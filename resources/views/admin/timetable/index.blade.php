@@ -158,18 +158,6 @@
                             <button type="button" class="tt-type" data-type="practice">Amaliy</button>
                         </div>
                     </div>
-                    <div class="tt-field tt-week-field">
-                        <label>Hafta</label>
-                        <span class="tt-week-nav">
-                            <button type="button" id="weekPrev" title="Oldingi hafta" aria-label="Oldingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                            <select id="weekSel"></select>
-                            <button type="button" id="weekNext" title="Keyingi hafta" aria-label="Keyingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                        </span>
-                        <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
-                        @unless($timetableAssignmentOnly)
-                        <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
-                        @endunless
-                    </div>
                     <div class="tt-field tt-view-field">
                         <label>Kesim</label>
                         <select id="viewMode">
@@ -202,6 +190,18 @@
                             <button type="button" id="wkLayerExternal" class="px-2 py-1 bg-white text-gray-500">Tashqi</button>
                             <button type="button" id="wkLayerInternal" class="px-2 py-1 bg-white text-gray-500">Ichki</button>
                         </span>
+                        <div class="tt-week-field tt-week-inline">
+                            <span class="tt-week-nav">
+                                <button type="button" id="weekPrev" title="Oldingi hafta" aria-label="Oldingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                                <select id="weekSel"></select>
+                                <button type="button" id="weekNext" title="Keyingi hafta" aria-label="Keyingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                            </span>
+                            <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+                            @unless($timetableAssignmentOnly)
+                            <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni tashqi jadvaldagi joyiga yoki undan pastdagi bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
+                            <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
+                            @endunless
+                        </div>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -1300,6 +1300,7 @@
         .tt-ktr-weeks-btn { margin-left: 6px; padding: 3px 8px; border-radius: 6px; border: 1px solid #a7f3d0; background: #ecfdf5;
             color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap; }
         .tt-ktr-weeks-btn:disabled { opacity: .5; }
+        .tt-compact-btn { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
         .tt-req-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; border-radius: 8px;
             background: #f59e0b; color: #fff; font-size: 10px; font-weight: 800; }
         .tt-req-badge.hidden { display: none; }
@@ -2160,6 +2161,9 @@
             color: #fff;
         }
         .tt-week-field select { min-width: 170px; }
+        /* Hafta navigatsiyasi Tashqi/Ichki tugmalaridan keyin, bir qatorda */
+        .tt-week-inline { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .tt-week-inline .tt-ktr-weeks-btn { margin-left: 0; height: 30px; }
         .tt-view-field select { min-width: 100px; }
         .tt-main-actions {
             display: flex;
@@ -3453,6 +3457,96 @@
                 } catch (e) { alert('Xatolik: ' + e.message); }
                 finally { this.disabled = false; }
             };
+            // ===== Ichki jadval: haftani zichlash =====
+            // Tashqi jadval (ext_day/ext_pair) andoza: guruhning shu kunidagi shablonda band, lekin
+            // shu haftada bo'sh qolgan yarim-slotlariga keyingi darslar yuqoriga suriladi; so'ng
+            // joylashmagan kartalar andozadagi joyiga yoki shu kunning pastroq bo'sh joyiga qo'yiladi.
+            // Har bir ko'chirish oddiy week-override (server konflikt tekshiradi).
+            async function compactInternalWeek(W, scopeCards) {
+                const all = cards.filter(c => !isCycleCardAny(c));
+                const key = c => c.id + '|' + W;
+                const off = c => { const o = overrides[key(c)]; return !!(o && o.cancelled); };
+                const place = c => {
+                    const o = overrides[key(c)];
+                    if (o) return o.cancelled ? null : { d: +o.day, p: +o.pair };
+                    return c.day ? { d: +c.day, p: +c.pair } : null;
+                };
+                const slots = (c, g, d) => gkey(c, g) + '|' + d;
+                const tmpl = {};
+                all.forEach(c => {
+                    if (!c.ext_day || !c.ext_pair) return;
+                    cardGroups(c).forEach(g => {
+                        const k = slots(c, g, c.ext_day), set = tmpl[k] || (tmpl[k] = new Set());
+                        for (let i = 0; i < cardLen(c); i++) set.add(+c.ext_pair + i);
+                    });
+                });
+                const occ = () => {
+                    const u = {};
+                    all.forEach(c => {
+                        if (off(c)) return;
+                        const pl = place(c);
+                        if (!pl) return;
+                        cardGroups(c).forEach(g => {
+                            const m = u[slots(c, g, pl.d)] || (u[slots(c, g, pl.d)] = new Map());
+                            for (let i = 0; i < cardLen(c); i++) m.set(pl.p + i, c.id);
+                        });
+                    });
+                    return u;
+                };
+                const maxPair = Math.max(1, boardSchedule().filter(it => it.type === 'pair').length) || 12;
+                const free = (u, c, d, p) => p >= 1 && p + cardLen(c) - 1 <= maxPair && cardGroups(c).every(g => {
+                    const m = u[slots(c, g, d)];
+                    for (let i = 0; i < cardLen(c); i++) { const x = m && m.get(p + i); if (x && x !== c.id) return false; }
+                    return true;
+                });
+                const move = async (c, d, p) => {
+                    try {
+                        await api(BASE + '/cards/' + c.id + '/week-override', 'POST', { week: W, action: 'move', day: d, pair: p, layer: 'internal' });
+                        overrides[key(c)] = Object.assign({}, overrides[key(c)] || {}, { card_id: c.id, week: W, day: d, pair: p, cancelled: false });
+                        return true;
+                    } catch (e) { return false; }
+                };
+                const res = { up: 0, placed: 0, left: 0 };
+                const act = scopeCards.filter(c => !off(c) && place(c))
+                    .sort((a, b) => place(a).d - place(b).d || place(a).p - place(b).p);
+                for (const c of act) {
+                    const pl = place(c), u = occ();
+                    let st = pl.p;
+                    while (st > 1 && cardGroups(c).every(g => tmpl[slots(c, g, pl.d)] && tmpl[slots(c, g, pl.d)].has(st - 1)) && free(u, c, pl.d, st - 1)) st--;
+                    if ((pl.p - st) % 2) st++;
+                    for (; st < pl.p; st += 2) { if (await move(c, pl.d, st)) { res.up++; break; } }
+                }
+                for (const c of scopeCards.filter(c => !off(c) && !place(c) && c.ext_day && c.ext_pair)) {
+                    let ok = false;
+                    for (let p = +c.ext_pair; p <= maxPair && !ok; p += 2) {
+                        if (free(occ(), c, +c.ext_day, p) && await move(c, +c.ext_day, p)) ok = true;
+                    }
+                    if (ok) res.placed++; else res.left++;
+                }
+                return res;
+            }
+            if ($('compactWeekBtn')) $('compactWeekBtn').onclick = async function () {
+                if (!board || !curWeek || weeklyLayer !== 'internal') return;
+                const total = Math.max(curWeek, ...Object.values(grids || {}).map(g => +(g && g.weeks) || 0));
+                if (!confirm('Qamrov: ' + scopeLabelText() + '\n\nIchki jadvalda bo\'sh qolgan dars joylariga keyingi darslar suriladi, ' +
+                    'joylashmagan kartalar pastdagi bo\'sh joyga qo\'yiladi.\n\nDavom etamizmi?')) return;
+                const allWeeks = total > 1 && confirm('Barcha haftalarga (1–' + total + ') qo\'llansinmi?\n\nOK — barcha haftalar, Bekor — faqat ' + curWeek + '-hafta');
+                const weeks = allWeeks ? Array.from({ length: total }, (_, i) => i + 1) : [curWeek];
+                const scope = visibleSpecCards().filter(c => !isCycleCardAny(c));
+                this.disabled = true;
+                const sum = { up: 0, placed: 0, left: 0 };
+                try {
+                    for (const W of weeks) {
+                        $('boardMsg').textContent = 'Zichlanmoqda: ' + W + '-hafta…';
+                        const r = await compactInternalWeek(W, scope);
+                        sum.up += r.up; sum.placed += r.placed; sum.left += r.left;
+                    }
+                    $('boardMsg').textContent = 'Zichlash: ' + sum.up + ' ta dars yuqoriga surildi, ' + sum.placed + ' ta karta joylandi' +
+                        (sum.left ? ', ' + sum.left + ' tasiga bo\'sh joy topilmadi' : '');
+                    await loadBoard(board.id);
+                } catch (e) { alert('Xatolik: ' + e.message); }
+                finally { this.disabled = false; }
+            };
             $('weekSel').onchange = function () {
                 curWeek = +this.value || 0;
                 selected = null;
@@ -3540,10 +3634,61 @@
                 if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
                 const ov = overrides[c.id + '|' + curWeek];
                 // Tashqi qatlamda haftaga xos ko'chirishlar (ichki jadvalniki) hisobga olinmaydi, faqat o'tilmaydigan haftalar.
-                if (ov && weeklyLayer === 'external') return ov.cancelled ? null : (c.day ? { day: c.day, pair: c.pair } : null);
+                if (weeklyLayer === 'external') {
+                    if ((ov && ov.cancelled) || !c.day) return null;
+                    // Shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga
+                    // keyingi darslar yuqoriga suriladi — kun o'rtasida bo'sh para qolmaydi.
+                    const sh = externalCompactMap()[c.id];
+                    return { day: c.day, pair: sh || c.pair };
+                }
                 if (ov) return ov.cancelled ? null : { day: ov.day, pair: ov.pair };
                 return c.day ? { day: c.day, pair: c.pair } : null;
             }
+            // Tashqi qatlam, alohida hafta: shablonda band bo'lgan, lekin shu haftada
+            // bo'shab qolgan (o'tilmaydigan karta egallagan yoki yuqoriga surilgan karta
+            // tashlab ketgan) yarim-slotlarga keyingi darslar ketma-ket suriladi.
+            // Shablondagi ataylab bo'sh joylar (masalan kun IV paradan boshlansa) to'ldirilmaydi.
+            // Natija: { cardId: yangi pair } — faqat surilgan kartalar uchun.
+            let compactCache = null;
+            function externalCompactMap() {
+                const sig = curWeek + '|' + weeklyLayer + '|' + cards.length;
+                if (compactCache && compactCache.sig === sig) return compactCache.map;
+                const map = {};
+                if (curWeek && weeklyLayer === 'external') {
+                    const tmpl = {};   // gkey|day -> Set(shablonda band yarim-slotlar)
+                    const act = [];
+                    cards.forEach(c => {
+                        if (!c.day || !c.pair || isCycleCardAny(c)) return;
+                        const len = cardLen(c);
+                        cardGroups(c).forEach(g => {
+                            const k = gkey(c, g) + '|' + c.day;
+                            const set = tmpl[k] || (tmpl[k] = new Set());
+                            for (let i = 0; i < len; i++) set.add(c.pair + i);
+                        });
+                        if (!weekCancelled(c)) act.push(c);
+                    });
+                    act.sort((a, b) => (a.day - b.day) || (a.pair - b.pair) || (cardLen(b) - cardLen(a)));
+                    const used = {};   // gkey|day -> Set(shu haftada haqiqatan band slotlar)
+                    act.forEach(c => {
+                        const len = cardLen(c);
+                        const keys = cardGroups(c).map(g => gkey(c, g) + '|' + c.day);
+                        let start = c.pair;
+                        // Har bir guruh uchun yuqoridagi slot bo'sh va shablonda band bo'lsa — bir qadam yuqoriga
+                        while (start > 1 && keys.length && keys.every(k =>
+                            tmpl[k].has(start - 1) && !(used[k] && used[k].has(start - 1)))) start--;
+                        // Juft yarim-slot chegarasini saqlash (para o'rtasidan boshlanmasin)
+                        if ((c.pair - start) % 2) start++;
+                        if (start !== c.pair) map[c.id] = start;
+                        keys.forEach(k => {
+                            const set = used[k] || (used[k] = new Set());
+                            for (let i = 0; i < len; i++) set.add(start + i);
+                        });
+                    });
+                }
+                compactCache = { sig, map };
+                return map;
+            }
+            const resetCompactCache = () => { compactCache = null; };
             // Tanlangan haftada vaqt bilan birga auditoriya ham individual
             // override'dan olinadi; shablon ko'rinishida bazaviy xona qoladi.
             function effectiveCard(c) {
@@ -5404,6 +5549,8 @@
                     if (b) b.className = 'px-2 py-1 ' + (weeklyLayer === l ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
                 if ($('weeklyLayerBox')) $('weeklyLayerBox').classList.toggle('hidden', viewMode === 'cycle');
+                if ($('compactWeekBtn')) $('compactWeekBtn').classList.toggle('hidden',
+                    !(WEEKLY_ADMIN && weeklyLayer === 'internal' && curWeek && viewMode !== 'cycle'));
                 document.body.classList.toggle('tt-weekly-external', weeklyLayer === 'external');
             }
             async function setWeeklyLayer(l) {
@@ -5735,7 +5882,9 @@
                 cards.forEach(o => {
                     if (o.id === card.id) return;
                     const effectiveOther = effectiveCard(o);
-                    const pl = effPlace(o);
+                    // Tashqi qatlamda joylash andozaga (barcha haftalar) yoziladi va server bandlikni
+                    // andoza bo'yicha tekshiradi — haftaning ko'rinishdagi surilishi/bekori hisobga olinmaydi.
+                    const pl = weeklyLayer === 'external' ? (o.day && o.pair ? { day: o.day, pair: o.pair } : null) : effPlace(o);
                     if (!pl || pl.day !== day) return;
                     const b0 = pl.pair, b1 = pl.pair + cardLen(o);   // [b0, b1)
                     if (a0 >= b1 || b0 >= a1) return;   // yarim-slot oraliqlari kesishmasa — konflikt yo'q
@@ -5873,7 +6022,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
+            function renderAll() { resetCompactCache(); buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda

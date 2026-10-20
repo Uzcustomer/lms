@@ -3462,7 +3462,14 @@
             // shu haftada bo'sh qolgan yarim-slotlariga keyingi darslar yuqoriga suriladi; so'ng
             // joylashmagan kartalar andozadagi joyiga yoki shu kunning pastroq bo'sh joyiga qo'yiladi.
             // Har bir ko'chirish oddiy week-override (server konflikt tekshiradi).
+            // Kartaning o'z panjarasidagi haftalar soni (yo'nalish+kurs, bo'lmasa doska).
+            const cardTermWeeks = c => {
+                const g = grids[gridKey(c.faculty_name || '', c.specialty_name, c.course)] || grids[gridKey('', c.specialty_name, c.course)];
+                return +(g && g.weeks) || +board.weeks || 15;
+            };
             async function compactInternalWeek(W, scopeCards) {
+                // Kartaning semestri tugagan haftaga ko'chirish yozilmasin.
+                scopeCards = scopeCards.filter(c => W <= cardTermWeeks(c));
                 const all = cards.filter(c => !isCycleCardAny(c));
                 const key = c => c.id + '|' + W;
                 const off = c => { const o = overrides[key(c)]; return !!(o && o.cancelled); };
@@ -3513,12 +3520,14 @@
                     const pl = place(c), u = occ();
                     let st = pl.p;
                     while (st > 1 && cardGroups(c).every(g => tmpl[slots(c, g, pl.d)] && tmpl[slots(c, g, pl.d)].has(st - 1)) && free(u, c, pl.d, st - 1)) st--;
-                    if ((pl.p - st) % 2) st++;
-                    for (; st < pl.p; st += 2) { if (await move(c, pl.d, st)) { res.up++; break; } }
+                    // Para chegarasi faqat butun para (2+ yarim-slot) darslar uchun saqlanadi.
+                    const step = cardLen(c) > 1 ? 2 : 1;
+                    if (step === 2 && (pl.p - st) % 2) st++;
+                    for (; st < pl.p; st += step) { if (await move(c, pl.d, st)) { res.up++; break; } }
                 }
                 for (const c of scopeCards.filter(c => !off(c) && !place(c) && c.ext_day && c.ext_pair)) {
                     let ok = false;
-                    for (let p = +c.ext_pair; p <= maxPair && !ok; p += 2) {
+                    for (let p = +c.ext_pair; p <= maxPair && !ok; p += cardLen(c) > 1 ? 2 : 1) {
                         if (free(occ(), c, +c.ext_day, p) && await move(c, +c.ext_day, p)) ok = true;
                     }
                     if (ok) res.placed++; else res.left++;
@@ -3527,12 +3536,13 @@
             }
             if ($('compactWeekBtn')) $('compactWeekBtn').onclick = async function () {
                 if (!board || !curWeek || weeklyLayer !== 'internal') return;
-                const total = Math.max(curWeek, ...Object.values(grids || {}).map(g => +(g && g.weeks) || 0));
+                const scope = visibleSpecCards().filter(c => !isCycleCardAny(c));
+                // Faqat tanlangan qamrovdagi panjaralar semestri (boshqa, uzunroq panjara emas).
+                const total = Math.max(curWeek, ...scope.map(cardTermWeeks));
                 if (!confirm('Qamrov: ' + scopeLabelText() + '\n\nIchki jadvalda bo\'sh qolgan dars joylariga keyingi darslar suriladi, ' +
                     'joylashmagan kartalar pastdagi bo\'sh joyga qo\'yiladi.\n\nDavom etamizmi?')) return;
                 const allWeeks = total > 1 && confirm('Barcha haftalarga (1–' + total + ') qo\'llansinmi?\n\nOK — barcha haftalar, Bekor — faqat ' + curWeek + '-hafta');
                 const weeks = allWeeks ? Array.from({ length: total }, (_, i) => i + 1) : [curWeek];
-                const scope = visibleSpecCards().filter(c => !isCycleCardAny(c));
                 this.disabled = true;
                 const sum = { up: 0, placed: 0, left: 0 };
                 try {
@@ -3677,7 +3687,7 @@
                         while (start > 1 && keys.length && keys.every(k =>
                             tmpl[k].has(start - 1) && !(used[k] && used[k].has(start - 1)))) start--;
                         // Juft yarim-slot chegarasini saqlash (para o'rtasidan boshlanmasin)
-                        if ((c.pair - start) % 2) start++;
+                        if (len > 1 && (c.pair - start) % 2) start++;   // yarim para dars yarim-slot bo'shliqqa ham suriladi
                         if (start !== c.pair) map[c.id] = start;
                         keys.forEach(k => {
                             const set = used[k] || (used[k] = new Set());
@@ -5871,6 +5881,15 @@
                 const n = String(name || '').trim();
                 return n !== '' && !/\d/.test(n) && /mashg|umumiy/i.test(n);
             };
+            // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).
+            function weeksIntersect(a, b) {
+                const total = +curGrid().weeks || +board.weeks || 15;
+                for (let w = 1; w <= total; w++) {
+                    const oa = overrides[a.id + '|' + w], ob = overrides[b.id + '|' + w];
+                    if (!(oa && oa.cancelled) && !(ob && ob.cancelled)) return true;
+                }
+                return false;
+            }
             // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha).
             // `pair` — yarim-slot indeksi; dars cardLen(card) ta yarim-slotni egallaydi,
             // shu oraliq [pair, pair+len) boshqa kartaning oralig'i bilan kesishsa — band.
@@ -5891,7 +5910,9 @@
                     // Guruh bandligi kalit bo'yicha: bir xil nomli, lekin turli
                     // fakultetdagi guruhlar bir-biriga to'sqinlik qilmasin.
                     const ov = cardGKeys(o).filter(k => my.includes(k));
-                    if (ov.length) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
+                    // Tashqi jadval — umumiy shablon: hech qachon bir haftaga tushmaydigan kartalar
+                    // bitta katakni bo'lisha oladi (serverdagi findExternalConflicts kabi).
+                    if (ov.length && !(weeklyLayer === 'external' && !weeksIntersect(card, o))) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
                     // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
                     if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code

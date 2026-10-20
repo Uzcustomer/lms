@@ -158,18 +158,6 @@
                             <button type="button" class="tt-type" data-type="practice">Amaliy</button>
                         </div>
                     </div>
-                    <div class="tt-field tt-week-field">
-                        <label>Hafta</label>
-                        <span class="tt-week-nav">
-                            <button type="button" id="weekPrev" title="Oldingi hafta" aria-label="Oldingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                            <select id="weekSel"></select>
-                            <button type="button" id="weekNext" title="Keyingi hafta" aria-label="Keyingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                        </span>
-                        <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
-                        @unless($timetableAssignmentOnly)
-                        <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
-                        @endunless
-                    </div>
                     <div class="tt-field tt-view-field">
                         <label>Kesim</label>
                         <select id="viewMode">
@@ -202,6 +190,17 @@
                             <button type="button" id="wkLayerExternal" class="px-2 py-1 bg-white text-gray-500">Tashqi</button>
                             <button type="button" id="wkLayerInternal" class="px-2 py-1 bg-white text-gray-500">Ichki</button>
                         </span>
+                        <div class="tt-week-field tt-week-inline">
+                            <span class="tt-week-nav">
+                                <button type="button" id="weekPrev" title="Oldingi hafta" aria-label="Oldingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                                <select id="weekSel"></select>
+                                <button type="button" id="weekNext" title="Keyingi hafta" aria-label="Keyingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                            </span>
+                            <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+                            @unless($timetableAssignmentOnly)
+                            <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
+                            @endunless
+                        </div>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -2160,6 +2159,9 @@
             color: #fff;
         }
         .tt-week-field select { min-width: 170px; }
+        /* Hafta navigatsiyasi Tashqi/Ichki tugmalaridan keyin, bir qatorda */
+        .tt-week-inline { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .tt-week-inline .tt-ktr-weeks-btn { margin-left: 0; height: 30px; }
         .tt-view-field select { min-width: 100px; }
         .tt-main-actions {
             display: flex;
@@ -3540,10 +3542,61 @@
                 if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
                 const ov = overrides[c.id + '|' + curWeek];
                 // Tashqi qatlamda haftaga xos ko'chirishlar (ichki jadvalniki) hisobga olinmaydi, faqat o'tilmaydigan haftalar.
-                if (ov && weeklyLayer === 'external') return ov.cancelled ? null : (c.day ? { day: c.day, pair: c.pair } : null);
+                if (weeklyLayer === 'external') {
+                    if ((ov && ov.cancelled) || !c.day) return null;
+                    // Shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga
+                    // keyingi darslar yuqoriga suriladi — kun o'rtasida bo'sh para qolmaydi.
+                    const sh = externalCompactMap()[c.id];
+                    return { day: c.day, pair: sh || c.pair };
+                }
                 if (ov) return ov.cancelled ? null : { day: ov.day, pair: ov.pair };
                 return c.day ? { day: c.day, pair: c.pair } : null;
             }
+            // Tashqi qatlam, alohida hafta: shablonda band bo'lgan, lekin shu haftada
+            // bo'shab qolgan (o'tilmaydigan karta egallagan yoki yuqoriga surilgan karta
+            // tashlab ketgan) yarim-slotlarga keyingi darslar ketma-ket suriladi.
+            // Shablondagi ataylab bo'sh joylar (masalan kun IV paradan boshlansa) to'ldirilmaydi.
+            // Natija: { cardId: yangi pair } — faqat surilgan kartalar uchun.
+            let compactCache = null;
+            function externalCompactMap() {
+                const sig = curWeek + '|' + weeklyLayer + '|' + cards.length;
+                if (compactCache && compactCache.sig === sig) return compactCache.map;
+                const map = {};
+                if (curWeek && weeklyLayer === 'external') {
+                    const tmpl = {};   // gkey|day -> Set(shablonda band yarim-slotlar)
+                    const act = [];
+                    cards.forEach(c => {
+                        if (!c.day || !c.pair || isCycleCardAny(c)) return;
+                        const len = cardLen(c);
+                        cardGroups(c).forEach(g => {
+                            const k = gkey(c, g) + '|' + c.day;
+                            const set = tmpl[k] || (tmpl[k] = new Set());
+                            for (let i = 0; i < len; i++) set.add(c.pair + i);
+                        });
+                        if (!weekCancelled(c)) act.push(c);
+                    });
+                    act.sort((a, b) => (a.day - b.day) || (a.pair - b.pair) || (cardLen(b) - cardLen(a)));
+                    const used = {};   // gkey|day -> Set(shu haftada haqiqatan band slotlar)
+                    act.forEach(c => {
+                        const len = cardLen(c);
+                        const keys = cardGroups(c).map(g => gkey(c, g) + '|' + c.day);
+                        let start = c.pair;
+                        // Har bir guruh uchun yuqoridagi slot bo'sh va shablonda band bo'lsa — bir qadam yuqoriga
+                        while (start > 1 && keys.length && keys.every(k =>
+                            tmpl[k].has(start - 1) && !(used[k] && used[k].has(start - 1)))) start--;
+                        // Juft yarim-slot chegarasini saqlash (para o'rtasidan boshlanmasin)
+                        if ((c.pair - start) % 2) start++;
+                        if (start !== c.pair) map[c.id] = start;
+                        keys.forEach(k => {
+                            const set = used[k] || (used[k] = new Set());
+                            for (let i = 0; i < len; i++) set.add(start + i);
+                        });
+                    });
+                }
+                compactCache = { sig, map };
+                return map;
+            }
+            const resetCompactCache = () => { compactCache = null; };
             // Tanlangan haftada vaqt bilan birga auditoriya ham individual
             // override'dan olinadi; shablon ko'rinishida bazaviy xona qoladi.
             function effectiveCard(c) {
@@ -5873,7 +5926,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
+            function renderAll() { resetCompactCache(); buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda

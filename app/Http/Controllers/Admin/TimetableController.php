@@ -5903,6 +5903,19 @@ class TimetableController extends Controller
             ->get();
         $my = [$pair - 1, $pair - 1 + $card->lenHalf()];
         $myGroups = $card->occupiedGroups();
+        // Tashqi jadval — umumiy shablon: bir katakni hech qachon bir haftaga tushmaydigan
+        // kartalar (toq/juft hafta ma'ruzalari, "BKP 7 / Umumiy xirurgiya 8" kabi navbatlashuvchi
+        // fanlar) bo'lisha oladi. Shuning uchun guruh bandligi faqat umumiy faol hafta bo'lsa konflikt.
+        $totalWeeks = max(1, (int) ($card->board->weeks ?? 15));
+        $cancelled = [];
+        $activeWeeks = function (int $cardId) use (&$cancelled, $totalWeeks): array {
+            if (!array_key_exists($cardId, $cancelled)) {
+                $cancelled[$cardId] = Schema::hasTable('timetable_card_overrides')
+                    ? TimetableCardOverride::where('card_id', $cardId)->where('cancelled', true)->pluck('week')->map(fn ($w) => (int) $w)->all()
+                    : [];
+            }
+            return array_values(array_diff(range(1, $totalWeeks), $cancelled[$cardId]));
+        };
         $errors = [];
         foreach ($others as $o) {
             $range = [(int) $o->ext_pair - 1, (int) $o->ext_pair - 1 + $o->lenHalf()];
@@ -5910,6 +5923,9 @@ class TimetableController extends Controller
                 continue;
             }
             $common = array_intersect($myGroups, $o->occupiedGroups());
+            if ($common && !array_intersect($activeWeeks((int) $card->id), $activeWeeks((int) $o->id))) {
+                continue;
+            }
             if ($common) {
                 $errors[] = 'Guruh band: ' . implode(', ', $common) . ' (' . $o->subject_name . ')';
             }

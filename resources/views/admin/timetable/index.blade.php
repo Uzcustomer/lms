@@ -1295,7 +1295,8 @@
         .tt-week-nav button:active:not(:disabled) { background: #1d4ed8; color: #fff; }
         .tt-week-nav button:disabled { background: #f8fafc; color: #cbd5e1; cursor: default; }
         .tt-week-nav select#weekSel { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; height: 100%;
-            background-color: #fff; font-weight: 600; color: #1e3a8a; padding-top: 0; padding-bottom: 0; outline: none; }
+            background-color: #fff; font-weight: 600; color: #1e3a8a; padding-top: 0; padding-bottom: 0; outline: none;
+            flex: 1 1 auto; }   /* tor ekranda maydon 100% bo'lganda bo'sh joy qolmasin — select cho'ziladi */
         .tt-ktr-weeks-btn { margin-left: 6px; padding: 3px 8px; border-radius: 6px; border: 1px solid #a7f3d0; background: #ecfdf5;
             color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap; }
         .tt-ktr-weeks-btn:disabled { opacity: .5; }

@@ -256,3 +256,20 @@ it('biriktiruvsiz juftlangan bo\'lak kartasi va ishchi reja doskasi bo\'linmaydi
     expect($c->fresh()->group_names)->toBe(['g-01a', 'g-02a'])
         ->and(\App\Models\TimetableCard::where('subject_name', 'Pediatriya (a)')->count())->toBe(1);
 });
+
+it('biriktiruvi yo\'q bo\'lak talabalar ulushini asl kartadan oladi', function () {
+    $s = layersSetup();
+    $s['board']->forceFill(['subject_source' => 'hemis'])->save();
+    // Faqat 02a/02b biriktirilgan; 03a/03b uchun HEMIS ma'lumoti yo'q
+    assignVariantStudents('Nevrologiya (c)', ['g-02a' => 3, 'g-02b' => 2]);
+    $c = \App\Models\TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half', 'weeks'])
+        + ['subject_name' => 'Nevrologiya (c)', 'kafedra_name' => 'X', 'students' => 40,
+            'group_name' => 'g-02a + g-02b + g-03a + g-03b', 'group_names' => ['g-02a', 'g-02b', 'g-03a', 'g-03b']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-variant-mixed', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['cards' => 1, 'created' => 1]);
+    $copy = \App\Models\TimetableCard::where('subject_name', 'Nevrologiya (c)')->where('id', '!=', $c->id)->sole();
+    expect($c->fresh()->students)->toBe(5)
+        ->and($copy->group_names)->toBe(['g-03a', 'g-03b'])
+        ->and($copy->students)->toBe(20);
+});

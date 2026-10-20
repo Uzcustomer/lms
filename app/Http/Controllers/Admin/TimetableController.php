@@ -2027,11 +2027,14 @@ class TimetableController extends Controller
                     continue;
                 }
                 $ovs = $hasOv ? TimetableCardOverride::where('card_id', $card->id)->get() : collect();
+                // Biriktiruvi yo'q bo'lak uchun ulush — asl (bo'linmagan) kartadan: birinchi bo'lak
+                // $card->students ni yangilab yuboradi.
+                $fallback = (int) round($card->students / count($bundles));
                 foreach ($bundles as $i => $names) {
                     $attrs = [
                         'group_name' => implode(' + ', $names),
                         'group_names' => count($names) > 1 ? $names : null,
-                        'students' => max(1, $studentsOf($names) ?: (int) round($card->students / count($bundles))),
+                        'students' => max(1, $studentsOf($names) ?: $fallback),
                     ];
                     if ($i === 0) {
                         $card->update($attrs);

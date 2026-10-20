@@ -2763,15 +2763,36 @@
                 };
                 return '#' + f(0) + f(8) + f(4);
             }
-            function buildSubjectColors() {
-                const names = [...new Set(cards.map(c => c.subject_name).filter(Boolean))]
-                    .sort((a, b) => a.localeCompare(b, 'uz'));
-                subjectColors = {};
+            // Rang fanning asosiy nomiga beriladi ("Fan (a)/(b)/(c)" — bitta rang) va avvalo
+            // EKRANDAGI qamrov fanlari orasida taqsimlanadi: butun doskada yuzlab fan bo'lgani uchun
+            // ranglar bir-biriga yaqinlashib qolardi (masalan Patologik anatomiya va Umumiy xirurgiya).
+            // Qamrovdagi 10–20 fanga oltin burchak bilan tarqatilgan rang + navbatlanuvchi yorqinlik.
+            function buildSubjectColors(scopeCards) {
+                const bolakM = n => /^(.*?)\s*\((\p{L})\)\s*$/u.exec(String(n).trim());
+                const baseOf = n => { const m = bolakM(n); return (m ? m[1] : String(n)).trim().toLowerCase(); };
+                const allNames = [...new Set(cards.map(c => c.subject_name).filter(Boolean))];
+                const scopeNames = [...new Set((scopeCards || cards).map(c => c.subject_name).filter(Boolean))];
+                const order = [];
+                const pushBases = names => [...new Set(names.map(baseOf))].sort((a, b) => a.localeCompare(b, 'uz'))
+                    .forEach(b => { if (!order.includes(b)) order.push(b); });
+                pushBases(scopeNames);
+                pushBases(allNames);
+                // Birinchi 11 fan — bir-biridan aniq farq qiladigan tayyor ranglar (qo'shnilari
+                // ataylab uzoq: qizil, havorang, yashil, binafsha...). Sariq yo'q — u ma'ruzaniki.
+                const PALETTE = [
+                    ['#fecaca', '#dc2626'], ['#a5f3fc', '#0891b2'], ['#d9f99d', '#65a30d'], ['#ddd6fe', '#7c3aed'],
+                    ['#fed7aa', '#ea580c'], ['#bfdbfe', '#2563eb'], ['#fbcfe8', '#db2777'], ['#a7f3d0', '#059669'],
+                    ['#e7e5e4', '#57534e'], ['#c7d2fe', '#4338ca'], ['#99f6e4', '#0d9488'],
+                ];
                 const GOLDEN = 137.508;
-                names.forEach((n, i) => {
-                    const h = Math.round((i * GOLDEN) % 360);
-                    subjectColors[n] = { bg: hslToHex(h, 70, 88), border: hslToHex(h, 62, 45) };
+                subjectColors = {};
+                const colorOf = {};
+                order.forEach((b, i) => {
+                    colorOf[b] = i < PALETTE.length
+                        ? { bg: PALETTE[i][0], border: PALETTE[i][1] }
+                        : (h => ({ bg: hslToHex(h, [74, 60, 82][i % 3], [85, 90, 81][i % 3]), border: hslToHex(h, 64, 40) }))(Math.round((i * GOLDEN + 18) % 360));
                 });
+                allNames.forEach(n => { subjectColors[n] = { ...colorOf[baseOf(n)] }; });
             }
             // Foydalanuvchi tanlagan ranglar doska sozlamalarida saqlanadi va
             // avtomatik (golden-angle) rangdan ustun turadi.
@@ -6077,7 +6098,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { resetCompactCache(); buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
+            function renderAll() { resetCompactCache(); try { buildSubjectColors(specCards()); } catch (e) { } buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda

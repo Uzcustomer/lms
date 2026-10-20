@@ -2714,9 +2714,9 @@ class TimetableController extends Controller
 
     private function syncCardWeeksFromKtr(TimetableBoard $board, array $scope = [], bool $dryRun = false): array
     {
-        $facs = array_values(array_filter(array_map(fn ($v) => mb_strtolower(trim((string) $v)), $scope['faculty_names'] ?? [])));
-        $specs = array_values(array_filter(array_map(fn ($v) => $this->specKey($v), $scope['specialty_names'] ?? [])));
-        $courses = array_map('intval', $scope['courses'] ?? []);
+        // Qamrov boshqa amallar (bo'shatish) bilan bir xil: yuborilmagan — cheklovsiz,
+        // bo'sh ro'yxat — hech narsa, '' — fakultetsiz kartalar.
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
 
         // Sikl fanlari bu yerda emas (ularning kunlari sikl kalendarida).
         $cycleSubjects = [];
@@ -2747,19 +2747,9 @@ class TimetableController extends Controller
             return ($fac !== '' ? ($ktr[$this->specKey($fac) . '|' . $key] ?? null) : null) ?? $ktr[$key] ?? null;
         };
 
-        $cards = TimetableCard::where('board_id', $board->id)
-            ->when($courses, fn ($q) => $q->whereIn('course', $courses))
-            ->get()
-            ->filter(function (TimetableCard $c) use ($facs, $specs, $isCycle) {
-                if ($facs && !in_array(mb_strtolower(trim((string) $c->faculty_name)), $facs, true)) {
-                    return false;
-                }
-                if ($specs && !in_array($this->specKey($c->specialty_name), $specs, true)) {
-                    return false;
-                }
-
-                return !$isCycle($c);
-            });
+        $cardQuery = TimetableCard::where('board_id', $board->id);
+        $this->applyScopeToQuery($cardQuery, $facSet, $specSet, $courseSet);
+        $cards = $cardQuery->get()->reject($isCycle);
 
         // Dars birligi: ma'ruza — oqim (+til), amaliy — guruhcha.
         $units = [];

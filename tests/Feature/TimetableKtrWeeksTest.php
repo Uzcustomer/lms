@@ -79,3 +79,19 @@ it('sinov rejimi (dry_run) hech narsani o\'zgartirmaydi', function () {
     expect($res['dry_run'])->toBeTrue()->and($res['weeks_on'] + $res['weeks_off'])->toBeGreaterThan(0)
         ->and(activeWeeks($s['lec']))->toBe([1, 3, 5]);
 });
+
+it('qamrov boshqa amallar kabi: bo\'sh tanlov yoki boshqa fakultet — hech narsa o\'zgarmaydi', function () {
+    $s = ktrWeeksSetup([
+        '1' => ['11' => 2, '13' => 2], '2' => ['11' => 2, '13' => 2], '3' => ['11' => 0, '13' => 4],
+        '4' => ['11' => 0, '13' => 4], '5' => ['11' => 2, '13' => 2], '6' => ['11' => 0, '13' => 4],
+    ]);
+
+    foreach ([['faculty_names' => []], ['faculty_names' => ['2-son davolash'], 'courses' => [2]]] as $scope) {
+        $res = (new TimetableController())->ktrWeeks(Request::create('/', 'POST', $scope), $s['board'])->getData(true);
+        expect($res['cards'])->toBe(0);
+    }
+    expect(activeWeeks($s['lec']))->toBe([1, 3, 5])->and(activeWeeks($s['p2']))->toBe([2, 4, 6]);
+
+    $res = (new TimetableController())->ktrWeeks(Request::create('/', 'POST', ['faculty_names' => ['1-son davolash'], 'courses' => [2]]), $s['board'])->getData(true);
+    expect($res['cards'])->toBe(3)->and(activeWeeks($s['lec']))->toBe([1, 2, 5]);
+});

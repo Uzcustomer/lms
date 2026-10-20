@@ -352,3 +352,18 @@ it('sikl rejimidagi bo\'lakli fan ma\'ruzalari bo\'lak nomi bilan qoladi (sikl k
         ->assertOk()->assertJson(['lectures' => 0, 'removed' => 0]);
     expect($a->fresh()->subject_name)->toBe('Gistologiya (a)')->and($b->fresh()->subject_name)->toBe('Gistologiya (b)');
 });
+
+it('HEMIS biriktiruvi bilan bitta guruhdan bo\'lingan bo\'lak ma\'ruzalari birlashganda ulushlar qo\'shiladi', function () {
+    $s = layersSetup();
+    $s['board']->forceFill(['subject_source' => 'hemis'])->save();
+    // g-02 talabalari (a) va (b) bo'laklariga bo'lingan — ikkala ma'ruza ham shu guruh bilan
+    assignVariantStudents('Patologiya (a)', ['g-02' => 10]);
+    assignVariantStudents('Patologiya (b)', ['g-02' => 10]);
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']) + ['training_type' => 'lecture', 'kafedra_name' => 'X'];
+    $a = \App\Models\TimetableCard::create($base + ['subject_name' => 'Patologiya (a)', 'students' => 10, 'group_names' => ['g-02']]);
+    \App\Models\TimetableCard::create($base + ['subject_name' => 'Patologiya (b)', 'students' => 10, 'group_names' => ['g-02']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 1]);
+    expect($a->fresh()->subject_name)->toBe('Patologiya')->and($a->fresh()->students)->toBe(20);
+});

@@ -162,6 +162,9 @@
                         <label>Hafta</label>
                         <select id="weekSel"></select>
                         <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+                        @unless($timetableAssignmentOnly)
+                        <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
+                        @endunless
                     </div>
                     <div class="tt-field tt-view-field">
                         <label>Kesim</label>
@@ -1263,6 +1266,9 @@
         #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        .tt-ktr-weeks-btn { margin-left: 6px; padding: 3px 8px; border-radius: 6px; border: 1px solid #a7f3d0; background: #ecfdf5;
+            color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap; }
+        .tt-ktr-weeks-btn:disabled { opacity: .5; }
         .tt-req-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; border-radius: 8px;
             background: #f59e0b; color: #fff; font-size: 10px; font-weight: 800; }
         .tt-req-badge.hidden { display: none; }
@@ -3330,6 +3336,26 @@
                 $('weekSel').innerHTML = opts;
                 $('weekSel').value = String(curWeek);
             }
+            // Haftalik fanlar: har hafta qaysi kartochka o'tilishi — KTR'dan (ma'ruza haftalari, amaliy soati).
+            if ($('ktrWeeksBtn')) $('ktrWeeksBtn').onclick = async function () {
+                if (!board) return;
+                const body = scopeBody();
+                this.disabled = true;
+                try {
+                    const dry = await api(BASE + '/boards/' + board.id + '/ktr-weeks', 'POST', Object.assign({ dry_run: 1 }, body));
+                    const msg = 'Qamrov: ' + scopeLabelText() + '\n\n' +
+                        dry.cards + ' ta kartochka KTR bo\'yicha haftalarga taqsimlanadi\n' +
+                        '(' + dry.weeks_on + ' ta hafta yoqiladi, ' + dry.weeks_off + ' ta o\'chiriladi).' +
+                        (dry.no_ktr.length ? '\n\nKTR topilmagan fanlar (o\'zgarmaydi): ' + dry.no_ktr.slice(0, 8).join('; ') + (dry.no_ktr.length > 8 ? '…' : '') : '') +
+                        (dry.mismatch_count ? '\n\nDiqqat: ' + dry.mismatch_count + ' ta haftada KTR soatiga kartochkalar yetmaydi (masalan: ' + dry.mismatch[0] + ').' : '') +
+                        '\n\nDavom etamizmi?';
+                    if (!confirm(msg)) return;
+                    const res = await api(BASE + '/boards/' + board.id + '/ktr-weeks', 'POST', body);
+                    $('boardMsg').textContent = 'KTR bo\'yicha: ' + res.cards + ' ta kartochka haftalari yangilandi';
+                    await loadBoard(board.id);
+                } catch (e) { alert('Xatolik: ' + e.message); }
+                finally { this.disabled = false; }
+            };
             $('weekSel').onchange = function () {
                 curWeek = +this.value || 0;
                 selected = null;

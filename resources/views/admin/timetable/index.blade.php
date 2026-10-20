@@ -5997,19 +5997,22 @@
                 catch (e) { alert('Konflikt: ' + e.message); }
             }
             // Birlashtirilgan (ketma-ket) blok — kartalarni ketma-ket paralarga joylaymiz
-            async function placeBlockAt(ids, d, p) {
+            // parallel — bo'lakli fan bo'laklari: hammasi bitta katakka (ketma-ket emas).
+            async function placeBlockAt(ids, d, p, parallel) {
                 try {
                     for (let k = 0; k < ids.length; k++) {
                         const card = cards.find(x => x.id === ids[k]);
-                        if (card) await placeOneCard(card, d, p + k);
+                        if (card) await placeOneCard(card, d, parallel ? p : p + k);
                     }
                     selected = null; renderAll();
                 } catch (e) { alert('Konflikt: ' + e.message); }
             }
             // ===== Drag-and-drop holati (blok = bir yoki bir necha ketma-ket karta) =====
             let dragCardIds = null;
-            function startDrag(ids, ev) {
+            let dragParallel = false;
+            function startDrag(ids, ev, parallel) {
                 dragCardIds = Array.isArray(ids) ? ids.slice() : [ids];
+                dragParallel = !!parallel;
                 if (ev && ev.dataTransfer) {
                     ev.dataTransfer.effectAllowed = 'move';
                     try { ev.dataTransfer.setData('text/plain', dragCardIds.join(',')); } catch (e) { /* ba'zi brauzerlar */ }
@@ -6018,6 +6021,7 @@
             // Sudrash tugagach holatni tozalash (tashlanmagan bo'lsa ham)
             document.addEventListener('dragend', () => {
                 dragCardIds = null;
+                dragParallel = false;
                 document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
                 const panel = document.getElementById('cardPanel');
                 if (panel) panel.classList.remove('pn-drop');
@@ -6631,7 +6635,7 @@
                     const parts = B.split(/\.\s+/).filter(Boolean);
                     const shortB = parts.length > 1 ? parts[parts.length - 1] : B;
                     const ids = items.map(x => x.id).join(',');
-                    const head = '<div class="tt-bolak-head" data-chip="' + first.id + '" data-merge-ids="' + ids + '" title="' +
+                    const head = '<div class="tt-bolak-head" data-chip="' + first.id + '" data-parallel-ids="' + ids + '" title="' +
                         esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi)") + '"><b>[A]</b> ' + esc(shortB) + '</div>';
                     const rows = items.map(x => '<div class="tt-bolak-item' + (selected && selected.id === x.id ? ' sel' : '') + '" data-chip="' + x.id + '" title="' + esc(cardTooltip(x)) + '">' +
                         '<b class="tt-bolak-tag">' + esc(bolakLetterOf(x)) + '</b> ' + esc(cardGroups(x).map(shortGroup).join('+')) +
@@ -6779,8 +6783,11 @@
                     el.setAttribute('draggable', 'true');
                     el.addEventListener('dragstart', ev => {
                         ev.stopPropagation();
-                        const ids = el.dataset.mergeIds ? el.dataset.mergeIds.split(',').map(Number) : [+el.dataset.chip];
-                        startDrag(ids, ev);
+                        // Bo'laklar sarlavhasi — hamma bo'lak bitta katakka birga ko'chadi (data-parallel-ids).
+                        const parallel = !!el.dataset.parallelIds;
+                        const list = parallel ? el.dataset.parallelIds : el.dataset.mergeIds;
+                        const ids = list ? list.split(',').map(Number) : [+el.dataset.chip];
+                        startDrag(ids, ev, parallel);
                     });
                 });
                 // Kataklarni tashlash nishoni qilamiz
@@ -6798,10 +6805,11 @@
                         ev.preventDefault();
                         td.classList.remove('drag-ok', 'drag-bad');
                         if (!dragCardIds) return;
-                        const ids = dragCardIds;
+                        const ids = dragCardIds, parallel = dragParallel;
                         const d = +td.dataset.day, p = +td.dataset.pair;
                         dragCardIds = null;
-                        placeBlockAt(ids, d, p);
+                        dragParallel = false;
+                        placeBlockAt(ids, d, p, parallel);
                     });
                 });
             }

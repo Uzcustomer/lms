@@ -199,7 +199,7 @@
                             <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
                             @unless($timetableAssignmentOnly)
                             <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni tashqi jadvaldagi joyiga yoki undan pastdagi bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
-                    <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
+                            <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
                             @endunless
                         </div>
                     </div>
@@ -5882,7 +5882,9 @@
                 cards.forEach(o => {
                     if (o.id === card.id) return;
                     const effectiveOther = effectiveCard(o);
-                    const pl = effPlace(o);
+                    // Tashqi qatlamda joylash andozaga (barcha haftalar) yoziladi va server bandlikni
+                    // andoza bo'yicha tekshiradi — haftaning ko'rinishdagi surilishi/bekori hisobga olinmaydi.
+                    const pl = weeklyLayer === 'external' ? (o.day && o.pair ? { day: o.day, pair: o.pair } : null) : effPlace(o);
                     if (!pl || pl.day !== day) return;
                     const b0 = pl.pair, b1 = pl.pair + cardLen(o);   // [b0, b1)
                     if (a0 >= b1 || b0 >= a1) return;   // yarim-slot oraliqlari kesishmasa — konflikt yo'q

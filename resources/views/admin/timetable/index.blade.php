@@ -160,7 +160,11 @@
                     </div>
                     <div class="tt-field tt-week-field">
                         <label>Hafta</label>
-                        <select id="weekSel"></select>
+                        <span class="tt-week-nav">
+                            <button type="button" id="weekPrev" title="Oldingi hafta">&#8249;</button>
+                            <select id="weekSel"></select>
+                            <button type="button" id="weekNext" title="Keyingi hafta">&#8250;</button>
+                        </span>
                         <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
                         @unless($timetableAssignmentOnly)
                         <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
@@ -1278,6 +1282,11 @@
         #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        .tt-week-nav { display: inline-flex; align-items: center; gap: 2px; }
+        .tt-week-nav button { width: 22px; height: 26px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1e40af;
+            font-size: 16px; font-weight: 800; line-height: 1; }
+        .tt-week-nav button:hover:not(:disabled) { background: #dbeafe; }
+        .tt-week-nav button:disabled { opacity: .35; }
         .tt-ktr-weeks-btn { margin-left: 6px; padding: 3px 8px; border-radius: 6px; border: 1px solid #a7f3d0; background: #ecfdf5;
             color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap; }
         .tt-ktr-weeks-btn:disabled { opacity: .5; }
@@ -3360,17 +3369,60 @@
             }
 
             // ===== Hafta tanlash (individual haftalar) =====
+            // Semestr boshlanishi (doska sozlamasi / sikl jadvalidagi sana) — hafta sanalari uchun.
+            function semesterStartDate() {
+                const v = (board && board.settings && board.settings.semester_start) || ($('cycleStart') && $('cycleStart').value) || '';
+                const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+                if (!m) return null;
+                const d = new Date(+m[1], +m[2] - 1, +m[3]);
+                d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // o'sha haftaning dushanbasi
+                return d;
+            }
+            function weekDates(n) {
+                const st = semesterStartDate();
+                if (!st) return '';
+                const a = new Date(st); a.setDate(a.getDate() + (n - 1) * 7);
+                const b = new Date(a); b.setDate(b.getDate() + Math.max(0, (board.days || 6) - 1));
+                const f = d => String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
+                return f(a) + '–' + f(b);
+            }
+            // Bugun semestrning nechanchi haftasi (chegaradan chiqsa — 1 yoki oxirgi hafta).
+            function currentWeekNo(w) {
+                const st = semesterStartDate();
+                if (!st) return 1;
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                return Math.min(w, Math.max(1, Math.floor((today - st) / (7 * 864e5)) + 1));
+            }
+            // Ichki (haqiqiy) jadval faqat haftama-hafta ko'riladi — "shablon" yo'q.
+            const weeklyOnly = () => typeof weeklyLayer !== 'undefined' && weeklyLayer === 'internal' && viewMode !== 'cycle';
             function fillWeekSel() {
                 const w = +curGrid().weeks || +board.weeks || 15;
                 // curWeek faqat 0 (shablon) yoki 1..w oralig'idagi butun son bo'lishi mumkin —
                 // aks holda (URLdan kelgan noto'g'ri qiymat, qisqargan panjara) shablonga qaytamiz,
                 // yo'qsa select'da mos variant bo'lmaydi va hafta istisnosi 422 bilan qaytadi.
                 if (!Number.isInteger(curWeek) || curWeek < 0 || curWeek > w) curWeek = 0;
-                let opts = '<option value="0">Barcha haftalar (shablon)</option>';
-                for (let i = 1; i <= w; i++) opts += '<option value="' + i + '">' + i + '-hafta</option>';
+                const only = weeklyOnly();
+                const now = currentWeekNo(w);
+                if (only && !curWeek) curWeek = now;   // ichki jadval — joriy hafta bilan ochiladi
+                let opts = only ? '' : '<option value="0">Barcha haftalar (shablon)</option>';
+                for (let i = 1; i <= w; i++) {
+                    const dates = weekDates(i);
+                    opts += '<option value="' + i + '">' + i + '-hafta' + (dates ? ' (' + dates + ')' : '') + (i === now && semesterStartDate() ? ' • joriy' : '') + '</option>';
+                }
                 $('weekSel').innerHTML = opts;
                 $('weekSel').value = String(curWeek);
+                if ($('weekPrev')) $('weekPrev').disabled = curWeek <= (only ? 1 : 0);
+                if ($('weekNext')) $('weekNext').disabled = curWeek >= w;
             }
+            function stepWeek(delta) {
+                const w = +curGrid().weeks || +board.weeks || 15;
+                const next = Math.min(w, Math.max(weeklyOnly() ? 1 : 0, (curWeek || 0) + delta));
+                if (next === curWeek) return;
+                $('weekSel').value = String(next);
+                $('weekSel').onchange.call($('weekSel'));
+            }
+            if ($('weekPrev')) $('weekPrev').onclick = () => stepWeek(-1);
+            if ($('weekNext')) $('weekNext').onclick = () => stepWeek(1);
             // Haftalik fanlar: har hafta qaysi kartochka o'tilishi — KTR'dan (ma'ruza haftalari, amaliy soati).
             if ($('ktrWeeksBtn')) $('ktrWeeksBtn').onclick = async function () {
                 if (!board) return;
@@ -3395,6 +3447,7 @@
                 curWeek = +this.value || 0;
                 selected = null;
                 showSkipped = false;
+                fillWeekSel();
                 renderAll();
             };
             // "Bu haftada o'tilmaydi" kartalarini panelda ko'rsatish/yashirish
@@ -3453,6 +3506,7 @@
                 viewMode = this.value;
                 selected = null;
                 if (typeof renderWeeklyLayerUi === 'function') renderWeeklyLayerUi();
+                if (board) fillWeekSel();
                 renderGrid();
                 syncUrl();
             };

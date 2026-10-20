@@ -1076,6 +1076,8 @@
         #grid td.tt-split .tt-tri-name { max-width: 62%; }
         #grid td.tt-split .tt-tri-name .tt-weeks { display: block; font-size: 8px; }
         #grid td.tt-split .tt-tri-name .tt-room { font-size: 9px; }
+        /* Bo'lakli fan harfi — "(a)", "(c)" */
+        .tt-bolak-tag { color: #7c2d12; font-weight: 800; white-space: nowrap; }
         /* Ikki rang tutashgan joydagi nozik ajratgich */
         #grid td.tt-cell.tt-split::after {
             content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
@@ -6117,10 +6119,36 @@
 
             $('unplacedExportBtn').onclick = downloadUnplacedDiagnostics;
 
+            // Bo'lakli fan ("Tibbiyot kasbiga kirish. Terapiya (a)"): qisqa nomda asosiy qism
+            // (oxirgi nuqtadan keyingisi — "Terapiya") va bo'lak harfi doim ko'rinadi,
+            // aks holda uzun umumiy boshlanma tufayli (a) yoki (c) ekani bilinmay qolardi.
             function cardLabel(c, short) {
                 const t = c.training_type === 'lecture' ? 'M' : 'A';
+                const bm = BOLAK_RX.exec(String(c.subject_name || '').trim());
+                if (bm) {
+                    let baseName = bm[1].trim();
+                    if (short) {
+                        const parts = baseName.split(/\.\s+/).filter(Boolean);
+                        if (parts.length > 1) baseName = parts[parts.length - 1];
+                        if (baseName.length > 20) baseName = baseName.slice(0, 20) + '…';
+                    }
+                    return '<b>[' + t + ']</b> ' + esc(baseName) + ' <b class="tt-bolak-tag">(' + esc(bm[2]) + ')</b>';
+                }
                 const name = short && c.subject_name.length > 26 ? c.subject_name.slice(0, 26) + '…' : c.subject_name;
                 return '<b>[' + t + ']</b> ' + esc(name);
+            }
+            // Karta ustiga kursor olib borilganda chiqadigan to'liq ma'lumot (sikldagi kabi).
+            function cardTooltip(c, extra) {
+                const bm = BOLAK_RX.exec(String(c.subject_name || '').trim());
+                return [
+                    c.subject_name + ' — ' + (c.training_type === 'lecture' ? "ma'ruza" : 'amaliy'),
+                    bm ? '(' + bm[2] + ") bo'lak — guruh talabalarining bir qismi, boshqa bo'laklar bilan parallel" : '',
+                    (c.oqim_label ? c.oqim_label + ' · ' : '') + 'Guruh: ' + cardGroups(c).join(', ') + (c.students ? ' · ' + c.students + ' talaba' : ''),
+                    "O'qituvchi: " + (c.teacher_name || 'biriktirilmagan'),
+                    'Xona: ' + (c.auditorium_name ? c.auditorium_name + (c.auditorium_volume ? " (sig'im " + c.auditorium_volume + ')' : '') : 'biriktirilmagan'),
+                    c.kafedra_name ? 'Kafedra: ' + c.kafedra_name : '',
+                    extra || '',
+                ].filter(Boolean).join('\n');
             }
 
             // Joylashmagan kartalar — pastda gorizontal panel (aSc uslubida): tekis
@@ -6469,14 +6497,11 @@
                     const wkNums = wkList.length ? ': ' + wkList.join(',') : '';
                     const wks = showWks
                         ? ' <span class="tt-weeks">(' + c.weeks + ' hafta' + wkNums + ')</span>' : '';
-                    const wkTitle = showWks ? ' · ' + c.weeks + ' hafta' + wkNums : '';
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
                     const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
                     const roomTxt = roomNo
                         ? '<div class="tt-room">№ ' + esc(roomNo) + '</div>'
                         : '';
-                    const roomTitle = c.auditorium_name
-                        ? ' · ' + c.auditorium_name + (c.auditorium_volume ? ' (sig\'im ' + c.auditorium_volume + ')' : '') : '';
                     // Almashinuvchi karta — har hafta emas, faqat ayrim haftalarda o'tiladi
                     // (ma'ruza va uni almashtiruvchi amaliy). Shablon ("Barcha haftalar")
                     // ko'rinishida yo'l-yo'l fon + ⇄ belgisi bilan ajratib turadi, chunki
@@ -6488,8 +6513,8 @@
                         (alt ? ' tt-alt' : '') + tri +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
-                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle
-                            + (alt ? ' · har hafta emas (almashib keladi)' : '')) + '">';
+                        esc(cardTooltip(c, (showWks ? 'Haftalar: ' + c.weeks + ' hafta' + wkNums : '')
+                            + (alt ? ' · har hafta emas (almashib keladi)' : ''))) + '">';
                     // Uchburchakka bo'lingan katakda fan nomi, qaysi haftalarda
                     // o'tilishi va xona raqami ko'rinadi. O'qituvchi tooltipda
                     // qoladi — uchburchakka sig'may, yozuvni buzadi.

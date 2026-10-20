@@ -5348,7 +5348,11 @@
                 try { localStorage.setItem('lms:timetable-weekly-layer', l); } catch (e) { }
                 selected = null;
                 renderWeeklyLayerUi();
-                if (allCards.length) { applyWeeklyLayer(allCards); cards = scopeCards(allCards); if (typeof renderAll === 'function') renderAll(); }
+                // Serverdan qayta yuklanadi: shu ko'rinishda joyida qilingan biriktirishlar (o'qituvchi/xona)
+                // kartaning birinchi yuklashdagi nusxasidan tiklanib, eskisi qaytib chiqmasin.
+                if (board) {
+                    try { await loadBoard(board.id); } catch (e) { alert('Xatolik: ' + e.message); }
+                }
             }
             if ($('wkLayerExternal')) { $('wkLayerExternal').onclick = () => setWeeklyLayer('external'); $('wkLayerInternal').onclick = () => setWeeklyLayer('internal'); renderWeeklyLayerUi(); }
             if ($('mineAll')) {

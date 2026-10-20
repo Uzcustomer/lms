@@ -1095,8 +1095,10 @@ class TimetableController extends Controller
                                     if ($lectureGroupName === '') {
                                         continue;
                                     }
-                                    // Bo'laklar bir guruhning turli talabalari — guruh+bo'lak bo'yicha yig'iladi.
-                                    $slot = $lectureGroupName . "\0" . $s->subject_name;
+                                    // Bo'laklar bir guruhning turli talabalari — guruh+bo'lak bo'yicha yig'iladi
+                                    // (HEMIS biriktiruvi: qatorda shu bo'lak talabalari). Biriktiruvsiz (harf qoidasi,
+                                    // ishchi reja) qatorda guruhning jami talabasi — har bo'lakda qayta sanalmaydi.
+                                    $slot = $lectureGroupName . ($variantUnits ? "\0" . $s->subject_name : '');
                                     $lectureGroupStudents[$lecKey][$slot] = max(
                                         (int) ($lectureGroupStudents[$lecKey][$slot] ?? 0),
                                         (int) ($lectureGroup['count'] ?? 0)

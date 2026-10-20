@@ -5881,6 +5881,13 @@
                 const n = String(name || '').trim();
                 return n !== '' && !/\d/.test(n) && /mashg|umumiy/i.test(n);
             };
+            // Bitta fanning turli bo'laklari ("Fan (a)" va "Fan (b)") — guruhning turli talabalari,
+            // bir vaqtda parallel o'tadi: guruh bandligi hisoblanmaydi (serverdagi bolakSiblings).
+            const BOLAK_RX = /^(.*?)\s*\((\p{L})\)\s*$/u;
+            function bolakSiblings(a, b) {
+                const ma = BOLAK_RX.exec(String(a.subject_name || '').trim()), mb = BOLAK_RX.exec(String(b.subject_name || '').trim());
+                return !!(ma && mb && ma[1].trim().toLowerCase() === mb[1].trim().toLowerCase() && ma[2].toLowerCase() !== mb[2].toLowerCase());
+            }
             // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).
             function weeksIntersect(a, b) {
                 const total = +curGrid().weeks || +board.weeks || 15;
@@ -5912,7 +5919,7 @@
                     const ov = cardGKeys(o).filter(k => my.includes(k));
                     // Tashqi jadval — umumiy shablon: hech qachon bir haftaga tushmaydigan kartalar
                     // bitta katakni bo'lisha oladi (serverdagi findExternalConflicts kabi).
-                    if (ov.length && !(weeklyLayer === 'external' && !weeksIntersect(card, o))) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
+                    if (ov.length && !bolakSiblings(card, o) && !(weeklyLayer === 'external' && !weeksIntersect(card, o))) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
                     // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
                     if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code

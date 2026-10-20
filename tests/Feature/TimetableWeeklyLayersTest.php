@@ -181,3 +181,19 @@ it('haftalar kesishmasi doska emas, yo\'nalish panjarasi haftalari bo\'yicha', f
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertOk();
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.cards.place', $s['foreign']), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertOk();
 });
+
+it('bitta fanning turli bo\'laklari bir katakda parallel tura oladi, boshqa fan esa yo\'q', function () {
+    $s = layersSetup();
+    $s['own']->update(['subject_name' => 'Terapiya (a)']);
+    $s['foreign']->update(['subject_name' => 'Terapiya (c)']);
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertOk();
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $s['foreign']), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertOk();
+    // ichki jadval, alohida hafta
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $s['own']), ['week' => 1, 'action' => 'move', 'day' => 1, 'pair' => 1])->assertOk();
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $s['foreign']), ['week' => 1, 'action' => 'move', 'day' => 1, 'pair' => 1])->assertOk();
+
+    // Boshqa fan (bo'lak emas) — guruh band
+    $other = \App\Models\TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students', 'training_type', 'len_half', 'weeks', 'group_name'])
+        + ['subject_name' => 'Xirurgiya (b)', 'kafedra_name' => 'X']);
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $other), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertStatus(422);
+});

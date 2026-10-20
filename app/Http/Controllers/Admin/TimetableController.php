@@ -1998,26 +1998,51 @@ class TimetableController extends Controller
             $groups[implode('|', [$card->faculty_name, $card->specialty_name, $card->course, mb_strtolower((string) $card->oqim_label), $this->normSubject($base)])][] = [$card, $base];
         }
         $dry = $request->boolean('dry_run');
+        $hasOv = Schema::hasTable('timetable_card_overrides');
+        // Joylashuv (ikkala qatlam) va hafta yozuvlari: bo'laklarniki farq qilsa, qoldiriladigan karta
+        // boshqa bo'lak guruhlarini tekshiruvsiz o'z joyiga (bandligi noma'lum) va o'z haftalariga olib
+        // o'tardi — o'sha bo'laklarning qo'shimcha amaliysi esa eski ma'ruza haftalariga moslangan.
+        $placementSig = function (TimetableCard $c) use ($hasOv): string {
+            $ovs = $hasOv
+                ? TimetableCardOverride::where('card_id', $c->id)->orderBy('week')->get()
+                    ->map(fn ($o) => [(int) $o->week, (int) $o->day, (int) $o->pair, (int) $o->start_half, (bool) $o->cancelled])->all()
+                : [];
+
+            return json_encode([(int) $c->day, (int) $c->pair, (int) $c->start_half, (int) $c->ext_day, (int) $c->ext_pair, $ovs]);
+        };
         $list = [];
+        $skipped = [];
         $removed = 0;
-        DB::transaction(function () use ($groups, $dry, &$list, &$removed) {
+        DB::transaction(function () use ($groups, $dry, $hasOv, $placementSig, &$list, &$skipped, &$removed) {
             foreach ($groups as $items) {
                 [$keep, $base] = $items[0];
+                $label = $base . ' · ' . $keep->oqim_label;
+                if (count(array_unique(array_map(fn ($it) => $placementSig($it[0]), $items))) > 1) {
+                    $skipped[] = $label . " — bo'laklar ma'ruzasi turli vaqtda yoki turli haftalarda";
+                    continue;
+                }
                 $names = [];
-                $students = 0;
+                $sets = [];
+                $students = [];
                 foreach ($items as [$c]) {
-                    foreach ((array) $c->group_names as $g) {
+                    $gs = (array) $c->group_names;
+                    foreach ($gs as $g) {
                         $names[$g] = true;
                     }
-                    $students += (int) $c->students;
+                    sort($gs);
+                    $sets[json_encode($gs)] = true;
+                    $students[] = (int) $c->students;
                 }
-                $list[] = $base . ' · ' . $keep->oqim_label . ' · ' . count($items) . " bo'lak → 1";
+                // Guruhlari bir xil bo'laklar (biriktiruvsiz: ishchi reja, harf qoidasi) — har biri butun
+                // oqim sonini olgan, qo'shilsa ikki-uch barobar bo'lardi; aks holda har bo'lak o'z ulushi.
+                $total = count($sets) === 1 ? max($students) : array_sum($students);
+                $list[] = $label . ' · ' . count($items) . " bo'lak → 1";
                 if ($dry) {
                     continue;
                 }
-                $keep->update(['subject_name' => $base, 'group_names' => array_keys($names), 'students' => max(1, $students)]);
+                $keep->update(['subject_name' => $base, 'group_names' => array_keys($names), 'students' => max(1, $total)]);
                 foreach (array_slice($items, 1) as [$c]) {
-                    if (Schema::hasTable('timetable_card_overrides')) {
+                    if ($hasOv) {
                         TimetableCardOverride::where('card_id', $c->id)->delete();
                     }
                     $c->delete();
@@ -2026,7 +2051,8 @@ class TimetableController extends Controller
             }
         });
 
-        return response()->json(['ok' => true, 'dry_run' => $dry, 'lectures' => count($list), 'removed' => $removed, 'list' => array_slice($list, 0, 200)]);
+        return response()->json(['ok' => true, 'dry_run' => $dry, 'lectures' => count($list), 'removed' => $removed,
+            'list' => array_slice($list, 0, 200), 'skipped' => array_slice($skipped, 0, 200)]);
     }
 
     /**

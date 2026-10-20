@@ -280,15 +280,46 @@ it('bo\'lakli fan ma\'ruzalari bitta umumiy ma\'ruzaga birlashadi', function () 
     $a = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP (a)', 'students' => 40, 'group_names' => ['g-02a', 'g-03a']]);
     $b = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP (b)', 'students' => 40, 'group_names' => ['g-02b', 'g-03b']]);
     $c = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP (c)', 'students' => 20, 'group_names' => ['g-02a', 'g-02b', 'g-03a', 'g-03b']]);
-    \App\Models\TimetableCardOverride::create(['card_id' => $a->id, 'week' => 9, 'cancelled' => true]);
+    foreach ([$a, $b, $c] as $card) {
+        \App\Models\TimetableCardOverride::create(['card_id' => $card->id, 'week' => 9, 'cancelled' => true]);
+    }
 
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2], 'dry_run' => 1])
+        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 0]);
+    expect(\App\Models\TimetableChangeRequest::count())->toBe(0);
     layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2]])
-        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 2]);
+        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 2, 'skipped' => []]);
     $a->refresh();
     expect($a->subject_name)->toBe('IKP')->and($a->students)->toBe(100)
         ->and(collect($a->group_names)->sort()->values()->all())->toBe(['g-02a', 'g-02b', 'g-03a', 'g-03b'])
         ->and(\App\Models\TimetableCard::whereIn('id', [$b->id, $c->id])->count())->toBe(0)
-        ->and(\App\Models\TimetableCardOverride::where('card_id', $a->id)->count())->toBe(1);
+        ->and(\App\Models\TimetableCardOverride::where('card_id', $a->id)->count())->toBe(1)
+        ->and(\App\Models\TimetableChangeRequest::sole()->summary)->toBe('Bo\'lakli fan ma\'ruzalari birlashtirildi: 2-kurs');
+});
+
+it('turli vaqtdagi yoki turli haftadagi bo\'lak ma\'ruzalari birlashtirilmaydi; bir xil guruhli bo\'laklar soni qo\'shilmaydi', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']) + ['training_type' => 'lecture', 'kafedra_name' => 'X'];
+    // Turli vaqtda joylashgan — qoldiriladigan kartaga qo'shilsa, (b) guruhlari tekshiruvsiz boshqa vaqtga o'tardi
+    $a = \App\Models\TimetableCard::create($base + ['subject_name' => 'Fiziologiya (a)', 'students' => 20, 'group_names' => ['g-02a'], 'day' => 1, 'pair' => 1]);
+    $b = \App\Models\TimetableCard::create($base + ['subject_name' => 'Fiziologiya (b)', 'students' => 20, 'group_names' => ['g-02b'], 'day' => 2, 'pair' => 5]);
+    // Turli haftalarda (toq / juft)
+    $x = \App\Models\TimetableCard::create($base + ['subject_name' => 'Biokimyo (a)', 'students' => 20, 'group_names' => ['g-02a']]);
+    $y = \App\Models\TimetableCard::create($base + ['subject_name' => 'Biokimyo (b)', 'students' => 20, 'group_names' => ['g-02b']]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $x->id, 'week' => 2, 'cancelled' => true]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $y->id, 'week' => 1, 'cancelled' => true]);
+    // Ishchi reja: har bo'lakda butun oqim — bir xil guruhlar, bir xil son
+    $p = \App\Models\TimetableCard::create($base + ['subject_name' => 'Anatomiya (a)', 'students' => 30, 'group_names' => ['g-02a', 'g-02b']]);
+    $q = \App\Models\TimetableCard::create($base + ['subject_name' => 'Anatomiya (b)', 'students' => 30, 'group_names' => ['g-02b', 'g-02a']]);
+
+    $r = layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 1]);
+    expect($r->json('skipped'))->toHaveCount(2)
+        ->and(\App\Models\TimetableCard::whereIn('id', [$a->id, $b->id, $x->id, $y->id])->count())->toBe(4)
+        ->and($a->fresh()->subject_name)->toBe('Fiziologiya (a)')
+        ->and($p->fresh()->subject_name)->toBe('Anatomiya')
+        ->and($p->fresh()->students)->toBe(30)
+        ->and(\App\Models\TimetableCard::find($q->id))->toBeNull();
 });
 
 it('bo\'lakli fanning qo\'shimcha amaliysi umumiy ma\'ruzasiz haftalarga tushadi', function () {

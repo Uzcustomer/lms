@@ -53,6 +53,7 @@ class TimetableChangeApproval
         'admin.timetable.ktr-weeks'           => ['ktrWeeks', 'board', 'weeks'],   // dry_run emas
         'admin.timetable.weekly-layer-copy'   => ['weeklyLayerCopy', 'board', 'layer'],   // dry_run emas
         'admin.timetable.boards.split-variant-mixed' => ['splitVariantMixed', 'board', 'split'],   // dry_run emas
+        'admin.timetable.boards.merge-variant-lectures' => ['mergeVariantLectures', 'board', 'merge'],   // dry_run emas
     ];
 
     /** Tasdiqlay oladigan rollar. */
@@ -87,8 +88,8 @@ class TimetableChangeApproval
         if ($route === 'admin.timetable.cycle-plan') {
             return $request->boolean('clear') && !$request->boolean('mine') && !$request->boolean('kafedra');
         }
-        // KTR haftalari, qatlamga ko'chirish, aralash kartani bo'lish: avval sinov (dry_run) — u hech narsani o'zgartirmaydi.
-        if (in_array($route, ['admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed'], true)) {
+        // KTR haftalari, qatlamga ko'chirish, bo'lak kartalarini bo'lish/birlashtirish: avval sinov (dry_run) — u hech narsani o'zgartirmaydi.
+        if (in_array($route, ['admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed', 'admin.timetable.boards.merge-variant-lectures'], true)) {
             return !$request->boolean('dry_run');
         }
 
@@ -333,7 +334,7 @@ class TimetableChangeApproval
         if ($card) {
             return collect([$card]);
         }
-        if (in_array($route, ['admin.timetable.boards.unplace', 'admin.timetable.cycle-plan', 'admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed'], true)) {
+        if (in_array($route, ['admin.timetable.boards.unplace', 'admin.timetable.cycle-plan', 'admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed', 'admin.timetable.boards.merge-variant-lectures'], true)) {
             return collect();
         }
         $controller = app(TimetableController::class);
@@ -445,6 +446,7 @@ class TimetableChangeApproval
                     'admin.timetable.weekly-layer-copy' => 'Haftalik joylashuv tashqi jadvalga ko\'chirildi'
                         . (!empty($p['clear_internal']) ? ', ichki jadval bo\'shatildi' : ''),
                     'admin.timetable.boards.split-variant-mixed' => 'Aralash bo\'lak kartalari asos guruhlar bo\'yicha bo\'lindi',
+                    'admin.timetable.boards.merge-variant-lectures' => 'Bo\'lakli fan ma\'ruzalari birlashtirildi',
                     default => ($this->externalLayer($p) ? 'Tashqi jadval · ' : '') . 'Joylashuvlarni bo\'shatish',
                 } . ($scope ? ': ' . $scope : '');
         }

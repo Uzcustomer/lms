@@ -160,3 +160,21 @@ it('doska ma\'lumotida guruhcha talabalar soni keladi', function () {
     $data = (new TimetableController())->data($s['board'])->getData(true);
     expect($data['group_students']['1-son davolash|g-01a'])->toBe(2);
 });
+
+it('raqamsiz umumiy xona ("amaliy mashg\'ulot xonasi") bandlik to\'qnashuvi bermaydi', function () {
+    $s = ktrWeeksSetup(['1' => ['11' => 2, '13' => 2]]);
+    $common = ['auditorium_code' => 'AMX', 'auditorium_name' => "amaliy mashg'ulot xonasi"];
+    $s['p1']->update($common + ['day' => 1, 'pair' => 1]);
+    $other = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => '1-son davolash', 'specialty_name' => 'davolash ishi',
+        'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 15, 'subject_name' => 'Biokimyo',
+        'training_type' => 'practice', 'group_name' => 'g-02a', 'len_half' => 2, 'weeks' => 6] + $common);
+    $res = (new TimetableController())->placeCard(Request::create('/', 'POST', ['day' => 1, 'pair' => 1]), $other);
+    expect($res->getStatusCode())->toBe(200)->and($other->fresh()->day)->toBe(1);
+
+    // Raqamli xona esa band hisoblanadi
+    $s['p1']->update(['auditorium_code' => 'R421', 'auditorium_name' => '421']);
+    $third = $other->replicate(); $third->group_name = 'g-03a'; $third->day = null; $third->pair = null;
+    $third->auditorium_code = 'R421'; $third->auditorium_name = '421'; $third->save();
+    $res = (new TimetableController())->placeCard(Request::create('/', 'POST', ['day' => 1, 'pair' => 1]), $third);
+    expect($res->getStatusCode())->toBe(422);
+});

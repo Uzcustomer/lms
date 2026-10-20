@@ -5732,7 +5732,7 @@ class TimetableController extends Controller
                 $errors[] = "O'qituvchi band: " . $o->teacher_name . ' (' . $o->subject_name . ')';
             }
             $otherRoomCode = $ov?->auditorium_code ?: $o->auditorium_code;
-            if ($myRoomCode && $otherRoomCode === $myRoomCode) {
+            if ($myRoomCode && $otherRoomCode === $myRoomCode && !$this->isSharedRoom($ov?->auditorium_name ?: $o->auditorium_name)) {
                 $errors[] = 'Auditoriya band: ' . ($ov?->auditorium_name ?: $o->auditorium_name) . ' (' . $o->subject_name . ')';
             }
         }
@@ -5807,6 +5807,18 @@ class TimetableController extends Controller
         return [$s, $s + $card->lenHalf()];
     }
 
+    /**
+     * Umumiy (raqamsiz) xona nomi — masalan "amaliy mashg'ulot xonasi": bu aniq bitta xona emas,
+     * kafedraning amaliy xonalari umumiy belgisi. Bir vaqtda bir nechta guruhga berilishi mumkin,
+     * shuning uchun xona bandligi tekshirilmaydi (o'qituvchi va guruh bandligi tekshiriladi).
+     */
+    private function isSharedRoom(?string $name): bool
+    {
+        $name = trim((string) $name);
+
+        return $name !== '' && !preg_match('/\d/u', $name);
+    }
+
     private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0): array
     {
         // Shu kundagi barcha joylashgan kartalar (para bo'yicha emas — oraliq kesishuvi bilan)
@@ -5835,7 +5847,7 @@ class TimetableController extends Controller
                 $errors[] = "O'qituvchi band: " . $o->teacher_name . ' (' . $o->subject_name . ')';
             }
             // Auditoriya konflikti — butun doska bo'ylab
-            if ($card->auditorium_code && $o->auditorium_code === $card->auditorium_code) {
+            if ($card->auditorium_code && $o->auditorium_code === $card->auditorium_code && !$this->isSharedRoom($o->auditorium_name)) {
                 $errors[] = 'Auditoriya band: ' . $o->auditorium_name . ' (' . $o->subject_name . ')';
             }
         }

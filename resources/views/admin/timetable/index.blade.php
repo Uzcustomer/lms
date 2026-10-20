@@ -5626,7 +5626,9 @@
                     const ov = cardGKeys(o).filter(k => my.includes(k));
                     if (ov.length) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
-                    if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
+                    // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
+                    if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code
+                        && !(effectiveOther.auditorium_name && !/\d/.test(effectiveOther.auditorium_name))) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
                 });
                 return errs;
             }

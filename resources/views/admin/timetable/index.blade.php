@@ -162,6 +162,9 @@
                         <label>Hafta</label>
                         <select id="weekSel"></select>
                         <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+                        @unless($timetableAssignmentOnly)
+                        <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
+                        @endunless
                     </div>
                     <div class="tt-field tt-view-field">
                         <label>Kesim</label>
@@ -1263,6 +1266,9 @@
         #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        .tt-ktr-weeks-btn { margin-left: 6px; padding: 3px 8px; border-radius: 6px; border: 1px solid #a7f3d0; background: #ecfdf5;
+            color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap; }
+        .tt-ktr-weeks-btn:disabled { opacity: .5; }
         .tt-req-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; border-radius: 8px;
             background: #f59e0b; color: #fff; font-size: 10px; font-weight: 800; }
         .tt-req-badge.hidden { display: none; }
@@ -3330,6 +3336,26 @@
                 $('weekSel').innerHTML = opts;
                 $('weekSel').value = String(curWeek);
             }
+            // Haftalik fanlar: har hafta qaysi kartochka o'tilishi — KTR'dan (ma'ruza haftalari, amaliy soati).
+            if ($('ktrWeeksBtn')) $('ktrWeeksBtn').onclick = async function () {
+                if (!board) return;
+                const body = scopeBody();
+                this.disabled = true;
+                try {
+                    const dry = await api(BASE + '/boards/' + board.id + '/ktr-weeks', 'POST', Object.assign({ dry_run: 1 }, body));
+                    const msg = 'Qamrov: ' + scopeLabelText() + '\n\n' +
+                        dry.cards + ' ta kartochka KTR bo\'yicha haftalarga taqsimlanadi\n' +
+                        '(' + dry.weeks_on + ' ta hafta yoqiladi, ' + dry.weeks_off + ' ta o\'chiriladi).' +
+                        (dry.no_ktr.length ? '\n\nKTR topilmagan fanlar (o\'zgarmaydi): ' + dry.no_ktr.slice(0, 8).join('; ') + (dry.no_ktr.length > 8 ? '…' : '') : '') +
+                        (dry.mismatch_count ? '\n\nDiqqat: ' + dry.mismatch_count + ' ta haftada KTR soatiga kartochkalar yetmaydi (masalan: ' + dry.mismatch[0] + ').' : '') +
+                        '\n\nDavom etamizmi?';
+                    if (!confirm(msg)) return;
+                    const res = await api(BASE + '/boards/' + board.id + '/ktr-weeks', 'POST', body);
+                    $('boardMsg').textContent = 'KTR bo\'yicha: ' + res.cards + ' ta kartochka haftalari yangilandi';
+                    await loadBoard(board.id);
+                } catch (e) { alert('Xatolik: ' + e.message); }
+                finally { this.disabled = false; }
+            };
             $('weekSel').onchange = function () {
                 curWeek = +this.value || 0;
                 selected = null;
@@ -3511,11 +3537,14 @@
             const multiSpec = () => selectedDirs.size > 1;
             // Sikl rejimidagi fan — haftalik panjaraga tushmaydi (faqat sikl kalendarida).
             const isCycleCard = c => (subjectSettings[subjModeKey(c.specialty_name, c.course, c.subject_name)] || {}).mode === 'cycle';
+            // Bo'lakli fan ("Fan (a)") sozlamasi asosiy nom bilan saqlangan bo'lishi mumkin.
+            const isCycleCardAny = c => isCycleCard(c)
+                || isCycleCard(Object.assign({}, c, { subject_name: String(c.subject_name || '').replace(/\s*\(\p{L}\)\s*$/u, '') }));
             const specCards = () => cards.filter(c =>
                 selectedFaculties.has(c.faculty_name || '') &&
                 selectedDirs.has(c.specialty_name) &&
                 selectedCourses.has(c.course) &&
-                !isCycleCard(c));
+                !isCycleCardAny(c));
             const cardGroups = c => (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []);
             // Guruh identifikatori. Guruh NOMI fakultetlar bo'ylab takrorlanishi mumkin
             // (mas. 1-kurs "1K-01a (o'z)" ham 1-son, ham 2-son davolashda bor), shuning
@@ -3900,6 +3929,7 @@
                     renderHolChips();
                     renderCyclePlan(j);
                     renderCycleCards(j);
+                    if (typeof renderStats === 'function') renderStats();
                     if (keep && !options.resetScroll) {
                         const restore = () => { gw.scrollTop = keep.top; gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
                         restore(); requestAnimationFrame(restore);
@@ -5689,13 +5719,19 @@
                 // ular "joylashmagan" bo'lib ko'rinib qolardi.
                 const sc = weekActiveCards();
                 const placed = sc.filter(c => effPlace(c)).length;
-                const boardCards = cards.filter(c => !weekCancelled(c));
+                // Sikl (4-6 kurs) kartalari haftalik panjaraga (kun/para) emas, sikl kalendariga
+                // joylanadi — haftalik hisobga qo'shilsa, doim "joylanmagan" bo'lib ko'rinadi.
+                const boardCards = cards.filter(c => !weekCancelled(c) && !isCycleCardAny(c));
                 const totPlaced = boardCards.filter(c => effPlace(c)).length;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
                 const weekLbl = curWeek ? ' · ' + curWeek + '-hafta' : '';
-                $('statChips').innerHTML =
-                    '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>' +
-                    '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
+                const cyc = (viewMode === 'cycle' && cyclePlanData && Array.isArray(cyclePlanData.cycle_cards)) ? cyclePlanData.cycle_cards : null;
+                const first = cyc
+                    ? '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700" title="Tanlangan qamrovdagi sikl bloklari (fan × oqim/guruh × mashg\'ulot turi)">Sikl bloklari: <b>' +
+                        cyc.filter(c => c.placed).length + '/' + cyc.length + '</b></span>'
+                    : '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>';
+                $('statChips').innerHTML = first +
+                    '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600" title="Haftalik jadval kartalari (sikl fanlari bundan tashqari — ular sikl kalendarida)">Doska bo\'yicha (haftalik): <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
                 $('unplacedExportBtn').classList.toggle('hidden', !sc.some(c => !effPlace(c)));
                 $('weekHint').classList.toggle('hidden', !curWeek);
@@ -5947,7 +5983,7 @@
                 // "fanlar yo'qolmadi", ular sikl kalendarida. Yo'naltiruvchi xabar.
                 if (!groupRows.length) {
                     const hasCycleHere = cards.some(c => selectedFaculties.has(c.faculty_name || '') &&
-                        selectedDirs.has(c.specialty_name) && selectedCourses.has(c.course) && isCycleCard(c));
+                        selectedDirs.has(c.specialty_name) && selectedCourses.has(c.course) && isCycleCardAny(c));
                     if (hasCycleHere) {
                         $('grid').innerHTML = '<tbody><tr><td class="p-6 text-sm text-gray-600 text-center">' +
                             'Bu tanlovdagi fanlar <b>sikl (blok)</b> rejimida belgilangan — ular haftalik panjarada emas, ' +

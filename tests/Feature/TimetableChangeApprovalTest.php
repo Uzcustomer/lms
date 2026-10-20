@@ -269,3 +269,42 @@ it('doska sozlamalari saqlanganda tasdiq rejimi, ranglar va bayramlar yo\'qolmay
         ->and($settings['days_off'])->toBe([])
         ->and((int) $settings['allow_zero'])->toBe(1);
 });
+
+it('parallel bekor qilingan so\'rov tasdiqlanmaydi va qayta rad etilmaydi', function () {
+    ['head' => $head, 'reg' => $reg, 'card' => $card] = approvalSetup();
+
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $card), ['day' => 2, 'pair' => 3]);
+    // Registrator so'rovni ochib turibdi (xotirada — "pending"), shu payt mudir uni bekor qiladi.
+    $stale = TimetableChangeRequest::sole();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.cancel', $stale))->assertOk();
+    expect($stale->status)->toBe('pending');
+
+    $svc = app(\App\Services\Timetable\TimetableChangeApproval::class);
+    expect($svc->apply($stale, $reg))->toMatchArray(['ok' => false, 'stale' => true])
+        ->and($svc->reject($stale, $reg, 'kech'))->toBeFalse()
+        ->and($svc->cancel($stale))->toBeFalse();
+
+    expect($card->fresh()->only(['day', 'pair']))->toBe(['day' => 1, 'pair' => 1])
+        ->and($stale->fresh()->status)->toBe('cancelled')
+        ->and($stale->fresh()->review_note)->toBe('Yuboruvchi bekor qildi')
+        ->and(TeacherNotification::where('teacher_id', $head->id)->count())->toBe(0);
+
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $stale))
+        ->assertStatus(422)->assertJson(['error' => 'Bu so\'rov allaqachon ko\'rib chiqilgan.']);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.cancel', $stale))
+        ->assertStatus(422);
+});
+
+it('KTR bo\'yicha haftalar tarixga yoziladi, sinov (dry_run) yozilmaydi', function () {
+    ['reg' => $reg, 'board' => $board] = approvalSetup();
+    $scope = ['faculty_names' => ['F1'], 'specialty_names' => ['davolash ishi'], 'courses' => [2]];
+
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.ktr-weeks', $board), $scope + ['dry_run' => 1])
+        ->assertOk()->assertJson(['dry_run' => true]);
+    expect(TimetableChangeRequest::count())->toBe(0);
+
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.ktr-weeks', $board), $scope)->assertOk();
+    $row = TimetableChangeRequest::sole();
+    expect($row->status)->toBe('applied')
+        ->and($row->summary)->toBe('Haftalar KTR bo\'yicha belgilandi: F1, davolash ishi, 2-kurs');
+});

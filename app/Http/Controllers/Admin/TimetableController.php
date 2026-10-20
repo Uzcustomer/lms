@@ -2688,6 +2688,179 @@ class TimetableController extends Controller
     }
 
     /**
+     * Haftalik (1-3 kurs) fanlar: qaysi kartochka qaysi haftada o'tilishini KTR'dan belgilaydi.
+     * KTR'da har hafta uchun ma'ruza va amaliy (amaliy+laboratoriya+seminar) soatlari bor;
+     * shu haftaning soati dars birligi (fan × guruhcha / ma'ruzada oqim) kartochkalaridan
+     * yig'iladi, qolgan kartochkalar o'sha haftada "o'tilmaydi" (override cancelled).
+     * Ko'chirilgan hafta (day/pair) yozuvlari faol hafta bo'lsa saqlanadi.
+     */
+    public function ktrWeeks(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'dry_run'           => 'nullable|boolean',
+        ]);
+        if (!Schema::hasTable('timetable_card_overrides')) {
+            return response()->json(['error' => 'Haftalar jadvali (timetable_card_overrides) yo\'q.'], 422);
+        }
+
+        return response()->json($this->syncCardWeeksFromKtr($board, $data, $request->boolean('dry_run')));
+    }
+
+    private function syncCardWeeksFromKtr(TimetableBoard $board, array $scope = [], bool $dryRun = false): array
+    {
+        // Qamrov boshqa amallar (bo'shatish) bilan bir xil: yuborilmagan — cheklovsiz,
+        // bo'sh ro'yxat — hech narsa, '' — fakultetsiz kartalar.
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
+
+        // Sikl fanlari bu yerda emas (ularning kunlari sikl kalendarida).
+        $cycleSubjects = [];
+        foreach ($this->subjectSettingsFor($board) as $st) {
+            if (($st['mode'] ?? '') === 'cycle') {
+                $cycleSubjects[$this->specKey($st['specialty_name']) . '|' . (int) $st['course'] . '|' . $this->normSubject((string) $st['subject_name'])] = true;
+            }
+        }
+        $isCycle = function (TimetableCard $c) use ($cycleSubjects): bool {
+            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+            $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
+
+            return isset($cycleSubjects[$k . $this->normSubject((string) $c->subject_name)])
+                || ($base !== null && isset($cycleSubjects[$k . $this->normSubject($base)]));
+        };
+
+        $gset = TimetableGridSetting::where('board_id', $board->id)->get()
+            ->mapWithKeys(fn ($g) => [($g->faculty_name ?? '') . '|' . $this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks])->all();
+        $boardWeeks = max(1, (int) $board->weeks);
+        $totalFor = fn ($c) => max(1, (int) ($gset[($c->faculty_name ?? '') . '|' . $this->specKey($c->specialty_name) . '|' . $c->course]
+            ?? $gset['|' . $this->specKey($c->specialty_name) . '|' . $c->course] ?? $boardWeeks));
+
+        $ktr = $this->cycleKtrDayPlans($board);
+        $ktrFor = function (TimetableCard $c) use ($ktr): ?array {
+            $key = $this->cycleKtrKey((string) $c->specialty_name, (int) $c->course, (string) $c->subject_name);
+            $fac = trim((string) $c->faculty_name);
+
+            return ($fac !== '' ? ($ktr[$this->specKey($fac) . '|' . $key] ?? null) : null) ?? $ktr[$key] ?? null;
+        };
+
+        $cardQuery = TimetableCard::where('board_id', $board->id);
+        $this->applyScopeToQuery($cardQuery, $facSet, $specSet, $courseSet);
+        $cards = $cardQuery->get()->reject($isCycle);
+
+        // Dars birligi: ma'ruza — oqim (+til), amaliy — guruhcha.
+        $units = [];
+        foreach ($cards as $c) {
+            $who = $c->training_type === 'lecture'
+                ? 'L|' . mb_strtolower((string) $c->oqim_label) . '|' . $c->lang . '|' . implode(',', (array) $c->group_names)
+                : 'P|' . mb_strtolower(trim((string) $c->group_name));
+            $units[implode('|', [mb_strtolower((string) $c->faculty_name), $this->specKey($c->specialty_name), (int) $c->course,
+                $this->normSubject((string) $c->subject_name), $who])][] = $c;
+        }
+
+        $existing = DB::table('timetable_card_overrides')->whereIn('card_id', $cards->pluck('id'))->get()
+            ->groupBy('card_id');
+        $now = now();
+        $insert = [];
+        $cancelIds = [];
+        $deleteIds = [];
+        $weekCounts = [];
+        $noKtr = [];
+        $mismatch = [];
+        $synced = 0;
+
+        foreach ($units as $unitCards) {
+            $first = $unitCards[0];
+            $plan = $ktrFor($first);
+            if ($plan === null) {
+                $noKtr[$first->specialty_name . ' ' . $first->course . '-kurs · ' . $first->subject_name] = true;
+                continue;
+            }
+            $total = $totalFor($first);
+            $typeKey = $first->training_type === 'lecture' ? 'lec' : 'prc';
+            // Asosiy (ko'p haftali, uzun) kartochka birinchi tanlanadi.
+            usort($unitCards, fn ($a, $b) => [(int) $b->weeks, $b->lenHalf(), $a->id] <=> [(int) $a->weeks, $a->lenHalf(), $b->id]);
+            $active = [];
+            for ($w = 1; $w <= $total; $w++) {
+                $need = (int) ($plan[$w - 1][$typeKey] ?? 0);
+                $chosen = [];
+                foreach ($unitCards as $c) {
+                    if ($need <= 0) {
+                        break;
+                    }
+                    if ($c->lenHalf() <= $need) {
+                        $chosen[$c->id] = true;
+                        $need -= $c->lenHalf();
+                    }
+                }
+                if ($need > 0) {
+                    $mismatch[] = $first->subject_name . ' · ' . ($first->group_name ?: $first->oqim_label) . ' · ' . $w . '-hafta: KTR '
+                        . (int) ($plan[$w - 1][$typeKey] ?? 0) . ' soat, kartochkalar yetmaydi';
+                }
+                foreach ($unitCards as $c) {
+                    $active[$c->id][$w] = isset($chosen[$c->id]);
+                }
+            }
+            foreach ($unitCards as $c) {
+                $rows = ($existing[$c->id] ?? collect())->keyBy('week');
+                $count = 0;
+                for ($w = 1; $w <= $total; $w++) {
+                    $row = $rows[$w] ?? null;
+                    if ($active[$c->id][$w]) {
+                        $count++;
+                        if ($row && $row->cancelled) {
+                            $deleteIds[] = $row->id;
+                        }
+                    } elseif (!$row) {
+                        $insert[] = ['card_id' => $c->id, 'week' => $w, 'day' => null, 'pair' => null, 'cancelled' => true,
+                            'created_at' => $now, 'updated_at' => $now];
+                    } elseif (!$row->cancelled) {
+                        $cancelIds[] = $row->id;
+                    }
+                }
+                $weekCounts[$c->id] = $count;
+                $synced++;
+            }
+        }
+
+        $result = [
+            'ok' => true,
+            'dry_run' => $dryRun,
+            'cards' => $synced,
+            'units' => count($units),
+            'weeks_on' => count($deleteIds),
+            'weeks_off' => count($insert) + count($cancelIds),
+            'no_ktr' => array_keys($noKtr),
+            'mismatch' => array_slice($mismatch, 0, 50),
+            'mismatch_count' => count($mismatch),
+        ];
+        if ($dryRun) {
+            return $result;
+        }
+
+        DB::transaction(function () use ($insert, $cancelIds, $deleteIds, $weekCounts, $now) {
+            foreach (array_chunk($deleteIds, 1000) as $chunk) {
+                DB::table('timetable_card_overrides')->whereIn('id', $chunk)->delete();
+            }
+            foreach (array_chunk($cancelIds, 1000) as $chunk) {
+                DB::table('timetable_card_overrides')->whereIn('id', $chunk)
+                    ->update(['cancelled' => true, 'day' => null, 'pair' => null, 'updated_at' => $now]);
+            }
+            foreach (array_chunk($insert, 1000) as $chunk) {
+                DB::table('timetable_card_overrides')->insert($chunk);
+            }
+            foreach ($weekCounts as $id => $count) {
+                DB::table('timetable_cards')->where('id', $id)->update(['weeks' => max(0, $count)]);
+            }
+        });
+
+        return $result;
+    }
+
+    /**
      * Haftalik amaliy soatni dars kartalariga bo'ladi. Qaytadi: len_half
      * qiymatlari ro'yxati (len_half birligi = SOAT; 2 = 1 para = 2 soat).
      * Sukut — 2 soatlik paralar; toq soat qolsa oxirgisi 3 soatga uzaytiriladi

@@ -1269,6 +1269,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-assign-options', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignOptions'])->name('cycle-assign-options');
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
+                // Haftalik fanlar: kartochka haftalarini KTR'dan belgilash
+                Route::post('/boards/{board}/ktr-weeks', [\App\Http\Controllers\Admin\TimetableController::class, 'ktrWeeks'])->name('ktr-weeks');
                 // Jadval o'zgarishlari — registrator ofisi tasdig'i
                 Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');
                 Route::post('/boards/{board}/change-requests/mode', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'setMode'])->name('change-requests.mode');

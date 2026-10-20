@@ -7104,7 +7104,8 @@
                     });
                     rows.push(cells);
                 });
-                return { rows, freeze_rows: grid.querySelectorAll('thead tr').length, freeze_cols: 2 };
+                // Chapda 3 ustun qotiriladi: kun, para (rim raqami), yarim para vaqti.
+                return { rows, freeze_rows: grid.querySelectorAll('thead tr').length, freeze_cols: 3, col_widths: [null, null, 9] };
             }
 
             // Jadvalni HAQIQIY .xlsx fayl sifatida yuklab olish (serverda PhpSpreadsheet

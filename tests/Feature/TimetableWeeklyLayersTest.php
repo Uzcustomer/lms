@@ -198,8 +198,24 @@ it('bitta fanning turli bo\'laklari bir katakda parallel tura oladi, boshqa fan 
     layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $other), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertStatus(422);
 });
 
+/** HEMIS biriktiruvi: [guruh => talabalar soni] shu fanni o'qiydi (student_subjects). */
+function assignVariantStudents(string $subject, array $perGroup): void
+{
+    static $seq = 900000;
+    foreach ($perGroup as $g => $n) {
+        for ($i = 0; $i < $n; $i++) {
+            $hid = ++$seq;
+            DB::table('students')->insert(['hemis_id' => $hid, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S', 'second_name' => 'S',
+                'student_id_number' => (string) $hid, 'group_name' => $g . " (o'z)", 'student_status_code' => 11]);
+            DB::table('student_subjects')->insert(['student_hemis_id' => $hid, 'curriculum_subject_hemis_id' => 1, 'subject_name' => $subject, 'education_year' => '2026']);
+        }
+    }
+}
+
 it('aralash (c) bo\'lak kartasini asos guruhlar bo\'yicha bo\'ladi, joylashuv va haftalar saqlanadi', function () {
     $s = layersSetup();
+    $s['board']->forceFill(['subject_source' => 'hemis'])->save();
+    assignVariantStudents('IKP (c)', ['g-02a' => 3, 'g-02b' => 2, 'g-03a' => 4, 'g-03b' => 1]);
     $c = \App\Models\TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half', 'weeks'])
         + ['subject_name' => 'IKP (c)', 'kafedra_name' => 'X', 'students' => 40, 'teacher_id' => 7, 'teacher_name' => 'T',
             'group_name' => 'g-02a + g-02b + g-03a + g-03b', 'group_names' => ['g-02a', 'g-02b', 'g-03a', 'g-03b'], 'ext_day' => 1, 'ext_pair' => 3]);
@@ -212,9 +228,27 @@ it('aralash (c) bo\'lak kartasini asos guruhlar bo\'yicha bo\'ladi, joylashuv va
         ->assertOk()->assertJson(['cards' => 1, 'created' => 1]);
 
     $c->refresh();
-    expect($c->group_names)->toBe(['g-02a', 'g-02b']);
+    expect($c->group_names)->toBe(['g-02a', 'g-02b'])->and($c->students)->toBe(5);
     $copy = \App\Models\TimetableCard::where('subject_name', 'IKP (c)')->where('id', '!=', $c->id)->first();
     expect($copy->group_names)->toBe(['g-03a', 'g-03b'])
+        ->and($copy->students)->toBe(5)
         ->and([$copy->ext_day, $copy->ext_pair, $copy->teacher_id])->toBe([1, 3, null])
         ->and(\App\Models\TimetableCardOverride::where('card_id', $copy->id)->count())->toBe(2);
+});
+
+it('biriktiruvsiz juftlangan bo\'lak kartasi va ishchi reja doskasi bo\'linmaydi', function () {
+    $s = layersSetup();
+    // Harf qoidasi bilan ataylab juftlangan amaliy (seminar / katta guruh) — HEMIS biriktiruvi yo'q
+    $c = \App\Models\TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half', 'weeks'])
+        + ['subject_name' => 'Pediatriya (a)', 'kafedra_name' => 'X', 'students' => 30,
+            'group_name' => 'g-01a + g-02a', 'group_names' => ['g-01a', 'g-02a']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-variant-mixed', $s['board']), ['courses' => [2]])
+        ->assertStatus(422);
+
+    $s['board']->forceFill(['subject_source' => 'hemis'])->save();
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-variant-mixed', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['cards' => 0, 'created' => 0]);
+    expect($c->fresh()->group_names)->toBe(['g-01a', 'g-02a'])
+        ->and(\App\Models\TimetableCard::where('subject_name', 'Pediatriya (a)')->count())->toBe(1);
 });

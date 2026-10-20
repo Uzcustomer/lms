@@ -1978,6 +1978,11 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        // Aralash karta faqat HEMIS doskada (biriktiruv bo'yicha) yig'iladi; ishchi reja doskasida
+        // ko'p guruhli amaliy karta — ataylab juftlangan guruhlar.
+        if (!$this->isHemisBoard($board)) {
+            return response()->json(['error' => 'Bu amal faqat HEMIS fanlari doskasi uchun.'], 422);
+        }
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->whereNotNull('group_names');
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -1999,20 +2004,23 @@ class TimetableController extends Controller
                 if (count($byBase) < 2) {
                     continue;
                 }
-                // Har guruhdan shu bo'lakka HEMIS'da biriktirilgan talabalar (o'quv rejadan qat'i nazar).
-                $counts = [];
-                foreach ($this->variantStudentCounts((string) $card->subject_name, $year) as $byGroup) {
-                    foreach ($byGroup as $gk => $n) {
-                        $counts[$gk] = ($counts[$gk] ?? 0) + $n;
-                    }
-                }
-                $studentsOf = function (array $names) use ($counts) {
+                // Har guruhdan shu bo'lakka HEMIS'da biriktirilgan talabalar — guruhning o'z o'quv
+                // rejasi bo'yicha (variantAssignedCount kabi): guruh nomi fakultetlararo takrorlanadi.
+                $counts = $this->variantStudentCounts((string) $card->subject_name, $year);
+                $studentsOf = function (array $names) use ($counts, $card) {
                     $sum = 0;
                     foreach ($names as $n) {
-                        $sum += $counts[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $n))] ?? 0;
+                        $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $n));
+                        $cur = $this->groupCurriculum((string) $n, $card->faculty_name);
+                        $sum += $cur ? (int) ($counts[$cur][$gk] ?? 0) : (int) array_sum(array_column($counts, $gk));
                     }
                     return $sum;
                 };
+                // Biriktiruv bo'yicha yig'ilgan aralash kartagina bo'linadi. Biriktiruvi yo'q karta
+                // harf qoidasi bilan ataylab juftlangan ("01a + 02a": seminar / katta amaliy guruh).
+                if ($studentsOf((array) $card->group_names) < 1) {
+                    continue;
+                }
                 $bundles = array_values($byBase);
                 $split[] = $card->subject_name . ' · ' . $card->oqim_label . ' · ' . count($bundles) . ' guruh';
                 if ($dry) {

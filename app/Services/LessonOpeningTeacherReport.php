@@ -511,16 +511,29 @@ class LessonOpeningTeacherReport
             return [];
         }
 
+        // Kursda qoldirilgan / qayta tiklangan talabada bir xil semestr va fan ikki
+        // o'quv yilida takrorlanadi (2025 va 2026). Eng erta sana olinsa o'tgan yilgi
+        // biriktirish chiqib, yangi guruhdagi kech qo'shilgan darslari "kech" bo'lmay
+        // qolardi — shuning uchun eng oxirgi o'quv yilidagi biriktirish sanasi olinadi.
         $map = [];
+        $yearOf = [];
         foreach (array_chunk($hemisIds, 1000) as $chunk) {
             DB::table('student_subjects')
                 ->whereIn('student_hemis_id', $chunk)
                 ->whereNotNull('hemis_created_at')
-                ->groupBy('student_hemis_id', 'semester_id', 'subject_id')
-                ->selectRaw('student_hemis_id, semester_id, subject_id, MIN(hemis_created_at) as assigned_at')
+                ->groupBy('student_hemis_id', 'semester_id', 'subject_id', 'education_year')
+                ->selectRaw('student_hemis_id, semester_id, subject_id, education_year, MIN(hemis_created_at) as assigned_at')
                 ->get()
-                ->each(function ($row) use (&$map) {
-                    $map[(string) $row->student_hemis_id][(string) $row->semester_id][(string) $row->subject_id] = substr((string) $row->assigned_at, 0, 10);
+                ->each(function ($row) use (&$map, &$yearOf) {
+                    $h = (string) $row->student_hemis_id;
+                    $sem = (string) $row->semester_id;
+                    $sub = (string) $row->subject_id;
+                    $year = (int) $row->education_year;
+                    if (isset($yearOf[$h][$sem][$sub]) && $yearOf[$h][$sem][$sub] > $year) {
+                        return;
+                    }
+                    $yearOf[$h][$sem][$sub] = $year;
+                    $map[$h][$sem][$sub] = substr((string) $row->assigned_at, 0, 10);
                 });
         }
 

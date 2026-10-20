@@ -6625,20 +6625,24 @@
                     const startList = g => (cellStack[g + '|' + d + '|' + p] || []).filter(x => x.training_type !== 'lecture');
                     const l0 = startList(o.groups[gi]);
                     const B = l0.length ? bolakBaseOf(l0[0]) : null;
-                    if (!B || !l0.every(x => bolakBaseOf(x) === B)) return null;
+                    // Bitta katak (rowspan) — bo'laklar uzunligi bir xil bo'lsagina: aks holda qisqasi
+                    // tugagan joydan boshlanadigan dars uzun bo'lak rowspan'i ostida yo'qolib qolardi.
+                    const L = l0.length ? cardLen(l0[0]) : 0;
+                    const fits = x => bolakBaseOf(x) === B && cardLen(x) === L;
+                    if (!B || !l0.every(fits)) return null;
                     const bg = baseKey(gName[o.groups[gi]] || '');
                     let span = 1;
                     while (gi + span < o.groups.length) {
                         const g2 = o.groups[gi + span];
                         if (baseKey(gName[g2] || '') !== bg || vConsumed[g2 + '|' + d + '|' + p]) break;
                         const l2 = startList(g2);
-                        if (!l2.length || !l2.every(x => bolakBaseOf(x) === B)) break;
+                        if (!l2.length || !l2.every(fits)) break;
                         span++;
                     }
                     const list = new Map();
                     for (let k = 0; k < span; k++) startList(o.groups[gi + k]).forEach(x => list.set(x.id, x));
                     const items = [...list.values()].sort((a, b) => bolakLetterOf(a).localeCompare(bolakLetterOf(b)) || a.id - b.id);
-                    const vs = Math.max(...items.map(cardLen));
+                    const vs = L;
                     for (let r = 1; r < vs; r++) for (let k = 0; k < span; k++) vConsumed[o.groups[gi + k] + '|' + d + '|' + (p + r)] = 1;
                     const first = items[0];
                     const parts = B.split(/\.\s+/).filter(Boolean);

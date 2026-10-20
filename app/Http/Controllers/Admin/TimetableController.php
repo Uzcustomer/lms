@@ -5794,6 +5794,7 @@ class TimetableController extends Controller
             'days'  => $gs->days ?? $board->days,
             // Yarim-slot soni doska qo'ng'iroq jadvalidan (yo'nalish bo'yicha bir xil)
             'pairs' => $board->pairCount(),
+            'weeks' => max(1, (int) ($gs->weeks ?? $board->weeks ?? 15)),
         ];
     }
 
@@ -5906,7 +5907,9 @@ class TimetableController extends Controller
         // Tashqi jadval — umumiy shablon: bir katakni hech qachon bir haftaga tushmaydigan
         // kartalar (toq/juft hafta ma'ruzalari, "BKP 7 / Umumiy xirurgiya 8" kabi navbatlashuvchi
         // fanlar) bo'lisha oladi. Shuning uchun guruh bandligi faqat umumiy faol hafta bo'lsa konflikt.
-        $totalWeeks = max(1, (int) ($card->board->weeks ?? 15));
+        // Haftalar — yo'nalish+kurs panjarasidan (hafta istisnolari shu chegaragacha yoziladi);
+        // guruh konflikti faqat bir panjara (groupScopeKey) ichida bo'ladi.
+        $totalWeeks = $this->gridFor($card->board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course)['weeks'];
         $cancelled = [];
         $activeWeeks = function (int $cardId) use (&$cancelled, $totalWeeks): array {
             if (!array_key_exists($cardId, $cancelled)) {

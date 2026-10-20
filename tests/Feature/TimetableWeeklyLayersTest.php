@@ -166,3 +166,18 @@ it('tashqi jadvalda haftalari kesishmaydigan kartalar bir katakni bo\'lisha olad
     \App\Models\TimetableCardOverride::where('card_id', $s['foreign']->id)->where('week', 7)->delete();
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.cards.place', $s['foreign']), ['day' => 2, 'pair' => 4, 'layer' => 'external'])->assertStatus(422);
 });
+
+it('haftalar kesishmasi doska emas, yo\'nalish panjarasi haftalari bo\'yicha', function () {
+    $s = layersSetup();
+    // Doska 18 hafta, yo'nalish panjarasi 15 hafta: istisnolar 15-haftagacha yoziladi,
+    // 16-18-haftalar bu kartalar uchun yo'q — ularni "umumiy faol hafta" deb hisoblamaslik kerak.
+    $s['board']->update(['weeks' => 18]);
+    foreach (range(8, 15) as $w) {
+        \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => $w, 'cancelled' => true]);
+    }
+    foreach (range(1, 7) as $w) {
+        \App\Models\TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => $w, 'cancelled' => true]);
+    }
+    layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertOk();
+    layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.cards.place', $s['foreign']), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertOk();
+});

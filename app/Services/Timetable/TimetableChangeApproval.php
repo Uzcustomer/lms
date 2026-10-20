@@ -51,6 +51,7 @@ class TimetableChangeApproval
     public const LOGGED = self::GATED + [
         'admin.timetable.cards.update'        => ['updateCard', 'card', 'card'],
         'admin.timetable.ktr-weeks'           => ['ktrWeeks', 'board', 'weeks'],   // dry_run emas
+        'admin.timetable.weekly-layer-copy'   => ['weeklyLayerCopy', 'board', 'layer'],   // dry_run emas
     ];
 
     /** Tasdiqlay oladigan rollar. */
@@ -85,8 +86,8 @@ class TimetableChangeApproval
         if ($route === 'admin.timetable.cycle-plan') {
             return $request->boolean('clear') && !$request->boolean('mine') && !$request->boolean('kafedra');
         }
-        // KTR haftalari: avval sinov (dry_run) — u hech narsani o'zgartirmaydi.
-        if ($route === 'admin.timetable.ktr-weeks') {
+        // KTR haftalari, qatlamga ko'chirish: avval sinov (dry_run) — u hech narsani o'zgartirmaydi.
+        if (in_array($route, ['admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy'], true)) {
             return !$request->boolean('dry_run');
         }
 
@@ -331,7 +332,7 @@ class TimetableChangeApproval
         if ($card) {
             return collect([$card]);
         }
-        if (in_array($route, ['admin.timetable.boards.unplace', 'admin.timetable.cycle-plan', 'admin.timetable.ktr-weeks'], true)) {
+        if (in_array($route, ['admin.timetable.boards.unplace', 'admin.timetable.cycle-plan', 'admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy'], true)) {
             return collect();
         }
         $controller = app(TimetableController::class);
@@ -389,8 +390,7 @@ class TimetableChangeApproval
 
         switch ($route) {
             case 'admin.timetable.cards.place':
-                // Haftalik jadval qatlami: so'rovda bo'lmasa — rol bo'yicha (o'quv bo'limi — tashqi).
-                $ext = ($p['layer'] ?? (in_array((string) session('active_role'), ['oquv_bolimi', 'oquv_bolimi_boshligi'], true) ? 'external' : 'internal')) === 'external';
+                $ext = $this->externalLayer($p);
                 $to = (!empty($p['day']) && !empty($p['pair'])) ? $slot($p['day'], $p['pair']) : 'jadvaldan olib tashlash';
                 $from = $ext ? $slot($card->ext_day ?? null, $card->ext_pair ?? null) : $slot($card->day, $card->pair);
                 $text = ($ext ? 'Tashqi jadval · ' : '') . $head . ': ' . $from . ' → ' . $to;
@@ -441,11 +441,19 @@ class TimetableChangeApproval
                 $text = match ($route) {
                     'admin.timetable.cycle-plan' => 'Sikl bloklarini bo\'shatish',
                     'admin.timetable.ktr-weeks' => 'Haftalar KTR bo\'yicha belgilandi',
-                    default => 'Joylashuvlarni bo\'shatish',
+                    'admin.timetable.weekly-layer-copy' => 'Haftalik joylashuv tashqi jadvalga ko\'chirildi'
+                        . (!empty($p['clear_internal']) ? ', ichki jadval bo\'shatildi' : ''),
+                    default => ($this->externalLayer($p) ? 'Tashqi jadval · ' : '') . 'Joylashuvlarni bo\'shatish',
                 } . ($scope ? ': ' . $scope : '');
         }
 
         return [$subject, $text];
+    }
+
+    /** Haftalik jadval qatlami tashqimi: so'rovda bo'lmasa — rol bo'yicha (o'quv bo'limi — tashqi), controller kabi. */
+    private function externalLayer(array $p): bool
+    {
+        return ($p['layer'] ?? (in_array((string) session('active_role'), ['oquv_bolimi', 'oquv_bolimi_boshligi'], true) ? 'external' : 'internal')) === 'external';
     }
 
     private function targetKey(string $route, array $p, ?TimetableCard $card, TimetableBoard $board): string

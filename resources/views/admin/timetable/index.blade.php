@@ -5881,7 +5881,6 @@
                 const n = String(name || '').trim();
                 return n !== '' && !/\d/.test(n) && /mashg|umumiy/i.test(n);
             };
-            // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).
             // Bitta fanning turli bo'laklari ("Fan (a)" va "Fan (b)") — guruhning turli talabalari,
             // bir vaqtda parallel o'tadi: guruh bandligi hisoblanmaydi (serverdagi bolakSiblings).
             const BOLAK_RX = /^(.*?)\s*\((\p{L})\)\s*$/u;
@@ -5889,6 +5888,7 @@
                 const ma = BOLAK_RX.exec(String(a.subject_name || '').trim()), mb = BOLAK_RX.exec(String(b.subject_name || '').trim());
                 return !!(ma && mb && ma[1].trim().toLowerCase() === mb[1].trim().toLowerCase() && ma[2].toLowerCase() !== mb[2].toLowerCase());
             }
+            // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).
             function weeksIntersect(a, b) {
                 const total = +curGrid().weeks || +board.weeks || 15;
                 for (let w = 1; w <= total; w++) {

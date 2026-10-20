@@ -5895,7 +5895,6 @@ class TimetableController extends Controller
         return null;
     }
 
-    /** Tashqi qatlamdagi guruh bandligi (ext_day/ext_pair bo'yicha). */
     /**
      * Bitta fanning turli bo'laklari ("Fan (a)" va "Fan (b)"): guruhning turli talabalari —
      * bir vaqtda parallel o'tadi, guruh bandligi bo'yicha bir-biriga to'sqinlik qilmaydi
@@ -5911,6 +5910,7 @@ class TimetableController extends Controller
         return mb_strtolower(trim($ma[1])) === mb_strtolower(trim($mb[1])) && mb_strtolower($ma[2]) !== mb_strtolower($mb[2]);
     }
 
+    /** Tashqi qatlamdagi guruh bandligi (ext_day/ext_pair bo'yicha). */
     private function findExternalConflicts(TimetableCard $card, int $day, int $pair): array
     {
         $others = TimetableCard::where('board_id', $card->board_id)

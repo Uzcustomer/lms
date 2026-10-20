@@ -224,8 +224,12 @@ it('aralash (c) bo\'lak kartasini asos guruhlar bo\'yicha bo\'ladi, joylashuv va
 
     layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-variant-mixed', $s['board']), ['courses' => [2], 'dry_run' => 1])
         ->assertOk()->assertJson(['cards' => 1, 'created' => 0]);
+    expect(\App\Models\TimetableChangeRequest::count())->toBe(0);
     layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-variant-mixed', $s['board']), ['courses' => [2]])
         ->assertOk()->assertJson(['cards' => 1, 'created' => 1]);
+    $log = \App\Models\TimetableChangeRequest::sole();
+    expect($log->status)->toBe('applied')
+        ->and($log->summary)->toBe('Aralash bo\'lak kartalari asos guruhlar bo\'yicha bo\'lindi: 2-kurs');
 
     $c->refresh();
     expect($c->group_names)->toBe(['g-02a', 'g-02b'])->and($c->students)->toBe(5);

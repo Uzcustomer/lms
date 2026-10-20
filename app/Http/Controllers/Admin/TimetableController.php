@@ -446,6 +446,14 @@ class TimetableController extends Controller
         return preg_replace('/\s+/u', '', $name);
     }
 
+    /** Asos guruh kaliti: "d1/d24-02a (o'z)" -> "d1/d24-02" (pastki guruh harfi va til qo'shimchasisiz). */
+    private function baseGroupKey(string $name): string
+    {
+        $n = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $name));
+
+        return (string) preg_replace('/(\d)[a-zа-яё]$/u', '$1', $n);
+    }
+
     /** Variant harfi: "... (a)" / "(А)" -> a, "(b)" / "(Б)" -> b, "(c)" / "(С)" -> c. */
     private function variantLetter(string $text, bool $groupName = false): ?string
     {
@@ -1159,8 +1167,14 @@ class TimetableController extends Controller
                                     $fullRows = array_values(array_filter($practiceRows, fn ($gr) => empty($gr['partial'])));
                                     $partRows = array_values(array_filter($practiceRows, fn ($gr) => !empty($gr['partial'])));
                                     $practiceBundles = array_map(static fn ($gr) => [$gr], $fullRows);
-                                    if ($partRows) {
-                                        $practiceBundles[] = $partRows;
+                                    // Kichik qismlar asos guruh bo'yicha: "02a dan 5 + 02b dan 5" — bitta (c)
+                                    // guruhi; butun oqimning qoldiqlari bitta katta guruhga qo'shilmaydi.
+                                    $partByBase = [];
+                                    foreach ($partRows as $gr) {
+                                        $partByBase[$this->baseGroupKey((string) ($gr['name'] ?? ''))][] = $gr;
+                                    }
+                                    foreach ($partByBase as $bundle) {
+                                        $practiceBundles[] = $bundle;
                                     }
                                 } else {
                                     $practiceBundles = $pairPracticeGroups
@@ -1941,6 +1955,107 @@ class TimetableController extends Controller
         }
 
         return response()->json(['ok' => true, 'regenerated' => $weeksChanged]);
+    }
+
+    /**
+     * Bo'lakli fanning aralash (c) amaliy kartasi bir nechta asos guruhni qamrab olgan bo'lsa
+     * ("02a+02b+03a+03b+…"), uni asos guruhlar bo'yicha bo'ladi: har asos guruhga ("02a + 02b")
+     * alohida karta. Asl karta birinchi asos guruhda qoladi; qolganlari uning nusxasi —
+     * tashqi/ichki joylashuvi va haftalari (bekor qilingan haftalar, ko'chirishlar) bilan.
+     * O'qituvchi va xona nusxalarga ko'chirilmaydi (kafedra o'zi biriktiradi).
+     */
+    public function splitVariantMixed(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'dry_run'           => 'nullable|boolean',
+        ]);
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
+        }
+        // Aralash karta faqat HEMIS doskada (biriktiruv bo'yicha) yig'iladi; ishchi reja doskasida
+        // ko'p guruhli amaliy karta — ataylab juftlangan guruhlar.
+        if (!$this->isHemisBoard($board)) {
+            return response()->json(['error' => 'Bu amal faqat HEMIS fanlari doskasi uchun.'], 422);
+        }
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->whereNotNull('group_names');
+        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
+        $year = (int) substr((string) $board->academic_year, 0, 4);
+        $dry = $request->boolean('dry_run');
+        $split = [];
+        $created = 0;
+        $hasOv = Schema::hasTable('timetable_card_overrides');
+
+        DB::transaction(function () use ($q, $year, $dry, $hasOv, &$split, &$created) {
+            foreach ($q->get() as $card) {
+                if ($this->variantLetter((string) $card->subject_name) === null) {
+                    continue;
+                }
+                $byBase = [];
+                foreach ((array) $card->group_names as $g) {
+                    $byBase[$this->baseGroupKey((string) $g)][] = $g;
+                }
+                if (count($byBase) < 2) {
+                    continue;
+                }
+                // Har guruhdan shu bo'lakka HEMIS'da biriktirilgan talabalar — guruhning o'z o'quv
+                // rejasi bo'yicha (variantAssignedCount kabi): guruh nomi fakultetlararo takrorlanadi.
+                $counts = $this->variantStudentCounts((string) $card->subject_name, $year);
+                $studentsOf = function (array $names) use ($counts, $card) {
+                    $sum = 0;
+                    foreach ($names as $n) {
+                        $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $n));
+                        $cur = $this->groupCurriculum((string) $n, $card->faculty_name);
+                        $sum += $cur ? (int) ($counts[$cur][$gk] ?? 0) : (int) array_sum(array_column($counts, $gk));
+                    }
+                    return $sum;
+                };
+                // Biriktiruv bo'yicha yig'ilgan aralash kartagina bo'linadi. Biriktiruvi yo'q karta
+                // harf qoidasi bilan ataylab juftlangan ("01a + 02a": seminar / katta amaliy guruh).
+                if ($studentsOf((array) $card->group_names) < 1) {
+                    continue;
+                }
+                $bundles = array_values($byBase);
+                $split[] = $card->subject_name . ' · ' . $card->oqim_label . ' · ' . count($bundles) . ' guruh';
+                if ($dry) {
+                    continue;
+                }
+                $ovs = $hasOv ? TimetableCardOverride::where('card_id', $card->id)->get() : collect();
+                foreach ($bundles as $i => $names) {
+                    $attrs = [
+                        'group_name' => implode(' + ', $names),
+                        'group_names' => count($names) > 1 ? $names : null,
+                        'students' => max(1, $studentsOf($names) ?: (int) round($card->students / count($bundles))),
+                    ];
+                    if ($i === 0) {
+                        $card->update($attrs);
+                        continue;
+                    }
+                    $copy = $card->replicate();
+                    $copy->fill($attrs);
+                    $copy->teacher_id = null;
+                    $copy->teacher_name = null;
+                    $copy->auditorium_code = null;
+                    $copy->auditorium_name = null;
+                    $copy->save();
+                    $created++;
+                    foreach ($ovs as $o) {
+                        TimetableCardOverride::create([
+                            'card_id' => $copy->id, 'week' => $o->week, 'day' => $o->day, 'pair' => $o->pair,
+                            'start_half' => $o->start_half, 'cancelled' => $o->cancelled,
+                        ]);
+                    }
+                }
+            }
+        });
+
+        return response()->json(['ok' => true, 'dry_run' => $dry, 'cards' => count($split), 'created' => $created, 'list' => array_slice($split, 0, 200)]);
     }
 
     /**

@@ -389,8 +389,11 @@ class TimetableChangeApproval
 
         switch ($route) {
             case 'admin.timetable.cards.place':
+                // Haftalik jadval qatlami: so'rovda bo'lmasa — rol bo'yicha (o'quv bo'limi — tashqi).
+                $ext = ($p['layer'] ?? (in_array((string) session('active_role'), ['oquv_bolimi', 'oquv_bolimi_boshligi'], true) ? 'external' : 'internal')) === 'external';
                 $to = (!empty($p['day']) && !empty($p['pair'])) ? $slot($p['day'], $p['pair']) : 'jadvaldan olib tashlash';
-                $text = $head . ': ' . $slot($card->day, $card->pair) . ' → ' . $to;
+                $from = $ext ? $slot($card->ext_day ?? null, $card->ext_pair ?? null) : $slot($card->day, $card->pair);
+                $text = ($ext ? 'Tashqi jadval · ' : '') . $head . ': ' . $from . ' → ' . $to;
                 break;
             case 'admin.timetable.cards.week-override':
                 $act = ($p['action'] ?? '') === 'cancel' ? 'dars bekor qilinadi'

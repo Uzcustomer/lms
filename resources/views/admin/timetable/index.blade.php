@@ -194,6 +194,10 @@
                             <button type="button" id="mineOnly" class="px-2 py-1 bg-white text-gray-500">Faqat meniki</button>
                         </span>
                         @endif
+                        <span id="weeklyLayerBox" class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Haftalik jadval qatlami: tashqi — o'quv bo'limi (umumiy, o'qituvchi/xonasiz), ichki — kafedra (haqiqiy jadval)">
+                            <button type="button" id="wkLayerExternal" class="px-2 py-1 bg-white text-gray-500">Tashqi</button>
+                            <button type="button" id="wkLayerInternal" class="px-2 py-1 bg-white text-gray-500">Ichki</button>
+                        </span>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -2489,6 +2493,26 @@
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
+            const TIMETABLE_ROLE = @json($timetableActiveRole);
+            // Haftalik jadval qatlami (sikl kabi): tashqi — o'quv bo'limi, ichki — kafedra mudiri.
+            const WEEKLY_ADMIN = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'].includes(TIMETABLE_ROLE);
+            const WEEKLY_OQUV = ['oquv_bolimi', 'oquv_bolimi_boshligi'].includes(TIMETABLE_ROLE);
+            let weeklyLayer = WEEKLY_OQUV ? 'external' : 'internal';
+            try { const v = localStorage.getItem('lms:timetable-weekly-layer'); if (v === 'external' || v === 'internal') weeklyLayer = v; } catch (e) { }
+            const weeklyCanEdit = () => !TIMETABLE_READ_ONLY && (WEEKLY_ADMIN || (weeklyLayer === 'external' ? WEEKLY_OQUV : TIMETABLE_ROLE === 'kafedra_mudiri'));
+            // Kartani tanlangan qatlamga moslaydi: tashqida joylashuv ext_day/ext_pair, o'qituvchi va xona yashiriladi.
+            function applyWeeklyLayer(list) {
+                list.forEach(c => {
+                    if (!c._int) c._int = { day: c.day, pair: c.pair, teacher_id: c.teacher_id, teacher_name: c.teacher_name,
+                        auditorium_code: c.auditorium_code, auditorium_name: c.auditorium_name, auditorium_volume: c.auditorium_volume };
+                    if (weeklyLayer === 'external') {
+                        Object.assign(c, { day: c.ext_day || null, pair: c.ext_pair || null, teacher_id: null, teacher_name: null,
+                            auditorium_code: null, auditorium_name: null, auditorium_volume: null });
+                    } else {
+                        Object.assign(c, c._int);
+                    }
+                });
+            }
             const TIMETABLE_TEACHER_ID = @json($timetableTeacherId);
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
             // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
@@ -3130,6 +3154,7 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
+                applyWeeklyLayer(allCards);
                 groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
                 cards = scopeCards(allCards);
@@ -3427,6 +3452,7 @@
             $('viewMode').onchange = function () {
                 viewMode = this.value;
                 selected = null;
+                if (typeof renderWeeklyLayerUi === 'function') renderWeeklyLayerUi();
                 renderGrid();
                 syncUrl();
             };
@@ -3449,13 +3475,15 @@
             function effPlace(c) {
                 if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
                 const ov = overrides[c.id + '|' + curWeek];
+                // Tashqi qatlamda haftaga xos ko'chirishlar (ichki jadvalniki) hisobga olinmaydi, faqat o'tilmaydigan haftalar.
+                if (ov && weeklyLayer === 'external') return ov.cancelled ? null : (c.day ? { day: c.day, pair: c.pair } : null);
                 if (ov) return ov.cancelled ? null : { day: ov.day, pair: ov.pair };
                 return c.day ? { day: c.day, pair: c.pair } : null;
             }
             // Tanlangan haftada vaqt bilan birga auditoriya ham individual
             // override'dan olinadi; shablon ko'rinishida bazaviy xona qoladi.
             function effectiveCard(c) {
-                if (!curWeek) return c;
+                if (!curWeek || weeklyLayer === 'external') return c;
                 const ov = overrides[c.id + '|' + curWeek];
                 if (!ov || ov.cancelled || !ov.auditorium_code) return c;
                 return {
@@ -3531,7 +3559,7 @@
                 if (!confirm(scopeLabel + ' bo\'yicha barcha joylashuvlar bo\'shatilib, kartochkalar panelga qaytariladi. Davom etamizmi?')) return;
                 this.disabled = true; $('autoMsg').textContent = 'Bo\'shatilmoqda...';
                 try {
-                    const body = {};
+                    const body = { layer: weeklyLayer };
                     if (!whole) Object.assign(body, scopeBody());
                     if (typeFilter !== 'all') body.training_type = typeFilter;
                     const j = await api(BASE + '/boards/' + board.id + '/unplace', 'POST', body);
@@ -5306,6 +5334,23 @@
                 if (typeof renderAll === 'function') renderAll();
                 if (viewMode === 'cycle') loadCyclePlan();
             }
+            function renderWeeklyLayerUi() {
+                [['wkLayerExternal', 'external'], ['wkLayerInternal', 'internal']].forEach(([id, l]) => {
+                    const b = $(id);
+                    if (b) b.className = 'px-2 py-1 ' + (weeklyLayer === l ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
+                });
+                if ($('weeklyLayerBox')) $('weeklyLayerBox').classList.toggle('hidden', viewMode === 'cycle');
+                document.body.classList.toggle('tt-weekly-external', weeklyLayer === 'external');
+            }
+            async function setWeeklyLayer(l) {
+                if (weeklyLayer === l) return;
+                weeklyLayer = l;
+                try { localStorage.setItem('lms:timetable-weekly-layer', l); } catch (e) { }
+                selected = null;
+                renderWeeklyLayerUi();
+                if (allCards.length) { applyWeeklyLayer(allCards); cards = scopeCards(allCards); if (typeof renderAll === 'function') renderAll(); }
+            }
+            if ($('wkLayerExternal')) { $('wkLayerExternal').onclick = () => setWeeklyLayer('external'); $('wkLayerInternal').onclick = () => setWeeklyLayer('internal'); renderWeeklyLayerUi(); }
             if ($('mineAll')) {
                 $('mineAll').onclick = () => setScopeMode('all');
                 $('mineOnly').onclick = () => setScopeMode('mine');
@@ -5641,10 +5686,23 @@
             // ===== Joylash (bosish yoki drag-and-drop uchun umumiy) =====
             // Kartani joyidan olib tashlash — modal tugmasi va panelga sudrash uchun umumiy.
             // Shablon ko'rinishida barcha haftalardan; hafta tanlangan bo'lsa faqat shu haftada.
+            // Qatlam almashtirilganda yo'qolmasin: joylashuv o'z qatlamining maydoniga ham yoziladi.
+            function rememberLayerPlace(card, d, p) {
+                if (weeklyLayer === 'external') { card.ext_day = d; card.ext_pair = p; }
+                else if (card._int) { card._int.day = d; card._int.pair = p; }
+            }
+            function weeklyEditGuard() {
+                if (weeklyCanEdit()) return;
+                throw new Error(weeklyLayer === 'external'
+                    ? 'Tashqi dars jadvalini o\'quv bo\'limi tahrirlaydi. Ichki jadvalga o\'ting.'
+                    : 'Ichki dars jadvalini kafedra mudiri tahrirlaydi.');
+            }
             async function unplaceOneCard(card) {
-                if (!curWeek) {
-                    await api(BASE + '/cards/' + card.id + '/place', 'POST', {});
+                weeklyEditGuard();
+                if (!curWeek || weeklyLayer === 'external') {
+                    await api(BASE + '/cards/' + card.id + '/place', 'POST', { layer: weeklyLayer });
                     card.day = null; card.pair = null;
+                    rememberLayerPlace(card, null, null);
                 } else {
                     await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'cancel' });
                     overrides[card.id + '|' + curWeek] = {
@@ -5654,9 +5712,11 @@
                 }
             }
             async function placeOneCard(card, d, p) {
-                if (!curWeek) {
-                    await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p });
+                weeklyEditGuard();
+                if (!curWeek || weeklyLayer === 'external') {
+                    await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p, layer: weeklyLayer });
                     card.day = d; card.pair = p;
+                    rememberLayerPlace(card, d, p);
                 } else {
                     await api(BASE + '/cards/' + card.id + '/week-override', 'POST',
                         { week: curWeek, action: 'move', day: d, pair: p });
@@ -5736,7 +5796,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); }
+            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda

@@ -1961,6 +1961,7 @@ class TimetableController extends Controller
             'courses'           => 'nullable|array',
             'courses.*'         => 'integer|min:1|max:7',
             'training_type'  => 'nullable|in:lecture,practice',
+            'layer'          => 'nullable|in:external,internal',
         ]);
 
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
@@ -1968,6 +1969,24 @@ class TimetableController extends Controller
         $this->applyScopeToQuery($scopeQuery, $facSet, $specSet, $courseSet);
         if (!empty($data['training_type'])) {
             $scopeQuery->where('training_type', $data['training_type']);
+        }
+
+        $layer = $this->weeklyLayer($request, $data['layer'] ?? null);
+        if ($denied = $this->weeklyLayerDenied($request, $layer)) {
+            return $denied;
+        }
+        if ($layer === 'external') {
+            $q = (clone $scopeQuery)->whereNotNull('ext_day');
+            $count = (clone $q)->count();
+            $q->update(['ext_day' => null, 'ext_pair' => null]);
+
+            return response()->json(['ok' => true, 'unplaced' => $count, 'layer' => 'external']);
+        }
+        // Kafedra mudiri faqat o'z kafedrasi kartalarini bo'shatadi.
+        if ($this->timetableActiveRole($request) === 'kafedra_mudiri' && ($own = $this->departmentHeadKafedraSafe($request))) {
+            $ids = (clone $scopeQuery)->get(['id', 'kafedra_name'])
+                ->filter(fn ($c) => $this->sameKafedra($c->kafedra_name, $own))->pluck('id')->all();
+            $scopeQuery->whereIn('id', $ids ?: [0]);
         }
 
         $q = (clone $scopeQuery)
@@ -2077,6 +2096,9 @@ class TimetableController extends Controller
             'subject_name' => $c->subject_name,
             'kafedra_name' => $c->kafedra_name,
             'students' => $c->students,
+            // Tashqi qatlam (o'quv bo'limi) joylashuvi; day/pair — ichki (kafedra) jadval.
+            'ext_day' => $c->ext_day ?? null,
+            'ext_pair' => $c->ext_pair ?? null,
             'teacher_id' => $c->teacher_id,
             'teacher_name' => $c->teacher_name,
             'auditorium_code' => $c->auditorium_code,
@@ -5648,9 +5670,14 @@ class TimetableController extends Controller
             'week'       => 'required|integer|min:1|max:30',
             'action'     => 'required|in:move,cancel,reset',
             'day'        => 'nullable|integer|min:1|max:10',
-            'pair'       => 'nullable|integer|min:1|max:10',
+            // Yarim para katakli qo'ng'iroq jadvalida kuniga 12+ katak bo'ladi.
+            'pair'       => 'nullable|integer|min:1|max:24',
             'start_half' => 'nullable|integer|min:0|max:1',
         ]);
+        // Haftaga xos o'zgarish — faqat ichki (kafedra) jadvalda.
+        if ($denied = $this->weeklyLayerDenied($request, 'internal', $card)) {
+            return $denied;
+        }
         $week = (int) $data['week'];
         $startHalf = (int) ($data['start_half'] ?? 0);
 
@@ -5763,6 +5790,119 @@ class TimetableController extends Controller
         ];
     }
 
+    /**
+     * Haftalik jadvalni ikki qatlamga ajratish (admin): qamrovdagi haftalik kartalarning hozirgi
+     * joylashuvi tashqi jadvalga ko'chiriladi (ext_day/ext_pair), ichki jadval (day/pair) esa
+     * xohlansa bo'shatiladi — kafedra mudiri o'z kartalarini bo'sh holatdan joylaydi.
+     */
+    public function weeklyLayerCopy(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'clear_internal'    => 'nullable|boolean',
+            'dry_run'           => 'nullable|boolean',
+        ]);
+        if (!Schema::hasColumn('timetable_cards', 'ext_day')) {
+            return response()->json(['error' => 'Migratsiya hali ishga tushirilmagan (php artisan migrate).'], 503);
+        }
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
+        }
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        $q = TimetableCard::where('board_id', $board->id)->whereNotNull('day')->whereNotNull('pair');
+        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
+        $cards = $q->get(['id', 'day', 'pair']);
+        $result = ['ok' => true, 'copied' => $cards->count(), 'cleared' => $request->boolean('clear_internal') ? $cards->count() : 0];
+        if ($request->boolean('dry_run')) {
+            return response()->json($result + ['dry_run' => true]);
+        }
+        DB::transaction(function () use ($cards, $request) {
+            foreach ($cards as $c) {
+                $upd = ['ext_day' => $c->day, 'ext_pair' => $c->pair];
+                if ($request->boolean('clear_internal')) {
+                    $upd += ['day' => null, 'pair' => null, 'start_half' => 0];
+                }
+                DB::table('timetable_cards')->where('id', $c->id)->update($upd);
+            }
+            if ($request->boolean('clear_internal') && Schema::hasTable('timetable_card_overrides')) {
+                // Haftaga xos ko'chirishlar ichki jadvalga tegishli — tozalanadi (bekor qilingan haftalar qoladi).
+                DB::table('timetable_card_overrides')->whereIn('card_id', $cards->pluck('id'))
+                    ->where('cancelled', false)->delete();
+            }
+        });
+
+        return response()->json($result);
+    }
+
+    /**
+     * Haftalik jadval qatlami: so'rovda berilgan, aks holda rol bo'yicha (o'quv bo'limi — tashqi,
+     * qolganlar — ichki). Ustunlar hali yo'q bo'lsa (migratsiyadan oldin) doim ichki.
+     */
+    private function weeklyLayer(Request $request, ?string $requested): string
+    {
+        if (!Schema::hasColumn('timetable_cards', 'ext_day')) {
+            return 'internal';
+        }
+
+        return $requested ?: ($this->isOquvBolimiRole($this->timetableActiveRole($request)) ? 'external' : 'internal');
+    }
+
+    /**
+     * Haftalik qatlamni kim tahrirlaydi (sikl kabi): tashqi — o'quv bo'limi, ichki — kafedra
+     * mudiri (faqat o'z kafedrasi fanlari); admin/superadmin/registrator ofisi — ikkalasini.
+     */
+    private function weeklyLayerDenied(Request $request, string $layer, ?TimetableCard $card = null)
+    {
+        if (!$this->timetableActor($request)) {
+            return null;   // ichki chaqiruv (konsol/test) — HTTP so'rovlar middleware'dan o'tadi
+        }
+        $role = $this->timetableActiveRole($request);
+        if (in_array($role, ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'], true)) {
+            return null;
+        }
+        if ($layer === 'external') {
+            return $this->isOquvBolimiRole($role) ? null
+                : response()->json(['error' => 'Tashqi dars jadvalini faqat o‘quv bo‘limi tahrirlaydi.'], 403);
+        }
+        if ($role !== 'kafedra_mudiri') {
+            return response()->json(['error' => 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.'], 403);
+        }
+        if ($card && ($own = $this->departmentHeadKafedraSafe($request)) && !$this->sameKafedra($card->kafedra_name, $own)) {
+            return response()->json(['error' => 'Bu fan sizning kafedrangizga tegishli emas.'], 403);
+        }
+
+        return null;
+    }
+
+    /** Tashqi qatlamdagi guruh bandligi (ext_day/ext_pair bo'yicha). */
+    private function findExternalConflicts(TimetableCard $card, int $day, int $pair): array
+    {
+        $others = TimetableCard::where('board_id', $card->board_id)
+            ->where('id', '!=', $card->id)
+            ->where('ext_day', $day)->whereNotNull('ext_pair')
+            ->get();
+        $my = [$pair - 1, $pair - 1 + $card->lenHalf()];
+        $myGroups = $card->occupiedGroups();
+        $errors = [];
+        foreach ($others as $o) {
+            $range = [(int) $o->ext_pair - 1, (int) $o->ext_pair - 1 + $o->lenHalf()];
+            if (!$this->halfOverlap($my, $range) || $this->groupScopeKey($o) !== $this->groupScopeKey($card)) {
+                continue;
+            }
+            $common = array_intersect($myGroups, $o->occupiedGroups());
+            if ($common) {
+                $errors[] = 'Guruh band: ' . implode(', ', $common) . ' (' . $o->subject_name . ')';
+            }
+        }
+
+        return array_values(array_unique($errors));
+    }
+
     /** Kartochkani joylash/ko'chirish/olib tashlash — konflikt tekshiruvi bilan. */
     public function placeCard(Request $request, TimetableCard $card)
     {
@@ -5772,11 +5912,29 @@ class TimetableController extends Controller
             'day'        => 'nullable|integer|min:1|max:' . $grid['days'],
             'pair'       => 'nullable|integer|min:1|max:' . $grid['pairs'],
             'start_half' => 'nullable|integer|min:0|max:1',
+            'layer'      => 'nullable|in:external,internal',
         ]);
 
         $day = $data['day'] ?? null;
         $pair = $data['pair'] ?? null;
         $startHalf = (int) ($data['start_half'] ?? 0);
+        $layer = $this->weeklyLayer($request, $data['layer'] ?? null);
+        if ($denied = $this->weeklyLayerDenied($request, $layer, $card)) {
+            return $denied;
+        }
+
+        if ($layer === 'external') {
+            // Tashqi jadval: faqat guruh bandligi (o'qituvchi/xona bu qatlamda yo'q).
+            if ($day && $pair) {
+                $conflicts = $this->findExternalConflicts($card, $day, $pair);
+                if (!empty($conflicts)) {
+                    return response()->json(['error' => implode(' · ', $conflicts)], 422);
+                }
+            }
+            $card->update(['ext_day' => $day && $pair ? $day : null, 'ext_pair' => $day && $pair ? $pair : null]);
+
+            return response()->json(['ok' => true, 'layer' => 'external']);
+        }
 
         if ($day && $pair) {
             $conflicts = $this->findConflicts($card, $day, $pair, $startHalf);

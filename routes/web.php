@@ -1270,6 +1270,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
                 // Haftalik fanlar: kartochka haftalarini KTR'dan belgilash
+                // Haftalik jadval: hozirgi joylashuvni tashqi qatlamga ko'chirish (admin)
+                Route::post('/boards/{board}/weekly-layer-copy', [\App\Http\Controllers\Admin\TimetableController::class, 'weeklyLayerCopy'])->name('weekly-layer-copy');
                 Route::post('/boards/{board}/ktr-weeks', [\App\Http\Controllers\Admin\TimetableController::class, 'ktrWeeks'])->name('ktr-weeks');
                 // Jadval o'zgarishlari — registrator ofisi tasdig'i
                 Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');

@@ -5762,8 +5762,17 @@
                     card.day = null; card.pair = null;
                     rememberLayerPlace(card, null, null);
                 } else {
+                    const key = card.id + '|' + curWeek;
+                    const ov = overrides[key];
+                    // Hafta-hafta (shablonsiz) ichki jadval: shablonda joyi yo'q kartani panelga qaytarish —
+                    // shu haftadagi joylashuvni olib tashlash (reset), "bu haftada o'tilmaydi" (cancel) emas.
+                    if (ov && !ov.cancelled && !card.day) {
+                        await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'reset' });
+                        delete overrides[key];
+                        return;
+                    }
                     await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'cancel' });
-                    overrides[card.id + '|' + curWeek] = {
+                    overrides[key] = {
                         day: null, pair: null, cancelled: true,
                         auditorium_code: null, auditorium_name: null, auditorium_volume: null,
                     };

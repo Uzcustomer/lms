@@ -337,3 +337,18 @@ it('bo\'lakli fanning qo\'shimcha amaliysi umumiy ma\'ruzasiz haftalarga tushadi
     expect($lecActive)->toHaveCount(5)
         ->and($cancelled($prc))->toBe($lecActive);
 });
+
+it('sikl rejimidagi bo\'lakli fan ma\'ruzalari bo\'lak nomi bilan qoladi (sikl kalendari shu nom bilan qidiradi)', function () {
+    $s = layersSetup();
+    foreach (['Gistologiya (a)', 'Gistologiya (b)'] as $subject) {
+        \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 2,
+            'subject_name' => $subject, 'mode' => 'cycle', 'cycle_days' => 5]);
+    }
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']) + ['training_type' => 'lecture', 'kafedra_name' => 'X', 'students' => 20];
+    $a = \App\Models\TimetableCard::create($base + ['subject_name' => 'Gistologiya (a)', 'group_names' => ['g-02a']]);
+    $b = \App\Models\TimetableCard::create($base + ['subject_name' => 'Gistologiya (b)', 'group_names' => ['g-02b']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['lectures' => 0, 'removed' => 0]);
+    expect($a->fresh()->subject_name)->toBe('Gistologiya (a)')->and($b->fresh()->subject_name)->toBe('Gistologiya (b)');
+});

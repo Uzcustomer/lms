@@ -294,3 +294,17 @@ it('parallel bekor qilingan so\'rov tasdiqlanmaydi va qayta rad etilmaydi', func
     asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.cancel', $stale))
         ->assertStatus(422);
 });
+
+it('KTR bo\'yicha haftalar tarixga yoziladi, sinov (dry_run) yozilmaydi', function () {
+    ['reg' => $reg, 'board' => $board] = approvalSetup();
+    $scope = ['faculty_names' => ['F1'], 'specialty_names' => ['davolash ishi'], 'courses' => [2]];
+
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.ktr-weeks', $board), $scope + ['dry_run' => 1])
+        ->assertOk()->assertJson(['dry_run' => true]);
+    expect(TimetableChangeRequest::count())->toBe(0);
+
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.ktr-weeks', $board), $scope)->assertOk();
+    $row = TimetableChangeRequest::sole();
+    expect($row->status)->toBe('applied')
+        ->and($row->summary)->toBe('Haftalar KTR bo\'yicha belgilandi: F1, davolash ishi, 2-kurs');
+});

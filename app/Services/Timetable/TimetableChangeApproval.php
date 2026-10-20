@@ -47,9 +47,10 @@ class TimetableChangeApproval
         'admin.timetable.assign-room'         => ['assignUnitRoom', 'board', 'room'],
     ];
 
-    /** Tarixga yoziladigan amallar: tasdiq talab qilinadiganlar + kartani tahrirlash (admin). */
+    /** Tarixga yoziladigan amallar: tasdiq talab qilinadiganlar + kartani tahrirlash, KTR haftalari (admin). */
     public const LOGGED = self::GATED + [
         'admin.timetable.cards.update'        => ['updateCard', 'card', 'card'],
+        'admin.timetable.ktr-weeks'           => ['ktrWeeks', 'board', 'weeks'],   // dry_run emas
     ];
 
     /** Tasdiqlay oladigan rollar. */
@@ -83,6 +84,10 @@ class TimetableChangeApproval
         // Sikl rejasi faqat "Bo'shatish" (clear=1) bo'lganda o'zgartiradi; filtrli ko'rinishda clear yo'q.
         if ($route === 'admin.timetable.cycle-plan') {
             return $request->boolean('clear') && !$request->boolean('mine') && !$request->boolean('kafedra');
+        }
+        // KTR haftalari: avval sinov (dry_run) — u hech narsani o'zgartirmaydi.
+        if ($route === 'admin.timetable.ktr-weeks') {
+            return !$request->boolean('dry_run');
         }
 
         return true;
@@ -326,7 +331,7 @@ class TimetableChangeApproval
         if ($card) {
             return collect([$card]);
         }
-        if (in_array($route, ['admin.timetable.boards.unplace', 'admin.timetable.cycle-plan'], true)) {
+        if (in_array($route, ['admin.timetable.boards.unplace', 'admin.timetable.cycle-plan', 'admin.timetable.ktr-weeks'], true)) {
             return collect();
         }
         $controller = app(TimetableController::class);
@@ -430,7 +435,11 @@ class TimetableChangeApproval
                     implode('/', (array) ($p['specialty_names'] ?? [])) ?: ($p['specialty_name'] ?? ''),
                     ($p['courses'] ?? null) ? implode(',', (array) $p['courses']) . '-kurs' : (!empty($p['course']) ? $p['course'] . '-kurs' : ''),
                 ])));
-                $text = ($route === 'admin.timetable.cycle-plan' ? 'Sikl bloklarini bo\'shatish' : 'Joylashuvlarni bo\'shatish') . ($scope ? ': ' . $scope : '');
+                $text = match ($route) {
+                    'admin.timetable.cycle-plan' => 'Sikl bloklarini bo\'shatish',
+                    'admin.timetable.ktr-weeks' => 'Haftalar KTR bo\'yicha belgilandi',
+                    default => 'Joylashuvlarni bo\'shatish',
+                } . ($scope ? ': ' . $scope : '');
         }
 
         return [$subject, $text];

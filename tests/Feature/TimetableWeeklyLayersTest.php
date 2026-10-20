@@ -367,3 +367,32 @@ it('HEMIS biriktiruvi bilan bitta guruhdan bo\'lingan bo\'lak ma\'ruzalari birla
         ->assertOk()->assertJson(['lectures' => 1, 'removed' => 1]);
     expect($a->fresh()->subject_name)->toBe('Patologiya')->and($a->fresh()->students)->toBe(20);
 });
+
+it('boshqa fakultetdagi bir xil nomli guruhning HEMIS biriktiruvi birlashtirishda hisobga olinmaydi', function () {
+    $s = layersSetup();
+    $s['board']->forceFill(['subject_source' => 'hemis'])->save();
+    // "g-07" nomi ikki fakultetda: F1 — 100-reja (biriktiruv yo'q), F2 — 200-reja (biriktiruv bor)
+    foreach ([['F1', 100, 1], ['F2', 200, 2]] as [$fac, $cur, $id]) {
+        DB::table('groups')->insert(['group_hemis_id' => 7000 + $id, 'name' => "g-07 (o'z)", 'department_hemis_id' => $id, 'department_name' => $fac,
+            'department_code' => 'D' . $id, 'department_structure_type_code' => '11', 'department_structure_type_name' => 'Fakultet',
+            'department_locality_type_code' => '11', 'department_locality_type_name' => 'M', 'department_active' => 1, 'specialty_hemis_id' => 1,
+            'specialty_code' => 'S', 'specialty_name' => 'davolash ishi', 'education_lang_code' => '11', 'education_lang_name' => 'uz',
+            'curriculum_hemis_id' => $cur, 'active' => 1]);
+    }
+    DB::table('curriculum_subjects')->insert(['curriculum_subject_hemis_id' => 901, 'curricula_hemis_id' => 200, 'subject_id' => 1,
+        'subject_name' => 'Mikrobiologiya (a)', 'subject_code' => 'M', 'semester_code' => '13', 'semester_name' => '3', 'at_semester' => 1]);
+    foreach (['Mikrobiologiya (a)', 'Mikrobiologiya (b)'] as $i => $subject) {
+        $hid = 950000 + $i;
+        DB::table('students')->insert(['hemis_id' => $hid, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S', 'second_name' => 'S',
+            'student_id_number' => (string) $hid, 'group_name' => "g-07 (o'z)", 'student_status_code' => 11]);
+        DB::table('student_subjects')->insert(['student_hemis_id' => $hid, 'curriculum_subject_hemis_id' => 901, 'subject_name' => $subject, 'education_year' => '2026']);
+    }
+    // F1 kartalari — biriktiruvsiz: har bo'lakda butun oqim (30)
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']) + ['training_type' => 'lecture', 'kafedra_name' => 'X'];
+    $a = \App\Models\TimetableCard::create($base + ['subject_name' => 'Mikrobiologiya (a)', 'students' => 30, 'group_names' => ['g-07']]);
+    \App\Models\TimetableCard::create($base + ['subject_name' => 'Mikrobiologiya (b)', 'students' => 30, 'group_names' => ['g-07']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 1]);
+    expect($a->fresh()->students)->toBe(30);
+});

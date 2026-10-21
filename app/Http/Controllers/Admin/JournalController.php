@@ -222,7 +222,7 @@ class JournalController extends Controller
         }
 
         if ($request->filled('specialty')) {
-            $query->where('sp.specialty_hemis_id', $request->specialty);
+            $query->whereIn('sp.specialty_hemis_id', $this->specialtySiblings($request->specialty));
         }
 
         if ($request->filled('level_code')) {
@@ -4959,10 +4959,39 @@ class JournalController extends Controller
             $query->whereIn('specialty_hemis_id', $specialtyHemisIds);
         }
 
-        return $query->select('specialty_hemis_id', 'name')
+        // HEMIS bir yo'nalishni yangi qabul uchun qayta yaratadi (bir xil kod va nom,
+        // boshqa ID — masalan "Davolash ishi" 17 va 44). Ro'yxatda bitta qilib
+        // ko'rsatiladi; tanlanganda filtrlar specialtySiblings() orqali hammasini oladi.
+        return $query->select('specialty_hemis_id', 'name', 'code')
             ->orderBy('name')
+            ->orderBy('specialty_hemis_id')
             ->get()
+            ->unique(fn ($sp) => mb_strtolower(trim((string) $sp->name)) . '|' . trim((string) $sp->code))
             ->pluck('name', 'specialty_hemis_id');
+    }
+
+    /**
+     * Tanlangan yo'nalish bilan bir xil kod va nomdagi barcha yo'nalish ID lari
+     * (HEMIS yangi qabul uchun yo'nalishni qayta yaratgan bo'lsa ham 2-kurs va
+     * eski kurslar bitta "Davolash ishi" ostida chiqsin).
+     */
+    private function specialtySiblings($specialtyId): array
+    {
+        static $cache = [];
+        $key = (string) $specialtyId;
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+        $sp = Specialty::where('specialty_hemis_id', $specialtyId)->first(['name', 'code']);
+        if (!$sp) {
+            return $cache[$key] = [$specialtyId];
+        }
+        $ids = Specialty::where('code', $sp->code)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $sp->name))])
+            ->pluck('specialty_hemis_id')
+            ->all();
+
+        return $cache[$key] = $ids ?: [$specialtyId];
     }
 
     /**
@@ -5012,7 +5041,7 @@ class JournalController extends Controller
             }
         }
         if ($request->filled('specialty_id')) {
-            $query->where('g.specialty_hemis_id', $request->specialty_id);
+            $query->whereIn('g.specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         if ($request->get('current_semester') == '1') {
             $query->whereIn('s.semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
@@ -5061,7 +5090,7 @@ class JournalController extends Controller
             }
         }
         if ($request->filled('specialty_id')) {
-            $query->where('g.specialty_hemis_id', $request->specialty_id);
+            $query->whereIn('g.specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         if ($request->get('current_semester') == '1') {
             $query->whereIn('s.semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
@@ -5126,7 +5155,7 @@ class JournalController extends Controller
             $query->where('cs.department_id', $request->department_id);
         }
         if ($request->filled('specialty_id')) {
-            $query->where('sp.specialty_hemis_id', $request->specialty_id);
+            $query->whereIn('sp.specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         // Nom bo'yicha filtr (bir xil nomga ega bir nechta specialty_hemis_id bo'lsa ham mos keladi)
         if ($request->filled('specialty_name')) {
@@ -5233,7 +5262,7 @@ class JournalController extends Controller
         }
 
         if ($request->filled('specialty_id')) {
-            $query->where('specialty_hemis_id', $request->specialty_id);
+            $query->whereIn('specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         // Nom bo'yicha filtr (bir xil nomga ega bir nechta specialty_hemis_id bo'lsa ham mos keladi)
         if ($request->filled('specialty_name')) {
@@ -5809,7 +5838,7 @@ class JournalController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
         if ($request->filled('specialty_id')) {
-            $levelsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+            $levelsQuery->whereIn('g.specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         if ($facultyDeptHemisId) {
             $levelsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
@@ -5829,7 +5858,7 @@ class JournalController extends Controller
             $semestersQuery->where('s.level_code', $request->level_code);
         }
         if ($request->filled('specialty_id')) {
-            $semestersQuery->where('g.specialty_hemis_id', $request->specialty_id);
+            $semestersQuery->whereIn('g.specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         if ($facultyDeptHemisId) {
             $semestersQuery->where('g.department_hemis_id', $facultyDeptHemisId);
@@ -5860,7 +5889,7 @@ class JournalController extends Controller
             });
         }
         if ($request->filled('specialty_id')) {
-            $groupsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+            $groupsQuery->whereIn('g.specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         if ($facultyDeptHemisId) {
             $groupsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
@@ -5905,7 +5934,7 @@ class JournalController extends Controller
             $subjectsQuery->where('g.id', $request->group_id);
         }
         if ($request->filled('specialty_id')) {
-            $subjectsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+            $subjectsQuery->whereIn('g.specialty_hemis_id', $this->specialtySiblings($request->specialty_id));
         }
         if ($facultyDeptHemisId) {
             $subjectsQuery->where('g.department_hemis_id', $facultyDeptHemisId);

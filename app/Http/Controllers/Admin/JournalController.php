@@ -5001,20 +5001,50 @@ class JournalController extends Controller
      */
     private function journalCurrentSemesterWindowQuery()
     {
+        static $ids = null;
+        if ($ids !== null) {
+            return $ids;
+        }
+
         $currentEducationYear = DB::table('semesters')
             ->where('current', true)
             ->orderByDesc('education_year')
             ->value('education_year');
 
-        return DB::table('semesters')
-            ->select('semester_hemis_id')
-            ->when(
-                $currentEducationYear,
-                fn ($query) => $query->where('education_year', $currentEducationYear),
-                fn ($query) => $query->where('current', true)
-            )
-            ->whereNotNull('semester_hemis_id')
-            ->groupBy('semester_hemis_id');
+        if (!$currentEducationYear) {
+            return $ids = DB::table('semesters')->where('current', true)
+                ->whereNotNull('semester_hemis_id')->pluck('semester_hemis_id')->unique()->values()->all();
+        }
+
+        // Har bir reja uchun joriy semestr — o'quv haftalari boshlangan eng oxirgi semestr.
+        // semesters.current ga tayanilmaydi: import uni haftalar orasida (yakshanba kechasi)
+        // ishlaganda deyarli barcha rejalarda belgilamay qoldiradi. Sanaga qarab: kuzgi
+        // semestr bahorgi haftalar boshlanguncha joriy, keyin bahorgisi. Haftalari
+        // kiritilmagan rejalarda o'quv yilining barcha semestrlari qoladi (yo'qolib qolmasin).
+        $today = now('Asia/Tashkent')->toDateTimeString();
+        $rows = DB::table('semesters as s')
+            ->leftJoin('curriculum_weeks as cw', 'cw.semester_hemis_id', '=', 's.semester_hemis_id')
+            ->where('s.education_year', $currentEducationYear)
+            ->whereNotNull('s.semester_hemis_id')
+            ->groupBy('s.semester_hemis_id', 's.curriculum_hemis_id')
+            ->select('s.semester_hemis_id', 's.curriculum_hemis_id', DB::raw('MIN(cw.start_date) as first_week'))
+            ->get()
+            ->groupBy('curriculum_hemis_id');
+
+        $ids = [];
+        foreach ($rows as $semesters) {
+            $started = $semesters->filter(fn ($s) => $s->first_week !== null && $s->first_week <= $today);
+            if ($started->isEmpty()) {
+                // Hafta ma'lumoti yo'q yoki hali boshlanmagan — eski xatti-harakat
+                foreach ($semesters as $s) {
+                    $ids[] = $s->semester_hemis_id;
+                }
+                continue;
+            }
+            $ids[] = $started->sortByDesc('first_week')->first()->semester_hemis_id;
+        }
+
+        return $ids = array_values(array_unique($ids));
     }
 
     public function getLevelCodes(Request $request)
@@ -5286,7 +5316,7 @@ class JournalController extends Controller
 
         // Joriy semestr bo'yicha filtrlash (joriy o'quv yili kesimida)
         if ($request->get('current_semester') == '1') {
-            $currentSemesterHemisIds = $this->journalCurrentSemesterWindowQuery()->pluck('semester_hemis_id');
+            $currentSemesterHemisIds = $this->journalCurrentSemesterWindowQuery();
             $curriculaIds = Semester::whereIn('semester_hemis_id', $currentSemesterHemisIds)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);

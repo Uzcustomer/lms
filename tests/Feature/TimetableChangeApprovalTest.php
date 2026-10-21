@@ -309,3 +309,172 @@ it('KTR bo\'yicha haftalar tarixga yoziladi, sinov (dry_run) yozilmaydi', functi
     expect($row->status)->toBe('applied')
         ->and($row->summary)->toBe('Haftalar KTR bo\'yicha belgilandi: F1, davolash ishi, 2-kurs');
 });
+
+
+it('teacher proposal requires head then registrar even when board approval is off', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'board' => $board, 'card' => $card] = approvalSetup(false);
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Boshqa vaqtda qulay'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    $req = TimetableChangeRequest::sole();
+    expect($req->approval_stage)->toBe('department')
+        ->and($card->fresh()->day)->toBe(1)
+        ->and(\App\Models\TimetableCardOverride::count())->toBe(0)
+        ->and(TeacherNotification::where('teacher_id', $head->id)->count())->toBe(1)
+        ->and(TeacherNotification::where('teacher_id', $reg->id)->count())->toBe(0);
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertForbidden();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.week-override', $card),
+        ['week' => 2, 'action' => 'move', 'day' => 3, 'pair' => 3])->assertForbidden();
+    asRole($head, 'kafedra_mudiri')->getJson(route('admin.timetable.change-requests.index', $board))
+        ->assertOk()->assertJsonPath('requests.0.can_review', true);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($req->fresh()->approval_stage)->toBe('registrar')
+        ->and($req->fresh()->head_reviewer_id)->toBe($head->id)
+        ->and(\App\Models\TimetableCardOverride::count())->toBe(0)
+        ->and(TeacherNotification::where('teacher_id', $reg->id)->count())->toBe(1);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertForbidden();
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($req->fresh()->status)->toBe('approved')
+        ->and($card->fresh()->day)->toBe(1)
+        ->and(\App\Models\TimetableCardOverride::sole()->only(['week', 'day', 'pair']))->toBe(['week' => 2, 'day' => 3, 'pair' => 3]);
+});
+
+it('teacher cannot propose for another teacher, change assignments, or choose invalid time', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $data = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+    $other = $card->replicate(); $other->teacher_id = $head->id; $other->save();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $other), $data)->assertForbidden();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        array_merge($data, ['week' => 30]))->assertUnprocessable();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        array_merge($data, ['reason' => '']))->assertUnprocessable();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        $data + ['teacher_id' => $head->id, 'layer' => 'external'])->assertOk();
+    expect(TimetableChangeRequest::sole()->payload)->not->toHaveKeys(['teacher_id', 'layer'])
+        ->and($card->fresh()->teacher_id)->toBe($teacher->id);
+});
+
+it('wrong department cannot review or see incoming teacher proposal and rejection leaves timetable alone', function () {
+    ['head' => $head, 'teacher' => $teacher, 'board' => $board, 'card' => $card] = approvalSetup();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'])->assertOk();
+    $req = TimetableChangeRequest::sole();
+    $head->forceFill(['head_department_hemis_id' => 999])->save();
+    asRole($head, 'kafedra_mudiri')->getJson(route('admin.timetable.change-requests.index', $board))
+        ->assertOk()->assertJsonCount(0, 'requests');
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertForbidden();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.reject', $req))->assertForbidden();
+    $head->forceFill(['head_department_hemis_id' => null])->save();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.reject', $req), ['note' => 'Mos emas'])->assertOk();
+    expect($req->fresh()->status)->toBe('rejected')
+        ->and(\App\Models\TimetableCardOverride::count())->toBe(0)
+        ->and(TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->first()->message)->toContain('Mos emas');
+});
+
+it('final approval rechecks conflicts and stale ownership', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'])->assertOk();
+    $req = TimetableChangeRequest::sole();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    $busy = $card->replicate(); $busy->day = 3; $busy->pair = 3; $busy->save();
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
+    expect($req->fresh()->status)->toBe('failed')->and(\App\Models\TimetableCardOverride::count())->toBe(0);
+});
+
+it('teacher can cancel a proposal after head approval, preventing application', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'])->assertOk();
+    $req = TimetableChangeRequest::sole();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.change-requests.cancel', $req))->assertOk();
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertForbidden();
+    expect(\App\Models\TimetableCardOverride::count())->toBe(0);
+});
+
+it('pending proposals reserve group room and teacher until cancelled at either stage', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup(false);
+    $second = $card->replicate();
+    $second->teacher_id = $head->id; $second->teacher_name = $head->full_name;
+    $second->subject_name = 'Boshqa fan'; $second->day = 4; $second->save();
+    $head->assignRole('oqituvchi');
+    $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertOk();
+    $first = TimetableChangeRequest::sole();
+    // Same group but a different teacher: pending booking must prevent another proposal.
+    $conflict = asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $second), $move);
+    $conflict->assertUnprocessable();
+    expect($conflict->json('message'))->toContain('OQITUVCHI A.')->toContain('Gigiyena')->toContain('Tasdiqlash jarayonida');
+    asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $second), $move)->assertUnprocessable();
+    // Partial interval overlap is blocked as well, not only an identical start.
+    asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $second),
+        array_merge($move, ['pair' => 4]))->assertUnprocessable();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $first))->assertOk();
+    asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $second), $move)->assertUnprocessable();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.change-requests.cancel', $first))->assertOk();
+    asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $second), $move)->assertOk();
+});
+
+it('pending booking does not block unrelated groups teachers rooms or another week', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $other = $card->replicate();
+    $other->teacher_id = $head->id; $other->teacher_name = $head->full_name;
+    $other->group_name = 'OTHER-GROUP'; $other->day = 4; $other->save();
+    $head->assignRole('oqituvchi');
+    $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertOk();
+    asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $other), $move)->assertOk();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $card),
+        array_merge($move, ['week' => 3]))->assertOk();
+    // Updating one's own pending proposal replaces it, instead of conflicting with itself.
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        array_merge($move, ['pair' => 5]))->assertOk();
+    expect(TimetableChangeRequest::where('status', 'pending')->count())->toBe(1)
+        ->and(TimetableChangeRequest::where('status', 'cancelled')->count())->toBe(1);
+});
+
+it('existing timetable conflict is explained before a proposal is submitted', function () {
+    ['teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $busy = $card->replicate(); $busy->subject_name = 'Band fan'; $busy->day = 3; $busy->pair = 3; $busy->save();
+    $response = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3]);
+    $response->assertUnprocessable();
+    expect($response->json('message'))->toContain('Guruh band')->toContain('Band fan');
+    expect(TimetableChangeRequest::count())->toBe(0);
+});
+
+it('room and teacher reservations block even when the groups differ', function (string $resource) {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $card->update(['auditorium_code' => '101', 'auditorium_name' => '101']);
+    $other = $card->replicate();
+    $other->group_name = 'OTHER'; $other->day = 4; $other->pair = 1;
+    if ($resource === 'room') { $other->teacher_id = $head->id; $head->assignRole('oqituvchi'); }
+    else { $other->auditorium_code = '102'; $other->auditorium_name = '102'; }
+    $other->save();
+    $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertOk();
+    $actor = $resource === 'room' ? $head : $teacher;
+    asRole($actor, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $other), $move)->assertUnprocessable();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.reject', TimetableChangeRequest::sole()),
+        ['note' => 'Rad'])->assertOk();
+    asRole($actor, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $other), $move)->assertOk();
+})->with(['room', 'teacher']);
+
+it('final approval rejects a proposal if its source changes', function (string $field) {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'])->assertOk();
+    $req = TimetableChangeRequest::sole();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    $card->update([$field => $field === 'teacher_id' ? $head->id : 5]);
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
+    expect($req->fresh()->status)->toBe('failed')->and(\App\Models\TimetableCardOverride::count())->toBe(0);
+})->with(['teacher_id', 'day']);
+
+it('teacher page exposes proposal and approval status without enabling direct editing', function () {
+    ['teacher' => $teacher] = approvalSetup();
+    $html = asRole($teacher, 'oqituvchi')->get(route('admin.timetable.index'))->assertOk()->getContent();
+    expect($html)->toContain('id="changeReqBtn"')->toContain('const TIMETABLE_READ_ONLY = true')
+        ->toContain('Taklif yuborish')->toContain('/time-proposal/check')->toContain('Kafedra mudiri tasdig‘ida');
+});

@@ -1277,6 +1277,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/weekly-layer-copy', [\App\Http\Controllers\Admin\TimetableController::class, 'weeklyLayerCopy'])->name('weekly-layer-copy');
                 Route::post('/boards/{board}/ktr-weeks', [\App\Http\Controllers\Admin\TimetableController::class, 'ktrWeeks'])->name('ktr-weeks');
                 // Jadval o'zgarishlari — registrator ofisi tasdig'i
+                Route::post('/cards/{card}/time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkTime'])->name('cards.time-proposal.check');
+                Route::post('/cards/{card}/time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeTime'])->name('cards.time-proposal');
                 Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');
                 Route::post('/boards/{board}/change-requests/mode', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'setMode'])->name('change-requests.mode');
                 Route::post('/change-requests/{changeRequest}/approve', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'approve'])->name('change-requests.approve');

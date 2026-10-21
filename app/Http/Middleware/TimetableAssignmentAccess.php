@@ -39,6 +39,9 @@ class TimetableAssignmentAccess
             if (!$board && ($card = $request->route('card'))) {
                 $board = is_object($card) ? \App\Models\TimetableBoard::find($card->board_id) : null;
             }
+            if (!$board && ($change = $request->route('changeRequest'))) {
+                $board = \App\Models\TimetableBoard::find($change->board_id);
+            }
             if ($board && !is_object($board)) {
                 $board = \App\Models\TimetableBoard::find($board);
             }
@@ -51,7 +54,7 @@ class TimetableAssignmentAccess
         if ($user && in_array($activeRole, ['oqituvchi', 'fan_masuli'], true)) {
             // Excelga yuklash faqat klient yuborgan (o'zi ko'rib turgan) panjarani
             // faylga yozadi — yangi ma'lumot ochmaydi, shuning uchun ruxsat.
-            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export'])) {
+            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
@@ -72,6 +75,8 @@ class TimetableAssignmentAccess
                 // O'zgarish so'rovlari: o'z so'rovlarini ko'rish / bekor qilish
                 'admin.timetable.change-requests.index',
                 'admin.timetable.change-requests.cancel',
+                'admin.timetable.change-requests.approve',
+                'admin.timetable.change-requests.reject',
                 // Ekrandagi jadvalni Excelga yuklash (faqat klient panjarasini yozadi)
                 'admin.timetable.boards.excel-export',
             ];

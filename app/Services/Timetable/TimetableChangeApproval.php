@@ -65,6 +65,63 @@ class TimetableChangeApproval
     /** Tasdiqdan o'tishi kerak bo'lgan rollar. */
     public const GATED_ROLES = ['kafedra_mudiri'];
 
+    public function canReviewTeacherProposal(TimetableChangeRequest $req, $actor, string $role): bool
+    {
+        if ($req->status !== TimetableChangeRequest::PENDING || $req->isBy($actor)) {
+            return false;
+        }
+        if ($req->approval_stage === 'department') {
+            $departmentId = (int) ($actor?->head_department_hemis_id ?: ($actor?->department_hemis_id ?? 0));
+            return $actor instanceof Teacher && $role === 'kafedra_mudiri'
+                && $actor->hasRole('kafedra_mudiri') && $departmentId > 0
+                && $departmentId === (int) $req->department_hemis_id;
+        }
+
+        return $req->approval_stage === 'registrar' && in_array($role, self::APPROVER_ROLES, true)
+            && $actor && $actor->hasRole($role);
+    }
+
+    public function proposalSignature(TimetableCard $card, int $week): string
+    {
+        $override = \App\Models\TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
+
+        return hash('sha256', json_encode([$card->only(['day', 'pair', 'start_half', 'teacher_id', 'auditorium_code', 'len_half', 'kafedra_name', 'subject_name', 'faculty_name', 'specialty_name', 'course', 'group_name', 'group_names', 'weeks']),
+            $override?->only(['day', 'pair', 'start_half', 'cancelled', 'auditorium_code'])]));
+    }
+
+    /** The department approves the proposal only; the timetable is untouched. */
+    public function endorse(TimetableChangeRequest $req, $actor, string $role): bool
+    {
+        return (bool) $this->whilePending($req, function ($locked) use ($actor, $role) {
+            abort_unless($locked->approval_stage === 'department' && $this->canReviewTeacherProposal($locked, $actor, $role), 403);
+            $locked->update([
+                'approval_stage' => 'registrar', 'head_reviewer_id' => $actor->id,
+                'head_reviewer_name' => $actor->full_name, 'head_reviewed_at' => now(),
+            ]);
+            $this->notifyRegistrars($locked);
+
+            return true;
+        });
+    }
+
+    public function departmentHeads(int $departmentId)
+    {
+        return $this->teachersWithRoles(['kafedra_mudiri'])->filter(fn (Teacher $t) =>
+            (int) ($t->head_department_hemis_id ?: $t->department_hemis_id) === $departmentId);
+    }
+
+    private function notifyDepartmentHeads(TimetableChangeRequest $req): void
+    {
+        $id = $req->id;
+        dispatch(function () use ($id) {
+            $fresh = TimetableChangeRequest::find($id);
+            if ($fresh && $fresh->status === TimetableChangeRequest::PENDING && $fresh->approval_stage === 'department') {
+                $this->departmentHeads((int) $fresh->department_hemis_id)->each(fn (Teacher $t) =>
+                    $this->sendToTeacher($t, "O'qituvchi vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda", $fresh->requester_name . ":\n" . $fresh->summary, $fresh));
+            }
+        })->afterResponse();
+    }
+
     public static function tableReady(): bool
     {
         static $ready = null;
@@ -161,6 +218,22 @@ class TimetableChangeApproval
     public function submit(array $draft): TimetableChangeRequest
     {
         return DB::transaction(function () use ($draft) {
+            // Serialize booking checks on a stable row; concurrent requests cannot both reserve a free slot.
+            TimetableBoard::whereKey($draft['board_id'])->lockForUpdate()->firstOrFail();
+            if (($draft['requester_role'] ?? '') === 'oqituvchi') {
+                $replaced = TimetableChangeRequest::where('board_id', $draft['board_id'])
+                    ->where('requester_type', $draft['requester_type'])->where('requester_id', $draft['requester_id'])
+                    ->where('target_key', $draft['target_key'])->where('status', TimetableChangeRequest::PENDING)->pluck('id')->all();
+                $card = TimetableCard::findOrFail($draft['params']['card']);
+                abort_unless((int) $card->teacher_id === (int) $draft['requester_id'], 403);
+                app(TimetableController::class)->validateTimeProposal($card, $draft['payload'], $replaced);
+            } elseif (!empty($draft['params']['card'])) {
+                $replaced = TimetableChangeRequest::where('board_id', $draft['board_id'])
+                    ->where('requester_type', $draft['requester_type'])->where('requester_id', $draft['requester_id'])
+                    ->where('target_key', $draft['target_key'])->where('status', TimetableChangeRequest::PENDING)->pluck('id')->all();
+                $card = TimetableCard::findOrFail($draft['params']['card']);
+                app(TimetableController::class)->validatePendingTimeProposal($card, $draft['payload'], $draft['route_name'], $replaced);
+            }
             TimetableChangeRequest::where('board_id', $draft['board_id'])
                 ->where('requester_type', $draft['requester_type'])
                 ->where('requester_id', $draft['requester_id'])
@@ -170,7 +243,11 @@ class TimetableChangeApproval
 
             $req = TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::PENDING]);
 
-            $this->notifyRegistrars($req);
+            if ($req->approval_stage === 'department') {
+                $this->notifyDepartmentHeads($req);
+            } else {
+                $this->notifyRegistrars($req);
+            }
 
             return $req;
         });
@@ -209,9 +286,12 @@ class TimetableChangeApproval
     }
 
     /** Rad etish; so'rov endi kutilmayotgan bo'lsa false. */
-    public function reject(TimetableChangeRequest $req, $approver, ?string $note): bool
+    public function reject(TimetableChangeRequest $req, $approver, ?string $note, ?string $role = null): bool
     {
-        $done = $this->whilePending($req, function (TimetableChangeRequest $locked) use ($approver, $note) {
+        $done = $this->whilePending($req, function (TimetableChangeRequest $locked) use ($approver, $note, $role) {
+            if ($locked->requester_role === 'oqituvchi') {
+                abort_unless($this->canReviewTeacherProposal($locked, $approver, $role ?? (string) session('active_role')), 403);
+            }
             $locked->update([
                 'status' => TimetableChangeRequest::REJECTED,
                 'reviewer_id' => $approver?->id,
@@ -251,6 +331,7 @@ class TimetableChangeApproval
     private function whilePending(TimetableChangeRequest $req, callable $fn)
     {
         return DB::transaction(function () use ($req, $fn) {
+            TimetableBoard::whereKey($req->board_id)->lockForUpdate()->first();
             $locked = TimetableChangeRequest::whereKey($req->getKey())->lockForUpdate()->first();
 
             return $locked && $locked->status === TimetableChangeRequest::PENDING ? $fn($locked) : null;
@@ -260,6 +341,12 @@ class TimetableChangeApproval
     /** @return array{ok: bool, error: ?string} */
     private function applyLocked(TimetableChangeRequest $req, $approver): array
     {
+        if ($req->requester_role === 'oqituvchi' && ($req->approval_stage !== 'registrar' || !$req->head_reviewed_at)) {
+            return ['ok' => false, 'error' => 'Avval kafedra mudiri tasdiqlashi kerak.'];
+        }
+        if ($req->requester_role === 'oqituvchi') {
+            abort_unless($this->canReviewTeacherProposal($req, $approver, (string) session('active_role')), 403);
+        }
         [$method, $param] = self::GATED[$req->route_name] ?? [null, null];
         $requester = $req->requester;
         if (!$method || !$requester) {
@@ -273,6 +360,33 @@ class TimetableChangeApproval
             return $this->finish($req, $approver, false, 'Doska yoki kartochka endi mavjud emas.');
         }
 
+        if ($model instanceof TimetableCard) {
+            try {
+                app(TimetableController::class)->validatePendingTimeProposal($model, $req->payload, $req->route_name, [$req->id]);
+            } catch (ValidationException $e) {
+                return $this->finish($req, $approver, false, collect($e->errors())->flatten()->first());
+            }
+        }
+        if ($req->requester_role === 'oqituvchi') {
+            $head = Teacher::find($req->head_reviewer_id);
+            if (!$model instanceof TimetableCard || !$requester instanceof Teacher
+                || (int) $model->teacher_id !== (int) $requester->id
+                || !$head || !$head->hasRole('kafedra_mudiri')
+                || (int) ($head->head_department_hemis_id ?: $head->department_hemis_id) !== (int) $req->department_hemis_id
+                || !app(TimetableController::class)->proposalDepartmentMatches($model, (int) $req->department_hemis_id)) {
+                return $this->finish($req, $approver, false, "Dars biriktiruvi yoki kafedra vakolati o'zgargan. Yangi taklif yuboring.");
+            }
+            if (($req->details['original_signature'] ?? '') !== $this->proposalSignature($model, (int) $req->payload['week'])) {
+                return $this->finish($req, $approver, false, "Dars jadvali taklifdan keyin o'zgargan. Yangi taklif yuboring.");
+            }
+            try {
+                app(TimetableController::class)->validateTimeProposal($model, $req->payload, [$req->id]);
+            } catch (ValidationException $e) {
+                return $this->finish($req, $approver, false, collect($e->errors())->flatten()->first());
+            }
+            // Replay with the endorsing head's real permissions, never by elevating a teacher.
+            $requester = $head;
+        }
         $sub = Request::create('/', 'POST', $req->payload ?? []);
         $sub->headers->set('Accept', 'application/json');
         $sub->setUserResolver(fn () => $requester);
@@ -496,7 +610,7 @@ class TimetableChangeApproval
         dispatch(function () use ($title, $body, $id) {
             $svc = app(self::class);
             $req = TimetableChangeRequest::find($id);
-            if (!$req || $req->status !== TimetableChangeRequest::PENDING) {
+            if (!$req || $req->status !== TimetableChangeRequest::PENDING || $req->approval_stage === 'department') {
                 return;
             }
             $svc->teachersWithRoles([\App\Enums\ProjectRole::REGISTRAR_OFFICE->value])
@@ -521,6 +635,9 @@ class TimetableChangeApproval
         // Kafedra mudiri — natija
         if ($req->requester instanceof Teacher) {
             $send($req->requester, 'Dars jadvali o\'zgarishi tasdiqlandi');
+        }
+        if ($req->head_reviewer_id && ($head = Teacher::find($req->head_reviewer_id))) {
+            $send($head);
         }
         // O'qituvchi(lar)
         $teacherIds = array_unique(array_merge((array) ($details['teacher_ids'] ?? []), array_filter([(int) ($details['new_teacher_id'] ?? 0)])));
@@ -606,7 +723,7 @@ class TimetableChangeApproval
 
     public function sendToTeacher(Teacher $teacher, string $title, string $message, TimetableChangeRequest $req): void
     {
-        $link = Route::has('admin.timetable.index') ? route('admin.timetable.index') . '?board=' . $req->board_id : null;
+        $link = Route::has('admin.timetable.index') ? route('admin.timetable.index') . '?board=' . $req->board_id . '&change_request=' . $req->id : null;
         try {
             TeacherNotification::create([
                 'teacher_id' => $teacher->id,

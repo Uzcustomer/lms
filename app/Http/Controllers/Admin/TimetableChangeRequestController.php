@@ -5,6 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
 use App\Models\TimetableBoard;
+use App\Models\TimetableCard;
+use App\Models\Teacher;
+use App\Models\Department;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Routing\Route as RoutingRoute;
 use App\Models\TimetableChangeRequest;
 use App\Services\Timetable\TimetableChangeApproval;
 use Illuminate\Http\Request;
@@ -30,7 +35,17 @@ class TimetableChangeRequestController extends Controller
 
         $q = TimetableChangeRequest::where('board_id', $board->id);
         if (!$seesAll) {
-            $q->where('requester_type', $actor?->getMorphClass())->where('requester_id', $actor?->getKey() ?? 0);
+            $q->where(function ($q) use ($actor, $role) {
+                $q->where(function ($own) use ($actor) {
+                    $own->where('requester_type', $actor?->getMorphClass())->where('requester_id', $actor?->getKey() ?? 0);
+                });
+                if ($role === 'kafedra_mudiri' && Schema::hasColumn('timetable_change_requests', 'approval_stage')) {
+                    $deptId = (int) ($actor?->head_department_hemis_id ?: ($actor?->department_hemis_id ?? 0));
+                    if ($deptId > 0) {
+                        $q->orWhere(fn ($incoming) => $incoming->where('requester_role', 'oqituvchi')->where('department_hemis_id', $deptId));
+                    }
+                }
+            });
         }
         $pendingOnly = $request->query('status') === 'pending';
         if ($pendingOnly) {
@@ -44,6 +59,11 @@ class TimetableChangeRequestController extends Controller
         $rows = $found->take($limit)->map(fn (TimetableChangeRequest $r) => [
             'id' => $r->id,
             'status' => $r->status,
+            'approval_stage' => $r->approval_stage,
+            'head_reviewer_name' => $r->head_reviewer_name,
+            'can_review' => $r->requester_role === 'oqituvchi'
+                ? app(TimetableChangeApproval::class)->canReviewTeacherProposal($r, $actor, $role)
+                : ($canApprove && $r->status === TimetableChangeRequest::PENDING),
             'kind' => $r->kind,
             'route' => $r->route_name,
             'summary' => $r->summary,
@@ -72,8 +92,74 @@ class TimetableChangeRequestController extends Controller
         ]);
     }
 
+    public function checkTime(Request $request, TimetableCard $card)
+    {
+        $actor = $this->actor($request);
+        abort_unless($this->activeRole($request) === 'oqituvchi' && $actor instanceof Teacher
+            && (int) $card->teacher_id === (int) $actor->id, 403);
+        $data = $request->validate(['week' => 'required|integer|min:1|max:30',
+            'day' => 'required|integer|min:1|max:7', 'pair' => 'required|integer|min:1|max:24']);
+        $own = TimetableChangeRequest::where('board_id', $card->board_id)->where('requester_type', $actor->getMorphClass())
+            ->where('requester_id', $actor->id)->where('status', TimetableChangeRequest::PENDING)
+            ->where('route_name', 'admin.timetable.cards.week-override')->get()
+            ->filter(fn ($r) => (int) ($r->params['card'] ?? 0) === (int) $card->id
+                && (int) ($r->payload['week'] ?? 0) === (int) $data['week'])->pluck('id')->all();
+        app(TimetableController::class)->validateTimeProposal($card, $data, $own);
+
+        return response()->json(['ok' => true, 'message' => 'Vaqt bo‘sh. Taklif yuborishingiz mumkin.']);
+    }
+
+    public function proposeTime(Request $request, TimetableCard $card, TimetableChangeApproval $svc)
+    {
+        $actor = $this->actor($request);
+        abort_unless($this->activeRole($request) === 'oqituvchi' && $actor instanceof Teacher
+            && (int) $card->teacher_id === (int) $actor->id, 403, "Faqat o'zingizga biriktirilgan dars vaqtini taklif qila olasiz.");
+        abort_unless(TimetableChangeApproval::tableReady() && Schema::hasColumn('timetable_change_requests', 'approval_stage'),
+            503, 'Migratsiyani ishga tushiring (php artisan migrate).');
+        $data = $request->validate([
+            'week' => 'required|integer|min:1|max:30',
+            'day' => 'required|integer|min:1|max:7',
+            'pair' => 'required|integer|min:1|max:24',
+            'reason' => 'required|string|max:1000',
+        ]);
+        $controller = app(TimetableController::class);
+        // The authoritative conflict + booking check runs atomically in submit().
+        // Resolve from the subject's department, not the teacher's primary job department.
+        $departments = Department::where('structure_type_code', 12)->where('active', true)->get()
+            ->filter(fn ($dept) => $controller->proposalDepartmentMatches($card, (int) $dept->department_hemis_id));
+        abort_unless($departments->count() === 1, 422, "Fan kafedrasi aniq topilmadi. Registrator ofisiga murojaat qiling.");
+        $department = $departments->first();
+        abort_unless($svc->departmentHeads((int) $department->department_hemis_id)->contains(fn ($head) => $head->id !== $actor->id),
+            422, "Ushbu kafedra uchun tasdiqlovchi kafedra mudiri topilmadi.");
+        $payload = ['week' => (int) $data['week'], 'day' => (int) $data['day'], 'pair' => (int) $data['pair'],
+            'action' => 'move', '_change_hint' => $data['reason']];
+        $sub = Request::create('/', 'POST', $payload);
+        $route = (new RoutingRoute('POST', '/', []))->name('admin.timetable.cards.week-override');
+        $route->bind($sub);
+        $route->setParameter('card', $card);
+        $sub->setRouteResolver(fn () => $route);
+        $draft = $svc->draft($sub, $actor, $card->board, 'oqituvchi');
+        $draft['approval_stage'] = 'department';
+        $draft['department_hemis_id'] = $department->department_hemis_id;
+        $draft['kafedra_name'] = $department->name;
+        $draft['details']['original_signature'] = $svc->proposalSignature($card, (int) $data['week']);
+        $draft['details']['reason'] = $data['reason'];
+        $change = $svc->submit($draft);
+
+        return response()->json(['ok' => true, 'pending_approval' => true, 'change_request_id' => $change->id,
+            'summary' => $change->summary, 'message' => "Taklif kafedra mudiriga yuborildi. Kafedra mudiri va registrator ofisi tasdiqlagach jadval o'zgaradi."]);
+    }
+
     public function approve(Request $request, TimetableChangeRequest $changeRequest, TimetableChangeApproval $svc)
     {
+        if ($changeRequest->requester_role === 'oqituvchi') {
+            abort_unless($svc->canReviewTeacherProposal($changeRequest, $this->actor($request), $this->activeRole($request)), 403);
+            if ($changeRequest->approval_stage === 'department') {
+                return $svc->endorse($changeRequest, $this->actor($request), $this->activeRole($request))
+                    ? response()->json(['ok' => true, 'message' => "Kafedra mudiri tasdiqladi. Registrator ofisiga yuborildi; jadval hali o'zgarmadi."])
+                    : response()->json(['error' => TimetableChangeApproval::ALREADY_REVIEWED], 422);
+            }
+        }
         $this->ensureApprover($request);
         $result = $svc->apply($changeRequest, $this->actor($request));
 
@@ -84,10 +170,14 @@ class TimetableChangeRequestController extends Controller
 
     public function reject(Request $request, TimetableChangeRequest $changeRequest, TimetableChangeApproval $svc)
     {
-        $this->ensureApprover($request);
+        if ($changeRequest->requester_role === 'oqituvchi') {
+            abort_unless($svc->canReviewTeacherProposal($changeRequest, $this->actor($request), $this->activeRole($request)), 403);
+        } else {
+            $this->ensureApprover($request);
+        }
         $data = $request->validate(['note' => 'nullable|string|max:1000']);
 
-        return $svc->reject($changeRequest, $this->actor($request), $data['note'] ?? null)
+        return $svc->reject($changeRequest, $this->actor($request), $data['note'] ?? null, $this->activeRole($request))
             ? response()->json(['ok' => true])
             : response()->json(['error' => TimetableChangeApproval::ALREADY_REVIEWED], 422);
     }

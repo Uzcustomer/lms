@@ -6129,6 +6129,94 @@ class TimetableController extends Controller
         }
     }
 
+    /** Validate a proposal without writing any schedule data. Repeated on final approval. */
+    public function validateTimeProposal(TimetableCard $card, array $data, array $ignorePendingIds = []): void
+    {
+        $grid = $this->gridFor($card->board, $card->faculty_name, $card->specialty_name, (int) $card->course);
+        if ((int) $data['week'] > $grid['weeks'] || (int) $data['day'] > $grid['days']
+            || (int) $data['pair'] + $card->lenHalf() - 1 > $grid['pairs']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['day' => 'Tanlangan vaqt jadval chegarasidan tashqarida.']);
+        }
+        if (TimetableCardOverride::where('card_id', $card->id)->where('week', $data['week'])->where('cancelled', true)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['week' => 'Bu haftada ushbu dars o‘tilmaydi.']);
+        }
+        $conflicts = $this->findWeekConflicts($card, (int) $data['week'], (int) $data['day'], (int) $data['pair']);
+        $conflicts = array_merge($conflicts, $this->pendingTimeConflicts($card, $data, $ignorePendingIds));
+        if ($conflicts) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['day' => implode(' · ', $conflicts)]);
+        }
+    }
+
+    /** Other pending weekly changes also respect teacher reservations. */
+    public function validatePendingTimeProposal(TimetableCard $card, array $payload, string $route, array $ignoreIds): void
+    {
+        if (($payload['layer'] ?? 'internal') !== 'internal' || empty($payload['day']) || empty($payload['pair'])) return;
+        if (!in_array($route, ['admin.timetable.cards.week-override', 'admin.timetable.cards.place'], true)) return;
+        if ($route === 'admin.timetable.cards.week-override' && ($payload['action'] ?? '') !== 'move') return;
+        $weeks = $route === 'admin.timetable.cards.week-override' ? [(int) $payload['week']] : range(1, (int) $card->board->weeks);
+        foreach ($weeks as $week) {
+            $conflicts = $this->pendingTimeConflicts($card, array_merge($payload, ['week' => $week]), $ignoreIds);
+            if ($conflicts) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['day' => implode(' · ', $conflicts)]);
+            }
+        }
+    }
+
+    /** Pending internal moves reserve the same group, teacher and room until released. */
+    private function pendingTimeConflicts(TimetableCard $card, array $data, array $ignoreIds): array
+    {
+        if (!\App\Services\Timetable\TimetableChangeApproval::tableReady()) return [];
+        $pending = \App\Models\TimetableChangeRequest::where('board_id', $card->board_id)
+            ->where('status', \App\Models\TimetableChangeRequest::PENDING)
+            ->whereIn('route_name', ['admin.timetable.cards.week-override', 'admin.timetable.cards.place'])
+            ->when($ignoreIds, fn ($q) => $q->whereNotIn('id', $ignoreIds))->get();
+        $week = (int) $data['week'];
+        $sourceRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
+        $room = $sourceRoom?->auditorium_code ?: $card->auditorium_code;
+        $errors = [];
+        foreach ($pending as $req) {
+            $p = $req->payload ?? [];
+            if (($p['layer'] ?? 'internal') === 'external' || empty($p['day']) || empty($p['pair'])) continue;
+            if ($req->route_name === 'admin.timetable.cards.week-override'
+                && (($p['action'] ?? '') !== 'move' || (int) ($p['week'] ?? 0) !== $week)) continue;
+            $other = TimetableCard::find($req->params['card'] ?? 0);
+            if (!$other) continue;
+            // Competing proposals for one lesson cannot both be pending for this week.
+            $sameCard = (int) $other->id === (int) $card->id;
+            if (!$sameCard && ((int) $p['day'] !== (int) $data['day']
+                || !$this->halfOverlap($this->rangeFor($card, (int) $data['pair'], 0),
+                    $this->rangeFor($other, (int) $p['pair'], (int) ($p['start_half'] ?? 0))))) continue;
+            $resources = [];
+            if ($sameCard) $resources[] = 'shu dars';
+            if ($this->groupScopeKey($card) === $this->groupScopeKey($other) && !$this->bolakSiblings($card, $other)) {
+                $groups = array_intersect($card->occupiedGroups(), $other->occupiedGroups());
+                if ($groups) $resources[] = 'guruh: ' . implode(', ', $groups);
+            }
+            if ($card->teacher_id && (int) $card->teacher_id === (int) $other->teacher_id) $resources[] = 'o‘qituvchi';
+            $ov = TimetableCardOverride::where('card_id', $other->id)->where('week', $week)->first();
+            if ($room && $room === ($ov?->auditorium_code ?: $other->auditorium_code)
+                && !$this->isSharedRoom($ov?->auditorium_name ?: $other->auditorium_name)) $resources[] = 'auditoriya: ' . $room;
+            if (!$resources) continue;
+            $dayName = ($card->board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES)[(int) $p['day'] - 1] ?? $p['day'] . '-kun';
+            $schedule = array_values(array_filter($card->board->bell_schedule ?: [], fn ($slot) => ($slot['type'] ?? 'pair') === 'pair'));
+            $time = $schedule[(int) $p['pair'] - 1]['start'] ?? ($p['pair'] . '-katak');
+            $errors[] = $dayName . ', ' . $time . ' — ' . ($other->teacher_name ?: $req->requester_name)
+                . ' «' . $other->subject_name . '» darsi uchun bron qilgan (' . implode('; ', $resources)
+                . '). Tasdiqlash jarayonida. Bron bekor qilinmaguncha bu vaqtni tanlab bo‘lmaydi.';
+        }
+        return $errors;
+    }
+
+    /** Match the card's department using the same aliases used for head editing rights. */
+    public function proposalDepartmentMatches(TimetableCard $card, int $departmentId): bool
+    {
+        $names = DB::table('curriculum_subjects')->where('department_id', $departmentId)
+            ->whereNotNull('department_name')->distinct()->pluck('department_name')->all();
+        $names[] = Department::where('department_hemis_id', $departmentId)->value('name');
+
+        return $this->sameKafedra($card->kafedra_name, array_values(array_filter($names)));
+    }
+
     public function weekOverride(Request $request, TimetableCard $card)
     {
         $data = $request->validate([

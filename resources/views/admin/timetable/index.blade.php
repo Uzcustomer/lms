@@ -13,7 +13,7 @@
     }
     $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
-    // O'qituvchi: faqat ko'rish (hech qanday tahrirlash tugmasi yo'q)
+    // O'qituvchi: jadvalni bevosita tahrirlamaydi, o'z darsiga vaqt taklifini yuboradi.
     $timetableReadOnly = in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli'], true);
     // O'qituvchi identifikatori controllerda ikkala guard uchun bir xil aniqlanadi.
     // Fan mas'uli: "Mas'ul fanlarim" ko'rinishi (o'zi mas'ul bo'lgan fanlar)
@@ -30,7 +30,7 @@
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
     $timetableUsesChangeRequests = $timetableCanApprove
-        || in_array($timetableActiveRole, ['kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+        || in_array($timetableActiveRole, ['oqituvchi', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
 
     <x-slot name="header">
@@ -1571,6 +1571,10 @@
         #cycleGrid .cyc-cell.cycle-row-muted { opacity: .45; }
         .cycle-pn-card.cycle-pn-selected { outline: 2px solid #0ea5e9; outline-offset: 1px;
             box-shadow: 0 6px 16px rgba(14,165,233,.28); }
+        .cr-proposal-overlay { position: fixed; inset: 0; z-index: 10000; background: #0f172a99; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .cr-proposal-form { width: min(100%, 520px); max-height: 90vh; overflow: auto; background: white; color: #0f172a; border-radius: 12px; padding: 24px; display: grid; gap: 14px; box-shadow: 0 20px 60px #0004; }
+        .cr-proposal-form label { display: grid; gap: 5px; }
+        .cr-proposal-form select, .cr-proposal-form textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; background: white; color: #0f172a; }
         #cycleGrid .cyc-block[draggable="true"] { cursor: grab; }
         #cycleGrid .cyc-block[draggable="true"]:active { cursor: grabbing; }
         .cycle-pn-card { width: 220px; min-height: 54px; padding: 8px 10px; border: 1px solid #bfdbfe;
@@ -2902,7 +2906,7 @@
                 }
                 const r = await fetch(url, opt);
                 const j = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
+                if (!r.ok) throw new Error(j.error || (j.errors ? Object.values(j.errors).flat().join(' · ') : j.message) || ('HTTP ' + r.status));
                 if (j && j.pending_approval) onPendingApproval(j);
                 // Server ogohlantirishi (masalan o'qituvchi/xona shu sanada sikl darsida band) — joylash bajarildi.
                 if (j && Array.isArray(j.warnings) && j.warnings.length) {
@@ -3022,7 +3026,9 @@
                 const modeHtml = approver
                     ? '<label class="cr-mode"><input type="checkbox" id="crModeChk"' + (changeReqs.approval_required ? ' checked' : '') + '> ' +
                       'Kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tsin</label>'
-                    : '<div class="cr-mode-info">' + (TIMETABLE_DEPARTMENT_HEAD
+                    : '<div class="cr-mode-info">' + (TIMETABLE_ROLE === 'oqituvchi'
+                        ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi tasdiqlagach jadvalga tushadi.'
+                        : TIMETABLE_DEPARTMENT_HEAD
                         ? (changeReqs.approval_required
                             ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi.'
                             : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')
@@ -3032,15 +3038,17 @@
                 const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
                 const rows = list.length ? list.map(r => {
-                    const st = CR_STATUS[r.status] || [r.status, '#334155', '#e2e8f0'];
-                    const acts = r.status !== 'pending' ? '' : approver
+                    const st = r.status === 'pending' && r.approval_stage
+                        ? [r.approval_stage === 'department' ? 'Kafedra mudiri tasdig‘ida' : 'Registrator ofisi tasdig‘ida', '#b45309', '#fef3c7']
+                        : CR_STATUS[r.status] || [r.status, '#334155', '#e2e8f0'];
+                    const acts = r.status !== 'pending' ? '' : r.can_review
                         ? '<button type="button" class="cr-ok" data-cr-approve="' + r.id + '">Tasdiqlash</button><button type="button" class="cr-no" data-cr-reject="' + r.id + '">Rad etish</button>'
                         : r.mine ? '<button type="button" class="cr-no" data-cr-cancel="' + r.id + '">Bekor qilish</button>' : '';
                     const note = r.error ? '<div class="cr-err">' + esc(r.error) + '</div>' : (r.review_note && r.status !== 'pending' ? '<div class="cr-note">' + esc(r.review_note) + '</div>' : '');
                     return '<tr><td class="cr-when">' + esc(r.created_at || '') + '</td>' +
                         '<td><div class="cr-who">' + esc(r.kafedra_name || r.requester_role || '') + '</div><div class="cr-sub">' + esc(r.requester_name || '') +
                         (r.requester_role && r.kafedra_name ? ' · ' + esc(r.requester_role) : '') + '</div></td>' +
-                        '<td>' + esc(r.summary) + (r.groups && r.groups.length ? '<div class="cr-sub">Guruhlar: ' + esc(r.groups.slice(0, 8).join(', ')) + (r.groups.length > 8 ? '…' : '') + '</div>' : '') + note + '</td>' +
+                        '<td>' + esc(r.summary) + (r.head_reviewer_name ? '<div class="cr-sub">Kafedra mudiri tasdiqladi: ' + esc(r.head_reviewer_name) + '</div>' : '') + (r.groups && r.groups.length ? '<div class="cr-sub">Guruhlar: ' + esc(r.groups.slice(0, 8).join(', ')) + (r.groups.length > 8 ? '…' : '') + '</div>' : '') + note + '</td>' +
                         '<td><span class="cr-st" style="color:' + st[1] + ';background:' + st[2] + '">' + st[0] + '</span>' +
                         (r.reviewer_name && r.status !== 'pending' ? '<div class="cr-sub">' + esc(r.reviewer_name) + (r.reviewed_at ? ' · ' + esc(r.reviewed_at) : '') + '</div>' : '') + '</td>' +
                         '<td class="cr-acts">' + acts + '</td></tr>';
@@ -3068,8 +3076,8 @@
                 const act = async (btn, url, body, okMsg) => {
                     btn.disabled = true;
                     try {
-                        await api(url, 'POST', body);
-                        ttToast(okMsg, 'ok');
+                        const result = await api(url, 'POST', body);
+                        ttToast(result.message || okMsg, 'ok');
                         await loadChangeRequests();
                         if (changeReqFilter === 'history') await loadChangeHistory(true);
                         if (viewMode === 'cycle') await loadCyclePlan(); else await loadBoard(board.id);
@@ -3078,7 +3086,7 @@
                 body.querySelectorAll('[data-cr-approve]').forEach(b => b.onclick = () =>
                     act(b, BASE + '/change-requests/' + b.dataset.crApprove + '/approve', {}, 'Tasdiqlandi — jadvalga qo\'llandi, tegishlilarga xabar yuborilmoqda.'));
                 body.querySelectorAll('[data-cr-reject]').forEach(b => b.onclick = () => {
-                    const note = prompt('Rad etish sababi (kafedra mudiriga boradi):', '');
+                    const note = prompt('Rad etish sababi (taklif yuboruvchiga boradi):', '');
                     if (note === null) return;
                     act(b, BASE + '/change-requests/' + b.dataset.crReject + '/reject', { note }, 'Rad etildi.');
                 });
@@ -6117,6 +6125,7 @@
             let dragParallel = false;
             let dragOffsets = null;   // bo'laklar sarlavhasi: har bo'lakning katak boshidan siljishi (yarim-slot)
             function startDrag(ids, ev, parallel, offs) {
+                if (TIMETABLE_READ_ONLY) { if (ev) ev.preventDefault(); return; }
                 dragCardIds = Array.isArray(ids) ? ids.slice() : [ids];
                 dragParallel = !!parallel;
                 dragOffsets = Array.isArray(offs) ? offs.slice() : null;
@@ -6340,6 +6349,7 @@
                 document.querySelectorAll('.pn-card').forEach(el => {
                     el.onclick = () => {
                         const c = cards.find(x => x.id === +el.dataset.id);
+                        if (TIMETABLE_ROLE === 'oqituvchi') { openTeacherTimeProposal(c); return; }
                         selected = (selected && selected.id === c.id) ? null : c;
                         renderPanel(); renderGrid();
                     };
@@ -6994,6 +7004,7 @@
                 document.querySelectorAll('[data-chip]').forEach(el => el.onclick = (ev) => {
                     ev.stopPropagation();
                     const c = cards.find(x => x.id === +el.dataset.chip);
+                    if (TIMETABLE_ROLE === 'oqituvchi') { openTeacherTimeProposal(c); return; }
                     selected = c;
                     openModal(c);
                     renderPanel(); renderGrid();
@@ -7059,8 +7070,74 @@
                 });
             }
 
+            // Teachers propose a time; neither the card nor the local grid is moved before approval.
+            function openTeacherTimeProposal(c) {
+                if (!c || +c.teacher_id !== +TIMETABLE_TEACHER_ID) {
+                    alert("Faqat o'zingizga biriktirilgan dars vaqtini taklif qila olasiz."); return;
+                }
+                if (weeklyLayer !== 'internal' || !curWeek) {
+                    alert("Taklif berish uchun ichki jadval va haftani tanlang."); return;
+                }
+                const prior = document.getElementById('teacherTimeProposal');
+                if (prior) prior.remove();
+                const m = document.createElement('div');
+                m.id = 'teacherTimeProposal'; m.className = 'cr-proposal-overlay';
+                const days = boardDayNames().slice(0, +board.days || 6);
+                const slots = boardSchedule().filter(x => x.type !== 'break');
+                const pl = effPlace(c);
+                m.innerHTML = '<form class="cr-proposal-form"><h3 class="font-bold text-lg">Dars vaqtini o‘zgartirish taklifi</h3>' +
+                    '<p>' + esc(c.subject_name) + ' · ' + curWeek + '-hafta</p>' +
+                    '<p class="text-sm">Amaldagi vaqt: ' + esc(pl ? (days[pl.day - 1] + ' · ' + (slots[pl.pair - 1]?.start || pl.pair + '-katak')) : 'Joylashmagan') + '</p>' +
+                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi.</p>' +
+                    '<label>Yangi kun<select name="day" required>' + days.map((d, i) => '<option value="' + (i + 1) + '"' + (pl?.day === i + 1 ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select></label>' +
+                    '<label>Yangi boshlanish vaqti<select name="pair" required>' + slots.map((s, i) => '<option value="' + (i + 1) + '"' + (pl?.pair === i + 1 ? ' selected' : '') + '>' + esc(s.start || (i + 1) + '-katak') + '</option>').join('') + '</select></label>' +
+                    '<label>O‘zgarish sababi<textarea name="reason" required maxlength="1000" rows="3"></textarea></label>' +
+                    '<p role="alert" class="text-red-600"></p><button type="button" data-recheck>Vaqtni qayta tekshirish</button><div class="flex justify-end gap-3"><button type="button" data-close>Bekor</button>' +
+                    '<button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded">Taklif yuborish</button></div></form>';
+                document.body.appendChild(m);
+                m.querySelector('[data-close]').onclick = () => m.remove();
+                m.onclick = ev => { if (ev.target === m) m.remove(); };
+                const proposalWeek = curWeek;
+                const proposalForm = m.querySelector('form');
+                let checkSequence = 0;
+                const checkTime = async () => {
+                    const sequence = ++checkSequence, button = proposalForm.querySelector('[type="submit"]');
+                    const status = proposalForm.querySelector('[role="alert"]');
+                    button.disabled = true; status.textContent = 'Vaqt va bronlar tekshirilmoqda…';
+                    try {
+                        const result = await api(BASE + '/cards/' + c.id + '/time-proposal/check', 'POST', {
+                            week: proposalWeek, day: proposalForm.elements.day.value, pair: proposalForm.elements.pair.value,
+                        });
+                        if (sequence !== checkSequence || !m.isConnected) return;
+                        status.className = 'text-green-700'; status.textContent = result.message;
+                        button.disabled = false;
+                    } catch (e) {
+                        if (sequence !== checkSequence || !m.isConnected) return;
+                        status.className = 'text-red-600'; status.textContent = e.message;
+                    }
+                };
+                m.querySelector('[data-recheck]').onclick = checkTime;
+                proposalForm.elements.day.onchange = checkTime;
+                proposalForm.elements.pair.onchange = checkTime;
+                checkTime();
+                m.querySelector('form').onsubmit = async ev => {
+                    ev.preventDefault();
+                    const form = ev.currentTarget, button = form.querySelector('[type="submit"]');
+                    button.disabled = true;
+                    try {
+                        await api(BASE + '/cards/' + c.id + '/time-proposal', 'POST', {
+                            week: proposalWeek, day: form.elements.day.value, pair: form.elements.pair.value,
+                            reason: form.elements.reason.value,
+                        });
+                        m.remove();
+                        await loadChangeRequests();
+                    } catch (e) { form.querySelector('[role="alert"]').className = 'text-red-600'; form.querySelector('[role="alert"]').textContent = e.message; button.disabled = false; }
+                };
+            }
+
             // ===== Kartochka modali (o'qituvchi/auditoriya) =====
             async function openModal(c) {
+                if (TIMETABLE_ROLE === 'oqituvchi') { openTeacherTimeProposal(c); return; }
                 modalCard = c;
                 $('cmTitle').textContent = c.subject_name;
                 $('cmSub').textContent = (c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + (c.group_name || '')) +
@@ -9309,7 +9386,10 @@
 
             // URLdan doska ochish (F5 / havola) — tanlovlar ham URLdan tiklanadi (applyPendingView)
             const urlBoard = new URLSearchParams(location.search).get('board');
-            if (urlBoard) loadBoard(urlBoard).catch(e => {
+            const notificationRequest = new URLSearchParams(location.search).get('change_request');
+            if (urlBoard) loadBoard(urlBoard).then(() => {
+                if (notificationRequest) openChangeReqModal();
+            }).catch(e => {
                 hideBoard();
                 $('boardMsg').textContent = 'Doska ochilmadi: ' + e.message;
             });

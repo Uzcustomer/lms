@@ -58,7 +58,10 @@ class TimetableController extends Controller
         $faculties = \App\Models\Department::where('structure_type_code', 11)
             ->where('active', true)->orderBy('name')->get(['id', 'name']);
 
-        return view('admin.timetable.index', compact('boards', 'years', 'faculties', 'isBoardAdmin'));
+        $teacherId = $this->timetableTeacherId($request);
+        $timetableTeacherId = $teacherId > 0 ? $teacherId : null;
+
+        return view('admin.timetable.index', compact('boards', 'years', 'faculties', 'isBoardAdmin', 'timetableTeacherId'));
     }
 
     /** Sinov (faqat admin) doskalarini ko'ra oladigan rollar. */
@@ -3625,7 +3628,8 @@ class TimetableController extends Controller
         $variantFirst = [];   // norm(spec|kurs|asosiy nom) => birinchi bo'lak nomi (soatlar uchun)
         if (!empty($cycleKey)) {
             foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
-                if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)) {
+                if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)
+                    || ($scopeSubjects !== null && !$inMyScope($c))) {
                     continue;
                 }
                 $ck = $normKey($c->specialty_name, $c->course, $c->subject_name);
@@ -3700,7 +3704,7 @@ class TimetableController extends Controller
         // Ma'ruza kartalarining rekvizitlari (o'qituvchi/xona) ham blokda ko'rinsin.
         if (!empty($cycleKey)) {
             foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture')->get() as $c) {
-                if (!$inScope($c)) {
+                if (!$inScope($c) || ($scopeSubjects !== null && !$inMyScope($c))) {
                     continue;
                 }
                 $ck = $normKey($c->specialty_name, $c->course, $c->subject_name);
@@ -3871,6 +3875,13 @@ class TimetableController extends Controller
             }
             foreach ([$placeKey => $placeGroup, $rk => (string) $g['name']] as $savedKey => $savedGroup) {
                 foreach ($savedByRow[$savedKey] ?? [] as $placement) {
+                    // Asosiy nomga yig'ishdan oldin faqat mas'ul bo'lak joylashuvlarini qoldiramiz.
+                    if ($scopeSubjects !== null && !$this->responsibleMatch($scopeSubjects, [
+                        'faculty_name' => $g['faculty'], 'specialty_name' => $g['specialty'],
+                        'course' => $g['course'], 'subject_name' => $placement->subject_name,
+                    ])) {
+                        continue;
+                    }
                     // Tashqi jadval: bo'lak joylashuvi asosiy nomli bitta blok bo'lib ko'rinadi.
                     $placementBase = !$cycleSubRows ? $this->cycleSubjectVariantBase((string) $placement->subject_name) : null;
                     $baseSubject = $placementBase !== null ? ($subsByNorm[mb_strtolower($placementBase)] ?? null) : null;
@@ -7054,6 +7065,10 @@ class TimetableController extends Controller
             return (int) $actor->id;
         }
         $teacherId = $actor ? (int) ($actor->teacher_id ?? 0) : 0;
+        // Web guard: fan mas'uli boshqa sahifalarda ham email -> Teacher.login orqali bog'lanadi.
+        if ($teacherId <= 0 && $actor instanceof \App\Models\User && trim((string) $actor->email) !== '') {
+            $teacherId = (int) Teacher::where('login', $actor->email)->value('id');
+        }
 
         return $teacherId > 0 ? $teacherId : -1;
     }
@@ -7640,7 +7655,7 @@ class TimetableController extends Controller
         return $this->specKey((string) ($card->specialty_name ?? '')) . '|' . (int) ($card->course ?? 0) . '|' . $this->normSubject((string) ($card->subject_name ?? ''));
     }
 
-    /** Doskadagi fan mas'uli fanlari kartalari id lari (bo'lak nomi bo'lsa — asosiy nomi bo'yicha ham). */
+    /** Doskadagi mas'ul fanlarning aniq bo'laklari va umumiy kartalari id lari. */
     private function responsibleCardIds(Request $request, $cards): array
     {
         try {
@@ -7669,19 +7684,8 @@ class TimetableController extends Controller
         $key = $this->responsibleCardKey($card);
         $faculty = (string) (is_array($card) ? ($card['faculty_name'] ?? '') : ($card->faculty_name ?? ''));
         $facultyPrefix = $this->specKey($faculty) . '|';
-        $name = (string) (is_array($card) ? ($card['subject_name'] ?? '') : ($card->subject_name ?? ''));
-        $base = $this->cycleSubjectVariantBase($name);
-        $candidateKeys = [$key];
-        if ($base !== null) {
-            $candidateKeys[] = substr($key, 0, strrpos($key, '|') + 1) . $this->normSubject($base);
-        }
-        foreach ($candidateKeys as $candidate) {
-            if (isset($keys[$facultyPrefix . $candidate]) || isset($keys[$candidate])) {
-                return true;
-            }
-        }
-
-        return false;
+        // Asosiy nom kaliti umumiy kartaga tegishli; boshqa bo'lak unga aylantirilmaydi.
+        return isset($keys[$facultyPrefix . $key]) || isset($keys[$key]);
     }
 
     /** departmentHeadKafedra, lekin kafedra aniqlanmasa so'rovni yiqitmaydi (null). */

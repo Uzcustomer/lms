@@ -15,8 +15,7 @@
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
     // O'qituvchi: faqat ko'rish (hech qanday tahrirlash tugmasi yo'q)
     $timetableReadOnly = in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli'], true);
-    // O'qituvchi identifikatori (o'qituvchi/kafedra mudiri — teacher guard): "Faqat meniki" rejimi uchun
-    $timetableTeacherId = $timetableUser instanceof \App\Models\Teacher ? (int) $timetableUser->id : null;
+    // O'qituvchi identifikatori controllerda ikkala guard uchun bir xil aniqlanadi.
     // Fan mas'uli: "Mas'ul fanlarim" ko'rinishi (o'zi mas'ul bo'lgan fanlar)
     $timetableHasSubjects = $timetableActiveRole === 'fan_masuli';
     try {

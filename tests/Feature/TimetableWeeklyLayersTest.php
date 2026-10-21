@@ -708,3 +708,86 @@ it('haftalik Excel barcha jadval rollari uchun haqiqiy xlsx faylini yaratadi', f
         unlink($file);
     }
 })->with(['fan_masuli', 'oqituvchi', 'kafedra_mudiri', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'registrator_ofisi', 'kichik_admin', 'admin', 'superadmin']);
+
+function responsibleActor(array $s, string $guard, bool $linked = true)
+{
+    if ($guard === 'teacher') {
+        return test()->withoutVite()->actingAs($s['head'], 'teacher')->withSession(['active_role' => 'fan_masuli']);
+    }
+    $s['head']->update(['login' => 'responsible@example.test']);
+    $user = \App\Models\User::factory()->create(['email' => $linked ? 'responsible@example.test' : 'unlinked@example.test']);
+    $user->assignRole('fan_masuli');
+    return test()->withoutVite()->actingAs($user, 'web')->withSession(['active_role' => 'fan_masuli']);
+}
+
+it('web fan mas’uli email orqali o‘qituvchiga bog‘lanadi va qamrov tugmalarini ko‘radi', function () {
+    $s = responsibleScopeSetup();
+    $actor = responsibleActor($s, 'web');
+    $actor->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()
+        ->assertJsonPath('my_subject_card_ids', [$s['own']->id]);
+    $actor->get(route('admin.timetable.index'))->assertOk()
+        ->assertSee('const TIMETABLE_TEACHER_ID = ' . $s['head']->id, false)
+        ->assertSee('id="mineAll"', false)->assertSee('id="mineSubjects"', false)
+        ->assertSee('const TIMETABLE_HAS_SUBJECTS = true', false);
+    $actor->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 1, 'pair' => 1])->assertForbidden();
+});
+
+it('bog‘lanmagan web fan mas’uli boshqa o‘qituvchining biriktirishini olmaydi', function () {
+    $s = responsibleScopeSetup();
+    $actor = responsibleActor($s, 'web', false);
+    $actor->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->assertJsonPath('my_subject_card_ids', []);
+    $actor->get(route('admin.timetable.index'))->assertOk()->assertSee('const TIMETABLE_TEACHER_ID = null', false);
+});
+
+it('mas’ul bo‘lak aniq moslanadi, umumiy ma’ruza ko‘rinadi va boshqa bo‘lak yopiq qoladi', function (string $guard, string $assigned, array $variants) {
+    $s = responsibleScopeSetup();
+    DB::table('curriculum_subjects')->where('id', $s['responsible_subject_id'])->update(['subject_name' => $assigned]);
+    $s['own']->update(['subject_name' => 'Gigiyena (a)']);
+    $s['foreign']->update(['subject_name' => 'Gigiyena (b)']);
+    $lecture = $s['own']->replicate();
+    $lecture->fill(['subject_name' => 'Gigiyena', 'training_type' => 'lecture', 'group_name' => null, 'group_names' => ['g-01a']])->save();
+    $actor = responsibleActor($s, $guard);
+    $res = $actor->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
+    $expected = [$lecture->id];
+    if (in_array('a', $variants, true)) $expected[] = $s['own']->id;
+    if (in_array('b', $variants, true)) $expected[] = $s['foreign']->id;
+    expect(collect($res->json('my_subject_card_ids'))->sort()->values()->all())->toBe(collect($expected)->sort()->values()->all());
+})->with([
+    ['teacher', 'Gigiyena (a)', ['a']],
+    ['web', 'Gigiyena (a)', ['a']],
+    ['teacher', 'Gigiyena', []],
+    ['web', 'Gigiyena', []],
+]);
+
+it('ichki siklda faqat biriktirilgan bo‘lak ko‘rinadi', function (string $guard) {
+    $s = responsibleScopeSetup();
+    DB::table('curriculum_subjects')->where('id', $s['responsible_subject_id'])->update(['semester_code' => '19']);
+    $s['own']->update(['course' => 5, 'subject_name' => 'Gigiyena (a)']);
+    $s['foreign']->update(['course' => 5, 'subject_name' => 'Gigiyena (b)']);
+    foreach (['Gigiyena (a)', 'Gigiyena (b)'] as $name) {
+        \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+            'course' => 5, 'subject_name' => $name, 'mode' => 'cycle', 'cycle_days' => 2]);
+    }
+    $actor = responsibleActor($s, $guard);
+    $response = $actor->postJson(route('admin.timetable.cycle-plan', $s['board']), ['subjects' => 1, 'layer' => 'internal'])->assertOk();
+    expect(collect($response->json('cycle_cards'))->pluck('subject')->unique()->values()->all())->toBe(['Gigiyena (a)'])
+        ->and($response->json('can_edit'))->toBeFalse();
+})->with(['teacher', 'web']);
+
+it('tashqi siklda boshqa mas’ul bo‘lakning joylashuvi tanlangan bo‘lakni almashtirmaydi', function (string $guard) {
+    $s = responsibleScopeSetup();
+    DB::table('curriculum_subjects')->where('id', $s['responsible_subject_id'])->update(['semester_code' => '19']);
+    $s['own']->update(['course' => 5, 'subject_name' => 'Gigiyena (a)']);
+    $s['foreign']->update(['course' => 5, 'subject_name' => 'Gigiyena (b)']);
+    foreach (['Gigiyena (a)' => 0, 'Gigiyena (b)' => 6] as $name => $start) {
+        \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+            'course' => 5, 'subject_name' => $name, 'mode' => 'cycle', 'cycle_days' => 2]);
+        \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+            'course' => 5, 'group_name' => 'F1 / 1-oqim', 'subject_name' => $name, 'start_index' => $start, 'training_type' => 'practice']);
+    }
+    $actor = responsibleActor($s, $guard);
+    $response = $actor->postJson(route('admin.timetable.cycle-plan', $s['board']), ['subjects' => 1, 'layer' => 'external'])->assertOk();
+    expect($response->json('rows'))->toHaveCount(1)
+        ->and($response->json('rows.0.blocks'))->toHaveCount(1)
+        ->and($response->json('rows.0.blocks.0.from'))->toBe(0);
+})->with(['teacher', 'web']);

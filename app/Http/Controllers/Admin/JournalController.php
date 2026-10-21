@@ -11433,7 +11433,7 @@ class JournalController extends Controller
         }
         $student = DB::table('students')
             ->where('hemis_id', $studentHemisId)
-            ->first(['student_type_code', 'hemis_created_at']);
+            ->first(['hemis_id', 'student_type_code', 'hemis_created_at']);
         $assigned = \App\Services\LessonOpeningTeacherReport::assignedDateFor(
             \App\Services\LessonOpeningTeacherReport::subjectsAssignedAt([$studentHemisId]),
             $studentHemisId,

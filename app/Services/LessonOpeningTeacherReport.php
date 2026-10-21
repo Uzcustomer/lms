@@ -494,9 +494,39 @@ class LessonOpeningTeacherReport
         $dates = array_filter([
             !empty($student?->hemis_created_at) ? substr((string) $student->hemis_created_at, 0, 10) : null,
             $subjectsAssignedAt ? substr($subjectsAssignedAt, 0, 10) : null,
+            // Boshqa guruhdan o'tkazilgan talaba: yangi guruhdagi o'tishdan oldingi
+            // darslar ham "kech biriktirilgan" — o'qituvchi ularga baho qo'ya olsin
+            !empty($student?->hemis_id) ? self::groupTransferDate((string) $student->hemis_id) : null,
         ]);
 
         return $dates ? max($dates) : null;
+    }
+
+    /**
+     * Talaba hozirgi guruhiga boshqa guruhdan o'tkazilgan sana (Y-m-d), o'tkazilmagan
+     * bo'lsa null. student_group_history dagi birinchi yozuv LMS ga birinchi tushgan
+     * sana — u o'tkazish emas, shuning uchun faqat ikkinchi va keyingi guruhlar olinadi.
+     * Butun xarita bir marta yuklanadi (o'tkazilganlar kam).
+     */
+    public static function groupTransferDate(string $hemisId): ?string
+    {
+        static $map = null;
+        if ($map === null) {
+            $map = [];
+            if (\Illuminate\Support\Facades\Schema::hasTable('student_group_history')) {
+                DB::table('student_group_history as h')
+                    ->join('students as s', 's.id', '=', 'h.student_id')
+                    ->groupBy('h.student_id', 's.hemis_id')
+                    ->havingRaw('COUNT(*) > 1')
+                    ->select('s.hemis_id', DB::raw('MAX(h.started_at) as moved_at'))
+                    ->get()
+                    ->each(function ($row) use (&$map) {
+                        $map[(string) $row->hemis_id] = substr((string) $row->moved_at, 0, 10);
+                    });
+            }
+        }
+
+        return $map[$hemisId] ?? null;
     }
 
     /**

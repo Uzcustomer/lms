@@ -134,6 +134,31 @@ class TimetableController extends Controller
         return trim($s);
     }
 
+    /** UTF-8 harflari bo'yicha masofa; 2 tadan ko'p farq uchun 3 qaytaradi. */
+    private function subjectTypoDistance(string $a, string $b): int
+    {
+        $left = mb_str_split($a);
+        $right = mb_str_split($b);
+        $n = count($right);
+        if (abs(count($left) - $n) > 2) {
+            return 3;
+        }
+        $previous = range(0, $n);
+        foreach ($left as $i => $letter) {
+            $row = [$i + 1];
+            foreach ($right as $j => $other) {
+                $row[$j + 1] = min($row[$j] + 1, $previous[$j + 1] + 1,
+                    $previous[$j] + ($letter === $other ? 0 : 1));
+            }
+            if (min($row) > 2) {
+                return 3;
+            }
+            $previous = $row;
+        }
+
+        return min(3, $previous[$n]);
+    }
+
     /** Yo'nalish+kurs+fan bo'yicha joriy yilgi HEMIS kafedrasi (buildKafedraMap to'ldiradi). */
     private array $scopedKafMap = [];
 
@@ -1790,6 +1815,42 @@ class TimetableController extends Controller
             }
         }
         $map += $aliasFallback;
+        // Bo'lakli fanlarning asosiy nomi ("Fan (a)" → "Fan") ham — birlashtirilgan umumiy ma'ruza kartasi uchun
+        foreach ($map as $k => $name) {
+            $base = $this->cycleSubjectVariantBase((string) $name);
+            if ($base !== null) {
+                $map[substr($k, 0, strrpos($k, '|') + 1) . $this->normSubject($base)] ??= $base;
+            }
+        }
+        // Imlo xatosi tuzatilgan nomlar uchun (masalan HEMIS da "stamatologiya" → "stomatologiya"):
+        // aniq mos kelmasa — shu yo'nalish+kursdagi 1–2 harf farqli YAGONA nom (bo'lak harfi bir xil).
+        $byPrefix = [];
+        foreach ($map as $k => $name) {
+            $cut = strrpos($k, '|');
+            $byPrefix[substr($k, 0, $cut + 1)][substr($k, $cut + 1)] = $name;
+        }
+        $variantLetter = fn (string $n) => preg_match('/\(\s*(\p{L})\s*\)\s*$/u', trim($n), $m) ? mb_strtolower($m[1]) : '';
+        $fuzzy = function (string $prefix, string $norm, string $name) use ($byPrefix, $variantLetter): ?string {
+            if (mb_strlen($norm) < 12 || strlen($norm) > 255 || empty($byPrefix[$prefix])) {
+                return null;
+            }
+            $best = null;
+            $bestD = 3;
+            $ties = 0;
+            foreach ($byPrefix[$prefix] as $cand => $candName) {
+                if (strlen($cand) > 255 || $variantLetter((string) $candName) !== $variantLetter($name)) {
+                    continue;
+                }
+                $d = $this->subjectTypoDistance($norm, $cand);
+                if ($d < $bestD) {
+                    [$best, $bestD, $ties] = [$candName, $d, 0];
+                } elseif ($d === $bestD) {
+                    $ties++;
+                }
+            }
+
+            return $best !== null && $ties === 0 && $bestD > 0 ? $best : null;
+        };
 
         // Kafedra ham qayta hisoblanadi (barcha kartalarda — nom o'zgarmagan bo'lsa ham:
         // HEMIS da kafedra o'zgargan / bo'lingan bo'lsa joylashuvlarni yo'qotmasdan to'g'rilansin)
@@ -1816,6 +1877,14 @@ class TimetableController extends Controller
         foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
             $key = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
             $new = $map[$this->specKey((string) $c->faculty_name) . '|' . $key] ?? $map[$key] ?? null;
+            if ($new === null) {
+                $norm = $this->normSubject((string) $c->subject_name);
+                $p = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+                $facultyPrefix = $this->specKey((string) $c->faculty_name) . '|' . $p;
+                // Fakultet rejasida noaniq yoki yo'q moslikni boshqa fakultetdan olmang.
+                $prefix = isset($byPrefix[$facultyPrefix]) ? $facultyPrefix : $p;
+                $new = $fuzzy($prefix, $norm, (string) $c->subject_name);
+            }
             $changed = false;
             if ($new !== null && $new !== $c->subject_name) {
                 $c->subject_name = $new;
@@ -2014,6 +2083,21 @@ class TimetableController extends Controller
             }
             $base = (string) $this->cycleSubjectVariantBase((string) $card->subject_name);
             $groups[implode('|', [$card->faculty_name, $card->specialty_name, $card->course, mb_strtolower((string) $card->oqim_label), $this->normSubject($base)])][] = [$card, $base];
+        }
+        // Avval birlashtirilgan (asosiy nomli) ma'ruza shu oqimda qolgan bo'lsa — keyin qo'shilgan
+        // bo'lak ma'ruzalari ham unga qo'shiladi (u qoldiriladigan karta bo'ladi).
+        if ($groups) {
+            $q2 = TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture');
+            $this->applyScopeToQuery($q2, $facSet, $specSet, $courseSet);
+            foreach ($q2->orderBy('id')->get() as $card) {
+                if ($this->cycleSubjectVariantBase((string) $card->subject_name) !== null) {
+                    continue;
+                }
+                $k = implode('|', [$card->faculty_name, $card->specialty_name, $card->course, mb_strtolower((string) $card->oqim_label), $this->normSubject((string) $card->subject_name)]);
+                if (isset($groups[$k])) {
+                    array_unshift($groups[$k], [$card, $groups[$k][0][1]]);
+                }
+            }
         }
         $dry = $request->boolean('dry_run');
         $hasOv = Schema::hasTable('timetable_card_overrides');

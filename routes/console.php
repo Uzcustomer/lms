@@ -90,7 +90,7 @@ Schedule::call(function () {
         '--final' => true,
         '--silent' => true,
     ]);
-})->dailyAt('07:30')->name('grades-reimport-yesterday')->withoutOverlapping(60);
+})->dailyAt('06:00')->name('grades-reimport-yesterday')->withoutOverlapping(60);
 
 // Moodle quiz natijalarini har kuni avtomatik import qilish — har kuni ertalab 04:30 da
 // Ushbu cron LMS'da `moodle_sync_requested` flagini qo'yadi.

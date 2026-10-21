@@ -384,12 +384,15 @@
                                         <option value="4">2 para (4 soat)</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Boshlanishi</label>
+                                <div class="hidden">
                                     <select id="cmStartHalf" class="w-full rounded-md border-gray-300 text-sm">
                                         <option value="0">Para boshidan</option>
                                         <option value="1">Para o'rtasidan (yarmidan)</option>
                                     </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Boshlanish vaqti</label>
+                                    <select id="cmStartSlot" class="w-full rounded-md border-gray-300 text-sm"></select>
                                 </div>
                                 <div id="cmTimeHint" class="col-span-2 text-[11px] text-indigo-600"></div>
                             </div>
@@ -1057,7 +1060,20 @@
            bo'linadi. Har uchburchak to'lig'icha o'z fanining rangida bo'ladi —
            kartochka ramkasi yo'q, ichida faqat fan nomi turadi. */
         #grid td.tt-cell.tt-split { position: relative; padding: 0; overflow: hidden; }
-        #grid td.tt-bolak-cell { padding: 2px 3px; vertical-align: top; }
+        #grid td.tt-bolak-cell { padding: 2px 3px; vertical-align: top; position: relative; }
+        #grid td.tt-bolak-cell > .tt-bolak-head, #grid td.tt-bolak-cell > .tt-bolak-list { position: relative; z-index: 1; }
+        .tt-bolak-drops { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+        .tt-bolak-drop { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(100,116,139,.35); }
+        .tt-bolak-drop:first-child { border-top: 0; }
+        .tt-bolak-drop i { position: absolute; right: 2px; bottom: 1px; font-size: 8px; font-style: normal; color: #64748b; opacity: 0; }
+        #grid.tt-dragging .tt-bolak-drops { pointer-events: auto; z-index: 2; }
+        #grid.tt-dragging .tt-bolak-drop { background: rgba(255,255,255,.35); }
+        #grid.tt-dragging .tt-bolak-drop i { opacity: 1; font-weight: 700; }
+        .tt-bolak-drop.drag-ok { background: rgba(34,197,94,.35) !important; outline: 2px solid #16a34a; }
+        .tt-bolak-drop.drag-bad { background: rgba(239,68,68,.3) !important; outline: 2px solid #dc2626; }
+        .tt-bolak-time { font-size: 8.5px; color: #334155; background: rgba(255,255,255,.7); border-radius: 3px; padding: 0 3px; white-space: nowrap; }
+        .tt-bolak-item.tt-bolak-late { border-left: 3px solid #f59e0b; }
+        .tt-bolak-item.tt-bolak-late .tt-bolak-time { color: #b45309; font-weight: 700; }
         .tt-bolak-head { font-size: 10px; font-weight: 700; color: #1e293b; line-height: 1.2; cursor: grab;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px dashed rgba(15,23,42,.18); padding-bottom: 2px; margin-bottom: 2px; }
         .tt-bolak-list { display: flex; flex-direction: column; gap: 2px; }
@@ -2866,6 +2882,10 @@
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
                 if (j && j.pending_approval) onPendingApproval(j);
+                // Server ogohlantirishi (masalan o'qituvchi/xona shu sanada sikl darsida band) — joylash bajarildi.
+                if (j && Array.isArray(j.warnings) && j.warnings.length) {
+                    ttToast('<b>&#9888; Ogohlantirish</b>' + j.warnings.map(w => '<div>' + esc(w) + '</div>').join(''), 'warn');
+                }
                 return j;
             }
 
@@ -5945,6 +5965,14 @@
             // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha).
             // `pair` — yarim-slot indeksi; dars cardLen(card) ta yarim-slotni egallaydi,
             // shu oraliq [pair, pair+len) boshqa kartaning oralig'i bilan kesishsa — band.
+            // Band qilgan dars: "2-son davolash, 3-kurs · d2/d24-05a · Patologik anatomiya (amaliy)".
+            function describeCardBrief(o) {
+                const gs = cardGroups(o).map(g => String(g).replace(/\s*\(.*\)\s*$/, ''));
+                const gText = gs.length > 4 ? gs.slice(0, 4).join(', ') + ' +' + (gs.length - 4) : gs.join(', ');
+                return (o.faculty_name ? o.faculty_name + ', ' : '') + o.course + '-kurs'
+                    + (o.training_type === 'lecture' && o.oqim_label ? ' · ' + o.oqim_label : '')
+                    + (gText ? ' · ' + gText : '') + ' · ' + o.subject_name + ' (' + (o.training_type === 'lecture' ? "ma'ruza" : 'amaliy') + ')';
+            }
             function conflictsAt(card, day, pair) {
                 const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
@@ -5964,11 +5992,11 @@
                     const ov = cardGKeys(o).filter(k => my.includes(k));
                     // Tashqi jadval — umumiy shablon: hech qachon bir haftaga tushmaydigan kartalar
                     // bitta katakni bo'lisha oladi (serverdagi findExternalConflicts kabi).
-                    if (ov.length && !bolakSiblings(card, o) && !(weeklyLayer === 'external' && !weeksIntersect(card, o))) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
-                    if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
+                    if (ov.length && !bolakSiblings(card, o) && !(weeklyLayer === 'external' && !weeksIntersect(card, o))) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(',') + ' — ' + describeCardBrief(o));
+                    if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name + ' — ' + describeCardBrief(o));
                     // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
                     if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code
-                        && !isSharedRoomName(effectiveOther.auditorium_name)) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
+                        && !isSharedRoomName(effectiveOther.auditorium_name)) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name + ' — ' + describeCardBrief(o));
                 });
                 return errs;
             }
@@ -6029,20 +6057,22 @@
             }
             // Birlashtirilgan (ketma-ket) blok — kartalarni ketma-ket paralarga joylaymiz
             // parallel — bo'lakli fan bo'laklari: hammasi bitta katakka (ketma-ket emas).
-            async function placeBlockAt(ids, d, p, parallel) {
+            async function placeBlockAt(ids, d, p, parallel, offs) {
+                // Bo'laklar o'z siljishini saqlab ko'chadi ((a) 12:40 da bo'lsa, yangi joyda ham yarim para keyin)
+                const at = k => p + (parallel ? ((offs && offs[k]) || 0) : k);
                 // Bo'laklar birga ko'chadi: birortasi sig'masa (o'qituvchi/xona band) — hech biri
                 // ko'chirilmaydi, aks holda so'rovlar birma-bir ketib, guruh yarim ko'chgan holda qolardi.
                 if (parallel) {
                     for (const id of ids) {
                         const card = cards.find(x => x.id === id);
-                        const errs = card ? conflictsAt(card, d, p) : [];
+                        const errs = card ? conflictsAt(card, d, at(ids.indexOf(id))) : [];
                         if (errs.length) { alert('Konflikt (' + card.subject_name + '): ' + errs.join('; ')); return; }
                     }
                 }
                 try {
                     for (let k = 0; k < ids.length; k++) {
                         const card = cards.find(x => x.id === ids[k]);
-                        if (card) await placeOneCard(card, d, parallel ? p : p + k);
+                        if (card) await placeOneCard(card, d, at(k));
                     }
                     selected = null; renderAll();
                 } catch (e) { alert('Konflikt: ' + e.message); }
@@ -6050,9 +6080,13 @@
             // ===== Drag-and-drop holati (blok = bir yoki bir necha ketma-ket karta) =====
             let dragCardIds = null;
             let dragParallel = false;
-            function startDrag(ids, ev, parallel) {
+            let dragOffsets = null;   // bo'laklar sarlavhasi: har bo'lakning katak boshidan siljishi (yarim-slot)
+            function startDrag(ids, ev, parallel, offs) {
                 dragCardIds = Array.isArray(ids) ? ids.slice() : [ids];
                 dragParallel = !!parallel;
+                dragOffsets = Array.isArray(offs) ? offs.slice() : null;
+                // Bo'lak katagi ichidagi yarim-slot chiziqlari tushish nishoniga aylanadi
+                setTimeout(() => { const g = document.getElementById('grid'); if (g && dragCardIds) g.classList.add('tt-dragging'); }, 0);
                 if (ev && ev.dataTransfer) {
                     ev.dataTransfer.effectAllowed = 'move';
                     try { ev.dataTransfer.setData('text/plain', dragCardIds.join(',')); } catch (e) { /* ba'zi brauzerlar */ }
@@ -6062,6 +6096,9 @@
             document.addEventListener('dragend', () => {
                 dragCardIds = null;
                 dragParallel = false;
+                dragOffsets = null;
+                const gEl = document.getElementById('grid');
+                if (gEl) gEl.classList.remove('tt-dragging');
                 document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
                 const panel = document.getElementById('cardPanel');
                 if (panel) panel.classList.remove('pn-drop');
@@ -6652,43 +6689,99 @@
                 const bolakBaseOf = x => { const m = BOLAK_RX.exec(String(x.subject_name || '').trim()); return m ? m[1].trim() : null; };
                 const bolakLetterOf = x => { const m = BOLAK_RX.exec(String(x.subject_name || '').trim()); return m ? m[2] : ''; };
                 const shortGroup = g => String(g).replace(/\s*\(.*\)\s*$/, '').split('-').pop();
+                // Bo'lak kechroq boshlanishi mumkin (masalan (a) 12:40 da, (b)/(c) 12:00 da): katak
+                // shu asos guruhdagi barcha bo'laklarni qamraydi (rowspan — eng oxirgi tugashgacha),
+                // har bo'lak qatorida o'z vaqti yoziladi, katak ichida yarim-slot tushish chiziqlari bor.
                 const bolakCell = (o, oi, gi, d, p) => {
-                    const startList = g => (cellStack[g + '|' + d + '|' + p] || []).filter(x => x.training_type !== 'lecture');
-                    const l0 = startList(o.groups[gi]);
+                    const startList = (g, q) => (cellStack[g + '|' + d + '|' + q] || []).filter(x => x.training_type !== 'lecture');
+                    const l0 = startList(o.groups[gi], p);
                     const B = l0.length ? bolakBaseOf(l0[0]) : null;
-                    // Bitta katak (rowspan) — bo'laklar uzunligi bir xil bo'lsagina: aks holda qisqasi
-                    // tugagan joydan boshlanadigan dars uzun bo'lak rowspan'i ostida yo'qolib qolardi.
-                    const L = l0.length ? cardLen(l0[0]) : 0;
-                    const fits = x => bolakBaseOf(x) === B && cardLen(x) === L;
-                    if (!B || !l0.every(fits)) return null;
-                    const bg = baseKey(gName[o.groups[gi]] || '');
-                    let span = 1;
-                    while (gi + span < o.groups.length) {
-                        const g2 = o.groups[gi + span];
-                        if (baseKey(gName[g2] || '') !== bg || vConsumed[g2 + '|' + d + '|' + p]) break;
-                        const l2 = startList(g2);
-                        if (!l2.length || !l2.every(fits)) break;
-                        span++;
-                    }
-                    const list = new Map();
-                    for (let k = 0; k < span; k++) startList(o.groups[gi + k]).forEach(x => list.set(x.id, x));
-                    const items = [...list.values()].sort((a, b) => bolakLetterOf(a).localeCompare(bolakLetterOf(b)) || a.id - b.id);
-                    const vs = L;
+                    if (!B || !l0.every(x => bolakBaseOf(x) === B)) return null;
+                    const isB = x => bolakBaseOf(x) === B;
+                    const startOf = x => { const pl = effPlace(x); return pl ? +pl.pair : p; };
+                    // Guruh ustunining [p, end) oralig'idagi bo'laklari; begona dars bo'lsa — null
+                    const gather = (g, end, late) => {
+                        const out = [];
+                        for (let q = p; q < end; q++) {
+                            if (q > p && vConsumed[g + '|' + d + '|' + q]) return null;
+                            const l = startList(g, q);
+                            if (q > p && !late) { if (l.length) return null; continue; }
+                            if (!l.every(isB)) return null;
+                            out.push(...l);
+                            const occ = placedIdx[g + '|' + d + '|' + q];
+                            if (occ && occ.training_type !== 'lecture' && !isB(occ)) return null;
+                            if (occ && occ.training_type === 'lecture') return null;
+                        }
+                        return out;
+                    };
+                    const build = late => {
+                        let end = p + Math.max(...l0.map(cardLen));
+                        if (!late && !l0.every(x => cardLen(x) === end - p)) return null;
+                        let span = 1, guard = 0;
+                        while (guard++ < 8) {
+                            let items = [];
+                            for (let k = 0; k < span; k++) {
+                                const l = gather(o.groups[gi + k], end, late);
+                                if (!l) return null;
+                                items.push(...l);
+                            }
+                            // Qo'shni ustunlar (shu asos guruh) — ularda ham shu fan bo'laklari bo'lsa
+                            const bg = baseKey(gName[o.groups[gi]] || '');
+                            while (gi + span < o.groups.length) {
+                                const g2 = o.groups[gi + span];
+                                if (baseKey(gName[g2] || '') !== bg || vConsumed[g2 + '|' + d + '|' + p]) break;
+                                const l2 = gather(g2, end, late);
+                                if (!l2 || !l2.length) break;
+                                if (!late && !l2.every(x => startOf(x) === p && cardLen(x) === end - p)) break;
+                                items.push(...l2);
+                                span++;
+                            }
+                            const map = new Map(items.map(x => [x.id, x]));
+                            items = [...map.values()];
+                            const newEnd = Math.max(end, ...items.map(x => startOf(x) + cardLen(x)));
+                            if (newEnd === end) return { span, end, items };
+                            if (!late) return null;
+                            end = newEnd;
+                        }
+                        return null;
+                    };
+                    const res = build(true) || build(false);
+                    if (!res) return null;
+                    const { span, end } = res;
+                    const items = res.items.sort((a, b) => startOf(a) - startOf(b) || bolakLetterOf(a).localeCompare(bolakLetterOf(b)) || a.id - b.id);
+                    const vs = end - p;
                     for (let r = 1; r < vs; r++) for (let k = 0; k < span; k++) vConsumed[o.groups[gi + k] + '|' + d + '|' + (p + r)] = 1;
                     const first = items[0];
                     const parts = B.split(/\.\s+/).filter(Boolean);
                     const shortB = parts.length > 1 ? parts[parts.length - 1] : B;
                     const ids = items.map(x => x.id).join(',');
-                    const head = '<div class="tt-bolak-head" data-chip="' + first.id + '" data-parallel-ids="' + ids + '" title="' +
-                        esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi)") + '"><b>[A]</b> ' + esc(shortB) + '</div>';
-                    const rows = items.map(x => '<div class="tt-bolak-item' + (selected && selected.id === x.id ? ' sel' : '') + '" data-chip="' + x.id + '" title="' + esc(cardTooltip(x)) + '">' +
-                        '<b class="tt-bolak-tag">' + esc(bolakLetterOf(x)) + '</b> ' + esc(cardGroups(x).map(shortGroup).join('+')) +
-                        '<span class="tt-bolak-n">' + (x.students || '') + '</span>' +
-                        (x.teacher_name ? '<span class="tt-bolak-t">' + esc(String(x.teacher_name).split(' ')[0]) + '</span>' : '') + '</div>').join('');
+                    const offs = items.map(x => startOf(x) - p).join(',');
+                    const tStart = q => (pairTime[q] && pairTime[q].start) || '';
+                    const tEnd = q => (pairTime[q] && pairTime[q].end) || '';
+                    // Vaqt — bo'laklar boshlanishi/tugashi har xil bo'lsa har qatorda ko'rsatiladi
+                    const varied = items.some(x => startOf(x) !== p || startOf(x) + cardLen(x) !== end);
+                    const head = '<div class="tt-bolak-head" data-chip="' + first.id + '" data-parallel-ids="' + ids + '" data-parallel-offs="' + offs + '" title="' +
+                        esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi; bitta bo'lakni katak ichidagi chiziqqa sudrab boshlanish vaqtini o'zgartiring)") + '"><b>[A]</b> ' + esc(shortB) + '</div>';
+                    const rows = items.map(x => {
+                        const sx = startOf(x), late = sx > p;
+                        const tm = tStart(sx) + '–' + tEnd(sx + cardLen(x) - 1);
+                        return '<div class="tt-bolak-item' + (late ? ' tt-bolak-late' : '') + (selected && selected.id === x.id ? ' sel' : '') + '" data-chip="' + x.id + '" title="' + esc(cardTooltip(x, 'Vaqt: ' + tm)) + '">' +
+                            '<b class="tt-bolak-tag">' + esc(bolakLetterOf(x)) + '</b> ' + esc(cardGroups(x).map(shortGroup).join('+')) +
+                            (varied ? '<span class="tt-bolak-time">' + (late ? '⏵ ' : '') + esc(tm) + '</span>' : '') +
+                            '<span class="tt-bolak-n">' + (x.students || '') + '</span>' +
+                            (x.teacher_name ? '<span class="tt-bolak-t">' + esc(String(x.teacher_name).split(' ')[0]) + '</span>' : '') + '</div>';
+                    }).join('');
+                    // Katak ichidagi yarim-slot tushish chiziqlari (12:00 / 12:40 ...)
+                    let drops = '';
+                    if (vs > 1) {
+                        drops = '<div class="tt-bolak-drops">';
+                        for (let r = 0; r < vs; r++) drops += '<div class="tt-bolak-drop" data-drop-day="' + d + '" data-drop-pair="' + (p + r) + '" style="top:' + (r * 100 / vs) + '%;height:' + (100 / vs) + '%"><i>' + esc(tStart(p + r)) + '</i></div>';
+                        drops += '</div>';
+                    }
                     const cs = span > 1 ? ' colspan="' + span + '"' : '';
                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
                     return { span, html: '<td class="tt-cell tt-bolak-cell' + courseCls(o.course) + colBorder(oi, gi, o.groups) + rowEndCls(p + vs - 1) + '"' + cs + rs +
-                        ' data-day="' + d + '" data-pair="' + p + '" style="' + subjStyle(first) + '">' + head + '<div class="tt-bolak-list">' + rows + '</div></td>' };
+                        ' data-day="' + d + '" data-pair="' + p + '" style="' + subjStyle(first) + '">' + drops + head + '<div class="tt-bolak-list">' + rows + '</div></td>' };
                 };
 
                 for (let d = 1; d <= D; d++) {
@@ -6831,7 +6924,8 @@
                         const parallel = !!el.dataset.parallelIds;
                         const list = parallel ? el.dataset.parallelIds : el.dataset.mergeIds;
                         const ids = list ? list.split(',').map(Number) : [+el.dataset.chip];
-                        startDrag(ids, ev, parallel);
+                        const offs = parallel && el.dataset.parallelOffs ? el.dataset.parallelOffs.split(',').map(Number) : null;
+                        startDrag(ids, ev, parallel, offs);
                     });
                 });
                 // Kataklarni tashlash nishoni qilamiz
@@ -6849,11 +6943,32 @@
                         ev.preventDefault();
                         td.classList.remove('drag-ok', 'drag-bad');
                         if (!dragCardIds) return;
-                        const ids = dragCardIds, parallel = dragParallel;
+                        const ids = dragCardIds, parallel = dragParallel, offs = dragOffsets;
                         const d = +td.dataset.day, p = +td.dataset.pair;
                         dragCardIds = null;
                         dragParallel = false;
-                        placeBlockAt(ids, d, p, parallel);
+                        dragOffsets = null;
+                        placeBlockAt(ids, d, p, parallel, offs);
+                    });
+                });
+                // Bo'lak katagi ichidagi yarim-slot chiziqlari: bitta bo'lakni 12:40 ga sudrash va h.k.
+                document.querySelectorAll('#grid .tt-bolak-drop').forEach(z => {
+                    z.addEventListener('dragover', ev => {
+                        if (!dragCardIds) return;
+                        ev.preventDefault(); ev.stopPropagation();
+                        ev.dataTransfer.dropEffect = 'move';
+                        const card = cards.find(x => x.id === dragCardIds[0]);
+                        const d = +z.dataset.dropDay, p = +z.dataset.dropPair;
+                        z.classList.add(card && conflictsAt(card, d, p).length ? 'drag-bad' : 'drag-ok');
+                    });
+                    z.addEventListener('dragleave', () => z.classList.remove('drag-ok', 'drag-bad'));
+                    z.addEventListener('drop', ev => {
+                        ev.preventDefault(); ev.stopPropagation();
+                        z.classList.remove('drag-ok', 'drag-bad');
+                        if (!dragCardIds) return;
+                        const ids = dragCardIds, parallel = dragParallel, offs = dragOffsets;
+                        dragCardIds = null; dragParallel = false; dragOffsets = null;
+                        placeBlockAt(ids, +z.dataset.dropDay, +z.dataset.dropPair, parallel, offs);
                     });
                 });
             }
@@ -6873,22 +6988,47 @@
                 $('cmLen').value = String(c.len_half || 2);
                 $('cmStartHalf').value = String(c.start_half || 0);
                 $('cmStartHalf').disabled = !(c.day && c.pair);
+                fillCmStartSlot(c);
                 updateCmTimeHint();
                 $('cmMsg').classList.add('hidden');
                 $('cardModal').classList.remove('hidden');
                 await Promise.all([loadTeachers(''), loadAuds()]);
             }
+            // Modal: boshlanish vaqti — dars turgan para ichidagi yarim-slotlar (masalan 12:00 / 12:40).
+            // Tanlangan (hafta yoki shablon) joylashuv bo'yicha; o'zgarsa karta shu yarim-slotga ko'chadi.
+            function fillCmStartSlot(c) {
+                const sel = $('cmStartSlot');
+                const pl = effPlace(c);
+                if (!pl) { sel.innerHTML = '<option value="">— joylashtirilmagan —</option>'; sel.disabled = true; return; }
+                const sched = boardSchedule().filter(it => it.type === 'pair');
+                const pt = {};
+                sched.forEach((it, i) => { pt[i + 1] = { name: it.name || '', abbr: it.abbr || '', start: it.start || '', end: it.end || '' }; });
+                const P = sched.length || board.pairs_per_day || 12;
+                const groups = paraGroups(P, pt);
+                let a = +pl.pair;
+                while (a > 1 && groups[a] && groups[a].span === 0) a--;
+                const n = (groups[a] && groups[a].span) || 1;
+                let o = '';
+                for (let q = a; q < a + n; q++) {
+                    o += '<option value="' + q + '"' + (q === +pl.pair ? ' selected' : '') + '>' +
+                        esc((pt[q] && pt[q].start) || ('slot ' + q)) + (q === a ? ' — para boshi' : ' — para ichidan') + '</option>';
+                }
+                sel.innerHTML = o;
+                sel.disabled = n < 2;
+            }
             // Modal: tanlangan uzunlik/boshlanish bo'yicha dars vaqti oralig'ini ko'rsatish
             function updateCmTimeHint() {
                 const el = $('cmTimeHint');
-                if (!modalCard || !modalCard.day || !modalCard.pair) { el.textContent = 'Joylashtirilmagan — uzunlik saqlanadi.'; return; }
+                if (!modalCard || !effPlace(modalCard)) { el.textContent = 'Joylashtirilmagan — uzunlik saqlanadi.'; return; }
                 const sched = boardSchedule().filter(it => it.type === 'pair');
                 const len = +$('cmLen').value;
                 // Bu modelda `pair` — yarim-slot indeksi; har qo'ng'iroq elementi bitta
                 // yarim-slot (o'z start/end vaqti bilan). Dars pair'dan boshlab len ta
                 // yarim-slotni egallaydi.
-                const startEntry = sched[modalCard.pair - 1];
-                const endEntry = sched[modalCard.pair - 1 + len - 1] || startEntry;
+                const pl = effPlace(modalCard) || modalCard;
+                const sp = +$('cmStartSlot').value || +pl.pair;
+                const startEntry = sched[sp - 1];
+                const endEntry = sched[sp - 1 + len - 1] || startEntry;
                 const startT = startEntry ? (startEntry.start || '') : '';
                 const endT = endEntry ? (endEntry.end || '') : '';
                 const label = { 1: '0.5 para', 2: '1 para', 3: '1.5 para', 4: '2 para' }[len] || len;
@@ -6901,7 +7041,7 @@
                 const m = Math.round((toMin(s) + toMin(e)) / 2);
                 return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
             }
-            $('cmLen').onchange = $('cmStartHalf').onchange = updateCmTimeHint;
+            $('cmLen').onchange = $('cmStartHalf').onchange = $('cmStartSlot').onchange = updateCmTimeHint;
             async function loadTeachers(search) {
                 const p = new URLSearchParams();
                 if (modalCard.kafedra_name && !search) p.set('kafedra', modalCard.kafedra_name.split(' ')[0]);
@@ -6940,6 +7080,14 @@
                     modalCard.auditorium_name = j.auditorium_name;
                     modalCard.len_half = +$('cmLen').value;
                     if (modalCard.day && modalCard.pair) modalCard.start_half = +$('cmStartHalf').value;
+                    // Boshlanish vaqti o'zgargan bo'lsa — shu kunda yangi yarim-slotga ko'chirish
+                    const pl = effPlace(modalCard);
+                    const slot = +$('cmStartSlot').value;
+                    if (pl && slot && slot !== +pl.pair) {
+                        const errs = conflictsAt(modalCard, +pl.day, slot);
+                        if (errs.length) throw new Error('Konflikt: ' + errs.join('; '));
+                        await placeOneCard(modalCard, +pl.day, slot);
+                    }
                     $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                     renderAll();
                 } catch (e) {

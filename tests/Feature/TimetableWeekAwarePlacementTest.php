@@ -75,11 +75,7 @@ function weekTestSplitHours(int $hours): array
         $hours -= 2;
     }
     if ($hours === 1) {
-        if ($out) {
-            $out[count($out) - 1] = 3;
-        } else {
-            $out[] = 1;
-        }
+        $out[] = 1;
     }
     return $out;
 }

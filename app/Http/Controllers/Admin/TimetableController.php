@@ -2093,6 +2093,64 @@ class TimetableController extends Controller
     }
 
     /**
+     * 2 soatdan uzun amaliy kartalarini (3 yoki 4 soat) 2 + 1 / 2 + 2 soatlik kartalarga bo'ladi.
+     * Asl karta birinchi qism (2 soat) bo'lib qoladi; qolgan qismlar uning nusxasi — xuddi shu joyda
+     * davomi sifatida (tashqi va ichki joylashuv, haftalar, o'qituvchi, xona bilan).
+     */
+    public function splitLongPractice(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'dry_run'           => 'nullable|boolean',
+        ]);
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
+        }
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->where('len_half', '>', 2);
+        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
+        $dry = $request->boolean('dry_run');
+        $hasOv = Schema::hasTable('timetable_card_overrides');
+        $cards = $q->get();
+        $created = 0;
+        if (!$dry) {
+            DB::transaction(function () use ($cards, $hasOv, &$created) {
+                foreach ($cards as $card) {
+                    $parts = $this->splitPracticeHours((int) $card->len_half);
+                    $ovs = $hasOv ? TimetableCardOverride::where('card_id', $card->id)->get() : collect();
+                    $offset = (int) $parts[0];
+                    $card->update(['len_half' => $parts[0]]);
+                    foreach (array_slice($parts, 1) as $len) {
+                        $copy = $card->replicate();
+                        $copy->len_half = $len;
+                        $copy->pair = $card->pair ? (int) $card->pair + $offset : null;
+                        $copy->ext_pair = $card->ext_pair ? (int) $card->ext_pair + $offset : null;
+                        $copy->save();
+                        $created++;
+                        foreach ($ovs as $o) {
+                            TimetableCardOverride::create([
+                                'card_id' => $copy->id, 'week' => $o->week, 'day' => $o->day,
+                                'pair' => $o->pair ? (int) $o->pair + $offset : null,
+                                'start_half' => $o->start_half, 'cancelled' => $o->cancelled,
+                                'auditorium_code' => $o->auditorium_code, 'auditorium_name' => $o->auditorium_name,
+                            ]);
+                        }
+                        $offset += (int) $len;
+                    }
+                }
+            });
+        }
+
+        return response()->json(['ok' => true, 'dry_run' => $dry, 'cards' => $cards->count(), 'created' => $created,
+            'list' => $cards->take(100)->map(fn ($c) => $c->subject_name . ' · ' . ($c->group_name ?: $c->oqim_label) . ' · ' . $c->len_half . ' soat')->values()]);
+    }
+
+    /**
      * Bo'lakli fanning aralash (c) amaliy kartasi bir nechta asos guruhni qamrab olgan bo'lsa
      * ("02a+02b+03a+03b+…"), uni asos guruhlar bo'yicha bo'ladi: har asos guruhga ("02a + 02b")
      * alohida karta. Asl karta birinchi asos guruhda qoladi; qolganlari uning nusxasi —
@@ -3225,12 +3283,10 @@ class TimetableController extends Controller
             $out[] = 2;
             $hours -= 2;
         }
+        // Dars 1 yoki 2 soatlik (yarim yoki bitta para) bo'ladi: toq soat alohida 1 soatlik karta —
+        // 3 soatlik bitta karta qilinmaydi, uni kerak bo'lsa keyingi paraga alohida surish mumkin.
         if ($hours === 1) {
-            if ($out) {
-                $out[count($out) - 1] = 3;   // oxirgi 2 soatlikni 3 soatga uzaytiramiz
-            } else {
-                $out[] = 1;
-            }
+            $out[] = 1;
         }
         return $out;
     }
@@ -6015,7 +6071,9 @@ class TimetableController extends Controller
             ['card_id' => $card->id, 'week' => $week],
             ['day' => $day, 'pair' => $pair, 'start_half' => $startHalf, 'cancelled' => false]
         );
-        return response()->json(['ok' => true]);
+        $ovRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->value('auditorium_code');
+        $warnings = $this->weeklyCycleWarnings($card, $week, (int) $day, (int) $pair, $ovRoom);
+        return response()->json(['ok' => true] + ($warnings ? ['warnings' => $warnings] : []));
     }
 
     /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi (yarim-slot oralig'i). */
@@ -6053,15 +6111,15 @@ class TimetableController extends Controller
             if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
                 if (!empty($overlap)) {
-                    $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';
+                    $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' — ' . $this->describeCard($o);
                 }
             }
             if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
-                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' (' . $o->subject_name . ')';
+                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' — ' . $this->describeCard($o);
             }
             $otherRoomCode = $ov?->auditorium_code ?: $o->auditorium_code;
             if ($myRoomCode && $otherRoomCode === $myRoomCode && !$this->isSharedRoom($ov?->auditorium_name ?: $o->auditorium_name)) {
-                $errors[] = 'Auditoriya band: ' . ($ov?->auditorium_name ?: $o->auditorium_name) . ' (' . $o->subject_name . ')';
+                $errors[] = 'Auditoriya band: ' . ($ov?->auditorium_name ?: $o->auditorium_name) . ' — ' . $this->describeCard($o);
             }
         }
         return array_unique($errors);
@@ -6204,6 +6262,171 @@ class TimetableController extends Controller
         return mb_strtolower(trim($ma[1])) === mb_strtolower(trim($mb[1])) && mb_strtolower($ma[2]) !== mb_strtolower($mb[2]);
     }
 
+    /**
+     * Sikl (4–6-kurs) darslari sana bo'yicha: [Y-m-d => [[from_hour, to_hour, teacher_id, room_code, matn], ...]].
+     * Haftalik darsni qo'yganda o'qituvchi/xona sikl darsida bandligini ogohlantirish uchun.
+     * Soat — yarim-para indeksi (1..12). Kunlik vaqt: ichki jadval boshlanish soati (lecture_slots.starts)
+     * yoki blok parasi; davomiyligi KTR kunlik soatidan (topilmasa ma'ruza 2, amaliy 6 soat).
+     */
+    private function cycleBusyByDate(TimetableBoard $board): array
+    {
+        if (!Schema::hasTable('timetable_cycle_placements')) {
+            return [];
+        }
+        $startC = $this->weeklySemesterStart($board);
+        $set = (array) ($board->settings ?? []);
+        $holSet = [];
+        foreach ((array) ($set['holidays'] ?? []) as $holiday) {
+            try { $holSet[Carbon::parse($holiday)->toDateString()] = true; } catch (\Exception $e) { }
+        }
+        $daysPerWeek = max(1, (int) $board->days);
+        $maxDays = max(1, (int) $board->weeks) * $daysPerWeek;
+        $work = [];   // o'quv kuni tartib raqami => kalendar indeksi
+        $cur = $startC->copy();
+        for ($i = 0, $guard = 0; count($work) < $maxDays && $guard < $maxDays * 8 + 60; $i++, $guard++) {
+            $dow = (int) $cur->dayOfWeekIso;
+            if ($dow <= $daysPerWeek && $dow < 7 && !isset($holSet[$cur->toDateString()])) {
+                $work[] = $i;
+            }
+            $cur->addDay();
+        }
+        $posOf = function (int $calIndex) use ($work): ?int {
+            foreach ($work as $pos => $ci) {
+                if ($ci >= $calIndex) {
+                    return $pos;
+                }
+            }
+            return null;
+        };
+        $cycleDays = [];
+        foreach (TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')->get() as $st) {
+            $cycleDays[mb_strtolower(trim($st->specialty_name)) . '|' . (int) $st->course . '|' . mb_strtolower(trim($st->subject_name))] = max(1, (int) $st->cycle_days);
+        }
+        $cycleHours = $this->cycleSubjectHoursMap($board);
+        $ktr = $this->cycleKtrDayPlans($board);
+        // Sikl kartalari: qator (guruh/oqim) + fan + tur => o'qituvchi, xona
+        $req = [];
+        $facultyByRow = [];
+        foreach (TimetableCard::where('board_id', $board->id)->where('course', '>=', 4)->get() as $card) {
+            $base = mb_strtolower(trim((string) $card->specialty_name)) . '|' . (int) $card->course . '|';
+            $type = $card->training_type === 'lecture' ? 'lecture' : 'practice';
+            $rows = $type === 'practice'
+                ? array_merge(...array_map(fn ($m) => [$this->cycleFlowName($card, $m), $m], $this->cycleCardGroups($card) ?: ['']))
+                : array_merge([$this->cycleFlowName($card)], $this->cycleCardGroups($card));
+            foreach ($rows as $rowName) {
+                $k = $base . mb_strtolower(trim((string) $card->subject_name)) . '|' . mb_strtolower(trim((string) $rowName)) . '|' . $type;
+                $req[$k][$card->id] = [$card->teacher_id, $card->teacher_name, $card->auditorium_code, $card->auditorium_name];
+                if ($card->faculty_name) {
+                    $facultyByRow[$base . mb_strtolower(trim((string) $rowName))] ??= (string) $card->faculty_name;
+                }
+            }
+        }
+        $out = [];
+        foreach (TimetableCyclePlacement::where('board_id', $board->id)->get() as $pl) {
+            $type = ($pl->training_type ?: 'practice') === 'lecture' ? 'lecture' : 'practice';
+            $spec = (string) $pl->specialty_name;
+            $course = (int) $pl->course;
+            $subject = (string) $pl->subject_name;
+            $rowKey = mb_strtolower(trim($spec)) . '|' . $course . '|';
+            $resources = $req[$rowKey . mb_strtolower(trim($subject)) . '|' . mb_strtolower(trim((string) $pl->group_name)) . '|' . $type] ?? [];
+            if (!$resources) {
+                continue;
+            }
+            $faculty = $this->cycleRowFaculty((string) $pl->group_name) ?? ($facultyByRow[$rowKey . mb_strtolower(trim((string) $pl->group_name))] ?? null);
+            $hours = $this->cycleHoursLookup($cycleHours, $faculty, $spec, $course, $subject);
+            $days = max(1, $this->cycleTypeDays($cycleDays[$rowKey . mb_strtolower(trim($subject))] ?? 1, $hours, $type));
+            $kk = $this->cycleKtrKey($spec, $course, $subject);
+            $plan = ($faculty ? ($ktr[$this->specKey($faculty) . '|' . $kk] ?? null) : null) ?? $ktr[$kk] ?? null;
+            $starts = (array) (($pl->lecture_slots ?? [])['starts'] ?? []);
+            $defaultStart = $pl->pair ? ((int) $pl->pair - 1) * 2 + 1 : 1;
+            $pos = $posOf((int) $pl->start_index);
+            if ($pos === null) {
+                continue;
+            }
+            $dayPlan = ($plan !== null || $hours !== null)
+                ? $this->cycleDayPlan($plan, $hours, $days, $work[$pos], $work, $starts, 6, max(12, (int) $board->pairs_per_day))
+                : [];
+            for ($k = 0; $k < $days; $k++) {
+                $ci = $work[$pos + $k] ?? null;
+                if ($ci === null) {
+                    break;
+                }
+                $daily = $dayPlan[$ci - $work[$pos]] ?? null;
+                $dayHours = $daily !== null ? (int) $daily[$type === 'lecture' ? 'lec' : 'prc'] : ($type === 'lecture' ? 2 : 6);
+                if ($dayHours <= 0) {
+                    continue;
+                }
+                $from = $daily !== null
+                    ? (int) $daily['start'] + ($type === 'practice' ? (int) $daily['lec'] : 0)
+                    : max(1, (int) ($starts[(string) $k] ?? $defaultStart));
+                $date = $startC->copy()->addDays($ci)->toDateString();
+                foreach ($resources as [$tid, $tname, $room, $roomName]) {
+                    $out[$date][] = [$from, $from + $dayHours, $tid, $room, $tname, $roomName,
+                        $course . '-kurs · ' . $pl->group_name . ' · ' . $subject . ' (' . ($type === 'lecture' ? "ma'ruza" : 'amaliy') . ', sikl)'];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    private function weeklySemesterStart(TimetableBoard $board): Carbon
+    {
+        $set = (array) ($board->settings ?? []);
+        $start = $set['semester_start'] ?? null;
+        if (!$start) {
+            $y = (int) preg_replace('/\D.*$/', '', (string) $board->academic_year);
+            if ($y < 2000) $y = (int) date('Y');
+            $start = $board->semester_parity === 'bahorgi' ? sprintf('%04d-02-01', $y + 1) : sprintf('%04d-09-01', $y);
+        }
+
+        return Carbon::parse($start)->startOfDay();
+    }
+
+    /** Haftalik dars (hafta, kun, yarim-para) sikl darsi bilan o'qituvchi/xona bo'yicha ustma-ust tushsa — ogohlantirishlar. */
+    private function weeklyCycleWarnings(TimetableCard $card, int $week, int $day, int $pair, ?string $roomCode = null): array
+    {
+        if ((int) $card->course >= 4) {
+            return [];
+        }
+        $roomCode = $roomCode ?: $card->auditorium_code;
+        if (!$card->teacher_id && !$roomCode) {
+            return [];
+        }
+        $board = $card->board;
+        $date = $this->weeklySemesterStart($board)->startOfWeek()->addDays(($week - 1) * 7 + ($day - 1));
+        $busy = $this->cycleBusyByDate($board)[$date->toDateString()] ?? [];
+        $from = $pair;
+        $to = $pair + $card->lenHalf();
+        $out = [];
+        foreach ($busy as [$bf, $bt, $tid, $room, $tname, $roomName, $label]) {
+            if ($bf >= $to || $from >= $bt) {
+                continue;
+            }
+            if ($card->teacher_id && $tid && (int) $tid === (int) $card->teacher_id) {
+                $out[] = "O'qituvchi sikl darsida band (" . $date->format('d.m.Y') . '): ' . $tname . ' — ' . $label;
+            }
+            if ($roomCode && $room && $room === $roomCode && !$this->isSharedRoom($roomName)) {
+                $out[] = 'Auditoriya sikl darsida band (' . $date->format('d.m.Y') . '): ' . $roomName . ' — ' . $label;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /** Band qilgan dars haqida batafsil: "2-son davolash, 3-kurs · d2/d24-05a · Patologik anatomiya (amaliy)". */
+    private function describeCard(TimetableCard $o): string
+    {
+        $groups = array_map(fn ($g) => trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $g)), $o->occupiedGroups());
+        $gText = count($groups) > 4 ? implode(', ', array_slice($groups, 0, 4)) . ' +' . (count($groups) - 4) : implode(', ', $groups);
+        $who = trim((string) $o->faculty_name) !== '' ? trim((string) $o->faculty_name) . ', ' : '';
+
+        return $who . (int) $o->course . '-kurs'
+            . ($o->training_type === 'lecture' && $o->oqim_label ? ' · ' . $o->oqim_label : '')
+            . ($gText !== '' ? ' · ' . $gText : '')
+            . ' · ' . $o->subject_name . ' (' . ($o->training_type === 'lecture' ? "ma'ruza" : 'amaliy') . ')';
+    }
+
     /** Tashqi qatlamdagi guruh bandligi (ext_day/ext_pair bo'yicha). */
     private function findExternalConflicts(TimetableCard $card, int $day, int $pair): array
     {
@@ -6239,7 +6462,7 @@ class TimetableController extends Controller
                 continue;
             }
             if ($common) {
-                $errors[] = 'Guruh band: ' . implode(', ', $common) . ' (' . $o->subject_name . ')';
+                $errors[] = 'Guruh band: ' . implode(', ', $common) . ' — ' . $this->describeCard($o);
             }
         }
 
@@ -6342,16 +6565,16 @@ class TimetableController extends Controller
             if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
                 if (!empty($overlap)) {
-                    $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';
+                    $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' — ' . $this->describeCard($o);
                 }
             }
             // O'qituvchi konflikti — butun doska bo'ylab
             if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
-                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' (' . $o->subject_name . ')';
+                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' — ' . $this->describeCard($o);
             }
             // Auditoriya konflikti — butun doska bo'ylab
             if ($card->auditorium_code && $o->auditorium_code === $card->auditorium_code && !$this->isSharedRoom($o->auditorium_name)) {
-                $errors[] = 'Auditoriya band: ' . $o->auditorium_name . ' (' . $o->subject_name . ')';
+                $errors[] = 'Auditoriya band: ' . $o->auditorium_name . ' — ' . $this->describeCard($o);
             }
         }
         return array_unique($errors);

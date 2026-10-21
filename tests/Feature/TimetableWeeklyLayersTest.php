@@ -573,3 +573,138 @@ it('umumiy ma’ruzaga qo‘shish dry run va qayta bajarishda xavfsiz, turli haf
     layerAs($s['admin'], 'superadmin')->postJson($url, ['courses' => [2]])->assertOk()->assertJson(['lectures' => 0, 'removed' => 0]);
     expect($merged->fresh()->ext_pair)->toBe(1)->and($part->fresh())->toBeNull();
 });
+
+it('fan mas\'uli doskani faqat ko\'radi va "Mas\'ul fanlarim" uchun o\'z fanlari kartalarini oladi', function () {
+    $s = layersSetup();
+    Role::findOrCreate('fan_masuli', 'web');
+    $t = $s['head'];
+    $t->assignRole('fan_masuli');
+    DB::table('specialties')->insert(['specialty_hemis_id' => 9001, 'name' => 'Davolash ishi', 'code' => '60910200', 'locality_type_code' => '1',
+        'locality_type_name' => 'x', 'education_type_code' => '11', 'education_type_name' => 'B']);
+    DB::table('curricula')->insert(['curricula_hemis_id' => 8001, 'name' => 'R', 'specialty_hemis_id' => 9001, 'department_hemis_id' => 1,
+        'education_year_code' => '2026', 'education_year_name' => '2026-2027', 'current' => 1, 'education_type_code' => '11', 'education_type_name' => 'B',
+        'education_form_code' => '11', 'education_form_name' => 'K', 'marking_system_code' => '11', 'marking_system_name' => 'M',
+        'marking_system_minimum_limit' => 60, 'marking_system_gpa_limit' => 2.4, 'semester_count' => 12, 'education_period' => 6]);
+    $csId = DB::table('curriculum_subjects')->insertGetId(['curriculum_subject_hemis_id' => 7001, 'curricula_hemis_id' => 8001, 'subject_id' => 1,
+        'subject_name' => 'Gigiyena (a)', 'subject_code' => 'G1', 'semester_code' => '13', 'semester_name' => '3-semestr', 'at_semester' => 1]);
+    DB::table('teacher_responsible_subjects')->insert(['teacher_id' => $t->id, 'curriculum_subject_id' => $csId]);
+    $lec = TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks', 'students'])
+        + ['training_type' => 'lecture', 'subject_name' => 'Gigiyena', 'group_names' => ['g-01a'], 'kafedra_name' => 'X']);
+    $prc = TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks', 'students'])
+        + ['training_type' => 'practice', 'subject_name' => 'Gigiyena (a)', 'group_name' => 'g-01a', 'kafedra_name' => 'X']);
+
+    $res = layerAs($t, 'fan_masuli')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json();
+    expect(collect($res['my_subject_card_ids'])->sort()->values()->all())->toBe(collect([$s['own']->id, $lec->id, $prc->id])->sort()->values()->all())
+        ->and($res['my_subject_card_ids'])->not->toContain($s['foreign']->id);
+    layerAs($t, 'fan_masuli')->get(route('admin.timetable.index'))->assertOk()->assertSee("Mas'ul fanlarim", false);
+    layerAs($t, 'fan_masuli')->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 1, 'pair' => 1, 'layer' => 'external'])->assertForbidden();
+});
+
+function responsibleScopeSetup(): array
+{
+    $s = layersSetup();
+    Role::findOrCreate('fan_masuli', 'web');
+    $s['head']->assignRole('fan_masuli');
+    DB::table('specialties')->insert(['specialty_hemis_id' => 9001, 'name' => 'Davolash ishi', 'code' => '60910200', 'locality_type_code' => '1',
+        'locality_type_name' => 'x', 'education_type_code' => '11', 'education_type_name' => 'B']);
+    DB::table('curricula')->insert(['curricula_hemis_id' => 8001, 'name' => 'R', 'specialty_hemis_id' => 9001, 'department_hemis_id' => 501,
+        'education_year_code' => '2026', 'education_year_name' => '2026-2027', 'current' => 1, 'education_type_code' => '11', 'education_type_name' => 'B',
+        'education_form_code' => '11', 'education_form_name' => 'K', 'marking_system_code' => '11', 'marking_system_name' => 'M',
+        'marking_system_minimum_limit' => 60, 'marking_system_gpa_limit' => 2.4, 'semester_count' => 12, 'education_period' => 6]);
+    DB::table('departments')->where('department_hemis_id', 501)->update(['name' => 'F1']);
+    $s['responsible_subject_id'] = DB::table('curriculum_subjects')->insertGetId(['curriculum_subject_hemis_id' => 7001, 'curricula_hemis_id' => 8001, 'subject_id' => 1,
+        'subject_name' => 'Gigiyena (a)', 'subject_code' => 'G1', 'semester_code' => '13', 'semester_name' => '3-semestr', 'at_semester' => 1]);
+    DB::table('teacher_responsible_subjects')->insert(['teacher_id' => $s['head']->id, 'curriculum_subject_id' => $s['responsible_subject_id']]);
+    return $s;
+}
+
+it('mas’ul fanlar filtri biriktirish olib tashlanganda yangilanadi', function () {
+    $s = responsibleScopeSetup();
+    $url = route('admin.timetable.boards.data', $s['board']);
+    layerAs($s['head'], 'fan_masuli')->getJson($url)->assertOk()->assertJsonPath('my_subject_card_ids', [$s['own']->id]);
+    DB::table('teacher_responsible_subjects')->where('teacher_id', $s['head']->id)->delete();
+    layerAs($s['head'], 'fan_masuli')->getJson($url)->assertOk()->assertJsonPath('my_subject_card_ids', []);
+    layerAs($s['head'], 'fan_masuli')->get(route('admin.timetable.index'))->assertOk()
+        ->assertSee('id="mineSubjects"', false)->assertSee('const TIMETABLE_HAS_SUBJECTS = true', false)
+        ->assertSee('id="weeklyExcel"', false);
+});
+
+it('mas’ul fanlar filtri boshqa fakultetdagi ayni nomli kartani olmaydi', function () {
+    $s = responsibleScopeSetup();
+    $other = $s['own']->replicate();
+    $other->faculty_name = 'F2';
+    $other->save();
+    $res = layerAs($s['head'], 'fan_masuli')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
+    expect($res->json('my_subject_card_ids'))->toContain($s['own']->id)->not->toContain($other->id);
+});
+
+it('mas’ul fanlar filtri siklda ham ishlaydi va bo‘sh biriktirishda jadvalni kengaytirmaydi', function (string $layer) {
+    $s = responsibleScopeSetup();
+    $s['own']->update(['course' => 5]);
+    $s['foreign']->update(['course' => 5]);
+    DB::table('curriculum_subjects')->where('id', $s['responsible_subject_id'])->update(['semester_code' => '19']);
+    foreach (['Gigiyena', 'Anatomiya'] as $name) {
+        \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+            'course' => 5, 'subject_name' => $name, 'mode' => 'cycle', 'cycle_days' => 2]);
+    }
+    $url = route('admin.timetable.cycle-plan', $s['board']);
+    $body = ['subjects' => 1, 'layer' => $layer, 'view' => 'flow'];
+    $res = layerAs($s['head'], 'fan_masuli')->postJson($url, $body)->assertOk();
+    expect(collect($res->json('cycle_cards'))->pluck('subject')->unique()->values()->all())->toBe(['Gigiyena'])
+        ->and($res->json('can_edit'))->toBeFalse()
+        ->and($s['board']->fresh()->settings)->toBe($s['board']->settings);
+    DB::table('teacher_responsible_subjects')->where('teacher_id', $s['head']->id)->delete();
+    $empty = layerAs($s['head'], 'fan_masuli')->postJson($url, $body)->assertOk();
+    expect($empty->json('cycle_cards'))->toBe([])->and($empty->json('rows'))->toBe([]);
+})->with(['internal', 'external']);
+
+it('faqat ko‘rish roli jadvalni o‘zgartira olmaydi va admin doskasini ko‘rmaydi', function (string $role) {
+    $s = layersSetup();
+    Role::findOrCreate($role, 'web');
+    $s['head']->assignRole($role);
+    $urls = [
+        ['admin.timetable.cards.place', $s['own']],
+        ['admin.timetable.cards.update', $s['own']],
+        ['admin.timetable.cards.week-override', $s['own']],
+        ['admin.timetable.boards.unplace', $s['board']],
+        ['admin.timetable.boards.refresh-names', $s['board']],
+        ['admin.timetable.cycle-place', $s['board']],
+    ];
+    foreach ($urls as [$route, $model]) {
+        layerAs($s['head'], $role)->postJson(route($route, $model), [])->assertForbidden();
+    }
+    $s['board']->update(['admin_only' => true]);
+    layerAs($s['head'], $role)->getJson(route('admin.timetable.boards.data', $s['board']))->assertForbidden();
+    layerAs($s['head'], $role)->postJson(route('admin.timetable.boards.excel-export', $s['board']), [])->assertForbidden();
+    expect($s['own']->fresh()->day)->toBeNull();
+})->with(['fan_masuli', 'oqituvchi']);
+
+it('haftalik Excel barcha jadval rollari uchun haqiqiy xlsx faylini yaratadi', function (string $role) {
+    $s = layersSetup();
+    Role::findOrCreate($role, 'web');
+    $s['head']->assignRole($role);
+    $text = "[A] Gigiyena\nO‘qituvchi: Sinov\nXona: 101";
+    $payload = ['sheet_title' => 'Haftalik ichki', 'landscape' => 1, 'freeze_rows' => 1, 'freeze_cols' => 3,
+        'rows' => [
+            [['t' => 'Kun'], ['t' => 'Para'], ['t' => 'Vaqt'], ['t' => 'Guruh']],
+            [['t' => 'Dushanba'], ['t' => 'II'], ['t' => '12:00'], ['t' => $text, 'rs' => 2]],
+            [['t' => ''], ['t' => ''], ['t' => '12:40']],
+        ]];
+    $response = layerAs($s['head'], $role)->post(route('admin.timetable.boards.excel-export', $s['board']),
+        ['title' => 'Haftalik · 4-hafta', 'filename' => 'haftalik_4', 'payload' => json_encode($payload)])->assertOk()
+        ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        ->assertDownload('haftalik_4.xlsx');
+    $file = tempnam(sys_get_temp_dir(), 'weekly-xlsx-');
+    try {
+        file_put_contents($file, $response->streamedContent());
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+        $sheet = $spreadsheet->getActiveSheet();
+        expect($sheet->getTitle())->toBe('Haftalik ichki')->and($sheet->getCell('A1')->getValue())->toBe('Haftalik · 4-hafta')
+            ->and($sheet->getCell('D4')->getValue())->toBe($text)->and($sheet->getMergeCells())->toHaveKey('D4:D5')
+            ->and($sheet->getFreezePane())->toBe('D4')
+            ->and($sheet->getPageSetup()->getOrientation())->toBe('landscape');
+        $spreadsheet->disconnectWorksheets();
+    } finally {
+        unlink($file);
+    }
+})->with(['fan_masuli', 'oqituvchi', 'kafedra_mudiri', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'registrator_ofisi', 'kichik_admin', 'admin', 'superadmin']);

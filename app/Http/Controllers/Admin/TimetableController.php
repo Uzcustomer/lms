@@ -620,13 +620,16 @@ class TimetableController extends Controller
         return $out;
     }
 
+    /** Talabalar soni keshi bitta controller so'rovi doirasida saqlanadi. */
+    private ?array $activeStudentCounts = null;
+
     /**
      * Guruhdagi faol talabalar soni (students, status 11). Guruh nomi fakultetlararo takrorlanishi
      * mumkin, shuning uchun guruhning o'z o'quv rejasi bo'yicha; reja mos kelmasa — nom bo'yicha jami.
      */
     private function activeStudentCountFor(string $groupName, ?string $faculty = null): int
     {
-        static $counts = null;
+        $counts = &$this->activeStudentCounts;
         if ($counts === null) {
             $counts = [];
             foreach (DB::table('students')->where('student_status_code', 11)
@@ -2564,6 +2567,8 @@ class TimetableController extends Controller
             'missing_groups' => $this->missingGroupSpecs($board),
             // Kafedra mudiri: "Kafedraniki" filtri uchun o'z kafedrasi nomlari.
             'my_kafedras' => $this->departmentHeadKafedraSafe(request()),
+            // Fan mas'uli: "Mas'ul fanlarim" filtri uchun shu doskadagi mas'ul fanlari kartalari.
+            'my_subject_card_ids' => $this->responsibleCardIds(request(), $cards),
             // Guruh(cha) sarlavhasida faol talabalar soni (sikl jadvalidagi kabi): "fakultet|guruh" => son.
             'group_students' => $this->boardGroupStudentCounts($cards),
         ])
@@ -3463,6 +3468,7 @@ class TimetableController extends Controller
             'layer'             => 'nullable|in:external,internal',
             'mine'              => 'nullable|boolean',
             'kafedra'           => 'nullable|boolean',
+            'subjects'          => 'nullable|boolean',
         ]);
         $cycleView = $data['view'] ?? 'flow';
         // "Faqat meniki": o'qituvchi faqat o'zi biriktirilgan fan bloklarini ko'radi.
@@ -3472,10 +3478,17 @@ class TimetableController extends Controller
         if ($mineTeacherId === null && !empty($data['kafedra']) && $this->timetableActiveRole($request) === 'kafedra_mudiri') {
             $scopeKafedra = $this->departmentHeadKafedraSafe($request) ?: null;
         }
-        $scoped = $mineTeacherId !== null || $scopeKafedra !== null;
+        // "Mas'ul fanlarim" (fan mas'uli): faqat o'zi mas'ul bo'lgan fanlar bloklari.
+        $scopeSubjects = null;
+        if ($mineTeacherId === null && $scopeKafedra === null && !empty($data['subjects'])) {
+            $scopeSubjects = $this->responsibleSubjectKeys($request);
+        }
+        $scoped = $mineTeacherId !== null || $scopeKafedra !== null || $scopeSubjects !== null;
         $inMyScope = fn ($c) => $mineTeacherId !== null
             ? (int) $c->teacher_id === $mineTeacherId
-            : ($scopeKafedra !== null && $this->sameKafedra($c->kafedra_name, $scopeKafedra));
+            : ($scopeSubjects !== null
+                ? $this->responsibleMatch($scopeSubjects, $c)
+                : ($scopeKafedra !== null && $this->sameKafedra($c->kafedra_name, $scopeKafedra)));
         $mineFlowSubjects = [];   // flowKey => [subject => [training_type => true]]
         // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
         // para qatorlari yo'q — faqat fan nomi, kunlar va joylash qoidalari.
@@ -7581,6 +7594,94 @@ class TimetableController extends Controller
         $names[] = (string) $context['department_name'];
 
         return array_values(array_unique($names));
+    }
+
+    /**
+     * Fan mas'uli fanlari kalitlari: "fakultet|specKey|kurs|normFan" => true (fakultet bo'lmasa prefikssiz).
+     * Bo'lakli fan ("Fan (a)") uchun asosiy nom ham qo'shiladi — umumiy ma'ruza kartasi ham ko'rinsin.
+     */
+    private function responsibleSubjectKeys(Request $request): array
+    {
+        $tid = $this->timetableTeacherId($request);
+        if ($tid <= 0 || !Schema::hasTable('teacher_responsible_subjects')) {
+            return [];
+        }
+        $rows = DB::table('teacher_responsible_subjects as t')
+            ->join('curriculum_subjects as cs', 'cs.id', '=', 't.curriculum_subject_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('t.teacher_id', $tid)
+            ->get(['cs.subject_name', 'cs.semester_code', 'sp.name as specialty_name', 'f.name as faculty_name']);
+        $keys = [];
+        foreach ($rows as $r) {
+            $sem = (int) $r->semester_code - 10;
+            if ($sem < 1) {
+                continue;
+            }
+            [$facultyAlias, $spec] = $this->curriculumScopeAlias((string) $r->specialty_name);
+            $faculty = trim((string) ($r->faculty_name ?: $facultyAlias));
+            $prefix = ($faculty !== '' ? $this->specKey($faculty) . '|' : '')
+                . $this->specKey($spec) . '|' . (int) ceil($sem / 2) . '|';
+            $keys[$prefix . $this->normSubject((string) $r->subject_name)] = true;
+            $base = $this->cycleSubjectVariantBase((string) $r->subject_name);
+            if ($base !== null) {
+                $keys[$prefix . $this->normSubject($base)] = true;
+            }
+        }
+
+        return $keys;
+    }
+
+    private function responsibleCardKey($card): string
+    {
+        $card = (object) (is_array($card) ? $card : ($card instanceof TimetableCard ? $card->getAttributes() : (array) $card));
+
+        return $this->specKey((string) ($card->specialty_name ?? '')) . '|' . (int) ($card->course ?? 0) . '|' . $this->normSubject((string) ($card->subject_name ?? ''));
+    }
+
+    /** Doskadagi fan mas'uli fanlari kartalari id lari (bo'lak nomi bo'lsa — asosiy nomi bo'yicha ham). */
+    private function responsibleCardIds(Request $request, $cards): array
+    {
+        try {
+            $keys = $this->responsibleSubjectKeys($request);
+        } catch (\Throwable $e) {
+            return [];
+        }
+        if (!$keys) {
+            return [];
+        }
+        $ids = [];
+        foreach ($cards as $c) {
+            if ($this->responsibleMatch($keys, $c)) {
+                $ids[] = (int) (is_array($c) ? $c['id'] : $c->id);
+            }
+        }
+
+        return $ids;
+    }
+
+    private function responsibleMatch(array $keys, $card): bool
+    {
+        if (!$keys) {
+            return false;
+        }
+        $key = $this->responsibleCardKey($card);
+        $faculty = (string) (is_array($card) ? ($card['faculty_name'] ?? '') : ($card->faculty_name ?? ''));
+        $facultyPrefix = $this->specKey($faculty) . '|';
+        $name = (string) (is_array($card) ? ($card['subject_name'] ?? '') : ($card->subject_name ?? ''));
+        $base = $this->cycleSubjectVariantBase($name);
+        $candidateKeys = [$key];
+        if ($base !== null) {
+            $candidateKeys[] = substr($key, 0, strrpos($key, '|') + 1) . $this->normSubject($base);
+        }
+        foreach ($candidateKeys as $candidate) {
+            if (isset($keys[$facultyPrefix . $candidate]) || isset($keys[$candidate])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** departmentHeadKafedra, lekin kafedra aniqlanmasa so'rovni yiqitmaydi (null). */

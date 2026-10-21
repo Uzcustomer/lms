@@ -28,7 +28,7 @@ class TimetableAssignmentAccess
         // lekin oqituvchi roli ham bor) cheklovsiz to'liq kirishga tushib qolmasin.
         // Ro'yxat routes/web.php dagi dars-jadvali-tuzish guruhi bilan bir xil.
         $timetableRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi',
-            'oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri', 'oqituvchi'];
+            'oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri', 'oqituvchi', 'fan_masuli'];
         if ($user && !in_array($activeRole, $timetableRoles, true)) {
             abort(403, 'Dars jadvaliga kirish uchun mos rolni tanlang.');
         }
@@ -47,8 +47,8 @@ class TimetableAssignmentAccess
             }
         }
 
-        // O'qituvchi: dars jadvalini faqat ko'radi (tashqi/ichki almashtirgich bilan).
-        if ($user && $activeRole === 'oqituvchi') {
+        // O'qituvchi va fan mas'uli: dars jadvalini faqat ko'radi (tashqi/ichki almashtirgich bilan).
+        if ($user && in_array($activeRole, ['oqituvchi', 'fan_masuli'], true)) {
             // Excelga yuklash faqat klient yuborgan (o'zi ko'rib turgan) panjarani
             // faylga yozadi — yangi ma'lumot ochmaydi, shuning uchun ruxsat.
             if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export'])) {

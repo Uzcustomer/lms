@@ -14,9 +14,15 @@
     $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
     // O'qituvchi: faqat ko'rish (hech qanday tahrirlash tugmasi yo'q)
-    $timetableReadOnly = $timetableActiveRole === 'oqituvchi';
+    $timetableReadOnly = in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli'], true);
     // O'qituvchi identifikatori (o'qituvchi/kafedra mudiri — teacher guard): "Faqat meniki" rejimi uchun
     $timetableTeacherId = $timetableUser instanceof \App\Models\Teacher ? (int) $timetableUser->id : null;
+    // Fan mas'uli: "Mas'ul fanlarim" ko'rinishi (o'zi mas'ul bo'lgan fanlar)
+    $timetableHasSubjects = $timetableActiveRole === 'fan_masuli';
+    try {
+        $timetableHasSubjects = $timetableHasSubjects || ($timetableTeacherId && \Illuminate\Support\Facades\Schema::hasTable('teacher_responsible_subjects')
+            && \Illuminate\Support\Facades\DB::table('teacher_responsible_subjects')->where('teacher_id', $timetableTeacherId)->exists());
+    } catch (\Throwable $e) { /* Biriktirishsiz fan mas'uli uchun ham bo'sh filtr saqlanadi. */ }
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead || $timetableReadOnly;
     $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchiga yopiq.
@@ -183,6 +189,9 @@
                             @if($timetableDepartmentHead)
                             <button type="button" id="mineKafedra" class="px-2 py-1 bg-white text-gray-500" title="Faqat o'z kafedrangiz fanlari">Kafedraniki</button>
                             @endif
+                            @if($timetableHasSubjects)
+                            <button type="button" id="mineSubjects" class="px-2 py-1 bg-white text-gray-500" title="Faqat siz mas'ul bo'lgan fanlar">Mas'ul fanlarim</button>
+                            @endif
                             <button type="button" id="mineOnly" class="px-2 py-1 bg-white text-gray-500">Faqat meniki</button>
                         </span>
                         @endif
@@ -197,6 +206,7 @@
                                 <button type="button" id="weekNext" title="Keyingi hafta" aria-label="Keyingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                             </span>
                             <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+                            <button type="button" id="weeklyExcel" class="tt-weekly-excel" title="Ekrandagi haftalik jadvalni (tanlangan hafta, qatlam va ko'rinish qamrovi bilan) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                             @unless($timetableAssignmentOnly)
                             <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni tashqi jadvaldagi joyiga yoki undan pastdagi bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
                             <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
@@ -1285,6 +1295,11 @@
             color: rgba(15, 39, 72, .38);
         }
         #cycleGrid .cyc-mk-cell::after { content: ''; }
+        /* Haftalik jadval: Excel tugmasi (sikldagidek yashil) */
+        .tt-weekly-excel { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 8px; font-size: 11px;
+            background: #1d6f42; border: 1px solid #185c37; color: #fff; font-weight: 600; }
+        .tt-weekly-excel:hover:not(:disabled) { background: #185c37; }
+        .tt-weekly-excel:disabled { opacity: .7; cursor: wait; }
         /* Sikl paneli: Excel tugmasi yashil — boshqa tugmalardan ajralib tursin */
         #cycleArea .cyc-excel-btn { display: inline-flex; align-items: center; gap: 4px;
             background: #1d6f42; border-color: #185c37; color: #fff; font-weight: 600; }
@@ -2568,20 +2583,28 @@
             }
             const TIMETABLE_TEACHER_ID = @json($timetableTeacherId);
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
+            const TIMETABLE_HAS_SUBJECTS = @json((bool) $timetableHasSubjects);
+            let mySubjectCardIds = new Set();   // "Mas'ul fanlarim": serverdan (data.my_subject_card_ids)
             // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
             // Ko'rinish qamrovi: 'all' — butun doska, 'kafedra' — kafedra mudirining o'z kafedrasi
             // fanlari, 'mine' — faqat o'ziga biriktirilganlar. mineOnly = qamrov toraytirilgan.
-            let scopeMode = 'all';
+            let scopeMode = TIMETABLE_HAS_SUBJECTS && TIMETABLE_ROLE === 'fan_masuli' ? 'subjects' : 'all';
             try {
                 const saved = localStorage.getItem('lms:timetable-mine');
                 if (TIMETABLE_TEACHER_ID && saved === '1') scopeMode = 'mine';
                 else if (TIMETABLE_DEPARTMENT_HEAD && saved === 'kafedra') scopeMode = 'kafedra';
+                else if (TIMETABLE_HAS_SUBJECTS && saved === 'subjects') scopeMode = 'subjects';
+                else if (saved === '0') scopeMode = 'all';
             } catch (e) { }
             let mineOnly = scopeMode !== 'all';
             let myKafedras = [];
             const kafedraNorm = v => String(v || '').toLowerCase().trim().replace(/\s*kafedra(si)?\s*$/u, '').replace(/[^\p{L}\p{N}]+/gu, '');
+            function scopeModeLabel() {
+                return { all: 'Butun doska', kafedra: 'Kafedraniki', subjects: "Mas'ul fanlarim", mine: 'Faqat meniki' }[scopeMode] || '';
+            }
             function scopeCards(list) {
                 if (scopeMode === 'mine') return list.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID);
+                if (scopeMode === 'subjects') return list.filter(c => mySubjectCardIds.has(+c.id));
                 if (scopeMode === 'kafedra') {
                     const keys = new Set(myKafedras.map(kafedraNorm).filter(Boolean));
                     return list.filter(c => keys.has(kafedraNorm(c.kafedra_name)));
@@ -3243,6 +3266,7 @@
                 applyWeeklyLayer(allCards);
                 groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
+                mySubjectCardIds = new Set((j.my_subject_card_ids || []).map(Number));
                 cards = scopeCards(allCards);
                 missingGroups = j.missing_groups || [];
                 buildSubjectColors();
@@ -3815,7 +3839,7 @@
                 // "Faqat meniki" ko'rinishi to'liq emas, bo'shatish esa butun qamrovga
                 // (boshqalarning darslariga ham) ta'sir qiladi — bu rejimda o'chirilgan.
                 if (mineOnly) {
-                    alert('"' + (scopeMode === 'kafedra' ? 'Kafedraniki' : 'Faqat meniki') + '" rejimida bo‘shatish o‘chirilgan. Avval "Butun doska" ga qayting.');
+                    alert('"' + scopeModeLabel() + '" rejimida bo‘shatish o‘chirilgan. Avval "Butun doska" ga qayting.');
                     return;
                 }
                 if (viewMode === 'cycle') {
@@ -4237,6 +4261,7 @@
                 Object.assign(body, cycleLayerParams());
                 if (scopeMode === 'mine') { body.mine = 1; delete body.clear; }
                 else if (scopeMode === 'kafedra') { body.kafedra = 1; delete body.clear; }
+                else if (scopeMode === 'subjects') { body.subjects = 1; delete body.clear; }
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
@@ -4753,6 +4778,8 @@
                     // sozlama haqidagi xabar chalg'itadi.
                     const emptyMsg = scopeMode === 'kafedra'
                         ? 'Tanlangan qamrovda kafedrangizga tegishli sikl fani yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
+                        : scopeMode === 'subjects'
+                        ? 'Tanlangan qamrovda siz mas\'ul bo\'lgan sikl fani yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
                         : mineOnly
                         ? 'Tanlangan qamrovda sizga biriktirilgan sikl darsi yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
                         : 'Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.';
@@ -5603,7 +5630,7 @@
             }
             if ($('cycLayerExternal')) $('cycLayerExternal').onclick = () => setCycleLayer('external');
             function renderMineUi() {
-                [['mineAll', 'all'], ['mineKafedra', 'kafedra'], ['mineOnly', 'mine']].forEach(([id, mode]) => {
+                [['mineAll', 'all'], ['mineKafedra', 'kafedra'], ['mineSubjects', 'subjects'], ['mineOnly', 'mine']].forEach(([id, mode]) => {
                     const b = $(id);
                     if (b) b.className = 'px-2 py-1 ' + (scopeMode === mode ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
@@ -5612,7 +5639,7 @@
                 if (scopeMode === mode) return;
                 scopeMode = mode;
                 mineOnly = mode !== 'all';
-                try { localStorage.setItem('lms:timetable-mine', mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : '0'); } catch (e) { }
+                try { localStorage.setItem('lms:timetable-mine', mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : mode === 'subjects' ? 'subjects' : '0'); } catch (e) { }
                 renderMineUi();
                 cards = scopeCards(allCards);
                 if (typeof renderAll === 'function') renderAll();
@@ -5624,6 +5651,7 @@
                     if (b) b.className = 'px-2 py-1 ' + (weeklyLayer === l ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
                 if ($('weeklyLayerBox')) $('weeklyLayerBox').classList.toggle('hidden', viewMode === 'cycle');
+                if ($('weeklyExcel')) $('weeklyExcel').classList.toggle('hidden', viewMode === 'cycle');
                 if ($('compactWeekBtn')) $('compactWeekBtn').classList.toggle('hidden',
                     !(WEEKLY_ADMIN && weeklyLayer === 'internal' && curWeek && viewMode !== 'cycle'));
                 document.body.classList.toggle('tt-weekly-external', weeklyLayer === 'external');
@@ -5645,6 +5673,7 @@
                 $('mineAll').onclick = () => setScopeMode('all');
                 $('mineOnly').onclick = () => setScopeMode('mine');
                 if ($('mineKafedra')) $('mineKafedra').onclick = () => setScopeMode('kafedra');
+                if ($('mineSubjects')) $('mineSubjects').onclick = () => setScopeMode('subjects');
                 renderMineUi();
             }
             if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
@@ -7716,14 +7745,18 @@
 
                 const lessonType = card.training_type === 'lecture' ? 'M' : 'A';
                 const flow = card.oqim_label || card.group_name || '—';
+                const ec = typeof effectiveCard === 'function' ? effectiveCard(card) : card;
+                const room = String(ec.auditorium_name || ec.auditorium_code || '').trim();
 
                 return [
                     card.faculty_name || '—',
                     (card.specialty_name || '—') + (card.course ? ' · ' + card.course + '-kurs' : ''),
                     '[' + lessonType + '] ' + (card.subject_name || '—'),
                     'Oqim: ' + flow,
+                    card.teacher_name ? "O'qituvchi: " + card.teacher_name : null,
+                    room ? 'Xona: ' + room : null,
                     '(Haftalar: ' + weeksText + ')',
-                ].join('\n');
+                ].filter(Boolean).join('\n');
             }
 
             function gridExportCells() {
@@ -7746,9 +7779,22 @@
                             const card = cards.find(item => item.id === +child.dataset.chip);
                             return card ? excelCardText(card) : (child.innerText || '').replace(/\s+/g, ' ').trim();
                         }).filter(Boolean);
-                        const exportedText = subjectTexts.length
+                        // Bo'lak katagi: sarlavha (fan) + har bo'lak qatori (harf, guruh, talaba, o'qituvchi, vaqt)
+                        const bolakText = el.classList.contains('tt-bolak-cell')
+                            ? [el.querySelector('.tt-bolak-head'), ...el.querySelectorAll('.tt-bolak-item')]
+                                .filter(Boolean).map(x => {
+                                    const card = x.classList.contains('tt-bolak-item') ? cards.find(item => item.id === +x.dataset.chip) : null;
+                                    const base = (x.innerText || '').replace(/\s+/g, ' ').trim();
+                                    const ec = card && typeof effectiveCard === 'function' ? effectiveCard(card) : card;
+                                    const room = ec ? String(ec.auditorium_name || ec.auditorium_code || '').trim() : '';
+                                    return (x.classList.contains('tt-bolak-item') ? '• ' : '') + base
+                                        + (card && card.teacher_name && !base.includes(card.teacher_name) ? ' · ' + card.teacher_name : '')
+                                        + (room ? ' · №' + room.replace(/^№\s*/u, '') : '');
+                                }).join('\n')
+                            : '';
+                        const exportedText = bolakText || (subjectTexts.length
                             ? subjectTexts.join('\n────────────\n')
-                            : (el.innerText || '').replace(/\s+/g, ' ').trim();
+                            : (el.innerText || '').replace(/\s+/g, ' ').trim());
                         const cell = { t: exportedText };
                         if (el.colSpan > 1) cell.cs = el.colSpan;
                         if (el.rowSpan > 1) cell.rs = el.rowSpan;
@@ -7974,6 +8020,24 @@
                 await sendExcelExport(payload, title, base, $('cycleExcel'));
             }
             if ($('cycleExcel')) $('cycleExcel').onclick = () => downloadCycleExcel();
+            // Haftalik jadval (1–3 kurs): ekrandagi panjara — tanlangan hafta/shablon, tashqi/ichki qatlam
+            // va ko'rinish qamrovi (Butun doska / Kafedraniki / Mas'ul fanlarim / Faqat meniki) bilan.
+            async function downloadWeeklyExcel() {
+                const cellData = gridExportCells();
+                if (!cellData) { alert('Yuklab olish uchun panjara yo\'q.'); return; }
+                const layer = weeklyLayer === 'external' ? 'tashqi' : 'ichki';
+                const wk = curWeek ? curWeek + '-hafta' : 'barcha haftalar (shablon)';
+                const scope = scopeMode !== 'all' ? ' · ' + scopeModeLabel() : '';
+                // Uzun doska nomida ham hafta, qatlam va ko'rinish sarlavhada saqlansin.
+                const title = 'Haftalik jadval (' + layer + ') · ' + wk + scope + (curSpec ? ' · ' + scopeLabelText() : '') +
+                    ' · ' + (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali');
+                const base = ((board.name || 'dars-jadvali').slice(0, 80) + '_haftalik_' + layer + '_' + (curWeek ? curWeek + '-hafta' : 'shablon') +
+                    (scopeMode !== 'all' ? '_' + scopeModeLabel() : '')).replace(/[^\w\-]+/g, '_');
+                cellData.sheet_title = 'Haftalik ' + layer;
+                cellData.landscape = 1;
+                await sendExcelExport(cellData, Array.from(title).slice(0, 255).join(''), base.slice(0, 150), $('weeklyExcel'));
+            }
+            if ($('weeklyExcel')) $('weeklyExcel').onclick = () => downloadWeeklyExcel();
             document.querySelectorAll('.ex-mode').forEach(b => b.onclick = () => {
                 excelMode = b.dataset.mode;
                 document.querySelectorAll('.ex-mode').forEach(x => x.classList.toggle('active', x === b));

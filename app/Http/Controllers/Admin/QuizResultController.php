@@ -111,6 +111,59 @@ class QuizResultController extends Controller
     }
 
     /**
+     * "Testdan chetlashgan" oynasi: barcha talabalar ichidan F.I.Sh. yoki talaba ID
+     * bo'yicha qidirish (o'qimayotganlar ham chiqadi — holati ko'rsatiladi).
+     */
+    public function chetlashganStudents(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < 2) {
+            return response()->json(['students' => []]);
+        }
+
+        $students = DB::table('students')
+            ->where(function ($w) use ($q) {
+                if (ctype_digit($q)) {
+                    $w->where('student_id_number', 'like', $q . '%')->orWhere('hemis_id', $q);
+                } else {
+                    // Apostroflar har xil yozilgan bo'lishi mumkin — so'zma-so'z qidiramiz
+                    foreach (preg_split('/\s+/u', $q) as $word) {
+                        $w->where('full_name', 'like', '%' . $word . '%');
+                    }
+                }
+            })
+            ->orderByRaw('student_status_code = 11 DESC')
+            ->orderBy('full_name')
+            ->limit(30)
+            ->get(['hemis_id', 'full_name', 'student_id_number', 'group_name', 'department_name',
+                   'specialty_name', 'level_name', 'semester_name', 'student_status_name', 'student_status_code']);
+
+        return response()->json(['students' => $students]);
+    }
+
+    /** Tanlangan talabaning joriy o'quv yilidagi fanlari (HEMIS biriktirmasi bo'yicha). */
+    public function chetlashganSubjects(int $hemisId)
+    {
+        $student = DB::table('students')->where('hemis_id', $hemisId)
+            ->first(['hemis_id', 'full_name', 'student_id_number', 'group_name', 'semester_name', 'semester_code']);
+        abort_unless($student, 404);
+
+        $subjects = DB::table('student_subjects as ss')
+            ->leftJoin('curriculum_subjects as cs', 'cs.curriculum_subject_hemis_id', '=', 'ss.curriculum_subject_hemis_id')
+            ->where('ss.student_hemis_id', $hemisId)
+            ->tap(fn ($q) => \App\Services\StudentSubjectScope::apply($q, 'ss'))
+            ->orderByRaw('COALESCE(cs.semester_code, ss.semester_id)')
+            ->orderBy('ss.subject_name')
+            ->get([
+                'ss.subject_id', 'ss.subject_name', 'ss.semester_id',
+                'cs.semester_name', 'cs.department_name', 'cs.credit', 'cs.total_acload',
+                'ss.hemis_created_at',
+            ]);
+
+        return response()->json(['student' => $student, 'subjects' => $subjects]);
+    }
+
+    /**
      * Sistemaga yuklangan natijalar sahifasi.
      */
     public function saqlanganHisobotPage(Request $request)

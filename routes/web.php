@@ -1357,6 +1357,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');
             Route::get('/data', [QuizResultController::class, 'diagnostikaData'])->name('data');
             Route::get('/tartibga-sol', [QuizResultController::class, 'tartibgaSol'])->name('tartibga-sol');
+            // "Testdan chetlashgan": barcha talabalar ichidan qidirish va fanlari
+            Route::get('/chetlashgan/talabalar', [QuizResultController::class, 'chetlashganStudents'])->name('chetlashgan.students');
+            Route::get('/chetlashgan/talabalar/{hemisId}/fanlar', [QuizResultController::class, 'chetlashganSubjects'])->whereNumber('hemisId')->name('chetlashgan.subjects');
         });
 
         // Sistemaga yuklangan natijalar sahifasi
@@ -2092,6 +2095,9 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');
             Route::get('/data', [QuizResultController::class, 'diagnostikaData'])->name('data');
             Route::get('/tartibga-sol', [QuizResultController::class, 'tartibgaSol'])->name('tartibga-sol');
+            // "Testdan chetlashgan": barcha talabalar ichidan qidirish va fanlari
+            Route::get('/chetlashgan/talabalar', [QuizResultController::class, 'chetlashganStudents'])->name('chetlashgan.students');
+            Route::get('/chetlashgan/talabalar/{hemisId}/fanlar', [QuizResultController::class, 'chetlashganSubjects'])->whereNumber('hemisId')->name('chetlashgan.subjects');
         });
 
         // Sistemaga yuklangan natijalar sahifasi

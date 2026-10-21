@@ -244,7 +244,14 @@
                                 <span style="font-size:12px;font-weight:700;color:#991b1b;white-space:nowrap;">Faqat dublikatlar</span>
                             </label>
                         </div>
-                        <div class="filter-item" style="margin-left:auto;max-width:280px;">
+                        <div class="filter-item" style="margin-left:auto;max-width:200px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Chetlashganlar</label>
+                            <button type="button" class="btn-tartibga" onclick="chOpen()" style="background:#dc2626;border-color:#b91c1c;white-space:nowrap;">
+                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                                Testdan chetlashgan
+                            </button>
+                        </div>
+                        <div class="filter-item" style="max-width:280px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv ({{ now('Asia/Tashkent')->year }}-yil)</label>
                             <div style="display:flex;gap:6px;align-items:center;">
                                 <input type="text" id="search_student_name" class="date-input" placeholder="FISH kiriting..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByName();}" style="flex:1;" />
@@ -2298,6 +2305,142 @@
             };
 
         });
+    </script>
+
+    {{-- "Testdan chetlashgan": barcha talabalar ichidan qidirish va fanlari --}}
+    <style>
+        .ch-veil { position: fixed; inset: 0; z-index: 60; display: none; align-items: flex-start; justify-content: center; padding: 48px 16px; background: rgba(15, 23, 42, .5); overflow-y: auto; }
+        .ch-veil.is-open { display: flex; }
+        .ch-box { width: min(980px, 100%); background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(15, 23, 42, .3); overflow: hidden; }
+        .ch-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #b91c1c, #dc2626); color: #fff; }
+        .ch-head h3 { margin: 0; font-size: 16px; font-weight: 800; }
+        .ch-head p { margin: 2px 0 0; font-size: 12px; opacity: .85; }
+        .ch-x { width: 34px; height: 34px; border: 0; border-radius: 9px; background: rgba(255, 255, 255, .18); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; }
+        .ch-x:hover { background: rgba(255, 255, 255, .3); }
+        .ch-body { padding: 18px 20px 20px; display: grid; gap: 14px; }
+        .ch-search { display: flex; gap: 8px; }
+        .ch-search input { flex: 1; height: 42px; padding: 0 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; }
+        .ch-search input:focus { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, .12); }
+        .ch-hint { color: #64748b; font-size: 12px; }
+        .ch-list { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
+        .ch-stu { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; text-align: left; font: inherit; cursor: pointer; }
+        .ch-stu:hover { border-color: #fca5a5; background: #fef2f2; }
+        .ch-stu.is-on { border-color: #dc2626; background: #fef2f2; box-shadow: inset 3px 0 0 #dc2626; }
+        .ch-stu b { color: #0f172a; font-size: 13.5px; }
+        .ch-stu span { color: #64748b; font-size: 12px; }
+        .ch-pill { justify-self: end; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #dcfce7; color: #166534; white-space: nowrap; }
+        .ch-pill.off { background: #f1f5f9; color: #475569; }
+        .ch-subj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-top: 6px; border-top: 1px solid #eef2f6; }
+        .ch-subj-head b { color: #0f172a; font-size: 14px; }
+        .ch-subj-head span { color: #64748b; font-size: 12px; }
+        .ch-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .ch-table th { padding: 8px 10px; background: #f8fafc; color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-align: left; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+        .ch-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
+        .ch-table td.num { color: #64748b; font-variant-numeric: tabular-nums; }
+        .ch-empty { padding: 18px; color: #94a3b8; font-size: 13px; text-align: center; }
+    </style>
+
+    <div class="ch-veil" id="chVeil" role="dialog" aria-modal="true" aria-labelledby="chTitle">
+        <div class="ch-box">
+            <div class="ch-head">
+                <div>
+                    <h3 id="chTitle">Testdan chetlashgan</h3>
+                    <p>Talabani F.I.Sh. yoki talaba ID bo'yicha barcha talabalar ichidan toping</p>
+                </div>
+                <button type="button" class="ch-x" onclick="chClose()" aria-label="Yopish">&times;</button>
+            </div>
+            <div class="ch-body">
+                <div class="ch-search">
+                    <input type="text" id="chQuery" placeholder="Familiya, ism yoki talaba ID (masalan 368241100472)" autocomplete="off">
+                    <button type="button" class="btn-tartibga" onclick="chSearch()" style="background:#dc2626;border-color:#b91c1c;">Qidirish</button>
+                </div>
+                <div class="ch-hint" id="chHint">Kamida 2 ta belgi kiriting.</div>
+                <div class="ch-list" id="chList"></div>
+                <div id="chSubjects"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        var studentsUrl = @json(route($routePrefix . '.diagnostika.chetlashgan.students'));
+        var subjectsUrl = @json(route($routePrefix . '.diagnostika.chetlashgan.subjects', ['hemisId' => '__ID__']));
+        var veil = document.getElementById('chVeil');
+        var q = document.getElementById('chQuery');
+        var list = document.getElementById('chList');
+        var hint = document.getElementById('chHint');
+        var subjBox = document.getElementById('chSubjects');
+        var timer = null, seq = 0;
+
+        function esc(v) {
+            return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        window.chOpen = function () {
+            veil.classList.add('is-open');
+            setTimeout(function () { q.focus(); }, 30);
+        };
+        window.chClose = function () { veil.classList.remove('is-open'); };
+
+        window.chSearch = function () {
+            var term = q.value.trim();
+            subjBox.innerHTML = '';
+            if (term.length < 2) { list.innerHTML = ''; hint.textContent = 'Kamida 2 ta belgi kiriting.'; return; }
+            var my = ++seq;
+            hint.textContent = 'Qidirilmoqda...';
+            fetch(studentsUrl + '?q=' + encodeURIComponent(term), { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (my !== seq) return;
+                    var rows = d.students || [];
+                    hint.textContent = rows.length ? rows.length + ' ta talaba topildi' + (rows.length === 30 ? ' (birinchi 30 tasi — aniqroq yozing)' : '') + '. Fanlarini ko\'rish uchun bosing.' : 'Talaba topilmadi.';
+                    list.innerHTML = rows.map(function (s) {
+                        var active = String(s.student_status_code) === '11';
+                        return '<button type="button" class="ch-stu" data-id="' + esc(s.hemis_id) + '">'
+                            + '<b>' + esc(s.full_name) + '</b>'
+                            + '<span class="ch-pill' + (active ? '' : ' off') + '">' + esc(s.student_status_name || '') + '</span>'
+                            + '<span>' + esc(s.student_id_number) + ' · ' + esc(s.group_name || '') + ' · ' + esc(s.level_name || '') + ' · ' + esc(s.semester_name || '') + '</span>'
+                            + '<span>' + esc(s.department_name || '') + '</span>'
+                            + '</button>';
+                    }).join('');
+                })
+                .catch(function () { if (my === seq) hint.textContent = "Server bilan aloqa yo'q. Qayta urinib ko'ring."; });
+        };
+
+        function loadSubjects(id, btn) {
+            list.querySelectorAll('.ch-stu').forEach(function (b) { b.classList.toggle('is-on', b === btn); });
+            subjBox.innerHTML = '<div class="ch-empty">Fanlar yuklanmoqda...</div>';
+            fetch(subjectsUrl.replace('__ID__', encodeURIComponent(id)), { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var st = d.student || {}, rows = d.subjects || [];
+                    var head = '<div class="ch-subj-head"><b>' + esc(st.full_name) + '</b><span>' + esc(st.student_id_number) + ' · ' + esc(st.group_name || '') + ' · ' + rows.length + ' ta fan</span></div>';
+                    if (!rows.length) { subjBox.innerHTML = head + '<div class="ch-empty">Joriy o\'quv yilida biriktirilgan fan yo\'q.</div>'; return; }
+                    subjBox.innerHTML = head + '<div style="overflow-x:auto"><table class="ch-table"><thead><tr>'
+                        + '<th>#</th><th>Fan</th><th>Semestr</th><th>Kafedra</th><th>Kredit</th><th>Soat</th><th>Biriktirilgan</th>'
+                        + '</tr></thead><tbody>'
+                        + rows.map(function (r, i) {
+                            return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(r.subject_name) + '</td><td>' + esc(r.semester_name || r.semester_id || '') + '</td>'
+                                + '<td>' + esc(r.department_name || '') + '</td><td class="num">' + esc(r.credit != null ? parseFloat(r.credit) : '') + '</td>'
+                                + '<td class="num">' + esc(r.total_acload != null ? parseFloat(r.total_acload) : '') + '</td>'
+                                + '<td class="num">' + esc(r.hemis_created_at ? String(r.hemis_created_at).slice(0, 10) : '') + '</td></tr>';
+                        }).join('')
+                        + '</tbody></table></div>';
+                })
+                .catch(function () { subjBox.innerHTML = '<div class="ch-empty">Fanlarni yuklab bo\'lmadi.</div>'; });
+        }
+
+        list.addEventListener('click', function (e) {
+            var btn = e.target.closest('.ch-stu');
+            if (btn) loadSubjects(btn.dataset.id, btn);
+        });
+        q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(window.chSearch, 400); });
+        q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); window.chSearch(); } });
+        veil.addEventListener('click', function (e) { if (e.target === veil) window.chClose(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && veil.classList.contains('is-open')) window.chClose(); });
+    })();
     </script>
 
 </x-app-layout>

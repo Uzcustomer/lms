@@ -141,7 +141,10 @@ class QuizResultController extends Controller
         return response()->json(['students' => $students]);
     }
 
-    /** Tanlangan talabaning joriy o'quv yilidagi fanlari (HEMIS biriktirmasi bo'yicha). */
+    /**
+     * Tanlangan talabaning joriy o'quv yilidagi fanlari (HEMIS biriktirmasi bo'yicha),
+     * har birining yopilish shakli va jurnaldagi mavjud OSKI/Test baholari (urinish bo'yicha).
+     */
     public function chetlashganSubjects(int $hemisId)
     {
         $student = DB::table('students')->where('hemis_id', $hemisId)
@@ -156,11 +159,127 @@ class QuizResultController extends Controller
             ->orderBy('ss.subject_name')
             ->get([
                 'ss.subject_id', 'ss.subject_name', 'ss.semester_id',
-                'cs.semester_name', 'cs.department_name', 'cs.credit', 'cs.total_acload',
-                'ss.hemis_created_at',
+                'cs.semester_code', 'cs.semester_name', 'cs.department_name', 'cs.credit', 'cs.total_acload',
+                'cs.closing_form', 'ss.hemis_created_at',
             ]);
 
+        // Jurnaldagi OSKI (101) / Test (102) baholari: [fan][tur][urinish] => baho
+        $grades = [];
+        if ($subjects->isNotEmpty()) {
+            DB::table('student_grades')
+                ->where('student_hemis_id', $hemisId)
+                ->whereIn('subject_id', $subjects->pluck('subject_id')->all())
+                ->whereIn('training_type_code', [101, 102])
+                ->whereNull('deleted_at')
+                ->when(\Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'is_qoshimcha'), fn ($q) => $q->where('is_qoshimcha', false))
+                ->orderBy('id')
+                ->get(['subject_id', 'training_type_code', 'attempt', 'grade'])
+                ->each(function ($g) use (&$grades) {
+                    $grades[(string) $g->subject_id][(string) $g->training_type_code][(string) ((int) $g->attempt ?: 1)] = $g->grade !== null ? (float) $g->grade : null;
+                });
+        }
+        foreach ($subjects as $sub) {
+            $sub->grades = $grades[(string) $sub->subject_id] ?? new \stdClass();
+        }
+
         return response()->json(['student' => $student, 'subjects' => $subjects]);
+    }
+
+    /**
+     * "Testdan chetlashgan" oynasidan OSKI / Test bahosini jurnalga yozish.
+     * Test markazi Excel yuklashi (uploadToGrades) bilan bir xil yozuv yaratiladi:
+     * shu fan, tur va urinishda baho bo'lsa yangilanadi, bo'lmasa yangisi qo'shiladi.
+     */
+    public function chetlashganSaveGrade(Request $request)
+    {
+        $data = $request->validate([
+            'hemis_id' => ['required', 'integer'],
+            'subject_id' => ['required', 'integer'],
+            'attempt' => ['required', 'integer', 'in:1,2,3'],
+            'grades' => ['required', 'array', 'min:1'],
+            'grades.*.type' => ['required', 'integer', 'in:101,102'],
+            'grades.*.grade' => ['required', 'numeric', 'min:0', 'max:100'],
+        ], [], ['grades.*.grade' => 'Baho']);
+
+        $student = Student::where('hemis_id', $data['hemis_id'])->first();
+        abort_unless($student, 404, 'Talaba topilmadi');
+
+        $group = Group::where('group_hemis_id', $student->group_id)->first();
+        $subject = $group
+            ? CurriculumSubject::where('subject_id', $data['subject_id'])->where('curricula_hemis_id', $group->curriculum_hemis_id)->orderByRaw('closing_form IS NULL')->first()
+            : null;
+        $subject ??= CurriculumSubject::where('subject_id', $data['subject_id'])->first();
+        abort_unless($subject, 404, 'Fan topilmadi');
+
+        $semesterCode = $subject->semester_code ?: $student->semester_code;
+        $semester = $group
+            ? Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)->where('code', $semesterCode)->first()
+            : null;
+
+        $user = auth()->user() ?? auth()->guard('teacher')->user();
+        $userName = $user?->name ?? $user?->full_name ?? 'Test markazi';
+        $hasQoshimcha = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'is_qoshimcha');
+
+        $saved = [];
+        foreach ($data['grades'] as $entry) {
+            $type = (int) $entry['type'];
+            $value = $student->isInternationalFaculty()
+                ? self::toFivePointScale((float) $entry['grade'])
+                : round((float) $entry['grade']);
+
+            $existing = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $subject->subject_id)
+                ->where('training_type_code', $type)
+                ->where('attempt', $data['attempt'])
+                ->when($hasQoshimcha, fn ($q) => $q->where('is_qoshimcha', false))
+                ->orderByDesc('id')
+                ->first();
+
+            if ($existing) {
+                $existing->update(['grade' => $value, 'status' => 'recorded', 'employee_name' => $userName]);
+            } else {
+                StudentGrade::create([
+                    'student_id' => $student->id,
+                    'student_hemis_id' => $student->hemis_id,
+                    'hemis_id' => 999999999,
+                    'semester_code' => $semester->code ?? $semesterCode,
+                    'semester_name' => $semester->name ?? $student->semester_name,
+                    'education_year_code' => $student->education_year_code,
+                    'education_year_name' => $student->education_year_name,
+                    'subject_schedule_id' => 0,
+                    'subject_id' => $subject->subject_id,
+                    'subject_name' => $subject->subject_name,
+                    'subject_code' => $subject->subject_code ?? '',
+                    'training_type_code' => $type,
+                    'training_type_name' => $type === 101 ? 'Oski' : 'Yakuniy test',
+                    'employee_id' => 0,
+                    'employee_name' => $userName,
+                    'lesson_pair_name' => '',
+                    'lesson_pair_code' => '',
+                    'lesson_pair_start_time' => '',
+                    'lesson_pair_end_time' => '',
+                    'lesson_date' => now(),
+                    'created_at_api' => now(),
+                    'reason' => 'test_markazi_manual',
+                    'status' => 'recorded',
+                    'grade' => $value,
+                    'deadline' => now(),
+                    'is_final' => true,
+                    'attempt' => $data['attempt'],
+                ] + ($hasQoshimcha ? ['is_qoshimcha' => false] : []));
+            }
+            $saved[] = ($type === 101 ? 'OSKI' : 'Test') . ': ' . $value;
+        }
+
+        Log::info('[Chetlashgan] baho jurnalga yozildi', [
+            'student' => $student->student_id_number, 'subject_id' => $subject->subject_id,
+            'attempt' => $data['attempt'], 'saved' => $saved, 'by' => $userName,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => $student->full_name . ' — ' . $subject->subject_name . ' (' . $data['attempt'] . '-urinish): ' . implode(', ', $saved) . ' jurnalga yozildi.',
+        ]);
     }
 
     /**

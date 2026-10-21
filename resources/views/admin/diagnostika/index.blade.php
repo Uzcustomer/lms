@@ -2309,9 +2309,9 @@
 
     {{-- "Testdan chetlashgan": barcha talabalar ichidan qidirish va fanlari --}}
     <style>
-        .ch-veil { position: fixed; inset: 0; z-index: 60; display: none; align-items: flex-start; justify-content: center; padding: 48px 16px; background: rgba(15, 23, 42, .5); overflow-y: auto; }
+        .ch-veil { position: fixed; inset: 0; z-index: 60; display: none; align-items: flex-start; justify-content: center; padding: 24px 16px; background: rgba(15, 23, 42, .5); overflow-y: auto; }
         .ch-veil.is-open { display: flex; }
-        .ch-box { width: min(980px, 100%); background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(15, 23, 42, .3); overflow: hidden; }
+        .ch-box { width: min(1320px, 100%); background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(15, 23, 42, .3); overflow: hidden; }
         .ch-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #b91c1c, #dc2626); color: #fff; }
         .ch-head h3 { margin: 0; font-size: 16px; font-weight: 800; }
         .ch-head p { margin: 2px 0 0; font-size: 12px; opacity: .85; }
@@ -2322,7 +2322,7 @@
         .ch-search input { flex: 1; height: 42px; padding: 0 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; }
         .ch-search input:focus { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, .12); }
         .ch-hint { color: #64748b; font-size: 12px; }
-        .ch-list { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
+        .ch-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 6px; max-height: 240px; overflow-y: auto; }
         .ch-stu { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; text-align: left; font: inherit; cursor: pointer; }
         .ch-stu:hover { border-color: #fca5a5; background: #fef2f2; }
         .ch-stu.is-on { border-color: #dc2626; background: #fef2f2; box-shadow: inset 3px 0 0 #dc2626; }
@@ -2338,6 +2338,22 @@
         .ch-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: top; }
         .ch-table td.num { color: #64748b; font-variant-numeric: tabular-nums; }
         .ch-empty { padding: 18px; color: #94a3b8; font-size: 13px; text-align: center; }
+        .ch-attempt { display: inline-flex; align-items: center; gap: 8px; color: #334155; font-size: 13px; font-weight: 600; }
+        .ch-attempt select { height: 34px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+        .ch-form { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; background: #f1f5f9; color: #475569; }
+        .ch-form.oski { background: #ede9fe; color: #6d28d9; } .ch-form.test { background: #dbeafe; color: #1e40af; }
+        .ch-form.oski_test { background: #fce7f3; color: #9d174d; } .ch-form.off { background: #fef3c7; color: #92400e; }
+        .ch-grade { display: flex; align-items: center; gap: 6px; }
+        .ch-grade label { color: #64748b; font-size: 11px; font-weight: 700; min-width: 34px; }
+        .ch-grade input { width: 72px; height: 34px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-variant-numeric: tabular-nums; text-align: center; }
+        .ch-grade input:focus { border-color: #dc2626; outline: none; box-shadow: 0 0 0 3px rgba(220, 38, 38, .12); }
+        .ch-grade input.has { border-color: #86efac; background: #f0fdf4; }
+        .ch-grades { display: grid; gap: 6px; }
+        .ch-save { height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: #16a34a; color: #fff; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .ch-save:hover { background: #15803d; } .ch-save[disabled] { opacity: .5; cursor: not-allowed; }
+        .ch-note { color: #94a3b8; font-size: 11.5px; }
+        .ch-msg { padding: 10px 12px; border-radius: 9px; font-size: 13px; }
+        .ch-msg.ok { background: #dcfce7; color: #166534; } .ch-msg.bad { background: #fee2e2; color: #991b1b; }
     </style>
 
     <div class="ch-veil" id="chVeil" role="dialog" aria-modal="true" aria-labelledby="chTitle">
@@ -2345,7 +2361,7 @@
             <div class="ch-head">
                 <div>
                     <h3 id="chTitle">Testdan chetlashgan</h3>
-                    <p>Talabani F.I.Sh. yoki talaba ID bo'yicha barcha talabalar ichidan toping</p>
+                    <p>Talabani toping, fanini tanlab OSKI / Test bahosini kiriting — baho talabaning jurnaliga tushadi</p>
                 </div>
                 <button type="button" class="ch-x" onclick="chClose()" aria-label="Yopish">&times;</button>
             </div>
@@ -2409,28 +2425,118 @@
                 .catch(function () { if (my === seq) hint.textContent = "Server bilan aloqa yo'q. Qayta urinib ko'ring."; });
         };
 
+        var saveUrl = @json(route($routePrefix . '.diagnostika.chetlashgan.save'));
+        var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content;
+        var FORM_LABELS = { oski: 'Faqat OSKI', test: 'Faqat Test', oski_test: 'OSKI + Test', sinov: 'Sinov (test)', normativ: 'Normativ', none: "Yo'q" };
+        var current = { id: null, rows: [] };
+
+        // Yopilish shakliga qarab qaysi kataklar: oski / test / ikkalasi; belgilanmagan — ikkalasi
+        function typesFor(form) {
+            if (form === 'oski') return [101];
+            if (form === 'test') return [102];
+            if (form === 'oski_test' || !form) return [101, 102];
+            return []; // sinov / normativ / none — bu yerda kiritilmaydi
+        }
+
+        function attempt() { var el = document.getElementById('chAttempt'); return el ? el.value : '1'; }
+
+        function renderSubjects(st) {
+            var rows = current.rows;
+            var head = '<div class="ch-subj-head"><b>' + esc(st.full_name) + '</b>'
+                + '<span class="ch-attempt">Urinish: <select id="chAttempt"><option value="1">1-urinish</option><option value="2">2-urinish</option><option value="3">3-urinish</option></select></span>'
+                + '<span>' + esc(st.student_id_number) + ' · ' + esc(st.group_name || '') + ' · ' + rows.length + ' ta fan</span></div>'
+                + '<div id="chMsg"></div>';
+            if (!rows.length) { subjBox.innerHTML = head + '<div class="ch-empty">Joriy o\'quv yilida biriktirilgan fan yo\'q.</div>'; return; }
+            var a = attempt();
+            subjBox.innerHTML = head + '<div style="overflow-x:auto"><table class="ch-table"><thead><tr>'
+                + '<th>#</th><th>Fan</th><th>Semestr</th><th>Kafedra</th><th>Yopilish shakli</th><th>Baho (0–100)</th><th></th>'
+                + '</tr></thead><tbody>'
+                + rows.map(function (r, i) {
+                    var types = typesFor(r.closing_form);
+                    var formCls = r.closing_form ? (types.length ? r.closing_form : 'off') : 'off';
+                    var formTxt = r.closing_form ? (FORM_LABELS[r.closing_form] || r.closing_form) : 'Belgilanmagan';
+                    var inputs = types.map(function (t) {
+                        var have = r.grades && r.grades[t] && r.grades[t][a] != null ? r.grades[t][a] : '';
+                        return '<div class="ch-grade"><label>' + (t === 101 ? 'OSKI' : 'Test') + '</label>'
+                            + '<input type="number" min="0" max="100" step="1" data-type="' + t + '" value="' + esc(have) + '" class="' + (have !== '' ? 'has' : '') + '" title="' + (have !== '' ? 'Jurnalda bor — o\'zgartirilsa yangilanadi' : '') + '"></div>';
+                    }).join('');
+                    var cell = types.length
+                        ? '<div class="ch-grades">' + inputs + '</div>'
+                        : '<span class="ch-note">Bu shakl bu yerda kiritilmaydi</span>';
+                    return '<tr data-i="' + i + '"><td class="num">' + (i + 1) + '</td><td>' + esc(r.subject_name) + '</td>'
+                        + '<td>' + esc(r.semester_name || r.semester_id || '') + '</td><td>' + esc(r.department_name || '') + '</td>'
+                        + '<td><span class="ch-form ' + esc(formCls) + '">' + esc(formTxt) + '</span></td>'
+                        + '<td>' + cell + '</td>'
+                        + '<td>' + (types.length ? '<button type="button" class="ch-save" data-i="' + i + '">Yuklash</button>' : '') + '</td></tr>';
+                }).join('')
+                + '</tbody></table></div>';
+            var sel = document.getElementById('chAttempt');
+            sel.value = a;
+        }
+
         function loadSubjects(id, btn) {
             list.querySelectorAll('.ch-stu').forEach(function (b) { b.classList.toggle('is-on', b === btn); });
             subjBox.innerHTML = '<div class="ch-empty">Fanlar yuklanmoqda...</div>';
             fetch(subjectsUrl.replace('__ID__', encodeURIComponent(id)), { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
-                    var st = d.student || {}, rows = d.subjects || [];
-                    var head = '<div class="ch-subj-head"><b>' + esc(st.full_name) + '</b><span>' + esc(st.student_id_number) + ' · ' + esc(st.group_name || '') + ' · ' + rows.length + ' ta fan</span></div>';
-                    if (!rows.length) { subjBox.innerHTML = head + '<div class="ch-empty">Joriy o\'quv yilida biriktirilgan fan yo\'q.</div>'; return; }
-                    subjBox.innerHTML = head + '<div style="overflow-x:auto"><table class="ch-table"><thead><tr>'
-                        + '<th>#</th><th>Fan</th><th>Semestr</th><th>Kafedra</th><th>Kredit</th><th>Soat</th><th>Biriktirilgan</th>'
-                        + '</tr></thead><tbody>'
-                        + rows.map(function (r, i) {
-                            return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(r.subject_name) + '</td><td>' + esc(r.semester_name || r.semester_id || '') + '</td>'
-                                + '<td>' + esc(r.department_name || '') + '</td><td class="num">' + esc(r.credit != null ? parseFloat(r.credit) : '') + '</td>'
-                                + '<td class="num">' + esc(r.total_acload != null ? parseFloat(r.total_acload) : '') + '</td>'
-                                + '<td class="num">' + esc(r.hemis_created_at ? String(r.hemis_created_at).slice(0, 10) : '') + '</td></tr>';
-                        }).join('')
-                        + '</tbody></table></div>';
+                    current = { id: id, rows: d.subjects || [], student: d.student || {} };
+                    renderSubjects(current.student);
                 })
                 .catch(function () { subjBox.innerHTML = '<div class="ch-empty">Fanlarni yuklab bo\'lmadi.</div>'; });
         }
+
+        function showMsg(text, ok) {
+            var box = document.getElementById('chMsg');
+            if (box) box.innerHTML = '<div class="ch-msg ' + (ok ? 'ok' : 'bad') + '">' + esc(text) + '</div>';
+        }
+
+        subjBox.addEventListener('change', function (e) {
+            if (e.target.id === 'chAttempt') renderSubjects(current.student);
+        });
+
+        subjBox.addEventListener('click', function (e) {
+            var btn = e.target.closest('.ch-save');
+            if (!btn) return;
+            var row = current.rows[+btn.dataset.i];
+            var tr = btn.closest('tr');
+            var grades = [];
+            var bad = false;
+            tr.querySelectorAll('input[data-type]').forEach(function (inp) {
+                var v = inp.value.trim();
+                if (v === '') return;
+                var n = Number(v);
+                if (isNaN(n) || n < 0 || n > 100) { bad = true; return; }
+                grades.push({ type: +inp.dataset.type, grade: n });
+            });
+            if (bad) { showMsg("Baho 0 dan 100 gacha bo'lishi kerak.", false); return; }
+            if (!grades.length) { showMsg('Avval baho kiriting.', false); return; }
+            var a = attempt();
+            var txt = grades.map(function (g) { return (g.type === 101 ? 'OSKI ' : 'Test ') + g.grade; }).join(', ');
+            if (!confirm(current.student.full_name + '\n' + row.subject_name + ' — ' + a + '-urinish\n' + txt + '\n\nJurnalga yozilsinmi?')) return;
+            btn.disabled = true;
+            btn.textContent = 'Yuklanmoqda...';
+            fetch(saveUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
+                body: JSON.stringify({ hemis_id: current.id, subject_id: row.subject_id, attempt: +a, grades: grades })
+            })
+                .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) {
+                    if (!res.ok) {
+                        var m = res.d && (res.d.message || (res.d.errors && Object.values(res.d.errors)[0][0]));
+                        showMsg(m || 'Saqlab bo\'lmadi.', false);
+                        btn.disabled = false; btn.textContent = 'Yuklash';
+                        return;
+                    }
+                    showMsg(res.d.message, true);
+                    // Mavjud baholarni yangilab qayta chizamiz
+                    row.grades = row.grades && !Array.isArray(row.grades) ? row.grades : {};
+                    grades.forEach(function (g) { row.grades[g.type] = row.grades[g.type] || {}; row.grades[g.type][a] = g.grade; });
+                    renderSubjects(current.student);
+                })
+                .catch(function () { showMsg("Server bilan aloqa yo'q.", false); btn.disabled = false; btn.textContent = 'Yuklash'; });
+        });
 
         list.addEventListener('click', function (e) {
             var btn = e.target.closest('.ch-stu');

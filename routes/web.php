@@ -1360,6 +1360,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // "Testdan chetlashgan": barcha talabalar ichidan qidirish va fanlari
             Route::get('/chetlashgan/talabalar', [QuizResultController::class, 'chetlashganStudents'])->name('chetlashgan.students');
             Route::get('/chetlashgan/talabalar/{hemisId}/fanlar', [QuizResultController::class, 'chetlashganSubjects'])->whereNumber('hemisId')->name('chetlashgan.subjects');
+            Route::post('/chetlashgan/baho', [QuizResultController::class, 'chetlashganSaveGrade'])->name('chetlashgan.save');
         });
 
         // Sistemaga yuklangan natijalar sahifasi
@@ -2098,6 +2099,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             // "Testdan chetlashgan": barcha talabalar ichidan qidirish va fanlari
             Route::get('/chetlashgan/talabalar', [QuizResultController::class, 'chetlashganStudents'])->name('chetlashgan.students');
             Route::get('/chetlashgan/talabalar/{hemisId}/fanlar', [QuizResultController::class, 'chetlashganSubjects'])->whereNumber('hemisId')->name('chetlashgan.subjects');
+            Route::post('/chetlashgan/baho', [QuizResultController::class, 'chetlashganSaveGrade'])->name('chetlashgan.save');
         });
 
         // Sistemaga yuklangan natijalar sahifasi

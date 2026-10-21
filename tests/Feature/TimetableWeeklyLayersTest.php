@@ -475,3 +475,101 @@ it('jadval sahifasida boshlanish vaqti tanlovi chiqadi', function () {
     layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.index'))->assertOk()
         ->assertSee('id="cmStartSlot"', false)->assertSee('Boshlanish vaqti');
 });
+
+it('avval birlashtirilgan umumiy ma\'ruzaga keyin qo\'shilgan bo\'lak ma\'ruzalari qo\'shiladi', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']) + ['training_type' => 'lecture', 'kafedra_name' => 'X', 'ext_day' => 2, 'ext_pair' => 1];
+    $m = \App\Models\TimetableCard::create($base + ['subject_name' => 'Klinik stomatologiya', 'students' => 40, 'group_names' => ['g-02a']]);
+    $b = \App\Models\TimetableCard::create($base + ['subject_name' => 'Klinik stomatologiya (b)', 'students' => 30, 'group_names' => ['g-02b']]);
+    $c = \App\Models\TimetableCard::create($base + ['subject_name' => 'Klinik stomatologiya (c)', 'students' => 20, 'group_names' => ['g-02a', 'g-02b']]);
+    $other = \App\Models\TimetableCard::create($base + ['subject_name' => 'Anatomiya', 'students' => 50, 'group_names' => ['g-02a']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 2]);
+    $m->refresh();
+    expect($m->subject_name)->toBe('Klinik stomatologiya')->and($m->students)->toBe(90)
+        ->and(collect($m->group_names)->sort()->values()->all())->toBe(['g-02a', 'g-02b'])
+        ->and(\App\Models\TimetableCard::whereIn('id', [$b->id, $c->id])->count())->toBe(0)
+        ->and($other->fresh())->not->toBeNull();
+});
+
+it('fan nomlarini yangilash — rejada imlo xatosi tuzatilgan nomni (bo\'lak harfi bilan) topadi', function () {
+    $s = layersSetup();
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'x', 'specialty_name' => 'Davolash ishi', 'plan_year' => '2025/2026', 'level_code' => '12', 'created_at' => now(), 'updated_at' => now()]);
+    foreach (['Klinik restavratsion stomatologiya (a)', 'Klinik restavratsion stomatologiya (b)', 'Gigiyena'] as $n) {
+        DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => $n, 'semester' => 3, 'created_at' => now(), 'updated_at' => now()]);
+    }
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks', 'students']);
+    $pa = TimetableCard::create($base + ['training_type' => 'practice', 'subject_name' => 'Klinik restavratsion stamatologiya (a)', 'group_name' => 'g-02a']);
+    $lec = TimetableCard::create($base + ['training_type' => 'lecture', 'subject_name' => 'Klinik restavratsion stamatologiya', 'group_names' => ['g-02a']]);
+    $pb = TimetableCard::create($base + ['training_type' => 'practice', 'subject_name' => 'Klinik restavratsion stomatologiya (b)', 'group_name' => 'g-02b']);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.refresh-names', $s['board']))->assertOk();
+    expect($pa->fresh()->subject_name)->toBe('Klinik restavratsion stomatologiya (a)')
+        ->and($lec->fresh()->subject_name)->toBe('Klinik restavratsion stomatologiya')
+        ->and($pb->fresh()->subject_name)->toBe('Klinik restavratsion stomatologiya (b)')
+        ->and($s['own']->fresh()->subject_name)->toBe('Gigiyena')
+        ->and($s['foreign']->fresh()->subject_name)->toBe('Anatomiya');
+});
+
+function refreshNamePlan(string $specialty, array $names): void
+{
+    $id = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'Sinov reja', 'specialty_name' => $specialty,
+        'plan_year' => '2025/2026', 'level_code' => '12', 'created_at' => now(), 'updated_at' => now()]);
+    foreach ($names as $name) {
+        DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $id, 'subject_name' => $name,
+            'semester' => 3, 'created_at' => now(), 'updated_at' => now()]);
+    }
+}
+
+it('imlo mosligi noaniq bo‘lsa yoki faqat boshqa bo‘lak harfi topilsa nomni saqlaydi', function () {
+    $s = layersSetup();
+    refreshNamePlan('Davolash ishi', ['Klinik restavratsion stomatologiya (a)', 'Klinik restavratsion stimatologiya (a)']);
+    $s['own']->update(['subject_name' => 'Klinik restavratsion stamatologiya (a)']);
+    $s['foreign']->update(['subject_name' => 'Klinik restavratsion stamatologiya (b)']);
+    $url = route('admin.timetable.boards.refresh-names', $s['board']);
+    layerAs($s['admin'], 'superadmin')->postJson($url)->assertOk();
+    expect($s['own']->fresh()->subject_name)->toBe('Klinik restavratsion stamatologiya (a)')
+        ->and($s['foreign']->fresh()->subject_name)->toBe('Klinik restavratsion stamatologiya (b)');
+});
+
+it('fakultetda noaniq imlo mosligini boshqa fakultet nomi bilan almashtirmaydi', function () {
+    $s = layersSetup();
+    $s['own']->update(['faculty_name' => '1-son davolash', 'subject_name' => 'Klinik restavratsion stamatologiya']);
+    refreshNamePlan('1-son Davolash ishi', ['Klinik restavratsion stomotologiya', 'Klinik restavratsion stimitologiya']);
+    refreshNamePlan('2-son Davolash ishi', ['Klinik restavratsion stomatologiya']);
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.refresh-names', $s['board']))->assertOk();
+    expect($s['own']->fresh()->subject_name)->toBe('Klinik restavratsion stamatologiya');
+});
+
+it('kirill yozuvida ikki harfli imlo tuzatishini ham topadi va joylashuvni saqlaydi', function () {
+    $s = layersSetup();
+    refreshNamePlan('Davolash ishi', ['Клиник реставрацион стоматология (а)']);
+    $s['own']->update(['subject_name' => 'Клиник реставрацион стямятология (а)', 'day' => 2, 'pair' => 3,
+        'ext_day' => 4, 'ext_pair' => 5, 'teacher_id' => 77, 'teacher_name' => 'Sinov']);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'cancelled' => true]);
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.refresh-names', $s['board']))->assertOk();
+    $card = $s['own']->fresh();
+    expect($card->subject_name)->toBe('Клиник реставрацион стоматология (а)')
+        ->and([$card->day, $card->pair, $card->ext_day, $card->ext_pair, $card->teacher_id])->toBe([2, 3, 4, 5, 77])
+        ->and(\App\Models\TimetableCardOverride::where('card_id', $card->id)->where('week', 3)->value('cancelled'))->toBeTrue();
+});
+
+it('umumiy ma’ruzaga qo‘shish dry run va qayta bajarishda xavfsiz, turli haftalarni birlashtirmaydi', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks'])
+        + ['training_type' => 'lecture', 'students' => 20, 'ext_day' => 2, 'ext_pair' => 1];
+    $merged = TimetableCard::create($base + ['subject_name' => 'Klinik stomatologiya', 'group_names' => ['g-02a']]);
+    $part = TimetableCard::create($base + ['subject_name' => 'Klinik stomatologiya (b)', 'group_names' => ['g-02b']]);
+    $url = route('admin.timetable.boards.merge-variant-lectures', $s['board']);
+    layerAs($s['head'], 'kafedra_mudiri')->postJson($url)->assertForbidden();
+    layerAs($s['admin'], 'superadmin')->postJson($url, ['courses' => [2], 'dry_run' => true])->assertOk()->assertJson(['lectures' => 1, 'removed' => 0]);
+    expect($part->fresh())->not->toBeNull()->and($merged->fresh()->group_names)->toBe(['g-02a']);
+    $ov = \App\Models\TimetableCardOverride::create(['card_id' => $merged->id, 'week' => 3, 'cancelled' => true]);
+    $response = layerAs($s['admin'], 'superadmin')->postJson($url, ['courses' => [2]])->assertOk()->assertJson(['lectures' => 0, 'removed' => 0]);
+    expect($response->json('skipped'))->toHaveCount(1);
+    $ov->delete();
+    layerAs($s['admin'], 'superadmin')->postJson($url, ['courses' => [2]])->assertOk()->assertJson(['lectures' => 1, 'removed' => 1]);
+    layerAs($s['admin'], 'superadmin')->postJson($url, ['courses' => [2]])->assertOk()->assertJson(['lectures' => 0, 'removed' => 0]);
+    expect($merged->fresh()->ext_pair)->toBe(1)->and($part->fresh())->toBeNull();
+});

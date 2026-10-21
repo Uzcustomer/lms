@@ -5973,13 +5973,13 @@
                     + (o.training_type === 'lecture' && o.oqim_label ? ' · ' + o.oqim_label : '')
                     + (gText ? ' · ' + gText : '') + ' · ' + o.subject_name + ' (' + (o.training_type === 'lecture' ? "ma'ruza" : 'amaliy') + ')';
             }
-            function conflictsAt(card, day, pair) {
+            function conflictsAt(card, day, pair, ignoredIds = []) {
                 const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
                 const effectiveSource = effectiveCard(card);
                 const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
-                    if (o.id === card.id) return;
+                    if (o.id === card.id || ignoredIds.includes(o.id)) return;
                     const effectiveOther = effectiveCard(o);
                     // Tashqi qatlamda joylash andozaga (barcha haftalar) yoziladi va server bandlikni
                     // andoza bo'yicha tekshiradi — haftaning ko'rinishdagi surilishi/bekori hisobga olinmaydi.
@@ -6065,15 +6065,22 @@
                 if (parallel) {
                     for (const id of ids) {
                         const card = cards.find(x => x.id === id);
-                        const errs = card ? conflictsAt(card, d, at(ids.indexOf(id))) : [];
+                        const errs = card ? conflictsAt(card, d, at(ids.indexOf(id)), ids) : [];
                         if (errs.length) { alert('Konflikt (' + card.subject_name + '): ' + errs.join('; ')); return; }
                     }
                 }
                 try {
-                    for (let k = 0; k < ids.length; k++) {
-                        const card = cards.find(x => x.id === ids[k]);
-                        if (card) await placeOneCard(card, d, at(k));
+                    const moves = ids.map((id, k) => ({ card: cards.find(x => x.id === id), pair: at(k) }))
+                        .filter(move => move.card);
+                    if (parallel) {
+                        // O'ngga surilganda oxirgi qism avval ko'chadi: oldingi qismga joy bo'shatadi.
+                        const later = moves.every(move => {
+                            const pl = effPlace(move.card);
+                            return pl && +pl.day === d && move.pair >= +pl.pair;
+                        });
+                        moves.sort((a, b) => later ? b.pair - a.pair : a.pair - b.pair);
                     }
+                    for (const move of moves) await placeOneCard(move.card, d, move.pair);
                     selected = null; renderAll();
                 } catch (e) { alert('Konflikt: ' + e.message); }
             }
@@ -6433,6 +6440,26 @@
             // Para ustuni (sikl ichki jadvali kabi): qo'ng'iroq jadvalida ketma-ket bir xil
             // qisqartmali yarim paralar ("I", "I") bitta para katagiga birlashadi — chapda
             // katta rim raqami + "para", o'ngda har yarim qatorning vaqti.
+            // Bo'lak katagidagi yarim-slot chiziqlari: qatorlar balandligi har xil (mazmunli qator
+            // baland), shuning uchun chiziqlar foiz emas — katak qamragan haqiqiy qatorlar bo'yicha.
+            function alignBolakDrops() {
+                document.querySelectorAll('#grid td.tt-bolak-cell').forEach(td => {
+                    const zones = td.querySelectorAll('.tt-bolak-drop');
+                    if (!zones.length) return;
+                    const top0 = td.getBoundingClientRect().top;
+                    let tr = td.parentElement;
+                    const tops = [];
+                    for (let r = 0; r <= zones.length && tr; r++, tr = tr.nextElementSibling) tops.push(tr.getBoundingClientRect().top - top0);
+                    const h = td.getBoundingClientRect().height;
+                    zones.forEach((z, r) => {
+                        if (tops[r] == null) return;
+                        const t = Math.max(0, tops[r]), b = tops[r + 1] != null ? tops[r + 1] : h;
+                        z.style.top = t + 'px';
+                        z.style.height = Math.max(0, b - t) + 'px';
+                    });
+                });
+            }
+            window.addEventListener('resize', () => { try { alignBolakDrops(); } catch (e) { /* panjara yo'q */ } });
             function paraGroups(P, pairTime) {
                 const key = p => { const t = pairTime[p]; const a = t ? String(t.abbr || '').trim() : ''; return a && a !== '—' ? a : null; };
                 const out = {};
@@ -6738,7 +6765,17 @@
                             }
                             const map = new Map(items.map(x => [x.id, x]));
                             items = [...map.values()];
-                            const newEnd = Math.max(end, ...items.map(x => startOf(x) + cardLen(x)));
+                            let newEnd = Math.max(end, ...items.map(x => startOf(x) + cardLen(x)));
+                            // Bo'lakning davomi (masalan 2 soat + 1 soat) aynan katak tugagan joydan boshlansa — qo'shamiz
+                            if (late && newEnd === end) {
+                                for (let k = 0; k < span; k++) {
+                                    const nx = startList(o.groups[gi + k], end);
+                                    if (nx.length && nx.every(y => isB(y) && items.some(x => x.subject_name === y.subject_name
+                                        && cardGroups(x).join(',') === cardGroups(y).join(',') && startOf(x) + cardLen(x) === end))) {
+                                        newEnd = Math.max(newEnd, ...nx.map(y => end + cardLen(y)));
+                                    }
+                                }
+                            }
                             if (newEnd === end) return { span, end, items };
                             if (!late) return null;
                             end = newEnd;
@@ -6758,14 +6795,33 @@
                     const offs = items.map(x => startOf(x) - p).join(',');
                     const tStart = q => (pairTime[q] && pairTime[q].start) || '';
                     const tEnd = q => (pairTime[q] && pairTime[q].end) || '';
+                    // Bitta bo'lakning ketma-ket qismlari (masalan 2 soat + 1 soat) — bitta qator:
+                    // { x: birinchi karta, ids, s: boshlanish, e: tugash (yarim-slot, istisno) }
+                    const chains = [];
+                    items.forEach(x => {
+                        const sx = startOf(x), gk = cardGroups(x).join(',');
+                        // O'qituvchi/xona farq qilsa, ikkinchi qismning rekvizitlari yashirinmasin.
+                        const prev = chains.find(ch => ch.x.subject_name === x.subject_name && ch.gk === gk && ch.e === sx
+                            && (ch.x.teacher_id || null) === (x.teacher_id || null)
+                            && (ch.x.auditorium_code || null) === (x.auditorium_code || null));
+                        if (prev) { prev.ids.push(x.id); prev.e = sx + cardLen(x); }
+                        else chains.push({ x, gk, ids: [x.id], s: sx, e: sx + cardLen(x) });
+                    });
+                    chains.sort((a, b) => a.s - b.s || bolakLetterOf(a.x).localeCompare(bolakLetterOf(b.x)) || a.x.id - b.x.id);
                     // Vaqt — bo'laklar boshlanishi/tugashi har xil bo'lsa har qatorda ko'rsatiladi
-                    const varied = items.some(x => startOf(x) !== p || startOf(x) + cardLen(x) !== end);
+                    const varied = chains.some(ch => ch.s !== p || ch.e !== end);
+                    // Katak paradan oshib ketsa (masalan 3 soat: II para + III ning yarmi) — umumiy vaqt sarlavhada
+                    const paraOf = q => { let a = q; while (a > 1 && pGroups[a] && pGroups[a].span === 0) a--; return a; };
+                    const headTime = !varied && paraOf(end - 1) !== paraOf(p) ? ' <span class="tt-bolak-time">' + esc(tStart(p) + '–' + tEnd(end - 1)) + '</span>' : '';
                     const head = '<div class="tt-bolak-head" data-chip="' + first.id + '" data-parallel-ids="' + ids + '" data-parallel-offs="' + offs + '" title="' +
-                        esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi; bitta bo'lakni katak ichidagi chiziqqa sudrab boshlanish vaqtini o'zgartiring)") + '"><b>[A]</b> ' + esc(shortB) + '</div>';
-                    const rows = items.map(x => {
-                        const sx = startOf(x), late = sx > p;
-                        const tm = tStart(sx) + '–' + tEnd(sx + cardLen(x) - 1);
-                        return '<div class="tt-bolak-item' + (late ? ' tt-bolak-late' : '') + (selected && selected.id === x.id ? ' sel' : '') + '" data-chip="' + x.id + '" title="' + esc(cardTooltip(x, 'Vaqt: ' + tm)) + '">' +
+                        esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi; bitta bo'lakni katak ichidagi chiziqqa sudrab boshlanish vaqtini o'zgartiring)") + '"><b>[A]</b> ' + esc(shortB) + headTime + '</div>';
+                    const rows = chains.map(ch => {
+                        const x = ch.x, sx = ch.s, late = sx > p;
+                        const tm = tStart(sx) + '–' + tEnd(ch.e - 1);
+                        // Qismlar birga, o'z siljishi bilan ko'chadi (2 soat + 1 soat ketma-ket qoladi)
+                        const mids = ch.ids.length > 1 ? ' data-parallel-ids="' + ch.ids.join(',') + '" data-parallel-offs="' +
+                            ch.ids.map(id => startOf(items.find(y => y.id === id)) - ch.s).join(',') + '"' : '';
+                        return '<div class="tt-bolak-item' + (late ? ' tt-bolak-late' : '') + (selected && ch.ids.includes(selected.id) ? ' sel' : '') + '" data-chip="' + x.id + '"' + mids + ' title="' + esc(cardTooltip(x, 'Vaqt: ' + tm + (ch.ids.length > 1 ? ' (' + ch.ids.length + ' qism)' : ''))) + '">' +
                             '<b class="tt-bolak-tag">' + esc(bolakLetterOf(x)) + '</b> ' + esc(cardGroups(x).map(shortGroup).join('+')) +
                             (varied ? '<span class="tt-bolak-time">' + (late ? '⏵ ' : '') + esc(tm) + '</span>' : '') +
                             '<span class="tt-bolak-n">' + (x.students || '') + '</span>' +
@@ -6775,7 +6831,8 @@
                     let drops = '';
                     if (vs > 1) {
                         drops = '<div class="tt-bolak-drops">';
-                        for (let r = 0; r < vs; r++) drops += '<div class="tt-bolak-drop" data-drop-day="' + d + '" data-drop-pair="' + (p + r) + '" style="top:' + (r * 100 / vs) + '%;height:' + (100 / vs) + '%"><i>' + esc(tStart(p + r)) + '</i></div>';
+                        // Joyi render'dan keyin haqiqiy qator balandliklari bo'yicha qo'yiladi (alignBolakDrops)
+                        for (let r = 0; r < vs; r++) drops += '<div class="tt-bolak-drop" data-drop-day="' + d + '" data-drop-pair="' + (p + r) + '" data-r="' + r + '" style="top:' + (r * 100 / vs) + '%;height:' + (100 / vs) + '%"><i>' + esc(tStart(p + r)) + '</i></div>';
                         drops += '</div>';
                     }
                     const cs = span > 1 ? ' colspan="' + span + '"' : '';
@@ -6895,6 +6952,7 @@
                 }
                 h += '</tbody>';
                 $('grid').innerHTML = h;
+                alignBolakDrops();
                 activeCell = null;   // qayta render — eski faol katak eskirdi
 
                 // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)
@@ -6936,7 +6994,7 @@
                         ev.dataTransfer.dropEffect = 'move';
                         const card = cards.find(x => x.id === dragCardIds[0]);
                         const d = +td.dataset.day, p = +td.dataset.pair;
-                        td.classList.add(card && conflictsAt(card, d, p).length ? 'drag-bad' : 'drag-ok');
+                        td.classList.add(card && conflictsAt(card, d, p, dragCardIds).length ? 'drag-bad' : 'drag-ok');
                     });
                     td.addEventListener('dragleave', () => td.classList.remove('drag-ok', 'drag-bad'));
                     td.addEventListener('drop', ev => {
@@ -6959,7 +7017,7 @@
                         ev.dataTransfer.dropEffect = 'move';
                         const card = cards.find(x => x.id === dragCardIds[0]);
                         const d = +z.dataset.dropDay, p = +z.dataset.dropPair;
-                        z.classList.add(card && conflictsAt(card, d, p).length ? 'drag-bad' : 'drag-ok');
+                        z.classList.add(card && conflictsAt(card, d, p, dragCardIds).length ? 'drag-bad' : 'drag-ok');
                     });
                     z.addEventListener('dragleave', () => z.classList.remove('drag-ok', 'drag-bad'));
                     z.addEventListener('drop', ev => {

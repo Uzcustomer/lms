@@ -13,7 +13,7 @@ function render(cards) {
     (cellStack[key] ||= []).push(c);
     for (let q=c.pair; q<c.pair+c.len_half; q++) placedIdx['g|1|'+q] = c;
   }
-  const ctx = {cellStack, placedIdx, vConsumed:{}, gName:{g:'01a'},
+  const ctx = {cellStack, placedIdx, pGroups:{1:{span:2},2:{span:0},3:{span:2},4:{span:0}}, vConsumed:{}, gName:{g:'01a'},
     BOLAK_RX:/^(.*)\s+\(([a-z])\)$/i,
     bolakBaseOf:x => /^(.*)\s+\(([a-z])\)$/i.exec(x.subject_name)?.[1] ?? null,
     bolakLetterOf:x => /\(([a-z])\)$/i.exec(x.subject_name)?.[1] ?? '',
@@ -38,4 +38,18 @@ const foreign=render([a,{...b,subject_name:'Anatomiya'}]);
 assert.equal(foreign,null);
 const lecture=render([a,{...b,training_type:'lecture'}]);
 assert.equal(lecture,null);
-console.log('4 timetable split-cell rendering scenarios passed');
+const continuation = render([a,{...a,id:3,pair:3,len_half:1}]);
+assert.match(continuation.html,/rowspan="3"/);
+assert.match(continuation.html,/data-parallel-ids="1,3" data-parallel-offs="0,2"/);
+assert.equal((continuation.html.match(/class="tt-bolak-item/g) || []).length,1);
+assert.match(continuation.html,/12:00–14:00/);
+const gap = render([a,{...a,id:3,pair:4,len_half:1}]);
+assert.match(gap.html,/rowspan="2"/);
+assert.doesNotMatch(gap.html,/data-parallel-ids="1,3"/);
+const differentTeacher = render([{...a,teacher_id:1,teacher_name:'A'},
+  {...a,id:3,pair:3,len_half:1,teacher_id:2,teacher_name:'B'}]);
+assert.equal((differentTeacher.html.match(/class="tt-bolak-item/g) || []).length,2);
+const differentRoom = render([{...a,auditorium_code:'R1'},
+  {...a,id:3,pair:3,len_half:1,auditorium_code:'R2'}]);
+assert.equal((differentRoom.html.match(/class="tt-bolak-item/g) || []).length,2);
+console.log('8 timetable split-cell rendering scenarios passed');

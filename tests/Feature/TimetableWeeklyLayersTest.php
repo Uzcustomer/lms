@@ -396,3 +396,82 @@ it('boshqa fakultetdagi bir xil nomli guruhning HEMIS biriktiruvi birlashtirishd
         ->assertOk()->assertJson(['lectures' => 1, 'removed' => 1]);
     expect($a->fresh()->students)->toBe(30);
 });
+
+it('3 soatlik amaliy karta 2 + 1 soatlik kartalarga bo\'linadi, joyi va haftalari davomi bilan', function () {
+    $s = layersSetup();
+    $s['own']->update(['len_half' => 3, 'ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => 5, 'teacher_name' => 'T']);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 4, 'day' => 1, 'pair' => 5, 'cancelled' => false]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 9, 'cancelled' => true]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-long-practice', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['cards' => 1, 'created' => 1]);
+    expect($s['own']->fresh()->len_half)->toBe(2);
+    $copy = \App\Models\TimetableCard::where('subject_name', 'Gigiyena')->where('id', '!=', $s['own']->id)->first();
+    expect([$copy->len_half, $copy->ext_day, $copy->ext_pair, $copy->teacher_id])->toBe([1, 2, 5, 5]);
+    $o = \App\Models\TimetableCardOverride::where('card_id', $copy->id)->where('week', 4)->first();
+    expect([$o->day, $o->pair])->toBe([1, 7])
+        ->and(\App\Models\TimetableCardOverride::where('card_id', $copy->id)->where('week', 9)->value('cancelled'))->toBeTrue();
+});
+
+it('haftalik darsni qo\'yganda o\'qituvchi shu sanada sikl darsida band bo\'lsa — ogohlantirish va batafsil band xabari', function () {
+    $s = layersSetup();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14']]);
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 5]);
+    \App\Models\TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Pediatriya', 'group_name' => 'g5-01a', 'kafedra_name' => 'P', 'teacher_id' => 77, 'teacher_name' => 'SIKL T.']);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 0, 'training_type' => 'practice']);
+    $s['own']->update(['teacher_id' => 77, 'teacher_name' => 'SIKL T.']);
+
+    $res = layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $s['own']), ['week' => 1, 'action' => 'move', 'day' => 1, 'pair' => 1])
+        ->assertOk()->json();
+    expect($res['warnings'] ?? [])->toHaveCount(1)
+        ->and($res['warnings'][0])->toContain('14.09.2026')->toContain('Pediatriya');
+
+    // Batafsil band xabari: boshqa karta shu o'qituvchi bilan
+    $s['foreign']->update(['teacher_id' => 77, 'teacher_name' => 'SIKL T.', 'group_name' => 'g-02a']);
+    $err = layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $s['foreign']), ['week' => 1, 'action' => 'move', 'day' => 1, 'pair' => 1])
+        ->assertStatus(422)->json('error');
+    expect($err)->toContain("O'qituvchi band: SIKL T. — F1, 2-kurs · g-01a · Gigiyena (amaliy)");
+});
+
+it('sikl oqimidagi ikkinchi guruh o‘qituvchisini ham tekshiradi va birinchi so‘rovdan keyin bandlikni yangilaydi', function () {
+    $s = layersSetup();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14']]);
+    $base = ['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2,
+        'weeks' => 15, 'subject_name' => 'Pediatriya', 'kafedra_name' => 'P'];
+    TimetableCard::create($base + ['group_name' => 'g5-01a', 'teacher_id' => 76, 'teacher_name' => 'BIRINCHI']);
+    $second = TimetableCard::create($base + ['group_name' => 'g5-01b', 'teacher_id' => 77, 'teacher_name' => 'IKKINCHI']);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 0, 'training_type' => 'practice']);
+    $s['own']->update(['teacher_id' => 77]);
+    $url = route('admin.timetable.cards.week-override', $s['own']);
+    $move = ['week' => 1, 'action' => 'move', 'day' => 1, 'pair' => 1];
+    $response = layerAs($s['admin'], 'superadmin')->postJson($url, $move)->assertOk();
+    expect($response->json('warnings'))->toHaveCount(1)
+        ->and($response->json('warnings.0'))->toContain('IKKINCHI');
+    $second->update(['teacher_id' => null, 'teacher_name' => null]);
+    layerAs($s['admin'], 'superadmin')->postJson($url, $move)->assertOk()->assertJsonMissingPath('warnings');
+});
+
+it('uzun amaliy kartalarni bo‘lish dry run va qayta bajarishda xavfsiz, kafedra uchun taqiqlangan', function () {
+    $s = layersSetup();
+    $s['own']->update(['len_half' => 4, 'day' => 1, 'pair' => 3]);
+    $url = route('admin.timetable.boards.split-long-practice', $s['board']);
+    layerAs($s['head'], 'kafedra_mudiri')->postJson($url)->assertForbidden();
+    layerAs($s['admin'], 'superadmin')->postJson($url, ['dry_run' => true])->assertOk()->assertJson(['cards' => 1, 'created' => 0]);
+    expect($s['own']->fresh()->len_half)->toBe(4);
+    layerAs($s['admin'], 'superadmin')->postJson($url)->assertOk()->assertJson(['cards' => 1, 'created' => 1]);
+    $copy = TimetableCard::where('board_id', $s['board']->id)->where('subject_name', 'Gigiyena')->where('id', '!=', $s['own']->id)->sole();
+    expect([$copy->len_half, $copy->day, $copy->pair])->toBe([2, 1, 5]);
+    layerAs($s['admin'], 'superadmin')->postJson($url)->assertOk()->assertJson(['cards' => 0, 'created' => 0]);
+});
+
+it('jadval sahifasida boshlanish vaqti tanlovi chiqadi', function () {
+    $s = layersSetup();
+    layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.index'))->assertOk()
+        ->assertSee('id="cmStartSlot"', false)->assertSee('Boshlanish vaqti');
+});

@@ -193,3 +193,23 @@ it('raqamsiz, lekin aniq zal ("Katta majlislar zali") bandligi tekshirilaveradi'
         ->and($res->getData(true)['error'])->toContain('Auditoriya band')
         ->and($other->fresh()->day)->toBeNull();
 });
+
+
+it('sikl amaliysi ma’ruzadan keyin boshlanadi va KTR soatlaridan tashqarida bandlik bermaydi', function () {
+    $s = ktrWeeksSetup(['1' => ['11' => 2, '13' => 4]]);
+    DB::table('semesters')->where('curriculum_hemis_id', 30)->update(['level_code' => '15']);
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14']]);
+    $s['p1']->update(['course' => 5, 'teacher_id' => 77, 'teacher_name' => 'SIKL']);
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+        'course' => 5, 'subject_name' => 'Biokimyo', 'mode' => 'cycle', 'cycle_days' => 1]);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+        'course' => 5, 'group_name' => '1-son davolash / 1-oqim', 'subject_name' => 'Biokimyo', 'start_index' => 0,
+        'training_type' => 'practice', 'lecture_slots' => ['starts' => ['0' => 3]]]);
+    $weekly = new TimetableCard(['board_id' => $s['board']->id, 'course' => 2, 'teacher_id' => 77, 'len_half' => 2]);
+    $method = new ReflectionMethod(TimetableController::class, 'weeklyCycleWarnings');
+    $controller = new TimetableController();
+    // Kun 3-slotdan boshlanadi: ma’ruza 3–4, amaliy 5–8.
+    expect($method->invoke($controller, $weekly, 1, 1, 3))->toBe([])
+        ->and($method->invoke($controller, $weekly, 1, 1, 5))->toHaveCount(1)
+        ->and($method->invoke($controller, $weekly, 1, 1, 9))->toBe([]);
+});

@@ -379,10 +379,13 @@ class JournalController extends Controller
             ->exists();
 
         if (!$hasSchedulesWithGivenSemester) {
-            // Shu guruh + fan uchun haqiqiy semester_code ni schedules dan topish
+            // Shu guruh + fan uchun haqiqiy semester_code ni schedules dan topish —
+            // faqat JORIY o'quv yili ichida. Aks holda darsi hali boshlanmagan fan
+            // (masalan 9-semestr) o'tgan yilgi 7/8-semestr jurnaliga ochilib ketardi.
             $actualSemesterCode = DB::table('schedules')
                 ->where('group_id', $group->group_hemis_id)
                 ->where('subject_id', $subjectId)
+                ->where('education_year_current', true)
                 ->whereNull('deleted_at')
                 ->whereNotNull('lesson_date')
                 ->orderBy('lesson_date', 'desc')

@@ -53,20 +53,16 @@ class ImportSemesters extends Command
                     // Compute current flag from actual week date ranges instead of
                     // HEMIS's current field, which only reflects educationYear.current
                     // and misses ongoing semesters from older cohorts.
-                    //
-                    // Semestrning butun davri olinadi (birinchi hafta boshi — oxirgi hafta
-                    // oxiri), alohida haftalar emas: haftalar dushanba–shanba bo'lgani uchun
-                    // yakshanba kechasi ishlagan import hech bir haftaga tushmay, deyarli
-                    // barcha semestrlarni "joriy emas" deb yozardi (11.10.2026: 374 tadan 27).
                     $isCurrent = false;
                     $now = now();
-                    $weekStarts = array_filter(array_column($semesterData['curriculumWeeks'] ?? [], 'start_date'));
-                    $weekEnds = array_filter(array_column($semesterData['curriculumWeeks'] ?? [], 'end_date'));
-                    if ($weekStarts && $weekEnds) {
-                        $isCurrent = $now->between(
-                            \Carbon\Carbon::createFromTimestamp(min($weekStarts)),
-                            \Carbon\Carbon::createFromTimestamp(max($weekEnds))
-                        );
+                    foreach ($semesterData['curriculumWeeks'] as $weekData) {
+                        if ($now->between(
+                            \Carbon\Carbon::createFromTimestamp($weekData['start_date']),
+                            \Carbon\Carbon::createFromTimestamp($weekData['end_date'])
+                        )) {
+                            $isCurrent = true;
+                            break;
+                        }
                     }
 
                     $semester = Semester::updateOrCreate(

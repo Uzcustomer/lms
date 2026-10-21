@@ -6705,12 +6705,12 @@
                         for (let q = p; q < end; q++) {
                             if (q > p && vConsumed[g + '|' + d + '|' + q]) return null;
                             const l = startList(g, q);
-                            if (q > p && !late) { if (l.length) return null; continue; }
-                            if (!l.every(isB)) return null;
-                            out.push(...l);
                             const occ = placedIdx[g + '|' + d + '|' + q];
                             if (occ && occ.training_type !== 'lecture' && !isB(occ)) return null;
                             if (occ && occ.training_type === 'lecture') return null;
+                            if (q > p && !late) { if (l.length) return null; continue; }
+                            if (!l.every(isB)) return null;
+                            out.push(...l);
                         }
                         return out;
                     };

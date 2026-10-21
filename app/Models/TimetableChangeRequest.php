@@ -17,6 +17,7 @@ class TimetableChangeRequest extends Model
     protected $fillable = [
         'board_id', 'requester_id', 'requester_type', 'requester_name', 'requester_role', 'kafedra_name', 'route_name', 'target_key',
         'params', 'payload', 'kind', 'subject_name', 'summary', 'details', 'status',
+        'approval_stage', 'department_hemis_id', 'head_reviewer_id', 'head_reviewer_name', 'head_reviewed_at',
         'reviewer_id', 'reviewer_name', 'review_note', 'error', 'reviewed_at',
     ];
 
@@ -25,6 +26,7 @@ class TimetableChangeRequest extends Model
         'payload' => 'array',
         'details' => 'array',
         'reviewed_at' => 'datetime',
+        'head_reviewed_at' => 'datetime',
     ];
 
     public function board()

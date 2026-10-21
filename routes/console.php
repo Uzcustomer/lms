@@ -80,6 +80,18 @@ Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(fu
 });
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 
+// Kechagi baholarni ertalab yana bir marta tortish — ertalabgi hisobotlardan
+// (08:00–08:35) oldin. HEMIS kechasi soat 23–00 da qo'yilgan baholarni API'ga
+// kechikib chiqaradi: 00:30 dagi import ularni olmay qoladi va o'qituvchi
+// "baho qo'yilmagan" hisobotiga asossiz tushardi (21.10.2026, p/p24-01a).
+Schedule::call(function () {
+    \Illuminate\Support\Facades\Artisan::call('student:import-data', [
+        '--date' => Carbon::yesterday('Asia/Tashkent')->toDateString(),
+        '--final' => true,
+        '--silent' => true,
+    ]);
+})->dailyAt('07:30')->name('grades-reimport-yesterday')->withoutOverlapping(60);
+
 // Moodle quiz natijalarini har kuni avtomatik import qilish — har kuni ertalab 04:30 da
 // Ushbu cron LMS'da `moodle_sync_requested` flagini qo'yadi.
 // Moodle serverdagi cron (har 3 daqiqada `/moodle/should-sync` ga so'rov yuboradi)

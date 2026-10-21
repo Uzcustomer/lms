@@ -37,7 +37,7 @@ class ImportGrades extends Command
         $this->token = config('services.hemis.token') ?? '';
     }
 
-    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--to= : Backfill end date (Y-m-d), default yesterday} {--date= : Single date import (Y-m-d)} {--silent : Suppress Telegram notifications}';
+    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--to= : Backfill end date (Y-m-d), default yesterday} {--date= : Single date import (Y-m-d)} {--final : --date bilan: kunni yakuniy (is_final) rejimda butunlay almashtirish} {--silent : Suppress Telegram notifications}';
 
     protected $description = 'Import student grades and attendance from Hemis API';
 
@@ -103,12 +103,32 @@ class ImportGrades extends Command
             return;
         }
 
+        // --final: yakunlangan kunni qayta tortish (ertalabgi 07:30 qadami). Oddiy rejimda
+        // is_final=true yozuvlar o'chmaydi va har bir baho ikkinchi marta yozilib dublikat
+        // bo'lardi; yakuniy rejimda kun to'liq almashtiriladi (LMS baholari tiklanadi).
+        $isFinal = (bool) $this->option('final');
+
+        if ($isFinal && !empty($gradeItems)) {
+            // HEMIS ba'zan to'liq bo'lmagan ro'yxat qaytaradi — bazadagidan keskin kam
+            // kelsa (5% dan ortiq), kunga tegilmaydi: bor baholar yo'qolmasin.
+            $existing = StudentGrade::whereDate('lesson_date', $dateStr)
+                ->where('hemis_id', '<>', 88888888)
+                ->count();
+            if ($existing > 0 && count($gradeItems) < $existing * 0.95) {
+                $msg = "[SingleDayImport] {$dateStr}: HEMIS " . count($gradeItems) . " ta baho berdi, bazada {$existing} ta — keskin kam, kun o'zgartirilmadi";
+                $this->warn($msg);
+                Log::warning($msg);
+
+                return;
+            }
+        }
+
         if (!empty($gradeItems)) {
-            $this->applyGrades($gradeItems, $date, false);
+            $this->applyGrades($gradeItems, $date, $isFinal);
         }
 
         $count = count($gradeItems);
-        $this->info("Single-day import done: {$dateStr}, {$count} ta baho");
+        $this->info("Single-day import done: {$dateStr}, {$count} ta baho" . ($isFinal ? ' (yakuniy)' : ''));
         Log::info("[SingleDayImport] Completed for {$dateStr}: {$count} grades");
     }
 

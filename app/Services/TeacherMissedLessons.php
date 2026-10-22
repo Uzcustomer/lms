@@ -469,23 +469,11 @@ class TeacherMissedLessons
         [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds, $from, $today);
         $this->lastTimings['roster'] = round(microtime(true) - $started, 2);
 
-        // Fanga guruhda biriktirilganlar (semestr kodidan qat'i nazar): biriktirmadagi
-        // semestr kodi darsnikidan farq qilsa ham butun guruh ro'yxatiga o'tib ketmasin —
-        // aks holda shu fanni o'qimaydigan talabalar (masalan "Rus tili" o'rniga
-        // "O'zbek (rus) tili" ga biriktirilganlar) qarzdor bo'lib chiqardi.
-        $bySubjectAnySem = [];
-        foreach ($bySubject as $key => $set) {
-            [$g, $s] = explode('|', $key);
-            $bySubjectAnySem[$g.'|'.$s] = ($bySubjectAnySem[$g.'|'.$s] ?? []) + $set;
-        }
-
         $marked = [];
         $missing = [];
         foreach ($processedSets as $pk => $set) {
             $parts = explode('|', $pk); // group|subject|semester|day|pair
-            $roster = $bySubject[$parts[0].'|'.$parts[1].'|'.$parts[2]]
-                ?? $bySubjectAnySem[$parts[0].'|'.$parts[1]]
-                ?? ($byGroup[$parts[0]] ?? []);
+            $roster = $bySubject[$parts[0].'|'.$parts[1].'|'.$parts[2]] ?? ($byGroup[$parts[0]] ?? []);
             if ($roster === []) {
                 continue;
             }

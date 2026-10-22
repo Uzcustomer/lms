@@ -1088,5 +1088,10 @@ class FanTestiKioskController extends Controller
             'percent' => $percent,
             'is_passed' => $passPercent ? $percent >= (float) $passPercent : $percent >= 60,
         ]);
+
+        // Qayta topshirish testi — natija jurnaldagi mavzuga mos NB katagiga otrabotka bo'lib tushadi
+        if ($attempt->is_retake) {
+            \App\Services\FanTestiJournalSync::sync($attempt->fresh());
+        }
     }
 }

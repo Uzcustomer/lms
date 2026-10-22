@@ -199,3 +199,23 @@ Schedule::command('monitoring:run --all')->dailyAt('05:30')->withoutOverlapping(
 // Har yakshanba 01:30 da ishga tushadi (login paytida finally bloki ishlamagan
 // yoki uzilib qolgan fayllar).
 Schedule::command('faceid:cleanup-temp')->weeklyOn(0, '01:30')->name('faceid-cleanup-temp');
+
+// Qayta topshirish testlari natijasini jurnalga (mavzuga mos NB katagiga) yozish —
+// avtomatik yozish joriy qilinishidan oldin topshirilganlar uchun yoki qayta urinish
+Artisan::command('fan-testi:sync-retakes {--attempt= : Bitta urinish ID si} {--force : Avval yozilganlarni ham qayta tekshirish}', function () {
+    $query = \App\Models\FanTestiAttempt::query()
+        ->where('is_retake', true)
+        ->where('status', '!=', 'in_progress');
+    if ($this->option('attempt')) {
+        $query->whereKey((int) $this->option('attempt'));
+    } elseif (!$this->option('force')) {
+        $query->whereNull('journal_synced_at');
+    }
+    $n = 0;
+    foreach ($query->orderBy('id')->get() as $attempt) {
+        $note = \App\Services\FanTestiJournalSync::sync($attempt);
+        $this->line("#{$attempt->id} {$attempt->student_name}: {$note}");
+        $n++;
+    }
+    $this->info("{$n} ta urinish tekshirildi.");
+})->purpose("Qayta topshirish testlari natijasini jurnaldagi mavzuga mos NB katagiga yozish");

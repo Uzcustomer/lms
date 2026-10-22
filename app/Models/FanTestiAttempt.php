@@ -20,6 +20,7 @@ class FanTestiAttempt extends Model
         'questions_snapshot', 'ip_address',
         'retake_allowed_at', 'retake_allowed_by',
         'draft_answers', 'draft_saved_at',
+        'journal_synced_at', 'journal_sync_note',
     ];
 
     protected $casts = [

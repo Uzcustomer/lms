@@ -215,6 +215,9 @@
     }
     .jr-try.is-retake { background: #e8eef7; color: var(--navy-soft); }
     .jr-flag.is-ok { background: var(--ok-bg); color: var(--ok); }
+    .jr-sync { display: block; max-width: 260px; margin-top: 6px; padding: 4px 9px; border-radius: 7px; font-size: 11px; font-weight: 600; line-height: 1.4; }
+    .jr-sync.is-ok { background: var(--ok-bg); color: var(--ok); }
+    .jr-sync.is-warn { background: #fef3c7; color: #92400e; }
     .jr-flash.is-error { border-color: #e8c3c0; border-left-color: var(--bad); background: var(--bad-bg); color: #8f1d17; }
 
     /* Qayta topshirish tugmasi — alohida oxirgi ustunda, yashil */
@@ -580,6 +583,10 @@
                                                 <span class="jr-flag is-bad" title="O'qituvchi ochib berishini kutmoqda">Qulflangan</span>
                                             @elseif((int) ($attempt->lock_count ?? 0) === 1)
                                                 <span class="jr-flag is-warn" title="Chalg'igani uchun bir marta qulflangan va o'qituvchi ochib bergan">1 marta qulflangan</span>
+                                            @endif
+                                            {{-- Qayta topshirish testi: natija jurnaldagi NB katagiga yozildimi --}}
+                                            @if(!empty($attempt->journal_sync_note))
+                                                <span class="jr-sync {{ str_starts_with($attempt->journal_sync_note, 'Jurnalga yozildi') ? 'is-ok' : 'is-warn' }}">{{ $attempt->journal_sync_note }}</span>
                                             @endif
                                         </td>
                                         <td><span class="jr-num">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</span></td>

@@ -811,3 +811,28 @@ it('panjara: hafta soni o\'zgarsa kartochkalar so\'ralmasa saqlanadi; o\'z boshl
         ->and($m->invoke($ctl, $s['board']->fresh(), $s['own']->fresh(), 11)->toDateString())->toBe('2026-12-21')
         ->and($m->invoke($ctl, $s['board']->fresh(), $s['own']->fresh(), 12)->toDateString())->toBe('2027-01-11');
 });
+
+it('oqimga keyin qo\'shilgan guruh: amaliy yangi karta, ma\'ruza mavjud kartaga qo\'shiladi (joyi saqlanadi)', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']);
+    $lec = TimetableCard::create($base + ['training_type' => 'lecture', 'subject_name' => 'IKP', 'students' => 30, 'group_names' => ['g-01a', 'g-01b'],
+        'ext_day' => 2, 'ext_pair' => 1]);
+    $cards = TimetableCard::where('board_id', $s['board']->id)->get();
+    $rows = [
+        $base + ['training_type' => 'lecture', 'subject_name' => 'IKP (a)', 'students' => 45, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01b', 'g-01c'])],
+        $base + ['training_type' => 'practice', 'subject_name' => 'IKP (a)', 'students' => 15, 'group_name' => 'g-01c', 'group_names' => null],
+        $base + ['training_type' => 'practice', 'subject_name' => 'IKP (a)', 'students' => 15, 'group_name' => 'g-01a', 'group_names' => null],
+        $base + ['training_type' => 'practice', 'subject_name' => 'IKP (c)', 'students' => 15, 'group_name' => 'g-01a + g-01c', 'group_names' => null],
+        $base + ['training_type' => 'lecture', 'subject_name' => 'Yangi fan', 'students' => 15, 'group_name' => null, 'group_names' => json_encode(['g-02a'])],
+    ];
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'planMissingGroupCards');
+    $m->setAccessible(true);
+    [$insert, $grow, $mixed, $new] = $m->invoke($ctl, $rows, $cards);
+    expect(array_keys($new))->toBe(['g-01c', 'g-02a'])
+        ->and(count($insert))->toBe(2)
+        ->and($insert[0]['group_name'])->toBe('g-01c')
+        ->and(array_keys($grow))->toBe([$lec->id])
+        ->and($grow[$lec->id][0])->toBe(['g-01a', 'g-01b', 'g-01c'])
+        ->and($mixed)->toHaveCount(1);
+});

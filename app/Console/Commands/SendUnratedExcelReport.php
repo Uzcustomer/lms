@@ -157,8 +157,15 @@ class SendUnratedExcelReport extends Command
         $sk = count(array_unique(array_column(array_filter($rows,
             fn ($row) => ($row['student_type_code'] ?? '') === LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE), 'student_hemis_id')));
 
+        // Dars kunlari noyob sanaladi (guruh + fan + sana + o'qituvchi) — $rows har bir
+        // talabaning har bir darsi, uning soni "talaba × dars" bo'lib, dars soni emas
+        $days = count(array_unique(array_map(
+            fn ($row) => ($row['group'] ?? '') . '|' . ($row['subject'] ?? '') . '|' . ($row['date'] ?? '') . '|' . ($row['teacher'] ?? ''),
+            $rows
+        )));
+
         return "\n🟡 HEMISga kech kiritilganlar (kiritilishidan oldingi darslar): "
-            . count(array_unique(array_column($rows, 'student_hemis_id'))) . ' ta talaba · ' . count($rows) . ' ta dars'
+            . count(array_unique(array_column($rows, 'student_hemis_id'))) . ' ta talaba · ' . $days . ' ta dars kuni'
             . ($sk > 0 ? " (superkontrakt: {$sk})" : '');
     }
 

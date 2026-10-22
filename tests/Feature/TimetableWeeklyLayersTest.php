@@ -894,3 +894,17 @@ it('kartochka yaratish: ikki fakultetdagi bir xil nomli guruhning (1K-01a) har b
     expect(array_keys($perFaculty))->toBe(['1-son davolash', '2-son davolash'])
         ->and($perFaculty['1-son davolash'])->toBe($perFaculty['2-son davolash']);
 });
+
+it('ma\'ruzaga yangi guruh qo\'shilganda talabalar soni qatordagi haqiqiy jami bo\'yicha', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']);
+    $lec = TimetableCard::create($base + ['training_type' => 'lecture', 'subject_name' => 'Biologiya', 'students' => 10, 'group_names' => ['g-01a']]);
+    // yangi g-01x guruhida 30 talaba: qator jami 40 (guruhlar teng emas)
+    $rows = [$base + ['training_type' => 'lecture', 'subject_name' => 'Biologiya', 'students' => 40, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01x'])]];
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'planMissingGroupCards');
+    $m->setAccessible(true);
+    [, $grow] = $m->invoke($ctl, $rows, TimetableCard::where('board_id', $s['board']->id)->get());
+    expect($grow[$lec->id][0])->toBe(['g-01a', 'g-01x'])
+        ->and($grow[$lec->id][2])->toBe(40);
+});

@@ -1422,9 +1422,9 @@ class TimetableController extends Controller
             return response()->json($result);
         }
         DB::transaction(function () use ($insert, $grow, $board, $specsFound) {
-            foreach ($grow as $id => [$groups, $add]) {
+            foreach ($grow as $id => [$groups, $add, $total]) {
                 $c = TimetableCard::find($id);
-                $c->update(['group_names' => array_values($groups), 'students' => (int) $c->students + (int) round($add)]);
+                $c->update(['group_names' => array_values($groups), 'students' => $total ?: (int) $c->students + (int) round($add)]);
             }
             foreach (array_chunk($insert, 500) as $chunk) {
                 TimetableCard::insert($chunk);
@@ -1437,7 +1437,10 @@ class TimetableController extends Controller
         return response()->json($result);
     }
 
-    /** addMissingGroupCards rejasi: [qo'shiladigan qatorlar, kengaytiriladigan ma'ruzalar, aralash, yangi guruhlar, guruh o'quvchi]. */
+    /**
+     * addMissingGroupCards rejasi: [qo'shiladigan qatorlar, kengaytiriladigan ma'ruzalar
+     * (card_id => [guruhlar, qo'shiladigan talaba taxmini, aniq jami|null]), aralash, yangi guruhlar, guruh o'quvchi].
+     */
     private function planMissingGroupCards(array $rows, $cards): array
     {
         $norm = fn ($g) => mb_strtolower(trim((string) $g));
@@ -1509,13 +1512,18 @@ class TimetableController extends Controller
                 continue;
             }
             $share = (int) round(((int) ($r['students'] ?? 0)) * count($new) / max(1, count($gs)));
-            $cur = $grow[$target->id] ?? [(array) ($target->group_names ?: [$target->group_name]), 0];
+            $cur = $grow[$target->id] ?? [(array) ($target->group_names ?: [$target->group_name]), 0, null];
             foreach ($new as $g) {
                 if (!in_array($g, $cur[0], true)) {
                     $cur[0][] = $g;
                     $cur[1] += $share / max(1, count($new));
                 }
             }
+            // Karta guruhlari endi aynan shu qatorniki — qatordagi jami (guruhlar haqiqiy soni bo'yicha) olinadi;
+            // aks holda ulush taxmini (guruhlar teng deb), chunki qatorda guruhma-guruh son yo'q.
+            $sameGroups = fn (array $a, array $b) => !array_diff(array_map($norm, $a), array_map($norm, $b))
+                && !array_diff(array_map($norm, $b), array_map($norm, $a));
+            $cur[2] = $sameGroups($cur[0], $gs) ? (int) ($r['students'] ?? 0) : null;
             $grow[$target->id] = $cur;
         }
 

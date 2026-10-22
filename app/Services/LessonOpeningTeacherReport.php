@@ -57,6 +57,58 @@ class LessonOpeningTeacherReport
 
     public function __construct(private TeacherMissedLessons $missed) {}
 
+    /** "guruh|fan|semestr" => YN ga yuborilgan sana (Y-m-d) */
+    private array $ynSubmitted = [];
+
+    /**
+     * Hisobotdagi guruh+fan+semestrlardan qaysilari YN ga yuborilgan (yn_submissions).
+     * Hisob o'zgarmaydi — Excelda faqat belgi sifatida ko'rsatiladi.
+     */
+    private function ynSubmittedMap(array $records): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('yn_submissions')) {
+            return [];
+        }
+        $groups = array_values(array_unique(array_filter(array_map(fn ($r) => (string) ($r['group_id'] ?? ''), $records))));
+        $subjects = array_values(array_unique(array_filter(array_map(fn ($r) => (string) ($r['subject_id'] ?? ''), $records))));
+        if ($groups === [] || $subjects === []) {
+            return [];
+        }
+
+        $map = [];
+        DB::table('yn_submissions')
+            ->whereIn('group_hemis_id', $groups)
+            ->whereIn('subject_id', $subjects)
+            ->get(['group_hemis_id', 'subject_id', 'semester_code', 'submitted_at'])
+            ->each(function ($y) use (&$map) {
+                $key = $y->group_hemis_id . '|' . $y->subject_id . '|' . $y->semester_code;
+                $date = $y->submitted_at ? substr((string) $y->submitted_at, 0, 10) : '';
+                if (!isset($map[$key]) || ($date !== '' && $date < $map[$key])) {
+                    $map[$key] = $date;
+                }
+            });
+
+        return $map;
+    }
+
+    /** Excel uchun: "Ha · 15.10.2026" yoki bo'sh. */
+    public static function ynLabel(?string $date): string
+    {
+        if ($date === null) {
+            return '';
+        }
+
+        return $date !== '' ? 'Ha · ' . \Carbon\Carbon::parse($date)->format('d.m.Y') : 'Ha';
+    }
+
+    /** Yozuv uchun YN ga yuborilgan sana; yuborilmagan bo'lsa null. */
+    private function ynSubmittedFor(array $record): ?string
+    {
+        $key = ($record['group_id'] ?? '') . '|' . ($record['subject_id'] ?? '') . '|' . ($record['semester_code'] ?? '');
+
+        return array_key_exists($key, $this->ynSubmitted) ? $this->ynSubmitted[$key] : null;
+    }
+
     /**
      * @return array{
      *     from: Carbon, to: Carbon, totals: array<string, int>,
@@ -416,10 +468,13 @@ class LessonOpeningTeacherReport
         // Har bir kun uchun baho qo'yilmagan juftliklar alohida qatorga chiqadi
         // (qaysi sanada, qaysi guruhda, qaysi juftlikda, qaysi soatda). Juftlik
         // ma'lumoti bo'lmasa (masalan baho qo'yib bo'lingan ariza) — bitta qator.
+        $this->ynSubmitted = $this->ynSubmittedMap($records);
         $days = [];
         foreach ($records as $record) {
             [$course, $semester] = $this->courseSemester($record['semester_name'] ?? '', $record['semester_code'] ?? '');
             $base = [
+                // Fan shu guruhda YN ga yuborilgan bo'lsa — yuborilgan sana (jurnal qulflangan)
+                'yn_submitted' => $this->ynSubmittedFor($record),
                 'teacher' => $people[$record['who']]['name'],
                 'department' => $people[$record['who']]['department'],
                 'group' => $record['group'],
@@ -763,6 +818,7 @@ class LessonOpeningTeacherReport
                 $student = $students[(string) $hemisId] ?? null;
                 $manager = $record['student_managers'][(string) $hemisId] ?? null;
                 $rows[] = [
+                    'yn_submitted' => $this->ynSubmittedFor($record),
                     'student' => (string) ($student->full_name ?? ''),
                     'student_id_number' => (string) ($student->student_id_number ?? ''),
                     'student_hemis_id' => (string) $hemisId,

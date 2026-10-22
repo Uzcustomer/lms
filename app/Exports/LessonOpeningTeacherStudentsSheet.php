@@ -26,7 +26,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
     /** Ustunlar: A..M (Holat — L, Mas'ul xodim — M) */
-    private const LAST_COL = 'M';
+    private const LAST_COL = 'N';
 
     private const STATUS_COL = 'L';
 
@@ -51,10 +51,10 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
         // A1 bo'sh bo'lmasin: Laravel Excel qatorlarni 1000 talab yozadi va A1
         // bo'sh bo'lsa keyingi bo'lakni yana 1-qatordan yozib, ma'lumotni bosadi.
         $rows = [
-            array_pad(['Jami:', "{$distinct} ta talabaga baho qo'yilmagan · ".count($students).' ta qator'], 13, ''),
+            array_pad(['Jami:', "{$distinct} ta talabaga baho qo'yilmagan · ".count($students).' ta qator'], 14, ''),
             [
                 '№', 'Talaba', 'Talaba ID', 'Guruh', 'Kurs', 'Semestr',
-                'Fan', 'Dars sanasi', 'Juftlik', "O'qituvchi", 'Kafedra', 'Holat', "Mas'ul xodim",
+                'Fan', 'Dars sanasi', 'Juftlik', "O'qituvchi", 'Kafedra', 'Holat', "Mas'ul xodim", 'YN ga yuborilgan',
             ],
         ];
 
@@ -73,11 +73,12 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
                 $row['department'] ?? '',
                 LessonOpeningTeacherReport::LABELS[$row['status']] ?? $row['status'],
                 ($row['manager'] ?? '') !== '' ? $row['manager'] : self::UNASSIGNED,
+                \App\Services\LessonOpeningTeacherReport::ynLabel($row['yn_submitted'] ?? null),
             ];
         }
 
         if ($students === []) {
-            $rows[] = array_pad(["Bu davrda baho qo'yilmagan talaba topilmadi."], 13, '');
+            $rows[] = array_pad(["Bu davrda baho qo'yilmagan talaba topilmadi."], 14, '');
         }
 
         $this->lastRow = count($rows);
@@ -88,7 +89,7 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
     public function columnWidths(): array
     {
         return ['A' => 6, 'B' => 38, 'C' => 16, 'D' => 16, 'E' => 9, 'F' => 12,
-            'G' => 40, 'H' => 13, 'I' => 16, 'J' => 34, 'K' => 32, 'L' => 36, 'M' => 34];
+            'G' => 40, 'H' => 13, 'I' => 16, 'J' => 34, 'K' => 32, 'L' => 36, 'M' => 34, 'N' => 18];
     }
 
     public function registerEvents(): array

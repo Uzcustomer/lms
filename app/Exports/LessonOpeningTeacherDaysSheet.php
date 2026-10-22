@@ -24,7 +24,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
     /** Ustunlar: A..Q (Holat — L, Mas'ul xodim — Q) */
-    private const LAST_COL = 'Q';
+    private const LAST_COL = 'R';
 
     private const STATUS_COL = 'L';
 
@@ -47,12 +47,12 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
         // A1 bo'sh bo'lmasin: Laravel Excel qatorlarni 1000 talab yozadi va A1
         // bo'sh bo'lsa keyingi bo'lakni yana 1-qatordan yozib, ma'lumotni bosadi.
         $rows = [
-            array_pad(['Jami:', count($days).' ta dars kuni', '', '', '', 'Talabalar:', $students], 17, ''),
+            array_pad(['Jami:', count($days).' ta dars kuni', '', '', '', 'Talabalar:', $students], 18, ''),
             [
                 '№', "O'qituvchi", 'Kafedra', 'Guruh', 'Kurs', 'Semestr',
                 "Baho qo'yilmagan talaba",
                 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat',
-                "So'rov raqami", 'Ariza sanasi', "So'rov yuborgan", 'Tasdiqlaganlar', "Mas'ul xodim",
+                "So'rov raqami", 'Ariza sanasi', "So'rov yuborgan", 'Tasdiqlaganlar', "Mas'ul xodim", 'YN ga yuborilgan',
             ],
         ];
 
@@ -75,6 +75,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                 $day['applicant'] ?? '',
                 $day['approvers'] ?? '',
                 ($day['manager'] ?? '') !== '' ? $day['manager'] : LessonOpeningTeacherStudentsSheet::UNASSIGNED,
+                \App\Services\LessonOpeningTeacherReport::ynLabel($day['yn_submitted'] ?? null),
             ];
         }
 
@@ -85,7 +86,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 9, 'F' => 12, 'G' => 14, 'H' => 40, 'I' => 13, 'J' => 16, 'K' => 14, 'L' => 36, 'M' => 11, 'N' => 17, 'O' => 34, 'P' => 40, 'Q' => 34];
+        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 9, 'F' => 12, 'G' => 14, 'H' => 40, 'I' => 13, 'J' => 16, 'K' => 14, 'L' => 36, 'M' => 11, 'N' => 17, 'O' => 34, 'P' => 40, 'Q' => 34, 'R' => 18];
     }
 
     public function registerEvents(): array

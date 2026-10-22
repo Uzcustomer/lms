@@ -859,3 +859,15 @@ it('yangi guruhlar boshqa fakultetdagi bir xil nomli guruh bilan adashtirilmaydi
         ->and($mixed)->toHaveCount(1)
         ->and($lec->fresh()->group_names)->toBe(['g-01a', 'g-01b']);
 });
+
+it('yangi guruhlar uchun kartochka qo\'shish tarixga yoziladi, sinov (dry_run) yozilmaydi', function () {
+    $req = function (array $params) {
+        $r = \Illuminate\Http\Request::create('/x', 'POST', $params);
+        $route = (new \Illuminate\Routing\Route('POST', 'x', []))->name('admin.timetable.boards.add-missing-groups');
+        $r->setRouteResolver(fn () => $route);
+
+        return $r;
+    };
+    expect(\App\Services\Timetable\TimetableChangeApproval::isChange($req([])))->toBeTrue()
+        ->and(\App\Services\Timetable\TimetableChangeApproval::isChange($req(['dry_run' => 1])))->toBeFalse();
+});

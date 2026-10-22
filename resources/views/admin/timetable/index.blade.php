@@ -591,6 +591,13 @@
                                         <input id="stShowNum" type="checkbox" class="rounded border-gray-300"> Kun nomi o'rniga raqamini ko'rsatish
                                     </label>
                                 </div>
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1" title="Shu oraliqqa tushgan haftalar o'quv haftasi hisoblanmaydi (hafta raqami ta'tildan keyin davom etadi)">Ta'til oralig'i (haftalik jadval, masalan qishki ta'til)</label>
+                                    <div class="flex items-center gap-2">
+                                        <input id="stBreakFrom" type="date" class="rounded-md border-gray-300 text-sm"> —
+                                        <input id="stBreakTo" type="date" class="rounded-md border-gray-300 text-sm">
+                                    </div>
+                                </div>
                                 <p class="col-span-2 text-xs text-gray-400">O'quv yili va semestr doska yaratilganda belgilangan — o'zgartirish uchun yangi doska yarating.</p>
                             </div>
                             {{-- Qo'ng'iroqlar --}}
@@ -3486,20 +3493,45 @@
                 d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // o'sha haftaning dushanbasi
                 return d;
             }
+            // Yo'nalish+kurs kalendari: panjaraning o'z boshlanishi (bo'lmasa doska semestr boshi),
+            // ta'til oralig'iga (settings.weekly_breaks) tushgan haftalar o'quv haftasi hisoblanmaydi.
+            function gridStartDate(g) {
+                const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String((g && g.start_date) || ''));
+                if (!m) return semesterStartDate();
+                const d = new Date(+m[1], +m[2] - 1, +m[3]);
+                d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+                return d;
+            }
+            function weekBreaks() {
+                const toD = v => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+                return ((board && board.settings && board.settings.weekly_breaks) || [])
+                    .map(b => [toD(b && b.from), toD(b && b.to)]).filter(b => b[0] && b[1]);
+            }
+            // n-o'quv haftasining dushanbasi (tanlangan yo'nalish+kurs kalendari bo'yicha)
+            function weekMonday(n, g) {
+                const st = gridStartDate(g || curGrid());
+                if (!st) return null;
+                const br = weekBreaks();
+                const d = new Date(st);
+                for (let k = 0, guard = 0; guard < 200; guard++, d.setDate(d.getDate() + 7)) {
+                    if (br.some(([f, t]) => d >= f && d <= t)) continue;
+                    if (++k >= n) return d;
+                }
+                return d;
+            }
             function weekDates(n) {
-                const st = semesterStartDate();
-                if (!st) return '';
-                const a = new Date(st); a.setDate(a.getDate() + (n - 1) * 7);
+                const a = weekMonday(n);
+                if (!a) return '';
                 const b = new Date(a); b.setDate(b.getDate() + Math.max(0, (board.days || 6) - 1));
                 const f = d => String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
                 return f(a) + '–' + f(b);
             }
             // Bugun semestrning nechanchi haftasi (chegaradan chiqsa — 1 yoki oxirgi hafta).
             function currentWeekNo(w) {
-                const st = semesterStartDate();
-                if (!st) return 1;
+                if (!gridStartDate(curGrid())) return 1;
                 const today = new Date(); today.setHours(0, 0, 0, 0);
-                return Math.min(w, Math.max(1, Math.floor((today - st) / (7 * 864e5)) + 1));
+                for (let i = w; i >= 1; i--) { const m = weekMonday(i); if (m && m <= today) return i; }
+                return 1;
             }
             // Ichki (haqiqiy) jadval faqat haftama-hafta ko'riladi — "shablon" yo'q.
             const weeklyOnly = () => typeof weeklyLayer !== 'undefined' && weeklyLayer === 'internal' && viewMode !== 'cycle';
@@ -8326,6 +8358,9 @@
                     $('stDayOff').value = (set.days_off || []).join(', ');
                     $('stAllowZero').checked = !!set.allow_zero;
                     $('stShowNum').checked = !!set.show_day_number;
+                    const br = (set.weekly_breaks || [])[0] || {};
+                    $('stBreakFrom').value = br.from || '';
+                    $('stBreakTo').value = br.to || '';
                     bellDraft = (s.bell_schedule || []).map(x => ({ ...x }));
                     dayDraft = (s.day_names || []).slice();
                     renderBellTable(); renderDayNames();
@@ -8418,6 +8453,7 @@
                                 '<label title="Kunlar soni">K<input data-grid-field="days" type="number" min="1" max="7" value="' + (+g.days || board.days) + '"></label>' +
                                 '<label title="Kuniga paralar soni">P<input data-grid-field="pairs_per_day" type="number" min="1" max="10" value="' + (+g.pairs_per_day || board.pairs_per_day) + '"></label>' +
                                 '<label title="Hafta soni">H<input data-grid-field="weeks" type="number" min="1" max="30" value="' + (+g.weeks || board.weeks) + '"></label>' +
+                                '<label title="Semestr boshlanishi (bo\'sh — doska semestr boshi)">B<input data-grid-field="start_date" type="date" value="' + esc(String(g.start_date || '').slice(0, 10)) + '" style="width:118px"></label>' +
                             '</div>' +
                             '<button type="button" class="grid-setting-save" data-grid-save="' + item.index + '" title="Saqlash"><img src="' + ICON_BASE + '/saqlash.png" alt="" aria-hidden="true"></button>' +
                             '<span class="grid-setting-status"></span>' +
@@ -8448,6 +8484,10 @@
                 if (!row || !wrap || !board) return;
                 const value = name => wrap.querySelector('[data-grid-field="' + name + '"]').value;
                 const status = wrap.querySelector('.grid-setting-status');
+                const cur = grids[gridKey(row.faculty, row.specialty, row.course)] || grids[gridKey('', row.specialty, row.course)];
+                // Hafta soni o'zgarsa kartochkalarni qayta yaratish ixtiyoriy — joylashuvlar o'chib ketmasin
+                const regenerate = !!(cur && +cur.weeks !== +value('weeks') &&
+                    confirm('Hafta soni o\'zgardi. Shu yo\'nalish kartochkalari qayta yaratilsinmi?\n\nOK — qayta yaratish (joylashuvlar o\'chadi)\nBekor — kartochkalar va joylashuvlar saqlanadi, faqat hafta soni o\'zgaradi'));
                 btn.disabled = true;
                 status.textContent = 'Saqlanmoqda...';
                 try {
@@ -8458,6 +8498,8 @@
                         days: value('days'),
                         pairs_per_day: value('pairs_per_day'),
                         weeks: value('weeks'),
+                        start_date: value('start_date') || '',
+                        regenerate: regenerate ? 1 : 0,
                     });
                     await loadBoard(board.id);
                     renderGridSettings();
@@ -8606,6 +8648,12 @@
                 dayOff.forEach((d, i) => fd.append('settings[days_off][' + i + ']', d));
                 fd.append('settings[allow_zero]', $('stAllowZero').checked ? 1 : 0);
                 fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
+                if ($('stBreakFrom').value && $('stBreakTo').value) {
+                    fd.append('settings[weekly_breaks][0][from]', $('stBreakFrom').value);
+                    fd.append('settings[weekly_breaks][0][to]', $('stBreakTo').value);
+                } else {
+                    fd.append('settings[weekly_breaks]', '');
+                }
                 try {
                     const r = await fetch(SETTINGS_URL(board.id), { method: 'POST', headers: { 'Accept': 'application/json' }, body: fd });
                     const j = await r.json();

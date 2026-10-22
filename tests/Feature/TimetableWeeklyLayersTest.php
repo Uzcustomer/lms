@@ -791,3 +791,23 @@ it('tashqi siklda boshqa mas’ul bo‘lakning joylashuvi tanlangan bo‘lakni a
         ->and($response->json('rows.0.blocks'))->toHaveCount(1)
         ->and($response->json('rows.0.blocks.0.from'))->toBe(0);
 })->with(['teacher', 'web']);
+
+it('panjara: hafta soni o\'zgarsa kartochkalar so\'ralmasa saqlanadi; o\'z boshlanishi va ta\'til haftalari bilan sikl ogohlantirishi sanasi', function () {
+    $s = layersSetup();
+    $s['own']->update(['ext_day' => 1, 'ext_pair' => 1]);
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.grid', $s['board']), [
+        'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'days' => 6, 'pairs_per_day' => 6, 'weeks' => 18,
+        'start_date' => '2026-10-12',
+    ])->assertOk()->assertJson(['regenerated' => false]);
+    expect($s['own']->fresh()->ext_day)->toBe(1)
+        ->and(TimetableGridSetting::where('board_id', $s['board']->id)->first()->start_date->toDateString())->toBe('2026-10-12');
+
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'weekly_breaks' => [['from' => '2026-12-28', 'to' => '2027-01-09']]]]);
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'weekStartDate');
+    $m->setAccessible(true);
+    // 12.10 dan: 1–11-haftalar 12.10–21.12, ta'til (28.12, 04.01) o'tkaziladi → 12-hafta 11.01
+    expect($m->invoke($ctl, $s['board']->fresh(), $s['own']->fresh(), 1)->toDateString())->toBe('2026-10-12')
+        ->and($m->invoke($ctl, $s['board']->fresh(), $s['own']->fresh(), 11)->toDateString())->toBe('2026-12-21')
+        ->and($m->invoke($ctl, $s['board']->fresh(), $s['own']->fresh(), 12)->toDateString())->toBe('2027-01-11');
+});

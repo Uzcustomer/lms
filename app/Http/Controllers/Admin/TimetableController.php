@@ -1007,7 +1007,9 @@ class TimetableController extends Controller
         // mumkin (turli fakultet konteksti, bir yo'nalishning bir necha bloki) —
         // aks holda o'sha fanning kartalari necha marta uchrasa shuncha ko'payib,
         // haftalik yuk bir necha barobar oshib ketardi.
-        $madePractice = [];   // "spec|kurs|guruh|fan" => true
+        // Kalitda haqiqiy fakultet ($blockFac) ham bor: 1-kurs guruh nomlari ("1K-01a (o'z)") ikki davolash
+        // fakultetida takrorlanadi — aks holda ikkinchisining amaliy kartalari yaratilmay qolardi.
+        $madePractice = [];   // "fakultet|spec|kurs|guruh|fan" => true
         $madeLecture  = [];   // "fakultet|spec|kurs|oqim|fan" => $rows indeksi
         $lectureGroupStudents = []; // shu mantiqiy oqimdagi noyob guruh => talaba soni
         // Paralar soni endi weeklyPlan() da hisoblanadi (haftalik yuk chegarasi bilan)
@@ -1256,7 +1258,7 @@ class TimetableController extends Controller
                                     }
                                     $groupLabel = implode(' + ', $names);
                                     // Bu guruhga shu fan bo'yicha kartalar allaqachon yaratilganmi?
-                                    $prcKey = $sk . '|' . $course . '|' . $groupLabel . '|' . $subjKey;
+                                    $prcKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|' . $groupLabel . '|' . $subjKey;
                                     if (isset($madePractice[$prcKey])) {
                                         continue;
                                     }
@@ -1388,6 +1390,144 @@ class TimetableController extends Controller
         $restored = $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $kept);
 
         return response()->json(['ok' => true, 'created' => count($rows)] + $restored);
+    }
+
+    /**
+     * Oqimga keyin qo'shilgan guruhlar uchun kartochkalarni QO'SHADI — mavjud kartalarga (joylashuv,
+     * birlashtirilgan/bo'lingan kartalar, haftalar) tegmaydi:
+     *  - amaliy: guruh(lar)i hammasi yangi bo'lsa — yangi karta;
+     *  - ma'ruza: shu oqimning shu fan ma'ruzasi bor bo'lsa — yangi guruhlar unga qo'shiladi
+     *    (joyi saqlanadi), yo'q bo'lsa — yangi karta.
+     * Aralash (eski + yangi guruhli) amaliy qatorlar va mos ma'ruzasi topilmagan aralash ma'ruza
+     * qatorlari qo'shilmaydi, ro'yxatda ko'rsatiladi.
+     */
+    public function addMissingGroupCards(Request $request, TimetableBoard $board)
+    {
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
+        }
+        $dry = $request->boolean('dry_run');
+        $specsFound = [];
+        $rows = $this->assembleRows($board, null, null, $specsFound);
+        if ($rows === null) {
+            return response()->json(['error' => 'Tasdiqlangan oqim topilmadi.'], 422);
+        }
+        $rows = $this->stripUnsupportedColumns($rows);
+        [$insert, $grow, $mixed, $newGroups, $groupsOfRow] = $this->planMissingGroupCards($rows, TimetableCard::where('board_id', $board->id)->get());
+        $result = ['ok' => true, 'dry_run' => $dry, 'new_groups' => array_keys($newGroups), 'insert' => count($insert),
+            'lectures_extended' => count($grow), 'mixed_skipped' => array_slice($mixed, 0, 100),
+            'insert_list' => array_slice(array_map(fn ($r) => ($r['course'] ?? '') . 'k ' . ($r['specialty_name'] ?? '') . ' · '
+                . ($r['subject_name'] ?? '') . ' · ' . ($r['training_type'] ?? '') . ' · ' . implode('+', $groupsOfRow($r)), $insert), 0, 300)];
+        if ($dry) {
+            return response()->json($result);
+        }
+        DB::transaction(function () use ($insert, $grow, $board, $specsFound) {
+            foreach ($grow as $id => [$groups, $add, $total]) {
+                $c = TimetableCard::find($id);
+                $c->update(['group_names' => array_values($groups), 'students' => $total ?: (int) $c->students + (int) round($add)]);
+            }
+            foreach (array_chunk($insert, 500) as $chunk) {
+                TimetableCard::insert($chunk);
+            }
+            $this->ensureGridSettings($board, $specsFound);
+        });
+        $this->assignCardWeeks($board);
+        $this->backfillFacultyNames($board);
+
+        return response()->json($result);
+    }
+
+    /**
+     * addMissingGroupCards rejasi: [qo'shiladigan qatorlar, kengaytiriladigan ma'ruzalar
+     * (card_id => [guruhlar, qo'shiladigan talaba taxmini, aniq jami|null]), aralash, yangi guruhlar, guruh o'quvchi].
+     */
+    private function planMissingGroupCards(array $rows, $cards): array
+    {
+        $norm = fn ($g) => mb_strtolower(trim((string) $g));
+        $groupsOfRow = function (array $r): array {
+            $v = $r['group_names'] ?? null;
+            $list = is_string($v) ? (json_decode($v, true) ?: []) : (array) ($v ?: []);
+            if (!$list && !empty($r['group_name'])) {
+                $list = array_map('trim', explode('+', (string) $r['group_name']));
+            }
+
+            return array_values(array_filter(array_map(fn ($g) => trim((string) $g), $list), fn ($g) => $g !== ''));
+        };
+        // Guruh nomi fakultetlararo takrorlanadi ("1K-01a" 1-son va 2-son davolashda) — kalit panjaradagi
+        // kabi fakultet+yo'nalish+kurs+nom. Fakultetsiz eski kartalar fakultetsiz kalit bilan ham tekshiriladi.
+        $key = fn ($fac, $spec, $course, $g) => mb_strtolower(trim((string) $fac)) . '|' . $this->specKey((string) $spec) . '|' . (int) $course . '|' . $norm($g);
+        $have = [];
+        foreach ($cards as $c) {
+            foreach ($c->occupiedGroups() as $g) {
+                $have[$key($c->faculty_name, $c->specialty_name, $c->course, $g)] = true;
+            }
+        }
+        $exists = fn (array $r, $g) => isset($have[$key($r['faculty_name'] ?? '', $r['specialty_name'] ?? '', $r['course'] ?? 0, $g)])
+            || isset($have[$key('', $r['specialty_name'] ?? '', $r['course'] ?? 0, $g)]);
+        $insert = [];
+        $grow = [];      // card_id => [groups, students]
+        $mixed = [];
+        $newGroups = [];
+        foreach ($rows as $r) {
+            $gs = $groupsOfRow($r);
+            if (!$gs) {
+                continue;
+            }
+            $new = array_values(array_filter($gs, fn ($g) => !$exists($r, $g)));
+            if (!$new) {
+                continue;
+            }
+            foreach ($new as $g) {
+                $newGroups[$g] = true;
+            }
+            if (count($new) === count($gs)) {
+                $insert[] = $r;
+                continue;
+            }
+            if (($r['training_type'] ?? '') !== 'lecture') {
+                $mixed[] = ($r['subject_name'] ?? '') . ' · ' . implode(' + ', $gs);
+                continue;
+            }
+            $subj = $this->normSubject((string) ($r['subject_name'] ?? ''));
+            $base = $this->cycleSubjectVariantBase((string) ($r['subject_name'] ?? ''));
+            $baseN = $base !== null ? $this->normSubject($base) : null;
+            $old = array_map($norm, array_diff($gs, $new));
+            $target = $cards->first(function (TimetableCard $c) use ($r, $subj, $baseN, $old, $norm) {
+                if ($c->training_type !== 'lecture' || (int) $c->course !== (int) ($r['course'] ?? 0)
+                    || ((string) $c->faculty_name !== '' && mb_strtolower(trim((string) $c->faculty_name)) !== mb_strtolower(trim((string) ($r['faculty_name'] ?? ''))))
+                    || $this->specKey((string) $c->specialty_name) !== $this->specKey((string) ($r['specialty_name'] ?? ''))
+                    || mb_strtolower((string) $c->oqim_label) !== mb_strtolower((string) ($r['oqim_label'] ?? ''))) {
+                    return false;
+                }
+                $cs = $this->normSubject((string) $c->subject_name);
+                if ($cs !== $subj && ($baseN === null || $cs !== $baseN)) {
+                    return false;
+                }
+
+                return (bool) array_intersect($old, array_map($norm, $c->occupiedGroups()));
+            });
+            if (!$target) {
+                // Eski guruhlarning ma'ruzasi boshqa nom/oqim bilan turibdi — yangi karta ularga ikkinchi ma'ruza bo'lardi.
+                $mixed[] = ($r['subject_name'] ?? '') . ' (ma\'ruza) · ' . implode(' + ', $gs);
+                continue;
+            }
+            $share = (int) round(((int) ($r['students'] ?? 0)) * count($new) / max(1, count($gs)));
+            $cur = $grow[$target->id] ?? [(array) ($target->group_names ?: [$target->group_name]), 0, null];
+            foreach ($new as $g) {
+                if (!in_array($g, $cur[0], true)) {
+                    $cur[0][] = $g;
+                    $cur[1] += $share / max(1, count($new));
+                }
+            }
+            // Karta guruhlari endi aynan shu qatorniki — qatordagi jami (guruhlar haqiqiy soni bo'yicha) olinadi;
+            // aks holda ulush taxmini (guruhlar teng deb), chunki qatorda guruhma-guruh son yo'q.
+            $sameGroups = fn (array $a, array $b) => !array_diff(array_map($norm, $a), array_map($norm, $b))
+                && !array_diff(array_map($norm, $b), array_map($norm, $a));
+            $cur[2] = $sameGroups($cur[0], $gs) ? (int) ($r['students'] ?? 0) : null;
+            $grow[$target->id] = $cur;
+        }
+
+        return [$insert, $grow, $mixed, $newGroups, $groupsOfRow];
     }
 
     /**

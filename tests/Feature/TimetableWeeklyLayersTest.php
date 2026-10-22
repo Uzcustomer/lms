@@ -811,3 +811,100 @@ it('panjara: hafta soni o\'zgarsa kartochkalar so\'ralmasa saqlanadi; o\'z boshl
         ->and($m->invoke($ctl, $s['board']->fresh(), $s['own']->fresh(), 11)->toDateString())->toBe('2026-12-21')
         ->and($m->invoke($ctl, $s['board']->fresh(), $s['own']->fresh(), 12)->toDateString())->toBe('2027-01-11');
 });
+
+it('oqimga keyin qo\'shilgan guruh: amaliy yangi karta, ma\'ruza mavjud kartaga qo\'shiladi (joyi saqlanadi)', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']);
+    $lec = TimetableCard::create($base + ['training_type' => 'lecture', 'subject_name' => 'IKP', 'students' => 30, 'group_names' => ['g-01a', 'g-01b'],
+        'ext_day' => 2, 'ext_pair' => 1]);
+    $cards = TimetableCard::where('board_id', $s['board']->id)->get();
+    $rows = [
+        $base + ['training_type' => 'lecture', 'subject_name' => 'IKP (a)', 'students' => 45, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01b', 'g-01c'])],
+        $base + ['training_type' => 'practice', 'subject_name' => 'IKP (a)', 'students' => 15, 'group_name' => 'g-01c', 'group_names' => null],
+        $base + ['training_type' => 'practice', 'subject_name' => 'IKP (a)', 'students' => 15, 'group_name' => 'g-01a', 'group_names' => null],
+        $base + ['training_type' => 'practice', 'subject_name' => 'IKP (c)', 'students' => 15, 'group_name' => 'g-01a + g-01c', 'group_names' => null],
+        $base + ['training_type' => 'lecture', 'subject_name' => 'Yangi fan', 'students' => 15, 'group_name' => null, 'group_names' => json_encode(['g-02a'])],
+    ];
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'planMissingGroupCards');
+    $m->setAccessible(true);
+    [$insert, $grow, $mixed, $new] = $m->invoke($ctl, $rows, $cards);
+    expect(array_keys($new))->toBe(['g-01c', 'g-02a'])
+        ->and(count($insert))->toBe(2)
+        ->and($insert[0]['group_name'])->toBe('g-01c')
+        ->and(array_keys($grow))->toBe([$lec->id])
+        ->and($grow[$lec->id][0])->toBe(['g-01a', 'g-01b', 'g-01c'])
+        ->and($mixed)->toHaveCount(1);
+});
+
+it('yangi guruhlar boshqa fakultetdagi bir xil nomli guruh bilan adashtirilmaydi; mos ma\'ruzasiz aralash ma\'ruza qo\'shilmaydi', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']);
+    // F1 da g-01a guruhi va uning "IKP" ma'ruzasi bor
+    $lec = TimetableCard::create($base + ['faculty_name' => 'F1', 'training_type' => 'lecture', 'subject_name' => 'IKP', 'students' => 30, 'group_names' => ['g-01a', 'g-01b']]);
+    $cards = TimetableCard::where('board_id', $s['board']->id)->get();
+    $rows = [
+        // F2 dagi bir xil nomli g-01a — yangi guruh
+        $base + ['faculty_name' => 'F2', 'training_type' => 'practice', 'subject_name' => 'IKP', 'students' => 15, 'group_name' => 'g-01a', 'group_names' => null],
+        $base + ['faculty_name' => 'F2', 'training_type' => 'lecture', 'subject_name' => 'IKP', 'students' => 30, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01x'])],
+        // F1: eski g-01a + yangi g-01z, lekin "Fiziologiya" ma'ruzasi yo'q — ikkinchi ma'ruza yaratilmasin
+        $base + ['faculty_name' => 'F1', 'training_type' => 'lecture', 'subject_name' => 'Fiziologiya', 'students' => 30, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01z'])],
+    ];
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'planMissingGroupCards');
+    $m->setAccessible(true);
+    [$insert, $grow, $mixed] = $m->invoke($ctl, $rows, $cards);
+    expect(array_map(fn ($r) => $r['faculty_name'] . ':' . $r['training_type'], $insert))->toBe(['F2:practice', 'F2:lecture'])
+        ->and($grow)->toBe([])
+        ->and($mixed)->toHaveCount(1)
+        ->and($lec->fresh()->group_names)->toBe(['g-01a', 'g-01b']);
+});
+
+it('yangi guruhlar uchun kartochka qo\'shish tarixga yoziladi, sinov (dry_run) yozilmaydi', function () {
+    $req = function (array $params) {
+        $r = \Illuminate\Http\Request::create('/x', 'POST', $params);
+        $route = (new \Illuminate\Routing\Route('POST', 'x', []))->name('admin.timetable.boards.add-missing-groups');
+        $r->setRouteResolver(fn () => $route);
+
+        return $r;
+    };
+    expect(\App\Services\Timetable\TimetableChangeApproval::isChange($req([])))->toBeTrue()
+        ->and(\App\Services\Timetable\TimetableChangeApproval::isChange($req(['dry_run' => 1])))->toBeFalse();
+});
+
+it('kartochka yaratish: ikki fakultetdagi bir xil nomli guruhning (1K-01a) har biriga amaliy karta yaratiladi', function () {
+    $board = TimetableBoard::create(['name' => 'G', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15]);
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'R', 'specialty_name' => 'Davolash ishi', 'plan_year' => '2026',
+        'level_code' => '11', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Anatomiya', 'semester' => 1,
+        'lecture' => 0, 'practice' => 30, 'laboratory' => 0, 'seminar' => 0]);
+    // 1-kurs guruh nomlari avtomatik — "1K-01a (o'z)" ikkala davolash fakultetida bor
+    $block = fn (string $fac) => ['merge_key' => 'x|Davolash ishi', 'title' => 'Davolash ishi', 'department_name' => $fac,
+        'courses' => [['level_code' => 11, 'oqims' => [['label' => '1-oqim', 'lang' => 'uz', 'total' => 15, 'rows' => [['name' => "1K-01a (o'z)", 'count' => 15]]]]]]];
+    // Bir fakultetning bloki takror kelsa (snapshotda bir guruh bir necha blokda) — karta bir marta
+    \App\Models\OqimSnapshot::create(['context_key' => 'k', 'context' => [], 'data' => [$block('1-son davolash'), $block('1-son davolash'), $block('2-son davolash')],
+        'status' => 'approved', 'approved_at' => now()]);
+
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'assembleRows');
+    $m->setAccessible(true);
+    $found = [];
+    $rows = $m->invokeArgs($ctl, [$board, null, null, &$found]);
+    $perFaculty = array_count_values(array_map(fn ($r) => $r['faculty_name'], array_filter($rows, fn ($r) => $r['training_type'] === 'practice')));
+    expect(array_keys($perFaculty))->toBe(['1-son davolash', '2-son davolash'])
+        ->and($perFaculty['1-son davolash'])->toBe($perFaculty['2-son davolash']);
+});
+
+it('ma\'ruzaga yangi guruh qo\'shilganda talabalar soni qatordagi haqiqiy jami bo\'yicha', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']);
+    $lec = TimetableCard::create($base + ['training_type' => 'lecture', 'subject_name' => 'Biologiya', 'students' => 10, 'group_names' => ['g-01a']]);
+    // yangi g-01x guruhida 30 talaba: qator jami 40 (guruhlar teng emas)
+    $rows = [$base + ['training_type' => 'lecture', 'subject_name' => 'Biologiya', 'students' => 40, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01x'])]];
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'planMissingGroupCards');
+    $m->setAccessible(true);
+    [, $grow] = $m->invoke($ctl, $rows, TimetableCard::where('board_id', $s['board']->id)->get());
+    expect($grow[$lec->id][0])->toBe(['g-01a', 'g-01x'])
+        ->and($grow[$lec->id][2])->toBe(40);
+});

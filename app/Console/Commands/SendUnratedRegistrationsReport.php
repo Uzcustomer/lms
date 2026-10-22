@@ -173,6 +173,18 @@ class SendUnratedRegistrationsReport extends Command
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');
 
+        // Fanga guruhda biriktirilganlar (semestr kodidan qat'i nazar) — biriktirmadagi
+        // semestr kodi darsnikidan farq qilsa ham butun guruhga o'tib ketmasin
+        $subjectStudentCountsAnySem = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->where('st.student_status_code', self::ACTIVE_STATUS)
+            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as g_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->pluck('cnt', 'g_key');
+
         // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
         $groupStudentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
@@ -238,7 +250,9 @@ class SendUnratedRegistrationsReport extends Command
 
             // Fanga biriktirilgan faol talabalar soni (student_subjects), topilmasa guruh soni
             $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
-            $subjectTotal = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
+            $subjectTotal = $subjectStudentCounts[$gsKey]
+                ?? $subjectStudentCountsAnySem[$sch->group_id . '|' . $sch->subject_id]
+                ?? ($groupStudentCounts[$sch->group_id] ?? 0);
             if ($subjectTotal === 0) {
                 continue; // Bu fanga biriktirilgan faol talaba yo'q
             }

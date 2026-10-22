@@ -127,14 +127,25 @@ class SendUnratedExcelReport extends Command
         foreach ($managers as $manager) {
             if ($manager['manager_id'] === 0) {
                 $lines[] = "⚠️ Mas'ul biriktirilmagan: " . $manager['students']
-                    . " ta talaba · " . $manager['days'] . ' ta dars kuni';
+                    . " ta talaba · " . $manager['days'] . ' ta dars kuni' . $this->ynLine($manager);
                 continue;
             }
             $lines[] = $i++ . '. ' . $manager['name'] . "\n    " . $manager['students']
-                . " ta talabaga baho qo'yilmagan · " . $manager['days'] . ' ta dars kuni';
+                . " ta talabaga baho qo'yilmagan · " . $manager['days'] . ' ta dars kuni' . $this->ynLine($manager);
         }
 
         return implode("\n", $lines);
+    }
+
+    /** Sonlar tagida: shundan YN ga yuborilgan (jurnal qulflangan) fanlardagilar. */
+    private function ynLine(array $manager): string
+    {
+        if (($manager['yn_students'] ?? 0) <= 0) {
+            return '';
+        }
+
+        return "\n    🔒 shundan YN ga yuborilgan: " . $manager['yn_students'] . ' ta talaba · '
+            . ($manager['yn_days'] ?? 0) . ' ta dars kuni';
     }
 
     /** HEMISga kech kiritilgan talabalarning kiritilishidan oldingi baholanmagan darslari (alohida varaqda). */

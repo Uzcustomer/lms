@@ -653,10 +653,17 @@ class LessonOpeningTeacherReport
         $by = [];
         foreach ($studentRows as $row) {
             $id = (int) ($row['manager_id'] ?? 0);
-            $by[$id] ??= ['name' => (string) ($row['manager'] ?? ''), 'students' => [], 'days' => [], 'cases' => 0];
+            $by[$id] ??= ['name' => (string) ($row['manager'] ?? ''), 'students' => [], 'days' => [], 'cases' => 0,
+                'yn_students' => [], 'yn_days' => []];
+            $dayKey = $row['group'].'|'.$row['subject'].'|'.$row['date'].'|'.$row['teacher'];
             $by[$id]['students'][$row['student_hemis_id']] = true;
-            $by[$id]['days'][$row['group'].'|'.$row['subject'].'|'.$row['date'].'|'.$row['teacher']] = true;
+            $by[$id]['days'][$dayKey] = true;
             $by[$id]['cases']++;
+            // Fan YN ga yuborilgan (jurnal qulflangan) — alohida sanaladi, jami ichida
+            if (($row['yn_submitted'] ?? null) !== null) {
+                $by[$id]['yn_students'][$row['student_hemis_id']] = true;
+                $by[$id]['yn_days'][$dayKey] = true;
+            }
         }
 
         $list = [];
@@ -667,6 +674,8 @@ class LessonOpeningTeacherReport
                 'students' => count($entry['students']),
                 'days' => count($entry['days']),
                 'cases' => $entry['cases'],
+                'yn_students' => count($entry['yn_students']),
+                'yn_days' => count($entry['yn_days']),
             ];
         }
         usort($list, fn ($a, $b) => ($a['manager_id'] === 0) <=> ($b['manager_id'] === 0)

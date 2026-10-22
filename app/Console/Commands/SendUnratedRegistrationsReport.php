@@ -173,6 +173,21 @@ class SendUnratedRegistrationsReport extends Command
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');
 
+        // Fanga guruhda biriktirma bormi (o'qish holatidan qat'i nazar) va ulardan nechtasi
+        // o'qiyapti. Biriktirma bo'lsa butun guruhga o'tilmaydi (chetlashgan yagona talaba
+        // yoki boshqa semestr kodi tufayli shu fanni o'qimaydiganlar qarzdor chiqmasin).
+        $subjectAssigned = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
+            ->select(
+                DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as g_key"),
+                DB::raw('COUNT(DISTINCT CASE WHEN st.student_status_code = ' . (int) self::ACTIVE_STATUS . ' THEN ss.student_hemis_id END) as active_cnt')
+            )
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->pluck('active_cnt', 'g_key');
+
         // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
         $groupStudentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
@@ -238,7 +253,10 @@ class SendUnratedRegistrationsReport extends Command
 
             // Fanga biriktirilgan faol talabalar soni (student_subjects), topilmasa guruh soni
             $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
-            $subjectTotal = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
+            $subjectTotal = $subjectStudentCounts[$gsKey]
+                ?? (isset($subjectAssigned[$sch->group_id . '|' . $sch->subject_id])
+                    ? (int) $subjectAssigned[$sch->group_id . '|' . $sch->subject_id]
+                    : ($groupStudentCounts[$sch->group_id] ?? 0));
             if ($subjectTotal === 0) {
                 continue; // Bu fanga biriktirilgan faol talaba yo'q
             }

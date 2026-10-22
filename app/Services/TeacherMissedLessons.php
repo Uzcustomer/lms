@@ -466,14 +466,26 @@ class TeacherMissedLessons
 
         // 3. Guruh+fan+semestr bo'yicha faol talabalar ro'yxati
         $started = microtime(true);
-        [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds, $from, $today);
+        [$bySubject, $byGroup, $assignedAny] = $this->activeStudentTotals($groupIds, $subjectIds, $from, $today);
         $this->lastTimings['roster'] = round(microtime(true) - $started, 2);
 
         $marked = [];
         $missing = [];
         foreach ($processedSets as $pk => $set) {
             $parts = explode('|', $pk); // group|subject|semester|day|pair
-            $roster = $bySubject[$parts[0].'|'.$parts[1].'|'.$parts[2]] ?? ($byGroup[$parts[0]] ?? []);
+            $gs = $parts[0].'|'.$parts[1];
+            $roster = $bySubject[$gs.'|'.$parts[2]] ?? null;
+            if ($roster === null && isset($assignedAny[$gs])) {
+                // Fanga guruhda biriktirma bor (boshqa semestr kodida yoki biriktirilganlar
+                // o'qimayotgan — chetlashgan). Butun guruhga o'tilmaydi: aks holda shu fanni
+                // o'qimaydigan talabalar qarzdor bo'lib chiqardi (p/tp26-01b, Rus tili).
+                $roster = $assignedAny[$gs];
+                if ($roster === []) {
+                    $marked[$pk] = true; // baho kutiladigan o'qiyotgan talaba yo'q
+                    continue;
+                }
+            }
+            $roster ??= $byGroup[$parts[0]] ?? [];
             if ($roster === []) {
                 continue;
             }
@@ -539,7 +551,26 @@ class TeacherMissedLessons
                 $byGroup[(string) $r->group_id][(string) $r->hemis_id] = true;
             });
 
-        return [$bySubject, $byGroup];
+        // Fanga guruhda kim biriktirilgan (o'qish holatidan qat'i nazar): biriktirma bor
+        // bo'lsa butun guruh ro'yxatiga o'tilmaydi. Qiymati — ulardan o'qiyotganlar
+        // (semestr kodidan qat'i nazar), bo'sh bo'lishi ham mumkin.
+        $assignedAny = [];
+        DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->select('st.group_id', 'ss.subject_id', 'ss.student_hemis_id', 'st.student_status_code')
+            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss', $from, $to))
+            ->cursor()
+            ->each(function ($r) use (&$assignedAny) {
+                $key = $r->group_id.'|'.$r->subject_id;
+                $assignedAny[$key] ??= [];
+                if ((int) $r->student_status_code === 11) {
+                    $assignedAny[$key][(string) $r->student_hemis_id] = true;
+                }
+            });
+
+        return [$bySubject, $byGroup, $assignedAny];
     }
 
     /** Kun kaliti: guruh | fan | semestr | sana */

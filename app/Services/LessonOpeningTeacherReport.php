@@ -437,7 +437,13 @@ class LessonOpeningTeacherReport
      */
     private function assemble(array $records, array $people, Carbon $from, Carbon $to): array
     {
-        $blank = array_fill_keys(array_keys(self::LABELS), 0) + ['total' => 0, 'ungraded_students' => 0];
+        $blank = array_fill_keys(array_keys(self::LABELS), 0) + ['total' => 0, 'ungraded_students' => 0,
+            'yn_cases' => 0, 'yn_students' => 0];
+
+        // Qaysi guruh+fan+semestr YN ga yuborilgan — o'qituvchilar, kunlar va talabalar varaqlari uchun
+        $this->ynSubmitted = $this->ynSubmittedMap($records);
+        $ynStudentSets = [];
+        $ynAll = [];
 
         $counts = [];
         $studentSets = [];   // o'qituvchi => [talaba hemis_id => true]
@@ -452,9 +458,18 @@ class LessonOpeningTeacherReport
                 $studentSets[$record['who']][(string) $hemisId] = true;
                 $allStudents[(string) $hemisId] = true;
             }
+            // Shundan YN ga yuborilgan fanlardagilar (jami ichida)
+            if ($this->ynSubmittedFor($record) !== null) {
+                $counts[$record['who']]['yn_cases']++;
+                foreach (array_keys($record['missing_students'] ?? []) as $hemisId) {
+                    $ynStudentSets[$record['who']][(string) $hemisId] = true;
+                    $ynAll[(string) $hemisId] = true;
+                }
+            }
         }
         foreach ($counts as $who => $row) {
             $counts[$who]['ungraded_students'] = count($studentSets[$who] ?? []);
+            $counts[$who]['yn_students'] = count($ynStudentSets[$who] ?? []);
         }
 
         $teachers = [];
@@ -473,11 +488,11 @@ class LessonOpeningTeacherReport
         }
         // Jami: talaba bir nechta o'qituvchida bo'lsa ham bir marta
         $totals['ungraded_students'] = count($allStudents);
+        $totals['yn_students'] = count($ynAll);
 
         // Har bir kun uchun baho qo'yilmagan juftliklar alohida qatorga chiqadi
         // (qaysi sanada, qaysi guruhda, qaysi juftlikda, qaysi soatda). Juftlik
         // ma'lumoti bo'lmasa (masalan baho qo'yib bo'lingan ariza) — bitta qator.
-        $this->ynSubmitted = $this->ynSubmittedMap($records);
         $days = [];
         foreach ($records as $record) {
             [$course, $semester] = $this->courseSemester($record['semester_name'] ?? '', $record['semester_code'] ?? '');

@@ -871,3 +871,26 @@ it('yangi guruhlar uchun kartochka qo\'shish tarixga yoziladi, sinov (dry_run) y
     expect(\App\Services\Timetable\TimetableChangeApproval::isChange($req([])))->toBeTrue()
         ->and(\App\Services\Timetable\TimetableChangeApproval::isChange($req(['dry_run' => 1])))->toBeFalse();
 });
+
+it('kartochka yaratish: ikki fakultetdagi bir xil nomli guruhning (1K-01a) har biriga amaliy karta yaratiladi', function () {
+    $board = TimetableBoard::create(['name' => 'G', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15]);
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'R', 'specialty_name' => 'Davolash ishi', 'plan_year' => '2026',
+        'level_code' => '11', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Anatomiya', 'semester' => 1,
+        'lecture' => 0, 'practice' => 30, 'laboratory' => 0, 'seminar' => 0]);
+    // 1-kurs guruh nomlari avtomatik — "1K-01a (o'z)" ikkala davolash fakultetida bor
+    $block = fn (string $fac) => ['merge_key' => 'x|Davolash ishi', 'title' => 'Davolash ishi', 'department_name' => $fac,
+        'courses' => [['level_code' => 11, 'oqims' => [['label' => '1-oqim', 'lang' => 'uz', 'total' => 15, 'rows' => [['name' => "1K-01a (o'z)", 'count' => 15]]]]]]];
+    // Bir fakultetning bloki takror kelsa (snapshotda bir guruh bir necha blokda) — karta bir marta
+    \App\Models\OqimSnapshot::create(['context_key' => 'k', 'context' => [], 'data' => [$block('1-son davolash'), $block('1-son davolash'), $block('2-son davolash')],
+        'status' => 'approved', 'approved_at' => now()]);
+
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'assembleRows');
+    $m->setAccessible(true);
+    $found = [];
+    $rows = $m->invokeArgs($ctl, [$board, null, null, &$found]);
+    $perFaculty = array_count_values(array_map(fn ($r) => $r['faculty_name'], array_filter($rows, fn ($r) => $r['training_type'] === 'practice')));
+    expect(array_keys($perFaculty))->toBe(['1-son davolash', '2-son davolash'])
+        ->and($perFaculty['1-son davolash'])->toBe($perFaculty['2-son davolash']);
+});

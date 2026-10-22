@@ -1007,7 +1007,9 @@ class TimetableController extends Controller
         // mumkin (turli fakultet konteksti, bir yo'nalishning bir necha bloki) —
         // aks holda o'sha fanning kartalari necha marta uchrasa shuncha ko'payib,
         // haftalik yuk bir necha barobar oshib ketardi.
-        $madePractice = [];   // "spec|kurs|guruh|fan" => true
+        // Kalitda haqiqiy fakultet ($blockFac) ham bor: 1-kurs guruh nomlari ("1K-01a (o'z)") ikki davolash
+        // fakultetida takrorlanadi — aks holda ikkinchisining amaliy kartalari yaratilmay qolardi.
+        $madePractice = [];   // "fakultet|spec|kurs|guruh|fan" => true
         $madeLecture  = [];   // "fakultet|spec|kurs|oqim|fan" => $rows indeksi
         $lectureGroupStudents = []; // shu mantiqiy oqimdagi noyob guruh => talaba soni
         // Paralar soni endi weeklyPlan() da hisoblanadi (haftalik yuk chegarasi bilan)
@@ -1256,7 +1258,7 @@ class TimetableController extends Controller
                                     }
                                     $groupLabel = implode(' + ', $names);
                                     // Bu guruhga shu fan bo'yicha kartalar allaqachon yaratilganmi?
-                                    $prcKey = $sk . '|' . $course . '|' . $groupLabel . '|' . $subjKey;
+                                    $prcKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|' . $groupLabel . '|' . $subjKey;
                                     if (isset($madePractice[$prcKey])) {
                                         continue;
                                     }

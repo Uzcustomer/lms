@@ -2005,6 +2005,9 @@ class TimetableController extends Controller
             'days'           => 'required|integer|min:1|max:7',
             'pairs_per_day'  => 'required|integer|min:1|max:10',
             'weeks'          => 'required|integer|min:1|max:30',
+            'start_date'     => 'nullable|date',
+            // Hafta soni o'zgarganda kartochkalarni qayta yaratish (joylashuvlar o'chadi) — faqat so'ralsa
+            'regenerate'     => 'nullable|boolean',
         ]);
 
         $gs = TimetableGridSetting::firstOrNew([
@@ -2013,12 +2016,13 @@ class TimetableController extends Controller
             'specialty_name' => $data['specialty_name'],
             'course' => $data['course'],
         ]);
-        $weeksChanged = $gs->exists && (int) $gs->weeks !== (int) $data['weeks'];
+        $weeksChanged = $gs->exists && (int) $gs->weeks !== (int) $data['weeks'] && $request->boolean('regenerate');
         $gs->fill([
             'days' => $data['days'],
             'pairs_per_day' => $data['pairs_per_day'],
             'weeks' => $data['weeks'],
-        ])->save();
+        ] + (Schema::hasColumn('timetable_grid_settings', 'start_date') && $request->has('start_date')
+            ? ['start_date' => $data['start_date'] ?: null] : []))->save();
 
         // Panjaradan tashqarida qolgan joylashuvlarni bo'shatamiz. Yarim-slot (pair)
         // soni doska qo'ng'iroq jadvalidan olinadi, shuning uchun kunlar chegarasi bilan
@@ -2523,7 +2527,8 @@ class TimetableController extends Controller
         ]);
 
         $grids = TimetableGridSetting::where('board_id', $board->id)
-            ->get(['faculty_name', 'specialty_name', 'course', 'days', 'pairs_per_day', 'weeks']);
+            ->get(array_merge(['faculty_name', 'specialty_name', 'course', 'days', 'pairs_per_day', 'weeks'],
+                Schema::hasColumn('timetable_grid_settings', 'start_date') ? ['start_date'] : []));
 
         // Hafta bo'yicha istisnolar (individual haftalar) — migratsiya kechiksa bo'sh
         $overrides = collect();
@@ -6566,6 +6571,45 @@ class TimetableController extends Controller
         return $out;
     }
 
+    /**
+     * Yo'nalish+kurs kalendari bo'yicha W-haftaning dushanbasi: panjara boshlanishi (bo'lmasa doska
+     * semestr boshi) dan sanab, doska sozlamasidagi ta'til oraliqlariga (settings.weekly_breaks) tushgan
+     * haftalar o'tkazib yuboriladi (masalan qishki ta'til 28.12–09.01 — o'quv haftasi hisoblanmaydi).
+     */
+    private function weekStartDate(TimetableBoard $board, $card, int $week): Carbon
+    {
+        $start = null;
+        if (Schema::hasColumn('timetable_grid_settings', 'start_date')) {
+            $gs = TimetableGridSetting::where('board_id', $board->id)
+                ->where('specialty_name', $card->specialty_name)->where('course', $card->course)
+                ->where(fn ($q) => $q->where('faculty_name', $card->faculty_name)->orWhereNull('faculty_name')->orWhere('faculty_name', ''))
+                ->orderByRaw("CASE WHEN faculty_name = ? THEN 0 ELSE 1 END", [(string) $card->faculty_name])
+                ->first();
+            $start = $gs?->start_date ? Carbon::parse($gs->start_date)->startOfDay() : null;
+        }
+        $d = ($start ?: $this->weeklySemesterStart($board))->copy()->startOfWeek();
+        $breaks = [];
+        foreach ((array) (($board->settings ?? [])['weekly_breaks'] ?? []) as $b) {
+            if (!empty($b['from']) && !empty($b['to'])) {
+                $breaks[] = [Carbon::parse($b['from'])->startOfDay(), Carbon::parse($b['to'])->endOfDay()];
+            }
+        }
+        for ($n = 0, $guard = 0; $guard < 200; $guard++, $d->addWeek()) {
+            $inBreak = false;
+            foreach ($breaks as [$f, $t]) {
+                if ($d->between($f, $t)) {
+                    $inBreak = true;
+                    break;
+                }
+            }
+            if (!$inBreak && ++$n >= $week) {
+                break;
+            }
+        }
+
+        return $d->copy();
+    }
+
     private function weeklySemesterStart(TimetableBoard $board): Carbon
     {
         $set = (array) ($board->settings ?? []);
@@ -6590,7 +6634,7 @@ class TimetableController extends Controller
             return [];
         }
         $board = $card->board;
-        $date = $this->weeklySemesterStart($board)->startOfWeek()->addDays(($week - 1) * 7 + ($day - 1));
+        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1);
         $busy = $this->cycleBusyByDate($board)[$date->toDateString()] ?? [];
         $from = $pair;
         $to = $pair + $card->lenHalf();

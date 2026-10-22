@@ -440,14 +440,21 @@ class LessonOpeningTeacherReport
         $blank = array_fill_keys(array_keys(self::LABELS), 0) + ['total' => 0, 'ungraded_students' => 0];
 
         $counts = [];
+        $studentSets = [];   // o'qituvchi => [talaba hemis_id => true]
+        $allStudents = [];   // butun hisobot bo'yicha noyob talabalar
         foreach ($records as $record) {
             $counts[$record['who']] ??= $blank;
             $counts[$record['who']][$record['status']]++;
             $counts[$record['who']]['total']++;
-            // Baho qo'yilmagan talaba-kun soni: har holatdagi talabalar yig'indisi.
-            // Bir talaba bir necha kunda qoldirilsa, har kun alohida sanaladi —
-            // "holat" ham shunday hisoblanadi.
-            $counts[$record['who']]['ungraded_students'] += count($record['missing_students'] ?? []);
+            // Baho qo'yilmagan talabalar — NOYOB talabalar soni: bir talaba bir necha
+            // kunda qoldirilsa ham bir marta sanaladi (holatlar soni "total" da).
+            foreach (array_keys($record['missing_students'] ?? []) as $hemisId) {
+                $studentSets[$record['who']][(string) $hemisId] = true;
+                $allStudents[(string) $hemisId] = true;
+            }
+        }
+        foreach ($counts as $who => $row) {
+            $counts[$who]['ungraded_students'] = count($studentSets[$who] ?? []);
         }
 
         $teachers = [];
@@ -464,6 +471,8 @@ class LessonOpeningTeacherReport
                 $totals[$key] = $value + $teacher[$key];
             }
         }
+        // Jami: talaba bir nechta o'qituvchida bo'lsa ham bir marta
+        $totals['ungraded_students'] = count($allStudents);
 
         // Har bir kun uchun baho qo'yilmagan juftliklar alohida qatorga chiqadi
         // (qaysi sanada, qaysi guruhda, qaysi juftlikda, qaysi soatda). Juftlik

@@ -6497,7 +6497,19 @@
                     });
                 });
             }
-            window.addEventListener('resize', () => { try { alignBolakDrops(); } catch (e) { /* panjara yo'q */ } });
+            // Qotirilgan sarlavha: har bir sarlavha qatori o'zidan yuqoridagi qatorlar balandligicha pastda
+            // qotadi (aks holda hammasi top:0 da ustma-ust tushib, pastga aylantirganda sarlavha aralashib ketadi).
+            function stickGridHead() {
+                const grid = document.getElementById('grid');
+                const head = grid && grid.tHead;
+                if (!head) return;
+                let top = 0;
+                [...head.rows].forEach(tr => {
+                    [...tr.cells].forEach(th => { th.style.top = top + 'px'; });
+                    top += tr.getBoundingClientRect().height;
+                });
+            }
+            window.addEventListener('resize', () => { try { alignBolakDrops(); stickGridHead(); } catch (e) { /* panjara yo'q */ } });
             function paraGroups(P, pairTime) {
                 const key = p => { const t = pairTime[p]; const a = t ? String(t.abbr || '').trim() : ''; return a && a !== '—' ? a : null; };
                 const out = {};
@@ -6991,6 +7003,7 @@
                 h += '</tbody>';
                 $('grid').innerHTML = h;
                 alignBolakDrops();
+                stickGridHead();
                 activeCell = null;   // qayta render — eski faol katak eskirdi
 
                 // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)

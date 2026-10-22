@@ -1396,7 +1396,8 @@ class TimetableController extends Controller
      *  - amaliy: guruh(lar)i hammasi yangi bo'lsa — yangi karta;
      *  - ma'ruza: shu oqimning shu fan ma'ruzasi bor bo'lsa — yangi guruhlar unga qo'shiladi
      *    (joyi saqlanadi), yo'q bo'lsa — yangi karta.
-     * Aralash (eski + yangi guruhli) amaliy qatorlar qo'shilmaydi, ro'yxatda ko'rsatiladi.
+     * Aralash (eski + yangi guruhli) amaliy qatorlar va mos ma'ruzasi topilmagan aralash ma'ruza
+     * qatorlari qo'shilmaydi, ro'yxatda ko'rsatiladi.
      */
     public function addMissingGroupCards(Request $request, TimetableBoard $board)
     {
@@ -1447,12 +1448,17 @@ class TimetableController extends Controller
 
             return array_values(array_filter(array_map(fn ($g) => trim((string) $g), $list), fn ($g) => $g !== ''));
         };
+        // Guruh nomi fakultetlararo takrorlanadi ("1K-01a" 1-son va 2-son davolashda) — kalit panjaradagi
+        // kabi fakultet+yo'nalish+kurs+nom. Fakultetsiz eski kartalar fakultetsiz kalit bilan ham tekshiriladi.
+        $key = fn ($fac, $spec, $course, $g) => mb_strtolower(trim((string) $fac)) . '|' . $this->specKey((string) $spec) . '|' . (int) $course . '|' . $norm($g);
         $have = [];
         foreach ($cards as $c) {
             foreach ($c->occupiedGroups() as $g) {
-                $have[$norm($g)] = true;
+                $have[$key($c->faculty_name, $c->specialty_name, $c->course, $g)] = true;
             }
         }
+        $exists = fn (array $r, $g) => isset($have[$key($r['faculty_name'] ?? '', $r['specialty_name'] ?? '', $r['course'] ?? 0, $g)])
+            || isset($have[$key('', $r['specialty_name'] ?? '', $r['course'] ?? 0, $g)]);
         $insert = [];
         $grow = [];      // card_id => [groups, students]
         $mixed = [];
@@ -1462,7 +1468,7 @@ class TimetableController extends Controller
             if (!$gs) {
                 continue;
             }
-            $new = array_values(array_filter($gs, fn ($g) => !isset($have[$norm($g)])));
+            $new = array_values(array_filter($gs, fn ($g) => !$exists($r, $g)));
             if (!$new) {
                 continue;
             }
@@ -1483,6 +1489,7 @@ class TimetableController extends Controller
             $old = array_map($norm, array_diff($gs, $new));
             $target = $cards->first(function (TimetableCard $c) use ($r, $subj, $baseN, $old, $norm) {
                 if ($c->training_type !== 'lecture' || (int) $c->course !== (int) ($r['course'] ?? 0)
+                    || ((string) $c->faculty_name !== '' && mb_strtolower(trim((string) $c->faculty_name)) !== mb_strtolower(trim((string) ($r['faculty_name'] ?? ''))))
                     || $this->specKey((string) $c->specialty_name) !== $this->specKey((string) ($r['specialty_name'] ?? ''))
                     || mb_strtolower((string) $c->oqim_label) !== mb_strtolower((string) ($r['oqim_label'] ?? ''))) {
                     return false;
@@ -1495,7 +1502,8 @@ class TimetableController extends Controller
                 return (bool) array_intersect($old, array_map($norm, $c->occupiedGroups()));
             });
             if (!$target) {
-                $insert[] = $r;
+                // Eski guruhlarning ma'ruzasi boshqa nom/oqim bilan turibdi — yangi karta ularga ikkinchi ma'ruza bo'lardi.
+                $mixed[] = ($r['subject_name'] ?? '') . ' (ma\'ruza) · ' . implode(' + ', $gs);
                 continue;
             }
             $share = (int) round(((int) ($r['students'] ?? 0)) * count($new) / max(1, count($gs)));

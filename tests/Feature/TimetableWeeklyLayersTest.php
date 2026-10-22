@@ -836,3 +836,26 @@ it('oqimga keyin qo\'shilgan guruh: amaliy yangi karta, ma\'ruza mavjud kartaga 
         ->and($grow[$lec->id][0])->toBe(['g-01a', 'g-01b', 'g-01c'])
         ->and($mixed)->toHaveCount(1);
 });
+
+it('yangi guruhlar boshqa fakultetdagi bir xil nomli guruh bilan adashtirilmaydi; mos ma\'ruzasiz aralash ma\'ruza qo\'shilmaydi', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']);
+    // F1 da g-01a guruhi va uning "IKP" ma'ruzasi bor
+    $lec = TimetableCard::create($base + ['faculty_name' => 'F1', 'training_type' => 'lecture', 'subject_name' => 'IKP', 'students' => 30, 'group_names' => ['g-01a', 'g-01b']]);
+    $cards = TimetableCard::where('board_id', $s['board']->id)->get();
+    $rows = [
+        // F2 dagi bir xil nomli g-01a — yangi guruh
+        $base + ['faculty_name' => 'F2', 'training_type' => 'practice', 'subject_name' => 'IKP', 'students' => 15, 'group_name' => 'g-01a', 'group_names' => null],
+        $base + ['faculty_name' => 'F2', 'training_type' => 'lecture', 'subject_name' => 'IKP', 'students' => 30, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01x'])],
+        // F1: eski g-01a + yangi g-01z, lekin "Fiziologiya" ma'ruzasi yo'q — ikkinchi ma'ruza yaratilmasin
+        $base + ['faculty_name' => 'F1', 'training_type' => 'lecture', 'subject_name' => 'Fiziologiya', 'students' => 30, 'group_name' => null, 'group_names' => json_encode(['g-01a', 'g-01z'])],
+    ];
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'planMissingGroupCards');
+    $m->setAccessible(true);
+    [$insert, $grow, $mixed] = $m->invoke($ctl, $rows, $cards);
+    expect(array_map(fn ($r) => $r['faculty_name'] . ':' . $r['training_type'], $insert))->toBe(['F2:practice', 'F2:lecture'])
+        ->and($grow)->toBe([])
+        ->and($mixed)->toHaveCount(1)
+        ->and($lec->fresh()->group_names)->toBe(['g-01a', 'g-01b']);
+});

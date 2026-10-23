@@ -200,3 +200,39 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
         ->and(implode(' ', $byDate['create 2026-10-05']['blocked']))->toContain('p/st26-09a')
         ->and(implode(' ', $u['notes']))->toContain('rejaga kirmagan turdagi 1 ta');
 });
+
+it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq bo\'lmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Fan kafedrasining (501) va kafedrasiz xona yo'q — boshqa kafedraniki baribir qo'yiladi
+    \App\Models\Auditorium::where('code', 'KM1')->delete();
+    \App\Models\Auditorium::forceCreate(['code' => 'KM777', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 777]);
+    \App\Models\Auditorium::forceCreate(['code' => 'KM888', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 888]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-14', '12:00:00', '13:20:00');
+    hsSchedule(3, '2026-09-21', '10:00:00', '11:20:00', 6006);
+    hsSchedule(4, '2026-10-08', '10:00:00', '11:20:00');
+    // Boshqa guruh HEMIS'da shu vaqtda o'sha "Kafedra mudiri xonasi"da (boshqa o'qituvchi bilan)
+    hsInsert('schedules', ['schedule_hemis_id' => 70, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11',
+        'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-09-28 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 7007, 'employee_name' => 'E7007', 'auditorium_code' => 'KM777', 'auditorium_name' => 'Kafedra mudiri xonasi']);
+    $create = function () use ($s) {
+        $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+            ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'])
+            ->assertOk()->json();
+
+        return collect($res['groups'][0]['units'][0]['actions'])->first(fn ($a) => $a['op'] . ' ' . $a['date'] === 'create 2026-09-28');
+    };
+
+    // Xona biriktirilmagan — o'rinbosar sifatida
+    $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
+    $a = $create();
+    expect($a['auditorium_code'])->toBe('KM777')->and($a['flags'])->toBe(['mudir_xonasi'])->and($a['blocked'])->toBe([]);
+
+    // Kartaning o'zida shu xona qo'yilgan (o'rinbosar belgisisiz) — baribir to'siq emas
+    $s['card']->update(['auditorium_code' => 'KM777', 'auditorium_name' => 'Kafedra mudiri xonasi']);
+    $a = $create();
+    expect($a['auditorium_code'])->toBe('KM777')->and($a['flags'])->toBe([])->and($a['blocked'])->toBe([]);
+});

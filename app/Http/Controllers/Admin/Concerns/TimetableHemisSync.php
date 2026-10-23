@@ -224,14 +224,15 @@ trait TimetableHemisSync
         };
 
         $kuzgi = $board->semester_parity !== 'bahorgi';
-        // "Kafedra mudiri xonasi": fanning o'z kafedrasiniki (auditoriums.department_hemis_id), faqat faollari;
-        // o'ziniki bo'lmasa — kafedrasiz umumiy xona yoki yagona shunday xona. Boshqa kafedraniki olinmaydi.
+        // "Kafedra mudiri xonasi" (faqat faollari): avval fanning o'z kafedrasiniki (auditoriums.department_hemis_id),
+        // so'ng kafedrasiz umumiy xona, bo'lmasa — istalgan shunday xona. Biriktirilmagan darslar uchun vaqtinchalik
+        // chora: HEMIS'da xona ustma-ust tushishiga ruxsat yoqilgan, shuning uchun bu xona hech qachon to'siq emas.
         $mudirRooms = Auditorium::where('name', 'like', '%kafedra mudiri%')->where('active', true)->orderBy('id')->get();
         $fallbackRoom = $mudirRooms->first();
         $fallbackRoomFor = function ($deptId) use ($mudirRooms): ?array {
             $room = ($deptId ? $mudirRooms->first(fn ($a) => (string) $a->department_hemis_id === (string) $deptId) : null)
                 ?? $mudirRooms->first(fn ($a) => !$a->department_hemis_id)
-                ?? ($mudirRooms->count() === 1 ? $mudirRooms->first() : null);
+                ?? $mudirRooms->first();
 
             return $room ? [$room->code, $room->name] : null;
         };
@@ -452,13 +453,16 @@ trait TimetableHemisSync
     /**
      * Guruhlar alohida rejalashtiriladi — qo'shiladigan/o'zgaradigan dars o'qituvchi yoki xona bo'yicha boshqa
      * guruhning yakuniy darsi yoki HEMIS'dagi boshqa (rejaga kirmagan) dars bilan ustma-ust tushsa, amal to'siqli.
-     * O'rinbosar kafedra mudiri / uning xonasi va umumiy (raqamsiz) xonalar tekshirilmaydi.
+     * O'rinbosar kafedra mudiri, "Kafedra mudiri xonasi" (o'rinbosar yoki HEMIS'da allaqachon qo'yilgan —
+     * vaqtincha ustma-ust tushishiga ruxsat bor) va umumiy (raqamsiz) xonalar tekshirilmaydi.
      */
     private function hemisCrossCheck(array &$groupsOut, array $finals, array $handledIds, string $today): void
     {
         $idx = [];   // "e|xodim|sana" / "r|xona|sana" => [[boshlanish, tugash, birlik, matn], ...]
         $emps = [];
         $rooms = [];
+        $freeRoom = fn (array $r) => in_array('mudir_xonasi', $r['flags'] ?? [], true) || $this->isSharedRoom($r['auditorium_name'] ?? null)
+            || preg_match('/kafedra\s+mudiri/iu', (string) ($r['auditorium_name'] ?? '')) === 1;
         $index = function (string $type, $id, string $date, string $start, string $end, string $unitKey, string $label) use (&$idx) {
             $idx[$type . '|' . $id . '|' . $date][] = [$start, $end, $unitKey, $label];
         };
@@ -467,7 +471,7 @@ trait TimetableHemisSync
                 $index('e', $f['employee_id'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label']);
                 $emps[(string) $f['employee_id']] = true;
             }
-            if ($f['auditorium_code'] && !in_array('mudir_xonasi', $f['flags'] ?? [], true) && !$this->isSharedRoom($f['auditorium_name'] ?? null)) {
+            if ($f['auditorium_code'] && !$freeRoom($f)) {
                 $index('r', $f['auditorium_code'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label']);
                 $rooms[(string) $f['auditorium_code']] = true;
             }
@@ -500,7 +504,7 @@ trait TimetableHemisSync
                         continue;
                     }
                     foreach ([['e', $a['employee_id'] ?? null, 'mudir', "o'qituvchi band"], ['r', $a['auditorium_code'] ?? null, 'mudir_xonasi', 'xona band']] as [$type, $id, $flag, $msg]) {
-                        if (!$id || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $this->isSharedRoom($a['auditorium_name'] ?? null))) {
+                        if (!$id || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
                             continue;
                         }
                         foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label]) {

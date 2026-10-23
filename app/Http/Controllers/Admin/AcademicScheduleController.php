@@ -3577,7 +3577,6 @@ class AcademicScheduleController extends Controller
 
         DB::beginTransaction();
         $bookingsToDispatch = [];
-        $autoDistributeToDispatch = [];
         // Vaqt yoki sana o'zgarganda ComputerAssignment'ni qayta hisoblash —
         // TV displey planned_start'ni o'qiydi. Doim GURUH schedule id bo'yicha
         // (per-student emas) — assign() ichidagi override pass shaxsiy
@@ -3964,16 +3963,10 @@ class AcademicScheduleController extends Controller
                     $bookingsToDispatch[] = [$record->id, 'test'];
                 }
 
-                // Date set without an explicit time → auto-distribute via JIT.
-                // The job uses work_hours_start from settings, splits the
-                // group across slots, and triggers Moodle booking once
-                // distribute() persists the earliest slot as test_time.
-                if ($oskiDateChanged && $newOskiDate && !$newOskiNa && empty($record->oski_time)) {
-                    $autoDistributeToDispatch[] = [$record->id, 'oski'];
-                }
-                if ($testDateChanged && $newTestDate && !$newTestNa && empty($record->test_time)) {
-                    $autoDistributeToDispatch[] = [$record->id, 'test'];
-                }
+                // Sana vaqtsiz saqlansa vaqt AVTOMATIK qo'yilmaydi (23.10.2026): avval
+                // AutoDistributeOnDateSetJob vaqt va kompyuter rejasini o'zi yaratar, so'ng
+                // talabalarga Telegram/bildirishnoma ketib qolardi. Vaqtni mas'ul xodim qo'lda
+                // yoki "Hammasiga avto-vaqt belgilash" / 🎲 tugmasi bilan qo'yadi.
 
                 // 1-urinish OSKI/Test vaqti yoki sanasi o'zgargan bo'lsa —
                 // ComputerAssignment'ni qayta hisoblaymiz (TV displey va JIT
@@ -4015,10 +4008,6 @@ class AcademicScheduleController extends Controller
             }
             foreach ($vedomostNotices as [$id, $yn]) {
                 \App\Jobs\SendVedomostExamDateNoticeJob::dispatch($id, $yn);
-            }
-            foreach ($autoDistributeToDispatch ?? [] as [$id, $yn]) {
-                \App\Jobs\AutoDistributeOnDateSetJob::dispatch($id, $yn);
-                BookMoodleGroupExam::dispatch($id, $yn)->delay(now()->addSeconds(15));
             }
 
             return redirect()->back()->with('success', 'Imtihon sanalari muvaffaqiyatli saqlandi!');

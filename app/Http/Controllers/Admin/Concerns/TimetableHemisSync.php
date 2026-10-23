@@ -41,6 +41,8 @@ trait TimetableHemisSync
             'groups'            => 'nullable|array',
             'groups.*'          => 'string|max:255',
             'today'             => 'nullable|date',
+            // Faqat shu haftagacha (shu hafta oxirigacha) yoziladi; bo'sh/0 — semestr oxirigacha.
+            'until_week'        => 'nullable|integer|min:0|max:60',
         ]);
         $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
             ? Carbon::parse($data['today'])->toDateString()
@@ -224,10 +226,12 @@ trait TimetableHemisSync
         };
 
         $kuzgi = $board->semester_parity !== 'bahorgi';
-        // "Kafedra mudiri xonasi" (faqat faollari): avval fanning o'z kafedrasiniki (auditoriums.department_hemis_id),
-        // so'ng kafedrasiz umumiy xona, bo'lmasa — istalgan shunday xona. Biriktirilmagan darslar uchun vaqtinchalik
-        // chora: HEMIS'da xona ustma-ust tushishiga ruxsat yoqilgan, shuning uchun bu xona hech qachon to'siq emas.
-        $mudirRooms = Auditorium::where('name', 'like', '%kafedra mudiri%')->where('active', true)->orderBy('id')->get();
+        // "Kafedra mudiri xonasi" (faqat faollari; aynan shu nomlisi ustuvor): avval fanning o'z kafedrasiniki
+        // (auditoriums.department_hemis_id), so'ng kafedrasiz umumiy xona, bo'lmasa — istalgan shunday xona.
+        // Biriktirilmagan darslar uchun vaqtinchalik chora: HEMIS'da xona ustma-ust tushishiga ruxsat yoqilgan,
+        // shuning uchun bu xona hech qachon to'siq emas.
+        $mudirRooms = Auditorium::where('name', 'like', '%kafedra mudiri%')->where('active', true)
+            ->orderByRaw('LOWER(TRIM(name)) = ? DESC', ['kafedra mudiri xonasi'])->orderBy('id')->get();
         $fallbackRoom = $mudirRooms->first();
         $fallbackRoomFor = function ($deptId) use ($mudirRooms): ?array {
             $room = ($deptId ? $mudirRooms->first(fn ($a) => (string) $a->department_hemis_id === (string) $deptId) : null)
@@ -236,6 +240,10 @@ trait TimetableHemisSync
 
             return $room ? [$room->code, $room->name] : null;
         };
+        // until_week yuborilmasa — joriy hafta oxirigacha; 0 — semestr oxirigacha.
+        $untilWeek = array_key_exists('until_week', $scope) && $scope['until_week'] !== null ? (int) $scope['until_week'] : null;
+        $weeksOut = [];
+        $currentWeekOut = 0;
         $mudirCache = [];
         $mudirFor = function ($deptId) use (&$mudirCache) {
             if (!$deptId) {
@@ -414,6 +422,22 @@ trait TimetableHemisSync
                 }
             }
 
+            // Haftalar ro'yxati (oyna uchun) va "shu haftagacha" chegarasi.
+            $until = null;
+            $gCurrent = 0;
+            for ($w = 1; $w <= $g['weeks']; $w++) {
+                $mon = $weekMonday($sample, $w);
+                $weeksOut[$w] ??= ['week' => $w, 'from' => $mon, 'to' => Carbon::parse($mon)->addDays(6)->toDateString()];
+                if ($mon <= $today) {
+                    $gCurrent = $w;
+                }
+            }
+            $currentWeekOut = max($currentWeekOut, $gCurrent);
+            $uw = $untilWeek ?? $gCurrent;
+            if ($uw > 0) {
+                $until = Carbon::parse($weekMonday($sample, min($uw, $g['weeks'])))->addDays(6)->toDateString();
+            }
+
             $results = $units ? $planner->planGroup($units, $busy, $workDates) : [];
             foreach ($results as &$r) {
                 $r += $unitMeta[$r['key']] ?? [];
@@ -424,6 +448,11 @@ trait TimetableHemisSync
                     $finals[] = ['key' => $r['key'], 'label' => $gname . ' · ' . $r['subject_name']] + $rec;
                 }
                 unset($r['records']);
+                $r['actions_later'] = 0;
+                if ($until !== null) {
+                    $r['actions_later'] = count(array_filter($r['actions'], fn ($a) => $a['date'] > $until));
+                    $r['actions'] = array_values(array_filter($r['actions'], fn ($a) => $a['date'] <= $until));
+                }
             }
             unset($r);
 
@@ -432,6 +461,8 @@ trait TimetableHemisSync
                 'group_hemis_id' => (int) $grp->group_hemis_id,
                 'curriculum_hemis_id' => (int) $grp->curriculum_hemis_id,
                 'semester_code' => $semCode,
+                'education_year' => (int) substr((string) $board->academic_year, 0, 4),
+                'until' => $until,
                 'imported_at' => $hemisAll->max('updated_at'),
                 'units' => $results,
                 'skipped' => $skipped,
@@ -446,6 +477,9 @@ trait TimetableHemisSync
             'board_id' => $board->id,
             'fallback_room' => $fallbackRoom ? ['code' => $fallbackRoom->code, 'name' => $fallbackRoom->name] : null,
             'hemis_pairs' => self::HEMIS_PAIRS,
+            'until_week' => $untilWeek ?? $currentWeekOut,
+            'current_week' => $currentWeekOut,
+            'weeks' => array_values($weeksOut),
             'groups' => $groupsOut,
             'groups_not_in_hemis' => $missingGroups,
         ];

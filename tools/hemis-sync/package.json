@@ -1,0 +1,8 @@
+{
+  "name": "hemis-sync-writer",
+  "private": true,
+  "type": "module",
+  "description": "LMS HEMIS solishtirish JSON'idagi amallarni HEMIS dars jadvaliga yozish (Playwright)",
+  "scripts": { "write": "node hemis-write.mjs" },
+  "dependencies": { "playwright": "1.48.2" }
+}

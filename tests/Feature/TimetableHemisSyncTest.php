@@ -141,3 +141,24 @@ it('solishtirish Excelga yuklanadi; boshqa rollarga yopiq', function () {
     test()->withoutVite()->actingAs($mudir, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
         ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1]])->assertForbidden();
 });
+
+it('guruh HEMIS\'da fakulteti va to\'liq nomi bo\'yicha topiladi', function () {
+    $s = hsSetup();
+    // "1K-01a" ikki fakultetda — F1 kartasi F1 guruhiga bog'lanadi (F2 niki keyin yozilgan)
+    hsInsert('groups', ['group_hemis_id' => 2001, 'name' => '1K-01a', 'department_name' => 'F1', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    hsInsert('groups', ['group_hemis_id' => 2002, 'name' => '1K-01a', 'department_name' => 'F2', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 2, 'specialty_hemis_id' => 1]);
+    // HEMIS'dagi nomi til qo'shimchasi bilan
+    hsInsert('groups', ['group_hemis_id' => 2003, 'name' => 'p/st26-02a (rus)', 'department_name' => 'F1', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    $base = $s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students', 'training_type', 'len_half',
+        'weeks', 'subject_name', 'kafedra_name', 'day', 'pair']);
+    TimetableCard::create($base + ['group_name' => "1K-01a (o'z)", 'pair' => 5]);
+    TimetableCard::create($base + ['group_name' => 'p/st26-02a (rus)', 'pair' => 7]);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1]])->assertOk()->json();
+    $ids = array_column($res['groups'], 'group_hemis_id', 'group');
+    expect($ids['1K-01a'] ?? null)->toBe(2001)
+        ->and($ids['p/st26-02a'] ?? null)->toBe(2003)
+        ->and($ids['p/st26-01a'] ?? null)->toBe(1596)
+        ->and($res['groups_not_in_hemis'])->toBe([]);
+});

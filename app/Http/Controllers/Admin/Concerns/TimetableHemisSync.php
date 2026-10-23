@@ -192,21 +192,36 @@ trait TimetableHemisSync
             return $out;
         };
 
-        // Guruhlar: kartalardagi guruhcha nomlari (til qo'shimchasisiz).
+        // Guruhlar: kartalardagi guruhcha nomlari. Nom fakultetlararo takrorlanadi ("1K-01a" ikki davolash
+        // fakultetida) — kalit fakultet + nom. HEMIS'dagi nom til qo'shimchasi bilan ("… (rus)") ham, usiz ham
+        // bo'lishi mumkin: avval to'liq nomi, so'ng qo'shimchasiz nomi bo'yicha; bir xil nomlilardan — o'z fakulteti.
         $cleanGroup = fn ($n) => trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $n));
-        $cardGroups = fn (TimetableCard $c) => array_values(array_filter(array_map($cleanGroup, $c->occupiedGroups())));
+        $facKey = fn ($f) => mb_strtolower(trim((string) $f));
+        $cardGroups = fn (TimetableCard $c) => array_values(array_filter(array_map(fn ($n) => trim((string) $n), $c->occupiedGroups())));
+        $groupKey = fn (TimetableCard $c, string $raw) => $facKey($c->faculty_name) . '|' . $this->groupNameKey($raw);
         $groupNames = [];
         foreach ($cards as $c) {
-            foreach ($cardGroups($c) as $gn) {
-                $groupNames[$this->groupNameKey($gn)] = ['name' => $gn, 'card' => $c];
+            foreach ($cardGroups($c) as $raw) {
+                $groupNames[$groupKey($c, $raw)] ??= ['name' => $cleanGroup($raw), 'raw' => $raw, 'card' => $c];
             }
         }
         if (!empty($scope['groups'])) {
-            $want = array_flip(array_map(fn ($g) => $this->groupNameKey($cleanGroup($g)), $scope['groups']));
-            $groupNames = array_intersect_key($groupNames, $want);
+            $want = [];
+            foreach ($scope['groups'] as $g) {
+                $want[$this->groupNameKey($g)] = true;
+                $want[$this->groupNameKey($cleanGroup($g))] = true;
+            }
+            $groupNames = array_filter($groupNames, fn ($g) => isset($want[$this->groupNameKey($g['raw'])]) || isset($want[$this->groupNameKey($g['name'])]));
         }
-        $groupRows = DB::table('groups')->whereIn('name', array_column($groupNames, 'name'))->get()
-            ->keyBy(fn ($g) => $this->groupNameKey($g->name));
+        $groupRows = DB::table('groups')
+            ->whereIn('name', array_values(array_unique(array_merge(array_column($groupNames, 'raw'), array_column($groupNames, 'name')))))
+            ->get()->groupBy(fn ($g) => $this->groupNameKey($g->name));
+        $resolveGroup = function (array $g) use ($groupRows, $facKey) {
+            $cands = $groupRows[$this->groupNameKey($g['raw'])] ?? $groupRows[$this->groupNameKey($g['name'])] ?? collect();
+            $own = $cands->first(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
+
+            return $own ?? ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands->first() : null);
+        };
 
         $kuzgi = $board->semester_parity !== 'bahorgi';
         $fallbackRoom = Auditorium::where('name', 'like', '%kafedra mudiri%')->orderBy('id')->first();
@@ -228,8 +243,9 @@ trait TimetableHemisSync
 
         $groupsOut = [];
         $missingGroups = [];
-        foreach ($groupNames as $gk => ['name' => $gname, 'card' => $sample]) {
-            $grp = $groupRows[$gk] ?? null;
+        foreach ($groupNames as $gk => $gInfo) {
+            ['name' => $gname, 'card' => $sample] = $gInfo;
+            $grp = $resolveGroup($gInfo);
             if (!$grp) {
                 $missingGroups[] = $gname;
                 continue;
@@ -249,7 +265,7 @@ trait TimetableHemisSync
                 ->get(['schedule_hemis_id', 'subject_id', 'subject_name', 'training_type_code', 'training_type_name', 'lesson_date',
                     'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'updated_at']);
 
-            $gCards = $cards->filter(fn ($c) => in_array($gk, array_map(fn ($n) => $this->groupNameKey($n), $cardGroups($c)), true))->values();
+            $gCards = $cards->filter(fn ($c) => in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true))->values();
             $usedCards = [];
             $units = [];
             $unitMeta = [];

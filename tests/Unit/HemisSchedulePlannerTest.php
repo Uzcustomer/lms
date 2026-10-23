@@ -171,3 +171,16 @@ it('bo\'lak qo\'shnilari bir vaqtda davom ettiriladi', function () {
             ->and(array_column($r['records'], 'start'))->toBe(['08:30', '10:00']);
     }
 });
+
+it('KTR yo\'q bo\'lsa HEMIS\'dagi dars turi saqlanadi, o\'zboshimcha turga o\'zgartirilmaydi', function () {
+    $u = hsUnit([
+        'ktr' => null, 'current_week' => 1,
+        'hemis' => [hsHemis(1, hsDate(2, 1), 1, 2, '13'), hsHemis(2, hsDate(2, 3), 3, 2, '12'), hsHemis(3, hsDate(3, 1), 1, 2, '13')],
+        'plan' => [hsPlan(2, 1, 1, 2, 'A'), hsPlan(2, 3, 3, 2, 'A'), hsPlan(3, 1, 1, 2, 'A'), hsPlan(4, 1, 1, 2, 'A')],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 6)))->planGroup([$u], [], hsWorkDates(2, 4))[0];
+
+    // Mavjud darslar o'z turida qoladi; HEMIS'da yo'q kunga — shu qismda eng ko'p uchragan tur (Amaliy)
+    expect(array_map(fn ($a) => $a['op'] . ' ' . $a['date'] . ' ' . $a['code'], $r['actions']))->toBe(['create ' . hsDate(4, 1) . ' 13'])
+        ->and($r['notes'])->toContain('KTR kiritilmagan — balans tekshirilmadi, faqat jadval solishtirildi.');
+});

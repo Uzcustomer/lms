@@ -141,6 +141,34 @@ class SchedulePlanner
         unset($b);
 
         // Har haftada A (va L) yarim-slotlariga KTR qatoridagi turlar navbat bilan beriladi.
+        // KTR yo'q bo'lsa turlar taqsimoti noma'lum — HEMIS'dagi turi saqlanadi: o'sha vaqtdagi dars,
+        // bo'lmasa o'sha kundagi, bo'lmasa shu qismda eng ko'p uchragan tur (o'zboshimcha "asosiy" tur emas).
+        $hemisCode = null;
+        if ($u['ktr'] === null) {
+            $rowsByPart = [];
+            foreach ((array) $u['hemis'] as $r) {
+                if (isset($u['codes'][(string) $r['code']])) {
+                    $rowsByPart[$u['codes'][(string) $r['code']]][] = $r;
+                }
+            }
+            $hemisCode = function (string $part, string $date, int $slot) use ($rowsByPart): ?string {
+                [$from, $to] = $this->slotTimes[$slot] ?? ['', ''];
+                $rows = $rowsByPart[$part] ?? [];
+                $sameDay = array_values(array_filter($rows, fn ($r) => $r['date'] === $date));
+                foreach ($sameDay as $r) {
+                    if (substr($r['start'], 0, 5) <= $from && $to <= substr($r['end'], 0, 5)) {
+                        return (string) $r['code'];
+                    }
+                }
+                if ($sameDay) {
+                    return (string) $sameDay[0]['code'];
+                }
+                $freq = array_count_values(array_map(fn ($r) => (string) $r['code'], $rows));
+                arsort($freq);
+
+                return $freq ? (string) array_key_first($freq) : null;
+            };
+        }
         $byWeekPart = [];
         foreach ($blocks as $k => $b) {
             $byWeekPart[$b['week'] . '|' . $b['part']][] = $k;
@@ -159,7 +187,7 @@ class SchedulePlanner
             usort($keys, fn ($a, $b) => strcmp($blocks[$a]['date'], $blocks[$b]['date']));
             foreach ($keys as $k) {
                 foreach ($blocks[$k]['slots'] as $s => &$slot) {
-                    $slot['code'] = array_shift($queue) ?? $primary;
+                    $slot['code'] = array_shift($queue) ?? ($hemisCode ? $hemisCode($part, $blocks[$k]['date'], $s) : null) ?? $primary;
                 }
                 unset($slot);
             }

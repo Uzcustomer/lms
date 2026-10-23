@@ -453,26 +453,27 @@ trait TimetableHemisSync
     /**
      * Guruhlar alohida rejalashtiriladi — qo'shiladigan/o'zgaradigan dars o'qituvchi yoki xona bo'yicha boshqa
      * guruhning yakuniy darsi yoki HEMIS'dagi boshqa (rejaga kirmagan) dars bilan ustma-ust tushsa, amal to'siqli.
+     * O'sha o'qituvchi o'sha xonada bo'lsa — bu bitta dars (oqim ma'ruzasi, birlashgan amaliy), to'qnashuv emas.
      * O'rinbosar kafedra mudiri, "Kafedra mudiri xonasi" (o'rinbosar yoki HEMIS'da allaqachon qo'yilgan —
      * vaqtincha ustma-ust tushishiga ruxsat bor) va umumiy (raqamsiz) xonalar tekshirilmaydi.
      */
     private function hemisCrossCheck(array &$groupsOut, array $finals, array $handledIds, string $today): void
     {
-        $idx = [];   // "e|xodim|sana" / "r|xona|sana" => [[boshlanish, tugash, birlik, matn], ...]
+        $idx = [];   // "e|xodim|sana" / "r|xona|sana" => [[boshlanish, tugash, birlik, matn, xodim, xona], ...]
         $emps = [];
         $rooms = [];
         $freeRoom = fn (array $r) => in_array('mudir_xonasi', $r['flags'] ?? [], true) || $this->isSharedRoom($r['auditorium_name'] ?? null)
             || preg_match('/kafedra\s+mudiri/iu', (string) ($r['auditorium_name'] ?? '')) === 1;
-        $index = function (string $type, $id, string $date, string $start, string $end, string $unitKey, string $label) use (&$idx) {
-            $idx[$type . '|' . $id . '|' . $date][] = [$start, $end, $unitKey, $label];
+        $index = function (string $type, $id, string $date, string $start, string $end, string $unitKey, string $label, $emp, $room) use (&$idx) {
+            $idx[$type . '|' . $id . '|' . $date][] = [$start, $end, $unitKey, $label, (string) $emp, (string) $room];
         };
         foreach ($finals as $f) {
             if ($f['employee_id'] && !in_array('mudir', $f['flags'] ?? [], true)) {
-                $index('e', $f['employee_id'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label']);
+                $index('e', $f['employee_id'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label'], $f['employee_id'], $f['auditorium_code']);
                 $emps[(string) $f['employee_id']] = true;
             }
             if ($f['auditorium_code'] && !$freeRoom($f)) {
-                $index('r', $f['auditorium_code'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label']);
+                $index('r', $f['auditorium_code'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label'], $f['employee_id'], $f['auditorium_code']);
                 $rooms[(string) $f['auditorium_code']] = true;
             }
         }
@@ -490,10 +491,10 @@ trait TimetableHemisSync
                 $end = substr((string) $r->lesson_pair_end_time, 0, 5);
                 $label = 'HEMIS: ' . $r->group_name . ' · ' . $r->subject_name;
                 if ($r->employee_id && isset($emps[(string) $r->employee_id])) {
-                    $index('e', $r->employee_id, $date, $start, $end, '', $label);
+                    $index('e', $r->employee_id, $date, $start, $end, '', $label, $r->employee_id, $r->auditorium_code);
                 }
                 if ($r->auditorium_code && isset($rooms[(string) $r->auditorium_code]) && !$this->isSharedRoom($r->auditorium_name)) {
-                    $index('r', $r->auditorium_code, $date, $start, $end, '', $label);
+                    $index('r', $r->auditorium_code, $date, $start, $end, '', $label, $r->employee_id, $r->auditorium_code);
                 }
             }
         }
@@ -503,13 +504,18 @@ trait TimetableHemisSync
                     if (!in_array($a['op'], ['create', 'update'], true)) {
                         continue;
                     }
-                    foreach ([['e', $a['employee_id'] ?? null, 'mudir', "o'qituvchi band"], ['r', $a['auditorium_code'] ?? null, 'mudir_xonasi', 'xona band']] as [$type, $id, $flag, $msg]) {
-                        if (!$id || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
+                    $emp = (string) ($a['employee_id'] ?? '');
+                    $room = (string) ($a['auditorium_code'] ?? '');
+                    foreach ([['e', $emp, 'mudir', "o'qituvchi band"], ['r', $room, 'mudir_xonasi', 'xona band']] as [$type, $id, $flag, $msg]) {
+                        if ($id === '' || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
                             continue;
                         }
-                        foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label]) {
+                        foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label, $oEmp, $oRoom]) {
                             if ($k === $u['key'] && $s === $a['start']) {
                                 continue;   // shu yozuvning o'zi
+                            }
+                            if ($emp !== '' && $room !== '' && $oEmp === $emp && $oRoom === $room) {
+                                continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim)
                             }
                             if ($s < $a['end'] && $a['start'] < $e) {
                                 $a['blocked'][] = "{$msg}: {$label} {$s}-{$e}";

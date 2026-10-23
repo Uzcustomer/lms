@@ -236,3 +236,36 @@ it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq 
     $a = $create();
     expect($a['auditorium_code'])->toBe('KM777')->and($a['flags'])->toBe([])->and($a['blocked'])->toBe([]);
 });
+
+it('bir necha guruhga umumiy karta va HEMIS\'dagi oqim darsi o\'qituvchi/xona to\'qnashuvi hisoblanmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    $s['card']->update(['group_name' => 'p/st26-01a (rus) + p/st26-01b (rus)', 'group_names' => ['p/st26-01a (rus)', 'p/st26-01b (rus)']]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    // Hisobotda yo'q guruh HEMIS'da o'sha darsda (o'sha o'qituvchi, o'sha xona) — oqim
+    hsInsert('schedules', ['schedule_hemis_id' => 80, 'subject_id' => 474, 'subject_name' => 'Odam anatomiyasi', 'semester_code' => '11',
+        'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-09-28 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 5001, 'employee_name' => 'E5001', 'auditorium_code' => '71', 'auditorium_name' => '423']);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'])
+        ->assertOk()->json();
+
+    expect($res['groups'])->toHaveCount(2);
+    $creates = 0;
+    $blocked = [];
+    foreach ($res['groups'] as $g) {
+        foreach ($g['units'] as $u) {
+            foreach ($u['actions'] as $a) {
+                $creates += $a['op'] === 'create' ? 1 : 0;
+                if ($a['blocked']) {
+                    $blocked[] = $g['group'] . ' ' . $a['date'] . ': ' . implode('; ', $a['blocked']);
+                }
+            }
+        }
+    }
+    expect($creates)->toBeGreaterThan(2)->and($blocked)->toBe([]);
+});

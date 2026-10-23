@@ -162,3 +162,41 @@ it('guruh HEMIS\'da fakulteti va to\'liq nomi bo\'yicha topiladi', function () {
         ->and($ids['p/st26-01a'] ?? null)->toBe(1596)
         ->and($res['groups_not_in_hemis'])->toBe([]);
 });
+
+it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS darslari o\'qituvchi bandligida hisobga olinadi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Boshqa kafedraning va faol bo'lmagan "Kafedra mudiri xonasi" — tanlanmaydi; fan kafedrasi (501) niki olinadi
+    \App\Models\Auditorium::forceCreate(['code' => 'KM777', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 777]);
+    \App\Models\Auditorium::forceCreate(['code' => 'KM501X', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => false, 'department_hemis_id' => 501]);
+    \App\Models\Auditorium::forceCreate(['code' => 'KM501', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 501]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-14', '12:00:00', '13:20:00');
+    hsSchedule(3, '2026-09-21', '10:00:00', '11:20:00', 6006);
+    hsSchedule(4, '2026-10-08', '10:00:00', '11:20:00');
+    // Shu fanning rejaga kirmagan turi (mustaqil ta'lim) — o'sha o'qituvchi 28.09 10:00 da band
+    hsInsert('schedules', ['schedule_hemis_id' => 50, 'subject_id' => 474, 'subject_name' => 'Odam anatomiyasi', 'semester_code' => '11',
+        'group_id' => 1596, 'group_name' => 'p/st26-01a', 'training_type_code' => '17', 'training_type_name' => "Mustaqil ta'lim",
+        'lesson_date' => '2026-09-28 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 5001, 'employee_name' => 'E5001', 'auditorium_code' => '99', 'auditorium_name' => '99']);
+    // Boshqa guruh (hisobotda yo'q) — o'sha o'qituvchi 05.10 10:00 da band
+    hsInsert('schedules', ['schedule_hemis_id' => 60, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11',
+        'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-10-05 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 5001, 'employee_name' => 'E5001', 'auditorium_code' => '98', 'auditorium_name' => '98']);
+    $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'])
+        ->assertOk()->json();
+    $u = $res['groups'][0]['units'][0];
+    $byDate = [];
+    foreach ($u['actions'] as $a) {
+        $byDate[$a['op'] . ' ' . $a['date']] = $a;
+    }
+    expect($byDate['create 2026-09-28']['auditorium_code'])->toBe('KM501')
+        ->and(implode(' ', $byDate['create 2026-09-28']['blocked']))->toContain("o'qituvchi band")
+        ->and(implode(' ', $byDate['create 2026-10-05']['blocked']))->toContain('p/st26-09a')
+        ->and(implode(' ', $u['notes']))->toContain('rejaga kirmagan turdagi 1 ta');
+});

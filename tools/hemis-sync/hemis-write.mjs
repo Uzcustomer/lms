@@ -65,7 +65,9 @@ if (opt('until-week')) {
 }
 const groupsOnly = opt('group') ? String(opt('group')).split(',').map(s => s.trim().toLowerCase()) : null;
 const opsOnly = opt('only') ? String(opt('only')).split(',').map(s => s.trim()) : null;
-const today = rep.today;
+// Bugun — JSON'dagi sana va shu kompyuterdagi sanadan kattasi: eski JSON yoki admin sinov sanasi bilan
+// olingan JSON ham bugungi va o'tgan kunlarga yozdirmaydi.
+const today = [String(rep.today || ''), new Date().toLocaleDateString('en-CA')].sort().pop();
 
 // --- Amallar ro'yxati
 const jobs = [];
@@ -89,7 +91,11 @@ for (const g of rep.groups || []) {
         }
     }
 }
-jobs.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
+// Guruh bo'yicha (tasdiq har guruhga bir marta); guruh ichida avval o'chirish, so'ng o'zgartirish, so'ng qo'shish —
+// bo'shaydigan vaqtga yangi dars eskisi olib tashlangandan keyin qo'yiladi.
+const OP_ORDER = { delete: 0, update: 1, create: 2 };
+jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
+    || OP_ORDER[x.op] - OP_ORDER[y.op] || (x.date + x.start).localeCompare(y.date + y.start));
 
 const line = j => `${OP_NAME[j.op].padEnd(12)} ${j.group.padEnd(12)} ${j.date} ${j.start}-${j.end}  ${j.subject.slice(0, 34).padEnd(34)} ${String(j.type).padEnd(12)} ${j.employee_name || '—'} · ${j.auditorium_name || '—'}${j.hemis_id ? ' · #' + j.hemis_id : ''}${j.changes && j.changes.length ? '  (' + j.changes.join('; ') + ')' : ''}`;
 
@@ -211,13 +217,13 @@ const results = [];
 let lastGroup = null;
 let stop = false;
 for (const j of jobs) {
-    if (apply && !has('yes') && j.group !== lastGroup) {
-        const n = jobs.filter(x => x.group === j.group).length;
+    if (apply && !has('yes') && j.group_id !== lastGroup) {
+        const n = jobs.filter(x => x.group_id === j.group_id).length;
         const ans = (await rl.question(`\n${j.group}: ${n} ta amal HEMIS'ga yoziladi. Davom etamizmi? [ha / o'tkaz / to'xtat] `)).trim().toLowerCase();
         if (ans.startsWith('t')) { stop = true; }
-        if (ans.startsWith('o')) { jobs.filter(x => x.group === j.group).forEach(x => x._skip = true); }
+        if (ans.startsWith('o')) { jobs.filter(x => x.group_id === j.group_id).forEach(x => x._skip = true); }
     }
-    lastGroup = j.group;
+    lastGroup = j.group_id;
     if (stop) { results.push({ ...j, status: 'skipped', reason: 'to\'xtatildi' }); continue; }
     if (j._skip) { results.push({ ...j, status: 'skipped', reason: 'foydalanuvchi o\'tkazdi' }); continue; }
     const res = await page.evaluate(runInPage, { job: j, apply }).catch(e => ({ ok: false, error: String(e.message || e) }));

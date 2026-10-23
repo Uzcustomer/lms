@@ -289,3 +289,22 @@ it('faqat tanlangan haftagacha amallar chiqadi; sukut — joriy hafta oxirigacha
         // 2-hafta dushanbasidagi dars HEMIS'ga kiritilmagan (o'tib ketdi) — shu haftaning o'zida yangi kun qo'shiladi
         ->and(array_map(fn ($a) => $a['op'] . ' ' . $a['date'], $def['groups'][0]['units'][0]['actions']))->toBe(['create 2026-09-23']);
 });
+
+it('"Kafedra mudiri xonasi" — aynan shu nomli auditoriya ustuvor', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    \App\Models\Auditorium::where('code', 'KM1')->delete();
+    \App\Models\Auditorium::forceCreate(['code' => 'KMX', 'name' => 'Kafedra mudiri xonasi (eski bino)', 'volume' => 1, 'active' => true]);
+    \App\Models\Auditorium::forceCreate(['code' => 'KME', 'name' => ' Kafedra mudiri xonasi ', 'volume' => 1, 'active' => true]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $creates = array_values(array_filter($res['groups'][0]['units'][0]['actions'], fn ($a) => $a['op'] === 'create'));
+    expect($res['fallback_room']['code'])->toBe('KME')
+        ->and($creates)->not->toBeEmpty()
+        ->and(array_unique(array_column($creates, 'auditorium_code')))->toBe(['KME']);
+});

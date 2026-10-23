@@ -1277,6 +1277,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Haftalik jadval: hozirgi joylashuvni tashqi qatlamga ko'chirish (admin)
                 Route::post('/boards/{board}/weekly-layer-copy', [\App\Http\Controllers\Admin\TimetableController::class, 'weeklyLayerCopy'])->name('weekly-layer-copy');
                 Route::post('/boards/{board}/ktr-weeks', [\App\Http\Controllers\Admin\TimetableController::class, 'ktrWeeks'])->name('ktr-weeks');
+                Route::post('/boards/{board}/hemis-sync', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncCompare'])->name('hemis-sync');
+                Route::post('/boards/{board}/hemis-sync/export', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncExport'])->name('hemis-sync.export');
                 // Jadval o'zgarishlari — registrator ofisi tasdig'i
                 Route::post('/cards/{card}/time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkTime'])->name('cards.time-proposal.check');
                 Route::post('/cards/{card}/time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeTime'])->name('cards.time-proposal');

@@ -144,6 +144,12 @@
                                     </svg>
                                     Excel
                                 </a>
+                                <a href="{{ route('admin.ktr.export-detailed', request()->query()) }}" class="ktr-export-btn" title="Filtrdagi barcha fanlar: mashg'ulot turlari va haftalar bo'yicha soatlar (mavzularsiz)">
+                                    <svg style="width: 16px; height: 16px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    Batafsil Excel
+                                </a>
                                 @if($canSyncHemis)
                                     <button type="button" id="btn-hemis-sync" class="ktr-sync-btn" onclick="startHemisSync()" title="O'quv rejalar va fanlarini HEMIS'dan yangilash">
                                         <svg style="width: 16px; height: 16px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -965,6 +965,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-semesters', [KtrController::class, 'getSemesters'])->name('get-semesters');
             Route::get('/get-subjects', [KtrController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/export', [KtrController::class, 'export'])->name('export');
+            Route::get('/export-detailed', [KtrController::class, 'exportDetailed'])->name('export-detailed');
             Route::post('/hemis-sync', [KtrController::class, 'startHemisSync'])->name('hemis-sync');
             Route::get('/hemis-sync/status', [KtrController::class, 'hemisSyncStatus'])->name('hemis-sync.status');
             Route::get('/export-word/{curriculumSubjectId}', [KtrController::class, 'exportWord'])->name('export-word');

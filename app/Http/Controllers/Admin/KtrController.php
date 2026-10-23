@@ -524,12 +524,10 @@ class KtrController extends Controller
     }
 
     /**
-     * Excelga export
+     * Eksportlar uchun umumiy so'rov: sahifadagi filtrlar va fan mas'uli doirasi
      */
-    public function export(Request $request)
+    private function buildExportQuery(Request $request)
     {
-        $this->checkKtrAccess();
-
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
@@ -601,6 +599,17 @@ class KtrController extends Controller
             $this->applyCurrentSemesterFilter($query);
         }
 
+        return $query;
+    }
+
+    /**
+     * Excelga export
+     */
+    public function export(Request $request)
+    {
+        $this->checkKtrAccess();
+
+        $query = $this->buildExportQuery($request);
         $query->orderBy('f.name')->orderBy('cs.subject_name');
         $items = $query->get();
 
@@ -711,6 +720,187 @@ class KtrController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Batafsil Excel: filtrdagi barcha fanlarning kalendar rejasi (mavzularsiz) —
+     * har fan uchun mashg'ulot turlari, haftalar bo'yicha soatlar va fan jami.
+     */
+    public function exportDetailed(Request $request)
+    {
+        $this->checkKtrAccess();
+
+        $items = $this->buildExportQuery($request)
+            ->addSelect(['s.level_code', 'cs.semester_code'])
+            ->orderBy('f.name')
+            ->orderBy('sp.name')
+            ->orderBy('s.level_code')
+            ->orderBy('cs.semester_code')
+            ->orderBy('cs.subject_name')
+            ->get();
+
+        $plans = Schema::hasTable('ktr_plans')
+            ? KtrPlan::whereIn('curriculum_subject_id', $items->pluck('curriculum_subject_id'))->get()->keyBy('curriculum_subject_id')
+            : collect();
+
+        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+        $normalize = fn ($str) => preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower((string) $str));
+        $typePos = function ($name) use ($typeOrder, $normalize) {
+            $n = $normalize($name);
+            foreach ($typeOrder as $i => $kw) {
+                if (str_contains($n, $kw)) return $i;
+            }
+            return count($typeOrder);
+        };
+
+        // Har fan: mashg'ulot turlari (tartiblangan), haftalik soatlar va jami
+        $blocks = [];
+        $maxWeeks = 0;
+        foreach ($items as $item) {
+            $details = is_string($item->subject_details) ? json_decode($item->subject_details, true) : $item->subject_details;
+            $types = [];
+            foreach (is_array($details) ? $details : [] as $d) {
+                $code = (string) ($d['trainingType']['code'] ?? '');
+                $name = $d['trainingType']['name'] ?? '';
+                if ($code !== '' && $name !== '') {
+                    $types[$code] = ['name' => $name, 'hours' => (int) ($d['academic_load'] ?? 0)];
+                }
+            }
+            uasort($types, fn ($a, $b) => $typePos($a['name']) <=> $typePos($b['name']));
+
+            $plan = $plans->get($item->curriculum_subject_id);
+            $weekCount = $plan ? (int) $plan->week_count : 0;
+            $hoursData = $plan ? ($plan->plan_data['hours'] ?? $plan->plan_data ?? []) : [];
+            $maxWeeks = max($maxWeeks, $weekCount);
+
+            $rows = [];
+            foreach ($types as $code => $type) {
+                $weeks = [];
+                $weekSum = 0;
+                for ($w = 1; $w <= $weekCount; $w++) {
+                    $h = (int) ($hoursData[$w][$code] ?? 0);
+                    $weeks[$w] = $h;
+                    $weekSum += $h;
+                }
+                // Mustaqil ta'lim haftalarga taqsimlanmaydi — jami HEMIS yuklamasidan
+                $isMustaqil = str_contains($normalize($type['name']), 'mustaqil');
+                $rows[] = [
+                    'name' => $type['name'],
+                    'weeks' => $weeks,
+                    'total' => ($plan && !$isMustaqil) ? $weekSum : $type['hours'],
+                ];
+            }
+
+            $blocks[] = ['item' => $item, 'has_plan' => (bool) $plan, 'rows' => $rows];
+        }
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('KTR');
+        $col = fn (int $i) => \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
+
+        // Ustunlar: # | Fakultet | Yo'nalish | Kurs | Semestr | Fan | Mashg'ulot turi | 1..N hafta | Jami soat
+        $firstWeekCol = 8;
+        $totalCol = $firstWeekCol + $maxWeeks;
+        $lastCol = $col($totalCol);
+
+        $sheet->setCellValue('A1', "Kalendar tematik rejalar — mashg'ulot turlari va soatlar");
+        $sheet->mergeCells("A1:{$lastCol}1");
+        $sheet->setCellValue('A2', 'Yuklab olingan: ' . now()->format('d.m.Y H:i') . ' · Fanlar soni: ' . count($blocks));
+        $sheet->mergeCells("A2:{$lastCol}2");
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+        $sheet->getStyle('A2')->getFont()->setItalic(true)->getColor()->setRGB('555555');
+
+        $fixed = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', "Mashg'ulot turi"];
+        foreach ($fixed as $i => $label) {
+            $c = $col($i + 1);
+            $sheet->setCellValue("{$c}3", $label);
+            $sheet->mergeCells("{$c}3:{$c}4");
+        }
+        if ($maxWeeks > 0) {
+            $sheet->setCellValue($col($firstWeekCol) . '3', "Haftalar bo'yicha soatlar");
+            $sheet->mergeCells($col($firstWeekCol) . '3:' . $col($totalCol - 1) . '3');
+            for ($w = 1; $w <= $maxWeeks; $w++) {
+                $sheet->setCellValue($col($firstWeekCol + $w - 1) . '4', $w);
+            }
+        }
+        $sheet->setCellValue("{$lastCol}3", 'Jami soat');
+        $sheet->mergeCells("{$lastCol}3:{$lastCol}4");
+        $sheet->getStyle("A3:{$lastCol}4")->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1F4E78']],
+            'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true],
+        ]);
+
+        $r = 5;
+        $n = 0;
+        foreach ($blocks as $block) {
+            $item = $block['item'];
+            $startRow = $r;
+            $rows = $block['rows'] ?: [['name' => "Mashg'ulot turlari yo'q", 'weeks' => [], 'total' => 0]];
+            $weekTotals = [];
+
+            foreach ($rows as $row) {
+                $sheet->setCellValue("G{$r}", $row['name']);
+                foreach ($row['weeks'] as $w => $h) {
+                    if ($h > 0) {
+                        $sheet->setCellValue($col($firstWeekCol + $w - 1) . $r, $h);
+                    }
+                    $weekTotals[$w] = ($weekTotals[$w] ?? 0) + $h;
+                }
+                $sheet->setCellValue("{$lastCol}{$r}", $row['total']);
+                $r++;
+            }
+
+            // Fan jami qatori
+            $sheet->setCellValue("G{$r}", $block['has_plan'] ? 'Jami' : 'Jami (KTR yaratilmagan)');
+            foreach ($weekTotals as $w => $h) {
+                if ($h > 0) {
+                    $sheet->setCellValue($col($firstWeekCol + $w - 1) . $r, $h);
+                }
+            }
+            $sheet->setCellValue("{$lastCol}{$r}", array_sum(array_column($rows, 'total')));
+            $sheet->getStyle("G{$r}:{$lastCol}{$r}")->applyFromArray([
+                'font' => ['bold' => true],
+                'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => $block['has_plan'] ? 'E2EFDA' : 'FCE4D6']],
+            ]);
+
+            $info = [++$n, $item->faculty_name ?? '-', $item->specialty_name ?? '-', $item->level_name ?? '-', $item->semester_name ?? '-', $item->subject_name ?? '-'];
+            foreach ($info as $i => $value) {
+                $c = $col($i + 1);
+                $sheet->setCellValue("{$c}{$startRow}", $value);
+                $sheet->mergeCells("{$c}{$startRow}:{$c}{$r}");
+            }
+            $sheet->getStyle("A{$startRow}:{$lastCol}{$r}")->applyFromArray(['borders' => [
+                'allBorders' => ['borderStyle' => 'thin'],
+                'outline' => ['borderStyle' => 'medium'],
+            ]]);
+            $r++;
+        }
+
+        $lastRow = max(4, $r - 1);
+        $sheet->getStyle("A3:{$lastCol}4")->applyFromArray(['borders' => ['allBorders' => ['borderStyle' => 'thin']]]);
+        $sheet->getStyle("A5:F{$lastRow}")->getAlignment()->setVertical('center')->setWrapText(true);
+        $sheet->getStyle("A5:A{$lastRow}")->getAlignment()->setHorizontal('center');
+        $sheet->getStyle("D5:E{$lastRow}")->getAlignment()->setHorizontal('center');
+        $sheet->getStyle($col($firstWeekCol) . "5:{$lastCol}{$lastRow}")->getAlignment()->setHorizontal('center');
+        $sheet->getStyle("{$lastCol}5:{$lastCol}{$lastRow}")->getFont()->setBold(true);
+
+        foreach (['A' => 5, 'B' => 28, 'C' => 32, 'D' => 9, 'E' => 11, 'F' => 36, 'G' => 26] as $c => $width) {
+            $sheet->getColumnDimension($c)->setWidth($width);
+        }
+        for ($i = $firstWeekCol; $i < $totalCol; $i++) {
+            $sheet->getColumnDimension($col($i))->setWidth(4.5);
+        }
+        $sheet->getColumnDimension($lastCol)->setWidth(10);
+        $sheet->freezePane('H5');
+
+        $temp = tempnam(sys_get_temp_dir(), 'ktr_') . '.xlsx';
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save($temp);
+
+        return response()->download($temp, 'KTR_batafsil_' . date('Y-m-d_H-i') . '.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     /**

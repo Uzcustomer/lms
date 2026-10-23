@@ -108,7 +108,7 @@ it('admin sinov sanasi bilan: ortiqcha soat keyingi haftada kamaytiriladi, mudir
     $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
 
     $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
-        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
         ->assertOk()->json();
 
     expect($res['groups'])->toHaveCount(1);
@@ -188,7 +188,7 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
     $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
 
     $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
-        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
         ->assertOk()->json();
     $u = $res['groups'][0]['units'][0];
     $byDate = [];
@@ -220,7 +220,7 @@ it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq 
         'employee_id' => 7007, 'employee_name' => 'E7007', 'auditorium_code' => 'KM777', 'auditorium_name' => 'Kafedra mudiri xonasi']);
     $create = function () use ($s) {
         $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
-            ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'])
+            ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
             ->assertOk()->json();
 
         return collect($res['groups'][0]['units'][0]['actions'])->first(fn ($a) => $a['op'] . ' ' . $a['date'] === 'create 2026-09-28');
@@ -251,7 +251,7 @@ it('bir necha guruhga umumiy karta va HEMIS\'dagi oqim darsi o\'qituvchi/xona to
         'employee_id' => 5001, 'employee_name' => 'E5001', 'auditorium_code' => '71', 'auditorium_name' => '423']);
 
     $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
-        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
         ->assertOk()->json();
 
     expect($res['groups'])->toHaveCount(2);
@@ -268,4 +268,43 @@ it('bir necha guruhga umumiy karta va HEMIS\'dagi oqim darsi o\'qituvchi/xona to
         }
     }
     expect($creates)->toBeGreaterThan(2)->and($blocked)->toBe([]);
+});
+
+it('faqat tanlangan haftagacha amallar chiqadi; sukut — joriy hafta oxirigacha', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+
+    $two = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])->assertOk()->json();
+    $u = $two['groups'][0]['units'][0];
+    expect(array_column($u['actions'], 'date'))->toBe(['2026-09-21'])
+        ->and($u['actions_later'])->toBe(2)
+        ->and($two['groups'][0]['until'])->toBe('2026-09-27');
+
+    // Sukut: joriy (2-) hafta — bugun 2026-09-22
+    $def = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22'])->assertOk()->json();
+    expect($def['until_week'])->toBe(2)->and($def['current_week'])->toBe(2)
+        // 2-hafta dushanbasidagi dars HEMIS'ga kiritilmagan (o'tib ketdi) — shu haftaning o'zida yangi kun qo'shiladi
+        ->and(array_map(fn ($a) => $a['op'] . ' ' . $a['date'], $def['groups'][0]['units'][0]['actions']))->toBe(['create 2026-09-23']);
+});
+
+it('"Kafedra mudiri xonasi" — aynan shu nomli auditoriya ustuvor', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    \App\Models\Auditorium::where('code', 'KM1')->delete();
+    \App\Models\Auditorium::forceCreate(['code' => 'KMX', 'name' => 'Kafedra mudiri xonasi (eski bino)', 'volume' => 1, 'active' => true]);
+    \App\Models\Auditorium::forceCreate(['code' => 'KME', 'name' => ' Kafedra mudiri xonasi ', 'volume' => 1, 'active' => true]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $creates = array_values(array_filter($res['groups'][0]['units'][0]['actions'], fn ($a) => $a['op'] === 'create'));
+    expect($res['fallback_room']['code'])->toBe('KME')
+        ->and($creates)->not->toBeEmpty()
+        ->and(array_unique(array_column($creates, 'auditorium_code')))->toBe(['KME']);
 });

@@ -1,0 +1,4 @@
+.hemis-profile/
+hemis-write-log-*.json
+node_modules/
+hemis_amallar_*.json

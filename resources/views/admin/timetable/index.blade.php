@@ -3588,6 +3588,7 @@
             };
             // ===== Registrator: HEMIS bilan solishtirish (faqat o'qiydi, taklif beradi) =====
             let hemisSyncLast = null;
+            let hemisSyncUntil = null;   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -3629,6 +3630,7 @@
                         const fx = u.fixes.map(f => '<div>• ' + hsEsc(f.text) + '</div>').join('') +
                             u.notes.map(n => '<div class="text-red-600">⚠ ' + hsEsc(n) + '</div>').join('');
                         const cnt = { create: 0, update: 0, delete: 0 };
+                        tot.later = (tot.later || 0) + (u.actions_later || 0);
                         u.actions.forEach(a => { cnt[a.op]++; tot[a.op]++; if (a.blocked && a.blocked.length) tot.blocked++; });
                         const list = u.actions.map(a => '<div class="' + opCls[a.op] + '">' + opName[a.op] + ' · ' + hsEsc(a.date) + ' ' + hsEsc(a.start) + '–' + hsEsc(a.end) +
                             ' · ' + hsEsc(u.code_names[a.code] || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') +
@@ -3652,16 +3654,21 @@
                 }
                 const head = '<div class="flex items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">HEMIS solishtirish · ' + hsEsc(scopeLabelText()) +
                     ' · bugun ' + hsEsc(rep.today) + '</h3>' +
+                    '<label class="text-gray-600">Qaysi haftagacha: <select id="hsUntil" class="border rounded px-1 py-0.5 text-[12px]">' +
+                    (rep.weeks || []).map(w => '<option value="' + w.week + '"' + (w.week === rep.until_week ? ' selected' : '') + '>' + w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')' +
+                        (w.week === rep.current_week ? ' • joriy' : '') + '</option>').join('') +
+                    '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
                     '<button type="button" id="hsExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="hsJson" class="tt-ktr-weeks-btn">JSON (HEMIS\'ga yozish uchun)</button>' +
                     '<button type="button" id="hsClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
                     '<div class="text-gray-600 mb-1">Bugun va undan oldingi kunlarga tegilmaydi. Farq: musbat — ortiqcha, manfiy — kam. ' +
                     'Jami amallar: <b class="text-emerald-700">+' + tot.create + '</b> qo\'shish, <b class="text-amber-700">~' + tot.update + '</b> o\'zgartirish, ' +
-                    '<b class="text-red-700">−' + tot.delete + '</b> o\'chirish' + (tot.blocked ? ', <b class="text-red-600">' + tot.blocked + ' ta to\'siqli</b>' : '') + '.' +
+                    '<b class="text-red-700">−' + tot.delete + '</b> o\'chirish' + (tot.later ? ' (tanlangan haftadan keyin yana ' + tot.later + ' ta amal — hozir yozilmaydi)' : '') + (tot.blocked ? ', <b class="text-red-600">' + tot.blocked + ' ta to\'siqli</b>' : '') + '.' +
                     (rep.fallback_room ? '' : ' <b class="text-red-600">"Kafedra mudiri xonasi" auditoriyasi topilmadi — HEMIS\'da ochib, auditoriyalarni import qiling.</b>') +
                     (rep.groups_not_in_hemis.length ? '<div class="text-red-600">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.groups_not_in_hemis.join(', ')) + '</div>' : '') + '</div>';
                 hemisSyncModal(head + body);
                 $('hsClose').onclick = () => $('hemisSyncModal').remove();
+                $('hsUntil').onchange = function () { hemisSyncUntil = +this.value; hemisSyncRun(); };
                 $('hsJson').onclick = () => {
                     const blob = new Blob([JSON.stringify(rep, null, 1)], { type: 'application/json' });
                     const a = document.createElement('a');
@@ -3675,19 +3682,26 @@
                     add('_token', CSRF);
                     const sb = scopeBody();
                     Object.keys(sb).forEach(k => sb[k].forEach(v => add(k + '[]', v)));
+                    add('until_week', rep.until_week || 0);
                     document.body.appendChild(f); f.submit(); f.remove();
                 };
+            }
+            async function hemisSyncRun() {
+                hemisSyncModal('<div class="p-6 text-center text-gray-500">HEMIS bilan solishtirilmoqda… (' + hsEsc(scopeLabelText()) + ')</div>');
+                try {
+                    // Sukut (until_week yuborilmasa) — server joriy hafta oxirigacha oladi.
+                    const body = hemisSyncUntil === null ? scopeBody() : Object.assign({ until_week: hemisSyncUntil }, scopeBody());
+                    hemisSyncLast = await api(BASE + '/boards/' + board.id + '/hemis-sync', 'POST', body);
+                    hemisSyncRender(hemisSyncLast);
+                } catch (e) {
+                    hemisSyncModal('<div class="p-4 text-red-600">Xatolik: ' + hsEsc(e.message) + '</div><button type="button" class="px-2 py-1 border rounded" onclick="this.closest(\'#hemisSyncModal\').remove()">Yopish</button>');
+                }
             }
             if ($('hemisSyncBtn')) $('hemisSyncBtn').onclick = async function () {
                 if (!board) return;
                 this.disabled = true;
-                hemisSyncModal('<div class="p-6 text-center text-gray-500">HEMIS bilan solishtirilmoqda… (' + hsEsc(scopeLabelText()) + ')</div>');
-                try {
-                    hemisSyncLast = await api(BASE + '/boards/' + board.id + '/hemis-sync', 'POST', scopeBody());
-                    hemisSyncRender(hemisSyncLast);
-                } catch (e) {
-                    hemisSyncModal('<div class="p-4 text-red-600">Xatolik: ' + hsEsc(e.message) + '</div><button type="button" class="px-2 py-1 border rounded" onclick="this.closest(\'#hemisSyncModal\').remove()">Yopish</button>');
-                } finally { this.disabled = false; }
+                hemisSyncUntil = null;
+                try { await hemisSyncRun(); } finally { this.disabled = false; }
             };
             // ===== Ichki jadval: haftani zichlash =====
             // Tashqi jadval (ext_day/ext_pair) andoza: guruhning shu kunidagi shablonda band, lekin

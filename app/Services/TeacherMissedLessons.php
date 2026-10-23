@@ -68,6 +68,12 @@ class TeacherMissedLessons
      * talabaning "o'z o'qituvchisi" — shu fanda unga eng ko'p baho qo'ygan xodim.
      * Bo'sh katak faqat o'sha o'qituvchiga tegishli bo'ladi.
      *
+     * Kichik guruh = BIR KUNDA guruhning shu fanida ikki va undan ortiq o'qituvchi
+     * dars o'tgan. Boshqa kunda bitta o'qituvchining o'rniga kirgan (o'rinbosar)
+     * kichik guruh hisoblanmaydi — aks holda o'rinbosar bir kun baho qo'ygan kech
+     * kiritilgan talaba butunlay unga "tegishli" bo'lib qolardi. Ega ham faqat
+     * shunday (parallel) kunlardagi baholardan aniqlanadi.
+     *
      * @return array ['multi' => [guruh|fan => true], 'own' => [guruh|fan => [talaba hemis => xodim hemis]]]
      */
     public function subgroupOwners(array $groupIds, array $subjectIds, string $from, string $to): array
@@ -76,15 +82,17 @@ class TeacherMissedLessons
         if (! $groupIds || ! $subjectIds) {
             return $out;
         }
+        $multiDays = [];
         foreach (DB::table('schedules')
             ->whereIn('group_id', $groupIds)->whereIn('subject_id', $subjectIds)
             ->whereNull('deleted_at')->where('education_year_current', true)
             ->where('training_type_code', '!=', '11')->whereNotNull('employee_id')
             ->where('lesson_date', '>=', $from.' 00:00:00')->where('lesson_date', '<', $to.' 23:59:59')
-            ->groupBy('group_id', 'subject_id')
+            ->groupBy('group_id', 'subject_id', DB::raw('DATE(lesson_date)'))
             ->havingRaw('COUNT(DISTINCT employee_id) > 1')
-            ->get(['group_id', 'subject_id']) as $r) {
+            ->get(['group_id', 'subject_id', DB::raw('DATE(lesson_date) as d')]) as $r) {
             $out['multi'][$r->group_id.'|'.$r->subject_id] = true;
+            $multiDays[$r->group_id.'|'.$r->subject_id][(string) $r->d] = true;
         }
         if (! $out['multi']) {
             return $out;
@@ -101,12 +109,13 @@ class TeacherMissedLessons
                 ->whereIn('student_hemis_id', $chunk)->whereIn('subject_id', $multiSubjects)
                 ->whereNull('deleted_at')->whereNotNull('employee_id')->where('training_type_code', '!=', 11)
                 ->where('lesson_date', '>=', $from.' 00:00:00')
-                ->groupBy('student_hemis_id', 'subject_id', 'employee_id')
-                ->selectRaw('student_hemis_id, subject_id, employee_id, COUNT(*) as c')
+                ->groupBy('student_hemis_id', 'subject_id', 'employee_id', DB::raw('DATE(lesson_date)'))
+                ->selectRaw('student_hemis_id, subject_id, employee_id, DATE(lesson_date) as d, COUNT(*) as c')
                 ->get() as $g) {
                 $key = ($studentGroup[$g->student_hemis_id] ?? '').'|'.$g->subject_id;
-                if (isset($out['multi'][$key])) {
-                    $counts[$key][(string) $g->student_hemis_id][(string) $g->employee_id] = (int) $g->c;
+                if (isset($multiDays[$key][(string) $g->d])) {
+                    $counts[$key][(string) $g->student_hemis_id][(string) $g->employee_id] =
+                        ($counts[$key][(string) $g->student_hemis_id][(string) $g->employee_id] ?? 0) + (int) $g->c;
                 }
             }
         }
@@ -131,6 +140,29 @@ class TeacherMissedLessons
 
         return array_filter($missing, fn ($v, $hemis) => ! isset($own[(string) $hemis]) || $own[(string) $hemis] === (string) $employeeId,
             ARRAY_FILTER_USE_BOTH);
+    }
+
+    /**
+     * Guruh+fan amaliy juftliklarining jadvaldagi o'qituvchilari: kech kiritilgan
+     * talabaning bo'sh katagi o'sha darsni o'tgan o'qituvchiga tegishli (popup va
+     * hisobotdagi kabi), boshqa kunlarning o'qituvchisiga emas.
+     *
+     * @return array ['Y-m-d|juftlik' => [xodim hemis, ...]]
+     */
+    public function slotEmployees(string $groupId, string $subjectId, string $semesterCode): array
+    {
+        $out = [];
+        foreach (DB::table('schedules')
+            ->where('group_id', $groupId)->where('subject_id', $subjectId)->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')->whereNotNull('employee_id')
+            ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102, 103]))
+            ->get(['lesson_date', 'lesson_pair_code', 'employee_id']) as $r) {
+            $key = substr((string) $r->lesson_date, 0, 10).'|'.$r->lesson_pair_code;
+            $out[$key][(string) $r->employee_id] = true;
+        }
+
+        // Raqamli kalitlar int bo'lib qoladi — qat'iy solishtirish uchun stringga
+        return array_map(fn ($ids) => array_map('strval', array_keys($ids)), $out);
     }
 
     /** @return Collection<int, array> eng yangi sana birinchi */

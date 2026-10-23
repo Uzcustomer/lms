@@ -2428,8 +2428,12 @@ class JournalController extends Controller
         // Bir guruhni bir nechta o'qituvchi (kichik guruhlar) o'qitsa: sariq katakka faqat
         // talabaning o'z o'qituvchisi (unga eng ko'p baho qo'ygan) baho qo'yadi
         $skOwner = [];
+        $skSlotEmployees = [];
         $skViewerHemis = (string) (auth()->guard('teacher')->user()?->hemis_id ?? '');
         if ($lateJoinDates) {
+            // Sariq katak o'sha darsni jadvalda o'tgan o'qituvchiga tegishli
+            $skSlotEmployees = app(\App\Services\TeacherMissedLessons::class)->slotEmployees(
+                (string) $group->group_hemis_id, (string) $subjectId, (string) $semesterCode);
             $owners = app(\App\Services\TeacherMissedLessons::class)->subgroupOwners(
                 [(string) $group->group_hemis_id], [(string) $subjectId],
                 \App\Models\LessonOpening::periodStart()->toDateString(), now('Asia/Tashkent')->toDateString());
@@ -2442,6 +2446,7 @@ class JournalController extends Controller
 
         return view('admin.journal.show', compact(
             'skOwner',
+            'skSlotEmployees',
             'skViewerHemis',
             'lateJoinDates',
             'group',
@@ -6485,6 +6490,13 @@ class JournalController extends Controller
             $viewerIsAdmin = (auth()->guard('web')->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']) ?? false)
                 || (auth()->guard('teacher')->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']) ?? false);
             if ($isLateJoinGap && $viewerHemis !== '' && !$viewerIsAdmin) {
+                // Kech kiritilgan talabaning katagi — o'sha darsni jadvalda o'tgan o'qituvchiniki
+                $slot = app(\App\Services\TeacherMissedLessons::class)->slotEmployees(
+                    (string) $groupHemisId, (string) $request->subject_id, (string) $request->semester_code)[$lessonDate . '|' . $request->lesson_pair_code] ?? [];
+                if ($slot && !in_array($viewerHemis, $slot, true)) {
+                    $slotNames = Teacher::whereIn('hemis_id', $slot)->pluck('short_name')->filter()->implode(', ') ?: 'boshqa o\'qituvchi';
+                    return response()->json(['success' => false, 'message' => "Bu darsni jadval bo'yicha {$slotNames} o'tgan — bu katakka u baho qo'yadi."], 403);
+                }
                 $owners = app(\App\Services\TeacherMissedLessons::class)->subgroupOwners(
                     [(string) $groupHemisId], [(string) $request->subject_id],
                     \App\Models\LessonOpening::periodStart()->toDateString(), now('Asia/Tashkent')->toDateString());

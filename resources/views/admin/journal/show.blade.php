@@ -1208,6 +1208,17 @@
                             // O'qituvchi ularga dars ochish arizasisiz baho qo'yadi.
                             $skJoin = $lateJoinDates ?? [];
                             $skCanGrade = $isOqituvchi && !(isset($ynSubmission) && $ynSubmission);
+                            // Kichik guruhlar: boshqa o'qituvchining talabasi — bu o'qituvchi baho qo'ymaydi
+                            $skMine = fn ($hemis) => empty($skOwner[(string) $hemis]) || ($skViewerHemis ?? '') === ''
+                                || $skOwner[(string) $hemis]['id'] === $skViewerHemis;
+                            // Katak o'sha darsni jadvalda o'tgan o'qituvchiniki (o'rinbosar kuni — o'rinbosarniki);
+                            // juftlikda bir nechta o'qituvchi bo'lsa — talabaning kichik guruh egasi
+                            $skMineCell = function ($hemis, $day, $pair) use ($skMine, $skSlotEmployees, $skViewerHemis) {
+                                $slot = ($skSlotEmployees ?? [])[$day . '|' . $pair] ?? [];
+                                if (($skViewerHemis ?? '') === '' || !$slot) return $skMine($hemis);
+                                if (!in_array($skViewerHemis, $slot, true)) return false;
+                                return count($slot) === 1 || $skMine($hemis);
+                            };
                             $skPending = [];
                             foreach ($skJoin as $skHemis => $skDate) {
                                 $skCount = 0;
@@ -1216,14 +1227,11 @@
                                     if ($skDay > $skDate || $skDay > $todayStr) continue;
                                     if ((($jbGrades[$skHemis][$skCol['date']][$skCol['pair']] ?? null)['grade'] ?? null) !== null) continue;
                                     if (isset($jbAbsences[$skHemis][$skCol['date']][$skCol['pair']])) continue;
+                                    if (!$skMineCell($skHemis, $skDay, $skCol['pair'])) continue;
                                     $skCount++;
                                 }
                                 if ($skCount > 0) $skPending[$skHemis] = $skCount;
                             }
-                            // Kichik guruhlar: boshqa o'qituvchining talabasi — bu o'qituvchi baho qo'ymaydi
-                            $skMine = fn ($hemis) => empty($skOwner[(string) $hemis]) || ($skViewerHemis ?? '') === ''
-                                || $skOwner[(string) $hemis]['id'] === $skViewerHemis;
-                            $skPending = array_filter($skPending, fn ($v, $h) => $skMine($h), ARRAY_FILTER_USE_BOTH);
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
                             }));
@@ -2239,7 +2247,7 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr && $skMine($student->hemis_id))
+                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr && $skMineCell($student->hemis_id, $colDateStr, $col['pair']))
                                                             {{-- Talaba HEMISga kiritilishidan oldingi dars — arizasiz baho --}}
                                                             <div class="editable-cell grade-cell-opened sk-cell"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"

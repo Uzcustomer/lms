@@ -474,6 +474,42 @@ class FanTestiController extends Controller
             ->filter(fn ($row) => $row['running'] || $row['attempt'] !== null)
             ->values();
 
+        // Test boshlangandan KEYIN ro'yxatga qo'shilgan bo'sh kompyuterlar: "Yangilash"
+        // bosilganda shu yerda chiqadi va bitta tugma bilan testga qo'shiladi —
+        // testni to'xtatib qayta boshlash shart emas.
+        $launchedAt = $devices->where('assigned_fan_testi_id', $fanTesti->id)->min('assigned_at');
+        if ($launchedAt) {
+            $fresh = TestKioskDevice::query()
+                ->whereNull('revoked_at')
+                ->where('created_at', '>', $launchedAt)
+                ->whereNotIn('id', $devices->pluck('id'))
+                ->with('assignedTest:id,is_active')
+                ->orderBy('room')->orderBy('name')
+                ->get()
+                ->filter(fn (TestKioskDevice $d) => !$d->assigned_fan_testi_id || !$d->assignedTest?->is_active)
+                ->map(fn (TestKioskDevice $d) => [
+                    'id' => $d->id,
+                    'name' => $d->name,
+                    'room' => $d->roomLabel(),
+                    'code' => $d->recovery_code ?? null,
+                    'retake' => false,
+                    'online' => $d->isOnline(),
+                    'running' => false,
+                    'stage' => 'new',
+                    'stage_label' => self::STAGE_LABELS['new'],
+                    'stage_since' => $d->created_at?->diffForHumans(null, true),
+                    'answered' => null,
+                    'attempt' => null,
+                    'face_bypass' => false,
+                    'face_bypass_url' => null,
+                    'stop_url' => null,
+                    'restart_url' => null,
+                    'unlock_url' => null,
+                    'attach_url' => route('teacher.fan-testlari.devices.attach', [$fanTesti, $d]),
+                ]);
+            $rows = $rows->concat($fresh->values());
+        }
+
         return response()->json([
             'devices' => $rows,
             // Kartochkalarda natija ko'rinmagani uchun — shu testni topshirganlar soni alohida
@@ -600,6 +636,49 @@ class FanTestiController extends Controller
     }
 
     /**
+     * Ishlab turgan testga keyin ro'yxatga qo'shilgan (bo'sh) kompyuterni biriktiradi —
+     * "Kompyuterlar" oynasidagi yangi kompyuter kartochkasidan. Rejim (oddiy /
+     * qayta topshirish) shu testda ishlab turgan kompyuterlardan olinadi.
+     */
+    public function attachDevice(FanTesti $fanTesti, TestKioskDevice $device)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless($this->hasLiveColumns(), 409, 'php artisan migrate ni ishga tushiring.');
+
+        if (!$device->isActive()) {
+            return response()->json(['message' => 'Bu kompyuter ro\'yxatdan chiqarilgan.'], 422);
+        }
+        if ((int) $device->assigned_fan_testi_id === (int) $fanTesti->id) {
+            return response()->json(['message' => $this->deviceLabel($device) . ': bu test allaqachon shu kompyuterda ochiq.'], 422);
+        }
+        if ($device->assigned_fan_testi_id && $device->assignedTest?->is_active) {
+            return response()->json(['message' => $this->deviceLabel($device) . ': kompyuter boshqa test bilan band.'], 422);
+        }
+
+        $running = TestKioskDevice::where('assigned_fan_testi_id', $fanTesti->id)->whereNull('revoked_at')->first();
+        if (!$running) {
+            return response()->json(['message' => "Test hozir hech bir kompyuterda ochiq emas — \"Kompyuter qo'shish\" orqali boshlang."], 422);
+        }
+
+        $teacher = $this->teacher();
+        $device->update([
+            'assigned_fan_testi_id' => $fanTesti->id,
+            'assigned_at' => now(),
+            'assigned_by_name' => $teacher->short_name ?: $teacher->full_name,
+            'released_fan_testi_id' => null,
+            'released_attempt_id' => null,
+            'pending_command' => null,
+            'pending_attempt_id' => null,
+        ] + (Schema::hasColumn('test_kiosk_devices', 'assigned_mode') ? ['assigned_mode' => $running->assigned_mode ?? 'normal'] : []));
+
+        if (!$fanTesti->is_active) {
+            $fanTesti->update(['is_active' => true, 'updated_by' => $teacher->id]);
+        }
+
+        return response()->json(['message' => $this->deviceLabel($device) . ": testga qo'shildi — bir necha soniyada test oynasi ochiladi."]);
+    }
+
+    /**
      * Testni shu kompyuterda o'sha talabaga boshidan boshlaydi: javoblar
      * o'chiriladi, savollar va vaqt yangilanadi, kompyuter bir necha soniyada
      * test sahifasini o'zi ochadi (ID va yuz tekshiruvisiz).
@@ -723,6 +802,7 @@ class FanTestiController extends Controller
         'restarting' => 'Qayta boshlanmoqda',
         'locked' => "Qulflandi — chalg'idi",
         'ended_away' => "Yakunlandi — chalg'idi",
+        'new' => "Yangi — testga qo'shilmagan",
     ];
 
     private function hasLiveColumns(): bool

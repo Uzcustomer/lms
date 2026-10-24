@@ -1662,6 +1662,7 @@
             <div class="mn-body" id="monitorEntries" style="display:none"><div class="lm-empty">Yuklanmoqda...</div></div>
             <div class="bl-modal-foot">
                 <span class="mn-toast" id="monitorToast" aria-live="polite"></span>
+                <button type="button" class="bl-btn bl-btn-ghost" id="monitorRefresh" title="Ro'yxatni hozir yangilash — yangi qo'shilgan kompyuterlar ham chiqadi">Yangilash</button>
                 <button type="button" class="bl-btn bl-btn-launch lm-open" id="monitorAdd">Kompyuter qo'shish</button>
                 <button type="button" class="bl-btn bl-btn-ghost" id="monitorClose">Yopish</button>
             </div>
@@ -1683,6 +1684,16 @@
         const clock = (sec) => { sec = Math.max(0, sec | 0); return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); };
 
         function card(d) {
+            // Test boshlangandan keyin ro'yxatga qo'shilgan bo'sh kompyuter — bitta tugma bilan testga qo'shiladi
+            if (d.stage === 'new') {
+                return '<div class="mn-card new" style="border-style:dashed">'
+                    + '<div class="mn-head"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i><span class="mn-pc">' + esc(d.name) + '</span>'
+                    + (d.code ? '<em class="lm-code" title="Tiklash kodi">kod ' + esc(d.code) + '</em>' : '')
+                    + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
+                    + '<div class="mn-cbody"><div class="mn-student none">Ro\'yxatga ' + (d.stage_since ? esc(d.stage_since) + ' oldin ' : '') + 'qo\'shilgan' + (d.online ? '' : ' · kutish ekrani ochiq emas') + '</div></div>'
+                    + '<div class="mn-foot"><div class="mn-acts one"><button type="button" class="bl-btn bl-btn-ok bl-btn-sm" data-act="attach" data-url="' + esc(d.attach_url) + '" data-name="' + esc(d.name) + '">Shu kompyuterda testni boshlash</button></div></div>'
+                    + '</div>';
+            }
             const a = d.attempt;
             const student = a
                 ? '<div class="mn-student"><b>' + esc(a.student) + '</b><span>' + esc(a.student_id) + (a.group ? ' · ' + esc(a.group) : '') + '</span></div>'
@@ -1742,6 +1753,7 @@
                 + (count((d) => d.stage === 'locked') ? '<span class="mn-chip" style="background:#fee2e2;color:#991b1b"><b style="color:#dc2626">' + count((d) => d.stage === 'locked') + '</b> qulflangan</span>' : '')
                 + '<span class="mn-chip wait"><b>' + count((d) => ['start', 'face', 'wait', 'idle'].includes(d.stage)) + '</b> kutmoqda</span>'
                 + '<span class="mn-chip off"><b>' + count((d) => d.stage === 'offline' || d.stage === 'stopped') + '</b> oflayn / to\'xtatilgan</span>'
+                + (count((d) => d.stage === 'new') ? '<span class="mn-chip" style="background:#dbeafe;color:#1e40af"><b style="color:#1d4ed8">' + count((d) => d.stage === 'new') + '</b> yangi kompyuter</span>' : '')
                 + '<span class="mn-live">Har 3 soniyada yangilanadi</span>';
             if (!list.length) {
                 body.innerHTML = '<div class="lm-empty">Bu test hozir hech bir kompyuterda ochiq emas. "Kompyuter qo\'shish" tugmasi orqali boshlang.</div>';
@@ -1903,6 +1915,11 @@
             if (btn) { open(btn); return; }
             if (ev.target === modal || ev.target.id === 'monitorClose') close();
             if (ev.target.id === 'monitorAdd') { modal.classList.remove('is-open'); clearInterval(timer); }
+            if (ev.target.id === 'monitorRefresh') {
+                toast.className = 'mn-toast';
+                toast.textContent = "Ro'yxat yangilanmoqda...";
+                load().then(() => { toast.textContent = "Ro'yxat yangilandi."; });
+            }
         });
         document.addEventListener('keydown', (ev) => {
             if (ev.key === 'Escape' && modal.classList.contains('is-open')) close();
@@ -1911,8 +1928,8 @@
         modal.addEventListener('click', async (ev) => {
             const btn = ev.target.closest('button[data-act]');
             if (!btn || btn.disabled || !btn.dataset.url) return;
-            const question = btn.dataset.act === 'approve'
-                ? null // ruxsat — tasdiq so'ralmaydi, talaba kutib turibdi
+            const question = btn.dataset.act === 'approve' || btn.dataset.act === 'attach'
+                ? null // ruxsat / yangi kompyuterni qo'shish — tasdiq so'ralmaydi
                 : btn.dataset.act === 'reject'
                 ? btn.dataset.student + ' uchun kirish rad etilsinmi?'
                 : btn.dataset.act === 'stop-entry'

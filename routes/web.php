@@ -1969,6 +1969,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::get('/{fanTesti}/devices', [FanTestiController::class, 'liveDevices'])->name('devices');
                 Route::post('/{fanTesti}/devices/{device}/stop', [FanTestiController::class, 'stopDevice'])->name('devices.stop');
                 Route::post('/{fanTesti}/devices/{device}/restart', [FanTestiController::class, 'restartDevice'])->name('devices.restart');
+                // Test boshlangandan keyin ro'yxatga qo'shilgan kompyuterni ishlab turgan testga biriktirish
+                Route::post('/{fanTesti}/devices/{device}/attach', [FanTestiController::class, 'attachDevice'])->name('devices.attach');
                 Route::post('/{fanTesti}/attempts/{attempt}/unlock', [FanTestiController::class, 'unlockAttempt'])->name('attempts.unlock');
                 Route::post('/{fanTesti}/attempts/{attempt}/retake', [FanTestiController::class, 'allowRetake'])->name('attempts.retake');
                 // Natijani o'chirish — faqat superadmin o'qituvchi profiliga kirganda

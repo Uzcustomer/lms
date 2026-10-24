@@ -99,6 +99,8 @@
         $shown = rtrim(rtrim(number_format($percent, 1, '.', ''), '0'), '.');
         $ring = $passed ? '#0f7a52' : '#b3261e';
         $track = $passed ? '#d7eee3' : '#f6dcda';
+        // Boshqa oynaga o'tgani uchun sahifa testni o'zi yakunlagan
+        $leftPage = ($attempt->ended_reason ?? null) === 'tab';
     @endphp
 
     <div class="k-card">
@@ -118,7 +120,15 @@
                 @if($preview ?? false) · <b>sinov ko'rinishi, natija saqlanmadi</b>@endif
             </div>
 
-            @if($attempt->status === 'expired')
+            @if($leftPage)
+                <div class="r-expired" style="margin-top:12px;max-width:520px;margin-left:auto;margin-right:auto;line-height:1.5">
+                    <b>Nega test yopildi?</b> Siz test oynasidan boshqa oynaga yoki dasturga o'tdingiz.
+                    Test davomida boshqa oyna ochish taqiqlangan, shuning uchun test shu zahoti yakunlandi.
+                    Shu paytgacha belgilagan javoblaringiz saqlandi va o'qituvchi jurnalida bu holat belgilanadi.
+                </div>
+            @elseif(($attempt->ended_reason ?? null) === 'away')
+                <div class="r-expired">Monitordan ko'p marta chalg'igani sababli avtomatik yakunlandi</div>
+            @elseif($attempt->status === 'expired')
                 <div class="r-expired">Vaqt tugagani sababli avtomatik topshirildi</div>
             @endif
         </div>
@@ -168,7 +178,7 @@
     </div>
 
     <div class="r-actions">
-        <a href="{{ route('kiosk.fan-testi.show', $test) }}" class="k-btn">Keyingi talaba</a>
+        <a href="{{ route('kiosk.fan-testi.show', $test) }}" class="k-btn">{{ $leftPage ? 'Tushunarli' : 'Keyingi talaba' }}</a>
     </div>
 
     <p class="k-note">

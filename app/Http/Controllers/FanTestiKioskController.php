@@ -455,7 +455,13 @@ class FanTestiKioskController extends Controller
         $data = $request->validate([
             'answers' => ['nullable', 'array'],
             'answers.*' => ['nullable'],
+            // 'tab' — talaba test oynasidan boshqa oynaga o'tgani uchun sahifa testni o'zi yakunladi
+            'ended_reason' => ['nullable', 'in:tab'],
         ]);
+
+        if (!empty($data['ended_reason']) && $this->hasLockColumns() && empty($attempt->ended_reason)) {
+            $attempt->forceFill(['ended_reason' => $data['ended_reason']])->save();
+        }
 
         // Vaqt tugagan bo'lsa ham belgilangan javoblar hisobga olinadi —
         // talabaning ishi yo'qolmasligi kerak.

@@ -427,8 +427,20 @@
         window.location.href = event.detail;
     });
 
-    // Yuz kuzatuvi skripti uchun: javoblarni topshirish va serverdagi qolgan vaqtni qo'yish
-    window.kioskSubmit = () => submitOnce();
+    // Yuz kuzatuvi skripti uchun: javoblarni topshirish va serverdagi qolgan vaqtni qo'yish.
+    // reason berilsa (masalan 'tab' — boshqa oynaga o'tdi) u natijaga sabab bo'lib yoziladi.
+    window.kioskSubmit = (reason) => {
+        if (reason && !submitted) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'ended_reason';
+            input.value = reason;
+            form.appendChild(input);
+        }
+        submitOnce();
+    };
+    // "Topshirasizmi?" dialogi ochiq — brauzer fokusni yo'qotadi, bu oynadan chiqish emas
+    window.kioskDialog = false;
     window.kioskSetLeft = (seconds) => { left = Math.max(0, seconds | 0); renderClock(); };
     window.kioskReload = () => { submitted = true; window.location.reload(); };
 
@@ -527,7 +539,10 @@
 
     form.addEventListener('submit', event => {
         if (submitted) return;
-        if (left > 0 && !confirm('Testni topshirasizmi? Keyin javoblarni o\'zgartira olmaysiz.')) {
+        window.kioskDialog = true;
+        const ok = left <= 0 || confirm('Testni topshirasizmi? Keyin javoblarni o\'zgartira olmaysiz.');
+        setTimeout(() => { window.kioskDialog = false; }, 500);
+        if (!ok) {
             event.preventDefault();
             return;
         }
@@ -708,6 +723,7 @@
         locked: ["Test to'xtatildi", "Siz monitordan " + CFG.awayLimit + " marta chalg'idingiz. Javoblaringiz shu yerda saqlanib turibdi va topshirilmagan. O'qituvchi testni qayta ochib bermaguncha davom eta olmaysiz."],
         final: ['Test yakunlandi', "Siz yana " + CFG.awayLimit + " marta chalg'idingiz. Test yakunlandi — belgilagan javoblaringiz topshirilmoqda..."],
         reopened: ['Test qayta ochildi', "O'qituvchi testni ochib berdi. Diqqat: yana " + CFG.awayLimit + " marta chalg'isangiz, test yakunlanadi va javoblaringiz topshiriladi."],
+        left: ['Test yakunlandi', "Siz test oynasidan boshqa oynaga yoki dasturga o'tdingiz. Test davomida bunga ruxsat yo'q — belgilagan javoblaringiz saqlanib, test yakunlanmoqda..."],
     };
     const AWAY_KINDS = ['turn', 'none', 'many'];
 
@@ -718,7 +734,7 @@
         document.getElementById('monRetry').hidden = kind !== 'camera';
         document.getElementById('monOk').hidden = kind !== 'reopened';
         // Qulf paytida vaqt to'xtaydi — "vaqt to'xtamaydi" degan yozuv chiqmaydi
-        document.getElementById('monNote').hidden = ['locked', 'final', 'reopened'].includes(kind);
+        document.getElementById('monNote').hidden = ['locked', 'final', 'reopened', 'left'].includes(kind);
         if (!AWAY_KINDS.includes(kind)) document.getElementById('monCount').hidden = true;
         veil.hidden = false;
         form.inert = true;
@@ -784,12 +800,32 @@
     // 2-qulf: test yakunlanadi, belgilangan javoblar topshiriladi
     function finish() {
         clearInterval(state.poll);
+        state.ended = true;
         state.locked = true;
         state.paused = 'locked';
         window.kioskLocked = true;
         showVeil('final');
         setTimeout(() => { if (window.kioskSubmit) window.kioskSubmit(); }, 2500);
     }
+
+    // Boshqa oyna/ilovaga o'tish (ChatGPT va h.k.): test darhol yakunlanadi,
+    // javoblar topshiriladi, natija sahifasida sababi ko'rsatiladi.
+    // Kamera ruxsati so'rovi va "Topshirasizmi?" dialogi ham fokusni oladi — ular hisobga olinmaydi.
+    function leftPage() {
+        if (state.ended || window.kioskDialog || !window.kioskCamReady) return;
+        state.ended = true;
+        state.locked = true;
+        state.paused = 'locked';
+        window.kioskLocked = true;
+        clearInterval(state.poll);
+        showVeil('left');
+        setTimeout(() => { if (window.kioskSubmit) window.kioskSubmit('tab'); }, 1500);
+    }
+    document.addEventListener('visibilitychange', () => { if (document.hidden) leftPage(); });
+    window.addEventListener('blur', () => {
+        // Qisqa fokus almashinuvi (brauzer bildirishnomasi) emas, haqiqatan boshqa oynaga o'tganini tekshiramiz
+        setTimeout(() => { if (!document.hasFocus()) leftPage(); }, 150);
+    });
 
     document.getElementById('monOk').addEventListener('click', () => {
         if (state.paused !== 'notice') return;
@@ -926,6 +962,8 @@
         await new Promise((resolve) => { video.onloadedmetadata = resolve; });
         await video.play();
         camChip.hidden = false;
+        // Kamera ruxsati berildi — endi oynadan chiqish kuzatiladi
+        window.kioskCamReady = true;
         if (state.paused === 'camera') resume();
         // Kamera uzilib qolsa ham test to'xtaydi.
         state.stream.getVideoTracks().forEach((track) => track.addEventListener('ended', () => {

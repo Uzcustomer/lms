@@ -133,7 +133,9 @@ class FanTestiJournalResultsSheet implements FromArray, WithEvents, WithTitle, W
         if (!empty($a->face_bypass_by)) {
             $notes[] = "Yuz tekshiruvisiz: {$a->face_bypass_by}";
         }
-        if (($a->ended_reason ?? null) === 'away') {
+        if (($a->ended_reason ?? null) === 'tab') {
+            $notes[] = "Boshqa oynaga o'tgani uchun yakunlandi";
+        } elseif (($a->ended_reason ?? null) === 'away') {
             $notes[] = "Chalg'igani uchun yakunlandi";
         } elseif ((int) ($a->lock_count ?? 0) >= 1) {
             $notes[] = "{$a->lock_count} marta qulflangan";

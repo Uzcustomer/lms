@@ -577,7 +577,9 @@
                                             @if(!empty($attempt->face_bypass_by))
                                                 <span class="jr-flag is-warn" title="O'qituvchi bir martalik ruxsati bilan yuz tekshiruvisiz kirgan">Yuz tekshiruvisiz: {{ $attempt->face_bypass_by }}</span>
                                             @endif
-                                            @if(($attempt->ended_reason ?? null) === 'away')
+                                            @if(($attempt->ended_reason ?? null) === 'tab')
+                                                <span class="jr-flag is-bad" title="Talaba test oynasidan boshqa oynaga yoki dasturga o'tgan — test shu zahoti yakunlangan">Boshqa oynaga o'tgani uchun yakunlandi</span>
+                                            @elseif(($attempt->ended_reason ?? null) === 'away')
                                                 <span class="jr-flag is-bad" title="Ochib berilgandan keyin yana chalg'igani uchun test avtomatik yakunlangan">Chalg'igani uchun yakunlandi</span>
                                             @elseif($attempt->locked_at && $attempt->status === 'in_progress')
                                                 <span class="jr-flag is-bad" title="O'qituvchi ochib berishini kutmoqda">Qulflangan</span>

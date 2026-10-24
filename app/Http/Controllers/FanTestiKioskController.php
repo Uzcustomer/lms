@@ -731,9 +731,11 @@ class FanTestiKioskController extends Controller
             if (!$this->isRetakeLaunch($fanTesti)) {
                 $fail("Bu talaba testni allaqachon topshirgan. Qayta topshirish uchun o'qituvchi jurnalda ruxsat berishi kerak.");
             }
-            // Qayta topshirish rejimi: o'tolmagan (yoki qatnashmagan) talaba bir marta qayta ishlaydi
-            if ($latest->is_passed) {
-                $fail("Bu talaba testdan o'tgan — qayta topshirish shart emas.");
+            // Qayta topshirish rejimi: o'tolmagan (yoki qatnashmagan) talaba bir marta qayta ishlaydi.
+            // 60% dan past baho olgan ham kiradi — to'plamning o'tish foizi pastroq qo'yilgan bo'lsa ham.
+            if ($latest->is_passed && (float) $latest->percent >= 60) {
+                $shown = rtrim(rtrim(number_format((float) $latest->percent, 1, '.', ''), '0'), '.');
+                $fail("Bu talaba testdan {$shown}% bilan o'tgan — qayta topshirish shart emas.");
             }
             if ($latest->is_retake) {
                 $fail("Bu talaba qayta topshirishni allaqachon ishlagan. Yana topshirishi uchun o'qituvchi jurnalda ruxsat berishi kerak.");

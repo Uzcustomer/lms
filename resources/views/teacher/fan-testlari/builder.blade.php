@@ -1316,7 +1316,7 @@
 
                 {{-- Qayta topshirish testlari: o'tolmagan / qatnashmagan talabalar bir marta qayta ishlaydi --}}
                 <div data-pane="retake" hidden>
-                    <p class="bl-retake-note">Testdan <b>o'tolmagan yoki qatnashmagan</b> talabalar shu yerdan ochilgan test orqali <b>bir marta</b> qayta topshiradi (talaba ID + yuz tekshiruvi). Natijalar <b>Test jurnali &rarr; "Qayta topshirishlar"</b> tabida chiqadi.</p>
+                    <p class="bl-retake-note">Testdan <b>o'tolmagan, 60% dan past baho olgan yoki qatnashmagan</b> talabalar shu yerdan ochilgan test orqali <b>bir marta</b> qayta topshiradi (talaba ID + yuz tekshiruvi). Natijalar <b>Test jurnali &rarr; "Qayta topshirishlar"</b> tabida chiqadi.</p>
                     <div class="bl-scroll">
                         <table class="bl-table">
                             <thead>

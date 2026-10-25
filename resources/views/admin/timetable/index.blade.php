@@ -2569,6 +2569,8 @@
             const TEACHER_DEPARTMENTS_URL = @json(route('admin.timetable.teachers.departments'));
             const AUDS_URL = @json(route('admin.timetable.auditoriums'));
             const CSRF = @json(csrf_token());
+            // HEMIS'ga yozish xatcho'pi (bookmarklet) yuklaydigan skript.
+            const HS_WRITER_URL = @json(asset('js/hemis-writer.js'));
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
@@ -3711,6 +3713,10 @@
                     ' · bugun ' + hsEsc(rep.today) + '</h3>' +
                     '<button type="button" id="hsExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="hsJson" class="tt-ktr-weeks-btn">JSON (HEMIS\'ga yozish uchun)</button>' +
+                    // Xatcho'p: HEMIS sahifasida bosilganda mark'dagi yozish oynasini ochadi (JSON fayl tanlanadi).
+                    '<a href="' + hsEsc("javascript:(function(){var s=document.createElement('script');s.charset='utf-8';s.src='" + HS_WRITER_URL + "?v='+Date.now();document.body.appendChild(s);})();") + '"' +
+                    ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Keyin HEMIS sahifasida (kirib turgan holda) shu xatcho\\\'pni bosing va yuklab olingan JSON faylni tanlang.\'); return false;"' +
+                    ' title="Sichqoncha bilan xatcho\'plar paneliga torting, so\'ng HEMIS sahifasida bosing" class="px-2 py-1 rounded border border-indigo-400 bg-indigo-50 text-indigo-700 cursor-move">⭐ HEMIS\'ga yozish (xatcho\'p)</a>' +
                     '<button type="button" id="hsClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
                     '<div class="flex flex-wrap items-center gap-3 mb-2 p-2 bg-gray-50 rounded border">' +
                     '<label class="text-gray-700">Hisob davri: <select id="hsPFrom" class="border rounded px-1 py-0.5 text-[12px]">' + wkOpt(pf, w => w.week + '-hafta (' + hsEsc(w.from) + ')') + '</select>' +

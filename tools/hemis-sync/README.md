@@ -17,3 +17,10 @@ Qo'shimcha chegaralar (JSON ichidan yana toraytiradi):
 Bugun va undan oldingi kunlarga hech qachon yozilmaydi. To'siqli amallar (o'qituvchi yoki xona topilmagan) o'tkazib yuboriladi.
 Har ishga tushirishdan keyin `hemis-write-log-*.json` jurnali qoladi. Yozib bo'lgach LMS'da HEMIS jadval importini
 yangilab, solishtirishni qayta bosing — farq qolmagan bo'lishi kerak.
+
+## Xatcho'p (o'rnatishsiz)
+
+mark → «HEMIS solishtirish» oynasidagi **⭐ HEMIS'ga yozish (xatcho'p)** tugmasini sichqoncha bilan brauzerning
+xatcho'plar paneliga torting (bir marta). Keyin HEMIS'ga kirib, istalgan sahifada shu xatcho'pni bosing →
+JSON faylni tanlang → «Tekshirish» (yozmaydi) yoki «HEMIS'ga yozish» (har guruh oldidan tasdiq). Mantiq
+`hemis-write.mjs` bilan bir xil; skript `public/js/hemis-writer.js` dan yuklanadi.

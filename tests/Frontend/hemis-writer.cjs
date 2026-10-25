@@ -110,5 +110,32 @@ const done = (async () => {
         'p/st26-01a: 1 ta amal HEMIS\'ga yoziladi.', 'p/st26-01b: 1 ta amal HEMIS\'ga yoziladi.']);
     assert.equal(fetched.length, 2);
     assert.equal(els.hwGroup.disabled, false);
+
+    // 5) Yozish yarim tundan o'tib ketsa — endi «bugun» bo'lib qolgan dars yozilmaydi.
+    const RealDate = Date;
+    let fakeNow = null;
+    ctx.Date = class extends RealDate { constructor(...a) { if (a.length || fakeNow === null) super(...a); else super(fakeNow); } };
+    els.hwGroup.value = '';
+    els.hwGroup.onchange();
+    confirms.length = 0;
+    fetched.length = 0;
+    els.hwApply.onclick();
+    assert.equal(fetched.length, 1);
+    fakeNow = '2099-10-28T00:05:00';
+    openGate();
+    while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 50));
+    assert.equal(fetched.length, 1);
+    assert.deepEqual(confirms.slice(1), ['p/st26-01a: 1 ta amal HEMIS\'ga yoziladi.']);
+    assert.match(els.hwList.textContent, /p\/st26-01b · 2099-10-28 .* bugun yoki o'tgan kun/);
+
+    // 6) Oyna kecha ochilgan, «Yozish» bugun bosildi — sana chegarasi qayta hisoblanadi, bugungi darslar yozilmaydi.
+    confirms.length = 0;
+    fetched.length = 0;
+    els.hwApply.onclick();
+    await new Promise(r => setTimeout(r, 50));
+    assert.deepEqual(confirms, []);
+    assert.equal(fetched.length, 0);
+    assert.equal(count(), 0);
+    assert.match(els.hwSummary.innerHTML, /Bugun: <b>2099-10-28<\/b>/);
 })();
-done.then(() => console.log('5 HEMIS writer bookmarklet scenarios passed'), e => { console.error(e); process.exit(1); });
+done.then(() => console.log('7 HEMIS writer bookmarklet scenarios passed'), e => { console.error(e); process.exit(1); });

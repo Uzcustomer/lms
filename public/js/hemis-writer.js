@@ -114,6 +114,8 @@
 
     let rep = null, jobs = [], skipped = [], results = [], running = false, stop = false, lastMode = null;
     const FILTERS = ['hwUntil', 'hwGroup', 'hwSubject', 'hwOp_create', 'hwOp_update', 'hwOp_delete'];
+    // Bugun — JSON'dagi sana va shu kompyuterdagi sanadan kattasi. Har safar qayta hisoblanadi: oyna kechadan ochiq qolishi mumkin.
+    const cutoff = () => [String(rep.today || ''), localToday()].sort().pop();
 
     const line = j => OP_NAME[j.op] + ' · ' + j.group + ' · ' + j.date + ' ' + j.start + '–' + j.end + ' · ' + j.subject + ' · ' + j.type
         + ' · ' + (j.employee_name || '—') + ' · ' + (j.auditorium_name || '—') + (j.hemis_id ? ' · #' + j.hemis_id : '')
@@ -126,8 +128,7 @@
             subject: $('hwSubject') ? $('hwSubject').value : '',
             ops: ['create', 'update', 'delete'].filter(o => !$('hwOp_' + o) || $('hwOp_' + o).checked),
         };
-        // Bugun — JSON'dagi sana va shu kompyuterdagi sanadan kattasi.
-        const today = [String(rep.today || ''), localToday()].sort().pop();
+        const today = cutoff();
         jobs = []; skipped = [];
         for (const g of rep.groups || []) {
             if (f.group && String(g.group) !== f.group) continue;
@@ -179,8 +180,10 @@
     async function run(apply) {
         if (running) return;
         // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — guruh tasdig'idagi son
-        // va yoziladigan amallar bir xil bo'lib qoladi.
+        // va yoziladigan amallar bir xil bo'lib qoladi. Oldin qayta tuziladi — sana chegarasi hozirgi kun bo'yicha.
+        build();
         const batch = jobs.slice();
+        if (!batch.length) return;
         if (apply && !confirm(batch.length + ' ta amal HEMIS\'ga yoziladi (har guruh oldidan yana so\'raladi). Boshlaymizmi?')) return;
         running = true; stop = false; results = []; lastMode = apply ? 'apply' : 'check';
         ['hwCheck', 'hwApply', 'hwFile'].concat(FILTERS).forEach(id => { $(id).disabled = true; });
@@ -190,6 +193,12 @@
         let lastGroup = null, skipGroup = null;
         for (const j of batch) {
             if (stop) { results.push(Object.assign({}, j, { status: 'skipped', reason: 'to\'xtatildi' })); continue; }
+            // Yozish yarim tundan o'tib ketsa — endi bugun bo'lib qolgan darslar yozilmaydi.
+            if (j.date <= cutoff()) {
+                results.push(Object.assign({}, j, { status: 'skipped', reason: 'bugun yoki o\'tgan kun' }));
+                list.textContent += '  – ' + line(j) + '  — bugun yoki o\'tgan kun, yozilmadi\n';
+                continue;
+            }
             if (apply && j.group_id !== lastGroup) {
                 const n = batch.filter(x => x.group_id === j.group_id).length;
                 skipGroup = confirm(j.group + ': ' + n + ' ta amal HEMIS\'ga yoziladi.\n\nOK — yozish, Cancel — bu guruhni o\'tkazish.') ? null : j.group_id;

@@ -3626,7 +3626,8 @@
                 for (const g of rep.groups) {
                     const units = g.units.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
                     tot.hidden += g.units.length - units.length;
-                    if (!units.length && !g.skipped.length) continue;
+                    // Mos fanlar yashirilsa ham guruhning ogohlantirishlari (o'tkazilgan fanlar, HEMIS rejasida topilmagan kartochkalar) qoladi.
+                    if (!units.length && !g.skipped.length && !(g.cards_without_subject || []).length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
                     body += '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr>' +

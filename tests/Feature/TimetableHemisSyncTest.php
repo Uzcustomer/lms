@@ -524,3 +524,25 @@ it('Excel fan filtri: tanlanmagan fan chiqmaydi', function () {
     [$bal, $act] = $rows(['Odam anatomiyasi']);
     expect($bal)->toBeGreaterThan(1)->and($act)->toBeGreaterThan(1);
 });
+
+it('vaqti shablondan farq qilgan amalda sabab yoziladi: shablon vaqtida o\'qituvchi band', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Shablon (tashqi): dushanba 08:30; ichki: 10:00 — chunki 08:30 da o'qituvchi boshqa yo'nalishda dars o'tadi.
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'farmatsiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Falsafa', 'group_name' => 'p/f26-01a', 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 1,
+        'day' => 1, 'pair' => 1, 'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '99', 'auditorium_name' => '124']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');   // HEMIS'da shablon vaqtida
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json();
+    $a = collect($res['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($a['op'])->toBe('update')
+        ->and($a['reason'])->toContain('Tashqi jadvalda 08:30 da, ichki jadvalda 10:00 ga pastga tushirilgan')
+        ->and($a['reason'])->toContain('o\'qituvchi USTOZ shu vaqtda (08:30) farmatsiya 1-kurs p/f26-01a «Falsafa»');
+});

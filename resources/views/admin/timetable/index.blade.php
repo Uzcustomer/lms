@@ -3679,7 +3679,8 @@
                             ' · ' + hsEsc(u.code_names[a.code] || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') +
                             (a.changes && a.changes.length ? ' <span class="text-gray-500">(' + hsEsc(a.changes.join('; ')) + ')</span>' : '') +
                             (a.flags && a.flags.length ? ' <span class="text-indigo-600">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '') +
-                            (a.blocked && a.blocked.length ? ' <b class="text-red-600">⛔ ' + hsEsc(a.blocked.join('; ')) + '</b>' : '') + '</div>').join('');
+                            (a.blocked && a.blocked.length ? ' <b class="text-red-600">⛔ ' + hsEsc(a.blocked.join('; ')) + '</b>' : '') +
+                            (a.reason ? '<div class="ml-3 mb-1 text-gray-600 italic">Sabab: ' + hsEsc(a.reason) + '</div>' : '') + '</div>').join('');
                         const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
                         body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name) + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
                             '<td class="border px-1 whitespace-nowrap">' + per + '</td>' +

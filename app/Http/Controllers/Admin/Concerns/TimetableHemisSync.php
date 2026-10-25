@@ -205,14 +205,21 @@ trait TimetableHemisSync
 
             return (int) ($g->weeks ?? $board->weeks ?: 15);
         };
-        // Qamrov (fakultet|yo'nalish|kurs) bo'yicha: hafta dushanbasi => hafta raqami.
+        // Qamrov (fakultet|yo'nalish|kurs) bo'yicha: hafta dushanbasi => hafta raqami. Boshlanish sanasi weekStartDate()
+        // dagidek (panjara start_date, bo'lmasa semestr boshi), lekin oldindan yuklangan sozlamalardan — haftalar xotirada sanaladi.
+        $hasStart = Schema::hasColumn('timetable_grid_settings', 'start_date');
+        $low = fn ($v) => mb_strtolower(trim((string) $v));
         $mondays = [];
-        $weekFor = function (TimetableCard $c, string $monday) use (&$mondays, $board, $weeksOf): ?int {
+        $weekFor = function (TimetableCard $c, string $monday) use (&$mondays, $board, $weeksOf, $gset, $hasStart, $low): ?int {
             $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course;
             if (!isset($mondays[$k])) {
+                $gs = $hasStart ? $gset->filter(fn ($g) => $low($g->specialty_name) === $low($c->specialty_name) && (int) $g->course === (int) $c->course
+                        && in_array($low($g->faculty_name), [$low($c->faculty_name), ''], true))
+                    ->sortBy(fn ($g) => $low($g->faculty_name) === $low($c->faculty_name) ? 0 : 1)->first() : null;
+                $start = $gs?->start_date ? Carbon::parse($gs->start_date)->startOfDay() : $this->weeklySemesterStart($board);
                 $mondays[$k] = [];
-                for ($w = 1; $w <= $weeksOf($c); $w++) {
-                    $mondays[$k][$this->weekStartDate($board, $c, $w)->toDateString()] = $w;
+                foreach ($this->weekMondays($board, $start, $weeksOf($c)) as $i => $m) {
+                    $mondays[$k][$m->toDateString()] = $i + 1;
                 }
             }
 

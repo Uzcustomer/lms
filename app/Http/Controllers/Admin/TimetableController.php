@@ -6729,14 +6729,26 @@ class TimetableController extends Controller
                 ->first();
             $start = $gs?->start_date ? Carbon::parse($gs->start_date)->startOfDay() : null;
         }
-        $d = ($start ?: $this->weeklySemesterStart($board))->copy()->startOfWeek();
+        $mondays = $this->weekMondays($board, $start ?: $this->weeklySemesterStart($board), $week);
+
+        return ($mondays[max(1, $week) - 1] ?? end($mondays))->copy();
+    }
+
+    /**
+     * $start haftasidan boshlab birinchi $count ta o'quv haftasining dushanbalari: doska sozlamasidagi
+     * ta'til oraliqlariga (settings.weekly_breaks) tushgan haftalar o'tkazib yuboriladi. Bazaga murojaat qilmaydi.
+     */
+    private function weekMondays(TimetableBoard $board, Carbon $start, int $count): array
+    {
+        $d = $start->copy()->startOfWeek();
         $breaks = [];
         foreach ((array) (($board->settings ?? [])['weekly_breaks'] ?? []) as $b) {
             if (!empty($b['from']) && !empty($b['to'])) {
                 $breaks[] = [Carbon::parse($b['from'])->startOfDay(), Carbon::parse($b['to'])->endOfDay()];
             }
         }
-        for ($n = 0, $guard = 0; $guard < 200; $guard++, $d->addWeek()) {
+        $out = [];
+        for ($guard = 0; $guard < 200 && count($out) < max(1, $count); $guard++, $d->addWeek()) {
             $inBreak = false;
             foreach ($breaks as [$f, $t]) {
                 if ($d->between($f, $t)) {
@@ -6744,12 +6756,12 @@ class TimetableController extends Controller
                     break;
                 }
             }
-            if (!$inBreak && ++$n >= $week) {
-                break;
+            if (!$inBreak) {
+                $out[] = $d->copy();
             }
         }
 
-        return $d->copy();
+        return $out;
     }
 
     private function weeklySemesterStart(TimetableBoard $board): Carbon

@@ -616,3 +616,23 @@ it('sabab: zichlash shablon vaqtiga yetkaza olmasa — "Haftani zichlash" emas, 
     expect($reason)->toContain('ichki jadvalda 12:00 ga')->toContain("chiqara olmaydi")->toContain("08:30 ga qo'lda ko'chiring")
         ->not->toContain('chiqarish mumkin');
 });
+
+it('sabab: doskaning hafta kalendarlari har hafta uchun bazaga so\'rovsiz quriladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);
+    foreach (['farmatsiya', 'pediatriya', 'davolash', 'tibbiy', 'biotexnologiya'] as $i => $sp) {
+        TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => $sp, 'course' => 2,
+            'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+            'subject_name' => 'X', 'group_name' => 'g' . $i, 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 1, 'day' => 1, 'pair' => 1]);
+    }
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+    DB::enableQueryLog();
+    test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])->assertOk();
+    // 7 qamrov × 4 hafta: avval har (qamrov, hafta) uchun panjara sozlamasi so'ralardi (58 ta so'rov)
+    $grid = collect(DB::getQueryLog())->pluck('query')->filter(fn ($x) => str_contains($x, 'timetable_grid_settings'))->count();
+    expect($grid)->toBeLessThan(7 * 4);
+});

@@ -3588,7 +3588,9 @@
             };
             // ===== Registrator: HEMIS bilan solishtirish (faqat o'qiydi, taklif beradi) =====
             let hemisSyncLast = null;
-            let hemisSyncUntil = null;   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncUntil = null;
+            let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
+            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true } };   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -3603,74 +3605,128 @@
             }
             const hsEsc = v => String(v == null ? '' : v).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
             const hsSigned = n => (n > 0 ? '+' : '') + n;
+            function hsUnitMatches(u) {
+                if ((u.actions || []).length || (u.notes || []).length) return false;
+                for (const k of ['hours_diff', 'count_diff']) if (Object.values(u.before[k] || {}).some(v => +v)) return false;
+                const p = u.period;
+                if (p) {
+                    if (Object.keys(u.code_names).some(c => (+p.ktr_hours[c] || 0) !== (+p.hemis_hours[c] || 0))) return false;
+                    if (['L', 'A'].some(x => Object.values(u.codes).includes(x) && (+p.ktr_count[x] || 0) !== (+p.hemis_count[x] || 0))) return false;
+                }
+                return true;
+            }
+            const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
+                const F = hemisSyncFilter;
                 const opName = { create: 'Qo\'shish', update: 'O\'zgartirish', delete: 'O\'chirish' };
                 const opCls = { create: 'text-emerald-700', update: 'text-amber-700', delete: 'text-red-700' };
-                let tot = { create: 0, update: 0, delete: 0, blocked: 0 };
+                let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0 };
                 let body = '';
+                const pf = rep.period_from, pt = rep.period_to;
                 for (const g of rep.groups) {
+                    const units = g.units.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
+                    tot.hidden += g.units.length - units.length;
+                    if (!units.length && !g.skipped.length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
                     body += '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr>' +
-                        '<th class="border px-1 text-left">Fan</th><th class="border px-1">Soat farqi (oldin → keyin)</th>' +
-                        '<th class="border px-1">Soni farqi</th><th class="border px-1 text-left">Tuzatish takliflari</th>' +
+                        '<th class="border px-1 text-left">Fan</th>' +
+                        '<th class="border px-1">Davr ' + pf + '–' + pt + '-hafta<br><span class="font-normal text-gray-500">KTR / HEMIS / LMS</span></th>' +
+                        '<th class="border px-1">Semestr: soat farqi<br><span class="font-normal text-gray-500">(oldin → keyin)</span></th>' +
+                        '<th class="border px-1">Semestr: soni farqi</th><th class="border px-1 text-left">Tuzatish takliflari</th>' +
                         '<th class="border px-1">HEMIS amallari</th></tr></thead><tbody>';
-                    for (const u of g.units) {
+                    for (const u of units) {
+                        const p = u.period;
+                        const per = p ? Object.keys(u.code_names).map(c => {
+                            const k = +p.ktr_hours[c] || 0, h = +p.hemis_hours[c] || 0;
+                            return '<div class="' + (k !== h ? 'text-red-600' : 'text-gray-500') + '">' + hsEsc(u.code_names[c]) + ': ' + k + ' / ' + h + ' soat</div>';
+                        }).join('') + ['L', 'A'].filter(x => Object.values(u.codes).includes(x)).map(x => {
+                            const k = +p.ktr_count[x] || 0, h = +p.hemis_count[x] || 0, l = +p.lms_count[x] || 0;
+                            return '<div class="' + (k !== h ? 'text-red-600' : 'text-gray-500') + '">' + (x === 'L' ? 'Ma\'ruza' : 'A qism') + ' soni: ' + k + ' / ' + h + ' / ' + l + '</div>';
+                        }).join('') : '';
                         const hd = Object.keys(u.code_names).map(c => {
                             const b = u.before.hours_diff[c] || 0, a = u.after.hours_diff[c] || 0;
-                            const bad = b !== 0 || a !== 0;
                             return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '">' + hsEsc(u.code_names[c]) + ': ' +
-                                (bad ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
+                                (b || a ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
                         }).join('');
-                        const cd = ['L', 'A'].filter(p => Object.values(u.codes).includes(p)).map(p => {
-                            const b = u.before.count_diff[p] || 0, a = u.after.count_diff[p] || 0;
-                            return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '">' + (p === 'L' ? 'Ma\'ruza' : 'A qism') + ': ' +
+                        const cd = ['L', 'A'].filter(x => Object.values(u.codes).includes(x)).map(x => {
+                            const b = u.before.count_diff[x] || 0, a = u.after.count_diff[x] || 0;
+                            return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '">' + (x === 'L' ? 'Ma\'ruza' : 'A qism') + ': ' +
                                 (b || a ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
                         }).join('');
                         const fx = u.fixes.map(f => '<div>• ' + hsEsc(f.text) + '</div>').join('') +
                             u.notes.map(n => '<div class="text-red-600">⚠ ' + hsEsc(n) + '</div>').join('');
+                        const acts = u.actions.filter(hsOpOk);
                         const cnt = { create: 0, update: 0, delete: 0 };
-                        tot.later = (tot.later || 0) + (u.actions_later || 0);
-                        u.actions.forEach(a => { cnt[a.op]++; tot[a.op]++; if (a.blocked && a.blocked.length) tot.blocked++; });
-                        const list = u.actions.map(a => '<div class="' + opCls[a.op] + '">' + opName[a.op] + ' · ' + hsEsc(a.date) + ' ' + hsEsc(a.start) + '–' + hsEsc(a.end) +
+                        tot.later += u.actions_later || 0;
+                        acts.forEach(a => { if (a.blocked && a.blocked.length) tot.blocked++; else { cnt[a.op]++; tot[a.op]++; } });
+                        const list = acts.map(a => '<div class="' + opCls[a.op] + '">' + opName[a.op] + ' · ' + hsEsc(a.date) + ' ' + hsEsc(a.start) + '–' + hsEsc(a.end) +
                             ' · ' + hsEsc(u.code_names[a.code] || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') +
                             (a.changes && a.changes.length ? ' <span class="text-gray-500">(' + hsEsc(a.changes.join('; ')) + ')</span>' : '') +
                             (a.flags && a.flags.length ? ' <span class="text-indigo-600">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '') +
                             (a.blocked && a.blocked.length ? ' <b class="text-red-600">⛔ ' + hsEsc(a.blocked.join('; ')) + '</b>' : '') + '</div>').join('');
+                        const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
                         body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name) + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
+                            '<td class="border px-1 whitespace-nowrap">' + per + '</td>' +
                             '<td class="border px-1 whitespace-nowrap">' + hd + '</td><td class="border px-1 whitespace-nowrap">' + cd + '</td>' +
                             '<td class="border px-1">' + (fx || '<span class="text-gray-400">—</span>') + '</td>' +
-                            '<td class="border px-1">' + (u.actions.length
-                                ? '<details><summary class="cursor-pointer">+' + cnt.create + ' · ~' + cnt.update + ' · −' + cnt.delete + '</summary>' + list + '</details>'
-                                : '<span class="text-emerald-600">mos</span>') + '</td></tr>';
+                            '<td class="border px-1">' + (acts.length
+                                ? '<details><summary class="cursor-pointer">+' + cnt.create + ' · ~' + cnt.update + ' · −' + cnt.delete + (nBlk ? ' · ⛔' + nBlk : '') + '</summary>' + list + '</details>'
+                                : (u.actions.length ? '<span class="text-gray-400">filtrda yashirin</span>' : '<span class="text-emerald-600">mos</span>')) + '</td></tr>';
                     }
                     for (const sk of g.skipped) {
-                        body += '<tr class="text-gray-500"><td class="border px-1">' + hsEsc(sk.subject_name) + '</td><td class="border px-1" colspan="4">' + hsEsc(sk.reason) + '</td></tr>';
+                        body += '<tr class="text-gray-500"><td class="border px-1">' + hsEsc(sk.subject_name) + '</td><td class="border px-1" colspan="5">' + hsEsc(sk.reason) + '</td></tr>';
                     }
                     body += '</tbody></table>';
                     if (g.cards_without_subject.length) {
                         body += '<div class="text-amber-700 mt-1">HEMIS o\'quv rejasida topilmagan kartochkalar: ' + hsEsc(g.cards_without_subject.join('; ')) + '</div>';
                     }
                 }
-                const head = '<div class="flex items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">HEMIS solishtirish · ' + hsEsc(scopeLabelText()) +
+                const wkOpt = (sel, label) => (rep.weeks || []).map(w => '<option value="' + w.week + '"' + (w.week === sel ? ' selected' : '') + '>' + label(w) + (w.week === rep.current_week ? ' • joriy' : '') + '</option>').join('');
+                const chk = (id, on, text) => '<label class="inline-flex items-center gap-1 mr-2"><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '> ' + text + '</label>';
+                const head = '<div class="flex flex-wrap items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">HEMIS solishtirish · ' + hsEsc(scopeLabelText()) +
                     ' · bugun ' + hsEsc(rep.today) + '</h3>' +
-                    '<label class="text-gray-600">Qaysi haftagacha: <select id="hsUntil" class="border rounded px-1 py-0.5 text-[12px]">' +
-                    (rep.weeks || []).map(w => '<option value="' + w.week + '"' + (w.week === rep.until_week ? ' selected' : '') + '>' + w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')' +
-                        (w.week === rep.current_week ? ' • joriy' : '') + '</option>').join('') +
-                    '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
                     '<button type="button" id="hsExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="hsJson" class="tt-ktr-weeks-btn">JSON (HEMIS\'ga yozish uchun)</button>' +
                     '<button type="button" id="hsClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
-                    '<div class="text-gray-600 mb-1">Bugun va undan oldingi kunlarga tegilmaydi. Farq: musbat — ortiqcha, manfiy — kam. ' +
-                    'Jami amallar: <b class="text-emerald-700">+' + tot.create + '</b> qo\'shish, <b class="text-amber-700">~' + tot.update + '</b> o\'zgartirish, ' +
-                    '<b class="text-red-700">−' + tot.delete + '</b> o\'chirish' + (tot.later ? ' (tanlangan haftadan keyin yana ' + tot.later + ' ta amal — hozir yozilmaydi)' : '') + (tot.blocked ? ', <b class="text-red-600">' + tot.blocked + ' ta to\'siqli</b>' : '') + '.' +
+                    '<div class="flex flex-wrap items-center gap-3 mb-2 p-2 bg-gray-50 rounded border">' +
+                    '<label class="text-gray-700">Hisob davri: <select id="hsPFrom" class="border rounded px-1 py-0.5 text-[12px]">' + wkOpt(pf, w => w.week + '-hafta (' + hsEsc(w.from) + ')') + '</select>' +
+                    ' – <select id="hsPTo" class="border rounded px-1 py-0.5 text-[12px]">' + wkOpt(pt, w => w.week + '-hafta oxiri (' + hsEsc(w.to) + ')') + '</select></label>' +
+                    '<label class="text-gray-700">HEMIS\'ga yozish: <select id="hsUntil" class="border rounded px-1 py-0.5 text-[12px]">' +
+                    wkOpt(rep.until_week, w => w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')') +
+                    '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
+                    '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
+                    chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span></div>' +
+                    '<div class="text-gray-600 mb-1">Tuzatish takliflari butun semestr bo\'yicha: KTR jami = HEMIS (bugungacha o\'tilgan) + LMS ichki jadvali (ertadan semestr oxirigacha). ' +
+                    '«Hisob davri» faqat shu haftalardagi KTR / HEMIS / LMS yig\'indilarini ko\'rsatadi, «HEMIS\'ga yozish» esa qaysi haftagacha amal chiqishini belgilaydi. Bugun va undan oldingi kunlarga tegilmaydi.</div>' +
+                    '<div class="text-gray-600 mb-1">Ko\'rsatilgan amallar: <b class="text-emerald-700">+' + tot.create + '</b> qo\'shish, <b class="text-amber-700">~' + tot.update + '</b> o\'zgartirish, ' +
+                    '<b class="text-red-700">−' + tot.delete + '</b> o\'chirish' + (tot.blocked ? ', <b class="text-red-600">' + tot.blocked + ' ta to\'siqli</b>' : '') +
+                    (tot.later ? ' · tanlangan haftadan keyin yana ' + tot.later + ' ta amal (hozir yozilmaydi)' : '') +
+                    (tot.hidden ? ' · ' + tot.hidden + ' ta mos fan yashirildi' : '') + '.' +
                     (rep.fallback_room ? '' : ' <b class="text-red-600">"Kafedra mudiri xonasi" auditoriyasi topilmadi — HEMIS\'da ochib, auditoriyalarni import qiling.</b>') +
                     (rep.groups_not_in_hemis.length ? '<div class="text-red-600">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.groups_not_in_hemis.join(', ')) + '</div>' : '') + '</div>';
                 hemisSyncModal(head + body);
                 $('hsClose').onclick = () => $('hemisSyncModal').remove();
                 $('hsUntil').onchange = function () { hemisSyncUntil = +this.value; hemisSyncRun(); };
+                const perChange = () => {
+                    let a = +$('hsPFrom').value, b = +$('hsPTo').value;
+                    if (b < a) [a, b] = [b, a];
+                    hemisSyncPeriod = { from: a, to: b };
+                    hemisSyncRun();
+                };
+                $('hsPFrom').onchange = perChange;
+                $('hsPTo').onchange = perChange;
+                const reFilter = () => {
+                    F.onlyDiff = $('hsOnlyDiff').checked;
+                    F.ops = { create: $('hsOpC').checked, update: $('hsOpU').checked, delete: $('hsOpD').checked, blocked: $('hsOpB').checked };
+                    hemisSyncRender(rep);
+                };
+                ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB'].forEach(id => { $(id).onchange = reFilter; });
                 $('hsJson').onclick = () => {
-                    const blob = new Blob([JSON.stringify(rep, null, 1)], { type: 'application/json' });
+                    // Yozish uchun JSON — faqat filtrda tanlangan amallar (to'siqlilar baribir yozilmaydi).
+                    const out = JSON.parse(JSON.stringify(rep));
+                    out.groups.forEach(g => g.units.forEach(u => { u.actions = u.actions.filter(hsOpOk); }));
+                    const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob); a.download = 'hemis_amallar_' + rep.today + '.json';
                     document.body.appendChild(a); a.click(); a.remove();
@@ -3683,6 +3739,10 @@
                     const sb = scopeBody();
                     Object.keys(sb).forEach(k => sb[k].forEach(v => add(k + '[]', v)));
                     add('until_week', rep.until_week || 0);
+                    add('period_from', pf);
+                    add('period_to', pt);
+                    add('only_diff', F.onlyDiff ? 1 : 0);
+                    Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));
                     document.body.appendChild(f); f.submit(); f.remove();
                 };
             }
@@ -3691,6 +3751,7 @@
                 try {
                     // Sukut (until_week yuborilmasa) — server joriy hafta oxirigacha oladi.
                     const body = hemisSyncUntil === null ? scopeBody() : Object.assign({ until_week: hemisSyncUntil }, scopeBody());
+                    if (hemisSyncPeriod) Object.assign(body, { period_from: hemisSyncPeriod.from, period_to: hemisSyncPeriod.to });
                     hemisSyncLast = await api(BASE + '/boards/' + board.id + '/hemis-sync', 'POST', body);
                     hemisSyncRender(hemisSyncLast);
                 } catch (e) {
@@ -3762,6 +3823,7 @@
                 if (!board) return;
                 this.disabled = true;
                 hemisSyncUntil = null;
+                hemisSyncPeriod = null;
                 try { await hemisSyncAsk(); } finally { this.disabled = false; }
             };
             // ===== Ichki jadval: haftani zichlash =====

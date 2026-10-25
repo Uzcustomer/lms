@@ -381,3 +381,30 @@ it('oxirgi import — to\'liq va xatosiz importning vaqti; HEMIS ishlamasa impor
     $st = $as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->json();
     expect($st['last_import_at'])->toBe($full)->and($st['last_import_approx'])->toBeFalse();
 });
+
+it('hisob davri bo\'yicha KTR / HEMIS / LMS yig\'indilari; Excel filtrlari bilan', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-14', '12:00:00', '13:20:00');
+    hsSchedule(3, '2026-09-21', '10:00:00', '11:20:00');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+
+    $res = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-26',
+        'until_week' => 0, 'period_from' => 1, 'period_to' => 2])->assertOk()->json();
+    $p = $res['groups'][0]['units'][0]['period'];
+    expect([$res['period_from'], $res['period_to']])->toBe([1, 2])
+        ->and($p['ktr_hours'])->toBe(['13' => 4])
+        ->and($p['hemis_hours'])->toBe(['13' => 6])
+        ->and($p['ktr_count'])->toBe(['L' => 0, 'A' => 2])
+        ->and($p['hemis_count'])->toBe(['L' => 0, 'A' => 2])
+        ->and($p['lms_count'])->toBe(['L' => 0, 'A' => 2]);
+
+    // Sukut davr: 1-hafta — joriy hafta
+    $def = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-26'])->assertOk()->json();
+    expect([$def['period_from'], $def['period_to']])->toBe([1, 2]);
+
+    $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'until_week' => 0, 'period_from' => 1, 'period_to' => 2,
+        'only_diff' => 1, 'ops' => ['create', 'blocked']])->assertOk();
+});

@@ -3606,7 +3606,7 @@
             const hsEsc = v => String(v == null ? '' : v).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
             const hsSigned = n => (n > 0 ? '+' : '') + n;
             function hsUnitMatches(u) {
-                if ((u.actions || []).length || (u.notes || []).length) return false;
+                if ((u.actions || []).length || u.actions_later || (u.notes || []).length) return false;
                 for (const k of ['hours_diff', 'count_diff']) if (Object.values(u.before[k] || {}).some(v => +v)) return false;
                 const p = u.period;
                 if (p) {
@@ -3742,6 +3742,7 @@
                     add('period_from', pf);
                     add('period_to', pt);
                     add('only_diff', F.onlyDiff ? 1 : 0);
+                    add('ops_filter', 1);   // hech biri tanlanmasa ham — Excel'da amal bo'lmaydi
                     Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));
                     document.body.appendChild(f); f.submit(); f.remove();
                 };

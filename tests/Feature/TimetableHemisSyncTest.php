@@ -408,3 +408,35 @@ it('hisob davri bo\'yicha KTR / HEMIS / LMS yig\'indilari; Excel filtrlari bilan
     $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'until_week' => 0, 'period_from' => 1, 'period_to' => 2,
         'only_diff' => 1, 'ops' => ['create', 'blocked']])->assertOk();
 });
+
+it('Excel: keyingi haftalardagi farqli fan "mos" deb yashirilmaydi; amal turlari hech biri tanlanmasa — amal yo\'q', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Hammasi KTR bo'yicha; faqat 4-haftada (05.10) HEMIS'da boshqa o'qituvchi
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00');
+    hsSchedule(3, '2026-09-28', '10:00:00', '11:20:00');
+    hsSchedule(4, '2026-10-05', '10:00:00', '11:20:00', 6006);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $req = ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2];
+
+    $u = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $req)->assertOk()->json('groups.0.units.0');
+    expect($u['actions'])->toBe([])->and($u['actions_later'])->toBe(1);
+
+    $sheets = function (array $extra) use ($as, $s, &$req) {
+        $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+        file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req + $extra)->assertOk()->streamedContent());
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+        @unlink($file);
+
+        return [$book->getSheetByName('Balans')->getHighestDataRow(), $book->getSheetByName('Amallar')->getHighestDataRow()];
+    };
+    // Faqat farqi borlar: fan Balans'da qoladi (keyinroq farqi bor)
+    expect($sheets(['only_diff' => 1])[0])->toBeGreaterThan(1);
+    // Amal turlari: hech biri — Amallar varag'ida faqat sarlavha
+    $req['until_week'] = 0;
+    expect($sheets(['ops_filter' => 1])[1])->toBe(1)
+        ->and($sheets(['ops_filter' => 1, 'ops' => ['update']])[1])->toBe(2)
+        ->and($sheets([])[1])->toBe(2);
+});

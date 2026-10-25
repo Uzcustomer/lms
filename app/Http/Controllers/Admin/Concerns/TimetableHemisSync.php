@@ -49,6 +49,8 @@ trait TimetableHemisSync
             // Excel: faqat farqi borlar va tanlangan amal turlari.
             'only_diff'         => 'nullable|boolean',
             'ops'               => 'nullable|array',
+            // ops_filter=1 — amal turlari tanlangan (bo'sh ro'yxat ham: hech biri); yo'q bo'lsa — filtrsiz.
+            'ops_filter'        => 'nullable|boolean',
             'ops.*'             => 'in:create,update,delete,blocked',
         ]);
         $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
@@ -155,10 +157,10 @@ trait TimetableHemisSync
         ];
     }
 
-    /** Fan "mos": amal yo'q, semestr balansi va davr yig'indisi (HEMIS = KTR) to'g'ri. */
+    /** Fan "mos": amal yo'q (tanlangan haftadan keyingilari ham), semestr balansi va davr yig'indisi (HEMIS = KTR) to'g'ri. */
     private function hemisUnitMatches(array $u): bool
     {
-        if (!empty($u['actions']) || !empty($u['notes'])) {
+        if (!empty($u['actions']) || !empty($u['actions_later']) || !empty($u['notes'])) {
             return false;
         }
         foreach (['hours_diff', 'count_diff'] as $k) {
@@ -712,9 +714,9 @@ trait TimetableHemisSync
         $resp = $this->hemisSyncCompare($request, $board);
         $rep = $resp->getData(true);
         $onlyDiff = $request->boolean('only_diff');
-        $ops = (array) $request->input('ops', []);
+        $ops = $request->boolean('ops_filter') ? (array) $request->input('ops', []) : null;
         $opOk = function (array $a) use ($ops): bool {
-            if (!$ops) return true;
+            if ($ops === null) return true;
             if (!empty($a['blocked'])) return in_array('blocked', $ops, true);
             return in_array($a['op'], $ops, true);
         };

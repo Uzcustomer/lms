@@ -52,6 +52,10 @@ trait TimetableHemisSync
             // ops_filter=1 — amal turlari tanlangan (bo'sh ro'yxat ham: hech biri); yo'q bo'lsa — filtrsiz.
             'ops_filter'        => 'nullable|boolean',
             'ops.*'             => 'in:create,update,delete,blocked',
+            // Excel: faqat tanlangan fanlar (subjects_filter=1 bo'lsa).
+            'subjects_filter'   => 'nullable|boolean',
+            'subjects'          => 'nullable|array',
+            'subjects.*'        => 'string|max:255',
         ]);
         $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
             ? Carbon::parse($data['today'])->toDateString()
@@ -721,6 +725,7 @@ trait TimetableHemisSync
         $rep = $resp->getData(true);
         $onlyDiff = $request->boolean('only_diff');
         $ops = $request->boolean('ops_filter') ? (array) $request->input('ops', []) : null;
+        $subjects = $request->boolean('subjects_filter') ? (array) $request->input('subjects', []) : null;
         $opOk = function (array $a) use ($ops): bool {
             if ($ops === null) return true;
             if (!empty($a['blocked'])) return in_array('blocked', $ops, true);
@@ -731,8 +736,9 @@ trait TimetableHemisSync
         $bal = $book->getActiveSheet();
         $bal->setTitle('Balans');
         $bal->fromArray(['Guruh', 'Fan', 'Kafedra', 'Dars turi', 'KTR jami (soat)', 'KTR joriy haftagacha', 'HEMIS bugungacha',
-            'Farq oldin (soat)', 'Farq keyin (soat)', 'Qism', 'KTR soni', 'HEMIS soni (bugungacha)', 'Farq soni oldin', 'Farq soni keyin',
-            'Tuzatishlar', 'Izohlar', 'Davr', 'Davr KTR (soat)', 'Davr HEMIS (soat)', 'Davr farq (HEMIS−KTR)', 'Davr KTR soni', 'Davr HEMIS soni', 'Davr LMS soni'], null, 'A1');
+            'Semestr soat farqi hozir (+ kam, − ortiq)', 'Semestr soat farqi takliflardan keyin', 'Qism (Amaliy qism = amaliy, seminar, lab, klinik)',
+            'KTR dars kunlari (semestr)', 'HEMIS dars kunlari (bugungacha)', 'Semestr kunlar farqi hozir (+ kam, − ortiq)', 'Semestr kunlar farqi takliflardan keyin',
+            'Tuzatishlar', 'Izohlar', 'Davr', 'Davr KTR soati', 'Davr HEMIS soati', 'Davr soat farqi (HEMIS−KTR)', 'Davr KTR kunlari', 'Davr HEMIS kunlari', 'Davr LMS kunlari'], null, 'A1');
         $act = $book->createSheet();
         $act->setTitle('Amallar');
         $act->fromArray(['Guruh', 'Fan', 'Amal', 'Sana', 'Boshlanish', 'Tugash', 'HEMIS para', 'Dars turi', 'O\'qituvchi', 'Xona',
@@ -745,7 +751,11 @@ trait TimetableHemisSync
                 if ($onlyDiff && $this->hemisUnitMatches($u)) {
                     continue;
                 }
-                $fixes = implode("\n", array_map(fn ($f) => $f['text'], $u['fixes']));
+                if ($subjects !== null && !in_array($u['subject_name'], $subjects, true)) {
+                    continue;
+                }
+                $until = $g['until'] ?? null;
+                $fixes = implode("\n", array_map(fn ($f) => $f['text'] . (($until && !empty($f['date']) && $f['date'] > $until) ? ' (hozir yozilmaydi)' : ''), $u['fixes']));
                 $notes = implode("\n", $u['notes']);
                 $first = true;
                 foreach ($u['code_names'] as $code => $name) {

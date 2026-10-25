@@ -18,6 +18,7 @@
  *   --current-week     faqat joriy hafta oxirigacha
  *   --until SANA       faqat shu sanagacha (YYYY-MM-DD)
  *   --group NOM        faqat shu guruh(lar) (vergul bilan)
+ *   --subject NOM      faqat nomida shu so'z bor fan(lar) (vergul bilan, katta-kichik harf farqsiz)
  *   --only create,update,delete   faqat shu amallar
  *   --check            HEMIS'ga kirib formalarni tekshiradi (para, xona, o'qituvchi, fan bormi) — yozmaydi
  *   --apply            HAQIQATAN yozadi (har guruhdan oldin tasdiq so'raladi; --yes bilan so'ramaydi)
@@ -64,6 +65,7 @@ if (opt('until-week')) {
     until = w.to;
 }
 const groupsOnly = opt('group') ? String(opt('group')).split(',').map(s => s.trim().toLowerCase()) : null;
+const subjectsOnly = opt('subject') ? String(opt('subject')).split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : null;
 const opsOnly = opt('only') ? String(opt('only')).split(',').map(s => s.trim()) : null;
 // Bugun — JSON'dagi sana va shu kompyuterdagi sanadan kattasi: eski JSON yoki admin sinov sanasi bilan
 // olingan JSON ham bugungi va o'tgan kunlarga yozdirmaydi.
@@ -75,6 +77,7 @@ const skipped = [];
 for (const g of rep.groups || []) {
     if (groupsOnly && !groupsOnly.includes(String(g.group).toLowerCase())) continue;
     for (const u of g.units || []) {
+        if (subjectsOnly && !subjectsOnly.some(x => String(u.subject_name).toLowerCase().includes(x))) continue;
         for (const a of u.actions || []) {
             const base = { group: g.group, subject: u.subject_name, type: (u.code_names || {})[a.code] || a.code, ...a };
             if (a.date <= today) { skipped.push({ ...base, reason: 'bugun yoki o\'tgan kun' }); continue; }
@@ -99,7 +102,7 @@ jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id
 
 const line = j => `${OP_NAME[j.op].padEnd(12)} ${j.group.padEnd(12)} ${j.date} ${j.start}-${j.end}  ${j.subject.slice(0, 34).padEnd(34)} ${String(j.type).padEnd(12)} ${j.employee_name || '—'} · ${j.auditorium_name || '—'}${j.hemis_id ? ' · #' + j.hemis_id : ''}${j.changes && j.changes.length ? '  (' + j.changes.join('; ') + ')' : ''}`;
 
-console.log(`JSON: ${jsonPath} · bugun ${today} · chegara: ${until || 'semestr oxirigacha'}${groupsOnly ? ' · guruh: ' + groupsOnly.join(',') : ''}`);
+console.log(`JSON: ${jsonPath} · bugun ${today} · chegara: ${until || 'semestr oxirigacha'}${groupsOnly ? ' · guruh: ' + groupsOnly.join(',') : ''}${subjectsOnly ? ' · fan: ' + subjectsOnly.join(',') : ''}`);
 const cnt = { create: 0, update: 0, delete: 0 };
 jobs.forEach(j => cnt[j.op]++);
 console.log(`Bajariladi: ${jobs.length} ta (+${cnt.create} qo'shish, ~${cnt.update} o'zgartirish, −${cnt.delete} o'chirish); o'tkazib yuboriladi: ${skipped.length} ta\n`);

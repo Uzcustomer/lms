@@ -42,7 +42,9 @@ composer.phar
 
 # Laravel Mix
 /public/css
-/public/js
+/public/js/*
+# Hand-written script loaded by the HEMIS writer bookmarklet (not a Mix build output)
+!/public/js/hemis-writer.js
 /mix-manifest.json
 
 

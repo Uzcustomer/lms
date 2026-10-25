@@ -3620,6 +3620,9 @@
             const HS_A_TITLE = ' title="Amaliy qism — ma\'ruzadan boshqa barcha turlar: amaliy, seminar, laboratoriya, klinik mashg\'ulot. Bir kunda qaysi biri bo\'lsa ham — jurnalda bitta ustun."';
             // Fan filtri: null — hammasi; aks holda tanlangan fan nomlari.
             const hsSubjOk = u => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(u.subject_name);
+            // Fan filtri ro'yxati: solishtirilgan va o'tkazilgan (skipped) fanlar — o'tkazilganning sababini ham tanlab ko'rish mumkin.
+            const hsSubjectNames = rep => [...new Set(rep.groups.flatMap(g => [...g.units, ...(g.skipped || [])].map(x => x.subject_name)))]
+                .sort((a, b) => a.localeCompare(b));
             const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
@@ -3634,7 +3637,7 @@
                     const units = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
                     tot.hidden += picked.length - units.length;
                     // Mos fanlar yashirilsa ham guruhning ogohlantirishlari (o'tkazilgan fanlar, HEMIS rejasida topilmagan kartochkalar) qoladi.
-                    if (!units.length && !g.skipped.length && !(g.cards_without_subject || []).length) continue;
+                    if (!units.length && !g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name)).length && !(g.cards_without_subject || []).length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
                     body += '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr>' +
@@ -3679,7 +3682,8 @@
                             ' · ' + hsEsc(u.code_names[a.code] || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') +
                             (a.changes && a.changes.length ? ' <span class="text-gray-500">(' + hsEsc(a.changes.join('; ')) + ')</span>' : '') +
                             (a.flags && a.flags.length ? ' <span class="text-indigo-600">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '') +
-                            (a.blocked && a.blocked.length ? ' <b class="text-red-600">⛔ ' + hsEsc(a.blocked.join('; ')) + '</b>' : '') + '</div>').join('');
+                            (a.blocked && a.blocked.length ? ' <b class="text-red-600">⛔ ' + hsEsc(a.blocked.join('; ')) + '</b>' : '') +
+                            (a.reason ? '<div class="ml-3 mb-1 text-gray-600 italic">Sabab: ' + hsEsc(a.reason) + '</div>' : '') + '</div>').join('');
                         const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
                         body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name) + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
                             '<td class="border px-1 whitespace-nowrap">' + per + '</td>' +
@@ -3692,7 +3696,8 @@
                                     : u.actions_later ? '<span class="text-emerald-600">bu davrda mos</span><div class="text-amber-700">keyingi haftalarda ' + u.actions_later + ' ta amal</div>'
                                     : '<span class="text-emerald-600">mos</span>')) + '</td></tr>';
                     }
-                    for (const sk of g.skipped) {
+                    // Fan filtri tanlangan bo'lsa — o'tkazilgan fanlar ham faqat tanlanganlari.
+                    for (const sk of g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name))) {
                         body += '<tr class="text-gray-500"><td class="border px-1">' + hsEsc(sk.subject_name) + '</td><td class="border px-1" colspan="5">' + hsEsc(sk.reason) + '</td></tr>';
                     }
                     body += '</tbody></table>';
@@ -3716,7 +3721,7 @@
                     '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
                     chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span>' +
                     (() => {
-                        const all = [...new Set(rep.groups.flatMap(g => g.units.map(u => u.subject_name)))].sort((a, b) => a.localeCompare(b));
+                        const all = hsSubjectNames(rep);
                         const sel = F.subjects ? F.subjects.filter(x => all.includes(x)) : all;
                         return '<details id="hsSubjBox" class="relative"><summary class="cursor-pointer border rounded px-2 py-0.5 bg-white">Fanlar: ' +
                             (sel.length === all.length ? 'hammasi' : sel.length + ' / ' + all.length) + '</summary>' +
@@ -3754,7 +3759,7 @@
                 };
                 ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB'].forEach(id => { $(id).onchange = reFilter; });
                 {
-                    const all = [...new Set(rep.groups.flatMap(g => g.units.map(u => u.subject_name)))].sort((a, b) => a.localeCompare(b));
+                    const all = hsSubjectNames(rep);
                     const apply = () => {
                         const picked = [...document.querySelectorAll('#hemisSyncModal .hs-subj')].filter(c => c.checked).map(c => all[+c.dataset.i]);
                         F.subjects = picked.length === all.length ? null : picked;

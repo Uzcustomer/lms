@@ -185,6 +185,235 @@ trait TimetableHemisSync
         return true;
     }
 
+    /**
+     * Ichki jadvaldagi dars tashqi jadvaldagi (shablon) joyidan boshqa vaqtga tushgan bo'lsa — sababini
+     * butun doska bo'yicha topadi: shablon vaqtida o'qituvchi, xona yoki guruh band bo'lgan dars. Xalaqit
+     * bergan dars ham o'z shablonidan surilgan bo'lsa — uning sababi ham (bir daraja) yoziladi.
+     * Qaytaradi: callable(array $lesson): ?string.
+     */
+    private function hemisMoveExplainer(TimetableBoard $board, array $slotTimes, callable $isCycle): callable
+    {
+        $all = TimetableCard::where('board_id', $board->id)->get()->reject($isCycle)->keyBy('id');
+        $ov = Schema::hasTable('timetable_card_overrides')
+            ? DB::table('timetable_card_overrides')->whereIn('card_id', $all->keys())->get()->groupBy('card_id')->map(fn ($x) => $x->keyBy('week'))
+            : collect();
+        $hasOvRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
+        $gset = TimetableGridSetting::where('board_id', $board->id)->get();
+        $weeksOf = function (TimetableCard $c) use ($gset, $board): int {
+            $g = $gset->first(fn ($g) => (string) $g->faculty_name === (string) $c->faculty_name && $this->specKey($g->specialty_name) === $this->specKey($c->specialty_name) && (int) $g->course === (int) $c->course)
+                ?? $gset->first(fn ($g) => !$g->faculty_name && $this->specKey($g->specialty_name) === $this->specKey($c->specialty_name) && (int) $g->course === (int) $c->course);
+
+            return (int) ($g->weeks ?? $board->weeks ?: 15);
+        };
+        // Qamrov (fakultet|yo'nalish|kurs) bo'yicha: hafta dushanbasi => hafta raqami. Boshlanish sanasi weekStartDate()
+        // dagidek (panjara start_date, bo'lmasa semestr boshi), lekin oldindan yuklangan sozlamalardan — haftalar xotirada sanaladi.
+        $hasStart = Schema::hasColumn('timetable_grid_settings', 'start_date');
+        $low = fn ($v) => mb_strtolower(trim((string) $v));
+        $mondays = [];
+        $weekFor = function (TimetableCard $c, string $monday) use (&$mondays, $board, $weeksOf, $gset, $hasStart, $low): ?int {
+            $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course;
+            if (!isset($mondays[$k])) {
+                $gs = $hasStart ? $gset->filter(fn ($g) => $low($g->specialty_name) === $low($c->specialty_name) && (int) $g->course === (int) $c->course
+                        && in_array($low($g->faculty_name), [$low($c->faculty_name), ''], true))
+                    ->sortBy(fn ($g) => $low($g->faculty_name) === $low($c->faculty_name) ? 0 : 1)->first() : null;
+                $start = $gs?->start_date ? Carbon::parse($gs->start_date)->startOfDay() : $this->weeklySemesterStart($board);
+                $mondays[$k] = [];
+                foreach ($this->weekMondays($board, $start, $weeksOf($c)) as $i => $m) {
+                    $mondays[$k][$m->toDateString()] = $i + 1;
+                }
+            }
+
+            return $mondays[$k][$monday] ?? null;
+        };
+        $place = function (TimetableCard $c, int $w) use ($ov, $hasOvRoom): ?array {
+            $o = $ov[$c->id][$w] ?? null;
+            if ($o && $o->cancelled) {
+                return null;
+            }
+            $day = $o ? $o->day : $c->day;
+            $pair = $o ? $o->pair : $c->pair;
+            if (!$day || !$pair) {
+                return null;
+            }
+            $room = ($hasOvRoom && $o && $o->auditorium_code) ? [$o->auditorium_code, $o->auditorium_name] : [$c->auditorium_code, $c->auditorium_name];
+
+            return ['day' => (int) $day, 'pair' => (int) $pair, 'len' => $c->lenHalf(), 'room' => $room[0], 'room_name' => $room[1]];
+        };
+        $byDate = [];
+        $busyOn = function (string $date) use (&$byDate, $all, $weekFor, $place): array {
+            if (isset($byDate[$date])) {
+                return $byDate[$date];
+            }
+            $d = Carbon::parse($date);
+            $monday = $d->copy()->startOfWeek()->toDateString();
+            $dow = $d->dayOfWeekIso;
+            $out = [];
+            foreach ($all as $c) {
+                $w = $weekFor($c, $monday);
+                if (!$w || !($pl = $place($c, $w)) || $pl['day'] !== $dow) {
+                    continue;
+                }
+                $out[] = ['card' => $c, 'week' => $w] + $pl;
+            }
+
+            return $byDate[$date] = $out;
+        };
+        $time = fn (int $slot) => $slotTimes[$slot][0] ?? ('#' . $slot);
+        $gk = fn ($n) => mb_strtolower(trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $n)));
+        $groupsOf = fn (TimetableCard $c) => array_map($gk, $c->occupiedGroups());
+        $who = fn (TimetableCard $c) => $c->specialty_name . ' ' . $c->course . '-kurs ' . implode('+', array_map(fn ($g) => trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $g)), $c->occupiedGroups()))
+            . ' «' . $c->subject_name . '»' . ($c->teacher_name ? ' (' . $c->teacher_name . ')' : '');
+
+        // Sikl darslari (alohida jadval) sana bo'yicha — weeklyCycleWarnings() bilan bir xil manba; kerak bo'lgandagina hisoblanadi.
+        $cycleBusy = null;
+        $cycleOn = function (string $date) use (&$cycleBusy, $board): array {
+            $cycleBusy ??= $this->cycleBusyByDate($board);
+
+            return $cycleBusy[$date] ?? [];
+        };
+
+        // Shablon joyida (kun, yarim-slotlar) shu kartaga xalaqit beradigan darslar.
+        $blockers = function (TimetableCard $me, string $date, int $from, int $len, bool $deep) use (&$blockers, $busyOn, $cycleOn, $time, $groupsOf, $who, $place, $weekFor, $all): array {
+            $range = [$from, $from + $len];
+            $mine = $groupsOf($me);
+            // Shu haftadagi xonasi (haftalik ko'chirishda boshqa xona bo'lishi mumkin), bo'lmasa kartaniki.
+            $myWeek = $weekFor($me, Carbon::parse($date)->startOfWeek()->toDateString());
+            $myRoom = ($myWeek ? $place($me, $myWeek) : null)['room'] ?? $me->auditorium_code;
+            $out = [];
+            foreach ($busyOn($date) as $b) {
+                $c = $b['card'];
+                if ($c->id === $me->id || !($b['pair'] < $range[1] && $range[0] < $b['pair'] + $b['len'])) {
+                    continue;
+                }
+                $why = [];
+                if ($me->teacher_id && $c->teacher_id === $me->teacher_id) {
+                    $why[] = 'o\'qituvchi ' . $me->teacher_name . ' shu vaqtda (' . $time($b['pair']) . ') ' . $who($c) . ' darsida';
+                }
+                if ($myRoom && (string) $b['room'] === (string) $myRoom && !$this->isSharedRoom($b['room_name'])) {
+                    $why[] = ($b['room_name'] ?: $myRoom) . '-xona ' . $time($b['pair']) . ' da band: ' . $who($c);
+                }
+                // Guruh nomi fakultetlararo takrorlanadi ("1K-01a") — fakultet ham mos bo'lishi kerak (groupScopeKey kabi).
+                if (array_intersect($mine, $groupsOf($c)) && !$this->bolakSiblings($me, $c) && (int) $c->course === (int) $me->course
+                    && (string) ($c->faculty_name ?? '') === (string) ($me->faculty_name ?? '')
+                    && $this->specKey($c->specialty_name) === $this->specKey($me->specialty_name)) {
+                    $why[] = 'guruh ' . $time($b['pair']) . ' da «' . $c->subject_name . '» darsida';
+                }
+                if (!$why) {
+                    continue;
+                }
+                $line = implode('; ', $why);
+                // Xalaqit bergan dars ham o'z shablonidan surilgan bo'lsa — uning sababi (bir daraja).
+                if ($deep && $c->ext_day && $c->ext_pair && ((int) $c->ext_day !== $b['day'] || (int) $c->ext_pair !== $b['pair'])) {
+                    $sub = $blockers($c, $date, (int) $c->ext_pair, $c->lenHalf(), false);
+                    // Shablon kuni boshqa bo'lsa sanani o'sha kunga keltirmaymiz — faqat bir kun ichidagi siljishni tushuntiramiz.
+                    if ((int) $c->ext_day === $b['day']) {
+                        $line .= ' — u dars ham tashqi jadvalda ' . $time((int) $c->ext_pair) . ' da, lekin ichki jadvalda pastga tushirilgan'
+                            . ($sub ? ': ' . implode('; ', $sub) : '');
+                    }
+                }
+                $out[] = $line;
+            }
+            // Shablon vaqtida o'qituvchi yoki xona sikl darsida band — bu ham sabab (vaqt bo'sh emas).
+            foreach ($cycleOn($date) as [$bf, $bt, $tid, $room, $tname, $roomName, $label]) {
+                if ($bf >= $range[1] || $range[0] >= $bt) {
+                    continue;
+                }
+                if ($me->teacher_id && $tid && (int) $tid === (int) $me->teacher_id) {
+                    $out[] = 'o\'qituvchi ' . $me->teacher_name . ' shu vaqtda (' . $time((int) $bf) . ') sikl darsida: ' . $label;
+                }
+                if ($myRoom && $room && (string) $room === (string) $myRoom && !$this->isSharedRoom($roomName)) {
+                    $out[] = ($roomName ?: $room) . '-xona ' . $time((int) $bf) . ' da sikl darsida band: ' . $label;
+                }
+            }
+
+            return array_values(array_unique($out));
+        };
+
+        // "Haftani zichlash" (compactInternalWeek, blade) darsni faqat guruhning shu kundagi shablon yarim-slotlari
+        // bo'ylab va ular bo'sh bo'lsa yuqoriga suradi — o'sha yurishni takrorlab, qaysi yarim-slotgacha chiqara olishini topamiz.
+        $compactReach = function (TimetableCard $me, string $date, int $day, int $slot) use ($all, $busyOn): int {
+            $scope = fn (TimetableCard $c) => ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . (int) $c->course;
+            $mine = $me->occupiedGroups();
+            $tmpl = [];   // guruh => [shablondagi yarim-slot => true]
+            foreach ($all as $c) {
+                if ((int) $c->ext_day !== $day || !$c->ext_pair || $scope($c) !== $scope($me)) {
+                    continue;
+                }
+                foreach (array_intersect($c->occupiedGroups(), $mine) as $g) {
+                    for ($i = 0; $i < $c->lenHalf(); $i++) {
+                        $tmpl[$g][(int) $c->ext_pair + $i] = true;
+                    }
+                }
+            }
+            $occ = [];    // guruh => [shu haftada band yarim-slot => true] (o'zidan tashqari)
+            foreach ($busyOn($date) as $b) {
+                if ($b['card']->id === $me->id || $scope($b['card']) !== $scope($me)) {
+                    continue;
+                }
+                foreach (array_intersect($b['card']->occupiedGroups(), $mine) as $g) {
+                    for ($i = 0; $i < $b['len']; $i++) {
+                        $occ[$g][$b['pair'] + $i] = true;
+                    }
+                }
+            }
+            $len = $me->lenHalf();
+            $canStep = function (int $p) use ($mine, $tmpl, $occ, $len): bool {
+                foreach ($mine as $g) {
+                    if (!isset($tmpl[$g][$p])) {
+                        return false;
+                    }
+                    for ($i = 0; $i < $len; $i++) {
+                        if (isset($occ[$g][$p + $i])) {
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            };
+            $st = $slot;
+            while ($st > 1 && $canStep($st - 1)) {
+                $st--;
+            }
+            if ($len > 1 && ($slot - $st) % 2) {
+                $st++;   // butun para darslar para chegarasida qoladi
+            }
+
+            return $st;
+        };
+
+        return function (array $lesson) use ($all, $blockers, $compactReach, $time): ?string {
+            $c = $all[$lesson['card_id'] ?? 0] ?? null;
+            if (!$c || !$lesson['ext_day'] || !$lesson['ext_pair']) {
+                return null;
+            }
+            if ((int) $lesson['ext_day'] === (int) $lesson['day'] && (int) $lesson['ext_pair'] === (int) $lesson['slot']) {
+                return 'LMS\'da tashqi jadval (Excel) bo\'yicha joyida — HEMIS\'dagi vaqt shablondan farq qiladi.';
+            }
+            if ((int) $lesson['ext_day'] !== (int) $lesson['day']) {
+                return 'Ichki jadvalda boshqa kunga ko\'chirilgan (tashqi jadvalda ' . \App\Models\TimetableBoard::DEFAULT_DAY_NAMES[(int) $lesson['ext_day'] - 1] . ', ' . $time((int) $lesson['ext_pair']) . ').';
+            }
+            $ext = (int) $lesson['ext_pair'];
+            if ($lesson['slot'] < $ext) {
+                return 'Zichlangan: tashqi jadvalda ' . $time($ext) . ' da, shu haftada yuqoridagi dars o\'tilmagani uchun ' . $time((int) $lesson['slot']) . ' ga surilgan.';
+            }
+            $why = $blockers($c, $lesson['date'], $ext, $c->lenHalf(), true);
+            $head = 'Tashqi jadvalda ' . $time($ext) . ' da, ichki jadvalda ' . $time((int) $lesson['slot']) . ' ga pastga tushirilgan';
+
+            if ($why) {
+                return $head . ', chunki ' . implode('; ', $why) . '.';
+            }
+            $reach = $compactReach($c, $lesson['date'], (int) $lesson['day'], (int) $lesson['slot']);
+            if ($reach <= $ext) {
+                return $head . '. Hozir ' . $time($ext) . ' bo\'sh — «Haftani zichlash» bilan yuqoriga chiqarish mumkin.';
+            }
+
+            return $head . '. Hozir ' . $time($ext) . ' bo\'sh, lekin «Haftani zichlash» uni '
+                . ($reach < (int) $lesson['slot'] ? 'faqat ' . $time($reach) . ' gacha chiqaradi' : 'chiqara olmaydi')
+                . ' (oradagi vaqt guruhning tashqi jadvalida bo\'sh) — ' . $time($ext) . ' ga qo\'lda ko\'chiring.';
+        };
+    }
+
     /** Yarim-slot vaqtlari [slot => [start, end]] doskaning qo'ng'iroq jadvalidan. */
     private function hemisSlotTimes(TimetableBoard $board): array
     {
@@ -318,6 +547,8 @@ trait TimetableHemisSync
                 $out[] = [
                     'date' => Carbon::parse($weekMonday($c, $w))->addDays((int) $day - 1)->toDateString(),
                     'week' => $w, 'slot' => (int) $pair, 'len' => $c->lenHalf(),
+                    // Sabab tushuntirish uchun: qaysi karta, tashqi (shablon) joyi.
+                    'card_id' => $c->id, 'day' => (int) $day, 'ext_day' => (int) $c->ext_day, 'ext_pair' => (int) $c->ext_pair,
                     'part' => $c->training_type === 'lecture' ? 'L' : 'A',
                     'employee_id' => $c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null,
                     'employee_name' => $c->teacher_id ? $c->teacher_name : null,
@@ -395,6 +626,7 @@ trait TimetableHemisSync
         $planner = new SchedulePlanner($slotTimes, $today, array_fill_keys(array_keys(self::HEMIS_PAIRS), true));
 
         $groupsOut = [];
+        $explain = null;
         $missingGroups = [];
         $finals = [];        // barcha guruhlarning yakuniy (rejadagi) yozuvlari — guruhlararo tekshiruv uchun
         $handledIds = [];    // rejada qayta yoziladigan HEMIS yozuvlari (qolganlari tashqi bandlik)
@@ -582,6 +814,7 @@ trait TimetableHemisSync
             foreach ($units as $uu) {
                 $unitByKey[$uu['key']] = $uu;
             }
+            $explain ??= $this->hemisMoveExplainer($board, $slotTimes, $isCycle);
             foreach ($results as &$r) {
                 $r += $unitMeta[$r['key']] ?? [];
                 $r['period'] = isset($unitByKey[$r['key']])
@@ -598,6 +831,34 @@ trait TimetableHemisSync
                     $r['actions_later'] = count(array_filter($r['actions'], fn ($a) => $a['date'] > $until));
                     $r['actions'] = array_values(array_filter($r['actions'], fn ($a) => $a['date'] <= $until));
                 }
+                // Qo'shiladigan / o'zgartiriladigan dars tashqi jadvaldagi (Excel) joyidan boshqa vaqtda bo'lsa — nega.
+                $plan = $unitByKey[$r['key']]['plan'] ?? [];
+                foreach ($r['actions'] as &$a) {
+                    if ($a['op'] === 'delete') {
+                        continue;
+                    }
+                    $slot = $startToSlot[$a['start']] ?? null;
+                    $lesson = null;
+                    foreach ($plan as $l) {
+                        if ($l['date'] === $a['date'] && $slot && $slot >= $l['slot'] && $slot < $l['slot'] + $l['len']) {
+                            $lesson = $l;
+                            break;
+                        }
+                    }
+                    $why = [];
+                    $timeChanged = $a['op'] === 'create' || (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, 'vaqt'));
+                    if ($timeChanged) {
+                        $why[] = $lesson ? $explain($lesson) : 'KTR balansi uchun qo\'shilgan dars (tuzatish takliflariga qarang).';
+                    }
+                    if (in_array('mudir', $a['flags'] ?? [], true)) {
+                        $why[] = 'LMS kartochkasida o\'qituvchi biriktirilmagan — kafedra mudiri qo\'yiladi.';
+                    }
+                    if (in_array('mudir_xonasi', $a['flags'] ?? [], true)) {
+                        $why[] = 'LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo\'yiladi.';
+                    }
+                    $a['reason'] = implode(' ', array_filter($why)) ?: null;
+                }
+                unset($a);
             }
             unset($r);
 
@@ -742,7 +1003,7 @@ trait TimetableHemisSync
         $act = $book->createSheet();
         $act->setTitle('Amallar');
         $act->fromArray(['Guruh', 'Fan', 'Amal', 'Sana', 'Boshlanish', 'Tugash', 'HEMIS para', 'Dars turi', 'O\'qituvchi', 'Xona',
-            'HEMIS id', 'O\'zgarishlar', 'Belgilar', 'To\'siq'], null, 'A1');
+            'HEMIS id', 'O\'zgarishlar', 'Belgilar', 'To\'siq', 'Sabab'], null, 'A1');
         $opName = ['create' => 'Qo\'shish', 'update' => 'O\'zgartirish', 'delete' => 'O\'chirish'];
         $r1 = 2;
         $r2 = 2;
@@ -782,7 +1043,7 @@ trait TimetableHemisSync
                     $act->fromArray([$g['group'], $u['subject_name'], $opName[$x['op']] ?? $x['op'], $x['date'], $x['start'], $x['end'],
                         self::HEMIS_PAIRS[$x['start'] . '-' . $x['end']] ?? '', $u['code_names'][$x['code']] ?? $x['code'],
                         $x['employee_name'] ?? '', $x['auditorium_name'] ?? '', $x['hemis_id'] ?? '',
-                        implode('; ', $x['changes'] ?? []), implode(', ', $x['flags'] ?? []), implode('; ', $x['blocked'] ?? [])], null, 'A' . $r2++);
+                        implode('; ', $x['changes'] ?? []), implode(', ', $x['flags'] ?? []), implode('; ', $x['blocked'] ?? []), $x['reason'] ?? ''], null, 'A' . $r2++);
                 }
             }
         }

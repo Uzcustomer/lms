@@ -524,3 +524,115 @@ it('Excel fan filtri: tanlanmagan fan chiqmaydi', function () {
     [$bal, $act] = $rows(['Odam anatomiyasi']);
     expect($bal)->toBeGreaterThan(1)->and($act)->toBeGreaterThan(1);
 });
+
+it('vaqti shablondan farq qilgan amalda sabab yoziladi: shablon vaqtida o\'qituvchi band', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Shablon (tashqi): dushanba 08:30; ichki: 10:00 — chunki 08:30 da o'qituvchi boshqa yo'nalishda dars o'tadi.
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'farmatsiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Falsafa', 'group_name' => 'p/f26-01a', 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 1,
+        'day' => 1, 'pair' => 1, 'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '99', 'auditorium_name' => '124']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');   // HEMIS'da shablon vaqtida
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json();
+    $a = collect($res['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($a['op'])->toBe('update')
+        ->and($a['reason'])->toContain('Tashqi jadvalda 08:30 da, ichki jadvalda 10:00 ga pastga tushirilgan')
+        ->and($a['reason'])->toContain('o\'qituvchi USTOZ shu vaqtda (08:30) farmatsiya 1-kurs p/f26-01a «Falsafa»');
+});
+
+it('sabab: boshqa fakultetning bir xil nomli guruhi xalaqit deb ko\'rsatilmaydi; haftalik ko\'chirilgan xona hisobga olinadi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Shablon (tashqi): dushanba 08:30; ichki: 10:00
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);
+    $base = ['board_id' => $s['board']->id, 'course' => 1, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice',
+        'len_half' => 2, 'weeks' => 4, 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 1, 'day' => 1, 'pair' => 1];
+    // F2 fakultetida xuddi shu nomli guruh 08:30 da (boshqa o'qituvchi, boshqa xona) — xalaqit emas
+    TimetableCard::create($base + ['faculty_name' => 'F2', 'specialty_name' => 'stomatologiya', 'subject_name' => 'Kimyo',
+        'group_name' => 'p/st26-01a (rus)', 'auditorium_code' => '55', 'auditorium_name' => '55']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+    hsSchedule(3, '2026-09-28', '08:30:00', '09:50:00');
+    // 3-haftada dars B1 xonasiga ko'chirilgan; B1 08:30 da boshqa yo'nalish darsi bilan band
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['card']->id, 'week' => 3, 'day' => 1, 'pair' => 3,
+        'cancelled' => false, 'auditorium_code' => 'B1', 'auditorium_name' => 'B1']);
+    TimetableCard::create($base + ['faculty_name' => 'F1', 'specialty_name' => 'farmatsiya', 'subject_name' => 'Falsafa',
+        'group_name' => 'p/f26-01a', 'auditorium_code' => 'B1', 'auditorium_name' => 'B1']);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 3])
+        ->assertOk()->json();
+    $unit = collect($res['groups'])->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    $acts = collect($unit['actions'])->keyBy('date');
+    expect($acts['2026-09-21']['reason'])->not->toContain('guruh')->toContain('08:30 bo\'sh')
+        ->and($acts['2026-09-28']['reason'])->toContain('B1-xona 08:30 da band');
+});
+
+it('sabab: shablon vaqtida o\'qituvchi sikl darsida band bo\'lsa — "bo\'sh" deb zichlash taklif qilinmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);   // shablon: dushanba 08:30; ichki: 10:00
+    // 5-kurs sikli: o'sha o'qituvchi 21.09 (dushanba) kuni ertalabdan sikl amaliyotida
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 1]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Pediatriya', 'group_name' => 'g5-01a', 'kafedra_name' => 'P', 'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ']);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 7, 'training_type' => 'practice']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+
+    $unit = collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json('groups'))->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    $reason = collect($unit['actions'])->firstWhere('date', '2026-09-21')['reason'];
+    expect($reason)->toContain("o'qituvchi USTOZ shu vaqtda (08:30) sikl darsida")->toContain('Pediatriya')
+        ->not->toContain("bo'sh");
+});
+
+it('sabab: zichlash shablon vaqtiga yetkaza olmasa — "Haftani zichlash" emas, qo\'lda ko\'chirish tavsiya qilinadi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Shablon 08:30 (1-yarim slot), ichki jadvalda 12:00 (5-yarim slot); 10:00 shablonda bo'sh — zichlash o'tolmaydi
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1, 'pair' => 5]);
+    hsSchedule(1, '2026-09-14', '12:00:00', '13:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+
+    $unit = collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json('groups'))->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    $reason = collect($unit['actions'])->firstWhere('date', '2026-09-21')['reason'];
+    expect($reason)->toContain('ichki jadvalda 12:00 ga')->toContain("chiqara olmaydi")->toContain("08:30 ga qo'lda ko'chiring")
+        ->not->toContain('chiqarish mumkin');
+});
+
+it('sabab: doskaning hafta kalendarlari har hafta uchun bazaga so\'rovsiz quriladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);
+    foreach (['farmatsiya', 'pediatriya', 'davolash', 'tibbiy', 'biotexnologiya'] as $i => $sp) {
+        TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => $sp, 'course' => 2,
+            'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+            'subject_name' => 'X', 'group_name' => 'g' . $i, 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 1, 'day' => 1, 'pair' => 1]);
+    }
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+    DB::enableQueryLog();
+    test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])->assertOk();
+    // 7 qamrov × 4 hafta: avval har (qamrov, hafta) uchun panjara sozlamasi so'ralardi (58 ta so'rov)
+    $grid = collect(DB::getQueryLog())->pluck('query')->filter(fn ($x) => str_contains($x, 'timetable_grid_settings'))->count();
+    expect($grid)->toBeLessThan(7 * 4);
+});

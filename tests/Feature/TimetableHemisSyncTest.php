@@ -474,3 +474,32 @@ it('kalendari boshqacha guruhlar: sukut hisob davri har guruhning o\'z joriy haf
     }
     expect($davr)->toBe(['p/st26-01a' => '1–4-hafta', 'p/pd26-01a' => '1–2-hafta']);
 });
+
+it('o\'qituvchi ustma-ust tushmaydi; faqat kafedra mudiriga majburan qo\'yilgan HEMIS darsi bandlik hisoblanmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Kafedra mudiri (9001, 501-kafedra) shu fanni haqiqatan o'qitadi
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    $s['card']->update(['teacher_id' => $mudir->id, 'teacher_name' => 'MUDIR']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00', 9001);
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00', 9001);
+    $other = fn (int $id, string $date, int $dept) => hsInsert('schedules', ['schedule_hemis_id' => $id, 'subject_id' => 999, 'subject_name' => 'Boshqa fan',
+        'semester_code' => '11', 'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => $date . ' 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 9001, 'employee_name' => 'MUDIR', 'auditorium_code' => '98', 'auditorium_name' => '98', 'department_id' => $dept]);
+    // 28.09: boshqa guruhda o'z kafedrasi (501) fani — o'qituvchi biriktirilmagani uchun mudirga majburan qo'yilgan
+    $other(90, '2026-09-28', 501);
+    // 05.10: boshqa kafedra (777) fanida mudirning haqiqiy darsi
+    $other(91, '2026-10-05', 777);
+
+    $u = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json('groups.0.units.0');
+    $blocked = [];
+    foreach ($u['actions'] as $a) {
+        $blocked[$a['op'] . ' ' . $a['date']] = implode('; ', $a['blocked']);
+    }
+    expect($blocked['create 2026-09-28'])->toBe('')
+        ->and($blocked['create 2026-10-05'])->toContain("o'qituvchi band");
+});

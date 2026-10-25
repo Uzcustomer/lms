@@ -614,7 +614,7 @@ trait TimetableHemisSync
             ];
         }
 
-        $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today);
+        $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today, $mudirFor);
 
         return [
             'today' => $today,
@@ -634,10 +634,11 @@ trait TimetableHemisSync
      * Guruhlar alohida rejalashtiriladi — qo'shiladigan/o'zgaradigan dars o'qituvchi yoki xona bo'yicha boshqa
      * guruhning yakuniy darsi yoki HEMIS'dagi boshqa (rejaga kirmagan) dars bilan ustma-ust tushsa, amal to'siqli.
      * O'sha o'qituvchi o'sha xonada bo'lsa — bu bitta dars (oqim ma'ruzasi, birlashgan amaliy), to'qnashuv emas.
-     * O'rinbosar kafedra mudiri, "Kafedra mudiri xonasi" (o'rinbosar yoki HEMIS'da allaqachon qo'yilgan —
-     * vaqtincha ustma-ust tushishiga ruxsat bor) va umumiy (raqamsiz) xonalar tekshirilmaydi.
+     * O'qituvchilar ustma-ust tushmaydi; yagona istisno — o'qituvchi biriktirilmagani uchun kafedra mudiriga
+     * majburan qo'yilgan darslar (o'rinbosar, yoki HEMIS'dagi dars o'qituvchisi — shu fan kafedrasining mudiri).
+     * "Kafedra mudiri xonasi" (vaqtincha ustma-ust tushishiga ruxsat bor) va umumiy (raqamsiz) xonalar tekshirilmaydi.
      */
-    private function hemisCrossCheck(array &$groupsOut, array $finals, array $handledIds, string $today): void
+    private function hemisCrossCheck(array &$groupsOut, array $finals, array $handledIds, string $today, callable $mudirFor): void
     {
         $idx = [];   // "e|xodim|sana" / "r|xona|sana" => [[boshlanish, tugash, birlik, matn, xodim, xona], ...]
         $emps = [];
@@ -661,7 +662,7 @@ trait TimetableHemisSync
             $ext = DB::table('schedules')->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
                 ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
                 ->get(['schedule_hemis_id', 'group_name', 'subject_name', 'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time',
-                    'employee_id', 'auditorium_code', 'auditorium_name']);
+                    'employee_id', 'auditorium_code', 'auditorium_name', 'department_id']);
             foreach ($ext as $r) {
                 if (isset($handledIds[(int) $r->schedule_hemis_id])) {
                     continue;
@@ -670,7 +671,9 @@ trait TimetableHemisSync
                 $start = substr((string) $r->lesson_pair_start_time, 0, 5);
                 $end = substr((string) $r->lesson_pair_end_time, 0, 5);
                 $label = 'HEMIS: ' . $r->group_name . ' · ' . $r->subject_name;
-                if ($r->employee_id && isset($emps[(string) $r->employee_id])) {
+                // Kafedra mudiriga majburan qo'yilgan HEMIS darsi (o'qituvchisi — shu fan kafedrasining mudiri) bandlik emas.
+                $forcedMudir = $r->employee_id && (string) (($mudirFor($r->department_id) ?? [null])[0]) === (string) $r->employee_id;
+                if ($r->employee_id && isset($emps[(string) $r->employee_id]) && !$forcedMudir) {
                     $index('e', $r->employee_id, $date, $start, $end, '', $label, $r->employee_id, $r->auditorium_code);
                 }
                 if ($r->auditorium_code && isset($rooms[(string) $r->auditorium_code]) && !$this->isSharedRoom($r->auditorium_name)) {

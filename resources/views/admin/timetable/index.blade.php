@@ -3620,6 +3620,9 @@
             const HS_A_TITLE = ' title="Amaliy qism — ma\'ruzadan boshqa barcha turlar: amaliy, seminar, laboratoriya, klinik mashg\'ulot. Bir kunda qaysi biri bo\'lsa ham — jurnalda bitta ustun."';
             // Fan filtri: null — hammasi; aks holda tanlangan fan nomlari.
             const hsSubjOk = u => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(u.subject_name);
+            // Fan filtri ro'yxati: solishtirilgan va o'tkazilgan (skipped) fanlar — o'tkazilganning sababini ham tanlab ko'rish mumkin.
+            const hsSubjectNames = rep => [...new Set(rep.groups.flatMap(g => [...g.units, ...(g.skipped || [])].map(x => x.subject_name)))]
+                .sort((a, b) => a.localeCompare(b));
             const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
@@ -3718,7 +3721,7 @@
                     '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
                     chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span>' +
                     (() => {
-                        const all = [...new Set(rep.groups.flatMap(g => g.units.map(u => u.subject_name)))].sort((a, b) => a.localeCompare(b));
+                        const all = hsSubjectNames(rep);
                         const sel = F.subjects ? F.subjects.filter(x => all.includes(x)) : all;
                         return '<details id="hsSubjBox" class="relative"><summary class="cursor-pointer border rounded px-2 py-0.5 bg-white">Fanlar: ' +
                             (sel.length === all.length ? 'hammasi' : sel.length + ' / ' + all.length) + '</summary>' +
@@ -3756,7 +3759,7 @@
                 };
                 ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB'].forEach(id => { $(id).onchange = reFilter; });
                 {
-                    const all = [...new Set(rep.groups.flatMap(g => g.units.map(u => u.subject_name)))].sort((a, b) => a.localeCompare(b));
+                    const all = hsSubjectNames(rep);
                     const apply = () => {
                         const picked = [...document.querySelectorAll('#hemisSyncModal .hs-subj')].filter(c => c.checked).map(c => all[+c.dataset.i]);
                         F.subjects = picked.length === all.length ? null : picked;

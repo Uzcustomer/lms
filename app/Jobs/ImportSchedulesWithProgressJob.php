@@ -54,7 +54,7 @@ class ImportSchedulesWithProgressJob implements ShouldQueue
         Cache::put(self::PROGRESS_KEY, $state, now()->addDay());
 
         try {
-            $service->importByEducationYear(
+            $complete = $service->importByEducationYear(
                 function ($msg) use (&$lastLine) {
                     $lastLine = (string) $msg;
                 },
@@ -69,11 +69,15 @@ class ImportSchedulesWithProgressJob implements ShouldQueue
                 $range
             );
 
-            $state['status'] = 'done';
+            // HEMIS ishlamasa yoki sahifalar tushib qolsa servis xato tashlamaydi — natijasiga qaraladi:
+            // to'liq olinmagan import "done" emas (eski/yarim ma'lumot bilan solishtirilmasin).
+            $state['status'] = $complete ? 'done' : 'error';
             $state['finished_at'] = now()->toDateTimeString();
             $state['updated_at'] = $state['finished_at'];
             // Servisning yakuniy qatori: "✅ ... | N yozuv | Xm Ys | K o'chirildi"
-            $state['message'] = $lastLine !== '' ? $lastLine : 'Import yakunlandi';
+            $state['message'] = $complete
+                ? ($lastLine !== '' ? $lastLine : 'Import yakunlandi')
+                : "HEMIS'dan to'liq olinmadi" . ($lastLine !== '' ? ': ' . preg_replace('/^✅\s*/u', '', $lastLine) : '');
             Cache::put(self::PROGRESS_KEY, $state, now()->addDays(30));
         } catch (\Throwable $e) {
             $state['status'] = 'error';

@@ -308,3 +308,198 @@ it('"Kafedra mudiri xonasi" — aynan shu nomli auditoriya ustuvor', function ()
         ->and($creates)->not->toBeEmpty()
         ->and(array_unique(array_column($creates, 'auditorium_code')))->toBe(['KME']);
 });
+
+it('solishtirishdan oldin oxirgi import vaqti ko\'rsatiladi va HEMIS\'dan yangilash boshlanadi', function () {
+    \Illuminate\Support\Facades\Queue::fake();
+    \Illuminate\Support\Facades\Cache::forget(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY);
+    $s = hsSetup();
+    hsSchedule(1, now()->toDateString(), '10:00:00', '11:20:00');
+    DB::table('schedules')->update(['updated_at' => '2026-10-25 00:42:16']);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi']);
+
+    $st = $as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->assertOk()->json();
+    expect($st['last_import_at'])->toBe('2026-10-25 00:42:16')->and($st['running'])->toBeFalse();
+
+    $as()->postJson(route('admin.timetable.hemis-sync.import', $s['board']))->assertOk()->assertJsonPath('success', true);
+    \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\ImportSchedulesWithProgressJob::class);
+    expect($as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->json('running'))->toBeTrue();
+
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    test()->withoutVite()->actingAs($mudir, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
+        ->postJson(route('admin.timetable.hemis-sync.import', $s['board']))->assertForbidden();
+});
+
+it('oxirgi import — to\'liq va xatosiz importning vaqti; HEMIS ishlamasa import "done" bo\'lmaydi', function () {
+    $s = hsSetup();
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi']);
+    config(['services.hemis.token' => 't']);
+    $item = ['id' => 901, 'subject' => ['id' => 474, 'name' => 'Odam anatomiyasi', 'code' => 'OA'],
+        'semester' => ['code' => '11', 'name' => '1'], 'educationYear' => ['code' => '2026', 'name' => '2026-2027', 'current' => true],
+        'group' => ['id' => 1596, 'name' => 'p/st26-01a', 'educationLang' => ['code' => '12', 'name' => 'Rus']],
+        'faculty' => ['id' => 1, 'name' => 'F1', 'code' => 'F1', 'structureType' => ['code' => '11', 'name' => 'Fakultet']],
+        'department' => ['id' => 501, 'name' => 'Anatomiya', 'code' => 'A', 'structureType' => ['code' => '12', 'name' => 'Kafedra']],
+        'auditorium' => ['code' => '71', 'name' => '423', 'auditoriumType' => ['code' => '11', 'name' => 'Amaliy'], 'building' => ['id' => 1, 'name' => 'B']],
+        'trainingType' => ['code' => '13', 'name' => 'Amaliy'],
+        'lessonPair' => ['code' => '12', 'name' => '2', 'start_time' => '10:00', 'end_time' => '11:20'],
+        'employee' => ['id' => 5001, 'name' => 'E5001'],
+        'weekStartTime' => null, 'weekEndTime' => null, 'lesson_date' => now()->addDay()->startOfDay()->timestamp, '_week' => 1];
+    $range = ['year' => '2026', 'from' => now()->subMonth(), 'to' => now()->addMonths(3)];
+    $hemisUp = false;
+    \Illuminate\Support\Facades\Http::fake(function () use (&$hemisUp, $item) {
+        return $hemisUp
+            ? \Illuminate\Support\Facades\Http::response(['data' => ['items' => [$item], 'pagination' => ['pageCount' => 1]]])
+            : \Illuminate\Support\Facades\Http::response('x', 403);
+    });
+    $service = new class extends \App\Services\ScheduleImportService {
+        public ?array $range = null;
+        public function currentSemesterRange(): ?array { return $this->range; }
+    };
+    $service->range = $range;
+    $key = \App\Services\ScheduleImportService::LAST_FULL_IMPORT_KEY;
+
+    // Yozuvlar bor, to'liq import hali qayd etilmagan — taxminiy vaqt
+    hsSchedule(1, now()->toDateString(), '10:00:00', '11:20:00');
+    DB::table('schedules')->update(['updated_at' => now()->subDays(5)->toDateTimeString()]);
+    $st = $as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->json();
+    expect($st['last_import_approx'])->toBeTrue();
+
+    // HEMIS ishlamaydi — job xato bilan tugaydi, vaqt qayd etilmaydi
+    expect($service->importByEducationYear(null, true, null, $range))->toBeFalse()
+        ->and(\Illuminate\Support\Facades\Cache::get($key))->toBeNull();
+    (new \App\Jobs\ImportSchedulesWithProgressJob('REG'))->handle($service);
+    $job = \Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY);
+    expect($job['status'])->toBe('error')->and($job['message'])->toContain("to'liq olinmadi");
+
+    // Jurnaldan bitta guruh+fan yangilansa ham to'liq import vaqti o'zgarmaydi
+    $hemisUp = true;
+    (new \App\Jobs\ImportSchedulesWithProgressJob('REG'))->handle($service);
+    expect(\Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY)['status'])->toBe('done');
+    $full = \Illuminate\Support\Facades\Cache::get($key);
+    expect($full)->not->toBeNull();
+    test()->travel(2)->hours();
+    DB::table('schedules')->update(['updated_at' => now()->toDateTimeString()]);   // bitta guruh+fan importi
+    $st = $as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->json();
+    expect($st['last_import_at'])->toBe($full)->and($st['last_import_approx'])->toBeFalse();
+});
+
+it('hisob davri bo\'yicha KTR / HEMIS / LMS yig\'indilari; Excel filtrlari bilan', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-14', '12:00:00', '13:20:00');
+    hsSchedule(3, '2026-09-21', '10:00:00', '11:20:00');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+
+    $res = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-26',
+        'until_week' => 0, 'period_from' => 1, 'period_to' => 2])->assertOk()->json();
+    $p = $res['groups'][0]['units'][0]['period'];
+    expect([$res['period_from'], $res['period_to']])->toBe([1, 2])
+        ->and($p['ktr_hours'])->toBe(['13' => 4])
+        ->and($p['hemis_hours'])->toBe(['13' => 6])
+        ->and($p['ktr_count'])->toBe(['L' => 0, 'A' => 2])
+        ->and($p['hemis_count'])->toBe(['L' => 0, 'A' => 2])
+        ->and($p['lms_count'])->toBe(['L' => 0, 'A' => 2]);
+
+    // Sukut davr: 1-hafta — joriy hafta
+    $def = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-26'])->assertOk()->json();
+    expect([$def['period_from'], $def['period_to']])->toBe([1, 2]);
+
+    $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'until_week' => 0, 'period_from' => 1, 'period_to' => 2,
+        'only_diff' => 1, 'ops' => ['create', 'blocked']])->assertOk();
+});
+
+it('Excel: keyingi haftalardagi farqli fan "mos" deb yashirilmaydi; amal turlari hech biri tanlanmasa — amal yo\'q', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Hammasi KTR bo'yicha; faqat 4-haftada (05.10) HEMIS'da boshqa o'qituvchi
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00');
+    hsSchedule(3, '2026-09-28', '10:00:00', '11:20:00');
+    hsSchedule(4, '2026-10-05', '10:00:00', '11:20:00', 6006);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $req = ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2];
+
+    $u = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $req)->assertOk()->json('groups.0.units.0');
+    expect($u['actions'])->toBe([])->and($u['actions_later'])->toBe(1);
+
+    $sheets = function (array $extra) use ($as, $s, &$req) {
+        $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+        file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req + $extra)->assertOk()->streamedContent());
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+        @unlink($file);
+
+        return [$book->getSheetByName('Balans')->getHighestDataRow(), $book->getSheetByName('Amallar')->getHighestDataRow()];
+    };
+    // Faqat farqi borlar: fan Balans'da qoladi (keyinroq farqi bor)
+    expect($sheets(['only_diff' => 1])[0])->toBeGreaterThan(1);
+    // Amal turlari: hech biri — Amallar varag'ida faqat sarlavha
+    $req['until_week'] = 0;
+    expect($sheets(['ops_filter' => 1])[1])->toBe(1)
+        ->and($sheets(['ops_filter' => 1, 'ops' => ['update']])[1])->toBe(2)
+        ->and($sheets([])[1])->toBe(2);
+});
+
+it('kalendari boshqacha guruhlar: sukut hisob davri har guruhning o\'z joriy haftasi, Excel ham shunday', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Pediatriya 1-kurs 2 hafta kech boshlanadi
+    TimetableGridSetting::where('board_id', $s['board']->id)->update(['weeks' => 8]);
+    TimetableGridSetting::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'pediatriya', 'course' => 1,
+        'days' => 6, 'pairs_per_day' => 12, 'weeks' => 8, 'start_date' => '2026-09-28']);
+    hsInsert('groups', ['group_hemis_id' => 1700, 'name' => 'p/pd26-01a', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 2]);
+    TimetableCard::create($s['card']->only(['board_id', 'faculty_name', 'course', 'oqim_label', 'lang', 'students', 'training_type', 'len_half', 'weeks',
+        'subject_name', 'kafedra_name', 'day', 'pair', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name'])
+        + ['specialty_name' => 'pediatriya', 'group_name' => 'p/pd26-01a (rus)']);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $req = ['courses' => [1], 'today' => '2026-10-10'];
+
+    $res = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $req)->assertOk()->json();
+    $per = [];
+    foreach ($res['groups'] as $g) {
+        $per[$g['group']] = [$g['period_to'], $g['units'][0]['period']['to_week']];
+    }
+    expect($per)->toBe(['p/st26-01a' => [4, 4], 'p/pd26-01a' => [2, 2]]);
+
+    // Excel (oyna sukutda davr yubormaydi) — har guruh o'z davri bilan
+    $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+    file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req)->assertOk()->streamedContent());
+    $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getSheetByName('Balans')->toArray();
+    @unlink($file);
+    $davr = [];
+    foreach (array_slice($rows, 1) as $r) {
+        $davr[$r[0]] = $r[16];
+    }
+    expect($davr)->toBe(['p/st26-01a' => '1–4-hafta', 'p/pd26-01a' => '1–2-hafta']);
+});
+
+it('o\'qituvchi ustma-ust tushmaydi; faqat kafedra mudiriga majburan qo\'yilgan HEMIS darsi bandlik hisoblanmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Kafedra mudiri (9001, 501-kafedra) shu fanni haqiqatan o'qitadi
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    $s['card']->update(['teacher_id' => $mudir->id, 'teacher_name' => 'MUDIR']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00', 9001);
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00', 9001);
+    $other = fn (int $id, string $date, int $dept) => hsInsert('schedules', ['schedule_hemis_id' => $id, 'subject_id' => 999, 'subject_name' => 'Boshqa fan',
+        'semester_code' => '11', 'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => $date . ' 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 9001, 'employee_name' => 'MUDIR', 'auditorium_code' => '98', 'auditorium_name' => '98', 'department_id' => $dept]);
+    // 28.09: boshqa guruhda o'z kafedrasi (501) fani — o'qituvchi biriktirilmagani uchun mudirga majburan qo'yilgan
+    $other(90, '2026-09-28', 501);
+    // 05.10: boshqa kafedra (777) fanida mudirning haqiqiy darsi
+    $other(91, '2026-10-05', 777);
+
+    $u = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json('groups.0.units.0');
+    $blocked = [];
+    foreach ($u['actions'] as $a) {
+        $blocked[$a['op'] . ' ' . $a['date']] = implode('; ', $a['blocked']);
+    }
+    expect($blocked['create 2026-09-28'])->toBe('')
+        ->and($blocked['create 2026-10-05'])->toContain("o'qituvchi band");
+});

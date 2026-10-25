@@ -4,12 +4,19 @@ namespace App\Services;
 
 use App\Models\Schedule;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ScheduleImportService
 {
+    /**
+     * Joriy o'quv yili jadvalining oxirgi to'liq va xatosiz importi (kechki cron yoki qo'lda) vaqti.
+     * Yozuvlarning updated_at'i bunga yaramaydi: jurnaldagi bitta guruh+fan importi ham ularni yangilaydi.
+     */
+    public const LAST_FULL_IMPORT_KEY = 'schedule_last_full_import_at';
+
     private bool $silent = false;
 
     /**
@@ -204,8 +211,9 @@ class ScheduleImportService
      * @param \Closure|null $onProgress fn(int $page, int $pages, int $totalImported) — har sahifadan keyin
      * @param array|null $semesterRange currentSemesterRange() — berilsa faqat shu sana
      *        oralig'idagi darslar olinadi va eskirganlar ham faqat shu oraliqda o'chiriladi
+     * @return bool barcha sahifalar xatosiz olindimi (HEMIS ishlamasa yoki sahifa tushib qolsa — false)
      */
-    public function importByEducationYear(?\Closure $log = null, bool $silent = false, ?\Closure $onProgress = null, ?array $semesterRange = null): void
+    public function importByEducationYear(?\Closure $log = null, bool $silent = false, ?\Closure $onProgress = null, ?array $semesterRange = null): bool
     {
         $this->silent = $silent;
 
@@ -216,7 +224,7 @@ class ScheduleImportService
         if (!$educationYearCode) {
             $this->notifyTelegram("❌ Joriy o'quv yili topilmadi (semesters jadvalida current=true yo'q)");
             $this->safeLog('error', 'Joriy o\'quv yili topilmadi');
-            return;
+            return false;
         }
 
         $cronPrefix = $semesterRange
@@ -324,13 +332,15 @@ class ScheduleImportService
         $deleted = 0;
 
         // Faqat BARCHA sahifalar muvaffaqiyatli bo'lganda eski yozuvlarni o'chirish
-        if ($failedCount === 0 && $totalImported > 0) {
+        $complete = $failedCount === 0 && $totalImported > 0;
+        if ($complete) {
             $deleted = Schedule::where('education_year_code', $educationYearCode)
                 ->when($semesterRange, fn ($q) => $q->whereBetween('lesson_date', [$semesterRange['from'], $semesterRange['to']]))
                 ->whereNotIn('schedule_hemis_id', function ($q) {
                     $q->select('hemis_id')->from('_temp_schedule_ids');
                 })
                 ->delete();
+            Cache::forever(self::LAST_FULL_IMPORT_KEY, now()->toDateTimeString());
         }
 
         $elapsed = microtime(true) - $startTime;
@@ -351,6 +361,8 @@ class ScheduleImportService
             $nightlyCallback = app('nightly.progress');
             $nightlyCallback($detail);
         }
+
+        return $complete;
     }
 
     /**

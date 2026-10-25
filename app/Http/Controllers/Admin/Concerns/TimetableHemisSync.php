@@ -322,7 +322,60 @@ trait TimetableHemisSync
             return array_values(array_unique($out));
         };
 
-        return function (array $lesson) use ($all, $blockers, $time): ?string {
+        // "Haftani zichlash" (compactInternalWeek, blade) darsni faqat guruhning shu kundagi shablon yarim-slotlari
+        // bo'ylab va ular bo'sh bo'lsa yuqoriga suradi — o'sha yurishni takrorlab, qaysi yarim-slotgacha chiqara olishini topamiz.
+        $compactReach = function (TimetableCard $me, string $date, int $day, int $slot) use ($all, $busyOn): int {
+            $scope = fn (TimetableCard $c) => ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . (int) $c->course;
+            $mine = $me->occupiedGroups();
+            $tmpl = [];   // guruh => [shablondagi yarim-slot => true]
+            foreach ($all as $c) {
+                if ((int) $c->ext_day !== $day || !$c->ext_pair || $scope($c) !== $scope($me)) {
+                    continue;
+                }
+                foreach (array_intersect($c->occupiedGroups(), $mine) as $g) {
+                    for ($i = 0; $i < $c->lenHalf(); $i++) {
+                        $tmpl[$g][(int) $c->ext_pair + $i] = true;
+                    }
+                }
+            }
+            $occ = [];    // guruh => [shu haftada band yarim-slot => true] (o'zidan tashqari)
+            foreach ($busyOn($date) as $b) {
+                if ($b['card']->id === $me->id || $scope($b['card']) !== $scope($me)) {
+                    continue;
+                }
+                foreach (array_intersect($b['card']->occupiedGroups(), $mine) as $g) {
+                    for ($i = 0; $i < $b['len']; $i++) {
+                        $occ[$g][$b['pair'] + $i] = true;
+                    }
+                }
+            }
+            $len = $me->lenHalf();
+            $canStep = function (int $p) use ($mine, $tmpl, $occ, $len): bool {
+                foreach ($mine as $g) {
+                    if (!isset($tmpl[$g][$p])) {
+                        return false;
+                    }
+                    for ($i = 0; $i < $len; $i++) {
+                        if (isset($occ[$g][$p + $i])) {
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            };
+            $st = $slot;
+            while ($st > 1 && $canStep($st - 1)) {
+                $st--;
+            }
+            if ($len > 1 && ($slot - $st) % 2) {
+                $st++;   // butun para darslar para chegarasida qoladi
+            }
+
+            return $st;
+        };
+
+        return function (array $lesson) use ($all, $blockers, $compactReach, $time): ?string {
             $c = $all[$lesson['card_id'] ?? 0] ?? null;
             if (!$c || !$lesson['ext_day'] || !$lesson['ext_pair']) {
                 return null;
@@ -340,9 +393,17 @@ trait TimetableHemisSync
             $why = $blockers($c, $lesson['date'], $ext, $c->lenHalf(), true);
             $head = 'Tashqi jadvalda ' . $time($ext) . ' da, ichki jadvalda ' . $time((int) $lesson['slot']) . ' ga pastga tushirilgan';
 
-            return $why
-                ? $head . ', chunki ' . implode('; ', $why) . '.'
-                : $head . '. Hozir ' . $time($ext) . ' bo\'sh — «Haftani zichlash» bilan yuqoriga chiqarish mumkin.';
+            if ($why) {
+                return $head . ', chunki ' . implode('; ', $why) . '.';
+            }
+            $reach = $compactReach($c, $lesson['date'], (int) $lesson['day'], (int) $lesson['slot']);
+            if ($reach <= $ext) {
+                return $head . '. Hozir ' . $time($ext) . ' bo\'sh — «Haftani zichlash» bilan yuqoriga chiqarish mumkin.';
+            }
+
+            return $head . '. Hozir ' . $time($ext) . ' bo\'sh, lekin «Haftani zichlash» uni '
+                . ($reach < (int) $lesson['slot'] ? 'faqat ' . $time($reach) . ' gacha chiqaradi' : 'chiqara olmaydi')
+                . ' (oradagi vaqt guruhning tashqi jadvalida bo\'sh) — ' . $time($ext) . ' ga qo\'lda ko\'chiring.';
         };
     }
 

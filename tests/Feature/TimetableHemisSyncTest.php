@@ -599,3 +599,20 @@ it('sabab: shablon vaqtida o\'qituvchi sikl darsida band bo\'lsa — "bo\'sh" de
     expect($reason)->toContain("o'qituvchi USTOZ shu vaqtda (08:30) sikl darsida")->toContain('Pediatriya')
         ->not->toContain("bo'sh");
 });
+
+it('sabab: zichlash shablon vaqtiga yetkaza olmasa — "Haftani zichlash" emas, qo\'lda ko\'chirish tavsiya qilinadi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Shablon 08:30 (1-yarim slot), ichki jadvalda 12:00 (5-yarim slot); 10:00 shablonda bo'sh — zichlash o'tolmaydi
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1, 'pair' => 5]);
+    hsSchedule(1, '2026-09-14', '12:00:00', '13:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+
+    $unit = collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json('groups'))->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    $reason = collect($unit['actions'])->firstWhere('date', '2026-09-21')['reason'];
+    expect($reason)->toContain('ichki jadvalda 12:00 ga')->toContain("chiqara olmaydi")->toContain("08:30 ga qo'lda ko'chiring")
+        ->not->toContain('chiqarish mumkin');
+});

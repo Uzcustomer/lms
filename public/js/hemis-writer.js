@@ -165,10 +165,11 @@
         const groups = [...new Set(rep.groups.map(g => g.group))];
         const subjects = [...new Set(rep.groups.flatMap(g => (g.units || []).filter(u => (u.actions || []).length).map(u => u.subject_name)))].sort();
         $('hwFilters').style.display = 'block';
+        // value aniq beriladi: usiz brauzer nomdagi ortiqcha bo'shliqlarni qisqartiradi va filtr hech narsa topmaydi.
         $('hwFilters').innerHTML = '2) Qaysi haftagacha: <select id="hwUntil"><option value="">JSON\'dagi hammasi</option>'
             + (rep.weeks || []).map(w => '<option value="' + esc(w.to) + '">' + w.week + '-hafta oxirigacha (' + esc(w.to) + ')' + (w.week === rep.current_week ? ' • joriy' : '') + '</option>').join('') + '</select> '
-            + ' Guruh: <select id="hwGroup"><option value="">hammasi</option>' + groups.map(g => '<option>' + esc(g) + '</option>').join('') + '</select> '
-            + ' Fan: <select id="hwSubject" style="max-width:220px"><option value="">hammasi</option>' + subjects.map(s => '<option>' + esc(s) + '</option>').join('') + '</select><br>'
+            + ' Guruh: <select id="hwGroup"><option value="">hammasi</option>' + groups.map(g => '<option value="' + esc(g) + '">' + esc(g) + '</option>').join('') + '</select> '
+            + ' Fan: <select id="hwSubject" style="max-width:220px"><option value="">hammasi</option>' + subjects.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('') + '</select><br>'
             + ['create', 'update', 'delete'].map(o => '<label style="margin-right:8px"><input type="checkbox" id="hwOp_' + o + '" checked> ' + OP_NAME[o] + '</label>').join('');
         ['hwUntil', 'hwGroup', 'hwSubject', 'hwOp_create', 'hwOp_update', 'hwOp_delete'].forEach(id => { $(id).onchange = build; });
         build();

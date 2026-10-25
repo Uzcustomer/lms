@@ -329,12 +329,12 @@ trait TimetableHemisSync
             return array_values(array_unique($out));
         };
 
-        // "Haftani zichlash" (compactInternalWeek, blade) darsni faqat guruhning shu kundagi shablon yarim-slotlari
-        // bo'ylab va ular bo'sh bo'lsa yuqoriga suradi — o'sha yurishni takrorlab, qaysi yarim-slotgacha chiqara olishini topamiz.
-        $compactReach = function (TimetableCard $me, string $date, int $day, int $slot) use ($all, $busyOn): int {
-            $scope = fn (TimetableCard $c) => ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . (int) $c->course;
+        // Guruh panjarasi (compactInternalWeek'dagi gkey kabi: fakultet|yo'nalish|kurs) va shu kundagi tashqi jadval
+        // yarim-slotlari: guruh => [yarim-slot => true].
+        $scope = fn (TimetableCard $c) => ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . (int) $c->course;
+        $groupTemplate = function (TimetableCard $me, int $day) use ($all, $scope): array {
             $mine = $me->occupiedGroups();
-            $tmpl = [];   // guruh => [shablondagi yarim-slot => true]
+            $tmpl = [];
             foreach ($all as $c) {
                 if ((int) $c->ext_day !== $day || !$c->ext_pair || $scope($c) !== $scope($me)) {
                     continue;
@@ -345,6 +345,15 @@ trait TimetableHemisSync
                     }
                 }
             }
+
+            return $tmpl;
+        };
+
+        // "Haftani zichlash" (compactInternalWeek, blade) darsni faqat guruhning shu kundagi shablon yarim-slotlari
+        // bo'ylab va ular bo'sh bo'lsa yuqoriga suradi — o'sha yurishni takrorlab, qaysi yarim-slotgacha chiqara olishini topamiz.
+        $compactReach = function (TimetableCard $me, string $date, int $day, int $slot) use ($busyOn, $scope, $groupTemplate): int {
+            $mine = $me->occupiedGroups();
+            $tmpl = $groupTemplate($me, $day);
             $occ = [];    // guruh => [shu haftada band yarim-slot => true] (o'zidan tashqari)
             foreach ($busyOn($date) as $b) {
                 if ($b['card']->id === $me->id || $scope($b['card']) !== $scope($me)) {
@@ -382,7 +391,22 @@ trait TimetableHemisSync
             return $st;
         };
 
-        return function (array $lesson) use ($all, $blockers, $compactReach, $time): ?string {
+        // Yuqoriga surilish zichlashga o'xshaydimi: yangi joydan shablon joyigacha bo'lgan har bir yarim-slot guruhning
+        // shu kundagi tashqi jadvalida boshqa darsniki (shu hafta o'tilmagan) — aks holda bu oddiy haftalik ko'chirish.
+        $looksCompacted = function (TimetableCard $me, int $day, int $slot, int $ext) use ($groupTemplate): bool {
+            $tmpl = $groupTemplate($me, $day);
+            foreach ($me->occupiedGroups() as $g) {
+                for ($p = $slot; $p < $ext; $p++) {
+                    if (!isset($tmpl[$g][$p])) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        };
+
+        return function (array $lesson) use ($all, $blockers, $compactReach, $looksCompacted, $time): ?string {
             $c = $all[$lesson['card_id'] ?? 0] ?? null;
             if (!$c || !$lesson['ext_day'] || !$lesson['ext_pair']) {
                 return null;
@@ -395,7 +419,17 @@ trait TimetableHemisSync
             }
             $ext = (int) $lesson['ext_pair'];
             if ($lesson['slot'] < $ext) {
-                return 'Zichlangan: tashqi jadvalda ' . $time($ext) . ' da, shu haftada yuqoridagi dars o\'tilmagani uchun ' . $time((int) $lesson['slot']) . ' ga surilgan.';
+                // Yuqoriga: shablon vaqtida xalaqit bo'lsa — o'sha sabab; zichlash belgisi bo'lsa — zichlangan; aks holda haftalik ko'chirish.
+                $why = $blockers($c, $lesson['date'], $ext, $c->lenHalf(), true);
+                $head = 'Tashqi jadvalda ' . $time($ext) . ' da, ichki jadvalda ' . $time((int) $lesson['slot']) . ' ga yuqoriga ko\'chirilgan';
+                if ($why) {
+                    return $head . ', chunki ' . implode('; ', $why) . '.';
+                }
+                if ($looksCompacted($c, (int) $lesson['day'], (int) $lesson['slot'], $ext)) {
+                    return 'Zichlangan: tashqi jadvalda ' . $time($ext) . ' da, shu haftada yuqoridagi dars o\'tilmagani uchun ' . $time((int) $lesson['slot']) . ' ga surilgan.';
+                }
+
+                return $head . ' (shu hafta uchun ko\'chirilgan; ' . $time($ext) . ' hozir bo\'sh).';
             }
             $why = $blockers($c, $lesson['date'], $ext, $c->lenHalf(), true);
             $head = 'Tashqi jadvalda ' . $time($ext) . ' da, ichki jadvalda ' . $time((int) $lesson['slot']) . ' ga pastga tushirilgan';

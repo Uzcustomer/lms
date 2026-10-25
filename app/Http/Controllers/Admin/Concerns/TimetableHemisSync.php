@@ -257,8 +257,16 @@ trait TimetableHemisSync
         $who = fn (TimetableCard $c) => $c->specialty_name . ' ' . $c->course . '-kurs ' . implode('+', array_map(fn ($g) => trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $g)), $c->occupiedGroups()))
             . ' «' . $c->subject_name . '»' . ($c->teacher_name ? ' (' . $c->teacher_name . ')' : '');
 
+        // Sikl darslari (alohida jadval) sana bo'yicha — weeklyCycleWarnings() bilan bir xil manba; kerak bo'lgandagina hisoblanadi.
+        $cycleBusy = null;
+        $cycleOn = function (string $date) use (&$cycleBusy, $board): array {
+            $cycleBusy ??= $this->cycleBusyByDate($board);
+
+            return $cycleBusy[$date] ?? [];
+        };
+
         // Shablon joyida (kun, yarim-slotlar) shu kartaga xalaqit beradigan darslar.
-        $blockers = function (TimetableCard $me, string $date, int $from, int $len, bool $deep) use (&$blockers, $busyOn, $time, $groupsOf, $who, $place, $weekFor, $all): array {
+        $blockers = function (TimetableCard $me, string $date, int $from, int $len, bool $deep) use (&$blockers, $busyOn, $cycleOn, $time, $groupsOf, $who, $place, $weekFor, $all): array {
             $range = [$from, $from + $len];
             $mine = $groupsOf($me);
             // Shu haftadagi xonasi (haftalik ko'chirishda boshqa xona bo'lishi mumkin), bo'lmasa kartaniki.
@@ -297,6 +305,18 @@ trait TimetableHemisSync
                     }
                 }
                 $out[] = $line;
+            }
+            // Shablon vaqtida o'qituvchi yoki xona sikl darsida band — bu ham sabab (vaqt bo'sh emas).
+            foreach ($cycleOn($date) as [$bf, $bt, $tid, $room, $tname, $roomName, $label]) {
+                if ($bf >= $range[1] || $range[0] >= $bt) {
+                    continue;
+                }
+                if ($me->teacher_id && $tid && (int) $tid === (int) $me->teacher_id) {
+                    $out[] = 'o\'qituvchi ' . $me->teacher_name . ' shu vaqtda (' . $time((int) $bf) . ') sikl darsida: ' . $label;
+                }
+                if ($myRoom && $room && (string) $room === (string) $myRoom && !$this->isSharedRoom($roomName)) {
+                    $out[] = ($roomName ?: $room) . '-xona ' . $time((int) $bf) . ' da sikl darsida band: ' . $label;
+                }
             }
 
             return array_values(array_unique($out));

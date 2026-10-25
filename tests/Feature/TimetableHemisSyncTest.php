@@ -575,3 +575,27 @@ it('sabab: boshqa fakultetning bir xil nomli guruhi xalaqit deb ko\'rsatilmaydi;
     expect($acts['2026-09-21']['reason'])->not->toContain('guruh')->toContain('08:30 bo\'sh')
         ->and($acts['2026-09-28']['reason'])->toContain('B1-xona 08:30 da band');
 });
+
+it('sabab: shablon vaqtida o\'qituvchi sikl darsida band bo\'lsa — "bo\'sh" deb zichlash taklif qilinmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);   // shablon: dushanba 08:30; ichki: 10:00
+    // 5-kurs sikli: o'sha o'qituvchi 21.09 (dushanba) kuni ertalabdan sikl amaliyotida
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 1]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Pediatriya', 'group_name' => 'g5-01a', 'kafedra_name' => 'P', 'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ']);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 7, 'training_type' => 'practice']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+
+    $unit = collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json('groups'))->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    $reason = collect($unit['actions'])->firstWhere('date', '2026-09-21')['reason'];
+    expect($reason)->toContain("o'qituvchi USTOZ shu vaqtda (08:30) sikl darsida")->toContain('Pediatriya')
+        ->not->toContain("bo'sh");
+});

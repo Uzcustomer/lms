@@ -3629,8 +3629,10 @@
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;
                 for (const g of rep.groups) {
-                    const units = g.units.filter(u => hsSubjOk(u) && !(F.onlyDiff && hsUnitMatches(u)));
-                    tot.hidden += g.units.length - units.length;
+                    // Fan filtrida tanlanmaganlar "mos" emas — yashirilgan mos fanlar soniga qo'shilmaydi.
+                    const picked = g.units.filter(hsSubjOk);
+                    const units = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
+                    tot.hidden += picked.length - units.length;
                     // Mos fanlar yashirilsa ham guruhning ogohlantirishlari (o'tkazilgan fanlar, HEMIS rejasida topilmagan kartochkalar) qoladi.
                     if (!units.length && !g.skipped.length && !(g.cards_without_subject || []).length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
@@ -3638,7 +3640,7 @@
                     body += '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr>' +
                         '<th class="border px-1 text-left">Fan</th>' +
                         '<th class="border px-1" title="Tanlangan hisob davridagi haftalar: KTR bo\'yicha kerak, HEMIS\'da qo\'yilgan va LMS ichki jadvalida bor">Davr ' + (g.period_from || pf) + '–' + (g.period_to || pt) + '-hafta<br><span class="font-normal text-gray-500">soat va dars kunlari</span></th>' +
-                        '<th class="border px-1" title="Butun semestr: KTR jami − (HEMIS bugungacha + LMS ertadan). Musbat — ortiqcha, manfiy — kam; o\'qdan keyin — takliflar qo\'llangandan keyin">Semestr: soat farqi<br><span class="font-normal text-gray-500">(hozir → takliflardan keyin)</span></th>' +
+                        '<th class="border px-1" title="Butun semestr: (HEMIS bugungacha + LMS ertadan) − KTR jami. Musbat — ortiqcha, manfiy — kam; o\'qdan keyin — takliflar qo\'llangandan keyin">Semestr: soat farqi<br><span class="font-normal text-gray-500">(hozir → takliflardan keyin)</span></th>' +
                         '<th class="border px-1" title="Butun semestr bo\'yicha dars kunlari (jurnal ustunlari) farqi">Semestr: dars kunlari farqi</th><th class="border px-1 text-left">Tuzatish takliflari</th>' +
                         '<th class="border px-1">HEMIS amallari</th></tr></thead><tbody>';
                     for (const u of units) {
@@ -3868,6 +3870,7 @@
                 this.disabled = true;
                 hemisSyncUntil = null;
                 hemisSyncPeriod = null;
+                hemisSyncFilter.subjects = null;   // fan filtri qamrovga bog'liq — yangi solishtirishda hammasi
                 try { await hemisSyncAsk(); } finally { this.disabled = false; }
             };
             // ===== Ichki jadval: haftani zichlash =====

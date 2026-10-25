@@ -3615,6 +3615,9 @@
                 }
                 return true;
             }
+            // Qismlar: ma'ruza va "amaliy qism" (ma'ruzadan boshqa hamma tur) — har biri jurnalda kunma-kun ustun.
+            const HS_PART = { L: 'Ma\'ruza', A: 'Amaliy qism' };
+            const HS_A_TITLE = ' title="Amaliy qism — ma\'ruzadan boshqa barcha turlar: amaliy, seminar, laboratoriya, klinik mashg\'ulot. Bir kunda qaysi biri bo\'lsa ham — jurnalda bitta ustun."';
             const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
@@ -3632,27 +3635,27 @@
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
                     body += '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr>' +
                         '<th class="border px-1 text-left">Fan</th>' +
-                        '<th class="border px-1">Davr ' + (g.period_from || pf) + '–' + (g.period_to || pt) + '-hafta<br><span class="font-normal text-gray-500">KTR / HEMIS / LMS</span></th>' +
-                        '<th class="border px-1">Semestr: soat farqi<br><span class="font-normal text-gray-500">(oldin → keyin)</span></th>' +
-                        '<th class="border px-1">Semestr: soni farqi</th><th class="border px-1 text-left">Tuzatish takliflari</th>' +
+                        '<th class="border px-1" title="Tanlangan hisob davridagi haftalar: KTR bo\'yicha kerak, HEMIS\'da qo\'yilgan va LMS ichki jadvalida bor">Davr ' + (g.period_from || pf) + '–' + (g.period_to || pt) + '-hafta<br><span class="font-normal text-gray-500">soat va dars kunlari</span></th>' +
+                        '<th class="border px-1" title="Butun semestr: KTR jami − (HEMIS bugungacha + LMS ertadan). Musbat — ortiqcha, manfiy — kam; o\'qdan keyin — takliflar qo\'llangandan keyin">Semestr: soat farqi<br><span class="font-normal text-gray-500">(hozir → takliflardan keyin)</span></th>' +
+                        '<th class="border px-1" title="Butun semestr bo\'yicha dars kunlari (jurnal ustunlari) farqi">Semestr: dars kunlari farqi</th><th class="border px-1 text-left">Tuzatish takliflari</th>' +
                         '<th class="border px-1">HEMIS amallari</th></tr></thead><tbody>';
                     for (const u of units) {
                         const p = u.period;
                         const per = p ? Object.keys(u.code_names).map(c => {
                             const k = +p.ktr_hours[c] || 0, h = +p.hemis_hours[c] || 0;
-                            return '<div class="' + (k !== h ? 'text-red-600' : 'text-gray-500') + '">' + hsEsc(u.code_names[c]) + ': ' + k + ' / ' + h + ' soat</div>';
+                            return '<div class="' + (k !== h ? 'text-red-600' : 'text-gray-500') + '"><b>' + hsEsc(u.code_names[c]) + '</b> soati — KTR ' + k + ' · HEMIS ' + h + '</div>';
                         }).join('') + ['L', 'A'].filter(x => Object.values(u.codes).includes(x)).map(x => {
                             const k = +p.ktr_count[x] || 0, h = +p.hemis_count[x] || 0, l = +p.lms_count[x] || 0;
-                            return '<div class="' + (k !== h ? 'text-red-600' : 'text-gray-500') + '">' + (x === 'L' ? 'Ma\'ruza' : 'A qism') + ' soni: ' + k + ' / ' + h + ' / ' + l + '</div>';
+                            return '<div class="' + (k !== h ? 'text-red-600' : 'text-gray-500') + '"' + (x === 'A' ? HS_A_TITLE : '') + '><b>' + HS_PART[x] + '</b> kunlari — KTR ' + k + ' · HEMIS ' + h + ' · LMS ' + l + '</div>';
                         }).join('') : '';
                         const hd = Object.keys(u.code_names).map(c => {
                             const b = u.before.hours_diff[c] || 0, a = u.after.hours_diff[c] || 0;
-                            return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '">' + hsEsc(u.code_names[c]) + ': ' +
+                            return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '">' + hsEsc(u.code_names[c]) + ' soati: ' +
                                 (b || a ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
                         }).join('');
                         const cd = ['L', 'A'].filter(x => Object.values(u.codes).includes(x)).map(x => {
                             const b = u.before.count_diff[x] || 0, a = u.after.count_diff[x] || 0;
-                            return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '">' + (x === 'L' ? 'Ma\'ruza' : 'A qism') + ': ' +
+                            return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '"' + (x === 'A' ? HS_A_TITLE : '') + '>' + HS_PART[x] + ' kunlari: ' +
                                 (b || a ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
                         }).join('');
                         const fx = u.fixes.map(f => '<div>• ' + hsEsc(f.text) + '</div>').join('') +
@@ -3703,6 +3706,9 @@
                     chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span></div>' +
                     '<div class="text-gray-600 mb-1">Tuzatish takliflari butun semestr bo\'yicha: KTR jami = HEMIS (bugungacha o\'tilgan) + LMS ichki jadvali (ertadan semestr oxirigacha). ' +
                     '«Hisob davri» faqat shu haftalardagi KTR / HEMIS / LMS yig\'indilarini ko\'rsatadi, «HEMIS\'ga yozish» esa qaysi haftagacha amal chiqishini belgilaydi. Bugun va undan oldingi kunlarga tegilmaydi.</div>' +
+                    '<div class="text-gray-500 mb-1 text-[11px]"><b>Soati</b> — akademik soat (1 para = 2 soat). <b>Kunlari</b> — necha kunda o\'tilgani (jurnaldagi ustunlar soni). ' +
+                    '<b>Amaliy qism</b> — ma\'ruzadan boshqa barcha turlar (amaliy, seminar, laboratoriya, klinik): bir kunda qaysi biri bo\'lsa ham bitta ustun. ' +
+                    '<b>KTR</b> — reja bo\'yicha kerak, <b>HEMIS</b> — HEMIS\'da qo\'yilgan, <b>LMS</b> — mark ichki jadvalida. Teng bo\'lmasa — qizil.</div>' +
                     '<div class="text-gray-600 mb-1">Ko\'rsatilgan amallar: <b class="text-emerald-700">+' + tot.create + '</b> qo\'shish, <b class="text-amber-700">~' + tot.update + '</b> o\'zgartirish, ' +
                     '<b class="text-red-700">−' + tot.delete + '</b> o\'chirish' + (tot.blocked ? ', <b class="text-red-600">' + tot.blocked + ' ta to\'siqli</b>' : '') +
                     (tot.later ? ' · tanlangan haftadan keyin yana ' + tot.later + ' ta amal (hozir yozilmaydi)' : '') +

@@ -731,8 +731,9 @@ trait TimetableHemisSync
         $bal = $book->getActiveSheet();
         $bal->setTitle('Balans');
         $bal->fromArray(['Guruh', 'Fan', 'Kafedra', 'Dars turi', 'KTR jami (soat)', 'KTR joriy haftagacha', 'HEMIS bugungacha',
-            'Farq oldin (soat)', 'Farq keyin (soat)', 'Qism', 'KTR soni', 'HEMIS soni (bugungacha)', 'Farq soni oldin', 'Farq soni keyin',
-            'Tuzatishlar', 'Izohlar', 'Davr', 'Davr KTR (soat)', 'Davr HEMIS (soat)', 'Davr farq (HEMIS−KTR)', 'Davr KTR soni', 'Davr HEMIS soni', 'Davr LMS soni'], null, 'A1');
+            'Semestr soat farqi hozir (+ kam, − ortiq)', 'Semestr soat farqi takliflardan keyin', 'Qism (Amaliy qism = amaliy, seminar, lab, klinik)',
+            'KTR dars kunlari (semestr)', 'HEMIS dars kunlari (bugungacha)', 'Semestr kunlar farqi hozir (+ kam, − ortiq)', 'Semestr kunlar farqi takliflardan keyin',
+            'Tuzatishlar', 'Izohlar', 'Davr', 'Davr KTR soati', 'Davr HEMIS soati', 'Davr soat farqi (HEMIS−KTR)', 'Davr KTR kunlari', 'Davr HEMIS kunlari', 'Davr LMS kunlari'], null, 'A1');
         $act = $book->createSheet();
         $act->setTitle('Amallar');
         $act->fromArray(['Guruh', 'Fan', 'Amal', 'Sana', 'Boshlanish', 'Tugash', 'HEMIS para', 'Dars turi', 'O\'qituvchi', 'Xona',

@@ -3632,7 +3632,7 @@
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
                     body += '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr>' +
                         '<th class="border px-1 text-left">Fan</th>' +
-                        '<th class="border px-1">Davr ' + pf + '–' + pt + '-hafta<br><span class="font-normal text-gray-500">KTR / HEMIS / LMS</span></th>' +
+                        '<th class="border px-1">Davr ' + (g.period_from || pf) + '–' + (g.period_to || pt) + '-hafta<br><span class="font-normal text-gray-500">KTR / HEMIS / LMS</span></th>' +
                         '<th class="border px-1">Semestr: soat farqi<br><span class="font-normal text-gray-500">(oldin → keyin)</span></th>' +
                         '<th class="border px-1">Semestr: soni farqi</th><th class="border px-1 text-left">Tuzatish takliflari</th>' +
                         '<th class="border px-1">HEMIS amallari</th></tr></thead><tbody>';
@@ -3739,9 +3739,10 @@
                     add('_token', CSRF);
                     const sb = scopeBody();
                     Object.keys(sb).forEach(k => sb[k].forEach(v => add(k + '[]', v)));
-                    add('until_week', rep.until_week || 0);
-                    add('period_from', pf);
-                    add('period_to', pt);
+                    // Faqat foydalanuvchi tanlagani yuboriladi: sukutda server har guruh uchun o'z joriy haftasini
+                    // oladi (kalendari boshqacha guruhlar) — Excel oynadagi bilan bir xil bo'ladi.
+                    if (hemisSyncUntil !== null) add('until_week', hemisSyncUntil);
+                    if (hemisSyncPeriod) { add('period_from', hemisSyncPeriod.from); add('period_to', hemisSyncPeriod.to); }
                     add('only_diff', F.onlyDiff ? 1 : 0);
                     add('ops_filter', 1);   // hech biri tanlanmasa ham — Excel'da amal bo'lmaydi
                     Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));

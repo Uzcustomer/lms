@@ -440,3 +440,37 @@ it('Excel: keyingi haftalardagi farqli fan "mos" deb yashirilmaydi; amal turlari
         ->and($sheets(['ops_filter' => 1, 'ops' => ['update']])[1])->toBe(2)
         ->and($sheets([])[1])->toBe(2);
 });
+
+it('kalendari boshqacha guruhlar: sukut hisob davri har guruhning o\'z joriy haftasi, Excel ham shunday', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Pediatriya 1-kurs 2 hafta kech boshlanadi
+    TimetableGridSetting::where('board_id', $s['board']->id)->update(['weeks' => 8]);
+    TimetableGridSetting::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'pediatriya', 'course' => 1,
+        'days' => 6, 'pairs_per_day' => 12, 'weeks' => 8, 'start_date' => '2026-09-28']);
+    hsInsert('groups', ['group_hemis_id' => 1700, 'name' => 'p/pd26-01a', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 2]);
+    TimetableCard::create($s['card']->only(['board_id', 'faculty_name', 'course', 'oqim_label', 'lang', 'students', 'training_type', 'len_half', 'weeks',
+        'subject_name', 'kafedra_name', 'day', 'pair', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name'])
+        + ['specialty_name' => 'pediatriya', 'group_name' => 'p/pd26-01a (rus)']);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $req = ['courses' => [1], 'today' => '2026-10-10'];
+
+    $res = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $req)->assertOk()->json();
+    $per = [];
+    foreach ($res['groups'] as $g) {
+        $per[$g['group']] = [$g['period_to'], $g['units'][0]['period']['to_week']];
+    }
+    expect($per)->toBe(['p/st26-01a' => [4, 4], 'p/pd26-01a' => [2, 2]]);
+
+    // Excel (oyna sukutda davr yubormaydi) — har guruh o'z davri bilan
+    $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+    file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req)->assertOk()->streamedContent());
+    $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getSheetByName('Balans')->toArray();
+    @unlink($file);
+    $davr = [];
+    foreach (array_slice($rows, 1) as $r) {
+        $davr[$r[0]] = $r[16];
+    }
+    expect($davr)->toBe(['p/st26-01a' => '1–4-hafta', 'p/pd26-01a' => '1–2-hafta']);
+});

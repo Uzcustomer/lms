@@ -604,6 +604,9 @@ trait TimetableHemisSync
                 'semester_code' => $semCode,
                 'education_year' => (int) substr((string) $board->academic_year, 0, 4),
                 'until' => $until,
+                // Guruhning o'z hisob davri (kalendari boshqacha guruhlarda sukut — o'z joriy haftasi).
+                'period_from' => $pFrom,
+                'period_to' => $pTo,
                 'imported_at' => $hemisAll->max('updated_at'),
                 'units' => $results,
                 'skipped' => $skipped,

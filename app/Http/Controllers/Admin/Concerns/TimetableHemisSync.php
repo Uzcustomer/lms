@@ -258,10 +258,12 @@ trait TimetableHemisSync
             . ' «' . $c->subject_name . '»' . ($c->teacher_name ? ' (' . $c->teacher_name . ')' : '');
 
         // Shablon joyida (kun, yarim-slotlar) shu kartaga xalaqit beradigan darslar.
-        $blockers = function (TimetableCard $me, string $date, int $from, int $len, bool $deep) use (&$blockers, $busyOn, $time, $groupsOf, $who, $place, $all): array {
+        $blockers = function (TimetableCard $me, string $date, int $from, int $len, bool $deep) use (&$blockers, $busyOn, $time, $groupsOf, $who, $place, $weekFor, $all): array {
             $range = [$from, $from + $len];
             $mine = $groupsOf($me);
-            $myRoom = $me->auditorium_code;
+            // Shu haftadagi xonasi (haftalik ko'chirishda boshqa xona bo'lishi mumkin), bo'lmasa kartaniki.
+            $myWeek = $weekFor($me, Carbon::parse($date)->startOfWeek()->toDateString());
+            $myRoom = ($myWeek ? $place($me, $myWeek) : null)['room'] ?? $me->auditorium_code;
             $out = [];
             foreach ($busyOn($date) as $b) {
                 $c = $b['card'];
@@ -275,7 +277,9 @@ trait TimetableHemisSync
                 if ($myRoom && (string) $b['room'] === (string) $myRoom && !$this->isSharedRoom($b['room_name'])) {
                     $why[] = ($b['room_name'] ?: $myRoom) . '-xona ' . $time($b['pair']) . ' da band: ' . $who($c);
                 }
+                // Guruh nomi fakultetlararo takrorlanadi ("1K-01a") — fakultet ham mos bo'lishi kerak (groupScopeKey kabi).
                 if (array_intersect($mine, $groupsOf($c)) && !$this->bolakSiblings($me, $c) && (int) $c->course === (int) $me->course
+                    && (string) ($c->faculty_name ?? '') === (string) ($me->faculty_name ?? '')
                     && $this->specKey($c->specialty_name) === $this->specKey($me->specialty_name)) {
                     $why[] = 'guruh ' . $time($b['pair']) . ' da «' . $c->subject_name . '» darsida';
                 }

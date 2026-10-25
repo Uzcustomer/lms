@@ -546,3 +546,32 @@ it('vaqti shablondan farq qilgan amalda sabab yoziladi: shablon vaqtida o\'qituv
         ->and($a['reason'])->toContain('Tashqi jadvalda 08:30 da, ichki jadvalda 10:00 ga pastga tushirilgan')
         ->and($a['reason'])->toContain('o\'qituvchi USTOZ shu vaqtda (08:30) farmatsiya 1-kurs p/f26-01a «Falsafa»');
 });
+
+it('sabab: boshqa fakultetning bir xil nomli guruhi xalaqit deb ko\'rsatilmaydi; haftalik ko\'chirilgan xona hisobga olinadi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Shablon (tashqi): dushanba 08:30; ichki: 10:00
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 1]);
+    $base = ['board_id' => $s['board']->id, 'course' => 1, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice',
+        'len_half' => 2, 'weeks' => 4, 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 1, 'day' => 1, 'pair' => 1];
+    // F2 fakultetida xuddi shu nomli guruh 08:30 da (boshqa o'qituvchi, boshqa xona) — xalaqit emas
+    TimetableCard::create($base + ['faculty_name' => 'F2', 'specialty_name' => 'stomatologiya', 'subject_name' => 'Kimyo',
+        'group_name' => 'p/st26-01a (rus)', 'auditorium_code' => '55', 'auditorium_name' => '55']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '08:30:00', '09:50:00');
+    hsSchedule(3, '2026-09-28', '08:30:00', '09:50:00');
+    // 3-haftada dars B1 xonasiga ko'chirilgan; B1 08:30 da boshqa yo'nalish darsi bilan band
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['card']->id, 'week' => 3, 'day' => 1, 'pair' => 3,
+        'cancelled' => false, 'auditorium_code' => 'B1', 'auditorium_name' => 'B1']);
+    TimetableCard::create($base + ['faculty_name' => 'F1', 'specialty_name' => 'farmatsiya', 'subject_name' => 'Falsafa',
+        'group_name' => 'p/f26-01a', 'auditorium_code' => 'B1', 'auditorium_name' => 'B1']);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 3])
+        ->assertOk()->json();
+    $unit = collect($res['groups'])->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    $acts = collect($unit['actions'])->keyBy('date');
+    expect($acts['2026-09-21']['reason'])->not->toContain('guruh')->toContain('08:30 bo\'sh')
+        ->and($acts['2026-09-28']['reason'])->toContain('B1-xona 08:30 da band');
+});

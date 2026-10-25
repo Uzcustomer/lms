@@ -3718,7 +3718,9 @@
                 hemisSyncModal('<h3 class="font-semibold text-[14px] mb-2">HEMIS solishtirish · ' + hsEsc(scopeLabelText()) + '</h3>' +
                     (note ? '<div class="text-red-600 mb-2">' + note + '</div>' : '') +
                     '<div class="text-gray-700 mb-1">Solishtirish HEMIS dars jadvalining mark\'dagi nusxasi bilan qilinadi.</div>' +
-                    '<div class="mb-1">Oxirgi import: <b>' + hsAgo(st.last_import_at) + '</b>. Har kecha 00:30 da avtomatik yangilanadi.</div>' +
+                    '<div class="mb-1">Oxirgi import: <b>' + hsAgo(st.last_import_at) + '</b>' +
+                    (st.last_import_approx ? ' <span class="text-gray-500">(taxminan — to\'liq import hali qayd etilmagan, bu yozuvlarning oxirgi yangilanishi)</span>' : '') +
+                    '. Har kecha 00:30 da avtomatik yangilanadi.</div>' +
                     (job.status === 'error' ? '<div class="text-amber-700 mb-1">Oxirgi qo\'lda yangilash xato bilan tugagan: ' + hsEsc(job.message || '') + '</div>' : '') +
                     '<div class="mb-3 text-gray-600">Shu ma\'lumot bilan solishtiraymi yoki avval HEMIS\'dan yangilab olaymi?</div>' +
                     '<div class="flex gap-2"><button type="button" id="hsUseLast" class="px-3 py-1 rounded bg-emerald-600 text-white">Shu ma\'lumot bilan solishtirish</button>' +

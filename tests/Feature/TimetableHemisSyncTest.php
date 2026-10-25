@@ -328,3 +328,56 @@ it('solishtirishdan oldin oxirgi import vaqti ko\'rsatiladi va HEMIS\'dan yangil
     test()->withoutVite()->actingAs($mudir, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
         ->postJson(route('admin.timetable.hemis-sync.import', $s['board']))->assertForbidden();
 });
+
+it('oxirgi import — to\'liq va xatosiz importning vaqti; HEMIS ishlamasa import "done" bo\'lmaydi', function () {
+    $s = hsSetup();
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi']);
+    config(['services.hemis.token' => 't']);
+    $item = ['id' => 901, 'subject' => ['id' => 474, 'name' => 'Odam anatomiyasi', 'code' => 'OA'],
+        'semester' => ['code' => '11', 'name' => '1'], 'educationYear' => ['code' => '2026', 'name' => '2026-2027', 'current' => true],
+        'group' => ['id' => 1596, 'name' => 'p/st26-01a', 'educationLang' => ['code' => '12', 'name' => 'Rus']],
+        'faculty' => ['id' => 1, 'name' => 'F1', 'code' => 'F1', 'structureType' => ['code' => '11', 'name' => 'Fakultet']],
+        'department' => ['id' => 501, 'name' => 'Anatomiya', 'code' => 'A', 'structureType' => ['code' => '12', 'name' => 'Kafedra']],
+        'auditorium' => ['code' => '71', 'name' => '423', 'auditoriumType' => ['code' => '11', 'name' => 'Amaliy'], 'building' => ['id' => 1, 'name' => 'B']],
+        'trainingType' => ['code' => '13', 'name' => 'Amaliy'],
+        'lessonPair' => ['code' => '12', 'name' => '2', 'start_time' => '10:00', 'end_time' => '11:20'],
+        'employee' => ['id' => 5001, 'name' => 'E5001'],
+        'weekStartTime' => null, 'weekEndTime' => null, 'lesson_date' => now()->addDay()->startOfDay()->timestamp, '_week' => 1];
+    $range = ['year' => '2026', 'from' => now()->subMonth(), 'to' => now()->addMonths(3)];
+    $hemisUp = false;
+    \Illuminate\Support\Facades\Http::fake(function () use (&$hemisUp, $item) {
+        return $hemisUp
+            ? \Illuminate\Support\Facades\Http::response(['data' => ['items' => [$item], 'pagination' => ['pageCount' => 1]]])
+            : \Illuminate\Support\Facades\Http::response('x', 403);
+    });
+    $service = new class extends \App\Services\ScheduleImportService {
+        public ?array $range = null;
+        public function currentSemesterRange(): ?array { return $this->range; }
+    };
+    $service->range = $range;
+    $key = \App\Services\ScheduleImportService::LAST_FULL_IMPORT_KEY;
+
+    // Yozuvlar bor, to'liq import hali qayd etilmagan — taxminiy vaqt
+    hsSchedule(1, now()->toDateString(), '10:00:00', '11:20:00');
+    DB::table('schedules')->update(['updated_at' => now()->subDays(5)->toDateTimeString()]);
+    $st = $as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->json();
+    expect($st['last_import_approx'])->toBeTrue();
+
+    // HEMIS ishlamaydi — job xato bilan tugaydi, vaqt qayd etilmaydi
+    expect($service->importByEducationYear(null, true, null, $range))->toBeFalse()
+        ->and(\Illuminate\Support\Facades\Cache::get($key))->toBeNull();
+    (new \App\Jobs\ImportSchedulesWithProgressJob('REG'))->handle($service);
+    $job = \Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY);
+    expect($job['status'])->toBe('error')->and($job['message'])->toContain("to'liq olinmadi");
+
+    // Jurnaldan bitta guruh+fan yangilansa ham to'liq import vaqti o'zgarmaydi
+    $hemisUp = true;
+    (new \App\Jobs\ImportSchedulesWithProgressJob('REG'))->handle($service);
+    expect(\Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY)['status'])->toBe('done');
+    $full = \Illuminate\Support\Facades\Cache::get($key);
+    expect($full)->not->toBeNull();
+    test()->travel(2)->hours();
+    DB::table('schedules')->update(['updated_at' => now()->toDateTimeString()]);   // bitta guruh+fan importi
+    $st = $as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->json();
+    expect($st['last_import_at'])->toBe($full)->and($st['last_import_approx'])->toBeFalse();
+});

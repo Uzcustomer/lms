@@ -59,7 +59,10 @@ trait TimetableHemisSync
     public function hemisSyncImportStatus(Request $request, TimetableBoard $board)
     {
         $this->hemisSyncDenyUnlessRegistrar($request);
-        $last = DB::table('schedules')->whereNull('deleted_at')
+        // Oxirgi to'liq va xatosiz import. U hali qayd etilmagan bo'lsa (yangilanishdan keyingi birinchi
+        // kechgacha) — yozuvlarning eng so'nggi yangilanishi, "taxminiy" belgisi bilan.
+        $full = \Illuminate\Support\Facades\Cache::get(\App\Services\ScheduleImportService::LAST_FULL_IMPORT_KEY);
+        $last = $full ?? DB::table('schedules')->whereNull('deleted_at')
             ->where('lesson_date', '>=', now()->subDays(14)->startOfDay())
             ->where('lesson_date', '<=', now()->addDays(120)->endOfDay())
             ->max('updated_at');
@@ -69,6 +72,7 @@ trait TimetableHemisSync
 
         return response()->json([
             'last_import_at' => $last,
+            'last_import_approx' => $full === null && $last !== null,
             'job' => $state,
             'running' => $running,
         ]);

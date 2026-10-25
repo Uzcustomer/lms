@@ -3731,23 +3731,27 @@
                 };
             }
             // Import tugashini kutadi (job holati keshda); tugasa — solishtiradi, xato bo'lsa — oxirgi ma'lumotni taklif qiladi.
+            // Oyna yopilsa kutish to'xtaydi (import serverda davom etadi) — oyna qayta ochilib turmaydi.
             async function hemisSyncWaitImport() {
+                let skip = false;   // "Kutmasdan…" — holat so'ralayotgan paytda bosilsa ham yo'qolmaydi
                 for (let i = 0; i < 400; i++) {
                     let st;
                     try { st = await api(BASE + '/boards/' + board.id + '/hemis-sync/import-status'); }
                     catch (e) { st = null; }
+                    if (!$('hemisSyncModal')) return;
+                    if (skip) return hemisSyncRun();
                     const j = (st && st.job) || {};
                     if (st && !st.running && j.status === 'done') return hemisSyncRun();
                     if (st && !st.running && j.status !== 'queued') {
                         return hemisSyncAsk('HEMIS\'dan yangilab bo\'lmadi' + (j.message ? ': ' + hsEsc(j.message) : '') +
                             '. HEMIS hozir ishlamayotgan bo\'lishi mumkin — oxirgi import bilan solishtirish mumkin.');
                     }
-                    hemisSyncModal('<div class="p-6 text-center text-gray-600">HEMIS\'dan dars jadvali yangilanmoqda… ' +
+                    const m = hemisSyncModal('<div class="p-6 text-center text-gray-600">HEMIS\'dan dars jadvali yangilanmoqda… ' +
                         (j.pages ? j.page + '/' + j.pages + ' sahifa' : '') + '<div class="text-[11px] text-gray-400 mt-1">' + hsEsc(j.message || '') + '</div>' +
                         '<div class="mt-3"><button type="button" id="hsStopWait" class="px-2 py-1 border rounded">Kutmasdan oxirgi import bilan solishtirish</button></div></div>');
-                    let skip = false;
                     $('hsStopWait').onclick = () => { skip = true; };
-                    for (let k = 0; k < 6 && !skip; k++) await new Promise(r => setTimeout(r, 500));
+                    for (let k = 0; k < 6 && !skip && m.isConnected; k++) await new Promise(r => setTimeout(r, 500));
+                    if (!m.isConnected) return;
                     if (skip) return hemisSyncRun();
                 }
                 hemisSyncAsk('Import juda uzoq davom etmoqda.');

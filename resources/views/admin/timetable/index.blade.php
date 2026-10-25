@@ -3694,14 +3694,69 @@
                     hemisSyncLast = await api(BASE + '/boards/' + board.id + '/hemis-sync', 'POST', body);
                     hemisSyncRender(hemisSyncLast);
                 } catch (e) {
-                    hemisSyncModal('<div class="p-4 text-red-600">Xatolik: ' + hsEsc(e.message) + '</div><button type="button" class="px-2 py-1 border rounded" onclick="this.closest(\'#hemisSyncModal\').remove()">Yopish</button>');
+                    hemisSyncModal('<div class="p-4 text-red-600">' + hsEsc(hsErrText(e)) + '</div>' + HS_CLOSE);
                 }
+            }
+            const HS_CLOSE = '<button type="button" class="px-2 py-1 border rounded" onclick="this.closest(\'#hemisSyncModal\').remove()">Yopish</button>';
+            // "Failed to fetch" — brauzer mark serveriga yeta olmadi (internet/server), HEMIS emas.
+            const hsErrText = e => /failed to fetch|networkerror|load failed/i.test(String(e && e.message))
+                ? 'Mark serveri bilan aloqa yo\'q (internet yoki server javob bermayapti). Birozdan keyin qayta urinib ko\'ring.'
+                : 'Xatolik: ' + (e && e.message);
+            const hsAgo = ts => {
+                if (!ts) return 'hali import qilinmagan';
+                const m = Math.round((Date.now() - new Date(String(ts).replace(' ', 'T')).getTime()) / 60000);
+                return hsEsc(ts) + ' (' + (m < 60 ? m + ' daqiqa' : m < 2880 ? Math.round(m / 60) + ' soat' : Math.round(m / 1440) + ' kun') + ' oldin)';
+            };
+            // 1-qadam: oxirgi import vaqtini ko'rsatib, shu ma'lumot bilan solishtirish yoki avval HEMIS'dan yangilashni so'raydi.
+            async function hemisSyncAsk(note) {
+                hemisSyncModal('<div class="p-6 text-center text-gray-500">Oxirgi HEMIS importi tekshirilmoqda…</div>');
+                let st;
+                try { st = await api(BASE + '/boards/' + board.id + '/hemis-sync/import-status'); }
+                catch (e) { hemisSyncModal('<div class="p-4 text-red-600">' + hsEsc(hsErrText(e)) + '</div>' + HS_CLOSE); return; }
+                if (st.running) return hemisSyncWaitImport();
+                const job = st.job || {};
+                hemisSyncModal('<h3 class="font-semibold text-[14px] mb-2">HEMIS solishtirish · ' + hsEsc(scopeLabelText()) + '</h3>' +
+                    (note ? '<div class="text-red-600 mb-2">' + note + '</div>' : '') +
+                    '<div class="text-gray-700 mb-1">Solishtirish HEMIS dars jadvalining mark\'dagi nusxasi bilan qilinadi.</div>' +
+                    '<div class="mb-1">Oxirgi import: <b>' + hsAgo(st.last_import_at) + '</b>. Har kecha 00:30 da avtomatik yangilanadi.</div>' +
+                    (job.status === 'error' ? '<div class="text-amber-700 mb-1">Oxirgi qo\'lda yangilash xato bilan tugagan: ' + hsEsc(job.message || '') + '</div>' : '') +
+                    '<div class="mb-3 text-gray-600">Shu ma\'lumot bilan solishtiraymi yoki avval HEMIS\'dan yangilab olaymi?</div>' +
+                    '<div class="flex gap-2"><button type="button" id="hsUseLast" class="px-3 py-1 rounded bg-emerald-600 text-white">Shu ma\'lumot bilan solishtirish</button>' +
+                    '<button type="button" id="hsReimport" class="px-3 py-1 rounded border border-emerald-600 text-emerald-700">HEMIS\'dan yangilab, keyin solishtirish</button>' + HS_CLOSE + '</div>');
+                $('hsUseLast').onclick = () => hemisSyncRun();
+                $('hsReimport').onclick = async () => {
+                    try { await api(BASE + '/boards/' + board.id + '/hemis-sync/import', 'POST', {}); }
+                    catch (e) { return hemisSyncAsk(hsEsc(hsErrText(e))); }
+                    hemisSyncWaitImport();
+                };
+            }
+            // Import tugashini kutadi (job holati keshda); tugasa — solishtiradi, xato bo'lsa — oxirgi ma'lumotni taklif qiladi.
+            async function hemisSyncWaitImport() {
+                for (let i = 0; i < 400; i++) {
+                    let st;
+                    try { st = await api(BASE + '/boards/' + board.id + '/hemis-sync/import-status'); }
+                    catch (e) { st = null; }
+                    const j = (st && st.job) || {};
+                    if (st && !st.running && j.status === 'done') return hemisSyncRun();
+                    if (st && !st.running && j.status !== 'queued') {
+                        return hemisSyncAsk('HEMIS\'dan yangilab bo\'lmadi' + (j.message ? ': ' + hsEsc(j.message) : '') +
+                            '. HEMIS hozir ishlamayotgan bo\'lishi mumkin — oxirgi import bilan solishtirish mumkin.');
+                    }
+                    hemisSyncModal('<div class="p-6 text-center text-gray-600">HEMIS\'dan dars jadvali yangilanmoqda… ' +
+                        (j.pages ? j.page + '/' + j.pages + ' sahifa' : '') + '<div class="text-[11px] text-gray-400 mt-1">' + hsEsc(j.message || '') + '</div>' +
+                        '<div class="mt-3"><button type="button" id="hsStopWait" class="px-2 py-1 border rounded">Kutmasdan oxirgi import bilan solishtirish</button></div></div>');
+                    let skip = false;
+                    $('hsStopWait').onclick = () => { skip = true; };
+                    for (let k = 0; k < 6 && !skip; k++) await new Promise(r => setTimeout(r, 500));
+                    if (skip) return hemisSyncRun();
+                }
+                hemisSyncAsk('Import juda uzoq davom etmoqda.');
             }
             if ($('hemisSyncBtn')) $('hemisSyncBtn').onclick = async function () {
                 if (!board) return;
                 this.disabled = true;
                 hemisSyncUntil = null;
-                try { await hemisSyncRun(); } finally { this.disabled = false; }
+                try { await hemisSyncAsk(); } finally { this.disabled = false; }
             };
             // ===== Ichki jadval: haftani zichlash =====
             // Tashqi jadval (ext_day/ext_pair) andoza: guruhning shu kunidagi shablonda band, lekin

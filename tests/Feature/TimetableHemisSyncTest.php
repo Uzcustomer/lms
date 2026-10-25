@@ -308,3 +308,23 @@ it('"Kafedra mudiri xonasi" — aynan shu nomli auditoriya ustuvor', function ()
         ->and($creates)->not->toBeEmpty()
         ->and(array_unique(array_column($creates, 'auditorium_code')))->toBe(['KME']);
 });
+
+it('solishtirishdan oldin oxirgi import vaqti ko\'rsatiladi va HEMIS\'dan yangilash boshlanadi', function () {
+    \Illuminate\Support\Facades\Queue::fake();
+    \Illuminate\Support\Facades\Cache::forget(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY);
+    $s = hsSetup();
+    hsSchedule(1, now()->toDateString(), '10:00:00', '11:20:00');
+    DB::table('schedules')->update(['updated_at' => '2026-10-25 00:42:16']);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi']);
+
+    $st = $as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->assertOk()->json();
+    expect($st['last_import_at'])->toBe('2026-10-25 00:42:16')->and($st['running'])->toBeFalse();
+
+    $as()->postJson(route('admin.timetable.hemis-sync.import', $s['board']))->assertOk()->assertJsonPath('success', true);
+    \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\ImportSchedulesWithProgressJob::class);
+    expect($as()->getJson(route('admin.timetable.hemis-sync.import-status', $s['board']))->json('running'))->toBeTrue();
+
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    test()->withoutVite()->actingAs($mudir, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
+        ->postJson(route('admin.timetable.hemis-sync.import', $s['board']))->assertForbidden();
+});

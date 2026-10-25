@@ -51,6 +51,44 @@ trait TimetableHemisSync
         return response()->json($this->hemisSyncReport($board, $data, $today));
     }
 
+    /**
+     * Solishtirishdan oldin: HEMIS jadvali LMS'ga oxirgi marta qachon import qilingani va
+     * qo'lda boshlangan importning holati. Solishtirish har doim shu import (LMS bazasi)
+     * bilan ishlaydi — HEMIS'ning o'ziga bu tugma murojaat qilmaydi.
+     */
+    public function hemisSyncImportStatus(Request $request, TimetableBoard $board)
+    {
+        $this->hemisSyncDenyUnlessRegistrar($request);
+        $last = DB::table('schedules')->whereNull('deleted_at')
+            ->where('lesson_date', '>=', now()->subDays(14)->startOfDay())
+            ->where('lesson_date', '<=', now()->addDays(120)->endOfDay())
+            ->max('updated_at');
+        $state = \Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY);
+        $running = $state && in_array($state['status'] ?? null, ['queued', 'running'], true)
+            && !empty($state['updated_at']) && Carbon::parse($state['updated_at'])->gt(now()->subMinutes(10));
+
+        return response()->json([
+            'last_import_at' => $last,
+            'job' => $state,
+            'running' => $running,
+        ]);
+    }
+
+    /** HEMIS'dan joriy semestr jadvalini qayta import qilishni boshlash ("Dars jadval mosligi" bilan bir xil job). */
+    public function hemisSyncImportStart(Request $request, TimetableBoard $board)
+    {
+        $this->hemisSyncDenyUnlessRegistrar($request);
+
+        return app(\App\Http\Controllers\Admin\ReportController::class)->startScheduleImport();
+    }
+
+    private function hemisSyncDenyUnlessRegistrar(Request $request): void
+    {
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            abort(403, 'Faqat registrator ofisi uchun.');
+        }
+    }
+
     /** Yarim-slot vaqtlari [slot => [start, end]] doskaning qo'ng'iroq jadvalidan. */
     private function hemisSlotTimes(TimetableBoard $board): array
     {

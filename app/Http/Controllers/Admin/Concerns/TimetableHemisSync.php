@@ -583,6 +583,8 @@ trait TimetableHemisSync
                     'week' => $w, 'slot' => (int) $pair, 'len' => $c->lenHalf(),
                     // Sabab tushuntirish uchun: qaysi karta, tashqi (shablon) joyi.
                     'card_id' => $c->id, 'day' => (int) $day, 'ext_day' => (int) $c->ext_day, 'ext_pair' => (int) $c->ext_pair,
+                    // Xona qayerdan: shu haftaning ichki jadvalida alohida berilgan yoki kartochkaning o'zida.
+                    'room_from' => ($hasOvRoom && $o && $o->auditorium_code) ? 'week' : 'card', 'card_room_name' => $c->auditorium_name,
                     'part' => $c->training_type === 'lecture' ? 'L' : 'A',
                     'employee_id' => $c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null,
                     'employee_name' => $c->teacher_id ? $c->teacher_name : null,
@@ -889,6 +891,20 @@ trait TimetableHemisSync
                     }
                     if (in_array('mudir_xonasi', $a['flags'] ?? [], true)) {
                         $why[] = 'LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo\'yiladi.';
+                    }
+                    // Xona yoki o'qituvchi LMS'da boshqa — qayerda biriktirilgani.
+                    $changed = fn (string $p) => (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, $p));
+                    if ($changed('xona') && !in_array('mudir_xonasi', $a['flags'] ?? [], true)) {
+                        $why[] = ($lesson && ($lesson['room_from'] ?? '') === 'week')
+                            ? 'Xona ichki jadvalda shu hafta uchun alohida berilgan: ' . $a['auditorium_name']
+                                . ($lesson['card_room_name'] ? ' (kartochkada — ' . $lesson['card_room_name'] . ')' : '') . '.'
+                            : 'LMS kartochkasida biriktirilgan xona: ' . $a['auditorium_name'] . ' — HEMIS\'dagidan farq qiladi.';
+                    }
+                    if ($changed('o\'qituvchi') && !in_array('mudir', $a['flags'] ?? [], true)) {
+                        $why[] = 'LMS kartochkasida biriktirilgan o\'qituvchi: ' . $a['employee_name'] . ' — HEMIS\'dagidan farq qiladi.';
+                    }
+                    if ($changed('tur')) {
+                        $why[] = 'Dars turi shu haftaning KTR qatoriga qarab belgilangan.';
                     }
                     $a['reason'] = implode(' ', array_filter($why)) ?: null;
                 }

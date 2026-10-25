@@ -684,3 +684,19 @@ it('sabab: oradagi vaqt guruhning tashqi jadvalidagi o\'tilmagan darsniki bo\'ls
         ->assertOk()->json('groups'))->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
     expect(collect($unit['actions'])->firstWhere('date', '2026-09-21')['reason'])->toContain('Zichlangan');
 });
+
+it('faqat xona yoki o\'qituvchi farq qilsa ham sabab yoziladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 3]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00', 6006, '55');   // boshqa o'qituvchi va xona
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json();
+    $a = collect($res['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($a['reason'])->toContain('LMS kartochkasida biriktirilgan xona: 423')
+        ->and($a['reason'])->toContain('LMS kartochkasida biriktirilgan o\'qituvchi: USTOZ');
+});

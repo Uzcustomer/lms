@@ -3590,7 +3590,7 @@
             let hemisSyncLast = null;
             let hemisSyncUntil = null;
             let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
-            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true } };   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, subjects: null };   // subjects: null — barcha fanlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -3618,6 +3618,8 @@
             // Qismlar: ma'ruza va "amaliy qism" (ma'ruzadan boshqa hamma tur) — har biri jurnalda kunma-kun ustun.
             const HS_PART = { L: 'Ma\'ruza', A: 'Amaliy qism' };
             const HS_A_TITLE = ' title="Amaliy qism — ma\'ruzadan boshqa barcha turlar: amaliy, seminar, laboratoriya, klinik mashg\'ulot. Bir kunda qaysi biri bo\'lsa ham — jurnalda bitta ustun."';
+            // Fan filtri: null — hammasi; aks holda tanlangan fan nomlari.
+            const hsSubjOk = u => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(u.subject_name);
             const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
@@ -3627,7 +3629,7 @@
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;
                 for (const g of rep.groups) {
-                    const units = g.units.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
+                    const units = g.units.filter(u => hsSubjOk(u) && !(F.onlyDiff && hsUnitMatches(u)));
                     tot.hidden += g.units.length - units.length;
                     // Mos fanlar yashirilsa ham guruhning ogohlantirishlari (o'tkazilgan fanlar, HEMIS rejasida topilmagan kartochkalar) qoladi.
                     if (!units.length && !g.skipped.length && !(g.cards_without_subject || []).length) continue;
@@ -3658,7 +3660,14 @@
                             return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '"' + (x === 'A' ? HS_A_TITLE : '') + '>' + HS_PART[x] + ' kunlari: ' +
                                 (b || a ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
                         }).join('');
-                        const fx = u.fixes.map(f => '<div>• ' + hsEsc(f.text) + '</div>').join('') +
+                        // "HEMIS'ga yozish" chegarasidan keyingi takliflar — kulrang, hozir yozilmaydi.
+                        const fx = u.fixes.map(f => {
+                            const later = g.until && f.date && f.date > g.until;
+                            const wk = later ? (rep.weeks || []).find(w => f.date >= w.from && f.date <= w.to) : null;
+                            return later
+                                ? '<div class="text-gray-400">• ' + hsEsc(f.text) + ' <i>(' + (wk ? wk.week + '-hafta' : 'keyingi hafta') + ' — hozir yozilmaydi)</i></div>'
+                                : '<div>• ' + hsEsc(f.text) + '</div>';
+                        }).join('') +
                             u.notes.map(n => '<div class="text-red-600">⚠ ' + hsEsc(n) + '</div>').join('');
                         const acts = u.actions.filter(hsOpOk);
                         const cnt = { create: 0, update: 0, delete: 0 };
@@ -3703,7 +3712,17 @@
                     wkOpt(rep.until_week, w => w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')') +
                     '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
                     '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
-                    chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span></div>' +
+                    chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span>' +
+                    (() => {
+                        const all = [...new Set(rep.groups.flatMap(g => g.units.map(u => u.subject_name)))].sort((a, b) => a.localeCompare(b));
+                        const sel = F.subjects ? F.subjects.filter(x => all.includes(x)) : all;
+                        return '<details id="hsSubjBox" class="relative"><summary class="cursor-pointer border rounded px-2 py-0.5 bg-white">Fanlar: ' +
+                            (sel.length === all.length ? 'hammasi' : sel.length + ' / ' + all.length) + '</summary>' +
+                            '<div class="absolute z-10 mt-1 bg-white border rounded shadow p-2 max-h-72 overflow-auto w-96">' +
+                            '<div class="mb-1"><button type="button" id="hsSubjAll" class="underline mr-2">Hammasi</button><button type="button" id="hsSubjNone" class="underline">Hech biri</button></div>' +
+                            all.map((n, i) => '<label class="flex items-center gap-1"><input type="checkbox" class="hs-subj" data-i="' + i + '"' + (sel.includes(n) ? ' checked' : '') + '> ' + hsEsc(n) + '</label>').join('') +
+                            '</div></details>';
+                    })() + '</div>' +
                     '<div class="text-gray-600 mb-1">Tuzatish takliflari butun semestr bo\'yicha: KTR jami = HEMIS (bugungacha o\'tilgan) + LMS ichki jadvali (ertadan semestr oxirigacha). ' +
                     '«Hisob davri» faqat shu haftalardagi KTR / HEMIS / LMS yig\'indilarini ko\'rsatadi, «HEMIS\'ga yozish» esa qaysi haftagacha amal chiqishini belgilaydi. Bugun va undan oldingi kunlarga tegilmaydi.</div>' +
                     '<div class="text-gray-500 mb-1 text-[11px]"><b>Soati</b> — akademik soat (1 para = 2 soat). <b>Kunlari</b> — necha kunda o\'tilgani (jurnaldagi ustunlar soni). ' +
@@ -3732,10 +3751,22 @@
                     hemisSyncRender(rep);
                 };
                 ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB'].forEach(id => { $(id).onchange = reFilter; });
+                {
+                    const all = [...new Set(rep.groups.flatMap(g => g.units.map(u => u.subject_name)))].sort((a, b) => a.localeCompare(b));
+                    const apply = () => {
+                        const picked = [...document.querySelectorAll('#hemisSyncModal .hs-subj')].filter(c => c.checked).map(c => all[+c.dataset.i]);
+                        F.subjects = picked.length === all.length ? null : picked;
+                        hemisSyncRender(rep);
+                        if ($('hsSubjBox')) $('hsSubjBox').open = true;
+                    };
+                    document.querySelectorAll('#hemisSyncModal .hs-subj').forEach(c => { c.onchange = apply; });
+                    $('hsSubjAll').onclick = () => { document.querySelectorAll('#hemisSyncModal .hs-subj').forEach(c => { c.checked = true; }); apply(); };
+                    $('hsSubjNone').onclick = () => { document.querySelectorAll('#hemisSyncModal .hs-subj').forEach(c => { c.checked = false; }); apply(); };
+                }
                 $('hsJson').onclick = () => {
                     // Yozish uchun JSON — faqat filtrda tanlangan amallar (to'siqlilar baribir yozilmaydi).
                     const out = JSON.parse(JSON.stringify(rep));
-                    out.groups.forEach(g => g.units.forEach(u => { u.actions = u.actions.filter(hsOpOk); }));
+                    out.groups.forEach(g => g.units.forEach(u => { u.actions = hsSubjOk(u) ? u.actions.filter(hsOpOk) : []; }));
                     const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob); a.download = 'hemis_amallar_' + rep.today + '.json';
@@ -3755,6 +3786,7 @@
                     add('only_diff', F.onlyDiff ? 1 : 0);
                     add('ops_filter', 1);   // hech biri tanlanmasa ham — Excel'da amal bo'lmaydi
                     Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));
+                    if (F.subjects) { add('subjects_filter', 1); F.subjects.forEach(n => add('subjects[]', n)); }
                     document.body.appendChild(f); f.submit(); f.remove();
                 };
             }

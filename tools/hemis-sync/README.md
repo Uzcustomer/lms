@@ -12,7 +12,7 @@
    `node hemis-write.mjs --json ... --apply`
 
 Qo'shimcha chegaralar (JSON ichidan yana toraytiradi):
-`--current-week`, `--until-week 7`, `--until 2026-10-31`, `--group p/st26-01a,p/st26-01b`, `--only create,update`.
+`--current-week`, `--until-week 7`, `--until 2026-10-31`, `--group p/st26-01a,p/st26-01b`, `--subject anatomiya`, `--only create,update`.
 
 Bugun va undan oldingi kunlarga hech qachon yozilmaydi. To'siqli amallar (o'qituvchi yoki xona topilmagan) o'tkazib yuboriladi.
 Har ishga tushirishdan keyin `hemis-write-log-*.json` jurnali qoladi. Yozib bo'lgach LMS'da HEMIS jadval importini

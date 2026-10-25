@@ -503,3 +503,13 @@ it('o\'qituvchi ustma-ust tushmaydi; faqat kafedra mudiriga majburan qo\'yilgan 
     expect($blocked['create 2026-09-28'])->toBe('')
         ->and($blocked['create 2026-10-05'])->toContain("o'qituvchi band");
 });
+
+it('Excel fan filtri: tanlanmagan fan chiqmaydi', function () {
+    $s = hsSetup();
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi']);
+    $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'until_week' => 0,
+        'subjects_filter' => 1, 'subjects' => ['Boshqa fan']])->assertOk();
+    $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'until_week' => 0,
+        'subjects_filter' => 1, 'subjects' => ['Odam anatomiyasi']])->assertOk();
+});

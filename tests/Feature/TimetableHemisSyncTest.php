@@ -506,10 +506,21 @@ it('o\'qituvchi ustma-ust tushmaydi; faqat kafedra mudiriga majburan qo\'yilgan 
 
 it('Excel fan filtri: tanlanmagan fan chiqmaydi', function () {
     $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
     hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
-    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi']);
-    $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'until_week' => 0,
-        'subjects_filter' => 1, 'subjects' => ['Boshqa fan']])->assertOk();
-    $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'until_week' => 0,
-        'subjects_filter' => 1, 'subjects' => ['Odam anatomiyasi']])->assertOk();
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $rows = function (array $subjects) use ($as, $s) {
+        $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+        file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0,
+            'subjects_filter' => 1, 'subjects' => $subjects])->assertOk()->streamedContent());
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+        @unlink($file);
+
+        return [$book->getSheetByName('Balans')->getHighestDataRow(), $book->getSheetByName('Amallar')->getHighestDataRow()];
+    };
+    // Tanlanmagan fan — na Balans'da, na Amallar'da; tanlangani — bor
+    expect($rows(['Boshqa fan']))->toBe([1, 1]);
+    [$bal, $act] = $rows(['Odam anatomiyasi']);
+    expect($bal)->toBeGreaterThan(1)->and($act)->toBeGreaterThan(1);
 });

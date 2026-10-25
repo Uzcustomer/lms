@@ -636,3 +636,51 @@ it('sabab: doskaning hafta kalendarlari har hafta uchun bazaga so\'rovsiz qurila
     $grid = collect(DB::getQueryLog())->pluck('query')->filter(fn ($x) => str_contains($x, 'timetable_grid_settings'))->count();
     expect($grid)->toBeLessThan(7 * 4);
 });
+
+it('sabab: yuqoriga ko\'chirilgan dars — xalaqit bo\'lsa o\'sha sabab, aks holda "zichlangan" deb taxmin qilinmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Shablon va ichki jadval: dushanba 10:00 (3-yarim slot); 2- va 3-haftada 08:30 ga ko'chirilgan
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 3]);
+    foreach ([2, 3] as $w) {
+        \App\Models\TimetableCardOverride::create(['card_id' => $s['card']->id, 'week' => $w, 'day' => 1, 'pair' => 1, 'cancelled' => false]);
+    }
+    // 2-haftada 10:00 da o'sha o'qituvchi boshqa yo'nalishda dars o'tadi (3-haftada yo'q)
+    $other = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'farmatsiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Falsafa', 'group_name' => 'p/f26-01a', 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 3,
+        'day' => 1, 'pair' => 3, 'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '99', 'auditorium_name' => '124']);
+    \App\Models\TimetableCardOverride::create(['card_id' => $other->id, 'week' => 3, 'cancelled' => true]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00');
+    hsSchedule(3, '2026-09-28', '10:00:00', '11:20:00');
+
+    $unit = collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 3])
+        ->assertOk()->json('groups'))->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    $acts = collect($unit['actions'])->keyBy('date');
+    expect($acts['2026-09-21']['reason'])->toContain('ichki jadvalda 08:30 ga yuqoriga ko\'chirilgan, chunki o\'qituvchi USTOZ shu vaqtda (10:00)')
+        ->not->toContain('Zichlangan')
+        ->and($acts['2026-09-28']['reason'])->toContain('yuqoriga ko\'chirilgan (shu hafta uchun ko\'chirilgan; 10:00 hozir bo\'sh)')
+        ->not->toContain('Zichlangan');
+});
+
+it('sabab: oradagi vaqt guruhning tashqi jadvalidagi o\'tilmagan darsniki bo\'lsa — "zichlangan"', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $s['card']->update(['ext_day' => 1, 'ext_pair' => 3]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['card']->id, 'week' => 2, 'day' => 1, 'pair' => 1, 'cancelled' => false]);
+    // Guruhning 08:30 dagi boshqa darsi (tashqi jadvalda) 2-haftada o'tilmaydi
+    $first = TimetableCard::create($s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks', 'group_name', 'kafedra_name']) + ['subject_name' => 'Biologiya', 'ext_day' => 1, 'ext_pair' => 1, 'day' => 1, 'pair' => 1]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $first->id, 'week' => 2, 'cancelled' => true]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00');
+
+    $unit = collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json('groups'))->flatMap(fn ($g) => $g['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    expect(collect($unit['actions'])->firstWhere('date', '2026-09-21')['reason'])->toContain('Zichlangan');
+});

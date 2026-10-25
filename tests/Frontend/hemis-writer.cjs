@@ -89,5 +89,26 @@ const done = (async () => {
     els.hwGroup.onchange();
     assert.equal(count(), 1);
     assert.match(els.hwList.textContent, /O'zgartirish · p\/st26-01a · 2099-10-28/);
+
+    // 4) Yozish davomida filtrlar o'chiq; filtr baribir o'zgarsa ham bajarilayotgan ro'yxat va guruh tasdig'idagi son
+    // boshlanishdagi holatdan olinadi (aks holda «0 ta amal» deb so'rab, guruhni yozib yuborardi).
+    els.hwGroup.value = '';
+    els.hwGroup.onchange();
+    assert.equal(count(), 2);
+    const confirms = [], fetched = [];
+    let openGate;
+    ctx.confirm = m => { confirms.push(m.split('\n')[0]); return true; };
+    ctx.fetch = url => { fetched.push(url); return fetched.length === 1 ? new Promise(r => { openGate = () => r({ status: 404 }); }) : Promise.resolve({ status: 404 }); };
+    els.hwApply.onclick();
+    assert.equal(fetched.length, 1);
+    for (const id of ['hwUntil', 'hwGroup', 'hwSubject', 'hwOp_create', 'hwOp_update', 'hwOp_delete']) assert.equal(els[id].disabled, true, id);
+    els.hwGroup.value = 'p/st26-01a';
+    els.hwGroup.onchange();
+    openGate();
+    while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 50));
+    assert.deepEqual(confirms, ['2 ta amal HEMIS\'ga yoziladi (har guruh oldidan yana so\'raladi). Boshlaymizmi?',
+        'p/st26-01a: 1 ta amal HEMIS\'ga yoziladi.', 'p/st26-01b: 1 ta amal HEMIS\'ga yoziladi.']);
+    assert.equal(fetched.length, 2);
+    assert.equal(els.hwGroup.disabled, false);
 })();
-done.then(() => console.log('4 HEMIS writer bookmarklet scenarios passed'), e => { console.error(e); process.exit(1); });
+done.then(() => console.log('5 HEMIS writer bookmarklet scenarios passed'), e => { console.error(e); process.exit(1); });

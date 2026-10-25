@@ -113,6 +113,7 @@
     $('hwClose').onclick = () => { if (running && !confirm('Yozish davom etmoqda. To\'xtatib yopamizmi?')) return; stop = true; box.remove(); window.__hemisWriterOpen = false; };
 
     let rep = null, jobs = [], skipped = [], results = [], running = false, stop = false, lastMode = null;
+    const FILTERS = ['hwUntil', 'hwGroup', 'hwSubject', 'hwOp_create', 'hwOp_update', 'hwOp_delete'];
 
     const line = j => OP_NAME[j.op] + ' · ' + j.group + ' · ' + j.date + ' ' + j.start + '–' + j.end + ' · ' + j.subject + ' · ' + j.type
         + ' · ' + (j.employee_name || '—') + ' · ' + (j.auditorium_name || '—') + (j.hemis_id ? ' · #' + j.hemis_id : '')
@@ -171,23 +172,26 @@
             + ' Guruh: <select id="hwGroup"><option value="">hammasi</option>' + groups.map(g => '<option value="' + esc(g) + '">' + esc(g) + '</option>').join('') + '</select> '
             + ' Fan: <select id="hwSubject" style="max-width:220px"><option value="">hammasi</option>' + subjects.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('') + '</select><br>'
             + ['create', 'update', 'delete'].map(o => '<label style="margin-right:8px"><input type="checkbox" id="hwOp_' + o + '" checked> ' + OP_NAME[o] + '</label>').join('');
-        ['hwUntil', 'hwGroup', 'hwSubject', 'hwOp_create', 'hwOp_update', 'hwOp_delete'].forEach(id => { $(id).onchange = build; });
+        FILTERS.forEach(id => { $(id).onchange = build; });
         build();
     };
 
     async function run(apply) {
         if (running) return;
-        if (apply && !confirm(jobs.length + ' ta amal HEMIS\'ga yoziladi (har guruh oldidan yana so\'raladi). Boshlaymizmi?')) return;
+        // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — guruh tasdig'idagi son
+        // va yoziladigan amallar bir xil bo'lib qoladi.
+        const batch = jobs.slice();
+        if (apply && !confirm(batch.length + ' ta amal HEMIS\'ga yoziladi (har guruh oldidan yana so\'raladi). Boshlaymizmi?')) return;
         running = true; stop = false; results = []; lastMode = apply ? 'apply' : 'check';
-        ['hwCheck', 'hwApply', 'hwFile'].forEach(id => { $(id).disabled = true; });
+        ['hwCheck', 'hwApply', 'hwFile'].concat(FILTERS).forEach(id => { $(id).disabled = true; });
         $('hwStop').disabled = false; $('hwLog').disabled = true;
         const list = $('hwList');
         list.textContent = '';
         let lastGroup = null, skipGroup = null;
-        for (const j of jobs) {
+        for (const j of batch) {
             if (stop) { results.push(Object.assign({}, j, { status: 'skipped', reason: 'to\'xtatildi' })); continue; }
             if (apply && j.group_id !== lastGroup) {
-                const n = jobs.filter(x => x.group_id === j.group_id).length;
+                const n = batch.filter(x => x.group_id === j.group_id).length;
                 skipGroup = confirm(j.group + ': ' + n + ' ta amal HEMIS\'ga yoziladi.\n\nOK — yozish, Cancel — bu guruhni o\'tkazish.') ? null : j.group_id;
             }
             lastGroup = j.group_id;
@@ -203,7 +207,7 @@
         list.textContent += '\n' + (apply ? 'Yozildi' : 'Tekshirildi') + ': ' + ok + ' ta muvaffaqiyatli, ' + err + ' ta xato.'
             + (apply ? '\nEndi mark\'da «HEMIS solishtirish» → «HEMIS\'dan yangilab, keyin solishtirish»ni bosing.' : '');
         running = false;
-        ['hwCheck', 'hwApply', 'hwFile'].forEach(id => { $(id).disabled = false; });
+        ['hwCheck', 'hwApply', 'hwFile'].concat(FILTERS).forEach(id => { $(id).disabled = false; });
         $('hwStop').disabled = true; $('hwLog').disabled = false;
     }
     $('hwCheck').onclick = () => run(false);

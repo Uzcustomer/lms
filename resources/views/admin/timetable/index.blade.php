@@ -3673,7 +3673,10 @@
                             '<td class="border px-1">' + (fx || '<span class="text-gray-400">—</span>') + '</td>' +
                             '<td class="border px-1">' + (acts.length
                                 ? '<details><summary class="cursor-pointer">+' + cnt.create + ' · ~' + cnt.update + ' · −' + cnt.delete + (nBlk ? ' · ⛔' + nBlk : '') + '</summary>' + list + '</details>'
-                                : (u.actions.length ? '<span class="text-gray-400">filtrda yashirin</span>' : '<span class="text-emerald-600">mos</span>')) + '</td></tr>';
+                                : (u.actions.length ? '<span class="text-gray-400">filtrda yashirin</span>'
+                                    // Tanlangan haftagacha amal yo'q, lekin keyingi haftalarda bor — "mos" emas (filtrda ham yashirilmaydi).
+                                    : u.actions_later ? '<span class="text-emerald-600">bu davrda mos</span><div class="text-amber-700">keyingi haftalarda ' + u.actions_later + ' ta amal</div>'
+                                    : '<span class="text-emerald-600">mos</span>')) + '</td></tr>';
                     }
                     for (const sk of g.skipped) {
                         body += '<tr class="text-gray-500"><td class="border px-1">' + hsEsc(sk.subject_name) + '</td><td class="border px-1" colspan="5">' + hsEsc(sk.reason) + '</td></tr>';

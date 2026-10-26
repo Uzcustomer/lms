@@ -668,9 +668,12 @@ trait TimetableHemisSync
                 return null;
             }
             if (!array_key_exists($deptId, $mudirCache)) {
-                $t = Teacher::headsOfDepartment($deptId)->where('is_active', true)->first()
-                    ?? Teacher::where('role', 'kafedra_mudiri')->where('department_hemis_id', $deptId)->where('is_active', true)->first();
-                $mudirCache[$deptId] = $t && $t->hemis_id ? [(int) $t->hemis_id, $t->full_name] : null;
+                // Faqat mark'dagi rol bo'yicha: "kafedra_mudiri" roli va shu kafedraga biriktirilgan (head_department_hemis_id,
+                // bo'lmasa department_hemis_id). HEMIS lavozimi hisobga olinmaydi. HEMIS xodim id'si borlari ustuvor.
+                $q = Teacher::headsOfDepartment($deptId)->where('is_active', true);
+                $t = (clone $q)->whereNotNull('hemis_id')->where('hemis_id', '>', 0)->first() ?? $q->first();
+                // Topildi-yu HEMIS id'si yo'q — [null, ism] (to'siq matnida nomi chiqadi).
+                $mudirCache[$deptId] = $t ? [$t->hemis_id ? (int) $t->hemis_id : null, $t->full_name] : null;
             }
 
             return $mudirCache[$deptId];

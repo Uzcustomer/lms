@@ -673,7 +673,12 @@ class SchedulePlanner
                     $flags[] = 'mudir_xonasi';
                 }
                 $blocked = [];
-                if (!$emp) $blocked[] = 'o\'qituvchi ham, kafedra mudiri ham topilmadi';
+                if (!$emp) {
+                    // Mudir topilgan, lekin HEMIS xodim id'si yo'q — nomini aytamiz.
+                    $blocked[] = ($fbEmp && !empty($fbEmp[1]))
+                        ? 'kafedra mudiri ' . $fbEmp[1] . ' ning HEMIS xodim id\'si LMS\'da yo\'q'
+                        : 'o\'qituvchi ham, kafedra mudiri ham topilmadi (mark\'da shu kafedraga «Kafedra mudiri» roli berilgan xodim yo\'q)';
+                }
                 if (!$room) $blocked[] = '"Kafedra mudiri xonasi" auditoriyasi topilmadi';
                 if ($this->hemisPairs && !isset($this->hemisPairs[$start . '-' . $end])) {
                     $blocked[] = "HEMIS'da {$start}-{$end} para vaqti yo'q";

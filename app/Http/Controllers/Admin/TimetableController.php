@@ -919,6 +919,7 @@ class TimetableController extends Controller
             return null;
         }
         $cycleKeys = $this->cycleSubjectKeys($board);
+        $separatePractice = array_flip((array) (($board->settings ?? [])['separate_practice'] ?? []));
 
         // Fanlar: o'quv yili + semestr juft/toqligi bo'yicha
         $start = (int) substr($board->academic_year, 0, 4);
@@ -1118,7 +1119,11 @@ class TimetableController extends Controller
                             $kaf = $this->rowKafedra($overrides, $kafMap, $s, (string) $specName, (int) $course);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
                             $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
-                            $pairPracticeGroups = (float) $s->seminar > 0 || $practiceGroupSize >= 30;
+                            // Istisno: shu yo'nalish+kurs+fanda guruhlar alohida o'tiladi (doska sozlamasi) — barcha
+                            // fakultetlar uchun ('' fakultet) yoki faqat shu blok fakulteti uchun.
+                            $separateHere = isset($separatePractice[$this->separatePracticeKey('', (string) $specName, (int) $course, (string) $s->subject_name)])
+                                || isset($separatePractice[$this->separatePracticeKey((string) $blockFac, (string) $specName, (int) $course, (string) $s->subject_name)]);
+                            $pairPracticeGroups = ((float) $s->seminar > 0 || $practiceGroupSize >= 30) && !$separateHere;
                             // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
                             // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat
@@ -1224,25 +1229,7 @@ class TimetableController extends Controller
                                 }
 
                                 $practiceRows = array_values($practiceRowsByName);
-                                if ($variantUnits) {
-                                    // Bo'lak: to'liq qismlar alohida, kichik qismlar bitta aralash guruh.
-                                    $fullRows = array_values(array_filter($practiceRows, fn ($gr) => empty($gr['partial'])));
-                                    $partRows = array_values(array_filter($practiceRows, fn ($gr) => !empty($gr['partial'])));
-                                    $practiceBundles = array_map(static fn ($gr) => [$gr], $fullRows);
-                                    // Kichik qismlar asos guruh bo'yicha: "02a dan 5 + 02b dan 5" — bitta (c)
-                                    // guruhi; butun oqimning qoldiqlari bitta katta guruhga qo'shilmaydi.
-                                    $partByBase = [];
-                                    foreach ($partRows as $gr) {
-                                        $partByBase[$this->baseGroupKey((string) ($gr['name'] ?? ''))][] = $gr;
-                                    }
-                                    foreach ($partByBase as $bundle) {
-                                        $practiceBundles[] = $bundle;
-                                    }
-                                } else {
-                                    $practiceBundles = $pairPracticeGroups
-                                        ? array_chunk($practiceRows, 2)
-                                        : array_map(static fn($gr) => [$gr], $practiceRows);
-                                }
+                                $practiceBundles = $this->practiceBundles($practiceRows, (bool) $variantUnits, $pairPracticeGroups, $separateHere);
 
                                 foreach ($practiceBundles as $bundle) {
                                     $names = [];
@@ -2326,6 +2313,125 @@ class TimetableController extends Controller
 
         return response()->json(['ok' => true, 'dry_run' => $dry, 'lectures' => count($list), 'removed' => $removed,
             'list' => array_slice($list, 0, 200), 'skipped' => array_slice($skipped, 0, 200)]);
+    }
+
+    /**
+     * Amaliy kartalarning guruh to'plamlari. Bo'lakli fan (HEMIS biriktiruvi): to'liq qismlar alohida, kichik qismlar
+     * asos guruh bo'yicha bitta aralash guruh; boshqa fan: seminar / katta guruhda juftlab, aks holda alohida.
+     * "Alohida amaliy" istisnosida har guruh (bo'lakning kichik qismi ham) alohida — ajratilgan kartalar qayta
+     * yaratishda yana birlashmaydi.
+     */
+    private function practiceBundles(array $practiceRows, bool $variantUnits, bool $pairPracticeGroups, bool $separate): array
+    {
+        if ($separate || (!$variantUnits && !$pairPracticeGroups)) {
+            return array_map(static fn ($gr) => [$gr], $practiceRows);
+        }
+        if (!$variantUnits) {
+            return array_chunk($practiceRows, 2);
+        }
+        $bundles = array_map(static fn ($gr) => [$gr], array_values(array_filter($practiceRows, fn ($gr) => empty($gr['partial']))));
+        // Kichik qismlar asos guruh bo'yicha: "02a dan 5 + 02b dan 5" — bitta (c) guruhi; butun oqimning qoldiqlari
+        // bitta katta guruhga qo'shilmaydi.
+        $partByBase = [];
+        foreach ($practiceRows as $gr) {
+            if (!empty($gr['partial'])) {
+                $partByBase[$this->baseGroupKey((string) ($gr['name'] ?? ''))][] = $gr;
+            }
+        }
+
+        return array_merge($bundles, array_values($partByBase));
+    }
+
+    /** Istisno kaliti: fakultet ('' — barcha fakultetlar) + yo'nalish + kurs + fan (amaliy guruhlari juftlanmaydi). */
+    private function separatePracticeKey(string $faculty, string $specialty, int $course, string $subject): string
+    {
+        return mb_strtolower(trim($faculty)) . '|' . $this->specKey($specialty) . '|' . $course . '|' . $this->normSubject($subject);
+    }
+
+    /**
+     * Istisno: seminar (yoki katta guruh) sababli juftlab yaratilgan amaliy kartalarini ("01a + 01b") har guruhchaga
+     * alohida kartaga bo'ladi. Haftalik ko'chirishlar nusxalarga ham o'tadi; birinchi guruhda o'qituvchi/xona qoladi,
+     * qolganlariga keyin alohida biriktiriladi. Istisno doska sozlamasida saqlanadi — kartalar qayta
+     * yaratilganda ham bu fan juftlanmaydi.
+     */
+    public function separatePracticeGroups(Request $request, TimetableBoard $board)
+    {
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            abort(403);
+        }
+        $data = $request->validate([
+            'faculty_name'   => 'nullable|string|max:255',
+            'specialty_name' => 'required|string|max:255',
+            'course'         => 'required|integer|min:1|max:7',
+            'subject_name'   => 'required|string|max:255',
+            'dry_run'        => 'nullable|boolean',
+        ]);
+        $dry = $request->boolean('dry_run');
+        $subjKey = $this->normSubject($data['subject_name']);
+        $cards = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->where('course', (int) $data['course'])
+            ->get()
+            ->filter(fn (TimetableCard $c) => $this->specKey($c->specialty_name) === $this->specKey($data['specialty_name'])
+                && $this->normSubject((string) $c->subject_name) === $subjKey
+                && (empty($data['faculty_name']) || mb_strtolower(trim((string) $c->faculty_name)) === mb_strtolower(trim($data['faculty_name'])))
+                && count($c->occupiedGroups()) > 1)
+            ->values();
+
+        $plan = $cards->map(fn (TimetableCard $c) => '#' . $c->id . ' ' . (string) $c->group_name . ' → ' . implode(' | ', $c->occupiedGroups()))->all();
+        $hasOv = Schema::hasTable('timetable_card_overrides');
+        $ovCols = $hasOv ? array_values(array_intersect(['week', 'day', 'pair', 'start_half', 'cancelled', 'auditorium_code', 'auditorium_name'],
+            Schema::getColumnListing('timetable_card_overrides'))) : [];
+        $created = 0;
+        $hemisBoard = $this->isHemisBoard($board);
+        $year = (int) substr((string) $board->academic_year, 0, 4);
+        if (!$dry) {
+            DB::transaction(function () use ($cards, $hasOv, $ovCols, $hemisBoard, $year, &$created) {
+                foreach ($cards as $card) {
+                    $names = array_values($card->occupiedGroups());
+                    // Bo'lakli fan (HEMIS biriktiruvi): har guruhdan shu bo'lakka biriktirilgan talabalar — assembleRows va
+                    // splitVariantMixed dagidek; biriktiruvi yo'q bo'lsa — guruhning faol talabalari.
+                    $counts = [];
+                    if ($hemisBoard && $this->variantLetter((string) $card->subject_name) !== null) {
+                        $vCounts = $this->variantStudentCounts((string) $card->subject_name, $year);
+                        $counts = array_map(fn ($n) => $this->groupAssignedCount($vCounts, (string) $n, $card->faculty_name), $names);
+                    }
+                    if (array_sum($counts) < 1) {
+                        $counts = array_map(fn ($n) => $this->activeStudentCountFor((string) $n, $card->faculty_name), $names);
+                    }
+                    $fallback = (int) max(1, round($card->students / max(1, count($names))));
+                    $ovs = $hasOv ? DB::table('timetable_card_overrides')->where('card_id', $card->id)->get() : collect();
+                    foreach ($names as $i => $name) {
+                        $attrs = ['group_name' => $name, 'group_names' => null, 'students' => max(1, $counts[$i] ?: $fallback)];
+                        if ($i === 0) {
+                            $card->update($attrs);
+                            continue;
+                        }
+                        $copy = $card->replicate();
+                        $copy->fill($attrs);
+                        $copy->teacher_id = null;
+                        $copy->teacher_name = null;
+                        $copy->auditorium_code = null;
+                        $copy->auditorium_name = null;
+                        $copy->save();
+                        $created++;
+                        foreach ($ovs as $o) {
+                            $row = ['card_id' => $copy->id, 'created_at' => now(), 'updated_at' => now()];
+                            foreach ($ovCols as $col) {
+                                $row[$col] = in_array($col, ['auditorium_code', 'auditorium_name'], true) ? null : $o->{$col};
+                            }
+                            DB::table('timetable_card_overrides')->insert($row);
+                        }
+                    }
+                }
+            });
+            $set = (array) ($board->settings ?? []);
+            $list = (array) ($set['separate_practice'] ?? []);
+            // Fakultet ko'rsatilgan bo'lsa — istisno faqat o'sha fakultetga (boshqa fakultetdagi shu yo'nalish juftligicha qoladi).
+            $list[] = $this->separatePracticeKey((string) ($data['faculty_name'] ?? ''), $data['specialty_name'], (int) $data['course'], $data['subject_name']);
+            $set['separate_practice'] = array_values(array_unique($list));
+            $board->update(['settings' => $set]);
+        }
+
+        return response()->json(['ok' => true, 'dry_run' => $dry, 'cards' => $cards->count(), 'created' => $created, 'plan' => $plan]);
     }
 
     /**

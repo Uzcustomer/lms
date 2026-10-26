@@ -1250,6 +1250,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/refresh-names', [\App\Http\Controllers\Admin\TimetableController::class, 'refreshSubjectNames'])->name('boards.refresh-names');
                 Route::post('/boards/{board}/unplace', [\App\Http\Controllers\Admin\TimetableController::class, 'unplaceAll'])->name('boards.unplace');
                 Route::post('/boards/{board}/split-variant-mixed', [\App\Http\Controllers\Admin\TimetableController::class, 'splitVariantMixed'])->name('boards.split-variant-mixed');
+                Route::post('/boards/{board}/separate-practice-groups', [\App\Http\Controllers\Admin\TimetableController::class, 'separatePracticeGroups'])->name('boards.separate-practice-groups');
                 Route::post('/boards/{board}/split-long-practice', [\App\Http\Controllers\Admin\TimetableController::class, 'splitLongPractice'])->name('boards.split-long-practice');
                 Route::post('/boards/{board}/merge-variant-lectures', [\App\Http\Controllers\Admin\TimetableController::class, 'mergeVariantLectures'])->name('boards.merge-variant-lectures');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');

@@ -970,3 +970,109 @@ it('fakultetning tasdiqlangan oqimida guruh qolmagan bo\'lsa — uning eski kart
         ->map(fn ($u) => $u['faculty_name'] . '|' . $u['group_name'])->unique()->values()->all();
     expect($units)->toContain('F1|g-01a')->not->toContain("F2|g-05a (o'z)");
 });
+
+it('seminarli fan amaliyoti istisno qilinsa guruhlar alohida karta bo\'ladi (mavjudlari bo\'linadi, qayta yaratishda ham)', function () {
+    $s = layersSetup();
+    $s['board']->update(['kind' => 'real']);
+    $pair = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'Farmatsiya', 'course' => 1, 'oqim_label' => '1-oqim',
+        'lang' => 'uz', 'students' => 20, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15, 'day' => 2, 'pair' => 3,
+        'subject_name' => 'Mutaxassislikka kirish', 'group_name' => "p/f26-01a (o'z) + p/f26-01b (o'z)", 'group_names' => ["p/f26-01a (o'z)", "p/f26-01b (o'z)"],
+        'kafedra_name' => 'Farmakologiya', 'teacher_id' => $s['head']->id, 'teacher_name' => 'MUDIR']);
+    DB::table('timetable_card_overrides')->insert(['card_id' => $pair->id, 'week' => 3, 'day' => 4, 'pair' => 5, 'cancelled' => false, 'created_at' => now(), 'updated_at' => now()]);
+    $body = ['specialty_name' => 'Farmatsiya', 'course' => 1, 'subject_name' => 'Mutaxassislikka kirish'];
+
+    $dry = layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']), $body + ['dry_run' => 1])->assertOk()->json();
+    expect($dry['cards'])->toBe(1)->and(TimetableCard::where('subject_name', 'Mutaxassislikka kirish')->count())->toBe(1);
+
+    $res = layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']), $body)->assertOk()->json();
+    $cards = TimetableCard::where('subject_name', 'Mutaxassislikka kirish')->orderBy('id')->get();
+    expect($res['created'])->toBe(1)
+        ->and($cards->pluck('group_name')->all())->toBe(["p/f26-01a (o'z)", "p/f26-01b (o'z)"])
+        ->and($cards->pluck('group_names')->all())->toBe([null, null])
+        ->and([$cards[0]->teacher_id, $cards[1]->teacher_id])->toBe([$s['head']->id, null])
+        ->and([$cards[1]->day, $cards[1]->pair])->toBe([2, 3])
+        ->and(DB::table('timetable_card_overrides')->where('card_id', $cards[1]->id)->where('week', 3)->value('day'))->toBe(4)
+        ->and($s['board']->fresh()->settings['separate_practice'])->toBe(['|farmatsiya|1|mutaxassislikka kirish']);
+
+    // Kartalar qayta yaratilganda ham juftlanmaydi.
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'R', 'specialty_name' => 'Farmatsiya', 'plan_year' => '2026',
+        'level_code' => '11', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Mutaxassislikka kirish', 'semester' => 1,
+        'lecture' => 0, 'practice' => 0, 'laboratory' => 0, 'seminar' => 30]);
+    \App\Models\OqimSnapshot::create(['context_key' => 'k', 'context' => [], 'status' => 'approved', 'approved_at' => now(), 'data' => [[
+        'merge_key' => 'x|Farmatsiya', 'title' => 'Farmatsiya', 'department_name' => 'F1',
+        'courses' => [['level_code' => 11, 'oqims' => [['label' => '1-oqim', 'lang' => 'uz', 'total' => 20,
+            'rows' => [['name' => "p/f26-01a (o'z)", 'count' => 10], ['name' => "p/f26-01b (o'z)", 'count' => 10]]]]]],
+    ]]]);
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'assembleRows');
+    $m->setAccessible(true);
+    $found = [];
+    $rows = $m->invokeArgs($ctl, [$s['board']->fresh(), null, null, &$found]);
+    $labels = array_values(array_unique(array_map(fn ($r) => $r['group_name'], array_filter($rows, fn ($r) => $r['training_type'] === 'practice'))));
+    expect($labels)->toBe(["p/f26-01a (o'z)", "p/f26-01b (o'z)"]);
+});
+
+it('alohida amaliy istisnosi fakultet ko\'rsatilsa faqat o\'sha fakultetga: boshqa fakultetdagi shu yo\'nalish juftligicha qoladi', function () {
+    $s = layersSetup();
+    $s['board']->update(['kind' => 'real']);
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'R', 'specialty_name' => 'Farmatsiya', 'plan_year' => '2026',
+        'level_code' => '11', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Mutaxassislikka kirish', 'semester' => 1,
+        'lecture' => 0, 'practice' => 0, 'laboratory' => 0, 'seminar' => 30]);
+    $block = fn (string $fac, string $g) => ['merge_key' => 'x|Farmatsiya', 'title' => 'Farmatsiya', 'department_name' => $fac,
+        'courses' => [['level_code' => 11, 'oqims' => [['label' => '1-oqim', 'lang' => 'uz', 'total' => 20,
+            'rows' => [['name' => "p/f26-{$g}a (o'z)", 'count' => 10], ['name' => "p/f26-{$g}b (o'z)", 'count' => 10]]]]]]];
+    \App\Models\OqimSnapshot::create(['context_key' => 'k', 'context' => [], 'status' => 'approved', 'approved_at' => now(),
+        'data' => [$block('F1', '01'), $block('F2', '05')]]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']),
+        ['faculty_name' => 'F1', 'specialty_name' => 'Farmatsiya', 'course' => 1, 'subject_name' => 'Mutaxassislikka kirish'])->assertOk();
+
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'assembleRows');
+    $m->setAccessible(true);
+    $found = [];
+    $rows = $m->invokeArgs($ctl, [$s['board']->fresh(), null, null, &$found]);
+    $labels = fn (string $fac) => array_values(array_unique(array_map(fn ($r) => $r['group_name'],
+        array_filter($rows, fn ($r) => $r['training_type'] === 'practice' && $r['faculty_name'] === $fac))));
+    expect($labels('F1'))->toBe(["p/f26-01a (o'z)", "p/f26-01b (o'z)"])
+        ->and(collect($labels('F2'))->contains(fn ($l) => str_contains($l, '05a') && str_contains($l, '05b')))->toBeTrue();
+});
+
+it('alohida amaliy istisnosi bo\'lakli fanning aralash (kichik qism) guruhlarini ham ajratadi', function () {
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'practiceBundles');
+    $m->setAccessible(true);
+    $names = fn (array $bundles) => array_map(fn ($b) => implode(' + ', array_column($b, 'name')), $bundles);
+    // Bo'lak: 01a to'liq, 02a/02b kichik qismlar (asos guruh bir xil — "g-02").
+    $variant = [['name' => 'g-01a', 'count' => 12], ['name' => 'g-02a', 'count' => 3, 'partial' => true], ['name' => 'g-02b', 'count' => 2, 'partial' => true]];
+    expect($names($m->invoke($ctl, $variant, true, false, false)))->toBe(['g-01a', 'g-02a + g-02b'])
+        ->and($names($m->invoke($ctl, $variant, true, false, true)))->toBe(['g-01a', 'g-02a', 'g-02b']);
+    // Seminar: juftlab; istisnoda — alohida.
+    $plain = [['name' => 'g-01a', 'count' => 10], ['name' => 'g-01b', 'count' => 10], ['name' => 'g-01c', 'count' => 10]];
+    expect($names($m->invoke($ctl, $plain, false, true, false)))->toBe(['g-01a + g-01b', 'g-01c'])
+        ->and($names($m->invoke($ctl, $plain, false, false, true)))->toBe(['g-01a', 'g-01b', 'g-01c']);
+});
+
+it('alohida amaliy istisnosi bo\'lakli fan kartasini bo\'lganda biriktirilgan talabalar sonini saqlaydi', function () {
+    $s = layersSetup();
+    $s['board']->forceFill(['subject_source' => 'hemis', 'kind' => 'real'])->save();
+    // 02a dan 3, 02b dan 2 talaba shu bo'lakka biriktirilgan; har guruhda yana 17/18 faol talaba bor (biriktirilmagan).
+    assignVariantStudents('IKP (c)', ['g-02a' => 3, 'g-02b' => 2]);
+    foreach (['g-02a' => 17, 'g-02b' => 18] as $g => $n) {
+        for ($i = 0; $i < $n; $i++) {
+            $hid = 800000 + random_int(1, 99999) * 10 + $i;
+            DB::table('students')->insert(['hemis_id' => $hid, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S', 'second_name' => 'S',
+                'student_id_number' => (string) $hid, 'group_name' => $g . " (o'z)", 'student_status_code' => 11]);
+        }
+    }
+    \App\Models\TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half', 'weeks'])
+        + ['subject_name' => 'IKP (c)', 'kafedra_name' => 'X', 'students' => 5, 'group_name' => 'g-02a + g-02b', 'group_names' => ['g-02a', 'g-02b']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']),
+        ['specialty_name' => $s['own']->specialty_name, 'course' => (int) $s['own']->course, 'subject_name' => 'IKP (c)'])->assertOk()->assertJson(['created' => 1]);
+    $cards = \App\Models\TimetableCard::where('subject_name', 'IKP (c)')->orderBy('id')->get();
+    expect($cards->pluck('group_name')->all())->toBe(['g-02a', 'g-02b'])
+        ->and($cards->pluck('students')->all())->toBe([3, 2]);
+});

@@ -517,3 +517,30 @@ it('biriktirish Excel hisobotini registrator ofisi ham yuklaydi', function () {
     expect(substr($res->baseResponse->getFile()->getContent(), 0, 2))->toBe('PK');
     asRole($head, 'kafedra_mudiri')->get(route('admin.timetable.assignment-report', $board))->assertForbidden();
 });
+
+it('tasdiqsiz birinchi biriktirish mudirning shu dars bo\'yicha eski kutilayotgan so\'rovini bekor qiladi', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    $old = $teacher->replicate()->forceFill(['hemis_id' => 777002, 'employee_id_number' => '777002', 'login' => 'old777002',
+        'full_name' => 'ESKI O.', 'short_name' => 'ESKI O.']);
+    $old->save();
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+
+    // Darsda o'qituvchi bor — almashtirish tasdiqqa boradi.
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $old->id])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    $stale = TimetableChangeRequest::where('status', 'pending')->sole();
+
+    // Keyin o'qituvchi olib tashlandi (boshqa yo'l bilan) va mudir bo'sh darsga boshqasini darhol biriktirdi.
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $teacher->id])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect($card->fresh()->teacher_id)->toBe($teacher->id)
+        ->and($stale->fresh()->status)->toBe('cancelled');
+
+    // Eski so'rov endi tasdiqlanmaydi va yangi biriktiruvni bosib ketmaydi.
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $stale));
+    expect($card->fresh()->teacher_id)->toBe($teacher->id)
+        ->and($stale->fresh()->status)->toBe('cancelled');
+});

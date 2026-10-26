@@ -250,12 +250,7 @@ class TimetableChangeApproval
                 $card = TimetableCard::findOrFail($draft['params']['card']);
                 app(TimetableController::class)->validatePendingTimeProposal($card, $draft['payload'], $draft['route_name'], $replaced);
             }
-            TimetableChangeRequest::where('board_id', $draft['board_id'])
-                ->where('requester_type', $draft['requester_type'])
-                ->where('requester_id', $draft['requester_id'])
-                ->where('target_key', $draft['target_key'])
-                ->where('status', TimetableChangeRequest::PENDING)
-                ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => 'Yangi so\'rov bilan almashtirildi', 'reviewed_at' => now()]);
+            $this->replacePending($draft, 'Yangi so\'rov bilan almashtirildi');
 
             $req = TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::PENDING]);
 
@@ -273,6 +268,21 @@ class TimetableChangeApproval
     public function record(array $draft): TimetableChangeRequest
     {
         return TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::APPLIED]);
+    }
+
+    /**
+     * Shu foydalanuvchining shu joy bo'yicha kutilayotgan so'rovlari bekor qilinadi (yangisi almashtiradi).
+     * Tasdiqsiz qo'llangan birinchi biriktirishdan keyin ham chaqiriladi — aks holda eski so'rov
+     * keyin tasdiqlanib, yangi biriktiruvni bosib ketardi.
+     */
+    public function replacePending(array $draft, string $note): int
+    {
+        return TimetableChangeRequest::where('board_id', $draft['board_id'])
+            ->where('requester_type', $draft['requester_type'])
+            ->where('requester_id', $draft['requester_id'])
+            ->where('target_key', $draft['target_key'])
+            ->where('status', TimetableChangeRequest::PENDING)
+            ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => $note, 'reviewed_at' => now()]);
     }
 
     public const ALREADY_REVIEWED = 'Bu so\'rov allaqachon ko\'rib chiqilgan.';

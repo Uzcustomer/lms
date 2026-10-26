@@ -170,10 +170,17 @@ class TimetableAssignmentAccess
                 Log::warning('[TimetableChange] history draft: ' . $e->getMessage());
             }
         }
+        // Doska tasdiq talab qilsa-yu, amal tasdiqsiz o'tsa — bu birinchi biriktirish (shouldIntercept).
+        $firstAssignment = in_array($activeRole, TimetableChangeApproval::GATED_ROLES, true)
+            && isset(TimetableChangeApproval::GATED[(string) optional($request->route())->getName()])
+            && TimetableChangeApproval::boardRequiresApproval($board);
         $response = $next($request);
         if ($draft && TimetableChangeApproval::succeeded($response)) {
             try {
                 $approval->record($draft);
+                if ($firstAssignment) {
+                    $approval->replacePending($draft, 'Yangi o\'zgarish bilan almashtirildi');
+                }
             } catch (\Throwable $e) {
                 Log::warning('[TimetableChange] history record: ' . $e->getMessage());
             }

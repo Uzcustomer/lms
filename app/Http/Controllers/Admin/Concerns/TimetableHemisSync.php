@@ -1098,9 +1098,17 @@ trait TimetableHemisSync
         $act->setTitle('Amallar');
         $act->fromArray(['Guruh', 'Fan', 'Amal', 'Sana', 'Boshlanish', 'Tugash', 'HEMIS para', 'Dars turi', 'O\'qituvchi', 'Xona',
             'HEMIS id', 'O\'zgarishlar', 'Belgilar', 'To\'siq', 'Sabab'], null, 'A1');
+        // "To'siqlar" — har bir to'siq alohida qator: kim / nima xalaqit beradi, kimga murojaat qilish kerak.
+        $blkSheet = $book->createSheet();
+        $blkSheet->setTitle('To\'siqlar');
+        $blkSheet->fromArray(['Guruh', 'Fan', 'Kafedra', 'Kafedra mudiri', 'Amal', 'Sana', 'Vaqt', 'Dars turi', 'O\'qituvchi (LMS)', 'Xona (LMS)',
+            'To\'siq turi', 'Band qilgan: manba', 'Band qilgan: guruh', 'Band qilgan: fan', 'Band qilgan: o\'qituvchi', 'Band qilgan: xona',
+            'Band vaqti', 'To\'siq matni'], null, 'A1');
+        $blkName = ['room' => 'Xona band', 'teacher' => 'O\'qituvchi band', 'other' => 'Boshqa'];
         $opName = ['create' => 'Qo\'shish', 'update' => 'O\'zgartirish', 'delete' => 'O\'chirish'];
         $r1 = 2;
         $r2 = 2;
+        $r3 = 2;
         foreach ($rep['groups'] as $g) {
             foreach ($g['units'] as $u) {
                 if ($onlyDiff && $this->hemisUnitMatches($u)) {
@@ -1138,10 +1146,23 @@ trait TimetableHemisSync
                         self::HEMIS_PAIRS[$x['start'] . '-' . $x['end']] ?? '', $u['code_names'][$x['code']] ?? $x['code'],
                         $x['employee_name'] ?? '', $x['auditorium_name'] ?? '', $x['hemis_id'] ?? '',
                         implode('; ', $x['changes'] ?? []), implode(', ', $x['flags'] ?? []), implode('; ', $x['blocked'] ?? []), $x['reason'] ?? ''], null, 'A' . $r2++);
+                    if (!empty($x['blocked'])) {
+                        $base = [$g['group'], $u['subject_name'], $u['kafedra'] ?? '', $u['mudir'] ?? '', $opName[$x['op']] ?? $x['op'], $x['date'],
+                            $x['start'] . '–' . $x['end'], $u['code_names'][$x['code']] ?? $x['code'], $x['employee_name'] ?? '', $x['auditorium_name'] ?? ''];
+                        $blocks = (array) ($x['blocks'] ?? []);
+                        foreach ($blocks as $b) {
+                            $blkSheet->fromArray(array_merge($base, [$blkName[$b['type'] ?? 'other'] ?? 'Boshqa', $b['source'] ?? '', $b['group'] ?? '',
+                                $b['subject'] ?? '', $b['teacher'] ?? '', $b['room'] ?? '', $b['time'] ?? '', $b['text'] ?? '']), null, 'A' . $r3++);
+                        }
+                        // Tuzilmagan to'siqlar (o'qituvchi/xona topilmadi, para yo'q...) — "Boshqa".
+                        foreach (array_diff((array) $x['blocked'], array_column($blocks, 'text')) as $txt) {
+                            $blkSheet->fromArray(array_merge($base, ['Boshqa', '', '', '', '', '', '', $txt]), null, 'A' . $r3++);
+                        }
+                    }
                 }
             }
         }
-        foreach ([$bal, $act] as $sh) {
+        foreach ([$bal, $act, $blkSheet] as $sh) {
             $sh->getStyle('A1:W1')->getFont()->setBold(true);
             $sh->freezePane('A2');
             foreach (range('A', 'W') as $col) {

@@ -216,6 +216,18 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
         return $rows - 1;
     };
     expect($amallar(['teacher']))->toBeGreaterThan(0)->and($amallar(['room']))->toBe(0);
+
+    // "To'siqlar" varag'i: har to'siq alohida qator, band qilgan dars tafsiloti bilan.
+    $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+    file_put_contents($file, test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->baseResponse->getFile()->getContent());
+    $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getSheetByName("To'siqlar");
+    @unlink($file);
+    $rows = $sheet->toArray();
+    expect($rows[0][10])->toBe("To'siq turi")
+        ->and(collect($rows)->slice(1)->pluck(10)->all())->toContain("O'qituvchi band")
+        ->and(collect($rows)->slice(1)->pluck(12)->all())->toContain('p/st26-09a');
 });
 
 it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq bo\'lmaydi', function () {

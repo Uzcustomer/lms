@@ -197,7 +197,7 @@ class TimetableAssignmentAccess
             try {
                 $approval->record($draft);
                 if ($firstAssignment) {
-                    $approval->replacePending($draft, 'Yangi o\'zgarish bilan almashtirildi');
+                    $approval->supersedeAssignments($draft);
                 }
             } catch (\Throwable $e) {
                 Log::warning('[TimetableChange] history record: ' . $e->getMessage());

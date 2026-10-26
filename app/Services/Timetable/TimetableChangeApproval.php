@@ -279,19 +279,38 @@ class TimetableChangeApproval
         return TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::APPLIED]);
     }
 
-    /**
-     * Shu foydalanuvchining shu joy bo'yicha kutilayotgan so'rovlari bekor qilinadi (yangisi almashtiradi).
-     * Tasdiqsiz qo'llangan birinchi biriktirishdan keyin ham chaqiriladi — aks holda eski so'rov
-     * keyin tasdiqlanib, yangi biriktiruvni bosib ketardi.
-     */
+    /** Shu foydalanuvchining shu joy bo'yicha kutilayotgan so'rovlari bekor qilinadi (yangisi almashtiradi). */
     public function replacePending(array $draft, string $note): int
+    {
+        return $this->pendingOf($draft)->where('target_key', $draft['target_key'])
+            ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => $note, 'reviewed_at' => now()]);
+    }
+
+    /**
+     * Tasdiqsiz qo'llangan birinchi biriktirishdan keyin: shu foydalanuvchining shu darslardagi shu maydonni
+     * (o'qituvchi/xona) yozadigan kutilayotgan biriktirish so'rovlari eskiradi — qaysi oynadan yuborilgan
+     * bo'lmasin. Aks holda eski so'rov keyin tasdiqlanib, yangi biriktiruvni bosib ketardi.
+     */
+    public function supersedeAssignments(array $draft): int
+    {
+        $fields = self::ASSIGN_FIELDS[$draft['route_name']] ?? [];
+        $cardIds = array_map('intval', $draft['details']['card_ids'] ?? []);
+        $ids = $this->pendingOf($draft)->whereIn('route_name', array_keys(self::ASSIGN_FIELDS))->get()
+            ->filter(fn (TimetableChangeRequest $r) => $r->target_key === $draft['target_key']
+                || (array_intersect(self::ASSIGN_FIELDS[$r->route_name], $fields)
+                    && array_intersect(array_map('intval', $r->details['card_ids'] ?? []), $cardIds)))
+            ->pluck('id');
+
+        return $ids->isEmpty() ? 0 : TimetableChangeRequest::whereIn('id', $ids)->where('status', TimetableChangeRequest::PENDING)
+            ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => 'Yangi o\'zgarish bilan almashtirildi', 'reviewed_at' => now()]);
+    }
+
+    private function pendingOf(array $draft)
     {
         return TimetableChangeRequest::where('board_id', $draft['board_id'])
             ->where('requester_type', $draft['requester_type'])
             ->where('requester_id', $draft['requester_id'])
-            ->where('target_key', $draft['target_key'])
-            ->where('status', TimetableChangeRequest::PENDING)
-            ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => $note, 'reviewed_at' => now()]);
+            ->where('status', TimetableChangeRequest::PENDING);
     }
 
     public const ALREADY_REVIEWED = 'Bu so\'rov allaqachon ko\'rib chiqilgan.';

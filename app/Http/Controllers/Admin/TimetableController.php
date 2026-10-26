@@ -7832,7 +7832,7 @@ class TimetableController extends Controller
      */
     public function assignmentReport(Request $request, TimetableBoard $board)
     {
-        abort_unless(in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true), 403, 'Hisobot faqat admin uchun.');
+        abort_unless(in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true), 403, 'Hisobot faqat admin va registrator ofisi uchun.');
 
         $units = [];
         $approved = $this->approvedOqimGroupKeys($board);
@@ -8265,6 +8265,57 @@ class TimetableController extends Controller
         }
 
         return $q;
+    }
+
+    /**
+     * Birinchi marta biriktirishmi: o'zgaradigan kartalarda o'qituvchi/xona hali yo'q (yoki xuddi shu qiymat).
+     * Shunday bo'lsa kafedra mudirining amali registrator tasdig'isiz qo'llanadi; mavjud o'qituvchi/xonani
+     * almashtirish yoki olib tashlash (va sikl vaqtini o'zgartirish) esa tasdiqqa boradi.
+     */
+    public function isFirstAssignment(TimetableBoard $board, string $route, array $p): bool
+    {
+        $fresh = function ($cards, string $field, $new): bool {
+            $new = ($new === null || $new === '') ? null : (string) $new;
+            if ($cards->isEmpty()) {
+                return false;
+            }
+            foreach ($cards as $c) {
+                $cur = ($c->{$field} === null || $c->{$field} === '') ? null : (string) $c->{$field};
+                if ($cur !== null && $cur !== $new) {
+                    return false;   // mavjud qiymat o'zgaradi yoki olib tashlanadi
+                }
+            }
+
+            return true;
+        };
+        $unit = fn () => empty($p['specialty_name']) || empty($p['course']) || empty($p['subject_name'])
+            || !in_array($p['training_type'] ?? null, ['lecture', 'practice'], true)
+            ? collect() : $this->unitCardsQuery($board, $p)->get();
+
+        if ($route === 'admin.timetable.assign-teacher') {
+            return !empty($p['teacher_id']) && $fresh($unit(), 'teacher_id', $p['teacher_id']);
+        }
+        if ($route === 'admin.timetable.assign-room') {
+            return !empty($p['auditorium_code']) && $fresh($unit(), 'auditorium_code', $p['auditorium_code']);
+        }
+        if ($route === 'admin.timetable.cycle-assign') {
+            if (empty($p['specialty_name']) || empty($p['course']) || empty($p['subject_name']) || empty($p['group_name'])
+                || !Schema::hasTable('timetable_cycle_placements')) {
+                return false;
+            }
+            $placement = $this->findCyclePlacement($board, $p);
+            if (!$placement || (trim((string) ($p['lesson_time'] ?? '')) ?: null) !== ($placement->lesson_time ?: null)) {
+                return false;   // vaqt o'zgaradi
+            }
+            $cards = $this->cycleFlowCards($board, $p['specialty_name'], (int) $p['course'], $p['subject_name'], $p['group_name'],
+                $p['training_type'] ?? null, $p['view'] ?? 'flow');
+
+            return (!empty($p['teacher_id']) || !empty($p['auditorium_code']))
+                && $fresh($cards, 'teacher_id', $p['teacher_id'] ?? null)
+                && $fresh($cards, 'auditorium_code', $p['auditorium_code'] ?? null);
+        }
+
+        return false;
     }
 
     /** Dars birligiga o'qituvchini ommaviy biriktirish (barcha kartalariga). */

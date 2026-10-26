@@ -478,3 +478,42 @@ it('teacher page exposes proposal and approval status without enabling direct ed
     expect($html)->toContain('id="changeReqBtn"')->toContain('const TIMETABLE_READ_ONLY = true')
         ->toContain('Taklif yuborish')->toContain('/time-proposal/check')->toContain('Kafedra mudiri tasdig‘ida');
 });
+
+it('kafedra mudiri bo\'sh darsga birinchi marta o\'qituvchi/xona biriktirsa tasdiqsiz, mavjudini almashtirsa tasdiq bilan', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    $own = $teacher->replicate()->forceFill(['hemis_id' => 777001, 'employee_id_number' => '777001', 'login' => 'own777001',
+        'full_name' => 'YANGI O.', 'short_name' => 'YANGI O.', 'department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi']);
+    $own->save();
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '1-xona', 'active' => true, 'volume' => 30]);
+    \App\Models\Auditorium::create(['code' => 'R2', 'name' => '2-xona', 'active' => true, 'volume' => 30]);
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+
+    // Birinchi marta — darhol
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $teacher->id])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $card->board_id), $unit + ['auditorium_code' => 'R1'])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and(TimetableChangeRequest::where('status', 'pending')->count())->toBe(0);
+
+    // Mavjudini almashtirish yoki olib tashlash — tasdiqqa
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $own->id])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $card->board_id), $unit + ['auditorium_code' => 'R2'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $card->board_id), $unit + ['auditorium_code' => null])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and(TimetableChangeRequest::where('status', 'pending')->count())->toBe(2)   // xona: oxirgi so'rov oldingisini almashtiradi
+        ->and(TimetableChangeRequest::where('status', 'cancelled')->count())->toBe(1);
+});
+
+it('biriktirish Excel hisobotini registrator ofisi ham yuklaydi', function () {
+    ['head' => $head, 'reg' => $reg, 'board' => $board] = approvalSetup();
+    $res = asRole($reg, 'registrator_ofisi')->get(route('admin.timetable.assignment-report', $board))->assertOk();
+    expect(substr($res->baseResponse->getFile()->getContent(), 0, 2))->toBe('PK');
+    asRole($head, 'kafedra_mudiri')->get(route('admin.timetable.assignment-report', $board))->assertForbidden();
+});

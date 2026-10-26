@@ -160,7 +160,22 @@ class TimetableChangeApproval
         return in_array($activeRole, self::GATED_ROLES, true)
             && isset(self::GATED[(string) optional($request->route())->getName()])
             && self::isChange($request)
-            && self::boardRequiresApproval($board);
+            && self::boardRequiresApproval($board)
+            && !self::isFirstAssignment($request, $board);
+    }
+
+    /** O'qituvchi/xona birinchi marta biriktirilmoqda (bo'sh joyga) — tasdiq kerak emas. */
+    public static function isFirstAssignment(Request $request, ?TimetableBoard $board): bool
+    {
+        $route = (string) optional($request->route())->getName();
+        if (!$board || !in_array($route, ['admin.timetable.assign-teacher', 'admin.timetable.assign-room', 'admin.timetable.cycle-assign'], true)) {
+            return false;
+        }
+        try {
+            return app(TimetableController::class)->isFirstAssignment($board, $route, $request->all());
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /** Amal muvaffaqiyatli bajarildimi (xato yoki tasdiqqa yuborilgan javob emas). */

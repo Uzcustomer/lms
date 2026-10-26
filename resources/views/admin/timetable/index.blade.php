@@ -883,8 +883,8 @@
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgCount" class="text-xs text-slate-400"></span>
-                                    @if(in_array($timetableActiveRole, ['admin', 'superadmin'], true))
-                                        {{-- Kafedralar kesimida o'qituvchi va xona biriktirish hisoboti (faqat admin) --}}
+                                    @if(in_array($timetableActiveRole, ['admin', 'superadmin', 'registrator_ofisi'], true))
+                                        {{-- Kafedralar kesimida o'qituvchi va xona biriktirish hisoboti (admin, registrator ofisi) --}}
                                         <button type="button" id="asgReportBtn" class="asc-btn text-xs" style="background:#059669;color:#fff;border-color:#059669"
                                                 title="Har bir kafedra bo'yicha o'qituvchi va xona biriktirilgan / biriktirilmagan darslar">
                                             <i class="bi bi-file-earmark-excel" aria-hidden="true"></i> Excel hisobot

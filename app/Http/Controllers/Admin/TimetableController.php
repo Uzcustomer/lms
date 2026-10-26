@@ -7765,10 +7765,11 @@ class TimetableController extends Controller
         );
     }
 
-    /** Doskadagi dars birliklari + joriy o'qituvchi (biriktirish matritsasi uchun). */
     /**
-     * Tasdiqlangan oqim(lar)dagi guruh nomlari kalitlari (to'liq va til qo'shimchasisiz). Oqim tasdiqlanmagan
-     * bo'lsa — null (filtrlanmaydi). Oqimdan olib tashlangan guruh (HEMIS'da hali faol bo'lsa ham) bu yerda yo'q.
+     * Tasdiqlangan oqim(lar)dagi guruh nomlari kalitlari, fakultet bo'yicha: [fakultet => [guruh kaliti => true]]
+     * (to'liq nom va til qo'shimchasisiz). Fakultet — kartalar yaratilgandagidek: blokning department_name'i, bo'lmasa
+     * snapshot fakulteti. Hech qaysi oqim tasdiqlanmagan bo'lsa — null (filtrlanmaydi). Oqimdan olib tashlangan guruh
+     * (HEMIS'da hali faol bo'lsa ham) bu yerda yo'q.
      */
     private function approvedOqimGroupKeys(TimetableBoard $board): ?array
     {
@@ -7776,16 +7777,19 @@ class TimetableController extends Controller
         if (!$snaps) {
             return null;
         }
+        $facMap = \App\Models\Department::where('structure_type_code', 11)->pluck('name', 'id')->all();
         $keys = [];
-        foreach ($snaps as $snap) {
+        foreach ($snaps as $fk => $snap) {
+            $facName = (string) ($facMap[(int) $fk] ?? ($facMap[$fk] ?? ''));
             foreach ($snap->data ?? [] as $bl) {
+                $fac = mb_strtolower(trim((string) ($bl['department_name'] ?? '')) ?: trim($facName));
                 foreach ($bl['courses'] ?? [] as $co) {
                     foreach ($co['oqims'] ?? [] as $oq) {
                         foreach ($oq['rows'] ?? [] as $r) {
                             $n = trim((string) ($r['name'] ?? ''));
                             if ($n !== '') {
-                                $keys[$this->groupNameKey($n)] = true;
-                                $keys[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $n))] = true;
+                                $keys[$fac][$this->groupNameKey($n)] = true;
+                                $keys[$fac][$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $n))] = true;
                             }
                         }
                     }
@@ -7796,14 +7800,20 @@ class TimetableController extends Controller
         return $keys ?: null;
     }
 
-    /** Karta tasdiqlangan oqimdagi kamida bitta guruhga tegishlimi (oqim yo'q bo'lsa — ha). */
+    /**
+     * Karta o'z fakultetining tasdiqlangan oqimidagi kamida bitta guruhga tegishlimi. Fakultetida oqim hali
+     * tasdiqlanmagan bo'lsa — ha (filtrlanmaydi); bir xil nomli guruh boshqa fakultet oqimida bo'lishi yetmaydi.
+     */
     private function cardInApprovedOqim(TimetableCard $c, ?array $keys): bool
     {
-        if ($keys === null) {
+        $fac = mb_strtolower(trim((string) $c->faculty_name));
+        if ($keys === null || (!isset($keys[$fac]) && !isset($keys['']))) {
             return true;
         }
+        // '' — fakulteti aniqlanmagan bloklar: har qaysi fakultet kartasi uchun.
+        $own = ($keys[$fac] ?? []) + ($keys[''] ?? []);
         foreach ($c->occupiedGroups() as $g) {
-            if (isset($keys[$this->groupNameKey((string) $g)]) || isset($keys[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g))])) {
+            if (isset($own[$this->groupNameKey((string) $g)]) || isset($own[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g))])) {
                 return true;
             }
         }
@@ -7811,6 +7821,7 @@ class TimetableController extends Controller
         return false;
     }
 
+    /** Doskadagi dars birliklari + joriy o'qituvchi (biriktirish matritsasi uchun). */
     public function teacherUnits(Request $request, TimetableBoard $board)
     {
         // Biriktirish ro'yxati tasdiqlangan oqim bo'yicha: oqimdan olib tashlangan guruhning kartalari chiqmaydi.

@@ -755,3 +755,50 @@ it('bir xil nomli guruhlardan o\'quv rejasida faqat o\'chirilgan fanlari borini 
     expect($res['groups'][0]['group_hemis_id'])->toBe(1596)
         ->and($res['groups'][0]['cards_without_subject'])->toBe([]);
 });
+
+it('kafedra mudiri faqat mark\'dagi rol bo\'yicha topiladi; HEMIS lavozimi hisobga olinmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    $s['card']->update(['teacher_id' => null, 'teacher_name' => null]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $body = ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0];
+
+    // Rol bor — mudir qo'yiladi.
+    $a = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $body)->assertOk()->json('groups.0.units.0.actions.0');
+    expect($a['employee_id'])->toBe(9001)->and($a['blocked'])->toBe([]);
+
+    // Rol olib tashlandi, faqat HEMIS lavozimi "Kafedra mudiri" — topilmaydi.
+    $mudir->removeRole('kafedra_mudiri');
+    $mudir->forceFill(['staff_position' => 'Kafedra mudiri'])->save();
+    $a = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $body)->assertOk()->json('groups.0.units.0.actions.0');
+    expect(implode(' ', $a['blocked']))->toContain('kafedra mudiri ham topilmadi');
+});
+
+it('kafedra mudirlaridan HEMIS id\'si borini oladi; yagona mudirning id\'si yo\'q bo\'lsa to\'siqda nomi aytiladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $s['card']->update(['teacher_id' => null, 'teacher_name' => null]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    // Bazada birinchi turgan mudirning HEMIS xodim id'si yo'q (0); ikkinchisida bor.
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    $mudir->forceFill(['hemis_id' => 0])->save();
+    $m2 = $mudir->replicate()->forceFill(['full_name' => 'MUDIR2', 'hemis_id' => 9002, 'login' => 'u' . random_int(100000, 999999),
+        'employee_id_number' => (string) random_int(100000, 999999)]);
+    $m2->save();
+    $m2->assignRole('kafedra_mudiri');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $body = ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0];
+
+    $a = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $body)->assertOk()->json('groups.0.units.0.actions.0');
+    expect($a['employee_id'])->toBe(9002)->and($a['blocked'])->toBe([]);
+
+    // Faqat id'siz mudir qoldi — to'siq uning nomini aytadi.
+    $m2->removeRole('kafedra_mudiri');
+    $a = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $body)->assertOk()->json('groups.0.units.0.actions.0');
+    expect($a['employee_id'])->toBeNull()
+        ->and(implode(' ', $a['blocked']))->toContain("kafedra mudiri MUDIR ning HEMIS xodim id'si LMS'da yo'q");
+});

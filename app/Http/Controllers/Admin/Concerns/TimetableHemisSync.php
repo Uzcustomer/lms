@@ -1091,6 +1091,9 @@ trait TimetableHemisSync
             }
             return $ops === null || in_array($a['op'], $ops, true);
         };
+        // Amal/to'siq turi bo'yicha filtr tanlangan bo'lsa — shu filtrga tushadigan amali yo'q fanlar Balansga ham chiqmaydi (oynadagidek).
+        $narrowed = ($ops !== null && array_diff(['create', 'update', 'delete', 'blocked'], $ops))
+            || ($blk !== null && array_diff(['room', 'teacher', 'other'], $blk));
 
         $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $bal = $book->getActiveSheet();
@@ -1120,6 +1123,9 @@ trait TimetableHemisSync
                     continue;
                 }
                 if ($subjects !== null && !in_array($u['subject_name'], $subjects, true)) {
+                    continue;
+                }
+                if ($narrowed && !array_filter($u['actions'], $opOk)) {
                     continue;
                 }
                 $until = $g['until'] ?? null;

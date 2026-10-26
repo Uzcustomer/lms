@@ -52,6 +52,9 @@ trait TimetableHemisSync
             // ops_filter=1 — amal turlari tanlangan (bo'sh ro'yxat ham: hech biri); yo'q bo'lsa — filtrsiz.
             'ops_filter'        => 'nullable|boolean',
             'ops.*'             => 'in:create,update,delete,blocked',
+            'blk_filter'        => 'nullable|boolean',
+            'blk'               => 'nullable|array',
+            'blk.*'             => 'in:room,teacher,other',
             // Excel: faqat tanlangan fanlar (subjects_filter=1 bo'lsa).
             'subjects_filter'   => 'nullable|boolean',
             'subjects'          => 'nullable|array',
@@ -1066,10 +1069,22 @@ trait TimetableHemisSync
         $onlyDiff = $request->boolean('only_diff');
         $ops = $request->boolean('ops_filter') ? (array) $request->input('ops', []) : null;
         $subjects = $request->boolean('subjects_filter') ? (array) $request->input('subjects', []) : null;
-        $opOk = function (array $a) use ($ops): bool {
-            if ($ops === null) return true;
-            if (!empty($a['blocked'])) return in_array('blocked', $ops, true);
-            return in_array($a['op'], $ops, true);
+        // To'siq turi filtri (oynadagi bilan bir xil): room / teacher / other.
+        $blk = $request->boolean('blk_filter') ? (array) $request->input('blk', []) : null;
+        $blockKinds = function (array $a): array {
+            $k = array_values(array_unique(array_map(fn ($b) => $b['type'] ?? 'other', (array) ($a['blocks'] ?? []))));
+            if (!$k || count((array) ($a['blocked'] ?? [])) > count((array) ($a['blocks'] ?? []))) {
+                $k[] = 'other';
+            }
+
+            return $k;
+        };
+        $opOk = function (array $a) use ($ops, $blk, $blockKinds): bool {
+            if (!empty($a['blocked'])) {
+                return ($ops === null || in_array('blocked', $ops, true))
+                    && ($blk === null || (bool) array_intersect($blockKinds($a), $blk));
+            }
+            return $ops === null || in_array($a['op'], $ops, true);
         };
 
         $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -1135,7 +1150,12 @@ trait TimetableHemisSync
         }
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book);
 
-        return response()->streamDownload(fn () => $writer->save('php://output'), 'hemis_solishtirish_' . $rep['today'] . '.xlsx',
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        // Vaqtinchalik faylga yozib, tayyor fayl yuboriladi (Content-Length bilan) — oqim (stream) o'rtasida
+        // xato yoki boshqa sarlavha bo'lsa brauzer "ERR_INVALID_RESPONSE" berardi.
+        $tmp = tempnam(sys_get_temp_dir(), 'hemis_xlsx_');
+        $writer->save($tmp);
+
+        return response()->download($tmp, 'hemis_solishtirish_' . $rep['today'] . '.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 }

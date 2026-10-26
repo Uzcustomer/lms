@@ -3592,7 +3592,7 @@
             let hemisSyncLast = null;
             let hemisSyncUntil = null;
             let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
-            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, subjects: null };   // subjects: null — barcha fanlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null };   // subjects: null — barcha fanlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -3662,7 +3662,15 @@
                 const reason = a.reason ? '<div class="ml-3 text-gray-500 italic text-[10px]">Sabab: ' + hsEsc(a.reason) + flags + '</div>' : (flags ? '<div class="ml-3">' + flags + '</div>' : '');
                 return '<div class="mb-1.5 pb-1 border-b border-dashed border-gray-200">' + head + summary + details + reason + '</div>';
             }
-            const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
+            // To'siq turi: xona band / o'qituvchi band / boshqa (o'qituvchi yoki xona topilmadi, para yo'q...).
+            const hsBlockKinds = a => {
+                const k = new Set((a.blocks || []).map(b => b.type));
+                if (!k.size || (a.blocked || []).length > (a.blocks || []).length) k.add('other');
+                return [...k];
+            };
+            const hsOpOk = a => (a.blocked && a.blocked.length)
+                ? hemisSyncFilter.ops.blocked && hsBlockKinds(a).some(k => hemisSyncFilter.blk[k])
+                : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
                 let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0 };
@@ -3755,7 +3763,12 @@
                     wkOpt(rep.until_week, w => w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')') +
                     '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
                     '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
-                    chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span>' +
+                    chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') +
+                    '<span class="ml-1 pl-2 border-l border-gray-300' + (F.ops.blocked ? '' : ' opacity-40') + '">To\'siq turi: ' +
+                    chk('hsBlkRoom', F.blk.room, '<span class="px-1 rounded bg-orange-100 text-orange-800">Xona band</span>') +
+                    chk('hsBlkTeacher', F.blk.teacher, '<span class="px-1 rounded bg-purple-100 text-purple-800">O\'qituvchi band</span>') +
+                    chk('hsBlkOther', F.blk.other, '<span class="px-1 rounded bg-red-100 text-red-700">Boshqa</span>') +
+                    '<button type="button" id="hsOnlyBlocked" class="ml-1 underline text-[11px]">faqat to\'siqlilar</button></span>' + '</span>' +
                     (() => {
                         const all = hsSubjectNames(rep);
                         const sel = F.subjects ? F.subjects.filter(x => all.includes(x)) : all;
@@ -3791,9 +3804,14 @@
                 const reFilter = () => {
                     F.onlyDiff = $('hsOnlyDiff').checked;
                     F.ops = { create: $('hsOpC').checked, update: $('hsOpU').checked, delete: $('hsOpD').checked, blocked: $('hsOpB').checked };
+                    F.blk = { room: $('hsBlkRoom').checked, teacher: $('hsBlkTeacher').checked, other: $('hsBlkOther').checked };
                     hemisSyncRender(rep);
                 };
-                ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB'].forEach(id => { $(id).onchange = reFilter; });
+                ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
+                $('hsOnlyBlocked').onclick = () => {
+                    F.ops = { create: false, update: false, delete: false, blocked: true };
+                    hemisSyncRender(rep);
+                };
                 {
                     const all = hsSubjectNames(rep);
                     const apply = () => {
@@ -3815,10 +3833,9 @@
                     a.href = URL.createObjectURL(blob); a.download = 'hemis_amallar_' + rep.today + '.json';
                     document.body.appendChild(a); a.click(); a.remove();
                 };
-                $('hsExcel').onclick = () => {
-                    const f = document.createElement('form');
-                    f.method = 'POST'; f.action = BASE + '/boards/' + board.id + '/hemis-sync/export'; f.style.display = 'none';
-                    const add = (k, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i); };
+                $('hsExcel').onclick = async function () {
+                    const fd = new FormData();
+                    const add = (k, v) => fd.append(k, v);
                     add('_token', CSRF);
                     const sb = scopeBody();
                     Object.keys(sb).forEach(k => sb[k].forEach(v => add(k + '[]', v)));
@@ -3829,8 +3846,29 @@
                     add('only_diff', F.onlyDiff ? 1 : 0);
                     add('ops_filter', 1);   // hech biri tanlanmasa ham — Excel'da amal bo'lmaydi
                     Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));
+                    Object.keys(F.blk).filter(k => F.blk[k]).forEach(k => add('blk[]', k));
+                    add('blk_filter', 1);
                     if (F.subjects) { add('subjects_filter', 1); F.subjects.forEach(n => add('subjects[]', n)); }
-                    document.body.appendChild(f); f.submit(); f.remove();
+                    // Forma yuborish o'rniga fetch: xato bo'lsa sahifa "ERR_INVALID_RESPONSE" bo'lib qolmaydi — sababi ko'rsatiladi.
+                    const btn = this, html = btn.innerHTML;
+                    btn.disabled = true; btn.textContent = 'Tayyorlanmoqda…';
+                    try {
+                        const r = await fetch(BASE + '/boards/' + board.id + '/hemis-sync/export', { method: 'POST', body: fd, headers: { Accept: 'application/json' } });
+                        const blob = await r.blob();
+                        const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+                        if (!r.ok || head[0] !== 0x50 || head[1] !== 0x4B) {   // xlsx — "PK" (zip) bilan boshlanadi
+                            let msg = 'HTTP ' + r.status;
+                            try { const j = JSON.parse(await blob.text()); msg = j.error || j.message || msg; } catch (_) { }
+                            throw new Error(msg);
+                        }
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                        a.download = 'hemis_solishtirish_' + rep.today + '.xlsx';
+                        document.body.appendChild(a); a.click(); a.remove();
+                        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+                    } catch (e) {
+                        alert('Excel faylini yaratib bo\'lmadi: ' + e.message);
+                    } finally { btn.disabled = false; btn.innerHTML = html; }
                 };
             }
             async function hemisSyncRun() {

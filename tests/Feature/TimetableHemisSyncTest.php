@@ -202,6 +202,20 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
         ->and($byDate['create 2026-09-28']['blocked'])->toContain($byDate['create 2026-09-28']['blocks'][0]['text'])
         ->and(implode(' ', $byDate['create 2026-10-05']['blocked']))->toContain('p/st26-09a')
         ->and(implode(' ', $u['notes']))->toContain('rejaga kirmagan turdagi 1 ta');
+
+    // Excel: to'siq turi filtri — faqat "xona band" tanlansa o'qituvchi bandligi to'siqlari chiqmaydi.
+    $amallar = function (array $blk) use ($s) {
+        $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+        file_put_contents($file, test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+            ->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0,
+                'ops_filter' => 1, 'ops' => ['blocked'], 'blk_filter' => 1, 'blk' => $blk])
+            ->assertOk()->baseResponse->getFile()->getContent());
+        $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getSheetByName('Amallar')->getHighestDataRow();
+        @unlink($file);
+
+        return $rows - 1;
+    };
+    expect($amallar(['teacher']))->toBeGreaterThan(0)->and($amallar(['room']))->toBe(0);
 });
 
 it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq bo\'lmaydi', function () {
@@ -429,7 +443,7 @@ it('Excel: keyingi haftalardagi farqli fan "mos" deb yashirilmaydi; amal turlari
 
     $sheets = function (array $extra) use ($as, $s, &$req) {
         $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
-        file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req + $extra)->assertOk()->streamedContent());
+        file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req + $extra)->assertOk()->baseResponse->getFile()->getContent());
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
         @unlink($file);
 
@@ -468,7 +482,7 @@ it('kalendari boshqacha guruhlar: sukut hisob davri har guruhning o\'z joriy haf
 
     // Excel (oyna sukutda davr yubormaydi) — har guruh o'z davri bilan
     $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
-    file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req)->assertOk()->streamedContent());
+    file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req)->assertOk()->baseResponse->getFile()->getContent());
     $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getSheetByName('Balans')->toArray();
     @unlink($file);
     $davr = [];
@@ -516,7 +530,7 @@ it('Excel fan filtri: tanlanmagan fan chiqmaydi', function () {
     $rows = function (array $subjects) use ($as, $s) {
         $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
         file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0,
-            'subjects_filter' => 1, 'subjects' => $subjects])->assertOk()->streamedContent());
+            'subjects_filter' => 1, 'subjects' => $subjects])->assertOk()->baseResponse->getFile()->getContent());
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
         @unlink($file);
 

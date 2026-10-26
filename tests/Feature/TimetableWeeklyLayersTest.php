@@ -1039,3 +1039,18 @@ it('alohida amaliy istisnosi fakultet ko\'rsatilsa faqat o\'sha fakultetga: bosh
     expect($labels('F1'))->toBe(["p/f26-01a (o'z)", "p/f26-01b (o'z)"])
         ->and(collect($labels('F2'))->contains(fn ($l) => str_contains($l, '05a') && str_contains($l, '05b')))->toBeTrue();
 });
+
+it('alohida amaliy istisnosi bo\'lakli fanning aralash (kichik qism) guruhlarini ham ajratadi', function () {
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'practiceBundles');
+    $m->setAccessible(true);
+    $names = fn (array $bundles) => array_map(fn ($b) => implode(' + ', array_column($b, 'name')), $bundles);
+    // Bo'lak: 01a to'liq, 02a/02b kichik qismlar (asos guruh bir xil — "g-02").
+    $variant = [['name' => 'g-01a', 'count' => 12], ['name' => 'g-02a', 'count' => 3, 'partial' => true], ['name' => 'g-02b', 'count' => 2, 'partial' => true]];
+    expect($names($m->invoke($ctl, $variant, true, false, false)))->toBe(['g-01a', 'g-02a + g-02b'])
+        ->and($names($m->invoke($ctl, $variant, true, false, true)))->toBe(['g-01a', 'g-02a', 'g-02b']);
+    // Seminar: juftlab; istisnoda — alohida.
+    $plain = [['name' => 'g-01a', 'count' => 10], ['name' => 'g-01b', 'count' => 10], ['name' => 'g-01c', 'count' => 10]];
+    expect($names($m->invoke($ctl, $plain, false, true, false)))->toBe(['g-01a + g-01b', 'g-01c'])
+        ->and($names($m->invoke($ctl, $plain, false, false, true)))->toBe(['g-01a', 'g-01b', 'g-01c']);
+});

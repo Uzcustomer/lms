@@ -1119,11 +1119,11 @@ class TimetableController extends Controller
                             $kaf = $this->rowKafedra($overrides, $kafMap, $s, (string) $specName, (int) $course);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
                             $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
-                            $pairPracticeGroups = ((float) $s->seminar > 0 || $practiceGroupSize >= 30)
-                                // Istisno: shu yo'nalish+kurs+fanda guruhlar alohida o'tiladi (doska sozlamasi) — barcha
-                                // fakultetlar uchun ('' fakultet) yoki faqat shu blok fakulteti uchun.
-                                && !isset($separatePractice[$this->separatePracticeKey('', (string) $specName, (int) $course, (string) $s->subject_name)])
-                                && !isset($separatePractice[$this->separatePracticeKey((string) $blockFac, (string) $specName, (int) $course, (string) $s->subject_name)]);
+                            // Istisno: shu yo'nalish+kurs+fanda guruhlar alohida o'tiladi (doska sozlamasi) — barcha
+                            // fakultetlar uchun ('' fakultet) yoki faqat shu blok fakulteti uchun.
+                            $separateHere = isset($separatePractice[$this->separatePracticeKey('', (string) $specName, (int) $course, (string) $s->subject_name)])
+                                || isset($separatePractice[$this->separatePracticeKey((string) $blockFac, (string) $specName, (int) $course, (string) $s->subject_name)]);
+                            $pairPracticeGroups = ((float) $s->seminar > 0 || $practiceGroupSize >= 30) && !$separateHere;
                             // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
                             // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat
@@ -1229,25 +1229,7 @@ class TimetableController extends Controller
                                 }
 
                                 $practiceRows = array_values($practiceRowsByName);
-                                if ($variantUnits) {
-                                    // Bo'lak: to'liq qismlar alohida, kichik qismlar bitta aralash guruh.
-                                    $fullRows = array_values(array_filter($practiceRows, fn ($gr) => empty($gr['partial'])));
-                                    $partRows = array_values(array_filter($practiceRows, fn ($gr) => !empty($gr['partial'])));
-                                    $practiceBundles = array_map(static fn ($gr) => [$gr], $fullRows);
-                                    // Kichik qismlar asos guruh bo'yicha: "02a dan 5 + 02b dan 5" — bitta (c)
-                                    // guruhi; butun oqimning qoldiqlari bitta katta guruhga qo'shilmaydi.
-                                    $partByBase = [];
-                                    foreach ($partRows as $gr) {
-                                        $partByBase[$this->baseGroupKey((string) ($gr['name'] ?? ''))][] = $gr;
-                                    }
-                                    foreach ($partByBase as $bundle) {
-                                        $practiceBundles[] = $bundle;
-                                    }
-                                } else {
-                                    $practiceBundles = $pairPracticeGroups
-                                        ? array_chunk($practiceRows, 2)
-                                        : array_map(static fn($gr) => [$gr], $practiceRows);
-                                }
+                                $practiceBundles = $this->practiceBundles($practiceRows, (bool) $variantUnits, $pairPracticeGroups, $separateHere);
 
                                 foreach ($practiceBundles as $bundle) {
                                     $names = [];
@@ -2331,6 +2313,33 @@ class TimetableController extends Controller
 
         return response()->json(['ok' => true, 'dry_run' => $dry, 'lectures' => count($list), 'removed' => $removed,
             'list' => array_slice($list, 0, 200), 'skipped' => array_slice($skipped, 0, 200)]);
+    }
+
+    /**
+     * Amaliy kartalarning guruh to'plamlari. Bo'lakli fan (HEMIS biriktiruvi): to'liq qismlar alohida, kichik qismlar
+     * asos guruh bo'yicha bitta aralash guruh; boshqa fan: seminar / katta guruhda juftlab, aks holda alohida.
+     * "Alohida amaliy" istisnosida har guruh (bo'lakning kichik qismi ham) alohida — ajratilgan kartalar qayta
+     * yaratishda yana birlashmaydi.
+     */
+    private function practiceBundles(array $practiceRows, bool $variantUnits, bool $pairPracticeGroups, bool $separate): array
+    {
+        if ($separate || (!$variantUnits && !$pairPracticeGroups)) {
+            return array_map(static fn ($gr) => [$gr], $practiceRows);
+        }
+        if (!$variantUnits) {
+            return array_chunk($practiceRows, 2);
+        }
+        $bundles = array_map(static fn ($gr) => [$gr], array_values(array_filter($practiceRows, fn ($gr) => empty($gr['partial']))));
+        // Kichik qismlar asos guruh bo'yicha: "02a dan 5 + 02b dan 5" — bitta (c) guruhi; butun oqimning qoldiqlari
+        // bitta katta guruhga qo'shilmaydi.
+        $partByBase = [];
+        foreach ($practiceRows as $gr) {
+            if (!empty($gr['partial'])) {
+                $partByBase[$this->baseGroupKey((string) ($gr['name'] ?? ''))][] = $gr;
+            }
+        }
+
+        return array_merge($bundles, array_values($partByBase));
     }
 
     /** Istisno kaliti: fakultet ('' — barcha fakultetlar) + yo'nalish + kurs + fan (amaliy guruhlari juftlanmaydi). */

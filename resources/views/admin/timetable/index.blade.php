@@ -213,6 +213,9 @@
                             @if($timetableCanApprove)
                             <button type="button" id="hemisSyncBtn" class="tt-ktr-weeks-btn" title="Tanlangan qamrov: LMS ichki jadvali va KTR ↔ HEMIS dars jadvali. Bugungacha o'tilgan darslar balansi (soat va soni), ertadan boshlab tuzatish takliflari va HEMIS'da qilinadigan amallar">HEMIS solishtirish</button>
                             @endif
+                            @if(in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'kafedra_mudiri', 'oqituvchi'], true))
+                            <button type="button" id="blockTicketsBtn" class="tt-ktr-weeks-btn" title="HEMIS to'siqlari bo'yicha so'rovlar: javob berish va (kafedra mudiri) hal qilish">To'siq so'rovlari</button>
+                            @endif
                         </div>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
@@ -3592,7 +3595,7 @@
             let hemisSyncLast = null;
             let hemisSyncUntil = null;
             let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
-            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, subjects: null };   // subjects: null — barcha fanlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null };   // subjects: null — barcha fanlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -3662,7 +3665,15 @@
                 const reason = a.reason ? '<div class="ml-3 text-gray-500 italic text-[10px]">Sabab: ' + hsEsc(a.reason) + flags + '</div>' : (flags ? '<div class="ml-3">' + flags + '</div>' : '');
                 return '<div class="mb-1.5 pb-1 border-b border-dashed border-gray-200">' + head + summary + details + reason + '</div>';
             }
-            const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
+            // To'siq turi: xona band / o'qituvchi band / boshqa (o'qituvchi yoki xona topilmadi, para yo'q...).
+            const hsBlockKinds = a => {
+                const k = new Set((a.blocks || []).map(b => b.type));
+                if (!k.size || (a.blocked || []).length > (a.blocks || []).length) k.add('other');
+                return [...k];
+            };
+            const hsOpOk = a => (a.blocked && a.blocked.length)
+                ? hemisSyncFilter.ops.blocked && hsBlockKinds(a).some(k => hemisSyncFilter.blk[k])
+                : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
                 let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0 };
@@ -3743,6 +3754,8 @@
                     ' · bugun ' + hsEsc(rep.today) + '</h3>' +
                     '<button type="button" id="hsExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="hsJson" class="tt-ktr-weeks-btn">JSON (HEMIS\'ga yozish uchun)</button>' +
+                    '<button type="button" id="hsTickets" class="tt-ktr-weeks-btn" title="Filtrdagi to\'siqlar bo\'yicha o\'qituvchi va kafedra mudiriga Telegram orqali so\'rov">📨 To\'siqlar bo\'yicha xabar</button>' +
+                    '<button type="button" id="hsTicketList" class="tt-ktr-weeks-btn">So\'rovlar</button>' +
                     // Xatcho'p: HEMIS sahifasida bosilganda mark'dagi yozish oynasini ochadi (JSON fayl tanlanadi).
                     '<a href="' + hsEsc("javascript:(function(){var s=document.createElement('script');s.charset='utf-8';s.src='" + HS_WRITER_URL + "?v='+Date.now();document.body.appendChild(s);})();") + '"' +
                     ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Keyin HEMIS sahifasida (kirib turgan holda) shu xatcho\\\'pni bosing va yuklab olingan JSON faylni tanlang.\'); return false;"' +
@@ -3755,7 +3768,12 @@
                     wkOpt(rep.until_week, w => w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')') +
                     '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
                     '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
-                    chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') + '</span>' +
+                    chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') +
+                    '<span class="ml-1 pl-2 border-l border-gray-300' + (F.ops.blocked ? '' : ' opacity-40') + '">To\'siq turi: ' +
+                    chk('hsBlkRoom', F.blk.room, '<span class="px-1 rounded bg-orange-100 text-orange-800">Xona band</span>') +
+                    chk('hsBlkTeacher', F.blk.teacher, '<span class="px-1 rounded bg-purple-100 text-purple-800">O\'qituvchi band</span>') +
+                    chk('hsBlkOther', F.blk.other, '<span class="px-1 rounded bg-red-100 text-red-700">Boshqa</span>') +
+                    '<button type="button" id="hsOnlyBlocked" class="ml-1 underline text-[11px]">faqat to\'siqlilar</button></span>' + '</span>' +
                     (() => {
                         const all = hsSubjectNames(rep);
                         const sel = F.subjects ? F.subjects.filter(x => all.includes(x)) : all;
@@ -3779,6 +3797,8 @@
                     (rep.groups_not_in_hemis.length ? '<div class="text-red-600">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.groups_not_in_hemis.join(', ')) + '</div>' : '') + '</div>';
                 hemisSyncModal(head + body);
                 $('hsClose').onclick = () => $('hemisSyncModal').remove();
+                $('hsTickets').onclick = () => hsTicketsSend(rep);
+                $('hsTicketList').onclick = () => hsTicketsList();
                 $('hsUntil').onchange = function () { hemisSyncUntil = +this.value; hemisSyncRun(); };
                 const perChange = () => {
                     let a = +$('hsPFrom').value, b = +$('hsPTo').value;
@@ -3791,9 +3811,14 @@
                 const reFilter = () => {
                     F.onlyDiff = $('hsOnlyDiff').checked;
                     F.ops = { create: $('hsOpC').checked, update: $('hsOpU').checked, delete: $('hsOpD').checked, blocked: $('hsOpB').checked };
+                    F.blk = { room: $('hsBlkRoom').checked, teacher: $('hsBlkTeacher').checked, other: $('hsBlkOther').checked };
                     hemisSyncRender(rep);
                 };
-                ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB'].forEach(id => { $(id).onchange = reFilter; });
+                ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
+                $('hsOnlyBlocked').onclick = () => {
+                    F.ops = { create: false, update: false, delete: false, blocked: true };
+                    hemisSyncRender(rep);
+                };
                 {
                     const all = hsSubjectNames(rep);
                     const apply = () => {
@@ -3815,10 +3840,9 @@
                     a.href = URL.createObjectURL(blob); a.download = 'hemis_amallar_' + rep.today + '.json';
                     document.body.appendChild(a); a.click(); a.remove();
                 };
-                $('hsExcel').onclick = () => {
-                    const f = document.createElement('form');
-                    f.method = 'POST'; f.action = BASE + '/boards/' + board.id + '/hemis-sync/export'; f.style.display = 'none';
-                    const add = (k, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i); };
+                $('hsExcel').onclick = async function () {
+                    const fd = new FormData();
+                    const add = (k, v) => fd.append(k, v);
                     add('_token', CSRF);
                     const sb = scopeBody();
                     Object.keys(sb).forEach(k => sb[k].forEach(v => add(k + '[]', v)));
@@ -3829,8 +3853,29 @@
                     add('only_diff', F.onlyDiff ? 1 : 0);
                     add('ops_filter', 1);   // hech biri tanlanmasa ham — Excel'da amal bo'lmaydi
                     Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));
+                    Object.keys(F.blk).filter(k => F.blk[k]).forEach(k => add('blk[]', k));
+                    add('blk_filter', 1);
                     if (F.subjects) { add('subjects_filter', 1); F.subjects.forEach(n => add('subjects[]', n)); }
-                    document.body.appendChild(f); f.submit(); f.remove();
+                    // Forma yuborish o'rniga fetch: xato bo'lsa sahifa "ERR_INVALID_RESPONSE" bo'lib qolmaydi — sababi ko'rsatiladi.
+                    const btn = this, html = btn.innerHTML;
+                    btn.disabled = true; btn.textContent = 'Tayyorlanmoqda…';
+                    try {
+                        const r = await fetch(BASE + '/boards/' + board.id + '/hemis-sync/export', { method: 'POST', body: fd, headers: { Accept: 'application/json' } });
+                        const blob = await r.blob();
+                        const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+                        if (!r.ok || head[0] !== 0x50 || head[1] !== 0x4B) {   // xlsx — "PK" (zip) bilan boshlanadi
+                            let msg = 'HTTP ' + r.status;
+                            try { const j = JSON.parse(await blob.text()); msg = j.error || j.message || msg; } catch (_) { }
+                            throw new Error(msg);
+                        }
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                        a.download = 'hemis_solishtirish_' + rep.today + '.xlsx';
+                        document.body.appendChild(a); a.click(); a.remove();
+                        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+                    } catch (e) {
+                        alert('Excel faylini yaratib bo\'lmadi: ' + e.message);
+                    } finally { btn.disabled = false; btn.innerHTML = html; }
                 };
             }
             async function hemisSyncRun() {
@@ -3914,6 +3959,146 @@
                 hemisSyncFilter.subjects = null;   // fan filtri qamrovga bog'liq — yangi solishtirishda hammasi
                 try { await hemisSyncAsk(); } finally { this.disabled = false; }
             };
+            // ===== HEMIS to'siqlari bo'yicha so'rovlar (Telegram: o'qituvchi / kafedra mudiri) =====
+            const TICKET_FROM_URL = new URLSearchParams(location.search).get('ticket');
+            const HS_TICKET_STATUS = { open: 'Ochiq', resolved: 'Hal qilindi', pending_registrar: 'Registrator tasdig\'ida', cancelled: 'Bekor qilingan' };
+            const HS_DAY = ['', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+            const HS_ROLE = { teacher: 'Dars o\'qituvchisi', head: 'Kafedra mudiri', blocker: 'Xonani band qilgan dars o\'qituvchisi' };
+            // Oynadagi (filtrlangan) to'siqli amallar → so'rovlar: har to'siq turi alohida.
+            function hsTicketItems(rep) {
+                const items = [];
+                for (const g of rep.groups) {
+                    for (const u of g.units) {
+                        if (!hsSubjOk(u)) continue;
+                        for (const a of u.actions) {
+                            if (!(a.blocked && a.blocked.length) || !a.card_id || !a.week || !hsOpOk(a)) continue;
+                            for (const kind of hsBlockKinds(a)) {
+                                if (!hemisSyncFilter.blk[kind]) continue;
+                                const b = (a.blocks || []).find(x => x.type === kind) || null;
+                                items.push({ card_id: a.card_id, week: a.week, date: a.date, start: a.start, end: a.end, type: kind, group: g.group,
+                                    text: kind === 'other' ? a.blocked.filter(t => !(a.blocks || []).some(x => x.text === t)).join('; ') : (b && b.text) || a.blocked.join('; '),
+                                    blocker: b ? { source: b.source, group: b.group, subject: b.subject, teacher: b.teacher, room: b.room, time: b.time } : null });
+                            }
+                        }
+                    }
+                }
+                return items;
+            }
+            async function hsTicketsSend(rep) {
+                const items = hsTicketItems(rep);
+                if (!items.length) { alert('Filtrda yuboriladigan to\'siq yo\'q (bugungacha va tanlangan haftadan keyingilar hisobga olinmaydi).'); return; }
+                if (!confirm(items.length + ' ta to\'siq bo\'yicha so\'rov yaratiladi va dars o\'qituvchisi, kafedra mudiri (xona band bo\'lsa — xonani band qilgan dars o\'qituvchisi ham) Telegram orqali xabar oladi. Yuboramizmi?')) return;
+                // api() massivni "key[]" qilib yuboradi — obyektlar "[object Object]" bo'lib qolardi (422). Shuning uchun
+                // Laravel tushunadigan items[i][maydon] (blocker uchun items[i][blocker][maydon]) kalitlari.
+                const body = {};
+                items.forEach((it, i) => Object.entries(it).forEach(([k, v]) => {
+                    if (v && typeof v === 'object') Object.entries(v).forEach(([bk, bv]) => { body['items[' + i + '][' + k + '][' + bk + ']'] = bv; });
+                    else body['items[' + i + '][' + k + ']'] = v;
+                }));
+                try {
+                    const r = await api(BASE + '/boards/' + board.id + '/block-tickets', 'POST', body);
+                    alert('Yaratildi: ' + r.created + ' ta so\'rov (o\'tkazildi: ' + r.skipped + ' — allaqachon ochiq yoki o\'tgan kun).\nTelegram xabarlari: ' + r.telegram_sent + ' ta.' +
+                        (r.without_telegram.length ? '\n\nTelegram ulanmagan / topilmagan: ' + r.without_telegram.join(', ') : ''));
+                } catch (e) { alert(hsErrText(e)); }
+            }
+            async function hsTicketsList() {
+                if (!board) return;
+                hemisSyncModal('<div class="p-6 text-center text-gray-500">To\'siq so\'rovlari yuklanmoqda…</div>');
+                let j;
+                try { j = await api(BASE + '/boards/' + board.id + '/block-tickets'); }
+                catch (e) { hemisSyncModal('<div class="p-4 text-red-600">' + hsEsc(hsErrText(e)) + '</div>' + HS_CLOSE); return; }
+                const rows = (j.tickets || []).map(t => '<tr class="align-top hover:bg-gray-50 cursor-pointer" data-ticket="' + t.id + '">' +
+                    '<td class="border px-1">№' + t.id + '</td><td class="border px-1">' + hsEsc(t.lesson_date) + ' ' + hsEsc(t.start_time) + '–' + hsEsc(t.end_time) + '</td>' +
+                    '<td class="border px-1">' + hsEsc(t.group_name) + '<div class="text-gray-500">' + hsEsc(t.subject_name) + '</div></td>' +
+                    '<td class="border px-1">' + (HS_BLOCK[t.block_type] ? '<span class="px-1 rounded border ' + HS_BLOCK[t.block_type].cls + '">' + HS_BLOCK[t.block_type].label + '</span>' : 'Boshqa') + '</td>' +
+                    '<td class="border px-1">' + (t.recipients || []).map(r => hsEsc(r.name) + ': ' + (r.response === 'accepted' ? '✅' : r.response === 'declined' ? '❌' : (r.chat_id ? '…' : '📵'))).join('<br>') + '</td>' +
+                    '<td class="border px-1">' + hsEsc(HS_TICKET_STATUS[t.status] || t.status) + (t.can_resolve ? ' <b class="text-emerald-700">— hal qiling</b>' : '') + '</td></tr>').join('');
+                hemisSyncModal('<div class="flex items-center mb-2"><h3 class="font-semibold text-[14px] flex-1">To\'siq so\'rovlari</h3>' + HS_CLOSE + '</div>' +
+                    '<div class="text-gray-500 text-[11px] mb-2">✅ qabul qildi · ❌ rad etdi · … javob kutilmoqda · 📵 Telegram ulanmagan. Qatorni bosing — batafsil va hal qilish.</div>' +
+                    (rows ? '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr><th class="border px-1">№</th><th class="border px-1">Sana, vaqt</th><th class="border px-1">Guruh, fan</th><th class="border px-1">To\'siq</th><th class="border px-1">Javoblar</th><th class="border px-1">Holat</th></tr></thead><tbody>' + rows + '</tbody></table>'
+                        : '<div class="text-gray-500">So\'rov yo\'q.</div>'));
+                document.querySelectorAll('#hemisSyncModal [data-ticket]').forEach(tr => { tr.onclick = () => hsTicketOpen(tr.dataset.ticket); });
+            }
+            async function hsTicketOpen(id, day) {
+                hemisSyncModal('<div class="p-6 text-center text-gray-500">So\'rov №' + hsEsc(id) + ' yuklanmoqda…</div>');
+                let t;
+                try { t = (await api(BASE + '/block-tickets/' + id + (day ? '?day=' + day : ''))).ticket; }
+                catch (e) { hemisSyncModal('<div class="p-4 text-red-600">' + hsEsc(hsErrText(e)) + '</div>' + HS_CLOSE); return; }
+                const b = t.blocker || {};
+                const blockLine = t.block_type === 'room'
+                    ? '<b>' + hsEsc(b.room || '') + '</b>-xona ' + hsEsc(b.time || '') + ' da band: ' + hsEsc([b.source, b.group, b.subject && '«' + b.subject + '»', b.teacher && 'o\'qituvchi: ' + b.teacher].filter(Boolean).join(' · '))
+                    : t.block_type === 'teacher'
+                        ? '<b>' + hsEsc(b.teacher || '') + '</b> ' + hsEsc(b.time || '') + ' da boshqa darsda: ' + hsEsc([b.source, b.group, b.subject && '«' + b.subject + '»', b.room && 'xona: ' + b.room].filter(Boolean).join(' · '))
+                        : hsEsc(t.block_text || '');
+                const cls = HS_BLOCK[t.block_type] ? HS_BLOCK[t.block_type].cls : 'bg-red-100 text-red-700 border-red-300';
+                let html = '<div class="flex items-center mb-2"><h3 class="font-semibold text-[14px] flex-1">To\'siq №' + t.id + ' · ' + hsEsc(HS_TICKET_STATUS[t.status] || t.status) + '</h3>' +
+                    (board ? '<button type="button" id="tkBack" class="px-2 py-1 border rounded mr-1">← Ro\'yxat</button>' : '') + HS_CLOSE + '</div>' +
+                    '<div class="mb-1"><b>' + hsEsc(t.group_name) + '</b> · ' + hsEsc(t.subject_name) + ' · ' + hsEsc(t.kafedra_name || '') + '</div>' +
+                    '<div class="mb-1">' + hsEsc(t.lesson_date) + ' (' + t.week + '-hafta) ' + hsEsc(t.start_time) + '–' + hsEsc(t.end_time) +
+                    (t.card ? ' · o\'qituvchi: ' + hsEsc(t.card.teacher_name || '—') + ' · xona: ' + hsEsc(t.card.auditorium_name || '—') : '') + '</div>' +
+                    '<div class="mb-2 px-2 py-1 rounded border ' + cls + '">' + blockLine + '</div>' +
+                    '<div class="mb-2"><b>Javoblar:</b> ' + (t.recipients || []).map(r => hsEsc(HS_ROLE[r.role] || r.role) + ' — ' + hsEsc(r.name) + ': ' +
+                        (r.response === 'accepted' ? '✅ qabul qildi' : r.response === 'declined' ? '❌ rad etdi' : (r.chat_id ? 'javob kutilmoqda' : '📵 Telegram ulanmagan')) +
+                        (r.note ? ' («' + hsEsc(r.note) + '»)' : '')).join('<br>') + '</div>';
+                if (t.resolution) {
+                    const rs = t.resolution;
+                    html += '<div class="mb-2 text-emerald-800"><b>Yechim:</b> ' + (rs.kind === 'room' ? 'xona — ' + hsEsc(rs.auditorium) : rs.kind === 'time' ? 'vaqt — ' + hsEsc(rs.time) :
+                        rs.kind === 'day' ? 'kun — ' + hsEsc(HS_DAY[rs.day] || rs.day) + ' (registrator tasdig\'i bilan)' : '') + (rs.by ? ' · ' + hsEsc(rs.by) : '') +
+                        (rs.registrar ? ' · <span class="text-red-600">registrator: ' + hsEsc(rs.registrar) + (rs.registrar_note ? ' — ' + hsEsc(rs.registrar_note) : '') + '</span>' : '') + '</div>';
+                }
+                if (t.can_respond) {
+                    html += '<div class="mb-2"><button type="button" id="tkAcc" class="px-2 py-1 rounded bg-emerald-600 text-white">✅ Qabul qildim</button> ' +
+                        '<button type="button" id="tkDec" class="px-2 py-1 rounded border border-red-400 text-red-700">❌ Rad etaman</button></div>';
+                }
+                if (t.can_resolve) {
+                    const d = t.free_pairs_day || (t.place && t.place.day);
+                    html += '<div class="p-2 border rounded bg-gray-50"><b>Hal qilish</b> <span class="text-gray-500">(faqat shu so\'rov doirasida, shu dars uchun)</span>' +
+                        '<div class="mt-1"><label class="mr-3"><input type="radio" name="tkKind" value="room" checked> Xonani almashtirish</label>' +
+                        '<label class="mr-3"><input type="radio" name="tkKind" value="time"> Vaqtini almashtirish (shu kun)</label>' +
+                        '<label><input type="radio" name="tkKind" value="day"> Kunini almashtirish (registrator tasdig\'i)</label></div>' +
+                        '<div id="tkRoomBox" class="mt-1">Bo\'sh xona: <select id="tkRoom" class="border rounded px-1 max-w-full">' +
+                        (t.free_rooms || []).map(r => '<option value="' + hsEsc(r.code) + '">' + hsEsc(r.name) + (r.volume ? ' (' + r.volume + ')' : '') + (r.building ? ' — ' + hsEsc(r.building) : '') + '</option>').join('') + '</select></div>' +
+                        '<div id="tkTimeBox" class="mt-1 hidden">' +
+                        '<span id="tkDayWrap" class="hidden">Kun: <select id="tkDay" class="border rounded px-1">' + [1, 2, 3, 4, 5, 6].map(x => '<option value="' + x + '"' + (x === d ? ' selected' : '') + '>' + HS_DAY[x] + '</option>').join('') + '</select> </span>' +
+                        'Bo\'sh vaqt: <select id="tkPair" class="border rounded px-1">' + (t.free_pairs || []).map(p => '<option value="' + p.pair + '">' + hsEsc(p.time) + '</option>').join('') + '</select>' +
+                        (!(t.free_pairs || []).length ? ' <span class="text-red-600">bo\'sh vaqt yo\'q</span>' : '') + '</div>' +
+                        '<div class="mt-1">Izoh: <input id="tkNote" class="border rounded px-1 w-2/3" maxlength="500"></div>' +
+                        '<div class="mt-2"><button type="button" id="tkResolve" class="px-3 py-1 rounded bg-emerald-600 text-white">Saqlash</button></div></div>';
+                }
+                hemisSyncModal(html);
+                if ($('tkBack')) $('tkBack').onclick = () => hsTicketsList();
+                const respond = async resp => {
+                    try { await api(BASE + '/block-tickets/' + t.id + '/respond', 'POST', { response: resp }); hsTicketOpen(t.id); }
+                    catch (e) { alert(hsErrText(e)); }
+                };
+                if ($('tkAcc')) { $('tkAcc').onclick = () => respond('accepted'); $('tkDec').onclick = () => respond('declined'); }
+                if (t.can_resolve) {
+                    const kindNow = () => (document.querySelector('#hemisSyncModal input[name="tkKind"]:checked') || {}).value;
+                    const showKind = () => {
+                        const k = kindNow();
+                        $('tkRoomBox').classList.toggle('hidden', k !== 'room');
+                        $('tkTimeBox').classList.toggle('hidden', k === 'room');
+                        $('tkDayWrap').classList.toggle('hidden', k !== 'day');
+                    };
+                    document.querySelectorAll('#hemisSyncModal input[name="tkKind"]').forEach(r => { r.onchange = showKind; });
+                    if (day) { document.querySelector('#hemisSyncModal input[value="day"]').checked = true; }
+                    showKind();
+                    $('tkDay').onchange = function () { hsTicketOpen(t.id, +this.value); };
+                    $('tkResolve').onclick = async () => {
+                        const k = kindNow();
+                        const body = { kind: k, note: $('tkNote').value };
+                        if (k === 'room') { if (!$('tkRoom').value) return alert('Xona tanlang.'); body.auditorium_code = $('tkRoom').value; }
+                        else { if (!$('tkPair').value) return alert('Vaqt tanlang.'); body.pair = +$('tkPair').value; if (k === 'day') body.day = +$('tkDay').value; }
+                        try {
+                            const r = await api(BASE + '/block-tickets/' + t.id + '/resolve', 'POST', body);
+                            alert(r.status === 'pending_registrar' ? 'Kunni o\'zgartirish so\'rovi registrator ofisiga yuborildi.' : 'Saqlandi: o\'zgarish LMS ichki jadvalida qo\'llandi.');
+                            hsTicketOpen(t.id);
+                        } catch (e) { alert(hsErrText(e)); }
+                    };
+                }
+            }
+            if ($('blockTicketsBtn')) $('blockTicketsBtn').onclick = () => hsTicketsList();
+            if (TICKET_FROM_URL) setTimeout(() => hsTicketOpen(TICKET_FROM_URL), 300);
             // ===== Ichki jadval: haftani zichlash =====
             // Tashqi jadval (ext_day/ext_pair) andoza: guruhning shu kunidagi shablonda band, lekin
             // shu haftada bo'sh qolgan yarim-slotlariga keyingi darslar yuqoriga suriladi; so'ng

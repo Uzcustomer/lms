@@ -24,6 +24,8 @@ class SetupTelegramWebhook extends Command
 
         $response = Http::post("https://api.telegram.org/bot{$token}/setWebhook", [
             'url' => $webhookUrl,
+            // Tugmalar (dars jadvali to'siq so'rovlari) uchun callback_query ham kerak.
+            'allowed_updates' => ['message', 'callback_query'],
         ]);
 
         if ($response->successful() && $response->json('ok')) {

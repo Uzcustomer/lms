@@ -52,6 +52,9 @@ trait TimetableHemisSync
             // ops_filter=1 — amal turlari tanlangan (bo'sh ro'yxat ham: hech biri); yo'q bo'lsa — filtrsiz.
             'ops_filter'        => 'nullable|boolean',
             'ops.*'             => 'in:create,update,delete,blocked',
+            'blk_filter'        => 'nullable|boolean',
+            'blk'               => 'nullable|array',
+            'blk.*'             => 'in:room,teacher,other',
             // Excel: faqat tanlangan fanlar (subjects_filter=1 bo'lsa).
             'subjects_filter'   => 'nullable|boolean',
             'subjects'          => 'nullable|array',
@@ -900,6 +903,11 @@ trait TimetableHemisSync
                             break;
                         }
                     }
+                    // To'siq so'rovi (Telegram) uchun: qaysi karta, qaysi hafta.
+                    if ($lesson) {
+                        $a['card_id'] = $lesson['card_id'] ?? null;
+                        $a['week'] = $lesson['week'] ?? null;
+                    }
                     $why = [];
                     $timeChanged = $a['op'] === 'create' || (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, 'vaqt'));
                     if ($timeChanged) {
@@ -1066,10 +1074,22 @@ trait TimetableHemisSync
         $onlyDiff = $request->boolean('only_diff');
         $ops = $request->boolean('ops_filter') ? (array) $request->input('ops', []) : null;
         $subjects = $request->boolean('subjects_filter') ? (array) $request->input('subjects', []) : null;
-        $opOk = function (array $a) use ($ops): bool {
-            if ($ops === null) return true;
-            if (!empty($a['blocked'])) return in_array('blocked', $ops, true);
-            return in_array($a['op'], $ops, true);
+        // To'siq turi filtri (oynadagi bilan bir xil): room / teacher / other.
+        $blk = $request->boolean('blk_filter') ? (array) $request->input('blk', []) : null;
+        $blockKinds = function (array $a): array {
+            $k = array_values(array_unique(array_map(fn ($b) => $b['type'] ?? 'other', (array) ($a['blocks'] ?? []))));
+            if (!$k || count((array) ($a['blocked'] ?? [])) > count((array) ($a['blocks'] ?? []))) {
+                $k[] = 'other';
+            }
+
+            return $k;
+        };
+        $opOk = function (array $a) use ($ops, $blk, $blockKinds): bool {
+            if (!empty($a['blocked'])) {
+                return ($ops === null || in_array('blocked', $ops, true))
+                    && ($blk === null || (bool) array_intersect($blockKinds($a), $blk));
+            }
+            return $ops === null || in_array($a['op'], $ops, true);
         };
 
         $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -1083,9 +1103,17 @@ trait TimetableHemisSync
         $act->setTitle('Amallar');
         $act->fromArray(['Guruh', 'Fan', 'Amal', 'Sana', 'Boshlanish', 'Tugash', 'HEMIS para', 'Dars turi', 'O\'qituvchi', 'Xona',
             'HEMIS id', 'O\'zgarishlar', 'Belgilar', 'To\'siq', 'Sabab'], null, 'A1');
+        // "To'siqlar" — har bir to'siq alohida qator: kim / nima xalaqit beradi, kimga murojaat qilish kerak.
+        $blkSheet = $book->createSheet();
+        $blkSheet->setTitle('To\'siqlar');
+        $blkSheet->fromArray(['Guruh', 'Fan', 'Kafedra', 'Kafedra mudiri', 'Amal', 'Sana', 'Vaqt', 'Dars turi', 'O\'qituvchi (LMS)', 'Xona (LMS)',
+            'To\'siq turi', 'Band qilgan: manba', 'Band qilgan: guruh', 'Band qilgan: fan', 'Band qilgan: o\'qituvchi', 'Band qilgan: xona',
+            'Band vaqti', 'To\'siq matni'], null, 'A1');
+        $blkName = ['room' => 'Xona band', 'teacher' => 'O\'qituvchi band', 'other' => 'Boshqa'];
         $opName = ['create' => 'Qo\'shish', 'update' => 'O\'zgartirish', 'delete' => 'O\'chirish'];
         $r1 = 2;
         $r2 = 2;
+        $r3 = 2;
         foreach ($rep['groups'] as $g) {
             foreach ($g['units'] as $u) {
                 if ($onlyDiff && $this->hemisUnitMatches($u)) {
@@ -1123,10 +1151,23 @@ trait TimetableHemisSync
                         self::HEMIS_PAIRS[$x['start'] . '-' . $x['end']] ?? '', $u['code_names'][$x['code']] ?? $x['code'],
                         $x['employee_name'] ?? '', $x['auditorium_name'] ?? '', $x['hemis_id'] ?? '',
                         implode('; ', $x['changes'] ?? []), implode(', ', $x['flags'] ?? []), implode('; ', $x['blocked'] ?? []), $x['reason'] ?? ''], null, 'A' . $r2++);
+                    if (!empty($x['blocked'])) {
+                        $base = [$g['group'], $u['subject_name'], $u['kafedra'] ?? '', $u['mudir'] ?? '', $opName[$x['op']] ?? $x['op'], $x['date'],
+                            $x['start'] . '–' . $x['end'], $u['code_names'][$x['code']] ?? $x['code'], $x['employee_name'] ?? '', $x['auditorium_name'] ?? ''];
+                        $blocks = (array) ($x['blocks'] ?? []);
+                        foreach ($blocks as $b) {
+                            $blkSheet->fromArray(array_merge($base, [$blkName[$b['type'] ?? 'other'] ?? 'Boshqa', $b['source'] ?? '', $b['group'] ?? '',
+                                $b['subject'] ?? '', $b['teacher'] ?? '', $b['room'] ?? '', $b['time'] ?? '', $b['text'] ?? '']), null, 'A' . $r3++);
+                        }
+                        // Tuzilmagan to'siqlar (o'qituvchi/xona topilmadi, para yo'q...) — "Boshqa".
+                        foreach (array_diff((array) $x['blocked'], array_column($blocks, 'text')) as $txt) {
+                            $blkSheet->fromArray(array_merge($base, ['Boshqa', '', '', '', '', '', '', $txt]), null, 'A' . $r3++);
+                        }
+                    }
                 }
             }
         }
-        foreach ([$bal, $act] as $sh) {
+        foreach ([$bal, $act, $blkSheet] as $sh) {
             $sh->getStyle('A1:W1')->getFont()->setBold(true);
             $sh->freezePane('A2');
             foreach (range('A', 'W') as $col) {
@@ -1135,7 +1176,12 @@ trait TimetableHemisSync
         }
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book);
 
-        return response()->streamDownload(fn () => $writer->save('php://output'), 'hemis_solishtirish_' . $rep['today'] . '.xlsx',
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        // Vaqtinchalik faylga yozib, tayyor fayl yuboriladi (Content-Length bilan) — oqim (stream) o'rtasida
+        // xato yoki boshqa sarlavha bo'lsa brauzer "ERR_INVALID_RESPONSE" berardi.
+        $tmp = tempnam(sys_get_temp_dir(), 'hemis_xlsx_');
+        $writer->save($tmp);
+
+        return response()->download($tmp, 'hemis_solishtirish_' . $rep['today'] . '.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 }

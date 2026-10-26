@@ -19,6 +19,13 @@ class TelegramWebhookController extends Controller
 
         $data = $request->all();
 
+        // Tugma bosildi (dars jadvali to'siq so'rovi: "Qabul qildim / Rad etaman").
+        if (!empty($data['callback_query'])) {
+            app(\App\Services\Timetable\BlockTicketTelegram::class)->callback((array) $data['callback_query']);
+
+            return response()->json(['ok' => true]);
+        }
+
         $message = $data['message'] ?? null;
         if (!$message) {
             return response()->json(['ok' => true]);

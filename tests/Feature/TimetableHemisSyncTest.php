@@ -889,3 +889,49 @@ it('sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (sana, vaqt,
     ]);
     expect($u['before']['hours_diff'])->toBe(['11' => 0, '13' => 0]);
 });
+
+it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq emas, amaliy har guruhchaning o\'z kartasidan', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 2]);
+    $lecT = Teacher::where('full_name', 'MUDIR')->first();
+    $pa = Teacher::where('full_name', 'USTOZ')->first();
+    $pb = $pa->replicate()->forceFill(['hemis_id' => 5002, 'full_name' => 'UST2', 'short_name' => 'UST2', 'login' => 'ust5002', 'employee_id_number' => '5002']);
+    $pb->save();
+    $base = ['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Pediatriya', 'kafedra_name' => 'P'];
+    TimetableCard::create($base + ['training_type' => 'practice', 'group_name' => 'g5-01a', 'teacher_id' => $pa->id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '71', 'auditorium_name' => '423']);
+    TimetableCard::create($base + ['training_type' => 'practice', 'group_name' => 'g5-01b', 'teacher_id' => $pb->id, 'teacher_name' => 'UST2', 'auditorium_code' => '72', 'auditorium_name' => '424']);
+    TimetableCard::create($base + ['training_type' => 'lecture', 'group_name' => null, 'group_names' => ['g5-01a', 'g5-01b'],
+        'teacher_id' => $lecT->id, 'teacher_name' => 'MUDIR', 'auditorium_code' => 'Y1', 'auditorium_name' => 'Y301']);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 7, 'training_type' => 'practice']);   // 21.09
+    hsInsert('specialties', ['specialty_hemis_id' => 77, 'name' => 'davolash ishi']);
+    hsInsert('curricula', ['curricula_hemis_id' => 260, 'specialty_hemis_id' => 77, 'department_hemis_id' => 1]);
+    hsInsert('semesters', ['curriculum_hemis_id' => 260, 'code' => '19', 'education_year' => '2026', 'level_code' => '15']);
+    foreach ([2500 => 'g5-01a', 2501 => 'g5-01b'] as $id => $name) {
+        hsInsert('groups', ['group_hemis_id' => $id, 'name' => $name, 'curriculum_hemis_id' => 260, 'department_hemis_id' => 1, 'specialty_hemis_id' => 77]);
+    }
+    hsInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 2, 'curricula_hemis_id' => 260, 'subject_id' => 900, 'subject_name' => 'Pediatriya',
+        'semester_code' => '19', 'semester_name' => '9', 'department_id' => 501, 'department_name' => 'Pediatriya', 'at_semester' => 1,
+        'subject_details' => json_encode([['trainingType' => ['code' => '11', 'name' => "Ma'ruza"], 'academic_load' => 2],
+            ['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 10]])]);
+    $cs = DB::table('curriculum_subjects')->where('subject_id', 900)->value('id');
+    DB::table('ktr_plans')->insert(['curriculum_subject_id' => $cs, 'week_count' => 2,
+        'plan_data' => json_encode(['hours' => ['1' => ['11' => 2, '13' => 4], '2' => ['13' => 6]]]), 'created_at' => now(), 'updated_at' => now()]);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $acts = fn (string $group) => collect(collect($res['groups'])->firstWhere('group', $group)['units'][0]['actions']);
+    foreach (['g5-01a' => 'USTOZ', 'g5-01b' => 'UST2'] as $group => $practiceTeacher) {
+        $a = $acts($group);
+        expect($a)->toHaveCount(6)
+            ->and($a->pluck('blocked')->flatten()->all())->toBe([])
+            ->and($a->where('code', '11')->map(fn ($x) => $x['start'] . ' ' . $x['employee_name'] . ' ' . $x['auditorium_name'])->values()->all())
+            ->toBe(['08:30 MUDIR Y301'])
+            ->and($a->where('code', '13')->pluck('employee_name')->unique()->values()->all())->toBe([$practiceTeacher]);
+    }
+});

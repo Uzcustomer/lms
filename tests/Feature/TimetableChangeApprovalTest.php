@@ -544,3 +544,26 @@ it('tasdiqsiz birinchi biriktirish mudirning shu dars bo\'yicha eski kutilayotga
     expect($card->fresh()->teacher_id)->toBe($teacher->id)
         ->and($stale->fresh()->status)->toBe('cancelled');
 });
+
+it('sikl blokida ham bo\'sh darsga birinchi biriktirish tasdiqsiz, vaqt yoki mavjud o\'qituvchini o\'zgartirish tasdiq bilan', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card, 'board' => $board] = approvalSetup();
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '1-xona', 'active' => true, 'volume' => 30]);
+    $placement = \App\Models\TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'davolash ishi', 'course' => 2,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'start_index' => 0, 'training_type' => 'practice', 'lesson_time' => '08:30']);
+    $flow = ['specialty_name' => 'davolash ishi', 'course' => 2, 'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'training_type' => 'practice'];
+
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-assign', $board), $flow + ['teacher_id' => $teacher->id, 'auditorium_code' => 'R1', 'lesson_time' => '08:30'])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and(TimetableChangeRequest::where('status', 'applied')->count())->toBe(1);
+
+    // Vaqtni o'zgartirish yoki xonani olib tashlash — tasdiqqa.
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-assign', $board), $flow + ['teacher_id' => $teacher->id, 'auditorium_code' => 'R1', 'lesson_time' => '10:00'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-assign', $board), $flow + ['teacher_id' => $teacher->id, 'lesson_time' => '08:30'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and($placement->fresh()->lesson_time)->toBe('08:30');
+});

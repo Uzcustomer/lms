@@ -3733,7 +3733,8 @@
                         acts.forEach(a => { if (a.blocked && a.blocked.length) tot.blocked++; else { cnt[a.op]++; tot[a.op]++; } });
                         const list = acts.map(a => hsActionHtml(a, u)).join('');
                         const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
-                        body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name) + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
+                        body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name)
+                            + (u.cycle ? ' <span class="px-1 rounded bg-sky-100 text-sky-700 text-[10px]" title="Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma\'lumot)">sikl</span>' : '') + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
                             '<td class="border px-1 whitespace-nowrap">' + per + '</td>' +
                             '<td class="border px-1 whitespace-nowrap">' + hd + '</td><td class="border px-1 whitespace-nowrap">' + cd + '</td>' +
                             '<td class="border px-1">' + (fx || '<span class="text-gray-400">—</span>') + '</td>' +

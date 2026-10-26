@@ -831,3 +831,61 @@ it('kafedra mudirlaridan HEMIS id\'si borini oladi; yagona mudirning id\'si yo\'
     expect($a['employee_id'])->toBeNull()
         ->and(implode(' ', $a['blocked']))->toContain("kafedra mudiri MUDIR ning HEMIS xodim id'si LMS'da yo'q");
 });
+
+it('sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (sana, vaqt, tur KTR kuni bo\'yicha, o\'qituvchi, xona)', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // 5-kurs: Pediatriya — sikl fani (2 kun), KTR: 1-kun 2 soat ma'ruza + 4 soat amaliy, 2-kun 6 soat amaliy
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 2]);
+    $lecT = Teacher::where('full_name', 'MUDIR')->first();
+    $base = ['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Pediatriya',
+        'kafedra_name' => 'P'];
+    TimetableCard::create($base + ['training_type' => 'practice', 'group_name' => 'g5-01a',
+        'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '71', 'auditorium_name' => '423']);
+    TimetableCard::create($base + ['training_type' => 'lecture', 'group_name' => null, 'group_names' => ['g5-01a'],
+        'teacher_id' => $lecT->id, 'teacher_name' => 'MUDIR', 'auditorium_code' => 'Y1', 'auditorium_name' => 'Y301']);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 7, 'training_type' => 'practice']);   // 21.09
+
+    hsInsert('groups', ['group_hemis_id' => 2500, 'name' => 'g5-01a', 'curriculum_hemis_id' => 260, 'department_hemis_id' => 1, 'specialty_hemis_id' => 77]);
+    hsInsert('specialties', ['specialty_hemis_id' => 77, 'name' => 'davolash ishi']);
+    hsInsert('curricula', ['curricula_hemis_id' => 260, 'specialty_hemis_id' => 77, 'department_hemis_id' => 1]);
+    hsInsert('semesters', ['curriculum_hemis_id' => 260, 'code' => '19', 'education_year' => '2026', 'level_code' => '15']);
+    hsInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 2, 'curricula_hemis_id' => 260, 'subject_id' => 900, 'subject_name' => 'Pediatriya',
+        'semester_code' => '19', 'semester_name' => '9', 'department_id' => 501, 'department_name' => 'Pediatriya', 'at_semester' => 1,
+        'subject_details' => json_encode([['trainingType' => ['code' => '11', 'name' => "Ma'ruza"], 'academic_load' => 2],
+            ['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 10]])]);
+    $cs = DB::table('curriculum_subjects')->where('subject_id', 900)->value('id');
+    DB::table('ktr_plans')->insert(['curriculum_subject_id' => $cs, 'week_count' => 2,
+        'plan_data' => json_encode(['hours' => ['1' => ['11' => 2, '13' => 4], '2' => ['13' => 6]]]), 'created_at' => now(), 'updated_at' => now()]);
+    // HEMIS: 21.09 amaliy 08:30 da boshqa o'qituvchi bilan; 23.09 ortiqcha dars
+    $row = fn (int $id, string $date, string $st, string $en, string $code, int $emp) => hsInsert('schedules', ['schedule_hemis_id' => $id,
+        'subject_id' => 900, 'subject_name' => 'Pediatriya', 'semester_code' => '19', 'group_id' => 2500, 'group_name' => 'g5-01a',
+        'training_type_code' => $code, 'training_type_name' => $code === '11' ? "Ma'ruza" : 'Amaliy', 'lesson_date' => $date . ' 00:00:00',
+        'lesson_pair_start_time' => $st, 'lesson_pair_end_time' => $en, 'employee_id' => $emp, 'employee_name' => 'E' . $emp,
+        'auditorium_code' => '71', 'auditorium_name' => '423']);
+    $row(10, '2026-09-21', '10:00:00', '11:20:00', '13', 6006);
+    $row(11, '2026-09-23', '10:00:00', '11:20:00', '13', 5001);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $g = collect($res['groups'])->firstWhere('group', 'g5-01a');
+    expect($g)->not->toBeNull();
+    $u = $g['units'][0];
+    expect($u['cycle'])->toBeTrue()->and($u['fixes'])->toBe([]);
+    $ops = array_map(fn ($a) => $a['op'] . ' ' . $a['date'] . ' ' . $a['start'] . '-' . $a['end'] . ' ' . $a['code'] . ' ' . ($a['employee_name'] ?? ''), $u['actions']);
+    expect($ops)->toBe([
+        'create 2026-09-21 08:30-09:50 11 MUDIR',
+        'update 2026-09-21 10:00-11:20 13 USTOZ',
+        'create 2026-09-21 12:00-13:20 13 USTOZ',
+        'create 2026-09-22 08:30-09:50 13 USTOZ',
+        'create 2026-09-22 10:00-11:20 13 USTOZ',
+        'create 2026-09-22 12:00-13:20 13 USTOZ',
+        'delete 2026-09-23 10:00-11:20 13 E5001',
+    ]);
+    expect($u['before']['hours_diff'])->toBe(['11' => 0, '13' => 0]);
+});

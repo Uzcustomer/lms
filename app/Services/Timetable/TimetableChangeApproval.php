@@ -66,6 +66,13 @@ class TimetableChangeApproval
     /** Tasdiqdan o'tishi kerak bo'lgan rollar. */
     public const GATED_ROLES = ['kafedra_mudiri'];
 
+    /** Biriktirish amallari va ular o'zgartiradigan maydonlar (sikl biriktiruvi ikkalasini ham yozadi). */
+    public const ASSIGN_FIELDS = [
+        'admin.timetable.assign-teacher' => ['teacher'],
+        'admin.timetable.assign-room'    => ['room'],
+        'admin.timetable.cycle-assign'   => ['teacher', 'room'],
+    ];
+
     public function canReviewTeacherProposal(TimetableChangeRequest $req, $actor, string $role): bool
     {
         if ($req->status !== TimetableChangeRequest::PENDING || $req->isBy($actor)) {
@@ -154,13 +161,30 @@ class TimetableChangeApproval
         return true;
     }
 
-    /** Shu so'rov tasdiqqa yuborilishi kerakmi (o'zgartiradigan amal + gated rol + doska rejimi). */
+    /**
+     * Shu so'rov tasdiqqa yuborilishi kerakmi (o'zgartiradigan amal + gated rol + doska rejimi).
+     * Istisno — bo'sh darsga birinchi biriktirish (isFirstAssignment): uni middleware doska qulfi ostida tekshiradi.
+     */
     public static function shouldIntercept(Request $request, string $activeRole, ?TimetableBoard $board): bool
     {
         return in_array($activeRole, self::GATED_ROLES, true)
             && isset(self::GATED[(string) optional($request->route())->getName()])
             && self::isChange($request)
             && self::boardRequiresApproval($board);
+    }
+
+    /** O'qituvchi/xona birinchi marta biriktirilmoqda (bo'sh joyga) — tasdiq kerak emas. */
+    public static function isFirstAssignment(Request $request, ?TimetableBoard $board): bool
+    {
+        $route = (string) optional($request->route())->getName();
+        if (!$board || !isset(self::ASSIGN_FIELDS[$route])) {
+            return false;
+        }
+        try {
+            return app(TimetableController::class)->isFirstAssignment($board, $route, $request->all());
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /** Amal muvaffaqiyatli bajarildimi (xato yoki tasdiqqa yuborilgan javob emas). */
@@ -235,12 +259,7 @@ class TimetableChangeApproval
                 $card = TimetableCard::findOrFail($draft['params']['card']);
                 app(TimetableController::class)->validatePendingTimeProposal($card, $draft['payload'], $draft['route_name'], $replaced);
             }
-            TimetableChangeRequest::where('board_id', $draft['board_id'])
-                ->where('requester_type', $draft['requester_type'])
-                ->where('requester_id', $draft['requester_id'])
-                ->where('target_key', $draft['target_key'])
-                ->where('status', TimetableChangeRequest::PENDING)
-                ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => 'Yangi so\'rov bilan almashtirildi', 'reviewed_at' => now()]);
+            $this->replacePending($draft, 'Yangi so\'rov bilan almashtirildi');
 
             $req = TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::PENDING]);
 
@@ -258,6 +277,40 @@ class TimetableChangeApproval
     public function record(array $draft): TimetableChangeRequest
     {
         return TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::APPLIED]);
+    }
+
+    /** Shu foydalanuvchining shu joy bo'yicha kutilayotgan so'rovlari bekor qilinadi (yangisi almashtiradi). */
+    public function replacePending(array $draft, string $note): int
+    {
+        return $this->pendingOf($draft)->where('target_key', $draft['target_key'])
+            ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => $note, 'reviewed_at' => now()]);
+    }
+
+    /**
+     * Tasdiqsiz qo'llangan birinchi biriktirishdan keyin: shu foydalanuvchining shu darslardagi shu maydonni
+     * (o'qituvchi/xona) yozadigan kutilayotgan biriktirish so'rovlari eskiradi — qaysi oynadan yuborilgan
+     * bo'lmasin. Aks holda eski so'rov keyin tasdiqlanib, yangi biriktiruvni bosib ketardi.
+     */
+    public function supersedeAssignments(array $draft): int
+    {
+        $fields = self::ASSIGN_FIELDS[$draft['route_name']] ?? [];
+        $cardIds = array_map('intval', $draft['details']['card_ids'] ?? []);
+        $ids = $this->pendingOf($draft)->whereIn('route_name', array_keys(self::ASSIGN_FIELDS))->get()
+            ->filter(fn (TimetableChangeRequest $r) => $r->target_key === $draft['target_key']
+                || (array_intersect(self::ASSIGN_FIELDS[$r->route_name], $fields)
+                    && array_intersect(array_map('intval', $r->details['card_ids'] ?? []), $cardIds)))
+            ->pluck('id');
+
+        return $ids->isEmpty() ? 0 : TimetableChangeRequest::whereIn('id', $ids)->where('status', TimetableChangeRequest::PENDING)
+            ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => 'Yangi o\'zgarish bilan almashtirildi', 'reviewed_at' => now()]);
+    }
+
+    private function pendingOf(array $draft)
+    {
+        return TimetableChangeRequest::where('board_id', $draft['board_id'])
+            ->where('requester_type', $draft['requester_type'])
+            ->where('requester_id', $draft['requester_id'])
+            ->where('status', TimetableChangeRequest::PENDING);
     }
 
     public const ALREADY_REVIEWED = 'Bu so\'rov allaqachon ko\'rib chiqilgan.';

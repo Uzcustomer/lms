@@ -478,3 +478,149 @@ it('teacher page exposes proposal and approval status without enabling direct ed
     expect($html)->toContain('id="changeReqBtn"')->toContain('const TIMETABLE_READ_ONLY = true')
         ->toContain('Taklif yuborish')->toContain('/time-proposal/check')->toContain('Kafedra mudiri tasdig‘ida');
 });
+
+it('kafedra mudiri bo\'sh darsga birinchi marta o\'qituvchi/xona biriktirsa tasdiqsiz, mavjudini almashtirsa tasdiq bilan', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    $own = $teacher->replicate()->forceFill(['hemis_id' => 777001, 'employee_id_number' => '777001', 'login' => 'own777001',
+        'full_name' => 'YANGI O.', 'short_name' => 'YANGI O.', 'department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi']);
+    $own->save();
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '1-xona', 'active' => true, 'volume' => 30]);
+    \App\Models\Auditorium::create(['code' => 'R2', 'name' => '2-xona', 'active' => true, 'volume' => 30]);
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+
+    // Birinchi marta — darhol
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $teacher->id])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $card->board_id), $unit + ['auditorium_code' => 'R1'])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and(TimetableChangeRequest::where('status', 'pending')->count())->toBe(0);
+
+    // Mavjudini almashtirish yoki olib tashlash — tasdiqqa
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $own->id])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $card->board_id), $unit + ['auditorium_code' => 'R2'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $card->board_id), $unit + ['auditorium_code' => null])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and(TimetableChangeRequest::where('status', 'pending')->count())->toBe(2)   // xona: oxirgi so'rov oldingisini almashtiradi
+        ->and(TimetableChangeRequest::where('status', 'cancelled')->count())->toBe(1);
+});
+
+it('biriktirish Excel hisobotini registrator ofisi ham yuklaydi', function () {
+    ['head' => $head, 'reg' => $reg, 'board' => $board] = approvalSetup();
+    $res = asRole($reg, 'registrator_ofisi')->get(route('admin.timetable.assignment-report', $board))->assertOk();
+    expect(substr($res->baseResponse->getFile()->getContent(), 0, 2))->toBe('PK');
+    asRole($head, 'kafedra_mudiri')->get(route('admin.timetable.assignment-report', $board))->assertForbidden();
+});
+
+it('tasdiqsiz birinchi biriktirish mudirning shu dars bo\'yicha eski kutilayotgan so\'rovini bekor qiladi', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    $old = $teacher->replicate()->forceFill(['hemis_id' => 777002, 'employee_id_number' => '777002', 'login' => 'old777002',
+        'full_name' => 'ESKI O.', 'short_name' => 'ESKI O.']);
+    $old->save();
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+
+    // Darsda o'qituvchi bor — almashtirish tasdiqqa boradi.
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $old->id])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    $stale = TimetableChangeRequest::where('status', 'pending')->sole();
+
+    // Keyin o'qituvchi olib tashlandi (boshqa yo'l bilan) va mudir bo'sh darsga boshqasini darhol biriktirdi.
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $teacher->id])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect($card->fresh()->teacher_id)->toBe($teacher->id)
+        ->and($stale->fresh()->status)->toBe('cancelled');
+
+    // Eski so'rov endi tasdiqlanmaydi va yangi biriktiruvni bosib ketmaydi.
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $stale));
+    expect($card->fresh()->teacher_id)->toBe($teacher->id)
+        ->and($stale->fresh()->status)->toBe('cancelled');
+});
+
+it('sikl blokida ham bo\'sh darsga birinchi biriktirish tasdiqsiz, vaqt yoki mavjud o\'qituvchini o\'zgartirish tasdiq bilan', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card, 'board' => $board] = approvalSetup();
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '1-xona', 'active' => true, 'volume' => 30]);
+    $placement = \App\Models\TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'davolash ishi', 'course' => 2,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'start_index' => 0, 'training_type' => 'practice', 'lesson_time' => '08:30']);
+    $flow = ['specialty_name' => 'davolash ishi', 'course' => 2, 'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'training_type' => 'practice'];
+
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-assign', $board), $flow + ['teacher_id' => $teacher->id, 'auditorium_code' => 'R1', 'lesson_time' => '08:30'])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and(TimetableChangeRequest::where('status', 'applied')->count())->toBe(1);
+
+    // Vaqtni o'zgartirish yoki xonani olib tashlash — tasdiqqa.
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-assign', $board), $flow + ['teacher_id' => $teacher->id, 'auditorium_code' => 'R1', 'lesson_time' => '10:00'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-assign', $board), $flow + ['teacher_id' => $teacher->id, 'lesson_time' => '08:30'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
+        ->and($placement->fresh()->lesson_time)->toBe('08:30');
+});
+
+it('birinchi biriktirish doska qulfi ostida qayta tekshiriladi: qulfni kutayotganda dars band bo\'lsa — tasdiqqa', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    $other = $teacher->replicate()->forceFill(['hemis_id' => 777003, 'employee_id_number' => '777003', 'login' => 'oth777003',
+        'full_name' => 'BOSHQA O.', 'short_name' => 'BOSHQA O.']);
+    $other->save();
+    // Parallel so'rov: biz doska qulfini kutayotganimizda boshqasi shu darsga o'qituvchi yozib bo'ldi.
+    $raced = false;
+    DB::listen(function ($q) use (&$raced, $card, $other) {
+        if (!$raced && str_contains($q->sql, 'timetable_boards') && str_contains(strtolower($q->sql), 'for update')) {
+            $raced = true;
+            DB::table('timetable_cards')->where('id', $card->id)->update(['teacher_id' => $other->id, 'teacher_name' => 'BOSHQA O.']);
+        }
+    });
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $teacher->id])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    expect($raced)->toBeTrue()
+        ->and($card->fresh()->teacher_id)->toBe($other->id);
+});
+
+it('birinchi biriktirish boshqa yo\'ldan yuborilgan, shu darsning shu maydonini o\'zgartiradigan eski so\'rovni ham bekor qiladi', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card, 'board' => $board] = approvalSetup();
+    $card->update(['teacher_id' => null, 'teacher_name' => null, 'auditorium_code' => 'R1', 'auditorium_name' => '1-xona']);
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    $old = $teacher->replicate()->forceFill(['hemis_id' => 777004, 'employee_id_number' => '777004', 'login' => 'old777004',
+        'full_name' => 'ESKI O.', 'short_name' => 'ESKI O.']);
+    $old->save();
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '1-xona', 'active' => true, 'volume' => 30]);
+    \App\Models\Auditorium::create(['code' => 'R2', 'name' => '2-xona', 'active' => true, 'volume' => 30]);
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'davolash ishi', 'course' => 2,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'start_index' => 0, 'training_type' => 'practice', 'lesson_time' => '08:30']);
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+
+    // Sikl oynasidan: o'qituvchi + yangi vaqt — tasdiqqa. Biriktirish oynasidan: xonani almashtirish — tasdiqqa.
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-assign', $board), ['specialty_name' => 'davolash ishi', 'course' => 2,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'training_type' => 'practice', 'teacher_id' => $old->id, 'auditorium_code' => 'R1', 'lesson_time' => '10:00'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $board), $unit + ['auditorium_code' => 'R2'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    $cycle = TimetableChangeRequest::where('route_name', 'admin.timetable.cycle-assign')->sole();
+    $room = TimetableChangeRequest::where('route_name', 'admin.timetable.assign-room')->sole();
+
+    // Bo'sh darsga o'qituvchi darhol: sikl so'rovi ham o'qituvchini yozadi — eskiradi; xona so'rovi o'qituvchiga tegmaydi — qoladi.
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $board), $unit + ['teacher_id' => $teacher->id])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect($cycle->fresh()->status)->toBe('cancelled')
+        ->and($room->fresh()->status)->toBe('pending');
+
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $cycle));
+    expect($card->fresh()->teacher_id)->toBe($teacher->id);
+});

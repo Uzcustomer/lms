@@ -467,7 +467,10 @@ it('Excel: keyingi haftalardagi farqli fan "mos" deb yashirilmaydi; amal turlari
     $req['until_week'] = 0;
     expect($sheets(['ops_filter' => 1])[1])->toBe(1)
         ->and($sheets(['ops_filter' => 1, 'ops' => ['update']])[1])->toBe(2)
-        ->and($sheets([])[1])->toBe(2);
+        ->and($sheets([])[1])->toBe(2)
+        // Tanlangan turdagi amali yo'q fan Balans'ga ham chiqmaydi
+        ->and($sheets(['ops_filter' => 1, 'ops' => ['blocked']])[0])->toBe(1)
+        ->and($sheets(['ops_filter' => 1, 'ops' => ['update']])[0])->toBeGreaterThan(1);
 });
 
 it('kalendari boshqacha guruhlar: sukut hisob davri har guruhning o\'z joriy haftasi, Excel ham shunday', function () {

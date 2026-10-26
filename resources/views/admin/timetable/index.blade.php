@@ -883,8 +883,8 @@
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgCount" class="text-xs text-slate-400"></span>
-                                    @if(in_array($timetableActiveRole, ['admin', 'superadmin'], true))
-                                        {{-- Kafedralar kesimida o'qituvchi va xona biriktirish hisoboti (faqat admin) --}}
+                                    @if(in_array($timetableActiveRole, ['admin', 'superadmin', 'registrator_ofisi'], true))
+                                        {{-- Kafedralar kesimida o'qituvchi va xona biriktirish hisoboti (admin, registrator ofisi) --}}
                                         <button type="button" id="asgReportBtn" class="asc-btn text-xs" style="background:#059669;color:#fff;border-color:#059669"
                                                 title="Har bir kafedra bo'yicha o'qituvchi va xona biriktirilgan / biriktirilmagan darslar">
                                             <i class="bi bi-file-earmark-excel" aria-hidden="true"></i> Excel hisobot
@@ -3045,10 +3045,10 @@
                         ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi tasdiqlagach jadvalga tushadi.'
                         : TIMETABLE_DEPARTMENT_HEAD
                         ? (changeReqs.approval_required
-                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi.'
+                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi. Bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish — darhol.'
                             : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')
                         : (changeReqs.approval_required
-                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi.'
+                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi (bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish bundan mustasno).'
                             : 'Bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')) + '</div>';
                 const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
@@ -3676,14 +3676,19 @@
                 : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
-                let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0 };
+                let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0, opHidden: 0 };
+                // Amal turi yoki to'siq turi bo'yicha filtr tanlangan bo'lsa — shu filtrga tushadigan amali yo'q fanlar ko'rsatilmaydi.
+                const opsNarrowed = !(F.ops.create && F.ops.update && F.ops.delete && F.ops.blocked && F.blk.room && F.blk.teacher && F.blk.other);
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;
                 for (const g of rep.groups) {
                     // Fan filtrida tanlanmaganlar "mos" emas — yashirilgan mos fanlar soniga qo'shilmaydi.
                     const picked = g.units.filter(hsSubjOk);
-                    const units = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
-                    tot.hidden += picked.length - units.length;
+                    const shown = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
+                    tot.hidden += picked.length - shown.length;
+                    const units = opsNarrowed ? shown.filter(u => u.actions.some(hsOpOk)) : shown;
+                    tot.opHidden += shown.length - units.length;
+                    shown.filter(u => !units.includes(u)).forEach(u => { tot.later += u.actions_later || 0; });
                     // Mos fanlar yashirilsa ham guruhning ogohlantirishlari (o'tkazilgan fanlar, HEMIS rejasida topilmagan kartochkalar) qoladi.
                     if (!units.length && !g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name)).length && !(g.cards_without_subject || []).length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
@@ -3792,7 +3797,8 @@
                     '<div class="text-gray-600 mb-1">Ko\'rsatilgan amallar: <b class="text-emerald-700">+' + tot.create + '</b> qo\'shish, <b class="text-amber-700">~' + tot.update + '</b> o\'zgartirish, ' +
                     '<b class="text-red-700">−' + tot.delete + '</b> o\'chirish' + (tot.blocked ? ', <b class="text-red-600">' + tot.blocked + ' ta to\'siqli</b>' : '') +
                     (tot.later ? ' · tanlangan haftadan keyin yana ' + tot.later + ' ta amal (hozir yozilmaydi)' : '') +
-                    (tot.hidden ? ' · ' + tot.hidden + ' ta mos fan yashirildi' : '') + '.' +
+                    (tot.hidden ? ' · ' + tot.hidden + ' ta mos fan yashirildi' : '') +
+                    (tot.opHidden ? ' · ' + tot.opHidden + ' ta fanda tanlangan turdagi amal yo\'q (yashirildi)' : '') + '.' +
                     (rep.fallback_room ? '' : ' <b class="text-red-600">"Kafedra mudiri xonasi" auditoriyasi topilmadi — HEMIS\'da ochib, auditoriyalarni import qiling.</b>') +
                     (rep.groups_not_in_hemis.length ? '<div class="text-red-600">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.groups_not_in_hemis.join(', ')) + '</div>' : '') + '</div>';
                 hemisSyncModal(head + body);

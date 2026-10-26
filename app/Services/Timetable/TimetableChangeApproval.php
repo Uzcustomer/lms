@@ -66,6 +66,13 @@ class TimetableChangeApproval
     /** Tasdiqdan o'tishi kerak bo'lgan rollar. */
     public const GATED_ROLES = ['kafedra_mudiri'];
 
+    /** Biriktirish amallari va ular o'zgartiradigan maydonlar (sikl biriktiruvi ikkalasini ham yozadi). */
+    public const ASSIGN_FIELDS = [
+        'admin.timetable.assign-teacher' => ['teacher'],
+        'admin.timetable.assign-room'    => ['room'],
+        'admin.timetable.cycle-assign'   => ['teacher', 'room'],
+    ];
+
     public function canReviewTeacherProposal(TimetableChangeRequest $req, $actor, string $role): bool
     {
         if ($req->status !== TimetableChangeRequest::PENDING || $req->isBy($actor)) {
@@ -154,21 +161,23 @@ class TimetableChangeApproval
         return true;
     }
 
-    /** Shu so'rov tasdiqqa yuborilishi kerakmi (o'zgartiradigan amal + gated rol + doska rejimi). */
+    /**
+     * Shu so'rov tasdiqqa yuborilishi kerakmi (o'zgartiradigan amal + gated rol + doska rejimi).
+     * Istisno — bo'sh darsga birinchi biriktirish (isFirstAssignment): uni middleware doska qulfi ostida tekshiradi.
+     */
     public static function shouldIntercept(Request $request, string $activeRole, ?TimetableBoard $board): bool
     {
         return in_array($activeRole, self::GATED_ROLES, true)
             && isset(self::GATED[(string) optional($request->route())->getName()])
             && self::isChange($request)
-            && self::boardRequiresApproval($board)
-            && !self::isFirstAssignment($request, $board);
+            && self::boardRequiresApproval($board);
     }
 
     /** O'qituvchi/xona birinchi marta biriktirilmoqda (bo'sh joyga) — tasdiq kerak emas. */
     public static function isFirstAssignment(Request $request, ?TimetableBoard $board): bool
     {
         $route = (string) optional($request->route())->getName();
-        if (!$board || !in_array($route, ['admin.timetable.assign-teacher', 'admin.timetable.assign-room', 'admin.timetable.cycle-assign'], true)) {
+        if (!$board || !isset(self::ASSIGN_FIELDS[$route])) {
             return false;
         }
         try {

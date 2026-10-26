@@ -137,6 +137,21 @@ class TimetableAssignmentAccess
         $approval = app(TimetableChangeApproval::class);
 
         if (TimetableChangeApproval::shouldIntercept($request, $activeRole, $board)) {
+            // Bo'sh darsga birinchi biriktirish — tasdiqsiz. Tekshiruv va yozish bitta doska qulfi ostida:
+            // parallel so'rov darsni endi bo'sh ko'rmaydi va tasdiqqa boradi.
+            $direct = isset(TimetableChangeApproval::ASSIGN_FIELDS[(string) $request->route()->getName()])
+                ? DB::transaction(function () use ($request, $next, $user, $activeRole, $board, $approval) {
+                    \App\Models\TimetableBoard::whereKey($board->id)->lockForUpdate()->first();
+
+                    return TimetableChangeApproval::isFirstAssignment($request, $board)
+                        ? $this->runRecorded($request, $next, $user, $activeRole, $board, $approval, true)
+                        : null;
+                })
+                : null;
+            if ($direct) {
+                return $direct;
+            }
+
             $draft = $approval->draft($request, $user, $board, $activeRole);
             // Sinov bajarish: amal hozir o'tadimi (kafedra, to'qnashuv va h.k. tekshiruvlari)?
             // Natija bekor qilinadi (rollback) — xato bo'lsa, so'rov yaratilmaydi, xato darhol ko'rinadi.
@@ -161,6 +176,13 @@ class TimetableAssignmentAccess
             ]);
         }
 
+        return $this->runRecorded($request, $next, $user, $activeRole, $board, $approval, false);
+    }
+
+    /** Amalni bajaradi va tarixga "qo'llangan" deb yozadi; birinchi biriktirishda mudirning eskirgan so'rovlari bekor qilinadi. */
+    private function runRecorded(Request $request, Closure $next, $user, string $activeRole, ?\App\Models\TimetableBoard $board,
+        TimetableChangeApproval $approval, bool $firstAssignment)
+    {
         // Tarix yordamchi: yozib bo'lmasa ham amalning o'zi to'xtamaydi.
         $draft = null;
         if ($board) {
@@ -170,10 +192,6 @@ class TimetableAssignmentAccess
                 Log::warning('[TimetableChange] history draft: ' . $e->getMessage());
             }
         }
-        // Doska tasdiq talab qilsa-yu, amal tasdiqsiz o'tsa — bu birinchi biriktirish (shouldIntercept).
-        $firstAssignment = in_array($activeRole, TimetableChangeApproval::GATED_ROLES, true)
-            && isset(TimetableChangeApproval::GATED[(string) optional($request->route())->getName()])
-            && TimetableChangeApproval::boardRequiresApproval($board);
         $response = $next($request);
         if ($draft && TimetableChangeApproval::succeeded($response)) {
             try {

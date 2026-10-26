@@ -567,3 +567,27 @@ it('sikl blokida ham bo\'sh darsga birinchi biriktirish tasdiqsiz, vaqt yoki mav
     expect($card->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $teacher->id, 'auditorium_code' => 'R1'])
         ->and($placement->fresh()->lesson_time)->toBe('08:30');
 });
+
+it('birinchi biriktirish doska qulfi ostida qayta tekshiriladi: qulfni kutayotganda dars band bo\'lsa — tasdiqqa', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $card->update(['teacher_id' => null, 'teacher_name' => null]);
+    $teacher->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    $other = $teacher->replicate()->forceFill(['hemis_id' => 777003, 'employee_id_number' => '777003', 'login' => 'oth777003',
+        'full_name' => 'BOSHQA O.', 'short_name' => 'BOSHQA O.']);
+    $other->save();
+    // Parallel so'rov: biz doska qulfini kutayotganimizda boshqasi shu darsga o'qituvchi yozib bo'ldi.
+    $raced = false;
+    DB::listen(function ($q) use (&$raced, $card, $other) {
+        if (!$raced && str_contains($q->sql, 'timetable_boards') && str_contains(strtolower($q->sql), 'for update')) {
+            $raced = true;
+            DB::table('timetable_cards')->where('id', $card->id)->update(['teacher_id' => $other->id, 'teacher_name' => 'BOSHQA O.']);
+        }
+    });
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-teacher', $card->board_id), $unit + ['teacher_id' => $teacher->id])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    expect($raced)->toBeTrue()
+        ->and($card->fresh()->teacher_id)->toBe($other->id);
+});

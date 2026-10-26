@@ -2381,11 +2381,22 @@ class TimetableController extends Controller
         $ovCols = $hasOv ? array_values(array_intersect(['week', 'day', 'pair', 'start_half', 'cancelled', 'auditorium_code', 'auditorium_name'],
             Schema::getColumnListing('timetable_card_overrides'))) : [];
         $created = 0;
+        $hemisBoard = $this->isHemisBoard($board);
+        $year = (int) substr((string) $board->academic_year, 0, 4);
         if (!$dry) {
-            DB::transaction(function () use ($cards, $hasOv, $ovCols, &$created) {
+            DB::transaction(function () use ($cards, $hasOv, $ovCols, $hemisBoard, $year, &$created) {
                 foreach ($cards as $card) {
                     $names = array_values($card->occupiedGroups());
-                    $counts = array_map(fn ($n) => $this->activeStudentCountFor((string) $n, $card->faculty_name), $names);
+                    // Bo'lakli fan (HEMIS biriktiruvi): har guruhdan shu bo'lakka biriktirilgan talabalar — assembleRows va
+                    // splitVariantMixed dagidek; biriktiruvi yo'q bo'lsa — guruhning faol talabalari.
+                    $counts = [];
+                    if ($hemisBoard && $this->variantLetter((string) $card->subject_name) !== null) {
+                        $vCounts = $this->variantStudentCounts((string) $card->subject_name, $year);
+                        $counts = array_map(fn ($n) => $this->groupAssignedCount($vCounts, (string) $n, $card->faculty_name), $names);
+                    }
+                    if (array_sum($counts) < 1) {
+                        $counts = array_map(fn ($n) => $this->activeStudentCountFor((string) $n, $card->faculty_name), $names);
+                    }
                     $fallback = (int) max(1, round($card->students / max(1, count($names))));
                     $ovs = $hasOv ? DB::table('timetable_card_overrides')->where('card_id', $card->id)->get() : collect();
                     foreach ($names as $i => $name) {

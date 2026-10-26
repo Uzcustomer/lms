@@ -1054,3 +1054,25 @@ it('alohida amaliy istisnosi bo\'lakli fanning aralash (kichik qism) guruhlarini
     expect($names($m->invoke($ctl, $plain, false, true, false)))->toBe(['g-01a + g-01b', 'g-01c'])
         ->and($names($m->invoke($ctl, $plain, false, false, true)))->toBe(['g-01a', 'g-01b', 'g-01c']);
 });
+
+it('alohida amaliy istisnosi bo\'lakli fan kartasini bo\'lganda biriktirilgan talabalar sonini saqlaydi', function () {
+    $s = layersSetup();
+    $s['board']->forceFill(['subject_source' => 'hemis', 'kind' => 'real'])->save();
+    // 02a dan 3, 02b dan 2 talaba shu bo'lakka biriktirilgan; har guruhda yana 17/18 faol talaba bor (biriktirilmagan).
+    assignVariantStudents('IKP (c)', ['g-02a' => 3, 'g-02b' => 2]);
+    foreach (['g-02a' => 17, 'g-02b' => 18] as $g => $n) {
+        for ($i = 0; $i < $n; $i++) {
+            $hid = 800000 + random_int(1, 99999) * 10 + $i;
+            DB::table('students')->insert(['hemis_id' => $hid, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S', 'second_name' => 'S',
+                'student_id_number' => (string) $hid, 'group_name' => $g . " (o'z)", 'student_status_code' => 11]);
+        }
+    }
+    \App\Models\TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half', 'weeks'])
+        + ['subject_name' => 'IKP (c)', 'kafedra_name' => 'X', 'students' => 5, 'group_name' => 'g-02a + g-02b', 'group_names' => ['g-02a', 'g-02b']]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']),
+        ['specialty_name' => $s['own']->specialty_name, 'course' => (int) $s['own']->course, 'subject_name' => 'IKP (c)'])->assertOk()->assertJson(['created' => 1]);
+    $cards = \App\Models\TimetableCard::where('subject_name', 'IKP (c)')->orderBy('id')->get();
+    expect($cards->pluck('group_name')->all())->toBe(['g-02a', 'g-02b'])
+        ->and($cards->pluck('students')->all())->toBe([3, 2]);
+});

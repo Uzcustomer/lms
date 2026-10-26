@@ -168,3 +168,48 @@ it('ro\'yxat: mudir o\'z kafedrasini, o\'qituvchi o\'ziga yuborilganni ko\'radi'
         ->and($count($s['teacher'], 'oqituvchi'))->toBe(1)
         ->and($count($s['other'], 'kafedra_mudiri'))->toBe(0);
 });
+
+/** NOT NULL ustunlarni sukut qiymatlari bilan to'ldirib yozadi (HEMIS jadvali qatori uchun). */
+function tkInsert(string $table, array $data): void
+{
+    foreach (DB::select('SHOW COLUMNS FROM `' . $table . '`') as $col) {
+        if ($col->Field === 'id' || array_key_exists($col->Field, $data) || $col->Null === 'YES' || $col->Default !== null) {
+            continue;
+        }
+        $t = strtolower($col->Type);
+        $data[$col->Field] = match (true) {
+            str_contains($t, 'int') || str_contains($t, 'decimal') || str_contains($t, 'double') => 0,
+            str_contains($t, 'datetime') || str_contains($t, 'timestamp') => now(),
+            str_contains($t, 'date') => '2026-01-01',
+            str_contains($t, 'json') => '[]',
+            default => 'x',
+        };
+    }
+    DB::table($table)->insert($data);
+}
+
+it('vaqtni o\'zgartirishda HEMIS bandligi va kutilayotgan bronlar ham tekshiriladi', function () {
+    $s = ticketSetup();
+    $t = makeTicket($s, ['type' => 'teacher']);
+    $free = fn () => collect(ticketAs($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.block-tickets.show', $t))->assertOk()
+        ->json('ticket.free_pairs'))->keyBy('pair');
+    expect($free()->has(7))->toBeTrue()->and($free()->has(9))->toBeTrue();
+    [$s7, $e7] = explode('–', $free()[7]['time']);
+
+    // HEMIS: shu o'qituvchi shu sanada 7-katak vaqtida boshqa guruhda dars o'tadi.
+    tkInsert('schedules', ['schedule_hemis_id' => 91, 'group_name' => 'boshqa-01', 'subject_name' => 'Boshqa fan', 'lesson_date' => $t->lesson_date->toDateString() . ' 00:00:00',
+        'lesson_pair_start_time' => $s7 . ':00', 'lesson_pair_end_time' => $e7 . ':00', 'employee_id' => $s['teacher']->hemis_id, 'employee_name' => 'OQITUVCHI A.',
+        'auditorium_code' => 'Z9', 'auditorium_name' => 'Z9']);
+    expect($free()->has(7))->toBeFalse();
+    ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'time', 'pair' => 7])
+        ->assertStatus(422)->assertJsonFragment(['error' => "HEMIS: o'qituvchi band — boshqa-01 · Boshqa fan {$s7}-{$e7}"]);
+
+    // Kutilayotgan bron: shu guruhning boshqa darsi 5-hafta 9-katakka ko'chirishni so'ragan (tasdiq kutilmoqda).
+    TimetableChangeRequest::create(['board_id' => $s['board']->id, 'requester_name' => 'X', 'requester_role' => 'kafedra_mudiri',
+        'route_name' => 'admin.timetable.cards.week-override', 'target_key' => 'k', 'params' => ['board' => $s['board']->id, 'card' => $s['busy']->id],
+        'payload' => ['week' => 5, 'action' => 'move', 'day' => 2, 'pair' => 9, 'layer' => 'internal'], 'kind' => 'move', 'summary' => 's', 'details' => [],
+        'status' => TimetableChangeRequest::PENDING]);
+    expect($free()->has(9))->toBeFalse();
+    ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'time', 'pair' => 9])->assertStatus(422);
+    expect(TimetableCardOverride::count())->toBe(0)->and($t->fresh()->status)->toBe('open');
+});

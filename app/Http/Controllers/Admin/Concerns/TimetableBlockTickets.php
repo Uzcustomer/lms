@@ -74,6 +74,64 @@ trait TimetableBlockTickets
         return $card->day && $card->pair ? [(int) $card->day, (int) $card->pair, (int) ($card->start_half ?? 0)] : null;
     }
 
+    /**
+     * HEMIS'dagi boshqa darslar shu sana va vaqtda dars o'qituvchisini yoki xonasini band qiladimi — hemisCrossCheck
+     * dagi kabi: kartaning o'z guruhlari darslari (sinxronda qayta yoziladi), umumiy / "Kafedra mudiri xonasi" va
+     * kafedra mudiriga majburan qo'yilgan darslar bandlik emas.
+     */
+    private function ticketHemisBusy(TimetableCard $card, string $date, string $start, string $end, ?string $roomCode, ?string $roomName): array
+    {
+        $empId = $card->teacher_id ? Teacher::whereKey($card->teacher_id)->value('hemis_id') : null;
+        $room = $roomCode && !$this->isSharedRoom($roomName) && !preg_match('/kafedra\s+mudiri/iu', (string) $roomName) ? (string) $roomCode : null;
+        if (!$empId && !$room) {
+            return [];
+        }
+        $own = array_map(fn ($g) => $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g)), $card->occupiedGroups());
+        $rows = DB::table('schedules')->whereNull('deleted_at')->whereDate('lesson_date', $date)
+            ->where('lesson_pair_start_time', '<', $end . ':00')->where('lesson_pair_end_time', '>', $start . ':00')
+            ->where(fn ($q) => $q->when($empId, fn ($w) => $w->orWhere('employee_id', $empId))->when($room, fn ($w) => $w->orWhere('auditorium_code', $room)))
+            ->get(['group_name', 'subject_name', 'employee_id', 'auditorium_code', 'department_id', 'lesson_pair_start_time', 'lesson_pair_end_time']);
+        $headOf = [];
+        $out = [];
+        foreach ($rows as $r) {
+            if (in_array($this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name)), $own, true)) {
+                continue;
+            }
+            $teacherBusy = $empId && (string) $r->employee_id === (string) $empId;
+            if ($teacherBusy && $r->department_id) {
+                $headOf[$r->department_id] ??= Teacher::headsOfDepartment($r->department_id)->whereKey($card->teacher_id)->exists();
+                $teacherBusy = !$headOf[$r->department_id];
+            }
+            $roomBusy = $room && (string) $r->auditorium_code === $room;
+            if ($teacherBusy || $roomBusy) {
+                $out[] = 'HEMIS: ' . ($teacherBusy ? 'o\'qituvchi band' : 'xona band') . ' — ' . $r->group_name . ' · ' . $r->subject_name . ' '
+                    . substr((string) $r->lesson_pair_start_time, 0, 5) . '-' . substr((string) $r->lesson_pair_end_time, 0, 5);
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Shu haftada kun/katakka qo'yish uchun to'siqlar: doskadagi kartalar (findWeekConflicts), kutilayotgan
+     * o'zgarish bronlari (pendingTimeConflicts) va HEMIS'dagi bandlik. Xona — shu haftadagi samarali xona.
+     */
+    private function ticketSlotConflicts(TimetableBlockTicket $t, TimetableCard $card, int $day, int $pair, int $startHalf, int $placeDay): array
+    {
+        $slots = $this->hemisSlotTimes($card->board);
+        $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $t->week)->first();
+        $date = $t->lesson_date->copy()->addDays($day - $placeDay)->toDateString();
+        $start = $slots[$pair][0] ?? null;
+        $end = $slots[$pair + $card->lenHalf() - 1][1] ?? null;
+
+        return array_merge(
+            $this->findWeekConflicts($card, $t->week, $day, $pair, $startHalf),
+            $this->pendingTimeConflicts($card, ['week' => $t->week, 'day' => $day, 'pair' => $pair], []),
+            $start && $end ? $this->ticketHemisBusy($card, $date, $start, $end, $ov?->auditorium_code ?: $card->auditorium_code,
+                $ov?->auditorium_code ? $ov->auditorium_name : $card->auditorium_name) : []
+        );
+    }
+
     /** Registrator: to'siqli darslar bo'yicha so'rov yaratish va Telegram'ga yuborish. */
     public function blockTicketsSend(Request $request, TimetableBoard $board)
     {
@@ -243,7 +301,7 @@ trait TimetableBlockTickets
                 if ($day === $place[0] && $p === $place[1]) {
                     continue;
                 }
-                if (!$this->findWeekConflicts($card, $ticket->week, $day, $p)) {
+                if (!$this->ticketSlotConflicts($ticket, $card, $day, $p, 0, $place[0])) {
                     $pairs[] = ['pair' => $p, 'time' => $st . '–' . ($slots[$p + $card->lenHalf() - 1][1] ?? $en)];
                 }
             }
@@ -350,6 +408,8 @@ trait TimetableBlockTickets
         try {
             // O'zgarish yoziladi va shu haftadagi to'qnashuv tekshiriladi; to'qnashuv bo'lsa — hammasi bekor (rollback).
             DB::transaction(function () use ($data, $card, $ticket, $day, $pair, $startHalf, &$roomName) {
+                // Bronlar bilan bir vaqtda o'zgarmasin (tasdiqlash oqimidagi kabi doska qulflanadi).
+                TimetableBoard::whereKey($card->board_id)->lockForUpdate()->first();
                 $ov = TimetableCardOverride::firstOrNew(['card_id' => $card->id, 'week' => $ticket->week]);
                 $ov->cancelled = false;
                 $ov->day = $day;
@@ -368,7 +428,8 @@ trait TimetableBlockTickets
                     $roomName = $a->name;
                 }
                 $ov->save();
-                $conf = $this->findWeekConflicts($card, $ticket->week, (int) $ov->day, (int) $ov->pair, (int) $ov->start_half);
+                // Doska kartalari, kutilayotgan bronlar va HEMIS bandligi (yangi xona / vaqt bilan).
+                $conf = $this->ticketSlotConflicts($ticket, $card, (int) $ov->day, (int) $ov->pair, (int) $ov->start_half, $day);
                 if ($conf) {
                     throw new \RuntimeException(implode(' · ', $conf));
                 }

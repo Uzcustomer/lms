@@ -98,7 +98,13 @@ class FanTestiJournalSync
             || ($c->grade !== null && round((float) $c->grade) < self::PASS));
 
         if ($cells->isEmpty()) {
-            return "Yozilmadi: {$topic}-mavzu ({$dateLabel}) kunida talabada NB yoki 60 dan past baho yo'q";
+            // Jurnalda shu kuni 60+ baho bor — qaysi baho ekani test jurnalida ko'rinsin
+            $passing = $dayCells->pluck('grade')->filter(fn ($g) => $g !== null)
+                ->map(fn ($g) => rtrim(rtrim(number_format((float) $g, 2, '.', ''), '0'), '.'))->unique()->implode(', ');
+
+            return $passing !== ''
+                ? "Yozilmadi: {$topic}-mavzu ({$dateLabel}) kuni jurnalda {$passing} baho bor (60 va undan yuqori)"
+                : "Yozilmadi: {$topic}-mavzu ({$dateLabel}) kunida talabada NB yoki baho yo'q";
         }
 
         $percent = (float) $attempt->percent;

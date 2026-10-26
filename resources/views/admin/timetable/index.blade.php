@@ -3625,11 +3625,46 @@
             // Fan filtri ro'yxati: solishtirilgan va o'tkazilgan (skipped) fanlar — o'tkazilganning sababini ham tanlab ko'rish mumkin.
             const hsSubjectNames = rep => [...new Set(rep.groups.flatMap(g => [...g.units, ...(g.skipped || [])].map(x => x.subject_name)))]
                 .sort((a, b) => a.localeCompare(b));
+            // Amal qatori: qisqa xulosa (HEMIS → LMS), to'siq belgilari (xona / o'qituvchi band — alohida rangda),
+            // pastda batafsil: kim, qachon, qaysi guruh va fan band qilgan; so'ng sabab.
+            const HS_BLOCK = {
+                room: { label: 'Xona band', cls: 'bg-orange-100 text-orange-800 border-orange-300' },
+                teacher: { label: 'O\'qituvchi band', cls: 'bg-purple-100 text-purple-800 border-purple-300' },
+            };
+            const hsChangeShort = c => {
+                const m = /^([^:]+):\s*(.*?)\s*→\s*(.*)$/.exec(String(c));
+                if (!m) return hsEsc(c);
+                const what = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                return '<b>' + hsEsc(what) + ':</b> HEMIS\'da <span class="line-through">' + hsEsc(m[2] || '—') + '</span> → LMS\'da <b>' + hsEsc(m[3]) + '</b>';
+            };
+            function hsActionHtml(a, u) {
+                const opName = { create: 'Qo\'shish', update: 'O\'zgartirish', delete: 'O\'chirish' };
+                const opCls = { create: 'text-emerald-700', update: 'text-amber-700', delete: 'text-red-700' };
+                const blocks = a.blocks || [];
+                // Tuzilgan tafsiloti yo'q to'siqlar (para vaqti yo'q, o'qituvchi/xona topilmadi) — alohida, matni bilan.
+                const covered = new Set(blocks.map(b => b.text));
+                const other = (a.blocked || []).filter(m => !covered.has(m));
+                const types = [...new Set(blocks.map(b => b.type))];
+                const chips = types.map(t => '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold ' + HS_BLOCK[t].cls + '">⛔ ' + HS_BLOCK[t].label + '</span>').join('')
+                    + (other.length ? '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold bg-red-100 text-red-700 border-red-300">⛔ To\'siq</span>' : '');
+                const head = '<div><span class="' + opCls[a.op] + ' font-semibold">' + opName[a.op] + '</span> · ' + hsEsc(a.date) + ' ' + hsEsc(a.start) + '–' + hsEsc(a.end)
+                    + ' · ' + hsEsc((u && u.code_names[a.code]) || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') + chips + '</div>';
+                const summary = (a.changes && a.changes.length) ? '<div class="ml-3 text-gray-700">' + a.changes.map(hsChangeShort).join(' · ') + '</div>' : '';
+                const details = blocks.map(b => '<div class="ml-3 mt-0.5 px-1.5 py-0.5 rounded border ' + HS_BLOCK[b.type].cls + '">' +
+                    (b.type === 'room'
+                        ? '<b>' + hsEsc(b.room || '') + '</b>-xona ' + hsEsc(b.time) + ' da band'
+                        : '<b>' + hsEsc(b.teacher || 'O\'qituvchi') + '</b> ' + hsEsc(b.time) + ' da boshqa darsda')
+                    + ': ' + hsEsc(b.source || '') + ' · ' + hsEsc(b.group || '') + ' · «' + hsEsc(b.subject || '') + '»'
+                    + (b.type === 'room' && b.teacher ? ' · o\'qituvchi: ' + hsEsc(b.teacher) : '')
+                    + (b.type === 'teacher' && b.room ? ' · xona: ' + hsEsc(b.room) : '') + '</div>').join('')
+                    + (other.length ? '<div class="ml-3 mt-0.5 text-red-700">' + hsEsc(other.join('; ')) + '</div>' : '');
+                const flags = (a.flags && a.flags.length) ? ' <span class="text-indigo-600 text-[10px]">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '';
+                const reason = a.reason ? '<div class="ml-3 text-gray-500 italic text-[10px]">Sabab: ' + hsEsc(a.reason) + flags + '</div>' : (flags ? '<div class="ml-3">' + flags + '</div>' : '');
+                return '<div class="mb-1.5 pb-1 border-b border-dashed border-gray-200">' + head + summary + details + reason + '</div>';
+            }
             const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
-                const opName = { create: 'Qo\'shish', update: 'O\'zgartirish', delete: 'O\'chirish' };
-                const opCls = { create: 'text-emerald-700', update: 'text-amber-700', delete: 'text-red-700' };
                 let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0 };
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;
@@ -3680,12 +3715,7 @@
                         const cnt = { create: 0, update: 0, delete: 0 };
                         tot.later += u.actions_later || 0;
                         acts.forEach(a => { if (a.blocked && a.blocked.length) tot.blocked++; else { cnt[a.op]++; tot[a.op]++; } });
-                        const list = acts.map(a => '<div class="' + opCls[a.op] + '">' + opName[a.op] + ' · ' + hsEsc(a.date) + ' ' + hsEsc(a.start) + '–' + hsEsc(a.end) +
-                            ' · ' + hsEsc(u.code_names[a.code] || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') +
-                            (a.changes && a.changes.length ? ' <span class="text-gray-500">(' + hsEsc(a.changes.join('; ')) + ')</span>' : '') +
-                            (a.flags && a.flags.length ? ' <span class="text-indigo-600">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '') +
-                            (a.blocked && a.blocked.length ? ' <b class="text-red-600">⛔ ' + hsEsc(a.blocked.join('; ')) + '</b>' : '') +
-                            (a.reason ? '<div class="ml-3 mb-1 text-gray-600 italic">Sabab: ' + hsEsc(a.reason) + '</div>' : '') + '</div>').join('');
+                        const list = acts.map(a => hsActionHtml(a, u)).join('');
                         const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
                         body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name) + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
                             '<td class="border px-1 whitespace-nowrap">' + per + '</td>' +

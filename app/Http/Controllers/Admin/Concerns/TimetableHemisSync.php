@@ -619,11 +619,28 @@ trait TimetableHemisSync
         $groupRows = DB::table('groups')
             ->whereIn('name', array_values(array_unique(array_merge(array_column($groupNames, 'raw'), array_column($groupNames, 'name')))))
             ->get()->groupBy(fn ($g) => $this->groupNameKey($g->name));
-        $resolveGroup = function (array $g) use ($groupRows, $facKey) {
+        $hasGroupActive = Schema::hasColumn('groups', 'active');
+        $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
+        $parityKuzgi = $board->semester_parity !== 'bahorgi';
+        $resolveGroup = function (array $g) use ($groupRows, $facKey, $hasGroupActive, $hasCsActive, $parityKuzgi) {
             $cands = $groupRows[$this->groupNameKey($g['raw'])] ?? $groupRows[$this->groupNameKey($g['name'])] ?? collect();
-            $own = $cands->first(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
-
-            return $own ?? ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands->first() : null);
+            $own = $cands->filter(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
+            $pool = $own->isNotEmpty() ? $own : ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands : collect());
+            if ($pool->count() <= 1) {
+                return $pool->first();
+            }
+            // Bir xil nomli bir nechta guruh (eski / qayta ochilgan): faol, shu semestrda HEMIS jadvali bor,
+            // o'quv rejasida shu semestr fanlari bor guruh tanlanadi.
+            $course = (int) $g['card']->course;
+            $sem = (string) ($parityKuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course);
+            return $pool->sortByDesc(fn ($r) => [
+                $hasGroupActive ? (int) (bool) ($r->active ?? 1) : 1,
+                (int) DB::table('schedules')->where('group_id', $r->group_hemis_id)->where('semester_code', $sem)->whereNull('deleted_at')->exists(),
+                // Fanlar keyingi so'rovdagidek: HEMIS'dan olib tashlanganlari (is_active = false) hisobga olinmaydi.
+                (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)
+                    ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->exists(),
+                (int) $r->group_hemis_id,
+            ])->first();
         };
 
         $kuzgi = $board->semester_parity !== 'bahorgi';
@@ -658,7 +675,6 @@ trait TimetableHemisSync
 
             return $mudirCache[$deptId];
         };
-        $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
         $planner = new SchedulePlanner($slotTimes, $today, array_fill_keys(array_keys(self::HEMIS_PAIRS), true));
 
         $groupsOut = [];
@@ -960,16 +976,19 @@ trait TimetableHemisSync
         $rooms = [];
         $freeRoom = fn (array $r) => in_array('mudir_xonasi', $r['flags'] ?? [], true) || $this->isSharedRoom($r['auditorium_name'] ?? null)
             || preg_match('/kafedra\s+mudiri/iu', (string) ($r['auditorium_name'] ?? '')) === 1;
-        $index = function (string $type, $id, string $date, string $start, string $end, string $unitKey, string $label, $emp, $room) use (&$idx) {
-            $idx[$type . '|' . $id . '|' . $date][] = [$start, $end, $unitKey, $label, (string) $emp, (string) $room];
+        // $info — bandlik tafsiloti (to'siq oynasi uchun): manba, guruh, fan, o'qituvchi, xona.
+        $index = function (string $type, $id, string $date, string $start, string $end, string $unitKey, string $label, $emp, $room, array $info = []) use (&$idx) {
+            $idx[$type . '|' . $id . '|' . $date][] = [$start, $end, $unitKey, $label, (string) $emp, (string) $room, $info];
         };
         foreach ($finals as $f) {
+            [$fGroup, $fSubj] = array_pad(explode(' · ', (string) $f['label'], 2), 2, '');
+            $fInfo = ['source' => 'LMS', 'group' => $fGroup, 'subject' => $fSubj, 'teacher' => $f['employee_name'] ?? null, 'room' => $f['auditorium_name'] ?? null];
             if ($f['employee_id'] && !in_array('mudir', $f['flags'] ?? [], true)) {
-                $index('e', $f['employee_id'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label'], $f['employee_id'], $f['auditorium_code']);
+                $index('e', $f['employee_id'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label'], $f['employee_id'], $f['auditorium_code'], $fInfo);
                 $emps[(string) $f['employee_id']] = true;
             }
             if ($f['auditorium_code'] && !$freeRoom($f)) {
-                $index('r', $f['auditorium_code'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label'], $f['employee_id'], $f['auditorium_code']);
+                $index('r', $f['auditorium_code'], $f['date'], $f['start'], $f['end'], $f['key'], $f['label'], $f['employee_id'], $f['auditorium_code'], $fInfo);
                 $rooms[(string) $f['auditorium_code']] = true;
             }
         }
@@ -977,7 +996,7 @@ trait TimetableHemisSync
             $ext = DB::table('schedules')->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
                 ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
                 ->get(['schedule_hemis_id', 'group_name', 'subject_name', 'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time',
-                    'employee_id', 'auditorium_code', 'auditorium_name', 'department_id']);
+                    'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
             foreach ($ext as $r) {
                 if (isset($handledIds[(int) $r->schedule_hemis_id])) {
                     continue;
@@ -986,13 +1005,14 @@ trait TimetableHemisSync
                 $start = substr((string) $r->lesson_pair_start_time, 0, 5);
                 $end = substr((string) $r->lesson_pair_end_time, 0, 5);
                 $label = 'HEMIS: ' . $r->group_name . ' · ' . $r->subject_name;
+                $rInfo = ['source' => 'HEMIS', 'group' => $r->group_name, 'subject' => $r->subject_name, 'teacher' => $r->employee_name, 'room' => $r->auditorium_name];
                 // Kafedra mudiriga majburan qo'yilgan HEMIS darsi (o'qituvchisi — shu fan kafedrasining mudiri) bandlik emas.
                 $forcedMudir = $r->employee_id && (string) (($mudirFor($r->department_id) ?? [null])[0]) === (string) $r->employee_id;
                 if ($r->employee_id && isset($emps[(string) $r->employee_id]) && !$forcedMudir) {
-                    $index('e', $r->employee_id, $date, $start, $end, '', $label, $r->employee_id, $r->auditorium_code);
+                    $index('e', $r->employee_id, $date, $start, $end, '', $label, $r->employee_id, $r->auditorium_code, $rInfo);
                 }
                 if ($r->auditorium_code && isset($rooms[(string) $r->auditorium_code]) && !$this->isSharedRoom($r->auditorium_name)) {
-                    $index('r', $r->auditorium_code, $date, $start, $end, '', $label, $r->employee_id, $r->auditorium_code);
+                    $index('r', $r->auditorium_code, $date, $start, $end, '', $label, $r->employee_id, $r->auditorium_code, $rInfo);
                 }
             }
         }
@@ -1008,7 +1028,7 @@ trait TimetableHemisSync
                         if ($id === '' || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
                             continue;
                         }
-                        foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label, $oEmp, $oRoom]) {
+                        foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label, $oEmp, $oRoom, $info]) {
                             if ($k === $u['key'] && $s === $a['start']) {
                                 continue;   // shu yozuvning o'zi
                             }
@@ -1016,7 +1036,13 @@ trait TimetableHemisSync
                                 continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim)
                             }
                             if ($s < $a['end'] && $a['start'] < $e) {
-                                $a['blocked'][] = "{$msg}: {$label} {$s}-{$e}";
+                                $text = "{$msg}: {$label} {$s}-{$e}";
+                                $a['blocked'][] = $text;
+                                // Tuzilgan tafsilot: oynada rangli belgi va batafsil qator uchun ('text' — shu to'siqning
+                                // blocked'dagi matni; oyna qolgan (rejalashtiruvchi) to'siqlarni alohida ko'rsatadi).
+                                $a['blocks'][] = ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
+                                    'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
+                                    'teacher' => $type === 'e' ? ($a['employee_name'] ?? null) : ($info['teacher'] ?? null)] + $info;
                                 break;
                             }
                         }

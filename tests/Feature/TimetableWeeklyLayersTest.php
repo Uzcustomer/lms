@@ -908,3 +908,21 @@ it('ma\'ruzaga yangi guruh qo\'shilganda talabalar soni qatordagi haqiqiy jami b
     expect($grow[$lec->id][0])->toBe(['g-01a', 'g-01x'])
         ->and($grow[$lec->id][2])->toBe(40);
 });
+
+it('biriktirish ro\'yxati tasdiqlangan oqim bo\'yicha: oqimdan olib tashlangan guruh chiqmaydi', function () {
+    $s = layersSetup();
+    $s['board']->update(['kind' => 'real']);   // haqiqiy doska — tasdiqlangan (proyeksiya emas) oqim
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'oqim_label' => '1-oqim',
+        'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Gigiyena', 'group_name' => "g-02a (o'z)", 'kafedra_name' => 'Gigiyena kafedrasi']);
+    $units = fn () => collect(layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.teacher-units', $s['board']))->assertOk()->json('units'))
+        ->pluck('group_name')->filter()->unique()->values()->all();
+    // Oqim tasdiqlanmagan — hammasi chiqadi.
+    expect($units())->toContain("g-02a (o'z)");
+
+    \App\Models\OqimSnapshot::create(['context_key' => 'k', 'context' => [], 'status' => 'approved', 'approved_at' => now(), 'data' => [[
+        'merge_key' => 'x|davolash ishi', 'title' => 'davolash ishi', 'department_name' => 'F1',
+        'courses' => [['level_code' => 12, 'oqims' => [['label' => '1-oqim', 'lang' => 'uz', 'total' => 15, 'rows' => [['name' => "g-01a (o'z)", 'count' => 15]]]]]],
+    ]]]);
+    expect($units())->toContain('g-01a')->not->toContain("g-02a (o'z)");
+});

@@ -7703,7 +7703,11 @@ class TimetableController extends Controller
         abort_unless(in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true), 403, 'Hisobot faqat admin uchun.');
 
         $units = [];
+        $approved = $this->approvedOqimGroupKeys($board);
         foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
+            if (!$this->cardInApprovedOqim($c, $approved)) {
+                continue;   // oqimdan olib tashlangan guruh
+            }
             $k = $this->unitKey($c);
             $units[$k] ??= [
                 'kafedra' => trim((string) $c->kafedra_name) ?: '— kafedra aniqlanmagan —',
@@ -7762,9 +7766,57 @@ class TimetableController extends Controller
     }
 
     /** Doskadagi dars birliklari + joriy o'qituvchi (biriktirish matritsasi uchun). */
+    /**
+     * Tasdiqlangan oqim(lar)dagi guruh nomlari kalitlari (to'liq va til qo'shimchasisiz). Oqim tasdiqlanmagan
+     * bo'lsa — null (filtrlanmaydi). Oqimdan olib tashlangan guruh (HEMIS'da hali faol bo'lsa ham) bu yerda yo'q.
+     */
+    private function approvedOqimGroupKeys(TimetableBoard $board): ?array
+    {
+        $snaps = $this->boardSnapshots($board);
+        if (!$snaps) {
+            return null;
+        }
+        $keys = [];
+        foreach ($snaps as $snap) {
+            foreach ($snap->data ?? [] as $bl) {
+                foreach ($bl['courses'] ?? [] as $co) {
+                    foreach ($co['oqims'] ?? [] as $oq) {
+                        foreach ($oq['rows'] ?? [] as $r) {
+                            $n = trim((string) ($r['name'] ?? ''));
+                            if ($n !== '') {
+                                $keys[$this->groupNameKey($n)] = true;
+                                $keys[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $n))] = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $keys ?: null;
+    }
+
+    /** Karta tasdiqlangan oqimdagi kamida bitta guruhga tegishlimi (oqim yo'q bo'lsa — ha). */
+    private function cardInApprovedOqim(TimetableCard $c, ?array $keys): bool
+    {
+        if ($keys === null) {
+            return true;
+        }
+        foreach ($c->occupiedGroups() as $g) {
+            if (isset($keys[$this->groupNameKey((string) $g)]) || isset($keys[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g))])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function teacherUnits(Request $request, TimetableBoard $board)
     {
-        $cards = TimetableCard::where('board_id', $board->id)->get();
+        // Biriktirish ro'yxati tasdiqlangan oqim bo'yicha: oqimdan olib tashlangan guruhning kartalari chiqmaydi.
+        $approved = $this->approvedOqimGroupKeys($board);
+        $cards = TimetableCard::where('board_id', $board->id)->get()
+            ->filter(fn (TimetableCard $c) => $this->cardInApprovedOqim($c, $approved));
         // Kafedra mudiri faqat o'z kafedrasiga tegishli dars birliklarini ko'radi
         $ownKafedra = $this->departmentHeadKafedra($request);
         $units = [];

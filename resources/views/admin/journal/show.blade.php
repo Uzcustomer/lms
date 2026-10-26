@@ -2098,8 +2098,9 @@
                                                                 $origVal = round($gradeData['original_grade'], 0);
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
                                                                 $retakeSababli = !empty($gradeData['retake_was_sababli']);
+                                                                $retakeByKafedra = ($gradeData['retake_by'] ?? null) === \App\Services\FanTestiJournalSync::GRADED_BY;
                                                             @endphp
-                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}{{ $retakeByKafedra ? "\nBaho qo'ydi: " . $gradeData['retake_by'] . ' (qayta topshirish testi)' : '' }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -2126,7 +2127,10 @@
                                                                         $retakeTooltip .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
                                                                     }
                                                                     $graderName = null;
-                                                                    if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                    if (($absenceData['retake_by'] ?? null) === \App\Services\FanTestiJournalSync::GRADED_BY) {
+                                                                        // Qayta topshirish testidan avtomatik yozilgan otrabotka
+                                                                        $graderName = $absenceData['retake_by'];
+                                                                    } elseif (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
                                                                         $graderName = $retakeGraderNames[$absenceData['graded_by_user_id']];
                                                                     } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
                                                                         $graderName = $retakeEmployeeNames[$absenceData['employee_id']];
@@ -2224,7 +2228,10 @@
                                                                     $retakeTooltip2 .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
                                                                 }
                                                                 $graderName2 = null;
-                                                                if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                if (($absenceData['retake_by'] ?? null) === \App\Services\FanTestiJournalSync::GRADED_BY) {
+                                                                    // Qayta topshirish testidan avtomatik yozilgan otrabotka
+                                                                    $graderName2 = $absenceData['retake_by'];
+                                                                } elseif (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
                                                                     $graderName2 = $retakeGraderNames[$absenceData['graded_by_user_id']];
                                                                 } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
                                                                     $graderName2 = $retakeEmployeeNames[$absenceData['employee_id']];

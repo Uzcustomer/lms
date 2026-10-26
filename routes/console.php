@@ -200,8 +200,9 @@ Schedule::command('monitoring:run --all')->dailyAt('05:30')->withoutOverlapping(
 // yoki uzilib qolgan fayllar).
 Schedule::command('faceid:cleanup-temp')->weeklyOn(0, '01:30')->name('faceid-cleanup-temp');
 
-// Qayta topshirish testlari natijasini jurnalga (mavzuga mos NB katagiga) yozish —
-// avtomatik yozish joriy qilinishidan oldin topshirilganlar uchun yoki qayta urinish
+// Qayta topshirish testlari natijasini jurnalga (mavzuga mos NB yoki 60 dan past baho
+// katagiga) yozish — avtomatik yozish joriy qilinishidan oldin topshirilganlar yoki
+// "Yozilmadi"/"Xato" bo'lib qolganlar uchun. Shu urinish yozgan katak qayta yozilmaydi.
 Artisan::command('fan-testi:sync-retakes {--attempt= : Bitta urinish ID si} {--force : Avval yozilganlarni ham qayta tekshirish}', function () {
     $query = \App\Models\FanTestiAttempt::query()
         ->where('is_retake', true)
@@ -209,7 +210,9 @@ Artisan::command('fan-testi:sync-retakes {--attempt= : Bitta urinish ID si} {--f
     if ($this->option('attempt')) {
         $query->whereKey((int) $this->option('attempt'));
     } elseif (!$this->option('force')) {
-        $query->whereNull('journal_synced_at');
+        $query->where(fn ($q) => $q->whereNull('journal_synced_at')
+            ->orWhere('journal_sync_note', 'like', 'Yozilmadi%')
+            ->orWhere('journal_sync_note', 'like', 'Xato%'));
     }
     $n = 0;
     foreach ($query->orderBy('id')->get() as $attempt) {
@@ -218,4 +221,4 @@ Artisan::command('fan-testi:sync-retakes {--attempt= : Bitta urinish ID si} {--f
         $n++;
     }
     $this->info("{$n} ta urinish tekshirildi.");
-})->purpose("Qayta topshirish testlari natijasini jurnaldagi mavzuga mos NB katagiga yozish");
+})->purpose("Qayta topshirish testlari natijasini jurnaldagi mavzuga mos NB yoki 60 dan past baho katagiga yozish");

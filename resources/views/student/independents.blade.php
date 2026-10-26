@@ -125,13 +125,13 @@
                             $submittedCount = $items->filter(fn ($i) => !empty($i['submission']))->count();
                             $done = $itemCount > 0 && $submittedCount === $itemCount;
                             $st = $done
-                                ? ['bg' => '#047857', 'border' => '#065f46', 'bar' => '#064e3b', 'icon' => 'rgba(255,255,255,0.18)', 'title' => '#ffffff', 'muted' => 'rgba(255,255,255,0.8)', 'chevron' => '#ffffff', 'badge' => 'background:rgba(255,255,255,0.2);color:#ffffff;']
-                                : ['bg' => '#fef9c3', 'border' => '#fde047', 'bar' => '#eab308', 'icon' => '#eab308', 'title' => '#854d0e', 'muted' => '#a16207', 'chevron' => '#ca8a04', 'badge' => 'background:#dcfce7;color:#15803d;'];
+                                ? ['bg' => '#22c55e', 'border' => '#16a34a', 'bar' => '#15803d', 'icon' => 'rgba(255,255,255,0.22)', 'title' => '#ffffff', 'muted' => 'rgba(255,255,255,0.9)', 'chevron' => '#ffffff', 'badge' => 'background:rgba(255,255,255,0.25);color:#ffffff;']
+                                : ['bg' => '#fefce8', 'border' => '#fef08a', 'bar' => '#facc15', 'icon' => '#facc15', 'title' => '#854d0e', 'muted' => '#a16207', 'chevron' => '#eab308', 'badge' => 'background:#dcfce7;color:#15803d;'];
                             $colorIndex++;
                         @endphp
                         <button @click="openModal('{{ addslashes($subjectName) }}', {{ json_encode($groupedJson[$subjectName]) }})"
                             class="w-full flex items-center shadow-sm border overflow-hidden active:scale-[0.98] transition-all duration-150"
-                            style="background:{{ $st['bg'] }};border-color:{{ $st['border'] }};border-radius:0;">
+                            style="background:{{ $st['bg'] }};border-color:{{ $st['border'] }};border-radius:10px;">
                             {{-- Left accent bar --}}
                             <div class="w-1.5 self-stretch" style="background:{{ $st['bar'] }};"></div>
                             {{-- Icon --}}

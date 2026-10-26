@@ -118,33 +118,45 @@
                         @php
                             $subjectName = $subjectData['name'];
                             $items = collect($subjectData['independents']);
-                            $color = $cardColors[$colorIndex % count($cardColors)];
                             $itemCount = $items->count();
                             $completedCount = $items->where('grade_locked', true)->count();
+                            // Holat rangi: barcha topshiriqlar yuklangan — to'q yashil (oq yozuv);
+                            // topshiriq yo'q yoki hali yuklanmagani bor — sariq
+                            $submittedCount = $items->filter(fn ($i) => !empty($i['submission']))->count();
+                            $done = $itemCount > 0 && $submittedCount === $itemCount;
+                            $st = $done
+                                ? ['bg' => '#047857', 'border' => '#065f46', 'bar' => '#064e3b', 'icon' => 'rgba(255,255,255,0.18)', 'title' => '#ffffff', 'muted' => 'rgba(255,255,255,0.8)', 'chevron' => '#ffffff', 'badge' => 'background:rgba(255,255,255,0.2);color:#ffffff;']
+                                : ['bg' => '#fef9c3', 'border' => '#fde047', 'bar' => '#eab308', 'icon' => '#eab308', 'title' => '#854d0e', 'muted' => '#a16207', 'chevron' => '#ca8a04', 'badge' => 'background:#dcfce7;color:#15803d;'];
                             $colorIndex++;
                         @endphp
                         <button @click="openModal('{{ addslashes($subjectName) }}', {{ json_encode($groupedJson[$subjectName]) }})"
-                            class="w-full flex items-center shadow-sm border overflow-hidden active:scale-[0.98] transition-all duration-150 {{ $color['borderClass'] }}"
-                            style="background:{{ $color['bg'] }};border-radius:0;">
+                            class="w-full flex items-center shadow-sm border overflow-hidden active:scale-[0.98] transition-all duration-150"
+                            style="background:{{ $st['bg'] }};border-color:{{ $st['border'] }};border-radius:0;">
                             {{-- Left accent bar --}}
-                            <div class="w-1.5 self-stretch" style="background:{{ $color['accent'] }};"></div>
+                            <div class="w-1.5 self-stretch" style="background:{{ $st['bar'] }};"></div>
                             {{-- Icon --}}
-                            <div class="w-10 h-10 rounded-lg flex items-center justify-center ml-3 flex-shrink-0" style="background:{{ $color['accent'] }};">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+                            <div class="w-10 h-10 rounded-lg flex items-center justify-center ml-3 flex-shrink-0" style="background:{{ $st['icon'] }};">
+                                @if($done)
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                                @else
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+                                @endif
                             </div>
                             {{-- Content --}}
                             <div class="flex-1 min-w-0 py-3 px-3 text-left">
-                                <h3 class="text-sm font-bold truncate" style="color:{{ $color['text'] }};">{{ $subjectName }}</h3>
+                                <h3 class="text-sm font-bold truncate" style="color:{{ $st['title'] }};">{{ $subjectName }}</h3>
                                 <div class="flex items-center gap-2 mt-0.5">
-                                    <span class="text-[11px] text-gray-400">{{ $itemCount }} {{ __('topshiriq') }}</span>
+                                    <span class="text-[11px]" style="color:{{ $st['muted'] }};">
+                                        {{ $itemCount }} {{ __('topshiriq') }}@if($itemCount > 0) · {{ $done ? __('yuklangan') : $submittedCount . '/' . $itemCount . ' ' . __('yuklangan') }}@endif
+                                    </span>
                                     @if($completedCount > 0)
-                                        <span class="text-[10px] font-semibold text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">{{ $completedCount }}/{{ $itemCount }}</span>
+                                        <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style="{{ $st['badge'] }}" title="{{ __('Qabul qilingan') }}">{{ $completedCount }}/{{ $itemCount }}</span>
                                     @endif
                                 </div>
                             </div>
                             {{-- Chevron --}}
                             <div class="pr-3 flex-shrink-0">
-                                <svg class="w-5 h-5" style="color:{{ $color['accent'] }};" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                                <svg class="w-5 h-5" style="color:{{ $st['chevron'] }};" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
                             </div>
                         </button>
                     @endforeach

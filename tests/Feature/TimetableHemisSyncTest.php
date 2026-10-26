@@ -720,10 +720,15 @@ it('sabab: xona shu hafta uchun ichki jadvalda alohida berilgan bo\'lsa — shun
 
 it('bir xil nomli ikki guruhdan HEMIS jadvali va o\'quv rejasi borini tanlaydi', function () {
     $s = hsSetup();
-    // Ikkinchi "p/st26-01a": boshqa o'quv reja (fanlari yo'q), jadvali yo'q, hemis id katta.
+    // Ikkinchi "p/st26-01a": boshqa o'quv reja (fanlari yo'q), jadvali yo'q, hemis id katta. Jadvalda u birinchi turadi —
+    // avvalgi «birinchisini olish» uni tanlardi.
+    $real = (array) DB::table('groups')->where('group_hemis_id', 1596)->first();
+    DB::table('groups')->where('group_hemis_id', 1596)->delete();
     hsInsert('groups', ['group_hemis_id' => 9999, 'name' => 'p/st26-01a', 'curriculum_hemis_id' => 777, 'department_hemis_id' => 1,
         'specialty_hemis_id' => 1, 'department_name' => 'F1']);
-    DB::table('groups')->where('group_hemis_id', 1596)->update(['department_name' => 'F1']);
+    unset($real['id']);
+    DB::table('groups')->insert(array_merge($real, ['department_name' => 'F1']));
+    expect(DB::table('groups')->where('name', 'p/st26-01a')->orderBy('id')->value('group_hemis_id'))->toBe(9999);
     hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
     $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi'])
         ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'until_week' => 0])->assertOk()->json();

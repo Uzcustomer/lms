@@ -396,30 +396,55 @@ trait TimetableBlockTickets
         ]);
         $card = $ticket->card;
         abort_unless($card, 404);
-        $place = $this->ticketPlace($card, $ticket->week);
-        abort_unless($place, 422, 'Dars shu haftada ichki jadvalda joylashmagan.');
-        [$day, $pair, $startHalf] = $place;
+        abort_unless($this->ticketPlace($card, $ticket->week), 422, 'Dars shu haftada ichki jadvalda joylashmagan.');
         $actor = $acc['actor'];
         $who = $actor?->full_name ?? $actor?->name;
         $tg = app(BlockTicketTelegram::class);
+        // Doska va so'rov qulflangach holat va joylashuv qayta o'qiladi: bir vaqtda ikki hal qilish bo'lsa, ikkinchisi
+        // eski joyni qayta yozmaydi va hal qilingan so'rovni o'zgartirmaydi; holat shu tranzaksiyada yangilanadi.
+        $lockOpen = function () use ($card, $ticket): array {
+            TimetableBoard::whereKey($card->board_id)->lockForUpdate()->first();
+            $fresh = TimetableBlockTicket::whereKey($ticket->id)->lockForUpdate()->first();
+            if (!$fresh || !$fresh->isOpen()) {
+                throw new \RuntimeException('So\'rov ochiq emas — o\'zgartirib bo\'lmaydi.');
+            }
+            $place = $this->ticketPlace($card, $ticket->week);
+            if (!$place) {
+                throw new \RuntimeException('Dars shu haftada ichki jadvalda joylashmagan.');
+            }
+
+            return [$fresh, $place];
+        };
 
         if ($data['kind'] === 'day') {
-            abort_if((int) $data['day'] === $day, 422, 'Kun o\'zgarmagan — vaqtni o\'zgartirish tanlang.');
-            $payload = ['week' => $ticket->week, 'action' => 'move', 'day' => (int) $data['day'], 'pair' => (int) $data['pair'], 'layer' => 'internal'];
-            $route = 'admin.timetable.cards.week-override';
-            $req = app(TimetableChangeApproval::class)->submit([
-                'board_id' => $card->board_id, 'requester_id' => $actor?->getKey(), 'requester_type' => $actor?->getMorphClass(),
-                'requester_name' => $who, 'requester_role' => 'kafedra_mudiri', 'kafedra_name' => $card->kafedra_name,
-                'route_name' => $route, 'target_key' => mb_substr($route . '#' . md5('card:' . $card->id . ':w' . $ticket->week), 0, 191),
-                'params' => ['board' => $card->board_id, 'card' => $card->id], 'payload' => $payload, 'kind' => 'move',
-                'subject_name' => $card->subject_name,
-                'summary' => 'To\'siq №' . $ticket->id . ': ' . $ticket->group_name . ' · ' . $card->subject_name . ' · ' . $ticket->week
-                    . '-hafta — ' . (BlockTicketTelegram::DAY_NAMES[(int) $data['day']] ?? $data['day']) . 'ga ko\'chirish'
-                    . (!empty($data['note']) ? ' — ' . $data['note'] : ''),
-                'details' => [],
-            ]);
-            $ticket->update(['status' => TimetableBlockTicket::PENDING_REGISTRAR, 'change_request_id' => $req->id,
-                'resolution' => ['kind' => 'day', 'day' => (int) $data['day'], 'pair' => (int) $data['pair'], 'by' => $who, 'at' => now()->toDateTimeString(), 'note' => $data['note'] ?? null]]);
+            try {
+                $req = DB::transaction(function () use ($data, $card, $ticket, $who, $actor, $lockOpen) {
+                    [$fresh, [$day]] = $lockOpen();
+                    if ((int) $data['day'] === $day) {
+                        throw new \RuntimeException('Kun o\'zgarmagan — vaqtni o\'zgartirish tanlang.');
+                    }
+                    $payload = ['week' => $ticket->week, 'action' => 'move', 'day' => (int) $data['day'], 'pair' => (int) $data['pair'], 'layer' => 'internal'];
+                    $route = 'admin.timetable.cards.week-override';
+                    $req = app(TimetableChangeApproval::class)->submit([
+                        'board_id' => $card->board_id, 'requester_id' => $actor?->getKey(), 'requester_type' => $actor?->getMorphClass(),
+                        'requester_name' => $who, 'requester_role' => 'kafedra_mudiri', 'kafedra_name' => $card->kafedra_name,
+                        'route_name' => $route, 'target_key' => mb_substr($route . '#' . md5('card:' . $card->id . ':w' . $ticket->week), 0, 191),
+                        'params' => ['board' => $card->board_id, 'card' => $card->id], 'payload' => $payload, 'kind' => 'move',
+                        'subject_name' => $card->subject_name,
+                        'summary' => 'To\'siq №' . $ticket->id . ': ' . $ticket->group_name . ' · ' . $card->subject_name . ' · ' . $ticket->week
+                            . '-hafta — ' . (BlockTicketTelegram::DAY_NAMES[(int) $data['day']] ?? $data['day']) . 'ga ko\'chirish'
+                            . (!empty($data['note']) ? ' — ' . $data['note'] : ''),
+                        'details' => [],
+                    ]);
+                    $fresh->update(['status' => TimetableBlockTicket::PENDING_REGISTRAR, 'change_request_id' => $req->id,
+                        'resolution' => ['kind' => 'day', 'day' => (int) $data['day'], 'pair' => (int) $data['pair'], 'by' => $who, 'at' => now()->toDateTimeString(), 'note' => $data['note'] ?? null]]);
+
+                    return $req;
+                });
+            } catch (\RuntimeException $e) {
+                return response()->json(['error' => $e->getMessage()], 422);
+            }
+            $ticket->refresh();
             $tg->broadcast($ticket, "To'siq №{$ticket->id}: kafedra mudiri darsni boshqa kunga ko'chirishni so'radi — registrator ofisi tasdig'ini kutmoqda.");
 
             return response()->json(['ok' => true, 'status' => $ticket->status, 'change_request_id' => $req->id]);
@@ -428,9 +453,8 @@ trait TimetableBlockTickets
         $roomName = null;
         try {
             // O'zgarish yoziladi va shu haftadagi to'qnashuv tekshiriladi; to'qnashuv bo'lsa — hammasi bekor (rollback).
-            DB::transaction(function () use ($data, $card, $ticket, $day, $pair, $startHalf, &$roomName) {
-                // Bronlar bilan bir vaqtda o'zgarmasin (tasdiqlash oqimidagi kabi doska qulflanadi).
-                TimetableBoard::whereKey($card->board_id)->lockForUpdate()->first();
+            $res = DB::transaction(function () use ($data, $card, $ticket, $who, $lockOpen, &$roomName) {
+                [$fresh, [$day, $pair, $startHalf]] = $lockOpen();
                 $ov = TimetableCardOverride::firstOrNew(['card_id' => $card->id, 'week' => $ticket->week]);
                 $ov->cancelled = false;
                 $ov->day = $day;
@@ -454,16 +478,19 @@ trait TimetableBlockTickets
                 if ($conf) {
                     throw new \RuntimeException(implode(' · ', $conf));
                 }
+                $slots = $this->hemisSlotTimes($card->board);
+                $res = $data['kind'] === 'room'
+                    ? ['kind' => 'room', 'auditorium' => $roomName]
+                    : ['kind' => 'time', 'pair' => (int) $data['pair'], 'time' => ($slots[(int) $data['pair']][0] ?? '') . '–' . ($slots[(int) $data['pair'] + $card->lenHalf() - 1][1] ?? '')];
+                $fresh->update(['status' => TimetableBlockTicket::RESOLVED, 'resolved_at' => now(),
+                    'resolution' => $res + ['by' => $who, 'at' => now()->toDateTimeString(), 'note' => $data['note'] ?? null]]);
+
+                return $res;
             });
         } catch (\RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
-        $slots = $this->hemisSlotTimes($card->board);
-        $res = $data['kind'] === 'room'
-            ? ['kind' => 'room', 'auditorium' => $roomName]
-            : ['kind' => 'time', 'pair' => (int) $data['pair'], 'time' => ($slots[(int) $data['pair']][0] ?? '') . '–' . ($slots[(int) $data['pair'] + $card->lenHalf() - 1][1] ?? '')];
-        $ticket->update(['status' => TimetableBlockTicket::RESOLVED, 'resolved_at' => now(),
-            'resolution' => $res + ['by' => $who, 'at' => now()->toDateTimeString(), 'note' => $data['note'] ?? null]]);
+        $ticket->refresh();
         $tg->broadcast($ticket, "✅ To'siq №{$ticket->id} hal qilindi ({$ticket->group_name} · {$ticket->subject_name}, "
             . $ticket->lesson_date->format('d.m.Y') . '): '
             . ($res['kind'] === 'room' ? 'yangi xona — ' . $roomName : 'yangi vaqt — ' . $res['time']) . '.');
@@ -475,7 +502,17 @@ trait TimetableBlockTickets
     public function blockTicketCancel(Request $request, TimetableBlockTicket $ticket)
     {
         abort_unless($this->isTicketAdmin($request) && !$this->ticketBoardDenied($request, $ticket->board), 403);
-        $ticket->update(['status' => TimetableBlockTicket::CANCELLED]);
+        $this->syncTicketStatus($ticket);
+        abort_if($ticket->status === TimetableBlockTicket::RESOLVED, 422, 'So\'rov allaqachon hal qilingan.');
+        DB::transaction(function () use ($ticket) {
+            $t = TimetableBlockTicket::whereKey($ticket->id)->lockForUpdate()->first();
+            // Kunni o'zgartirish tasdiqni kutayotgan bo'lsa — o'sha o'zgarish so'rovi ham bekor: bron bo'shaydi va keyin qo'llanmaydi.
+            if ($t->status === TimetableBlockTicket::PENDING_REGISTRAR && $t->change_request_id
+                && ($cr = TimetableChangeRequest::find($t->change_request_id))) {
+                app(TimetableChangeApproval::class)->cancel($cr);
+            }
+            $t->update(['status' => TimetableBlockTicket::CANCELLED]);
+        });
 
         return response()->json(['ok' => true]);
     }

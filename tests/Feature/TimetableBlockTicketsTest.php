@@ -253,3 +253,14 @@ it('bo\'sh xonalar darsning hozirgi joyi (ko\'chirilgan vaqti) bo\'yicha HEMIS b
         ->json('ticket.free_rooms'))->pluck('code')->all();
     expect($rooms)->not->toContain('R1')->toContain('R2');
 });
+
+it('registrator tasdig\'ini kutayotgan so\'rov bekor qilinsa — bog\'liq o\'zgarish so\'rovi ham bekor bo\'ladi', function () {
+    $s = ticketSetup();
+    $t = makeTicket($s, ['type' => 'teacher']);
+    ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'day', 'day' => 4, 'pair' => 1])
+        ->assertOk()->assertJson(['status' => 'pending_registrar']);
+
+    ticketAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.block-tickets.cancel', $t))->assertOk();
+    expect($t->fresh()->status)->toBe('cancelled')
+        ->and(TimetableChangeRequest::sole()->status)->toBe(TimetableChangeRequest::CANCELLED);
+});

@@ -619,11 +619,25 @@ trait TimetableHemisSync
         $groupRows = DB::table('groups')
             ->whereIn('name', array_values(array_unique(array_merge(array_column($groupNames, 'raw'), array_column($groupNames, 'name')))))
             ->get()->groupBy(fn ($g) => $this->groupNameKey($g->name));
-        $resolveGroup = function (array $g) use ($groupRows, $facKey) {
+        $hasGroupActive = Schema::hasColumn('groups', 'active');
+        $parityKuzgi = $board->semester_parity !== 'bahorgi';
+        $resolveGroup = function (array $g) use ($groupRows, $facKey, $hasGroupActive, $parityKuzgi) {
             $cands = $groupRows[$this->groupNameKey($g['raw'])] ?? $groupRows[$this->groupNameKey($g['name'])] ?? collect();
-            $own = $cands->first(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
-
-            return $own ?? ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands->first() : null);
+            $own = $cands->filter(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
+            $pool = $own->isNotEmpty() ? $own : ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands : collect());
+            if ($pool->count() <= 1) {
+                return $pool->first();
+            }
+            // Bir xil nomli bir nechta guruh (eski / qayta ochilgan): faol, shu semestrda HEMIS jadvali bor,
+            // o'quv rejasida shu semestr fanlari bor guruh tanlanadi.
+            $course = (int) $g['card']->course;
+            $sem = (string) ($parityKuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course);
+            return $pool->sortByDesc(fn ($r) => [
+                $hasGroupActive ? (int) (bool) ($r->active ?? 1) : 1,
+                (int) DB::table('schedules')->where('group_id', $r->group_hemis_id)->where('semester_code', $sem)->whereNull('deleted_at')->exists(),
+                (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)->exists(),
+                (int) $r->group_hemis_id,
+            ])->first();
         };
 
         $kuzgi = $board->semester_parity !== 'bahorgi';

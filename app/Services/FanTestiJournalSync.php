@@ -102,6 +102,9 @@ class FanTestiJournalSync
         }
 
         $percent = (float) $attempt->percent;
+        // Muddat talaba testni TOPSHIRGAN vaqtga nisbatan tekshiriladi: buyruq keyinroq
+        // ishga tushsa ham, muddat ichida ishlangan test yozilishi kerak
+        $doneAt = $attempt->submitted_at ?? now();
         $hasSababli = Schema::hasColumn('student_grades', 'retake_was_sababli');
         $marker = "urinish #{$attempt->id}";
         $written = [];
@@ -121,7 +124,7 @@ class FanTestiJournalSync
                 $skipped[] = 'otrabotka allaqachon qo\'yilgan (' . (float) $cell->retake_grade . ')';
                 continue;
             }
-            if ($cell->deadline && now()->greaterThan($cell->deadline)) {
+            if ($cell->deadline && $doneAt->greaterThan($cell->deadline)) {
                 $skipped[] = 'otrabotka muddati o\'tgan (' . \Carbon\Carbon::parse($cell->deadline)->format('d.m.Y') . ')';
                 continue;
             }

@@ -1036,9 +1036,11 @@ trait TimetableHemisSync
                                 continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim)
                             }
                             if ($s < $a['end'] && $a['start'] < $e) {
-                                $a['blocked'][] = "{$msg}: {$label} {$s}-{$e}";
-                                // Tuzilgan tafsilot: oynada rangli belgi va batafsil qator uchun.
-                                $a['blocks'][] = ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e,
+                                $text = "{$msg}: {$label} {$s}-{$e}";
+                                $a['blocked'][] = $text;
+                                // Tuzilgan tafsilot: oynada rangli belgi va batafsil qator uchun ('text' — shu to'siqning
+                                // blocked'dagi matni; oyna qolgan (rejalashtiruvchi) to'siqlarni alohida ko'rsatadi).
+                                $a['blocks'][] = ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
                                     'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
                                     'teacher' => $type === 'e' ? ($a['employee_name'] ?? null) : ($info['teacher'] ?? null)] + $info;
                                 break;

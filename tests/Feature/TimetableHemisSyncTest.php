@@ -199,6 +199,7 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
         ->and(implode(' ', $byDate['create 2026-09-28']['blocked']))->toContain("o'qituvchi band")
         ->and($byDate['create 2026-09-28']['blocks'][0]['type'])->toBe('teacher')
         ->and($byDate['create 2026-09-28']['blocks'][0]['source'])->toBe('HEMIS')
+        ->and($byDate['create 2026-09-28']['blocked'])->toContain($byDate['create 2026-09-28']['blocks'][0]['text'])
         ->and(implode(' ', $byDate['create 2026-10-05']['blocked']))->toContain('p/st26-09a')
         ->and(implode(' ', $u['notes']))->toContain('rejaga kirmagan turdagi 1 ta');
 });

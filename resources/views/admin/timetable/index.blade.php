@@ -3641,9 +3641,12 @@
                 const opName = { create: 'Qo\'shish', update: 'O\'zgartirish', delete: 'O\'chirish' };
                 const opCls = { create: 'text-emerald-700', update: 'text-amber-700', delete: 'text-red-700' };
                 const blocks = a.blocks || [];
+                // Tuzilgan tafsiloti yo'q to'siqlar (para vaqti yo'q, o'qituvchi/xona topilmadi) — alohida, matni bilan.
+                const covered = new Set(blocks.map(b => b.text));
+                const other = (a.blocked || []).filter(m => !covered.has(m));
                 const types = [...new Set(blocks.map(b => b.type))];
                 const chips = types.map(t => '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold ' + HS_BLOCK[t].cls + '">⛔ ' + HS_BLOCK[t].label + '</span>').join('')
-                    + ((a.blocked && a.blocked.length && !blocks.length) ? '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold bg-red-100 text-red-700 border-red-300">⛔ To\'siq</span>' : '');
+                    + (other.length ? '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold bg-red-100 text-red-700 border-red-300">⛔ To\'siq</span>' : '');
                 const head = '<div><span class="' + opCls[a.op] + ' font-semibold">' + opName[a.op] + '</span> · ' + hsEsc(a.date) + ' ' + hsEsc(a.start) + '–' + hsEsc(a.end)
                     + ' · ' + hsEsc((u && u.code_names[a.code]) || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') + chips + '</div>';
                 const summary = (a.changes && a.changes.length) ? '<div class="ml-3 text-gray-700">' + a.changes.map(hsChangeShort).join(' · ') + '</div>' : '';
@@ -3654,7 +3657,7 @@
                     + ': ' + hsEsc(b.source || '') + ' · ' + hsEsc(b.group || '') + ' · «' + hsEsc(b.subject || '') + '»'
                     + (b.type === 'room' && b.teacher ? ' · o\'qituvchi: ' + hsEsc(b.teacher) : '')
                     + (b.type === 'teacher' && b.room ? ' · xona: ' + hsEsc(b.room) : '') + '</div>').join('')
-                    + ((a.blocked && a.blocked.length && !blocks.length) ? '<div class="ml-3 mt-0.5 text-red-700">' + hsEsc(a.blocked.join('; ')) + '</div>' : '');
+                    + (other.length ? '<div class="ml-3 mt-0.5 text-red-700">' + hsEsc(other.join('; ')) + '</div>' : '');
                 const flags = (a.flags && a.flags.length) ? ' <span class="text-indigo-600 text-[10px]">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '';
                 const reason = a.reason ? '<div class="ml-3 text-gray-500 italic text-[10px]">Sabab: ' + hsEsc(a.reason) + flags + '</div>' : (flags ? '<div class="ml-3">' + flags + '</div>' : '');
                 return '<div class="mb-1.5 pb-1 border-b border-dashed border-gray-200">' + head + summary + details + reason + '</div>';
@@ -3662,8 +3665,6 @@
             const hsOpOk = a => (a.blocked && a.blocked.length) ? hemisSyncFilter.ops.blocked : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
-                const opName = { create: 'Qo\'shish', update: 'O\'zgartirish', delete: 'O\'chirish' };
-                const opCls = { create: 'text-emerald-700', update: 'text-amber-700', delete: 'text-red-700' };
                 let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0 };
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;

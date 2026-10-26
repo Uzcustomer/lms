@@ -3988,8 +3988,15 @@
                 const items = hsTicketItems(rep);
                 if (!items.length) { alert('Filtrda yuboriladigan to\'siq yo\'q (bugungacha va tanlangan haftadan keyingilar hisobga olinmaydi).'); return; }
                 if (!confirm(items.length + ' ta to\'siq bo\'yicha so\'rov yaratiladi va dars o\'qituvchisi, kafedra mudiri (xona band bo\'lsa — xonani band qilgan dars o\'qituvchisi ham) Telegram orqali xabar oladi. Yuboramizmi?')) return;
+                // api() massivni "key[]" qilib yuboradi — obyektlar "[object Object]" bo'lib qolardi (422). Shuning uchun
+                // Laravel tushunadigan items[i][maydon] (blocker uchun items[i][blocker][maydon]) kalitlari.
+                const body = {};
+                items.forEach((it, i) => Object.entries(it).forEach(([k, v]) => {
+                    if (v && typeof v === 'object') Object.entries(v).forEach(([bk, bv]) => { body['items[' + i + '][' + k + '][' + bk + ']'] = bv; });
+                    else body['items[' + i + '][' + k + ']'] = v;
+                }));
                 try {
-                    const r = await api(BASE + '/boards/' + board.id + '/block-tickets', 'POST', { items });
+                    const r = await api(BASE + '/boards/' + board.id + '/block-tickets', 'POST', body);
                     alert('Yaratildi: ' + r.created + ' ta so\'rov (o\'tkazildi: ' + r.skipped + ' — allaqachon ochiq yoki o\'tgan kun).\nTelegram xabarlari: ' + r.telegram_sent + ' ta.' +
                         (r.without_telegram.length ? '\n\nTelegram ulanmagan / topilmagan: ' + r.without_telegram.join(', ') : ''));
                 } catch (e) { alert(hsErrText(e)); }

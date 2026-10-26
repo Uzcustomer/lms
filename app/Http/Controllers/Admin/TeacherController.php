@@ -27,7 +27,9 @@ class TeacherController extends Controller
 
     public function index(Request $request)
     {
-        $query = Teacher::with('roles');
+        $query = Teacher::with(Schema::hasTable('teacher_employments')
+            ? ['roles', 'employments' => fn ($q) => $q->where('is_primary', false)->where('is_working', true)]
+            : ['roles']);
 
         if ($request->filled('search')) {
             $searchTerm = $request->search;

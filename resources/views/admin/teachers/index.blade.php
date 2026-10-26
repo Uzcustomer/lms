@@ -169,6 +169,14 @@
                                     </td>
                                     <td>
                                         <span class="text-cell" style="color: #92400e; max-width: 220px; white-space: normal; word-break: break-word;">{{ $teacher->department ?? '-' }}</span>
+                                        {{-- HEMIS dagi qo'shimcha ish joylari (o'rindoshlik, soatbay) --}}
+                                        @if($teacher->relationLoaded('employments'))
+                                            @foreach($teacher->employments as $emp)
+                                                <div style="font-size: 10.5px; color: #64748b; margin-top: 3px; max-width: 220px; line-height: 1.35;" title="{{ $emp->staff_position }}">
+                                                    + {{ $emp->department_name }} <span style="color: #94a3b8;">({{ $emp->employment_form }})</span>
+                                                </div>
+                                            @endforeach
+                                        @endif
                                     </td>
                                     <td>
                                         <span class="text-cell" style="color: #5b21b6;">{{ $teacher->staff_position ?? '-' }}</span>

@@ -169,6 +169,12 @@ class Teacher extends Authenticatable
     /**
      * Dekan sifatida bog'langan fakultetlar (ko'p-ko'p)
      */
+    /** HEMIS dagi barcha ish joylari (asosiy, o'rindoshlik, soatbay) */
+    public function employments()
+    {
+        return $this->hasMany(TeacherEmployment::class);
+    }
+
     public function deanFaculties()
     {
         return $this->belongsToMany(Department::class, 'dean_faculties', 'teacher_id', 'department_hemis_id', 'id', 'department_hemis_id')

@@ -4289,7 +4289,13 @@ class TimetableController extends Controller
         if ($kafedra) {
             $teachers = Teacher::query()
                 ->whereNotNull('full_name')
-                ->where('department', 'like', '%' . trim($kafedra) . '%')
+                ->where(function ($w) use ($kafedra) {
+                    $w->where('department', 'like', '%' . trim($kafedra) . '%');
+                    // Shu kafedradagi o'rindosh/soatbay o'qituvchilar ham
+                    if (Schema::hasTable('teacher_employments')) {
+                        $w->orWhereIn('id', $this->employmentTeacherIdsByDepartmentName($kafedra));
+                    }
+                })
                 ->orderBy('full_name')
                 ->limit(300)
                 ->get(['id', 'full_name', 'short_name']);
@@ -7087,6 +7093,9 @@ class TimetableController extends Controller
                 if ($headDeptIds) {
                     $w->orWhereIn('head_department_hemis_id', $headDeptIds);
                 }
+                if (Schema::hasTable('teacher_employments')) {
+                    $w->orWhereIn('id', $this->employmentTeacherIdsByDepartmentName($request->kafedra));
+                }
             });
         }
 
@@ -7130,7 +7139,23 @@ class TimetableController extends Controller
                 ->orWhere('id', $context['actor_id'])
                 ->orWhereIn('hemis_id', (clone $load)->whereNotNull('employee_id')->select('employee_id'))
                 ->orWhereIn('full_name', (clone $load)->whereNotNull('employee_name')->select('employee_name'));
+            // HEMIS da shu kafedrada o'rindosh yoki soatbay ishlaydiganlar (asosiy ish joyi boshqa bo'limda)
+            if (Schema::hasTable('teacher_employments')) {
+                $w->orWhereIn('id', DB::table('teacher_employments')
+                    ->whereIn('department_hemis_id', $deptIds)
+                    ->where('is_working', true)
+                    ->select('teacher_id'));
+            }
         });
+    }
+
+    /** HEMIS da shu nomdagi kafedrada ishlayotgan (o'rindosh/soatbay ham) xodimlar ID lari — kafedra nomi bo'yicha qidiruv uchun. */
+    private function employmentTeacherIdsByDepartmentName(string $kafedra)
+    {
+        return DB::table('teacher_employments')
+            ->where('department_name', 'like', '%' . trim($kafedra) . '%')
+            ->where('is_working', true)
+            ->select('teacher_id');
     }
 
     private function isDepartmentTeacher(Teacher $teacher, array $context): bool

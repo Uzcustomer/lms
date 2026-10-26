@@ -620,8 +620,9 @@ trait TimetableHemisSync
             ->whereIn('name', array_values(array_unique(array_merge(array_column($groupNames, 'raw'), array_column($groupNames, 'name')))))
             ->get()->groupBy(fn ($g) => $this->groupNameKey($g->name));
         $hasGroupActive = Schema::hasColumn('groups', 'active');
+        $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
         $parityKuzgi = $board->semester_parity !== 'bahorgi';
-        $resolveGroup = function (array $g) use ($groupRows, $facKey, $hasGroupActive, $parityKuzgi) {
+        $resolveGroup = function (array $g) use ($groupRows, $facKey, $hasGroupActive, $hasCsActive, $parityKuzgi) {
             $cands = $groupRows[$this->groupNameKey($g['raw'])] ?? $groupRows[$this->groupNameKey($g['name'])] ?? collect();
             $own = $cands->filter(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
             $pool = $own->isNotEmpty() ? $own : ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands : collect());
@@ -635,7 +636,9 @@ trait TimetableHemisSync
             return $pool->sortByDesc(fn ($r) => [
                 $hasGroupActive ? (int) (bool) ($r->active ?? 1) : 1,
                 (int) DB::table('schedules')->where('group_id', $r->group_hemis_id)->where('semester_code', $sem)->whereNull('deleted_at')->exists(),
-                (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)->exists(),
+                // Fanlar keyingi so'rovdagidek: HEMIS'dan olib tashlanganlari (is_active = false) hisobga olinmaydi.
+                (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)
+                    ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->exists(),
                 (int) $r->group_hemis_id,
             ])->first();
         };
@@ -672,7 +675,6 @@ trait TimetableHemisSync
 
             return $mudirCache[$deptId];
         };
-        $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
         $planner = new SchedulePlanner($slotTimes, $today, array_fill_keys(array_keys(self::HEMIS_PAIRS), true));
 
         $groupsOut = [];

@@ -120,7 +120,13 @@ trait TimetableHemisSync
         $ktrH = [];
         $ktrC = ['L' => 0, 'A' => 0];
         foreach ((array) ($u['ktr'] ?? []) as $i => $row) {
-            if ($i + 1 < $fromWeek || $i + 1 > $toWeek) {
+            // Sikl fani: KTR qatori — sikl kuni, davrga sanasi bo'yicha kiradi.
+            if (isset($u['ktr_dates'])) {
+                $d = $u['ktr_dates'][$i + 1] ?? null;
+                if ($d === null || $d < $fromDate || $d > $toDate) {
+                    continue;
+                }
+            } elseif ($i + 1 < $fromWeek || $i + 1 > $toWeek) {
                 continue;
             }
             $sum = ['L' => 0, 'A' => 0];
@@ -506,6 +512,87 @@ trait TimetableHemisSync
         return preg_match("/ma['’ʻ`]?ruza|лекц/u", $n) ? 'L' : 'A';
     }
 
+    /**
+     * Sikl fanlari (4–6 kurs): LMS ichki sikl jadvalidagi darslar — guruhcha va fan bo'yicha.
+     * Manba — "Sikl jadvali" (ichki qatlam) oynasining o'zi (cyclePlan): blok joylashuvi, kafedra surgan
+     * kunlar va KTR kunlik ma'ruza/amaliy soatlari. Har kun: ma'ruza — "start" dan, amaliy — undan keyin.
+     * O'qituvchi va xona — shu guruhcha va fan kartasidan (ma'ruza — ma'ruza kartasi).
+     * Qaytaradi: ["fakultet|guruh kaliti" => [fan kaliti => [dars, ...]]]; dars: date, week (= sikl kuni,
+     * KTR qatori), slot, len, part, employee_*, auditorium_*, cycle.
+     */
+    private function hemisCycleLessons(TimetableBoard $board, array $scope, $cycleCards): array
+    {
+        if (!Schema::hasTable('timetable_cycle_placements')) {
+            return [];
+        }
+        $params = ['layer' => 'internal'];
+        foreach (['faculty_names', 'specialty_names', 'courses'] as $k) {
+            if (!empty($scope[$k])) {
+                $params[$k] = $scope[$k];
+            }
+        }
+        $plan = $this->cyclePlan(Request::create('/', 'POST', $params), $board)->getData(true);
+        $dates = array_column((array) ($plan['dates'] ?? []), 'iso');
+        if (!$dates) {
+            return [];
+        }
+        $fk = fn ($f) => mb_strtolower(trim((string) $f));
+        $teacherHemis = Teacher::whereIn('id', $cycleCards->pluck('teacher_id')->filter()->unique())->pluck('hemis_id', 'id')->all();
+        // Karta: fakultet|guruhcha|fan|tur
+        $cardOf = [];
+        foreach ($cycleCards as $c) {
+            $type = $c->training_type === 'lecture' ? 'lecture' : 'practice';
+            foreach ($this->cycleCardGroups($c) as $m) {
+                $cardOf[$fk($c->faculty_name) . '|' . $this->groupNameKey($m) . '|' . $this->normSubject((string) $c->subject_name) . '|' . $type] ??= $c;
+            }
+        }
+        $find = function (string $fac, string $member, string $subject, string $type) use ($cardOf, $fk) {
+            $k = $fk($fac) . '|' . $this->groupNameKey($member) . '|';
+            $base = $this->cycleSubjectVariantBase($subject);
+
+            return $cardOf[$k . $this->normSubject($subject) . '|' . $type]
+                ?? ($base !== null ? ($cardOf[$k . $this->normSubject($base) . '|' . $type] ?? null) : null);
+        };
+        $attrs = function ($card) use ($teacherHemis): array {
+            return [
+                'employee_id' => $card && $card->teacher_id ? ($teacherHemis[$card->teacher_id] ?? null) : null,
+                'employee_name' => $card && $card->teacher_id ? $card->teacher_name : null,
+                'auditorium_code' => $card?->auditorium_code ?: null,
+                'auditorium_name' => $card?->auditorium_name ?: null,
+            ];
+        };
+
+        $out = [];
+        foreach ((array) ($plan['rows'] ?? []) as $row) {
+            foreach ((array) ($row['blocks'] ?? []) as $b) {
+                $subject = (string) ($b['subject'] ?? '');
+                $from = (int) ($b['from'] ?? 0);
+                foreach ((array) ($row['subgroups'] ?? []) as $member) {
+                    $gk = $fk($row['faculty'] ?? '') . '|' . $this->groupNameKey((string) $member);
+                    $sk = $this->hemisSubjectKey($subject);
+                    $lec = $attrs($find((string) ($row['faculty'] ?? ''), (string) $member, $subject, 'lecture'));
+                    $prc = $attrs($find((string) ($row['faculty'] ?? ''), (string) $member, $subject, 'practice'));
+                    foreach ((array) ($b['day_plan'] ?? []) as $off => $d) {
+                        $date = $dates[$from + (int) $off] ?? null;
+                        if ($date === null) {
+                            continue;
+                        }
+                        $start = max(1, (int) ($d['start'] ?? 1));
+                        $base = ['date' => $date, 'week' => (int) ($d['k'] ?? 0), 'cycle' => true, 'card_id' => null];
+                        if ((int) ($d['lec'] ?? 0) > 0) {
+                            $out[$gk][$sk][] = $base + ['slot' => $start, 'len' => (int) $d['lec'], 'part' => 'L'] + $lec;
+                        }
+                        if ((int) ($d['prc'] ?? 0) > 0) {
+                            $out[$gk][$sk][] = $base + ['slot' => $start + (int) ($d['lec'] ?? 0), 'len' => (int) $d['prc'], 'part' => 'A'] + $prc;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
     private function hemisSyncReport(TimetableBoard $board, array $scope, string $today): array
     {
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
@@ -611,6 +698,13 @@ trait TimetableHemisSync
                 $groupNames[$groupKey($c, $raw)] ??= ['name' => $cleanGroup($raw), 'raw' => $raw, 'card' => $c];
             }
         }
+        // Sikl fanlari kartalaridagi guruhlar ham (4–6 kursda hamma fan sikl bo'lishi mumkin).
+        foreach ($cycleCards as $c) {
+            foreach ($cardGroups($c) as $raw) {
+                $groupNames[$groupKey($c, $raw)] ??= ['name' => $cleanGroup($raw), 'raw' => $raw, 'card' => $c];
+            }
+        }
+        $cycleLessons = $cycleCards->isNotEmpty() ? $this->hemisCycleLessons($board, $scope, $cycleCards) : [];
         if (!empty($scope['groups'])) {
             $want = [];
             foreach ($scope['groups'] as $g) {
@@ -742,11 +836,73 @@ trait TimetableHemisSync
                     return $c->training_type === 'lecture' && $this->variantLetter((string) $c->subject_name) === null && $ck === $base;
                 });
                 $hemisRows = $hemisAll->where('subject_id', $cs->subject_id);
+                // Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma'lumot).
+                $cyc = $cycleLessons[$gk][$key] ?? [];
+                $isCycleSubject = $cycleCards->contains(fn ($c) => $this->hemisSubjectBase((string) $c->subject_name) === $base
+                    && in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true));
+                if ($matched->isEmpty() && $isCycleSubject) {
+                    if (!$cyc) {
+                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'sikl fani — LMS ichki sikl jadvalida joylanmagan, HEMIS\'ga tegilmaydi'];
+                        continue;
+                    }
+                    if (!array_filter($cyc, fn ($p) => $p['date'] > $today)) {
+                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'sikl fani — ichki sikl jadvalida ertadan keyin dars yo\'q, HEMIS\'ga tegilmaydi'];
+                        continue;
+                    }
+                    $handledSubjects[(int) $cs->subject_id] = ($handledSubjects[(int) $cs->subject_id] ?? []) + $codes;
+                    foreach ($hemisRows as $hr) {
+                        if (isset($codes[(string) $hr->training_type_code])) {
+                            $handledIds[(int) $hr->schedule_hemis_id] = true;
+                        }
+                    }
+                    $kp = $ktrPlans[$cs->id] ?? null;
+                    $ktr = null;
+                    if ($kp) {
+                        $pd = is_string($kp->plan_data) ? json_decode($kp->plan_data, true) : $kp->plan_data;
+                        $hours = (array) ($pd['hours'] ?? $pd ?? []);
+                        $ktr = [];
+                        for ($w = 1; $w <= (int) $kp->week_count; $w++) {
+                            $ktr[] = array_map('intval', (array) ($hours[$w] ?? $hours[(string) $w] ?? []));
+                        }
+                    }
+                    // KTR qatori = sikl kuni; "joriy" — bugungacha o'tgan sikl kunlari.
+                    $ktrDates = [];
+                    $doneDays = 0;
+                    foreach ($cyc as $l) {
+                        $ktrDates[$l['week']] ??= $l['date'];
+                        if ($l['date'] <= $today) {
+                            $doneDays = max($doneDays, (int) $l['week']);
+                        }
+                    }
+                    $mudir = $mudirFor($cs->department_id);
+                    $units[] = [
+                        'key' => $gk . '|' . $cs->id,
+                        'subject_id' => (int) $cs->subject_id,
+                        'subject_name' => $cs->subject_name,
+                        'base' => $base,
+                        'codes' => $codes, 'code_names' => $codeNames,
+                        'ktr' => $ktr,
+                        'ktr_dates' => $ktrDates,
+                        'current_week' => $doneDays,
+                        'mirror' => true,
+                        'hemis' => $hemisRows->map(fn ($r) => [
+                            'id' => (int) $r->schedule_hemis_id, 'date' => substr((string) $r->lesson_date, 0, 10),
+                            'start' => substr((string) $r->lesson_pair_start_time, 0, 5), 'end' => substr((string) $r->lesson_pair_end_time, 0, 5),
+                            'code' => (string) $r->training_type_code, 'employee_id' => $r->employee_id, 'employee_name' => $r->employee_name,
+                            'auditorium_code' => $r->auditorium_code, 'auditorium_name' => $r->auditorium_name,
+                        ])->values()->all(),
+                        'plan' => $cyc,
+                        'fallback_employee' => $mudir,
+                        'fallback_room' => $fallbackRoomFor($cs->department_id),
+                    ];
+                    $otherTypes = $hemisRows->filter(fn ($r) => substr((string) $r->lesson_date, 0, 10) > $today && !isset($codes[(string) $r->training_type_code]))->count();
+                    $unitMeta[$gk . '|' . $cs->id] = ['kafedra' => $cs->department_name, 'cs_id' => $cs->id, 'mudir' => $mudir[1] ?? null,
+                        'other_type_rows' => $otherTypes, 'cycle' => true];
+                    continue;
+                }
                 if ($matched->isEmpty()) {
-                    if ($hemisRows->isNotEmpty() || $cycleCards->contains(fn ($c) => $this->hemisSubjectBase((string) $c->subject_name) === $base)) {
-                        $skipped[] = ['subject_name' => $cs->subject_name,
-                            'reason' => $cycleCards->contains(fn ($c) => $this->hemisSubjectBase((string) $c->subject_name) === $base)
-                                ? 'sikl fani — keyingi bosqichda' : 'LMS doskasida kartochka yo\'q — HEMIS\'ga tegilmaydi'];
+                    if ($hemisRows->isNotEmpty()) {
+                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS doskasida kartochka yo\'q — HEMIS\'ga tegilmaydi'];
                     }
                     continue;
                 }
@@ -904,14 +1060,16 @@ trait TimetableHemisSync
                         }
                     }
                     // To'siq so'rovi (Telegram) uchun: qaysi karta, qaysi hafta.
-                    if ($lesson) {
+                    if ($lesson && empty($lesson['cycle'])) {
                         $a['card_id'] = $lesson['card_id'] ?? null;
                         $a['week'] = $lesson['week'] ?? null;
                     }
                     $why = [];
                     $timeChanged = $a['op'] === 'create' || (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, 'vaqt'));
                     if ($timeChanged) {
-                        $why[] = $lesson ? $explain($lesson) : 'KTR balansi uchun qo\'shilgan dars (tuzatish takliflariga qarang).';
+                        $why[] = !empty($lesson['cycle'])
+                            ? 'LMS ichki sikl jadvali bo\'yicha (' . $lesson['week'] . '-sikl kuni).'
+                            : ($lesson ? $explain($lesson) : 'KTR balansi uchun qo\'shilgan dars (tuzatish takliflariga qarang).');
                     }
                     if (in_array('mudir', $a['flags'] ?? [], true)) {
                         $why[] = 'LMS kartochkasida o\'qituvchi biriktirilmagan — kafedra mudiri qo\'yiladi.';
@@ -931,7 +1089,8 @@ trait TimetableHemisSync
                         $why[] = 'LMS kartochkasida biriktirilgan o\'qituvchi: ' . $a['employee_name'] . ' — HEMIS\'dagidan farq qiladi.';
                     }
                     if ($changed('tur')) {
-                        $why[] = 'Dars turi shu haftaning KTR qatoriga qarab belgilangan.';
+                        $why[] = !empty($lesson['cycle']) ? 'Dars turi shu sikl kunining KTR qatoriga qarab belgilangan.'
+                            : 'Dars turi shu haftaning KTR qatoriga qarab belgilangan.';
                     }
                     $a['reason'] = implode(' ', array_filter($why)) ?: null;
                 }

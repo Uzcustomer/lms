@@ -324,7 +324,7 @@ class SchedulePlanner
 
         if ($u['ktr'] === null) {
             $notes[] = 'KTR kiritilmagan — balans tekshirilmadi, faqat jadval solishtirildi.';
-        } else {
+        } elseif (empty($u['mirror'])) {   // sikl fani (mirror) — HEMIS ichki sikl jadvaliga aynan moslanadi, tuzatishsiz
             $this->fixSwaps($u, $blocks, $fixes);
             $this->fixCountSurplus($u, $blocks, $occ, $fixes, $notes);
             $this->fixCountDeficit($u, $blocks, $occ, $workDates, $fixes, $notes);

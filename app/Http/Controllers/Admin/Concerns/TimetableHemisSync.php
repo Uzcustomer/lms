@@ -903,6 +903,11 @@ trait TimetableHemisSync
                             break;
                         }
                     }
+                    // To'siq so'rovi (Telegram) uchun: qaysi karta, qaysi hafta.
+                    if ($lesson) {
+                        $a['card_id'] = $lesson['card_id'] ?? null;
+                        $a['week'] = $lesson['week'] ?? null;
+                    }
                     $why = [];
                     $timeChanged = $a['op'] === 'create' || (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, 'vaqt'));
                     if ($timeChanged) {

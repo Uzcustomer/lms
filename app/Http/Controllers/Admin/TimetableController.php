@@ -35,6 +35,7 @@ use Illuminate\Support\Facades\Schema;
 class TimetableController extends Controller
 {
     use Concerns\TimetableHemisSync;
+    use Concerns\TimetableBlockTickets;
 
     public function index(Request $request)
     {

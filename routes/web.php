@@ -1238,6 +1238,18 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::put('/yigmajild/{checklist}', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'updateChecklist'])->name('yigmajild.update');
         });
 
+        // HEMIS to'siqlari bo'yicha so'rovlar (registrator → o'qituvchi / kafedra mudiri, Telegram). Ruxsat kontrollerda.
+        Route::prefix('dars-jadvali-tuzish')->name('timetable.')
+            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|kafedra_mudiri|oqituvchi'])
+            ->group(function () {
+                Route::post('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsSend'])->name('block-tickets.send');
+                Route::get('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsIndex'])->name('block-tickets.index');
+                Route::get('/block-tickets/{ticket}', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketShow'])->name('block-tickets.show');
+                Route::post('/block-tickets/{ticket}/respond', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketRespond'])->name('block-tickets.respond');
+                Route::post('/block-tickets/{ticket}/resolve', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketResolve'])->name('block-tickets.resolve');
+                Route::post('/block-tickets/{ticket}/cancel', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketCancel'])->name('block-tickets.cancel');
+            });
+
         // Dars jadvali tuzish (aSc Timetables uslubida)
         Route::prefix('dars-jadvali-tuzish')->name('timetable.')
             ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|kafedra_mudiri|oqituvchi|fan_masuli', \App\Http\Middleware\TimetableAssignmentAccess::class])

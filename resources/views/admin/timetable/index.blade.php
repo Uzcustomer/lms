@@ -3045,10 +3045,10 @@
                         ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi tasdiqlagach jadvalga tushadi.'
                         : TIMETABLE_DEPARTMENT_HEAD
                         ? (changeReqs.approval_required
-                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi.'
+                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi. Bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish — darhol.'
                             : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')
                         : (changeReqs.approval_required
-                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi.'
+                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi (bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish bundan mustasno).'
                             : 'Bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')) + '</div>';
                 const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';

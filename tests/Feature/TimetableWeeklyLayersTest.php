@@ -992,7 +992,7 @@ it('seminarli fan amaliyoti istisno qilinsa guruhlar alohida karta bo\'ladi (mav
         ->and([$cards[0]->teacher_id, $cards[1]->teacher_id])->toBe([$s['head']->id, null])
         ->and([$cards[1]->day, $cards[1]->pair])->toBe([2, 3])
         ->and(DB::table('timetable_card_overrides')->where('card_id', $cards[1]->id)->where('week', 3)->value('day'))->toBe(4)
-        ->and($s['board']->fresh()->settings['separate_practice'])->toBe(['farmatsiya|1|mutaxassislikka kirish']);
+        ->and($s['board']->fresh()->settings['separate_practice'])->toBe(['|farmatsiya|1|mutaxassislikka kirish']);
 
     // Kartalar qayta yaratilganda ham juftlanmaydi.
     $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'R', 'specialty_name' => 'Farmatsiya', 'plan_year' => '2026',
@@ -1011,4 +1011,31 @@ it('seminarli fan amaliyoti istisno qilinsa guruhlar alohida karta bo\'ladi (mav
     $rows = $m->invokeArgs($ctl, [$s['board']->fresh(), null, null, &$found]);
     $labels = array_values(array_unique(array_map(fn ($r) => $r['group_name'], array_filter($rows, fn ($r) => $r['training_type'] === 'practice'))));
     expect($labels)->toBe(["p/f26-01a (o'z)", "p/f26-01b (o'z)"]);
+});
+
+it('alohida amaliy istisnosi fakultet ko\'rsatilsa faqat o\'sha fakultetga: boshqa fakultetdagi shu yo\'nalish juftligicha qoladi', function () {
+    $s = layersSetup();
+    $s['board']->update(['kind' => 'real']);
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'R', 'specialty_name' => 'Farmatsiya', 'plan_year' => '2026',
+        'level_code' => '11', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Mutaxassislikka kirish', 'semester' => 1,
+        'lecture' => 0, 'practice' => 0, 'laboratory' => 0, 'seminar' => 30]);
+    $block = fn (string $fac, string $g) => ['merge_key' => 'x|Farmatsiya', 'title' => 'Farmatsiya', 'department_name' => $fac,
+        'courses' => [['level_code' => 11, 'oqims' => [['label' => '1-oqim', 'lang' => 'uz', 'total' => 20,
+            'rows' => [['name' => "p/f26-{$g}a (o'z)", 'count' => 10], ['name' => "p/f26-{$g}b (o'z)", 'count' => 10]]]]]]];
+    \App\Models\OqimSnapshot::create(['context_key' => 'k', 'context' => [], 'status' => 'approved', 'approved_at' => now(),
+        'data' => [$block('F1', '01'), $block('F2', '05')]]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']),
+        ['faculty_name' => 'F1', 'specialty_name' => 'Farmatsiya', 'course' => 1, 'subject_name' => 'Mutaxassislikka kirish'])->assertOk();
+
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'assembleRows');
+    $m->setAccessible(true);
+    $found = [];
+    $rows = $m->invokeArgs($ctl, [$s['board']->fresh(), null, null, &$found]);
+    $labels = fn (string $fac) => array_values(array_unique(array_map(fn ($r) => $r['group_name'],
+        array_filter($rows, fn ($r) => $r['training_type'] === 'practice' && $r['faculty_name'] === $fac))));
+    expect($labels('F1'))->toBe(["p/f26-01a (o'z)", "p/f26-01b (o'z)"])
+        ->and(collect($labels('F2'))->contains(fn ($l) => str_contains($l, '05a') && str_contains($l, '05b')))->toBeTrue();
 });

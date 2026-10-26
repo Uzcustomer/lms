@@ -1120,8 +1120,10 @@ class TimetableController extends Controller
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
                             $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
                             $pairPracticeGroups = ((float) $s->seminar > 0 || $practiceGroupSize >= 30)
-                                // Istisno: shu yo'nalish+kurs+fanda guruhlar alohida o'tiladi (doska sozlamasi).
-                                && !isset($separatePractice[$this->separatePracticeKey((string) $specName, (int) $course, (string) $s->subject_name)]);
+                                // Istisno: shu yo'nalish+kurs+fanda guruhlar alohida o'tiladi (doska sozlamasi) — barcha
+                                // fakultetlar uchun ('' fakultet) yoki faqat shu blok fakulteti uchun.
+                                && !isset($separatePractice[$this->separatePracticeKey('', (string) $specName, (int) $course, (string) $s->subject_name)])
+                                && !isset($separatePractice[$this->separatePracticeKey((string) $blockFac, (string) $specName, (int) $course, (string) $s->subject_name)]);
                             // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
                             // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat
@@ -2331,15 +2333,10 @@ class TimetableController extends Controller
             'list' => array_slice($list, 0, 200), 'skipped' => array_slice($skipped, 0, 200)]);
     }
 
-    /**
-     * 2 soatdan uzun amaliy kartalarini (3 yoki 4 soat) 2 + 1 / 2 + 2 soatlik kartalarga bo'ladi.
-     * Asl karta birinchi qism (2 soat) bo'lib qoladi; qolgan qismlar uning nusxasi — xuddi shu joyda
-     * davomi sifatida (tashqi va ichki joylashuv, haftalar, o'qituvchi, xona bilan).
-     */
-    /** Istisno kaliti: yo'nalish + kurs + fan (amaliy guruhlari juftlanmaydi). */
-    private function separatePracticeKey(string $specialty, int $course, string $subject): string
+    /** Istisno kaliti: fakultet ('' — barcha fakultetlar) + yo'nalish + kurs + fan (amaliy guruhlari juftlanmaydi). */
+    private function separatePracticeKey(string $faculty, string $specialty, int $course, string $subject): string
     {
-        return $this->specKey($specialty) . '|' . $course . '|' . $this->normSubject($subject);
+        return mb_strtolower(trim($faculty)) . '|' . $this->specKey($specialty) . '|' . $course . '|' . $this->normSubject($subject);
     }
 
     /**
@@ -2366,7 +2363,7 @@ class TimetableController extends Controller
             ->get()
             ->filter(fn (TimetableCard $c) => $this->specKey($c->specialty_name) === $this->specKey($data['specialty_name'])
                 && $this->normSubject((string) $c->subject_name) === $subjKey
-                && (empty($data['faculty_name']) || (string) $c->faculty_name === $data['faculty_name'])
+                && (empty($data['faculty_name']) || mb_strtolower(trim((string) $c->faculty_name)) === mb_strtolower(trim($data['faculty_name'])))
                 && count($c->occupiedGroups()) > 1)
             ->values();
 
@@ -2408,7 +2405,8 @@ class TimetableController extends Controller
             });
             $set = (array) ($board->settings ?? []);
             $list = (array) ($set['separate_practice'] ?? []);
-            $list[] = $this->separatePracticeKey($data['specialty_name'], (int) $data['course'], $data['subject_name']);
+            // Fakultet ko'rsatilgan bo'lsa — istisno faqat o'sha fakultetga (boshqa fakultetdagi shu yo'nalish juftligicha qoladi).
+            $list[] = $this->separatePracticeKey((string) ($data['faculty_name'] ?? ''), $data['specialty_name'], (int) $data['course'], $data['subject_name']);
             $set['separate_practice'] = array_values(array_unique($list));
             $board->update(['settings' => $set]);
         }
@@ -2416,6 +2414,11 @@ class TimetableController extends Controller
         return response()->json(['ok' => true, 'dry_run' => $dry, 'cards' => $cards->count(), 'created' => $created, 'plan' => $plan]);
     }
 
+    /**
+     * 2 soatdan uzun amaliy kartalarini (3 yoki 4 soat) 2 + 1 / 2 + 2 soatlik kartalarga bo'ladi.
+     * Asl karta birinchi qism (2 soat) bo'lib qoladi; qolgan qismlar uning nusxasi — xuddi shu joyda
+     * davomi sifatida (tashqi va ichki joylashuv, haftalar, o'qituvchi, xona bilan).
+     */
     public function splitLongPractice(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([

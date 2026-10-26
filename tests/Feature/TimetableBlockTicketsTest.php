@@ -282,3 +282,12 @@ it('kunni o\'zgartirish so\'rovida xabar oluvchilar (o\'qituvchi, guruh) bor; o\
         ->and($d['groups'] ?? [])->toContain('g-01a');
     \Illuminate\Support\Carbon::setTestNow();
 });
+
+it('vaqtni o\'zgartirishda jadvaldan tashqari yoki para boshiga to\'g\'ri kelmaydigan katak rad etiladi', function () {
+    $s = ticketSetup();
+    $t = makeTicket($s, ['type' => 'teacher']);
+    foreach ([24, 2] as $pair) {   // 24 — jadvalda yo'q; 2 — to'liq para (2 yarim katak) uchun juft katak
+        ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'time', 'pair' => $pair])->assertStatus(422);
+    }
+    expect(TimetableCardOverride::count())->toBe(0)->and($t->fresh()->status)->toBe('open');
+});

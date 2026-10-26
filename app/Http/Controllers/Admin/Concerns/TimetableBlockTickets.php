@@ -135,6 +135,9 @@ trait TimetableBlockTickets
         $date = $this->ticketDateFor($t, $day);
         $start = $slots[$pair][0] ?? null;
         $end = $slots[$pair + $card->lenHalf() - 1][1] ?? null;
+        if (!$start || !$end) {
+            return ['Tanlangan vaqt jadval chegarasidan tashqarida.'];
+        }
 
         return array_merge(
             $this->findWeekConflicts($card, $t->week, $day, $pair, $startHalf),
@@ -463,6 +466,10 @@ trait TimetableBlockTickets
             // O'zgarish yoziladi va shu haftadagi to'qnashuv tekshiriladi; to'qnashuv bo'lsa — hammasi bekor (rollback).
             $res = DB::transaction(function () use ($data, $card, $ticket, $who, $lockOpen, &$roomName) {
                 [$fresh, [$day, $pair, $startHalf]] = $lockOpen();
+                // Yangi vaqt — to'liq para (2 yarim katak) faqat para boshidan (toq katak); bo'sh vaqtlar ro'yxatidagi qoida.
+                if ($data['kind'] === 'time' && $card->lenHalf() >= 2 && (int) $data['pair'] % 2 === 0) {
+                    throw new \RuntimeException('Tanlangan vaqt para boshiga to\'g\'ri kelmaydi.');
+                }
                 $ov = TimetableCardOverride::firstOrNew(['card_id' => $card->id, 'week' => $ticket->week]);
                 $ov->cancelled = false;
                 $ov->day = $day;

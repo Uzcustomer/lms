@@ -3690,7 +3690,11 @@
                     tot.opHidden += shown.length - units.length;
                     shown.filter(u => !units.includes(u)).forEach(u => { tot.later += u.actions_later || 0; });
                     // Mos fanlar yashirilsa ham guruhning ogohlantirishlari (o'tkazilgan fanlar, HEMIS rejasida topilmagan kartochkalar) qoladi.
-                    if (!units.length && !g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name)).length && !(g.cards_without_subject || []).length) continue;
+                    // Amal/to'siq turi filtri tanlanganda — faqat shu turdagi amali bor fanlar; o'tkazilgan fanlar va
+                    // HEMIS rejasida topilmagan kartochkalar (amal emas, ma'lumot) ko'rsatilmaydi.
+                    const skippedShown = opsNarrowed ? [] : g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name));
+                    const noSubjCards = opsNarrowed ? [] : (g.cards_without_subject || []);
+                    if (!units.length && !skippedShown.length && !noSubjCards.length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
                     body += '<table class="w-full border text-[11px]"><thead class="bg-gray-50"><tr>' +
@@ -3746,12 +3750,12 @@
                                     : '<span class="text-emerald-600">mos</span>')) + '</td></tr>';
                     }
                     // Fan filtri tanlangan bo'lsa — o'tkazilgan fanlar ham faqat tanlanganlari.
-                    for (const sk of g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name))) {
+                    for (const sk of skippedShown) {
                         body += '<tr class="text-gray-500"><td class="border px-1">' + hsEsc(sk.subject_name) + '</td><td class="border px-1" colspan="5">' + hsEsc(sk.reason) + '</td></tr>';
                     }
                     body += '</tbody></table>';
-                    if (g.cards_without_subject.length) {
-                        body += '<div class="text-amber-700 mt-1">HEMIS o\'quv rejasida topilmagan kartochkalar: ' + hsEsc(g.cards_without_subject.join('; ')) + '</div>';
+                    if (noSubjCards.length) {
+                        body += '<div class="text-amber-700 mt-1">HEMIS o\'quv rejasida topilmagan kartochkalar: ' + hsEsc(noSubjCards.join('; ')) + '</div>';
                     }
                 }
                 const wkOpt = (sel, label) => (rep.weeks || []).map(w => '<option value="' + w.week + '"' + (w.week === sel ? ' selected' : '') + '>' + label(w) + (w.week === rep.current_week ? ' • joriy' : '') + '</option>').join('');

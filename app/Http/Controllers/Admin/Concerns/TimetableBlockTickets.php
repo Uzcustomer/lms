@@ -37,6 +37,18 @@ trait TimetableBlockTickets
         return in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true);
     }
 
+    /** "Faqat admin" (sinov) doskasi boshqa rollarga yopiq — TimetableAssignmentAccess dagi kabi; so'rov uni ochib bermaydi. */
+    private function ticketBoardDenied(Request $request, ?TimetableBoard $board): bool
+    {
+        return $board && !empty($board->admin_only) && !in_array($this->timetableActiveRole($request), ['superadmin', 'admin'], true);
+    }
+
+    /** So'rov haftasidagi kun sanasi: hafta dushanbadan, kun 1 = dushanba (dars ko'chirilgan bo'lsa ham to'g'ri sana). */
+    private function ticketDateFor(TimetableBlockTicket $t, int $day): string
+    {
+        return $t->lesson_date->copy()->startOfWeek(\Carbon\Carbon::MONDAY)->addDays($day - 1)->toDateString();
+    }
+
     /** Kartaning kafedrasi mudiri (mark'dagi "kafedra_mudiri" roli, shu kafedraga biriktirilgan). */
     private function ticketHeadFor(TimetableCard $card): ?Teacher
     {
@@ -116,11 +128,11 @@ trait TimetableBlockTickets
      * Shu haftada kun/katakka qo'yish uchun to'siqlar: doskadagi kartalar (findWeekConflicts), kutilayotgan
      * o'zgarish bronlari (pendingTimeConflicts) va HEMIS'dagi bandlik. Xona — shu haftadagi samarali xona.
      */
-    private function ticketSlotConflicts(TimetableBlockTicket $t, TimetableCard $card, int $day, int $pair, int $startHalf, int $placeDay): array
+    private function ticketSlotConflicts(TimetableBlockTicket $t, TimetableCard $card, int $day, int $pair, int $startHalf): array
     {
         $slots = $this->hemisSlotTimes($card->board);
         $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $t->week)->first();
-        $date = $t->lesson_date->copy()->addDays($day - $placeDay)->toDateString();
+        $date = $this->ticketDateFor($t, $day);
         $start = $slots[$pair][0] ?? null;
         $end = $slots[$pair + $card->lenHalf() - 1][1] ?? null;
 
@@ -137,6 +149,7 @@ trait TimetableBlockTickets
     {
         abort_unless($this->isTicketAdmin($request), 403, 'Faqat registrator ofisi uchun.');
         abort_unless($this->blockTicketsReady(), 422, 'To\'siq so\'rovlari jadvali yo\'q (migratsiya).');
+        abort_if($this->ticketBoardDenied($request, $board), 403, 'Bu sinov doskasi faqat admin uchun.');
         $data = $request->validate([
             'items'                 => 'required|array|max:500',
             'items.*.card_id'       => 'required|integer',
@@ -216,6 +229,9 @@ trait TimetableBlockTickets
     /** So'rovni ko'rishga ruxsat: admin/registrator, qabul qiluvchilar, shu kafedra mudiri. */
     private function ticketAccess(Request $request, TimetableBlockTicket $t): array
     {
+        if ($this->ticketBoardDenied($request, $t->board)) {
+            return ['admin' => false, 'recipient' => null, 'head' => false, 'view' => false, 'actor' => null];
+        }
         $admin = $this->isTicketAdmin($request);
         $actor = $this->timetableActor($request);
         $tid = $this->timetableTeacherId($request);
@@ -260,6 +276,7 @@ trait TimetableBlockTickets
     /** Ro'yxat: registrator — hammasi; kafedra mudiri — o'z kafedrasiniki; o'qituvchi — o'ziga yuborilganlar. */
     public function blockTicketsIndex(Request $request, TimetableBoard $board)
     {
+        abort_if($this->ticketBoardDenied($request, $board), 403, 'Bu sinov doskasi faqat admin uchun.');
         if (!$this->blockTicketsReady()) {
             return response()->json(['tickets' => []]);
         }
@@ -301,7 +318,7 @@ trait TimetableBlockTickets
                 if ($day === $place[0] && $p === $place[1]) {
                     continue;
                 }
-                if (!$this->ticketSlotConflicts($ticket, $card, $day, $p, 0, $place[0])) {
+                if (!$this->ticketSlotConflicts($ticket, $card, $day, $p, 0)) {
                     $pairs[] = ['pair' => $p, 'time' => $st . '–' . ($slots[$p + $card->lenHalf() - 1][1] ?? $en)];
                 }
             }
@@ -332,9 +349,12 @@ trait TimetableBlockTickets
                 $busy[(string) $room] = true;
             }
         }
-        // HEMIS'dagi boshqa darslar (shu sana va vaqt).
-        foreach (DB::table('schedules')->whereNull('deleted_at')->whereDate('lesson_date', $t->lesson_date)
-            ->where('lesson_pair_start_time', '<', $t->end_time . ':59')->where('lesson_pair_end_time', '>', $t->start_time . ':00')
+        // HEMIS'dagi boshqa darslar — darsning hozirgi joyi (sana va vaqt) bo'yicha: so'rovdan keyin ko'chirilgan bo'lishi mumkin.
+        $slots = $this->hemisSlotTimes($card->board);
+        $start = $slots[$pair][0] ?? $t->start_time;
+        $end = $slots[$pair + $card->lenHalf() - 1][1] ?? $t->end_time;
+        foreach (DB::table('schedules')->whereNull('deleted_at')->whereDate('lesson_date', $this->ticketDateFor($t, (int) $day))
+            ->where('lesson_pair_start_time', '<', $end . ':00')->where('lesson_pair_end_time', '>', $start . ':00')
             ->pluck('auditorium_code') as $code) {
             $busy[(string) $code] = true;
         }
@@ -349,6 +369,7 @@ trait TimetableBlockTickets
     /** Qabul qiluvchi (veb orqali) javobi. */
     public function blockTicketRespond(Request $request, TimetableBlockTicket $ticket)
     {
+        abort_if($this->ticketBoardDenied($request, $ticket->board), 403, 'Bu sinov doskasi faqat admin uchun.');
         $data = $request->validate(['response' => 'required|in:accepted,declined', 'note' => 'nullable|string|max:500']);
         $msg = app(BlockTicketTelegram::class)->respond($ticket->id, $this->timetableTeacherId($request), $data['response'], $data['note'] ?? null);
         abort_if($msg === null, 403, 'Siz bu so\'rovga javob bera olmaysiz.');
@@ -429,7 +450,7 @@ trait TimetableBlockTickets
                 }
                 $ov->save();
                 // Doska kartalari, kutilayotgan bronlar va HEMIS bandligi (yangi xona / vaqt bilan).
-                $conf = $this->ticketSlotConflicts($ticket, $card, (int) $ov->day, (int) $ov->pair, (int) $ov->start_half, $day);
+                $conf = $this->ticketSlotConflicts($ticket, $card, (int) $ov->day, (int) $ov->pair, (int) $ov->start_half);
                 if ($conf) {
                     throw new \RuntimeException(implode(' · ', $conf));
                 }
@@ -453,7 +474,7 @@ trait TimetableBlockTickets
     /** Registrator: so'rovni bekor qilish. */
     public function blockTicketCancel(Request $request, TimetableBlockTicket $ticket)
     {
-        abort_unless($this->isTicketAdmin($request), 403);
+        abort_unless($this->isTicketAdmin($request) && !$this->ticketBoardDenied($request, $ticket->board), 403);
         $ticket->update(['status' => TimetableBlockTicket::CANCELLED]);
 
         return response()->json(['ok' => true]);

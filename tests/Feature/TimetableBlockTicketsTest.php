@@ -66,7 +66,8 @@ function ticketAs(Teacher $t, string $role)
 
 function ticketItem(array $s, array $extra = []): array
 {
-    return array_merge(['card_id' => $s['card']->id, 'week' => 5, 'date' => now()->addDays(3)->toDateString(), 'start' => '08:30', 'end' => '09:50',
+    // Sana — kartaning kuni (2 = seshanba) keyingi haftada: HEMIS amali darsning haqiqiy sanasi bilan keladi.
+    return array_merge(['card_id' => $s['card']->id, 'week' => 5, 'date' => now()->addWeek()->startOfWeek()->addDay()->toDateString(), 'start' => '08:30', 'end' => '09:50',
         'type' => 'room', 'text' => 'Xona band', 'group' => 'g-01a',
         'blocker' => ['source' => 'HEMIS', 'group' => 'x-02', 'subject' => 'Fiziologiya', 'teacher' => 'BAND QILGAN B.', 'room' => '101']], $extra);
 }
@@ -212,4 +213,43 @@ it('vaqtni o\'zgartirishda HEMIS bandligi va kutilayotgan bronlar ham tekshirila
     expect($free()->has(9))->toBeFalse();
     ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'time', 'pair' => 9])->assertStatus(422);
     expect(TimetableCardOverride::count())->toBe(0)->and($t->fresh()->status)->toBe('open');
+});
+
+it('"faqat admin" doskasidagi so\'rovni boshqa rollar ko\'ra ham, o\'zgartira ham olmaydi', function () {
+    $s = ticketSetup();
+    Auditorium::create(['code' => 'A55', 'name' => '55-xona', 'active' => true, 'volume' => 30]);
+    $t = makeTicket($s);
+    $s['board']->forceFill(['admin_only' => true])->save();
+
+    ticketAs($s['teacher'], 'oqituvchi')->getJson(route('admin.timetable.block-tickets.show', $t))->assertForbidden();
+    ticketAs($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.block-tickets.respond', $t), ['response' => 'accepted'])->assertForbidden();
+    ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'room', 'auditorium_code' => 'A55'])->assertForbidden();
+    ticketAs($s['reg'], 'registrator_ofisi')->getJson(route('admin.timetable.block-tickets.index', $s['board']))->assertForbidden();
+    ticketAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.block-tickets.send', $s['board']), ['items' => [ticketItem($s)]])->assertForbidden();
+    expect(TimetableCardOverride::count())->toBe(0)->and($t->fresh()->status)->toBe('open');
+});
+
+it('bo\'sh xonalar darsning hozirgi joyi (ko\'chirilgan vaqti) bo\'yicha HEMIS bandligini hisobga oladi', function () {
+    $s = ticketSetup();
+    foreach (['R1', 'R2'] as $c) {
+        Auditorium::create(['code' => $c, 'name' => $c, 'active' => true, 'volume' => 30]);
+    }
+    $t = makeTicket($s);
+    // Dars shu haftada 7-katakka ko'chirilgan (masalan, boshqa so'rov bilan).
+    TimetableCardOverride::create(['card_id' => $s['card']->id, 'week' => 5, 'day' => 2, 'pair' => 7, 'cancelled' => false]);
+    $time = collect(ticketAs($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.block-tickets.show', $t))->json('ticket.free_pairs'))
+        ->firstWhere('pair', 9)['time'] ?? null;
+    $slots = (new ReflectionMethod(\App\Http\Controllers\Admin\TimetableController::class, 'hemisSlotTimes'));
+    $slots->setAccessible(true);
+    $st = $slots->invoke(app(\App\Http\Controllers\Admin\TimetableController::class), $s['board']);
+    $date = $t->lesson_date->toDateString() . ' 00:00:00';
+    // R1 — yangi vaqtda (7-katak) HEMIS'da band; R2 — faqat eski vaqtda (08:30) band.
+    tkInsert('schedules', ['schedule_hemis_id' => 92, 'group_name' => 'boshqa-02', 'subject_name' => 'X', 'lesson_date' => $date,
+        'lesson_pair_start_time' => $st[7][0] . ':00', 'lesson_pair_end_time' => $st[8][1] . ':00', 'employee_id' => 1, 'auditorium_code' => 'R1', 'auditorium_name' => 'R1']);
+    tkInsert('schedules', ['schedule_hemis_id' => 93, 'group_name' => 'boshqa-03', 'subject_name' => 'Y', 'lesson_date' => $date,
+        'lesson_pair_start_time' => '08:30:00', 'lesson_pair_end_time' => '09:50:00', 'employee_id' => 2, 'auditorium_code' => 'R2', 'auditorium_name' => 'R2']);
+
+    $rooms = collect(ticketAs($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.block-tickets.show', $t))->assertOk()
+        ->json('ticket.free_rooms'))->pluck('code')->all();
+    expect($rooms)->not->toContain('R1')->toContain('R2');
 });

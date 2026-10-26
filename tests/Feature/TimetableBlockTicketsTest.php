@@ -264,3 +264,21 @@ it('registrator tasdig\'ini kutayotgan so\'rov bekor qilinsa — bog\'liq o\'zga
     expect($t->fresh()->status)->toBe('cancelled')
         ->and(TimetableChangeRequest::sole()->status)->toBe(TimetableChangeRequest::CANCELLED);
 });
+
+it('kunni o\'zgartirish so\'rovida xabar oluvchilar (o\'qituvchi, guruh) bor; o\'tgan yoki bugungi kunga ko\'chirib bo\'lmaydi', function () {
+    \Illuminate\Support\Carbon::setTestNow('2026-11-02 09:00:00');   // dushanba
+    $s = ticketSetup();
+    $t = makeTicket($s, ['type' => 'teacher', 'date' => '2026-11-03']);   // seshanba (kartaning kuni)
+
+    // Dushanba — bugun: rad etiladi, bo'sh vaqt ham taklif qilinmaydi.
+    expect(ticketAs($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.block-tickets.show', $t) . '?day=1')->json('ticket.free_pairs'))->toBe([]);
+    ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'day', 'day' => 1, 'pair' => 1])
+        ->assertStatus(422);
+    expect(TimetableChangeRequest::count())->toBe(0)->and($t->fresh()->status)->toBe('open');
+
+    ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'day', 'day' => 4, 'pair' => 1])->assertOk();
+    $d = TimetableChangeRequest::sole()->details;
+    expect($d['teacher_ids'] ?? [])->toContain($s['teacher']->id)
+        ->and($d['groups'] ?? [])->toContain('g-01a');
+    \Illuminate\Support\Carbon::setTestNow();
+});

@@ -311,6 +311,8 @@ trait TimetableBlockTickets
             $slots = $this->hemisSlotTimes($board);
             $day = (int) ($request->input('day') ?: $place[0]);
             $pairs = [];
+            // Bugungi yoki o'tgan kunga ko'chirish taklif qilinmaydi.
+            $dayPast = $this->ticketDateFor($ticket, $day) <= now()->toDateString();
             foreach ($slots as $p => [$st, $en]) {
                 if ($p + $card->lenHalf() - 1 > count($slots) || ($card->lenHalf() >= 2 && $p % 2 === 0)) {
                     continue;
@@ -318,7 +320,7 @@ trait TimetableBlockTickets
                 if ($day === $place[0] && $p === $place[1]) {
                     continue;
                 }
-                if (!$this->ticketSlotConflicts($ticket, $card, $day, $p, 0)) {
+                if (!$dayPast && !$this->ticketSlotConflicts($ticket, $card, $day, $p, 0)) {
                     $pairs[] = ['pair' => $p, 'time' => $st . '–' . ($slots[$p + $card->lenHalf() - 1][1] ?? $en)];
                 }
             }
@@ -423,6 +425,11 @@ trait TimetableBlockTickets
                     if ((int) $data['day'] === $day) {
                         throw new \RuntimeException('Kun o\'zgarmagan — vaqtni o\'zgartirish tanlang.');
                     }
+                    // Darsni bugungi yoki o'tgan kunga ko'chirib bo'lmaydi (HEMIS rejasi faqat ertadan boshlanadi).
+                    $dest = $this->ticketDateFor($fresh, (int) $data['day']);
+                    if ($dest <= now()->toDateString()) {
+                        throw new \RuntimeException('Tanlangan kun (' . $dest . ') bugun yoki o\'tgan kun — darsni o\'tmishga ko\'chirib bo\'lmaydi.');
+                    }
                     $payload = ['week' => $ticket->week, 'action' => 'move', 'day' => (int) $data['day'], 'pair' => (int) $data['pair'], 'layer' => 'internal'];
                     $route = 'admin.timetable.cards.week-override';
                     $req = app(TimetableChangeApproval::class)->submit([
@@ -434,7 +441,8 @@ trait TimetableBlockTickets
                         'summary' => 'To\'siq №' . $ticket->id . ': ' . $ticket->group_name . ' · ' . $card->subject_name . ' · ' . $ticket->week
                             . '-hafta — ' . (BlockTicketTelegram::DAY_NAMES[(int) $data['day']] ?? $data['day']) . 'ga ko\'chirish'
                             . (!empty($data['note']) ? ' — ' . $data['note'] : ''),
-                        'details' => [],
+                        // Tasdiqlangach xabar oladiganlar (o'qituvchi, guruhlar, fakultet) — oddiy o'zgarish so'rovidagidek.
+                        'details' => app(TimetableChangeApproval::class)->detailsFromCards(collect([$card])),
                     ]);
                     $fresh->update(['status' => TimetableBlockTicket::PENDING_REGISTRAR, 'change_request_id' => $req->id,
                         'resolution' => ['kind' => 'day', 'day' => (int) $data['day'], 'pair' => (int) $data['pair'], 'by' => $who, 'at' => now()->toDateTimeString(), 'note' => $data['note'] ?? null]]);

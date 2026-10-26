@@ -457,7 +457,7 @@ class TimetableChangeApproval
         return $controller->changeRequestCards($board, $route, $p);
     }
 
-    private function detailsFromCards($cards): array
+    public function detailsFromCards($cards): array
     {
         $controller = app(TimetableController::class);
         $groups = [];

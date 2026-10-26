@@ -7783,6 +7783,11 @@ class TimetableController extends Controller
             $facName = (string) ($facMap[(int) $fk] ?? ($facMap[$fk] ?? ''));
             foreach ($snap->data ?? [] as $bl) {
                 $fac = mb_strtolower(trim((string) ($bl['department_name'] ?? '')) ?: trim($facName));
+                // Fakultet guruhi qolmagan bo'lsa ham "tasdiqlangan" — eski kartalari chiqmaydi. Fakulteti aniqlanmagan
+                // ('' — har qaysi fakultetga tegishli) bo'sh blok esa hech narsani yashirmasin.
+                if ($fac !== '') {
+                    $keys[$fac] ??= [];
+                }
                 foreach ($bl['courses'] ?? [] as $co) {
                     foreach ($co['oqims'] ?? [] as $oq) {
                         foreach ($oq['rows'] ?? [] as $r) {

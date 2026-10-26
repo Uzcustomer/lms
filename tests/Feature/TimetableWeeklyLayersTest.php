@@ -953,3 +953,20 @@ it('biriktirish ro\'yxatidagi oqim filtri fakultet bo\'yicha: oqimi tasdiqlanmag
     expect($u)->toContain('F1|g-01a')->not->toContain("F2|g-05a (o'z)")
         ->and($u)->not->toContain('F2|g-01a');
 });
+
+it('fakultetning tasdiqlangan oqimida guruh qolmagan bo\'lsa — uning eski kartalari biriktirish ro\'yxatida chiqmaydi', function () {
+    $s = layersSetup();
+    $s['board']->update(['kind' => 'real']);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'davolash ishi', 'course' => 2,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Gigiyena', 'group_name' => "g-05a (o'z)", 'kafedra_name' => 'Gigiyena kafedrasi']);
+    // F1 da guruh bor; F2 ning tasdiqlangan oqimida blok qolgan, lekin barcha guruhlari o'chirilgan (oqims bo'sh).
+    foreach ([['1', 'F1', [['label' => '1-oqim', 'lang' => 'uz', 'total' => 15, 'rows' => [['name' => "g-01a (o'z)", 'count' => 15]]]]], ['2', 'F2', []]] as [$fk, $fac, $oqims]) {
+        \App\Models\OqimSnapshot::create(['context_key' => 'k' . $fk, 'context' => ['faculty' => $fk], 'status' => 'approved', 'approved_at' => now(),
+            'data' => [['merge_key' => 'x|davolash ishi', 'title' => 'davolash ishi', 'department_name' => $fac,
+                'courses' => [['level_code' => 12, 'oqims' => $oqims]]]]]);
+    }
+    $units = collect(layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.teacher-units', $s['board']))->assertOk()->json('units'))
+        ->map(fn ($u) => $u['faculty_name'] . '|' . $u['group_name'])->unique()->values()->all();
+    expect($units)->toContain('F1|g-01a')->not->toContain("F2|g-05a (o'z)");
+});

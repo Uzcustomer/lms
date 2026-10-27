@@ -6205,12 +6205,12 @@ class TimetableController extends Controller
 
             $headers = [
                 'ID', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Oqim', 'Guruh', 'Fan',
-                'Turi', 'Hafta', 'Talabalar', 'O\'qituvchi', 'Auditoriya',
+                'Turi', 'Hafta', 'Talabalar', 'O\'qituvchi', 'Auditoriya', 'Tekshirilgan vaqt', 'Sabab',
             ];
             $sheet->fromArray([$headers], null, 'A1');
-            $sheet->mergeCells('A1:L1');
+            $sheet->mergeCells('A1:N1');
             $sheet->setCellValue('A1', 'Joylanmagan kartalar' . ($external ? ' (tashqi jadval)' : '') . ' - ' . $board->name);
-            $sheet->getStyle('A1:L1')->applyFromArray([
+            $sheet->getStyle('A1:N1')->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 13],
                 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1D4ED8']],
                 'alignment' => ['horizontal' => 'center', 'vertical' => 'center'],
@@ -6218,14 +6218,16 @@ class TimetableController extends Controller
             $sheet->getRowDimension(1)->setRowHeight(24);
 
             $sheet->fromArray([$headers], null, 'A2');
-            $sheet->getStyle('A2:L2')->applyFromArray([
+            $sheet->getStyle('A2:N2')->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
                 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '475569']],
                 'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true],
             ]);
 
+            $reasonFor = $this->unplacedReasonFn($board, $external, $week);
             $rows = [];
             foreach ($cards as $card) {
+                [$slotText, $reason] = $reasonFor($card);
                 $rows[] = [
                     $card->id,
                     $card->faculty_name ?: '-',
@@ -6239,6 +6241,8 @@ class TimetableController extends Controller
                     (int) $card->students,
                     $external ? '—' : ($card->teacher_name ?: 'Biriktirilmagan'),
                     $external ? '—' : ($card->auditorium_name ?: 'Biriktirilmagan'),
+                    $slotText,
+                    $reason,
                 ];
             }
             if ($rows) {
@@ -6246,14 +6250,14 @@ class TimetableController extends Controller
             }
 
             $lastRow = max(2, 2 + count($rows));
-            $sheet->getStyle('A2:L' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
-            $sheet->getStyle('A3:L' . $lastRow)->getAlignment()->setVertical('top')->setWrapText(true);
+            $sheet->getStyle('A2:N' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
+            $sheet->getStyle('A3:N' . $lastRow)->getAlignment()->setVertical('top')->setWrapText(true);
             $sheet->freezePane('A3');
-            $widths = ['A'=>9,'B'=>22,'C'=>25,'D'=>8,'E'=>14,'F'=>20,'G'=>34,'H'=>12,'I'=>9,'J'=>11,'K'=>24,'L'=>22];
+            $widths = ['A'=>9,'B'=>22,'C'=>25,'D'=>8,'E'=>14,'F'=>20,'G'=>34,'H'=>12,'I'=>9,'J'=>11,'K'=>24,'L'=>22,'M'=>20,'N'=>70];
             foreach ($widths as $col => $width) $sheet->getColumnDimension($col)->setWidth($width);
             for ($r = 3; $r <= $lastRow; $r++) $sheet->getRowDimension($r)->setRowHeight(-1);
 
-            $sheet->getAutoFilter()->setRange('A2:L' . $lastRow);
+            $sheet->getAutoFilter()->setRange('A2:N' . $lastRow);
             $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
             $filename = 'joylanmagan-kartalar-diagnostikasi-' . $board->id . '.xlsx';
             return response()->streamDownload(function () use ($writer) {
@@ -6265,6 +6269,84 @@ class TimetableController extends Controller
             Log::warning('Timetable unplaced-export xatosi: ' . $e->getMessage());
             return response()->json(['error' => 'Diagnostika Excelini yaratib bo\'lmadi: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Joylanmagan karta sababi (Excel uchun): nomzod vaqt tekshiriladi — o'sha vaqtda kim band (guruh / o'qituvchi /
+     * xona) va bitta para pastda ham. Nomzod: ichki jadval uchun — odatiy ichki joyi (haftalik ko'chirishlarining eng
+     * ko'pi), bo'lmasa tashqi jadvaldagi joyi; tashqi jadval uchun — ichki jadvaldagi joyi, bo'lmasa odatiy ichki joyi.
+     * Joyi umuman bo'lmasa — shuni aytadi. Chegara — yo'nalish panjarasi (gridFor). Qaytaradi: [tekshirilgan vaqt, sabab].
+     */
+    private function unplacedReasonFn(TimetableBoard $board, bool $external, int $week): \Closure
+    {
+        $state = $this->occupancyState($board->id);
+        $grids = [];
+        // Kun nomlari — doska sozlamasidan (jadvaldagi kabi), bo'lmasa sukutdagilar.
+        $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
+        $paraText = fn (int $pair, int $len) => $len >= 2 && $pair % 2 === 1
+            ? intdiv($pair + 1, 2) . '-para'
+            : intdiv($pair + 1, 2) . '-para (' . ($pair % 2 === 1 ? '1' : '2') . '-yarmi)';
+        $usual = function (TimetableCard $card) use ($state): ?array {
+            $cnt = [];
+            foreach ($state['ov'][$card->id] ?? [] as $o) {
+                if (!$o->cancelled && $o->day && $o->pair) {
+                    $k = (int) $o->day . '/' . (int) $o->pair;
+                    $cnt[$k] = ($cnt[$k] ?? 0) + 1;
+                }
+            }
+            if (!$cnt) {
+                return null;
+            }
+            arsort($cnt);
+
+            return array_map('intval', explode('/', (string) array_key_first($cnt)));
+        };
+
+        return function (TimetableCard $card) use ($board, $state, $external, $week, $dayNames, $paraText, $usual, &$grids): array {
+            $cands = $external
+                ? [[$card->day && $card->pair ? [(int) $card->day, (int) $card->pair] : null, 'ichki jadval'], [$usual($card), 'odatiy ichki joyi']]
+                : [[$usual($card), 'odatiy joyi'], [$card->ext_day && $card->ext_pair ? [(int) $card->ext_day, (int) $card->ext_pair] : null, 'tashqi jadval']];
+            $slot = null;
+            $src = '';
+            foreach ($cands as [$cand, $label]) {
+                if ($cand) {
+                    [$slot, $src] = [$cand, $label];
+                    break;
+                }
+            }
+            $noTeacher = $card->teacher_id ? '' : "O'qituvchi biriktirilmagan. ";
+            if (!$slot) {
+                return ['—', $noTeacher . "Tashqi jadvalda ham, ichkida ham joyi yo'q — qaysi vaqtga qo'yish noma'lum."];
+            }
+            [$day, $pair] = $slot;
+            $len = $card->lenHalf();
+            $grid = $grids[$card->faculty_name . '|' . $card->specialty_name . '|' . $card->course]
+                ??= $this->gridFor($board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course);
+            $check = function (int $p) use ($card, $external, $week, $day, $state, $len, $grid): array {
+                if ($day < 1 || $day > $grid['days'] || $p < 1 || $p + $len - 1 > $grid['pairs']) {
+                    return ['Jadval chegarasidan tashqarida'];
+                }
+                try {
+                    $errs = $external ? $this->findExternalConflicts($card, $day, $p)
+                        : ($week ? $this->findWeekConflicts($card, $week, $day, $p, 0, $state)
+                            : $this->findConflicts($card, $day, $p, 0, $state));
+                } catch (\Throwable $e) {
+                    return ['Tekshirib bo\'lmadi: ' . $e->getMessage()];
+                }
+
+                return array_values(array_unique($errs));
+            };
+            $slotText = ($dayNames[$day - 1] ?? $day . '-kun') . ', ' . $paraText($pair, $len) . ' (' . $src . ')';
+            $e1 = $check($pair);
+            if (!$e1) {
+                return [$slotText, $noTeacher . "Bu vaqt bo'sh — joylash mumkin."];
+            }
+            $e2 = $check($pair + 2);
+            $reason = $noTeacher . implode('; ', $e1)
+                . ($e2 ? ' || 1 para pastda ham: ' . implode('; ', $e2) : " || 1 para pastda bo'sh — o'sha yerga qo'yish mumkin.");
+
+            return [$slotText, $reason];
+        };
     }
 
     /** Katak ma'lumotidan (klientdan kelgan JSON) xlsx varaqni tuzadi. */

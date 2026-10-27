@@ -150,6 +150,66 @@ it('joylanmagan kartalar eksporti tanlangan qatlam bo\'yicha', function () {
         ->and($rowsOf('internal'))->toBe([['Gigiyena', 'MAXFIY O.']]);
 });
 
+it('joylanmagan kartalar eksporti sababini ko\'rsatadi: kim band, bitta para pastda, joyi yo\'q', function () {
+    $s = layersSetup();
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3]);                                   // tashqi joyi bor, 3-haftada ichkida yo'q
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'day' => 2, 'pair' => 3]); // shu guruh shu vaqtda band
+    $none = TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks']) + ['subject_name' => 'Biologiya', 'group_name' => 'g-01b']);
+
+    $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=internal&week=3')->assertOk();
+    $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+    file_put_contents($file, $res->streamedContent());
+    $rows = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet()->toArray())->slice(2)->keyBy(fn ($r) => $r[6]);
+    @unlink($file);
+
+    expect($rows->keys()->sort()->values()->all())->toBe(['Biologiya', 'Gigiyena'])
+        ->and($rows['Gigiyena'][12])->toBe('Seshanba, 2-para (tashqi jadval)')
+        ->and($rows['Gigiyena'][13])->toContain('Guruh band')->toContain('Anatomiya')->toContain("1 para pastda bo'sh")
+        ->and($rows['Biologiya'][12])->toBe('—')
+        ->and($rows['Biologiya'][13])->toContain("joyi yo'q");
+});
+
+it('joylanmagan kartalar sababi doska panjarasi bo\'yicha: 1 para pastda panjaradan chiqsa — bo\'sh deyilmaydi', function () {
+    $s = layersSetup();
+    $s['board']->update(['pairs_per_day' => 4]);   // kuniga 4 yarim-slot (2 para)
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+
+    $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=internal&week=3')->assertOk();
+    $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+    file_put_contents($file, $res->streamedContent());
+    $rows = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet()->toArray())->slice(2)->keyBy(fn ($r) => $r[6]);
+    @unlink($file);
+
+    expect($rows['Gigiyena'][13])->toContain('Guruh band')->toContain('1 para pastda ham: Jadval chegarasidan tashqarida')
+        ->not->toContain("pastda bo'sh");
+});
+
+it('tashqi jadval eksporti: ichki jadvaldagi joyi tekshiriladi («ichkida ham joyi yo\'q» deyilmaydi)', function () {
+    $s = layersSetup();
+    $s['own']->update(['day' => 1, 'pair' => 1]);                   // ichkida joylangan, tashqida yo'q
+    $s['foreign']->update(['ext_day' => 1, 'ext_pair' => 1]);       // shu guruh tashqi jadvalda o'sha vaqtda band
+
+    $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=external')->assertOk();
+    $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+    file_put_contents($file, $res->streamedContent());
+    $rows = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet()->toArray())->slice(2)->keyBy(fn ($r) => $r[6]);
+    @unlink($file);
+
+    expect($rows['Gigiyena'][12])->toBe('Dushanba, 1-para (ichki jadval)')
+        ->and($rows['Gigiyena'][13])->toContain('Guruh band')->toContain('Anatomiya')->not->toContain("joyi yo'q");
+
+    // Doska sozlamasidagi kun nomlari (jadvaldagi kabi) ishlatiladi
+    $s['board']->update(['day_names' => ['Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba']]);
+    $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=external')->assertOk();
+    $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+    file_put_contents($file, $res->streamedContent());
+    $rows = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet()->toArray())->slice(2)->keyBy(fn ($r) => $r[6]);
+    @unlink($file);
+    expect($rows['Gigiyena'][12])->toBe('Seshanba, 1-para (ichki jadval)');
+});
+
 it('tashqi jadvalda haftalari kesishmaydigan kartalar bir katakni bo\'lisha oladi', function () {
     $s = layersSetup();
     // own: 1-7 hafta, foreign: 8-15 hafta ("BKP 7 / Umumiy xirurgiya 8" kabi)

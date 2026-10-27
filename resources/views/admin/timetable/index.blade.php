@@ -211,7 +211,7 @@
                             <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
                             <button type="button" id="weeklyExcel" class="tt-weekly-excel" title="Ekrandagi haftalik jadvalni (tanlangan hafta, qatlam va ko'rinish qamrovi bilan) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                             @unless($timetableAssignmentOnly)
-                            <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni tashqi jadvaldagi joyiga yoki undan pastdagi bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
+                            <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni blok bo'lib (bir fanning kartalari ketma-ket, bo'linmasdan) tashqi joyiga yoki o'sha kunning ichidagi eng yaqin bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
                             <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
                             @endunless
                             @if($timetableCanApprove)
@@ -4241,12 +4241,67 @@
                     if (step === 2 && (pl.p - st) % 2) st++;
                     for (; st < pl.p; st += step) { if (await move(c, pl.d, st)) { res.up++; break; } }
                 }
-                for (const c of scopeCards.filter(c => !off(c) && !place(c) && c.ext_day && c.ext_pair)) {
-                    let ok = false;
-                    for (let p = +c.ext_pair; p <= maxPair && !ok; p += cardLen(c) > 1 ? 2 : 1) {
-                        if (free(occ(), c, +c.ext_day, p) && await move(c, +c.ext_day, p)) ok = true;
+                // Joylanmagan kartalar blok bo'lib qo'yiladi: bir guruhning bir fandan (bo'lak harfisiz)
+                // shu kundagi amaliy kartalari tashqi jadvalda yonma-yon bo'lsa, ichkida ham ketma-ket
+                // turadi — bo'linib ketmaydi. Blok avval tashqi joyiga, band bo'lsa o'sha kunning ichida
+                // eng yaqin bo'sh joyga qo'yiladi; boshqa kunga o'tkazilmaydi. Sig'maganlar joylanmagan
+                // qoladi (qo'lda surish mumkin — qo'lda joylashga bu qoida qo'yilmaydi).
+                const reset = async c => {
+                    try {
+                        await api(BASE + '/cards/' + c.id + '/week-override', 'POST', { week: W, action: 'reset' });
+                        delete overrides[key(c)];
+                    } catch (e) { }
+                };
+                const baseSubj = s => String(s || '').replace(/\s*\([abc]\)\s*$/, '').trim();
+                const isBolak = c => /\([abc]\)\s*$/.test(String(c.subject_name || ''));
+                const blockKey = c => c.training_type === 'lecture' || isBolak(c) ? 'k' + c.id
+                    : cardGroups(c).map(g => gkey(c, g)).sort().join(',') + '|' + baseSubj(c.subject_name) + '|' + c.ext_day;
+                const sameBlock = (a, b) => blockKey(a) === blockKey(b) && !String(blockKey(a)).startsWith('k');
+                const todo = scopeCards.filter(c => !off(c) && !place(c) && c.ext_day && c.ext_pair);
+                const groups = {};
+                todo.forEach(c => (groups[blockKey(c)] = groups[blockKey(c)] || []).push(c));
+                const blocks = [];
+                Object.values(groups).forEach(list => {
+                    list.sort((a, b) => +a.ext_pair - +b.ext_pair || (+b.weeks || 0) - (+a.weeks || 0));
+                    let cur = null;
+                    list.forEach(c => {
+                        if (cur && +c.ext_pair <= cur.end + 1) { cur.cs.push(c); cur.end = Math.max(cur.end, +c.ext_pair + cardLen(c) - 1); }
+                        else { cur = { cs: [c], end: +c.ext_pair + cardLen(c) - 1 }; blocks.push(cur); }
+                    });
+                });
+                for (const b of blocks) {
+                    const d = +b.cs[0].ext_day, len = b.cs.reduce((s, c) => s + cardLen(c), 0);
+                    // Shu fanning shu haftada allaqachon joylashgan qismi bo'lsa — blok uning yoniga yopishadi.
+                    const placedSib = all.filter(x => !off(x) && place(x) && place(x).d === d && sameBlock(x, b.cs[0]));
+                    let starts;
+                    if (placedSib.length) {
+                        const lo = Math.min(...placedSib.map(x => place(x).p));
+                        const hi = Math.max(...placedSib.map(x => place(x).p + cardLen(x)));
+                        starts = [hi, lo - len];
+                    } else {
+                        const p0 = +b.cs[0].ext_pair;
+                        starts = [];
+                        for (let s = 1; s + len - 1 <= maxPair; s++) starts.push(s);
+                        starts.sort((x, y) => (x === p0 ? -1 : y === p0 ? 1 : 0) || Math.abs(x - p0) - Math.abs(y - p0) || x - y);
                     }
-                    if (ok) res.placed++; else res.left++;
+                    let ok = false;
+                    for (const s of starts) {
+                        if (s < 1 || s + len - 1 > maxPair) continue;
+                        let p = s, fits = true;
+                        const u = occ();
+                        for (const c of b.cs) { if (!free(u, c, d, p)) { fits = false; break; } p += cardLen(c); }
+                        if (!fits) continue;
+                        p = s;
+                        const done = [];
+                        for (const c of b.cs) {
+                            if (!(await move(c, d, p))) break;
+                            done.push(c);
+                            p += cardLen(c);
+                        }
+                        if (done.length === b.cs.length) { ok = true; break; }
+                        for (const c of done) await reset(c);
+                    }
+                    if (ok) res.placed += b.cs.length; else res.left += b.cs.length;
                 }
                 return res;
             }
@@ -4256,7 +4311,7 @@
                 // Faqat tanlangan qamrovdagi panjaralar semestri (boshqa, uzunroq panjara emas).
                 const total = Math.max(curWeek, ...scope.map(cardTermWeeks));
                 if (!confirm('Qamrov: ' + scopeLabelText() + '\n\nIchki jadvalda bo\'sh qolgan dars joylariga keyingi darslar suriladi, ' +
-                    'joylashmagan kartalar pastdagi bo\'sh joyga qo\'yiladi.\n\nDavom etamizmi?')) return;
+                    'joylashmagan kartalar o\'sha kunning ichida bo\'sh joyga ketma-ket (bo\'linmasdan) qo\'yiladi.\n\nDavom etamizmi?')) return;
                 const allWeeks = total > 1 && confirm('Barcha haftalarga (1–' + total + ') qo\'llansinmi?\n\nOK — barcha haftalar, Bekor — faqat ' + curWeek + '-hafta');
                 const weeks = allWeeks ? Array.from({ length: total }, (_, i) => i + 1) : [curWeek];
                 this.disabled = true;

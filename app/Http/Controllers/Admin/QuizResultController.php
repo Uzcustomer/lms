@@ -177,10 +177,10 @@ class QuizResultController extends Controller
 
             // Sana filtrlari
             if ($request->filled('date_from')) {
-                $query->whereDate('date_finish', '>=', $request->date_from);
+                $query->where('date_finish', '>=', $request->date_from);
             }
             if ($request->filled('date_to')) {
-                $query->whereDate('date_finish', '<=', $request->date_to);
+                $query->where('date_finish', '<', self::dayAfter($request->date_to));
             }
 
             $totalCount = (clone $query)->count();
@@ -752,10 +752,10 @@ class QuizResultController extends Controller
             $query->where('quiz_type', $request->quiz_type);
         }
         if ($request->filled('date_from')) {
-            $query->whereDate('date_finish', '>=', $request->date_from);
+            $query->where('date_finish', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('date_finish', '<=', $request->date_to);
+            $query->where('date_finish', '<', self::dayAfter($request->date_to));
         }
 
         // Excel export
@@ -799,11 +799,46 @@ class QuizResultController extends Controller
      * Quiz turi bo'yicha YN turi ustunida Test yoki OSKI deb ko'rsatiladi.
      * Barcha urinishlar ko'rsatiladi.
      */
+    /**
+     * "Shu kungacha" filtri uchun keyingi kun: date_finish < keyingi kun —
+     * whereDate() dan farqli, ustundagi indeksdan foydalanadi.
+     */
+    private static function dayAfter($date): string
+    {
+        return \Carbon\Carbon::parse($date)->addDay()->toDateString();
+    }
+
+    /**
+     * Natijalar egalari bitta so'rovda: [hemis_id yoki student_id_number => Student].
+     * Har natija uchun alohida Student so'rovi (yuzlab tanlanganda) sekin edi.
+     * hemis_id mosligi student_id_number dan ustun.
+     */
+    private function studentsForResults($results): array
+    {
+        $ids = collect($results)->pluck('student_id')->filter()->unique()->values()->all();
+        if (!$ids) {
+            return [];
+        }
+        $students = Student::where(fn ($q) => $q->whereIn('hemis_id', $ids)->orWhereIn('student_id_number', $ids))->get();
+        $lookup = [];
+        foreach ($students as $s) {
+            if ($s->student_id_number !== null && !isset($lookup[(string) $s->student_id_number])) {
+                $lookup[(string) $s->student_id_number] = $s;
+            }
+        }
+        foreach ($students as $s) {
+            $lookup[(string) $s->hemis_id] = $s;
+        }
+
+        return $lookup;
+    }
+
     public function tartibgaSol(Request $request)
     {
         try {
             set_time_limit(300);
             ini_set('memory_limit', '512M');
+            $tStart = microtime(true);
 
             $query = HemisQuizResult::where('is_active', 1);
 
@@ -838,8 +873,8 @@ class QuizResultController extends Controller
                                      ->whereColumn('h2.attempt_id', '>', 'hemis_quiz_results.attempt_id');
                               });
                         });
-                    if ($dateFrom) $sub->whereDate('h2.date_finish', '>=', $dateFrom);
-                    if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
+                    if ($dateFrom) $sub->where('h2.date_finish', '>=', $dateFrom);
+                    if ($dateTo)   $sub->where('h2.date_finish', '<', self::dayAfter($dateTo));
                 });
             }
             if ($hasNameSearch) {
@@ -855,10 +890,10 @@ class QuizResultController extends Controller
                 $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
             }
             if ($request->filled('date_from')) {
-                $query->whereDate('date_finish', '>=', $request->date_from);
+                $query->where('date_finish', '>=', $request->date_from);
             }
             if ($request->filled('date_to')) {
-                $query->whereDate('date_finish', '<=', $request->date_to);
+                $query->where('date_finish', '<', self::dayAfter($request->date_to));
             }
             // Yuklashdan keyin faqat shu talabalar qayta hisoblanadi — xulosa
             // (yuklangan / dublikat / bahosi bor) faqat talabaning o'z natijalariga
@@ -868,6 +903,7 @@ class QuizResultController extends Controller
             }
 
             $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
+            $tFetched = microtime(true);
 
             // Barcha student_id larni yig'ish va bulk query
             $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
@@ -1311,6 +1347,7 @@ class QuizResultController extends Controller
             }
 
             // ====== DATA TAYYORLASH ======
+            $tPrepared = microtime(true);
             $data = [];
             $rowNum = 0;
 
@@ -1394,6 +1431,19 @@ class QuizResultController extends Controller
                     'oski_avg' => $xulosa['oski_avg'],
                     'retake_group_id' => $xulosa['retake_group_id'] ?? null,
                 ];
+            }
+
+            // Sekin so'rovni topish uchun: qaysi bosqich ko'p vaqt olgani logga yoziladi
+            $tTotal = microtime(true) - $tStart;
+            if ($tTotal > 3) {
+                Log::info('[tartibgaSol] sekin', [
+                    'jami_s' => round($tTotal, 2),
+                    'natijalar_s' => round($tFetched - $tStart, 2),
+                    'tayyorlash_s' => round($tPrepared - $tFetched, 2),
+                    'xulosa_s' => round(microtime(true) - $tPrepared, 2),
+                    'natijalar_soni' => count($data),
+                    'filtr' => $request->only(['date_from', 'date_to', 'student_name', 'shakl_search', 'show_duplicates']),
+                ]);
             }
 
             return response()->json([
@@ -2302,10 +2352,10 @@ class QuizResultController extends Controller
     {
         $rq = HemisQuizResult::where('is_active', 1);
         if ($request->filled('date_from')) {
-            $rq->whereDate('date_finish', '>=', $request->date_from);
+            $rq->where('date_finish', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $rq->whereDate('date_finish', '<=', $request->date_to);
+            $rq->where('date_finish', '<', self::dayAfter($request->date_to));
         }
 
         $rows = $rq->get()->filter(
@@ -2428,11 +2478,11 @@ class QuizResultController extends Controller
         }
 
         if ($request->filled('date_from')) {
-            $query->whereDate('date_finish', '>=', $request->date_from);
+            $query->where('date_finish', '>=', $request->date_from);
         }
 
         if ($request->filled('date_to')) {
-            $query->whereDate('date_finish', '<=', $request->date_to);
+            $query->where('date_finish', '<', self::dayAfter($request->date_to));
         }
 
         $perPage = $request->input('per_page', 50);
@@ -3458,19 +3508,19 @@ class QuizResultController extends Controller
      */
     public function getReuploadPreview(Request $request)
     {
+        // exists: har ID uchun alohida so'rov edi — mavjud bo'lmaganlari whereIn da o'zi tushib qoladi
         $request->validate([
             'ids' => 'required|array|min:1',
-            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+            'ids.*' => 'integer',
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+        $studentLookup = $this->studentsForResults($results);
 
         // (fan_id, group_id) bo'yicha guruhlash. Talabaning hozirgi semester_code'i ham saqlanadi.
         $groups = [];
         foreach ($results as $r) {
-            $student = Student::where('hemis_id', $r->student_id)
-                ->orWhere('student_id_number', $r->student_id)
-                ->first();
+            $student = $studentLookup[(string) $r->student_id] ?? null;
             if (!$student || !$student->group_id) {
                 continue;
             }
@@ -3951,7 +4001,7 @@ class QuizResultController extends Controller
     {
         $request->validate([
             'ids' => 'required|array|min:1',
-            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+            'ids.*' => 'integer',
             'confirmed_fan_names' => 'nullable|array', // conflict tasdiqlanganda yuboriladi
             'subject_overrides' => 'nullable|array',   // { "<fan_id>_<group_id>": <subject_id> }
             'yn_turi_overrides' => 'nullable|array',   // { "<fan_id>_<group_id>": "oski"|"test"|"mavzu" }
@@ -3970,10 +4020,9 @@ class QuizResultController extends Controller
 
             $deletedCount = 0;
             $errors = [];
+            $studentLookup = $this->studentsForResults($results);
             foreach ($results as $result) {
-                $student = Student::where('hemis_id', $result->student_id)
-                    ->orWhere('student_id_number', $result->student_id)
-                    ->first();
+                $student = $studentLookup[(string) $result->student_id] ?? null;
                 if (!$student) continue;
 
                 $key = $result->fan_id . '_' . ($student->group_id ?? '');
@@ -4162,12 +4211,13 @@ class QuizResultController extends Controller
     {
         $request->validate([
             'ids' => 'required|array|min:1',
-            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+            'ids.*' => 'integer',
             'subject_overrides' => 'nullable|array',
             'yn_turi_overrides' => 'nullable|array',
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+        $studentLookup = $this->studentsForResults($results);
         $subjectOverrides = $request->input('subject_overrides', []);
         $ynTuriOverrides = $request->input('yn_turi_overrides', []);
 
@@ -4177,9 +4227,7 @@ class QuizResultController extends Controller
         $comparisons = [];
 
         foreach ($results as $result) {
-            $student = Student::where('hemis_id', $result->student_id)
-                ->orWhere('student_id_number', $result->student_id)
-                ->first();
+            $student = $studentLookup[(string) $result->student_id] ?? null;
 
             if (!$student) continue;
 

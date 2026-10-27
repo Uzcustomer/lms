@@ -2003,7 +2003,8 @@
                                     html += '</ul></div>';
                                 }
                                 $('#upload-result').html(html).show();
-                                if (data.deleted_count > 0) loadTartibgaSol();
+                                // Butun jadval emas — faqat shu talabalar qatorlari qayta hisoblanadi
+                                if (data.deleted_count > 0) refreshStudentsAfterUpload(ids);
                             },
                             error: function(xhr) {
                                 alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
@@ -2068,8 +2069,8 @@
                         $('#upload-result').html(html).show();
 
                         if (data.deleted_count > 0) {
-                            // Server bilan qayta sinxronlash
-                            loadTartibgaSol();
+                            // Server bilan qayta sinxronlash — faqat shu talabalar qatorlari
+                            refreshStudentsAfterUpload(ids);
                         }
                     },
                     error: function(xhr) {

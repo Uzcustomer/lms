@@ -139,3 +139,62 @@ it('sinxronlashdan keyin faqat shu safar yaratilgan karta eski joyni oladi — a
         ->and($spare->fresh()->only(['day', 'pair', 'ext_day', 'ext_pair']))->toBe(['day' => null, 'pair' => null, 'ext_day' => null, 'ext_pair' => null])
         ->and(TimetableBoardSnapshot::count())->toBe(0);
 });
+
+it('hafta-hafta (shablonsiz) joylangan karta: qayta yaratilsa ham, nusxadan tiklansa ham haftalik joylari qaytadi', function () {
+    $s = snapSetup();
+    // Ichki jadvalda shablon joyi yo'q — faqat 3- va 4-haftada joylangan
+    $s['old']->update(['day' => null, 'pair' => null, 'ext_day' => null, 'ext_pair' => null]);
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    TimetableCardOverride::create(['card_id' => $s['old']->id, 'week' => 3, 'day' => 2, 'pair' => 3, 'start_half' => 0, 'cancelled' => false]);
+    TimetableCardOverride::create(['card_id' => $s['old']->id, 'week' => 4, 'day' => 3, 'pair' => 1, 'start_half' => 0, 'cancelled' => false]);
+    $weekOf = fn (int $cardId) => TimetableCardOverride::where('card_id', $cardId)->where('cancelled', false)->orderBy('week')
+        ->get()->map(fn ($o) => $o->week . ':' . $o->day . '/' . $o->pair)->all();
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+
+    // Saqlanib qolgan karta: haftalik joylari olib tashlangan — nusxadan qaytadi
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    $r = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.snapshots.restore', [$s['board'], $snap]), ['dry_run' => 0])->assertOk()->json();
+    expect($r['cards'])->toBe(1)->and($r['week_moves'])->toBe(2)
+        ->and($weekOf($s['old']->id))->toBe(['3:2/3', '4:3/1'])
+        ->and($s['old']->fresh()->day)->toBeNull();
+
+    // Sinxronlash: karta (hafta soni o'zgargan) qayta yaratildi — yangi karta o'sha haftalarda joylanadi
+    $before = app(BoardSnapshots::class)->collect($s['board']);
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    $s['old']->delete();
+    $new = TimetableCard::create($s['base'] + ['len_half' => 3, 'weeks' => 10]);
+    expect(app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before))->toBe(1)
+        ->and($weekOf($new->id))->toBe(['3:2/3', '4:3/1'])
+        ->and($new->fresh()->day)->toBeNull()
+        ->and($new->fresh()->teacher_id)->toBe($s['head']->id);
+});
+
+it('qisman tiklash: saqlanib qolgan karta o\'z eski joyiga qaytadi, ko\'chirilgan kartaning eski joyini olmaydi', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $mon = TimetableCard::create($fiz + ['day' => 1, 'pair' => 1]);
+    $tue = TimetableCard::create($fiz + ['day' => 2, 'pair' => 1, 'teacher_id' => $s['admin']->id, 'teacher_name' => 'ADMIN']);
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+    // Dushanbadagi karta chorshanbaga ko'chirildi, seshanbadagisi bo'shatildi
+    $mon->update(['day' => 3]);
+    $tue->update(['day' => null, 'pair' => null]);
+
+    $r = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.snapshots.restore', [$s['board'], $snap]), ['dry_run' => 0])->assertOk()->json();
+    expect($r['cards'])->toBe(1)
+        ->and($tue->fresh()->only(['day', 'pair', 'teacher_id']))->toBe(['day' => 2, 'pair' => 1, 'teacher_id' => $s['admin']->id])
+        ->and($mon->fresh()->only(['day', 'pair']))->toBe(['day' => 3, 'pair' => 1]);
+});
+
+it('«Kartochkalar» (to\'liq) qayta yaratgan bir xil karta: nusxadan hafta-hafta joylari kartama-karta qaytadi', function () {
+    $s = snapSetup();
+    $s['old']->update(['day' => null, 'pair' => null, 'ext_day' => null, 'ext_pair' => null]);
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'before_generate');   // 5-hafta: 4-kun 1-para
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    $s['old']->delete();
+    $new = TimetableCard::create($s['base'] + ['len_half' => 3, 'weeks' => 15]);
+
+    $r = app(BoardSnapshots::class)->restorePlacement($s['board'], $snap->data(), false, [], false);
+    expect($r['cards'])->toBe(1)
+        ->and(TimetableCardOverride::where('card_id', $new->id)->get(['week', 'day', 'pair'])->toArray())->toBe([['week' => 5, 'day' => 4, 'pair' => 1]])
+        ->and($new->fresh()->teacher_id)->toBe($s['head']->id);
+});

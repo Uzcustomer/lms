@@ -165,8 +165,45 @@ class BoardSnapshots
 
         $cardUpdates = [];     // id => [col => value]
         $ovInserts = [];       // [card_id, week, day, pair, start_half]
+        $weekDone = [];        // karta id => true: kamida bitta haftalik joy tiklandi
         $stats = ['units' => 0, 'cards' => 0, 'internal' => 0, 'external' => 0, 'week_moves' => 0, 'teacher_room' => 0,
             'no_source' => 0, 'source_unplaced' => 0, 'examples' => []];
+
+        $valid = fn (array $o) => empty($o['cancelled']) && !empty($o['day']) && !empty($o['pair']);
+        // Haftalik ko'chirish (ichki jadval): eski kartaning shu haftadagi joyi, xuddi shu siljish bilan.
+        // Hafta yangi kartada bekor qilingan yoki allaqachon joylangan bo'lsa — tegilmaydi (kartaning o'z haftalari).
+        $addWeek = function (array $c, int $w, array $o, int $offset) use (&$ovInserts, &$stats, &$weekDone, $curOv): void {
+            $mine = $curOv[(int) $c['id']][$w] ?? null;
+            if ($mine && (!empty($mine['cancelled']) || !empty($mine['day']))) {
+                return;
+            }
+            $ovInserts[] = ['card_id' => $c['id'], 'week' => $w, 'day' => (int) $o['day'], 'pair' => (int) $o['pair'] + $offset,
+                'start_half' => (int) ($o['start_half'] ?? 0), 'auditorium_code' => $o['auditorium_code'] ?? null,
+                'auditorium_name' => $o['auditorium_name'] ?? null, 'exists' => (bool) $mine];
+            $weekDone[(int) $c['id']] = true;
+            $stats['week_moves']++;
+        };
+        // O'qituvchi/xona — hozir bo'sh bo'lsa, eski kartadan.
+        $teacherRoom = function (array $c, array $oldCard) use (&$cardUpdates, &$stats): void {
+            if (empty($c['teacher_id']) && !empty($oldCard['teacher_id']) && !isset($cardUpdates[$c['id']]['teacher_id'])) {
+                $cardUpdates[$c['id']]['teacher_id'] = $oldCard['teacher_id'];
+                $cardUpdates[$c['id']]['teacher_name'] = $oldCard['teacher_name'];
+                $stats['teacher_room']++;
+            }
+            if (empty($c['auditorium_code']) && !empty($oldCard['auditorium_code']) && !isset($cardUpdates[$c['id']]['auditorium_code'])) {
+                $cardUpdates[$c['id']]['auditorium_code'] = $oldCard['auditorium_code'];
+                $cardUpdates[$c['id']]['auditorium_name'] = $oldCard['auditorium_name'];
+            }
+        };
+        // Shablonsiz (faqat haftalarda) joylashgan eski kartaning hamma haftalik joylari.
+        $copyWeeks = function (array $c, array $oldCard) use ($oldOv, $valid, $addWeek, $teacherRoom): void {
+            foreach ($oldOv[(int) $oldCard['id']] ?? [] as $w => $o) {
+                if ($valid($o)) {
+                    $addWeek($c, (int) $w, $o, 0);
+                }
+            }
+            $teacherRoom($c, $oldCard);
+        };
 
         foreach ($curByUnit as $key => $cards) {
             $todo = array_values(array_filter($cards, fn ($c) => empty($c['day']) && empty($c['ext_day']) && !isset($oldIds[(int) $c['id']])));
@@ -178,93 +215,139 @@ class BoardSnapshots
                 $stats['no_source'] += count($todo);
                 continue;
             }
-            // Hozir joylashgan kartalari bo'lsa (birlikning bir qismi qo'yilgan) — faqat qolganlari; eski kartalardan
-            // ham shu birlikda hozir joyi bor kartalar egallagan soatlar chiqarilmaydi (oddiylik: hammasi beriladi).
             $stats['units']++;
-            // Bir xil bo'linish (soat va haftalar bir xil) — kartama-karta; aks holda eski soatlar ichiga ketma-ket.
             $sig = fn (array $list) => implode(',', array_map(fn ($c) => $lenOf($c) . 'x' . (int) ($c['weeks'] ?? 0), $list));
             $byLen = fn (array $a, array $b) => [$lenOf($b), (int) ($b['weeks'] ?? 0), $a['id']] <=> [$lenOf($a), (int) ($a['weeks'] ?? 0), $b['id']];
             usort($todo, $byLen);
             usort($src, $byLen);
-            $same = count($todo) === count($src) && $sig($todo) === $sig($src);
+            // Nusxada ham bor (saqlanib qolgan) karta — faqat o'z eski joyiga. Qayta yaratilgan kartalar — hozir yo'q
+            // (o'chirilgan) eski kartalar joyiga: hozir ham bor kartaning eski joyi o'shaniki (u ko'chirilgan bo'lsa ham).
+            $srcById = [];
+            foreach ($src as $sc) {
+                $srcById[(int) $sc['id']] = $sc;
+            }
+            $fresh = array_values(array_filter($todo, fn ($c) => !isset($srcById[(int) $c['id']])));
+            $gone = array_values(array_filter($src, fn ($sc) => !isset($curById[(int) $sc['id']])));
+            // Bir xil bo'linish (soat va haftalar bir xil) — kartama-karta; aks holda eski soatlar ichiga ketma-ket.
+            $same = count($fresh) === count($gone) && $sig($fresh) === $sig($gone);
 
             foreach (['internal' => ['day', 'pair'], 'external' => ['ext_day', 'ext_pair']] as $layer => [$dCol, $pCol]) {
-                // Eski kartalar egallagan bo'laklar: [kun, boshlanish, uzunlik, eski karta].
+                // Eski kartalar egallagan bo'laklar (eski karta id'si bo'yicha); hozir ham bor kartaniki — band.
                 $segs = [];
-                foreach ($src as $s) {
-                    if (!empty($s[$dCol]) && !empty($s[$pCol])) {
-                        // Eski karta hozir ham shu joyda bo'lsa — bo'lak band (yangi karta uning ustiga qo'yilmaydi).
-                        $still = $curById[(int) $s['id']] ?? null;
-                        $busy = $still && (int) ($still[$dCol] ?? 0) === (int) $s[$dCol] && (int) ($still[$pCol] ?? 0) === (int) $s[$pCol];
-                        $segs[] = ['d' => (int) $s[$dCol], 'p' => (int) $s[$pCol], 'len' => $lenOf($s), 'used' => $busy ? $lenOf($s) : 0, 'card' => $s];
+                foreach ($src as $sc) {
+                    if (!empty($sc[$dCol]) && !empty($sc[$pCol])) {
+                        $alive = isset($curById[(int) $sc['id']]);
+                        $segs[(int) $sc['id']] = ['d' => (int) $sc[$dCol], 'p' => (int) $sc[$pCol], 'len' => $lenOf($sc),
+                            'used' => $alive ? $lenOf($sc) : 0, 'alive' => $alive, 'card' => $sc];
                     }
                 }
-                if (!$segs) {
-                    if ($layer === 'internal') {
-                        $stats['source_unplaced'] += count($todo);
+                uasort($segs, fn ($a, $b) => [$a['d'], $a['p']] <=> [$b['d'], $b['p']]);
+                $place = [];      // [karta, bo'lak, siljish]
+                $weekFrom = [];   // kartama-karta: shablonsiz eski karta (faqat haftalik joylari)
+                foreach ($todo as $c) {
+                    if (isset($segs[(int) $c['id']])) {
+                        $place[] = [$c, (int) $c['id'], 0];
                     }
-                    continue;
                 }
-                usort($segs, fn ($a, $b) => [$a['d'], $a['p']] <=> [$b['d'], $b['p']]);
-                foreach ($todo as $i => $c) {
+                foreach ($fresh as $i => $c) {
                     $l = $lenOf($c);
                     $seg = null;
                     if ($same) {
-                        // Kartama-karta: shu tartibdagi eski karta.
-                        $s = $src[$i];
-                        foreach ($segs as $k => $sg) {
-                            if ($sg['card']['id'] === $s['id']) {
-                                $seg = $k;
-                            }
+                        $sid = (int) $gone[$i]['id'];
+                        if (!isset($segs[$sid])) {
+                            $weekFrom[] = [$c, $gone[$i]];
+                            continue;
                         }
+                        $seg = $sid;
                     } else {
                         foreach ($segs as $k => $sg) {
-                            if ($sg['len'] - $sg['used'] >= $l) {
+                            if (!$sg['alive'] && $sg['len'] - $sg['used'] >= $l) {
                                 $seg = $k;
                                 break;
                             }
                         }
-                        // Sig'madi — oxirgi bo'lak davomiga.
-                        $seg ??= array_key_last($segs);
+                        // Sig'madi — o'chirilgan kartalarning oxirgi bo'lagi davomiga.
+                        if ($seg === null) {
+                            foreach ($segs as $k => $sg) {
+                                if (!$sg['alive']) {
+                                    $seg = $k;
+                                }
+                            }
+                        }
                     }
                     if ($seg === null) {
                         continue;
                     }
-                    $offset = $same ? 0 : $segs[$seg]['used'];
+                    $place[] = [$c, $seg, $same ? 0 : $segs[$seg]['used']];
                     $segs[$seg]['used'] += $l;
-                    $day = $segs[$seg]['d'];
-                    $pair = $segs[$seg]['p'] + $offset;
-                    $cardUpdates[$c['id']][$dCol] = $day;
-                    $cardUpdates[$c['id']][$pCol] = $pair;
+                }
+                foreach ($place as [$c, $seg, $offset]) {
+                    $cardUpdates[$c['id']][$dCol] = $segs[$seg]['d'];
+                    $cardUpdates[$c['id']][$pCol] = $segs[$seg]['p'] + $offset;
                     $stats[$layer]++;
                     if ($layer === 'internal') {
                         $oldCard = $segs[$seg]['card'];
                         $cardUpdates[$c['id']]['start_half'] = (int) ($oldCard['start_half'] ?? 0);
-                        // O'qituvchi/xona — hozir bo'sh bo'lsa.
-                        if (empty($c['teacher_id']) && !empty($oldCard['teacher_id'])) {
-                            $cardUpdates[$c['id']]['teacher_id'] = $oldCard['teacher_id'];
-                            $cardUpdates[$c['id']]['teacher_name'] = $oldCard['teacher_name'];
-                            $stats['teacher_room']++;
-                        }
-                        if (empty($c['auditorium_code']) && !empty($oldCard['auditorium_code'])) {
-                            $cardUpdates[$c['id']]['auditorium_code'] = $oldCard['auditorium_code'];
-                            $cardUpdates[$c['id']]['auditorium_name'] = $oldCard['auditorium_name'];
-                        }
-                        // Haftalik ko'chirishlar (ichki jadval): eski kartaning shu haftadagi joyi, xuddi shu siljish bilan.
-                        // Hafta yangi kartada bekor qilingan bo'lsa — tegilmaydi (yangi kartaning o'z haftalari).
+                        $teacherRoom($c, $oldCard);
                         foreach ($oldOv[(int) $oldCard['id']] ?? [] as $w => $o) {
-                            if (!empty($o['cancelled']) || empty($o['day']) || empty($o['pair'])) {
-                                continue;
+                            if ($valid($o)) {
+                                $addWeek($c, (int) $w, $o, $offset);
                             }
-                            $mine = $curOv[(int) $c['id']][$w] ?? null;
-                            if ($mine && (!empty($mine['cancelled']) || !empty($mine['day']))) {
-                                continue;
-                            }
-                            $ovInserts[] = ['card_id' => $c['id'], 'week' => $w, 'day' => (int) $o['day'], 'pair' => (int) $o['pair'] + $offset,
-                                'start_half' => (int) ($o['start_half'] ?? 0), 'auditorium_code' => $o['auditorium_code'] ?? null,
-                                'auditorium_name' => $o['auditorium_name'] ?? null, 'exists' => (bool) $mine];
-                            $stats['week_moves']++;
                         }
+                    }
+                }
+                if ($layer !== 'internal') {
+                    continue;
+                }
+                // Shablonsiz, hafta-hafta joylangan eski kartalar (ichki jadvalda faqat haftalik joy): saqlanib qolgan
+                // karta — o'z haftalariga; qayta yaratilganlari — har haftada o'chirilgan kartalar joyiga ketma-ket.
+                foreach ($todo as $c) {
+                    if (isset($srcById[(int) $c['id']]) && !isset($segs[(int) $c['id']])) {
+                        $copyWeeks($c, $srcById[(int) $c['id']]);
+                    }
+                }
+                foreach ($weekFrom as [$c, $oldCard]) {
+                    $copyWeeks($c, $oldCard);
+                }
+                $placed = array_flip(array_map(fn ($x) => (int) $x[0]['id'], $place));
+                $rest = $same ? [] : array_values(array_filter($fresh, fn ($c) => !isset($placed[(int) $c['id']])));
+                $weekOnly = array_values(array_filter($gone, fn ($sc) => empty($sc[$dCol]) || empty($sc[$pCol])));
+                $weeks = [];
+                foreach ($rest ? $weekOnly : [] as $sc) {
+                    foreach ($oldOv[(int) $sc['id']] ?? [] as $w => $o) {
+                        if ($valid($o)) {
+                            $weeks[(int) $w] = true;
+                        }
+                    }
+                }
+                ksort($weeks);
+                foreach (array_keys($weeks) as $w) {
+                    $wsegs = [];
+                    foreach ($weekOnly as $sc) {
+                        $o = $oldOv[(int) $sc['id']][$w] ?? null;
+                        if ($o && $valid($o)) {
+                            $wsegs[] = ['d' => (int) $o['day'], 'p' => (int) $o['pair'], 'len' => $lenOf($sc), 'used' => 0, 'ov' => $o, 'card' => $sc];
+                        }
+                    }
+                    usort($wsegs, fn ($a, $b) => [$a['d'], $a['p']] <=> [$b['d'], $b['p']]);
+                    foreach ($rest as $c) {
+                        $l = $lenOf($c);
+                        $k = null;
+                        foreach ($wsegs as $j => $sg) {
+                            if ($sg['len'] - $sg['used'] >= $l) {
+                                $k = $j;
+                                break;
+                            }
+                        }
+                        $k ??= array_key_last($wsegs);
+                        $addWeek($c, $w, $wsegs[$k]['ov'], $wsegs[$k]['used']);
+                        $wsegs[$k]['used'] += $l;
+                        $teacherRoom($c, $wsegs[$k]['card']);
+                    }
+                }
+                foreach ($todo as $c) {
+                    if (!isset($cardUpdates[$c['id']]['day']) && !isset($weekDone[(int) $c['id']])) {
+                        $stats['source_unplaced']++;
                     }
                 }
             }
@@ -272,11 +355,11 @@ class BoardSnapshots
                 $c0 = $todo[0];
                 $u = $cardUpdates[$c0['id']] ?? [];
                 $stats['examples'][] = ($c0['faculty_name'] ?? '') . ' · ' . $c0['course'] . '-kurs · ' . $c0['subject_name'] . ' · '
-                    . ($c0['group_name'] ?: $c0['oqim_label']) . ' → ichki ' . (($u['day'] ?? null) ? $u['day'] . '/' . $u['pair'] : '—')
+                    . ($c0['group_name'] ?: $c0['oqim_label']) . ' → ichki ' . (($u['day'] ?? null) ? $u['day'] . '/' . $u['pair'] : (isset($weekDone[(int) $c0['id']]) ? 'haftalarda' : '—'))
                     . ', tashqi ' . (($u['ext_day'] ?? null) ? $u['ext_day'] . '/' . $u['ext_pair'] : '—');
             }
         }
-        $stats['cards'] = count($cardUpdates);
+        $stats['cards'] = count($cardUpdates + $weekDone);
 
         if (!$dryRun && ($cardUpdates || $ovInserts)) {
             if ($takeSnapshot) {

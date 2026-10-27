@@ -215,6 +215,7 @@ it('tiklash joy bandligini tekshiradi: eski joyni boshqa karta egallagan bo\'lsa
         ->and($dry['conflict_examples'][0])->toContain('Guruh band');
     // Konsol buyrug'i ham xuddi shu tekshiruv bilan (sinov rejimi)
     $this->artisan('timetable:restore-placement', ['board' => $s['board']->id, '--snapshot' => $snap->id])
+        ->expectsOutputToContain('Tekshirildi: 1/1')
         ->expectsOutputToContain("to'qnashuv sababli yozilmadi 1")->assertExitCode(0);
     $r = snapAs($s['admin'], 'superadmin')->postJson($url, ['dry_run' => 0])->assertOk()->json();
     expect($r['conflicts'])->toBe(1)

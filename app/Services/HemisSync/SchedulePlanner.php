@@ -735,9 +735,12 @@ class SchedulePlanner
                 }
             }
         };
+        // Moslash tartibi: aynan bir xil yozuv; so'ng shu kunning shu turidagi dars (vaqti surilgan — "vaqt"
+        // o'zgartiriladi: ma'ruza ma'ruzaga, seminar seminarga); so'ng shu vaqtdagi boshqa turdagi dars ("tur").
+        // Shunda darslar surilganda o'chirish + qo'shish o'rniga bitta "o'zgartirish" chiqadi.
         $pairUp($k);
-        $pairUp(fn ($r) => $r['date'] . '|' . substr($r['start'], 0, 5));
         $pairUp(fn ($r) => $r['date'] . '|' . $r['code']);
+        $pairUp(fn ($r) => $r['date'] . '|' . substr($r['start'], 0, 5));
 
         foreach ($want as $w) {
             $actions[] = ['op' => 'create', 'hemis_id' => null] + $w + ['changes' => []];

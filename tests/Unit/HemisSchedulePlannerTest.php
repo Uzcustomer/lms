@@ -184,3 +184,21 @@ it('KTR yo\'q bo\'lsa HEMIS\'dagi dars turi saqlanadi, o\'zboshimcha turga o\'zg
     expect(array_map(fn ($a) => $a['op'] . ' ' . $a['date'] . ' ' . $a['code'], $r['actions']))->toBe(['create ' . hsDate(4, 1) . ' 13'])
         ->and($r['notes'])->toContain('KTR kiritilmagan — balans tekshirilmadi, faqat jadval solishtirildi.');
 });
+
+it('kun ichida darslar surilsa — o\'chirish + qo\'shish emas, shu turdagi darsning vaqti o\'zgartiriladi', function () {
+    $u = hsUnit([
+        'codes' => ['11' => 'L', '14' => 'A'], 'code_names' => ['11' => 'Ma\'ruza', '14' => 'Seminar'], 'current_week' => 1,
+        'ktr' => [[], ['11' => 2, '14' => 2]],
+        // HEMIS: ma'ruza 10:00 (T5), seminar 12:00 (T7)
+        'hemis' => [hsHemis(1, hsDate(2, 6), 3, 2, '11', 5), hsHemis(2, hsDate(2, 6), 5, 2, '14', 7)],
+        // LMS: ma'ruza 12:00 (T6), seminar 13:30 (T7)
+        'plan' => [hsPlan(2, 6, 5, 2, 'L', 6), hsPlan(2, 6, 7, 2, 'A', 7)],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 6)))->planGroup([$u], [], hsWorkDates(2, 2))[0];
+    $acts = array_map(fn ($a) => $a['op'] . ' ' . $a['hemis_id'] . ' ' . implode('; ', $a['changes']), $r['actions']);
+
+    expect($acts)->toBe([
+        "update 1 vaqt: 10:00-11:20 → 12:00-13:20; o'qituvchi: T5 → T6",
+        'update 2 vaqt: 12:00-13:20 → 13:30-14:50',
+    ]);
+});

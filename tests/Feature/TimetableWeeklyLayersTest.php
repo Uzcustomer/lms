@@ -199,6 +199,15 @@ it('tashqi jadval eksporti: ichki jadvaldagi joyi tekshiriladi («ichkida ham jo
 
     expect($rows['Gigiyena'][12])->toBe('Dushanba, 1-para (ichki jadval)')
         ->and($rows['Gigiyena'][13])->toContain('Guruh band')->toContain('Anatomiya')->not->toContain("joyi yo'q");
+
+    // Doska sozlamasidagi kun nomlari (jadvaldagi kabi) ishlatiladi
+    $s['board']->update(['day_names' => ['Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba']]);
+    $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=external')->assertOk();
+    $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+    file_put_contents($file, $res->streamedContent());
+    $rows = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet()->toArray())->slice(2)->keyBy(fn ($r) => $r[6]);
+    @unlink($file);
+    expect($rows['Gigiyena'][12])->toBe('Seshanba, 1-para (ichki jadval)');
 });
 
 it('tashqi jadvalda haftalari kesishmaydigan kartalar bir katakni bo\'lisha oladi', function () {

@@ -6281,7 +6281,8 @@ class TimetableController extends Controller
     {
         $state = $this->occupancyState($board->id);
         $grids = [];
-        $dayNames = [1 => 'Dushanba', 2 => 'Seshanba', 3 => 'Chorshanba', 4 => 'Payshanba', 5 => 'Juma', 6 => 'Shanba', 7 => 'Yakshanba'];
+        // Kun nomlari — doska sozlamasidan (jadvaldagi kabi), bo'lmasa sukutdagilar.
+        $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
         $paraText = fn (int $pair, int $len) => $len >= 2 && $pair % 2 === 1
             ? intdiv($pair + 1, 2) . '-para'
             : intdiv($pair + 1, 2) . '-para (' . ($pair % 2 === 1 ? '1' : '2') . '-yarmi)';
@@ -6335,7 +6336,7 @@ class TimetableController extends Controller
 
                 return array_values(array_unique($errs));
             };
-            $slotText = ($dayNames[$day] ?? $day . '-kun') . ', ' . $paraText($pair, $len) . ' (' . $src . ')';
+            $slotText = ($dayNames[$day - 1] ?? $day . '-kun') . ', ' . $paraText($pair, $len) . ' (' . $src . ')';
             $e1 = $check($pair);
             if (!$e1) {
                 return [$slotText, $noTeacher . "Bu vaqt bo'sh — joylash mumkin."];

@@ -4214,6 +4214,9 @@
                         for (let i = 0; i < cardLen(c); i++) set.add(+c.ext_pair + i);
                     });
                 });
+                // Ma'ruza vaqti qat'iy: shu haftada o'tiladigan, hali joylanmagan ma'ruzaning tashqi joyi unga band
+                // hisoblanadi — amaliy darslar u yerga surilib (yoki qo'yilib), ma'ruzani joysiz qoldirmasin.
+                const lecWait = scopeCards.filter(c => c.training_type === 'lecture' && !off(c) && !place(c) && c.ext_day && c.ext_pair);
                 const occ = () => {
                     const u = {};
                     all.forEach(c => {
@@ -4223,6 +4226,13 @@
                         cardGroups(c).forEach(g => {
                             const m = u[slots(c, g, pl.d)] || (u[slots(c, g, pl.d)] = new Map());
                             for (let i = 0; i < cardLen(c); i++) m.set(pl.p + i, c.id);
+                        });
+                    });
+                    lecWait.forEach(c => {
+                        if (place(c)) return;
+                        cardGroups(c).forEach(g => {
+                            const m = u[slots(c, g, +c.ext_day)] || (u[slots(c, g, +c.ext_day)] = new Map());
+                            for (let i = 0; i < cardLen(c); i++) if (!m.has(+c.ext_pair + i)) m.set(+c.ext_pair + i, c.id);
                         });
                     });
                     return u;

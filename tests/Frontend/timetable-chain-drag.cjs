@@ -8,7 +8,7 @@ const end = source.indexOf('// ===== Drag-and-drop holati', start);
 const conflictStart = source.indexOf('function conflictsAt(');
 const conflictEnd = source.indexOf('// ===== Joylash', conflictStart);
 assert(start > 0 && end > start);
-async function move(from, to, blocked = false) {
+async function move(from, to, blocked = false, parallel = true) {
     const cards = [{id:1, pair:from, len:2, day:1}, {id:2, pair:from+2, len:1, day:1}];
     const calls = [], alerts = [];
     const ctx = {cards, selected:null, effPlace:card=>({day:card.day,pair:card.pair}), renderAll:()=>{},
@@ -22,7 +22,7 @@ async function move(from, to, blocked = false) {
         if (ctx.conflictsAt(card,day,pair).length) throw new Error('Band');
         calls.push(card.id); card.day=day; card.pair=pair;
     };
-    await vm.runInContext(source.slice(start,end)+`; placeBlockAt([1,2],1,${to},true,[0,2]);`,ctx);
+    await vm.runInContext(source.slice(start,end)+`; placeBlockAt([1,2],1,${to},${parallel},${parallel ? '[0,2]' : 'null'});`,ctx);
     return {cards:cards.filter(c=>c.id!==3),calls,alerts};
 }
 (async () => {
@@ -38,5 +38,15 @@ async function move(from, to, blocked = false) {
     assert.equal(blocked.alerts.length,1);
     assert.deepEqual(blocked.calls,[]);
     assert.deepEqual(blocked.cards.map(c=>c.pair),[1,3]);
-    console.log('3 timetable chain movement scenarios passed');
+    // Ketma-ket (birlashgan) blok: 2 soatlik karta + 1 soatlik karta. Ikkinchisi birinchisining uzunligi qadar
+    // keyin turadi (p+1 emas — u holda o'z bloki ustiga tushardi); pastga surilganda oxirgisi avval ko'chadi.
+    const seqLater = await move(1,2,false,false);
+    assert.deepEqual(seqLater.alerts,[]);
+    assert.deepEqual(seqLater.calls,[2,1]);
+    assert.deepEqual(seqLater.cards.map(c=>c.pair),[2,4]);
+    const seqEarlier = await move(3,1,false,false);
+    assert.deepEqual(seqEarlier.alerts,[]);
+    assert.deepEqual(seqEarlier.calls,[1,2]);
+    assert.deepEqual(seqEarlier.cards.map(c=>c.pair),[1,3]);
+    console.log('5 timetable chain movement scenarios passed');
 })().catch(error=>{ console.error(error); process.exitCode=1; });

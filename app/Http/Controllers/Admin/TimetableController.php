@@ -6688,7 +6688,6 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Kun va para ko\'rsatilishi kerak'], 422);
         }
         $room = null;
-        $checkCard = $card;
         if (!empty($data['auditorium_code'])) {
             $room = Auditorium::where('code', $data['auditorium_code'])->first();
             if (!$room) {
@@ -6697,13 +6696,9 @@ class TimetableController extends Controller
             if (!$this->auditoriumAllowedForCard($room, $card, $this->auditoriumTeacherMap())) {
                 return response()->json(['error' => 'Bu auditoriya tanlangan o\'qituvchiga biriktirilmagan.'], 422);
             }
-            $checkCard = clone $card;
-            $checkCard->auditorium_code = $room->code;
-            $checkCard->auditorium_name = $room->name;
-            // Haftalik yozuvdagi eski xona tekshiruvga aralashmasin
-            TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->update(['auditorium_code' => null, 'auditorium_name' => null]);
         }
-        $conflicts = $this->findWeekConflicts($checkCard, $week, $day, $pair, $startHalf);
+        // Berilgan xona bilan tekshiriladi (haftalik yozuvdagi eski xona emas); rad etilsa hech narsa o'zgarmaydi.
+        $conflicts = $this->findWeekConflicts($card, $week, $day, $pair, $startHalf, null, $room?->code);
         if (!empty($conflicts)) {
             return response()->json(['error' => implode(' · ', $conflicts)], 422);
         }
@@ -6718,13 +6713,14 @@ class TimetableController extends Controller
     }
 
     /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi (yarim-slot oralig'i). */
-    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
+    /** $roomCode — shu hafta uchun beriladigan xona (berilmasa — haftalik yozuvdagi yoki kartaning xonasi). */
+    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0, ?array $state = null, ?string $roomCode = null): array
     {
         // Shu haftada shu kunda turganlar: shablonda shu kunda (o'sha haftaga yozuvi bo'lmasa) yoki haftalik ko'chirish bilan.
         $s = $this->daySlice($card, $day, $week, $state);
         $myRange = $this->rangeFor($card, $pair, $startHalf);
         $myOverride = $s['ov'][$card->id][$week] ?? null;
-        $myRoomCode = $myOverride?->auditorium_code ?: $card->auditorium_code;
+        $myRoomCode = $roomCode ?: ($myOverride?->auditorium_code ?: $card->auditorium_code);
         $ids = array_unique(array_merge($s['tpl'], array_map(fn ($m) => $m[0], $s['moved'])));
         sort($ids);
         $errors = [];

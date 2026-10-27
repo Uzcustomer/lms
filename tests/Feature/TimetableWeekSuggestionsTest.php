@@ -126,3 +126,26 @@ it('haftalik ko\'chirishda faqat shu hafta uchun boshqa xona beriladi', function
     expect([$o->day, $o->pair, $o->auditorium_code])->toBe([1, 1, 'R1'])
         ->and($s['own']->fresh()->auditorium_code)->toBeNull();
 });
+
+it('rad etilgan haftalik ko\'chirish haftalik xonani o\'chirib yubormaydi, yangi xona bilan tekshiradi', function () {
+    $s = sugSetup();
+    \App\Models\Auditorium::create(['code' => 'R0', 'name' => '100', 'volume' => 30, 'active' => true]);
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '101', 'volume' => 30, 'active' => true]);
+    TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 2, 'day' => 1, 'pair' => 1, 'auditorium_code' => 'R0', 'auditorium_name' => '100']);
+    // Shu guruhning boshqa darsi 2-haftada 1-kun 3-parada — u yerga ko'chirish rad etiladi
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 2, 'day' => 1, 'pair' => 3]);
+    // Boshqa guruhning darsi 101-xonada 1-kun 5-parada
+    $other = TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks']) + ['subject_name' => 'Biologiya', 'group_name' => 'g-02', 'auditorium_code' => 'R1', 'auditorium_name' => '101']);
+    TimetableCardOverride::create(['card_id' => $other->id, 'week' => 2, 'day' => 1, 'pair' => 5]);
+
+    $as = sugAs($s['admin'], 'superadmin');
+    $as->postJson(route('admin.timetable.cards.week-override', $s['own']),
+        ['week' => 2, 'action' => 'move', 'day' => 1, 'pair' => 3, 'auditorium_code' => 'R1'])->assertStatus(422);
+    // Tekshiruv eski (100) emas, berilgan (101) xona bilan: 101 shu vaqtda band
+    $err = $as->postJson(route('admin.timetable.cards.week-override', $s['own']),
+        ['week' => 2, 'action' => 'move', 'day' => 1, 'pair' => 5, 'auditorium_code' => 'R1'])->assertStatus(422)->json('error');
+    expect($err)->toContain('Auditoriya band: 101');
+    $o = TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 2)->first();
+    expect([$o->day, $o->pair, $o->auditorium_code])->toBe([1, 1, 'R0']);
+});

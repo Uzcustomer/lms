@@ -154,8 +154,8 @@ it('rad etilgan haftalik ko\'chirish haftalik xonani o\'chirib yubormaydi, yangi
 
 function sugCard(array $s, array $attrs): TimetableCard
 {
-    return TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
-        'training_type', 'len_half', 'weeks']) + $attrs);
+    return TimetableCard::create($attrs + $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks']));
 }
 
 it('takliflar: sikl fanlari haftalik joylanmaganlar qatoriga kirmaydi', function () {

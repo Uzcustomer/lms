@@ -1255,6 +1255,14 @@ trait TimetableHemisSync
                         // (keyinroq tekshiriladi) ham mudirga almashtirilib, o'qituvchi ikkalasidan ham ayrilmasin.
                         $own = $type . '|' . ($type === 'e' ? $emp : $room) . '|' . $a['date'];
                         $idx[$own] = array_values(array_filter($idx[$own] ?? [], fn ($x) => !($x[2] === $u['key'] && $x[0] === $a['start'])));
+                        // Ikkinchi indeksdagi yozuvi ham haqiqiy qiymat bilan: "o'sha o'qituvchi o'sha xonada — bitta dars"
+                        // istisnosi eski o'qituvchi/xona bilan ishlab, keyingi to'qnashuvni yashirmasin.
+                        $other = ($type === 'e' ? 'r|' . $room : 'e|' . $emp) . '|' . $a['date'];
+                        foreach ($idx[$other] ?? [] as $xi => $x) {
+                            if ($x[2] === $u['key'] && $x[0] === $a['start']) {
+                                $idx[$other][$xi][$type === 'e' ? 4 : 5] = (string) $fbId;
+                            }
+                        }
                         $a['reason'] = trim(($a['reason'] ?? '') . ' ' . ($type === 'e'
                             ? "LMS'dagi o'qituvchi {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli kafedra mudiri qo'yildi."
                             : "LMS'dagi xona {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli «{$fbName}» qo'yildi."));

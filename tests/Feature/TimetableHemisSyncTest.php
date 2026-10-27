@@ -1015,3 +1015,39 @@ it('ikki LMS darsi bir xonada bir vaqtda — faqat bittasiga «Kafedra mudiri xo
         ->and(collect([$a['auditorium_code'], $b['auditorium_code']])->sort()->values()->all())->toBe(['71', 'KM1'])
         ->and([$a['employee_id'], $b['employee_id']])->toBe([5001, 5002]);
 });
+
+it('bartarafdan keyin bandlik haqiqiy qiymatlar bilan: bir xonada ikki xil o\'qituvchi yoki bir o\'qituvchi ikki xonada qolmaydi', function (string $cTeacher, string $cRoom) {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $ust2 = Teacher::where('full_name', 'USTOZ')->first()->replicate()->forceFill(['hemis_id' => 5002, 'full_name' => 'UST2', 'short_name' => 'UST2',
+        'login' => 'ust5002', 'employee_id_number' => '5002']);
+    $ust2->save();
+    $teachers = ['USTOZ' => $s['card']->teacher_id, 'UST2' => $ust2->id];
+    // A (01a) = USTOZ · 71 (hsSetup) va B (01b) = USTOZ · 71 — bitta dars; C (01c) ular bilan to'qnashadi. Tekshiruv tartibi A, C, B.
+    foreach ([['p/st26-01c', 1598, $cTeacher, $cRoom], ['p/st26-01b', 1597, 'USTOZ', '71']] as [$name, $id, $t, $code]) {
+        hsInsert('groups', ['group_hemis_id' => $id, 'name' => $name, 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+        TimetableCard::create(array_merge($s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+            'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name', 'day', 'pair']),
+            ['group_name' => $name . ' (rus)', 'teacher_id' => $teachers[$t], 'teacher_name' => $t, 'auditorium_code' => $code, 'auditorium_name' => 'X' . $code]));
+    }
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $acts = collect($res['groups'])->map(fn ($g) => collect($g['units'][0]['actions'])
+        ->first(fn ($a) => $a['date'] === '2026-09-21' && $a['start'] === '10:00'));
+    expect($acts)->toHaveCount(3)
+        ->and($acts->pluck('blocked')->flatten()->all())->toBe([]);
+    // Mudir va mudir xonasi ustma-ust tushishi mumkin; qolgan har bir xonada bitta o'qituvchi, har bir o'qituvchi bitta xonada.
+    $real = $acts->reject(fn ($a) => $a['auditorium_code'] === 'KM1');
+    foreach ($real->groupBy('auditorium_code') as $room => $inRoom) {
+        expect($inRoom->pluck('employee_id')->unique()->count())->toBe(1, "xona $room");
+    }
+    foreach ($acts->reject(fn ($a) => (int) $a['employee_id'] === 9001)->groupBy('employee_id') as $emp => $byEmp) {
+        expect($byEmp->pluck('auditorium_code')->unique()->count())->toBe(1, "o'qituvchi $emp");
+    }
+})->with([
+    'avval o\'qituvchi almashtiriladi (C = USTOZ · 73)' => ['USTOZ', '73'],
+    'avval xona almashtiriladi (C = UST2 · 71)' => ['UST2', '71'],
+]);

@@ -406,13 +406,18 @@ class SchedulePlanner
             $C = $this->tally($u, $blocks)['count_diff'][$part];
             while ($C < 0) {
                 $done = false;
+                // Avval faqat shu haftadagi kunlar birlashtiriladi (haftada KTR'dagidan ko'p kun — ortiqcha kun aynan shu);
+                // shunday hafta qolmasagina boshqa haftaga (eng yaqin kun). Aks holda ortiqchasi yo'q haftaning kuni
+                // olib tashlanib, butun semestr bo'ylab zanjir surilishlar chiqardi.
+                foreach ([true, false] as $sameWeekOnly) {
                 foreach ($blocks as $xi => $x) {
                     if ($x['part'] !== $part) {
                         continue;
                     }
                     $h = count($x['slots']);
                     // Nishon: shu haftadagi, so'ng eng yaqin kun.
-                    $targets = array_keys(array_filter($blocks, fn ($y, $yi) => $yi !== $xi && $y['part'] === $part, ARRAY_FILTER_USE_BOTH));
+                    $targets = array_keys(array_filter($blocks, fn ($y, $yi) => $yi !== $xi && $y['part'] === $part
+                        && (!$sameWeekOnly || $y['week'] === $x['week']), ARRAY_FILTER_USE_BOTH));
                     usort($targets, fn ($a, $b) => [(int) ($blocks[$a]['week'] !== $x['week']), abs(strtotime($blocks[$a]['date']) - strtotime($x['date']))]
                         <=> [(int) ($blocks[$b]['week'] !== $x['week']), abs(strtotime($blocks[$b]['date']) - strtotime($x['date']))]);
                     foreach ($targets as $yi) {
@@ -421,6 +426,9 @@ class SchedulePlanner
                         $last = max($slots);
                         $first = min($slots);
                         $cands = [range($last + 1, $last + $h), range($first - $h, $first - 1)];
+                        // O'sha soatlar boshqa kunda ham bo'sh bo'lsa — dars o'z vaqtida qoladi (faqat kuni o'zgaradi).
+                        $own = array_keys($x['slots']);
+                        usort($cands, fn ($a, $b) => (int) ($b === $own) <=> (int) ($a === $own));
                         foreach ($cands as $range) {
                             if (array_filter($range, fn ($s) => !$this->isFree($occ, $u['key'], $u['base'], $part, $y['date'], $s))) {
                                 continue;
@@ -439,9 +447,10 @@ class SchedulePlanner
                             unset($blocks[$xi]);
                             $blocks = array_values($blocks);
                             $done = true;
-                            break 3;
+                            break 4;
                         }
                     }
+                }
                 }
                 if (!$done) {
                     $notes[] = ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ' kunlari ' . (-$C) . ' ta ortiqcha — avtomatik birlashtirib bo\'lmadi.';

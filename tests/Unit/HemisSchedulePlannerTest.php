@@ -296,3 +296,21 @@ it('o\'rin almashgan darslarning vaqti aynan mos kelmasa — biri o\'chirib qayt
         ->and($final)->toBe(hsWanted($r['records']))
         ->and(array_count_values(array_column($r['actions'], 'op')))->toEqual(['delete' => 1, 'update' => 1, 'create' => 1]);
 });
+
+it('haftada KTR\'dagidan ko\'p kun bo\'lsa — o\'sha haftaning kunlari birlashtiriladi (boshqa haftaga zanjir surilmaydi), dars o\'z soatida qoladi', function () {
+    // KTR: har hafta Amaliy qism 1 kun. LMS: 1-haftada chorshanba 10:00–13:20; 2-haftada seshanba 08:30 + chorshanba 10:00–13:20.
+    $u = hsUnit([
+        'codes' => ['13' => 'A'], 'code_names' => ['13' => 'Amaliy'], 'current_week' => 0,
+        'ktr' => [['13' => 4], ['13' => 6]],
+        'hemis' => [hsHemis(1, hsDate(1, 3), 3, 2, '13'), hsHemis(2, hsDate(1, 3), 5, 2, '13'),
+            hsHemis(3, hsDate(2, 3), 1, 2, '13'), hsHemis(4, hsDate(2, 3), 3, 2, '13'), hsHemis(5, hsDate(2, 3), 5, 2, '13')],
+        'plan' => [hsPlan(1, 3, 3, 4, 'A'), hsPlan(2, 2, 1, 2, 'A'), hsPlan(2, 3, 3, 4, 'A')],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 1)))->planGroup([$u], [], hsWorkDates(1, 2))[0];
+
+    expect($r['before']['count_diff']['A'])->toBe(-1)
+        ->and($r['after']['count_diff']['A'])->toBe(0)
+        ->and($r['fixes'][0]['text'])->toContain(hsDate(2, 2))->toContain(hsDate(2, 3))
+        // Natija HEMIS bilan aynan bir xil: 2-hafta chorshanba 08:30–13:20 — amal yo'q.
+        ->and($r['actions'])->toBe([]);
+});

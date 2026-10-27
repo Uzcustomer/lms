@@ -195,15 +195,19 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
     foreach ($u['actions'] as $a) {
         $byDate[$a['op'] . ' ' . $a['date']] = $a;
     }
-    expect($byDate['create 2026-09-28']['auditorium_code'])->toBe('KM501')
-        ->and(implode(' ', $byDate['create 2026-09-28']['blocked']))->toContain("o'qituvchi band")
-        ->and($byDate['create 2026-09-28']['blocks'][0]['type'])->toBe('teacher')
-        ->and($byDate['create 2026-09-28']['blocks'][0]['source'])->toBe('HEMIS')
-        ->and($byDate['create 2026-09-28']['blocked'])->toContain($byDate['create 2026-09-28']['blocks'][0]['text'])
-        ->and(implode(' ', $byDate['create 2026-10-05']['blocked']))->toContain('p/st26-09a')
+    // O'qituvchi band — to'siq bartaraf etiladi: kafedra mudiri qo'yiladi, sababi va band qilgan dars saqlanadi.
+    $c28 = $byDate['create 2026-09-28'];
+    expect($c28['auditorium_code'])->toBe('KM501')
+        ->and($c28['blocked'])->toBe([])
+        ->and($c28['employee_id'])->toBe(9001)
+        ->and($c28['flags'])->toContain('mudir')->toContain("to'siq sababli")
+        ->and($c28['resolved'][0]['type'])->toBe('teacher')
+        ->and($c28['resolved'][0]['source'])->toBe('HEMIS')
+        ->and($c28['reason'])->toContain("to'siq sababli kafedra mudiri qo'yildi")
+        ->and($byDate['create 2026-10-05']['resolved'][0]['group'])->toBe('p/st26-09a')
         ->and(implode(' ', $u['notes']))->toContain('rejaga kirmagan turdagi 1 ta');
 
-    // Excel: to'siq turi filtri — faqat "xona band" tanlansa o'qituvchi bandligi to'siqlari chiqmaydi.
+    // Excel: to'siqli amal qolmadi
     $amallar = function (array $blk) use ($s) {
         $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
         file_put_contents($file, test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
@@ -215,7 +219,7 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
 
         return $rows - 1;
     };
-    expect($amallar(['teacher']))->toBeGreaterThan(0)->and($amallar(['room']))->toBe(0);
+    expect($amallar(['teacher']))->toBe(0)->and($amallar(['room']))->toBe(0);
 
     // "To'siqlar" varag'i: har to'siq alohida qator, band qilgan dars tafsiloti bilan.
     $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
@@ -226,7 +230,7 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
     @unlink($file);
     $rows = $sheet->toArray();
     expect($rows[0][10])->toBe("To'siq turi")
-        ->and(collect($rows)->slice(1)->pluck(10)->all())->toContain("O'qituvchi band")
+        ->and(collect($rows)->slice(1)->pluck(10)->all())->toContain("O'qituvchi band — bartaraf: kafedra mudiri qo'yildi")
         ->and(collect($rows)->slice(1)->pluck(12)->all())->toContain('p/st26-09a');
 });
 
@@ -934,4 +938,29 @@ it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq e
             ->toBe(['08:30 MUDIR Y301'])
             ->and($a->where('code', '13')->pluck('employee_name')->unique()->values()->all())->toBe([$practiceTeacher]);
     }
+});
+
+it('xona band — to\'siq bartaraf etiladi: «Kafedra mudiri xonasi» qo\'yiladi, o\'qituvchi o\'zgarmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00');
+    // Boshqa guruh 28.09 10:00 da 71-xonada (boshqa o'qituvchi)
+    hsInsert('schedules', ['schedule_hemis_id' => 70, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11',
+        'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-09-28 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 7777, 'employee_name' => 'E7777', 'auditorium_code' => '71', 'auditorium_name' => '423']);
+
+    $u = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json('groups.0.units.0');
+    $a = collect($u['actions'])->firstWhere('date', '2026-09-28');
+    expect($a['op'])->toBe('create')
+        ->and($a['blocked'])->toBe([])
+        ->and($a['auditorium_code'])->toBe('KM1')
+        ->and($a['employee_id'])->toBe(5001)
+        ->and($a['flags'])->toContain('mudir_xonasi')->toContain("to'siq sababli")->not->toContain('mudir')
+        ->and($a['resolved'][0]['type'])->toBe('room')
+        ->and($a['reason'])->toContain("«Kafedra mudiri xonasi» qo'yildi");
 });

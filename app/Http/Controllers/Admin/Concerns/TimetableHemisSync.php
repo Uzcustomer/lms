@@ -1031,6 +1031,8 @@ trait TimetableHemisSync
             $explain ??= $this->hemisMoveExplainer($board, $slotTimes, $isCycle);
             foreach ($results as &$r) {
                 $r += $unitMeta[$r['key']] ?? [];
+                // To'siqni bartaraf etish uchun (hemisCrossCheck): kafedra mudiri va uning xonasi; javobdan olib tashlanadi.
+                $r['_fb'] = [$unitByKey[$r['key']]['fallback_employee'] ?? null, $unitByKey[$r['key']]['fallback_room'] ?? null];
                 $r['period'] = isset($unitByKey[$r['key']])
                     ? $this->hemisPeriodStats($unitByKey[$r['key']], $pFrom, $pTo, $pFromDate, $pToDate) : null;
                 if (!empty($r['other_type_rows'])) {
@@ -1188,12 +1190,17 @@ trait TimetableHemisSync
         }
         foreach ($groupsOut as &$g) {
             foreach ($g['units'] as &$u) {
-                foreach ($u['actions'] as &$a) {
+                [$fbEmp, $fbRoom] = $u['_fb'] ?? [null, null];
+                unset($u['_fb']);
+                $drop = [];
+                foreach ($u['actions'] as $ai => &$a) {
                     if (!in_array($a['op'], ['create', 'update'], true)) {
                         continue;
                     }
                     $emp = (string) ($a['employee_id'] ?? '');
                     $room = (string) ($a['auditorium_code'] ?? '');
+                    // Avval asl qiymatlar bo'yicha to'qnashuvlar topiladi, keyin bartaraf etiladi.
+                    $hits = [];
                     foreach ([['e', $emp, 'mudir', "o'qituvchi band"], ['r', $room, 'mudir_xonasi', 'xona band']] as [$type, $id, $flag, $msg]) {
                         if ($id === '' || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
                             continue;
@@ -1207,18 +1214,55 @@ trait TimetableHemisSync
                             }
                             if ($s < $a['end'] && $a['start'] < $e) {
                                 $text = "{$msg}: {$label} {$s}-{$e}";
-                                $a['blocked'][] = $text;
-                                // Tuzilgan tafsilot: oynada rangli belgi va batafsil qator uchun ('text' — shu to'siqning
-                                // blocked'dagi matni; oyna qolgan (rejalashtiruvchi) to'siqlarni alohida ko'rsatadi).
-                                $a['blocks'][] = ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
+                                $hits[$type] = ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
                                     'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
                                     'teacher' => $type === 'e' ? ($a['employee_name'] ?? null) : ($info['teacher'] ?? null)] + $info;
                                 break;
                             }
                         }
                     }
+                    // To'siq bartaraf etiladi (registrator ofisi qarori): o'qituvchi band — kafedra mudiri, xona band —
+                    // "Kafedra mudiri xonasi" (ikkalasining ustma-ust tushishiga ruxsat bor). Mudir/xona topilmasa — to'siq qoladi.
+                    foreach ($hits as $type => $b) {
+                        [$fbId, $fbName] = ($type === 'e' ? $fbEmp : $fbRoom) ?: [null, null];
+                        // Mudir topilmadi yoki band o'qituvchining o'zi mudir — almashtirish yordam bermaydi, to'siq qoladi.
+                        if (!$fbId || ($type === 'e' && (string) $fbId === $emp)) {
+                            $a['blocked'][] = $b['text'];
+                            $a['blocks'][] = $b;
+                            continue;
+                        }
+                        $field = $type === 'e' ? 'employee' : 'auditorium';
+                        $what = $type === 'e' ? "o'qituvchi" : 'xona';
+                        $oldName = (string) ($a[$field . '_name'] ?? '');
+                        // HEMIS'dagi qiymat: o'zgarish matnidan ("o'qituvchi: ESKI → YANGI"), bo'lmasa — u LMS'dagi bilan bir xil edi.
+                        $hemisName = $oldName;
+                        foreach ($a['changes'] ?? [] as $ci => $ch) {
+                            if (str_starts_with($ch, $what . ': ')) {
+                                $hemisName = trim(explode(' → ', substr($ch, strlen($what) + 2))[0]);
+                                unset($a['changes'][$ci]);
+                            }
+                        }
+                        $a[$field . ($type === 'e' ? '_id' : '_code')] = $fbId;
+                        $a[$field . '_name'] = $fbName;
+                        if ($a['op'] === 'update' && $hemisName !== $fbName) {
+                            $a['changes'][] = $what . ': ' . ($hemisName ?: '—') . ' → ' . $fbName;
+                        }
+                        $a['changes'] = array_values($a['changes'] ?? []);
+                        $a['flags'][] = $type === 'e' ? 'mudir' : 'mudir_xonasi';
+                        $a['flags'][] = "to'siq sababli";
+                        $a['resolved'][] = $b;
+                        $a['reason'] = trim(($a['reason'] ?? '') . ' ' . ($type === 'e'
+                            ? "LMS'dagi o'qituvchi {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli kafedra mudiri qo'yildi."
+                            : "LMS'dagi xona {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli «{$fbName}» qo'yildi."));
+                    }
+                    $a['flags'] = array_values(array_unique($a['flags'] ?? []));
+                    // HEMIS'da allaqachon shunday (mudir/xona) — o'zgartirish kerak emas.
+                    if ($a['op'] === 'update' && !$a['changes'] && !($a['blocked'] ?? [])) {
+                        $drop[$ai] = true;
+                    }
                 }
                 unset($a);
+                $u['actions'] = array_values(array_diff_key($u['actions'], $drop));
             }
             unset($u);
         }
@@ -1316,6 +1360,13 @@ trait TimetableHemisSync
                         self::HEMIS_PAIRS[$x['start'] . '-' . $x['end']] ?? '', $u['code_names'][$x['code']] ?? $x['code'],
                         $x['employee_name'] ?? '', $x['auditorium_name'] ?? '', $x['hemis_id'] ?? '',
                         implode('; ', $x['changes'] ?? []), implode(', ', $x['flags'] ?? []), implode('; ', $x['blocked'] ?? []), $x['reason'] ?? ''], null, 'A' . $r2++);
+                    // Bartaraf etilgan to'siqlar (kafedra mudiri / mudir xonasi qo'yilgan) ham ro'yxatda — kimga murojaat qilish uchun.
+                    foreach ((array) ($x['resolved'] ?? []) as $b) {
+                        $blkSheet->fromArray([$g['group'], $u['subject_name'], $u['kafedra'] ?? '', $u['mudir'] ?? '', $opName[$x['op']] ?? $x['op'], $x['date'],
+                            $x['start'] . '–' . $x['end'], $u['code_names'][$x['code']] ?? $x['code'], $x['employee_name'] ?? '', $x['auditorium_name'] ?? '',
+                            ($blkName[$b['type'] ?? 'other'] ?? 'Boshqa') . ' — bartaraf: ' . (($b['type'] ?? '') === 'teacher' ? 'kafedra mudiri qo\'yildi' : 'mudir xonasi qo\'yildi'),
+                            $b['source'] ?? '', $b['group'] ?? '', $b['subject'] ?? '', $b['teacher'] ?? '', $b['room'] ?? '', $b['time'] ?? '', $b['text'] ?? ''], null, 'A' . $r3++);
+                    }
                     if (!empty($x['blocked'])) {
                         $base = [$g['group'], $u['subject_name'], $u['kafedra'] ?? '', $u['mudir'] ?? '', $opName[$x['op']] ?? $x['op'], $x['date'],
                             $x['start'] . '–' . $x['end'], $u['code_names'][$x['code']] ?? $x['code'], $x['employee_name'] ?? '', $x['auditorium_name'] ?? ''];

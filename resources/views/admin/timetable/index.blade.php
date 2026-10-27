@@ -6787,7 +6787,11 @@
             // parallel — bo'lakli fan bo'laklari: hammasi bitta katakka (ketma-ket emas).
             async function placeBlockAt(ids, d, p, parallel, offs) {
                 // Bo'laklar o'z siljishini saqlab ko'chadi ((a) 12:40 da bo'lsa, yangi joyda ham yarim para keyin)
-                const at = k => p + (parallel ? ((offs && offs[k]) || 0) : k);
+                // Ketma-ket blok: har karta oldingilarining uzunligi (yarim-slot) qadar keyin turadi
+                // (2 soat + 1 soat → p va p+2; avval k qo'shilardi va kartalar ustma-ust tushardi).
+                const seqOff = [];
+                ids.reduce((acc, id, k) => { seqOff[k] = acc; const x = cards.find(c => c.id === id); return acc + (x ? cardLen(x) : 1); }, 0);
+                const at = k => p + (parallel ? ((offs && offs[k]) || 0) : seqOff[k]);
                 // Bo'laklar birga ko'chadi: birortasi sig'masa (o'qituvchi/xona band) — hech biri
                 // ko'chirilmaydi, aks holda so'rovlar birma-bir ketib, guruh yarim ko'chgan holda qolardi.
                 if (parallel) {
@@ -6800,8 +6804,9 @@
                 try {
                     const moves = ids.map((id, k) => ({ card: cards.find(x => x.id === id), pair: at(k) }))
                         .filter(move => move.card);
-                    if (parallel) {
-                        // O'ngga surilganda oxirgi qism avval ko'chadi: oldingi qismga joy bo'shatadi.
+                    {
+                        // Pastga surilganda oxirgi qism avval ko'chadi: oldingi qismga joy bo'shatadi
+                        // (aks holda blok o'z eski joyi bilan "Guruh band" konfliktiga tushadi).
                         const later = moves.every(move => {
                             const pl = effPlace(move.card);
                             return pl && +pl.day === d && move.pair >= +pl.pair;

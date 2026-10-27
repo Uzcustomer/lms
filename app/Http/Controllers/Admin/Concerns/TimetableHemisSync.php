@@ -64,6 +64,10 @@ trait TimetableHemisSync
             ? Carbon::parse($data['today'])->toDateString()
             : now()->toDateString();
 
+        // Butun doska / semestr oxirigacha: hisobot katta (bir necha MB) — serverning 128M chegarasi yetmaydi.
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
         return response()->json($this->hemisSyncReport($board, $data, $today));
     }
 

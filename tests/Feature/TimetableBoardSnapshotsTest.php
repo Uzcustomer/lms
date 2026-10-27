@@ -258,3 +258,46 @@ it('aralash birlik: shablondagi joy to\'lsa, qayta yaratilgan karta hafta-hafta 
         ->and($one->fresh()->only(['day', 'pair']))->toBe(['day' => null, 'pair' => null])
         ->and(TimetableCardOverride::where('card_id', $one->id)->get(['week', 'day', 'pair'])->toArray())->toBe([['week' => 3, 'day' => 2, 'pair' => 1]]);
 });
+
+it('haftalik joy nusxadagi xonasi bilan tekshiriladi (kartaning asosiy xonasi bilan emas)', function () {
+    $s = snapSetup();
+    $s['old']->update(['day' => null, 'pair' => null, 'ext_day' => null, 'ext_pair' => null, 'auditorium_code' => 'R1', 'auditorium_name' => 'R1']);
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    TimetableCardOverride::create(['card_id' => $s['old']->id, 'week' => 3, 'day' => 2, 'pair' => 3, 'start_half' => 0, 'cancelled' => false,
+        'auditorium_code' => 'R9', 'auditorium_name' => 'R9']);
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+    $url = route('admin.timetable.snapshots.restore', [$s['board'], $snap]);
+    // Boshqa guruhning darsi shu vaqtda kartaning asosiy xonasida (R1) — haftalik joyga (R9) xalaqit bermaydi
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    $blocker = TimetableCard::create(array_merge($s['base'], ['group_name' => 'g-02a (o\'z)', 'subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15,
+        'day' => 2, 'pair' => 3, 'auditorium_code' => 'R1', 'auditorium_name' => 'R1']));
+    $r = snapAs($s['admin'], 'superadmin')->postJson($url, ['dry_run' => 0])->assertOk()->json();
+    expect($r['week_moves'])->toBe(1)->and($r['conflicts'])->toBe(0)
+        ->and(TimetableCardOverride::where('card_id', $s['old']->id)->where('week', 3)->value('auditorium_code'))->toBe('R9');
+
+    // O'sha dars nusxadagi xonada (R9) bo'lsa — haftalik joy yozilmaydi
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    $blocker->update(['auditorium_code' => 'R9', 'auditorium_name' => 'R9']);
+    $r = snapAs($s['admin'], 'superadmin')->postJson($url, ['dry_run' => 0])->assertOk()->json();
+    expect($r['week_moves'])->toBe(0)->and($r['conflicts'])->toBe(1)
+        ->and($r['conflict_examples'][0])->toContain('Auditoriya band')
+        ->and(TimetableCardOverride::where('card_id', $s['old']->id)->count())->toBe(0);
+});
+
+it('panjaradan chiqib ketadigan joylashuv yozilmaydi (kun oxiridagi karta soati ko\'paysa)', function () {
+    $s = snapSetup();
+    $last = $s['board']->pairCount() - 1;
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $card = TimetableCard::create($fiz + ['day' => 3, 'pair' => $last]);   // kunning oxirgi ikki yarim-sloti
+    $before = app(BoardSnapshots::class)->collect($s['board']);
+    $card->delete();
+    $two = TimetableCard::create(array_merge($fiz, ['weeks' => 10]));
+    $one = TimetableCard::create(array_merge($fiz, ['len_half' => 1, 'weeks' => 10]));
+
+    $r = app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before,
+        app(\App\Http\Controllers\Admin\TimetableController::class)->restoreConflictChecker());
+    expect($r['cards'])->toBe(1)->and($r['conflicts'])->toBe(1)
+        ->and($r['conflict_examples'][0])->toContain('chegarasidan tashqarida')
+        ->and($two->fresh()->only(['day', 'pair']))->toBe(['day' => 3, 'pair' => $last])
+        ->and($one->fresh()->only(['day', 'pair']))->toBe(['day' => null, 'pair' => null]);
+});

@@ -369,12 +369,13 @@ class BoardSnapshots
             if (!$dryRun && $takeSnapshot) {
                 $this->take($board, 'before_restore', null, $current);
             }
+            $level = DB::transactionLevel();
             DB::beginTransaction();
             try {
                 $applied = $this->applyRestore($cardUpdates, $ovInserts, $conflicts, $stats);
                 $dryRun ? DB::rollBack() : DB::commit();
             } catch (\Throwable $e) {
-                DB::rollBack();
+                DB::rollBack($level);
                 throw $e;
             }
         }
@@ -441,9 +442,12 @@ class BoardSnapshots
         $ovRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
         foreach ($ovInserts as $o) {
             $card = TimetableCard::find($o['card_id']);
-            if (!$card || $clash($card, 'week', (int) $o['week'], (int) $o['day'], (int) $o['pair'], (int) $o['start_half'])) {
+            if (!$card) {
                 continue;
             }
+            // Haftalik yozuv avval yoziladi (ichki savepoint), so'ng tekshiriladi: tekshiruv shu haftaning xonasini
+            // (nusxadagi, kartanikidan farq qilishi mumkin) yozuvdan oladi. To'qnashsa — bekor qilinadi.
+            DB::beginTransaction();
             $row = ['day' => $o['day'], 'pair' => $o['pair'], 'start_half' => $o['start_half'], 'cancelled' => false,
                 'updated_at' => now()] + ($ovRoom ? ['auditorium_code' => $o['auditorium_code'], 'auditorium_name' => $o['auditorium_name']] : []);
             if ($o['exists']) {
@@ -451,6 +455,11 @@ class BoardSnapshots
             } else {
                 DB::table('timetable_card_overrides')->insert($row + ['card_id' => $o['card_id'], 'week' => $o['week'], 'created_at' => now()]);
             }
+            if ($clash($card, 'week', (int) $o['week'], (int) $o['day'], (int) $o['pair'], (int) $o['start_half'])) {
+                DB::rollBack();
+                continue;
+            }
+            DB::commit();
             $stats['week_moves']++;
             $applied[(int) $o['card_id']]['weeks'] = true;
         }

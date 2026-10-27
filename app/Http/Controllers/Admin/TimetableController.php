@@ -1334,15 +1334,24 @@ class TimetableController extends Controller
     }
 
     /**
-     * Nusxadan tiklashda joylashuv tekshiruvi — qo'lda joylashtirishdagi kabi (guruh, o'qituvchi, xona):
-     * ichki shablon, tashqi jadval va haftalik ko'chirish uchun. To'qnashuvlar matnini qaytaradi.
+     * Nusxadan tiklashda joylashuv tekshiruvi — qo'lda joylashtirishdagi kabi (guruh, o'qituvchi, xona) va panjara
+     * chegarasi (validateTimeProposal dagidek): ichki shablon, tashqi jadval va haftalik ko'chirish uchun.
+     * To'qnashuvlar matnini qaytaradi.
      */
     public function restoreConflictChecker(): \Closure
     {
-        return fn (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf): array => match ($what) {
-            'external' => $this->findExternalConflicts($card, $day, $pair),
-            'week' => $this->findWeekConflicts($card, (int) $week, $day, $pair, $startHalf),
-            default => $this->findConflicts($card, $day, $pair, $startHalf),
+        return function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf): array {
+            $grid = $this->gridFor($card->board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course);
+            if ($day < 1 || $day > $grid['days'] || $pair < 1 || $pair + $card->lenHalf() - 1 > $grid['pairs']
+                || ($week !== null && ($week < 1 || $week > $grid['weeks']))) {
+                return ['Jadval chegarasidan tashqarida'];
+            }
+
+            return match ($what) {
+                'external' => $this->findExternalConflicts($card, $day, $pair),
+                'week' => $this->findWeekConflicts($card, (int) $week, $day, $pair, $startHalf),
+                default => $this->findConflicts($card, $day, $pair, $startHalf),
+            };
         };
     }
 

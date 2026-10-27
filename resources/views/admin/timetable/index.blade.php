@@ -4280,8 +4280,11 @@
                         starts = [hi, lo - len];
                     } else {
                         const p0 = +b.cs[0].ext_pair;
+                        // Para chegarasi butun para (2+ yarim-slot) darslar uchun saqlanadi (yuqoriga surishdagidek):
+                        // blok tashqi joyi bilan bir xil juftlikda boshlanadi — yarim paraga siljimaydi.
+                        const step = b.cs.some(c => cardLen(c) > 1) ? 2 : 1;
                         starts = [];
-                        for (let s = 1; s + len - 1 <= maxPair; s++) starts.push(s);
+                        for (let s = 1; s + len - 1 <= maxPair; s++) if ((s - p0) % step === 0) starts.push(s);
                         starts.sort((x, y) => (x === p0 ? -1 : y === p0 ? 1 : 0) || Math.abs(x - p0) - Math.abs(y - p0) || x - y);
                     }
                     let ok = false;

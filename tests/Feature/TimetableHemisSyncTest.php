@@ -1123,3 +1123,21 @@ it('hal qilinmagan to\'siq ikkinchi tur almashgandan keyin qayta tekshiriladi: e
     expect([$a['employee_id'], $a['auditorium_code']])->toBe([5001, 'KM1'])
         ->and($a['blocked'])->toBe([]);
 });
+
+it('HEMIS\'da allaqachon mudir bo\'lsa (ismi boshqacha yozilgan) — ortiqcha o\'zgartirish chiqmaydi: id bo\'yicha solishtiriladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00', 9001);   // HEMIS'da mudir (ismi "E9001" — LMS'da "MUDIR")
+    // USTOZ shu vaqtda boshqa guruhda band — LMS'dagi o'qituvchi o'rniga yana mudir qo'yiladi.
+    hsInsert('schedules', ['schedule_hemis_id' => 70, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11',
+        'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-09-21 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 5001, 'employee_name' => 'E5001', 'auditorium_code' => '98', 'auditorium_name' => '98']);
+
+    $u = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json('groups.0.units.0');
+    expect(collect($u['actions'])->first(fn ($a) => $a['date'] === '2026-09-21'))->toBeNull();
+});

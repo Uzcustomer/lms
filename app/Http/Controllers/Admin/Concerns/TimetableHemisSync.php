@@ -1033,6 +1033,8 @@ trait TimetableHemisSync
                 $r += $unitMeta[$r['key']] ?? [];
                 // To'siqni bartaraf etish uchun (hemisCrossCheck): kafedra mudiri va uning xonasi; javobdan olib tashlanadi.
                 $r['_fb'] = [$unitByKey[$r['key']]['fallback_employee'] ?? null, $unitByKey[$r['key']]['fallback_room'] ?? null];
+                // HEMIS'dagi asl yozuvlar (id bo'yicha) — "o'zgartirish" kerakmi, ismi emas, id bo'yicha hal qilinadi.
+                $r['_hemis'] = array_column($unitByKey[$r['key']]['hemis'] ?? [], null, 'id');
                 $r['period'] = isset($unitByKey[$r['key']])
                     ? $this->hemisPeriodStats($unitByKey[$r['key']], $pFrom, $pTo, $pFromDate, $pToDate) : null;
                 if (!empty($r['other_type_rows'])) {
@@ -1191,7 +1193,8 @@ trait TimetableHemisSync
         foreach ($groupsOut as &$g) {
             foreach ($g['units'] as &$u) {
                 [$fbEmp, $fbRoom] = $u['_fb'] ?? [null, null];
-                unset($u['_fb']);
+                $hemisRows = $u['_hemis'] ?? [];
+                unset($u['_fb'], $u['_hemis']);
                 $drop = [];
                 foreach ($u['actions'] as $ai => &$a) {
                     if (!in_array($a['op'], ['create', 'update'], true)) {
@@ -1251,20 +1254,16 @@ trait TimetableHemisSync
                         $field = $type === 'e' ? 'employee' : 'auditorium';
                         $what = $type === 'e' ? "o'qituvchi" : 'xona';
                         $oldName = (string) ($a[$field . '_name'] ?? '');
-                        // HEMIS'dagi qiymat: o'zgarish matnidan ("o'qituvchi: ESKI → YANGI"), bo'lmasa — u LMS'dagi bilan bir xil edi.
-                        $hemisName = $oldName;
-                        foreach ($a['changes'] ?? [] as $ci => $ch) {
-                            if (str_starts_with($ch, $what . ': ')) {
-                                $hemisName = trim(explode(' → ', substr($ch, strlen($what) + 2))[0]);
-                                unset($a['changes'][$ci]);
-                            }
-                        }
                         $a[$field . ($type === 'e' ? '_id' : '_code')] = $fbId;
                         $a[$field . '_name'] = $fbName;
-                        if ($a['op'] === 'update' && $hemisName !== $fbName) {
-                            $a['changes'][] = $what . ': ' . ($hemisName ?: '—') . ' → ' . $fbName;
+                        // O'zgartirishda: HEMIS'dagi yozuvda allaqachon shu xodim/xona (id bo'yicha) bo'lsa — o'zgarish yo'q.
+                        $a['changes'] = array_values(array_filter($a['changes'] ?? [], fn ($c) => !str_starts_with($c, $what . ': ')));
+                        if ($a['op'] === 'update') {
+                            $was = $hemisRows[$a['hemis_id'] ?? 0] ?? [];
+                            if ((string) ($was[$type === 'e' ? 'employee_id' : 'auditorium_code'] ?? '') !== (string) $fbId) {
+                                $a['changes'][] = $what . ': ' . (($was[$field . '_name'] ?? '') ?: '—') . ' → ' . $fbName;
+                            }
                         }
-                        $a['changes'] = array_values($a['changes'] ?? []);
                         $a['flags'][] = $type === 'e' ? 'mudir' : 'mudir_xonasi';
                         $a['flags'][] = "to'siq sababli";
                         $a['resolved'][] = $b;

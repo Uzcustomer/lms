@@ -376,6 +376,12 @@ trait TimetableWeekSuggestions
             // 6) Eng oxirida — shu kafedraning shu vaqtda bo'sh o'qituvchisi (butun karta uchun).
             if ($c->kafedra_name) {
                 $teachersOf[$c->kafedra_name] ??= $this->kafedraTeachers((string) $c->kafedra_name);
+                $placedWeeks = [];
+                for ($w2 = 1; $w2 <= (int) $grid['weeks']; $w2++) {
+                    if ($w2 !== $W && ($pl = $eff($c, $w2))) {
+                        $placedWeeks[$w2] = $pl;
+                    }
+                }
                 $n = 0;
                 foreach ($teachersOf[$c->kafedra_name] as $t) {
                     if ((int) $t->id === (int) $c->teacher_id) {
@@ -385,6 +391,17 @@ trait TimetableWeekSuggestions
                     $tmp->teacher_id = $t->id;
                     $tmp->teacher_name = $t->short_name ?: $t->full_name;
                     if ($check($tmp, $W, $td, $tp, $state)) {
+                        continue;
+                    }
+                    // O'qituvchi butun semestr uchun almashadi — karta joylashgan boshqa haftalarda ham bo'sh bo'lishi kerak.
+                    $busyElsewhere = false;
+                    foreach ($placedWeeks as $w2 => [$d2, $p2]) {
+                        if (array_filter($check($tmp, $w2, $d2, $p2, $state), fn ($m) => str_starts_with($m, 'O\'qituvchi band'))) {
+                            $busyElsewhere = true;
+                            break;
+                        }
+                    }
+                    if ($busyElsewhere) {
                         continue;
                     }
                     $add('teacher', 'O\'qituvchini almashtirish: ' . ($t->short_name ?: $t->full_name) . ' — ' . $slotText($td, $tp, $len),

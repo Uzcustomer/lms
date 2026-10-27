@@ -53,6 +53,16 @@ trait TimetableWeekSuggestions
         }
         $scopeIds = $q->pluck('id')->map(fn ($id) => (int) $id)->all();
 
+        // Sikl fanlari haftalik panjarada emas (ularning kunlari sikl kalendarida) — joylanmaganlar qatoriga kirmaydi.
+        $cycleKeys = $this->cycleSubjectKeys($board);
+        $isCycle = function (TimetableCard $c) use ($cycleKeys): bool {
+            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+            $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
+
+            return isset($cycleKeys[$k . $this->normSubject((string) $c->subject_name)])
+                || ($base !== null && isset($cycleKeys[$k . $this->normSubject($base)]));
+        };
+
         $state = $this->occupancyState($board->id);
         $eff = function (TimetableCard $c, int $w) use (&$state): ?array {
             $ov = $state['ov'][(int) $c->id][$w] ?? null;
@@ -67,7 +77,7 @@ trait TimetableWeekSuggestions
         $unplaced = [];
         foreach ($scopeIds as $id) {
             $c = $state['cards'][$id] ?? null;
-            if (!$c || $cancelled($c, $W) || $eff($c, $W)) {
+            if (!$c || $isCycle($c) || $cancelled($c, $W) || $eff($c, $W)) {
                 continue;
             }
             $unplaced[] = $c;
@@ -101,8 +111,11 @@ trait TimetableWeekSuggestions
             . ($len > 2 ? ' + ' . ($len - 2) . ' soat' : '');
         $check = fn (TimetableCard $c, int $w, int $d, int $p, array $st) => $this->findWeekConflicts($c, $w, $d, $p, 0, $st);
         $withMove = function (array $st, TimetableCard $c, int $w, ?int $d, ?int $p, bool $cancel = false) {
+            // weekOverride xona berilmagan ko'chirishda shu haftaga berilgan xonani saqlaydi (bekor qilishda tozalaydi).
+            $prev = $cancel ? null : ($st['ov'][(int) $c->id][$w] ?? null);
             $o = new TimetableCardOverride();
-            $o->forceFill(['card_id' => $c->id, 'week' => $w, 'day' => $d, 'pair' => $p, 'start_half' => 0, 'cancelled' => $cancel]);
+            $o->forceFill(['card_id' => $c->id, 'week' => $w, 'day' => $d, 'pair' => $p, 'start_half' => 0, 'cancelled' => $cancel,
+                'auditorium_code' => $prev?->auditorium_code, 'auditorium_name' => $prev?->auditorium_name]);
             $this->stateSetOverride($st, $o);
 
             return $st;
@@ -363,6 +376,12 @@ trait TimetableWeekSuggestions
             // 6) Eng oxirida — shu kafedraning shu vaqtda bo'sh o'qituvchisi (butun karta uchun).
             if ($c->kafedra_name) {
                 $teachersOf[$c->kafedra_name] ??= $this->kafedraTeachers((string) $c->kafedra_name);
+                $placedWeeks = [];
+                for ($w2 = 1; $w2 <= (int) $grid['weeks']; $w2++) {
+                    if ($w2 !== $W && ($pl = $eff($c, $w2))) {
+                        $placedWeeks[$w2] = $pl;
+                    }
+                }
                 $n = 0;
                 foreach ($teachersOf[$c->kafedra_name] as $t) {
                     if ((int) $t->id === (int) $c->teacher_id) {
@@ -372,6 +391,17 @@ trait TimetableWeekSuggestions
                     $tmp->teacher_id = $t->id;
                     $tmp->teacher_name = $t->short_name ?: $t->full_name;
                     if ($check($tmp, $W, $td, $tp, $state)) {
+                        continue;
+                    }
+                    // O'qituvchi butun semestr uchun almashadi — karta joylashgan boshqa haftalarda ham bo'sh bo'lishi kerak.
+                    $busyElsewhere = false;
+                    foreach ($placedWeeks as $w2 => [$d2, $p2]) {
+                        if (array_filter($check($tmp, $w2, $d2, $p2, $state), fn ($m) => str_starts_with($m, 'O\'qituvchi band'))) {
+                            $busyElsewhere = true;
+                            break;
+                        }
+                    }
+                    if ($busyElsewhere) {
                         continue;
                     }
                     $add('teacher', 'O\'qituvchini almashtirish: ' . ($t->short_name ?: $t->full_name) . ' — ' . $slotText($td, $tp, $len),

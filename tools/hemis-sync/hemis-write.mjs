@@ -125,7 +125,20 @@ try {
     process.exit(1);
 }
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ctx = await chromium.launchPersistentContext(String(opt('profile', './.hemis-profile')), { headless: false, viewport: { width: 1280, height: 860 } });
+// Ctrl+C: ochiq readline uni o'zi ushlaydi (birinchisi jarayonni to'xtatmaydi, ikkinchisi amal o'rtasida o'ldiradi va jurnal
+// yozilmaydi), Playwright'ning o'z SIGINT ishlovchisi esa birinchi signaldayoq brauzerni yopib chiqib ketadi. Shuning uchun
+// signal faqat shu yerda: birinchisi — joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi; ikkinchisi — darhol chiqish
+// (brauzerni Playwright jarayon tugashida o'zi yopadi). Brauzer ochilishidan oldin ulanadi — kirish bosqichida ham.
+let stop = false;
+const ctrlC = () => {
+    if (stop) process.exit(130);
+    stop = true;
+    console.log('\nTo\'xtatilmoqda: joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi (darhol chiqish — yana Ctrl+C).');
+};
+rl.on('SIGINT', ctrlC);
+process.on('SIGINT', ctrlC);
+const ctx = await chromium.launchPersistentContext(String(opt('profile', './.hemis-profile')),
+    { headless: false, viewport: { width: 1280, height: 860 }, handleSIGINT: false });
 const page = ctx.pages()[0] || await ctx.newPage();
 await page.goto(BASE + '/curriculum/schedule-info');
 const loggedIn = async () => !!(await page.$('meta[name="csrf-param"]')) && !/login/i.test(page.url());
@@ -219,22 +232,12 @@ const runInPage = async ({ job, apply }) => {
 const apply = has('apply');
 const results = [];
 let lastGroup = null;
-let stop = false;
 // Bitta tasdiq — butun ro'yxat uchun; guruh almashganda qayta so'ralmaydi (to'xtatish — Ctrl+C).
 if (apply && !has('yes') && jobs.length) {
     const nGroups = new Set(jobs.map(x => x.group_id)).size;
     const ans = (await rl.question(`\n${jobs.length} ta amal (${nGroups} ta guruh) HEMIS'ga yoziladi. Boshlaymizmi? [ha / yo'q] `)).trim().toLowerCase();
     if (!ans.startsWith('ha')) stop = true;
 }
-// Ctrl+C: ochiq readline uni o'zi ushlaydi (birinchisi jarayonni to'xtatmaydi, ikkinchisi amal o'rtasida o'ldiradi va jurnal
-// yozilmaydi). Shuning uchun: birinchisi — joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi; ikkinchisi — darhol chiqish.
-const ctrlC = () => {
-    if (stop) process.exit(130);
-    stop = true;
-    console.log('\nTo\'xtatilmoqda: joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi (darhol chiqish — yana Ctrl+C).');
-};
-rl.on('SIGINT', ctrlC);
-process.on('SIGINT', ctrlC);
 for (const j of jobs) {
     if (j.group_id !== lastGroup) console.log(`— ${j.group} (${jobs.filter(x => x.group_id === j.group_id).length} ta amal)`);
     lastGroup = j.group_id;

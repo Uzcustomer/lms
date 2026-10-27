@@ -24,8 +24,11 @@ assert.match(logs[0], /joriy amal tugagach qolganlari yozilmaydi, jurnal saqlana
 ctx.ctrlC();
 assert.deepEqual(exits, [130]);
 
-// Ikkala manbaga ulangan va yozish siklidan oldin; sikl har amaldan oldin stop'ni tekshiradi.
+// Ikkala manbaga ulangan, brauzer ochilishidan (kirish bosqichi) va yozish siklidan oldin; Playwright'ning o'z SIGINT
+// ishlovchisi o'chirilgan (aks holda birinchi signalda brauzerni yopib chiqib ketadi); sikl har amaldan oldin stop'ni tekshiradi.
 const wired = source.indexOf("rl.on('SIGINT', ctrlC);"), loop = source.indexOf('for (const j of jobs) {');
-assert(wired > 0 && source.includes("process.on('SIGINT', ctrlC);") && wired < loop);
+const launch = source.indexOf('chromium.launchPersistentContext(');
+assert(wired > 0 && source.includes("process.on('SIGINT', ctrlC);") && wired < launch && launch < loop);
+assert.match(source.slice(launch, source.indexOf(');', launch)), /handleSIGINT: false/);
 assert.match(source.slice(loop, loop + 400), /if \(stop\) \{ results\.push\(\{ \.\.\.j, status: 'skipped'/);
-console.log('2 HEMIS writer (Playwright) Ctrl+C scenarios passed');
+console.log('3 HEMIS writer (Playwright) Ctrl+C scenarios passed');

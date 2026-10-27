@@ -6274,17 +6274,19 @@ class TimetableController extends Controller
     /**
      * Joylanmagan karta sababi (Excel uchun): kartaning odatiy ichki joyi (haftalik ko'chirishlarining eng ko'pi),
      * bo'lmasa tashqi jadvaldagi joyi tekshiriladi — o'sha vaqtda kim band (guruh / o'qituvchi / xona) va
-     * bitta para pastda ham. Joyi umuman bo'lmasa — shuni aytadi. Qaytaradi: [tekshirilgan vaqt, sabab].
+     * bitta para pastda ham. Joyi umuman bo'lmasa — shuni aytadi. Chegara — yo'nalish panjarasi (gridFor).
+     * Qaytaradi: [tekshirilgan vaqt, sabab].
      */
     private function unplacedReasonFn(TimetableBoard $board, bool $external, int $week): \Closure
     {
         $state = $external ? null : $this->occupancyState($board->id);
+        $grids = [];
         $dayNames = [1 => 'Dushanba', 2 => 'Seshanba', 3 => 'Chorshanba', 4 => 'Payshanba', 5 => 'Juma', 6 => 'Shanba', 7 => 'Yakshanba'];
         $paraText = fn (int $pair, int $len) => $len >= 2 && $pair % 2 === 1
             ? intdiv($pair + 1, 2) . '-para'
             : intdiv($pair + 1, 2) . '-para (' . ($pair % 2 === 1 ? '1' : '2') . '-yarmi)';
 
-        return function (TimetableCard $card) use ($state, $external, $week, $dayNames, $paraText): array {
+        return function (TimetableCard $card) use ($board, $state, $external, $week, $dayNames, $paraText, &$grids): array {
             $slot = null;
             $src = '';
             if (!$external && $state !== null) {
@@ -6311,8 +6313,10 @@ class TimetableController extends Controller
             }
             [$day, $pair] = $slot;
             $len = $card->lenHalf();
-            $check = function (int $p) use ($card, $external, $week, $day, $state, $len): array {
-                if ($p < 1 || $p + $len - 1 > 12) {
+            $grid = $grids[$card->faculty_name . '|' . $card->specialty_name . '|' . $card->course]
+                ??= $this->gridFor($board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course);
+            $check = function (int $p) use ($card, $external, $week, $day, $state, $len, $grid): array {
+                if ($day < 1 || $day > $grid['days'] || $p < 1 || $p + $len - 1 > $grid['pairs']) {
                     return ['Jadval chegarasidan tashqarida'];
                 }
                 try {

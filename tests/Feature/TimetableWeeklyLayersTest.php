@@ -170,6 +170,22 @@ it('joylanmagan kartalar eksporti sababini ko\'rsatadi: kim band, bitta para pas
         ->and($rows['Biologiya'][13])->toContain("joyi yo'q");
 });
 
+it('joylanmagan kartalar sababi doska panjarasi bo\'yicha: 1 para pastda panjaradan chiqsa — bo\'sh deyilmaydi', function () {
+    $s = layersSetup();
+    $s['board']->update(['pairs_per_day' => 4]);   // kuniga 4 yarim-slot (2 para)
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+
+    $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=internal&week=3')->assertOk();
+    $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+    file_put_contents($file, $res->streamedContent());
+    $rows = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet()->toArray())->slice(2)->keyBy(fn ($r) => $r[6]);
+    @unlink($file);
+
+    expect($rows['Gigiyena'][13])->toContain('Guruh band')->toContain('1 para pastda ham: Jadval chegarasidan tashqarida')
+        ->not->toContain("pastda bo'sh");
+});
+
 it('tashqi jadvalda haftalari kesishmaydigan kartalar bir katakni bo\'lisha oladi', function () {
     $s = layersSetup();
     // own: 1-7 hafta, foreign: 8-15 hafta ("BKP 7 / Umumiy xirurgiya 8" kabi)

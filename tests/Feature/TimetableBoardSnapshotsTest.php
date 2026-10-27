@@ -8,6 +8,7 @@ use App\Models\TimetableCardOverride;
 use App\Models\TimetableGridSetting;
 use App\Services\Timetable\BoardSnapshots;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -301,4 +302,63 @@ it('panjaradan chiqib ketadigan joylashuv yozilmaydi (kun oxiridagi karta soati 
         ->and($r['conflict_examples'][0])->toContain('chegarasidan tashqarida')
         ->and($two->fresh()->only(['day', 'pair']))->toBe(['day' => 3, 'pair' => $last])
         ->and($one->fresh()->only(['day', 'pair']))->toBe(['day' => null, 'pair' => null]);
+});
+
+it('shablonga qo\'yishda boshqa kartaning haftalik joyi ham tekshiriladi (o\'sha hafta o\'tilmasa — to\'qnashuv emas)', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $b = TimetableCard::create($fiz);   // faqat 3-haftada: juma 7-para
+    TimetableCardOverride::create(['card_id' => $b->id, 'week' => 3, 'day' => 5, 'pair' => 7, 'start_half' => 0, 'cancelled' => false]);
+    $a = TimetableCard::create(array_merge($fiz, ['subject_name' => 'Kimyo']));
+    $url = route('admin.timetable.cards.place', $a);
+
+    $err = snapAs($s['admin'], 'superadmin')->postJson($url, ['day' => 5, 'pair' => 7, 'layer' => 'internal'])->assertStatus(422)->json('error');
+    expect($err)->toBe('3-hafta: Guruh band: g-01a (o\'z) — F1, 2-kurs · g-01a · Fizika (amaliy)');
+    // A 3-haftada o'tilmaydi — o'sha haftadagi joy xalaqit bermaydi
+    TimetableCardOverride::create(['card_id' => $a->id, 'week' => 3, 'cancelled' => true]);
+    snapAs($s['admin'], 'superadmin')->postJson($url, ['day' => 5, 'pair' => 7, 'layer' => 'internal'])->assertOk();
+    expect($a->fresh()->only(['day', 'pair']))->toBe(['day' => 5, 'pair' => 7]);
+});
+
+it('tiklashda shablon joyi boshqa kartaning o\'sha vaqtdagi haftalik joyi bilan ham tekshiriladi', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $a = TimetableCard::create($fiz + ['day' => 1, 'pair' => 1]);
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+    // A bo'shatildi; boshqa fan faqat 3-haftada A'ning joyiga qo'yildi
+    $a->update(['day' => null, 'pair' => null]);
+    $b = TimetableCard::create(array_merge($fiz, ['subject_name' => 'Kimyo']));
+    TimetableCardOverride::create(['card_id' => $b->id, 'week' => 3, 'day' => 1, 'pair' => 1, 'start_half' => 0, 'cancelled' => false]);
+
+    $r = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.snapshots.restore', [$s['board'], $snap]), ['dry_run' => 0])->assertOk()->json();
+    expect($r['conflicts'])->toBe(1)
+        ->and($r['conflict_examples'][0])->toContain('3-hafta: Guruh band')
+        ->and($a->fresh()->day)->toBeNull();
+});
+
+it('tiklash doskani bir marta o\'qiydi — har tekshiruvda butun doska qayta yuklanmaydi', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $tpl = [];
+    foreach ([1, 2, 3, 4] as $d) {
+        $tpl[] = TimetableCard::create(array_merge($fiz, ['subject_name' => 'Fan ' . $d, 'day' => $d, 'pair' => 9]));
+    }
+    $wk = TimetableCard::create(array_merge($fiz, ['subject_name' => 'Haftalik']));
+    foreach (range(1, 8) as $w) {
+        TimetableCardOverride::create(['card_id' => $wk->id, 'week' => $w, 'day' => 5, 'pair' => 1 + $w, 'start_half' => 0, 'cancelled' => false]);
+    }
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+    TimetableCard::whereIn('id', collect($tpl)->pluck('id'))->update(['day' => null, 'pair' => null]);
+    TimetableCardOverride::where('card_id', $wk->id)->delete();
+
+    // Butun doska bo'yicha (kun bo'yicha emas) kartalar so'rovlari
+    $boardWide = 0;
+    DB::listen(function ($q) use (&$boardWide) {
+        if (str_contains($q->sql, 'timetable_cards') && str_contains($q->sql, '`board_id` = ?') && !str_contains($q->sql, '`day` = ?')) {
+            $boardWide++;
+        }
+    });
+    $r = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.snapshots.restore', [$s['board'], $snap]), ['dry_run' => 0])->assertOk()->json();
+    expect($r['internal'])->toBe(4)->and($r['week_moves'])->toBe(8)->and($r['conflicts'])->toBe(0)
+        ->and($boardWide)->toBeLessThanOrEqual(5);
 });

@@ -110,12 +110,12 @@ trait TimetableWeekSuggestions
         $slotText = fn (int $d, int $p, int $len) => $dayName($d) . ', ' . intdiv($p + 1, 2) . '-para' . ($p % 2 ? '' : ' (2-yarmi)')
             . ($len > 2 ? ' + ' . ($len - 2) . ' soat' : '');
         $check = fn (TimetableCard $c, int $w, int $d, int $p, array $st) => $this->findWeekConflicts($c, $w, $d, $p, 0, $st);
-        $withMove = function (array $st, TimetableCard $c, int $w, ?int $d, ?int $p, bool $cancel = false) {
+        $withMove = function (array $st, TimetableCard $c, int $w, ?int $d, ?int $p, bool $cancel = false, ?array $room = null) {
             // weekOverride xona berilmagan ko'chirishda shu haftaga berilgan xonani saqlaydi (bekor qilishda tozalaydi).
             $prev = $cancel ? null : ($st['ov'][(int) $c->id][$w] ?? null);
             $o = new TimetableCardOverride();
             $o->forceFill(['card_id' => $c->id, 'week' => $w, 'day' => $d, 'pair' => $p, 'start_half' => 0, 'cancelled' => $cancel,
-                'auditorium_code' => $prev?->auditorium_code, 'auditorium_name' => $prev?->auditorium_name]);
+                'auditorium_code' => $room ? $room[0] : $prev?->auditorium_code, 'auditorium_name' => $room ? $room[1] : $prev?->auditorium_name]);
             $this->stateSetOverride($st, $o);
 
             return $st;
@@ -147,6 +147,156 @@ trait TimetableWeekSuggestions
             $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course;
 
             return $grids[$k] ??= $this->gridFor($board, $c->faculty_name, (string) $c->specialty_name, (int) $c->course);
+        };
+        // Dars butun hisoblanadi: bir guruhning bir fandan shu kundagi ketma-ket amaliy kartalari (2 + 2, 2 + 1 soat)
+        // bitta blok — ko'chirilsa hammasi birga, bir kunda ketma-ket ko'chadi.
+        $effIn = function (TimetableCard $x, int $w, array $st): ?array {
+            $ov = $st['ov'][(int) $x->id][$w] ?? null;
+            if ($ov) {
+                return $ov->cancelled || !$ov->day || !$ov->pair ? null : [(int) $ov->day, (int) $ov->pair];
+            }
+
+            return $x->day && $x->pair ? [(int) $x->day, (int) $x->pair] : null;
+        };
+        // Bir kundagi [karta, boshlanish] ro'yxatidan ketma-ket zanjirlar (bir kunda shu fanning ikki alohida darsi bo'lishi mumkin).
+        $chainsOf = function (array $list): array {
+            usort($list, fn ($a, $b) => $a[1] <=> $b[1]);
+            $chains = [];
+            foreach ($list as [$y, $p]) {
+                $last = $chains ? $chains[count($chains) - 1] : null;
+                if ($last && $p <= $last['end']) {
+                    $chains[count($chains) - 1]['cards'][] = $y;
+                    $chains[count($chains) - 1]['end'] = max($last['end'], $p + $y->lenHalf());
+                } else {
+                    $chains[] = ['cards' => [$y], 'start' => $p, 'end' => $p + $y->lenHalf()];
+                }
+            }
+
+            return $chains;
+        };
+        $blockOf = function (TimetableCard $x, int $w, array $st) use ($effIn, $bySib, $sibKey, $isBolak, $chainsOf): array {
+            $pl = $effIn($x, $w, $st);
+            if (!$pl || $x->training_type === 'lecture' || $isBolak($x)) {
+                return [$x];
+            }
+            $list = [];
+            foreach ($bySib[$sibKey($x)] ?? [] as $y) {
+                $py = $effIn($y, $w, $st);
+                if ($py && $py[0] === $pl[0]) {
+                    $list[] = [$y, $py[1]];
+                }
+            }
+            // Faqat x turgan ketma-ket zanjir.
+            foreach ($chainsOf($list) as $ch) {
+                foreach ($ch['cards'] as $y) {
+                    if ((int) $y->id === (int) $x->id) {
+                        return $ch['cards'];
+                    }
+                }
+            }
+
+            return [$x];
+        };
+        // Blokni (d, s) dan boshlab ketma-ket qo'yib ko'radi: avval blok kartalari o'z joyidan "ko'tariladi".
+        $placeBlock = function (array $cards, int $w, int $d, int $s, array $st, int $maxPair) use ($withMove, $check): ?array {
+            $len = array_sum(array_map(fn ($x) => $x->lenHalf(), $cards));
+            if ($s < 1 || $s + $len - 1 > $maxPair) {
+                return null;
+            }
+            // Haftalik xona ko'tarishda yo'qolmasin: blok tuzish uchun avval "reset" qilinsa ham, rejada xona hisobga olinadi.
+            $keep = [];
+            foreach ($cards as $x) {
+                $prev = $st['ov'][(int) $x->id][$w] ?? null;
+                $keep[(int) $x->id] = [$prev?->auditorium_code, $prev?->auditorium_name];
+                // "reset" kabi: shu haftaga yozuvi o'chadi va karta shablondagi (barcha haftalar) joyiga qaytadi (bo'lsa) —
+                // ketma-ket ko'chirishda keyingi kartalar o'sha joyda turgan holda tekshiriladi.
+                $this->stateSetOverride($st, null, (int) $x->id, $w);
+            }
+            $p = $s;
+            foreach ($cards as $x) {
+                $st = $withMove($st, $x, $w, $d, $p, false, $keep[(int) $x->id][0] ? $keep[(int) $x->id] : null);
+                if ($check($x, $w, $d, $p, $st)) {
+                    return null;
+                }
+                $p += $x->lenHalf();
+            }
+
+            return $st;
+        };
+        // Blok uchun joy: avval $prefDay (yaqin vaqtdan), keyin (ruxsat bo'lsa) boshqa kunlar. [kun, boshlanish, holat]
+        // Boshqa kunga ko'chirilayotgan dars: o'sha kunda shu guruhning shu fandan shu turdagi darsi bormi (blokning
+        // o'zidan tashqari). Bor bo'lsa — u kunga taklif qilinmaydi (kunlik darslar soni buzilmasin).
+        $dayIdx = [];
+        $lessonKey = fn (TimetableCard $x) => $this->groupScopeKey($x) . '|' . $x->training_type . '|' . mb_strtolower($baseSubj($x->subject_name));
+        $sameLessonOnDay = function (array $cards, int $w, int $d) use (&$dayIdx, &$state, $effIn, $lessonKey): bool {
+            if (!isset($dayIdx[$w])) {
+                $dayIdx[$w] = [];
+                foreach ($state['cards'] as $y) {
+                    if ($py = $effIn($y, $w, $state)) {
+                        $dayIdx[$w][$py[0]][$lessonKey($y)][] = $y;
+                    }
+                }
+            }
+            $ids = array_map(fn ($x) => (int) $x->id, $cards);
+            $groups = array_merge(...array_map(fn ($x) => $x->occupiedGroups(), $cards));
+            foreach ($dayIdx[$w][$d][$lessonKey($cards[0])] ?? [] as $y) {
+                if (!in_array((int) $y->id, $ids, true) && array_intersect($y->occupiedGroups(), $groups)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        $searchBlock = function (array $cards, int $w, array $st, int $prefDay, int $prefPair, int $maxDay, int $maxPair, bool $otherDays, ?array $skip = null) use ($placeBlock, $sameLessonOnDay): ?array {
+            $len = array_sum(array_map(fn ($x) => $x->lenHalf(), $cards));
+            $days = range(1, $maxDay);
+            usort($days, fn ($a, $b) => ($a !== $prefDay) <=> ($b !== $prefDay) ?: $a <=> $b);
+            foreach ($days as $d) {
+                if (!$otherDays && $d !== $prefDay) {
+                    continue;
+                }
+                if ($d !== $prefDay && $sameLessonOnDay($cards, $w, $d)) {
+                    continue;
+                }
+                $ps = range(1, max(1, $maxPair - $len + 1));
+                usort($ps, fn ($a, $b) => abs($a - $prefPair) <=> abs($b - $prefPair) ?: $a <=> $b);
+                foreach ($ps as $s) {
+                    if ($skip && $skip === [$d, $s]) {
+                        continue;
+                    }
+                    if ($st2 = $placeBlock($cards, $w, $d, $s, $st, $maxPair)) {
+                        return [$d, $s, $st2];
+                    }
+                }
+            }
+
+            return null;
+        };
+        $blockActs = function (array $cards, int $w, int $d, int $s) use (&$state): array {
+            // Blok bir necha karta bo'lsa — avval eski joylari bo'shatiladi, keyin ketma-ket qo'yiladi
+            // (aks holda karta o'z blokining eski joyi bilan to'qnashadi).
+            $acts = [];
+            if (count($cards) > 1) {
+                foreach ($cards as $x) {
+                    $acts[] = ['op' => 'reset', 'card_id' => (int) $x->id, 'week' => $w];
+                }
+            }
+            $p = $s;
+            foreach ($cards as $x) {
+                // "reset" shu haftaga berilgan xonani ham o'chiradi — ko'chirishda qayta beriladi.
+                $room = count($cards) > 1 ? ($state['ov'][(int) $x->id][$w] ?? null)?->auditorium_code : null;
+                $acts[] = ['op' => 'move', 'card_id' => (int) $x->id, 'week' => $w, 'day' => $d, 'pair' => $p] + ($room ? ['auditorium_code' => $room] : []);
+                $p += $x->lenHalf();
+            }
+
+            return $acts;
+        };
+        $blockText = function (array $cards) use ($slotText): string {
+            $x = $cards[0];
+            $h = array_sum(array_map(fn ($y) => $y->lenHalf(), $cards));
+
+            return '«' . $x->subject_name . '» (' . implode(', ', $x->occupiedGroups()) . ($x->teacher_name ? ', ' . $x->teacher_name : '')
+                . ($h > 1 ? ', ' . $h . ' soat' : '') . ')';
         };
         $rooms = null;
         $roomMap = null;
@@ -205,25 +355,41 @@ trait TimetableWeekSuggestions
                 $why0 = $why0 ?: $e;
             }
             $reason = $why0 ? implode('; ', $why0) : '';
+            // Shu darsning butun bloki (karta ulanadigan, maqsad joyiga tutash ketma-ket qism + shu karta) — ko'chirilsa
+            // birga ko'chadi. Shu kundagi shu fanning boshqa, alohida darsi blokka kirmaydi.
+            $cb = [];
+            $dayParts = [];
+            foreach ($sibs as [$x, $pl]) {
+                if ($pl[0] === $td) {
+                    $dayParts[] = [$x, $pl[1]];
+                }
+            }
+            foreach ($chainsOf($dayParts) as $ch) {
+                if ($ch['end'] === $tp || $ch['start'] === $tp + $len) {
+                    $cb = $ch['cards'];
+                    break;
+                }
+            }
+            $cbStart = $cb ? min(array_map(fn ($x) => $eff($x, $W)[1], $cb)) : null;
+            $cb[] = $c;
+            $cbLen = array_sum(array_map(fn ($x) => $x->lenHalf(), $cb));
 
-            // 1) Shu kunning boshqa bo'sh vaqti (ma'ruzadan tashqari).
+            // 1) Shu kunning boshqa bo'sh vaqti — butun dars (joylashgan qismi bilan birga) ko'chadi.
             if (!$sugs) {
-                $cand = range(1, max(1, $maxPair - $len + 1));
-                usort($cand, fn ($a, $b) => abs($a - $tp) <=> abs($b - $tp) ?: $a <=> $b);
                 $n = 0;
-                foreach ($cand as $p) {
-                    if (in_array([$td, $p], $targets, true) || $check($c, $W, $td, $p, $state)) {
-                        continue;
-                    }
+                $skip = null;
+                while ($n < 2 && ($f = $searchBlock($cb, $W, $state, $td, $cbStart ?? $tp, $maxDay, $maxPair, false, $skip))) {
+                    [$d, $s0] = $f;
+                    $title = (count($cb) > 1 ? 'Butun darsni (' . $cbLen . ' soat) shu kunning boshqa vaqtiga: ' : 'Shu kun, boshqa vaqt: ') . $slotText($d, $s0, $cbLen);
                     if ($lecture) {
-                        $addLate('lecture', 'Ma\'ruzani shu kunning boshqa vaqtiga: ' . $slotText($td, $p, $len), [$mv($c, $W, $td, $p)], $lecNote);
+                        $addLate('lecture', 'Ma\'ruzani shu kunning boshqa vaqtiga: ' . $slotText($d, $s0, $len), $blockActs($cb, $W, $d, $s0), $lecNote);
                     } else {
-                        $add('slot', 'Shu kun, boshqa vaqt: ' . $slotText($td, $p, $len), [$mv($c, $W, $td, $p)],
-                            $sibs ? 'Shu fanning boshqa qismidan ajralib qoladi' : '');
+                        $add('slot', $title, $blockActs($cb, $W, $d, $s0));
                     }
-                    if (++$n >= 2) {
-                        break;
-                    }
+                    $n++;
+                    // keyingi variant — boshqa boshlanish (blok qidiruvda o'z joyidan ko'tariladi, shuning uchun
+                    // topilgan joyni holatda band qilib bo'lmaydi — u o'tkazib yuboriladi)
+                    $skip = [$d, $s0];
                 }
             }
 
@@ -260,58 +426,49 @@ trait TimetableWeekSuggestions
                 break;
             }
 
-            // 3) To'sib turgan amaliy darsni shu haftaning boshqa vaqtiga surish.
+            // 3) To'sib turgan darsni shu haftaning boshqa vaqtiga surish — to'sib turgan dars ham butun blok bo'lib ko'chadi.
             $nb = 0;
             foreach ($targets as [$d, $p]) {
                 $bl = $blockers($c, $W, $d, $p, $state);
                 if (!$bl || count($bl) > 2) {
                     continue;
                 }
-                $movesLecture = (bool) array_filter($bl, fn ($b) => $b[0]->training_type === 'lecture');
                 $st = $withMove($state, $c, $W, $d, $p);
                 $plan = [];
+                $movesLecture = false;
+                $seen = [];
                 foreach ($bl as [$b]) {
-                    $bpl = $eff($b, $W);
-                    $found = null;
-                    $days = range(1, $maxDay);
-                    usort($days, fn ($a, $x) => ($a !== $bpl[0]) <=> ($x !== $bpl[0]) ?: $a <=> $x);
-                    foreach ($days as $bd) {
-                        $ps = range(1, max(1, $maxPair - $b->lenHalf() + 1));
-                        usort($ps, fn ($a, $x) => abs($a - $bpl[1]) <=> abs($x - $bpl[1]) ?: $a <=> $x);
-                        foreach ($ps as $bp) {
-                            if ([$bd, $bp] === $bpl) {
-                                continue;
-                            }
-                            $st2 = $withMove($st, $b, $W, $bd, $bp);
-                            if (!$check($b, $W, $bd, $bp, $st2)) {
-                                $found = [$bd, $bp];
-                                break 2;
-                            }
-                        }
+                    if (isset($seen[(int) $b->id])) {
+                        continue;
                     }
-                    if (!$found) {
+                    $bb = $blockOf($b, $W, $state);
+                    foreach ($bb as $y) {
+                        $seen[(int) $y->id] = true;
+                    }
+                    if (in_array((int) $c->id, array_map(fn ($y) => (int) $y->id, $bb), true)) {
                         $plan = null;
                         break;
                     }
-                    $st = $withMove($st, $b, $W, $found[0], $found[1]);
-                    $plan[] = [$b, $bpl, $found];
+                    $movesLecture = $movesLecture || $b->training_type === 'lecture';
+                    $from = $eff($bb[0], $W);
+                    $bgrid = $gridOf($bb[0]);
+                    $f = $searchBlock($bb, $W, $st, $from[0], $from[1], (int) $bgrid['days'], (int) $bgrid['pairs'], true, $from);
+                    if (!$f) {
+                        $plan = null;
+                        break;
+                    }
+                    $st = $f[2];
+                    $plan[] = [$bb, $from, [$f[0], $f[1]]];
                 }
-                if (!$plan) {
-                    continue;
-                }
-                $st3 = $state;
-                foreach ($plan as [$b, , $f]) {
-                    $st3 = $withMove($st3, $b, $W, $f[0], $f[1]);
-                }
-                if ($check($c, $W, $d, $p, $st3)) {
+                if (!$plan || $check($c, $W, $d, $p, $st)) {
                     continue;
                 }
                 $txt = [];
                 $acts = [];
-                foreach ($plan as [$b, $from, $to]) {
-                    $txt[] = '«' . $b->subject_name . '» (' . implode(', ', $b->occupiedGroups()) . ($b->teacher_name ? ', ' . $b->teacher_name : '') . ') '
-                        . $slotText($from[0], $from[1], $b->lenHalf()) . ' → ' . $slotText($to[0], $to[1], $b->lenHalf());
-                    $acts[] = $mv($b, $W, $to[0], $to[1]);
+                foreach ($plan as [$bb, $from, $to]) {
+                    $h = array_sum(array_map(fn ($y) => $y->lenHalf(), $bb));
+                    $txt[] = $blockText($bb) . ' ' . $slotText($from[0], $from[1], $h) . ' → ' . $slotText($to[0], $to[1], $h);
+                    array_push($acts, ...$blockActs($bb, $W, $to[0], $to[1]));
                 }
                 $acts[] = $mv($c, $W, $d, $p);
                 if ($movesLecture) {
@@ -319,37 +476,39 @@ trait TimetableWeekSuggestions
                         'Faqat shu hafta. ' . $lecNote);
                 } else {
                     $add('blocker', 'To\'sib turgan darsni surish: ' . implode('; ', $txt) . ' — keyin bu karta ' . $slotText($d, $p, $len), $acts,
-                        'Faqat shu hafta');
+                        'Faqat shu hafta; dars butun ko\'chadi');
                 }
                 if (++$nb >= 2) {
                     break;
                 }
             }
 
-            // 4) Shu haftaning boshqa kuni (ma'ruza uchun — oxirroqda, ogohlantirish bilan).
+            // 4) Shu haftaning boshqa kuni — butun dars birga (ma'ruza uchun — oxirroqda, ogohlantirish bilan).
             {
                 $n = 0;
                 for ($d = 1; $d <= $maxDay && $n < 2; $d++) {
                     if ($d === $td) {
                         continue;
                     }
-                    $ps = range(1, max(1, $maxPair - $len + 1));
-                    usort($ps, fn ($a, $b) => abs($a - $tp) <=> abs($b - $tp) ?: $a <=> $b);
-                    foreach ($ps as $p) {
-                        if (!$check($c, $W, $d, $p, $state)) {
-                            if ($lecture) {
-                                $addLate('lecture', 'Ma\'ruzani boshqa kunga: ' . $slotText($d, $p, $len), [$mv($c, $W, $d, $p)], $lecNote);
-                            } else {
-                                $add('day', 'Boshqa kun: ' . $slotText($d, $p, $len), [$mv($c, $W, $d, $p)]);
-                            }
-                            $n++;
-                            break;
-                        }
+                    if ($sameLessonOnDay($cb, $W, $d)) {
+                        continue;
                     }
+                    $f = $searchBlock($cb, $W, $state, $d, $cbStart ?? $tp, $maxDay, $maxPair, false, null);
+                    if (!$f) {
+                        continue;
+                    }
+                    if ($lecture) {
+                        $addLate('lecture', 'Ma\'ruzani boshqa kunga: ' . $slotText($f[0], $f[1], $len), $blockActs($cb, $W, $f[0], $f[1]), $lecNote);
+                    } else {
+                        $add('day', (count($cb) > 1 ? 'Butun darsni (' . $cbLen . ' soat) boshqa kunga: ' : 'Boshqa kun: ') . $slotText($f[0], $f[1], $cbLen),
+                            $blockActs($cb, $W, $f[0], $f[1]));
+                    }
+                    $n++;
                 }
 
                 // 5) Boshqa hafta: karta o'tilmaydigan haftaga, tashqi (yoki shu) vaqtida.
-                $n = $lecture ? 2 : 0;
+                // Darsning boshqa qismi shu haftada joylashgan bo'lsa — faqat bir qismini boshqa haftaga o'tkazib bo'lmaydi.
+                $n = $lecture || count($cb) > 1 ? 2 : 0;
                 $weeks = range(1, (int) $grid['weeks']);
                 usort($weeks, fn ($a, $b) => abs($a - $W) <=> abs($b - $W) ?: $a <=> $b);
                 foreach ($weeks as $w2) {
@@ -374,7 +533,7 @@ trait TimetableWeekSuggestions
                 $sugs[] = $x;
             }
             // 6) Eng oxirida — shu kafedraning shu vaqtda bo'sh o'qituvchisi (butun karta uchun).
-            if ($c->kafedra_name) {
+            if ($c->kafedra_name && count($cb) === 1) {
                 $teachersOf[$c->kafedra_name] ??= $this->kafedraTeachers((string) $c->kafedra_name);
                 $placedWeeks = [];
                 for ($w2 = 1; $w2 <= (int) $grid['weeks']; $w2++) {

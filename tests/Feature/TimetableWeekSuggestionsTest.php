@@ -154,8 +154,8 @@ it('rad etilgan haftalik ko\'chirish haftalik xonani o\'chirib yubormaydi, yangi
 
 function sugCard(array $s, array $attrs): TimetableCard
 {
-    return TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
-        'training_type', 'len_half', 'weeks']) + $attrs);
+    return TimetableCard::create($attrs + $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks']));
 }
 
 it('takliflar: sikl fanlari haftalik joylanmaganlar qatoriga kirmaydi', function () {
@@ -210,4 +210,138 @@ it('takliflar: boshqa haftada band o\'qituvchi almashtirishga taklif qilinmaydi'
         ->assertOk()->json();
     $titles = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->where('type', 'teacher')->pluck('title')->implode(' | ');
     expect($titles)->toContain('YBOSH O.')->not->toContain('XBAND O.');
+});
+
+it('takliflar: to\'sib turgan dars butun blok bo\'lib (2 + 1 soat) bir kunda ko\'chadi', function () {
+    $s = sugSetup();
+    $busy = sugTeacher('BAND O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    $mk = fn (int $len) => TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'weeks', 'kafedra_name']) + ['len_half' => $len, 'subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    $b1 = $mk(2);
+    $b2 = $mk(1);
+    TimetableCardOverride::create(['card_id' => $b1->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+    TimetableCardOverride::create(['card_id' => $b2->id, 'week' => 3, 'day' => 2, 'pair' => 5]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $blk = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->firstWhere('type', 'blocker');
+    expect($blk)->not->toBeNull();
+    $acts = collect($blk['actions']);
+    $moves = $acts->where('op', 'move')->whereIn('card_id', [$b1->id, $b2->id])->values();
+    expect($acts->where('op', 'reset')->pluck('card_id')->sort()->values()->all())->toBe([$b1->id, $b2->id])
+        ->and($moves)->toHaveCount(2)
+        ->and($moves[0]['day'])->toBe($moves[1]['day'])
+        ->and($moves[1]['pair'])->toBe($moves[0]['pair'] + 2)
+        ->and($acts->last())->toMatchArray(['op' => 'move', 'card_id' => $s['own']->id, 'day' => 2, 'pair' => 3]);
+
+    // Takliflarni ketma-ket qo'llash ishlaydi
+    foreach ($blk['actions'] as $a) {
+        $body = ['week' => $a['week'], 'action' => $a['op'] === 'reset' ? 'reset' : 'move'] + ($a['op'] === 'move' ? ['day' => $a['day'], 'pair' => $a['pair']] : []);
+        sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $a['card_id']), $body)->assertOk();
+    }
+    expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3);
+});
+
+it('takliflar: shablonda joylashgan blokni surish taklifi qo\'llanganda ham ishlaydi', function () {
+    $s = sugSetup();
+    $busy = sugTeacher('BAND O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    // To'sib turgan dars (2 + 1 soat) shablonda (barcha haftalarda) 2-kun 3–5 da — "reset" uni o'sha joyga qaytaradi
+    $b1 = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'len_half' => 2, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.', 'day' => 2, 'pair' => 3]);
+    $b2 = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'len_half' => 1, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.', 'day' => 2, 'pair' => 5]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $blk = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->firstWhere('type', 'blocker');
+    expect($blk)->not->toBeNull();
+    foreach ($blk['actions'] as $a) {
+        $body = ['week' => $a['week'], 'action' => $a['op'] === 'reset' ? 'reset' : 'move'] + ($a['op'] === 'move' ? ['day' => $a['day'], 'pair' => $a['pair']] : []);
+        sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $a['card_id']), $body)->assertOk();
+    }
+    expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3);
+});
+
+it('takliflar: shu kunning boshqa vaqti uchun ikki variant beriladi', function () {
+    $s = sugSetup();
+    $busy = sugTeacher('BAND O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    $other = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $other->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $slots = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->where('type', 'slot')->values();
+    expect($slots)->toHaveCount(2)
+        ->and($slots[0]['actions'][0]['pair'])->not->toBe($slots[1]['actions'][0]['pair']);
+});
+
+it('takliflar: shu kundagi shu fanning alohida darsi blokka qo\'shilmaydi', function () {
+    $s = sugSetup();
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    // Gigiyena g-01a: 3-haftada 2-kun 1–2 da (alohida dars) va 7–8 da; joylanmagan karta 7–8 ning ketiga (9) ulanadi
+    $a = sugCard($s, ['subject_name' => 'Gigiyena', 'group_name' => 'g-01a']);
+    $b = sugCard($s, ['subject_name' => 'Gigiyena', 'group_name' => 'g-01a']);
+    TimetableCardOverride::create(['card_id' => $a->id, 'week' => 3, 'day' => 2, 'pair' => 1]);
+    TimetableCardOverride::create(['card_id' => $b->id, 'week' => 3, 'day' => 2, 'pair' => 7]);
+    // 9–10 da shu guruhning boshqa darsi
+    $k = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-01a']);
+    TimetableCardOverride::create(['card_id' => $k->id, 'week' => 3, 'day' => 2, 'pair' => 9]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $sugs = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions']);
+    $slot = $sugs->firstWhere('type', 'slot');
+    expect($slot)->not->toBeNull();
+    // Faqat 7–8 dagi qism shu karta bilan birga ko'chadi; 1–2 dagi alohida darsga tegilmaydi
+    $touched = $sugs->whereIn('type', ['slot', 'day'])->flatMap(fn ($x) => collect($x['actions'])->pluck('card_id'))->unique()->values()->all();
+    expect($touched)->toContain($b->id)->not->toContain($a->id);
+});
+
+it('takliflar: dars shu fanning shu turdagi darsi bor kunga ko\'chirishga taklif qilinmaydi', function () {
+    $s = sugSetup();
+    TimetableGridSetting::where('board_id', $s['board']->id)->where('course', 2)->update(['days' => 3]);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    // Gigiyena g-01a: 2-kun 1–2 da (karta shunga ulanadi) va 3-kun 7–8 da
+    $a = sugCard($s, ['subject_name' => 'Gigiyena', 'group_name' => 'g-01a']);
+    $b = sugCard($s, ['subject_name' => 'Gigiyena', 'group_name' => 'g-01a']);
+    TimetableCardOverride::create(['card_id' => $a->id, 'week' => 3, 'day' => 2, 'pair' => 1]);
+    TimetableCardOverride::create(['card_id' => $b->id, 'week' => 3, 'day' => 3, 'pair' => 7]);
+    // Ulanish joyi (2-kun 3) band
+    $k = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-01a']);
+    TimetableCardOverride::create(['card_id' => $k->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $days = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->where('type', 'day')
+        ->map(fn ($x) => collect($x['actions'])->firstWhere('op', 'move')['day'])->values()->all();
+    // 3-kunda Gigiyena allaqachon bor — u kunga emas, faqat 1-kunga
+    expect($days)->toBe([1]);
+});
+
+it('takliflar: to\'sib turgan dars ham shu fanning darsi bor kunga surilmaydi', function () {
+    $s = sugSetup();
+    TimetableGridSetting::where('board_id', $s['board']->id)->where('course', 2)->update(['days' => 3]);
+    $busy = sugTeacher('BAND O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    // To'sib turgan Biologiya (g-01b) 2-kun 3–4 da; 2-kunning qolgan joylari shu guruhda band
+    $bio = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $bio->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+    foreach ([[1, 2], [5, 8]] as [$p, $l]) {
+        $f = sugCard($s, ['subject_name' => 'Kimyo ' . $p, 'group_name' => 'g-01b', 'len_half' => $l]);
+        TimetableCardOverride::create(['card_id' => $f->id, 'week' => 3, 'day' => 2, 'pair' => $p]);
+    }
+    // 1-kunda g-01b ning boshqa Biologiya darsi bor
+    $bio2 = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b']);
+    TimetableCardOverride::create(['card_id' => $bio2->id, 'week' => 3, 'day' => 1, 'pair' => 9]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $blk = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->firstWhere('type', 'blocker');
+    expect($blk)->not->toBeNull()
+        ->and(collect($blk['actions'])->firstWhere('card_id', $bio->id)['day'])->toBe(3);
 });

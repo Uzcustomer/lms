@@ -4413,6 +4413,8 @@
                             if (a.op === 'move') {
                                 await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST',
                                     { week: a.week, action: 'move', day: a.day, pair: a.pair, layer: 'internal', auditorium_code: a.auditorium_code });
+                            } else if (a.op === 'reset') {
+                                await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST', { week: a.week, action: 'reset', layer: 'internal' });
                             } else if (a.op === 'cancel') {
                                 await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST', { week: a.week, action: 'cancel', layer: 'internal' });
                             } else if (a.op === 'teacher') {

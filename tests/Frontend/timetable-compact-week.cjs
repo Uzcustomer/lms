@@ -96,5 +96,14 @@ const card = (id, o) => Object.assign({ id, group_name: 'g', training_type: 'pra
   assert.deepEqual(r.moves, [[1, 1, 1]]);
   assert.deepEqual([r.res.up, r.res.placed, r.res.left], [0, 1, 0]);
 
-  console.log('timetable compact week: 7 scenarios passed');
+  // Joylashgan ma'ruza bo'sh joyga yuqoriga surilmaydi; tashqi joyi band bo'lgan ma'ruza boshqa joyga qo'yilmaydi.
+  r = await compact([
+    card(1, { training_type: 'lecture', subject_name: 'Fiziologiya', day: 1, pair: 3, ext_day: 1, ext_pair: 3 }),
+    card(2, { subject_name: 'Gigiyena', ext_day: 1, ext_pair: 1 }),
+    card(3, { training_type: 'lecture', subject_name: 'Anatomiya', ext_day: 1, ext_pair: 3 }),
+  ]);
+  assert.deepEqual(r.moves, [[2, 1, 1]]);
+  assert.deepEqual([r.res.up, r.res.placed, r.res.left], [0, 1, 1]);
+
+  console.log('timetable compact week: 8 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -37,6 +37,7 @@ class TimetableController extends Controller
     use Concerns\TimetableHemisSync;
     use Concerns\TimetableBlockTickets;
     use Concerns\TimetableBoardSnapshotsActions;
+    use Concerns\TimetableWeekSuggestions;
 
     public function index(Request $request)
     {
@@ -6651,6 +6652,8 @@ class TimetableController extends Controller
             // Yarim para katakli qo'ng'iroq jadvalida kuniga 12+ katak bo'ladi.
             'pair'       => 'nullable|integer|min:1|max:24',
             'start_half' => 'nullable|integer|min:0|max:1',
+            // Faqat shu hafta uchun boshqa xona (takliflardan "xonani almashtirish").
+            'auditorium_code' => 'nullable|string|max:50',
         ]);
         // Haftaga xos o'zgarish — faqat ichki (kafedra) jadvalda.
         if ($denied = $this->weeklyLayerDenied($request, 'internal', $card)) {
@@ -6684,13 +6687,25 @@ class TimetableController extends Controller
         if (!$day || !$pair) {
             return response()->json(['error' => 'Kun va para ko\'rsatilishi kerak'], 422);
         }
-        $conflicts = $this->findWeekConflicts($card, $week, $day, $pair, $startHalf);
+        $room = null;
+        if (!empty($data['auditorium_code'])) {
+            $room = Auditorium::where('code', $data['auditorium_code'])->first();
+            if (!$room) {
+                return response()->json(['error' => 'Auditoriya topilmadi'], 422);
+            }
+            if (!$this->auditoriumAllowedForCard($room, $card, $this->auditoriumTeacherMap())) {
+                return response()->json(['error' => 'Bu auditoriya tanlangan o\'qituvchiga biriktirilmagan.'], 422);
+            }
+        }
+        // Berilgan xona bilan tekshiriladi (haftalik yozuvdagi eski xona emas); rad etilsa hech narsa o'zgarmaydi.
+        $conflicts = $this->findWeekConflicts($card, $week, $day, $pair, $startHalf, null, $room?->code);
         if (!empty($conflicts)) {
             return response()->json(['error' => implode(' · ', $conflicts)], 422);
         }
         TimetableCardOverride::updateOrCreate(
             ['card_id' => $card->id, 'week' => $week],
             ['day' => $day, 'pair' => $pair, 'start_half' => $startHalf, 'cancelled' => false]
+                + ($room ? ['auditorium_code' => $room->code, 'auditorium_name' => $room->name] : [])
         );
         $ovRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->value('auditorium_code');
         $warnings = $this->weeklyCycleWarnings($card, $week, (int) $day, (int) $pair, $ovRoom);
@@ -6698,13 +6713,14 @@ class TimetableController extends Controller
     }
 
     /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi (yarim-slot oralig'i). */
-    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
+    /** $roomCode — shu hafta uchun beriladigan xona (berilmasa — haftalik yozuvdagi yoki kartaning xonasi). */
+    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0, ?array $state = null, ?string $roomCode = null): array
     {
         // Shu haftada shu kunda turganlar: shablonda shu kunda (o'sha haftaga yozuvi bo'lmasa) yoki haftalik ko'chirish bilan.
         $s = $this->daySlice($card, $day, $week, $state);
         $myRange = $this->rangeFor($card, $pair, $startHalf);
         $myOverride = $s['ov'][$card->id][$week] ?? null;
-        $myRoomCode = $myOverride?->auditorium_code ?: $card->auditorium_code;
+        $myRoomCode = $roomCode ?: ($myOverride?->auditorium_code ?: $card->auditorium_code);
         $ids = array_unique(array_merge($s['tpl'], array_map(fn ($m) => $m[0], $s['moved'])));
         sort($ids);
         $errors = [];

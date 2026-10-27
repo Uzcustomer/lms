@@ -1167,3 +1167,51 @@ it('hal qilinmagan to\'siq oxirida yakuniy bandlik bo\'yicha qayta tekshiriladi:
     expect([$b['employee_id'], $b['blocked']])->toBe([9001, []])
         ->and([$a['employee_id'], $a['blocked']])->toBe([5001, []]);
 });
+
+it('umumiy dars bo\'linmaydi: u bilan to\'qnashgan alohida dars kafedra mudiriga o\'tadi, umumiy dars o\'qituvchida qoladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // A (01a) va B (01b) — USTOZ · 71, bitta umumiy dars; C (01c) — USTOZ · 73. Ro'yxat tartibi A, C, B.
+    foreach ([['p/st26-01c', 1598, '73'], ['p/st26-01b', 1597, '71']] as [$name, $id, $code]) {
+        hsInsert('groups', ['group_hemis_id' => $id, 'name' => $name, 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+        TimetableCard::create(array_merge($s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+            'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name', 'day', 'pair', 'teacher_id', 'teacher_name']),
+            ['group_name' => $name . ' (rus)', 'auditorium_code' => $code, 'auditorium_name' => 'X' . $code]));
+    }
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $got = collect($res['groups'])->mapWithKeys(function ($g) {
+        $a = collect($g['units'][0]['actions'])->first(fn ($a) => $a['date'] === '2026-09-21' && $a['start'] === '10:00');
+
+        return [$g['group'] => $a['employee_id'] . ' · ' . $a['auditorium_code'] . (count($a['blocked']) ? ' ⛔' : '')];
+    })->sortKeys()->all();
+    expect($got)->toBe(['p/st26-01a' => '5001 · 71', 'p/st26-01b' => '5001 · 71', 'p/st26-01c' => '9001 · 73']);
+});
+
+it('umumiy darsni almashtirish kerak bo\'lsa — uning hamma guruhlari birga, o\'sha xonada kafedra mudiriga o\'tadi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // A (01a) va B (01b) — USTOZ · 71, bitta umumiy dars; USTOZ shu vaqtda HEMIS'da boshqa guruhda (o'zgartirib bo'lmaydi).
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    TimetableCard::create(array_merge($s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name', 'day', 'pair', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name']),
+        ['group_name' => 'p/st26-01b (rus)']));
+    hsInsert('schedules', ['schedule_hemis_id' => 70, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11',
+        'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-09-21 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 5001, 'employee_name' => 'E5001', 'auditorium_code' => '98', 'auditorium_name' => '98']);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $got = collect($res['groups'])->mapWithKeys(function ($g) {
+        $a = collect($g['units'][0]['actions'])->first(fn ($a) => $a['date'] === '2026-09-21' && $a['start'] === '10:00');
+
+        return [$g['group'] => $a['employee_id'] . ' · ' . $a['auditorium_code'] . (count($a['blocked']) ? ' ⛔' : '')];
+    })->sortKeys()->all();
+    expect($got)->toBe(['p/st26-01a' => '9001 · 71', 'p/st26-01b' => '9001 · 71']);
+});

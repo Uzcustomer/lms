@@ -1217,117 +1217,153 @@ trait TimetableHemisSync
 
             return null;
         };
-        foreach ($groupsOut as &$g) {
-            foreach ($g['units'] as &$u) {
-                [$fbEmp, $fbRoom] = $u['_fb'] ?? [null, null];
-                $hemisRows = $u['_hemis'] ?? [];
+        // Umumiy dars: bir vaqtda, bitta o'qituvchi bitta xonada bir necha guruhga (oqim ma'ruzasi, birlashgan amaliy).
+        // Har guruhda alohida yozuv — lekin to'qnashuvda bitta birlik: bo'linib ketmasin.
+        $shareKey = fn (array $r) => (string) ($r['employee_id'] ?? '') !== '' && (string) ($r['auditorium_code'] ?? '') !== ''
+            ? $r['date'] . '|' . $r['start'] . '|' . $r['end'] . '|' . $r['employee_id'] . '|' . $r['auditorium_code'] : null;
+        $shareSize = [];   // umumiy dars kaliti => guruhlar soni (HEMIS'da o'zgarmaydiganlari ham)
+        foreach ($finals as $f) {
+            if ($k = $shareKey($f)) {
+                $shareSize[$k] = ($shareSize[$k] ?? 0) + 1;
+            }
+        }
+        // Yaratiladigan / o'zgartiriladigan darslar va ularning holati.
+        $st = [];
+        $fbOf = [];
+        $hemisOf = [];
+        foreach ($groupsOut as $gi => &$g) {
+            foreach ($g['units'] as $ui => &$u) {
+                $fbOf[$gi][$ui] = $u['_fb'] ?? [null, null];
+                $hemisOf[$gi][$ui] = $u['_hemis'] ?? [];
                 unset($u['_fb'], $u['_hemis']);
-                $drop = [];
-                foreach ($u['actions'] as $ai => &$a) {
-                    if (!in_array($a['op'], ['create', 'update'], true)) {
-                        continue;
-                    }
-                    // Indeksdagi shu darsning o'z yozuvlari asl qiymatlar kalitida turadi.
-                    $emp0 = (string) ($a['employee_id'] ?? '');
-                    $room0 = (string) ($a['auditorium_code'] ?? '');
-                    // To'siq bartaraf etiladi (registrator ofisi qarori): o'qituvchi band — kafedra mudiri, xona band —
-                    // "Kafedra mudiri xonasi" (ikkalasining ustma-ust tushishiga ruxsat bor). Mudir/xona topilmasa — to'siq qoladi.
-                    $queue = ['e', 'r'];
-                    $resolved = [];
-                    $unresolved = [];   // hal qilib bo'lmagan to'siqlar — ikkinchi tur almashsa qayta tekshiriladi
-                    while ($queue) {
-                        $type = array_shift($queue);
-                        if (isset($resolved[$type])) {
-                            continue;
-                        }
-                        unset($unresolved[$type]);
-                        if (!($b = $findHit($a, $u['key'], $type))) {
-                            continue;
-                        }
-                        [$fbId, $fbName] = ($type === 'e' ? $fbEmp : $fbRoom) ?: [null, null];
-                        // Mudir topilmadi yoki band o'qituvchining o'zi mudir — almashtirish yordam bermaydi, to'siq qoladi.
-                        if (!$fbId || ($type === 'e' && (string) $fbId === (string) ($a['employee_id'] ?? ''))) {
-                            $unresolved[$type] = $b;
-                            continue;
-                        }
-                        $resolved[$type] = true;
-                        $field = $type === 'e' ? 'employee' : 'auditorium';
-                        $what = $type === 'e' ? "o'qituvchi" : 'xona';
-                        $oldName = (string) ($a[$field . '_name'] ?? '');
-                        $a[$field . ($type === 'e' ? '_id' : '_code')] = $fbId;
-                        $a[$field . '_name'] = $fbName;
-                        // O'zgartirishda: HEMIS'dagi yozuvda allaqachon shu xodim/xona (id bo'yicha) bo'lsa — o'zgarish yo'q.
-                        $a['changes'] = array_values(array_filter($a['changes'] ?? [], fn ($c) => !str_starts_with($c, $what . ': ')));
-                        if ($a['op'] === 'update') {
-                            $was = $hemisRows[$a['hemis_id'] ?? 0] ?? [];
-                            if ((string) ($was[$type === 'e' ? 'employee_id' : 'auditorium_code'] ?? '') !== (string) $fbId) {
-                                $a['changes'][] = $what . ': ' . (($was[$field . '_name'] ?? '') ?: '—') . ' → ' . $fbName;
-                            }
-                        }
-                        $a['flags'][] = $type === 'e' ? 'mudir' : 'mudir_xonasi';
-                        $a['flags'][] = "to'siq sababli";
-                        $a['resolved'][] = $b;
-                        // Bu dars endi o'sha o'qituvchi/xonani band qilmaydi: u bilan to'qnashgan ikkinchi LMS darsi
-                        // (keyinroq tekshiriladi) ham mudirga almashtirilib, o'qituvchi ikkalasidan ham ayrilmasin.
-                        $own = $type . '|' . ($type === 'e' ? $emp0 : $room0) . '|' . $a['date'];
-                        $idx[$own] = array_values(array_filter($idx[$own] ?? [], fn ($x) => !($x[2] === $u['key'] && $x[0] === $a['start'])));
-                        // Ikkinchi indeksdagi yozuvi ham haqiqiy qiymat bilan: "o'sha o'qituvchi o'sha xonada — bitta dars"
-                        // istisnosi eski o'qituvchi/xona bilan ishlab, keyingi to'qnashuvni yashirmasin.
-                        $other = ($type === 'e' ? 'r|' . $room0 : 'e|' . $emp0) . '|' . $a['date'];
-                        foreach ($idx[$other] ?? [] as $xi => $x) {
-                            if ($x[2] === $u['key'] && $x[0] === $a['start']) {
-                                $idx[$other][$xi][$type === 'e' ? 4 : 5] = (string) $fbId;
-                            }
-                        }
-                        $a['reason'] = trim(($a['reason'] ?? '') . ' ' . ($type === 'e'
-                            ? "LMS'dagi o'qituvchi {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli kafedra mudiri qo'yildi."
-                            : "LMS'dagi xona {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli «{$fbName}» qo'yildi."));
-                        // Endi ikkinchi tur yangi qiymat bilan qayta tekshiriladi (hal qilinmagan to'sig'i ham).
-                        $queue[] = $type === 'e' ? 'r' : 'e';
-                    }
-                    // Hal qilinmagan to'siqlar hamma darslar ko'rilgach, yakuniy bandlik bo'yicha qayta tekshiriladi:
-                    // keyingi dars mudirga o'tib, to'qnashuv yo'qolgan bo'lishi mumkin.
-                    if ($unresolved) {
-                        $a['_unresolved'] = array_keys($unresolved);
-                    }
-                    $a['flags'] = array_values(array_unique($a['flags'] ?? []));
-                    // HEMIS'da allaqachon shunday (mudir/xona) — o'zgartirish kerak emas.
-                    if ($a['op'] === 'update' && !$a['changes'] && !($a['blocked'] ?? []) && !$unresolved) {
-                        $drop[$ai] = true;
+                foreach ($u['actions'] as $ai => $a) {
+                    if (in_array($a['op'], ['create', 'update'], true)) {
+                        // emp0/room0 — indeksdagi shu darsning o'z yozuvlari kaliti (asl qiymatlar).
+                        $st[] = ['gi' => $gi, 'ui' => $ui, 'ai' => $ai, 'key' => $u['key'], 'share' => $shareKey($a),
+                            'emp0' => (string) ($a['employee_id'] ?? ''), 'room0' => (string) ($a['auditorium_code'] ?? ''),
+                            'queue' => ['e', 'r'], 'resolved' => [], 'unresolved' => []];
                     }
                 }
-                unset($a);
-                $u['actions'] = array_values(array_diff_key($u['actions'], $drop));
             }
             unset($u);
         }
         unset($g);
+        $byShare = [];
+        foreach ($st as $i => $x) {
+            if ($x['share'] !== null) {
+                $byShare[$x['share']][] = $i;
+            }
+        }
+        // Kamroq guruhli darslar oldin ko'riladi: to'qnashuvda kafedra mudiriga ular o'tadi, umumiy dars o'qituvchida qoladi.
+        $size = fn (int $i) => $st[$i]['share'] !== null ? ($shareSize[$st[$i]['share']] ?? 1) : 1;
+        $order = array_keys($st);
+        usort($order, fn ($i, $j) => [$size($i), $i] <=> [$size($j), $j]);
 
-        // Yakuniy tekshiruv: hal qilinmagan to'siq hozir ham turgan bo'lsagina yoziladi (band qilgan dars — hozirgisi).
-        foreach ($groupsOut as &$g) {
-            foreach ($g['units'] as &$u) {
-                $drop = [];
-                foreach ($u['actions'] as $ai => &$a) {
-                    if (!isset($a['_unresolved'])) {
-                        continue;
-                    }
-                    foreach ($a['_unresolved'] as $type) {
-                        if ($b = $findHit($a, $u['key'], $type)) {
-                            $a['blocked'][] = $b['text'];
-                            $a['blocks'][] = $b;
-                        }
-                    }
-                    unset($a['_unresolved']);
-                    if ($a['op'] === 'update' && !$a['changes'] && !($a['blocked'] ?? [])) {
-                        $drop[$ai] = true;
+        // O'rinbosarni qo'yish (o'qituvchi band — kafedra mudiri, xona band — "Kafedra mudiri xonasi").
+        $apply = function (int $i, string $type, $fbId, string $fbName, array $b) use (&$st, &$groupsOut, &$idx, $hemisOf) {
+            $x = &$st[$i];
+            $a = &$groupsOut[$x['gi']]['units'][$x['ui']]['actions'][$x['ai']];
+            $field = $type === 'e' ? 'employee' : 'auditorium';
+            $what = $type === 'e' ? "o'qituvchi" : 'xona';
+            $oldName = (string) ($a[$field . '_name'] ?? '');
+            $a[$field . ($type === 'e' ? '_id' : '_code')] = $fbId;
+            $a[$field . '_name'] = $fbName;
+            // O'zgartirishda: HEMIS'dagi yozuvda allaqachon shu xodim/xona (id bo'yicha) bo'lsa — o'zgarish yo'q.
+            $a['changes'] = array_values(array_filter($a['changes'] ?? [], fn ($c) => !str_starts_with($c, $what . ': ')));
+            if ($a['op'] === 'update') {
+                $was = $hemisOf[$x['gi']][$x['ui']][$a['hemis_id'] ?? 0] ?? [];
+                if ((string) ($was[$type === 'e' ? 'employee_id' : 'auditorium_code'] ?? '') !== (string) $fbId) {
+                    $a['changes'][] = $what . ': ' . (($was[$field . '_name'] ?? '') ?: '—') . ' → ' . $fbName;
+                }
+            }
+            $a['flags'][] = $type === 'e' ? 'mudir' : 'mudir_xonasi';
+            $a['flags'][] = "to'siq sababli";
+            $a['resolved'][] = $b;
+            // Bu dars endi o'sha o'qituvchi/xonani band qilmaydi: u bilan to'qnashgan ikkinchi LMS darsi
+            // (keyinroq tekshiriladi) ham mudirga almashtirilib, o'qituvchi ikkalasidan ham ayrilmasin.
+            $own = $type . '|' . ($type === 'e' ? $x['emp0'] : $x['room0']) . '|' . $a['date'];
+            $idx[$own] = array_values(array_filter($idx[$own] ?? [], fn ($r) => !($r[2] === $x['key'] && $r[0] === $a['start'])));
+            // Ikkinchi indeksdagi yozuvi ham haqiqiy qiymat bilan: "o'sha o'qituvchi o'sha xonada — bitta dars"
+            // istisnosi eski o'qituvchi/xona bilan ishlab, keyingi to'qnashuvni yashirmasin.
+            $other = ($type === 'e' ? 'r|' . $x['room0'] : 'e|' . $x['emp0']) . '|' . $a['date'];
+            foreach ($idx[$other] ?? [] as $ri => $r) {
+                if ($r[2] === $x['key'] && $r[0] === $a['start']) {
+                    $idx[$other][$ri][$type === 'e' ? 4 : 5] = (string) $fbId;
+                }
+            }
+            $a['reason'] = trim(($a['reason'] ?? '') . ' ' . ($type === 'e'
+                ? "LMS'dagi o'qituvchi {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli kafedra mudiri qo'yildi."
+                : "LMS'dagi xona {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli «{$fbName}» qo'yildi."));
+            $x['resolved'][$type] = true;
+            unset($x['unresolved'][$type]);
+            // Endi ikkinchi tur yangi qiymat bilan qayta tekshiriladi (hal qilinmagan to'sig'i ham).
+            $x['queue'][] = $type === 'e' ? 'r' : 'e';
+        };
+        // Darsning navbatdagi tekshiruvlari. Mudir/xona topilmasa yoki band o'qituvchining o'zi mudir bo'lsa — to'siq
+        // "hal qilinmagan" bo'lib qoladi va oxirida yakuniy bandlik bo'yicha qayta tekshiriladi.
+        $drain = function (int $i) use (&$drain, &$st, &$groupsOut, $findHit, $fbOf, $byShare, $shareSize, $apply) {
+            $touched = [];
+            while ($st[$i]['queue']) {
+                $type = array_shift($st[$i]['queue']);
+                if (isset($st[$i]['resolved'][$type])) {
+                    continue;
+                }
+                unset($st[$i]['unresolved'][$type]);
+                $x = $st[$i];
+                $a = $groupsOut[$x['gi']]['units'][$x['ui']]['actions'][$x['ai']];
+                if (!($b = $findHit($a, $x['key'], $type))) {
+                    continue;
+                }
+                $fb = fn (int $j) => $fbOf[$st[$j]['gi']][$st[$j]['ui']][$type === 'e' ? 0 : 1] ?: [null, null];
+                [$fbId, $fbName] = $fb($i);
+                if (!$fbId || ($type === 'e' && (string) $fbId === (string) ($a['employee_id'] ?? ''))) {
+                    $st[$i]['unresolved'][$type] = $b;
+                    continue;
+                }
+                // Umumiy dars hammasi bilan birga almashadi: barcha guruhlari almashtiriladigan darslar, hali o'zgarmagan va
+                // o'rinbosari bir xil bo'lsa (aks holda — faqat shu dars, avvalgidek).
+                $with = [$i];
+                if ($x['share'] !== null && !$x['resolved'] && count($byShare[$x['share']]) === ($shareSize[$x['share']] ?? 0)) {
+                    $mates = array_values(array_filter($byShare[$x['share']], fn ($j) => $j !== $i));
+                    if (!array_filter($mates, fn ($j) => $st[$j]['resolved'] || (string) ($fb($j)[0] ?? '') !== (string) $fbId)) {
+                        $with = array_merge($with, $mates);
+                        array_push($touched, ...$mates);
                     }
                 }
-                unset($a);
-                $u['actions'] = array_values(array_diff_key($u['actions'], $drop));
+                foreach ($with as $j) {
+                    $apply($j, $type, $fbId, (string) $fbName, $b);
+                }
             }
-            unset($u);
+            foreach ($touched as $j) {
+                $drain($j);
+            }
+        };
+        foreach ($order as $i) {
+            $drain($i);
         }
-        unset($g);
+
+        // Yakuniy tekshiruv: hal qilinmagan to'siq hozir ham turgan bo'lsagina yoziladi (band qilgan dars — hozirgisi);
+        // HEMIS'da allaqachon shunday (mudir/xona) bo'lgan o'zgartirish tashlab yuboriladi.
+        $drop = [];
+        foreach ($st as $x) {
+            $a = &$groupsOut[$x['gi']]['units'][$x['ui']]['actions'][$x['ai']];
+            foreach (array_keys($x['unresolved']) as $type) {
+                if ($b = $findHit($a, $x['key'], $type)) {
+                    $a['blocked'][] = $b['text'];
+                    $a['blocks'][] = $b;
+                }
+            }
+            $a['flags'] = array_values(array_unique($a['flags'] ?? []));
+            if ($a['op'] === 'update' && !$a['changes'] && !($a['blocked'] ?? [])) {
+                $drop[$x['gi']][$x['ui']][$x['ai']] = true;
+            }
+            unset($a);
+        }
+        foreach ($drop as $gi => $units) {
+            foreach ($units as $ui => $ais) {
+                $groupsOut[$gi]['units'][$ui]['actions'] = array_values(array_diff_key($groupsOut[$gi]['units'][$ui]['actions'], $ais));
+            }
+        }
     }
 
     /** Solishtirish natijasi Excelda: "Balans" (fan + guruh) va "Amallar" (HEMIS'da qilinadigan o'zgarishlar). */

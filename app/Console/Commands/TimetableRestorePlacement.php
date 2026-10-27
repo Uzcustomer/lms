@@ -36,9 +36,14 @@ class TimetableRestorePlacement extends Command
 
             return 1;
         }
+        $this->line('Har bir joylashuv to\'qnashuvga tekshiriladi — bir necha daqiqa ketishi mumkin.');
         $scope = ['faculty_names' => $this->option('faculty'), 'specialty_names' => $this->option('specialty'), 'courses' => $this->option('course')];
         $r = $snapshots->restorePlacement($board, $old, !$this->option('apply'), $scope, true,
-            app(\App\Http\Controllers\Admin\TimetableController::class)->restoreConflictChecker());
+            app(\App\Http\Controllers\Admin\TimetableController::class)->restoreConflictChecker(),
+            function (int $done, int $total) {
+                // Har bir joylashuv to'qnashuvga tekshiriladi — ko'p bo'lsa uzoq; jarayon shu yerda ko'rinadi.
+                $this->output->write("\r  Tekshirildi: {$done}/{$total}" . ($done === $total ? "\n" : ''));
+            });
         $this->info(($r['dry_run'] ? 'SINOV (yozilmadi)' : 'YOZILDI') . ": {$r['cards']} karta ({$r['units']} dars birligi) — ichki {$r['internal']}, tashqi {$r['external']}, "
             . "haftalik ko'chirish {$r['week_moves']}, o'qituvchi/xona {$r['teacher_room']}; manbada topilmadi {$r['no_source']}, manbada ham joylanmagan {$r['source_unplaced']}, "
             . "to'qnashuv sababli yozilmadi {$r['conflicts']}");

@@ -126,7 +126,7 @@ class BoardSnapshots
      * $conflicts(karta, 'internal'|'external'|'week', hafta, kun, para, start_half): to'qnashuvlar matni — qo'lda
      * joylashtirishdagi tekshiruv; to'qnashgan joylashuv yozilmaydi. Qaytaradi: hisobot.
      */
-    public function restorePlacement(TimetableBoard $board, array $old, bool $dryRun, array $scope = [], bool $takeSnapshot = true, ?callable $conflicts = null): array
+    public function restorePlacement(TimetableBoard $board, array $old, bool $dryRun, array $scope = [], bool $takeSnapshot = true, ?callable $conflicts = null, ?callable $progress = null): array
     {
         $lenOf = fn (array $c) => max(1, (int) ($c['len_half'] ?? 2));
         $inScope = function (array $c) use ($scope): bool {
@@ -372,7 +372,7 @@ class BoardSnapshots
             $level = DB::transactionLevel();
             DB::beginTransaction();
             try {
-                $applied = $this->applyRestore($cardUpdates, $ovInserts, $conflicts, $stats);
+                $applied = $this->applyRestore($cardUpdates, $ovInserts, $conflicts, $stats, $progress);
                 $dryRun ? DB::rollBack() : DB::commit();
             } catch (\Throwable $e) {
                 DB::rollBack($level);
@@ -393,8 +393,17 @@ class BoardSnapshots
      * Rejadagi joylashuvlarni ketma-ket yozadi; har biri oldin to'qnashuvga tekshiriladi (oldin yozilganlar ham hisobga
      * kiradi). Qaytaradi: karta id => yozilgan joylashuv (day/pair, ext_day/ext_pair, weeks).
      */
-    private function applyRestore(array $cardUpdates, array $ovInserts, ?callable $conflicts, array &$stats): array
+    private function applyRestore(array $cardUpdates, array $ovInserts, ?callable $conflicts, array &$stats, ?callable $progress = null): array
     {
+        // Jarayon: (bajarildi, jami) — buyruq satrida ko'rsatkich uchun.
+        $total = count($cardUpdates) + count($ovInserts);
+        $done = 0;
+        $tick = function () use (&$done, $total, $progress): void {
+            $done++;
+            if ($progress && ($done % 50 === 0 || $done === $total)) {
+                $progress($done, $total);
+            }
+        };
         $clash = function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf) use ($conflicts, &$stats): bool {
             $errors = $conflicts ? (array) $conflicts($card, $what, $week, $day, $pair, $startHalf) : [];
             if (!$errors) {
@@ -411,6 +420,7 @@ class BoardSnapshots
         };
         $applied = [];
         foreach ($cardUpdates as $id => $cols) {
+            $tick();
             $card = TimetableCard::find($id);
             if (!$card) {
                 continue;
@@ -441,6 +451,7 @@ class BoardSnapshots
         }
         $ovRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
         foreach ($ovInserts as $o) {
+            $tick();
             $card = TimetableCard::find($o['card_id']);
             if (!$card) {
                 continue;

@@ -42,8 +42,8 @@
          panjara ichida skroll bo'ladi. --}}
     <div class="max-w-full mx-auto px-2 lg:px-4" style="height: calc(100vh - 130px); display: flex; flex-direction: column; overflow: hidden;">
 
-            {{-- Yuqori boshqaruv qatorlari (flex-shrink-0 — doim ko'rinadi) --}}
-            <div style="flex: 0 0 auto;">
+            {{-- Yuqori boshqaruv qatorlari (flex-shrink-0 — doim ko'rinadi); pastki chegarasini sichqoncha bilan surib kichraytirish mumkin --}}
+            <div id="ttTopArea" style="flex: 0 0 auto;">
 
             {{-- Doska tanlash + boshqaruv paneli --}}
             <div class="tt-control-panel tt-top-panel mb-1">
@@ -228,6 +228,7 @@
             </div>
 
             </div>{{-- /yuqori boshqaruv qatorlari --}}
+            <div id="ttResizeTop" class="tt-resizer" title="Surib menyuni kichraytiring yoki kengaytiring (ikki marta bosish — asl holiga)"></div>
 
             {{-- Asosiy maydon: panjara (flex bilan qolgan balandlikni to'ldiradi,
                  faqat shu ichida skroll) + pastda joylashmagan kartalar --}}
@@ -273,8 +274,9 @@
                     <div id="cycleGridWrap" class="overflow-auto"><table id="cycleGrid" class="border-collapse text-[11px]"></table><div id="cycleOverlay"></div></div>
                 </div>
 
+                <div id="ttResizeBottom" class="tt-resizer" title="Surib joylashmagan kartalar panelini kichraytiring yoki kengaytiring (ikki marta bosish — asl holiga)"></div>
                 {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel (flex-shrink-0 — doim ko'rinadi) --}}
-                <div class="bg-white shadow-sm sm:rounded-lg mt-2" style="flex: 0 0 auto; box-shadow: 0 -6px 12px -4px rgba(0,0,0,.15);">
+                <div id="ttBottomPanel" class="bg-white shadow-sm sm:rounded-lg" style="flex: 0 0 auto; box-shadow: 0 -6px 12px -4px rgba(0,0,0,.15);">
                     <div class="px-3 py-1 border-b border-gray-100 flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <span id="cardPanelTitle" class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
@@ -2566,6 +2568,11 @@
         #cycRowPop .cyc-rp-list button:hover { background: #f1f5f9; }
         #cycRowPop .cyc-rp-list button.is-on { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
         #cycRowPop .cyc-rp-empty { padding: 6px 8px; color: #94a3b8; font-size: 12px; }
+        /* Menyu / panjara / joylashmagan kartalar orasidagi suriladigan chegaralar */
+        .tt-resizer { flex: 0 0 auto; height: 7px; margin: 1px 0; cursor: row-resize; border-radius: 4px;
+            background: linear-gradient(#e2e8f0, #e2e8f0) center / 48px 3px no-repeat; touch-action: none; }
+        .tt-resizer:hover, .tt-resizer.dragging { background: linear-gradient(#64748b, #64748b) center / 64px 3px no-repeat, #e0e7ff; }
+        body.tt-resizing, body.tt-resizing * { cursor: row-resize !important; user-select: none !important; }
 </style>
 
     <script>
@@ -10120,6 +10127,79 @@
                 $('boardMsg').textContent = 'Doska ochilmadi: ' + e.message;
             });
 
+        })();
+
+        // Menyu va joylashmagan kartalar panelining balandligini sichqoncha bilan o'zgartirish:
+        // ular kichraysa asosiy jadval (flex) shu hisobiga kengayadi. O'lcham shu brauzerda eslab qolinadi.
+        (function () {
+            const store = {
+                get(k) { try { return JSON.parse(localStorage.getItem('tt-size-' + k)); } catch (e) { return null; } },
+                set(k, v) { try { if (v === null) localStorage.removeItem('tt-size-' + k); else localStorage.setItem('tt-size-' + k, JSON.stringify(v)); } catch (e) { } },
+            };
+            const top = document.getElementById('ttTopArea');
+            const panel = document.getElementById('cardPanel');
+            const applyTop = h => {
+                if (!top) return;
+                if (h === null) { top.style.height = ''; top.style.overflow = ''; return; }
+                top.style.height = h + 'px';
+                top.style.overflow = 'auto';
+            };
+            const applyPanel = h => {
+                if (!panel) return;
+                if (h === null) { panel.style.maxHeight = '120px'; panel.style.height = ''; return; }
+                panel.style.maxHeight = h + 'px';
+                panel.style.height = h + 'px';
+            };
+            applyTop(store.get('top'));
+            applyPanel(store.get('panel'));
+            const drag = (handle, start, move, key) => {
+                if (!handle) return;
+                handle.addEventListener('pointerdown', ev => {
+                    if (ev.button !== 0) return;
+                    ev.preventDefault();
+                    const y0 = ev.clientY, h0 = start();
+                    let last = h0;
+                    handle.classList.add('dragging');
+                    document.body.classList.add('tt-resizing');
+                    handle.setPointerCapture(ev.pointerId);
+                    const onMove = e => { last = move(h0, e.clientY - y0); };
+                    const onUp = () => {
+                        handle.classList.remove('dragging');
+                        document.body.classList.remove('tt-resizing');
+                        handle.removeEventListener('pointermove', onMove);
+                        handle.removeEventListener('pointerup', onUp);
+                        handle.removeEventListener('pointercancel', onUp);
+                        store.set(key, Math.round(last));
+                    };
+                    handle.addEventListener('pointermove', onMove);
+                    handle.addEventListener('pointerup', onUp);
+                    handle.addEventListener('pointercancel', onUp);
+                });
+            };
+            // Yuqori menyu: pastga sursangiz kattalashadi (tabiiy balandligidan oshmaydi), tepaga — kichrayadi.
+            drag(document.getElementById('ttResizeTop'),
+                () => top.getBoundingClientRect().height,
+                (h0, dy) => {
+                    const natural = top.scrollHeight;
+                    const h = Math.max(0, Math.min(natural, h0 + dy));
+                    if (h >= natural - 1) { applyTop(null); return natural; }
+                    applyTop(h);
+                    return h;
+                }, 'top');
+            // Joylashmagan kartalar: tepaga sursangiz kattalashadi, pastga — kichrayadi.
+            drag(document.getElementById('ttResizeBottom'),
+                () => panel.getBoundingClientRect().height,
+                (h0, dy) => {
+                    const h = Math.max(0, Math.min(window.innerHeight * 0.7, h0 - dy));
+                    applyPanel(h);
+                    return h;
+                }, 'panel');
+            const reset = (id, key, fn) => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('dblclick', () => { fn(null); store.set(key, null); });
+            };
+            reset('ttResizeTop', 'top', applyTop);
+            reset('ttResizeBottom', 'panel', applyPanel);
         })();
     </script>
 </x-app-layout>

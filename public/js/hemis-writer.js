@@ -179,7 +179,7 @@
 
     async function run(apply) {
         if (running) return;
-        // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — guruh tasdig'idagi son
+        // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — tasdiqdagi son
         // va yoziladigan amallar bir xil bo'lib qoladi. Oldin qayta tuziladi — sana chegarasi hozirgi kun bo'yicha.
         build();
         const batch = jobs.slice();

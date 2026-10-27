@@ -2573,6 +2573,10 @@
             background: linear-gradient(#e2e8f0, #e2e8f0) center / 48px 3px no-repeat; touch-action: none; }
         .tt-resizer:hover, .tt-resizer.dragging { background: linear-gradient(#64748b, #64748b) center / 64px 3px no-repeat, #e0e7ff; }
         body.tt-resizing, body.tt-resizing * { cursor: row-resize !important; user-select: none !important; }
+        /* Saqlangan yoki surilgan balandlik oynaga sig'masa ham panel konteynerdan chiqib ketmaydi (pastki kartalari
+           ko'rinmay qolmaydi): panjaraga kamida 60px qoladi, kartalar panel ichida skroll bo'ladi. */
+        #ttBottomPanel { display: flex; flex-direction: column; max-height: calc(100% - 60px); }
+        #ttBottomPanel > #cardPanel { min-height: 0; }
 </style>
 
     <script>

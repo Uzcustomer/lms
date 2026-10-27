@@ -109,3 +109,17 @@ it('qisman qayta yaratilgan birlik: hozir ham joyida turgan eski karta egallagan
         ->and($keep->fresh()->only(['day', 'pair']))->toBe(['day' => 2, 'pair' => 5])
         ->and(TimetableBoardSnapshot::count())->toBe(0);
 });
+
+it('rad etilgan yoki xato so\'rov nusxa qoldirmaydi — nusxa ruxsat va tekshiruvdan keyin olinadi', function () {
+    $s = snapSetup();
+    Role::findOrCreate('kichik_admin', 'web');
+    $s['head']->assignRole('kichik_admin');
+    foreach (['boards.add-missing-groups', 'boards.merge-variant-lectures', 'boards.split-long-practice', 'weekly-layer-copy'] as $name) {
+        snapAs($s['head'], 'kichik_admin')->postJson(route('admin.timetable.' . $name, $s['board']), [])->assertForbidden();
+    }
+    snapAs($s['head'], 'kichik_admin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']),
+        ['specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena'])->assertForbidden();
+    snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.unplace', $s['board']), ['layer' => 'boshqa'])->assertStatus(422);
+
+    expect(TimetableBoardSnapshot::count())->toBe(0);
+});

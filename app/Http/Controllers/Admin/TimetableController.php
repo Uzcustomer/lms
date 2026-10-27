@@ -1333,7 +1333,10 @@ class TimetableController extends Controller
         }
     }
 
-    /** Xavfli (ko'p kartaga tegadigan) amaldan oldin doska nusxasi — versiyalar tarixida qoladi; sinov (dry_run) uchun emas. */
+    /**
+     * Xavfli (ko'p kartaga tegadigan) amaldan oldin doska nusxasi — versiyalar tarixida qoladi; sinov (dry_run) uchun emas.
+     * Ruxsat va kiritilgan ma'lumot tekshirilgandan keyin chaqiriladi: rad etilgan so'rov nusxa qoldirmaydi.
+     */
     private function snapshotBefore(Request $request, TimetableBoard $board, string $reason): void
     {
         if ($request->boolean('dry_run') || !\App\Services\Timetable\BoardSnapshots::ready()) {
@@ -1349,13 +1352,13 @@ class TimetableController extends Controller
      */
     public function generateCards(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_generate');
         $specsFound = [];
         $rows = $this->assembleRows($board, null, null, $specsFound);
         if ($rows === null) {
             return response()->json(['error' => "Tasdiqlangan oqim topilmadi. Avval Oqim sahifasida "
                 . ($board->kind === 'plan' ? "kelasi yil (reja) oqimini" : "joriy oqimni") . " tasdiqlang."], 422);
         }
+        $this->snapshotBefore($request, $board, 'before_generate');
         $rows = $this->stripUnsupportedColumns($rows);
 
         // Sinxronlash (sukut): mavjud kartalar joyida qoladi, faqat endi kerak bo'lmaganlari
@@ -1414,10 +1417,10 @@ class TimetableController extends Controller
      */
     public function addMissingGroupCards(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_add_groups');
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_add_groups');
         $dry = $request->boolean('dry_run');
         $specsFound = [];
         $rows = $this->assembleRows($board, null, null, $specsFound);
@@ -2222,7 +2225,6 @@ class TimetableController extends Controller
      */
     public function mergeVariantLectures(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_merge_lectures');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
@@ -2235,6 +2237,7 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_merge_lectures');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture');
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -2380,7 +2383,6 @@ class TimetableController extends Controller
      */
     public function separatePracticeGroups(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_separate_practice');
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             abort(403);
         }
@@ -2391,6 +2393,7 @@ class TimetableController extends Controller
             'subject_name'   => 'required|string|max:255',
             'dry_run'        => 'nullable|boolean',
         ]);
+        $this->snapshotBefore($request, $board, 'before_separate_practice');
         $dry = $request->boolean('dry_run');
         $subjKey = $this->normSubject($data['subject_name']);
         $cards = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->where('course', (int) $data['course'])
@@ -2466,7 +2469,6 @@ class TimetableController extends Controller
      */
     public function splitLongPractice(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_split_practice');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
@@ -2479,6 +2481,7 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_split_practice');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->where('len_half', '>', 2);
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -2527,7 +2530,6 @@ class TimetableController extends Controller
      */
     public function splitVariantMixed(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_split_variant');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
@@ -2545,6 +2547,7 @@ class TimetableController extends Controller
         if (!$this->isHemisBoard($board)) {
             return response()->json(['error' => 'Bu amal faqat HEMIS fanlari doskasi uchun.'], 422);
         }
+        $this->snapshotBefore($request, $board, 'before_split_variant');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->whereNotNull('group_names');
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -2629,7 +2632,6 @@ class TimetableController extends Controller
      */
     public function unplaceAll(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_unplace');
         $data = $request->validate([
             'specialty_name'    => 'nullable|string|max:255',
             'course'            => 'nullable|integer|min:1|max:7',
@@ -2654,6 +2656,7 @@ class TimetableController extends Controller
         if ($denied = $this->weeklyLayerDenied($request, $layer)) {
             return $denied;
         }
+        $this->snapshotBefore($request, $board, 'before_unplace');
         if ($layer === 'external') {
             $q = (clone $scopeQuery)->whereNotNull('ext_day');
             $count = (clone $q)->count();
@@ -6640,7 +6643,6 @@ class TimetableController extends Controller
      */
     public function weeklyLayerCopy(Request $request, TimetableBoard $board)
     {
-        $this->snapshotBefore($request, $board, 'before_layer_copy');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
@@ -6657,6 +6659,7 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_layer_copy');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $scopeQ = TimetableCard::where('board_id', $board->id);
         $this->applyScopeToQuery($scopeQ, $facSet, $specSet, $courseSet);

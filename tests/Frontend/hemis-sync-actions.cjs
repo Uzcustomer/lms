@@ -47,4 +47,13 @@ assert(!html.includes('⛔ To\'siq'));
 // 4) O'zgarishlar qisqa ko'rinishda: HEMIS'dagi → LMS'dagi.
 html = ctx.hsActionHtml(act({ op: 'update', changes: ['xona: 55 → 423'] }), u);
 assert.match(html, /<b>Xona:<\/b> HEMIS'da <span class="line-through">55<\/span> → LMS'da <b>423<\/b>/);
-console.log('4 HEMIS compare action row scenarios passed');
+
+// 5) Bartaraf etilgan to'siq: yashil belgi va band qilgan dars tafsiloti (title escape qilinadi); qizil to'siq yo'q.
+html = ctx.hsActionHtml(act({ flags: ['mudir', "to'siq sababli"], employee_name: 'MUDIR',
+    resolved: [{ type: 'teacher', time: '12:00–13:20', source: 'HEMIS', group: 'p/st26-09a', subject: '<Fan>', text: "o'qituvchi band: …" }] }), u);
+assert.match(html, /✔ O'qituvchi band → kafedra mudiri/);
+assert.match(html, /title="HEMIS · p\/st26-09a · «&lt;Fan&gt;» 12:00–13:20"/);
+assert(!html.includes('⛔'));
+html = ctx.hsActionHtml(act({ resolved: [{ type: 'room', time: '12:00–13:20', source: 'LMS', group: 'g', subject: 'F' }] }), u);
+assert.match(html, /✔ Xona band → mudir xonasi/);
+console.log('5 HEMIS compare action row scenarios passed');

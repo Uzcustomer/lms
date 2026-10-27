@@ -3649,7 +3649,9 @@
                 const other = (a.blocked || []).filter(m => !covered.has(m));
                 const types = [...new Set(blocks.map(b => b.type))];
                 const chips = types.map(t => '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold ' + HS_BLOCK[t].cls + '">⛔ ' + HS_BLOCK[t].label + '</span>').join('')
-                    + (other.length ? '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold bg-red-100 text-red-700 border-red-300">⛔ To\'siq</span>' : '');
+                    + (other.length ? '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold bg-red-100 text-red-700 border-red-300">⛔ To\'siq</span>' : '')
+                    // Bartaraf etilgan to'siq: band o'qituvchi/xona o'rniga kafedra mudiri / mudir xonasi qo'yilgan.
+                    + (a.resolved || []).map(b => '<span class="ml-1 px-1.5 rounded border text-[10px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-300" title="' + hsEsc((b.source || '') + ' · ' + (b.group || '') + ' · «' + (b.subject || '') + '» ' + (b.time || '')) + '">✔ ' + (b.type === 'room' ? 'Xona band → mudir xonasi' : 'O\'qituvchi band → kafedra mudiri') + '</span>').join('');
                 const head = '<div><span class="' + opCls[a.op] + ' font-semibold">' + opName[a.op] + '</span> · ' + hsEsc(a.date) + ' ' + hsEsc(a.start) + '–' + hsEsc(a.end)
                     + ' · ' + hsEsc((u && u.code_names[a.code]) || a.code) + ' · ' + hsEsc(a.employee_name || '—') + ' · ' + hsEsc(a.auditorium_name || '—') + chips + '</div>';
                 const summary = (a.changes && a.changes.length) ? '<div class="ml-3 text-gray-700">' + a.changes.map(hsChangeShort).join(' · ') + '</div>' : '';

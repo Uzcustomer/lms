@@ -10,6 +10,7 @@
    `node hemis-write.mjs --json ... --check`
 5. Yozish (boshida bir marta tasdiq so'raydi):
    `node hemis-write.mjs --json ... --apply`
+   To'xtatish — Ctrl+C: joriy amal tugagach qolganlari yozilmaydi va jurnal saqlanadi (darhol chiqish — yana Ctrl+C).
 
 Qo'shimcha chegaralar (JSON ichidan yana toraytiradi):
 `--current-week`, `--until-week 7`, `--until 2026-10-31`, `--group p/st26-01a,p/st26-01b`, `--subject anatomiya`, `--only create,update`.

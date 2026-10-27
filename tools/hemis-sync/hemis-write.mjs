@@ -21,7 +21,8 @@
  *   --subject NOM      faqat nomida shu so'z bor fan(lar) (vergul bilan, katta-kichik harf farqsiz)
  *   --only create,update,delete   faqat shu amallar
  *   --check            HEMIS'ga kirib formalarni tekshiradi (para, xona, o'qituvchi, fan bormi) — yozmaydi
- *   --apply            HAQIQATAN yozadi (boshida bir marta tasdiq so'raladi; --yes bilan so'ramaydi)
+ *   --apply            HAQIQATAN yozadi (boshida bir marta tasdiq so'raladi; --yes bilan so'ramaydi;
+ *                      Ctrl+C — joriy amal tugagach to'xtaydi va jurnal saqlanadi, ikkinchi Ctrl+C — darhol)
  *   --profile PAPKA    brauzer profili (HEMIS sessiyasi saqlanadi), sukut: ./.hemis-profile
  *   --base URL         HEMIS manzili, sukut: https://hemis.ttatf.uz
  *
@@ -225,6 +226,15 @@ if (apply && !has('yes') && jobs.length) {
     const ans = (await rl.question(`\n${jobs.length} ta amal (${nGroups} ta guruh) HEMIS'ga yoziladi. Boshlaymizmi? [ha / yo'q] `)).trim().toLowerCase();
     if (!ans.startsWith('ha')) stop = true;
 }
+// Ctrl+C: ochiq readline uni o'zi ushlaydi (birinchisi jarayonni to'xtatmaydi, ikkinchisi amal o'rtasida o'ldiradi va jurnal
+// yozilmaydi). Shuning uchun: birinchisi — joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi; ikkinchisi — darhol chiqish.
+const ctrlC = () => {
+    if (stop) process.exit(130);
+    stop = true;
+    console.log('\nTo\'xtatilmoqda: joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi (darhol chiqish — yana Ctrl+C).');
+};
+rl.on('SIGINT', ctrlC);
+process.on('SIGINT', ctrlC);
 for (const j of jobs) {
     if (j.group_id !== lastGroup) console.log(`— ${j.group} (${jobs.filter(x => x.group_id === j.group_id).length} ta amal)`);
     lastGroup = j.group_id;

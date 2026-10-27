@@ -91,9 +91,11 @@ it('takliflar: joylanmagan karta uchun boshqa kun, boshqa hafta va oxirida boshq
     $teacher = collect($card['suggestions'])->firstWhere('type', 'teacher');
     expect($teacher['title'])->toContain('BOSH O.')
         ->and($teacher['actions'][0])->toMatchArray(['op' => 'teacher', 'teacher_id' => $free->id]);
+    // Avval yangi haftaga ko'chiriladi (server rad etishi mumkin bo'lgan qadam), keyin shu hafta bekor qilinadi —
+    // ko'chirish rad etilsa, dars ikkala haftadan ham yo'qolib qolmaydi.
     $week = collect($card['suggestions'])->firstWhere('type', 'week');
-    expect($week['actions'][0])->toMatchArray(['op' => 'cancel', 'week' => 3])
-        ->and($week['actions'][1])->toMatchArray(['op' => 'move', 'week' => 5, 'day' => 2, 'pair' => 3]);
+    expect($week['actions'][0])->toMatchArray(['op' => 'move', 'week' => 5, 'day' => 2, 'pair' => 3])
+        ->and($week['actions'][1])->toMatchArray(['op' => 'cancel', 'week' => 3]);
 });
 
 it('takliflar: ma\'ruza vaqtini siljitish oxirroqda, o\'qituvchi almashtirishdan oldin', function () {

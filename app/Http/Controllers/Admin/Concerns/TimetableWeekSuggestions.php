@@ -346,8 +346,10 @@ trait TimetableWeekSuggestions
                     if ($check($c, $w2, $td, $tp, $state)) {
                         continue;
                     }
+                    // Avval yangi haftaga ko'chiriladi (server qayta tekshirib rad etishi mumkin), keyin shu hafta bekor
+                    // qilinadi: ko'chirish rad etilsa, dars ikkala haftadan ham yo'qolib qolmaydi.
                     $add('week', $w2 . '-haftaga o\'tkazish: ' . $slotText($td, $tp, $len),
-                        [['op' => 'cancel', 'card_id' => (int) $c->id, 'week' => $W], $mv($c, $w2, $td, $tp)],
+                        [$mv($c, $w2, $td, $tp), ['op' => 'cancel', 'card_id' => (int) $c->id, 'week' => $W]],
                         'KTR taqsimoti o\'zgaradi: ' . $W . '-haftada o\'tilmaydi, ' . $w2 . '-haftada o\'tiladi');
                     if (++$n >= 2) {
                         break;

@@ -21,7 +21,7 @@
  *   --subject NOM      faqat nomida shu so'z bor fan(lar) (vergul bilan, katta-kichik harf farqsiz)
  *   --only create,update,delete   faqat shu amallar
  *   --check            HEMIS'ga kirib formalarni tekshiradi (para, xona, o'qituvchi, fan bormi) — yozmaydi
- *   --apply            HAQIQATAN yozadi (har guruhdan oldin tasdiq so'raladi; --yes bilan so'ramaydi)
+ *   --apply            HAQIQATAN yozadi (boshida bir marta tasdiq so'raladi; --yes bilan so'ramaydi)
  *   --profile PAPKA    brauzer profili (HEMIS sessiyasi saqlanadi), sukut: ./.hemis-profile
  *   --base URL         HEMIS manzili, sukut: https://hemis.ttatf.uz
  *
@@ -219,16 +219,16 @@ const apply = has('apply');
 const results = [];
 let lastGroup = null;
 let stop = false;
+// Bitta tasdiq — butun ro'yxat uchun; guruh almashganda qayta so'ralmaydi (to'xtatish — Ctrl+C).
+if (apply && !has('yes') && jobs.length) {
+    const nGroups = new Set(jobs.map(x => x.group_id)).size;
+    const ans = (await rl.question(`\n${jobs.length} ta amal (${nGroups} ta guruh) HEMIS'ga yoziladi. Boshlaymizmi? [ha / yo'q] `)).trim().toLowerCase();
+    if (!ans.startsWith('ha')) stop = true;
+}
 for (const j of jobs) {
-    if (apply && !has('yes') && j.group_id !== lastGroup) {
-        const n = jobs.filter(x => x.group_id === j.group_id).length;
-        const ans = (await rl.question(`\n${j.group}: ${n} ta amal HEMIS'ga yoziladi. Davom etamizmi? [ha / o'tkaz / to'xtat] `)).trim().toLowerCase();
-        if (ans.startsWith('t')) { stop = true; }
-        if (ans.startsWith('o')) { jobs.filter(x => x.group_id === j.group_id).forEach(x => x._skip = true); }
-    }
+    if (j.group_id !== lastGroup) console.log(`— ${j.group} (${jobs.filter(x => x.group_id === j.group_id).length} ta amal)`);
     lastGroup = j.group_id;
     if (stop) { results.push({ ...j, status: 'skipped', reason: 'to\'xtatildi' }); continue; }
-    if (j._skip) { results.push({ ...j, status: 'skipped', reason: 'foydalanuvchi o\'tkazdi' }); continue; }
     const res = await page.evaluate(runInPage, { job: j, apply }).catch(e => ({ ok: false, error: String(e.message || e) }));
     results.push({ ...j, status: res.ok ? 'ok' : 'error', note: res.note || null, error: res.error || null });
     console.log((res.ok ? '  ✓ ' : '  ✗ ') + line(j) + (res.ok ? (res.note ? '  — ' + res.note : '') : '  — ' + res.error));

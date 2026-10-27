@@ -8,7 +8,7 @@
    `node hemis-write.mjs --json hemis_amallar_2026-10-23.json`
 4. HEMIS formalarini tekshirish (yozmaydi, brauzer ochiladi, HEMIS'ga o'zingiz kirasiz):
    `node hemis-write.mjs --json ... --check`
-5. Yozish (har guruhdan oldin tasdiq so'raydi):
+5. Yozish (boshida bir marta tasdiq so'raydi):
    `node hemis-write.mjs --json ... --apply`
 
 Qo'shimcha chegaralar (JSON ichidan yana toraytiradi):
@@ -22,5 +22,5 @@ yangilab, solishtirishni qayta bosing — farq qolmagan bo'lishi kerak.
 
 mark → «HEMIS solishtirish» oynasidagi **⭐ HEMIS'ga yozish (xatcho'p)** tugmasini sichqoncha bilan brauzerning
 xatcho'plar paneliga torting (bir marta). Keyin HEMIS'ga kirib, istalgan sahifada shu xatcho'pni bosing →
-JSON faylni tanlang → «Tekshirish» (yozmaydi) yoki «HEMIS'ga yozish» (har guruh oldidan tasdiq). Mantiq
+JSON faylni tanlang → «Tekshirish» (yozmaydi) yoki «HEMIS'ga yozish» (boshida bir marta tasdiq). Mantiq
 `hemis-write.mjs` bilan bir xil; skript `public/js/hemis-writer.js` dan yuklanadi.

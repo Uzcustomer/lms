@@ -142,6 +142,26 @@ it('solishtirish Excelga yuklanadi; boshqa rollarga yopiq', function () {
         ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1]])->assertForbidden();
 });
 
+it('katta qamrov: solishtirish va Excel PHP xotira chegarasini 1024M ga ko\'taradi (serverdagi 128M da 500 berardi)', function () {
+    $s = hsSetup();
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi']);
+    $orig = ini_get('memory_limit');
+    // Server chegarasi kabi past: hozirgi sarfdan biroz yuqori (undan past qilib bo'lmaydi).
+    $low = (string) (memory_get_usage(true) + 64 * 1024 * 1024);
+    try {
+        ini_set('memory_limit', $low);
+        $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1]])->assertOk();
+        expect(ini_get('memory_limit'))->toBe('1024M');
+
+        ini_set('memory_limit', $low);
+        $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1]])->assertOk();
+        expect(ini_get('memory_limit'))->toBe('1024M');
+    } finally {
+        ini_set('memory_limit', $orig);
+    }
+});
+
 it('guruh HEMIS\'da fakulteti va to\'liq nomi bo\'yicha topiladi', function () {
     $s = hsSetup();
     // "1K-01a" ikki fakultetda — F1 kartasi F1 guruhiga bog'lanadi (F2 niki keyin yozilgan)

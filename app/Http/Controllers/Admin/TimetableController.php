@@ -1369,8 +1369,7 @@ class TimetableController extends Controller
             // Soati yoki hafta soni o'zgargani uchun qayta yaratilgan kartalar eski kartaning joyini oladi (fan + guruh
             // bo'yicha) — joylashgan dars "joylanmaganlar"ga tushib qolmasin. Faqat haqiqatan yangi fan/guruh joylanmagan qoladi.
             if (!empty($res['created']) && $before) {
-                $r = app(\App\Services\Timetable\BoardSnapshots::class)->restorePlacement($board, $before, false, [], false);
-                $res['kept_placement'] = $r['cards'];
+                $res['kept_placement'] = app(\App\Services\Timetable\BoardSnapshots::class)->keepPlacementOfRecreated($board, $before);
             }
 
             return response()->json($res);

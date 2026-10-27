@@ -123,3 +123,19 @@ it('rad etilgan yoki xato so\'rov nusxa qoldirmaydi — nusxa ruxsat va tekshiru
 
     expect(TimetableBoardSnapshot::count())->toBe(0);
 });
+
+it('sinxronlashdan keyin faqat shu safar yaratilgan karta eski joyni oladi — avvaldan joylanmagan karta bo\'sh qoladi', function () {
+    $s = snapSetup();
+    // Shu birlikda ataylab joylanmagan 1 soatlik karta: sinxronlashda saqlanadi (id o'zgarmaydi)
+    $spare = TimetableCard::create($s['base'] + ['len_half' => 1, 'weeks' => 15]);
+    $before = app(BoardSnapshots::class)->collect($s['board']);
+    // Sinxronlash: 3 soatlik karta (hafta soni o'zgargan) o'chirilib qayta yaratildi
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    $s['old']->delete();
+    $new = TimetableCard::create($s['base'] + ['len_half' => 3, 'weeks' => 10]);
+
+    expect(app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before))->toBe(1)
+        ->and($new->fresh()->only(['day', 'pair', 'ext_day', 'ext_pair']))->toBe(['day' => 2, 'pair' => 3, 'ext_day' => 2, 'ext_pair' => 1])
+        ->and($spare->fresh()->only(['day', 'pair', 'ext_day', 'ext_pair']))->toBe(['day' => null, 'pair' => null, 'ext_day' => null, 'ext_pair' => null])
+        ->and(TimetableBoardSnapshot::count())->toBe(0);
+});

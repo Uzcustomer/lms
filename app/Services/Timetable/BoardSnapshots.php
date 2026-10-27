@@ -111,8 +111,18 @@ class BoardSnapshots
     }
 
     /**
+     * "Kartochkalar" sinxronlashidan keyin: shu sinxronlashda yaratilgan (avval bo'lmagan) kartalar eski kartaning
+     * joyini oladi. Avvaldan joylanmagan, saqlangan kartalarga tegilmaydi — ular ataylab bo'sh qoldirilgan bo'lishi mumkin.
+     */
+    public function keepPlacementOfRecreated(TimetableBoard $board, array $before): int
+    {
+        return $this->restorePlacement($board, $before, false, ['only_new' => true], false)['cards'];
+    }
+
+    /**
      * Nusxadagi joylashuvni hozirgi joylanmagan kartalarga tiklaydi.
-     * $scope: faculty_names / specialty_names / courses (ixtiyoriy). Qaytaradi: hisobot.
+     * $scope: faculty_names / specialty_names / courses (ixtiyoriy); only_new — faqat nusxada yo'q (yangi) kartalar.
+     * Qaytaradi: hisobot.
      */
     public function restorePlacement(TimetableBoard $board, array $old, bool $dryRun, array $scope = [], bool $takeSnapshot = true): array
     {
@@ -131,6 +141,7 @@ class BoardSnapshots
         foreach ((array) ($old['cards'] ?? []) as $c) {
             $oldByUnit[$this->unitKey($c)][] = $c;
         }
+        $oldIds = !empty($scope['only_new']) ? array_flip(array_map('intval', array_column((array) ($old['cards'] ?? []), 'id'))) : [];
         $oldOv = [];
         foreach ((array) ($old['overrides'] ?? []) as $o) {
             $oldOv[(int) $o['card_id']][(int) $o['week']] = $o;
@@ -158,7 +169,7 @@ class BoardSnapshots
             'no_source' => 0, 'source_unplaced' => 0, 'examples' => []];
 
         foreach ($curByUnit as $key => $cards) {
-            $todo = array_values(array_filter($cards, fn ($c) => empty($c['day']) && empty($c['ext_day'])));
+            $todo = array_values(array_filter($cards, fn ($c) => empty($c['day']) && empty($c['ext_day']) && !isset($oldIds[(int) $c['id']])));
             if (!$todo) {
                 continue;
             }

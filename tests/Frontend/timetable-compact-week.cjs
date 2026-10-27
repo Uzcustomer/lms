@@ -6,8 +6,10 @@ const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin
 
 // "Haftani zichlash": joylanmagan kartalar blok bo'lib, o'sha kunning ichida eng yaqin bo'sh joyga qo'yiladi.
 const a = source.indexOf('const cardTermWeeks = ');
-const b = source.indexOf("            if ($('compactWeekBtn')) $('compactWeekBtn').onclick", a);
-assert(a > 0 && b > a);
+const fn = source.indexOf('async function compactInternalWeek(', a);
+const end = '\n                return res;\n            }\n';
+const b = source.indexOf(end, fn) + end.length;
+assert(a > 0 && fn > a && b > fn);
 const code = source.slice(a, b);
 
 async function compact(cards, slotsPerDay = 12, reject = []) {

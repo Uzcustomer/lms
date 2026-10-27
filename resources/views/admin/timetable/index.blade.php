@@ -4267,11 +4267,22 @@
                 const isBolak = c => /\([abc]\)\s*$/.test(String(c.subject_name || ''));
                 const blockKey = c => c.training_type === 'lecture' || isBolak(c) ? 'k' + c.id
                     : cardGroups(c).map(g => gkey(c, g)).sort().join(',') + '|' + baseSubj(c.subject_name) + '|' + c.ext_day;
-                const sameBlock = (a, b) => blockKey(a) === blockKey(b) && !String(blockKey(a)).startsWith('k');
+                // Kun hisobga olinmaydigan kalit: tashqi jadvalda joyi yo'q kartani (masalan KTR bo'yicha
+                // 13–15-haftalardagi qo'shimcha 1 soatlik amaliy) shu fanning joylashgan qismiga ulash uchun.
+                const sibKey = c => c.training_type === 'lecture' || isBolak(c) ? 'k' + c.id
+                    : cardGroups(c).map(g => gkey(c, g)).sort().join(',') + '|' + baseSubj(c.subject_name);
+                const sameBlock = (a, b) => sibKey(a) === sibKey(b) && !String(sibKey(a)).startsWith('k');
                 const todo = scopeCards.filter(c => !off(c) && !place(c) && c.ext_day && c.ext_pair);
                 const groups = {};
                 todo.forEach(c => (groups[blockKey(c)] = groups[blockKey(c)] || []).push(c));
                 const blocks = [];
+                // Tashqi joyi yo'q, lekin shu haftada shu fanning boshqa qismi joylashgan kartalar —
+                // o'sha kunga, joylashgan qismning darhol ketiga (yoki oldiga) qo'yiladi.
+                scopeCards.filter(c => !off(c) && !place(c) && !(c.ext_day && c.ext_pair)).forEach(c => {
+                    const sib = all.filter(x => x.id !== c.id && !off(x) && place(x) && sameBlock(x, c))
+                        .sort((a, b) => cardLen(b) - cardLen(a))[0];
+                    if (sib) blocks.push({ cs: [c], day: place(sib).d });
+                });
                 Object.values(groups).forEach(list => {
                     list.sort((a, b) => +a.ext_pair - +b.ext_pair || (+b.weeks || 0) - (+a.weeks || 0));
                     let cur = null;
@@ -4281,12 +4292,13 @@
                     });
                 });
                 for (const b of blocks) {
-                    const d = +b.cs[0].ext_day, len = b.cs.reduce((s, c) => s + cardLen(c), 0);
+                    const d = b.day ? +b.day : +b.cs[0].ext_day, len = b.cs.reduce((s, c) => s + cardLen(c), 0);
                     // Shu fanning shu haftada allaqachon joylashgan qismi bo'lsa — blok uning yoniga yopishadi.
                     const placedSib = all.filter(x => !off(x) && place(x) && place(x).d === d && sameBlock(x, b.cs[0]));
                     // Para chegarasi butun para (2+ yarim-slot) darslar uchun saqlanadi (yuqoriga surishdagidek):
                     // blok tashqi joyi bilan bir xil juftlikda boshlanadi — yarim paraga siljimaydi (yonga yopishganda ham).
-                    const p0 = +b.cs[0].ext_pair;
+                    // Tashqi joyi yo'q kartada — para chegarasi 1-slotdan.
+                    const p0 = +b.cs[0].ext_pair || 1;
                     const step = b.cs.some(c => cardLen(c) > 1) ? 2 : 1;
                     const aligned = s => (s - p0) % step === 0;
                     let starts;

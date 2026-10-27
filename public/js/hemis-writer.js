@@ -148,7 +148,7 @@
             }
         }
         jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
-            || OP_ORDER[x.op] - OP_ORDER[y.op] || (x.date + x.start).localeCompare(y.date + y.start));
+            || OP_ORDER[x.op] - OP_ORDER[y.op] || x.date.localeCompare(y.date) || (x.seq || 0) - (y.seq || 0) || x.start.localeCompare(y.start));
         const c = { create: 0, update: 0, delete: 0 };
         jobs.forEach(j => c[j.op]++);
         const blk = skipped.filter(s => s.skip.startsWith('to\'siq')).length;

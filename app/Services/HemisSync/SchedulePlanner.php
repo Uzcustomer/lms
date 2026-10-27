@@ -708,30 +708,15 @@ class SchedulePlanner
         $actions = [];
         $k = fn ($r) => $r['date'] . '|' . substr($r['start'], 0, 5) . '|' . substr($r['end'], 0, 5) . '|' . $r['code'];
 
-        $pairUp = function (callable $key) use (&$existing, &$want, &$actions, $u) {
+        $pairs = [];   // [kerakli yozuv, HEMIS yozuvi]
+        $pairUp = function (callable $key) use (&$existing, &$want, &$pairs) {
             foreach ($want as $wi => $w) {
                 foreach ($existing as $ei => $e) {
-                    if ($key($w) !== $key($e)) {
-                        continue;
+                    if ($key($w) === $key($e)) {
+                        $pairs[] = [$w, $e];
+                        unset($want[$wi], $existing[$ei]);
+                        continue 2;
                     }
-                    $changes = [];
-                    if (substr($e['start'], 0, 5) !== $w['start'] || substr($e['end'], 0, 5) !== $w['end']) {
-                        $changes[] = 'vaqt: ' . substr($e['start'], 0, 5) . '-' . substr($e['end'], 0, 5) . ' → ' . $w['start'] . '-' . $w['end'];
-                    }
-                    if ((string) $e['code'] !== (string) $w['code']) {
-                        $changes[] = 'tur: ' . $this->codeName($u, (string) $e['code']) . ' → ' . $this->codeName($u, (string) $w['code']);
-                    }
-                    if ($w['employee_id'] && (string) $e['employee_id'] !== (string) $w['employee_id']) {
-                        $changes[] = 'o\'qituvchi: ' . ($e['employee_name'] ?: '—') . ' → ' . $w['employee_name'];
-                    }
-                    if ($w['auditorium_code'] && (string) $e['auditorium_code'] !== (string) $w['auditorium_code']) {
-                        $changes[] = 'xona: ' . ($e['auditorium_name'] ?: '—') . ' → ' . $w['auditorium_name'];
-                    }
-                    if ($changes) {
-                        $actions[] = ['op' => 'update', 'hemis_id' => $e['id']] + $w + ['changes' => $changes];
-                    }
-                    unset($want[$wi], $existing[$ei]);
-                    continue 2;
                 }
             }
         };
@@ -741,6 +726,26 @@ class SchedulePlanner
         $pairUp($k);
         $pairUp(fn ($r) => $r['date'] . '|' . $r['code']);
         $pairUp(fn ($r) => $r['date'] . '|' . substr($r['start'], 0, 5));
+        $seq = $this->orderMoves($pairs, $want, $existing);
+
+        foreach ($pairs as $pi => [$w, $e]) {
+            $changes = [];
+            if (substr($e['start'], 0, 5) !== $w['start'] || substr($e['end'], 0, 5) !== $w['end']) {
+                $changes[] = 'vaqt: ' . substr($e['start'], 0, 5) . '-' . substr($e['end'], 0, 5) . ' → ' . $w['start'] . '-' . $w['end'];
+            }
+            if ((string) $e['code'] !== (string) $w['code']) {
+                $changes[] = 'tur: ' . $this->codeName($u, (string) $e['code']) . ' → ' . $this->codeName($u, (string) $w['code']);
+            }
+            if ($w['employee_id'] && (string) $e['employee_id'] !== (string) $w['employee_id']) {
+                $changes[] = 'o\'qituvchi: ' . ($e['employee_name'] ?: '—') . ' → ' . $w['employee_name'];
+            }
+            if ($w['auditorium_code'] && (string) $e['auditorium_code'] !== (string) $w['auditorium_code']) {
+                $changes[] = 'xona: ' . ($e['auditorium_name'] ?: '—') . ' → ' . $w['auditorium_name'];
+            }
+            if ($changes) {
+                $actions[] = ['op' => 'update', 'hemis_id' => $e['id']] + $w + ['changes' => $changes] + (isset($seq[$pi]) ? ['seq' => $seq[$pi]] : []);
+            }
+        }
 
         foreach ($want as $w) {
             $actions[] = ['op' => 'create', 'hemis_id' => null] + $w + ['changes' => []];
@@ -755,5 +760,61 @@ class SchedulePlanner
         usort($actions, fn ($a, $b) => [$a['date'], $a['start']] <=> [$b['date'], $b['start']]);
 
         return $actions;
+    }
+
+    /**
+     * Vaqti o'zgaradigan juftlarning HEMIS'ga yozilish navbati ('seq'). Guruhda bir vaqtda ikki dars turmaydi —
+     * dars hali bo'shamagan vaqtga ko'chirilmasin: yangi vaqti boshqa darsning hozirgi (HEMIS) vaqti bilan
+     * kesishsa, o'sha dars oldin suriladi. Darslar o'rin almashsa (aylana) navbat yordam bermaydi: vaqti aynan
+     * mos bo'lsa juftlar almashtiriladi (vaqt emas, "tur" o'zgaradi), aks holda dars o'chirib qayta qo'shiladi.
+     */
+    private function orderMoves(array &$pairs, array &$want, array &$existing): array
+    {
+        $t = fn (array $r) => [substr($r['start'], 0, 5), substr($r['end'], 0, 5)];
+        $moving = function (int $i) use (&$pairs, $t) {
+            return isset($pairs[$i]) && $t($pairs[$i][0]) !== $t($pairs[$i][1]);
+        };
+        $left = array_values(array_filter(array_keys($pairs), $moving));
+        $seq = [];
+        $n = 0;
+        while ($left) {
+            $after = [];   // i => j: i ning yangi vaqti j ning hozirgi vaqti bilan kesishadi (avval j)
+            foreach ($left as $i) {
+                $to = $t($pairs[$i][0]);
+                foreach ($left as $j) {
+                    $from = $t($pairs[$j][1]);
+                    if ($i !== $j && $pairs[$i][0]['date'] === $pairs[$j][1]['date'] && $to[0] < $from[1] && $from[0] < $to[1]) {
+                        $after[$i] = $j;
+                    }
+                }
+            }
+            $free = array_values(array_filter($left, fn ($i) => !isset($after[$i])));
+            if ($free) {
+                foreach ($free as $i) {
+                    $seq[$i] = ++$n;
+                }
+                $left = array_values(array_diff($left, $free));
+                continue;
+            }
+            // Hammasi kutmoqda — aylana: undagi bir darsni topamiz.
+            $seen = [];
+            for ($i = $left[0]; !isset($seen[$i]); $i = $after[$i]) {
+                $seen[$i] = true;
+            }
+            $j = $after[$i];
+            [$wi, $ei] = $pairs[$i];
+            [$wj, $ej] = $pairs[$j];
+            if ($t($wi) === $t($ej)) {
+                $pairs[$i] = [$wi, $ej];
+                $pairs[$j] = [$wj, $ei];
+            } else {
+                unset($pairs[$i]);
+                $want[] = $wi;
+                $existing[] = $ei;
+            }
+            $left = array_values(array_filter($left, $moving));
+        }
+
+        return $seq;
     }
 }

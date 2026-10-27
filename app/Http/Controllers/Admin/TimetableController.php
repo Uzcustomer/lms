@@ -6272,40 +6272,46 @@ class TimetableController extends Controller
     }
 
     /**
-     * Joylanmagan karta sababi (Excel uchun): kartaning odatiy ichki joyi (haftalik ko'chirishlarining eng ko'pi),
-     * bo'lmasa tashqi jadvaldagi joyi tekshiriladi — o'sha vaqtda kim band (guruh / o'qituvchi / xona) va
-     * bitta para pastda ham. Joyi umuman bo'lmasa — shuni aytadi. Chegara — yo'nalish panjarasi (gridFor).
-     * Qaytaradi: [tekshirilgan vaqt, sabab].
+     * Joylanmagan karta sababi (Excel uchun): nomzod vaqt tekshiriladi — o'sha vaqtda kim band (guruh / o'qituvchi /
+     * xona) va bitta para pastda ham. Nomzod: ichki jadval uchun — odatiy ichki joyi (haftalik ko'chirishlarining eng
+     * ko'pi), bo'lmasa tashqi jadvaldagi joyi; tashqi jadval uchun — ichki jadvaldagi joyi, bo'lmasa odatiy ichki joyi.
+     * Joyi umuman bo'lmasa — shuni aytadi. Chegara — yo'nalish panjarasi (gridFor). Qaytaradi: [tekshirilgan vaqt, sabab].
      */
     private function unplacedReasonFn(TimetableBoard $board, bool $external, int $week): \Closure
     {
-        $state = $external ? null : $this->occupancyState($board->id);
+        $state = $this->occupancyState($board->id);
         $grids = [];
         $dayNames = [1 => 'Dushanba', 2 => 'Seshanba', 3 => 'Chorshanba', 4 => 'Payshanba', 5 => 'Juma', 6 => 'Shanba', 7 => 'Yakshanba'];
         $paraText = fn (int $pair, int $len) => $len >= 2 && $pair % 2 === 1
             ? intdiv($pair + 1, 2) . '-para'
             : intdiv($pair + 1, 2) . '-para (' . ($pair % 2 === 1 ? '1' : '2') . '-yarmi)';
-
-        return function (TimetableCard $card) use ($board, $state, $external, $week, $dayNames, $paraText, &$grids): array {
-            $slot = null;
-            $src = '';
-            if (!$external && $state !== null) {
-                $cnt = [];
-                foreach ($state['ov'][$card->id] ?? [] as $o) {
-                    if (!$o->cancelled && $o->day && $o->pair) {
-                        $k = (int) $o->day . '/' . (int) $o->pair;
-                        $cnt[$k] = ($cnt[$k] ?? 0) + 1;
-                    }
-                }
-                if ($cnt) {
-                    arsort($cnt);
-                    $slot = array_map('intval', explode('/', (string) array_key_first($cnt)));
-                    $src = 'odatiy joyi';
+        $usual = function (TimetableCard $card) use ($state): ?array {
+            $cnt = [];
+            foreach ($state['ov'][$card->id] ?? [] as $o) {
+                if (!$o->cancelled && $o->day && $o->pair) {
+                    $k = (int) $o->day . '/' . (int) $o->pair;
+                    $cnt[$k] = ($cnt[$k] ?? 0) + 1;
                 }
             }
-            if (!$slot && $card->ext_day && $card->ext_pair) {
-                $slot = [(int) $card->ext_day, (int) $card->ext_pair];
-                $src = 'tashqi jadval';
+            if (!$cnt) {
+                return null;
+            }
+            arsort($cnt);
+
+            return array_map('intval', explode('/', (string) array_key_first($cnt)));
+        };
+
+        return function (TimetableCard $card) use ($board, $state, $external, $week, $dayNames, $paraText, $usual, &$grids): array {
+            $cands = $external
+                ? [[$card->day && $card->pair ? [(int) $card->day, (int) $card->pair] : null, 'ichki jadval'], [$usual($card), 'odatiy ichki joyi']]
+                : [[$usual($card), 'odatiy joyi'], [$card->ext_day && $card->ext_pair ? [(int) $card->ext_day, (int) $card->ext_pair] : null, 'tashqi jadval']];
+            $slot = null;
+            $src = '';
+            foreach ($cands as [$cand, $label]) {
+                if ($cand) {
+                    [$slot, $src] = [$cand, $label];
+                    break;
+                }
             }
             $noTeacher = $card->teacher_id ? '' : "O'qituvchi biriktirilmagan. ";
             if (!$slot) {

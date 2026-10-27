@@ -186,6 +186,21 @@ it('joylanmagan kartalar sababi doska panjarasi bo\'yicha: 1 para pastda panjara
         ->not->toContain("pastda bo'sh");
 });
 
+it('tashqi jadval eksporti: ichki jadvaldagi joyi tekshiriladi («ichkida ham joyi yo\'q» deyilmaydi)', function () {
+    $s = layersSetup();
+    $s['own']->update(['day' => 1, 'pair' => 1]);                   // ichkida joylangan, tashqida yo'q
+    $s['foreign']->update(['ext_day' => 1, 'ext_pair' => 1]);       // shu guruh tashqi jadvalda o'sha vaqtda band
+
+    $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=external')->assertOk();
+    $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+    file_put_contents($file, $res->streamedContent());
+    $rows = collect(\PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet()->toArray())->slice(2)->keyBy(fn ($r) => $r[6]);
+    @unlink($file);
+
+    expect($rows['Gigiyena'][12])->toBe('Dushanba, 1-para (ichki jadval)')
+        ->and($rows['Gigiyena'][13])->toContain('Guruh band')->toContain('Anatomiya')->not->toContain("joyi yo'q");
+});
+
 it('tashqi jadvalda haftalari kesishmaydigan kartalar bir katakni bo\'lisha oladi', function () {
     $s = layersSetup();
     // own: 1-7 hafta, foreign: 8-15 hafta ("BKP 7 / Umumiy xirurgiya 8" kabi)

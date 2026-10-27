@@ -123,8 +123,8 @@ class BoardSnapshots
     /**
      * Nusxadagi joylashuvni hozirgi joylanmagan kartalarga tiklaydi.
      * $scope: faculty_names / specialty_names / courses (ixtiyoriy); only_new — faqat nusxada yo'q (yangi) kartalar.
-     * $conflicts(karta, 'internal'|'external'|'week', hafta, kun, para, start_half): to'qnashuvlar matni — qo'lda
-     * joylashtirishdagi tekshiruv; to'qnashgan joylashuv yozilmaydi. Qaytaradi: hisobot.
+     * $conflicts(karta, 'internal'|'external'|'week', hafta, kun, para, start_half, haftalik yozuv xonasi): to'qnashuvlar
+     * matni — qo'lda joylashtirishdagi tekshiruv; to'qnashgan joylashuv yozilmaydi. Qaytaradi: hisobot.
      */
     public function restorePlacement(TimetableBoard $board, array $old, bool $dryRun, array $scope = [], bool $takeSnapshot = true, ?callable $conflicts = null, ?callable $progress = null): array
     {
@@ -404,8 +404,8 @@ class BoardSnapshots
                 $progress($done, $total);
             }
         };
-        $clash = function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf) use ($conflicts, &$stats): bool {
-            $errors = $conflicts ? (array) $conflicts($card, $what, $week, $day, $pair, $startHalf) : [];
+        $clash = function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf, array $room = []) use ($conflicts, &$stats): bool {
+            $errors = $conflicts ? (array) $conflicts($card, $what, $week, $day, $pair, $startHalf, $room) : [];
             if (!$errors) {
                 return false;
             }
@@ -456,21 +456,17 @@ class BoardSnapshots
             if (!$card) {
                 continue;
             }
-            // Haftalik yozuv avval yoziladi (ichki savepoint), so'ng tekshiriladi: tekshiruv shu haftaning xonasini
-            // (nusxadagi, kartanikidan farq qilishi mumkin) yozuvdan oladi. To'qnashsa — bekor qilinadi.
-            DB::beginTransaction();
-            $row = ['day' => $o['day'], 'pair' => $o['pair'], 'start_half' => $o['start_half'], 'cancelled' => false,
-                'updated_at' => now()] + ($ovRoom ? ['auditorium_code' => $o['auditorium_code'], 'auditorium_name' => $o['auditorium_name']] : []);
+            // Tekshiruv shu haftaning xonasi bilan (nusxadagi, kartanikidan farq qilishi mumkin) — yozilishidan oldin.
+            $room = $ovRoom ? ['auditorium_code' => $o['auditorium_code'], 'auditorium_name' => $o['auditorium_name']] : [];
+            if ($clash($card, 'week', (int) $o['week'], (int) $o['day'], (int) $o['pair'], (int) $o['start_half'], $room)) {
+                continue;
+            }
+            $row = ['day' => $o['day'], 'pair' => $o['pair'], 'start_half' => $o['start_half'], 'cancelled' => false, 'updated_at' => now()] + $room;
             if ($o['exists']) {
                 DB::table('timetable_card_overrides')->where('card_id', $o['card_id'])->where('week', $o['week'])->update($row);
             } else {
                 DB::table('timetable_card_overrides')->insert($row + ['card_id' => $o['card_id'], 'week' => $o['week'], 'created_at' => now()]);
             }
-            if ($clash($card, 'week', (int) $o['week'], (int) $o['day'], (int) $o['pair'], (int) $o['start_half'])) {
-                DB::rollBack();
-                continue;
-            }
-            DB::commit();
             $stats['week_moves']++;
             $applied[(int) $o['card_id']]['weeks'] = true;
         }

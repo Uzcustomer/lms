@@ -1340,18 +1340,48 @@ class TimetableController extends Controller
      */
     public function restoreConflictChecker(): \Closure
     {
-        return function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf): array {
-            $grid = $this->gridFor($card->board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course);
+        // Doska bandligi birinchi tekshiruvda bir marta yuklanadi (har tekshiruvda butun doskani o'qimaslik uchun) va
+        // har qabul qilingan joylashuv bilan yangilanadi: tiklash joylashuvni tekshiruvdan keyin, to'qnashmasa, yozadi.
+        $state = null;
+        $board = null;
+        $grids = [];
+
+        return function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf, array $room = []) use (&$state, &$board, &$grids): array {
+            $board ??= $card->board;
+            $grid = $grids[$card->faculty_name . '|' . $card->specialty_name . '|' . $card->course]
+                ??= $this->gridFor($board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course);
             if ($day < 1 || $day > $grid['days'] || $pair < 1 || $pair + $card->lenHalf() - 1 > $grid['pairs']
                 || ($week !== null && ($week < 1 || $week > $grid['weeks']))) {
                 return ['Jadval chegarasidan tashqarida'];
             }
+            if ($what === 'external') {
+                return $this->findExternalConflicts($card, $day, $pair);
+            }
+            $state ??= $this->occupancyState((int) $card->board_id);
+            // Kartaning hozirgi holati (tiklash o'qituvchi/xonani avval qo'yadi).
+            $this->stateSetCard($state, clone $card);
+            if ($what === 'week') {
+                // Yoziladigan haftalik yozuv (xonasi bilan) bandlikka vaqtincha qo'yiladi; to'qnashsa — avvalgisi qaytadi.
+                $prev = $state['ov'][(int) $card->id][$week] ?? null;
+                $pending = new TimetableCardOverride();
+                $pending->forceFill(['card_id' => $card->id, 'week' => $week, 'day' => $day, 'pair' => $pair, 'start_half' => $startHalf,
+                    'cancelled' => false, 'auditorium_code' => $room['auditorium_code'] ?? null, 'auditorium_name' => $room['auditorium_name'] ?? null]);
+                $this->stateSetOverride($state, $pending);
+                $errors = $this->findWeekConflicts($card, $week, $day, $pair, $startHalf, $state);
+                if ($errors) {
+                    $this->stateSetOverride($state, $prev, (int) $card->id, $week);
+                }
 
-            return match ($what) {
-                'external' => $this->findExternalConflicts($card, $day, $pair),
-                'week' => $this->findWeekConflicts($card, (int) $week, $day, $pair, $startHalf),
-                default => $this->findConflicts($card, $day, $pair, $startHalf),
-            };
+                return $errors;
+            }
+            $errors = $this->findConflicts($card, $day, $pair, $startHalf, $state);
+            if (!$errors) {
+                $placed = clone $card;
+                $placed->forceFill(['day' => $day, 'pair' => $pair, 'start_half' => $startHalf]);
+                $this->stateSetCard($state, $placed);
+            }
+
+            return $errors;
         };
     }
 
@@ -6586,19 +6616,22 @@ class TimetableController extends Controller
     }
 
     /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi (yarim-slot oralig'i). */
-    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0): array
+    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
     {
-        $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $card->board_id))
-            ->where('week', $week)->get()->keyBy('card_id');
-        $others = TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)->get();
-
+        // Shu haftada shu kunda turganlar: shablonda shu kunda (o'sha haftaga yozuvi bo'lmasa) yoki haftalik ko'chirish bilan.
+        $s = $this->daySlice($card, $day, $week, $state);
         $myRange = $this->rangeFor($card, $pair, $startHalf);
-        $myGroups = $card->occupiedGroups();
-        $myOverride = $ovr->get($card->id);
+        $myOverride = $s['ov'][$card->id][$week] ?? null;
         $myRoomCode = $myOverride?->auditorium_code ?: $card->auditorium_code;
+        $ids = array_unique(array_merge($s['tpl'], array_map(fn ($m) => $m[0], $s['moved'])));
+        sort($ids);
         $errors = [];
-        foreach ($others as $o) {
-            $ov = $ovr->get($o->id);
+        foreach ($ids as $id) {
+            $o = $s['cards'][$id] ?? null;
+            if (!$o || (int) $id === (int) $card->id) {
+                continue;
+            }
+            $ov = $s['ov'][$id][$week] ?? null;
             if ($ov) {
                 if ($ov->cancelled) {
                     continue;
@@ -6617,19 +6650,8 @@ class TimetableController extends Controller
             if (!$this->halfOverlap($myRange, $this->rangeFor($o, (int) $op, $osh))) {
                 continue;
             }
-            if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
-                $overlap = array_intersect($myGroups, $o->occupiedGroups());
-                if (!empty($overlap)) {
-                    $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' — ' . $this->describeCard($o);
-                }
-            }
-            if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
-                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' — ' . $this->describeCard($o);
-            }
-            $otherRoomCode = $ov?->auditorium_code ?: $o->auditorium_code;
-            if ($myRoomCode && $otherRoomCode === $myRoomCode && !$this->isSharedRoom($ov?->auditorium_name ?: $o->auditorium_name)) {
-                $errors[] = 'Auditoriya band: ' . ($ov?->auditorium_name ?: $o->auditorium_name) . ' — ' . $this->describeCard($o);
-            }
+            array_push($errors, ...$this->clashWith($card, $myRoomCode, $o,
+                $ov?->auditorium_code ?: $o->auditorium_code, $ov?->auditorium_name ?: $o->auditorium_name));
         }
         return array_unique($errors);
     }
@@ -7106,39 +7128,152 @@ class TimetableController extends Controller
         return $name !== '' && !preg_match('/\d/u', $name) && preg_match('/mashg|umumiy/iu', $name) === 1;
     }
 
-    private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0): array
+    /**
+     * Shablon joyi to'qnashuvlari: shu kunda shablonda turgan boshqa kartalar (oraliq kesishuvi bilan) va haftalik
+     * ko'chirish bilan shu vaqtga kelgan kartalar — karta o'sha haftada shablon joyida bo'lsa (o'sha hafta bekor
+     * qilinmagan va boshqa joyga ko'chirilmagan). $state — tiklashda bir marta yuklangan doska bandligi.
+     */
+    private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
     {
-        // Shu kundagi barcha joylashgan kartalar (para bo'yicha emas — oraliq kesishuvi bilan)
-        $others = TimetableCard::where('board_id', $card->board_id)
-            ->where('id', '!=', $card->id)
-            ->where('day', $day)->whereNotNull('pair')
-            ->get();
-
+        $s = $this->daySlice($card, $day, null, $state);
         $myRange = $this->rangeFor($card, $pair, $startHalf);
-        $myGroups = $card->occupiedGroups();
         $errors = [];
-        foreach ($others as $o) {
-            $oRange = $o->halfRange();
-            if (!$oRange || !$this->halfOverlap($myRange, $oRange)) {
+        foreach ($s['tpl'] as $id) {
+            $o = $s['cards'][$id] ?? null;
+            $oRange = $o?->halfRange();
+            if (!$o || (int) $id === (int) $card->id || !$oRange || !$this->halfOverlap($myRange, $oRange)) {
                 continue;
             }
-            // Guruh konflikti — bir yo'nalish+kurs ichida
-            if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
-                $overlap = array_intersect($myGroups, $o->occupiedGroups());
-                if (!empty($overlap)) {
-                    $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' — ' . $this->describeCard($o);
-                }
+            array_push($errors, ...$this->clashWith($card, $card->auditorium_code, $o, $o->auditorium_code, $o->auditorium_name));
+        }
+        $mine = $s['ov'][$card->id] ?? [];
+        $weeksOf = [];   // to'qnashuv matni => haftalar
+        foreach ($s['moved'] as [$id, $w, $ov]) {
+            $o = $s['cards'][$id] ?? null;
+            $myOv = $mine[$w] ?? null;
+            if (!$o || (int) $id === (int) $card->id || ($myOv && ($myOv->cancelled || $myOv->day))
+                || !$this->halfOverlap($myRange, $this->rangeFor($o, (int) $ov->pair, (int) ($ov->start_half ?? 0)))) {
+                continue;
             }
-            // O'qituvchi konflikti — butun doska bo'ylab
-            if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
-                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' — ' . $this->describeCard($o);
-            }
-            // Auditoriya konflikti — butun doska bo'ylab
-            if ($card->auditorium_code && $o->auditorium_code === $card->auditorium_code && !$this->isSharedRoom($o->auditorium_name)) {
-                $errors[] = 'Auditoriya band: ' . $o->auditorium_name . ' — ' . $this->describeCard($o);
+            foreach ($this->clashWith($card, $myOv?->auditorium_code ?: $card->auditorium_code, $o,
+                $ov->auditorium_code ?: $o->auditorium_code, $ov->auditorium_name ?: $o->auditorium_name) as $e) {
+                $weeksOf[$e][] = (int) $w;
             }
         }
+        foreach ($weeksOf as $e => $weeks) {
+            sort($weeks);
+            $errors[] = implode(', ', array_unique($weeks)) . '-hafta: ' . $e;
+        }
+
         return array_unique($errors);
+    }
+
+    /** Ikki dars bir vaqtda: guruh (bir yo'nalish+kurs ichida, bo'lak qo'shnilaridan tashqari), o'qituvchi va xona bandligi. */
+    private function clashWith(TimetableCard $card, ?string $myRoom, TimetableCard $o, ?string $oRoom, ?string $oRoomName): array
+    {
+        $errors = [];
+        // Guruh konflikti — bir yo'nalish+kurs ichida
+        if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
+            $overlap = array_intersect($card->occupiedGroups(), $o->occupiedGroups());
+            if (!empty($overlap)) {
+                $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' — ' . $this->describeCard($o);
+            }
+        }
+        // O'qituvchi konflikti — butun doska bo'ylab
+        if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
+            $errors[] = "O'qituvchi band: " . $o->teacher_name . ' — ' . $this->describeCard($o);
+        }
+        // Auditoriya konflikti — butun doska bo'ylab
+        if ($myRoom && $oRoom === $myRoom && !$this->isSharedRoom($oRoomName)) {
+            $errors[] = 'Auditoriya band: ' . $oRoomName . ' — ' . $this->describeCard($o);
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Bir kunning bandligi (to'qnashuv tekshiruvi uchun): ['cards' => [id => karta], 'tpl' => shablonda shu kundagi
+     * kartalar id'lari, 'moved' => [[id, hafta, yozuv]] — haftalik ko'chirish bilan shu kunga kelganlar, 'ov' => [id =>
+     * [hafta => yozuv]]]. $state berilsa (doska bir marta yuklangan) — undan; aks holda bazadan, faqat shu kun
+     * ($week berilsa — faqat shu hafta).
+     */
+    private function daySlice(TimetableCard $card, int $day, ?int $week, ?array $state = null): array
+    {
+        if ($state !== null) {
+            return ['cards' => $state['cards'], 'tpl' => array_values($state['tplByDay'][$day] ?? []), 'ov' => $state['ov'],
+                'moved' => array_values(array_filter($state['movedByDay'][$day] ?? [], fn ($m) => $week === null || $m[1] === $week))];
+        }
+        $cards = TimetableCard::where('board_id', $card->board_id)->where('day', $day)->whereNotNull('pair')->get()->keyBy('id')->all();
+        $out = ['cards' => $cards, 'tpl' => array_keys($cards), 'moved' => [], 'ov' => []];
+        if (!Schema::hasTable('timetable_card_overrides')) {
+            return $out;
+        }
+        // Shablon kartalari (shu haftadagi joyi uchun — faqat hafta tekshiruvida) va kartaning o'zi; shu kunga ko'chirilganlar.
+        $ownIds = $week !== null ? array_merge(array_keys($cards), [$card->id]) : [$card->id];
+        $rows = TimetableCardOverride::whereHas('card', fn ($q) => $q->where('board_id', $card->board_id))
+            ->when($week !== null, fn ($q) => $q->where('week', $week))
+            ->where(fn ($q) => $q->whereIn('card_id', $ownIds)->orWhere(fn ($w) => $w->where('day', $day)->where('cancelled', false)))
+            ->get();
+        $missing = array_diff($rows->pluck('card_id')->map(fn ($id) => (int) $id)->unique()->all(), array_keys($cards), [(int) $card->id]);
+        if ($missing) {
+            $out['cards'] += TimetableCard::whereIn('id', $missing)->get()->keyBy('id')->all();
+        }
+        foreach ($rows as $o) {
+            $out['ov'][(int) $o->card_id][(int) $o->week] = $o;
+            if (!$o->cancelled && (int) $o->day === $day && $o->pair) {
+                $out['moved'][] = [(int) $o->card_id, (int) $o->week, $o];
+            }
+        }
+
+        return $out;
+    }
+
+    /** Butun doska bandligi bir marta (tiklash uchun) — daySlice shundan olinadi; yozilganlar stateSet* bilan qo'shiladi. */
+    private function occupancyState(int $boardId): array
+    {
+        $state = ['cards' => [], 'tplByDay' => [], 'tplDayOf' => [], 'ov' => [], 'movedByDay' => []];
+        foreach (TimetableCard::where('board_id', $boardId)->get() as $c) {
+            $this->stateSetCard($state, $c);
+        }
+        if (Schema::hasTable('timetable_card_overrides')) {
+            foreach (TimetableCardOverride::whereHas('card', fn ($q) => $q->where('board_id', $boardId))->get() as $o) {
+                $this->stateSetOverride($state, $o);
+            }
+        }
+
+        return $state;
+    }
+
+    private function stateSetCard(array &$state, TimetableCard $c): void
+    {
+        $id = (int) $c->id;
+        if (isset($state['tplDayOf'][$id])) {
+            unset($state['tplByDay'][$state['tplDayOf'][$id]][$id], $state['tplDayOf'][$id]);
+        }
+        $state['cards'][$id] = $c;
+        if ($c->day && $c->pair) {
+            $state['tplByDay'][(int) $c->day][$id] = $id;
+            $state['tplDayOf'][$id] = (int) $c->day;
+        }
+    }
+
+    private function stateSetOverride(array &$state, ?TimetableCardOverride $o, ?int $cardId = null, ?int $week = null): void
+    {
+        $cardId ??= (int) $o->card_id;
+        $week ??= (int) $o->week;
+        $old = $state['ov'][$cardId][$week] ?? null;
+        if ($old && $old->day) {
+            unset($state['movedByDay'][(int) $old->day][$cardId . '|' . $week]);
+        }
+        if (!$o) {
+            unset($state['ov'][$cardId][$week]);
+
+            return;
+        }
+        $state['ov'][$cardId][$week] = $o;
+        if (!$o->cancelled && $o->day && $o->pair) {
+            $state['movedByDay'][(int) $o->day][$cardId . '|' . $week] = [$cardId, $week, $o];
+        }
     }
 
     /** Barcha doskalarga umumiy auditoriya-o'qituvchi cheklovlari. */

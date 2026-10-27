@@ -1197,13 +1197,17 @@ trait TimetableHemisSync
                     if (!in_array($a['op'], ['create', 'update'], true)) {
                         continue;
                     }
-                    $emp = (string) ($a['employee_id'] ?? '');
-                    $room = (string) ($a['auditorium_code'] ?? '');
-                    // Avval asl qiymatlar bo'yicha to'qnashuvlar topiladi, keyin bartaraf etiladi.
-                    $hits = [];
-                    foreach ([['e', $emp, 'mudir', "o'qituvchi band"], ['r', $room, 'mudir_xonasi', 'xona band']] as [$type, $id, $flag, $msg]) {
+                    // Indeksdagi shu darsning o'z yozuvlari asl qiymatlar kalitida turadi.
+                    $emp0 = (string) ($a['employee_id'] ?? '');
+                    $room0 = (string) ($a['auditorium_code'] ?? '');
+                    // To'qnashuv darsning joriy o'qituvchi/xonasi bilan izlanadi: bir tur almashtirilgach ikkinchisi qayta
+                    // tekshiriladi — asl qiymat bilan "bitta dars" deb o'tkazilgan sherik dars endi to'qnashishi mumkin.
+                    $findHit = function (string $type) use (&$a, &$idx, $u, $freeRoom): ?array {
+                        $emp = (string) ($a['employee_id'] ?? '');
+                        $room = (string) ($a['auditorium_code'] ?? '');
+                        [$id, $flag, $msg] = $type === 'e' ? [$emp, 'mudir', "o'qituvchi band"] : [$room, 'mudir_xonasi', 'xona band'];
                         if ($id === '' || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
-                            continue;
+                            return null;
                         }
                         foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label, $oEmp, $oRoom, $info]) {
                             if ($k === $u['key'] && $s === $a['start']) {
@@ -1214,19 +1218,28 @@ trait TimetableHemisSync
                             }
                             if ($s < $a['end'] && $a['start'] < $e) {
                                 $text = "{$msg}: {$label} {$s}-{$e}";
-                                $hits[$type] = ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
+
+                                return ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
                                     'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
                                     'teacher' => $type === 'e' ? ($a['employee_name'] ?? null) : ($info['teacher'] ?? null)] + $info;
-                                break;
                             }
                         }
-                    }
+
+                        return null;
+                    };
                     // To'siq bartaraf etiladi (registrator ofisi qarori): o'qituvchi band — kafedra mudiri, xona band —
                     // "Kafedra mudiri xonasi" (ikkalasining ustma-ust tushishiga ruxsat bor). Mudir/xona topilmasa — to'siq qoladi.
-                    foreach ($hits as $type => $b) {
+                    $queue = ['e', 'r'];
+                    $settled = [];
+                    while ($queue) {
+                        $type = array_shift($queue);
+                        if (isset($settled[$type]) || !($b = $findHit($type))) {
+                            continue;
+                        }
+                        $settled[$type] = true;
                         [$fbId, $fbName] = ($type === 'e' ? $fbEmp : $fbRoom) ?: [null, null];
                         // Mudir topilmadi yoki band o'qituvchining o'zi mudir — almashtirish yordam bermaydi, to'siq qoladi.
-                        if (!$fbId || ($type === 'e' && (string) $fbId === $emp)) {
+                        if (!$fbId || ($type === 'e' && (string) $fbId === (string) ($a['employee_id'] ?? ''))) {
                             $a['blocked'][] = $b['text'];
                             $a['blocks'][] = $b;
                             continue;
@@ -1253,11 +1266,11 @@ trait TimetableHemisSync
                         $a['resolved'][] = $b;
                         // Bu dars endi o'sha o'qituvchi/xonani band qilmaydi: u bilan to'qnashgan ikkinchi LMS darsi
                         // (keyinroq tekshiriladi) ham mudirga almashtirilib, o'qituvchi ikkalasidan ham ayrilmasin.
-                        $own = $type . '|' . ($type === 'e' ? $emp : $room) . '|' . $a['date'];
+                        $own = $type . '|' . ($type === 'e' ? $emp0 : $room0) . '|' . $a['date'];
                         $idx[$own] = array_values(array_filter($idx[$own] ?? [], fn ($x) => !($x[2] === $u['key'] && $x[0] === $a['start'])));
                         // Ikkinchi indeksdagi yozuvi ham haqiqiy qiymat bilan: "o'sha o'qituvchi o'sha xonada — bitta dars"
                         // istisnosi eski o'qituvchi/xona bilan ishlab, keyingi to'qnashuvni yashirmasin.
-                        $other = ($type === 'e' ? 'r|' . $room : 'e|' . $emp) . '|' . $a['date'];
+                        $other = ($type === 'e' ? 'r|' . $room0 : 'e|' . $emp0) . '|' . $a['date'];
                         foreach ($idx[$other] ?? [] as $xi => $x) {
                             if ($x[2] === $u['key'] && $x[0] === $a['start']) {
                                 $idx[$other][$xi][$type === 'e' ? 4 : 5] = (string) $fbId;
@@ -1266,6 +1279,8 @@ trait TimetableHemisSync
                         $a['reason'] = trim(($a['reason'] ?? '') . ' ' . ($type === 'e'
                             ? "LMS'dagi o'qituvchi {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli kafedra mudiri qo'yildi."
                             : "LMS'dagi xona {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli «{$fbName}» qo'yildi."));
+                        // Endi ikkinchi tur yangi qiymat bilan qayta tekshiriladi.
+                        $queue[] = $type === 'e' ? 'r' : 'e';
                     }
                     $a['flags'] = array_values(array_unique($a['flags'] ?? []));
                     // HEMIS'da allaqachon shunday (mudir/xona) — o'zgartirish kerak emas.

@@ -184,3 +184,115 @@ it('KTR yo\'q bo\'lsa HEMIS\'dagi dars turi saqlanadi, o\'zboshimcha turga o\'zg
     expect(array_map(fn ($a) => $a['op'] . ' ' . $a['date'] . ' ' . $a['code'], $r['actions']))->toBe(['create ' . hsDate(4, 1) . ' 13'])
         ->and($r['notes'])->toContain('KTR kiritilmagan — balans tekshirilmadi, faqat jadval solishtirildi.');
 });
+
+it('kun ichida darslar surilsa — o\'chirish + qo\'shish emas, shu turdagi darsning vaqti o\'zgartiriladi', function () {
+    $u = hsUnit([
+        'codes' => ['11' => 'L', '14' => 'A'], 'code_names' => ['11' => 'Ma\'ruza', '14' => 'Seminar'], 'current_week' => 1,
+        'ktr' => [[], ['11' => 2, '14' => 2]],
+        // HEMIS: ma'ruza 10:00 (T5), seminar 12:00 (T7)
+        'hemis' => [hsHemis(1, hsDate(2, 6), 3, 2, '11', 5), hsHemis(2, hsDate(2, 6), 5, 2, '14', 7)],
+        // LMS: ma'ruza 12:00 (T6), seminar 13:30 (T7)
+        'plan' => [hsPlan(2, 6, 5, 2, 'L', 6), hsPlan(2, 6, 7, 2, 'A', 7)],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 6)))->planGroup([$u], [], hsWorkDates(2, 2))[0];
+    $acts = array_map(fn ($a) => $a['op'] . ' ' . $a['hemis_id'] . ' ' . implode('; ', $a['changes']), $r['actions']);
+
+    expect($acts)->toBe([
+        "update 1 vaqt: 10:00-11:20 → 12:00-13:20; o'qituvchi: T5 → T6",
+        'update 2 vaqt: 12:00-13:20 → 13:30-14:50',
+    ]);
+});
+
+/**
+ * Amallarni HEMIS'ga yozuvchi tartibida qo'llaydi (o'chirish; o'zgartirish — sana, navbat, vaqt bo'yicha; qo'shish).
+ * Har qadamda guruhning shu vaqtida hali boshqa dars turgan bo'lsa — to'qnashuv. Qaytaradi: [to'qnashuvlar, yakuniy holat].
+ */
+function hsReplay(array $hemis, array $actions): array
+{
+    $order = ['delete' => 0, 'update' => 1, 'create' => 2];
+    usort($actions, fn ($x, $y) => [$order[$x['op']], $x['date'], $x['seq'] ?? 0, $x['start']] <=> [$order[$y['op']], $y['date'], $y['seq'] ?? 0, $y['start']]);
+    $row = fn ($r) => ['date' => $r['date'], 'start' => substr($r['start'], 0, 5), 'end' => substr($r['end'], 0, 5), 'code' => (string) $r['code']];
+    $state = [];
+    foreach ($hemis as $h) {
+        $state['h' . $h['id']] = $row($h);
+    }
+    $clash = [];
+    $new = 0;
+    foreach ($actions as $a) {
+        if ($a['op'] === 'delete') {
+            unset($state['h' . $a['hemis_id']]);
+            continue;
+        }
+        $id = $a['op'] === 'update' ? 'h' . $a['hemis_id'] : 'new' . ++$new;
+        foreach ($state as $o => $s) {
+            if ($o !== $id && $s['date'] === $a['date'] && $s['start'] < $a['end'] && $a['start'] < $s['end']) {
+                $clash[] = "{$a['op']} {$id} → {$a['start']}: {$o} {$s['start']} da hali turibdi";
+            }
+        }
+        $state[$id] = $row($a);
+    }
+    $text = fn ($s) => $s['date'] . ' ' . $s['start'] . '-' . $s['end'] . ' ' . $s['code'];
+
+    return [$clash, array_map($text, array_values($state))];
+}
+
+function hsWanted(array $records): array
+{
+    $out = array_map(fn ($r) => $r['date'] . ' ' . $r['start'] . '-' . $r['end'] . ' ' . $r['code'], $records);
+    sort($out);
+
+    return $out;
+}
+
+it('kun ichida kechroqqa surilgan darslar: o\'rni bo\'shaydigan dars avval yoziladi (band vaqtga ko\'chirilmaydi)', function () {
+    $u = hsUnit([
+        'codes' => ['11' => 'L', '14' => 'A'], 'code_names' => ['11' => 'Ma\'ruza', '14' => 'Seminar'], 'current_week' => 1,
+        'ktr' => [[], ['11' => 2, '14' => 2]],
+        'hemis' => [hsHemis(1, hsDate(2, 6), 3, 2, '11', 5), hsHemis(2, hsDate(2, 6), 5, 2, '14', 7)],
+        'plan' => [hsPlan(2, 6, 5, 2, 'L', 6), hsPlan(2, 6, 7, 2, 'A', 7)],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 6)))->planGroup([$u], [], hsWorkDates(2, 2))[0];
+    [$clash, $final] = hsReplay($u['hemis'], $r['actions']);
+    sort($final);
+    $seq = array_column($r['actions'], 'seq', 'hemis_id');
+
+    expect($clash)->toBe([])
+        ->and($final)->toBe(hsWanted($r['records']))
+        ->and($seq[2])->toBeLessThan($seq[1]);
+});
+
+it('ma\'ruza va seminar o\'rin almashsa — vaqt emas, tur o\'zgartiriladi (bir-birini kutib qolmaydi)', function () {
+    $u = hsUnit([
+        'codes' => ['11' => 'L', '14' => 'A'], 'code_names' => ['11' => 'Ma\'ruza', '14' => 'Seminar'], 'current_week' => 1,
+        'ktr' => [[], ['11' => 2, '14' => 2]],
+        // HEMIS: ma'ruza 10:00 (T5), seminar 12:00 (T7); LMS: seminar 10:00 (T7), ma'ruza 12:00 (T5)
+        'hemis' => [hsHemis(1, hsDate(2, 6), 3, 2, '11', 5), hsHemis(2, hsDate(2, 6), 5, 2, '14', 7)],
+        'plan' => [hsPlan(2, 6, 3, 2, 'A', 7), hsPlan(2, 6, 5, 2, 'L', 5)],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 6)))->planGroup([$u], [], hsWorkDates(2, 2))[0];
+    [$clash, $final] = hsReplay($u['hemis'], $r['actions']);
+    sort($final);
+
+    expect(array_map(fn ($a) => $a['op'] . ' ' . $a['hemis_id'] . ' ' . implode('; ', $a['changes']), $r['actions']))->toBe([
+        "update 1 tur: Ma'ruza → Seminar; o'qituvchi: T5 → T7",
+        "update 2 tur: Seminar → Ma'ruza; o'qituvchi: T7 → T5",
+    ])->and($clash)->toBe([])
+        ->and($final)->toBe(hsWanted($r['records']));
+});
+
+it('o\'rin almashgan darslarning vaqti aynan mos kelmasa — biri o\'chirib qayta qo\'shiladi, to\'qnashuvsiz', function () {
+    $u = hsUnit([
+        'codes' => ['11' => 'L', '14' => 'A'], 'code_names' => ['11' => 'Ma\'ruza', '14' => 'Seminar'], 'current_week' => 1,
+        'ktr' => [[], ['11' => 1, '14' => 1]],
+        // HEMIS: ma'ruza 10:00-11:20, seminar 12:00-13:20; LMS: seminar 10:40-11:20, ma'ruza 12:00-12:40
+        'hemis' => [hsHemis(1, hsDate(2, 6), 3, 2, '11', 5), hsHemis(2, hsDate(2, 6), 5, 2, '14', 7)],
+        'plan' => [hsPlan(2, 6, 4, 1, 'A', 7), hsPlan(2, 6, 5, 1, 'L', 5)],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 6)))->planGroup([$u], [], hsWorkDates(2, 2))[0];
+    [$clash, $final] = hsReplay($u['hemis'], $r['actions']);
+    sort($final);
+
+    expect($clash)->toBe([])
+        ->and($final)->toBe(hsWanted($r['records']))
+        ->and(array_count_values(array_column($r['actions'], 'op')))->toEqual(['delete' => 1, 'update' => 1, 'create' => 1]);
+});

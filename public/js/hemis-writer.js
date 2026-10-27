@@ -2,7 +2,7 @@
  * HEMIS'ga yozish (xatcho'p / bookmarklet). HEMIS sahifasida, registratorning o'z sessiyasida ishlaydi.
  * mark (LMS) "HEMIS solishtirish" oynasidan yuklangan JSON'dagi amallarni HEMIS'ning o'z
  * qo'shish / tahrirlash / o'chirish formalari orqali bajaradi — tools/hemis-sync/hemis-write.mjs bilan bir xil mantiq:
- * bugun va o'tgan kunlarga yozilmaydi, to'siqli amallar o'tkaziladi, har guruh oldidan tasdiq so'raladi.
+ * bugun va o'tgan kunlarga yozilmaydi, to'siqli amallar o'tkaziladi, boshida bir marta tasdiq so'raladi.
  */
 (function () {
     'use strict';
@@ -148,7 +148,7 @@
             }
         }
         jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
-            || OP_ORDER[x.op] - OP_ORDER[y.op] || (x.date + x.start).localeCompare(y.date + y.start));
+            || OP_ORDER[x.op] - OP_ORDER[y.op] || x.date.localeCompare(y.date) || (x.seq || 0) - (y.seq || 0) || x.start.localeCompare(y.start));
         const c = { create: 0, update: 0, delete: 0 };
         jobs.forEach(j => c[j.op]++);
         const blk = skipped.filter(s => s.skip.startsWith('to\'siq')).length;
@@ -179,18 +179,20 @@
 
     async function run(apply) {
         if (running) return;
-        // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — guruh tasdig'idagi son
+        // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — tasdiqdagi son
         // va yoziladigan amallar bir xil bo'lib qoladi. Oldin qayta tuziladi — sana chegarasi hozirgi kun bo'yicha.
         build();
         const batch = jobs.slice();
         if (!batch.length) return;
-        if (apply && !confirm(batch.length + ' ta amal HEMIS\'ga yoziladi (har guruh oldidan yana so\'raladi). Boshlaymizmi?')) return;
+        // Bitta tasdiq — butun ro'yxat uchun (guruhlar soni bilan); guruh almashganda qayta so'ralmaydi. To'xtatish — "To'xtatish" tugmasi.
+        const nGroups = new Set(batch.map(x => x.group_id)).size;
+        if (apply && !confirm(batch.length + ' ta amal (' + nGroups + ' ta guruh) HEMIS\'ga yoziladi. Guruhlar orasida qayta so\'ralmaydi — kerak bo\'lsa "To\'xtatish" tugmasini bosing.\n\nBoshlaymizmi?')) return;
         running = true; stop = false; results = []; lastMode = apply ? 'apply' : 'check';
         ['hwCheck', 'hwApply', 'hwFile'].concat(FILTERS).forEach(id => { $(id).disabled = true; });
         $('hwStop').disabled = false; $('hwLog').disabled = true;
         const list = $('hwList');
         list.textContent = '';
-        let lastGroup = null, skipGroup = null;
+        let lastGroup = null;
         for (const j of batch) {
             if (stop) { results.push(Object.assign({}, j, { status: 'skipped', reason: 'to\'xtatildi' })); continue; }
             // Yozish yarim tundan o'tib ketsa — endi bugun bo'lib qolgan darslar yozilmaydi.
@@ -199,12 +201,10 @@
                 list.textContent += '  – ' + line(j) + '  — bugun yoki o\'tgan kun, yozilmadi\n';
                 continue;
             }
-            if (apply && j.group_id !== lastGroup) {
-                const n = batch.filter(x => x.group_id === j.group_id).length;
-                skipGroup = confirm(j.group + ': ' + n + ' ta amal HEMIS\'ga yoziladi.\n\nOK — yozish, Cancel — bu guruhni o\'tkazish.') ? null : j.group_id;
+            if (j.group_id !== lastGroup) {
+                list.textContent += '— ' + j.group + ' (' + batch.filter(x => x.group_id === j.group_id).length + ' ta amal)\n';
             }
             lastGroup = j.group_id;
-            if (skipGroup === j.group_id) { results.push(Object.assign({}, j, { status: 'skipped', reason: 'foydalanuvchi o\'tkazdi' })); list.textContent += '  – ' + line(j) + '  — o\'tkazildi\n'; continue; }
             let res;
             try { res = await runInPage({ job: j, apply }); } catch (e) { res = { ok: false, error: String(e && e.message || e) }; }
             results.push(Object.assign({}, j, { status: res.ok ? 'ok' : 'error', note: res.note || null, error: res.error || null }));

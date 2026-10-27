@@ -90,8 +90,8 @@ const done = (async () => {
     assert.equal(count(), 1);
     assert.match(els.hwList.textContent, /O'zgartirish · p\/st26-01a · 2099-10-28/);
 
-    // 4) Yozish davomida filtrlar o'chiq; filtr baribir o'zgarsa ham bajarilayotgan ro'yxat va guruh tasdig'idagi son
-    // boshlanishdagi holatdan olinadi (aks holda «0 ta amal» deb so'rab, guruhni yozib yuborardi).
+    // 4) Boshida bitta tasdiq (amallar va guruhlar soni bilan), guruh almashganda qayta so'ralmaydi — ro'yxatda guruh sarlavhasi.
+    // Yozish davomida filtrlar o'chiq; filtr baribir o'zgarsa ham bajarilayotgan ro'yxat boshlanishdagi holatdan olinadi.
     els.hwGroup.value = '';
     els.hwGroup.onchange();
     assert.equal(count(), 2);
@@ -106,8 +106,7 @@ const done = (async () => {
     els.hwGroup.onchange();
     openGate();
     while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 50));
-    assert.deepEqual(confirms, ['2 ta amal HEMIS\'ga yoziladi (har guruh oldidan yana so\'raladi). Boshlaymizmi?',
-        'p/st26-01a: 1 ta amal HEMIS\'ga yoziladi.', 'p/st26-01b: 1 ta amal HEMIS\'ga yoziladi.']);
+    assert.deepEqual(confirms, ['2 ta amal (2 ta guruh) HEMIS\'ga yoziladi. Guruhlar orasida qayta so\'ralmaydi — kerak bo\'lsa "To\'xtatish" tugmasini bosing.']);
     assert.equal(fetched.length, 2);
     assert.equal(els.hwGroup.disabled, false);
 
@@ -125,7 +124,8 @@ const done = (async () => {
     openGate();
     while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 50));
     assert.equal(fetched.length, 1);
-    assert.deepEqual(confirms.slice(1), ['p/st26-01a: 1 ta amal HEMIS\'ga yoziladi.']);
+    assert.equal(confirms.length, 1);
+    assert.match(els.hwList.textContent, /^— p\/st26-01a \(1 ta amal\)\n/);
     assert.match(els.hwList.textContent, /p\/st26-01b · 2099-10-28 .* bugun yoki o'tgan kun/);
 
     // 6) Oyna kecha ochilgan, «Yozish» bugun bosildi — sana chegarasi qayta hisoblanadi, bugungi darslar yozilmaydi.

@@ -21,7 +21,8 @@
  *   --subject NOM      faqat nomida shu so'z bor fan(lar) (vergul bilan, katta-kichik harf farqsiz)
  *   --only create,update,delete   faqat shu amallar
  *   --check            HEMIS'ga kirib formalarni tekshiradi (para, xona, o'qituvchi, fan bormi) — yozmaydi
- *   --apply            HAQIQATAN yozadi (har guruhdan oldin tasdiq so'raladi; --yes bilan so'ramaydi)
+ *   --apply            HAQIQATAN yozadi (boshida bir marta tasdiq so'raladi; --yes bilan so'ramaydi;
+ *                      Ctrl+C — joriy amal tugagach to'xtaydi va jurnal saqlanadi, ikkinchi Ctrl+C — darhol)
  *   --profile PAPKA    brauzer profili (HEMIS sessiyasi saqlanadi), sukut: ./.hemis-profile
  *   --base URL         HEMIS manzili, sukut: https://hemis.ttatf.uz
  *
@@ -94,11 +95,12 @@ for (const g of rep.groups || []) {
         }
     }
 }
-// Guruh bo'yicha (tasdiq har guruhga bir marta); guruh ichida avval o'chirish, so'ng o'zgartirish, so'ng qo'shish —
-// bo'shaydigan vaqtga yangi dars eskisi olib tashlangandan keyin qo'yiladi.
+// Guruh bo'yicha; guruh ichida avval o'chirish, so'ng o'zgartirish, so'ng qo'shish — bo'shaydigan vaqtga yangi
+// dars eskisi olib tashlangandan keyin qo'yiladi. Kun ichida surilgan darslar LMS bergan navbatda (seq):
+// o'rni bo'shaydigan dars avval suriladi.
 const OP_ORDER = { delete: 0, update: 1, create: 2 };
 jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
-    || OP_ORDER[x.op] - OP_ORDER[y.op] || (x.date + x.start).localeCompare(y.date + y.start));
+    || OP_ORDER[x.op] - OP_ORDER[y.op] || x.date.localeCompare(y.date) || (x.seq || 0) - (y.seq || 0) || x.start.localeCompare(y.start));
 
 const line = j => `${OP_NAME[j.op].padEnd(12)} ${j.group.padEnd(12)} ${j.date} ${j.start}-${j.end}  ${j.subject.slice(0, 34).padEnd(34)} ${String(j.type).padEnd(12)} ${j.employee_name || '—'} · ${j.auditorium_name || '—'}${j.hemis_id ? ' · #' + j.hemis_id : ''}${j.changes && j.changes.length ? '  (' + j.changes.join('; ') + ')' : ''}`;
 
@@ -124,14 +126,34 @@ try {
     process.exit(1);
 }
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ctx = await chromium.launchPersistentContext(String(opt('profile', './.hemis-profile')), { headless: false, viewport: { width: 1280, height: 860 } });
+// Ctrl+C: ochiq readline uni o'zi ushlaydi (birinchisi jarayonni to'xtatmaydi, ikkinchisi amal o'rtasida o'ldiradi va jurnal
+// yozilmaydi), Playwright'ning o'z SIGINT ishlovchisi esa birinchi signaldayoq brauzerni yopib chiqib ketadi. Shuning uchun
+// signal faqat shu yerda: birinchisi — joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi; ikkinchisi — darhol chiqish
+// (brauzerni Playwright jarayon tugashida o'zi yopadi). Brauzer ochilishidan oldin ulanadi — kirish bosqichida ham.
+let stop = false;
+// Kutilayotgan savol (kirish / tasdiq) birinchi Ctrl+C da bekor bo'ladi (null) — skript odatdagi yakun yo'lidan boradi.
+const asking = new AbortController();
+const question = q => rl.question(q, { signal: asking.signal }).catch(e => {
+    if (e && e.name === 'AbortError') return null;
+    throw e;
+});
+const ctrlC = () => {
+    if (stop) process.exit(130);
+    stop = true;
+    asking.abort();
+    console.log('\nTo\'xtatilmoqda: joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi (darhol chiqish — yana Ctrl+C).');
+};
+rl.on('SIGINT', ctrlC);
+process.on('SIGINT', ctrlC);
+const ctx = await chromium.launchPersistentContext(String(opt('profile', './.hemis-profile')),
+    { headless: false, viewport: { width: 1280, height: 860 }, handleSIGINT: false });
 const page = ctx.pages()[0] || await ctx.newPage();
 await page.goto(BASE + '/curriculum/schedule-info');
 const loggedIn = async () => !!(await page.$('meta[name="csrf-param"]')) && !/login/i.test(page.url());
 if (!(await loggedIn())) {
-    await rl.question('\nBrauzerda HEMIS\'ga kiring (login, parol, captcha — o\'zingiz), so\'ng shu yerda Enter bosing... ');
-    await page.goto(BASE + '/curriculum/schedule-info');
-    if (!(await loggedIn())) {
+    await question('\nBrauzerda HEMIS\'ga kiring (login, parol, captcha — o\'zingiz), so\'ng shu yerda Enter bosing... ');
+    if (!stop) await page.goto(BASE + '/curriculum/schedule-info');
+    if (!stop && !(await loggedIn())) {
         console.error('HEMIS\'ga kirilmagan.');
         await ctx.close();
         process.exit(1);
@@ -218,17 +240,16 @@ const runInPage = async ({ job, apply }) => {
 const apply = has('apply');
 const results = [];
 let lastGroup = null;
-let stop = false;
+// Bitta tasdiq — butun ro'yxat uchun; guruh almashganda qayta so'ralmaydi (to'xtatish — Ctrl+C).
+if (apply && !has('yes') && jobs.length) {
+    const nGroups = new Set(jobs.map(x => x.group_id)).size;
+    const ans = ((await question(`\n${jobs.length} ta amal (${nGroups} ta guruh) HEMIS'ga yoziladi. Boshlaymizmi? [ha / yo'q] `)) ?? '').trim().toLowerCase();
+    if (!ans.startsWith('ha')) stop = true;
+}
 for (const j of jobs) {
-    if (apply && !has('yes') && j.group_id !== lastGroup) {
-        const n = jobs.filter(x => x.group_id === j.group_id).length;
-        const ans = (await rl.question(`\n${j.group}: ${n} ta amal HEMIS'ga yoziladi. Davom etamizmi? [ha / o'tkaz / to'xtat] `)).trim().toLowerCase();
-        if (ans.startsWith('t')) { stop = true; }
-        if (ans.startsWith('o')) { jobs.filter(x => x.group_id === j.group_id).forEach(x => x._skip = true); }
-    }
+    if (j.group_id !== lastGroup) console.log(`— ${j.group} (${jobs.filter(x => x.group_id === j.group_id).length} ta amal)`);
     lastGroup = j.group_id;
     if (stop) { results.push({ ...j, status: 'skipped', reason: 'to\'xtatildi' }); continue; }
-    if (j._skip) { results.push({ ...j, status: 'skipped', reason: 'foydalanuvchi o\'tkazdi' }); continue; }
     const res = await page.evaluate(runInPage, { job: j, apply }).catch(e => ({ ok: false, error: String(e.message || e) }));
     results.push({ ...j, status: res.ok ? 'ok' : 'error', note: res.note || null, error: res.error || null });
     console.log((res.ok ? '  ✓ ' : '  ✗ ') + line(j) + (res.ok ? (res.note ? '  — ' + res.note : '') : '  — ' + res.error));

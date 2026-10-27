@@ -224,10 +224,7 @@ class QuizResultController extends Controller
             if (!empty($allResultIds)) {
                 // OSKI/Test: reason='quiz_result' bilan yangi yozuv
                 // Mavzu retake: reason='absent'/'low_grade', lekin quiz_result_id bilan yozilgan
-                $uploadedResultIds = StudentGrade::whereIn('quiz_result_id', $allResultIds)
-                    ->whereNotNull('quiz_result_id')
-                    ->pluck('quiz_result_id')
-                    ->toArray();
+                $uploadedResultIds = $this->uploadedQuizResultIds($allResultIds);
             }
             $uploadedResultIds = array_flip($uploadedResultIds);
 
@@ -335,11 +332,9 @@ class QuizResultController extends Controller
                 $jnGradesGrouped = [];
 
                 if (!empty($allSemCodes)) {
-                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                        $gradeRows = DB::table('student_grades')
+                    foreach (self::pairChunks(array_keys($studentSubjectSemester)) as $pairs) {
+                        $gradeRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                             ->whereNull('deleted_at')
-                            ->whereIn('student_hemis_id', $chunk)
-                            ->whereIn('subject_id', $fanIds)
                             ->whereIn('semester_code', $allSemCodes)
                             ->whereNotIn('training_type_code', $excludedCodes)
                             ->whereNotNull('lesson_date')
@@ -463,11 +458,9 @@ class QuizResultController extends Controller
                 $allSemCodes = array_unique(array_values($studentSubjectSemester));
 
                 if (!empty($allSemCodes)) {
-                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                        $gradeRows = DB::table('student_grades')
+                    foreach (self::pairChunks(array_keys($studentSubjectSemester)) as $pairs) {
+                        $gradeRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                             ->whereNull('deleted_at')
-                            ->whereIn('student_hemis_id', $chunk)
-                            ->whereIn('subject_id', $fanIds)
                             ->whereIn('semester_code', $allSemCodes)
                             ->whereNotIn('training_type_code', [100, 101, 102, 103])
                             ->whereNotNull('lesson_date')
@@ -509,11 +502,9 @@ class QuizResultController extends Controller
 
                 // Manual MT baholarini olish (lesson_date IS NULL — override)
                 $manualMtGrades = [];
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $manualRows = DB::table('student_grades')
+                foreach (self::pairChunks(array_keys($studentSubjectSemester)) as $pairs) {
+                    $manualRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                         ->whereNull('deleted_at')
-                        ->whereIn('student_hemis_id', $chunk)
-                        ->whereIn('subject_id', $fanIds)
                         ->where('training_type_code', 99)
                         ->whereNull('lesson_date')
                         ->whereNotNull('grade')
@@ -570,11 +561,9 @@ class QuizResultController extends Controller
             $currentSemCodes = $students->pluck('semester_code')->filter()->unique()->values()->toArray();
 
             if (!empty($studentHemisIds) && !empty($fanIds) && !empty($currentSemCodes)) {
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $oskiRows = DB::table('student_grades')
+                foreach (self::pairChunks(self::oskiPairKeys($results, $studentLookup)) as $pairs) {
+                    $oskiRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                         ->whereNull('deleted_at')
-                        ->whereIn('student_hemis_id', $chunk)
-                        ->whereIn('subject_id', $fanIds)
                         ->whereIn('semester_code', $currentSemCodes)
                         ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
@@ -959,10 +948,7 @@ class QuizResultController extends Controller
             if (!empty($allResultIds)) {
                 // OSKI/Test: reason='quiz_result' bilan yangi yozuv
                 // Mavzu retake: reason='absent'/'low_grade', lekin quiz_result_id bilan yozilgan
-                $uploadedResultIds = StudentGrade::whereIn('quiz_result_id', $allResultIds)
-                    ->whereNotNull('quiz_result_id')
-                    ->pluck('quiz_result_id')
-                    ->toArray();
+                $uploadedResultIds = $this->uploadedQuizResultIds($allResultIds);
             }
             $uploadedResultIds = array_flip($uploadedResultIds);
 
@@ -1074,11 +1060,9 @@ class QuizResultController extends Controller
                 $jnGradesGrouped = [];
 
                 if (!empty($allSemCodes)) {
-                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                        $gradeRows = DB::table('student_grades')
+                    foreach (self::pairChunks(array_keys($studentSubjectSemester)) as $pairs) {
+                        $gradeRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                             ->whereNull('deleted_at')
-                            ->whereIn('student_hemis_id', $chunk)
-                            ->whereIn('subject_id', $fanIds)
                             ->whereIn('semester_code', $allSemCodes)
                             ->whereNotIn('training_type_code', $excludedCodes)
                             ->whereNotNull('lesson_date')
@@ -1205,11 +1189,9 @@ class QuizResultController extends Controller
                 $allSemCodes = array_unique(array_values($studentSubjectSemester));
 
                 if (!empty($allSemCodes)) {
-                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                        $gradeRows = DB::table('student_grades')
+                    foreach (self::pairChunks(array_keys($studentSubjectSemester)) as $pairs) {
+                        $gradeRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                             ->whereNull('deleted_at')
-                            ->whereIn('student_hemis_id', $chunk)
-                            ->whereIn('subject_id', $fanIds)
                             ->whereIn('semester_code', $allSemCodes)
                             ->whereNotIn('training_type_code', [100, 101, 102, 103])
                             ->whereNotNull('lesson_date')
@@ -1258,11 +1240,9 @@ class QuizResultController extends Controller
 
                 // 4) Manual MT baholarini olish (lesson_date IS NULL — override)
                 $manualMtGrades = [];
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $manualRows = DB::table('student_grades')
+                foreach (self::pairChunks(array_keys($studentSubjectSemester)) as $pairs) {
+                    $manualRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                         ->whereNull('deleted_at')
-                        ->whereIn('student_hemis_id', $chunk)
-                        ->whereIn('subject_id', $fanIds)
                         ->where('training_type_code', 99)
                         ->whereNull('lesson_date')
                         ->whereNotNull('grade')
@@ -1321,11 +1301,9 @@ class QuizResultController extends Controller
             $currentSemCodes = $students->pluck('semester_code')->filter()->unique()->values()->toArray();
 
             if (!empty($studentHemisIds) && !empty($fanIds) && !empty($currentSemCodes)) {
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $oskiRows = DB::table('student_grades')
+                foreach (self::pairChunks(self::oskiPairKeys($results, $studentLookup)) as $pairs) {
+                    $oskiRows = self::whereStudentSubjectPairs(DB::table('student_grades'), $pairs)
                         ->whereNull('deleted_at')
-                        ->whereIn('student_hemis_id', $chunk)
-                        ->whereIn('subject_id', $fanIds)
                         ->whereIn('semester_code', $currentSemCodes)
                         ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
@@ -1724,6 +1702,90 @@ class QuizResultController extends Controller
 
         // 10) Hammasi joyida
         return ['code' => 'ok', 'text' => 'Yuklasa bo\'ladi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+    }
+
+    /**
+     * Shu natijalardan qaysilari jurnalga yuklangan (quiz_result_id bo'yicha).
+     *
+     * 100 tadan so'raladi: ro'yxat 200 dan oshsa MySQL indeksni aniq tekshirmay
+     * statistikaga tayanadi, quiz_result_id deyarli hammasi NULL bo'lgani uchun
+     * statistika yolg'on chiqadi va 17 GB jadval to'liq o'qiladi (~9 s).
+     */
+    private function uploadedQuizResultIds(array $resultIds): array
+    {
+        $ids = [];
+        foreach (array_chunk($resultIds, 100) as $chunk) {
+            foreach (StudentGrade::whereIn('quiz_result_id', $chunk)->pluck('quiz_result_id') as $id) {
+                $ids[] = $id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * student_grades so'roviga (talaba, fan) juftliklari sharti.
+     *
+     * student_hemis_id IN (500) AND subject_id IN (50) ko'rinishida MySQL ikkala
+     * ro'yxat ko'paytmasicha diapazon quradi, range_optimizer xotirasi tugaydi va
+     * 17 GB jadval to'liq o'qiladi (har so'rov 5–6 s). Juftliklar ro'yxati esa
+     * indeksda faqat kerakli joylarni o'qiydi.
+     */
+    private static function whereStudentSubjectPairs($query, array $pairs)
+    {
+        $bindings = [];
+        foreach ($pairs as [$hemisId, $subjectId]) {
+            $bindings[] = (int) $hemisId;
+            $bindings[] = (int) $subjectId;
+        }
+        $placeholders = implode(',', array_fill(0, count($pairs), '(?,?)'));
+
+        return $query->whereRaw("(student_hemis_id, subject_id) IN ($placeholders)", $bindings);
+    }
+
+    /**
+     * "hemis|fan" kalitlarini 100 talik juftlik bo'laklariga ajratadi.
+     */
+    private static function pairChunks(array $keys): array
+    {
+        $pairs = [];
+        foreach ($keys as $key) {
+            [$hemisId, $subjectId] = array_pad(explode('|', (string) $key, 2), 2, '');
+            if ($hemisId !== '' && $subjectId !== '') {
+                $pairs[] = [$hemisId, $subjectId];
+            }
+        }
+
+        return array_chunk($pairs, 100);
+    }
+
+    /**
+     * OSKI/Test bahosi qidiriladigan (talaba, fan) juftliklari: talaba natijalaridagi
+     * fanlar va shu ro'yxatdagi bir xil nomli boshqa fan id lari (jurnalda baho
+     * boshqa id ostida bo'lsa, xulosa uni nom bo'yicha topadi).
+     */
+    private static function oskiPairKeys($results, array $studentLookup): array
+    {
+        $fansByName = [];
+        foreach ($results as $r) {
+            if ($r->fan_id && $r->fan_name) {
+                $fansByName[mb_strtolower($r->fan_name)][$r->fan_id] = true;
+            }
+        }
+
+        $keys = [];
+        foreach ($results as $r) {
+            $student = $studentLookup[$r->student_id] ?? null;
+            if (!$student || !$r->fan_id) {
+                continue;
+            }
+            $keys[$student->hemis_id . '|' . $r->fan_id] = true;
+            foreach (array_keys($fansByName[mb_strtolower((string) $r->fan_name)] ?? []) as $fanId) {
+                $keys[$student->hemis_id . '|' . $fanId] = true;
+            }
+        }
+
+        return array_keys($keys);
     }
 
     /**

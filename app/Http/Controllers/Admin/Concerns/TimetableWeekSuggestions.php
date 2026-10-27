@@ -158,7 +158,23 @@ trait TimetableWeekSuggestions
 
             return $x->day && $x->pair ? [(int) $x->day, (int) $x->pair] : null;
         };
-        $blockOf = function (TimetableCard $x, int $w, array $st) use ($effIn, $bySib, $sibKey, $isBolak): array {
+        // Bir kundagi [karta, boshlanish] ro'yxatidan ketma-ket zanjirlar (bir kunda shu fanning ikki alohida darsi bo'lishi mumkin).
+        $chainsOf = function (array $list): array {
+            usort($list, fn ($a, $b) => $a[1] <=> $b[1]);
+            $chains = [];
+            foreach ($list as [$y, $p]) {
+                $last = $chains ? $chains[count($chains) - 1] : null;
+                if ($last && $p <= $last['end']) {
+                    $chains[count($chains) - 1]['cards'][] = $y;
+                    $chains[count($chains) - 1]['end'] = max($last['end'], $p + $y->lenHalf());
+                } else {
+                    $chains[] = ['cards' => [$y], 'start' => $p, 'end' => $p + $y->lenHalf()];
+                }
+            }
+
+            return $chains;
+        };
+        $blockOf = function (TimetableCard $x, int $w, array $st) use ($effIn, $bySib, $sibKey, $isBolak, $chainsOf): array {
             $pl = $effIn($x, $w, $st);
             if (!$pl || $x->training_type === 'lecture' || $isBolak($x)) {
                 return [$x];
@@ -170,19 +186,8 @@ trait TimetableWeekSuggestions
                     $list[] = [$y, $py[1]];
                 }
             }
-            usort($list, fn ($a, $b) => $a[1] <=> $b[1]);
-            // Faqat x turgan ketma-ket zanjir (bir kunda shu fanning ikki alohida darsi bo'lishi mumkin).
-            $chains = [];
-            foreach ($list as [$y, $p]) {
-                $last = $chains ? $chains[count($chains) - 1] : null;
-                if ($last && $p <= $last['end']) {
-                    $chains[count($chains) - 1]['cards'][] = $y;
-                    $chains[count($chains) - 1]['end'] = max($last['end'], $p + $y->lenHalf());
-                } else {
-                    $chains[] = ['cards' => [$y], 'end' => $p + $y->lenHalf()];
-                }
-            }
-            foreach ($chains as $ch) {
+            // Faqat x turgan ketma-ket zanjir.
+            foreach ($chainsOf($list) as $ch) {
                 foreach ($ch['cards'] as $y) {
                     if ((int) $y->id === (int) $x->id) {
                         return $ch['cards'];
@@ -324,15 +329,21 @@ trait TimetableWeekSuggestions
                 $why0 = $why0 ?: $e;
             }
             $reason = $why0 ? implode('; ', $why0) : '';
-            // Shu darsning butun bloki (shu kunda joylashgan qismlari + shu karta) — ko'chirilsa birga ko'chadi.
+            // Shu darsning butun bloki (karta ulanadigan, maqsad joyiga tutash ketma-ket qism + shu karta) — ko'chirilsa
+            // birga ko'chadi. Shu kundagi shu fanning boshqa, alohida darsi blokka kirmaydi.
             $cb = [];
+            $dayParts = [];
             foreach ($sibs as [$x, $pl]) {
                 if ($pl[0] === $td) {
-                    $cb[] = [$x, $pl[1]];
+                    $dayParts[] = [$x, $pl[1]];
                 }
             }
-            usort($cb, fn ($a, $b) => $a[1] <=> $b[1]);
-            $cb = array_map(fn ($e) => $e[0], $cb);
+            foreach ($chainsOf($dayParts) as $ch) {
+                if ($ch['end'] === $tp || $ch['start'] === $tp + $len) {
+                    $cb = $ch['cards'];
+                    break;
+                }
+            }
             $cbStart = $cb ? min(array_map(fn ($x) => $eff($x, $W)[1], $cb)) : null;
             $cb[] = $c;
             $cbLen = array_sum(array_map(fn ($x) => $x->lenHalf(), $cb));

@@ -278,3 +278,25 @@ it('takliflar: shu kunning boshqa vaqti uchun ikki variant beriladi', function (
     expect($slots)->toHaveCount(2)
         ->and($slots[0]['actions'][0]['pair'])->not->toBe($slots[1]['actions'][0]['pair']);
 });
+
+it('takliflar: shu kundagi shu fanning alohida darsi blokka qo\'shilmaydi', function () {
+    $s = sugSetup();
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    // Gigiyena g-01a: 3-haftada 2-kun 1–2 da (alohida dars) va 7–8 da; joylanmagan karta 7–8 ning ketiga (9) ulanadi
+    $a = sugCard($s, ['subject_name' => 'Gigiyena', 'group_name' => 'g-01a']);
+    $b = sugCard($s, ['subject_name' => 'Gigiyena', 'group_name' => 'g-01a']);
+    TimetableCardOverride::create(['card_id' => $a->id, 'week' => 3, 'day' => 2, 'pair' => 1]);
+    TimetableCardOverride::create(['card_id' => $b->id, 'week' => 3, 'day' => 2, 'pair' => 7]);
+    // 9–10 da shu guruhning boshqa darsi
+    $k = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-01a']);
+    TimetableCardOverride::create(['card_id' => $k->id, 'week' => 3, 'day' => 2, 'pair' => 9]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $sugs = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions']);
+    $slot = $sugs->firstWhere('type', 'slot');
+    expect($slot)->not->toBeNull();
+    // Faqat 7–8 dagi qism shu karta bilan birga ko'chadi; 1–2 dagi alohida darsga tegilmaydi
+    $touched = $sugs->whereIn('type', ['slot', 'day'])->flatMap(fn ($x) => collect($x['actions'])->pluck('card_id'))->unique()->values()->all();
+    expect($touched)->toContain($b->id)->not->toContain($a->id);
+});

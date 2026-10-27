@@ -130,9 +130,16 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 // signal faqat shu yerda: birinchisi — joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi; ikkinchisi — darhol chiqish
 // (brauzerni Playwright jarayon tugashida o'zi yopadi). Brauzer ochilishidan oldin ulanadi — kirish bosqichida ham.
 let stop = false;
+// Kutilayotgan savol (kirish / tasdiq) birinchi Ctrl+C da bekor bo'ladi (null) — skript odatdagi yakun yo'lidan boradi.
+const asking = new AbortController();
+const question = q => rl.question(q, { signal: asking.signal }).catch(e => {
+    if (e && e.name === 'AbortError') return null;
+    throw e;
+});
 const ctrlC = () => {
     if (stop) process.exit(130);
     stop = true;
+    asking.abort();
     console.log('\nTo\'xtatilmoqda: joriy amal tugagach qolganlari yozilmaydi, jurnal saqlanadi (darhol chiqish — yana Ctrl+C).');
 };
 rl.on('SIGINT', ctrlC);
@@ -143,9 +150,9 @@ const page = ctx.pages()[0] || await ctx.newPage();
 await page.goto(BASE + '/curriculum/schedule-info');
 const loggedIn = async () => !!(await page.$('meta[name="csrf-param"]')) && !/login/i.test(page.url());
 if (!(await loggedIn())) {
-    await rl.question('\nBrauzerda HEMIS\'ga kiring (login, parol, captcha — o\'zingiz), so\'ng shu yerda Enter bosing... ');
-    await page.goto(BASE + '/curriculum/schedule-info');
-    if (!(await loggedIn())) {
+    await question('\nBrauzerda HEMIS\'ga kiring (login, parol, captcha — o\'zingiz), so\'ng shu yerda Enter bosing... ');
+    if (!stop) await page.goto(BASE + '/curriculum/schedule-info');
+    if (!stop && !(await loggedIn())) {
         console.error('HEMIS\'ga kirilmagan.');
         await ctx.close();
         process.exit(1);
@@ -235,7 +242,7 @@ let lastGroup = null;
 // Bitta tasdiq — butun ro'yxat uchun; guruh almashganda qayta so'ralmaydi (to'xtatish — Ctrl+C).
 if (apply && !has('yes') && jobs.length) {
     const nGroups = new Set(jobs.map(x => x.group_id)).size;
-    const ans = (await rl.question(`\n${jobs.length} ta amal (${nGroups} ta guruh) HEMIS'ga yoziladi. Boshlaymizmi? [ha / yo'q] `)).trim().toLowerCase();
+    const ans = ((await question(`\n${jobs.length} ta amal (${nGroups} ta guruh) HEMIS'ga yoziladi. Boshlaymizmi? [ha / yo'q] `)) ?? '').trim().toLowerCase();
     if (!ans.startsWith('ha')) stop = true;
 }
 for (const j of jobs) {

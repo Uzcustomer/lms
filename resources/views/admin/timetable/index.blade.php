@@ -10162,18 +10162,23 @@
                     if (ev.button !== 0) return;
                     ev.preventDefault();
                     const y0 = ev.clientY, h0 = start();
-                    let last = h0;
+                    let last = h0, moved = false;
                     handle.classList.add('dragging');
                     document.body.classList.add('tt-resizing');
                     handle.setPointerCapture(ev.pointerId);
-                    const onMove = e => { last = move(h0, e.clientY - y0); };
+                    // Oddiy bosish (yoki 1-2px titrash) o'lchamni qotirib qo'ymaydi — faqat haqiqiy surish eslab qolinadi.
+                    const onMove = e => {
+                        if (!moved && Math.abs(e.clientY - y0) < 3) return;
+                        moved = true;
+                        last = move(h0, e.clientY - y0);
+                    };
                     const onUp = () => {
                         handle.classList.remove('dragging');
                         document.body.classList.remove('tt-resizing');
                         handle.removeEventListener('pointermove', onMove);
                         handle.removeEventListener('pointerup', onUp);
                         handle.removeEventListener('pointercancel', onUp);
-                        store.set(key, Math.round(last));
+                        if (moved) store.set(key, last === null ? null : Math.round(last));
                     };
                     handle.addEventListener('pointermove', onMove);
                     handle.addEventListener('pointerup', onUp);
@@ -10186,7 +10191,8 @@
                 (h0, dy) => {
                     const natural = top.scrollHeight;
                     const h = Math.max(0, Math.min(natural, h0 + dy));
-                    if (h >= natural - 1) { applyTop(null); return natural; }
+                    // To'liq balandlik px bilan saqlanmaydi: menyu keyin kattalashsa ham skroll bilan kesilib qolmasin.
+                    if (h >= natural - 1) { applyTop(null); return null; }
                     applyTop(h);
                     return h;
                 }, 'top');

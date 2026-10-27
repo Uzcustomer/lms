@@ -3281,8 +3281,8 @@ class QuizResultController extends Controller
      */
     /**
      * 100 ballik natijani 5 ballik bahoga o'tkazish (Xalqaro ta'lim fakulteti):
-     * 90–100 → 5 (a'lo), 70–89.9 → 4 (yaxshi), 60–69.9 → 3 (qoniqarli),
-     * 0–59.9 → 2 (qoniqarsiz).
+     * 90–100 → 5 (a'lo), 80–89.9 → 4 (yaxshi), 70–79.9 → 3 (qoniqarli),
+     * 0–69.9 → 2 (qoniqarsiz).
      */
     private static function toFivePointScale(float $grade): int
     {
@@ -3294,10 +3294,10 @@ class QuizResultController extends Controller
         if ($grade >= 90) {
             return 5;
         }
-        if ($grade >= 70) {
+        if ($grade >= 80) {
             return 4;
         }
-        if ($grade >= 60) {
+        if ($grade >= 70) {
             return 3;
         }
 

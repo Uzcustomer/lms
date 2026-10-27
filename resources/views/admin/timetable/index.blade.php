@@ -4273,18 +4273,19 @@
                     const d = +b.cs[0].ext_day, len = b.cs.reduce((s, c) => s + cardLen(c), 0);
                     // Shu fanning shu haftada allaqachon joylashgan qismi bo'lsa — blok uning yoniga yopishadi.
                     const placedSib = all.filter(x => !off(x) && place(x) && place(x).d === d && sameBlock(x, b.cs[0]));
+                    // Para chegarasi butun para (2+ yarim-slot) darslar uchun saqlanadi (yuqoriga surishdagidek):
+                    // blok tashqi joyi bilan bir xil juftlikda boshlanadi — yarim paraga siljimaydi (yonga yopishganda ham).
+                    const p0 = +b.cs[0].ext_pair;
+                    const step = b.cs.some(c => cardLen(c) > 1) ? 2 : 1;
+                    const aligned = s => (s - p0) % step === 0;
                     let starts;
                     if (placedSib.length) {
                         const lo = Math.min(...placedSib.map(x => place(x).p));
                         const hi = Math.max(...placedSib.map(x => place(x).p + cardLen(x)));
-                        starts = [hi, lo - len];
+                        starts = [hi, lo - len].filter(aligned);
                     } else {
-                        const p0 = +b.cs[0].ext_pair;
-                        // Para chegarasi butun para (2+ yarim-slot) darslar uchun saqlanadi (yuqoriga surishdagidek):
-                        // blok tashqi joyi bilan bir xil juftlikda boshlanadi — yarim paraga siljimaydi.
-                        const step = b.cs.some(c => cardLen(c) > 1) ? 2 : 1;
                         starts = [];
-                        for (let s = 1; s + len - 1 <= maxPair; s++) if ((s - p0) % step === 0) starts.push(s);
+                        for (let s = 1; s + len - 1 <= maxPair; s++) if (aligned(s)) starts.push(s);
                         starts.sort((x, y) => (x === p0 ? -1 : y === p0 ? 1 : 0) || Math.abs(x - p0) - Math.abs(y - p0) || x - y);
                     }
                     let ok = false;

@@ -59,5 +59,14 @@ const card = (id, o) => Object.assign({ id, group_name: 'g', training_type: 'pra
   assert.equal(r.overrides['1|1'], undefined);
   assert.deepEqual([r.res.placed, r.res.left], [0, 2]);
 
-  console.log('timetable compact week: 3 scenarios passed');
+  // Shu fanning joylashgan qismi yoniga yopishishda ham para chegarasi saqlanadi: 1-yarim-slotdagi qism yonida
+  // butun paralik karta 2-3 ga (yarim para siljib) qo'yilmaydi — joylanmagan qoladi.
+  r = await compact([
+    card(1, { subject_name: 'Gigiyena', len_half: 1, day: 1, pair: 1, ext_day: 1, ext_pair: 1 }),
+    card(2, { subject_name: 'Gigiyena', ext_day: 1, ext_pair: 3 }),
+  ]);
+  assert.deepEqual(r.moves, []);
+  assert.deepEqual([r.res.placed, r.res.left], [0, 1]);
+
+  console.log('timetable compact week: 4 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

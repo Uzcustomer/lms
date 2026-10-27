@@ -4241,7 +4241,8 @@
                     } catch (e) { return false; }
                 };
                 const res = { up: 0, placed: 0, left: 0 };
-                const act = scopeCards.filter(c => !off(c) && place(c))
+                // Ma'ruza vaqti qat'iy — tashqi jadvaldagi kun/vaqtda turadi (ma'ruza xonalari umumiy), surilmaydi.
+                const act = scopeCards.filter(c => !off(c) && place(c) && c.training_type !== 'lecture')
                     .sort((a, b) => place(a).d - place(b).d || place(a).p - place(b).p);
                 for (const c of act) {
                     const pl = place(c), u = occ();
@@ -4291,6 +4292,8 @@
                         else { cur = { cs: [c], end: +c.ext_pair + cardLen(c) - 1 }; blocks.push(cur); }
                     });
                 });
+                // Avval ma'ruzalar (qat'iy vaqt), keyin amaliy bloklar.
+                blocks.sort((a, b) => (b.cs[0].training_type === 'lecture') - (a.cs[0].training_type === 'lecture'));
                 for (const b of blocks) {
                     const d = b.day ? +b.day : +b.cs[0].ext_day, len = b.cs.reduce((s, c) => s + cardLen(c), 0);
                     // Shu fanning shu haftada allaqachon joylashgan qismi bo'lsa — blok uning yoniga yopishadi.
@@ -4306,6 +4309,9 @@
                         const lo = Math.min(...placedSib.map(x => place(x).p));
                         const hi = Math.max(...placedSib.map(x => place(x).p + cardLen(x)));
                         starts = [hi, lo - len].filter(aligned);
+                    } else if (b.cs[0].training_type === 'lecture') {
+                        // Ma'ruza — faqat tashqi jadvaldagi vaqtiga; band bo'lsa joylanmagan qoladi.
+                        starts = [+b.cs[0].ext_pair];
                     } else {
                         starts = [];
                         for (let s = 1; s + len - 1 <= maxPair; s++) if (aligned(s)) starts.push(s);

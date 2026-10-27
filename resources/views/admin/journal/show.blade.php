@@ -1566,7 +1566,7 @@
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
-                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
+                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}" @if((int) round((float) $oskiRounded) === 1) title="Testdan chetlashgan" @endif>{{ $oskiRounded }}</span>
                                                     @if($isSuperAdmin)
                                                         <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                 onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 1, this)">×</button>
@@ -1578,7 +1578,7 @@
                                             {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
                                             @if($showOskiQ1Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
-                                                    @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiQ1 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $oskiQ1) === 1) title="Testdan chetlashgan" @endif>{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish OSKI ustuni --}}
@@ -1603,7 +1603,7 @@
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
                                                     @if($oskiA2 !== null)
-                                                        <span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>
+                                                        <span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}" @if((int) round((float) $oskiA2) === 1) title="Testdan chetlashgan" @endif>{{ $oskiA2 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 2, this)">×</button>
@@ -1614,7 +1614,7 @@
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ2Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
-                                                    @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiQ2 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $oskiQ2) === 1) title="Testdan chetlashgan" @endif>{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
@@ -1639,7 +1639,7 @@
                                                     @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
                                                     title="{{ $oski3Title }}">
                                                     @if($oskiA3 !== null)
-                                                        <span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>
+                                                        <span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}" @if((int) round((float) $oskiA3) === 1) title="Testdan chetlashgan" @endif>{{ $oskiA3 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 3, this)">×</button>
@@ -1650,7 +1650,7 @@
                                             {{-- 3-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ3Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
-                                                    @if($oskiQ3 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
+                                                    @if($oskiQ3 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $oskiQ3) === 1) title="Testdan chetlashgan" @endif>{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
@@ -1697,7 +1697,7 @@
                                                     @if($testClickable) onclick="{{ $testClickHandler }}" @endif
                                                     @if($testTitle) title="{{ $testTitle }}" @endif>
                                                     @if($testRounded !== null)
-                                                        <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                        <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}" @if((int) round((float) $testRounded) === 1) title="Testdan chetlashgan" @endif>{{ $testRounded }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 1, this)">×</button>
@@ -1710,7 +1710,7 @@
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
-                                                    @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testQ1 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $testQ1) === 1) title="Testdan chetlashgan" @endif>{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish Test ustuni --}}
@@ -1735,7 +1735,7 @@
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
                                                     @if($testA2 !== null)
-                                                        <span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>
+                                                        <span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}" @if((int) round((float) $testA2) === 1) title="Testdan chetlashgan" @endif>{{ $testA2 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 2, this)">×</button>
@@ -1746,7 +1746,7 @@
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ2Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
-                                                    @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testQ2 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $testQ2) === 1) title="Testdan chetlashgan" @endif>{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}
@@ -1771,7 +1771,7 @@
                                                     @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
                                                     title="{{ $test3Title }}">
                                                     @if($testA3 !== null)
-                                                        <span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>
+                                                        <span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}" @if((int) round((float) $testA3) === 1) title="Testdan chetlashgan" @endif>{{ $testA3 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 3, this)">×</button>
@@ -1782,7 +1782,7 @@
                                             {{-- 3-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ3Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
-                                                    @if($testQ3 !== null)<span class="font-bold text-emerald-700">{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
+                                                    @if($testQ3 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $testQ3) === 1) title="Testdan chetlashgan" @endif>{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -1990,6 +1990,10 @@
                                                         }
                                                     }
                                                     $cellTitle = $cellGrader ? ('Baho qo\'ygan: ' . $cellGrader) : '';
+                                                    // Diagnostikada 1 — talaba testdan chetlashtirilgan
+                                                    if ($gradeData && !empty($gradeData['quiz_result_id']) && isset($gradeData['grade']) && (int) round((float) $gradeData['grade']) === 1) {
+                                                        $cellTitle = 'Testdan chetlashgan' . ($cellTitle ? ' · ' . $cellTitle : '');
+                                                    }
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
                                                     @php
@@ -2099,8 +2103,9 @@
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
                                                                 $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                                 $retakeByKafedra = ($gradeData['retake_by'] ?? null) === \App\Services\FanTestiJournalSync::GRADED_BY;
+                                                                $retakeRemoved = !empty($gradeData['quiz_result_id']) && (int) $retakeVal === 1;
                                                             @endphp
-                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}{{ $retakeByKafedra ? "\nBaho qo'ydi: " . $gradeData['retake_by'] . ' (qayta topshirish testi)' : '' }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}{{ $retakeByKafedra ? "\nBaho qo'ydi: " . $gradeData['retake_by'] . ' (qayta topshirish testi)' : '' }}{{ $retakeRemoved ? "\nTestdan chetlashgan" : '' }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -2143,6 +2148,9 @@
                                                                         $retakeTooltip .= "\nBaho qo'ydi: " . $graderName;
                                                                     }
                                                                     $retakeTooltip .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
+                                                                    if (!empty($absenceData['quiz_result_id']) && (int) round((float) $grade) === 1) {
+                                                                        $retakeTooltip .= "\nTestdan chetlashgan";
+                                                                    }
                                                                 }
                                                             @endphp
                                                             <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip }}">
@@ -2244,6 +2252,9 @@
                                                                     $retakeTooltip2 .= "\nBaho qo'ydi: " . $graderName2;
                                                                 }
                                                                 $retakeTooltip2 .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
+                                                                if (!empty($absenceData['quiz_result_id']) && (int) $retakeVal === 1) {
+                                                                    $retakeTooltip2 .= "\nTestdan chetlashgan";
+                                                                }
                                                             @endphp
                                                             <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip2 }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
@@ -2389,7 +2400,7 @@
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
-                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
+                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}" @if((int) round((float) $oskiRounded) === 1) title="Testdan chetlashgan" @endif>{{ $oskiRounded }}</span>
                                                     @if($isSuperAdmin)
                                                         <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                 onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 1, this)">×</button>
@@ -2401,7 +2412,7 @@
                                             {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
                                             @if($showOskiQ1Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
-                                                    @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiQ1 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $oskiQ1) === 1) title="Testdan chetlashgan" @endif>{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish OSKI ustuni --}}
@@ -2426,7 +2437,7 @@
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
                                                     @if($oskiA2 !== null)
-                                                        <span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>
+                                                        <span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}" @if((int) round((float) $oskiA2) === 1) title="Testdan chetlashgan" @endif>{{ $oskiA2 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 2, this)">×</button>
@@ -2437,7 +2448,7 @@
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ2Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
-                                                    @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiQ2 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $oskiQ2) === 1) title="Testdan chetlashgan" @endif>{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
@@ -2462,7 +2473,7 @@
                                                     @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
                                                     title="{{ $oski3Title }}">
                                                     @if($oskiA3 !== null)
-                                                        <span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>
+                                                        <span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}" @if((int) round((float) $oskiA3) === 1) title="Testdan chetlashgan" @endif>{{ $oskiA3 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 3, this)">×</button>
@@ -2473,7 +2484,7 @@
                                             {{-- 3-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ3Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
-                                                    @if($oskiQ3 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
+                                                    @if($oskiQ3 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $oskiQ3) === 1) title="Testdan chetlashgan" @endif>{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
@@ -2520,7 +2531,7 @@
                                                     @if($testClickable) onclick="{{ $testClickHandler }}" @endif
                                                     @if($testTitle) title="{{ $testTitle }}" @endif>
                                                     @if($testRounded !== null)
-                                                        <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                        <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}" @if((int) round((float) $testRounded) === 1) title="Testdan chetlashgan" @endif>{{ $testRounded }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 1, this)">×</button>
@@ -2533,7 +2544,7 @@
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
-                                                    @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testQ1 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $testQ1) === 1) title="Testdan chetlashgan" @endif>{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish Test ustuni --}}
@@ -2558,7 +2569,7 @@
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
                                                     @if($testA2 !== null)
-                                                        <span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>
+                                                        <span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}" @if((int) round((float) $testA2) === 1) title="Testdan chetlashgan" @endif>{{ $testA2 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 2, this)">×</button>
@@ -2569,7 +2580,7 @@
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ2Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
-                                                    @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testQ2 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $testQ2) === 1) title="Testdan chetlashgan" @endif>{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}
@@ -2594,7 +2605,7 @@
                                                     @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
                                                     title="{{ $test3Title }}">
                                                     @if($testA3 !== null)
-                                                        <span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>
+                                                        <span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}" @if((int) round((float) $testA3) === 1) title="Testdan chetlashgan" @endif>{{ $testA3 }}</span>
                                                         @if($isSuperAdmin)
                                                             <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 3, this)">×</button>
@@ -2605,7 +2616,7 @@
                                             {{-- 3-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ3Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
-                                                    @if($testQ3 !== null)<span class="font-bold text-emerald-700">{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
+                                                    @if($testQ3 !== null)<span class="font-bold text-emerald-700" @if((int) round((float) $testQ3) === 1) title="Testdan chetlashgan" @endif>{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>

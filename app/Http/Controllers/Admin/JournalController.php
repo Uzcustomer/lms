@@ -738,6 +738,8 @@ class JournalController extends Controller
                     'employee_id' => $g->employee_id,
                     'employee_name' => $g->employee_name ?? null,
                     'retake_by' => $g->retake_by ?? null,
+                    // Diagnostikadan kelgan baho (1 — testdan chetlashgan)
+                    'quiz_result_id' => $g->quiz_result_id ?? null,
                 ]);
             }
         }

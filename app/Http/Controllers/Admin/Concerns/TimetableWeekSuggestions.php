@@ -111,8 +111,11 @@ trait TimetableWeekSuggestions
             . ($len > 2 ? ' + ' . ($len - 2) . ' soat' : '');
         $check = fn (TimetableCard $c, int $w, int $d, int $p, array $st) => $this->findWeekConflicts($c, $w, $d, $p, 0, $st);
         $withMove = function (array $st, TimetableCard $c, int $w, ?int $d, ?int $p, bool $cancel = false) {
+            // weekOverride xona berilmagan ko'chirishda shu haftaga berilgan xonani saqlaydi (bekor qilishda tozalaydi).
+            $prev = $cancel ? null : ($st['ov'][(int) $c->id][$w] ?? null);
             $o = new TimetableCardOverride();
-            $o->forceFill(['card_id' => $c->id, 'week' => $w, 'day' => $d, 'pair' => $p, 'start_half' => 0, 'cancelled' => $cancel]);
+            $o->forceFill(['card_id' => $c->id, 'week' => $w, 'day' => $d, 'pair' => $p, 'start_half' => 0, 'cancelled' => $cancel,
+                'auditorium_code' => $prev?->auditorium_code, 'auditorium_name' => $prev?->auditorium_name]);
             $this->stateSetOverride($st, $o);
 
             return $st;

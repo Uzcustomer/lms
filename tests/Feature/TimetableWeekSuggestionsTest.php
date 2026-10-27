@@ -243,3 +243,23 @@ it('takliflar: to\'sib turgan dars butun blok bo\'lib (2 + 1 soat) bir kunda ko\
     }
     expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3);
 });
+
+it('takliflar: shablonda joylashgan blokni surish taklifi qo\'llanganda ham ishlaydi', function () {
+    $s = sugSetup();
+    $busy = sugTeacher('BAND O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    // To'sib turgan dars (2 + 1 soat) shablonda (barcha haftalarda) 2-kun 3–5 da — "reset" uni o'sha joyga qaytaradi
+    $b1 = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'len_half' => 2, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.', 'day' => 2, 'pair' => 3]);
+    $b2 = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'len_half' => 1, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.', 'day' => 2, 'pair' => 5]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $blk = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->firstWhere('type', 'blocker');
+    expect($blk)->not->toBeNull();
+    foreach ($blk['actions'] as $a) {
+        $body = ['week' => $a['week'], 'action' => $a['op'] === 'reset' ? 'reset' : 'move'] + ($a['op'] === 'move' ? ['day' => $a['day'], 'pair' => $a['pair']] : []);
+        sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $a['card_id']), $body)->assertOk();
+    }
+    expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3);
+});

@@ -203,7 +203,9 @@ trait TimetableWeekSuggestions
             foreach ($cards as $x) {
                 $prev = $st['ov'][(int) $x->id][$w] ?? null;
                 $keep[(int) $x->id] = [$prev?->auditorium_code, $prev?->auditorium_name];
-                $st = $withMove($st, $x, $w, null, null, true);
+                // "reset" kabi: shu haftaga yozuvi o'chadi va karta shablondagi (barcha haftalar) joyiga qaytadi (bo'lsa) —
+                // ketma-ket ko'chirishda keyingi kartalar o'sha joyda turgan holda tekshiriladi.
+                $this->stateSetOverride($st, null, (int) $x->id, $w);
             }
             $p = $s;
             foreach ($cards as $x) {

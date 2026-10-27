@@ -68,5 +68,24 @@ const card = (id, o) => Object.assign({ id, group_name: 'g', training_type: 'pra
   assert.deepEqual(r.moves, []);
   assert.deepEqual([r.res.placed, r.res.left], [0, 1]);
 
-  console.log('timetable compact week: 4 scenarios passed');
+  // Tashqi joyi yo'q qo'shimcha karta (KTR bo'yicha 1 soat) shu yurishda tashqi joyiga qo'yilgan qismga ulanadi —
+  // ikkinchi marta bosish shart emas.
+  r = await compact([
+    card(1, { subject_name: 'Gigiyena', ext_day: 1, ext_pair: 1 }),
+    card(2, { subject_name: 'Gigiyena', len_half: 1 }),
+  ]);
+  assert.deepEqual(r.moves, [[1, 1, 1], [2, 1, 3]]);
+  assert.equal(r.res.placed, 2);
+
+  // Qo'shimcha karta boshqa fanning tashqi joyini egallab, uni surib yubormaydi: Anatomiya o'z joyiga (3) qo'yiladi,
+  // Gigiyenaning qo'shimcha soatiga yonida joy qolmasa — joylanmagan qoladi.
+  r = await compact([
+    card(1, { subject_name: 'Gigiyena', day: 1, pair: 1, ext_day: 1, ext_pair: 1 }),
+    card(2, { subject_name: 'Gigiyena', len_half: 1 }),
+    card(3, { subject_name: 'Anatomiya', ext_day: 1, ext_pair: 3 }),
+  ]);
+  assert.deepEqual(r.moves, [[3, 1, 3]]);
+  assert.deepEqual([r.res.placed, r.res.left], [1, 1]);
+
+  console.log('timetable compact week: 6 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

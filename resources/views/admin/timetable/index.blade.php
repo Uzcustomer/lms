@@ -4277,13 +4277,6 @@
                 const groups = {};
                 todo.forEach(c => (groups[blockKey(c)] = groups[blockKey(c)] || []).push(c));
                 const blocks = [];
-                // Tashqi joyi yo'q, lekin shu haftada shu fanning boshqa qismi joylashgan kartalar —
-                // o'sha kunga, joylashgan qismning darhol ketiga (yoki oldiga) qo'yiladi.
-                scopeCards.filter(c => !off(c) && !place(c) && !(c.ext_day && c.ext_pair)).forEach(c => {
-                    const sib = all.filter(x => x.id !== c.id && !off(x) && place(x) && sameBlock(x, c))
-                        .sort((a, b) => cardLen(b) - cardLen(a))[0];
-                    if (sib) blocks.push({ cs: [c], day: place(sib).d });
-                });
                 Object.values(groups).forEach(list => {
                     list.sort((a, b) => +a.ext_pair - +b.ext_pair || (+b.weeks || 0) - (+a.weeks || 0));
                     let cur = null;
@@ -4294,8 +4287,21 @@
                 });
                 // Avval ma'ruzalar (qat'iy vaqt), keyin amaliy bloklar.
                 blocks.sort((a, b) => (b.cs[0].training_type === 'lecture') - (a.cs[0].training_type === 'lecture'));
+                // Tashqi joyi yo'q, lekin shu haftada shu fanning boshqa qismi joylashgan kartalar —
+                // o'sha kunga, joylashgan qismning darhol ketiga (yoki oldiga) qo'yiladi. Ular tashqi joyli
+                // bloklardan keyin keladi: boshqa darsning tashqi joyini egallab qo'ymaydi va shu yurishda
+                // endi joylashgan qismga ham ulanadi (qism joylash paytida qidiriladi).
+                scopeCards.filter(c => !off(c) && !place(c) && !(c.ext_day && c.ext_pair))
+                    .forEach(c => blocks.push({ cs: [c], extra: true }));
                 for (const b of blocks) {
-                    const d = b.day ? +b.day : +b.cs[0].ext_day, len = b.cs.reduce((s, c) => s + cardLen(c), 0);
+                    let d = +b.cs[0].ext_day;
+                    if (b.extra) {
+                        const sib = all.filter(x => x.id !== b.cs[0].id && !off(x) && place(x) && sameBlock(x, b.cs[0]))
+                            .sort((x, y) => cardLen(y) - cardLen(x))[0];
+                        if (!sib) continue;
+                        d = place(sib).d;
+                    }
+                    const len = b.cs.reduce((s, c) => s + cardLen(c), 0);
                     // Shu fanning shu haftada allaqachon joylashgan qismi bo'lsa — blok uning yoniga yopishadi.
                     const placedSib = all.filter(x => !off(x) && place(x) && place(x).d === d && sameBlock(x, b.cs[0]));
                     // Para chegarasi butun para (2+ yarim-slot) darslar uchun saqlanadi (yuqoriga surishdagidek):

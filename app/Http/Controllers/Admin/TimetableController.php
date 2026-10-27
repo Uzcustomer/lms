@@ -36,6 +36,7 @@ class TimetableController extends Controller
 {
     use Concerns\TimetableHemisSync;
     use Concerns\TimetableBlockTickets;
+    use Concerns\TimetableBoardSnapshotsActions;
 
     public function index(Request $request)
     {
@@ -1332,12 +1333,23 @@ class TimetableController extends Controller
         }
     }
 
+    /** Xavfli (ko'p kartaga tegadigan) amaldan oldin doska nusxasi — versiyalar tarixida qoladi; sinov (dry_run) uchun emas. */
+    private function snapshotBefore(Request $request, TimetableBoard $board, string $reason): void
+    {
+        if ($request->boolean('dry_run') || !\App\Services\Timetable\BoardSnapshots::ready()) {
+            return;
+        }
+        $actor = $this->timetableActor($request);
+        app(\App\Services\Timetable\BoardSnapshots::class)->take($board, $reason, $actor?->full_name ?? $actor?->name);
+    }
+
     /**
      * Kartochkalarni yaratish: tasdiqlangan oqim + ishchi reja fanlari.
      * Mavjud kartochkalar o'chirilib qaytadan yaratiladi (joylashuvlar yo'qoladi).
      */
     public function generateCards(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_generate');
         $specsFound = [];
         $rows = $this->assembleRows($board, null, null, $specsFound);
         if ($rows === null) {
@@ -1349,7 +1361,16 @@ class TimetableController extends Controller
         // Sinxronlash (sukut): mavjud kartalar joyida qoladi, faqat endi kerak bo'lmaganlari
         // o'chiriladi va yangilari qo'shiladi. "full" — hammasini qaytadan yaratish (eski xatti-harakat).
         if ($request->input('mode', 'sync') !== 'full') {
-            return response()->json($this->syncCards($board, $rows, $specsFound));
+            $before = app(\App\Services\Timetable\BoardSnapshots::class)->collect($board);
+            $res = $this->syncCards($board, $rows, $specsFound);
+            // Soati yoki hafta soni o'zgargani uchun qayta yaratilgan kartalar eski kartaning joyini oladi (fan + guruh
+            // bo'yicha) — joylashgan dars "joylanmaganlar"ga tushib qolmasin. Faqat haqiqatan yangi fan/guruh joylanmagan qoladi.
+            if (!empty($res['created']) && $before) {
+                $r = app(\App\Services\Timetable\BoardSnapshots::class)->restorePlacement($board, $before, false, [], false);
+                $res['kept_placement'] = $r['cards'];
+            }
+
+            return response()->json($res);
         }
 
         // O'qituvchi/xona biriktirishlari dars birligi bo'yicha saqlab qolinadi
@@ -1393,6 +1414,7 @@ class TimetableController extends Controller
      */
     public function addMissingGroupCards(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_add_groups');
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
@@ -2200,6 +2222,7 @@ class TimetableController extends Controller
      */
     public function mergeVariantLectures(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_merge_lectures');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
@@ -2357,6 +2380,7 @@ class TimetableController extends Controller
      */
     public function separatePracticeGroups(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_separate_practice');
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             abort(403);
         }
@@ -2442,6 +2466,7 @@ class TimetableController extends Controller
      */
     public function splitLongPractice(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_split_practice');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
@@ -2502,6 +2527,7 @@ class TimetableController extends Controller
      */
     public function splitVariantMixed(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_split_variant');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
@@ -2603,6 +2629,7 @@ class TimetableController extends Controller
      */
     public function unplaceAll(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_unplace');
         $data = $request->validate([
             'specialty_name'    => 'nullable|string|max:255',
             'course'            => 'nullable|integer|min:1|max:7',
@@ -6613,6 +6640,7 @@ class TimetableController extends Controller
      */
     public function weeklyLayerCopy(Request $request, TimetableBoard $board)
     {
+        $this->snapshotBefore($request, $board, 'before_layer_copy');
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',

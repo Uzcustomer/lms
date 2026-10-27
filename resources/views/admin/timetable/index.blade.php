@@ -63,6 +63,10 @@
                         <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
                         <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
                         <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
+                        @if(in_array($timetableActiveRole, ['admin', 'superadmin'], true))
+                            {{-- Doska versiyalari: kunlik va xavfli amallardan oldingi nusxalar, joylashuvni tiklash --}}
+                            <button type="button" id="snapshotsBtn" class="hidden asc-tool toolbar-action" title="Doska versiyalari (nusxalar) va joylashuvni tiklash"><span class="toolbar-icon" aria-hidden="true">🕘</span>Versiyalar</button>
+                        @endif
                         <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
                         <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
                         <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
@@ -3157,6 +3161,7 @@
                         parts.push((j.kept || 0) + ' ta saqlandi', (j.created || 0) + ' ta yangi qo\'shildi',
                             (j.removed || 0) + ' ta o\'chirildi' + (j.removed_placed ? ' (' + j.removed_placed + ' tasi joylangan edi)' : ''));
                         if (j.updated) parts.push(j.updated + ' ta yangilandi');
+                        if (j.kept_placement) parts.push(j.kept_placement + ' ta qayta yaratilgan karta eski joyini oldi');
                     } else parts.push((j.created || 0) + ' ta kartochka yaratildi');
                     if (j.restored_units) parts.push(j.restored_units + ' ta dars birligining o\'qituvchi/xona biriktirishi tiklandi');
                     if (j.lost_units) parts.push(j.lost_units + ' ta birlik endi rejada yo\'q');
@@ -3164,6 +3169,57 @@
                     await loadBoard(board.id);
                 } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
                 this.disabled = false;
+            };
+            // ===== Doska versiyalari (nusxalar): ro'yxat, qo'lda nusxa, joylashuvni tiklash (avval sinov) =====
+            if ($('snapshotsBtn')) $('snapshotsBtn').onclick = async function () {
+                if (!board) return;
+                let box = $('snapBox');
+                if (!box) {
+                    box = document.createElement('div');
+                    box.id = 'snapBox';
+                    box.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto';
+                    document.body.appendChild(box);
+                }
+                const reasonName = { daily: 'Kunlik', manual: 'Qo\'lda', before_generate: '«Kartochkalar» oldidan', before_unplace: '«Bo\'shatish» oldidan',
+                    before_layer_copy: 'Qatlamga ko\'chirish oldidan', before_restore: 'Tiklash oldidan', imported_backup: 'Zaxira bazadan',
+                    before_add_groups: 'Yangi guruhlar oldidan', before_separate_practice: 'Alohida amaliy oldidan', before_split_practice: 'Amaliyni bo\'lish oldidan',
+                    before_split_variant: 'Bo\'lakni bo\'lish oldidan', before_merge_lectures: 'Ma\'ruzalarni birlashtirish oldidan' };
+                const render = async (msg) => {
+                    let list = [];
+                    try { list = (await api(BASE + '/boards/' + board.id + '/snapshots')).snapshots || []; } catch (e) { msg = 'Xatolik: ' + e.message; }
+                    box.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:820px;width:100%;padding:16px;font-size:13px">'
+                        + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><b style="flex:1;font-size:15px">Doska versiyalari</b>'
+                        + '<button type="button" id="snapTake" class="tt-ktr-weeks-btn">Hozir nusxa olish</button>'
+                        + '<button type="button" id="snapClose" class="tt-ktr-weeks-btn">Yopish</button></div>'
+                        + '<div style="color:#64748b;margin-bottom:8px">Har kecha va «Kartochkalar», «Bo\'shatish» kabi amallardan oldin avtomatik nusxa olinadi (30 kun saqlanadi). '
+                        + '«Tiklash» — nusxadagi joylashuvni hozir <b>joylanmagan</b> kartalarga qaytaradi (karta qayta yaratilgan bo\'lsa ham, fan + guruh bo\'yicha); joylashganlariga tegilmaydi. Avval «Sinov».</div>'
+                        + (msg ? '<pre style="white-space:pre-wrap;background:#f1f5f9;padding:8px;border-radius:8px;margin-bottom:8px">' + esc(msg) + '</pre>' : '')
+                        + '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:4px">Sana</th><th style="text-align:left">Turi</th><th>Kartalar</th><th>Joylashgan</th><th></th></tr></thead><tbody>'
+                        + (list.length ? list.map(x => '<tr style="border-top:1px solid #e2e8f0"><td style="padding:4px">' + esc(x.created_at) + '</td><td>' + esc(reasonName[x.reason] || x.reason)
+                            + (x.created_by_name ? ' <span style="color:#94a3b8">· ' + esc(x.created_by_name) + '</span>' : '') + '</td><td style="text-align:center">' + x.cards_count
+                            + '</td><td style="text-align:center">' + x.placed_count + '</td><td style="text-align:right;white-space:nowrap">'
+                            + '<button type="button" class="tt-ktr-weeks-btn" data-snap-dry="' + x.id + '">Sinov</button> '
+                            + '<button type="button" class="tt-ktr-weeks-btn" data-snap-apply="' + x.id + '">Tiklash</button></td></tr>').join('')
+                            : '<tr><td colspan="5" style="padding:8px;color:#94a3b8">Hali nusxa yo\'q</td></tr>')
+                        + '</tbody></table></div>';
+                    $('snapClose').onclick = () => box.remove();
+                    $('snapTake').onclick = async () => { try { await api(BASE + '/boards/' + board.id + '/snapshots', 'POST', {}); render('Nusxa olindi.'); } catch (e) { render('Xatolik: ' + e.message); } };
+                    const run = async (id, dry) => {
+                        if (!dry && !confirm('Nusxadagi joylashuv hozir joylanmagan kartalarga yoziladi (oldin hozirgi holatdan nusxa olinadi). Davom etamizmi?')) return;
+                        render('Hisoblanmoqda...');
+                        try {
+                            const r = await api(BASE + '/boards/' + board.id + '/snapshots/' + id + '/restore', 'POST', { dry_run: dry ? 1 : 0 });
+                            const txt = (r.dry_run ? 'SINOV (yozilmadi): ' : 'YOZILDI: ') + r.cards + ' karta (' + r.units + ' dars birligi) — ichki ' + r.internal + ', tashqi ' + r.external
+                                + ', haftalik ko\'chirish ' + r.week_moves + ', o\'qituvchi/xona ' + r.teacher_room + '\nNusxada topilmadi: ' + r.no_source + ' · nusxada ham joylanmagan: ' + r.source_unplaced
+                                + (r.examples && r.examples.length ? '\n\n' + r.examples.join('\n') : '');
+                            await render(txt);
+                            if (!r.dry_run) await loadBoard(board.id);
+                        } catch (e) { render('Xatolik: ' + e.message); }
+                    };
+                    box.querySelectorAll('[data-snap-dry]').forEach(b => b.onclick = () => run(b.dataset.snapDry, true));
+                    box.querySelectorAll('[data-snap-apply]').forEach(b => b.onclick = () => run(b.dataset.snapApply, false));
+                };
+                render('');
             };
             // Fan nomlarini ishchi rejadagi joriy nomga yangilash (qayta yaratmasdan)
             $('refreshNamesBtn').onclick = async function () {
@@ -3273,6 +3329,7 @@
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
                 $('refreshNamesBtn').classList.add('hidden'); $('reloadBoardBtn').classList.add('hidden');
+                if ($('snapshotsBtn')) $('snapshotsBtn').classList.add('hidden');
                 toggleAscToolbar(false);
                 $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
                 syncUrl();
@@ -3328,6 +3385,7 @@
                 if ($('changeReqBtn')) { $('changeReqBtn').classList.remove('hidden'); loadChangeRequests(); }
                 $('refreshNamesBtn').classList.remove('hidden');
                 $('reloadBoardBtn').classList.remove('hidden');
+                if ($('snapshotsBtn')) $('snapshotsBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
                 toggleAscToolbar(true);
                 buildSpecList();

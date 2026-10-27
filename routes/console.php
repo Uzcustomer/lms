@@ -70,6 +70,9 @@ Artisan::command('grades:align-schedule {--since= : Shu sanadan (Y-m-d), sukut â
 // 3. Davomat nazorati FINAL (import:attendance-controls --mode=final)
 Schedule::command('nightly:run')->dailyAt('00:30')->withoutOverlapping(180);
 
+// Dars jadvali doskalarining kunlik nusxasi (versiyalar tarixi, 30 kun saqlanadi)
+Schedule::command('timetable:snapshot')->dailyAt('02:40')->withoutOverlapping(60);
+
 // Kontraktlar importi â€” har kuni kechqurun 23:00 da HEMISdan yangilanadi
 Schedule::command('import:contracts')->dailyAt('23:00')->withoutOverlapping(60);
 

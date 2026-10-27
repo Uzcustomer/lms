@@ -1141,3 +1141,29 @@ it('HEMIS\'da allaqachon mudir bo\'lsa (ismi boshqacha yozilgan) — ortiqcha o\
         ->assertOk()->json('groups.0.units.0');
     expect(collect($u['actions'])->first(fn ($a) => $a['date'] === '2026-09-21'))->toBeNull();
 });
+
+it('hal qilinmagan to\'siq oxirida yakuniy bandlik bo\'yicha qayta tekshiriladi: keyingi dars mudirga o\'tib, to\'qnashuv yo\'qolsa — to\'siq qolmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // A (01a): fan kafedrasi 502 — mudiri yo'q, almashtirib bo'lmaydi. B (01b): o'sha fan boshqa o'quv rejada, kafedra 501 — mudir bor.
+    DB::table('curriculum_subjects')->where('id', $s['csId'])->update(['department_id' => 502]);
+    $cs = (array) DB::table('curriculum_subjects')->where('id', $s['csId'])->first();
+    unset($cs['id']);
+    hsInsert('curriculum_subjects', array_merge($cs, ['curriculum_subject_hemis_id' => 2, 'curricula_hemis_id' => 251, 'department_id' => 501]));
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 251, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    TimetableCard::create(array_merge($s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name', 'day', 'pair', 'teacher_id', 'teacher_name']),
+        ['group_name' => 'p/st26-01b (rus)', 'auditorium_code' => '72', 'auditorium_name' => '424']));
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $on = fn (string $group) => collect(collect($res['groups'])->firstWhere('group', $group)['units'][0]['actions'])
+        ->first(fn ($a) => $a['date'] === '2026-09-21' && $a['start'] === '10:00');
+    $a = $on('p/st26-01a');
+    $b = $on('p/st26-01b');
+    // B mudirga o'tdi — USTOZ endi faqat A da: A to'siqsiz.
+    expect([$b['employee_id'], $b['blocked']])->toBe([9001, []])
+        ->and([$a['employee_id'], $a['blocked']])->toBe([5001, []]);
+});

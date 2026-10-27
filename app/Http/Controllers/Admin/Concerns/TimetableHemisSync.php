@@ -1190,6 +1190,33 @@ trait TimetableHemisSync
                 }
             }
         }
+        // To'qnashuv darsning joriy o'qituvchi/xonasi bilan izlanadi: bir tur almashtirilgach ikkinchisi qayta
+        // tekshiriladi — asl qiymat bilan "bitta dars" deb o'tkazilgan sherik dars endi to'qnashishi mumkin.
+        $findHit = function (array $a, string $unitKey, string $type) use (&$idx, $freeRoom): ?array {
+            $emp = (string) ($a['employee_id'] ?? '');
+            $room = (string) ($a['auditorium_code'] ?? '');
+            [$id, $flag, $msg] = $type === 'e' ? [$emp, 'mudir', "o'qituvchi band"] : [$room, 'mudir_xonasi', 'xona band'];
+            if ($id === '' || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
+                return null;
+            }
+            foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label, $oEmp, $oRoom, $info]) {
+                if ($k === $unitKey && $s === $a['start']) {
+                    continue;   // shu yozuvning o'zi
+                }
+                if ($emp !== '' && $room !== '' && $oEmp === $emp && $oRoom === $room) {
+                    continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim)
+                }
+                if ($s < $a['end'] && $a['start'] < $e) {
+                    $text = "{$msg}: {$label} {$s}-{$e}";
+
+                    return ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
+                        'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
+                        'teacher' => $type === 'e' ? ($a['employee_name'] ?? null) : ($info['teacher'] ?? null)] + $info;
+                }
+            }
+
+            return null;
+        };
         foreach ($groupsOut as &$g) {
             foreach ($g['units'] as &$u) {
                 [$fbEmp, $fbRoom] = $u['_fb'] ?? [null, null];
@@ -1203,33 +1230,6 @@ trait TimetableHemisSync
                     // Indeksdagi shu darsning o'z yozuvlari asl qiymatlar kalitida turadi.
                     $emp0 = (string) ($a['employee_id'] ?? '');
                     $room0 = (string) ($a['auditorium_code'] ?? '');
-                    // To'qnashuv darsning joriy o'qituvchi/xonasi bilan izlanadi: bir tur almashtirilgach ikkinchisi qayta
-                    // tekshiriladi — asl qiymat bilan "bitta dars" deb o'tkazilgan sherik dars endi to'qnashishi mumkin.
-                    $findHit = function (string $type) use (&$a, &$idx, $u, $freeRoom): ?array {
-                        $emp = (string) ($a['employee_id'] ?? '');
-                        $room = (string) ($a['auditorium_code'] ?? '');
-                        [$id, $flag, $msg] = $type === 'e' ? [$emp, 'mudir', "o'qituvchi band"] : [$room, 'mudir_xonasi', 'xona band'];
-                        if ($id === '' || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
-                            return null;
-                        }
-                        foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label, $oEmp, $oRoom, $info]) {
-                            if ($k === $u['key'] && $s === $a['start']) {
-                                continue;   // shu yozuvning o'zi
-                            }
-                            if ($emp !== '' && $room !== '' && $oEmp === $emp && $oRoom === $room) {
-                                continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim)
-                            }
-                            if ($s < $a['end'] && $a['start'] < $e) {
-                                $text = "{$msg}: {$label} {$s}-{$e}";
-
-                                return ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
-                                    'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
-                                    'teacher' => $type === 'e' ? ($a['employee_name'] ?? null) : ($info['teacher'] ?? null)] + $info;
-                            }
-                        }
-
-                        return null;
-                    };
                     // To'siq bartaraf etiladi (registrator ofisi qarori): o'qituvchi band — kafedra mudiri, xona band —
                     // "Kafedra mudiri xonasi" (ikkalasining ustma-ust tushishiga ruxsat bor). Mudir/xona topilmasa — to'siq qoladi.
                     $queue = ['e', 'r'];
@@ -1241,7 +1241,7 @@ trait TimetableHemisSync
                             continue;
                         }
                         unset($unresolved[$type]);
-                        if (!($b = $findHit($type))) {
+                        if (!($b = $findHit($a, $u['key'], $type))) {
                             continue;
                         }
                         [$fbId, $fbName] = ($type === 'e' ? $fbEmp : $fbRoom) ?: [null, null];
@@ -1285,12 +1285,39 @@ trait TimetableHemisSync
                         // Endi ikkinchi tur yangi qiymat bilan qayta tekshiriladi (hal qilinmagan to'sig'i ham).
                         $queue[] = $type === 'e' ? 'r' : 'e';
                     }
-                    foreach ($unresolved as $b) {
-                        $a['blocked'][] = $b['text'];
-                        $a['blocks'][] = $b;
+                    // Hal qilinmagan to'siqlar hamma darslar ko'rilgach, yakuniy bandlik bo'yicha qayta tekshiriladi:
+                    // keyingi dars mudirga o'tib, to'qnashuv yo'qolgan bo'lishi mumkin.
+                    if ($unresolved) {
+                        $a['_unresolved'] = array_keys($unresolved);
                     }
                     $a['flags'] = array_values(array_unique($a['flags'] ?? []));
                     // HEMIS'da allaqachon shunday (mudir/xona) — o'zgartirish kerak emas.
+                    if ($a['op'] === 'update' && !$a['changes'] && !($a['blocked'] ?? []) && !$unresolved) {
+                        $drop[$ai] = true;
+                    }
+                }
+                unset($a);
+                $u['actions'] = array_values(array_diff_key($u['actions'], $drop));
+            }
+            unset($u);
+        }
+        unset($g);
+
+        // Yakuniy tekshiruv: hal qilinmagan to'siq hozir ham turgan bo'lsagina yoziladi (band qilgan dars — hozirgisi).
+        foreach ($groupsOut as &$g) {
+            foreach ($g['units'] as &$u) {
+                $drop = [];
+                foreach ($u['actions'] as $ai => &$a) {
+                    if (!isset($a['_unresolved'])) {
+                        continue;
+                    }
+                    foreach ($a['_unresolved'] as $type) {
+                        if ($b = $findHit($a, $u['key'], $type)) {
+                            $a['blocked'][] = $b['text'];
+                            $a['blocks'][] = $b;
+                        }
+                    }
+                    unset($a['_unresolved']);
                     if ($a['op'] === 'update' && !$a['changes'] && !($a['blocked'] ?? [])) {
                         $drop[$ai] = true;
                     }

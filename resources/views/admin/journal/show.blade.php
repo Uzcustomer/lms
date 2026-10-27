@@ -1414,7 +1414,10 @@
                                                                     ? $gd['employee_name']
                                                                     : ($gd['retake_by'] ?? null);
                                                             }
-                                                            $dayGraderLines[] = '(' . $pair . ') ' . round($gd['grade'], 0) . ($gName ? ' — ' . $gName : '');
+                                                            // Diagnostikadan kelgan 1 — talaba testdan chetlashtirilgan
+                                                            $gdRemoved = !empty($gd['quiz_result_id']) && (int) round((float) $gd['grade']) === 1;
+                                                            $dayGraderLines[] = '(' . $pair . ') ' . round($gd['grade'], 0) . ($gName ? ' — ' . $gName : '')
+                                                                . ($gdRemoved ? ' — Testdan chetlashgan' : '');
                                                         }
                                                     }
                                                     $dayTitle = implode(' | ', $dayGraderLines);

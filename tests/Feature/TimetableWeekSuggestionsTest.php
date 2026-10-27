@@ -211,3 +211,35 @@ it('takliflar: boshqa haftada band o\'qituvchi almashtirishga taklif qilinmaydi'
     $titles = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->where('type', 'teacher')->pluck('title')->implode(' | ');
     expect($titles)->toContain('YBOSH O.')->not->toContain('XBAND O.');
 });
+
+it('takliflar: to\'sib turgan dars butun blok bo\'lib (2 + 1 soat) bir kunda ko\'chadi', function () {
+    $s = sugSetup();
+    $busy = sugTeacher('BAND O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    $mk = fn (int $len) => TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'weeks', 'kafedra_name']) + ['len_half' => $len, 'subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    $b1 = $mk(2);
+    $b2 = $mk(1);
+    TimetableCardOverride::create(['card_id' => $b1->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+    TimetableCardOverride::create(['card_id' => $b2->id, 'week' => 3, 'day' => 2, 'pair' => 5]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $blk = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->firstWhere('type', 'blocker');
+    expect($blk)->not->toBeNull();
+    $acts = collect($blk['actions']);
+    $moves = $acts->where('op', 'move')->whereIn('card_id', [$b1->id, $b2->id])->values();
+    expect($acts->where('op', 'reset')->pluck('card_id')->sort()->values()->all())->toBe([$b1->id, $b2->id])
+        ->and($moves)->toHaveCount(2)
+        ->and($moves[0]['day'])->toBe($moves[1]['day'])
+        ->and($moves[1]['pair'])->toBe($moves[0]['pair'] + 2)
+        ->and($acts->last())->toMatchArray(['op' => 'move', 'card_id' => $s['own']->id, 'day' => 2, 'pair' => 3]);
+
+    // Takliflarni ketma-ket qo'llash ishlaydi
+    foreach ($blk['actions'] as $a) {
+        $body = ['week' => $a['week'], 'action' => $a['op'] === 'reset' ? 'reset' : 'move'] + ($a['op'] === 'move' ? ['day' => $a['day'], 'pair' => $a['pair']] : []);
+        sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $a['card_id']), $body)->assertOk();
+    }
+    expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3);
+});

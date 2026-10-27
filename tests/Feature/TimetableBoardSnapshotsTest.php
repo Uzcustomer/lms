@@ -362,3 +362,26 @@ it('tiklash doskani bir marta o\'qiydi — har tekshiruvda butun doska qayta yuk
     expect($r['internal'])->toBe(4)->and($r['week_moves'])->toBe(8)->and($r['conflicts'])->toBe(0)
         ->and($boardWide)->toBeLessThanOrEqual(5);
 });
+
+it('rad etilgan haftalik joy keyingilarini to\'smaydi (birinchi tekshiruv haftalik bo\'lsa ham)', function () {
+    $s = snapSetup();
+    $base = array_merge($s['base'], ['len_half' => 2, 'weeks' => 15]);
+    // Z: MUDIR juma 7-parada (har hafta) — X'ning o'qituvchisi band
+    TimetableCard::create(array_merge($base, ['group_name' => 'g-03a', 'subject_name' => 'Z', 'day' => 5, 'pair' => 7,
+        'teacher_id' => $s['head']->id, 'teacher_name' => 'MUDIR', 'auditorium_code' => 'R7', 'auditorium_name' => 'R7']));
+    $x = TimetableCard::create(array_merge($base, ['group_name' => 'g-02a', 'subject_name' => 'X', 'teacher_id' => $s['head']->id, 'teacher_name' => 'MUDIR']));
+    $y = TimetableCard::create(array_merge($base, ['group_name' => 'g-04a', 'subject_name' => 'Y', 'teacher_id' => $s['admin']->id, 'teacher_name' => 'ADMIN']));
+    foreach ([$x, $y] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 3, 'day' => 5, 'pair' => 7, 'start_half' => 0, 'cancelled' => false,
+            'auditorium_code' => 'R5', 'auditorium_name' => 'R5']);
+    }
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+    TimetableCardOverride::whereIn('card_id', [$x->id, $y->id])->delete();
+
+    // X (birinchi tekshiruv) o'qituvchisi band — rad etiladi; uning R5 xonasi Y'ga xalaqit bermasligi kerak
+    $r = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.snapshots.restore', [$s['board'], $snap]), ['dry_run' => 0])->assertOk()->json();
+    expect($r['conflicts'])->toBe(1)->and($r['week_moves'])->toBe(1)
+        ->and($r['conflict_examples'][0])->toContain("O'qituvchi band")
+        ->and(TimetableCardOverride::where('card_id', $x->id)->count())->toBe(0)
+        ->and(TimetableCardOverride::where('card_id', $y->id)->where('week', 3)->value('auditorium_code'))->toBe('R5');
+});

@@ -1341,12 +1341,12 @@ class TimetableController extends Controller
     public function restoreConflictChecker(): \Closure
     {
         // Doska bandligi birinchi tekshiruvda bir marta yuklanadi (har tekshiruvda butun doskani o'qimaslik uchun) va
-        // har yozilgan joylashuv bilan yangilanadi: tiklash to'qnashmagan joylashuvni aynan shu tekshiruvdan keyin yozadi.
+        // har qabul qilingan joylashuv bilan yangilanadi: tiklash joylashuvni tekshiruvdan keyin, to'qnashmasa, yozadi.
         $state = null;
         $board = null;
         $grids = [];
 
-        return function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf) use (&$state, &$board, &$grids): array {
+        return function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf, array $room = []) use (&$state, &$board, &$grids): array {
             $board ??= $card->board;
             $grid = $grids[$card->faculty_name . '|' . $card->specialty_name . '|' . $card->course]
                 ??= $this->gridFor($board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course);
@@ -1361,10 +1361,12 @@ class TimetableController extends Controller
             // Kartaning hozirgi holati (tiklash o'qituvchi/xonani avval qo'yadi).
             $this->stateSetCard($state, clone $card);
             if ($what === 'week') {
-                // Haftalik yozuv tekshiruvdan oldin yozilgan (savepoint) — xonasi shu yozuvdan; to'qnashsa bekor qilinadi.
+                // Yoziladigan haftalik yozuv (xonasi bilan) bandlikka vaqtincha qo'yiladi; to'qnashsa — avvalgisi qaytadi.
                 $prev = $state['ov'][(int) $card->id][$week] ?? null;
-                $row = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
-                $this->stateSetOverride($state, $row, (int) $card->id, $week);
+                $pending = new TimetableCardOverride();
+                $pending->forceFill(['card_id' => $card->id, 'week' => $week, 'day' => $day, 'pair' => $pair, 'start_half' => $startHalf,
+                    'cancelled' => false, 'auditorium_code' => $room['auditorium_code'] ?? null, 'auditorium_name' => $room['auditorium_name'] ?? null]);
+                $this->stateSetOverride($state, $pending);
                 $errors = $this->findWeekConflicts($card, $week, $day, $pair, $startHalf, $state);
                 if ($errors) {
                     $this->stateSetOverride($state, $prev, (int) $card->id, $week);

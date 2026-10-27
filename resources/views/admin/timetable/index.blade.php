@@ -7259,7 +7259,17 @@
                 // Shablon ko'rinishida faqat bir xil haftalarda o'tiladigan kartalar birlashtiriladi:
                 // har hafta o'tiladigan (15 hafta) va almashib keladigan (masalan 9 hafta) qism
                 // alohida chiziladi — ikkinchisi yo'l-yo'l (⇄) bo'lib ajralib tursin.
-                const weeksKey = x => curWeek ? '' : activeWeeksOf(x, curGrid().weeks).join(',');
+                // Kalit — o'tiladigan haftalarning TO'LIQ ro'yxati (activeWeeksOf ko'rinish uchun 10 tadan keyin qisqartiradi:
+                // 12 va 11 haftalik qismlar bir xil chiqib, birlashib ketardi).
+                const weeksKey = x => {
+                    if (curWeek) return '';
+                    const out = [];
+                    for (let w = 1, total = Math.max(1, +curGrid().weeks || 0); w <= total; w++) {
+                        const ov = overrides[x.id + '|' + w];
+                        if (!(ov && ov.cancelled)) out.push(w);
+                    }
+                    return out.join(',');
+                };
                 const vChain = (grp, d, p, c) => {
                     const ids = [];
                     let span = 0, cur = p;

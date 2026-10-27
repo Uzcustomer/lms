@@ -7360,7 +7360,13 @@
                 const chipHtml = (c, ids, shade) => {
                     const merged = ids && ids.length > 1;
                     const mids = merged ? ' data-merge-ids="' + ids.join(',') + '"' : '';
-                    const badge = merged ? '<span class="tt-merge-badge">' + ids.length + ' para</span>' : '';
+                    // Birlashgan blokning umumiy davomiyligi — kartalar soni emas, soat (yarim-slot = 1 soat):
+                    // 2 soat + 1 soat = "3 soat", 2 + 2 = "4 soat".
+                    const mergedHours = merged ? ids.reduce((sum, id) => {
+                        const x = cards.find(k => k.id === id);
+                        return sum + (x ? cardLen(x) : 0);
+                    }, 0) : 0;
+                    const badge = merged ? '<span class="tt-merge-badge" title="' + ids.length + ' ta karta">' + mergedHours + ' soat</span>' : '';
                     // Karta necha hafta o'tiladi: "(N hafta)". Semestrning HAR haftasida
                     // o'tiladigan dars uchun buni yozish shart emas — 1 soatmi, 3 soatmi,
                     // farqi yo'q. "Har hafta"ni karta haftalar sonidan emas, hafta

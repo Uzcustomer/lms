@@ -134,7 +134,7 @@ it('sinxronlashdan keyin faqat shu safar yaratilgan karta eski joyni oladi — a
     $s['old']->delete();
     $new = TimetableCard::create($s['base'] + ['len_half' => 3, 'weeks' => 10]);
 
-    expect(app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before))->toBe(1)
+    expect(app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before)['cards'])->toBe(1)
         ->and($new->fresh()->only(['day', 'pair', 'ext_day', 'ext_pair']))->toBe(['day' => 2, 'pair' => 3, 'ext_day' => 2, 'ext_pair' => 1])
         ->and($spare->fresh()->only(['day', 'pair', 'ext_day', 'ext_pair']))->toBe(['day' => null, 'pair' => null, 'ext_day' => null, 'ext_pair' => null])
         ->and(TimetableBoardSnapshot::count())->toBe(0);
@@ -163,7 +163,7 @@ it('hafta-hafta (shablonsiz) joylangan karta: qayta yaratilsa ham, nusxadan tikl
     TimetableCardOverride::where('card_id', $s['old']->id)->delete();
     $s['old']->delete();
     $new = TimetableCard::create($s['base'] + ['len_half' => 3, 'weeks' => 10]);
-    expect(app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before))->toBe(1)
+    expect(app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before)['cards'])->toBe(1)
         ->and($weekOf($new->id))->toBe(['3:2/3', '4:3/1'])
         ->and($new->fresh()->day)->toBeNull()
         ->and($new->fresh()->teacher_id)->toBe($s['head']->id);
@@ -197,4 +197,64 @@ it('«Kartochkalar» (to\'liq) qayta yaratgan bir xil karta: nusxadan hafta-haft
     expect($r['cards'])->toBe(1)
         ->and(TimetableCardOverride::where('card_id', $new->id)->get(['week', 'day', 'pair'])->toArray())->toBe([['week' => 5, 'day' => 4, 'pair' => 1]])
         ->and($new->fresh()->teacher_id)->toBe($s['head']->id);
+});
+
+it('tiklash joy bandligini tekshiradi: eski joyni boshqa karta egallagan bo\'lsa — karta joylanmagan qoladi va hisobotda chiqadi', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $a = TimetableCard::create($fiz + ['day' => 1, 'pair' => 1]);
+    $b = TimetableCard::create($fiz + ['day' => 2, 'pair' => 1]);
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+    // A bo'shatildi, B A'ning eski joyiga (dushanba) ko'chirildi
+    $a->update(['day' => null, 'pair' => null]);
+    $b->update(['day' => 1]);
+    $url = route('admin.timetable.snapshots.restore', [$s['board'], $snap]);
+
+    $dry = snapAs($s['admin'], 'superadmin')->postJson($url, ['dry_run' => 1])->assertOk()->json();
+    expect($dry['cards'])->toBe(0)->and($dry['conflicts'])->toBe(1)
+        ->and($dry['conflict_examples'][0])->toContain('Guruh band');
+    // Konsol buyrug'i ham xuddi shu tekshiruv bilan (sinov rejimi)
+    $this->artisan('timetable:restore-placement', ['board' => $s['board']->id, '--snapshot' => $snap->id])
+        ->expectsOutputToContain("to'qnashuv sababli yozilmadi 1")->assertExitCode(0);
+    $r = snapAs($s['admin'], 'superadmin')->postJson($url, ['dry_run' => 0])->assertOk()->json();
+    expect($r['conflicts'])->toBe(1)
+        ->and($a->fresh()->only(['day', 'pair']))->toBe(['day' => null, 'pair' => null])
+        ->and($b->fresh()->only(['day', 'pair']))->toBe(['day' => 1, 'pair' => 1]);
+});
+
+it('haftalik joy ham tekshiriladi: o\'sha haftada joy band bo\'lsa — o\'sha hafta yozilmaydi', function () {
+    $s = snapSetup();
+    $s['old']->update(['day' => null, 'pair' => null, 'ext_day' => null, 'ext_pair' => null]);
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    TimetableCardOverride::create(['card_id' => $s['old']->id, 'week' => 3, 'day' => 2, 'pair' => 3, 'start_half' => 0, 'cancelled' => false]);
+    TimetableCardOverride::create(['card_id' => $s['old']->id, 'week' => 4, 'day' => 3, 'pair' => 1, 'start_half' => 0, 'cancelled' => false]);
+    $snap = app(BoardSnapshots::class)->take($s['board'], 'daily');
+    TimetableCardOverride::where('card_id', $s['old']->id)->delete();
+    // Shu guruhning boshqa fani endi seshanba 3-paraga qo'yilgan (har hafta)
+    TimetableCard::create(array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15, 'day' => 2, 'pair' => 3]));
+
+    $r = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.snapshots.restore', [$s['board'], $snap]), ['dry_run' => 0])->assertOk()->json();
+    expect($r['week_moves'])->toBe(1)->and($r['conflicts'])->toBe(1)
+        ->and(TimetableCardOverride::where('card_id', $s['old']->id)->pluck('week')->all())->toBe([4]);
+});
+
+it('aralash birlik: shablondagi joy to\'lsa, qayta yaratilgan karta hafta-hafta joylangan eski karta o\'rniga o\'tadi', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $tpl = TimetableCard::create($fiz + ['day' => 1, 'pair' => 1]);   // dushanba (shablon)
+    $wk = TimetableCard::create($fiz);                                   // faqat 3-haftada seshanba
+    TimetableCardOverride::create(['card_id' => $wk->id, 'week' => 3, 'day' => 2, 'pair' => 1, 'start_half' => 0, 'cancelled' => false]);
+    $before = app(BoardSnapshots::class)->collect($s['board']);
+    // Sinxronlash: ikkala karta (hafta soni o'zgargan) 2 + 1 soat bo'lib qayta yaratildi
+    TimetableCardOverride::where('card_id', $wk->id)->delete();
+    $tpl->delete();
+    $wk->delete();
+    $two = TimetableCard::create(array_merge($fiz, ['weeks' => 10]));
+    $one = TimetableCard::create(array_merge($fiz, ['len_half' => 1, 'weeks' => 10]));
+
+    $r = app(BoardSnapshots::class)->keepPlacementOfRecreated($s['board'], $before);
+    expect($r['cards'])->toBe(2)
+        ->and($two->fresh()->only(['day', 'pair']))->toBe(['day' => 1, 'pair' => 1])
+        ->and($one->fresh()->only(['day', 'pair']))->toBe(['day' => null, 'pair' => null])
+        ->and(TimetableCardOverride::where('card_id', $one->id)->get(['week', 'day', 'pair'])->toArray())->toBe([['week' => 3, 'day' => 2, 'pair' => 1]]);
 });

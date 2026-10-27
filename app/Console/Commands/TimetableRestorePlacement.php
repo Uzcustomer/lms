@@ -37,10 +37,12 @@ class TimetableRestorePlacement extends Command
             return 1;
         }
         $scope = ['faculty_names' => $this->option('faculty'), 'specialty_names' => $this->option('specialty'), 'courses' => $this->option('course')];
-        $r = $snapshots->restorePlacement($board, $old, !$this->option('apply'), $scope);
+        $r = $snapshots->restorePlacement($board, $old, !$this->option('apply'), $scope, true,
+            app(\App\Http\Controllers\Admin\TimetableController::class)->restoreConflictChecker());
         $this->info(($r['dry_run'] ? 'SINOV (yozilmadi)' : 'YOZILDI') . ": {$r['cards']} karta ({$r['units']} dars birligi) — ichki {$r['internal']}, tashqi {$r['external']}, "
-            . "haftalik ko'chirish {$r['week_moves']}, o'qituvchi/xona {$r['teacher_room']}; manbada topilmadi {$r['no_source']}, manbada ham joylanmagan {$r['source_unplaced']}");
-        foreach ($r['examples'] as $e) {
+            . "haftalik ko'chirish {$r['week_moves']}, o'qituvchi/xona {$r['teacher_room']}; manbada topilmadi {$r['no_source']}, manbada ham joylanmagan {$r['source_unplaced']}, "
+            . "to'qnashuv sababli yozilmadi {$r['conflicts']}");
+        foreach (array_merge($r['examples'], $r['conflict_examples']) as $e) {
             $this->line('  ' . $e);
         }
         if ($r['dry_run']) {

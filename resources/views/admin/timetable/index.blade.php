@@ -3162,6 +3162,7 @@
                             (j.removed || 0) + ' ta o\'chirildi' + (j.removed_placed ? ' (' + j.removed_placed + ' tasi joylangan edi)' : ''));
                         if (j.updated) parts.push(j.updated + ' ta yangilandi');
                         if (j.kept_placement) parts.push(j.kept_placement + ' ta qayta yaratilgan karta eski joyini oldi');
+                        if (j.kept_placement_conflicts) parts.push(j.kept_placement_conflicts + ' ta eski joy band — karta joylanmagan qoldi');
                     } else parts.push((j.created || 0) + ' ta kartochka yaratildi');
                     if (j.restored_units) parts.push(j.restored_units + ' ta dars birligining o\'qituvchi/xona biriktirishi tiklandi');
                     if (j.lost_units) parts.push(j.lost_units + ' ta birlik endi rejada yo\'q');
@@ -3211,7 +3212,9 @@
                             const r = await api(BASE + '/boards/' + board.id + '/snapshots/' + id + '/restore', 'POST', { dry_run: dry ? 1 : 0 });
                             const txt = (r.dry_run ? 'SINOV (yozilmadi): ' : 'YOZILDI: ') + r.cards + ' karta (' + r.units + ' dars birligi) — ichki ' + r.internal + ', tashqi ' + r.external
                                 + ', haftalik ko\'chirish ' + r.week_moves + ', o\'qituvchi/xona ' + r.teacher_room + '\nNusxada topilmadi: ' + r.no_source + ' · nusxada ham joylanmagan: ' + r.source_unplaced
-                                + (r.examples && r.examples.length ? '\n\n' + r.examples.join('\n') : '');
+                                + (r.conflicts ? ' · joyi band (to\'qnashuv) — yozilmadi: ' + r.conflicts : '')
+                                + (r.examples && r.examples.length ? '\n\n' + r.examples.join('\n') : '')
+                                + (r.conflict_examples && r.conflict_examples.length ? '\n\nTo\'qnashuvlar:\n' + r.conflict_examples.join('\n') : '');
                             await render(txt);
                             if (!r.dry_run) await loadBoard(board.id);
                         } catch (e) { render('Xatolik: ' + e.message); }

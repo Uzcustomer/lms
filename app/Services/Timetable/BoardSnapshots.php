@@ -4,6 +4,7 @@ namespace App\Services\Timetable;
 
 use App\Models\TimetableBoard;
 use App\Models\TimetableBoardSnapshot;
+use App\Models\TimetableCard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -114,17 +115,18 @@ class BoardSnapshots
      * "Kartochkalar" sinxronlashidan keyin: shu sinxronlashda yaratilgan (avval bo'lmagan) kartalar eski kartaning
      * joyini oladi. Avvaldan joylanmagan, saqlangan kartalarga tegilmaydi — ular ataylab bo'sh qoldirilgan bo'lishi mumkin.
      */
-    public function keepPlacementOfRecreated(TimetableBoard $board, array $before): int
+    public function keepPlacementOfRecreated(TimetableBoard $board, array $before, ?callable $conflicts = null): array
     {
-        return $this->restorePlacement($board, $before, false, ['only_new' => true], false)['cards'];
+        return $this->restorePlacement($board, $before, false, ['only_new' => true], false, $conflicts);
     }
 
     /**
      * Nusxadagi joylashuvni hozirgi joylanmagan kartalarga tiklaydi.
      * $scope: faculty_names / specialty_names / courses (ixtiyoriy); only_new — faqat nusxada yo'q (yangi) kartalar.
-     * Qaytaradi: hisobot.
+     * $conflicts(karta, 'internal'|'external'|'week', hafta, kun, para, start_half): to'qnashuvlar matni — qo'lda
+     * joylashtirishdagi tekshiruv; to'qnashgan joylashuv yozilmaydi. Qaytaradi: hisobot.
      */
-    public function restorePlacement(TimetableBoard $board, array $old, bool $dryRun, array $scope = [], bool $takeSnapshot = true): array
+    public function restorePlacement(TimetableBoard $board, array $old, bool $dryRun, array $scope = [], bool $takeSnapshot = true, ?callable $conflicts = null): array
     {
         $lenOf = fn (array $c) => max(1, (int) ($c['len_half'] ?? 2));
         $inScope = function (array $c) use ($scope): bool {
@@ -166,13 +168,14 @@ class BoardSnapshots
         $cardUpdates = [];     // id => [col => value]
         $ovInserts = [];       // [card_id, week, day, pair, start_half]
         $weekDone = [];        // karta id => true: kamida bitta haftalik joy tiklandi
+        $exampleCards = [];
         $stats = ['units' => 0, 'cards' => 0, 'internal' => 0, 'external' => 0, 'week_moves' => 0, 'teacher_room' => 0,
-            'no_source' => 0, 'source_unplaced' => 0, 'examples' => []];
+            'no_source' => 0, 'source_unplaced' => 0, 'conflicts' => 0, 'examples' => [], 'conflict_examples' => []];
 
         $valid = fn (array $o) => empty($o['cancelled']) && !empty($o['day']) && !empty($o['pair']);
         // Haftalik ko'chirish (ichki jadval): eski kartaning shu haftadagi joyi, xuddi shu siljish bilan.
         // Hafta yangi kartada bekor qilingan yoki allaqachon joylangan bo'lsa — tegilmaydi (kartaning o'z haftalari).
-        $addWeek = function (array $c, int $w, array $o, int $offset) use (&$ovInserts, &$stats, &$weekDone, $curOv): void {
+        $addWeek = function (array $c, int $w, array $o, int $offset) use (&$ovInserts, &$weekDone, $curOv): void {
             $mine = $curOv[(int) $c['id']][$w] ?? null;
             if ($mine && (!empty($mine['cancelled']) || !empty($mine['day']))) {
                 return;
@@ -181,7 +184,6 @@ class BoardSnapshots
                 'start_half' => (int) ($o['start_half'] ?? 0), 'auditorium_code' => $o['auditorium_code'] ?? null,
                 'auditorium_name' => $o['auditorium_name'] ?? null, 'exists' => (bool) $mine];
             $weekDone[(int) $c['id']] = true;
-            $stats['week_moves']++;
         };
         // O'qituvchi/xona — hozir bo'sh bo'lsa, eski kartadan.
         $teacherRoom = function (array $c, array $oldCard) use (&$cardUpdates, &$stats): void {
@@ -230,6 +232,8 @@ class BoardSnapshots
             $gone = array_values(array_filter($src, fn ($sc) => !isset($curById[(int) $sc['id']])));
             // Bir xil bo'linish (soat va haftalar bir xil) — kartama-karta; aks holda eski soatlar ichiga ketma-ket.
             $same = count($fresh) === count($gone) && $sig($fresh) === $sig($gone);
+            // Shablon joyi yo'q, faqat haftalarda joylangan o'chirilgan kartalar (ichki jadval).
+            $weekOnly = array_values(array_filter($gone, fn ($sc) => empty($sc['day']) || empty($sc['pair'])));
 
             foreach (['internal' => ['day', 'pair'], 'external' => ['ext_day', 'ext_pair']] as $layer => [$dCol, $pCol]) {
                 // Eski kartalar egallagan bo'laklar (eski karta id'si bo'yicha); hozir ham bor kartaniki — band.
@@ -266,7 +270,11 @@ class BoardSnapshots
                                 break;
                             }
                         }
-                        // Sig'madi — o'chirilgan kartalarning oxirgi bo'lagi davomiga.
+                        // Sig'madi — avval hafta-hafta joylangan eski kartalar o'rniga (pastda), ular bo'lmasa
+                        // o'chirilgan kartalarning oxirgi bo'lagi davomiga.
+                        if ($seg === null && $layer === 'internal' && $weekOnly) {
+                            continue;
+                        }
                         if ($seg === null) {
                             foreach ($segs as $k => $sg) {
                                 if (!$sg['alive']) {
@@ -284,7 +292,6 @@ class BoardSnapshots
                 foreach ($place as [$c, $seg, $offset]) {
                     $cardUpdates[$c['id']][$dCol] = $segs[$seg]['d'];
                     $cardUpdates[$c['id']][$pCol] = $segs[$seg]['p'] + $offset;
-                    $stats[$layer]++;
                     if ($layer === 'internal') {
                         $oldCard = $segs[$seg]['card'];
                         $cardUpdates[$c['id']]['start_half'] = (int) ($oldCard['start_half'] ?? 0);
@@ -311,7 +318,6 @@ class BoardSnapshots
                 }
                 $placed = array_flip(array_map(fn ($x) => (int) $x[0]['id'], $place));
                 $rest = $same ? [] : array_values(array_filter($fresh, fn ($c) => !isset($placed[(int) $c['id']])));
-                $weekOnly = array_values(array_filter($gone, fn ($sc) => empty($sc[$dCol]) || empty($sc[$pCol])));
                 $weeks = [];
                 foreach ($rest ? $weekOnly : [] as $sc) {
                     foreach ($oldOv[(int) $sc['id']] ?? [] as $w => $o) {
@@ -351,37 +357,105 @@ class BoardSnapshots
                     }
                 }
             }
-            if (count($stats['examples']) < 15) {
-                $c0 = $todo[0];
-                $u = $cardUpdates[$c0['id']] ?? [];
-                $stats['examples'][] = ($c0['faculty_name'] ?? '') . ' · ' . $c0['course'] . '-kurs · ' . $c0['subject_name'] . ' · '
-                    . ($c0['group_name'] ?: $c0['oqim_label']) . ' → ichki ' . (($u['day'] ?? null) ? $u['day'] . '/' . $u['pair'] : (isset($weekDone[(int) $c0['id']]) ? 'haftalarda' : '—'))
-                    . ', tashqi ' . (($u['ext_day'] ?? null) ? $u['ext_day'] . '/' . $u['ext_pair'] : '—');
+            if (count($exampleCards) < 15) {
+                $exampleCards[] = $todo[0];
             }
         }
-        $stats['cards'] = count($cardUpdates + $weekDone);
 
-        if (!$dryRun && ($cardUpdates || $ovInserts)) {
-            if ($takeSnapshot) {
+        // Yozish: har joylashuv hozirgi jadval va oldin tiklanganlar bilan to'qnashuvga tekshiriladi — to'qnashsa,
+        // yozilmaydi (karta joylanmagan qoladi) va hisobotga tushadi. Sinov ham xuddi shunday hisoblanadi, oxirida bekor qilinadi.
+        $applied = [];
+        if ($cardUpdates || $ovInserts) {
+            if (!$dryRun && $takeSnapshot) {
                 $this->take($board, 'before_restore', null, $current);
             }
-            $ovRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
-            DB::transaction(function () use ($cardUpdates, $ovInserts, $ovRoom) {
-                foreach ($cardUpdates as $id => $cols) {
-                    DB::table('timetable_cards')->where('id', $id)->update($cols + ['updated_at' => now()]);
-                }
-                foreach ($ovInserts as $o) {
-                    $row = ['day' => $o['day'], 'pair' => $o['pair'], 'start_half' => $o['start_half'], 'cancelled' => false,
-                        'updated_at' => now()] + ($ovRoom ? ['auditorium_code' => $o['auditorium_code'], 'auditorium_name' => $o['auditorium_name']] : []);
-                    if ($o['exists']) {
-                        DB::table('timetable_card_overrides')->where('card_id', $o['card_id'])->where('week', $o['week'])->update($row);
-                    } else {
-                        DB::table('timetable_card_overrides')->insert($row + ['card_id' => $o['card_id'], 'week' => $o['week'], 'created_at' => now()]);
-                    }
-                }
-            });
+            DB::beginTransaction();
+            try {
+                $applied = $this->applyRestore($cardUpdates, $ovInserts, $conflicts, $stats);
+                $dryRun ? DB::rollBack() : DB::commit();
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                throw $e;
+            }
+        }
+        foreach ($exampleCards as $c0) {
+            $u = $applied[(int) $c0['id']] ?? [];
+            $stats['examples'][] = ($c0['faculty_name'] ?? '') . ' · ' . $c0['course'] . '-kurs · ' . $c0['subject_name'] . ' · '
+                . ($c0['group_name'] ?: $c0['oqim_label']) . ' → ichki ' . (($u['day'] ?? null) ? $u['day'] . '/' . $u['pair'] : (!empty($u['weeks']) ? 'haftalarda' : '—'))
+                . ', tashqi ' . (($u['ext_day'] ?? null) ? $u['ext_day'] . '/' . $u['ext_pair'] : '—');
         }
 
         return ['dry_run' => $dryRun] + $stats;
+    }
+
+    /**
+     * Rejadagi joylashuvlarni ketma-ket yozadi; har biri oldin to'qnashuvga tekshiriladi (oldin yozilganlar ham hisobga
+     * kiradi). Qaytaradi: karta id => yozilgan joylashuv (day/pair, ext_day/ext_pair, weeks).
+     */
+    private function applyRestore(array $cardUpdates, array $ovInserts, ?callable $conflicts, array &$stats): array
+    {
+        $clash = function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf) use ($conflicts, &$stats): bool {
+            $errors = $conflicts ? (array) $conflicts($card, $what, $week, $day, $pair, $startHalf) : [];
+            if (!$errors) {
+                return false;
+            }
+            $stats['conflicts']++;
+            if (count($stats['conflict_examples']) < 15) {
+                $where = ['internal' => 'ichki', 'external' => 'tashqi', 'week' => $week . '-hafta'][$what] ?? $what;
+                $stats['conflict_examples'][] = $card->course . '-kurs · ' . $card->subject_name . ' · ' . ($card->group_name ?: $card->oqim_label)
+                    . " → {$where} {$day}/{$pair}: " . implode(' · ', $errors);
+            }
+
+            return true;
+        };
+        $applied = [];
+        foreach ($cardUpdates as $id => $cols) {
+            $card = TimetableCard::find($id);
+            if (!$card) {
+                continue;
+            }
+            // O'qituvchi/xona avval (tekshiruv shular bilan), so'ng joylashuv.
+            $card->forceFill(array_diff_key($cols, array_flip(['day', 'pair', 'start_half', 'ext_day', 'ext_pair'])));
+            if (isset($cols['day'])) {
+                if ($clash($card, 'internal', null, (int) $cols['day'], (int) $cols['pair'], (int) ($cols['start_half'] ?? 0))) {
+                    unset($cols['day'], $cols['pair'], $cols['start_half']);
+                } else {
+                    $stats['internal']++;
+                    $applied[$id]['day'] = $cols['day'];
+                    $applied[$id]['pair'] = $cols['pair'];
+                }
+            }
+            if (isset($cols['ext_day'])) {
+                if ($clash($card, 'external', null, (int) $cols['ext_day'], (int) $cols['ext_pair'], 0)) {
+                    unset($cols['ext_day'], $cols['ext_pair']);
+                } else {
+                    $stats['external']++;
+                    $applied[$id]['ext_day'] = $cols['ext_day'];
+                    $applied[$id]['ext_pair'] = $cols['ext_pair'];
+                }
+            }
+            if ($cols) {
+                DB::table('timetable_cards')->where('id', $id)->update($cols + ['updated_at' => now()]);
+            }
+        }
+        $ovRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
+        foreach ($ovInserts as $o) {
+            $card = TimetableCard::find($o['card_id']);
+            if (!$card || $clash($card, 'week', (int) $o['week'], (int) $o['day'], (int) $o['pair'], (int) $o['start_half'])) {
+                continue;
+            }
+            $row = ['day' => $o['day'], 'pair' => $o['pair'], 'start_half' => $o['start_half'], 'cancelled' => false,
+                'updated_at' => now()] + ($ovRoom ? ['auditorium_code' => $o['auditorium_code'], 'auditorium_name' => $o['auditorium_name']] : []);
+            if ($o['exists']) {
+                DB::table('timetable_card_overrides')->where('card_id', $o['card_id'])->where('week', $o['week'])->update($row);
+            } else {
+                DB::table('timetable_card_overrides')->insert($row + ['card_id' => $o['card_id'], 'week' => $o['week'], 'created_at' => now()]);
+            }
+            $stats['week_moves']++;
+            $applied[(int) $o['card_id']]['weeks'] = true;
+        }
+        $stats['cards'] = count($applied);
+
+        return $applied;
     }
 }

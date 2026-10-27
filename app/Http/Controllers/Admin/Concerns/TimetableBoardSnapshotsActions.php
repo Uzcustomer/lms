@@ -49,6 +49,7 @@ trait TimetableBoardSnapshotsActions
         @ini_set('memory_limit', '1024M');
         @set_time_limit(300);
 
-        return response()->json(app(BoardSnapshots::class)->restorePlacement($board, $snapshot->data(), $request->boolean('dry_run', true), $data));
+        return response()->json(app(BoardSnapshots::class)->restorePlacement($board, $snapshot->data(), $request->boolean('dry_run', true), $data, true,
+            $this->restoreConflictChecker()));
     }
 }

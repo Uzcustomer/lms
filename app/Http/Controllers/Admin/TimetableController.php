@@ -1334,6 +1334,19 @@ class TimetableController extends Controller
     }
 
     /**
+     * Nusxadan tiklashda joylashuv tekshiruvi — qo'lda joylashtirishdagi kabi (guruh, o'qituvchi, xona):
+     * ichki shablon, tashqi jadval va haftalik ko'chirish uchun. To'qnashuvlar matnini qaytaradi.
+     */
+    public function restoreConflictChecker(): \Closure
+    {
+        return fn (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf): array => match ($what) {
+            'external' => $this->findExternalConflicts($card, $day, $pair),
+            'week' => $this->findWeekConflicts($card, (int) $week, $day, $pair, $startHalf),
+            default => $this->findConflicts($card, $day, $pair, $startHalf),
+        };
+    }
+
+    /**
      * Xavfli (ko'p kartaga tegadigan) amaldan oldin doska nusxasi — versiyalar tarixida qoladi; sinov (dry_run) uchun emas.
      * Ruxsat va kiritilgan ma'lumot tekshirilgandan keyin chaqiriladi: rad etilgan so'rov nusxa qoldirmaydi.
      */
@@ -1369,7 +1382,9 @@ class TimetableController extends Controller
             // Soati yoki hafta soni o'zgargani uchun qayta yaratilgan kartalar eski kartaning joyini oladi (fan + guruh
             // bo'yicha) — joylashgan dars "joylanmaganlar"ga tushib qolmasin. Faqat haqiqatan yangi fan/guruh joylanmagan qoladi.
             if (!empty($res['created']) && $before) {
-                $res['kept_placement'] = app(\App\Services\Timetable\BoardSnapshots::class)->keepPlacementOfRecreated($board, $before);
+                $kept = app(\App\Services\Timetable\BoardSnapshots::class)->keepPlacementOfRecreated($board, $before, $this->restoreConflictChecker());
+                $res['kept_placement'] = $kept['cards'];
+                $res['kept_placement_conflicts'] = $kept['conflicts'];
             }
 
             return response()->json($res);

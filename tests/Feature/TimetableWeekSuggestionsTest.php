@@ -263,3 +263,18 @@ it('takliflar: shablonda joylashgan blokni surish taklifi qo\'llanganda ham ishl
     }
     expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3);
 });
+
+it('takliflar: shu kunning boshqa vaqti uchun ikki variant beriladi', function () {
+    $s = sugSetup();
+    $busy = sugTeacher('BAND O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    $other = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $other->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $slots = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->where('type', 'slot')->values();
+    expect($slots)->toHaveCount(2)
+        ->and($slots[0]['actions'][0]['pair'])->not->toBe($slots[1]['actions'][0]['pair']);
+});

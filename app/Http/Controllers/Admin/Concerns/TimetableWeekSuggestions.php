@@ -340,14 +340,9 @@ trait TimetableWeekSuggestions
             // 1) Shu kunning boshqa bo'sh vaqti — butun dars (joylashgan qismi bilan birga) ko'chadi.
             if (!$sugs) {
                 $n = 0;
-                $st = $state;
-                $tried = [];
-                while ($n < 2 && ($f = $searchBlock($cb, $W, $st, $td, $cbStart ?? $tp, $maxDay, $maxPair, false, null))) {
+                $skip = null;
+                while ($n < 2 && ($f = $searchBlock($cb, $W, $state, $td, $cbStart ?? $tp, $maxDay, $maxPair, false, $skip))) {
                     [$d, $s0] = $f;
-                    if (isset($tried[$s0])) {
-                        break;
-                    }
-                    $tried[$s0] = true;
                     $title = (count($cb) > 1 ? 'Butun darsni (' . $cbLen . ' soat) shu kunning boshqa vaqtiga: ' : 'Shu kun, boshqa vaqt: ') . $slotText($d, $s0, $cbLen);
                     if ($lecture) {
                         $addLate('lecture', 'Ma\'ruzani shu kunning boshqa vaqtiga: ' . $slotText($d, $s0, $len), $blockActs($cb, $W, $d, $s0), $lecNote);
@@ -355,8 +350,9 @@ trait TimetableWeekSuggestions
                         $add('slot', $title, $blockActs($cb, $W, $d, $s0));
                     }
                     $n++;
-                    // keyingi variant uchun shu boshlanishni band qilib qo'yamiz
-                    $st = $withMove($st, $c, $W, $d, $s0);
+                    // keyingi variant — boshqa boshlanish (blok qidiruvda o'z joyidan ko'tariladi, shuning uchun
+                    // topilgan joyni holatda band qilib bo'lmaydi — u o'tkazib yuboriladi)
+                    $skip = [$d, $s0];
                 }
             }
 

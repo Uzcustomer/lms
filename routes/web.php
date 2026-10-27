@@ -1248,6 +1248,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/block-tickets/{ticket}/respond', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketRespond'])->name('block-tickets.respond');
                 Route::post('/block-tickets/{ticket}/resolve', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketResolve'])->name('block-tickets.resolve');
                 Route::post('/block-tickets/{ticket}/cancel', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketCancel'])->name('block-tickets.cancel');
+                // Doska versiyalari (nusxalar) — ruxsat kontrollerda (faqat admin).
+                Route::get('/boards/{board}/snapshots', [\App\Http\Controllers\Admin\TimetableController::class, 'boardSnapshotsIndex'])->name('snapshots.index');
+                Route::post('/boards/{board}/snapshots', [\App\Http\Controllers\Admin\TimetableController::class, 'boardSnapshotStore'])->name('snapshots.store');
+                Route::post('/boards/{board}/snapshots/{snapshot}/restore', [\App\Http\Controllers\Admin\TimetableController::class, 'boardSnapshotRestore'])->name('snapshots.restore');
             });
 
         // Dars jadvali tuzish (aSc Timetables uslubida)

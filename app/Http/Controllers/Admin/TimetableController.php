@@ -36,6 +36,7 @@ class TimetableController extends Controller
 {
     use Concerns\TimetableHemisSync;
     use Concerns\TimetableBlockTickets;
+    use Concerns\TimetableBoardSnapshotsActions;
 
     public function index(Request $request)
     {
@@ -1333,6 +1334,41 @@ class TimetableController extends Controller
     }
 
     /**
+     * Nusxadan tiklashda joylashuv tekshiruvi — qo'lda joylashtirishdagi kabi (guruh, o'qituvchi, xona) va panjara
+     * chegarasi (validateTimeProposal dagidek): ichki shablon, tashqi jadval va haftalik ko'chirish uchun.
+     * To'qnashuvlar matnini qaytaradi.
+     */
+    public function restoreConflictChecker(): \Closure
+    {
+        return function (TimetableCard $card, string $what, ?int $week, int $day, int $pair, int $startHalf): array {
+            $grid = $this->gridFor($card->board, $card->faculty_name, (string) $card->specialty_name, (int) $card->course);
+            if ($day < 1 || $day > $grid['days'] || $pair < 1 || $pair + $card->lenHalf() - 1 > $grid['pairs']
+                || ($week !== null && ($week < 1 || $week > $grid['weeks']))) {
+                return ['Jadval chegarasidan tashqarida'];
+            }
+
+            return match ($what) {
+                'external' => $this->findExternalConflicts($card, $day, $pair),
+                'week' => $this->findWeekConflicts($card, (int) $week, $day, $pair, $startHalf),
+                default => $this->findConflicts($card, $day, $pair, $startHalf),
+            };
+        };
+    }
+
+    /**
+     * Xavfli (ko'p kartaga tegadigan) amaldan oldin doska nusxasi — versiyalar tarixida qoladi; sinov (dry_run) uchun emas.
+     * Ruxsat va kiritilgan ma'lumot tekshirilgandan keyin chaqiriladi: rad etilgan so'rov nusxa qoldirmaydi.
+     */
+    private function snapshotBefore(Request $request, TimetableBoard $board, string $reason): void
+    {
+        if ($request->boolean('dry_run') || !\App\Services\Timetable\BoardSnapshots::ready()) {
+            return;
+        }
+        $actor = $this->timetableActor($request);
+        app(\App\Services\Timetable\BoardSnapshots::class)->take($board, $reason, $actor?->full_name ?? $actor?->name);
+    }
+
+    /**
      * Kartochkalarni yaratish: tasdiqlangan oqim + ishchi reja fanlari.
      * Mavjud kartochkalar o'chirilib qaytadan yaratiladi (joylashuvlar yo'qoladi).
      */
@@ -1344,12 +1380,23 @@ class TimetableController extends Controller
             return response()->json(['error' => "Tasdiqlangan oqim topilmadi. Avval Oqim sahifasida "
                 . ($board->kind === 'plan' ? "kelasi yil (reja) oqimini" : "joriy oqimni") . " tasdiqlang."], 422);
         }
+        $this->snapshotBefore($request, $board, 'before_generate');
         $rows = $this->stripUnsupportedColumns($rows);
 
         // Sinxronlash (sukut): mavjud kartalar joyida qoladi, faqat endi kerak bo'lmaganlari
         // o'chiriladi va yangilari qo'shiladi. "full" — hammasini qaytadan yaratish (eski xatti-harakat).
         if ($request->input('mode', 'sync') !== 'full') {
-            return response()->json($this->syncCards($board, $rows, $specsFound));
+            $before = app(\App\Services\Timetable\BoardSnapshots::class)->collect($board);
+            $res = $this->syncCards($board, $rows, $specsFound);
+            // Soati yoki hafta soni o'zgargani uchun qayta yaratilgan kartalar eski kartaning joyini oladi (fan + guruh
+            // bo'yicha) — joylashgan dars "joylanmaganlar"ga tushib qolmasin. Faqat haqiqatan yangi fan/guruh joylanmagan qoladi.
+            if (!empty($res['created']) && $before) {
+                $kept = app(\App\Services\Timetable\BoardSnapshots::class)->keepPlacementOfRecreated($board, $before, $this->restoreConflictChecker());
+                $res['kept_placement'] = $kept['cards'];
+                $res['kept_placement_conflicts'] = $kept['conflicts'];
+            }
+
+            return response()->json($res);
         }
 
         // O'qituvchi/xona biriktirishlari dars birligi bo'yicha saqlab qolinadi
@@ -1396,6 +1443,7 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_add_groups');
         $dry = $request->boolean('dry_run');
         $specsFound = [];
         $rows = $this->assembleRows($board, null, null, $specsFound);
@@ -2212,6 +2260,7 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_merge_lectures');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture');
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -2367,6 +2416,7 @@ class TimetableController extends Controller
             'subject_name'   => 'required|string|max:255',
             'dry_run'        => 'nullable|boolean',
         ]);
+        $this->snapshotBefore($request, $board, 'before_separate_practice');
         $dry = $request->boolean('dry_run');
         $subjKey = $this->normSubject($data['subject_name']);
         $cards = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->where('course', (int) $data['course'])
@@ -2454,6 +2504,7 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_split_practice');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->where('len_half', '>', 2);
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -2519,6 +2570,7 @@ class TimetableController extends Controller
         if (!$this->isHemisBoard($board)) {
             return response()->json(['error' => 'Bu amal faqat HEMIS fanlari doskasi uchun.'], 422);
         }
+        $this->snapshotBefore($request, $board, 'before_split_variant');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->whereNotNull('group_names');
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -2627,6 +2679,7 @@ class TimetableController extends Controller
         if ($denied = $this->weeklyLayerDenied($request, $layer)) {
             return $denied;
         }
+        $this->snapshotBefore($request, $board, 'before_unplace');
         if ($layer === 'external') {
             $q = (clone $scopeQuery)->whereNotNull('ext_day');
             $count = (clone $q)->count();
@@ -6629,6 +6682,7 @@ class TimetableController extends Controller
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
+        $this->snapshotBefore($request, $board, 'before_layer_copy');
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $scopeQ = TimetableCard::where('board_id', $board->id);
         $this->applyScopeToQuery($scopeQ, $facSet, $specSet, $courseSet);

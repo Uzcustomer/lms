@@ -7256,12 +7256,18 @@
                 // qamragan (chiqarilmaydigan) kataklar. vChain — jami yarim-slot uzunligi
                 // va tarkibidagi karta id'lari (badge uchun).
                 const vConsumed = {};
+                // Shablon ko'rinishida faqat bir xil haftalarda o'tiladigan kartalar birlashtiriladi:
+                // har hafta o'tiladigan (15 hafta) va almashib keladigan (masalan 9 hafta) qism
+                // alohida chiziladi — ikkinchisi yo'l-yo'l (⇄) bo'lib ajralib tursin.
+                const weeksKey = x => curWeek ? '' : activeWeeksOf(x, curGrid().weeks).join(',');
                 const vChain = (grp, d, p, c) => {
                     const ids = [];
                     let span = 0, cur = p;
+                    const wk = weeksKey(c);
                     while (true) {
                         const n = placedIdx[grp + '|' + d + '|' + cur];
                         if (!n || n.training_type !== c.training_type || n.subject_name !== c.subject_name) break;
+                        if (weeksKey(n) !== wk) break;
                         ids.push(n.id);
                         span += cardLen(n);
                         cur += cardLen(n);

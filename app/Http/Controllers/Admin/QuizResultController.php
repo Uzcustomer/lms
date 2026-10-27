@@ -3087,6 +3087,11 @@ class QuizResultController extends Controller
      */
     private static function toFivePointScale(float $grade): int
     {
+        // 1 — test markazida "testdan chetlashgan" belgisi: 2 ga aylanmasin,
+        // jurnalda ham 1 bo'lib turadi (va "Testdan chetlashgan" deb ko'rinadi)
+        if ((int) round($grade) === 1) {
+            return 1;
+        }
         if ($grade >= 90) {
             return 5;
         }

@@ -809,6 +809,20 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Ketma-ket bosqich belgilaridan har bosqich davomiyligi (soniya).
+     */
+    private function stageDurations(float $from, array $marks): array
+    {
+        $out = [];
+        foreach ($marks as $name => $at) {
+            $out[$name] = round($at - $from, 2);
+            $from = $at;
+        }
+
+        return $out;
+    }
+
+    /**
      * Natijalar egalari bitta so'rovda: [hemis_id yoki student_id_number => Student].
      * Har natija uchun alohida Student so'rovi (yuzlab tanlanganda) sekin edi.
      * hemis_id mosligi student_id_number dan ustun.
@@ -839,6 +853,15 @@ class QuizResultController extends Controller
             set_time_limit(300);
             ini_set('memory_limit', '512M');
             $tStart = microtime(true);
+            $marks = []; // bosqich => tugagan vaqti (sekin so'rov logi uchun)
+            $queryStats = ['soni' => 0, 'vaqt_ms' => 0.0, 'sekinlari' => []];
+            DB::listen(function ($q) use (&$queryStats) {
+                $queryStats['soni']++;
+                $queryStats['vaqt_ms'] += $q->time;
+                if ($q->time >= 300 && count($queryStats['sekinlari']) < 10) {
+                    $queryStats['sekinlari'][] = round($q->time / 1000, 2) . 's ' . mb_substr($q->sql, 0, 300);
+                }
+            });
 
             $query = HemisQuizResult::where('is_active', 1);
 
@@ -926,6 +949,7 @@ class QuizResultController extends Controller
 
             $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
             $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+            $marks['talabalar'] = microtime(true);
 
             // ====== XULOSA UCHUN MA'LUMOTLAR TAYYORLASH ======
 
@@ -943,6 +967,7 @@ class QuizResultController extends Controller
             $uploadedResultIds = array_flip($uploadedResultIds);
 
             [$appealDeletedResultIds, $appealDeletedRetakeKeys] = $this->buildAppealDeletedSets($allResultIds);
+            $marks['yuklangan'] = microtime(true);
 
             // 2) Dublikatlarni aniqlash: student_id + fan_id + yn_turi + shakl
             $duplicateMap = []; // key => [result_ids]
@@ -964,6 +989,7 @@ class QuizResultController extends Controller
             $groups = !empty($groupIds)
                 ? Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id')
                 : collect();
+            $marks['guruhlar'] = microtime(true);
             $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
 
             $curriculumSubjects = [];
@@ -995,6 +1021,8 @@ class QuizResultController extends Controller
                     }
                 }
             }
+
+            $marks['reja'] = microtime(true);
 
             // JN baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
@@ -1127,6 +1155,8 @@ class QuizResultController extends Controller
                         : 0;
                 }
             }
+
+            $marks['jn'] = microtime(true);
 
             // MT baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
             $mtGrades = []; // student_hemis_id|subject_id => computed MT average (pre-computed)
@@ -1284,6 +1314,8 @@ class QuizResultController extends Controller
                 }
             }
 
+            $marks['mt'] = microtime(true);
+
             // OSKI/Test baholar — jurnal logikasi: MAX(grade), faqat JORIY semestr, YN turi bo'yicha alohida
             $oskiGrades = []; // hemis|subject_id|semester|YN_turi => max grade
             $currentSemCodes = $students->pluck('semester_code')->filter()->unique()->values()->toArray();
@@ -1313,12 +1345,15 @@ class QuizResultController extends Controller
                     unset($oskiRows);
                 }
             }
+            $marks['oski'] = microtime(true);
 
             // Mavzu (N-mavzu) shakldagi natijalar uchun jurnal holati
             $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
+            $marks['mavzu'] = microtime(true);
 
             // Qayta o'qish natijalari uchun JN/MT/OSKI — qayta o'qish jurnalidan
             $retakeApps = $this->buildRetakeApps($results);
+            $marks['qayta_oqish'] = microtime(true);
 
             // 4) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
             $markingSystemCodes = $students
@@ -1441,6 +1476,10 @@ class QuizResultController extends Controller
                     'natijalar_s' => round($tFetched - $tStart, 2),
                     'tayyorlash_s' => round($tPrepared - $tFetched, 2),
                     'xulosa_s' => round(microtime(true) - $tPrepared, 2),
+                    'bosqichlar_s' => $this->stageDurations($tFetched, $marks + ['baholash_tizimi' => $tPrepared]),
+                    'sorovlar_soni' => $queryStats['soni'],
+                    'sorovlar_s' => round($queryStats['vaqt_ms'] / 1000, 2),
+                    'sekin_sorovlar' => $queryStats['sekinlari'],
                     'natijalar_soni' => count($data),
                     'filtr' => $request->only(['date_from', 'date_to', 'student_name', 'shakl_search', 'show_duplicates']),
                 ]);
@@ -2160,6 +2199,7 @@ class QuizResultController extends Controller
         }
 
         // 4) Har bir pair uchun mavzu_n ni state ga aylantirish
+        $nbRetakes = []; // stateKey => [hemis, fan, sana, juftlik] — NB ustidan retake, koeffitsiyent keyin
         foreach ($results as $r) {
             if (!$r->shakl || !preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) continue;
             $student = $studentLookup[$r->student_id] ?? null;
@@ -2207,15 +2247,19 @@ class QuizResultController extends Controller
             //     (sabablilik aynan o'sha juftlik (lesson_pair_code) bo'yicha tekshiriladi)
             $stateKey = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
             if ($maxRetake !== null) {
-                $mult = $retakeFromNb
-                    ? $this->mavzuSababliMultiplier($student->hemis_id, $r->fan_id, $targetDate, $retakeNbPair)
-                    : 0.8;
-                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake, 'mult' => $mult];
+                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake, 'mult' => 0.8];
+                if ($retakeFromNb) {
+                    $nbRetakes[$stateKey] = [$student->hemis_id, $r->fan_id, $targetDate, $retakeNbPair];
+                }
             } elseif ($maxGrade !== null) {
                 $states[$stateKey] = ['type' => 'grade', 'grade' => $maxGrade, 'retake' => null, 'mult' => 0.8];
             } elseif ($hasNb) {
                 $states[$stateKey] = ['type' => 'nb', 'grade' => null, 'retake' => null, 'mult' => 1.0];
             }
+        }
+
+        foreach ($this->mavzuSababliMultipliers($nbRetakes) as $stateKey => $mult) {
+            $states[$stateKey]['mult'] = $mult;
         }
 
         return $states;
@@ -2227,26 +2271,69 @@ class QuizResultController extends Controller
      * (aynan o'sha juftlik — lesson_pair_code bo'yicha) yoki shu sanani qamragan
      * tasdiqlangan AbsenceExcuse. (Sababsiz->sababli o'tish arizani tasdiqlash +
      * qayta yuklash orqali avtomatik 0.8->1.0 yangilanadi; bu yerda joriy holat o'qiladi.)
+     *
+     * Barcha yozuvlar uchun birdaniga — ilgari har natijaga 2 ta alohida so'rov
+     * ketardi va retake ko'p kunlari "Tartibga solish" o'nlab soniya kutardi.
+     *
+     * @param array $items key => [hemis_id, fan_id, 'Y-m-d', lesson_pair_code|null]
+     * @return array key => 1.0|0.8
      */
-    private function mavzuSababliMultiplier($hemisId, $fanId, $targetDate, $pairCode = null): float
+    private function mavzuSababliMultipliers(array $items): array
     {
-        $sababli = DB::table('attendances')
-            ->where('student_hemis_id', $hemisId)
-            ->where('subject_id', $fanId)
-            ->whereDate('lesson_date', $targetDate)
-            ->when($pairCode !== null, fn ($q) => $q->where('lesson_pair_code', $pairCode))
-            ->where('absent_on', '>', 0)
-            ->exists();
-
-        if (!$sababli) {
-            $sababli = \App\Models\AbsenceExcuse::where('status', 'approved')
-                ->where('student_hemis_id', $hemisId)
-                ->whereDate('start_date', '<=', $targetDate)
-                ->whereDate('end_date', '>=', $targetDate)
-                ->exists();
+        if (empty($items)) {
+            return [];
         }
 
-        return $sababli ? 1.0 : 0.8;
+        $hemisIds = array_values(array_unique(array_column($items, 0)));
+        $fanIds = array_values(array_unique(array_column($items, 1)));
+        $dates = array_column($items, 2);
+        $minDate = min($dates);
+        $untilDate = self::dayAfter(max($dates));
+
+        $absent = []; // hemis|fan|sana va hemis|fan|sana|juftlik => true
+        $excuses = []; // hemis => [[boshlanish, tugash], ...]
+        foreach (array_chunk($hemisIds, 500) as $chunk) {
+            $rows = DB::table('attendances')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereIn('subject_id', $fanIds)
+                ->where('lesson_date', '>=', $minDate)
+                ->where('lesson_date', '<', $untilDate)
+                ->where('absent_on', '>', 0)
+                ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code']);
+            foreach ($rows as $a) {
+                $base = $a->student_hemis_id . '|' . $a->subject_id . '|' . substr((string) $a->lesson_date, 0, 10);
+                $absent[$base] = true;
+                $absent[$base . '|' . $a->lesson_pair_code] = true;
+            }
+
+            // student_hemis_id bu jadvalda varchar — son bilan solishtirsak indeks ishlamaydi
+            $rows = \App\Models\AbsenceExcuse::where('status', 'approved')
+                ->whereIn('student_hemis_id', array_map('strval', $chunk))
+                ->where('start_date', '<', $untilDate)
+                ->where('end_date', '>=', $minDate)
+                ->toBase()
+                ->get(['student_hemis_id', 'start_date', 'end_date']);
+            foreach ($rows as $e) {
+                $excuses[$e->student_hemis_id][] = [substr((string) $e->start_date, 0, 10), substr((string) $e->end_date, 0, 10)];
+            }
+        }
+
+        $out = [];
+        foreach ($items as $key => [$hemisId, $fanId, $date, $pairCode]) {
+            $base = $hemisId . '|' . $fanId . '|' . $date;
+            $sababli = isset($absent[$pairCode !== null ? $base . '|' . $pairCode : $base]);
+            if (!$sababli) {
+                foreach ($excuses[$hemisId] ?? [] as [$from, $to]) {
+                    if ($from <= $date && $to >= $date) {
+                        $sababli = true;
+                        break;
+                    }
+                }
+            }
+            $out[$key] = $sababli ? 1.0 : 0.8;
+        }
+
+        return $out;
     }
 
     /**

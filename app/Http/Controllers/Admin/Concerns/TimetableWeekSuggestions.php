@@ -53,6 +53,16 @@ trait TimetableWeekSuggestions
         }
         $scopeIds = $q->pluck('id')->map(fn ($id) => (int) $id)->all();
 
+        // Sikl fanlari haftalik panjarada emas (ularning kunlari sikl kalendarida) — joylanmaganlar qatoriga kirmaydi.
+        $cycleKeys = $this->cycleSubjectKeys($board);
+        $isCycle = function (TimetableCard $c) use ($cycleKeys): bool {
+            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+            $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
+
+            return isset($cycleKeys[$k . $this->normSubject((string) $c->subject_name)])
+                || ($base !== null && isset($cycleKeys[$k . $this->normSubject($base)]));
+        };
+
         $state = $this->occupancyState($board->id);
         $eff = function (TimetableCard $c, int $w) use (&$state): ?array {
             $ov = $state['ov'][(int) $c->id][$w] ?? null;
@@ -67,7 +77,7 @@ trait TimetableWeekSuggestions
         $unplaced = [];
         foreach ($scopeIds as $id) {
             $c = $state['cards'][$id] ?? null;
-            if (!$c || $cancelled($c, $W) || $eff($c, $W)) {
+            if (!$c || $isCycle($c) || $cancelled($c, $W) || $eff($c, $W)) {
                 continue;
             }
             $unplaced[] = $c;

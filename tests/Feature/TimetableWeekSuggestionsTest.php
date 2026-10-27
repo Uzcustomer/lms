@@ -151,3 +151,22 @@ it('rad etilgan haftalik ko\'chirish haftalik xonani o\'chirib yubormaydi, yangi
     $o = TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 2)->first();
     expect([$o->day, $o->pair, $o->auditorium_code])->toBe([1, 1, 'R0']);
 });
+
+function sugCard(array $s, array $attrs): TimetableCard
+{
+    return TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks']) + $attrs);
+}
+
+it('takliflar: sikl fanlari haftalik joylanmaganlar qatoriga kirmaydi', function () {
+    $s = sugSetup();
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+        'course' => 2, 'subject_name' => 'Anatomiya', 'mode' => 'cycle', 'cycle_days' => 1]);
+    $variant = sugCard($s, ['subject_name' => 'Anatomiya (a)', 'group_name' => 'g-01b']);
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json();
+    $ids = collect($res['cards'])->pluck('id')->all();
+    expect($ids)->toContain($s['own']->id)->not->toContain($s['foreign']->id)->not->toContain($variant->id)
+        ->and($res['total'])->toBe(1);
+});

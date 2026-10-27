@@ -232,6 +232,11 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
     expect($rows[0][10])->toBe("To'siq turi")
         ->and(collect($rows)->slice(1)->pluck(10)->all())->toContain("O'qituvchi band — bartaraf: kafedra mudiri qo'yildi")
         ->and(collect($rows)->slice(1)->pluck(12)->all())->toContain('p/st26-09a');
+
+    // Mudirning HEMIS xodim id'si yo'q — almashtirib bo'lmaydi, to'siq qoladi. Excel to'siq turi filtri:
+    // faqat "xona band" tanlansa o'qituvchi bandligi to'siqlari chiqmaydi.
+    Teacher::where('hemis_id', 9001)->update(['hemis_id' => 0]);
+    expect($amallar(['teacher']))->toBeGreaterThan(0)->and($amallar(['room']))->toBe(0);
 });
 
 it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq bo\'lmaydi', function () {

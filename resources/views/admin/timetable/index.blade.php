@@ -212,6 +212,7 @@
                             <button type="button" id="weeklyExcel" class="tt-weekly-excel" title="Ekrandagi haftalik jadvalni (tanlangan hafta, qatlam va ko'rinish qamrovi bilan) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                             @unless($timetableAssignmentOnly)
                             <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni blok bo'lib (bir fanning kartalari ketma-ket, bo'linmasdan) tashqi joyiga yoki o'sha kunning ichidagi eng yaqin bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
+                            <button type="button" id="suggestWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Shu haftada joylanmagan kartalarni sig'dirish takliflari: bo'sh vaqt, boshqa xona, to'sib turgan darsni surish, boshqa kun, boshqa hafta va eng oxirida boshqa o'qituvchi. Hech narsa o'zi yozilmaydi — har bir taklif «Qo'llash» bilan bajariladi.">Takliflar</button>
                             <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
                             @endunless
                             @if($timetableCanApprove)
@@ -4354,6 +4355,78 @@
                 }
                 return res;
             }
+
+            // ===== Takliflar: joylanmagan kartalarni sig'dirish yo'llari (server hisoblaydi, foydalanuvchi tanlaydi) =====
+            const SUG_LABEL = { slot: 'Bo\'sh vaqt', room: 'Boshqa xona', blocker: 'Darsni surish', day: 'Boshqa kun', week: 'Boshqa hafta', lecture: 'Ma\'ruzani surish', teacher: 'Boshqa o\'qituvchi' };
+            const SUG_COLOR = { slot: '#059669', room: '#0284c7', blocker: '#7c3aed', day: '#d97706', week: '#b45309', lecture: '#a16207', teacher: '#dc2626' };
+            async function openWeekSuggestions() {
+                if (!board || !curWeek || weeklyLayer !== 'internal') return;
+                let box = document.getElementById('ttSugModal');
+                if (!box) {
+                    box = document.createElement('div');
+                    box.id = 'ttSugModal';
+                    box.style.cssText = 'position:fixed;inset:0;z-index:70;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+                    box.innerHTML = '<div style="background:#fff;border-radius:12px;width:min(1100px,100%);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px #0005">' +
+                        '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #e2e8f0">' +
+                        '<b id="ttSugTitle">Takliflar</b><button type="button" id="ttSugClose" style="font-size:20px;line-height:1">&times;</button></div>' +
+                        '<div id="ttSugBody" style="overflow:auto;padding:12px 16px;font-size:12px"></div></div>';
+                    document.body.appendChild(box);
+                    box.addEventListener('click', ev => { if (ev.target === box || ev.target.id === 'ttSugClose') box.remove(); });
+                }
+                const body = box.querySelector('#ttSugBody');
+                box.querySelector('#ttSugTitle').textContent = 'Takliflar — ' + curWeek + '-hafta';
+                body.innerHTML = '<div style="color:#64748b">Hisoblanmoqda…</div>';
+                const params = new URLSearchParams();
+                [...selectedFaculties].forEach(v => params.append('faculty_names[]', v));
+                [...selectedDirs].forEach(v => params.append('specialty_names[]', v));
+                [...selectedCourses].forEach(v => params.append('courses[]', v));
+                params.set('type', typeFilter);
+                params.set('week', curWeek);
+                let res;
+                try { res = await api(BASE + '/boards/' + board.id + '/week-suggestions?' + params.toString()); }
+                catch (e) { body.innerHTML = '<div style="color:#dc2626">' + esc(e.message) + '</div>'; return; }
+                box.querySelector('#ttSugTitle').textContent = 'Takliflar — ' + res.week + '-hafta · joylanmagan: ' + res.total +
+                    (res.shown < res.total ? ' (birinchi ' + res.shown + ' tasi)' : '');
+                if (!res.cards.length) { body.innerHTML = '<div style="color:#059669">Bu haftada joylanmagan karta yo\'q.</div>'; return; }
+                window.__ttSug = res.cards;
+                body.innerHTML = res.cards.map((c, ci) =>
+                    '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
+                    '<div><b>' + esc(c.subject) + '</b> <span style="color:#64748b">[' + (c.type === 'lecture' ? 'M' : 'A') + '] ' +
+                    esc((c.groups || []).join(', ')) + ' · ' + esc(c.teacher || 'o\'qituvchi yo\'q') + (c.room ? ' · ' + esc(c.room) : '') + '</span></div>' +
+                    (c.reason ? '<div style="color:#b91c1c;margin:2px 0 4px">' + esc(c.reason) + '</div>' : '') +
+                    (c.suggestions.length ? c.suggestions.map((s, si) =>
+                        '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;border-top:1px dashed #f1f5f9">' +
+                        '<span style="flex:0 0 auto;font-size:10px;font-weight:700;color:#fff;border-radius:4px;padding:1px 6px;background:' + (SUG_COLOR[s.type] || '#475569') + '">' + (SUG_LABEL[s.type] || s.type) + '</span>' +
+                        '<span style="flex:1 1 auto">' + esc(s.title) + (s.note ? ' <i style="color:#64748b">(' + esc(s.note) + ')</i>' : '') + '</span>' +
+                        '<button type="button" data-sug="' + ci + ':' + si + '" style="flex:0 0 auto;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:1px 8px;background:#f8fafc">Qo\'llash</button></div>'
+                    ).join('') : '<div style="color:#64748b">Taklif topilmadi — qo\'lda joylash kerak.</div>') +
+                    '</div>').join('');
+                body.querySelectorAll('[data-sug]').forEach(btn => btn.onclick = async () => {
+                    const [ci, si] = btn.dataset.sug.split(':').map(Number);
+                    const sug = window.__ttSug[ci].suggestions[si];
+                    if (sug.type === 'teacher' && !confirm('O\'qituvchi butun semestr uchun almashadi. Davom etamizmi?')) return;
+                    if (sug.type === 'lecture' && !confirm('Ma\'ruza vaqti tashqi jadvaldan farq qiladi. Davom etamizmi?')) return;
+                    if (sug.type === 'week' && !confirm('KTR taqsimoti o\'zgaradi (' + sug.note + '). Davom etamizmi?')) return;
+                    btn.disabled = true; btn.textContent = '…';
+                    try {
+                        for (const a of sug.actions) {
+                            if (a.op === 'move') {
+                                await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST',
+                                    { week: a.week, action: 'move', day: a.day, pair: a.pair, layer: 'internal', auditorium_code: a.auditorium_code });
+                            } else if (a.op === 'cancel') {
+                                await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST', { week: a.week, action: 'cancel', layer: 'internal' });
+                            } else if (a.op === 'teacher') {
+                                await api(BASE + '/cards/' + a.card_id + '/update', 'POST', { teacher_id: a.teacher_id });
+                            }
+                        }
+                    } catch (e) {
+                        alert('Bajarilmadi: ' + e.message + (sug.actions.length > 1 ? '\n\nTaklifning bir qismi bajarilgan bo\'lishi mumkin — jadvalni tekshiring.' : ''));
+                    }
+                    await loadBoard(board.id);
+                    openWeekSuggestions();
+                });
+            }
+            if ($('suggestWeekBtn')) $('suggestWeekBtn').onclick = openWeekSuggestions;
             if ($('compactWeekBtn')) $('compactWeekBtn').onclick = async function () {
                 if (!board || !curWeek || weeklyLayer !== 'internal') return;
                 const scope = visibleSpecCards().filter(c => !isCycleCardAny(c));
@@ -6386,6 +6459,8 @@
                 if ($('weeklyLayerBox')) $('weeklyLayerBox').classList.toggle('hidden', viewMode === 'cycle');
                 if ($('weeklyExcel')) $('weeklyExcel').classList.toggle('hidden', viewMode === 'cycle');
                 if ($('compactWeekBtn')) $('compactWeekBtn').classList.toggle('hidden',
+                    !(WEEKLY_ADMIN && weeklyLayer === 'internal' && curWeek && viewMode !== 'cycle'));
+                if ($('suggestWeekBtn')) $('suggestWeekBtn').classList.toggle('hidden',
                     !(WEEKLY_ADMIN && weeklyLayer === 'internal' && curWeek && viewMode !== 'cycle'));
                 document.body.classList.toggle('tt-weekly-external', weeklyLayer === 'external');
             }

@@ -1271,6 +1271,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/merge-variant-lectures', [\App\Http\Controllers\Admin\TimetableController::class, 'mergeVariantLectures'])->name('boards.merge-variant-lectures');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
+                Route::get('/boards/{board}/week-suggestions', [\App\Http\Controllers\Admin\TimetableController::class, 'weekSuggestions'])->name('boards.week-suggestions');
                 Route::get('/boards/{board}/unplaced-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedExport'])->name('boards.unplaced-export');
                 Route::post('/boards/{board}/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'saveGrid'])->name('boards.grid');
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');

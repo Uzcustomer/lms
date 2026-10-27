@@ -1251,6 +1251,10 @@ trait TimetableHemisSync
                         $a['flags'][] = $type === 'e' ? 'mudir' : 'mudir_xonasi';
                         $a['flags'][] = "to'siq sababli";
                         $a['resolved'][] = $b;
+                        // Bu dars endi o'sha o'qituvchi/xonani band qilmaydi: u bilan to'qnashgan ikkinchi LMS darsi
+                        // (keyinroq tekshiriladi) ham mudirga almashtirilib, o'qituvchi ikkalasidan ham ayrilmasin.
+                        $own = $type . '|' . ($type === 'e' ? $emp : $room) . '|' . $a['date'];
+                        $idx[$own] = array_values(array_filter($idx[$own] ?? [], fn ($x) => !($x[2] === $u['key'] && $x[0] === $a['start'])));
                         $a['reason'] = trim(($a['reason'] ?? '') . ' ' . ($type === 'e'
                             ? "LMS'dagi o'qituvchi {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli kafedra mudiri qo'yildi."
                             : "LMS'dagi xona {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli «{$fbName}» qo'yildi."));

@@ -224,12 +224,38 @@ trait TimetableWeekSuggestions
             return $st;
         };
         // Blok uchun joy: avval $prefDay (yaqin vaqtdan), keyin (ruxsat bo'lsa) boshqa kunlar. [kun, boshlanish, holat]
-        $searchBlock = function (array $cards, int $w, array $st, int $prefDay, int $prefPair, int $maxDay, int $maxPair, bool $otherDays, ?array $skip = null) use ($placeBlock): ?array {
+        // Boshqa kunga ko'chirilayotgan dars: o'sha kunda shu guruhning shu fandan shu turdagi darsi bormi (blokning
+        // o'zidan tashqari). Bor bo'lsa — u kunga taklif qilinmaydi (kunlik darslar soni buzilmasin).
+        $dayIdx = [];
+        $lessonKey = fn (TimetableCard $x) => $this->groupScopeKey($x) . '|' . $x->training_type . '|' . mb_strtolower($baseSubj($x->subject_name));
+        $sameLessonOnDay = function (array $cards, int $w, int $d) use (&$dayIdx, &$state, $effIn, $lessonKey): bool {
+            if (!isset($dayIdx[$w])) {
+                $dayIdx[$w] = [];
+                foreach ($state['cards'] as $y) {
+                    if ($py = $effIn($y, $w, $state)) {
+                        $dayIdx[$w][$py[0]][$lessonKey($y)][] = $y;
+                    }
+                }
+            }
+            $ids = array_map(fn ($x) => (int) $x->id, $cards);
+            $groups = array_merge(...array_map(fn ($x) => $x->occupiedGroups(), $cards));
+            foreach ($dayIdx[$w][$d][$lessonKey($cards[0])] ?? [] as $y) {
+                if (!in_array((int) $y->id, $ids, true) && array_intersect($y->occupiedGroups(), $groups)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        $searchBlock = function (array $cards, int $w, array $st, int $prefDay, int $prefPair, int $maxDay, int $maxPair, bool $otherDays, ?array $skip = null) use ($placeBlock, $sameLessonOnDay): ?array {
             $len = array_sum(array_map(fn ($x) => $x->lenHalf(), $cards));
             $days = range(1, $maxDay);
             usort($days, fn ($a, $b) => ($a !== $prefDay) <=> ($b !== $prefDay) ?: $a <=> $b);
             foreach ($days as $d) {
                 if (!$otherDays && $d !== $prefDay) {
+                    continue;
+                }
+                if ($d !== $prefDay && $sameLessonOnDay($cards, $w, $d)) {
                     continue;
                 }
                 $ps = range(1, max(1, $maxPair - $len + 1));
@@ -462,6 +488,9 @@ trait TimetableWeekSuggestions
                 $n = 0;
                 for ($d = 1; $d <= $maxDay && $n < 2; $d++) {
                     if ($d === $td) {
+                        continue;
+                    }
+                    if ($sameLessonOnDay($cb, $W, $d)) {
                         continue;
                     }
                     $f = $searchBlock($cb, $W, $state, $d, $cbStart ?? $tp, $maxDay, $maxPair, false, null);

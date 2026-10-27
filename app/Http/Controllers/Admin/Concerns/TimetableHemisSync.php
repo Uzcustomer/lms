@@ -1230,20 +1230,24 @@ trait TimetableHemisSync
                     // To'siq bartaraf etiladi (registrator ofisi qarori): o'qituvchi band — kafedra mudiri, xona band —
                     // "Kafedra mudiri xonasi" (ikkalasining ustma-ust tushishiga ruxsat bor). Mudir/xona topilmasa — to'siq qoladi.
                     $queue = ['e', 'r'];
-                    $settled = [];
+                    $resolved = [];
+                    $unresolved = [];   // hal qilib bo'lmagan to'siqlar — ikkinchi tur almashsa qayta tekshiriladi
                     while ($queue) {
                         $type = array_shift($queue);
-                        if (isset($settled[$type]) || !($b = $findHit($type))) {
+                        if (isset($resolved[$type])) {
                             continue;
                         }
-                        $settled[$type] = true;
+                        unset($unresolved[$type]);
+                        if (!($b = $findHit($type))) {
+                            continue;
+                        }
                         [$fbId, $fbName] = ($type === 'e' ? $fbEmp : $fbRoom) ?: [null, null];
                         // Mudir topilmadi yoki band o'qituvchining o'zi mudir — almashtirish yordam bermaydi, to'siq qoladi.
                         if (!$fbId || ($type === 'e' && (string) $fbId === (string) ($a['employee_id'] ?? ''))) {
-                            $a['blocked'][] = $b['text'];
-                            $a['blocks'][] = $b;
+                            $unresolved[$type] = $b;
                             continue;
                         }
+                        $resolved[$type] = true;
                         $field = $type === 'e' ? 'employee' : 'auditorium';
                         $what = $type === 'e' ? "o'qituvchi" : 'xona';
                         $oldName = (string) ($a[$field . '_name'] ?? '');
@@ -1279,8 +1283,12 @@ trait TimetableHemisSync
                         $a['reason'] = trim(($a['reason'] ?? '') . ' ' . ($type === 'e'
                             ? "LMS'dagi o'qituvchi {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli kafedra mudiri qo'yildi."
                             : "LMS'dagi xona {$oldName} shu vaqtda band ({$b['source']} · {$b['group']} · «{$b['subject']}» {$b['time']}) — to'siq sababli «{$fbName}» qo'yildi."));
-                        // Endi ikkinchi tur yangi qiymat bilan qayta tekshiriladi.
+                        // Endi ikkinchi tur yangi qiymat bilan qayta tekshiriladi (hal qilinmagan to'sig'i ham).
                         $queue[] = $type === 'e' ? 'r' : 'e';
+                    }
+                    foreach ($unresolved as $b) {
+                        $a['blocked'][] = $b['text'];
+                        $a['blocks'][] = $b;
                     }
                     $a['flags'] = array_values(array_unique($a['flags'] ?? []));
                     // HEMIS'da allaqachon shunday (mudir/xona) — o'zgartirish kerak emas.

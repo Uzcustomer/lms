@@ -1091,3 +1091,35 @@ it('almashtirishdan keyin ikkinchi tur yangi qiymat bilan qayta tekshiriladi: o\
     'avval o\'qituvchi almashadi (C = USTOZ · 73)' => ['USTOZ', '73'],
     'avval xona almashadi (C = UST2 · 71)' => ['UST2', '71'],
 ]);
+
+it('hal qilinmagan to\'siq ikkinchi tur almashgandan keyin qayta tekshiriladi: endi bitta dars bo\'lsa, to\'siq yo\'qoladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    Teacher::where('hemis_id', 9001)->update(['hemis_id' => 0]);   // mudirni qo'yib bo'lmaydi — o'qituvchi to'sig'i qoladi
+    $ust2 = Teacher::where('full_name', 'USTOZ')->first()->replicate()->forceFill(['hemis_id' => 5002, 'full_name' => 'UST2', 'short_name' => 'UST2',
+        'login' => 'ust5002', 'employee_id_number' => '5002']);
+    $ust2->save();
+    $copy = fn (array $o) => TimetableCard::create(array_merge($s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang',
+        'students', 'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name', 'day', 'pair']), $o));
+    // A (01a) = USTOZ · 71 (yangi); B (01b) = USTOZ · mudir xonasi — HEMIS'da allaqachon shunday; C (01c) = UST2 · 71.
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    hsInsert('groups', ['group_hemis_id' => 1598, 'name' => 'p/st26-01c', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    $copy(['group_name' => 'p/st26-01b (rus)', 'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => null, 'auditorium_name' => null]);
+    $copy(['group_name' => 'p/st26-01c (rus)', 'teacher_id' => $ust2->id, 'teacher_name' => 'UST2', 'auditorium_code' => '71', 'auditorium_name' => '423']);
+    hsInsert('schedules', ['schedule_hemis_id' => 80, 'subject_id' => 474, 'subject_name' => 'Odam anatomiyasi', 'semester_code' => '11',
+        'group_id' => 1597, 'group_name' => 'p/st26-01b', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-09-21 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 5001, 'employee_name' => 'USTOZ', 'auditorium_code' => 'KM1', 'auditorium_name' => 'Kafedra mudiri xonasi']);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $on = fn (string $group) => collect(collect($res['groups'])->firstWhere('group', $group)['units'][0]['actions'])
+        ->first(fn ($a) => $a['date'] === '2026-09-21' && $a['start'] === '10:00');
+    expect($on('p/st26-01b'))->toBeNull();
+    $a = $on('p/st26-01a');
+    // Xona band (C) — mudir xonasi; endi A va B — USTOZ mudir xonasida, bitta dars: o'qituvchi to'sig'i qolmaydi.
+    expect([$a['employee_id'], $a['auditorium_code']])->toBe([5001, 'KM1'])
+        ->and($a['blocked'])->toBe([]);
+});

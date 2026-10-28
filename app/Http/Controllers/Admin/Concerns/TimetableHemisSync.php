@@ -212,26 +212,19 @@ trait TimetableHemisSync
             : collect();
         $hasOvRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
         $gset = TimetableGridSetting::where('board_id', $board->id)->get();
-        $weeksOf = function (TimetableCard $c) use ($gset, $board): int {
-            $g = $gset->first(fn ($g) => (string) $g->faculty_name === (string) $c->faculty_name && $this->specKey($g->specialty_name) === $this->specKey($c->specialty_name) && (int) $g->course === (int) $c->course)
-                ?? $gset->first(fn ($g) => !$g->faculty_name && $this->specKey($g->specialty_name) === $this->specKey($c->specialty_name) && (int) $g->course === (int) $c->course);
-
-            return (int) ($g->weeks ?? $board->weeks ?: 15);
-        };
+        $weeksOf = fn (TimetableCard $c): int => $this->cardGrid($board, $c)['weeks'];
         // Qamrov (fakultet|yo'nalish|kurs) bo'yicha: hafta dushanbasi => hafta raqami. Boshlanish sanasi weekStartDate()
         // dagidek (panjara start_date, bo'lmasa semestr boshi), lekin oldindan yuklangan sozlamalardan — haftalar xotirada sanaladi.
         $hasStart = Schema::hasColumn('timetable_grid_settings', 'start_date');
         $low = fn ($v) => mb_strtolower(trim((string) $v));
         $mondays = [];
         $weekFor = function (TimetableCard $c, string $monday) use (&$mondays, $board, $weeksOf, $gset, $hasStart, $low): ?int {
-            $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course;
+            $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course . '|' . $this->cardCurriculumId($c);
             if (!isset($mondays[$k])) {
-                $gs = $hasStart ? $gset->filter(fn ($g) => $low($g->specialty_name) === $low($c->specialty_name) && (int) $g->course === (int) $c->course
-                        && in_array($low($g->faculty_name), [$low($c->faculty_name), ''], true))
-                    ->sortBy(fn ($g) => $low($g->faculty_name) === $low($c->faculty_name) ? 0 : 1)->first() : null;
-                $start = $gs?->start_date ? Carbon::parse($gs->start_date)->startOfDay() : $this->weeklySemesterStart($board);
+                $grid = $this->cardGrid($board, $c);
+                $start = $grid['start_date'] ? Carbon::parse($grid['start_date'])->startOfDay() : $this->weeklySemesterStart($board);
                 $mondays[$k] = [];
-                foreach ($this->weekMondays($board, $start, $weeksOf($c)) as $i => $m) {
+                foreach ($this->weekMondays($board, $start, $weeksOf($c), $grid['weekly_breaks']) as $i => $m) {
                     $mondays[$k][$m->toDateString()] = $i + 1;
                 }
             }
@@ -637,15 +630,10 @@ trait TimetableHemisSync
 
         // Haftalar: kartaning panjarasi (boshlanish sanasi, tanaffuslar) bo'yicha.
         $gset = TimetableGridSetting::where('board_id', $board->id)->get();
-        $gridFor = function (TimetableCard $c) use ($gset, $board) {
-            $g = $gset->first(fn ($g) => (string) $g->faculty_name === (string) $c->faculty_name && $this->specKey($g->specialty_name) === $this->specKey($c->specialty_name) && (int) $g->course === (int) $c->course)
-                ?? $gset->first(fn ($g) => !$g->faculty_name && $this->specKey($g->specialty_name) === $this->specKey($c->specialty_name) && (int) $g->course === (int) $c->course);
-
-            return ['weeks' => (int) ($g->weeks ?? $board->weeks ?: 15), 'days' => (int) ($g->days ?? $board->days ?: 6)];
-        };
+        $gridFor = fn (TimetableCard $c): array => $this->cardGrid($board, $c);
         $weekCache = [];
         $weekMonday = function (TimetableCard $c, int $w) use ($board, &$weekCache): string {
-            $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course . '|' . $w;
+            $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course . '|' . $this->cardCurriculumId($c) . '|' . $w;
 
             return $weekCache[$k] ??= $this->weekStartDate($board, $c, $w)->toDateString();
         };

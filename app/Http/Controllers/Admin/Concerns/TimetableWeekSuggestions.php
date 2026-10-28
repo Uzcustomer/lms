@@ -144,9 +144,9 @@ trait TimetableWeekSuggestions
         };
         $grids = [];
         $gridOf = function (TimetableCard $c) use (&$grids, $board) {
-            $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course;
+            $k = $c->faculty_name . '|' . $c->specialty_name . '|' . $c->course . '|' . $this->cardCurriculumId($c);
 
-            return $grids[$k] ??= $this->gridFor($board, $c->faculty_name, (string) $c->specialty_name, (int) $c->course);
+            return $grids[$k] ??= $this->cardGrid($board, $c);
         };
         // Dars butun hisoblanadi: bir guruhning bir fandan shu kundagi ketma-ket amaliy kartalari (2 + 2, 2 + 1 soat)
         // bitta blok — ko'chirilsa hammasi birga, bir kunda ketma-ket ko'chadi.

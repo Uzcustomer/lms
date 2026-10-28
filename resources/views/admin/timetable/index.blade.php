@@ -635,7 +635,7 @@
                                 <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
                                     <div>
                                         <div class="text-sm font-semibold text-slate-700">Dars kunlari va paralar</div>
-                                        <p class="text-xs text-slate-500">Fakultet va yo'nalishni tanlang, kurslar bo'yicha alohida saqlang.</p>
+                                        <p class="text-xs text-slate-500">Har bir HEMIS o‘quv rejasining kalendarini alohida saqlang. Kartochkalar va joylashuvlar saqlanadi.</p>
                                     </div>
                                     <div class="flex flex-wrap items-end gap-2">
                                         <label class="text-xs text-slate-500">Fakultet
@@ -2674,8 +2674,12 @@
             const SUBJ_SEASON_LABELS = { kuzgi: 'Kuzgi', bahorgi: 'Bahorgi' };
             // Fan-rejim kaliti — katta-kichik harf/bo'shliqqa befarq (reja nomi
             // "Davolash ishi", karta nomi "davolash ishi" bo'lishi mumkin).
-            const gridKey = (faculty, spec, course) =>
-                String(faculty || '').trim() + '|' + String(spec || '').trim() + '|' + course;
+            const gridKey = (faculty, spec, course, curriculum = 0) =>
+                String(faculty || '').trim() + '|' + String(spec || '').trim() + '|' + course + '|' + (+curriculum || 0);
+            const gridForCard = c => grids[gridKey(c.faculty_name || c.faculty || '', c.specialty_name || c.specialty, c.course, c.curriculum_hemis_id)]
+                || grids[gridKey(c.faculty_name || c.faculty || '', c.specialty_name || c.specialty, c.course)]
+                || grids[gridKey('', c.specialty_name || c.specialty, c.course)]
+                || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
             const subjModeKey = (spec, course, subject) =>
                 String(spec || '').trim().toLowerCase() + '|' + course + '|' + String(subject || '').trim().toLowerCase();
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
@@ -3366,7 +3370,7 @@
                 buildSubjectColors();
                 loadSubjectColorOverrides();
                 grids = {};
-                (j.grids || []).forEach(g => { grids[gridKey(g.faculty_name, g.specialty_name, g.course)] = g; });
+                (j.grids || []).forEach(g => { grids[gridKey(g.faculty_name, g.specialty_name, g.course, g.curriculum_hemis_id)] = g; });
                 // Hafta bo'yicha istisnolar
                 overrides = {};
                 (j.overrides || []).forEach(o => {
@@ -3555,9 +3559,10 @@
 
             // ===== Panjara sozlamasi (yo'nalish+kurs bo'yicha) =====
             function curGrid() {
-                const g = curSpec && (grids[gridKey(curSpec.faculty, curSpec.specialty_name, curSpec.course)]
-                    || grids[gridKey('', curSpec.specialty_name, curSpec.course)]);
-                return g || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
+                const visible = cards.filter(c => selectedFaculties.has(c.faculty_name || '') && selectedDirs.has(c.specialty_name) && selectedCourses.has(c.course));
+                const calendars = visible.map(gridForCard);
+                const base = calendars[0] || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
+                return Object.assign({}, base, { weeks: Math.max(+base.weeks || 1, ...calendars.map(g => +g.weeks || 1)) });
             }
             function fillGridInputs() {
                 // Panjara qiymatlari endi Sozlamalar modalidan boshqariladi.
@@ -3583,16 +3588,16 @@
                 d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
                 return d;
             }
-            function weekBreaks() {
+            function weekBreaks(g) {
                 const toD = v => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
-                return ((board && board.settings && board.settings.weekly_breaks) || [])
+                return ((g && g.weekly_breaks) ?? ((board && board.settings && board.settings.weekly_breaks) || []))
                     .map(b => [toD(b && b.from), toD(b && b.to)]).filter(b => b[0] && b[1]);
             }
             // n-o'quv haftasining dushanbasi (tanlangan yo'nalish+kurs kalendari bo'yicha)
             function weekMonday(n, g) {
                 const st = gridStartDate(g || curGrid());
                 if (!st) return null;
-                const br = weekBreaks();
+                const br = weekBreaks(g || curGrid());
                 const d = new Date(st);
                 for (let k = 0, guard = 0; guard < 200; guard++, d.setDate(d.getDate() + 7)) {
                     if (br.some(([f, t]) => d >= f && d <= t)) continue;
@@ -4192,7 +4197,7 @@
             // Har bir ko'chirish oddiy week-override (server konflikt tekshiradi).
             // Kartaning o'z panjarasidagi haftalar soni (yo'nalish+kurs, bo'lmasa doska).
             const cardTermWeeks = c => {
-                const g = grids[gridKey(c.faculty_name || '', c.specialty_name, c.course)] || grids[gridKey('', c.specialty_name, c.course)];
+                const g = gridForCard(c);
                 return +(g && g.weeks) || +board.weeks || 15;
             };
             async function compactInternalWeek(W, scopeCards) {
@@ -4525,7 +4530,7 @@
             // Ma'ruza haftalari semestr bo'ylab tarqatilgan — kartada "6 hafta: 1,3,6..."
             // ko'rinishida chiqadi. Ro'yxat uzun bo'lsa qisqartiriladi.
             function activeWeeksOf(c, totalWeeks) {
-                const total = Math.max(1, +totalWeeks || 0);
+                const total = Math.max(1, Math.min(+totalWeeks || 1, +c.term_weeks || +totalWeeks || 1));
                 const out = [];
                 for (let w = 1; w <= total; w++) {
                     const ov = overrides[c.id + '|' + w];
@@ -4537,6 +4542,7 @@
             }
 
             function effPlace(c) {
+                if (curWeek && c.term_weeks && curWeek > +c.term_weeks) return null;
                 if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
                 const ov = overrides[c.id + '|' + curWeek];
                 // Tashqi qatlamda haftaga xos ko'chirishlar (ichki jadvalniki) hisobga olinmaydi, faqat o'tilmaydigan haftalar.
@@ -4616,6 +4622,7 @@
             // butunlay chiqarib tashlanadi.
             const weekCancelled = (c) => {
                 if (!curWeek) return false;
+                if (c.term_weeks && curWeek > +c.term_weeks) return true;
                 const ov = overrides[c.id + '|' + curWeek];
                 return !!(ov && ov.cancelled);
             };
@@ -6794,7 +6801,7 @@
             }
             // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).
             function weeksIntersect(a, b) {
-                const total = +curGrid().weeks || +board.weeks || 15;
+                const total = Math.min(+a.term_weeks || +curGrid().weeks || +board.weeks || 15, +b.term_weeks || +curGrid().weeks || +board.weeks || 15);
                 for (let w = 1; w <= total; w++) {
                     const oa = overrides[a.id + '|' + w], ob = overrides[b.id + '|' + w];
                     if (!(oa && oa.cancelled) && !(ob && ob.cancelled)) return true;
@@ -8639,7 +8646,7 @@
             function excelCardText(card) {
                 if (!card) return '';
 
-                const cardGrid = grids[gridKey(card.faculty_name, card.specialty_name, card.course)] || {};
+                const cardGrid = gridForCard(card);
                 const totalWeeks = Math.max(1, +cardGrid.weeks || +(board && board.weeks) || +card.weeks || 15);
                 const activeWeeks = [];
                 let hasWeekExceptions = false;
@@ -9184,8 +9191,11 @@
                         faculty: card.faculty_name || '',
                         specialty: card.specialty_name || '',
                         course: +card.course || 0,
+                        curriculum_hemis_id: +card.curriculum_hemis_id || 0,
+                        program_name: card.program_name || 'Umumiy sozlama',
+                        education_form_name: card.education_form_name || '',
                     };
-                    const key = gridKey(row.faculty, row.specialty, row.course);
+                    const key = gridKey(row.faculty, row.specialty, row.course, row.curriculum_hemis_id);
                     if (!seen.has(key)) seen.set(key, row);
                 });
                 gridSettingRows = [...seen.values()].sort((a, b) =>
@@ -9215,10 +9225,10 @@
                 );
                 const groups = new Map();
                 filtered.forEach((row, index) => {
-                    const key = row.faculty + '|' + row.specialty;
-                    if (!groups.has(key)) groups.set(key, { faculty: row.faculty, specialty: row.specialty, courses: new Map() });
+                    const key = row.faculty + '|' + row.specialty + '|' + row.curriculum_hemis_id;
+                    if (!groups.has(key)) groups.set(key, { faculty: row.faculty, specialty: row.specialty, program: row.program_name, form: row.education_form_name, curriculum: row.curriculum_hemis_id, courses: new Map() });
                     const originalIndex = gridSettingRows.findIndex(item =>
-                        gridKey(item.faculty, item.specialty, item.course) === gridKey(row.faculty, row.specialty, row.course)
+                        gridKey(item.faculty, item.specialty, item.course, item.curriculum_hemis_id) === gridKey(row.faculty, row.specialty, row.course, row.curriculum_hemis_id)
                     );
                     groups.get(key).courses.set(row.course, { row, index: originalIndex });
                 });
@@ -9229,12 +9239,13 @@
                 }
 
                 let html = '<div class="grid-setting-table-wrap"><table class="grid-setting-table"><thead><tr>' +
-                    '<th>Fakultet</th><th>Yo\'nalish</th>';
+                    '<th>Fakultet</th><th>Ta’lim dasturi / o‘quv reja</th><th>Yo\'nalish</th>';
                 for (let course = 1; course <= 6; course++) html += '<th>' + course + '-kurs</th>';
                 html += '</tr></thead><tbody>';
 
                 groups.forEach(group => {
                     html += '<tr><td class="grid-setting-name"><b>' + esc(group.faculty || 'Fakultet ko\'rsatilmagan') + '</b></td>' +
+                        '<td class="grid-setting-name"><b>' + esc(group.program) + '</b><div>' + esc(group.form) + '</div></td>' +
                         '<td class="grid-setting-name"><span>' + esc(group.specialty) + '</span></td>';
                     for (let course = 1; course <= 6; course++) {
                         const item = group.courses.get(course);
@@ -9243,16 +9254,17 @@
                             continue;
                         }
                         const row = item.row;
-                        const g = grids[gridKey(row.faculty, row.specialty, row.course)]
-                            || grids[gridKey('', row.specialty, row.course)]
-                            || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
+                        const g = gridForCard(row);
                         html += '<td><div class="grid-setting-cell" data-grid-row="' + item.index + '">' +
                             '<div class="grid-setting-values">' +
                                 '<label title="Kunlar soni">K<input data-grid-field="days" type="number" min="1" max="7" value="' + (+g.days || board.days) + '"></label>' +
-                                '<label title="Kuniga paralar soni">P<input data-grid-field="pairs_per_day" type="number" min="1" max="10" value="' + (+g.pairs_per_day || board.pairs_per_day) + '"></label>' +
+                                '<label title="Kuniga paralar soni">P<input data-grid-field="pairs_per_day" type="number" min="1" max="24" value="' + (+g.pairs_per_day || board.pairs_per_day) + '"></label>' +
                                 '<label title="Hafta soni">H<input data-grid-field="weeks" type="number" min="1" max="30" value="' + (+g.weeks || board.weeks) + '"></label>' +
                                 '<label title="Semestr boshlanishi (bo\'sh — doska semestr boshi)">B<input data-grid-field="start_date" type="date" value="' + esc(String(g.start_date || '').slice(0, 10)) + '" style="width:118px"></label>' +
                             '</div>' +
+                            '<label title="Bo‘sh qoldirilsa doska ta’tili ishlaydi"><input data-grid-field="inherit_breaks" type="checkbox"' + (g.weekly_breaks == null ? ' checked' : '') + '> Umumiy ta’til</label>' +
+                            '<label>Ta’til boshi<input data-grid-field="break_from" type="date" value="' + esc(g.weekly_breaks?.[0]?.from || '') + '"></label>' +
+                            '<label>Ta’til oxiri<input data-grid-field="break_to" type="date" value="' + esc(g.weekly_breaks?.[0]?.to || '') + '"></label>' +
                             '<button type="button" class="grid-setting-save" data-grid-save="' + item.index + '" title="Saqlash"><img src="' + ICON_BASE + '/saqlash.png" alt="" aria-hidden="true"></button>' +
                             '<span class="grid-setting-status"></span>' +
                         '</div></td>';
@@ -9282,22 +9294,26 @@
                 if (!row || !wrap || !board) return;
                 const value = name => wrap.querySelector('[data-grid-field="' + name + '"]').value;
                 const status = wrap.querySelector('.grid-setting-status');
-                const cur = grids[gridKey(row.faculty, row.specialty, row.course)] || grids[gridKey('', row.specialty, row.course)];
-                // Hafta soni o'zgarsa kartochkalarni qayta yaratish ixtiyoriy — joylashuvlar o'chib ketmasin
-                const regenerate = !!(cur && +cur.weeks !== +value('weeks') &&
-                    confirm('Hafta soni o\'zgardi. Shu yo\'nalish kartochkalari qayta yaratilsinmi?\n\nOK — qayta yaratish (joylashuvlar o\'chadi)\nBekor — kartochkalar va joylashuvlar saqlanadi, faqat hafta soni o\'zgaradi'));
+                const inheritBreaks = wrap.querySelector('[data-grid-field="inherit_breaks"]').checked;
+                const from = value('break_from'), to = value('break_to');
+                if (!inheritBreaks && ((from && !to) || (!from && to) || (from && to < from))) {
+                    status.textContent = 'Ta’til sanalarini to‘liq va to‘g‘ri kiriting.';
+                    return;
+                }
                 btn.disabled = true;
                 status.textContent = 'Saqlanmoqda...';
                 try {
                     await api(BASE + '/boards/' + board.id + '/grid', 'POST', {
                         faculty_name: row.faculty,
+                        curriculum_hemis_id: row.curriculum_hemis_id,
+                        weekly_breaks: inheritBreaks ? null : (from ? [{ from, to }] : []),
                         specialty_name: row.specialty,
                         course: row.course,
                         days: value('days'),
                         pairs_per_day: value('pairs_per_day'),
                         weeks: value('weeks'),
                         start_date: value('start_date') || '',
-                        regenerate: regenerate ? 1 : 0,
+                        regenerate: 0,
                     });
                     await loadBoard(board.id);
                     renderGridSettings();

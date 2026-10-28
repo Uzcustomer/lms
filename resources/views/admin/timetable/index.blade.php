@@ -5081,6 +5081,9 @@
                 if (scopeMode === 'mine') { body.mine = 1; delete body.clear; }
                 else if (scopeMode === 'kafedra') { body.kafedra = 1; delete body.clear; }
                 else if (scopeMode === 'subjects') { body.subjects = 1; delete body.clear; }
+                $('cycleMsg').classList.remove('text-red-700', 'text-emerald-700', 'font-semibold');
+                $('cycleMsg').classList.add('text-gray-500');
+                $('cycleMsg').removeAttribute('title');
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
@@ -5258,8 +5261,30 @@
             }
             // Sikl panjarasi interaktiv ko'rinishda chiziladi: bo'sh katakka fan
             // kartasini sudrash uning start indeksini saqlaydi.
+            function showCyclePlacementResult(card, index, message, type = 'error') {
+                const msg = $('cycleMsg');
+                const date = cyclePlanData && cyclePlanData.dates && cyclePlanData.dates[index]
+                    ? (cyclePlanData.dates[index].date || cyclePlanData.dates[index].label || '')
+                    : '';
+                const subject = card && card.subject ? card.subject : 'Fan kartasi';
+                const prefix = type === 'success' ? 'Joylandi' : 'Joylanmadi';
+                const details = [subject, date].filter(Boolean).join(' · ');
+                const text = prefix + (details ? ': ' + details : '') + (message ? ' — ' + message : '');
+
+                msg.textContent = text;
+                msg.classList.remove('text-gray-500', 'text-red-700', 'text-emerald-700', 'font-semibold');
+                msg.classList.add(type === 'success' ? 'text-emerald-700' : 'text-red-700', 'font-semibold');
+                msg.setAttribute('title', text);
+
+                if (type !== 'success' && typeof ttToast === 'function') {
+                    ttToast('<b>Sikl kartasi joylanmadi</b><div>' + esc(text) + '</div>', 'error');
+                }
+            }
             async function placeCycleCardAt(card, index, pair) {
-                if (!card) return;
+                if (!card) {
+                    showCyclePlacementResult(null, index, 'Karta ma\u2019lumoti topilmadi. Sahifani yangilab qayta urinib ko\u2018ring.');
+                    return;
+                }
                 try {
                     await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                         ...cycleOverlapParams(), ...cycleLayerParams(),
@@ -5269,8 +5294,10 @@
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
+                    showCyclePlacementResult(card, index, '', 'success');
                 } catch (e) {
-                    alert('Sikl blokini joylab bo\u2018lmadi: ' + e.message);
+                    console.error('Sikl joylash xatosi: ' + (e && e.message ? e.message : 'Noma\u2019lum xato'), {karta: card, index: index});
+                    showCyclePlacementResult(card, index, e && e.message ? e.message : 'Noma\u2019lum xato.');
                 }
             }
             // Tanlangan karta qaysi oqim qatoriga tushishi mumkinligini ko'rsatadi:
@@ -6201,25 +6228,16 @@
                     const rowKey = cell.dataset.cycleRow;
                     const index = indexAt(cell, ev);
                     cycleDragKey = null;
-                    if (!card) return;
-                    if (card.row_key !== rowKey) {
-                        console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
-                        alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
+                    if (!card) {
+                        showCyclePlacementResult(null, index, 'Karta ma\u2019lumoti topilmadi. Sahifani yangilab qayta urinib ko\u2018ring.');
                         return;
                     }
-                    try {
-                        await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                            ...cycleOverlapParams(), ...cycleLayerParams(),
-                            action: 'place', specialty_name: card.specialty, course: card.course,
-                            group_name: card.group, subject_name: card.subject, start_index: index,
-                            training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
-                            start_date: $('cycleStart').value, holidays: cycleHolidays,
-                        });
-                        await loadCyclePlan();
-                    } catch (e) {
-                        console.error('Sikl joylash xatosi', {karta: card, index: index, xato: e.message});
-                        alert('Sikl blokini joylab bo‘lmadi: ' + e.message);
+                    if (card.row_key !== rowKey) {
+                        console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
+                        showCyclePlacementResult(card, index, 'Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
+                        return;
                     }
+                    await placeCycleCardAt(card, index, +cell.dataset.cyclePair || 1);
                 });
                 grid.addEventListener('dragstart', ev => {
                     // Belgilash rejimida bloklar ko'chirilmaydi.
@@ -6278,7 +6296,9 @@
                     cycleDragKey = null;
                     highlightCycleRow(null);
                     if (!card || card.row_key !== rowKey) {
-                        alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
+                        showCyclePlacementResult(card, index, card
+                            ? 'Fan kartasini faqat o\u2018z oqimining qatoriga joylang.'
+                            : 'Karta ma\u2019lumoti topilmadi. Sahifani yangilab qayta urinib ko\u2018ring.');
                         return;
                     }
                     placeCycleCardAt(card, index, +cell.dataset.cyclePair || 1);

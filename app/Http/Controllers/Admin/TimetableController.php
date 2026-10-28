@@ -1142,7 +1142,9 @@ class TimetableController extends Controller
                             $ktrPlan = $isCycleRow ? null
                                 : $this->ktrPlanForRow($ktrPlans, $blockFac, (string) $specName, (int) $course, (string) $s->subject_name);
                             if ($ktrPlan !== null) {
-                                $ktrLecWeeks = count(array_filter($ktrPlan, fn ($d) => (int) ($d['lec'] ?? 0) > 0));
+                                // 2 soatlik ma'ruza necha marta: odatda ma'ruzali haftalar soni; haftada 2 soatdan ko'p
+                                // bo'lsa (4 soat — ikki ma'ruza) soat kamayib ketmasin.
+                                $ktrLecWeeks = array_sum(array_map(fn ($d) => (int) ceil(max(0, (int) ($d['lec'] ?? 0)) / 2), $ktrPlan));
                                 if ($ktrLecWeeks > 0) {
                                     $wp['lecture_weeks'] = $ktrLecWeeks;
                                 }

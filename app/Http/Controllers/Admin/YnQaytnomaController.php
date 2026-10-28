@@ -691,7 +691,7 @@ class YnQaytnomaController extends Controller
                 }
 
                 foreach ($entryStudents as $student) {
-                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+                    $markingScore = MarkingSystemScore::forYnAdmission($student->hemis_id);
 
                     $qoldirgan = (int) Attendance::where('group_id', $entryGroup->group_hemis_id)
                         ->where('subject_id', $entrySubject->subject_id)
@@ -1136,6 +1136,8 @@ class YnQaytnomaController extends Controller
                 $hemisId = $student->hemis_id;
                 $davomatPct = (float) ($data['davomat'][$hemisId] ?? 0);
                 $davomatFailed = $davomatPct >= 25;
+                // JN o'tish chegarasi: xalqaro fakultet (PIMU) uchun 70, qolganlarga 60
+                $jnPass = MarkingSystemScore::vedomostJnPass($hemisId);
 
                 // B ustun - Talaba FIO (davomat ≥25% bo'lsa haqiqiy foiz qo'shiladi)
                 $fioLabel = $student->full_name;
@@ -1204,11 +1206,11 @@ class YnQaytnomaController extends Controller
                 $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
 
                 if ($roundJnMtToInt) {
-                    $eBall = ($jnVal !== null && $jnVal >= 60) ? (int) floor($jnVal * $wJn / 100 + 0.5) : 0;
+                    $eBall = ($jnVal !== null && $jnVal >= $jnPass) ? (int) floor($jnVal * $wJn / 100 + 0.5) : 0;
                     $hBall = ($mtVal !== null && $mtVal >= 60) ? (int) floor($mtVal * $wMt / 100 + 0.5) : 0;
                     $kBall = ($onVal !== null && $onVal >= 60) ? (int) floor($onVal * $wOn / 100 + 0.5) : 0;
                 } else {
-                    $eBall = ($jnVal !== null && $jnVal >= 60) ? round($jnVal * $wJn / 100, 1) : 0;
+                    $eBall = ($jnVal !== null && $jnVal >= $jnPass) ? round($jnVal * $wJn / 100, 1) : 0;
                     $hBall = ($mtVal !== null && $mtVal >= 60) ? round($mtVal * $wMt / 100, 1) : 0;
                     $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
                 }
@@ -1233,7 +1235,7 @@ class YnQaytnomaController extends Controller
 
                 // JB+MT+ON ball va N% — V branchlari uchun
                 $maxJbMtOn = $wJn + $wMt + $wOn;
-                $mSum = (($jnVal !== null && $jnVal < 60) || ($mtVal !== null && $mtVal < 60))
+                $mSum = (($jnVal !== null && $jnVal < $jnPass) || ($mtVal !== null && $mtVal < 60))
                     ? 0
                     : round($eBall + $hBall + $kBall, 1);
                 $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
@@ -1248,7 +1250,7 @@ class YnQaytnomaController extends Controller
                 } elseif (($wOski > 0 && ($oskiVal === null || $oskiVal == 0))
                        || ($wTest > 0 && ($testVal === null || $testVal == 0))) {
                     $v = -1; // kelmadi
-                } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < 60)
+                } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < $jnPass)
                        || ($wMt > 0   && $mtVal   !== null && $mtVal   < 60)
                        || ($wOn > 0   && $onVal   !== null && $onVal   < 60)
                        || ($wOski > 0 && $oskiVal !== null && $oskiVal < 60)

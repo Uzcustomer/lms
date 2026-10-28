@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\MarkingSystemScore;
+use App\Models\Student;
 use App\Models\VedomostSubmission;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -446,6 +448,9 @@ TXT;
             }
         }
 
+        // Xalqaro fakultet (PIMU) talabalari — vedomostda JN o'tish chegarasi 70.
+        $intlIds = $this->internationalStudentIds($expected['talabalar'] ?? []);
+
         $matched = [];
         foreach (($expected['talabalar'] ?? []) as $stu) {
             $id = $this->digits($stu['student_id'] ?? '');
@@ -469,7 +474,8 @@ TXT;
             // Ballar: PHP hisoblagan (tizim foizi × skaner og'irligi) vs skaner.
             $e = $this->calc->compute(
                 $stu['jn'] ?? null, $stu['mt'] ?? null, $stu['on'] ?? null,
-                $stu['oski'] ?? null, $stu['test'] ?? null, $levelCode, $w
+                $stu['oski'] ?? null, $stu['test'] ?? null, $levelCode, $w,
+                0.0, isset($intlIds[$id]) ? MarkingSystemScore::INTERNATIONAL_JN_LIMIT : 60
             );
             $this->cmpNum($disc, $label . ' — JB ball', $e['jb_ball'], $s['jb_ball'] ?? null);
             $this->cmpNum($disc, $label . ' — MT ball', $e['mt_ball'], $s['mt_ball'] ?? null);
@@ -536,6 +542,23 @@ TXT;
             'discrepancies' => $disc,
             'signatures' => $sig,
         ];
+    }
+
+    /**
+     * Ro'yxatdagi xalqaro fakultet talabalari (ID raqami => true).
+     */
+    private function internationalStudentIds(array $talabalar): array
+    {
+        $ids = array_values(array_filter(array_map(fn ($t) => $this->digits($t['student_id'] ?? ''), $talabalar)));
+        if (empty($ids)) {
+            return [];
+        }
+
+        return Student::whereIn('student_id_number', $ids)
+            ->get(['student_id_number', 'department_name'])
+            ->filter(fn ($s) => $s->isInternationalFaculty())
+            ->mapWithKeys(fn ($s) => [$this->digits($s->student_id_number) => true])
+            ->all();
     }
 
     /** Faqat raqamlarni qoldiradi (talaba ID solishtirish uchun). */

@@ -442,7 +442,7 @@ class VedomostController extends Controller
 
 
                     $deadline = Deadline::where('level_code', $semester->level_code)->first();
-                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+                    $markingScore = MarkingSystemScore::forYnAdmission($student->hemis_id);
                     $jnLimit = $markingScore->jn_active ? $markingScore->jn_limit : 0;
                     $mtLimit = $markingScore->mt_active ? $markingScore->mt_limit : 0;
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
@@ -852,7 +852,7 @@ class VedomostController extends Controller
 
 
                     $deadline = Deadline::where('level_code', $semester->level_code)->first();
-                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+                    $markingScore = MarkingSystemScore::forYnAdmission($student->hemis_id);
                     $jnLimit = $markingScore->jn_active ? $markingScore->jn_limit : 0;
                     $mtLimit = $markingScore->mt_active ? $markingScore->mt_limit : 0;
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;

@@ -178,7 +178,7 @@ class QaytnomaController extends Controller
                 ->get();
             $jadval_students = [];
             foreach ($students as $student) {
-                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+                $markingScore = MarkingSystemScore::forYnAdmission($student->hemis_id);
                 $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
                     ->where('subject_id', $subject->subject_id)
                     ->where('student_hemis_id', $student->hemis_id)

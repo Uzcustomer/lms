@@ -5460,7 +5460,7 @@ class AcademicScheduleController extends Controller
                 }
 
                 foreach ($entryStudents as $student) {
-                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+                    $markingScore = MarkingSystemScore::forYnAdmission($student->hemis_id);
 
                     $qoldirgan = (int) Attendance::where('group_id', $entryGroup->group_hemis_id)
                         ->where('subject_id', $entrySubject->subject_id)

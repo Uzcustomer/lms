@@ -17,11 +17,12 @@ class VedomostGradeCalculator
      *
      * @param  array  $w  og'irliklar: ['jn'=>50,'mt'=>20,'on'=>0,'oski'=>0,'test'=>30]
      * @param  string  $levelCode  semestr level_code (14/15 = 4-5 kurs → ball butun)
+     * @param  int  $jnPass  JN o'tish chegarasi (xalqaro fakultet uchun 70 — MarkingSystemScore::vedomostJnPass)
      * @return array{jb_ball:int|float,mt_ball:int|float,on_ball:int|float,
      *               oski_ball:int|float,test_ball:int|float,jbmton_ball:int|float,
      *               ozlashtirish:?int,ects:string,baho:string}
      */
-    public function compute($jn, $mt, $on, $oski, $test, ?string $levelCode, array $w, float $davomatPct = 0.0): array
+    public function compute($jn, $mt, $on, $oski, $test, ?string $levelCode, array $w, float $davomatPct = 0.0, int $jnPass = 60): array
     {
         $wJn = (int) ($w['jn'] ?? 0);
         $wMt = (int) ($w['mt'] ?? 0);
@@ -38,11 +39,11 @@ class VedomostGradeCalculator
         // JB/MT/ON ball — 4-5 kurs (14/15) butun (half-up), aks holda 1 kasr.
         $roundToInt = in_array((string) $levelCode, ['14', '15'], true);
         if ($roundToInt) {
-            $eBall = ($jnVal !== null && $jnVal >= 60) ? (int) floor($jnVal * $wJn / 100 + 0.5) : 0;
+            $eBall = ($jnVal !== null && $jnVal >= $jnPass) ? (int) floor($jnVal * $wJn / 100 + 0.5) : 0;
             $hBall = ($mtVal !== null && $mtVal >= 60) ? (int) floor($mtVal * $wMt / 100 + 0.5) : 0;
             $kBall = ($onVal !== null && $onVal >= 60) ? (int) floor($onVal * $wOn / 100 + 0.5) : 0;
         } else {
-            $eBall = ($jnVal !== null && $jnVal >= 60) ? round($jnVal * $wJn / 100, 1) : 0;
+            $eBall = ($jnVal !== null && $jnVal >= $jnPass) ? round($jnVal * $wJn / 100, 1) : 0;
             $hBall = ($mtVal !== null && $mtVal >= 60) ? round($mtVal * $wMt / 100, 1) : 0;
             $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
         }
@@ -63,7 +64,7 @@ class VedomostGradeCalculator
         }
 
         $maxJbMtOn = $wJn + $wMt + $wOn;
-        $mSum = (($jnVal !== null && $jnVal < 60) || ($mtVal !== null && $mtVal < 60))
+        $mSum = (($jnVal !== null && $jnVal < $jnPass) || ($mtVal !== null && $mtVal < 60))
             ? 0
             : round($eBall + $hBall + $kBall, 1);
         $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
@@ -78,7 +79,7 @@ class VedomostGradeCalculator
         } elseif (($wOski > 0 && ($oskiVal === null || $oskiVal == 0))
                || ($wTest > 0 && ($testVal === null || $testVal == 0))) {
             $v = -1;
-        } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < 60)
+        } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < $jnPass)
                || ($wMt > 0   && $mtVal   !== null && $mtVal   < 60)
                || ($wOn > 0   && $onVal   !== null && $onVal   < 60)
                || ($wOski > 0 && $oskiVal !== null && $oskiVal < 60)

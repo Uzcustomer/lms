@@ -181,7 +181,7 @@ class YnAdmissionService
             $jn = $liveGrades[$hemisId]['jn'] ?? 0;
             $mt = $liveGrades[$hemisId]['mt'] ?? 0;
 
-            $markingScore = MarkingSystemScore::getByStudentHemisId($hemisId);
+            $markingScore = MarkingSystemScore::forYnAdmission($hemisId);
             $jnLimit = $markingScore->effectiveLimit('jn');
             $mtLimit = $markingScore->effectiveLimit('mt');
 

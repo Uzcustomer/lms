@@ -94,6 +94,49 @@ class MarkingSystemScore extends Model
     }
 
     /**
+     * Xalqaro ta'lim fakulteti (PIMU) talabalari YN ga JN kamida shuncha bo'lsa kiradi:
+     * ularning 5 ballik shkalasida 3 (qoniqarli) 70 dan boshlanadi. Bu talabalar uchala
+     * baholash tizimida ham bor, shuning uchun qoida sozlamada emas, fakultet bo'yicha.
+     */
+    public const INTERNATIONAL_JN_LIMIT = 70;
+
+    /**
+     * YN ga ruxsat (YN jadval, qaytnoma, vedomost) uchun chegaralar:
+     * getByStudentHemisId() + xalqaro fakultet talabalari uchun JN 70.
+     */
+    public static function forYnAdmission($studentHemisId): self
+    {
+        $score = static::getByStudentHemisId($studentHemisId);
+
+        if (!$score->jn_active
+            || $score->jn_limit >= self::INTERNATIONAL_JN_LIMIT
+            || !static::isInternationalStudent($studentHemisId)) {
+            return $score;
+        }
+
+        // getByStudentHemisId keshidagi obyekt boshqa talabalar bilan umumiy — nusxasini o'zgartiramiz
+        $score = clone $score;
+        $score->jn_limit = self::INTERNATIONAL_JN_LIMIT;
+
+        return $score;
+    }
+
+    /**
+     * Vedomost hisobidagi JN o'tish chegarasi: xalqaro fakultet uchun 70, qolganlarga 60.
+     */
+    public static function vedomostJnPass($studentHemisId): int
+    {
+        return static::isInternationalStudent($studentHemisId) ? self::INTERNATIONAL_JN_LIMIT : 60;
+    }
+
+    public static function isInternationalStudent($studentHemisId): bool
+    {
+        static $cache = [];
+
+        return $cache[$studentHemisId] ??= (bool) Student::where('hemis_id', $studentHemisId)->first()?->isInternationalFaculty();
+    }
+
+    /**
      * Get the effective limit for a given type (returns 0 if inactive).
      */
     public function effectiveLimit(string $type): int

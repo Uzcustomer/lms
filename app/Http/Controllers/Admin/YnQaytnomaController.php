@@ -1136,7 +1136,7 @@ class YnQaytnomaController extends Controller
                 $hemisId = $student->hemis_id;
                 $davomatPct = (float) ($data['davomat'][$hemisId] ?? 0);
                 $davomatFailed = $davomatPct >= 25;
-                // JN o'tish chegarasi: xalqaro fakultet (PIMU) uchun 70, qolganlarga 60
+                // JN o'tish chegarasi: 70, xalqaro fakultet (PIMU) uchun avvalgidek 60
                 $jnPass = MarkingSystemScore::vedomostJnPass($hemisId);
 
                 // B ustun - Talaba FIO (davomat ≥25% bo'lsa haqiqiy foiz qo'shiladi)

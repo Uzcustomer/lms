@@ -17,7 +17,7 @@ class VedomostGradeCalculator
      *
      * @param  array  $w  og'irliklar: ['jn'=>50,'mt'=>20,'on'=>0,'oski'=>0,'test'=>30]
      * @param  string  $levelCode  semestr level_code (14/15 = 4-5 kurs → ball butun)
-     * @param  int  $jnPass  JN o'tish chegarasi (xalqaro fakultet uchun 70 — MarkingSystemScore::vedomostJnPass)
+     * @param  int  $jnPass  JN o'tish chegarasi (MarkingSystemScore::vedomostJnPass: 70, PIMU uchun 60)
      * @return array{jb_ball:int|float,mt_ball:int|float,on_ball:int|float,
      *               oski_ball:int|float,test_ball:int|float,jbmton_ball:int|float,
      *               ozlashtirish:?int,ects:string,baho:string}

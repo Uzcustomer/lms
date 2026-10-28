@@ -29,7 +29,7 @@ function exportGrid(bolak=false) {
     const cards = [{id:1,subject_name:'Gigiyena',faculty_name:'F1',specialty_name:'Davolash',course:2,training_type:'practice',
         teacher_name:'SINOV A.',group_name:'01a',weeks:4,auditorium_name:'Eski xona'},
         {id:2,subject_name:'HIDDEN SUBJECT'}];
-    const ctx = {document:{getElementById:()=>grid},cards,grids:{},gridKey:()=>'',board:{weeks:4},curWeek:4,weeklyLayer:'internal',
+    const ctx = {document:{getElementById:()=>grid},cards,grids:{},gridKey:()=>'',gridForCard:()=>({weeks:4}),board:{weeks:4},curWeek:4,weeklyLayer:'internal',
         overrides:{'1|2':{cancelled:true},'1|4':{auditorium_code:'R101',auditorium_name:'101'}},
         getComputedStyle:()=>({backgroundColor:'transparent',fontWeight:'400'}),rgbToHex:()=>null};
     vm.createContext(ctx);

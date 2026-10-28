@@ -15,7 +15,7 @@ const code = source.slice(a, b);
 async function compact(cards, slotsPerDay = 12, reject = []) {
   const moves = [], resets = [];
   const ctx = {
-    cards, overrides: {}, BASE: '', board: { weeks: 15 }, grids: {}, gridKey: () => '',
+    cards, overrides: {}, BASE: '', board: { weeks: 15 }, grids: {}, gridKey: () => '', gridForCard: () => ({weeks:15}),
     isCycleCardAny: () => false, cardGroups: c => [c.group_name], cardLen: c => c.len_half,
     gkey: (c, g) => g, boardSchedule: () => Array.from({ length: slotsPerDay }, () => ({ type: 'pair' })),
     api: async (url, method, body) => {

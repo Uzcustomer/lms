@@ -4817,15 +4817,19 @@
                 }
             }
 
-            async function autoCycleSubjects() {
-                if (!board || ascType !== 'subjects') return;
-                const candidates = ascData.filter(row => [4, 5, 6].includes(+row.course))
+            function autoCycleCandidates() {
+                return ascData.filter(row => [4, 5, 6].includes(+row.course))
                     .map(row => {
                         const total = (+row.lecture || 0) + (+row.practice || 0)
                             + (+row.laboratory || 0) + (+row.seminar || 0);
                         return { row, total, days: Math.max(1, Math.ceil(total / 6)) };
                     })
                     .filter(item => item.total > 0);
+            }
+
+            async function autoCycleSubjects() {
+                if (!board || ascType !== 'subjects') return;
+                const candidates = autoCycleCandidates();
                 autoCycleBackup = candidates.map(item => ({
                     row: item.row,
                     previous: { ...subjectSettingOf(item.row) },

@@ -350,6 +350,8 @@ it('joylanmagan kartalar Exceli sikl fanlarini ko\'rsatmaydi', function () {
     $s = sugSetup();
     \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
         'course' => 2, 'subject_name' => 'Anatomiya', 'mode' => 'cycle', 'cycle_days' => 1]);
+    // Sikl fanining bo'lak nomli kartasi ham chiqmaydi
+    sugCard($s, ['subject_name' => 'Anatomiya (a)', 'group_name' => 'g-01b']);
     $res = sugAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=internal&week=3')->assertOk();
     $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
     file_put_contents($file, $res->streamedContent());

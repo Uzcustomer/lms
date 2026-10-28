@@ -26,6 +26,10 @@ class IntegrationToken
             return response()->json(['success' => false, 'error' => 'Unauthorized'], 401);
         }
 
+        // Tashqi sayt Accept sarlavhasini yubormasa ham xatolar (422 va h.k.)
+        // redirect emas, JSON bo'lib qaytsin
+        $request->headers->set('Accept', 'application/json');
+
         return $next($request);
     }
 

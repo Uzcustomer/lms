@@ -3917,7 +3917,7 @@ class TimetableController extends Controller
         $workIndices = [];
         $cur = $startC->copy();
         $guard = 0;
-        $targetWorkDays = $W * $D;
+        $targetWorkDays = $this->cycleCalendarWorkDays($board, $startC, $holSet);
         while (count($workIndices) < $targetWorkDays && $guard < $targetWorkDays * 8 + count($holSet) * 2 + 60) {
             $dow = (int) $cur->dayOfWeekIso;
             $isHoliday = isset($holSet[$cur->toDateString()]);
@@ -4809,6 +4809,42 @@ class TimetableController extends Controller
      * Kalit — cycleKtrKey; 1-son/2-son kabi fakultetli rejalar uchun "specKey(fakultet)|" bilan ham.
      * KTR "hafta" qatorlari sikl fanida sikl kunlarini bildiradi (1-qator = 1-kun).
      */
+
+    /**
+     * The weekly board length is a minimum viewport, not a cycle placement limit.
+     * Include longer program calendars and the complete final cycle block.
+     */
+    private function cycleCalendarWorkDays(TimetableBoard $board, Carbon $start, array $holidays, ?int $requestedIndex = null, int $requestedDays = 0): int
+    {
+        $days = max(1, min(6, (int) $board->days));
+        $weeks = max(1, (int) $board->weeks);
+        if (Schema::hasTable('timetable_grid_settings')) {
+            $weeks = max($weeks, (int) TimetableGridSetting::where('board_id', $board->id)->max('weeks'));
+        }
+        $target = $weeks * $days;
+        $settings = TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')->get()
+            ->keyBy(fn ($s) => mb_strtolower(trim($s->specialty_name)).'|'.(int) $s->course.'|'.mb_strtolower(trim($s->subject_name)));
+        $spans = [];
+        if (Schema::hasTable('timetable_cycle_placements')) {
+            foreach (TimetableCyclePlacement::where('board_id', $board->id)->get() as $p) {
+                $key = mb_strtolower(trim($p->specialty_name)).'|'.(int) $p->course.'|'.mb_strtolower(trim($p->subject_name));
+                $setting = $settings->get($key);
+                if ($setting) $spans[] = [(int) $p->start_index, max(1, (int) $setting->cycle_days)];
+            }
+        }
+        if ($requestedIndex !== null) $spans[] = [$requestedIndex, max(1, $requestedDays)];
+        foreach ($spans as [$index, $length]) {
+            $teachingBefore = 0;
+            $date = $start->copy();
+            for ($i = 0; $i < $index; $i++, $date->addDay()) {
+                if ($date->dayOfWeekIso <= $days && !isset($holidays[$date->toDateString()])) $teachingBefore++;
+            }
+            // Keep one further teaching week available for placing the next block.
+            $target = max($target, $teachingBefore + $length + $days);
+        }
+        return $target;
+    }
+
     private function cycleKtrDayPlans(TimetableBoard $board): array
     {
         static $cache = [];
@@ -5152,7 +5188,7 @@ class TimetableController extends Controller
         }
 
         $daysPerWeek = max(1, (int) $board->days);
-        $maxDays = max(1, (int) $board->weeks) * $daysPerWeek;
+        $maxDays = $this->cycleCalendarWorkDays($board, $startC, $holSet);
         $workIndices = [];
         $calendarCount = 0;
         $cur = $startC->copy();
@@ -5697,7 +5733,8 @@ class TimetableController extends Controller
                 . $pairsTotal . ' paraga sig\'maydi. Yuqoriroq (kichikroq raqamli) juftlikni tanlang.'], 422);
         }
         $daysPerWeek = max(1, (int) $board->days);
-        $maxDays = max(1, (int) $board->weeks) * $daysPerWeek;
+        $maxDays = $this->cycleCalendarWorkDays($board, $startC, $holSet,
+            isset($data['start_index']) ? (int) $data['start_index'] : null, $requiredDays);
         while (count($workIndices) < $maxDays && $guard < $maxDays * 8 + count($holSet) * 2 + 60) {
             $dow = (int) $cur->dayOfWeekIso;
             $isHoliday = isset($holSet[$cur->toDateString()]);
@@ -6941,7 +6978,7 @@ class TimetableController extends Controller
             try { $holSet[Carbon::parse($holiday)->toDateString()] = true; } catch (\Exception $e) { }
         }
         $daysPerWeek = max(1, (int) $board->days);
-        $maxDays = max(1, (int) $board->weeks) * $daysPerWeek;
+        $maxDays = $this->cycleCalendarWorkDays($board, $startC, $holSet);
         $work = [];   // o'quv kuni tartib raqami => kalendar indeksi
         $cur = $startC->copy();
         for ($i = 0, $guard = 0; count($work) < $maxDays && $guard < $maxDays * 8 + 60; $i++, $guard++) {

@@ -1275,6 +1275,9 @@ class TutorReportController extends Controller
             ->where('sch.education_year_current', true)
             ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
 
+        // O'quv rejada nofaol fanlar — jurnal kabi ko'rsatilmaydi
+        \App\Services\InactiveSubjects::exclude($schedules, 'gr', 'sch');
+
         foreach ($excludedSubjectPatterns as $pattern) {
             $schedules->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
         }

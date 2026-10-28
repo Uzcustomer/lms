@@ -120,6 +120,8 @@ class SendUnratedRegistrationsReport extends Command
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');
             })
+            // O'quv rejada nofaol fanlar — jurnal kabi ko'rsatilmaydi
+            ->tap(fn ($q) => \App\Services\InactiveSubjects::exclude($q, 'g', 'sch'))
             ->select(
                 'sch.schedule_hemis_id',
                 'sch.employee_id',

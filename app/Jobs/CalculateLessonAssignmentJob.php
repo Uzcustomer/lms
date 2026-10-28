@@ -92,6 +92,9 @@ class CalculateLessonAssignmentJob implements ShouldQueue
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
 
+        // O'quv rejada nofaol fanlar — jurnal kabi ko'rsatilmaydi
+        \App\Services\InactiveSubjects::exclude($scheduleQuery, 'g', 'sch');
+
         if (!empty($excludedSubjectIds)) {
             $scheduleQuery->whereNotIn('sch.subject_id', $excludedSubjectIds);
         }

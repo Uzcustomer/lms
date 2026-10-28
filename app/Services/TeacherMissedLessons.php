@@ -370,6 +370,8 @@ class TeacherMissedLessons
                     $query->whereRaw('LOWER(sch.subject_name) NOT LIKE ?', ['%'.mb_strtolower($pattern).'%']);
                 }
             })
+            // O'quv rejada nofaol fanlar — jurnal kabi ko'rsatilmaydi
+            ->tap(fn ($query) => InactiveSubjects::exclude($query, 'g', 'sch'))
             // Indeksdan foydalanish uchun DATE() emas, sana chegaralari bilan
             ->where('sch.lesson_date', '>=', $from.' 00:00:00')
             ->where('sch.lesson_date', '<', $today.' 00:00:00')

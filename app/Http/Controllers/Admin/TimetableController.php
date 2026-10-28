@@ -5658,6 +5658,23 @@ class TimetableController extends Controller
                 . $data['group_name'] . '"' . ($known !== '' ? '; mavjud oqimlar: ' . $known : ''), 'code' => 'no_card'], 422);
         }
 
+        // Nomni yashirincha trim/normallashtirib joylamaymiz. HEMIS fan nomidagi ortiqcha
+        // bo'shliq TrimStrings'dan o'tgan so'rovda yo'qolsa, yozuv bazaga tushib, keyin qat'iy
+        // nom bo'yicha jadvalda ko'rinmay qoladi. Farqni ko'rinadigan ␠ belgisi bilan qaytaramiz.
+        $exactName = (string) $data['subject_name'];
+        $actualNames = $cards->pluck('subject_name')->map(fn ($name) => (string) $name)->unique()->values();
+        if (!$actualNames->contains(fn ($name) => $name === $exactName)) {
+            $visible = fn (string $name): string => str_replace(["\t", " "], ['⇥', '␠'], $name);
+            $expected = $actualNames->map(fn ($name) => '"' . $visible($name) . '"')->implode(', ');
+
+            return response()->json([
+                'error' => 'Fan nomi HEMIS/KTR kartasidagi nom bilan aynan mos emas. '
+                    . 'Kartada: ' . $expected . '; so\'rovda: "' . $visible($exactName) . '". '
+                    . 'HEMISdagi fan nomini to\'g\'rilab, KTRdan qayta sinxronlang.',
+                'code' => 'subject_name_mismatch',
+            ], 422);
+        }
+
         $sample = $cards->first();
         $activeFlows = $scopeCards->filter(fn ($c) => $this->sameCycleCapacityPool($c, $sample))->flatMap($cardFlows)->filter()->flip()->all();
 

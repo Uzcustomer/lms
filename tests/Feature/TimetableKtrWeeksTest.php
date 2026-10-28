@@ -213,3 +213,28 @@ it('sikl amaliysi ma’ruzadan keyin boshlanadi va KTR soatlaridan tashqarida ba
         ->and($method->invoke($controller, $weekly, 1, 1, 5))->toHaveCount(1)
         ->and($method->invoke($controller, $weekly, 1, 1, 9))->toBe([]);
 });
+
+it('kartochka yaratish: KTR bo\'lsa amaliy kartalar va ma\'ruza haftalari KTR bo\'yicha (ishchi reja soati emas)', function () {
+    // KTR: ma'ruza 1, 2, 5-haftalarda; amaliy 2, 2, 4, 4, 2, 4 soat.
+    $s = ktrWeeksSetup([
+        '1' => ['11' => 2, '13' => 2], '2' => ['11' => 2, '13' => 2], '3' => ['11' => 0, '13' => 4],
+        '4' => ['11' => 0, '13' => 4], '5' => ['11' => 2, '13' => 2], '6' => ['11' => 0, '13' => 4],
+    ]);
+    // Ishchi rejada boshqa soat: ma'ruza 10, amaliy 12 (KTR'siz bo'lsa — 5 hafta ma'ruza, 2 soat × 6 hafta amaliy).
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'R', 'specialty_name' => 'Davolash ishi', 'plan_year' => '2025',
+        'level_code' => '12', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Biokimyo', 'semester' => 3,
+        'lecture' => 10, 'practice' => 12, 'laboratory' => 0, 'seminar' => 0]);
+    \App\Models\OqimSnapshot::create(['context_key' => 'k', 'context' => [], 'status' => 'approved', 'approved_at' => now(), 'data' => [[
+        'merge_key' => 'x|Davolash ishi', 'title' => 'Davolash ishi', 'department_name' => '1-son davolash',
+        'courses' => [['level_code' => 12, 'oqims' => [['label' => '1-oqim', 'lang' => 'uz', 'total' => 15, 'rows' => [['name' => 'g-01a', 'count' => 15]]]]]],
+    ]]]);
+
+    $ctl = app(TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'assembleRows');
+    $m->setAccessible(true);
+    $found = [];
+    $rows = collect($m->invokeArgs($ctl, [$s['board'], null, null, &$found]))->where('subject_name', 'Biokimyo');
+    expect($rows->where('training_type', 'lecture')->pluck('weeks')->all())->toBe([3])
+        ->and($rows->where('training_type', 'practice')->map(fn ($r) => [$r['len_half'], $r['weeks']])->values()->all())->toBe([[2, 6], [2, 3]]);
+});

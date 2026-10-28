@@ -852,6 +852,38 @@ it('tashqi siklda boshqa mas’ul bo‘lakning joylashuvi tanlangan bo‘lakni a
         ->and($response->json('rows.0.blocks.0.from'))->toBe(0);
 })->with(['teacher', 'web']);
 
+it('sikl joylashuvi HEMIS fan nomi aynan mos bo‘lmasa aniq xato qaytaradi', function () {
+    $s = layersSetup();
+    $s['own']->update(['course' => 5, 'subject_name' => 'Вакцинопрофилактика ']);
+    \App\Models\TimetableSubjectSetting::create([
+        'board_id' => $s['board']->id,
+        'specialty_name' => 'davolash ishi',
+        'course' => 5,
+        'subject_name' => 'Вакцинопрофилактика',
+        'mode' => 'cycle',
+        'cycle_days' => 7,
+    ]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cycle-place', $s['board']), [
+        'specialty_name' => 'davolash ishi',
+        'course' => 5,
+        'group_name' => 'F1 / 1-oqim',
+        'subject_name' => 'Вакцинопрофилактика ',
+        'start_index' => 16,
+        'training_type' => 'practice',
+        'pair' => 1,
+        'view' => 'flow',
+        'action' => 'place',
+        'layer' => 'external',
+        'start_date' => '2026-09-14',
+    ])->assertStatus(422)
+        ->assertJsonPath('code', 'subject_name_mismatch')
+        ->assertJsonPath('error', fn ($error) => str_contains($error, 'Вакцинопрофилактика␠')
+            && str_contains($error, 'KTRdan qayta sinxronlang'));
+
+    expect(\App\Models\TimetableCyclePlacement::count())->toBe(0);
+});
+
 it('panjara: hafta soni o\'zgarsa kartochkalar so\'ralmasa saqlanadi; o\'z boshlanishi va ta\'til haftalari bilan sikl ogohlantirishi sanasi', function () {
     $s = layersSetup();
     $s['own']->update(['ext_day' => 1, 'ext_pair' => 1]);

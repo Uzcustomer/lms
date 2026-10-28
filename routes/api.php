@@ -94,6 +94,20 @@ Route::post('/moodle/trigger-push', MoodleTriggerPushController::class)
 
 /*
 |--------------------------------------------------------------------------
+| Integratsiya API — /api/integration/... (tashqi saytlar, faqat o'qish)
+|--------------------------------------------------------------------------
+| Token: Authorization: Bearer <token>, .env dagi INTEGRATION_API_TOKENS.
+*/
+
+Route::prefix('integration')
+    ->middleware([\App\Http\Middleware\IntegrationToken::class, 'throttle:60,1'])
+    ->group(function () {
+        Route::get('/grades', [\App\Http\Controllers\Api\Integration\GradeController::class, 'index'])
+            ->name('api.integration.grades');
+    });
+
+/*
+|--------------------------------------------------------------------------
 | API Routes — /api/v1/...
 |--------------------------------------------------------------------------
 */

@@ -72,6 +72,13 @@ return [
         'appeal_chat_id' => env('TELEGRAM_APPEAL_CHAT_ID'),
     ],
 
+    // Tashqi saytlar uchun faqat o'qish huquqli integratsiya API (/api/integration/*).
+    // Bir nechta token vergul bilan: har bir sayt uchun alohida, bekor qilish uchun
+    // ro'yxatdan o'chiriladi. Tokenlar `openssl rand -hex 32` bilan yaratiladi.
+    'integration' => [
+        'tokens' => env('INTEGRATION_API_TOKENS', ''),
+    ],
+
     'moodle' => [
         'ssh_host' => env('MOODLE_SSH_HOST'),
         'ssh_user' => env('MOODLE_SSH_USER'),

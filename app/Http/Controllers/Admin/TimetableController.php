@@ -5841,6 +5841,7 @@ class TimetableController extends Controller
                 $setting = $cycleSettings->get($norm($specialty) . '|' . $course . '|' . $norm($subject));
                 if (!$setting) return null;
                 $newStart = $shiftStart((int) data_get($placement, 'start_index'), $direction);
+                if ($newStart !== null && ($newStart < 0 || $newStart > 730)) return null;
                 $newPosition = $newStart === null ? null : $positionFor($newStart);
                 $days = max(1, $this->cycleTypeDays(
                     max(1, (int) $setting->cycle_days),

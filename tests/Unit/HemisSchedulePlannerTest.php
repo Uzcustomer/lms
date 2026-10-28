@@ -314,3 +314,23 @@ it('haftada KTR\'dagidan ko\'p kun bo\'lsa — o\'sha haftaning kunlari birlasht
         // Natija HEMIS bilan aynan bir xil: 2-hafta chorshanba 08:30–13:20 — amal yo'q.
         ->and($r['actions'])->toBe([]);
 });
+
+it('LMS darsi KTR soatidan qisqa bo\'lsa — kamomad bitta kunga emas, har haftaning o\'z darsiga qo\'shiladi', function () {
+    $u = hsUnit([
+        'codes' => ['13' => 'A'], 'code_names' => ['13' => 'Amaliy'], 'current_week' => 1,
+        'ktr' => [['13' => 4], ['13' => 4], ['13' => 4], ['13' => 4]],
+        'hemis' => [hsHemis(1, hsDate(1, 5), 1, 4, '13')],
+        // LMS kartasi 2 soatlik
+        'plan' => [hsPlan(2, 5, 1, 2, 'A'), hsPlan(3, 5, 1, 2, 'A'), hsPlan(4, 5, 1, 2, 'A')],
+    ]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 6)))->planGroup([$u], [], hsWorkDates(2, 4))[0];
+
+    expect($r['before']['hours_diff']['13'])->toBe(6)
+        ->and($r['after']['hours_diff']['13'])->toBe(0);
+    $byDate = [];
+    foreach ($r['records'] as $rec) {
+        $byDate[$rec['date']] = ($byDate[$rec['date']] ?? 0) + (strtotime($rec['end']) - strtotime($rec['start']) > 2500 ? 2 : 1);
+    }
+    expect($byDate)->toBe([hsDate(2, 5) => 4, hsDate(3, 5) => 4, hsDate(4, 5) => 4])
+        ->and(implode(' ', $r['notes']))->toContain('KTR soatidan qisqa')->toContain('2-hafta: KTR 4 soat, jadvalda 2');
+});

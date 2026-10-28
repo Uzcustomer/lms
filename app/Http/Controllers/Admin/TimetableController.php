@@ -923,6 +923,8 @@ class TimetableController extends Controller
         }
         $cycleKeys = $this->cycleSubjectKeys($board);
         $separatePractice = array_flip((array) (($board->settings ?? [])['separate_practice'] ?? []));
+        // KTR (har hafta soati) bo'lsa — kartalar soati KTR bo'yicha (ishchi reja soati emas).
+        $ktrPlans = $this->cycleKtrDayPlans($board);
 
         // Fanlar: o'quv yili + semestr juft/toqligi bo'yicha
         $start = (int) substr($board->academic_year, 0, 4);
@@ -1132,6 +1134,21 @@ class TimetableController extends Controller
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat
                             // ma'ruzasiz haftalarda o'tiladi (kartada weeks bilan belgilanadi).
                             $wp = $this->weeklyPlan((float) $s->lecture, $prcHours, $weeks);
+                            // Sikl fanlari KTR'i kunlik (haftalik emas) — ularga qo'llanmaydi.
+                            $cycleRowKey = $this->specKey((string) $specName) . '|' . (int) $course . '|';
+                            $cycleBase = $this->cycleSubjectVariantBase((string) $s->subject_name);
+                            $isCycleRow = isset($cycleKeys[$cycleRowKey . $this->normSubject((string) $s->subject_name)])
+                                || ($cycleBase !== null && isset($cycleKeys[$cycleRowKey . $this->normSubject($cycleBase)]));
+                            $ktrPlan = $isCycleRow ? null
+                                : $this->ktrPlanForRow($ktrPlans, $blockFac, (string) $specName, (int) $course, (string) $s->subject_name);
+                            if ($ktrPlan !== null) {
+                                // 2 soatlik ma'ruza necha marta: odatda ma'ruzali haftalar soni; haftada 2 soatdan ko'p
+                                // bo'lsa (4 soat — ikki ma'ruza) soat kamayib ketmasin.
+                                $ktrLecWeeks = array_sum(array_map(fn ($d) => (int) ceil(max(0, (int) ($d['lec'] ?? 0)) / 2), $ktrPlan));
+                                if ($ktrLecWeeks > 0) {
+                                    $wp['lecture_weeks'] = $ktrLecWeeks;
+                                }
+                            }
 
                             // Ma'ruza — bitta oqimga BITTA karta; necha hafta o'tilishi
                             // ma'ruza soatidan (1 para = 2 soat = 1 hafta).
@@ -1202,15 +1219,18 @@ class TimetableController extends Controller
                             //  - qoldiq +1 soat                     -> remainder_weeks ta haftada
                             // Shu bilan reja soati qoldiqsiz to'ldiriladi.
                             $cardPlan = [];   // [len_half, necha hafta]
-                            foreach ($this->splitPracticeHours((int) $wp['practice_hours_base']) as $lh) {
+                            $ktrCards = $ktrPlan !== null ? $this->ktrPracticeCardPlan($ktrPlan, (int) $weeks) : null;
+                            if ($ktrCards !== null) {
+                                $cardPlan = $ktrCards;
+                            } else foreach ($this->splitPracticeHours((int) $wp['practice_hours_base']) as $lh) {
                                 $cardPlan[] = [$lh, $weeks];
                             }
-                            if ((int) $wp['practice_extra_weeks'] > 0) {
+                            if ($ktrCards === null && (int) $wp['practice_extra_weeks'] > 0) {
                                 foreach ($this->splitPracticeHours((int) $wp['practice_hours_extra']) as $lh) {
                                     $cardPlan[] = [$lh, (int) $wp['practice_extra_weeks']];
                                 }
                             }
-                            if ((int) $wp['practice_remainder_weeks'] > 0) {
+                            if ($ktrCards === null && (int) $wp['practice_remainder_weeks'] > 0) {
                                 $cardPlan[] = [1, (int) $wp['practice_remainder_weeks']];
                             }
 
@@ -4759,6 +4779,47 @@ class TimetableController extends Controller
                 return mb_strtolower($this->cycleFlowName($card)) === $flowLower;
             })
             ->values();
+    }
+
+    /** Kartochka qatori uchun KTR haftalik rejasi (syncCardWeeksFromKtr bilan bir xil qidiruv). */
+    private function ktrPlanForRow(array $ktr, ?string $faculty, string $specialty, int $course, string $subject): ?array
+    {
+        $fac = trim((string) $faculty);
+        $key = $this->cycleKtrKey($specialty, $course, $subject);
+        $plan = ($fac !== '' ? ($ktr[$this->specKey($fac) . '|' . $key] ?? null) : null) ?? $ktr[$key] ?? null;
+
+        return is_array($plan) && $plan ? $plan : null;
+    }
+
+    /**
+     * KTR'ning har hafta amaliy soatidan kartochkalar: [len_half, necha hafta]. Har "qatlam" 2 soatdan
+     * (amaliy karta 2 soatdan oshmaydi): 1-qatlam — amaliy bor haftalar, 2-qatlam — 3+ soatli haftalar va h.k.;
+     * toq soat — 1 soatlik karta. Masalan 4,4,4,2 soat → [2 soat × 4 hafta] + [2 soat × 3 hafta] = 14 soat.
+     * Qaysi karta qaysi haftada o'tilishini keyin "KTR bo'yicha haftalar" belgilaydi.
+     */
+    private function ktrPracticeCardPlan(array $plan, int $weeks): ?array
+    {
+        $h = [];
+        foreach (array_slice($plan, 0, max(1, $weeks)) as $d) {
+            $h[] = max(0, (int) ($d['prc'] ?? 0));
+        }
+        $max = $h ? max($h) : 0;
+        if ($max <= 0) {
+            return null;
+        }
+        $out = [];
+        for ($j = 1; 2 * $j - 1 <= $max; $j++) {
+            $n2 = count(array_filter($h, fn ($x) => $x >= 2 * $j));
+            $n1 = count(array_filter($h, fn ($x) => $x === 2 * $j - 1));
+            if ($n2 > 0) {
+                $out[] = [2, $n2];
+            }
+            if ($n1 > 0) {
+                $out[] = [1, $n1];
+            }
+        }
+
+        return $out ?: null;
     }
 
     /** KTR kunlik rejasi kaliti (fakultetsiz): specKey(sof yo'nalish)|kurs|normFan. */

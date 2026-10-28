@@ -5081,7 +5081,7 @@
                 if (scopeMode === 'mine') { body.mine = 1; delete body.clear; }
                 else if (scopeMode === 'kafedra') { body.kafedra = 1; delete body.clear; }
                 else if (scopeMode === 'subjects') { body.subjects = 1; delete body.clear; }
-                $('cycleMsg').classList.remove('text-red-700', 'text-emerald-700', 'font-semibold');
+                $('cycleMsg').classList.remove('text-red-700', 'text-emerald-700', 'text-amber-700', 'font-semibold');
                 $('cycleMsg').classList.add('text-gray-500');
                 $('cycleMsg').removeAttribute('title');
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
@@ -5263,20 +5263,21 @@
             // kartasini sudrash uning start indeksini saqlaydi.
             function showCyclePlacementResult(card, index, message, type = 'error') {
                 const msg = $('cycleMsg');
-                const date = cyclePlanData && cyclePlanData.dates && cyclePlanData.dates[index]
-                    ? (cyclePlanData.dates[index].date || cyclePlanData.dates[index].label || '')
-                    : '';
+                const dateRow = cyclePlanData && cyclePlanData.dates && cyclePlanData.dates[index];
+                const date = dateRow ? (dateRow.iso || dateRow.d || '') : '';
                 const subject = card && card.subject ? card.subject : 'Fan kartasi';
-                const prefix = type === 'success' ? 'Joylandi' : 'Joylanmadi';
+                const prefix = type === 'success' ? 'Joylandi'
+                    : (type === 'pending' ? 'Tasdiqlashga yuborildi' : 'Joylanmadi');
                 const details = [subject, date].filter(Boolean).join(' · ');
                 const text = prefix + (details ? ': ' + details : '') + (message ? ' — ' + message : '');
 
                 msg.textContent = text;
-                msg.classList.remove('text-gray-500', 'text-red-700', 'text-emerald-700', 'font-semibold');
-                msg.classList.add(type === 'success' ? 'text-emerald-700' : 'text-red-700', 'font-semibold');
+                msg.classList.remove('text-gray-500', 'text-red-700', 'text-emerald-700', 'text-amber-700', 'font-semibold');
+                msg.classList.add(type === 'success' ? 'text-emerald-700'
+                    : (type === 'pending' ? 'text-amber-700' : 'text-red-700'), 'font-semibold');
                 msg.setAttribute('title', text);
 
-                if (type !== 'success' && typeof ttToast === 'function') {
+                if (type === 'error' && typeof ttToast === 'function') {
                     ttToast('<b>Sikl kartasi joylanmadi</b><div>' + esc(text) + '</div>', 'error');
                 }
             }
@@ -5286,7 +5287,7 @@
                     return;
                 }
                 try {
-                    await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                    const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                         ...cycleOverlapParams(), ...cycleLayerParams(),
                         action: 'place', specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject, start_index: index,
@@ -5294,7 +5295,7 @@
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
-                    showCyclePlacementResult(card, index, '', 'success');
+                    showCyclePlacementResult(card, index, '', result && result.pending_approval ? 'pending' : 'success');
                 } catch (e) {
                     console.error('Sikl joylash xatosi: ' + (e && e.message ? e.message : 'Noma\u2019lum xato'), {karta: card, index: index});
                     showCyclePlacementResult(card, index, e && e.message ? e.message : 'Noma\u2019lum xato.');

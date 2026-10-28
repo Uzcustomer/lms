@@ -448,7 +448,7 @@ TXT;
             }
         }
 
-        // JN o'tish chegarasi 70, xalqaro fakultet (PIMU) talabalari uchun avvalgidek 60.
+        // JN/MT o'tish chegarasi 70, xalqaro fakultet (PIMU) talabalari uchun avvalgidek 60.
         $intlIds = $this->internationalStudentIds($expected['talabalar'] ?? []);
 
         $matched = [];
@@ -475,7 +475,7 @@ TXT;
             $e = $this->calc->compute(
                 $stu['jn'] ?? null, $stu['mt'] ?? null, $stu['on'] ?? null,
                 $stu['oski'] ?? null, $stu['test'] ?? null, $levelCode, $w,
-                0.0, isset($intlIds[$id]) ? MarkingSystemScore::INTERNATIONAL_VEDOMOST_JN_PASS : MarkingSystemScore::YN_JN_LIMIT
+                0.0, isset($intlIds[$id]) ? MarkingSystemScore::INTERNATIONAL_VEDOMOST_PASS : MarkingSystemScore::YN_JN_MT_LIMIT
             );
             $this->cmpNum($disc, $label . ' — JB ball', $e['jb_ball'], $s['jb_ball'] ?? null);
             $this->cmpNum($disc, $label . ' — MT ball', $e['mt_ball'], $s['mt_ball'] ?? null);

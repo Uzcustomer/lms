@@ -1095,6 +1095,7 @@ class AcademicScheduleController extends Controller
                         // YN ga ruxsat (YN oldi qaydnoma bilan bir xil mantiq)
                         'admission_status' => $admission['status'] ?? null,
                         'admission_reasons' => $admission['reasons'] ?? [],
+                        'admission_davomat_failed' => $admission['davomat_failed'] ?? false,
                     ];
                 }
                 $item['students'] = $rows;
@@ -4545,9 +4546,11 @@ class AcademicScheduleController extends Controller
                     }
                     return false;
                 }
-                // admission_status === 'X' (JN/MT/davomat past) — YN'ga
-                // ruxsat yo'q, ro'yxatga kiritmaymiz.
-                if (($row['admission_status'] ?? null) === \App\Services\YnAdmissionService::STATUS_X) {
+                // Davomat ≥25% sababli X — YN'ga ruxsat yo'q, ro'yxatga kiritmaymiz.
+                // JN/MT past sababli X bo'lganlar esa Word'da "X" holati bilan
+                // ko'rinadi (kim kirmasligi qaydnomada ko'rinib tursin).
+                if (($row['admission_status'] ?? null) === \App\Services\YnAdmissionService::STATUS_X
+                    && !empty($row['admission_davomat_failed'])) {
                     if ($debug) {
                         $dbgRemoved[] = [
                             'name' => $row['full_name'] ?? $hemisId,
@@ -4592,9 +4595,9 @@ class AcademicScheduleController extends Controller
 
             // Enriched arraylarni eski kod kutgan stdClass shaklga o'tkazamiz
             // — Word jadvalini quruvchi kod $student->jn / $student->mt /
-            // $student->student_name kabi property'larga tayanadi. "Kirmaydigan"
-            // talabalar (held_back/X) yuqorida allaqachon filterlangan,
-            // shuning uchun bu yerda admission_status faqat Ruxsat/Shartli.
+            // $student->student_name kabi property'larga tayanadi. Kursdan
+            // qoldirilgan va davomat sababli X talabalar yuqorida filterlangan;
+            // JN/MT past bo'lganlar admission_status = X bilan qoladi.
             // Per-student individual imtihon vaqti uchun maydon — yn_type va
             // attempt bo'yicha tanlanadi. Talabaga guruh vaqtidan farqli vaqt
             // qo'yilgan bo'lsa, Word jadvalida ism yonida ko'rsatiladi.
@@ -5027,6 +5030,7 @@ class AcademicScheduleController extends Controller
             $hF = ['bold' => true, 'size' => 10];
             $cF = ['size' => 10];
             $cFOr = ['size' => 10, 'color' => 'FF8C00'];
+            $cFRed = ['size' => 10, 'color' => 'FF0000'];
             $cFCmp = ['size' => 11, 'bold' => true, 'color' => '1E40AF'];
             $cFGroup = ['bold' => true, 'size' => 10, 'color' => '1F4E20'];
             $hBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
@@ -5209,10 +5213,13 @@ class AcademicScheduleController extends Controller
                         }
                         $holat = $student->admission_status ?? 'Ruxsat';
                         if (!in_array($holat, ['Ruxsat', 'Shartli', 'X'])) $holat = 'Ruxsat';
+                        $markingScore = MarkingSystemScore::forYnAdmission($student->hemis_id);
 
                         return [
                             'jn' => $student->jn ?? 0,
                             'mt' => $student->mt ?? 0,
+                            'jnFailed' => ($student->jn ?? 0) < $markingScore->effectiveLimit('jn'),
+                            'mtFailed' => ($student->mt ?? 0) < $markingScore->effectiveLimit('mt'),
                             'qoldiq' => $qoldiq,
                             'contractText' => $contractText,
                             'contractFailed' => $contractFailed,
@@ -5234,11 +5241,11 @@ class AcademicScheduleController extends Controller
                             $dr->addCell($cw[0])->addText((string) $globalIdx, $cF, $cCtr);
                             $dr->addCell($cw[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
                             $dr->addCell($cw[2])->addText((string) ($stu->student_id ?? ''), $cF, $cCtr);
-                            $dr->addCell($cw[3])->addText((string) ($info['jn'] ?? '0'), $cF, $cCtr);
-                            $dr->addCell($cw[4])->addText((string) ($info['mt'] ?? '0'), $cF, $cCtr);
+                            $dr->addCell($cw[3])->addText((string) ($info['jn'] ?? '0'), $info['jnFailed'] ? $cFRed : $cF, $cCtr);
+                            $dr->addCell($cw[4])->addText((string) ($info['mt'] ?? '0'), $info['mtFailed'] ? $cFRed : $cF, $cCtr);
                             $dr->addCell($cw[5])->addText(($info['qoldiq'] != 0 ? $info['qoldiq'] . '%' : '0%'), $cF, $cCtr);
                             $dr->addCell($cw[6])->addText($info['contractText'], $info['contractFailed'] ? $cFOr : $cF, $cCtr);
-                            $dr->addCell($cw[7])->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
+                            $dr->addCell($cw[7])->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : ($info['holat'] === 'X' ? $cFRed : $cF), $cCtr);
                             $dr->addCell($cw[8])->addText(
                                 $info['compNum'] !== null ? (string) $info['compNum'] : '—',
                                 $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
@@ -5509,10 +5516,9 @@ class AcademicScheduleController extends Controller
                     if ($contractFailed && $holat === 'Ruxsat') {
                         $holat = 'Shartli';
                     }
-                    // Eslatma: 4+ qarzdor va admission_status=X talabalar
-                    // ro'yxatga olishdan oldin yuqorida filterlangan, shuning
-                    // uchun bu yerda "X" override'i kerak emas — Word faqat
-                    // Ruxsat / Shartli statusli talabalarni ko'rsatadi.
+                    // Eslatma: 4+ qarzdor va davomat sababli X talabalar
+                    // ro'yxatga olishdan oldin yuqorida filterlangan; JN/MT
+                    // past bo'lganlar shu yerda "X" holati bilan chiqadi.
 
                     $dataRow = $table->addRow();
                     $dataRow->addCell(500)->addText($rowNum, $cellFont, $cellCenter);

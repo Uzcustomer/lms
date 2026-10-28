@@ -94,45 +94,50 @@ class MarkingSystemScore extends Model
     }
 
     /**
-     * YN ga ruxsat uchun JN chegarasi — xalqaro ta'lim fakulteti (PIMU) dan tashqari
-     * barcha talabalar uchun. PIMU talabalari avvalgidek sozlamadagi chegarada qoladi.
-     * Ular uchala baholash tizimida ham bor, shuning uchun qoida sozlamada emas,
-     * fakultet bo'yicha.
+     * YN ga ruxsat uchun JN va MT chegarasi — xalqaro ta'lim fakulteti (PIMU) dan
+     * tashqari barcha talabalar uchun. PIMU talabalari avvalgidek sozlamadagi
+     * chegarada qoladi. Ular uchala baholash tizimida ham bor, shuning uchun qoida
+     * sozlamada emas, fakultet bo'yicha.
      */
-    public const YN_JN_LIMIT = 70;
+    public const YN_JN_MT_LIMIT = 70;
 
-    /** PIMU talabalari uchun vedomost hisobidagi JN o'tish chegarasi (avvalgidek). */
-    public const INTERNATIONAL_VEDOMOST_JN_PASS = 60;
+    /** PIMU talabalari uchun vedomost hisobidagi JN/MT o'tish chegarasi (avvalgidek). */
+    public const INTERNATIONAL_VEDOMOST_PASS = 60;
 
     /**
      * YN ga ruxsat (YN jadval, qaytnoma, vedomost) uchun chegaralar:
-     * getByStudentHemisId() + PIMU dan tashqari talabalar uchun JN 70.
+     * getByStudentHemisId() + PIMU dan tashqari talabalar uchun JN va MT 70.
      */
     public static function forYnAdmission($studentHemisId): self
     {
         $score = static::getByStudentHemisId($studentHemisId);
 
-        if (!$score->jn_active
-            || $score->jn_limit >= self::YN_JN_LIMIT
-            || static::isInternationalStudent($studentHemisId)) {
+        $raiseJn = $score->jn_active && $score->jn_limit < self::YN_JN_MT_LIMIT;
+        $raiseMt = $score->mt_active && $score->mt_limit < self::YN_JN_MT_LIMIT;
+        if ((!$raiseJn && !$raiseMt) || static::isInternationalStudent($studentHemisId)) {
             return $score;
         }
 
         // getByStudentHemisId keshidagi obyekt boshqa talabalar bilan umumiy — nusxasini o'zgartiramiz
         $score = clone $score;
-        $score->jn_limit = self::YN_JN_LIMIT;
+        if ($raiseJn) {
+            $score->jn_limit = self::YN_JN_MT_LIMIT;
+        }
+        if ($raiseMt) {
+            $score->mt_limit = self::YN_JN_MT_LIMIT;
+        }
 
         return $score;
     }
 
     /**
-     * Vedomost hisobidagi JN o'tish chegarasi: PIMU uchun 60 (avvalgidek), qolganlarga 70.
+     * Vedomost hisobidagi JN/MT o'tish chegarasi: PIMU uchun 60 (avvalgidek), qolganlarga 70.
      */
-    public static function vedomostJnPass($studentHemisId): int
+    public static function vedomostJnMtPass($studentHemisId): int
     {
         return static::isInternationalStudent($studentHemisId)
-            ? self::INTERNATIONAL_VEDOMOST_JN_PASS
-            : self::YN_JN_LIMIT;
+            ? self::INTERNATIONAL_VEDOMOST_PASS
+            : self::YN_JN_MT_LIMIT;
     }
 
     public static function isInternationalStudent($studentHemisId): bool

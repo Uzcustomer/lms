@@ -6199,6 +6199,19 @@ class TimetableController extends Controller
             })->values();
         }
 
+        // Sikl fanlari (4–6 kurs) haftalik panjarada emas — ularning kunlari sikl kalendarida turadi
+        // (takliflar va panjaradagi panel kabi) — joylanmaganlar ro'yxatiga kirmaydi.
+        $cycleKeys = $this->cycleSubjectKeys($board);
+        if ($cycleKeys) {
+            $cards = $cards->reject(function (TimetableCard $c) use ($cycleKeys): bool {
+                $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+                $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
+
+                return isset($cycleKeys[$k . $this->normSubject((string) $c->subject_name)])
+                    || ($base !== null && isset($cycleKeys[$k . $this->normSubject($base)]));
+            })->values();
+        }
+
         try {
             $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();

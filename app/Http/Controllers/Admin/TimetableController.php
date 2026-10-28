@@ -4821,26 +4821,37 @@ class TimetableController extends Controller
         if (Schema::hasTable('timetable_grid_settings')) {
             $weeks = max($weeks, (int) TimetableGridSetting::where('board_id', $board->id)->max('weeks'));
         }
-        $target = $weeks * $days;
-        $settings = TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')->get()
-            ->keyBy(fn ($s) => mb_strtolower(trim($s->specialty_name)).'|'.(int) $s->course.'|'.mb_strtolower(trim($s->subject_name)));
+        // Support two calendar years, including cross-year semesters, with bounded work.
+        abort_if($requestedIndex !== null && ($requestedIndex < 0 || $requestedIndex > 730), 422,
+            'Sikl boshlanishi kalendar boshidan 730 kundan oshmasligi kerak.');
+        $target = min(104, $weeks) * $days;
+        $settings = Schema::hasTable('timetable_subject_settings')
+            ? TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')->get()
+                ->keyBy(fn ($s) => mb_strtolower(trim($s->specialty_name)).'|'.(int) $s->course.'|'.mb_strtolower(trim($s->subject_name)))
+            : collect();
+        $placements = Schema::hasTable('timetable_cycle_placements')
+            ? TimetableCyclePlacement::where('board_id', $board->id)->get()
+            : collect(($board->settings ?? [])['cycle_placements'] ?? []);
         $spans = [];
-        if (Schema::hasTable('timetable_cycle_placements')) {
-            foreach (TimetableCyclePlacement::where('board_id', $board->id)->get() as $p) {
-                $key = mb_strtolower(trim($p->specialty_name)).'|'.(int) $p->course.'|'.mb_strtolower(trim($p->subject_name));
-                $setting = $settings->get($key);
-                if ($setting) $spans[] = [(int) $p->start_index, max(1, (int) $setting->cycle_days)];
+        foreach ($placements as $p) {
+            $key = mb_strtolower(trim((string) data_get($p, 'specialty_name'))).'|'.(int) data_get($p, 'course').'|'.mb_strtolower(trim((string) data_get($p, 'subject_name')));
+            $setting = $settings->get($key);
+            $index = (int) data_get($p, 'start_index', -1);
+            if ($setting && $index >= 0 && $index <= 730) {
+                $spans[] = [$index, max(1, min(120, (int) $setting->cycle_days))];
             }
         }
-        if ($requestedIndex !== null) $spans[] = [$requestedIndex, max(1, $requestedDays)];
+        if ($requestedIndex !== null) $spans[] = [$requestedIndex, max(1, min(120, $requestedDays))];
+        $maxIndex = $spans ? max(array_column($spans, 0)) : 0;
+        $teachingBefore = [0];
+        $date = $start->copy();
+        for ($i = 0; $i < $maxIndex; $i++, $date->addDay()) {
+            $teachingBefore[$i + 1] = $teachingBefore[$i]
+                + (int) ($date->dayOfWeekIso <= $days && !isset($holidays[$date->toDateString()]));
+        }
         foreach ($spans as [$index, $length]) {
-            $teachingBefore = 0;
-            $date = $start->copy();
-            for ($i = 0; $i < $index; $i++, $date->addDay()) {
-                if ($date->dayOfWeekIso <= $days && !isset($holidays[$date->toDateString()])) $teachingBefore++;
-            }
             // Keep one further teaching week available for placing the next block.
-            $target = max($target, $teachingBefore + $length + $days);
+            $target = max($target, $teachingBefore[$index] + $length + $days);
         }
         return $target;
     }
@@ -5532,7 +5543,7 @@ class TimetableController extends Controller
             'course' => 'required|integer|min:1|max:7',
             'group_name' => 'required|string|max:255',
             'subject_name' => 'required|string|max:255',
-            'start_index' => 'nullable|integer|min:0',
+            'start_index' => 'nullable|integer|min:0|max:730',
             'training_type' => 'required|in:lecture,practice',
             'pair' => 'nullable|integer|min:1|max:24',
             'view' => 'nullable|in:flow,group',

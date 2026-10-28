@@ -81,6 +81,13 @@
                         <span id="boardMsg" class="text-xs"></span>
                     </div>
                 </div>
+                <div id="cardSyncProgress" class="hidden px-3 pb-2" role="status" aria-live="polite">
+                    <div class="flex items-center justify-between gap-3 text-xs font-semibold text-blue-800">
+                        <span id="cardSyncProgressText">Tasdiqlangan oqim va o‘quv reja fanlari tekshirilmoqda…</span>
+                        <span id="cardSyncProgressElapsed" class="whitespace-nowrap tabular-nums">0 soniya</span>
+                    </div>
+                    <div class="tt-card-sync-track mt-1" aria-hidden="true"><span></span></div>
+                </div>
 
                 {{-- Yangi doska formasi --}}
                 <div id="newBoardForm" class="hidden border-t border-gray-100 p-3 grid grid-cols-2 md:grid-cols-7 gap-3 items-end bg-gray-50">
@@ -2578,6 +2585,10 @@
            ko'rinmay qolmaydi): panjaraga kamida 60px qoladi, kartalar panel ichida skroll bo'ladi. */
         #ttBottomPanel { display: flex; flex-direction: column; max-height: calc(100% - 60px); }
         #ttBottomPanel > #cardPanel { min-height: 0; }
+        .tt-card-sync-track { position: relative; height: 6px; overflow: hidden; border-radius: 9999px; background: #dbeafe; }
+        .tt-card-sync-track span { position: absolute; inset-block: 0; width: 34%; border-radius: inherit; background: #2563eb;
+            animation: tt-card-sync-slide 1.15s ease-in-out infinite; }
+        @keyframes tt-card-sync-slide { from { left: -34%; } to { left: 100%; } }
 </style>
 
     <script>
@@ -3159,6 +3170,30 @@
             };
             // Kartochkalar: odatda SINXRONLASH (joylashuvlar saqlanadi, faqat noaktual kartalar
             // o'chadi, yangilari taqsimlanmagan holda qo'shiladi). Shift+bosish — to'liq qayta yaratish.
+            let cardSyncTimer = null;
+            let cardSyncElapsed = 0;
+            function startCardSyncProgress(full) {
+                const box = $('cardSyncProgress');
+                cardSyncElapsed = 0;
+                $('cardSyncProgressText').textContent = full
+                    ? 'Barcha kartochkalar qayta yaratilmoqda…'
+                    : 'Tasdiqlangan oqim va o‘quv reja fanlari sinxronlanmoqda…';
+                $('cardSyncProgressElapsed').textContent = '0 soniya';
+                box.classList.remove('hidden');
+                if (cardSyncTimer) clearInterval(cardSyncTimer);
+                cardSyncTimer = setInterval(() => {
+                    cardSyncElapsed++;
+                    $('cardSyncProgressElapsed').textContent = cardSyncElapsed + ' soniya';
+                }, 1000);
+            }
+            function setCardSyncProgressText(text) {
+                $('cardSyncProgressText').textContent = text;
+            }
+            function stopCardSyncProgress() {
+                if (cardSyncTimer) clearInterval(cardSyncTimer);
+                cardSyncTimer = null;
+                $('cardSyncProgress').classList.add('hidden');
+            }
             $('genBtn').title = 'Tasdiqlangan oqim bilan sinxronlash. Shift+bosish — hammasini qayta yaratish';
             $('genBtn').onclick = async function (ev) {
                 if (!board) return;
@@ -3169,7 +3204,9 @@
                     + '• mavjud kartochkalar va ularning joylashuvi saqlanadi;\n'
                     + '• rejada endi yo\'q kartochkalar o\'chiriladi;\n'
                     + '• yangilari pastda (taqsimlanmagan) qo\'shiladi.\nDavom etamizmi?')) return;
-                this.disabled = true; $('boardMsg').textContent = full ? 'Qayta yaratilmoqda...' : 'Sinxronlanmoqda...';
+                this.disabled = true;
+                $('boardMsg').textContent = full ? 'Qayta yaratilmoqda...' : 'Sinxronlanmoqda...';
+                startCardSyncProgress(full);
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/generate', 'POST', { mode: full ? 'full' : 'sync' });
                     const parts = [];
@@ -3182,10 +3219,17 @@
                     } else parts.push((j.created || 0) + ' ta kartochka yaratildi');
                     if (j.restored_units) parts.push(j.restored_units + ' ta dars birligining o\'qituvchi/xona biriktirishi tiklandi');
                     if (j.lost_units) parts.push(j.lost_units + ' ta birlik endi rejada yo\'q');
-                    $('boardMsg').textContent = parts.join(' · ');
+                    const summary = parts.join(' · ');
+                    setCardSyncProgressText('Doska yangi kartochkalar bilan qayta yuklanmoqda…');
                     await loadBoard(board.id);
-                } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
-                this.disabled = false;
+                    $('boardMsg').textContent = summary;
+                } catch (e) {
+                    $('boardMsg').textContent = 'Sinxronlash xatosi: ' + e.message;
+                    alert('Xatolik: ' + e.message);
+                } finally {
+                    stopCardSyncProgress();
+                    this.disabled = false;
+                }
             };
             // ===== Doska versiyalari (nusxalar): ro'yxat, qo'lda nusxa, joylashuvni tiklash (avval sinov) =====
             if ($('snapshotsBtn')) $('snapshotsBtn').onclick = async function () {

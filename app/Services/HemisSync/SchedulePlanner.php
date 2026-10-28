@@ -13,7 +13,8 @@ namespace App\Services\HemisSync;
  *    bo'lishi kerak. Qismlar: L — ma'ruza, A — ma'ruzadan boshqa hamma tur (amaliy, laboratoriya,
  *    seminar, klinik...). A qismida bir kun — jurnalda bitta ustun (turlar aralash bo'lsa ham).
  *  - Bugun va undan oldingi kunlarga tegilmaydi; tuzatish ertadan boshlab, iloji boricha joriy haftada.
- *  - Faqat soat yetmasa — shu kundagi dars davomiga qo'shiladi (yangi kun = yangi jurnal ustuni).
+ *  - Faqat soat yetmasa — dars davomiga qo'shiladi (yangi kun = yangi jurnal ustuni): avval har hafta o'z KTR
+ *    soatigacha o'sha haftaning darsiga, qolgani darslarga navbat bilan 1 soatdan — bitta kunga yig'ilmaydi.
  *  - Soni yetmasa — yangi kunga (shu qism darsi yo'q kunga) qo'yiladi.
  *  - Soat ortiqcha — keyingi darslar qisqartiriladi, lekin dars kamida 1 soat (yarim para) qoladi.
  *  - Tur almashtirish (amaliy ↔ laboratoriya) kun va soatni o'zgartirmaydi.
@@ -568,7 +569,9 @@ class SchedulePlanner
         }
     }
 
-    // --- 4) Soat yetmaydi (soni to'g'ri): eng yaqin darslar davomiga 1 soatdan qo'shiladi.
+    // --- 4) Soat yetmaydi (soni to'g'ri). Avval har hafta o'z KTR soatigacha — shu haftaning darsi davomiga
+    //        (masalan LMS kartasi 2 soat, KTR 4 soat bo'lsa har haftaga 2 soatdan); qolgan kamomad
+    //        darslarga navbat bilan 1 soatdan (bitta kunga yig'ilmaydi).
     private function fixHoursDeficit(array $u, array &$blocks, array &$occ, array &$fixes, array &$notes): void
     {
         foreach (['L', 'A'] as $part) {
@@ -578,27 +581,72 @@ class SchedulePlanner
             $debt = function () use (&$D, $codes) {
                 return array_sum(array_map(fn ($c) => max(0, $D[$c] ?? 0), $codes));
             };
+            $extend = function (int $i) use (&$blocks, &$occ, &$D, &$added, $u, $part): bool {
+                $b = $blocks[$i];
+                $slots = array_keys($b['slots']);
+                // Avval keyingi yarim-slot (chala parani to'ldirish ham shu), so'ng oldingisi.
+                foreach ([max($slots) + 1, min($slots) - 1] as $s) {
+                    if (!$this->isFree($occ, $u['key'], $u['base'], $part, $b['date'], $s)) {
+                        continue;
+                    }
+                    $code = $this->bestPositiveCode($u, $D, $part);
+                    $attrs = $b['slots'][$s > max($slots) ? max($slots) : min($slots)];
+                    $blocks[$i]['slots'][$s] = ['code' => $code] + $attrs;
+                    ksort($blocks[$i]['slots']);
+                    $this->occAdd($occ, $u, $part, $b['date'], $s);
+                    $D[$code]--;
+                    $added[$b['date'] . '|' . $code] = ($added[$b['date'] . '|' . $code] ?? 0) + 1;
+
+                    return true;
+                }
+
+                return false;
+            };
+
+            // a) Hafta bo'yicha: shu haftaning KTR soati — shu haftadagi darslar davomiga.
+            if ($u['ktr'] !== null && $debt() > 0) {
+                $byWeek = [];
+                foreach ($blocks as $i => $b) {
+                    if ($b['part'] === $part) {
+                        $byWeek[(int) $b['week']][] = $i;
+                    }
+                }
+                ksort($byWeek);
+                $short = [];
+                foreach ($byWeek as $week => $idx) {
+                    $row = (array) ($u['ktr'][$week - 1] ?? []);
+                    $need = array_sum(array_map(fn ($c) => (int) ($row[$c] ?? 0), $codes));
+                    $have = array_sum(array_map(fn ($i) => count($blocks[$i]['slots']), $idx));
+                    if ($need > $have) {
+                        $short[] = $week . '-hafta: KTR ' . $need . ' soat, jadvalda ' . $have;
+                    }
+                    while ($have < $need && $debt() > 0) {
+                        $ok = false;
+                        foreach ($idx as $i) {
+                            if ($extend($i)) {
+                                $ok = true;
+                                $have++;
+                                break;
+                            }
+                        }
+                        if (!$ok) {
+                            break;
+                        }
+                    }
+                }
+                if ($short) {
+                    $notes[] = ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ': LMS ichki jadvalidagi dars KTR soatidan qisqa ('
+                        . implode('; ', array_slice($short, 0, 6)) . (count($short) > 6 ? '; …' : '')
+                        . ') — kartochka soatini KTR bo\'yicha tuzating.';
+                }
+            }
+
+            // b) Qolgan kamomad — darslarga navbat bilan 1 soatdan.
             while ($debt() > 0) {
                 $ok = false;
                 foreach ($blocks as $i => $b) {
-                    if ($b['part'] !== $part) {
-                        continue;
-                    }
-                    $slots = array_keys($b['slots']);
-                    // Avval chala parani to'ldirish (oxiri toq yarim-slot), so'ng keyingi yarim-slot, so'ng oldingisi.
-                    foreach ([max($slots) + 1, min($slots) - 1] as $s) {
-                        if (!$this->isFree($occ, $u['key'], $u['base'], $part, $b['date'], $s)) {
-                            continue;
-                        }
-                        $code = $this->bestPositiveCode($u, $D, $part);
-                        $attrs = $b['slots'][$s > max($slots) ? max($slots) : min($slots)];
-                        $blocks[$i]['slots'][$s] = ['code' => $code] + $attrs;
-                        ksort($blocks[$i]['slots']);
-                        $this->occAdd($occ, $u, $part, $b['date'], $s);
-                        $D[$code]--;
-                        $added[$b['date'] . '|' . $code] = ($added[$b['date'] . '|' . $code] ?? 0) + 1;
+                    if ($b['part'] === $part && $debt() > 0 && $extend($i)) {
                         $ok = true;
-                        break 2;
                     }
                 }
                 if (!$ok) {

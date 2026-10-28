@@ -5295,7 +5295,16 @@
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
-                    showCyclePlacementResult(card, index, '', result && result.pending_approval ? 'pending' : 'success');
+                    const reloaded = ((cyclePlanData && cyclePlanData.cycle_cards) || [])
+                        .find(item => item.key === card.key);
+                    if (result && result.pending_approval) {
+                        showCyclePlacementResult(card, index, '', 'pending');
+                    } else if (!reloaded || !reloaded.placed) {
+                        showCyclePlacementResult(card, index,
+                            'Server yozuvni qabul qildi, lekin qayta yuklanganda blok topilmadi. Fan/oqim nomlari mosligini tekshiring.');
+                    } else {
+                        showCyclePlacementResult(card, index, '', 'success');
+                    }
                 } catch (e) {
                     console.error('Sikl joylash xatosi: ' + (e && e.message ? e.message : 'Noma\u2019lum xato'), {karta: card, index: index});
                     showCyclePlacementResult(card, index, e && e.message ? e.message : 'Noma\u2019lum xato.');

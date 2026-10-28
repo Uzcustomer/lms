@@ -4779,7 +4779,6 @@ class TimetableController extends Controller
             ->values();
     }
 
-    /** KTR kunlik rejasi kaliti (fakultetsiz): specKey(sof yo'nalish)|kurs|normFan. */
     /** Kartochka qatori uchun KTR haftalik rejasi (syncCardWeeksFromKtr bilan bir xil qidiruv). */
     private function ktrPlanForRow(array $ktr, ?string $faculty, string $specialty, int $course, string $subject): ?array
     {
@@ -4821,6 +4820,7 @@ class TimetableController extends Controller
         return $out ?: null;
     }
 
+    /** KTR kunlik rejasi kaliti (fakultetsiz): specKey(sof yo'nalish)|kurs|normFan. */
     private function cycleKtrKey(string $specialty, int $course, string $subject): string
     {
         return $this->specKey($specialty) . '|' . $course . '|' . $this->normSubject($subject);

@@ -20,7 +20,7 @@ const message = {
 };
 const toasts = [];
 const ctx = {
-    cyclePlanData: { dates: [{ date: '2026-09-30' }] },
+    cyclePlanData: { dates: [{ iso: '2026-09-30', d: '30.09' }] },
     $: id => id === 'cycleMsg' ? message : null,
     esc: value => String(value),
     ttToast: (html, type) => toasts.push({ html, type }),
@@ -40,6 +40,15 @@ assert.match(message.textContent, /Joylandi: Вакцинопрофилакти�
 assert.ok(classes.has('text-emerald-700'));
 assert.ok(!classes.has('text-red-700'));
 assert.equal(toasts.length, 1, 'success does not show an error toast');
+
+ctx.showCyclePlacementResult({ subject: 'Вакцинопрофилактика' }, 0, '', 'pending');
+assert.match(message.textContent, /Tasdiqlashga yuborildi: Вакцинопрофилактика · 2026-09-30/);
+assert.ok(classes.has('text-amber-700'));
+assert.ok(!classes.has('text-emerald-700'));
+assert.equal(toasts.length, 1, 'pending approval uses the existing approval notice');
+
+assert.match(source.slice(source.indexOf('async function placeCycleCardAt('), source.indexOf('// Tanlangan karta', source.indexOf('async function placeCycleCardAt('))),
+    /result && result\.pending_approval \? 'pending' : 'success'/);
 
 const eventsStart = source.indexOf('function setupCycleGridEvents()');
 const eventsEnd = source.indexOf('function renderCycleCards(', eventsStart);

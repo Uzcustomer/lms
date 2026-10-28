@@ -1142,9 +1142,10 @@ class TimetableController extends Controller
                             $ktrPlan = $isCycleRow ? null
                                 : $this->ktrPlanForRow($ktrPlans, $blockFac, (string) $specName, (int) $course, (string) $s->subject_name);
                             if ($ktrPlan !== null) {
-                                // 2 soatlik ma'ruza necha marta: odatda ma'ruzali haftalar soni; haftada 2 soatdan ko'p
-                                // bo'lsa (4 soat — ikki ma'ruza) soat kamayib ketmasin.
-                                $ktrLecWeeks = array_sum(array_map(fn ($d) => (int) ceil(max(0, (int) ($d['lec'] ?? 0)) / 2), $ktrPlan));
+                                // 2 soatlik ma'ruza necha marta — KTR'ning jami ma'ruza soatidan (ishchi rejadagi weeklyPlan kabi):
+                                // odatda ma'ruzali haftalar soni; haftada 4 soat bo'lsa kamayib, toq (1 soat) bo'lsa oshib ketmaydi.
+                                $ktrLecHours = array_sum(array_map(fn ($d) => max(0, (int) ($d['lec'] ?? 0)), $ktrPlan));
+                                $ktrLecWeeks = min((int) round($ktrLecHours / 2), max(1, (int) $weeks));
                                 if ($ktrLecWeeks > 0) {
                                     $wp['lecture_weeks'] = $ktrLecWeeks;
                                 }

@@ -253,3 +253,12 @@ it('kartochka yaratish: KTR haftasida 2 soatdan ko\'p ma\'ruza bo\'lsa ham ma\'r
     ]);
     expect($rows->where('training_type', 'lecture')->pluck('weeks')->all())->toBe([3]);
 });
+
+it('kartochka yaratish: KTR haftasida toq (1) soat ma\'ruza bo\'lsa soat oshib ketmaydi', function () {
+    // 4 hafta 1 soatdan — jami 4 soat: 2 soatlik ma'ruza 2 marta (har hafta 2 soatga yaxlitlanib 8 soat emas).
+    $rows = ktrCardRows([
+        '1' => ['11' => 1, '13' => 2], '2' => ['11' => 1, '13' => 2], '3' => ['11' => 1, '13' => 2],
+        '4' => ['11' => 1, '13' => 2], '5' => ['11' => 0, '13' => 2], '6' => ['11' => 0, '13' => 2],
+    ]);
+    expect($rows->where('training_type', 'lecture')->pluck('weeks')->all())->toBe([2]);
+});

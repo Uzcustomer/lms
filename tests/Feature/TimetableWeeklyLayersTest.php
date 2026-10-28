@@ -884,6 +884,35 @@ it('sikl joylashuvi HEMIS fan nomi aynan mos bo‘lmasa aniq xato qaytaradi', fu
     expect(\App\Models\TimetableCyclePlacement::count())->toBe(0);
 });
 
+it('server hosil qilgan sikl varianti kartaning aynan nomi bilan saqlanadi', function () {
+    $s = layersSetup();
+    $s['own']->update(['course' => 5, 'subject_name' => 'Fan (a)']);
+    \App\Models\TimetableSubjectSetting::create([
+        'board_id' => $s['board']->id,
+        'specialty_name' => 'davolash ishi',
+        'course' => 5,
+        'subject_name' => 'FAN (a)',
+        'mode' => 'cycle',
+        'cycle_days' => 2,
+    ]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cycle-place', $s['board']), [
+        'specialty_name' => 'davolash ishi',
+        'course' => 5,
+        'group_name' => 'F1 / 1-oqim',
+        'subject_name' => 'Fan',
+        'start_index' => 0,
+        'training_type' => 'practice',
+        'pair' => 1,
+        'view' => 'flow',
+        'action' => 'place',
+        'layer' => 'external',
+        'start_date' => '2026-09-14',
+    ])->assertOk();
+
+    expect(\App\Models\TimetableCyclePlacement::first()->subject_name)->toBe('Fan (a)');
+});
+
 it('panjara: hafta soni o\'zgarsa kartochkalar so\'ralmasa saqlanadi; o\'z boshlanishi va ta\'til haftalari bilan sikl ogohlantirishi sanasi', function () {
     $s = layersSetup();
     $s['own']->update(['ext_day' => 1, 'ext_pair' => 1]);

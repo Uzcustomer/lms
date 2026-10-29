@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Deadline;
 use App\Models\RetakeBooking;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
@@ -23,6 +24,8 @@ class RetakeBookingService
     public const ALERT_AFTER_ATTEMPTS = 5;
     /** Bekor qilishni yuborish shundan keyin to'xtatiladi */
     public const MAX_SYNC_ATTEMPTS = 50;
+    /** Kurs uchun sozlama bo'lmasa (deadlines jadvali) */
+    public const DEFAULT_DEADLINE_DAYS = 7;
 
     public function __construct(private MoodleRetakeClient $client)
     {
@@ -98,7 +101,7 @@ class RetakeBookingService
         return null;
     }
 
-    /** Shu kundagi NB / past baho yozuvlari (sahifada ko'rsatish va grade_id uchun) */
+    /** Shu kundagi NB / past baho yozuvlari (sahifada ko'rsatish, grade_id va muddat uchun) */
     public static function gradeRows(int $studentHemisId, int $subjectId, string $lessonDate): Collection
     {
         return StudentGrade::where('student_hemis_id', $studentHemisId)
@@ -106,7 +109,35 @@ class RetakeBookingService
             ->whereDate('lesson_date', $lessonDate)
             ->whereIn('reason', ['absent', 'low_grade'])
             ->orderBy('id')
-            ->get(['id', 'grade', 'reason', 'retake_grade']);
+            ->get(['id', 'grade', 'reason', 'retake_grade', 'deadline', 'lesson_date']);
+    }
+
+    /** Admin sozlamalaridagi kurs bo'yicha qayta topshirish kunlari */
+    public static function deadlineDays($levelCode): int
+    {
+        return (int) (Deadline::where('level_code', $levelCode)->value('deadline_days') ?? self::DEFAULT_DEADLINE_DAYS);
+    }
+
+    /**
+     * Bitta bahoning qayta topshirish muddati: saqlangan student_grades.deadline,
+     * bo'sh bo'lsa — dars sanasi + sozlamadagi kunlar (import va jurnal yozganidek).
+     */
+    public static function rowDeadline($deadline, $lessonDate, int $days): Carbon
+    {
+        return $deadline
+            ? Carbon::parse($deadline)
+            : Carbon::parse($lessonDate)->addDays($days)->endOfDay();
+    }
+
+    /** Mavzu (talaba + fan + kun) muddati LMS bo'yicha: shu kundagi juftliklarning eng yaqini */
+    public static function lmsDeadline(int $studentHemisId, $levelCode, int $subjectId, string $lessonDate): Carbon
+    {
+        $days = self::deadlineDays($levelCode);
+        $rows = self::gradeRows($studentHemisId, $subjectId, $lessonDate);
+
+        return $rows->isEmpty()
+            ? self::rowDeadline(null, $lessonDate, $days)
+            : $rows->map(fn ($r) => self::rowDeadline($r->deadline, $r->lesson_date, $days))->min();
     }
 
     /** Talabaning shu mavzu bo'yicha amaldagi broni */
@@ -320,13 +351,13 @@ class RetakeBookingService
 
     private function markSynced(RetakeBooking $booking, array $result): void
     {
-        $booking->update(array_filter([
+        // Muddat LMS bo'yicha — Moodle qaytargan deadline yozilmaydi
+        $booking->update([
             'moodle_sync' => RetakeBooking::SYNC_OK,
             'moodle_code' => $result['code'],
             'moodle_message' => $result['message'],
-            'deadline' => $result['deadline'] ?? null,
             'synced_at' => now(),
-        ], fn ($v) => $v !== null));
+        ]);
     }
 
     private function markFailed(RetakeBooking $booking, MoodleRetakeException $e): void

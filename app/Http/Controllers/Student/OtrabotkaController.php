@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\Deadline;
 use App\Models\StudentGrade;
+use App\Services\RetakeBookingService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,8 +20,6 @@ use Illuminate\Support\Facades\Auth;
  */
 class OtrabotkaController extends Controller
 {
-    private const DEFAULT_DEADLINE_DAYS = 7;
-
     public function index()
     {
         $student = Auth::user();
@@ -47,14 +46,12 @@ class OtrabotkaController extends Controller
             ->get();
 
         $setting = Deadline::where('level_code', $student->level_code)->first();
-        $deadlineDays = $setting->deadline_days ?? self::DEFAULT_DEADLINE_DAYS;
+        $deadlineDays = RetakeBookingService::deadlineDays($student->level_code);
         $today = Carbon::today();
 
         $items = $rows->map(function (StudentGrade $g) use ($deadlineDays, $today) {
             $lessonDate = Carbon::parse($g->lesson_date);
-            $deadline = $g->deadline
-                ? Carbon::parse($g->deadline)
-                : $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
+            $deadline = RetakeBookingService::rowDeadline($g->deadline, $g->lesson_date, $deadlineDays);
 
             if ($g->retake_grade !== null) {
                 $state = 'done';

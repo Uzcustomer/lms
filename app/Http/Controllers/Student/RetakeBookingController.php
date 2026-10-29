@@ -37,12 +37,13 @@ class RetakeBookingController extends Controller
 
     public function index(Request $request)
     {
-        $hemisId = (int) Auth::guard('student')->user()->hemis_id;
+        $student = Auth::guard('student')->user();
+        $hemisId = (int) $student->hemis_id;
         $subjectId = (int) $request->query('subject_id');
         $lessonDate = $this->dateParam($request->query('lesson_date'));
 
         try {
-            $debts = $this->service->debts($hemisId);
+            $debts = $this->withLmsDeadline($this->service->debts($hemisId), $student);
         } catch (MoodleRetakeException $e) {
             Log::warning('Moodle otrabotka get_debts', ['student_hemis_id' => $hemisId, 'error' => $e->getMessage()]);
 
@@ -85,12 +86,17 @@ class RetakeBookingController extends Controller
             'slot.in' => "Vaqt oralig'ini ro'yxatdan tanlang.",
         ]);
 
-        $hemisId = (int) Auth::guard('student')->user()->hemis_id;
+        $student = Auth::guard('student')->user();
+        $hemisId = (int) $student->hemis_id;
         $back = $this->debtUrl((int) $data['subject_id'], $data['lesson_date']);
 
-        // Muddat va can_book ni brauzerdan emas, Moodle'dan qayta olamiz
+        // can_book ni brauzerdan emas, Moodle'dan qayta olamiz; muddat — LMS bo'yicha
         try {
-            $debt = RetakeBookingService::findDebt($this->service->debts($hemisId), (int) $data['subject_id'], $data['lesson_date']);
+            $debt = RetakeBookingService::findDebt(
+                $this->withLmsDeadline($this->service->debts($hemisId), $student),
+                (int) $data['subject_id'],
+                $data['lesson_date']
+            );
         } catch (MoodleRetakeException $e) {
             Log::warning('Moodle otrabotka get_debts', ['student_hemis_id' => $hemisId, 'error' => $e->getMessage()]);
 
@@ -130,6 +136,31 @@ class RetakeBookingController extends Controller
         $result = $this->service->cancel($booking);
 
         return redirect($back)->with('booking_flash', ['type' => $result['type'], 'message' => $result['message']]);
+    }
+
+    /**
+     * Qayta topshirish muddati Moodle'niki emas, LMS'niki: sozlamadagi kurs
+     * bo'yicha kunlar (otrabotka sahifasi bilan bir xil). Muddati LMS bo'yicha
+     * o'tgan qarzga vaqt tanlab bo'lmaydi.
+     */
+    private function withLmsDeadline(array $debts, $student): array
+    {
+        $today = now()->toDateString();
+
+        return array_map(function (array $debt) use ($student, $today) {
+            if (empty($debt['subject_id']) || empty($debt['lesson_date'])) {
+                return $debt;
+            }
+            $debt['deadline'] = RetakeBookingService::lmsDeadline(
+                (int) $student->hemis_id, $student->level_code, (int) $debt['subject_id'], (string) $debt['lesson_date']
+            )->toDateString();
+            if ($debt['deadline'] < $today && !in_array($debt['state'] ?? '', ['done', 'continue'], true)) {
+                $debt['state'] = 'expired';
+                $debt['can_book'] = false;
+            }
+
+            return $debt;
+        }, $debts);
     }
 
     /** Moodle qarzi + LMS'dagi bron va baholar — sahifa uchun */

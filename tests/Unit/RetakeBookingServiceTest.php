@@ -36,8 +36,15 @@ beforeEach(function () {
         $t->double('grade')->nullable();
         $t->double('retake_grade')->nullable();
         $t->string('reason')->nullable();
+        $t->dateTime('deadline')->nullable();
         $t->timestamps();
         $t->softDeletes();
+    });
+    Schema::create('deadlines', function ($t) {
+        $t->id();
+        $t->string('level_code');
+        $t->integer('deadline_days');
+        $t->timestamps();
     });
     (include database_path('migrations/2026_10_30_100000_create_retake_bookings_table.php'))->up();
 
@@ -80,7 +87,8 @@ it('saves a booking and marks it synced when Moodle accepts it', function () {
         ->and($b->status)->toBe('booked')
         ->and($b->moodle_sync)->toBe('ok')
         ->and($b->moodle_code)->toBe('saved')
-        ->and($b->deadline->format('Y-m-d'))->toBe('2026-11-01')
+        // Muddat LMS'niki — Moodle qaytargan 2026-11-01 yozilmaydi
+        ->and($b->deadline->format('Y-m-d'))->toBe('2026-10-31')
         ->and($b->grade_id)->toBe(1)
         ->and($b->synced_at)->not->toBeNull();
     Http::assertSent(fn (Request $r) => $r['booking_id'] == $b->id && $r['lesson_date'] === '2026-10-24'
@@ -216,4 +224,19 @@ it('builds time slots from the configured working hours', function () {
         '10:00-11:00' => ['10:00', '11:00'],
         '11:00-12:00' => ['11:00', '12:00'],
     ]);
+});
+
+it('takes the deadline from LMS: stored grade deadline, else lesson date + level days', function () {
+    DB::table('deadlines')->insert(['level_code' => '13', 'deadline_days' => 6]);
+
+    // Saqlangan muddat yo'q — 24.10 + 6 kun
+    DB::table('student_grades')->insert(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24 00:00:00', 'reason' => 'absent']);
+    expect(RetakeBookingService::lmsDeadline(5531, '13', 181, '2026-10-24')->toDateString())->toBe('2026-10-30');
+
+    // Sozlama yo'q kurs — 7 kun
+    expect(RetakeBookingService::lmsDeadline(5531, '99', 181, '2026-10-24')->toDateString())->toBe('2026-10-31');
+
+    // Bir kunda ikki juftlik — saqlangan eng yaqin muddat
+    DB::table('student_grades')->insert(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24 00:00:00', 'reason' => 'absent', 'deadline' => '2026-10-28 23:59:59']);
+    expect(RetakeBookingService::lmsDeadline(5531, '13', 181, '2026-10-24')->toDateString())->toBe('2026-10-28');
 });

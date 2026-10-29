@@ -909,11 +909,16 @@ trait TimetableHemisSync
                     $usedCards[$c->id] = true;
                 }
                 $plan = [];
+                $unplacedCard = false;
                 foreach ($matched as $c) {
-                    array_push($plan, ...$cardLessons($c));
+                    $lessons = $cardLessons($c);
+                    $unplacedCard = $unplacedCard || !$lessons;
+                    array_push($plan, ...$lessons);
                 }
                 if (!array_filter($plan, fn ($p) => $p['date'] > $today)) {
-                    $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS ichki jadvalida ertadan keyin dars yo\'q — HEMIS\'ga tegilmaydi', 'kind' => 'finished'];
+                    // Ichki jadvalda birorta darsi yo'q (joylanmagan) karta bo'lsa — fan tugamagan, bu haqiqiy muammo.
+                    $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS ichki jadvalida ertadan keyin dars yo\'q — HEMIS\'ga tegilmaydi',
+                        'kind' => $unplacedCard ? 'unplaced' : 'finished'];
                     continue;
                 }
                 // Faqat shu birlik turlari (kodlari) uning rejasida; boshqa turdagi HEMIS darslari guruh bandligida qoladi.

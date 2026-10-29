@@ -900,6 +900,12 @@ it('o\'tkazilgan fanlar turi: tugagan (haftalik va sikl), joylanmagan sikl, kart
     expect(array_column($b, 'kind'))->toBe(['finished'])
         ->and($b[0]['reason'])->toBe('LMS ichki jadvalida ertadan keyin dars yo\'q — HEMIS\'ga tegilmaydi');
 
+    // Haftalik fanning kartasi joylanmagan (ichki jadvalda darsi yo'q) — tugagan emas: unplaced, matni o'zgarmaydi
+    $s['card']->update(['day' => null, 'pair' => null]);
+    $u = $skipped([1], '2026-09-19', 'p/st26-01a');
+    expect(array_column($u, 'kind'))->toBe(['unplaced'])->and($u[0]['reason'])->toBe($b[0]['reason']);
+    $s['card']->update(['day' => 1, 'pair' => 3]);
+
     // (d) LMS doskasida kartochka yo'q (HEMIS'da dars bor)
     $s['card']->update(['subject_name' => 'Boshqa fan']);
     $d = $skipped([1], '2026-09-19', 'p/st26-01a');

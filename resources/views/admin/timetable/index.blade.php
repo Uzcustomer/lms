@@ -3718,7 +3718,7 @@
             let hemisSyncLast = null;
             let hemisSyncUntil = null;
             let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
-            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null };   // subjects: null — barcha fanlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null, groups: null };   // subjects / groups: null — barcha fanlar / guruhlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -3731,6 +3731,15 @@
                 m.innerHTML = '<div class="bg-white rounded-xl shadow-xl w-full max-w-6xl p-4 text-[12px]">' + html + '</div>';
                 return m;
             }
+            // Ochiladigan ro'yxatlar (Fanlar / Guruhlar): tashqariga bosilsa yoki Esc bosilsa — yopiladi.
+            // Ro'yxat ichidagi tugma oynani qayta chizsa (bosilgan element DOM'dan chiqadi) — yopilmaydi: apply() uni qayta ochadi.
+            document.addEventListener('click', e => {
+                if (!e.target.isConnected) return;
+                document.querySelectorAll('#hemisSyncModal details.hs-pick[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+            });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') document.querySelectorAll('#hemisSyncModal details.hs-pick[open]').forEach(d => { d.open = false; });
+            });
             const hsEsc = v => String(v == null ? '' : v).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
             const hsSigned = n => (n > 0 ? '+' : '') + n;
             function hsUnitMatches(u) {
@@ -3748,6 +3757,19 @@
             const HS_A_TITLE = ' title="Amaliy qism — ma\'ruzadan boshqa barcha turlar: amaliy, seminar, laboratoriya, klinik mashg\'ulot. Bir kunda qaysi biri bo\'lsa ham — jurnalda bitta ustun."';
             // Fan filtri: null — hammasi; aks holda tanlangan fan nomlari.
             const hsSubjOk = u => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(u.subject_name);
+            // Guruh filtri: null — hammasi; aks holda tanlangan guruhlar (rep.groups[].group). Fan filtri bilan birga (ikkalasi ham).
+            const hsGroupOk = g => !hemisSyncFilter.groups || hemisSyncFilter.groups.includes(g.group);
+            const hsGroupNames = rep => [...new Set(rep.groups.map(g => g.group))].sort((a, b) => a.localeCompare(b));
+            // Filtr panelidagi ochiladigan ro'yxat: checkbox'lar, tepada "Hammasi / Hech biri".
+            const hsPickBox = (key, label, all, picked) => {
+                const sel = picked ? picked.filter(x => all.includes(x)) : all;
+                return '<details id="hs' + key + 'Box" class="hs-pick relative"><summary class="cursor-pointer border rounded px-2 py-0.5 bg-white">' + label + ': ' +
+                    (sel.length === all.length ? 'hammasi' : sel.length + ' / ' + all.length) + '</summary>' +
+                    '<div class="absolute z-10 mt-1 bg-white border rounded shadow p-2 max-h-72 overflow-auto w-96">' +
+                    '<div class="mb-1"><button type="button" id="hs' + key + 'All" class="underline mr-2">Hammasi</button><button type="button" id="hs' + key + 'None" class="underline">Hech biri</button></div>' +
+                    all.map((n, i) => '<label class="flex items-center gap-1"><input type="checkbox" class="hs-pick-' + key + '" data-i="' + i + '"' + (sel.includes(n) ? ' checked' : '') + '> ' + hsEsc(n) + '</label>').join('') +
+                    '</div></details>';
+            };
             // Fan filtri ro'yxati: solishtirilgan va o'tkazilgan (skipped) fanlar — o'tkazilganning sababini ham tanlab ko'rish mumkin.
             const hsSubjectNames = rep => [...new Set(rep.groups.flatMap(g => [...g.units, ...(g.skipped || [])].map(x => x.subject_name)))]
                 .sort((a, b) => a.localeCompare(b));
@@ -3807,6 +3829,7 @@
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;
                 for (const g of rep.groups) {
+                    if (!hsGroupOk(g)) continue;
                     // Fan filtrida tanlanmaganlar "mos" emas — yashirilgan mos fanlar soniga qo'shilmaydi.
                     const picked = g.units.filter(hsSubjOk);
                     const shown = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
@@ -3909,16 +3932,8 @@
                     chk('hsBlkTeacher', F.blk.teacher, '<span class="px-1 rounded bg-purple-100 text-purple-800">O\'qituvchi band</span>') +
                     chk('hsBlkOther', F.blk.other, '<span class="px-1 rounded bg-red-100 text-red-700">Boshqa</span>') +
                     '<button type="button" id="hsOnlyBlocked" class="ml-1 underline text-[11px]">faqat to\'siqlilar</button></span>' + '</span>' +
-                    (() => {
-                        const all = hsSubjectNames(rep);
-                        const sel = F.subjects ? F.subjects.filter(x => all.includes(x)) : all;
-                        return '<details id="hsSubjBox" class="relative"><summary class="cursor-pointer border rounded px-2 py-0.5 bg-white">Fanlar: ' +
-                            (sel.length === all.length ? 'hammasi' : sel.length + ' / ' + all.length) + '</summary>' +
-                            '<div class="absolute z-10 mt-1 bg-white border rounded shadow p-2 max-h-72 overflow-auto w-96">' +
-                            '<div class="mb-1"><button type="button" id="hsSubjAll" class="underline mr-2">Hammasi</button><button type="button" id="hsSubjNone" class="underline">Hech biri</button></div>' +
-                            all.map((n, i) => '<label class="flex items-center gap-1"><input type="checkbox" class="hs-subj" data-i="' + i + '"' + (sel.includes(n) ? ' checked' : '') + '> ' + hsEsc(n) + '</label>').join('') +
-                            '</div></details>';
-                    })() + '</div>' +
+                    hsPickBox('Subj', 'Fanlar', hsSubjectNames(rep), F.subjects) +
+                    hsPickBox('Group', 'Guruhlar', hsGroupNames(rep), F.groups) + '</div>' +
                     '<div class="text-gray-600 mb-1">Tuzatish takliflari butun semestr bo\'yicha: KTR jami = HEMIS (bugungacha o\'tilgan) + LMS ichki jadvali (ertadan semestr oxirigacha). ' +
                     '«Hisob davri» faqat shu haftalardagi KTR / HEMIS / LMS yig\'indilarini ko\'rsatadi, «HEMIS\'ga yozish» esa qaysi haftagacha amal chiqishini belgilaydi. Bugun va undan oldingi kunlarga tegilmaydi.</div>' +
                     '<div class="text-gray-500 mb-1 text-[11px]"><b>Soati</b> — akademik soat (1 para = 2 soat). <b>Kunlari</b> — necha kunda o\'tilgani (jurnaldagi ustunlar soni). ' +
@@ -3955,21 +3970,23 @@
                     F.ops = { create: false, update: false, delete: false, blocked: true };
                     hemisSyncRender(rep);
                 };
-                {
-                    const all = hsSubjectNames(rep);
+                // Ochiladigan ro'yxat: belgilash — filtr (hammasi belgilansa null), qayta chizilgandan keyin ro'yxat ochiq qoladi.
+                for (const [key, all, field] of [['Subj', hsSubjectNames(rep), 'subjects'], ['Group', hsGroupNames(rep), 'groups']]) {
+                    const boxes = () => document.querySelectorAll('#hemisSyncModal .hs-pick-' + key);
                     const apply = () => {
-                        const picked = [...document.querySelectorAll('#hemisSyncModal .hs-subj')].filter(c => c.checked).map(c => all[+c.dataset.i]);
-                        F.subjects = picked.length === all.length ? null : picked;
+                        const picked = [...boxes()].filter(c => c.checked).map(c => all[+c.dataset.i]);
+                        F[field] = picked.length === all.length ? null : picked;
                         hemisSyncRender(rep);
-                        if ($('hsSubjBox')) $('hsSubjBox').open = true;
+                        if ($('hs' + key + 'Box')) $('hs' + key + 'Box').open = true;
                     };
-                    document.querySelectorAll('#hemisSyncModal .hs-subj').forEach(c => { c.onchange = apply; });
-                    $('hsSubjAll').onclick = () => { document.querySelectorAll('#hemisSyncModal .hs-subj').forEach(c => { c.checked = true; }); apply(); };
-                    $('hsSubjNone').onclick = () => { document.querySelectorAll('#hemisSyncModal .hs-subj').forEach(c => { c.checked = false; }); apply(); };
+                    boxes().forEach(c => { c.onchange = apply; });
+                    $('hs' + key + 'All').onclick = () => { boxes().forEach(c => { c.checked = true; }); apply(); };
+                    $('hs' + key + 'None').onclick = () => { boxes().forEach(c => { c.checked = false; }); apply(); };
                 }
                 $('hsJson').onclick = () => {
-                    // Yozish uchun JSON — faqat filtrda tanlangan amallar (to'siqlilar baribir yozilmaydi).
+                    // Yozish uchun JSON — faqat filtrda tanlangan guruh, fan va amallar (to'siqlilar baribir yozilmaydi).
                     const out = JSON.parse(JSON.stringify(rep));
+                    out.groups = out.groups.filter(hsGroupOk);
                     out.groups.forEach(g => g.units.forEach(u => { u.actions = hsSubjOk(u) ? u.actions.filter(hsOpOk) : []; }));
                     const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
                     const a = document.createElement('a');
@@ -3992,6 +4009,8 @@
                     Object.keys(F.blk).filter(k => F.blk[k]).forEach(k => add('blk[]', k));
                     add('blk_filter', 1);
                     if (F.subjects) { add('subjects_filter', 1); F.subjects.forEach(n => add('subjects[]', n)); }
+                    // Guruh filtri hisobotni toraytirmaydi ("groups[]" — qamrov, guruhlararo to'siqlar o'zgarardi), faqat chiqishni.
+                    if (F.groups) { add('groups_filter', 1); F.groups.forEach(n => add('filter_groups[]', n)); }
                     // Forma yuborish o'rniga fetch: xato bo'lsa sahifa "ERR_INVALID_RESPONSE" bo'lib qolmaydi — sababi ko'rsatiladi.
                     const btn = this, html = btn.innerHTML;
                     btn.disabled = true; btn.textContent = 'Tayyorlanmoqda…';
@@ -4092,7 +4111,8 @@
                 this.disabled = true;
                 hemisSyncUntil = null;
                 hemisSyncPeriod = null;
-                hemisSyncFilter.subjects = null;   // fan filtri qamrovga bog'liq — yangi solishtirishda hammasi
+                hemisSyncFilter.subjects = null;   // fan va guruh filtri qamrovga bog'liq — yangi solishtirishda hammasi
+                hemisSyncFilter.groups = null;
                 try { await hemisSyncAsk(); } finally { this.disabled = false; }
             };
             // ===== HEMIS to'siqlari bo'yicha so'rovlar (Telegram: o'qituvchi / kafedra mudiri) =====
@@ -4104,6 +4124,7 @@
             function hsTicketItems(rep) {
                 const items = [];
                 for (const g of rep.groups) {
+                    if (!hsGroupOk(g)) continue;
                     for (const u of g.units) {
                         if (!hsSubjOk(u)) continue;
                         for (const a of u.actions) {

@@ -14,7 +14,7 @@ function section(from, to) {
 const els = {};
 const ctx = {
     $: id => els[id] || (els[id] = { id, value: '1', checked: true }),
-    document: { querySelectorAll: () => [], createElement: () => ({}), body: { appendChild() {} } }, scopeLabelText: () => 'Hammasi', HS_WRITER_URL: '/js/hemis-writer.js',
+    document: { querySelectorAll: () => [], createElement: () => ({}), body: { appendChild() {} }, addEventListener() {} }, scopeLabelText: () => 'Hammasi', HS_WRITER_URL: '/js/hemis-writer.js',
 };
 vm.createContext(ctx);
 vm.runInContext(section('let hemisSyncFilter', 'async function hemisSyncRun()')

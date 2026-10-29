@@ -163,7 +163,7 @@
                             <div class="rb-slots" id="rb-slots">
                                 @foreach($slots as $key => [$from, $to])
                                     <label class="rb-slot-opt">
-                                        <input type="radio" name="slot" value="{{ $key }}" data-start="{{ $from }}" @checked($currentSlot === $key)>
+                                        <input type="radio" name="slot" value="{{ $key }}" data-start="{{ $from }}" data-end="{{ $to }}" @checked($currentSlot === $key)>
                                         <span>{{ $from }}–{{ $to }}</span>
                                     </label>
                                 @endforeach
@@ -215,11 +215,11 @@
                         }
                         var radios = Array.prototype.slice.call(form.querySelectorAll('input[name="slot"]'));
                         var noSlots = document.getElementById('rb-no-slots');
-                        // Tanlangan kun bugun bo'lsa, boshlanishi o'tib ketgan oraliqlar tanlanmaydi
+                        // Tanlangan kun bugun bo'lsa, tugab bo'lgan oraliqlar tanlanmaydi (davom etayotgani ochiq)
                         function refreshSlots() {
                             var date = form.date.value, now = new Date(), free = 0;
                             radios.forEach(function (r) {
-                                var past = !!date && new Date(date + 'T' + r.dataset.start) <= now;
+                                var past = !!date && new Date(date + 'T' + r.dataset.end) <= now;
                                 r.disabled = past;
                                 if (past && r.checked) { r.checked = false; }
                                 if (!past) { free++; }
@@ -238,7 +238,7 @@
                                 ok = fail("Sana qayta topshirish muddatidan kech bo'lmasligi kerak.");
                             } else if (!picked) {
                                 ok = fail("Vaqt oralig'ini tanlang.");
-                            } else if (new Date(date + 'T' + picked.dataset.start) <= new Date()) {
+                            } else if (new Date(date + 'T' + picked.dataset.end) <= new Date()) {
                                 ok = fail("Bu vaqt oralig'i o'tib ketgan — keyingisini tanlang.");
                             }
                             if (!ok) { e.preventDefault(); }

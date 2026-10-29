@@ -112,6 +112,16 @@ class RetakeBookingController extends Controller
         [$startTime, $endTime] = $slots[$data['slot']];
         $start = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $startTime);
         $end = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $endTime);
+        if ($end->lessThanOrEqualTo(now())) {
+            return redirect($back)->withInput()->withErrors(['slot' => "Bu vaqt oralig'i o'tib ketgan — keyingisini tanlang."]);
+        }
+        // Davom etayotgan oraliq: bron hozirdan (keyingi daqiqadan) oraliq oxirigacha
+        if ($start->lessThanOrEqualTo(now())) {
+            $start = now()->addMinute()->startOfMinute();
+            if ($start->greaterThanOrEqualTo($end)) {
+                return redirect($back)->withInput()->withErrors(['slot' => "Bu vaqt oralig'i tugayapti — keyingisini tanlang."]);
+            }
+        }
         if ($error = RetakeBookingService::validateSlot($start, $end, $debt['deadline'] ?? null)) {
             return redirect($back)->withInput()->withErrors(['slot' => $error]);
         }

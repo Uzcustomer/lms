@@ -25,7 +25,7 @@
         .ot-chip.done { background: #dcfce7; color: #166534; }
         .ot-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; }
         .ot-row + .ot-row { border-top: 1px solid #f1f4f8; }
-        .ot-mark { flex: none; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+        .ot-mark { flex: none; min-width: 44px; height: 44px; padding: 0 6px; box-sizing: border-box; border-radius: 12px; display: flex; align-items: center; justify-content: center;
             font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; background: #fee2e2; color: #b91c1c; }
         .ot-row.done .ot-mark { background: #f1f5f9; color: #64748b; }
         .ot-body { flex: 1; min-width: 0; }
@@ -82,14 +82,14 @@
                 </div>
                 @foreach($group['items'] as $item)
                     <div class="ot-row {{ $item['state'] }} {{ $item['state'] === 'open' && $item['days_left'] <= 1 ? 'urgent' : '' }}">
-                        <span class="ot-mark">{{ $item['is_absent'] ? 'NB' : rtrim(rtrim(number_format((float) $item['grade'], 2, '.', ''), '0'), '.') }}</span>
+                        <span class="ot-mark">{{ $item['mark'] }}</span>
                         <span class="ot-body">
                             <span class="ot-date">{{ $item['lesson_date']->format('d.m.Y') }}</span>
-                            <span class="ot-meta">{{ collect([$item['training_type'], $item['pair'] ? $item['pair'] . ' ' . __('juftlik') : null])->filter()->implode(' · ') }}</span>
+                            <span class="ot-meta">{{ $item['training_type'] }}</span>
                         </span>
                         <span class="ot-state">
                             @if($item['state'] === 'done')
-                                <b>{{ __('Topshirildi') }}: {{ rtrim(rtrim(number_format((float) $item['retake_grade'], 2, '.', ''), '0'), '.') }}</b>
+                                <b>{{ __('Topshirildi') }}: {{ $item['retake'] }}</b>
                             @elseif($item['state'] === 'expired')
                                 <b>{{ __("Muddati o'tgan") }}</b>
                                 <span>{{ $item['deadline']->format('d.m.Y') }}</span>

@@ -79,6 +79,11 @@ class OtrabotkaController extends Controller
             ];
         });
 
+        // Bir kundagi juftliklar bitta qator: talaba kun bo'yicha qayta topshiradi
+        $items = $items->groupBy(fn ($i) => $i['subject_id'] . '|' . $i['lesson_date']->toDateString())
+            ->map(fn ($day) => $this->mergeDay($day))
+            ->values();
+
         $groups = $items->groupBy('subject_id')->map(fn ($list) => [
             'name' => $list->first()['subject_name'],
             'items' => $list->values(),
@@ -102,5 +107,37 @@ class OtrabotkaController extends Controller
             'byTeacher' => (bool) ($setting->retake_by_oqituvchi ?? false),
             'semesterName' => $student->semester_name,
         ]);
+    }
+
+    /**
+     * Bir kunning juftliklarini bitta yozuvga birlashtiradi. Holat: birortasi
+     * ochiq bo'lsa — ochiq (eng yaqin muddati bilan), aks holda birortasining
+     * muddati o'tgan bo'lsa — o'tgan, hammasi topshirilgan bo'lsa — topshirilgan.
+     */
+    private function mergeDay($day): array
+    {
+        $state = $day->contains('state', 'open') ? 'open'
+            : ($day->contains('state', 'expired') ? 'expired' : 'done');
+        $relevant = $state === 'done' ? $day : $day->where('state', $state);
+        $deadline = $relevant->min('deadline');
+        $first = $day->first();
+
+        return [
+            'subject_id' => $first['subject_id'],
+            'subject_name' => $first['subject_name'],
+            'lesson_date' => $first['lesson_date'],
+            'training_type' => $day->pluck('training_type')->filter()->unique()->implode(', '),
+            'mark' => $day->map(fn ($i) => $i['is_absent'] ? 'NB' : self::number($i['grade']))->unique()->implode(' / '),
+            'retake' => $day->pluck('retake_grade')->filter(fn ($g) => $g !== null)
+                ->map(fn ($g) => self::number($g))->unique()->implode(' / '),
+            'deadline' => $deadline,
+            'days_left' => $relevant->min('days_left'),
+            'state' => $state,
+        ];
+    }
+
+    private static function number($value): string
+    {
+        return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
     }
 }

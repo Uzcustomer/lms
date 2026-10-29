@@ -371,10 +371,6 @@ class VedomostTekshirishController extends Controller
             }
         }
 
-        $aiSettings  = app(\App\Services\VedomostAiSettings::class);
-        $passDefault = (int) $aiSettings->get('jn_mt_pass');
-        $passIntl    = (int) $aiSettings->get('jn_mt_pass_international');
-
         $wJn   = (int) ($request->weight_jn   ?? 50);
         $wMt   = (int) ($request->weight_mt   ?? 20);
         $wOn   = (int) ($request->weight_on   ?? 0);
@@ -839,9 +835,6 @@ class VedomostTekshirishController extends Controller
             // --- Qatorlarni yozish ---
             foreach ($students as $stu) {
                 $hId = $stu->hemis_id;
-                // JN/MT o'tish chegarasi — Vedomost AI sozlamalaridan (AI tekshiruv bilan
-                // bir xil manba); xalqaro fakultet talabalari uchun alohida qiymat.
-                $pass = $stu->isInternationalFaculty() ? $passIntl : $passDefault;
 
                 $jnOrig  = $jnGrades[$hId] ?? 0;
                 $mt      = $mtGrades[$hId] ?? 0;
@@ -900,8 +893,8 @@ class VedomostTekshirishController extends Controller
                 $levelCode = (string) ($semester?->level_code ?? '');
                 $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
 
-                $jnBall = $jn >= $pass ? $jn * $wJn / 100 : 0;
-                $mtBall = $mt >= $pass ? $mt * $wMt / 100 : 0;
+                $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
+                $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
                 if ($roundJnMtToInt) {
                     $onBall = $on >= 60 ? (int) floor($on * $wOn / 100 + 0.5) : 0;
                 } else {
@@ -924,8 +917,8 @@ class VedomostTekshirishController extends Controller
 
                 // M ustun (JN+MT) — shablon formulasi bilan bir xil:
                 // =IF(OR(D<60, G<60), 0, ROUND(E+H, 0.1))
-                // JN yoki MT o'tish chegarasidan kichik bo'lsa M = 0.
-                $sumBall = ($jn < $pass || $mt < $pass)
+                // JN yoki MT 60 dan kichik bo'lsa M = 0.
+                $sumBall = ($jn < 60 || $mt < 60)
                     ? 0
                     : (int) floor($jnBall + $mtBall + $onBall + 0.5);
                 $maxSum  = $wJn + $wMt + $wOn;
@@ -935,7 +928,7 @@ class VedomostTekshirishController extends Controller
                 // imtihon vaznga ega bo'lgan holda V ekran yig'indisi bilan
                 // mos kelmaydi).
                 $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav,
-                    (float) $jnBall, (float) $mtBall, (float) $onBall, (float) $oskiBall, (float) $testBall, $pass);
+                    (float) $jnBall, (float) $mtBall, (float) $onBall, (float) $oskiBall, (float) $testBall);
 
                 // Yakuniy qiymatni butun songacha half-up yaxlitlaymiz (V ustun
                 // butun son chiqishi kerak). Maxsus qiymatlar ('', -2, -1, 0)
@@ -951,7 +944,7 @@ class VedomostTekshirishController extends Controller
                 $baho = $this->toBaho($yn);
 
                 // Zanjir
-                $zanjir = $this->checkZanjir($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $pass);
+                $zanjir = $this->checkZanjir($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest);
 
                 $r = $dataRow;
 
@@ -1105,7 +1098,7 @@ class VedomostTekshirishController extends Controller
         return $row?->employee_name ?? '';
     }
 
-    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav, float $jnBall = 0.0, float $mtBall = 0.0, float $onBall = 0.0, float $oskiBall = 0.0, float $testBall = 0.0, int $pass = 60): string|int|float
+    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav, float $jnBall = 0.0, float $mtBall = 0.0, float $onBall = 0.0, float $oskiBall = 0.0, float $testBall = 0.0): string|int|float
     {
         // Bo'sh talaba
         if ($jn === 0 && $mt === 0) return '';
@@ -1118,7 +1111,7 @@ class VedomostTekshirishController extends Controller
         $testMissing = $wTest > 0 && $test == 0;
         if ($oskiMissing || $testMissing) {
             // JN+MT >= 60% dan o'tganlar uchun -1
-            $sumBall = ($jn >= $pass ? $jn * $wJn / 100 : 0) + ($mt >= $pass ? $mt * $wMt / 100 : 0) + ($on >= 60 ? $on * $wOn / 100 : 0);
+            $sumBall = ($jn >= 60 ? $jn * $wJn / 100 : 0) + ($mt >= 60 ? $mt * $wMt / 100 : 0) + ($on >= 60 ? $on * $wOn / 100 : 0);
             $maxPre = $wJn + $wMt + $wOn;
             if ($maxPre > 0 && $sumBall / $maxPre >= 0.6) {
                 return -1;
@@ -1126,7 +1119,7 @@ class VedomostTekshirishController extends Controller
         }
 
         // Har qanday komponent < 60 → 0
-        if (($wJn > 0 && $jn < $pass) || ($wMt > 0 && $mt < $pass) || ($wOn > 0 && $on < 60) || ($wOski > 0 && $oski < 60) || ($wTest > 0 && $test < 60)) {
+        if (($wJn > 0 && $jn < 60) || ($wMt > 0 && $mt < 60) || ($wOn > 0 && $on < 60) || ($wOski > 0 && $oski < 60) || ($wTest > 0 && $test < 60)) {
             return 0;
         }
 
@@ -1173,11 +1166,11 @@ class VedomostTekshirishController extends Controller
         return 'qon-siz';
     }
 
-    private function checkZanjir(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, int $pass = 60): string
+    private function checkZanjir(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest): string
     {
         $warnings = [];
-        $jnPass   = $wJn   === 0 || $jn   >= $pass;
-        $mtPass   = $wMt   === 0 || $mt   >= $pass;
+        $jnPass   = $wJn   === 0 || $jn   >= 60;
+        $mtPass   = $wMt   === 0 || $mt   >= 60;
         $onPass   = $wOn   === 0 || $on   >= 60;
         $oskiPass = $wOski === 0 || $oski >= 60;
 

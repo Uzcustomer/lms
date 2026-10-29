@@ -39,7 +39,7 @@ class VedomostAiChecker
     /**
      * To'liq tekshiruv: skanerni o'qish + hisobot.
      */
-    public function check(VedomostSubmission $v): array
+    public function check(VedomostSubmission $v, bool $fresh = false): array
     {
         if (!$v->pdf_path || !Storage::disk('public')->exists($v->pdf_path)) {
             throw new RuntimeException('Skaner PDF topilmadi.');
@@ -58,7 +58,7 @@ class VedomostAiChecker
             throw new RuntimeException("Vedomost tekshirish hisobi bo'yicha talabalar topilmadi.");
         }
 
-        $scan = $this->reader->read(Storage::disk('public')->path($v->pdf_path), $v->id, count($expected['talabalar']));
+        $scan = $this->reader->read(Storage::disk('public')->path($v->pdf_path), $v->id, count($expected['talabalar']), $fresh);
         $context = $this->buildContext($v, $expected, $scan);
 
         return $this->assemble($expected, $scan, $context, []);

@@ -102,6 +102,10 @@ test('rasm rejimi: bo\'laklar birlashadi, xato qator qayta o\'qib tuzatiladi, na
     $before = $calls;
     $again = app(VedomostScanReader::class)->read($this->pdf, 7);
     expect($calls)->toBe($before)->and($again['meta']['cached'])->toBeTrue();
+
+    // Xodim «Qayta tekshirish»ni bosganda — kesh ishlatilmaydi, AI qaytadan o'qiydi.
+    $fresh = app(VedomostScanReader::class)->read($this->pdf, 7, null, true);
+    expect($calls)->toBeGreaterThan($before)->and($fresh['meta']['cached'])->toBeFalse();
 });
 
 test('tushib qolgan qator (raqamlashda bo\'shliq) qayta o\'qib qo\'shiladi', function () {

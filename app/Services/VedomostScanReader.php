@@ -67,7 +67,11 @@ class VedomostScanReader
     /**
      * @return array{header: array, rows: array, signatures: array, weights: array, meta: array}
      */
-    public function read(string $pdfPath, ?int $submissionId = null, ?int $expectedRows = null): array
+    /**
+     * @param  bool  $fresh  true — keshga qaramay AI'ga qaytadan o'qitish (xodim «Qayta tekshirish»ni bosganda);
+     *                       natija baribir keshga yoziladi.
+     */
+    public function read(string $pdfPath, ?int $submissionId = null, ?int $expectedRows = null, bool $fresh = false): array
     {
         if (!is_file($pdfPath)) {
             throw new RuntimeException('Skaner PDF topilmadi.');
@@ -81,7 +85,7 @@ class VedomostScanReader
         $images = self::rendererAvailable();
         $cacheFile = $this->cachePath(sha1(implode('|', ['v' . self::PROMPT_VER, $hash, $bands, $model, $images ? 'images' : 'pdf'])));
 
-        if (is_file($cacheFile)) {
+        if (!$fresh && is_file($cacheFile)) {
             $cached = json_decode((string) file_get_contents($cacheFile), true);
             if (is_array($cached)) {
                 $cached['meta']['cached'] = true;

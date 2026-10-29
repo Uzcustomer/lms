@@ -20,7 +20,11 @@ class VedomostAiDispatcher
     ) {
     }
 
-    public function queue(VedomostSubmission $v): void
+    /**
+     * @param  bool  $fresh  true — PDF AI'ga qaytadan o'qitiladi (xodim qo'lda bosganda); avtomatik
+     *                       tekshiruv va ommaviy navbatda kesh ishlatiladi.
+     */
+    public function queue(VedomostSubmission $v, bool $fresh = false): void
     {
         $siblings = $this->merge->siblingsOf($v);
         if (!$siblings->contains('id', $v->id)) {
@@ -53,7 +57,7 @@ class VedomostAiDispatcher
             }
         }
 
-        CheckVedomostSubmissionWithAi::dispatch($v->id);
+        CheckVedomostSubmissionWithAi::dispatch($v->id, $fresh);
     }
 
     /**

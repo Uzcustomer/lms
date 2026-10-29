@@ -83,7 +83,7 @@
     <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Yashash guvohnomasi</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div>
-            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Karta raqami</label>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Guvohnoma seriyasi va raqami</label>
             <input type="text" name="residence_permit_number" value="{{ $visaInfo?->residence_permit_number ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
         </div>
         <div>

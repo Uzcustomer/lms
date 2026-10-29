@@ -179,7 +179,7 @@
                         <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9;">
                             <div class="sv-section-title" style="margin-bottom:12px;">Yashash guvohnomasi <span style="text-transform:none;letter-spacing:0;font-weight:500;">— viza va registratsiya talab qilinmaydi</span></div>
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
-                                <div class="sv-kv"><span>Karta raqami</span><span style="font-weight:700;">{{ $visaInfo->residence_permit_number ?? '—' }}</span></div>
+                                <div class="sv-kv"><span>Seriyasi va raqami</span><span style="font-weight:700;">{{ $visaInfo->residence_permit_number ?? '—' }}</span></div>
                                 <div class="sv-kv"><span>Shaxsiy raqam</span><span>{{ $visaInfo->residence_permit_pinfl ?? '—' }}</span></div>
                                 <div class="sv-kv"><span>Berilgan joyi</span><span>{{ $visaInfo->residence_permit_issued_place ?? '—' }}</span></div>
                                 <div class="sv-kv"><span>Berilgan sanasi</span><span>{{ $visaInfo->residence_permit_issued_date?->format('d.m.Y') ?? '—' }}</span></div>

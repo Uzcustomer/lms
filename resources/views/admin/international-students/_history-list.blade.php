@@ -29,7 +29,7 @@
         'firm' => 'Firma',
         'firm_custom' => 'Firma (boshqa)',
         'residence_basis' => 'Turish asosi',
-        'residence_permit_number' => 'Guvohnoma raqami',
+        'residence_permit_number' => 'Guvohnoma seriyasi va raqami',
         'residence_permit_pinfl' => 'Shaxsiy raqam',
         'residence_permit_issued_place' => 'Guvohnoma berilgan joy',
         'residence_permit_issued_date' => 'Guvohnoma berilgan sana',

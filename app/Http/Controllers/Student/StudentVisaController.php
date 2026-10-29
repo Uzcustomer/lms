@@ -130,7 +130,7 @@ class StudentVisaController extends Controller
             'visa_issued_place.required' => __('Viza berilgan joyni kiriting.'),
             'visa_issued_date.required' => __('Viza berilgan vaqtni kiriting.'),
             'entry_date.required' => __('Chegaradan kirgan sanani kiriting.'),
-            'residence_permit_number.required' => __('Guvohnoma (karta) raqamini kiriting.'),
+            'residence_permit_number.required' => __('Guvohnoma seriyasi va raqamini kiriting.'),
             'residence_permit_pinfl.required' => __('Shaxsiy raqamni (JShShIR) kiriting.'),
             'residence_permit_pinfl.digits' => __('Shaxsiy raqam 14 ta raqamdan iborat bo\'lishi kerak.'),
             'residence_permit_issued_place.required' => __('Guvohnoma berilgan joyni kiriting.'),

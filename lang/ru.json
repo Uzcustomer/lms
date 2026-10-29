@@ -439,7 +439,6 @@
     "Viza va registratsiya kerak emas": "Виза и регистрация не нужны",
     "Xorijiy fuqaro uchun yashash guvohnomasi": "Вид на жительство иностранного гражданина",
     "Ma'lumotlarni guvohnoma kartasidan ko'chiring": "Перепишите данные с карты вида на жительство",
-    "Karta raqami": "Номер карты",
     "Shaxsiy raqam (JShShIR)": "Персональный номер (ПИНФЛ)",
     "Berilgan joyi": "Место выдачи",
     "Berilgan sanasi": "Дата выдачи",
@@ -535,7 +534,6 @@
     "Viza berilgan joyni kiriting.": "Укажите место выдачи визы.",
     "Viza berilgan vaqtni kiriting.": "Укажите дату выдачи визы.",
     "Chegaradan kirgan sanani kiriting.": "Укажите дату въезда в страну.",
-    "Guvohnoma (karta) raqamini kiriting.": "Укажите номер вида на жительство (карты).",
     "Shaxsiy raqamni (JShShIR) kiriting.": "Укажите персональный номер (ПИНФЛ).",
     "Shaxsiy raqam 14 ta raqamdan iborat bo'lishi kerak.": "Персональный номер должен состоять из 14 цифр.",
     "Guvohnoma berilgan joyni kiriting.": "Укажите место выдачи вида на жительство.",
@@ -590,5 +588,8 @@
     "Bugun oxirgi kun": "Сегодня последний день",
     "Qarzingiz yo'q": "Отработок нет",
     "Joriy fanlaringizda NB yoki 60 dan past baho topilmadi.": "По текущим предметам нет пропусков и оценок ниже 60.",
-    "Vaqt tanlash": "Выбрать время"
+    "Vaqt tanlash": "Выбрать время",
+    "Guvohnoma seriyasi va raqami": "Серия и номер вида на жительство",
+    "Kartaning old tomonida, «Karta raqami» deb yozilgan joyda": "На лицевой стороне карты, в поле «Karta raqami / Card number»",
+    "Guvohnoma seriyasi va raqamini kiriting.": "Укажите серию и номер вида на жительство."
 }

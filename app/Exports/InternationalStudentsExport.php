@@ -202,7 +202,7 @@ class InternationalStudentsExport implements FromQuery, WithHeadings, ShouldAuto
             'Tug\'ilgan viloyat',
             'Tug\'ilgan shahar',
             'Turish asosi',
-            'Guvohnoma raqami',
+            'Guvohnoma seriyasi va raqami',
             'Shaxsiy raqam (JShShIR)',
             'Guvohnoma berilgan joyi',
             'Guvohnoma berilgan sana',

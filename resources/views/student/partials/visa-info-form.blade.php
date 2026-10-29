@@ -195,10 +195,11 @@
         <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">{{ __("Ma'lumotlarni guvohnoma kartasidan ko'chiring") }}</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Karta raqami') }} <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Guvohnoma seriyasi va raqami') }} <span class="text-red-500">*</span></label>
                 <input type="text" name="residence_permit_number" value="{{ old('residence_permit_number', $visaInfo?->residence_permit_number ?? '') }}" required
                        placeholder="{{ __('Masalan') }}: XS0064114"
                        class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 uppercase" oninput="this.value=this.value.toUpperCase()">
+                <p class="text-[11px] text-gray-500 mt-1">{{ __('Kartaning old tomonida, «Karta raqami» deb yozilgan joyda') }}</p>
                 @error('residence_permit_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div>

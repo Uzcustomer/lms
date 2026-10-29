@@ -1824,6 +1824,8 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/mavzular', [\App\Http\Controllers\Student\SubjectTopicsController::class, 'index'])->name('topics.index');
         Route::get('/mavzular/{curriculumSubject}', [\App\Http\Controllers\Student\SubjectTopicsController::class, 'show'])->whereNumber('curriculumSubject')->name('topics.show');
         Route::get('/mavzular/{curriculumSubject}/pdf', [\App\Http\Controllers\Student\SubjectTopicsController::class, 'pdf'])->whereNumber('curriculumSubject')->name('topics.pdf');
+        // Qayta topshirish (Otrabotka): joriy fanlardagi NB / past baholar va muddati
+        Route::get('/otrabotka', [\App\Http\Controllers\Student\OtrabotkaController::class, 'index'])->name('otrabotka');
         Route::get('/documents/{file}/download', [\App\Http\Controllers\Student\StudentDocumentController::class, 'download'])->name('documents.download');
 
         // Visa application (xalqaro talabalar)

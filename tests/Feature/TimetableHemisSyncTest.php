@@ -925,6 +925,25 @@ it('joylanmagan kartalar xulosasi (HEMIS\'siz): haftalik va sikl — "Guruh bo\'
     $summary(['until_week' => 2], 'kichik_admin', $other)->assertForbidden();
 });
 
+it('joylanmagan kartalar: unplaced-summary va hemis-sync javobidagi unplaced bir xil', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'lecture', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Biologiya', 'group_name' => 'p/st26-01a (rus)', 'kafedra_name' => 'B']);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    // Sukut (until_week yo'q) — joriy hafta oxirigacha; 21.09 (2-hafta dushanbasi) — 2-hafta qolgan kunlari
+    foreach ([[], ['until_week' => 0], ['until_week' => 3]] as $extra) {
+        $body = ['faculty_names' => ['F1'], 'specialty_names' => ['stomatologiya'], 'courses' => [1], 'today' => '2026-09-21'] + $extra;
+        $summary = $as()->postJson(route('admin.timetable.hemis-sync.unplaced-summary', $s['board']), $body)->assertOk()->json();
+        $report = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $body)->assertOk()->json('unplaced');
+        expect($summary)->toBe($report)
+            ->and($summary['weekly']['count'])->toBe(['' => 1, 'until_week=0' => 3, 'until_week=3' => 2][http_build_query($extra)]);
+    }
+});
+
 it('joylanmagan kartalar: ertadan "HEMIS\'ga yozish" haftasi oxirigacha karta-haftalar va sikl kartalari sanaladi', function () {
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');

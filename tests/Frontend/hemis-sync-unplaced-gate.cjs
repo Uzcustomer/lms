@@ -9,9 +9,9 @@ function section(from, to) {
     return source.slice(a, b);
 }
 
-// "HEMIS solishtirish": solishtirishdan oldin joylanmagan kartalar bo'lsa — alohida ogohlantirish oynasi.
-// "Bekor qilish" solishtirish so'rovini yubormaydi; joylanmagan bo'lmasa (yoki xulosa olinmasa) oyna chiqmaydi;
-// hafta/davr o'zgartirilib qayta ishga tushirilganda ogohlantirish qayta chiqmaydi.
+// "HEMIS solishtirish" bosilganda eng birinchi — joylanmagan kartalar: bor bo'lsa qizil oyna, odatdagi hemisSyncAsk
+// oynasi faqat "Baribir davom etish"dan keyin; "Yopish" — hech qanday so'rov ketmaydi; joylanmagan bo'lmasa (yoki xulosa
+// olinmasa) qizil oyna chiqmaydi, darhol hemisSyncAsk.
 const els = {};
 const modals = [];   // hemisSyncModal oynasiga yozilgan har bir HTML
 const mk = id => {
@@ -25,8 +25,6 @@ const mk = id => {
 const calls = [];
 let summary = null;     // unplaced-summary javobi; Error — so'rov xatosi
 const warned = [];
-const rep = { today: '2099-10-01', weeks: [], current_week: 1, period_from: 1, period_to: 1, until_week: 1,
-    fallback_room: ['KM1', 'Kafedra mudiri xonasi'], groups_not_in_hemis: [], groups: [] };
 const ctx = {
     $: id => els[id] || (els[id] = mk(id)),
     document: { querySelectorAll: () => [], createElement: () => mk('x'), body: { appendChild() {} }, addEventListener() {} },
@@ -37,99 +35,84 @@ const ctx = {
         calls.push(url.replace('/admin/boards/7', ''));
         if (url.endsWith('/import-status')) return { running: false, job: null, last_import_at: null };
         if (url.endsWith('/unplaced-summary')) {
+            assert.deepEqual(body, ctx.scopeBody(), 'xulosaga qamrov (scopeBody) yuborilmadi');
             if (summary instanceof Error) throw summary;
             return summary;
         }
-        return rep;
+        throw new Error('kutilmagan so\'rov: ' + url);
     },
 };
 vm.createContext(ctx);
-vm.runInContext(section('            let hemisSyncLast = null;', "            // ===== HEMIS to'siqlari bo'yicha so'rovlar")
-    + '; this.run = hemisSyncRun; this.resetWarned = () => { hemisSyncWarned = false; };', ctx);
+vm.runInContext(section('            let hemisSyncLast = null;', "            // ===== HEMIS to'siqlari bo'yicha so'rovlar"), ctx);
 const tick = () => new Promise(r => setImmediate(r));
 // Kutilgan oyna yoki so'rov hech qachon tugamasa, Node jim chiqib ketadi — test oxirigacha yetmasa yiqilsin.
 process.exitCode = 1;
 const html = () => (els.hemisSyncModal ? els.hemisSyncModal.innerHTML : '');
 const text = h => h.replace(/<[^>]+>/g, '');
+const click = async () => { await els.hemisSyncBtn.onclick(); await tick(); };
+const ASK = /Shu ma'lumot bilan solishtirish/;
 
 (async () => {
-    // 1) Joylanmagan kartalar bor — oyna chiqadi; "Bekor qilish" solishtirish so'rovini yubormaydi.
+    // 1) Joylanmagan kartalar bor — eng birinchi qizil oyna; hemisSyncAsk (import holati) hali so'ralmaydi.
     summary = {
-        weekly: { count: 3, items: [{ group: 'G-B', subject: 'Biologiya', type: 'lecture', weeks: [2, 3, 4] }] },
-        cycle: { count: 1, items: [{ group: 'G-A', subject: 'Pediatriya', days: 5 }] },
+        weekly: { count: 4, items: [
+            { group: 'G-B', card_id: 7, subject: 'Biologiya', type: 'lecture', weeks: [2, 3, 4] },
+            { group: 'G-A', card_id: 7, subject: 'Biologiya', type: 'lecture', weeks: [2, 3, 4] },
+            { group: 'G-A', card_id: 8, subject: 'Anatomiya', type: 'practice', weeks: [6] },
+        ] },
+        cycle: { count: 1, items: [{ group: 'G-A', key: 'r1|ped|practice', subject: 'Pediatriya', type: 'practice', days: 5 }] },
     };
-    let run = ctx.run();
-    await tick();
-    assert.match(html(), /⚠ Hali joylanmagan kartalar bor/);
+    await click();
+    assert.deepEqual(calls, ['/unplaced-summary']);
+    assert.match(html(), /<div id="hsUnpBox" class="[^"]*border-red-400 bg-red-50 text-red-800/);
+    assert.match(html(), /⛔ Hali joylanmagan kartalar bor/);
     assert.equal(text(/<div id="hsUnpText"[^>]*>(.*?)<\/div>/.exec(html())[1]),
-        'Haftalik: 3 ta karta-hafta · Sikl: 1 ta karta. Ular HEMIS\'ga yozilmaydi, HEMIS\'da dars kam qoladi.');
-    assert.deepEqual([...html().matchAll(/<div><b>([^<]*)<\/b> · ([^<]*)<\/div>/g)].map(m => m[1] + ' · ' + m[2]),
-        ['G-A · Pediatriya (sikl): 5 kun', 'G-B · Biologiya (ma\'ruza): 2–4-hafta']);
-    assert.match(html(), /id="hsUnpGo"[^>]*>Mayli, solishtirish</);
-    assert.match(html(), /id="hsUnpExcel"[^>]*>Excel \(sabablar\)</);
-    els.hsUnpCancel.onclick();
-    await run;
-    assert.deepEqual(calls, ['/unplaced-summary'], '"Bekor qilish"dan keyin solishtirish so\'rovi yuborildi');
+        'Haftalik — 4 ta karta-hafta, sikl — 1 ta karta. Ular HEMIS\'ga yozilmaydi, HEMIS\'da dars kam qoladi.');
+    // Ro'yxat — natija oynasidagi banner bilan bir xil format (guruh bo'yicha), yig'iladigan.
+    assert.match(html(), /<details open[^>]*>.*<div id="hsUnpList"[^>]*><div><b>G-A<\/b>: Anatomiya \(amaliy\): 6-hafta; Biologiya \(ma'ruza\): 2–4-hafta; Pediatriya \(amaliy, sikl\): 5 kun<\/div><div><b>G-B<\/b>: Biologiya \(ma'ruza\): 2–4-hafta<\/div><\/div><\/details>/);
+    assert.deepEqual([...html().matchAll(/<button type="button" id="(hsUnp\w+)"[^>]*>([^<]*)</g)].map(m => m[1] + ':' + m[2]),
+        ['hsUnpGo:Baribir davom etish', 'hsUnpExcel:Excel (sabablar)', 'hsUnpClose:Yopish']);
+    assert(!ASK.test(html()));
+
+    // "Baribir davom etish" — shundan keyingina odatdagi hemisSyncAsk oynasi.
+    els.hsUnpGo.onclick();
+    await tick();
+    assert.deepEqual(calls, ['/unplaced-summary', '/hemis-sync/import-status']);
+    assert.match(html(), ASK);
+
+    // 2) "Yopish" — hech qanday so'rov ketmaydi, oyna yopiladi.
+    calls.length = 0;
+    await click();
+    els.hsUnpClose.onclick();
+    await tick();
+    assert.deepEqual(calls, ['/unplaced-summary']);
     assert.equal(els.hemisSyncModal, undefined, 'oyna yopilmadi');
 
-    // 2) "HEMIS solishtirish" qayta bosilsa — ogohlantirish yana chiqadi; "Mayli, solishtirish" — solishtirish so'rovi
-    // va odatdagi natija oynasi.
-    calls.length = 0;
-    await els.hemisSyncBtn.onclick();
-    els.hsUseLast.onclick();
-    await tick();
-    assert.match(html(), /⚠ Hali joylanmagan kartalar bor/);
-    els.hsUnpGo.onclick();
-    for (let i = 0; i < 5; i++) await tick();
-    assert.deepEqual(calls, ['/hemis-sync/import-status', '/unplaced-summary', '/hemis-sync']);
-    assert.match(html(), /HEMIS solishtirish · Qamrov/);
+    // 3) Faqat sikl kartalari — "Excel (sabablar)" (haftalik kartalar diagnostikasi) bo'sh fayl berardi, ko'rsatilmaydi.
+    summary = { weekly: { count: 0, items: [] }, cycle: { count: 1, items: [{ group: 'G-A', key: 'k', subject: 'Pediatriya', type: 'practice', days: 5 }] } };
+    await click();
+    assert.match(html(), /Haftalik — 0 ta karta-hafta, sikl — 1 ta karta/);
+    assert(!html().includes('hsUnpExcel'));
+    els.hsUnpClose.onclick();
 
-    // 3) Hafta/davr o'zgartirilib qayta ishga tushirilganda ogohlantirish qayta chiqmaydi.
-    calls.length = 0;
-    modals.length = 0;
-    await ctx.run();
-    assert.deepEqual(calls, ['/hemis-sync']);
-    assert(!modals.some(h => h.includes('Hali joylanmagan')));
-
-    // 4) Joylanmagan karta yo'q — oyna chiqmaydi, darhol solishtiriladi.
-    ctx.resetWarned();
+    // 4) Joylanmagan karta yo'q — qizil oyna chiqmaydi, darhol hemisSyncAsk.
     calls.length = 0;
     modals.length = 0;
     summary = { weekly: { count: 0, items: [] }, cycle: { count: 0, items: [] } };
-    await ctx.run();
-    assert.deepEqual(calls, ['/unplaced-summary', '/hemis-sync']);
-    assert(!modals.some(h => h.includes('Hali joylanmagan')), 'joylanmagan karta yo\'q, lekin oyna chiqdi');
+    await click();
+    assert.deepEqual(calls, ['/unplaced-summary', '/hemis-sync/import-status']);
+    assert(!modals.some(h => h.includes('Hali joylanmagan')), 'joylanmagan karta yo\'q, lekin qizil oyna chiqdi');
+    assert.match(html(), ASK);
 
-    // 5) Xulosa olinmadi — ogohlantirishsiz solishtiriladi, konsolga yoziladi.
-    ctx.resetWarned();
+    // 5) Xulosa olinmadi — konsolga yoziladi va to'g'ridan-to'g'ri hemisSyncAsk.
     calls.length = 0;
     summary = new Error('HTTP 500');
-    await ctx.run();
-    assert.deepEqual(calls, ['/unplaced-summary', '/hemis-sync']);
+    await click();
+    assert.deepEqual(calls, ['/unplaced-summary', '/hemis-sync/import-status']);
     assert.equal(warned.length, 1);
     assert.match(warned[0], /HTTP 500/);
-
-    // Faqat sikl kartalari — "Excel (sabablar)" (haftalik kartalar diagnostikasi) bo'sh fayl berardi, ko'rsatilmaydi.
-    ctx.resetWarned();
-    summary = { weekly: { count: 0, items: [] }, cycle: { count: 1, items: [{ group: 'G-A', subject: 'Pediatriya', days: 5 }] } };
-    run = ctx.run();
-    await tick();
-    assert.match(html(), /Haftalik: 0 ta karta-hafta · Sikl: 1 ta karta/);
-    assert(!html().includes('hsUnpExcel'), 'faqat sikl kartalari bo\'lsa ham "Excel (sabablar)" chiqdi');
-    els.hsUnpCancel.onclick();
-    await run;
-
-    // 6) Uzun ro'yxat — birinchi 30 qator, keyin "yana K ta".
-    ctx.resetWarned();
-    summary = { weekly: { count: 35, items: Array.from({ length: 35 }, (_, i) => ({ group: 'G' + String(i).padStart(2, '0'), subject: 'Fan', type: 'practice', weeks: [2] })) },
-        cycle: { count: 0, items: [] } };
-    run = ctx.run();
-    await tick();
-    assert.equal([...html().matchAll(/<div><b>/g)].length, 30);
-    assert.match(html(), /… yana 5 ta/);
-    els.hsUnpCancel.onclick();
-    await run;
+    assert.match(html(), ASK);
 
     process.exitCode = 0;
-    console.log('6 HEMIS compare unplaced-cards gate scenarios passed');
+    console.log('5 HEMIS compare unplaced-cards red gate scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -193,7 +193,9 @@ class VedomostAiChecker
 
     /**
      * Test markazi (hemis_quiz_results): talaba ID → ['oski'|'test' => [grade, dalolat, date]].
-     * Fan: fan_id = subject_id yoki nom o'xshashligi ≥ 0.85; shakl: vedomost shakli bilan bir xil.
+     * Fan: fan_id = subject_id yoki nom o'xshashligi ≥ 0.85; urinish vedomost shakliga mos
+     * (1-urinish → 12, 2-urinish → 12a, 3-urinish → 12b; qo'shimcha/farmoyish → "…-qo'shimcha").
+     * Qayta o'qish (retake) quizlari hisobga olinmaydi.
      */
     private function testCenter(array $ids, array $expected, string $formLabel): array
     {
@@ -211,13 +213,14 @@ class VedomostAiChecker
 
         $subjectId = (string) ($expected['subject_id'] ?? '');
         $fan = (string) ($expected['fan'] ?? '');
-        $base = $this->shaklBase($formLabel);
+        $base = self::shaklBase($formLabel);
 
         $best = [];
         foreach ($q->get() as $r) {
             $fanOk = ($subjectId !== '' && (string) $r->fan_id === $subjectId)
                 || VedomostNames::subjectScore($r->fan_name, $fan) >= 0.85;
-            if (!$fanOk || $this->shaklBase((string) $r->shakl) !== $base) {
+            if (!$fanOk || self::quizForm((string) $r->shakl) !== $base
+                || \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)) {
                 continue;
             }
             $type = mb_strtolower((string) $r->quiz_type);
@@ -244,7 +247,23 @@ class VedomostAiChecker
         return $best;
     }
 
-    private function shaklBase(string $s): string
+    /**
+     * Test markazi yozuvining shakli → vedomost shakli kaliti. hemis_quiz_results.shakl
+     * odatda "1-urinish", "2-urinish (qo'shimcha)" ko'rinishida bo'ladi; eski yozuvlarda
+     * to'g'ridan-to'g'ri "12a-shakl" bo'lishi mumkin.
+     */
+    public static function quizForm(string $shakl): string
+    {
+        if (preg_match('/^\s*(\d+)\s*-\s*urinish\b/iu', $shakl, $m)) {
+            $form = [1 => '12', 2 => '12a', 3 => '12b'][(int) $m[1]] ?? ('urinish' . $m[1]);
+
+            return $form . (\App\Http\Controllers\Admin\QuizResultController::isQoshimchaFarmoyishShakl($shakl) ? 'qoshimcha' : '');
+        }
+
+        return self::shaklBase($shakl);
+    }
+
+    public static function shaklBase(string $s): string
     {
         $t = preg_replace('/[^a-z0-9]/', '', mb_strtolower(VedomostNames::latin($s)));
         $t = preg_replace('/shakl$/', '', $t);

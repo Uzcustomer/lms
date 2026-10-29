@@ -106,6 +106,9 @@
             $isXd = $vs && (str_starts_with(strtolower($vs->group_name ?? ''), 'xd') || str_contains(strtolower($vs->citizenship_name ?? ''), 'orijiy'));
             $vi = $isXd ? \App\Models\StudentVisaInfo::where('student_id', $vs->id)->first() : null;
 
+            $regT = \App\Services\VisaSettings::thresholds('registration');
+            $visaT = \App\Services\VisaSettings::thresholds('visa');
+            $permitT = \App\Services\VisaSettings::thresholds('residence_permit');
             $blockSite = false;      // Saytni to'liq bloklash
             $showPassportModal = false; // Pasport topshirish modali
             $showFillModal = false;  // Ma'lumot to'ldirish modali (yopiladigan)
@@ -173,14 +176,21 @@
                     if (!$topBanner) {
                         $parts = [];
                         if ($rDays !== null && $rDays <= 0) $parts[] = __('Registratsiya muddati tugagan!');
-                        elseif ($rDays !== null && $rDays <= 7) $parts[] = __('Registratsiya muddati tugashiga') . " {$rDays} " . __('kun');
+                        elseif ($rDays !== null && $rDays <= $regT['info']) $parts[] = __('Registratsiya muddati tugashiga') . " {$rDays} " . __('kun');
                         if ($vDays !== null && $vDays <= 0) $parts[] = __('Viza muddati tugagan!');
-                        elseif ($vDays !== null && $vDays <= 30) $parts[] = __('Viza muddati tugashiga') . " {$vDays} " . __('kun');
+                        elseif ($vDays !== null && $vDays <= $visaT['info']) $parts[] = __('Viza muddati tugashiga') . " {$vDays} " . __('kun');
+                        $pDays = $vi->residencePermitDaysLeft();
+                        if ($pDays !== null && $pDays <= 0) $parts[] = __('Yashash guvohnomasi muddati tugagan!');
+                        elseif ($pDays !== null && $pDays <= $permitT['info']) $parts[] = __('Yashash guvohnomasi muddati tugashiga') . " {$pDays} " . __('kun');
 
                         if (count($parts) > 0) {
-                            $isDanger = ($rDays !== null && $rDays <= 3) || ($vDays !== null && $vDays <= 15);
-                            $isWarn = ($rDays !== null && $rDays <= 5) || ($vDays !== null && $vDays <= 20);
-                            $topBanner = ['level' => $isDanger ? 'danger' : ($isWarn ? 'warning' : 'info'), 'msg' => implode(' | ', $parts)];
+                            $isDanger = ($rDays !== null && $rDays <= $regT['danger']) || ($vDays !== null && $vDays <= $visaT['danger']);
+                            $isWarn = ($rDays !== null && $rDays <= $regT['warning']) || ($vDays !== null && $vDays <= $visaT['warning']);
+                            // Guvohnoma pasport topshirishni talab qilmaydi — faqat banner rangiga ta'sir qiladi
+                            $permitDanger = $pDays !== null && $pDays <= $permitT['danger'];
+                            $permitWarn = $pDays !== null && $pDays <= $permitT['warning'];
+                            $level = ($isDanger || $permitDanger) ? 'danger' : (($isWarn || $permitWarn) ? 'warning' : 'info');
+                            $topBanner = ['level' => $level, 'msg' => implode(' | ', $parts)];
 
                             // Pasport topshirish modali (yopiladigan, bloklash emas)
                             if (($isDanger || $isWarn) && !$vi->passport_handed_over) {

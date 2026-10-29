@@ -49,7 +49,7 @@
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         {{ $user->roles->pluck('name')->implode(', ') }}
                                         @if($user->assigned_firm)
-                                            <span class="ml-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">{{ \App\Models\StudentVisaInfo::FIRM_OPTIONS[$user->assigned_firm] ?? $user->assigned_firm }}</span>
+                                            <span class="ml-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">{{ \App\Services\VisaSettings::firmOptions()[$user->assigned_firm] ?? $user->assigned_firm }}</span>
                                         @endif
                                     </td>
                                     @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))

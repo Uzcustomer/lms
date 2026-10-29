@@ -9,7 +9,9 @@ use App\Models\StudentVisaInfo;
 use App\Models\User;
 use App\Services\StudentVisaHistoryService;
 use App\Services\TelegramService;
+use App\Services\VisaSettings;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -25,8 +27,9 @@ class StudentVisaController extends Controller
 
         $student = Auth::guard('student')->user();
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
+        $basisRule = VisaSettings::ruleFor($student);
 
-        return view('student.visa-info', compact('visaInfo', 'student'));
+        return view('student.visa-info', compact('visaInfo', 'student', 'basisRule'));
     }
 
     public function store(Request $request)
@@ -40,13 +43,39 @@ class StudentVisaController extends Controller
                 ->with('error', __('Ma\'lumotlaringiz allaqachon tasdiqlangan. Tahrirlash mumkin emas.'));
         }
 
-        $fileRule = function (string $pathField) use ($existing) {
+        // Turish asosi: tanlov ko'rsatilmagan davlatlarda admin qo'ygan yoki standart asos
+        $rule = VisaSettings::ruleFor($student);
+        if ($rule['show_choice']) {
+            $request->validate([
+                'residence_basis' => 'required|in:' . implode(',', array_keys(StudentVisaInfo::BASIS_LABELS)),
+            ], [
+                'residence_basis.required' => __("O'zbekistonda turish asosini tanlang."),
+            ]);
+            $basis = $request->input('residence_basis');
+        } else {
+            $basis = $existing?->residence_basis ?: $rule['default_basis'];
+        }
+
+        $isVisa = $basis === StudentVisaInfo::BASIS_VISA;
+        $isPermit = $basis === StudentVisaInfo::BASIS_RESIDENCE_PERMIT;
+        $needsRegistration = !$isPermit;
+
+        $requiredDocs = VisaSettings::requiredDocs($basis);
+        $docPaths = [
+            'passport_scan' => 'passport_scan_path',
+            'visa_scan' => 'visa_scan_path',
+            'registration_doc' => 'registration_doc_path',
+            'residence_permit_scan' => 'residence_permit_scan_path',
+        ];
+        $fileRule = function (string $input) use ($existing, $requiredDocs, $docPaths) {
             $base = 'file|mimes:pdf|max:5120';
-            if (!$existing || !$existing->$pathField) {
+            $pathField = $docPaths[$input];
+            if (in_array($input, $requiredDocs, true) && (!$existing || !$existing->$pathField)) {
                 return 'required|' . $base;
             }
             return 'nullable|' . $base;
         };
+        $req = fn (bool $needed) => $needed ? 'required' : 'nullable';
 
         $request->validate([
             'birth_country' => 'required|string|max:255',
@@ -56,22 +85,28 @@ class StudentVisaController extends Controller
             'passport_issued_place' => 'required|string|max:255',
             'passport_issued_date' => 'required|date',
             'passport_expiry_date' => 'required|date|after:passport_issued_date',
-            'registration_start_date' => 'required|date',
-            'registration_end_date' => 'required|date|after:registration_start_date',
+            'registration_start_date' => $req($needsRegistration) . '|date',
+            'registration_end_date' => $req($needsRegistration) . '|date|after:registration_start_date',
             'address_type' => 'required|in:dormitory,other',
             'current_address' => 'nullable|required_if:address_type,other|string|max:500',
-            'visa_number' => 'required|string|max:50',
-            'visa_type' => 'required|string|in:' . implode(',', array_keys(StudentVisaInfo::VISA_TYPES)),
-            'visa_start_date' => 'required|date',
-            'visa_end_date' => 'required|date|after:visa_start_date',
-            'visa_entries_count' => 'required|integer|min:1',
-            'visa_stay_days' => 'required|integer|min:1',
-            'visa_issued_place' => 'required|string|max:255',
-            'visa_issued_date' => 'required|date',
-            'entry_date' => 'required|date',
-            'passport_scan' => $fileRule('passport_scan_path'),
-            'visa_scan' => $fileRule('visa_scan_path'),
-            'registration_doc' => $fileRule('registration_doc_path'),
+            'visa_number' => $req($isVisa) . '|string|max:50',
+            'visa_type' => [$req($isVisa), 'string', Rule::in(array_keys(VisaSettings::visaTypes()))],
+            'visa_start_date' => $req($isVisa) . '|date',
+            'visa_end_date' => $req($isVisa) . '|date|after:visa_start_date',
+            'visa_entries_count' => $req($isVisa) . '|integer|min:1',
+            'visa_stay_days' => $req($isVisa) . '|integer|min:1',
+            'visa_issued_place' => $req($isVisa) . '|string|max:255',
+            'visa_issued_date' => $req($isVisa) . '|date',
+            'entry_date' => $req(!$isPermit) . '|date',
+            'residence_permit_number' => $req($isPermit) . '|string|max:50',
+            'residence_permit_pinfl' => $req($isPermit) . '|digits:14',
+            'residence_permit_issued_place' => $req($isPermit) . '|string|max:255',
+            'residence_permit_issued_date' => $req($isPermit) . '|date',
+            'residence_permit_expiry_date' => $req($isPermit) . '|date|after:residence_permit_issued_date',
+            'passport_scan' => $fileRule('passport_scan'),
+            'visa_scan' => $fileRule('visa_scan'),
+            'registration_doc' => $fileRule('registration_doc'),
+            'residence_permit_scan' => $fileRule('residence_permit_scan'),
             'agreement_accepted' => 'accepted',
         ], [
             'birth_country.required' => __('Tug\'ilgan davlatni kiriting.'),
@@ -95,6 +130,13 @@ class StudentVisaController extends Controller
             'visa_issued_place.required' => 'Viza berilgan joyni kiriting.',
             'visa_issued_date.required' => 'Viza berilgan vaqtni kiriting.',
             'entry_date.required' => 'Chegaradan kirgan sanani kiriting.',
+            'residence_permit_number.required' => 'Guvohnoma (karta) raqamini kiriting.',
+            'residence_permit_pinfl.required' => 'Shaxsiy raqamni (JShShIR) kiriting.',
+            'residence_permit_pinfl.digits' => 'Shaxsiy raqam 14 ta raqamdan iborat bo\'lishi kerak.',
+            'residence_permit_issued_place.required' => 'Guvohnoma berilgan joyni kiriting.',
+            'residence_permit_issued_date.required' => 'Guvohnoma berilgan sanani kiriting.',
+            'residence_permit_expiry_date.required' => 'Guvohnoma amal qilish muddatini kiriting.',
+            'residence_permit_expiry_date.after' => 'Amal qilish muddati berilgan sanadan keyin bo\'lishi kerak.',
             'passport_scan.required' => 'Pasport skanerini yuklang.',
             'passport_scan.mimes' => 'Pasport skaneri faqat PDF formatida bo\'lishi kerak.',
             'passport_scan.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
@@ -104,6 +146,9 @@ class StudentVisaController extends Controller
             'registration_doc.required' => 'Ro\'yxatga olish hujjatini yuklang.',
             'registration_doc.mimes' => 'Hujjat faqat PDF formatida bo\'lishi kerak.',
             'registration_doc.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
+            'residence_permit_scan.required' => 'Yashash guvohnomasi skanerini yuklang.',
+            'residence_permit_scan.mimes' => 'Guvohnoma skaneri faqat PDF formatida bo\'lishi kerak.',
+            'residence_permit_scan.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
             'agreement_accepted.accepted' => 'Javobgarlikni qabul qilishingiz shart.',
         ]);
 
@@ -114,7 +159,13 @@ class StudentVisaController extends Controller
             'visa_number', 'visa_type', 'visa_start_date', 'visa_end_date',
             'visa_entries_count', 'visa_stay_days', 'visa_issued_place', 'visa_issued_date',
             'entry_date',
+            'residence_permit_number', 'residence_permit_pinfl', 'residence_permit_issued_place',
+            'residence_permit_issued_date', 'residence_permit_expiry_date',
         ]);
+
+        // Asosga tegishli bo'lmagan maydonlar tozalanadi
+        $data = array_merge($data, StudentVisaInfo::fieldsClearedFor($basis));
+        $data['residence_basis'] = $basis;
 
         $data['birth_date'] = $student->birth_date;
         $data['agreement_accepted'] = true;
@@ -128,12 +179,8 @@ class StudentVisaController extends Controller
         $storagePath = 'student-visa/' . $student->id;
 
         // Yangi PDF lar uchun joy — eski fayllar diskdan O'CHIRILMAYDI (tarix uchun saqlanadi)
-        foreach ([
-            'passport_scan' => 'passport_scan_path',
-            'visa_scan' => 'visa_scan_path',
-            'registration_doc' => 'registration_doc_path',
-        ] as $inputName => $dbField) {
-            if ($request->hasFile($inputName)) {
+        foreach ($docPaths as $inputName => $dbField) {
+            if ($request->hasFile($inputName) && in_array($inputName, VisaSettings::DOCS_BY_BASIS[$basis], true)) {
                 $data[$dbField] = $request->file($inputName)->store($storagePath, 'public');
             }
         }
@@ -224,7 +271,7 @@ class StudentVisaController extends Controller
         $student = Auth::guard('student')->user();
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
 
-        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path'];
+        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path', 'residence_permit_scan_path'];
         if (!in_array($field, $allowed) || !$visaInfo->$field) {
             abort(404);
         }

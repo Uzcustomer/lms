@@ -32,6 +32,10 @@
                     $vps = $visaInfo->visa_process_status ?? 'none';
                     $regDays = $visaInfo->registrationDaysLeft();
                     $visaDays = $visaInfo->visaDaysLeft();
+                    $permitDays = $visaInfo->residencePermitDaysLeft();
+                    $regT = \App\Services\VisaSettings::thresholds('registration');
+                    $visaT = \App\Services\VisaSettings::thresholds('visa');
+                    $permitT = \App\Services\VisaSettings::thresholds('residence_permit');
                 @endphp
 
                 {{-- Profile Header --}}
@@ -61,6 +65,7 @@
                         @else
                             <span class="sv-badge sv-badge-amber">Tekshirilmoqda</span>
                         @endif
+                        <span class="sv-badge" style="background:#e0f2fe;color:#075985;border:1px solid #bae6fd;">{{ $visaInfo->basisLabel() }}</span>
                         @if($visaInfo->firm)
                             <span class="sv-badge sv-badge-indigo">{{ $visaInfo->firm_display }}</span>
                         @endif
@@ -82,7 +87,7 @@
                                 @csrf
                                 <select name="firm" class="sv-select" style="flex:1;" onchange="this.form.querySelector('.fo').style.display=this.value==='other'?'block':'none'">
                                     <option value="">Tanlang</option>
-                                    @foreach(\App\Models\StudentVisaInfo::FIRM_OPTIONS as $key => $label)
+                                    @foreach(\App\Services\VisaSettings::firmOptions() as $key => $label)
                                         <option value="{{ $key }}" {{ $visaInfo->firm === $key ? 'selected' : '' }}>{{ $label }}</option>
                                     @endforeach
                                     <option value="other" {{ $visaInfo->firm === 'other' ? 'selected' : '' }}>Boshqa</option>
@@ -119,6 +124,8 @@
                                     ['l'=>'Registratsiya','s'=>$rps,'t'=>'registration','sl'=>['passport_accepted'=>'Pasport olindi','registering'=>'Qilinmoqda','done'=>'Tugallandi'],'btn'=>['passport_accepted'=>'Qilinmoqda','registering'=>'Yangilandi']],
                                     ['l'=>'Viza','s'=>$vps,'t'=>'visa','sl'=>['passport_accepted'=>'Pasport olindi','registering'=>'Yangilanmoqda','done'=>'Tugallandi'],'btn'=>['passport_accepted'=>'Yangilanmoqda','registering'=>'Yangilandi']],
                                 ] as $p)
+                                @continue($p['t'] === 'registration' && !$visaInfo->needsRegistration())
+                                @continue($p['t'] === 'visa' && !$visaInfo->needsVisa())
                                 <div class="sv-process-row {{ $p['s'] !== 'none' && $p['s'] !== 'done' ? 'sv-process-active' : ($p['s'] === 'done' ? 'sv-process-done' : '') }}">
                                     <div style="display:flex;align-items:center;gap:8px;flex:1;">
                                         <span style="font-weight:600;font-size:13px;color:#334155;">{{ $p['l'] }}</span>
@@ -167,6 +174,25 @@
                             </div>
                         </div>
 
+                        @if($visaInfo->hasResidencePermit())
+                        {{-- Yashash guvohnomasi --}}
+                        <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9;">
+                            <div class="sv-section-title" style="margin-bottom:12px;">Yashash guvohnomasi <span style="text-transform:none;letter-spacing:0;font-weight:500;">— viza va registratsiya talab qilinmaydi</span></div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
+                                <div class="sv-kv"><span>Karta raqami</span><span style="font-weight:700;">{{ $visaInfo->residence_permit_number ?? '—' }}</span></div>
+                                <div class="sv-kv"><span>Shaxsiy raqam</span><span>{{ $visaInfo->residence_permit_pinfl ?? '—' }}</span></div>
+                                <div class="sv-kv"><span>Berilgan joyi</span><span>{{ $visaInfo->residence_permit_issued_place ?? '—' }}</span></div>
+                                <div class="sv-kv"><span>Berilgan sanasi</span><span>{{ $visaInfo->residence_permit_issued_date?->format('d.m.Y') ?? '—' }}</span></div>
+                                <div class="sv-kv">
+                                    <span>Amal qilish muddati</span>
+                                    <span>
+                                        {{ $visaInfo->residence_permit_expiry_date?->format('d.m.Y') ?? '—' }}
+                                        @if($permitDays !== null && $permitDays <= $permitT['info'])<span class="sv-days-badge" style="background:{{ $permitDays <= 0 ? '#dc2626' : ($permitDays <= $permitT['danger'] ? '#ef4444' : ($permitDays <= $permitT['warning'] ? '#f59e0b' : '#22c55e')) }};">{{ $permitDays <= 0 ? 'TUGAGAN' : $permitDays.'k' }}</span>@endif
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        @else
                         {{-- Reg + Viza --}}
                         <div style="display:grid;grid-template-columns:1fr 1fr;">
                             <div style="padding:20px 24px;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;">
@@ -176,11 +202,12 @@
                                     <span>Tugash</span>
                                     <span>
                                         {{ $visaInfo->registration_end_date?->format('d.m.Y') ?? '—' }}
-                                        @if($regDays !== null && $regDays <= 7)<span class="sv-days-badge" style="background:{{ $regDays <= 0 ? '#dc2626' : ($regDays <= 3 ? '#ef4444' : ($regDays <= 5 ? '#f59e0b' : '#22c55e')) }};">{{ $regDays <= 0 ? 'TUGAGAN' : $regDays.'k' }}</span>@endif
+                                        @if($regDays !== null && $regDays <= $regT['info'])<span class="sv-days-badge" style="background:{{ $regDays <= 0 ? '#dc2626' : ($regDays <= $regT['danger'] ? '#ef4444' : ($regDays <= $regT['warning'] ? '#f59e0b' : '#22c55e')) }};">{{ $regDays <= 0 ? 'TUGAGAN' : $regDays.'k' }}</span>@endif
                                     </span>
                                 </div>
                                 <div class="sv-kv"><span>Kirish sanasi</span><span>{{ $visaInfo->entry_date?->format('d.m.Y') ?? '—' }}</span></div>
                             </div>
+                            @if($visaInfo->needsVisa())
                             <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9;">
                                 <div class="sv-section-title" style="margin-bottom:12px;">Viza</div>
                                 <div class="sv-kv"><span>Raqami</span><span style="font-weight:700;">{{ $visaInfo->visa_number ?? '—' }} <span style="font-weight:400;color:#94a3b8;">{{ $visaInfo->visa_type }}</span></span></div>
@@ -190,12 +217,19 @@
                                     <span>Tugash</span>
                                     <span>
                                         {{ $visaInfo->visa_end_date?->format('d.m.Y') ?? '—' }}
-                                        @if($visaDays !== null && $visaDays <= 30)<span class="sv-days-badge" style="background:{{ $visaDays <= 0 ? '#dc2626' : ($visaDays <= 15 ? '#ef4444' : ($visaDays <= 20 ? '#f59e0b' : '#22c55e')) }};">{{ $visaDays <= 0 ? 'TUGAGAN' : $visaDays.'k' }}</span>@endif
+                                        @if($visaDays !== null && $visaDays <= $visaT['info'])<span class="sv-days-badge" style="background:{{ $visaDays <= 0 ? '#dc2626' : ($visaDays <= $visaT['danger'] ? '#ef4444' : ($visaDays <= $visaT['warning'] ? '#f59e0b' : '#22c55e')) }};">{{ $visaDays <= 0 ? 'TUGAGAN' : $visaDays.'k' }}</span>@endif
                                     </span>
                                 </div>
                                 <div class="sv-kv"><span>Berilgan</span><span>{{ $visaInfo->visa_issued_place ?? '—' }}{{ $visaInfo->visa_issued_date ? ', '.$visaInfo->visa_issued_date->format('d.m.Y') : '' }}</span></div>
                             </div>
+                            @else
+                            <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9;">
+                                <div class="sv-section-title" style="margin-bottom:12px;">Viza</div>
+                                <div style="font-size:12px;color:#64748b;">Vizasiz — viza talab qilinmaydi</div>
+                            </div>
+                            @endif
                         </div>
+                        @endif
 
                         {{-- Bottom --}}
                         <div style="padding:16px 24px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
@@ -206,7 +240,7 @@
                             <div>
                                 <div class="sv-section-title" style="margin-bottom:6px;">Hujjatlar</div>
                                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                                    @foreach(['passport_scan_path'=>['Pasport','#4f46e5','#eef2ff','#c7d2fe'],'visa_scan_path'=>['Viza','#059669','#ecfdf5','#a7f3d0'],'registration_doc_path'=>['Reg.','#d97706','#fffbeb','#fde68a']] as $f=>$c)
+                                    @foreach(['passport_scan_path'=>['Pasport','#4f46e5','#eef2ff','#c7d2fe'],'visa_scan_path'=>['Viza','#059669','#ecfdf5','#a7f3d0'],'registration_doc_path'=>['Reg.','#d97706','#fffbeb','#fde68a'],'residence_permit_scan_path'=>['Guvohnoma','#0e7490','#ecfeff','#a5f3fc']] as $f=>$c)
                                         @if($visaInfo->$f)
                                             <a href="{{ route('admin.international-students.file', [$student, $f]) }}" target="_blank" class="sv-file-btn" style="color:{{ $c[1] }};background:{{ $c[2] }};border-color:{{ $c[3] }};">
                                                 <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>

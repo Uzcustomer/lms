@@ -1,5 +1,15 @@
-<form method="POST" action="{{ route('admin.international-students.store-visa', $student) }}" enctype="multipart/form-data" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='BUTTON'){event.preventDefault();}">
+<form method="POST" action="{{ route('admin.international-students.store-visa', $student) }}" enctype="multipart/form-data" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='BUTTON'){event.preventDefault();}"
+      x-data="{ basis: @js($visaInfo?->residence_basis ?: \App\Services\VisaSettings::ruleFor($student)['default_basis']) }">
     @csrf
+    <div style="margin-top:12px;">
+        <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">O'zbekistonda turish asosi</label>
+        <select name="residence_basis" x-model="basis" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+            @foreach(\App\Models\StudentVisaInfo::BASIS_LABELS as $k => $l)
+                <option value="{{ $k }}">{{ $l }}</option>
+            @endforeach
+        </select>
+        <div style="font-size:10px;color:#94a3b8;margin-top:3px;">Asos almashtirilsa, unga tegishli bo'lmagan viza/registratsiya/guvohnoma ma'lumotlari tozalanadi.</div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport raqami</label>
@@ -51,6 +61,7 @@
         </div>
     </div>
 
+    <div x-show="basis !== 'residence_permit'">
     <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Registratsiya</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div>
@@ -66,7 +77,35 @@
             <input type="text" name="entry_date" value="{{ $visaInfo?->entry_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
+    </div>
 
+    <div x-show="basis === 'residence_permit'">
+    <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Yashash guvohnomasi</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Karta raqami</label>
+            <input type="text" name="residence_permit_number" value="{{ $visaInfo?->residence_permit_number ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
+        </div>
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Shaxsiy raqam (JShShIR)</label>
+            <input type="text" name="residence_permit_pinfl" value="{{ $visaInfo?->residence_permit_pinfl ?? '' }}" maxlength="14" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+        </div>
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan joyi</label>
+            <input type="text" name="residence_permit_issued_place" value="{{ $visaInfo?->residence_permit_issued_place ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
+        </div>
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan sanasi</label>
+            <input type="text" name="residence_permit_issued_date" value="{{ $visaInfo?->residence_permit_issued_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+        </div>
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Amal qilish muddati</label>
+            <input type="text" name="residence_permit_expiry_date" value="{{ $visaInfo?->residence_permit_expiry_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+        </div>
+    </div>
+    </div>
+
+    <div x-show="basis === 'visa'">
     <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Viza</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
         <div>
@@ -77,7 +116,7 @@
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Viza turi</label>
             <select name="visa_type" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
                 <option value="">-</option>
-                @foreach(\App\Models\StudentVisaInfo::VISA_TYPES as $k => $l)
+                @foreach(\App\Services\VisaSettings::visaTypes() as $k => $l)
                     <option value="{{ $k }}" {{ ($visaInfo?->visa_type ?? '') === $k ? 'selected' : '' }}>{{ $l }}</option>
                 @endforeach
             </select>
@@ -115,6 +154,7 @@
             <input type="text" name="visa_issued_date" value="{{ $visaInfo?->visa_issued_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
+    </div>
 
     <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Hujjatlar (PDF)</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
@@ -125,19 +165,26 @@
             @endif
             <input type="file" name="passport_scan" accept=".pdf" style="width:100%;font-size:11px;">
         </div>
-        <div>
+        <div x-show="basis === 'visa'">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Viza skaneri</label>
             @if($visaInfo?->visa_scan_path)
                 <div style="margin-bottom:4px;"><a href="{{ route('admin.international-students.file', [$student, 'visa_scan_path']) }}" target="_blank" style="font-size:10px;color:#4f46e5;">Yuklangan faylni ko'rish</a></div>
             @endif
             <input type="file" name="visa_scan" accept=".pdf" style="width:100%;font-size:11px;">
         </div>
-        <div>
+        <div x-show="basis !== 'residence_permit'">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Registratsiya hujjati</label>
             @if($visaInfo?->registration_doc_path)
                 <div style="margin-bottom:4px;"><a href="{{ route('admin.international-students.file', [$student, 'registration_doc_path']) }}" target="_blank" style="font-size:10px;color:#4f46e5;">Yuklangan faylni ko'rish</a></div>
             @endif
             <input type="file" name="registration_doc" accept=".pdf" style="width:100%;font-size:11px;">
+        </div>
+        <div x-show="basis === 'residence_permit'">
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Yashash guvohnomasi</label>
+            @if($visaInfo?->residence_permit_scan_path)
+                <div style="margin-bottom:4px;"><a href="{{ route('admin.international-students.file', [$student, 'residence_permit_scan_path']) }}" target="_blank" style="font-size:10px;color:#4f46e5;">Yuklangan faylni ko'rish</a></div>
+            @endif
+            <input type="file" name="residence_permit_scan" accept=".pdf" style="width:100%;font-size:11px;">
         </div>
     </div>
 

@@ -307,7 +307,7 @@
                                         @csrf
                                         <select name="firm" style="flex:1;font-size:12px;padding:6px 10px;border:1px solid #c7d2fe;border-radius:8px;outline:none;">
                                             <option value="">Tanlang</option>
-                                            @foreach(\App\Models\StudentVisaInfo::FIRM_OPTIONS as $key => $label)
+                                            @foreach(\App\Services\VisaSettings::firmOptions() as $key => $label)
                                                 <option value="{{ $key }}" {{ (isset($visaInfo) && $visaInfo?->firm === $key) ? 'selected' : '' }}>{{ $label }}</option>
                                             @endforeach
                                             <option value="other" {{ (isset($visaInfo) && $visaInfo?->firm === 'other') ? 'selected' : '' }}>Boshqa</option>

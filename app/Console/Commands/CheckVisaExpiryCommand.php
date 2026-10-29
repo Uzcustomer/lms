@@ -7,6 +7,7 @@ use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
 use App\Models\User;
 use App\Services\TelegramService;
+use App\Services\VisaSettings;
 use Illuminate\Console\Command;
 
 class CheckVisaExpiryCommand extends Command
@@ -22,16 +23,19 @@ class CheckVisaExpiryCommand extends Command
             ->where(function ($q) {
                 $q->whereNotNull('registration_end_date')
                   ->orWhereNotNull('visa_end_date');
+                if (\Schema::hasColumn('student_visa_infos', 'residence_permit_expiry_date')) {
+                    $q->orWhereNotNull('residence_permit_expiry_date');
+                }
             })
             ->get();
 
         // Staff uchun guruhlangan Telegram xabarlari:
         // $groups[$level][$type][] = ['line' => '...', 'firm' => '...']
         $groups = [
-            'renewing' => ['registratsiya' => [], 'visa' => []],
-            'danger'   => ['registratsiya' => [], 'visa' => []],
-            'warning'  => ['registratsiya' => [], 'visa' => []],
-            'info'     => ['registratsiya' => [], 'visa' => []],
+            'renewing' => ['registratsiya' => [], 'visa' => [], 'guvohnoma' => []],
+            'danger'   => ['registratsiya' => [], 'visa' => [], 'guvohnoma' => []],
+            'warning'  => ['registratsiya' => [], 'visa' => [], 'guvohnoma' => []],
+            'info'     => ['registratsiya' => [], 'visa' => [], 'guvohnoma' => []],
         ];
 
         $sent = 0;
@@ -42,6 +46,7 @@ class CheckVisaExpiryCommand extends Command
 
             $sent += $this->checkRegistration($info, $student, $telegram, $groups);
             $sent += $this->checkVisa($info, $student, $telegram, $groups);
+            $sent += $this->checkResidencePermit($info, $student, $telegram, $groups);
             $sent += $this->checkPassportHandover($info, $student, $telegram);
         }
 
@@ -61,8 +66,9 @@ class CheckVisaExpiryCommand extends Command
 
     private function checkRegistration(StudentVisaInfo $info, Student $student, TelegramService $telegram, array &$groups): int
     {
+        $t = VisaSettings::thresholds('registration');
         $daysLeft = $info->registrationDaysLeft();
-        if ($daysLeft === null || $daysLeft > 7) return 0;
+        if ($daysLeft === null || $daysLeft > $t['info']) return 0;
 
         $en = $this->isInternational($student);
 
@@ -85,11 +91,11 @@ class CheckVisaExpiryCommand extends Command
             return 1;
         }
 
-        if ($daysLeft <= 3) {
+        if ($daysLeft <= $t['danger']) {
             $level = 'danger';
-        } elseif ($daysLeft <= 5) {
+        } elseif ($daysLeft <= $t['warning']) {
             $level = 'warning';
-        } elseif ($daysLeft <= 7) {
+        } elseif ($daysLeft <= $t['info']) {
             $level = 'info';
         } else {
             return 0;
@@ -128,8 +134,9 @@ class CheckVisaExpiryCommand extends Command
 
     private function checkVisa(StudentVisaInfo $info, Student $student, TelegramService $telegram, array &$groups): int
     {
+        $t = VisaSettings::thresholds('visa');
         $daysLeft = $info->visaDaysLeft();
-        if ($daysLeft === null || $daysLeft > 30) return 0;
+        if ($daysLeft === null || $daysLeft > $t['info']) return 0;
 
         $en = $this->isInternational($student);
 
@@ -152,11 +159,11 @@ class CheckVisaExpiryCommand extends Command
             return 1;
         }
 
-        if ($daysLeft <= 15) {
+        if ($daysLeft <= $t['danger']) {
             $level = 'danger';
-        } elseif ($daysLeft <= 20) {
+        } elseif ($daysLeft <= $t['warning']) {
             $level = 'warning';
-        } elseif ($daysLeft <= 30) {
+        } elseif ($daysLeft <= $t['info']) {
             $level = 'info';
         } else {
             return 0;
@@ -192,6 +199,48 @@ class CheckVisaExpiryCommand extends Command
         return 1;
     }
 
+    /**
+     * Yashash guvohnomasi muddati. Pasport topshirish va "yangilanmoqda"
+     * jarayoni yo'q — talaba guvohnomani o'zi yangilaydi.
+     */
+    private function checkResidencePermit(StudentVisaInfo $info, Student $student, TelegramService $telegram, array &$groups): int
+    {
+        if (!$info->hasResidencePermit()) return 0;
+
+        $t = VisaSettings::thresholds('residence_permit');
+        $daysLeft = $info->residencePermitDaysLeft();
+        if ($daysLeft === null || $daysLeft > $t['info']) return 0;
+
+        $level = $daysLeft <= $t['danger'] ? 'danger' : ($daysLeft <= $t['warning'] ? 'warning' : 'info');
+        $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
+        $en = $this->isInternational($student);
+
+        if ($daysLeft <= 0) {
+            $message = $en
+                ? "{$emoji} Your residence permit has expired! Please renew it and inform the registrator office."
+                : "{$emoji} Yashash guvohnomasi muddati tugagan! Uni yangilab, registrator ofisiga xabar bering.";
+        } else {
+            $message = $en
+                ? "{$emoji} Your residence permit expires in {$daysLeft} days. Please renew it."
+                : "{$emoji} Yashash guvohnomasi muddati tugashiga {$daysLeft} kun qoldi. Uni yangilang.";
+        }
+
+        $this->notifyStudent($student, $telegram, $message, $level, 'guvohnoma');
+
+        $staffLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — ";
+        $staffLine .= $daysLeft <= 0 ? "yashash guvohnomasi muddati TUGAGAN" : "yashash guvohnomasi muddati tugashiga {$daysLeft} kun qoldi";
+        $this->createSiteNotificationsForStaff($info, "{$emoji} {$staffLine}");
+
+        $groupLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — ";
+        $groupLine .= $daysLeft <= 0 ? "muddati TUGAGAN" : "{$daysLeft} kun qoldi";
+        $groups[$level]['guvohnoma'][] = [
+            'line' => $groupLine,
+            'firm' => $info->firm,
+        ];
+
+        return 1;
+    }
+
     private function checkPassportHandover(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
     {
         if ($info->passport_handed_over) return 0;
@@ -199,7 +248,8 @@ class CheckVisaExpiryCommand extends Command
         $regDays = $info->registrationDaysLeft();
         $visaDays = $info->visaDaysLeft();
 
-        $shouldWarn = ($regDays !== null && $regDays <= 7) || ($visaDays !== null && $visaDays <= 30);
+        $shouldWarn = ($regDays !== null && $regDays <= VisaSettings::threshold('registration', 'info'))
+            || ($visaDays !== null && $visaDays <= VisaSettings::threshold('visa', 'info'));
         if (!$shouldWarn) return 0;
 
         $en = $this->isInternational($student);
@@ -221,6 +271,7 @@ class CheckVisaExpiryCommand extends Command
                 $type === 'registratsiya' => 'Registratsiya muddati ogohlantirishi',
                 $type === 'visa' => 'Viza muddati ogohlantirishi',
                 $type === 'passport' => 'Pasport topshirish ogohlantirishi',
+                $type === 'guvohnoma' => 'Yashash guvohnomasi muddati ogohlantirishi',
             },
             'message' => $message,
             'data' => ['level' => $level, 'type' => $type],
@@ -312,7 +363,7 @@ class CheckVisaExpiryCommand extends Command
         ];
 
         foreach ($groups as $level => $typesData) {
-            if (empty($typesData['registratsiya']) && empty($typesData['visa'])) {
+            if (empty($typesData['registratsiya']) && empty($typesData['visa']) && empty($typesData['guvohnoma'])) {
                 continue;
             }
 
@@ -337,7 +388,7 @@ class CheckVisaExpiryCommand extends Command
 
             // Firma javobgarlariga faqat o'z firmasi talabalari haqidagi xabar
             $byFirm = [];
-            foreach (['registratsiya', 'visa'] as $type) {
+            foreach (['registratsiya', 'visa', 'guvohnoma'] as $type) {
                 foreach ($typesData[$type] as $entry) {
                     $firm = $entry['firm'];
                     if ($firm) {
@@ -350,6 +401,7 @@ class CheckVisaExpiryCommand extends Command
                 $firmTypesData = [
                     'registratsiya' => $firmTypesData['registratsiya'] ?? [],
                     'visa'          => $firmTypesData['visa'] ?? [],
+                    'guvohnoma'     => $firmTypesData['guvohnoma'] ?? [],
                 ];
                 $firmMsg = $this->buildGroupMessage(
                     $firmTypesData,
@@ -392,6 +444,14 @@ class CheckVisaExpiryCommand extends Command
             $lines[] = '';
             $lines[] = '<b>Viza:</b>';
             foreach ($typesData['visa'] as $entry) {
+                $lines[] = '• ' . $entry['line'];
+            }
+        }
+
+        if (!empty($typesData['guvohnoma'])) {
+            $lines[] = '';
+            $lines[] = '<b>Yashash guvohnomasi:</b>';
+            foreach ($typesData['guvohnoma'] as $entry) {
                 $lines[] = '• ' . $entry['line'];
             }
         }

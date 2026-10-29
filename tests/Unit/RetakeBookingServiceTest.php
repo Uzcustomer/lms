@@ -47,6 +47,7 @@ beforeEach(function () {
         $t->timestamps();
     });
     (include database_path('migrations/2026_10_30_100000_create_retake_bookings_table.php'))->up();
+    svcExcuseTables();
 
     Carbon::setTestNow('2026-10-29 10:00:00');
 });
@@ -275,4 +276,87 @@ it('sends the student a Telegram message with a booking link per debt', function
             && str_contains($text, 'retake-booking?subject_id=181&amp;lesson_date=2026-10-24')
             && substr_count($text, '📌') === 1;
     });
+});
+
+function svcExcuseTables(): void
+{
+    Schema::create('absence_excuses', function ($t) {
+        $t->id();
+        $t->string('student_hemis_id');
+        $t->date('start_date');
+        $t->date('end_date');
+        $t->string('status');
+        $t->timestamps();
+    });
+    Schema::create('absence_excuse_makeups', function ($t) {
+        $t->id();
+        $t->unsignedBigInteger('absence_excuse_id');
+        $t->unsignedBigInteger('student_id')->nullable();
+        $t->string('subject_id')->nullable();
+        $t->string('assessment_type');
+        $t->date('original_date')->nullable();
+        $t->date('makeup_date')->nullable();
+        $t->date('makeup_end_date')->nullable();
+        $t->boolean('jn_submitted')->default(false);
+        $t->string('status')->default('scheduled');
+        $t->timestamps();
+    });
+}
+
+function svcExcuse(string $status, string $from, string $to, array $makeup = []): int
+{
+    $id = DB::table('absence_excuses')->insertGetId(['student_hemis_id' => '5531', 'start_date' => $from, 'end_date' => $to, 'status' => $status]);
+    DB::table('absence_excuse_makeups')->insert(array_merge([
+        'absence_excuse_id' => $id, 'student_id' => 1, 'subject_id' => '181', 'assessment_type' => 'jn',
+        'original_date' => $from, 'makeup_date' => '2026-11-02', 'makeup_end_date' => '2026-11-07',
+    ], $makeup));
+
+    return $id;
+}
+
+it('takes the retake range from an approved excuse covering the lesson date', function () {
+
+    // Ariza yo'q — oddiy muddat
+    expect(RetakeBookingService::excuseWindow(5531, 181, '2026-10-24'))->toBeNull();
+
+    // Tasdiqlanmagan ariza va boshqa davr hisobga olinmaydi
+    svcExcuse('pending', '2026-10-22', '2026-10-25');
+    svcExcuse('approved', '2026-10-01', '2026-10-05');
+    expect(RetakeBookingService::excuseWindow(5531, 181, '2026-10-24'))->toBeNull();
+
+    // Boshqa fan
+    svcExcuse('approved', '2026-10-22', '2026-10-25', ['subject_id' => '999']);
+    expect(RetakeBookingService::excuseWindow(5531, 181, '2026-10-24'))->toBeNull();
+
+    svcExcuse('approved', '2026-10-22', '2026-10-25');
+    expect(RetakeBookingService::excuseWindow(5531, 181, '2026-10-24'))->toBe(['2026-11-02', '2026-11-07']);
+});
+
+it('uses the rescheduled range when the excuse range was missed', function () {
+    svcExcuse('approved', '2026-10-22', '2026-10-25', ['status' => 'missed', 'makeup_date' => '2026-10-26', 'makeup_end_date' => '2026-10-27']);
+    // Keyingi arizada o'sha original_date bilan qayta belgilangan
+    svcExcuse('approved', '2026-10-26', '2026-10-28', ['original_date' => '2026-10-22', 'makeup_date' => '2026-11-03', 'makeup_end_date' => '2026-11-09']);
+
+    expect(RetakeBookingService::excuseWindow(5531, 181, '2026-10-24'))->toBe(['2026-11-03', '2026-11-09']);
+});
+
+it('opens booking until the excuse deadline even when the settings deadline passed', function () {
+    DB::table('deadlines')->insert(['level_code' => '13', 'deadline_days' => 3]);
+    svcExcuse('approved', '2026-10-22', '2026-10-25');
+    $student = (object) ['hemis_id' => 5531, 'level_code' => '13'];
+    $service = app(RetakeBookingService::class);
+
+    // Sozlama bo'yicha 24.10 + 3 kun = 27.10 — o'tgan; Moodle ham "expired" degan
+    [$excused, $plain] = $service->withLmsDeadline([
+        svcDebt(['state' => 'expired', 'can_book' => false]),
+        svcDebt(['subject_id' => 200, 'state' => 'expired', 'can_book' => false]),
+    ], $student);
+
+    expect($excused)->toMatchArray(['deadline' => '2026-11-07', 'book_from' => '2026-11-02', 'excused' => true, 'state' => 'start', 'can_book' => true])
+        ->and($plain)->toMatchArray(['deadline' => '2026-10-27', 'state' => 'expired', 'can_book' => false]);
+
+    expect(RetakeBookingService::validateSlot(Carbon::parse('2026-10-31 10:00'), Carbon::parse('2026-10-31 11:00'), '2026-11-07', '2026-11-02'))
+        ->toContain('02.11.2026 dan boshlanadi')
+        ->and(RetakeBookingService::validateSlot(Carbon::parse('2026-11-07 10:00'), Carbon::parse('2026-11-07 11:00'), '2026-11-07', '2026-11-02'))->toBeNull()
+        ->and(RetakeBookingService::validateSlot(Carbon::parse('2026-11-08 10:00'), Carbon::parse('2026-11-08 11:00'), '2026-11-07', '2026-11-02'))->not->toBeNull();
 });

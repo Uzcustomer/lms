@@ -122,7 +122,7 @@ class RetakeBookingController extends Controller
                 return redirect($back)->withInput()->withErrors(['slot' => "Bu vaqt oralig'i tugayapti — keyingisini tanlang."]);
             }
         }
-        if ($error = RetakeBookingService::validateSlot($start, $end, $debt['deadline'] ?? null)) {
+        if ($error = RetakeBookingService::validateSlot($start, $end, $debt['deadline'] ?? null, $debt['book_from'] ?? null)) {
             return redirect($back)->withInput()->withErrors(['slot' => $error]);
         }
 
@@ -176,6 +176,8 @@ class RetakeBookingController extends Controller
             'is_nb' => $isNb,
             'mark' => $isNb ? 'NB' : ($grades->isNotEmpty() ? $grades->implode(' / ') : 'past baho'),
             'deadline' => !empty($debt['deadline']) ? Carbon::parse($debt['deadline']) : null,
+            'book_from' => !empty($debt['book_from']) ? Carbon::parse($debt['book_from']) : null,
+            'excused' => !empty($debt['excused']),
             'tries_left' => $debt['tries_left'] ?? null,
             'state' => $isBooked ? 'booked' : $state,
             'state_label' => self::STATE_LABELS[$isBooked ? 'booked' : $state] ?? $state,

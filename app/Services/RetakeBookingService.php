@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AbsenceExcuseMakeup;
 use App\Models\Deadline;
 use App\Models\RetakeBooking;
 use App\Models\StudentGrade;
@@ -56,8 +57,10 @@ class RetakeBookingService
 
     /**
      * Qayta topshirish muddati Moodle'niki emas, LMS'niki: sozlamadagi kurs
-     * bo'yicha kunlar (otrabotka sahifasi bilan bir xil). Muddati LMS bo'yicha
-     * o'tgan qarzga vaqt tanlab bo'lmaydi.
+     * bo'yicha kunlar (otrabotka sahifasi bilan bir xil). Dars sanasi tasdiqlangan
+     * sababli arizaga tushsa — arizada shu fanga belgilangan qayta topshirish
+     * oralig'i (book_from — deadline). Muddati LMS bo'yicha o'tgan qarzga vaqt
+     * tanlab bo'lmaydi.
      */
     public function withLmsDeadline(array $debts, $student): array
     {
@@ -67,9 +70,20 @@ class RetakeBookingService
             if (empty($debt['subject_id']) || empty($debt['lesson_date'])) {
                 return $debt;
             }
-            $debt['deadline'] = self::lmsDeadline(
-                (int) $student->hemis_id, $student->level_code, (int) $debt['subject_id'], (string) $debt['lesson_date']
-            )->toDateString();
+            $window = self::excuseWindow((int) $student->hemis_id, (int) $debt['subject_id'], (string) $debt['lesson_date']);
+            if ($window) {
+                [$debt['book_from'], $debt['deadline']] = $window;
+                $debt['excused'] = true;
+                // Moodle o'z muddati bo'yicha "expired" desa ham sababli oraliq ichida ochiq
+                if (($debt['state'] ?? '') === 'expired' && $debt['deadline'] >= $today) {
+                    $debt['state'] = 'start';
+                    $debt['can_book'] = true;
+                }
+            } else {
+                $debt['deadline'] = self::lmsDeadline(
+                    (int) $student->hemis_id, $student->level_code, (int) $debt['subject_id'], (string) $debt['lesson_date']
+                )->toDateString();
+            }
             if ($debt['deadline'] < $today && !in_array($debt['state'] ?? '', ['done', 'continue'], true)) {
                 $debt['state'] = 'expired';
                 $debt['can_book'] = false;
@@ -111,13 +125,16 @@ class RetakeBookingService
     }
 
     /** Talaba tanlagan vaqt oralig'ini tekshiradi: xato matni yoki null */
-    public static function validateSlot(Carbon $start, Carbon $end, ?string $deadline): ?string
+    public static function validateSlot(Carbon $start, Carbon $end, ?string $deadline, ?string $from = null): ?string
     {
         if ($start->lessThanOrEqualTo(now())) {
             return "Boshlanish vaqti hozirgi vaqtdan keyin bo'lishi kerak.";
         }
         if ($end->lessThanOrEqualTo($start)) {
             return "Tugash vaqti boshlanish vaqtidan keyin bo'lishi kerak.";
+        }
+        if ($from && $start->toDateString() < $from) {
+            return "Sababli ariza bo'yicha qayta topshirish " . Carbon::parse($from)->format('d.m.Y') . ' dan boshlanadi.';
         }
         if ($deadline && $start->toDateString() > $deadline) {
             return 'Sana qayta topshirish muddatidan (' . Carbon::parse($deadline)->format('d.m.Y') . ') kech bo\'lmasligi kerak.';
@@ -163,6 +180,49 @@ class RetakeBookingService
         return $rows->isEmpty()
             ? self::rowDeadline(null, $lessonDate, $days)
             : $rows->map(fn ($r) => self::rowDeadline($r->deadline, $r->lesson_date, $days))->min();
+    }
+
+    /**
+     * Dars sanasi tasdiqlangan sababli arizaning davriga tushsa — arizada shu fan
+     * uchun talaba tanlagan JN qayta topshirish oralig'i [Y-m-d dan, Y-m-d gacha].
+     * Bajarilmagan (missed) oraliq keyingi arizada qayta belgilangan bo'lsa
+     * (o'sha original_date bilan) — eng so'nggisi amalda.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public static function excuseWindow(int $studentHemisId, int $subjectId, string $lessonDate): ?array
+    {
+        $jn = fn () => AbsenceExcuseMakeup::where('subject_id', (string) $subjectId)
+            ->where('assessment_type', 'jn')
+            ->where('jn_submitted', false)
+            ->whereNotNull('makeup_date');
+        $approved = fn ($q) => $q->where('status', 'approved')->where('student_hemis_id', (string) $studentHemisId);
+
+        $covering = $jn()->whereHas('absenceExcuse', fn ($q) => $approved($q)
+            ->whereDate('start_date', '<=', $lessonDate)
+            ->whereDate('end_date', '>=', $lessonDate))
+            ->get(['id', 'original_date']);
+        if ($covering->isEmpty()) {
+            return null;
+        }
+
+        $makeup = $jn()->whereHas('absenceExcuse', $approved)
+            ->where('status', '!=', 'missed')
+            ->where(function ($q) use ($covering) {
+                foreach ($covering->pluck('original_date')->filter()->unique() as $date) {
+                    $q->orWhereDate('original_date', Carbon::parse($date)->toDateString());
+                }
+                $q->orWhereIn('id', $covering->pluck('id'));
+            })
+            ->orderByDesc('id')
+            ->first(['makeup_date', 'makeup_end_date']);
+        if (!$makeup) {
+            return null;
+        }
+
+        $from = Carbon::parse($makeup->makeup_date)->toDateString();
+
+        return [$from, $makeup->makeup_end_date ? Carbon::parse($makeup->makeup_end_date)->toDateString() : $from];
     }
 
     /** Talabaning shu mavzu bo'yicha amaldagi broni */

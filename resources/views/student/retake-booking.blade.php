@@ -76,6 +76,8 @@
             @php
                 $dateText = $debt['lesson_date']?->format('d.m.Y');
                 $deadlineText = $debt['deadline']?->format('d.m.Y');
+                // Sababli ariza: oraliq boshi bugundan keyin bo'lishi mumkin
+                $minDate = $debt['book_from'] && $debt['book_from']->isFuture() ? $debt['book_from'] : now();
                 $showForm = $debt['can_book'];
                 // Vaqt tanlangan bo'lsa forma "O'zgartirish" bosilgandagina ochiladi (xato bo'lsa ochiq qoladi)
                 $formOpen = !$debt['is_booked'] || $errors->any() || ($flash['type'] ?? '') === 'error';
@@ -87,7 +89,12 @@
                 <p>
                     Sizda {{ $debt['subject_name'] }} fanidan {{ $dateText }} sanada
                     {{ $debt['is_nb'] ? 'NB' : 'past baho (' . $debt['mark'] . ')' }} bor.
-                    @if($deadlineText) Qayta topshirish muddati: <strong>{{ $deadlineText }}</strong> gacha. @endif
+                    @if($debt['excused'] && $deadlineText)
+                        Sababli ariza bo'yicha qayta topshirish oralig'i:
+                        <strong>{{ $debt['book_from']?->format('d.m.Y') }} — {{ $deadlineText }}</strong>.
+                    @elseif($deadlineText)
+                        Qayta topshirish muddati: <strong>{{ $deadlineText }}</strong> gacha.
+                    @endif
                     @if($showForm && !$debt['is_booked']) Qayta topshirish kuningiz va vaqt oralig'ini tanlang. @endif
                 </p>
             </div>
@@ -109,7 +116,7 @@
                     <div><dt>Mavzu</dt><dd>{{ $debt['mavzu'] ? $debt['mavzu'] . '-mavzu' : '—' }}</dd></div>
                     <div><dt>Dars sanasi</dt><dd>{{ $dateText }}</dd></div>
                     <div><dt>{{ $debt['is_nb'] ? 'Sabab' : 'Baho' }}</dt><dd>{{ $debt['mark'] }}</dd></div>
-                    <div><dt>Muddat</dt><dd>{{ $deadlineText ? $deadlineText . ' gacha' : '—' }}</dd></div>
+                    <div><dt>Muddat</dt><dd>{{ $deadlineText ? $deadlineText . ' gacha' : '—' }}@if($debt['excused']) <small>(sababli ariza)</small>@endif</dd></div>
                     <div><dt>Qolgan urinishlar</dt><dd>{{ $debt['tries_left'] ?? '—' }}</dd></div>
                     <div><dt>Holat</dt><dd><span class="rb-chip {{ $debt['state'] }}">{{ $debt['state_label'] }}</span></dd></div>
                 </dl>
@@ -143,14 +150,14 @@
                 <section class="rb-card" id="rb-form-card" @unless($formOpen) hidden @endunless>
                     <h2>{{ $debt['is_booked'] ? 'Yangi vaqtni tanlang' : 'Kun va vaqtni tanlang' }}</h2>
                     <form method="POST" action="{{ route('student.retake-booking.store') }}" class="rb-form" id="rb-form"
-                          data-deadline="{{ $debt['deadline']?->format('Y-m-d') }}">
+                          data-deadline="{{ $debt['deadline']?->format('Y-m-d') }}" data-from="{{ $minDate->format('Y-m-d') }}">
                         @csrf
                         <input type="hidden" name="subject_id" value="{{ $debt['subject_id'] }}">
                         <input type="hidden" name="lesson_date" value="{{ $debt['lesson_date_raw'] }}">
                         <div class="rb-field">
                             <label for="rb-date">Kun</label>
                             <input type="date" id="rb-date" name="date" required
-                                   min="{{ now()->format('Y-m-d') }}" @if($debt['deadline']) max="{{ $debt['deadline']->format('Y-m-d') }}" @endif
+                                   min="{{ $minDate->format('Y-m-d') }}" @if($debt['deadline']) max="{{ $debt['deadline']->format('Y-m-d') }}" @endif
                                    value="{{ old('date', $debt['is_booked'] ? $debt['slot_start']?->format('Y-m-d') : '') }}">
                         </div>
                         @php
@@ -234,6 +241,8 @@
                             var ok = true;
                             if (!date) {
                                 ok = fail("Kunni tanlang.");
+                            } else if (form.dataset.from && date < form.dataset.from) {
+                                ok = fail("Qayta topshirish oralig'i " + form.dataset.from.split('-').reverse().join('.') + " dan boshlanadi.");
                             } else if (deadline && date > deadline) {
                                 ok = fail("Sana qayta topshirish muddatidan kech bo'lmasligi kerak.");
                             } else if (!picked) {

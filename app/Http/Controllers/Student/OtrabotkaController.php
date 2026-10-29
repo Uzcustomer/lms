@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Auth;
  *
  * Muddat student_grades.deadline dan olinadi; u bo'sh bo'lsa — dars sanasi +
  * admin sozlamalaridagi kurs bo'yicha kunlar (deadlines.deadline_days), import
- * va jurnal yozganidek. Ma'ruza, MT, ON, OSKI va test baholari kirmaydi.
+ * va jurnal yozganidek. Dars tasdiqlangan sababli ariza davriga tushsa — arizada
+ * shu fanga belgilangan qayta topshirish oralig'ining oxiri. Ma'ruza, MT, ON,
+ * OSKI va test baholari kirmaydi.
  */
 class OtrabotkaController extends Controller
 {
@@ -49,9 +51,15 @@ class OtrabotkaController extends Controller
         $deadlineDays = RetakeBookingService::deadlineDays($student->level_code);
         $today = Carbon::today();
 
-        $items = $rows->map(function (StudentGrade $g) use ($deadlineDays, $today) {
+        $windows = [];
+        $items = $rows->map(function (StudentGrade $g) use ($deadlineDays, $today, $student, &$windows) {
             $lessonDate = Carbon::parse($g->lesson_date);
-            $deadline = RetakeBookingService::rowDeadline($g->deadline, $g->lesson_date, $deadlineDays);
+            // Sababli ariza davridagi dars: muddat — arizada belgilangan qayta topshirish oralig'i oxiri
+            $key = $g->subject_id . '|' . $lessonDate->toDateString();
+            $windows[$key] ??= RetakeBookingService::excuseWindow((int) $student->hemis_id, (int) $g->subject_id, $lessonDate->toDateString()) ?? false;
+            $deadline = $windows[$key]
+                ? Carbon::parse($windows[$key][1])->endOfDay()
+                : RetakeBookingService::rowDeadline($g->deadline, $g->lesson_date, $deadlineDays);
 
             if ($g->retake_grade !== null) {
                 $state = 'done';

@@ -294,7 +294,7 @@ class RetakeBookingService
         ]);
 
         try {
-            $result = $this->client->cancel($booking->id);
+            $result = $this->client->bookRetake($this->bookPayload($booking));
         } catch (MoodleRetakeException $e) {
             $this->markFailed($booking, $e);
 
@@ -317,9 +317,8 @@ class RetakeBookingService
     public function sync(RetakeBooking $booking): bool
     {
         try {
-            $result = $booking->status === RetakeBooking::STATUS_CANCELLED
-                ? $this->client->cancel($booking->id)
-                : $this->client->bookRetake($this->bookPayload($booking));
+            // bookPayload status ni yozuvdan oladi: booked yoki cancelled
+            $result = $this->client->bookRetake($this->bookPayload($booking));
         } catch (MoodleRetakeException $e) {
             $this->markFailed($booking, $e);
 
@@ -361,6 +360,10 @@ class RetakeBookingService
             ->orderBy('id');
     }
 
+    /**
+     * book_retake parametrlari. Bekor qilishda ham to'liq yuboriladi (status=cancelled):
+     * Moodle bronni faqat booking_id bilan topa olmasa ham talaba/fan/sana bo'yicha topsin.
+     */
     private function bookPayload(RetakeBooking $booking): array
     {
         return [
@@ -370,7 +373,7 @@ class RetakeBookingService
             'lesson_date' => $booking->lesson_date->format('Y-m-d'),
             'slot_start' => $booking->slot_start->format('Y-m-d H:i'),
             'slot_end' => $booking->slot_end->format('Y-m-d H:i'),
-            'status' => 'booked',
+            'status' => $booking->status === RetakeBooking::STATUS_CANCELLED ? 'cancelled' : 'booked',
         ];
     }
 

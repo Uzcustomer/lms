@@ -42,11 +42,6 @@ class MoodleRetakeClient
         ];
     }
 
-    public function cancel(int $bookingId): array
-    {
-        return $this->bookRetake(['booking_id' => $bookingId, 'status' => 'cancelled']);
-    }
-
     private function call(string $function, array $params): array
     {
         $url = (string) config('services.moodle.ws_url');

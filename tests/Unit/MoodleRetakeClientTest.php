@@ -84,16 +84,6 @@ it('treats a Moodle exception body and HTTP errors like network errors', functio
     expect(fn () => $client->getDebts(5531))->toThrow(MoodleRetakeException::class, 'HTTP 500');
 });
 
-it('cancels by booking_id only', function () {
-    Http::fake([RETAKE_WS => Http::response(['ok' => true, 'code' => 'cancelled', 'message' => 'Bekor qilindi'])]);
-
-    $result = app(MoodleRetakeClient::class)->cancel(7);
-
-    expect($result['ok'])->toBeTrue()->and($result['code'])->toBe('cancelled');
-    Http::assertSent(fn (Request $r) => $r['booking_id'] == 7 && $r['status'] === 'cancelled'
-        && !isset($r['student_hemis_id']) && !isset($r['slot_start']));
-});
-
 it('reads debts', function () {
     Http::fake([RETAKE_WS => Http::response(['found' => true, 'debts' => [[
         'subject_id' => 181, 'lesson_date' => '2026-09-16', 'state' => 'start', 'can_book' => true,

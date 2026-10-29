@@ -161,7 +161,8 @@ it('cancels a booking in LMS and Moodle', function () {
         ->and($b->cancelled_at)->not->toBeNull()
         ->and($b->moodle_sync)->toBe('ok')
         ->and($b->moodle_code)->toBe('cancelled');
-    Http::assertSent(fn (Request $r) => $r['status'] === 'cancelled' && $r['booking_id'] == $b->id);
+    Http::assertSent(fn (Request $r) => $r['status'] === 'cancelled' && $r['booking_id'] == $b->id
+        && $r['student_hemis_id'] == 5531 && $r['subject_id'] == 181 && $r['lesson_date'] === '2026-10-24');
 });
 
 it('marks a booking missed when Moodle reports it', function () {

@@ -3773,6 +3773,35 @@
             // Fan filtri ro'yxati: solishtirilgan va o'tkazilgan (skipped) fanlar — o'tkazilganning sababini ham tanlab ko'rish mumkin.
             const hsSubjectNames = rep => [...new Set(rep.groups.flatMap(g => [...g.units, ...(g.skipped || [])].map(x => x.subject_name)))]
                 .sort((a, b) => a.localeCompare(b));
+            // Joylanmagan kartalar (HEMIS'ga yozilmaydi): guruh filtri bo'yicha; bitta karta bir nechta guruhda bo'lsa — bir marta.
+            const hsUnplaced = rep => {
+                const u = rep.unplaced || {};
+                const weekly = ((u.weekly && u.weekly.items) || []).filter(hsGroupOk);
+                const cycle = ((u.cycle && u.cycle.items) || []).filter(hsGroupOk);
+                const cycleCards = new Set(cycle.map(i => i.key)).size;
+                return { weekly, cycle, cycleCards, cardWeeks: new Set(weekly.flatMap(i => i.weeks.map(w => i.card_id + '|' + w))).size,
+                    cards: new Set(weekly.map(i => i.card_id)).size + cycleCards };
+            };
+            let hsUnplacedOpen = false;   // "Ro'yxat" ochiqmi (qayta chizishda saqlanadi)
+            const hsWeekRanges = ws => ws.reduce((acc, w) => {
+                const last = acc[acc.length - 1];
+                if (last && w === last[1] + 1) last[1] = w; else acc.push([w, w]);
+                return acc;
+            }, []).map(([a, b]) => a === b ? String(a) : a + '–' + b).join(', ');
+            function hsUnplacedBanner(rep) {
+                const un = hsUnplaced(rep);
+                if (!un.cardWeeks && !un.cycleCards) return '';
+                const TYPE = { lecture: 'ma\'ruza', practice: 'amaliy' };
+                const byGroup = {};
+                un.weekly.forEach(i => (byGroup[i.group] = byGroup[i.group] || []).push([i.subject, hsEsc(i.subject) + ' (' + TYPE[i.type] + '): ' + hsWeekRanges(i.weeks) + '-hafta']));
+                un.cycle.forEach(i => (byGroup[i.group] = byGroup[i.group] || []).push([i.subject, hsEsc(i.subject) + ' (' + TYPE[i.type] + ', sikl): ' + i.days + ' kun']));
+                const list = Object.keys(byGroup).sort((a, b) => a.localeCompare(b)).map(g => '<div><b>' + hsEsc(g) + '</b>: ' +
+                    byGroup[g].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('; ') + '</div>').join('');
+                return '<div id="hsUnplacedBanner" class="mb-2 p-2 rounded border border-amber-300 bg-amber-50 text-amber-800">⚠ Hali joylanmagan kartalar bor: ' +
+                    [un.cardWeeks ? 'haftalik — ' + un.cardWeeks + ' ta karta-hafta' : '', un.cycleCards ? 'sikl — ' + un.cycleCards + ' ta karta' : ''].filter(Boolean).join(', ') +
+                    '. Ular HEMIS\'ga yozilmaydi. <button type="button" id="hsUnplacedToggle" class="underline ml-1">Ro\'yxat</button>' +
+                    '<div id="hsUnplacedList" class="mt-1' + (hsUnplacedOpen ? '' : ' hidden') + '">' + list + '</div></div>';
+            }
             // "Bu davrda mos": tanlangan davrgacha amali yo'q, keyingi haftalarda bor ("Bu davrda moslar" belgisi olinsa yashiriladi).
             const hsPeriodMatch = u => !u.actions.length && (u.actions_later || 0) > 0;
             // Amal qatori: qisqa xulosa (HEMIS → LMS), to'siq belgilari (xona / o'qituvchi band — alohida rangda),
@@ -3928,6 +3957,7 @@
                     ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Keyin HEMIS sahifasida (kirib turgan holda) shu xatcho\\\'pni bosing va yuklab olingan JSON faylni tanlang.\'); return false;"' +
                     ' title="Sichqoncha bilan xatcho\'plar paneliga torting, so\'ng HEMIS sahifasida bosing" class="px-2 py-1 rounded border border-indigo-400 bg-indigo-50 text-indigo-700 cursor-move">⭐ HEMIS\'ga yozish (xatcho\'p)</a>' +
                     '<button type="button" id="hsClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
+                    hsUnplacedBanner(rep) +
                     '<div class="flex flex-wrap items-center gap-3 mb-2 p-2 bg-gray-50 rounded border">' +
                     '<label class="text-gray-700">Hisob davri: <select id="hsPFrom" class="border rounded px-1 py-0.5 text-[12px]">' + wkOpt(pf, w => w.week + '-hafta (' + hsEsc(w.from) + ')') + '</select>' +
                     ' – <select id="hsPTo" class="border rounded px-1 py-0.5 text-[12px]">' + wkOpt(pt, w => w.week + '-hafta oxiri (' + hsEsc(w.to) + ')') + '</select></label>' +
@@ -3961,6 +3991,10 @@
                     (rep.groups_not_in_hemis.length ? '<div class="text-red-600">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.groups_not_in_hemis.join(', ')) + '</div>' : '') + '</div>';
                 hemisSyncModal(head + body);
                 $('hsClose').onclick = () => $('hemisSyncModal').remove();
+                if ($('hsUnplacedToggle')) $('hsUnplacedToggle').onclick = () => {
+                    hsUnplacedOpen = !hsUnplacedOpen;
+                    $('hsUnplacedList').classList.toggle('hidden', !hsUnplacedOpen);
+                };
                 $('hsTickets').onclick = () => hsTicketsSend(rep);
                 $('hsTicketList').onclick = () => hsTicketsList();
                 $('hsUntil').onchange = function () { hemisSyncUntil = +this.value; hemisSyncRun(); };
@@ -3999,6 +4033,8 @@
                     $('hs' + key + 'None').onclick = () => { boxes().forEach(c => { c.checked = false; }); apply(); };
                 }
                 $('hsJson').onclick = () => {
+                    const un = hsUnplaced(rep);
+                    if (un.cards && !confirm(un.cards + ' ta joylanmagan karta bor — ular HEMIS\'ga yozilmaydi. Baribir davom etamizmi?')) return;
                     // Yozish uchun JSON — faqat filtrda tanlangan guruh, fan va amallar (to'siqlilar baribir yozilmaydi).
                     const out = JSON.parse(JSON.stringify(rep));
                     out.groups = out.groups.filter(hsGroupOk);

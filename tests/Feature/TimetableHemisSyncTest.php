@@ -885,6 +885,35 @@ it('kafedra mudirlaridan HEMIS id\'si borini oladi; yagona mudirning id\'si yo\'
         ->and(implode(' ', $a['blocked']))->toContain("kafedra mudiri MUDIR ning HEMIS xodim id'si LMS'da yo'q");
 });
 
+it('joylanmagan kartalar: ertadan "HEMIS\'ga yozish" haftasi oxirigacha karta-haftalar va sikl kartalari sanaladi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    // Joylangan karta (hsSetup: dushanba 3-para) va shu guruhning joylanmagan kartasi (4 hafta, 14.09 dan)
+    $free = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'lecture', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Biologiya', 'group_name' => 'p/st26-01a (rus)', 'kafedra_name' => 'B']);
+    $report = fn (array $extra = []) => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19'] + $extra)
+        ->assertOk()->json('unplaced');
+
+    // Bugun 19.09 (1-hafta shanbasi) — 1-hafta yopiq; semestr oxirigacha 2–4-haftalar
+    $u = $report(['until_week' => 0]);
+    expect($u['weekly']['count'])->toBe(3)
+        ->and($u['weekly']['items'])->toBe([['group' => 'p/st26-01a', 'card_id' => $free->id, 'subject' => 'Biologiya', 'type' => 'lecture', 'weeks' => [2, 3, 4]]])
+        ->and($u['cycle'])->toBe(['count' => 0, 'items' => []]);
+    // "HEMIS'ga yozish" 2-hafta oxirigacha — faqat 2-hafta
+    expect($report(['until_week' => 2])['weekly']['count'])->toBe(1);
+    // 3-haftaga ko'chirilgan (kun va parasi bor) va 4-haftada bekor qilingan — joylanmagan emas
+    \App\Models\TimetableCardOverride::create(['card_id' => $free->id, 'week' => 3, 'day' => 2, 'pair' => 1, 'start_half' => 0, 'cancelled' => false]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $free->id, 'week' => 4, 'cancelled' => true]);
+    expect($report(['until_week' => 0])['weekly']['items'][0]['weeks'])->toBe([2]);
+    // Hammasi joylangan bo'lsa — bo'sh
+    $free->update(['day' => 3, 'pair' => 1]);
+    expect($report(['until_week' => 0])['weekly'])->toBe(['count' => 0, 'items' => []]);
+});
+
 it('o\'tkazilgan fanlar turi: tugagan (haftalik va sikl), joylanmagan sikl, kartochkasi yo\'q', function () {
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');
@@ -928,8 +957,13 @@ it('o\'tkazilgan fanlar turi: tugagan (haftalik va sikl), joylanmagan sikl, kart
     DB::table('ktr_plans')->insert(['curriculum_subject_id' => DB::table('curriculum_subjects')->where('subject_id', 900)->value('id'),
         'week_count' => 2, 'plan_data' => json_encode(['hours' => ['1' => ['13' => 6], '2' => ['13' => 6]]]), 'created_at' => now(), 'updated_at' => now()]);
 
-    // (c) Sikl ichki jadvalda joylanmagan
+    // (c) Sikl ichki jadvalda joylanmagan — joylanmagan kartalar ogohlantirishida ham (guruh, fan, kun soni)
     $c = $skipped([5], '2026-09-19', 'g5-01a');
+    $cyc = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json('unplaced.cycle');
+    expect($cyc['count'])->toBe(1)
+        ->and(array_map(fn ($i) => [$i['group'], $i['subject'], $i['days']], $cyc['items']))->toBe([['g5-01a', 'Pediatriya', 2]]);
     expect(array_column($c, 'kind'))->toBe(['unplaced'])
         ->and($c[0]['reason'])->toBe('sikl fani — LMS ichki sikl jadvalida joylanmagan, HEMIS\'ga tegilmaydi');
 
@@ -937,6 +971,9 @@ it('o\'tkazilgan fanlar turi: tugagan (haftalik va sikl), joylanmagan sikl, kart
     \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
         'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 7, 'training_type' => 'practice']);
     $a = $skipped([5], '2026-09-30', 'g5-01a');
+    expect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-30', 'until_week' => 0])
+        ->assertOk()->json('unplaced.cycle'))->toBe(['count' => 0, 'items' => []]);
     expect(array_column($a, 'kind'))->toBe(['finished'])
         ->and($a[0]['reason'])->toBe('sikl fani — ichki sikl jadvalida ertadan keyin dars yo\'q, HEMIS\'ga tegilmaydi');
 });

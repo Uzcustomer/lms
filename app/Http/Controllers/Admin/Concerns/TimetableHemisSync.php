@@ -522,7 +522,7 @@ trait TimetableHemisSync
      * Qaytaradi: ["fakultet|guruh kaliti" => [fan kaliti => [dars, ...]]]; dars: date, week (= sikl kuni,
      * KTR qatori), slot, len, part, employee_*, auditorium_*, cycle.
      */
-    private function hemisCycleLessons(TimetableBoard $board, array $scope, $cycleCards): array
+    private function hemisCycleLessons(TimetableBoard $board, array $scope, $cycleCards, ?array &$plan = null): array
     {
         if (!Schema::hasTable('timetable_cycle_placements')) {
             return [];
@@ -701,7 +701,8 @@ trait TimetableHemisSync
                 $groupNames[$groupKey($c, $raw)] ??= ['name' => $cleanGroup($raw), 'raw' => $raw, 'card' => $c];
             }
         }
-        $cycleLessons = $cycleCards->isNotEmpty() ? $this->hemisCycleLessons($board, $scope, $cycleCards) : [];
+        $cyclePlan = null;   // ichki sikl jadvali (cyclePlan javobi) — joylanmagan sikl kartalari shundan
+        $cycleLessons = $cycleCards->isNotEmpty() ? $this->hemisCycleLessons($board, $scope, $cycleCards, $cyclePlan) : [];
         if (!empty($scope['groups'])) {
             $want = [];
             foreach ($scope['groups'] as $g) {
@@ -779,6 +780,8 @@ trait TimetableHemisSync
         $missingGroups = [];
         $finals = [];        // barcha guruhlarning yakuniy (rejadagi) yozuvlari — guruhlararo tekshiruv uchun
         $handledIds = [];    // rejada qayta yoziladigan HEMIS yozuvlari (qolganlari tashqi bandlik)
+        $unplacedWeekly = [];   // joylanmagan haftalik karta-haftalar: guruh, karta, fan, tur, haftalar
+        $gnameOf = [];          // guruh kaliti => hisobotdagi guruh nomi (sikl kartalarini guruhlarga bog'lash uchun)
         foreach ($groupNames as $gk => $gInfo) {
             ['name' => $gname, 'card' => $sample] = $gInfo;
             $grp = $resolveGroup($gInfo);
@@ -802,6 +805,7 @@ trait TimetableHemisSync
                     'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'updated_at']);
 
             $gCards = $cards->filter(fn ($c) => in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true))->values();
+            $gnameOf[$gk] = $gname;
             $usedCards = [];
             $units = [];
             $unitMeta = [];
@@ -1021,6 +1025,29 @@ trait TimetableHemisSync
             if ($uw > 0) {
                 $until = Carbon::parse($weekMonday($sample, min($uw, $g['weeks'])))->addDays(6)->toDateString();
             }
+            // Joylanmagan haftalik karta-haftalar — faqat ertadan "HEMIS'ga yozish" haftasi oxirigacha (o'tgan kunlar HEMIS'da
+            // yopiq). Doskadagi "Doska bo'yicha (haftalik)" va unplacedExport kabi: bekor qilingan hafta hisobga olinmaydi, shu
+            // haftaga ko'chirilgan (kun va parasi bor) yoki shablonda joyi bor karta — joylangan.
+            foreach ($gCards as $c) {
+                $cg = $gridFor($c);
+                $ov = ($overrides[$c->id] ?? collect())->keyBy('week');
+                $weeks = [];
+                for ($w = 1; $w <= $cg['weeks']; $w++) {
+                    $mon = $weekMonday($c, $w);
+                    if (Carbon::parse($mon)->addDays(max(1, (int) $cg['days']) - 1)->toDateString() <= $today || ($until !== null && $mon > $until)) {
+                        continue;
+                    }
+                    $o = $ov[$w] ?? null;
+                    if (($o && $o->cancelled) || ($o && $o->day && $o->pair) || ($c->day && $c->pair)) {
+                        continue;
+                    }
+                    $weeks[] = $w;
+                }
+                if ($weeks) {
+                    $unplacedWeekly[] = ['group' => $gname, 'card_id' => $c->id, 'subject' => (string) $c->subject_name,
+                        'type' => $c->training_type === 'lecture' ? 'lecture' : 'practice', 'weeks' => $weeks];
+                }
+            }
 
             $results = $units ? $planner->planGroup($units, $busy, $workDates) : [];
             // Hisob davri: haftalar oralig'i (sukut 1 — joriy hafta).
@@ -1125,6 +1152,26 @@ trait TimetableHemisSync
 
         $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today, $mudirFor);
 
+        // Ichki sikl jadvalida joylanmagan sikl kartalari — oqim qatoridagi har guruhga (hisobotdagi nomi bilan).
+        $unplacedCycle = [];
+        $rowsByKey = collect((array) ($cyclePlan['rows'] ?? []))->keyBy('row_key');
+        foreach ((array) ($cyclePlan['cycle_cards'] ?? []) as $cc) {
+            if (!empty($cc['placed'])) {
+                continue;
+            }
+            $row = $rowsByKey->get($cc['row_key'] ?? null);
+            $seen = [];
+            foreach ((array) ($row['subgroups'] ?? []) as $member) {
+                $name = $gnameOf[$facKey($row['faculty'] ?? '') . '|' . $this->groupNameKey((string) $member)] ?? null;
+                if ($name === null || isset($seen[$name])) {
+                    continue;
+                }
+                $seen[$name] = true;
+                $unplacedCycle[] = ['group' => $name, 'key' => ($cc['row_key'] ?? '') . '|' . ($cc['key'] ?? ''), 'subject' => (string) $cc['subject'],
+                    'type' => (string) ($cc['type'] ?? 'practice'), 'days' => (int) ($cc['days'] ?? 0)];
+            }
+        }
+
         return [
             'today' => $today,
             'board_id' => $board->id,
@@ -1137,6 +1184,13 @@ trait TimetableHemisSync
             'weeks' => array_values($weeksOut),
             'groups' => $groupsOut,
             'groups_not_in_hemis' => $missingGroups,
+            // Joylanmagan kartalar HEMIS'ga yozilmaydi — oyna ogohlantiradi. Bitta karta bir nechta guruhda bo'lishi mumkin:
+            // sanoq — karta-hafta (haftalik) / karta (sikl) bo'yicha bir martadan.
+            'unplaced' => [
+                'weekly' => ['count' => count(array_unique(array_merge([], ...array_map(fn ($u) => array_map(fn ($w) => $u['card_id'] . '|' . $w, $u['weeks']), $unplacedWeekly)))),
+                    'items' => $unplacedWeekly],
+                'cycle' => ['count' => count(array_unique(array_column($unplacedCycle, 'key'))), 'items' => $unplacedCycle],
+            ],
         ];
     }
     /**

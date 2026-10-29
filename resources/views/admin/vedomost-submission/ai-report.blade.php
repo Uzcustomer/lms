@@ -363,6 +363,10 @@
                 const tm = (row.tm || {})[k];
                 if (!need) { body += '<td class="grey">kerak emas</td><td></td>'; return; }
                 if (!on) { body += `<td class="o txt">Test markazida natija yo'q</td><td></td>`; return; }
+                if (tm && tm.status === 'skip') {
+                    body += `<td class="grey" title="${esc(tm.note)}">hisobga olinmaydi${tm.tm !== null ? ' (TM ' + esc(fmt(tm.tm)) + ')' : ''}</td><td></td>`;
+                    return;
+                }
                 if (tm && tm.sinov) {
                     const fill = tm.status === 'bad' ? 'y' : '';
                     body += `<td class="${fill} txt">sinov: JN ${esc(fmt(tm.jn))}</td><td class="${fill}">${esc(fmt(num(vt.S) !== null && num(vt.D) !== null ? num(vt.S) - num(vt.D) : ''))}</td>`;

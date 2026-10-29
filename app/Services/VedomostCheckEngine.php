@@ -127,6 +127,11 @@ class VedomostCheckEngine
                 if (VedomostScanReader::ynConflict($s)) {
                     $unclear[] = 'yn';
                 }
+                // Kulrang qatorda hamma ustun 0 o'qilsa (HEMISda JN/MT bor) — o'qish xatosi ehtimoli katta.
+                if (VedomostScanReader::num($s['jb_pct'] ?? null) === 0.0 && VedomostScanReader::num($s['mt_pct'] ?? null) === 0.0
+                    && ((VedomostScanReader::num($vt['D']) ?? 0) > 0 || (VedomostScanReader::num($vt['G']) ?? 0) > 0)) {
+                    array_push($unclear, 'jb_pct', 'mt_ball');
+                }
                 foreach (self::COMPARE as $key => [$label, $pf, $col]) {
                     if (($key === 'oski' && !$useO) || ($key === 'test' && !$useT)) {
                         $cells[$key] = ['status' => 'skip'];
@@ -172,10 +177,18 @@ class VedomostCheckEngine
                 $set('missing');
             }
 
-            // Test markazi ↔ HEMIS
+            // Test markazi ↔ HEMIS. Imtihonga kiritilmagan talabada HEMISdagi 0 qoida bo'yicha
+            // to'g'ri — test markazidagi natija (topshirgan bo'lsa ham) hisobga olinmaydi.
             $tm = [];
+            $skipAll = $expelled ? 'talaba chetlashtirilgan'
+                : ($this->jnMtFailed($vt, $settings) ? 'JN/MT o‘tmagan — imtihonga kiritilmagan' : null);
+            $oskeVt = VedomostScanReader::num($vt['P']);
+            $skipTest = $skipAll ?? (($useO && $useT && $oskeVt !== null && $oskeVt < (float) ($settings['oski_min'] ?? 60))
+                ? 'OSKE ' . $this->f($oskeVt) . '% — Testga kiritilmagan' : null);
             if ($useO && $tmUsed['oski'] && !$kurs6) {
-                $tm['oski'] = $this->checkTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], 'OSKE', $flags, $set);
+                $tm['oski'] = $skipAll
+                    ? $this->skipTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], $skipAll)
+                    : $this->checkTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], 'OSKE', $flags, $set);
             }
             if ($useT && $sinov && !$kurs6) {
                 $t = VedomostScanReader::num($vt['S']);
@@ -188,6 +201,8 @@ class VedomostCheckEngine
                     $flags[] = ['t' => 'bad', 'm' => 'Sinov fan: Test ' . $this->f($t) . '% ≠ Joriy ' . $this->f($jn) . '%'];
                     $set('bad');
                 }
+            } elseif ($useT && $tmUsed['test'] && !$kurs6 && $skipTest) {
+                $tm['test'] = $this->skipTm($context['test_center'][$sid]['test'] ?? null, $vt['S'], $skipTest);
             } elseif ($useT && $tmUsed['test'] && !$kurs6) {
                 $tm['test'] = $this->checkTm($context['test_center'][$sid]['test'] ?? null, $vt['S'], 'Test', $flags, $set);
                 if (($tm['test']['tm'] ?? null) !== null) {
@@ -433,6 +448,11 @@ class VedomostCheckEngine
         }
 
         return $c + ['status' => 'ok'];
+    }
+
+    private function skipTm(?array $rec, $hemis, string $why): array
+    {
+        return ['tm' => $rec !== null ? (float) $rec['grade'] : null, 'hemis' => VedomostScanReader::num($hemis), 'status' => 'skip', 'delta' => null, 'note' => $why];
     }
 
     private function checkTm(?array $rec, $hemis, string $label, array &$flags, callable $set): array

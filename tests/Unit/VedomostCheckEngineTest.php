@@ -305,3 +305,40 @@ test('Test markazi: urinish vedomost shakliga moslanadi (1-urinish → 12-shakl)
         ->and($c::quizForm('12a-shakl'))->toBe($form('12a'))
         ->and($c::quizForm('1-urinish'))->not->toBe($form('12a'));
 });
+
+test('Test markazi: imtihonga kiritilmagan talabada TM natijasi hisobga olinmaydi', function () {
+    $tc = fn ($o, $t) => ['oski' => ['grade' => (float) $o, 'dalolat' => false], 'test' => ['grade' => (float) $t, 'dalolat' => false]];
+    $stus = [
+        vtStu('BABADJANOV BEKZOD BOTIROVICH', '368221100216', 29, 80, 0, 0),          // JN < 60
+        vtStu('KO‘CHAROVA MUNISA MUXIDDIN QIZI', '368221100070', 62, 85, 40, 0),       // OSKE < 60
+        vtStu('MISIROV AHLIDDIN SAYDULLA O‘G‘LI', '368221100747', 85, 88, 100, 0),     // kelmadi, TM Test 52
+    ];
+    $rows = [
+        pdfRow(7, 'BABADJANOV BEKZOD BOTIROVICH', '368221100216', ['jb_pct' => '29,0', 'jb_ball' => '0,0', 'mt_pct' => '80,0', 'mt_ball' => '16,0', 'yn' => '-2', 'ects' => 'FX', 'baho' => "qo'yilmadi"]),
+        pdfRow(8, 'KO‘CHAROVA MUNISA MUXIDDIN QIZI', '368221100070', ['jb_pct' => '62,0', 'jb_ball' => '31,0', 'mt_pct' => '85,0', 'mt_ball' => '17,0', 'jbmton_ball' => '48,0', 'oski_pct' => '40,0', 'oski_ball' => '0,0', 'yn' => '-1', 'baho' => 'kelmadi']),
+        pdfRow(13, 'MISIROV AHLIDDIN SAYDULLA O‘G‘LI', '368221100747', ['jb_pct' => '85,0', 'jb_ball' => '42,5', 'mt_pct' => '88,0', 'mt_ball' => '17,6', 'jbmton_ball' => '60,0', 'oski_pct' => '100,0', 'oski_ball' => '15,0', 'yn' => '-1', 'baho' => 'kelmadi']),
+    ];
+    $r = engine()->build(expectedData($stus), scanDoc($rows), [], rules(),
+        ctx(['test_center' => ['368221100216' => $tc(100, 92), '368221100070' => $tc(40, 76), '368221100747' => $tc(100, 52)]]));
+    $by = collect($r['rows'])->keyBy('id');
+
+    expect($by['368221100216']['tm']['oski']['status'])->toBe('skip')
+        ->and($by['368221100216']['tm']['test']['status'])->toBe('skip')
+        ->and($by['368221100216']['status'])->toBe('ok')
+        ->and($by['368221100070']['tm']['oski']['status'])->toBe('ok')
+        ->and($by['368221100070']['tm']['test']['status'])->toBe('skip')
+        ->and($by['368221100747']['tm']['test']['status'])->toBe('bad');
+
+    $ws = app(\App\Services\VedomostAiReportExcel::class)->build($r)->getSheetByName('Tekshirish');
+    $cells = collect($ws->toArray())->flatten()->filter()->implode(' | ');
+    expect($cells)->toContain('hisobga olinmaydi: JN/MT o‘tmagan');
+});
+
+test('kulrang qatorda hamma ustun 0 o\'qilsa — XATO emas, «PDFdan tekshiring»', function () {
+    $r = engine()->build(expectedData([vtStu('MUSTANOV ADXAM MUSTANOVICH', '368221100902', 54, 80, 0, 0)]),
+        scanDoc([pdfRow(4, 'MUSTANOV ADXAM MUSTANOVICH', '368221100902', ['jb_pct' => '0,0', 'jb_ball' => '0,0', 'mt_pct' => '0,0', 'mt_ball' => '0,0', 'yn' => '-2', 'ects' => 'FX'])]),
+        [], rules(), ctx());
+
+    expect($r['rows'][0]['cells']['jn']['status'])->toBe('ocr')
+        ->and($r['rows'][0]['cells']['mtb']['status'])->toBe('ocr');
+});

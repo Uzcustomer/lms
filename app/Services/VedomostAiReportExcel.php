@@ -145,6 +145,9 @@ class VedomostAiReportExcel
                 } elseif (!$on) {
                     $v()->setValue("Test markazida natija yo'q");
                     $this->fill($ws, $c, $rn, self::ORANGE);
+                } elseif (($tm['status'] ?? '') === 'skip') {
+                    $v()->setValue('hisobga olinmaydi: ' . $tm['note'] . ($tm['tm'] !== null ? ' (TM ' . $tm['tm'] . ')' : ''));
+                    $v()->getStyle()->getFont()->setItalic(true)->getColor()->setARGB('FF8A8A8A');
                 } elseif (!empty($tm['sinov'])) {
                     $v()->setValue('sinov: JN ' . ($tm['jn'] ?? ''));
                     $d()->setValue(sprintf('=%s%d-D%d', $hc, $rn, $rn));

@@ -54,7 +54,7 @@ class YnQaydnomaDataService
             ->where('semester_code', $semesterCode)
             ->first();
 
-        $students = Student::select('full_name', 'student_id_number', 'hemis_id')
+        $students = Student::select('full_name', 'student_id_number', 'hemis_id', 'student_status_code', 'student_status_name')
             ->where('group_id', $group->group_hemis_id)
             ->groupBy('id')
             ->orderBy('full_name')
@@ -66,6 +66,30 @@ class YnQaydnomaDataService
             $latest = YnStudentGrade::latestPerStudent($submission->id)->get();
             $jn = $latest->pluck('jn', 'student_hemis_id')->toArray();
             $mt = $latest->pluck('mt', 'student_hemis_id')->toArray();
+        }
+
+        // YN hali yuborilmagan (snapshot yo'q) talabalar uchun — jurnaldagi tirik
+        // JN/MT (AcademicScheduleController bilan bir xil tartib: snapshot ustun).
+        // Aks holda AI tekshiruv har talabada "tizimda yo'q" deb soxta farq chiqaradi.
+        $needLive = array_filter($studentHemisIds, fn ($hid) => ($jn[$hid] ?? null) === null || ($mt[$hid] ?? null) === null);
+        if (!empty($needLive)) {
+            try {
+                $live = \App\Services\JournalGradeService::computeJnMtBulk(
+                    [[(string) $group->group_hemis_id, (string) $subject->subject_id, (string) $semesterCode]],
+                    array_fill_keys(array_map('strval', $needLive), (string) $group->group_hemis_id)
+                );
+                $key = $group->group_hemis_id . '|' . $subject->subject_id . '|' . $semesterCode;
+                foreach ($live[$key] ?? [] as $hid => $vals) {
+                    if (($jn[$hid] ?? null) === null && $vals['jn'] !== null) {
+                        $jn[$hid] = $vals['jn'];
+                    }
+                    if (($mt[$hid] ?? null) === null && $vals['mt'] !== null) {
+                        $mt[$hid] = $vals['mt'];
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('YnQaydnomaDataService live JN/MT failed: ' . $e->getMessage());
+            }
         }
 
         // ON, OSKI, Test — jurnaldagi AYNAN bir xil tanlash mantig'i (MAX EMAS):
@@ -128,6 +152,9 @@ class YnQaydnomaDataService
                 'on' => $on[$hid] ?? null,
                 'oski' => $oski[$hid] ?? null,
                 'test' => $test[$hid] ?? null,
+                'hemis_id' => (string) $hid,
+                'status_code' => (string) ($stu->student_status_code ?? ''),
+                'status_name' => (string) ($stu->student_status_name ?? ''),
             ];
         }
 
@@ -149,9 +176,37 @@ class YnQaydnomaDataService
             'level_code' => $semester->level_code ?? null,
             'semestr' => $semester->name ?? $semester->code ?? null,
             'guruh' => $group->name,
+            'subject_id' => (string) $subject->subject_id,
+            'dekan' => $this->dekanName($department?->department_hemis_id),
             'jami_talabalar' => count($studentRows),
             'talabalar' => $studentRows,
         ];
+    }
+
+    /**
+     * Fakultet dekani (KtrController tasdiqlovchilar bilan bir xil tartib):
+     * dekan roli + dean_faculties → role ustuni → HEMIS lavozimi.
+     */
+    private function dekanName($facultyHemisId): ?string
+    {
+        if (!$facultyHemisId) {
+            return null;
+        }
+        try {
+            $q = fn () => \App\Models\Teacher::where('is_active', true);
+            $dekan = null;
+            if (\Illuminate\Support\Facades\Schema::hasTable('dean_faculties')) {
+                $dekan = $q()->whereHas('roles', fn ($r) => $r->where('name', 'dekan'))
+                    ->whereHas('deanFaculties', fn ($r) => $r->where('dean_faculties.department_hemis_id', $facultyHemisId))
+                    ->first();
+            }
+            $dekan ??= $q()->where('role', 'dekan')->where('department_hemis_id', $facultyHemisId)->first();
+            $dekan ??= $q()->where('staff_position', 'LIKE', '%ekan%')->where('department_hemis_id', $facultyHemisId)->first();
+
+            return $dekan?->full_name;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**

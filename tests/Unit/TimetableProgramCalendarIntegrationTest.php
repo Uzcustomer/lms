@@ -150,9 +150,15 @@ it('resolves two active same-name groups by the curriculum their active students
     $students(1169, 235, 25, '60');
     expect($resolve())->toBe([157, 157, 157, 157]);
 
-    // Faol talabalar ikki rejaga teng bo'lingan — kalendar tasodifiy reja olmaydi.
-    $students(1169, 235, 20);
-    expect($resolve()[0])->toBe(0);
+    // Ikkala guruhda ham faol talaba bor — ko'pchilik (157) hal qiladi; kalendar va xaritalar bir xil qaror oladi
+    // (aks holda dastur filtri 235 fanlarini, guruh xaritasi 157 fanlarini chiqarib, guruh kartasiz qolardi).
+    $students(1169, 235, 1);
+    expect($resolve())->toBe([157, 157, 157, 157]);
+
+    // Faol talabalar ikki rejaga teng bo'lingan — kalendar tasodifiy reja olmaydi (0, dastur filtri yo'q);
+    // xaritalar avvalgidek yangi (oxirgi) guruhni oladi.
+    $students(1169, 235, 19);
+    expect($resolve())->toBe([0, 235, 235, 235]);
 
     // Faqat nomzod rejalar hisoblanadi: boshqa rejadagi talabalar ustunlik bermaydi.
     DB::table('students')->where('curriculum_id', 157)->update(['curriculum_id' => 999]);

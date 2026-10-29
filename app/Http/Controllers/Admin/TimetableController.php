@@ -588,10 +588,10 @@ class TimetableController extends Controller
     {
         $map = [];
         // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi; ikkalasi faol bo'lsa —
-        // faol talabalari shu rejada o'qiydigani (kalendar rejasi bilan bir xil tanlov).
+        // kalendar bilan bir xil qaror (faol talabalar ko'pchiligi o'qiydigan reja).
         // Ikki kalit: to'liq nom va qavssiz nom (oqimda "d1/d26-01a (o'z)", bazada "d1/d26-01a").
         $groups = $this->preferStudentBackedGroups(DB::table('groups')->whereNotNull('curriculum_hemis_id')
-            ->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id', 'active', 'group_hemis_id']));
+            ->orderBy('active')->orderBy('id')->get(['name', 'department_name', 'curriculum_hemis_id', 'active', 'group_hemis_id']));
         foreach ($groups as $g) {
             $map[$this->groupNameKey((string) $g->name)] = (int) $g->curriculum_hemis_id;
         }
@@ -609,7 +609,7 @@ class TimetableController extends Controller
         if ($map === null) {
             $map = [];
             // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi; ikkalasi faol bo'lsa —
-            // faol talabalari shu rejada o'qiydigani.
+            // kalendar bilan bir xil qaror (faol talabalar ko'pchiligi o'qiydigan reja).
             foreach ($this->preferStudentBackedGroups(DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')
                 ->get(['name', 'department_name', 'curriculum_hemis_id', 'active', 'group_hemis_id'])) as $g) {
                 $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));

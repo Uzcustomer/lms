@@ -38,20 +38,28 @@ trait TimetableProgramCalendars
         }
         foreach (array_unique([$group, preg_replace('/\s*\(.*$/u', '', $group)]) as $name) {
             $key = mb_strtolower(trim((string) $faculty)).'|'.ProgramCalendar::groupKey($name);
-            $rows = $this->calendarGroups[$key] ?? [];
-            $active = array_filter($rows, fn ($r) => $r[1]);
-            $ids = array_unique(array_column($active ?: $rows, 0));
-            if (count($ids) === 1) {
-                return (int) reset($ids);
-            }
-            if (count($ids) > 1) {
-                // Bir xil nomli bir nechta faol guruh (HEMIS'da eskisi nofaol qilinmagan): guruhdagi faol
-                // talabalar qaysi rejada o'qisa — o'sha. Ular ham bo'linsa, noaniq guruh tasodifiy reja olmaydi.
-                return $this->studentBackedCurriculum($active ?: $rows, $ids);
+            if ($rows = $this->calendarGroups[$key] ?? []) {
+                return $this->sameNameCurriculum($rows);
             }
         }
 
         return 0;
+    }
+
+    /**
+     * Bir xil nomli guruhlar ([reja, faol, HEMIS guruh id] qatorlari) uchun yagona reja: faollari bitta rejada
+     * bo'lsa — o'sha. Bir nechta faol guruh turli rejada (HEMIS'da eskisi nofaol qilinmagan) — guruhlardagi faol
+     * talabalar ko'pchiligi o'qiydigan reja; ular ham teng bo'linsa — 0 (noaniq guruh tasodifiy reja olmaydi).
+     */
+    private function sameNameCurriculum(array $rows): int
+    {
+        $active = array_filter($rows, fn ($r) => $r[1]);
+        $ids = array_values(array_unique(array_column($active ?: $rows, 0)));
+        if (count($ids) === 1) {
+            return (int) $ids[0];
+        }
+
+        return $ids ? $this->studentBackedCurriculum($active ?: $rows, $ids) : 0;
     }
 
     /**
@@ -96,15 +104,26 @@ trait TimetableProgramCalendars
     }
 
     /**
-     * Bir xil nomli guruhlar ichida ustunlik tartibi (oxirgisi ustun): faol, so'ng faol talabalari shu
-     * guruhning rejasida o'qiydigani; teng bo'lsa — kelgan (id) tartibi saqlanadi.
+     * Bir xil nomli guruhlar ichida ustunlik tartibi (oxirgisi ustun): faol, so'ng kalendar bilan bir xil qaror
+     * (sameNameCurriculum: fakultet + qavssiz nom bo'yicha) yutqazgan rejadagi guruh pastga tushadi — fanlar va
+     * talabalar soni kalendar rejasidan olinadi. Qaror yo'q (teng/talabasiz) bo'lsa — kelgan (id) tartibi.
      */
     private function preferStudentBackedGroups(iterable $groups): array
     {
-        $students = $this->activeStudentCurricula();
         $list = is_array($groups) ? array_values($groups) : collect($groups)->values()->all();
-        usort($list, fn ($a, $b) => [(int) ($a->active ?? 0), (int) isset($students[(int) ($a->group_hemis_id ?? 0)][(int) $a->curriculum_hemis_id])]
-            <=> [(int) ($b->active ?? 0), (int) isset($students[(int) ($b->group_hemis_id ?? 0)][(int) $b->curriculum_hemis_id])]);
+        $setOf = fn ($g) => mb_strtolower(trim((string) ($g->department_name ?? ''))).'|'
+            .ProgramCalendar::groupKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));
+        $sets = [];
+        foreach ($list as $g) {
+            $sets[$setOf($g)][] = [(int) $g->curriculum_hemis_id, (bool) ($g->active ?? true), (int) ($g->group_hemis_id ?? 0)];
+        }
+        $winner = array_map(fn ($rows) => $this->sameNameCurriculum($rows), $sets);
+        $keeps = function ($g) use ($winner, $setOf) {
+            $w = $winner[$setOf($g)] ?? 0;
+
+            return (int) ($w === 0 || $w === (int) $g->curriculum_hemis_id);
+        };
+        usort($list, fn ($a, $b) => [(int) ($a->active ?? 0), $keeps($a)] <=> [(int) ($b->active ?? 0), $keeps($b)]);
 
         return $list;
     }

@@ -360,3 +360,34 @@ it('opens booking until the excuse deadline even when the settings deadline pass
         ->and(RetakeBookingService::validateSlot(Carbon::parse('2026-11-07 10:00'), Carbon::parse('2026-11-07 11:00'), '2026-11-07', '2026-11-02'))->toBeNull()
         ->and(RetakeBookingService::validateSlot(Carbon::parse('2026-11-08 10:00'), Carbon::parse('2026-11-08 11:00'), '2026-11-07', '2026-11-02'))->not->toBeNull();
 });
+
+it('gives Moodle the LMS deadlines over the X-SYNC-SECRET API', function () {
+    config()->set('services.moodle.pull_secret', 'pull-secret');
+    Schema::create('students', function ($t) {
+        $t->id();
+        $t->unsignedBigInteger('hemis_id');
+        $t->string('level_code')->nullable();
+        $t->timestamps();
+    });
+    DB::table('students')->insert(['hemis_id' => 5531, 'level_code' => '13']);
+    DB::table('deadlines')->insert(['level_code' => '13', 'deadline_days' => 6]);
+    svcExcuse('approved', '2026-10-22', '2026-10-25');
+
+    $items = ['items' => [
+        ['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24'],
+        ['student_hemis_id' => 5531, 'subject_id' => 200, 'lesson_date' => '2026-10-24'],
+        ['student_hemis_id' => 999, 'subject_id' => 181, 'lesson_date' => '2026-10-24'],
+    ]];
+
+    $this->postJson('/api/otrabotka/deadlines', $items)->assertStatus(403);
+    $this->postJson('/api/otrabotka/deadlines', $items, ['X-SYNC-SECRET' => 'wrong'])->assertStatus(403);
+    $this->postJson('/api/otrabotka/deadlines', ['items' => [['student_hemis_id' => 5531]]], ['X-SYNC-SECRET' => 'pull-secret'])->assertStatus(422);
+
+    $this->postJson('/api/otrabotka/deadlines', $items, ['X-SYNC-SECRET' => 'pull-secret'])
+        ->assertOk()
+        ->assertExactJson(['ok' => true, 'items' => [
+            ['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24', 'found' => true, 'deadline' => '2026-11-07', 'book_from' => '2026-11-02', 'excused' => true],
+            ['student_hemis_id' => 5531, 'subject_id' => 200, 'lesson_date' => '2026-10-24', 'found' => true, 'deadline' => '2026-10-30', 'book_from' => null, 'excused' => false],
+            ['student_hemis_id' => 999, 'subject_id' => 181, 'lesson_date' => '2026-10-24', 'found' => false, 'deadline' => null, 'book_from' => null, 'excused' => false],
+        ]]);
+});

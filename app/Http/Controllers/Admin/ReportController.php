@@ -11497,8 +11497,7 @@ class ReportController extends Controller
                     // Ro'yxatda ko'ringan guruhlarning faolligi upsert'da HEMIS 'active' maydonidan yozilgan —
                     // ularni qayta faollashtirMAYMIZ (aks holda API nofaol degan guruhlar yana faol bo'lib qoladi).
                     // Faqat ro'yxatda umuman ko'rinmaganlar (HEMISda o'chirilgan) nofaol qilinadi.
-                    $seenIds = array_keys($seen);
-                    $deactivated = \App\Models\Group::where('active', true)->whereNotIn('group_hemis_id', $seenIds)->update(['active' => false]);
+                    $deactivated = count(\App\Models\Group::deactivateMissingFromHemis(array_keys($seen)));
                 }
                 \Illuminate\Support\Facades\Cache::forget($seenKey);
                 \App\Services\ActivityLogService::log('import', 'group', 'Oqim sahifasidan guruhlar HEMISdan tortildi (' . $r['pageCount'] . ' sahifa, ' . count($seen) . ' ta; nofaol qilindi: ' . $deactivated . ')');

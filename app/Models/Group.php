@@ -49,6 +49,26 @@ class Group extends Model
         return $this->belongsTo(Curriculum::class, 'curriculum_hemis_id', 'curricula_hemis_id');
     }
 
+    /**
+     * HEMIS group-list nofaol guruhlarni qaytarmaydi: to'liq (barcha sahifalari muvaffaqiyatli olingan) ro'yxatda
+     * ko'rinmagan faol guruhlar nofaol qilinadi. Ko'ringanlarining faolligi importda HEMIS 'active' maydonidan
+     * yoziladi — ular qayta faollashtirilmaydi. Bo'sh ro'yxat (HEMIS xatosi bo'lishi mumkin) hech narsani o'zgartirmaydi.
+     *
+     * @return array<int, string> nofaol qilingan guruhlar: id => nomi
+     */
+    public static function deactivateMissingFromHemis(array $seenHemisIds): array
+    {
+        if (! $seenHemisIds) {
+            return [];
+        }
+        $missing = static::where('active', true)->whereNotIn('group_hemis_id', $seenHemisIds)->pluck('name', 'id')->all();
+        if ($missing) {
+            static::whereIn('id', array_keys($missing))->update(['active' => false]);
+        }
+
+        return $missing;
+    }
+
     public function getRouteKeyName()
     {
         return 'id';

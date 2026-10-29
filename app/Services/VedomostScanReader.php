@@ -77,7 +77,9 @@ class VedomostScanReader
         $bands = max(1, min(4, (int) $this->settings->get('bands')));
         $model = (string) $this->settings->get('model');
         $hash = sha1_file($pdfPath);
-        $cacheFile = $this->cachePath(sha1(implode('|', ['v' . self::PROMPT_VER, $hash, $bands, $model])));
+        // Rejim ham kalitda: pdftoppm keyin o'rnatilsa, butun-PDF rejimidagi eski natija qaytmasin.
+        $images = self::rendererAvailable();
+        $cacheFile = $this->cachePath(sha1(implode('|', ['v' . self::PROMPT_VER, $hash, $bands, $model, $images ? 'images' : 'pdf'])));
 
         if (is_file($cacheFile)) {
             $cached = json_decode((string) file_get_contents($cacheFile), true);
@@ -88,7 +90,7 @@ class VedomostScanReader
             }
         }
 
-        $result = self::rendererAvailable()
+        $result = $images
             ? $this->readAsImages($pdfPath, $bands, $expectedRows)
             : $this->readAsPdf($pdfPath, $expectedRows);
 

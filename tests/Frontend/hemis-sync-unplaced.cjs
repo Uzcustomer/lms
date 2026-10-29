@@ -55,6 +55,7 @@ const banner = () => (/<div id="hsUnplacedBanner"[^>]*>([\s\S]*?)<button/.exec(h
 ctx.render(rep);
 assert.equal(banner(), '⚠ Hali joylanmagan kartalar bor: haftalik — 4 ta karta-hafta, sikl — 1 ta karta. Ular HEMIS\'ga yozilmaydi. ');
 assert(html().indexOf('hsUnplacedBanner') < html().indexOf('id="hsOnlyDiff"'), 'ogohlantirish filtrlardan keyin chiqdi');
+assert.match(html(), /id="hsUnplacedBanner" class="[^"]*border-red-400 bg-red-50 text-red-800/, 'ogohlantirish qizil emas');
 // "Ro'yxat" — guruh va fan bo'yicha; sukutda yopiq, bosilganda ochiladi.
 assert.match(html(), /<div id="hsUnplacedList" class="mt-1 hidden"><div><b>G-A<\/b>: Anatomiya \(amaliy\): 6-hafta; Biologiya \(ma'ruza\): 2–4-hafta<\/div><div><b>G-B<\/b>: Biologiya \(ma'ruza\): 2–4-hafta; Pediatriya \(amaliy, sikl\): 5 kun<\/div><\/div>/);
 ctx.$('hsUnplacedList').classList = { toggle: (cls, on) => { listHidden = on; } };

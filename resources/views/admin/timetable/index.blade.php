@@ -3788,16 +3788,20 @@
                 if (last && w === last[1] + 1) last[1] = w; else acc.push([w, w]);
                 return acc;
             }, []).map(([a, b]) => a === b ? String(a) : a + '–' + b).join(', ');
-            function hsUnplacedBanner(rep) {
-                const un = hsUnplaced(rep);
-                if (!un.cardWeeks && !un.cycleCards) return '';
+            // Guruh bo'yicha ro'yxat (natija oynasidagi banner va oldindan ogohlantirish oynasi uchun bir xil).
+            function hsUnplacedListHtml(un) {
                 const TYPE = { lecture: 'ma\'ruza', practice: 'amaliy' };
                 const byGroup = {};
                 un.weekly.forEach(i => (byGroup[i.group] = byGroup[i.group] || []).push([i.subject, hsEsc(i.subject) + ' (' + TYPE[i.type] + '): ' + hsWeekRanges(i.weeks) + '-hafta']));
                 un.cycle.forEach(i => (byGroup[i.group] = byGroup[i.group] || []).push([i.subject, hsEsc(i.subject) + ' (' + TYPE[i.type] + ', sikl): ' + i.days + ' kun']));
-                const list = Object.keys(byGroup).sort((a, b) => a.localeCompare(b)).map(g => '<div><b>' + hsEsc(g) + '</b>: ' +
+                return Object.keys(byGroup).sort((a, b) => a.localeCompare(b)).map(g => '<div><b>' + hsEsc(g) + '</b>: ' +
                     byGroup[g].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('; ') + '</div>').join('');
-                return '<div id="hsUnplacedBanner" class="mb-2 p-2 rounded border border-amber-300 bg-amber-50 text-amber-800">⚠ Hali joylanmagan kartalar bor: ' +
+            }
+            function hsUnplacedBanner(rep) {
+                const un = hsUnplaced(rep);
+                if (!un.cardWeeks && !un.cycleCards) return '';
+                const list = hsUnplacedListHtml(un);
+                return '<div id="hsUnplacedBanner" class="mb-2 p-2 rounded border border-red-400 bg-red-50 text-red-800">⚠ Hali joylanmagan kartalar bor: ' +
                     [un.cardWeeks ? 'haftalik — ' + un.cardWeeks + ' ta karta-hafta' : '', un.cycleCards ? 'sikl — ' + un.cycleCards + ' ta karta' : ''].filter(Boolean).join(', ') +
                     '. Ular HEMIS\'ga yozilmaydi. <button type="button" id="hsUnplacedToggle" class="underline ml-1">Ro\'yxat</button>' +
                     '<div id="hsUnplacedList" class="mt-1' + (hsUnplacedOpen ? '' : ' hidden') + '">' + list + '</div></div>';
@@ -4084,6 +4088,42 @@
                     } finally { btn.disabled = false; btn.innerHTML = html; }
                 };
             }
+            // "HEMIS solishtirish" bosilganda eng birinchi (HEMIS'siz, faqat LMS): qamrovda ichki jadvalda joylanmagan kartalar bo'lsa —
+            // qizil oyna; "Baribir davom etish" — odatdagi hemisSyncAsk(). Joylanmagan bo'lmasa yoki xulosa olinmasa — darhol hemisSyncAsk().
+            async function hemisUnplacedGate() {
+                hemisSyncModal('<div class="p-6 text-center text-gray-500">Joylanmagan kartalar tekshirilmoqda… (' + hsEsc(scopeLabelText()) + ')</div>');
+                let u;
+                try {
+                    u = await api(BASE + '/boards/' + board.id + '/unplaced-summary', 'POST', scopeBody());
+                } catch (e) {
+                    console.warn('Joylanmagan kartalar xulosasi olinmadi — ogohlantirishsiz davom etiladi:', e);
+                    return hemisSyncAsk();
+                }
+                const un = hsUnplaced({ unplaced: u });
+                if (!un.cardWeeks && !un.cycleCards) return hemisSyncAsk();
+                const m = hemisSyncModal('<div id="hsUnpBox" class="p-3 rounded border border-red-400 bg-red-50 text-red-800">' +
+                    '<h3 class="font-semibold text-[14px] mb-2">⛔ Hali joylanmagan kartalar bor</h3>' +
+                    '<div id="hsUnpText" class="mb-2">Haftalik — ' + un.cardWeeks + ' ta karta-hafta, sikl — ' + un.cycleCards + ' ta karta. Ular HEMIS\'ga yozilmaydi, HEMIS\'da dars kam qoladi.</div>' +
+                    '<details open class="mb-3"><summary class="cursor-pointer">Guruh bo\'yicha ro\'yxat</summary>' +
+                    '<div id="hsUnpList" class="mt-1 max-h-72 overflow-auto">' + hsUnplacedListHtml(un) + '</div></details>' +
+                    '<div class="flex gap-2"><button type="button" id="hsUnpGo" class="px-3 py-1 rounded bg-red-600 text-white">Baribir davom etish</button>' +
+                    // Diagnostika (unplaced-export) faqat haftalik kartalar bo'yicha — sikl kartalari unda yo'q; faqat sikl bo'lsa bo'sh fayl bo'lardi.
+                    (un.cardWeeks ? '<button type="button" id="hsUnpExcel" class="tt-weekly-excel" title="Haftalik joylanmagan kartalar va sabablari (sikl kartalari bu faylga kirmaydi)">Excel (sabablar)</button>' : '') +
+                    '<button type="button" id="hsUnpClose" class="px-3 py-1 rounded border bg-white">Yopish</button></div></div>');
+                $('hsUnpGo').onclick = () => hemisSyncAsk();
+                $('hsUnpClose').onclick = () => m.remove();
+                if ($('hsUnpExcel')) $('hsUnpExcel').onclick = async function () {
+                    // Mavjud "Joylanmagan kartalar" diagnostikasi — ichki jadval, shu qamrov bo'yicha.
+                    const params = new URLSearchParams();
+                    const sb = scopeBody();
+                    Object.keys(sb).forEach(k => sb[k].forEach(v => params.append(k + '[]', v)));
+                    params.set('layer', 'internal');
+                    this.disabled = true;
+                    try { await downloadUnplacedXlsx(params); }
+                    catch (e) { alert('Diagnostika Excelini yuklab bo\'lmadi: ' + e.message); }
+                    finally { this.disabled = false; }
+                };
+            }
             async function hemisSyncRun() {
                 hemisSyncModal('<div class="p-6 text-center text-gray-500">HEMIS bilan solishtirilmoqda… (' + hsEsc(scopeLabelText()) + ')</div>');
                 try {
@@ -4164,7 +4204,8 @@
                 hemisSyncPeriod = null;
                 hemisSyncFilter.subjects = null;   // fan va guruh filtri qamrovga bog'liq — yangi solishtirishda hammasi
                 hemisSyncFilter.groups = null;
-                try { await hemisSyncAsk(); } finally { this.disabled = false; }
+                // Eng birinchi — joylanmagan kartalar (bo'lsa qizil oyna), so'ng odatdagi hemisSyncAsk().
+                try { await hemisUnplacedGate(); } finally { this.disabled = false; }
             };
             // ===== HEMIS to'siqlari bo'yicha so'rovlar (Telegram: o'qituvchi / kafedra mudiri) =====
             const TICKET_FROM_URL = new URLSearchParams(location.search).get('ticket');
@@ -7180,6 +7221,27 @@
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
 
+            // Joylanmagan kartalar diagnostikasi (unplaced-export) — panel tugmasi va HEMIS solishtirish ogohlantirishi uchun.
+            async function downloadUnplacedXlsx(params) {
+                params.set('_', Date.now());
+                const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?' + params.toString(), {
+                    headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+                    cache: 'no-store',
+                });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || 'HTTP ' + response.status);
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'joylanmagan-kartalar-diagnostikasi-' + board.id + '.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
             async function downloadUnplacedDiagnostics() {
                 if (!board) return;
                 const btn = $('unplacedExportBtn');
@@ -7194,24 +7256,7 @@
                     params.set('type', typeFilter);
                     params.set('layer', weeklyLayer);
                     if (curWeek) params.set('week', curWeek);
-                    params.set('_', Date.now());
-                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?' + params.toString(), {
-                        headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-                        cache: 'no-store',
-                    });
-                    if (!response.ok) {
-                        const error = await response.json().catch(() => ({}));
-                        throw new Error(error.error || 'HTTP ' + response.status);
-                    }
-                    const blob = await response.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'joylanmagan-kartalar-diagnostikasi-' + board.id + '.xlsx';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
+                    await downloadUnplacedXlsx(params);
                 } catch (e) {
                     alert('Diagnostika Excelini yuklab bo\'lmadi: ' + e.message);
                 } finally {

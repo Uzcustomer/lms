@@ -3,161 +3,297 @@
 namespace App\Services;
 
 /**
- * Vedomost tekshiruv dvigateli: tizim ma'lumoti (expected) + skanerdan o'qilgan
- * jadval (scan) + xodim tuzatishlari (edits) → hisobot (report v2).
+ * Vedomost tekshiruv dvigateli — Python "vedomost_avto" dasturining run_engine /
+ * header_checks mantig'i. "Tizim" (HEMIS) tomoni — "Vedomost tekshirish" eksporti
+ * bilan AYNAN bir xil qiymatlar (VedomostTekshirishService), PDF tomoni — skanerdan
+ * o'qilgan jadval (+ xodim tuzatishlari).
  *
- * Sof funksiya — bazaga murojaat qilmaydi; kerakli tashqi ma'lumot (Test markazi,
- * kontingent, kafedra mudiri) $context orqali beriladi. Shuning uchun xodim PDF
- * qiymatini tuzatganda AI'ni qayta chaqirmasdan hisobot darhol qayta quriladi.
- *
- * Qoidalar Python "vedomost_avto" dasturidan: PDF↔tizim farqlari, ball/YN hisobi,
- * imtihonga kirish qoidasi, yopilish shakliga mos kelmagan baho, sinov fani
- * (Test = Joriy), 6-kurs formulasi, Test markazi, kontingent, sarlavha.
+ * Sof funksiya: bazaga murojaat qilmaydi — tashqi ma'lumot (Test markazi, kontingent,
+ * kafedra mudiri) $context orqali keladi. Shu bois xodim PDF qiymatini tuzatganda
+ * hisobot AI'siz darhol qayta quriladi.
  */
 class VedomostCheckEngine
 {
-    public const VERSION = 2;
+    public const VERSION = 3;
 
-    /** Hisobotda ko'rsatiladigan qiymat maydonlari (tartib bilan). */
-    public const FIELDS = [
-        'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball', 'jbmton_ball',
+    /** PDF (BQ) jadvali maydonlari. */
+    public const PDF_FIELDS = [
+        'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball', 'jbmton_ball', 'jbmton_pct',
         'oski_pct', 'oski_ball', 'test_pct', 'test_ball', 'yn', 'ects', 'baho',
     ];
 
-    /** Xodim tahrirlay oladigan skaner maydonlari. */
-    public const EDITABLE = [
-        'fio', 'id', 'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball', 'jbmton_ball',
-        'oski_pct', 'oski_ball', 'test_pct', 'test_ball', 'yn', 'ects', 'baho',
-    ];
+    /** Xodim tahrirlay oladigan PDF maydonlari. */
+    public const EDITABLE = ['fio', 'id', ...self::PDF_FIELDS];
 
     public const HEADER_EDITABLE = ['fan', 'guruh', 'soat', 'kredit', 'maruzachi', 'amaliyot', 'yn_sana', 'dekan', 'kafedra_mudiri', 'kurs', 'semestr'];
 
-    private const RANK = ['ok' => 0, 'ocr' => 1, 'bad' => 2, 'extra' => 3, 'missing' => 3];
+    /**
+     * Python cmp(): PDF ↔ HEMIS solishtiriladigan 5 ustun.
+     * kalit => [yorliq, PDF maydoni, HEMIS (VT) ustuni]
+     */
+    public const COMPARE = [
+        'jn' => ['JN%', 'jb_pct', 'D'],
+        'mtb' => ['MT ball', 'mt_ball', 'H'],
+        'oski' => ['OSKE%', 'oski_pct', 'P'],
+        'test' => ['Test%', 'test_pct', 'S'],
+        'yn' => ['YN', 'yn', 'V'],
+    ];
 
-    public function __construct(private VedomostGradeCalculator $calc)
+    /** "Vedomost tekshirish" Excel ustunlari (A..AW). */
+    public const VT_HEADERS = [
+        'A' => '#', 'B' => 'FIO', 'C' => 'ID raqami', 'D' => 'JN', 'E' => 'JN ball', 'F' => '', 'G' => 'MT', 'H' => 'MT ball',
+        'I' => '', 'J' => 'ON', 'K' => 'ON ball', 'L' => '', 'M' => 'JN+MT', 'N' => 'JN+MT %', 'O' => '', 'P' => 'OSKI',
+        'Q' => 'OSKI ball', 'R' => '', 'S' => 'Test', 'T' => 'Test ball', 'U' => '', 'V' => 'YN natija', 'W' => 'ECTS',
+        'X' => "Amaliyot o'q.", 'Y' => 'Baho', 'Z' => 'Talaba HEMIS ID', 'AA' => 'Fan ID', 'AB' => 'Fan nomi',
+        'AC' => 'Qaydnoma turi', 'AD' => "O'quv yili", 'AE' => 'Semestr', 'AF' => 'Guruh HEMIS ID', 'AG' => 'Guruh nomi',
+        'AH' => 'Soat', 'AI' => 'Kredit', 'AJ' => "Ma'ruzachi", 'AK' => 'JN soni', 'AL' => 'Divisor', 'AM' => 'Davomat %',
+        'AN' => 'jn_vazn', 'AO' => 'mt_vazn', 'AP' => 'on_vazn', 'AQ' => 'oski_vazn', 'AR' => 'test_vazn', 'AS' => 'Zanjir',
+        'AT' => 'JN+MT tekshiruv', 'AU' => 'JN+MT izoh', 'AV' => 'YN tekshiruv', 'AW' => 'YN izoh',
+    ];
+
+    public const STATUS_TXT = [
+        'ok' => 'OK', 'bad' => 'XATO', 'ocr' => 'PDFdan tekshiring', 'missing' => "KONTINGENTDA YO'Q", 'nopdf' => "PDFda yo'q",
+    ];
+
+    private const RANK = ['ok' => 0, 'ocr' => 1, 'bad' => 2, 'nopdf' => 3, 'missing' => 4];
+
+    public function __construct(private VedomostTekshirishService $vt)
     {
     }
 
     /**
-     * @param  array  $settings  jn_mt_pass, jn_mt_pass_international, tolerance, oski_min, test_min
-     * @param  array  $context  kafedra_mudiri, test_center[id][oski|test], kontingent[id], international[id]
+     * @param  array  $settings  tolerance, jn_mt_pass, oski_min, test_min
+     * @param  array  $context  kafedra_mudiri, test_center[id][oski|test], kontingent[id]
      */
     public function build(array $expected, array $scan, array $edits, array $settings, array $context = []): array
     {
         $tol = (float) ($settings['tolerance'] ?? 0.05);
         [$scanRows, $header, $weights, $signatures, $editedKeys] = $this->applyEdits($scan, $edits);
 
-        $w = [
-            'jn' => (int) ($weights['jb'] ?? 0),
-            'mt' => (int) ($weights['mt'] ?? 0),
-            'on' => (int) ($weights['on'] ?? 0),
-            'oski' => (int) ($weights['oski'] ?? 0),
-            'test' => (int) ($weights['test'] ?? 0),
-        ];
         $closing = (string) ($expected['yopilish_shakli'] ?? '');
-        $levelCode = (string) ($expected['level_code'] ?? '');
-        $kurs6 = $levelCode === '16';
+        $w = $this->weights($weights, $closing);
+        $useO = $w['oski'] > 0;
+        $useT = $w['test'] > 0;
+        $sinov = $closing === 'sinov';
+        $kurs6 = (string) ($expected['level_code'] ?? '') === '16';
 
-        // --- talabalarni moslashtirish ---
-        $system = $expected['talabalar'] ?? [];
-        [$pairs, $missing, $extra] = $this->match($system, $scanRows);
+        // --- tizim (VT) qatorlari ---
+        $system = [];
+        foreach (array_values($expected['talabalar'] ?? []) as $i => $stu) {
+            $stu['vt'] = $this->vtRow($stu, $w, $expected, $i + 1);
+            $system[] = $stu;
+        }
 
-        $rows = [];
-        $docIssues = [];
+        // --- PDF ↔ tizim moslashtirish ---
+        [$pairs, $extra, $dupIds] = $this->match($system, $scanRows);
+        $missingNrs = $scan['meta']['missing_nrs'] ?? [];
+
         $tmUsed = ['oski' => false, 'test' => false];
         foreach ($context['test_center'] ?? [] as $rec) {
             $tmUsed['oski'] = $tmUsed['oski'] || isset($rec['oski']);
             $tmUsed['test'] = $tmUsed['test'] || isset($rec['test']);
         }
 
-        foreach ($pairs as [$stu, $s, $matchNote]) {
-            $rows[] = $this->row($stu, $s, $matchNote, $w, $levelCode, $kurs6, $closing, $settings, $context, $tmUsed, $tol);
-        }
-        foreach ($missing as $stu) {
-            $flags = [['t' => 'missing', 'm' => "PDFda yo'q"]];
-            if (($stu['status_code'] ?? '') === '60') {
-                $flags[] = ['t' => 'info', 'm' => "Talaba chetlashtirilgan ({$stu['status_name']})"];
+        $rows = [];
+        $tmTestFound = 0;
+        foreach ($system as $idx => $stu) {
+            $vt = $stu['vt'];
+            $sid = VedomostScanReader::digits($stu['student_id'] ?? '');
+            $flags = [];
+            $status = 'ok';
+            $set = function (string $s) use (&$status) {
+                if (self::RANK[$s] > self::RANK[$status]) {
+                    $status = $s;
+                }
+            };
+            $cells = [];
+            [$s, $matchFlags] = $pairs[$idx] ?? [null, []];
+            $expelled = ($stu['status_code'] ?? '') === '60';
+
+            if ($s !== null) {
+                foreach ($matchFlags as [$t, $m]) {
+                    $flags[] = ['t' => $t, 'm' => $m];
+                    if ($t !== 'info') {
+                        $set($t);
+                    }
+                }
+                if (isset($dupIds[$sid])) {
+                    $flags[] = ['t' => 'bad', 'm' => 'PDFda bu talaba bir necha marta uchraydi (ID mos)'];
+                    $set('bad');
+                }
+                $unclear = $s['unclear'] ?? [];
+                foreach (self::COMPARE as $key => [$label, $pf, $col]) {
+                    if (($key === 'oski' && !$useO) || ($key === 'test' && !$useT)) {
+                        $cells[$key] = ['status' => 'skip'];
+                        continue;
+                    }
+                    $cells[$key] = $this->cmp($label, $vt[$col], $s[$pf] ?? '', in_array($pf, $unclear, true), $tol, $flags, $set);
+                }
+                if (!empty($s['verified']) && !empty($s['problems'])) {
+                    $flags[] = ['t' => 'bad', 'm' => "Vedomostning o'zida hisob xatosi (ikki marta o'qildi, bir xil): " . implode('; ', $s['problems'])];
+                    $set('bad');
+                } elseif (!empty($s['problems'])) {
+                    $flags[] = ['t' => 'ocr', 'm' => "PDF qatorining ichki hisobi mos emas: " . implode('; ', $s['problems']) . ' — PDFdan tekshiring'];
+                    $set('ocr');
+                }
+                if ($kurs6) {
+                    foreach ($this->kurs6Checks($s, $w) as $m) {
+                        $flags[] = ['t' => 'bad', 'm' => '6-kurs: ' . $m];
+                        $set('bad');
+                    }
+                }
+            } else {
+                $gapNote = !empty($missingNrs) ? ' (AI PDFdagi ' . implode(', ', $missingNrs) . '-qatorni o\'qiy olmadi — PDFdan tekshiring)' : '';
+                if ($expelled) {
+                    $flags[] = ['t' => 'missing', 'm' => "KONTINGENTDA YO'Q va PDFda ham yo'q (HEMISda «chetlashgan» deb belgilangan)"];
+                    $set('missing');
+                } elseif ($gapNote !== '') {
+                    $flags[] = ['t' => 'ocr', 'm' => "PDFda topilmadi" . $gapNote];
+                    $set('ocr');
+                } else {
+                    $flags[] = ['t' => 'nopdf', 'm' => "PDFda yo'q"];
+                    $set('nopdf');
+                }
             }
+            if ($expelled && $s !== null) {
+                $flags[] = ['t' => 'missing', 'm' => "KONTINGENTDA YO'Q (talaba chetlashtirilgan)"];
+                $set('missing');
+            }
+
+            // Test markazi ↔ HEMIS
+            $tm = [];
+            if ($useO && $tmUsed['oski'] && !$kurs6) {
+                $tm['oski'] = $this->checkTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], 'OSKE', $flags, $set);
+            }
+            if ($useT && $sinov && !$kurs6) {
+                $t = VedomostScanReader::num($vt['S']);
+                $jn = VedomostScanReader::num($vt['D']);
+                $yn = VedomostScanReader::num($vt['V']);
+                $has = ($t !== null && $t != 0) || ($yn !== null && $yn > 0);
+                $tm['test'] = ['tm' => null, 'hemis' => $t, 'status' => 'ok', 'sinov' => true, 'jn' => $jn];
+                if ($has && !$this->near($t ?? 0, $jn ?? 0, $tol)) {
+                    $tm['test']['status'] = 'bad';
+                    $flags[] = ['t' => 'bad', 'm' => 'Sinov fan: Test ' . $this->f($t) . '% ≠ Joriy ' . $this->f($jn) . '%'];
+                    $set('bad');
+                }
+            } elseif ($useT && $tmUsed['test'] && !$kurs6) {
+                $tm['test'] = $this->checkTm($context['test_center'][$sid]['test'] ?? null, $vt['S'], 'Test', $flags, $set);
+                if (($tm['test']['tm'] ?? null) !== null) {
+                    $tmTestFound++;
+                }
+            }
+
+            // Shu nazorat bilan yopilmasa-yu, HEMISda baho turgan bo'lsa
+            foreach ([[$useO, 'P', 'OSKE', 'oski_vazn'], [$useT, 'S', 'Test', 'test_vazn']] as [$use, $col, $nm, $vn]) {
+                $v = VedomostScanReader::num($vt[$col]);
+                if (!$use && $v !== null && $v != 0 && !$kurs6) {
+                    $flags[] = ['t' => 'bad', 'm' => "HEMISda {$nm} = " . $this->f($v) . " qo‘yilgan, lekin bu fan {$nm} bilan yopilmaydi ({$vn} 0)"];
+                    $set('bad');
+                }
+            }
+
+            foreach ($this->entryCheck($vt, $w, $settings) as $p) {
+                $flags[] = ['t' => 'bad', 'm' => 'Qoida: ' . $p];
+                $set('bad');
+            }
+            if (!$kurs6 && ($cc = $this->calcCheck($vt, $w, $settings))) {
+                if ($cc['jnmtBad']) {
+                    $flags[] = ['t' => 'bad', 'm' => 'JN+MT hisobi: HEMIS ' . $this->f($cc['jnmtHemis']) . ' ≠ hisob ' . $cc['jnmtCalc']];
+                    $set('bad');
+                }
+                if ($cc['ynBad']) {
+                    $flags[] = ['t' => 'bad', 'm' => 'YN hisobi: HEMIS ' . $this->f($cc['ynHemis']) . ' ≠ hisob ' . $cc['ynCalc']];
+                    $set('bad');
+                }
+            }
+
             $rows[] = [
-                'key' => null, 'n' => $stu['n'] ?? null, 'fio' => $stu['fish'] ?? '', 'id' => (string) ($stu['student_id'] ?? ''),
-                'status' => 'missing', 'system' => $this->systemValues($stu, $w, $levelCode, $kurs6, $settings, $context),
-                'scan' => [], 'cells' => [], 'unclear' => [], 'edited' => [], 'flags' => $flags, 'page' => null, 'tm' => [],
+                'key' => $s['key'] ?? null,
+                'n' => $vt['A'],
+                'id' => $sid,
+                'fio' => $stu['fish'] ?? '',
+                'group' => $stu['group'] ?? '',
+                'vt' => $vt,
+                'pdf' => $s ? $this->pdfValues($s) : null,
+                'scan_fio' => $s['fio'] ?? null,
+                'scan_id' => $s['id'] ?? null,
+                'page' => $s['page'] ?? null,
+                'nr' => $s['nr'] ?? null,
+                'unclear' => $s['unclear'] ?? [],
+                'orig' => $s['orig'] ?? [],
+                'edited' => $s ? ($editedKeys[$s['key']] ?? []) : [],
+                'cells' => $cells,
+                'tm' => $tm,
+                'kont_fio' => $expelled ? null : ($stu['fish'] ?? ''),
+                'status' => $status,
+                'flags' => $flags,
             ];
         }
+
+        $extraRows = [];
         foreach ($extra as $s) {
             $sid = VedomostScanReader::digits($s['id'] ?? '');
             $k = $context['kontingent'][$sid] ?? null;
-            $note = $k
-                ? 'Boshqa guruh talabasi: ' . ($k['group'] ?? '?') . (($k['fio'] ?? '') !== '' ? ' (' . $k['fio'] . ')' : '')
-                : "Kontingentda yo'q";
-            $rows[] = [
-                'key' => $s['key'], 'n' => $s['nr'] ?? null, 'fio' => $s['fio'] ?? '', 'id' => $s['id'] ?? '',
-                'status' => 'extra', 'system' => [], 'scan' => $this->scanValues($s), 'cells' => [],
-                'unclear' => $s['unclear'] ?? [], 'edited' => $editedKeys[$s['key']] ?? [],
-                'flags' => [['t' => 'extra', 'm' => "PDFda bor, tizimda (bu guruhda) yo'q — {$note}"]],
-                'page' => $s['page'] ?? null, 'tm' => [],
+            $extraRows[] = [
+                'key' => $s['key'], 'id' => $s['id'] ?? '', 'fio' => $s['fio'] ?? '', 'page' => $s['page'] ?? null, 'nr' => $s['nr'] ?? null,
+                'pdf' => $this->pdfValues($s), 'unclear' => $s['unclear'] ?? [], 'orig' => $s['orig'] ?? [],
+                'edited' => $editedKeys[$s['key']] ?? [],
+                'note' => $k ? 'Boshqa guruh talabasi: ' . ($k['group'] ?? '?') . ' (' . ($k['fio'] ?? '') . ')' : "Kontingentda yo'q",
             ];
         }
-        foreach ($rows as &$r) {
-            $r['edited'] = $r['key'] !== null ? ($editedKeys[$r['key']] ?? []) : [];
-        }
-        unset($r);
-        usort($rows, fn ($a, $b) => [(int) ($a['n'] ?? 999), $a['fio']] <=> [(int) ($b['n'] ?? 999), $b['fio']]);
 
-        // --- hujjat darajasidagi tekshiruvlar ---
-        $headerChecks = $this->headerChecks($expected, $header, $context);
-        $docIssues = array_merge($docIssues, $this->weightIssues($w, $closing, $kurs6));
-        if (($tmUsed['oski'] || $tmUsed['test']) === false && ($w['oski'] > 0 || $w['test'] > 0) && $closing !== 'sinov') {
-            $docIssues[] = ['t' => 'info', 'm' => "Test markazida bu fan bo'yicha natija topilmadi — OSKE/Test Test markazi bilan solishtirilmadi."];
+        // --- hujjat darajasidagi ogohlantirishlar (Python R['issues']) ---
+        $issues = [];
+        $maruza = collect($system)->pluck('vt.AJ')->filter()->unique()->values();
+        if ($maruza->count() > 1) {
+            $issues[] = ['t' => 'warn', 'm' => "Ma'ruzachi bir xil emas: " . $maruza->implode(' / ')];
         }
-        if ($kurs6) {
-            $docIssues[] = ['t' => 'info', 'm' => '6-kurs: rasmiy shablon formulasi bilan tekshirildi (YN = ROUND(JB+MT) + nazorat bali).'];
+        if ($useT && !$sinov && $tmUsed['test'] === false && !$kurs6) {
+            $issues[] = ['t' => 'info', 'm' => "Test markazida bu fan bo‘yicha birorta ham Test natijasi topilmadi. Agar bu sinov fan bo‘lsa, yopilish shakli \"sinov\" bo‘lishi kerak (Test % Joriy % bilan solishtiriladi)."];
         }
-        if (!empty($scan['meta']['weights_from_ratio'])) {
-            $docIssues[] = ['t' => 'ocr', 'm' => "Vaznlar sarlavhadan o'qilmadi, ball/foiz nisbatidan aniqlandi: " . implode(', ', $scan['meta']['weights_from_ratio'])];
+        if ($sinov) {
+            $issues[] = ['t' => 'info', 'm' => 'Sinov fan rejimi: Test % Joriy % bilan solishtirildi, Test markazi Test fayli ishlatilmadi.'];
         }
-        $sigLabels = ['oqituvchi' => "o'qituvchi imzosi", 'dekan' => 'dekan imzosi', 'kafedra_mudiri' => 'kafedra mudiri imzosi', 'muhr' => 'muhr (M.O\')'];
-        foreach ($sigLabels as $k => $label) {
-            if (empty($signatures[$k])) {
-                $docIssues[] = ['t' => 'bad', 'm' => "Skanerda {$label} topilmadi"];
-            }
+        foreach ($this->weightIssues($w, $closing, $weights) as $wi) {
+            $issues[] = $wi;
         }
+        if (!empty($missingNrs)) {
+            $issues[] = ['t' => 'ocr', 'm' => 'AI PDFdagi ' . implode(', ', $missingNrs) . "-qator(lar)ni o'qiy olmadi — PDFdan ko'z bilan tekshiring yoki qayta tekshiring."];
+        }
+
+        $headerChecks = $this->headerChecks($expected, $system, $header, $context, $signatures);
 
         // --- noto'g'ri hujjat ---
         $sysN = count($system);
         $scanN = count($scanRows);
-        $matchedN = count($pairs);
-        $fanScore = ($header['fan'] ?? '') !== '' ? VedomostNames::subjectScore($header['fan'], $expected['fan'] ?? '') : null;
-        $wrongReasons = [];
-        if ($fanScore !== null && $fanScore < 0.6) {
-            $wrongReasons[] = "fan nomi: tizimda «" . ($expected['fan'] ?? '') . "», skanerda «" . $header['fan'] . '»';
+        $matchedN = count(array_filter($pairs, fn ($p) => ($p[0] ?? null) !== null));
+        $wrong = [];
+        if (($header['fan'] ?? '') !== '' && VedomostNames::subjectScore($header['fan'], $expected['fan'] ?? '') < 0.6) {
+            $wrong[] = 'fan nomi: tizimda «' . ($expected['fan'] ?? '') . '», skanerda «' . $header['fan'] . '»';
         }
         if ($sysN > 0 && $scanN > 0 && $matchedN / max($sysN, $scanN) < 0.5) {
-            $wrongReasons[] = "talabalar: tizimdagi {$sysN} talabadan faqat {$matchedN} tasi skanerda bor";
+            $wrong[] = "talabalar: tizimdagi {$sysN} talabadan faqat {$matchedN} tasi skanerda topildi";
         }
 
-        $counts = ['total' => count($rows), 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'extra' => 0,
-            'edited' => count(array_filter($rows, fn ($r) => !empty($r['edited'])))];
+        $counts = ['total' => $sysN, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => count($extraRows),
+            'edited' => count(array_filter($rows, fn ($r) => !empty($r['edited']))) + count(array_filter($extraRows, fn ($r) => !empty($r['edited'])))];
         foreach ($rows as $r) {
             $counts[$r['status']]++;
         }
+        $hdrBad = count(array_filter($headerChecks, fn ($h) => $h['st'] === 'bad'));
 
-        $headerBad = count(array_filter($headerChecks, fn ($h) => $h['status'] === 'bad'));
-        $docBad = count(array_filter($docIssues, fn ($d) => $d['t'] === 'bad'));
-        $docOcr = count(array_filter($docIssues, fn ($d) => $d['t'] === 'ocr'));
-
-        if (!empty($wrongReasons)) {
+        if ($wrong) {
             $verdict = 'wrong_document';
-            $summary = "Yuklangan PDF bu vedomostga tegishli emas ko'rinadi (" . implode('; ', $wrongReasons) . '). To\'g\'ri faylni yuklang.';
-        } elseif ($counts['bad'] + $counts['missing'] + $counts['extra'] + $headerBad + $docBad > 0) {
+            $summary = "Yuklangan PDF bu vedomostga tegishli emas ko'rinadi (" . implode('; ', $wrong) . "). To'g'ri faylni yuklang.";
+        } elseif ($counts['bad'] + $counts['missing'] + $counts['nopdf'] + $counts['extra'] + $hdrBad > 0) {
             $verdict = 'issues';
-            $summary = $this->summary($counts, $headerBad + $docBad, $sysN, $scanN);
-        } elseif ($counts['ocr'] + $docOcr > 0) {
+            $summary = $this->summary($counts, $hdrBad, $sysN, $scanN);
+        } elseif ($counts['ocr'] > 0 || collect($headerChecks)->contains('st', 'warn')) {
             $verdict = 'review';
-            $summary = "Farq topilmadi, lekin {$counts['ocr']} ta qatorni PDFdan ko'z bilan tekshirish kerak (AI aniq o'qiy olmagan).";
+            $summary = "Farq topilmadi, lekin {$counts['ocr']} ta qatorni PDFdan ko'z bilan tekshirish kerak.";
         } else {
             $verdict = 'ok';
-            $summary = "Vedomost tizim ma'lumotiga to'liq mos keladi ({$sysN} talaba; baholar, ballar, sarlavha va imzolar tekshirildi).";
+            $summary = "Vedomost tizim ma'lumotiga to'liq mos keladi ({$sysN} talaba).";
         }
 
         return [
@@ -166,16 +302,315 @@ class VedomostCheckEngine
             'summary' => $summary,
             'counts' => $counts,
             'weights' => $w,
-            'controls' => $this->activeControls($w, $rows),
+            'use' => ['oski' => $useO, 'test' => $useT, 'tm_oski' => $tmUsed['oski'], 'tm_test' => $tmUsed['test'] || $sinov],
             'closing_form' => $closing,
+            'sinov' => $sinov,
             'kurs6' => $kurs6,
             'header' => $headerChecks,
             'signatures' => $signatures,
-            'doc_issues' => $docIssues,
+            'issues' => $issues,
             'rows' => $rows,
+            'extra' => $extraRows,
             'scan_header' => $header,
             'meta' => $scan['meta'] ?? [],
         ];
+    }
+
+    // ───────────────────────── VT qatori ─────────────────────────
+
+    /** "Vedomost tekshirish" Excel qatori (A..AW) — eksport bilan aynan bir xil hisob. */
+    private function vtRow(array $stu, array $w, array $expected, int $n): array
+    {
+        $raw = $stu['raw'];
+        $c = $this->vt->compute($raw, $w['jb'], $w['mt'], $w['on'], $w['oski'], $w['test'], (string) ($expected['level_code'] ?? ''));
+        $m = $stu['meta'] ?? [];
+        $dav = (float) $c['dav'];
+        $fio = $stu['fish'] ?? '';
+        if ($dav >= 25) {
+            $fio .= ' (' . rtrim(rtrim(number_format($dav, 1, '.', ''), '0'), '.') . '% davomat)';
+        }
+
+        $row = [
+            'A' => $n, 'B' => $fio, 'C' => (string) ($stu['student_id'] ?? ''),
+            'D' => $c['jn'], 'E' => $c['jnBall'], 'F' => null, 'G' => $c['mt'], 'H' => $c['mtBall'], 'I' => null,
+            'J' => $c['on'], 'K' => $c['onBall'], 'L' => null, 'M' => $c['sumBall'],
+            'N' => $c['maxSum'] > 0 ? $c['sumBall'] / $c['maxSum'] : null, 'O' => null,
+            'P' => $c['oski'], 'Q' => $c['oskiBall'], 'R' => null, 'S' => $c['test'], 'T' => $c['testBall'], 'U' => null,
+            'V' => $c['yn'] === '' ? '' : $c['yn'], 'W' => $c['ects'], 'X' => $m['practice_teacher'] ?? '', 'Y' => $c['baho'],
+            'Z' => (string) ($stu['hemis_id'] ?? ''), 'AA' => $m['subject_id'] ?? '', 'AB' => $m['subject_name'] ?? '',
+            'AC' => $m['shakl'] ?? '', 'AD' => $m['education_year'] ?? '', 'AE' => $m['semester'] ?? '',
+            'AF' => (string) ($m['group_hemis_id'] ?? ''), 'AG' => $m['group_name'] ?? '', 'AH' => $m['hours'] ?? null,
+            'AI' => $m['credit'] ?? null, 'AJ' => $m['lecture_teacher'] ?? '', 'AK' => $raw['jnCount'] ?? null,
+            'AL' => $m['divisor'] ?? null, 'AM' => $dav / 100,
+            'AN' => $w['jb'], 'AO' => $w['mt'], 'AP' => $w['on'], 'AQ' => $w['oski'], 'AR' => $w['test'], 'AS' => $c['zanjir'],
+        ];
+
+        // HEMIS bilan taqqoslash (eksportdagidek): JN+MT — 11, YN — 13 (faqat V > 0)
+        $he = $stu['hemis_exam'] ?? [];
+        $h11 = $he['11'] ?? null;
+        [$row['AT'], $row['AU']] = $h11 === null ? ['D', "Hemisda yo'q"]
+            : ((int) $h11 !== (int) $c['sumBall'] ? ['D', "{$c['sumBall']}≠{$h11}"] : ['', '']);
+        $h13 = $he['13'] ?? null;
+        if (is_numeric($c['yn']) && $c['yn'] > 0) {
+            [$row['AV'], $row['AW']] = $h13 === null ? ['D', "Hemisda yo'q"]
+                : ((int) $h13 !== (int) $c['yn'] ? ['D', "{$c['yn']}≠{$h13}"] : ['', '']);
+        } else {
+            [$row['AV'], $row['AW']] = ['', ''];
+        }
+
+        return $row;
+    }
+
+    /** Vaznlar: skanerdan (yig'indisi 100 bo'lsa), aks holda yopilish shakli bo'yicha (eksport oynasidagi standart). */
+    private function weights(array $scanW, string $closing): array
+    {
+        $w = [];
+        foreach (['jb', 'mt', 'on', 'oski', 'test'] as $k) {
+            $w[$k] = (int) round((float) ($scanW[$k] ?? 0));
+        }
+        if (array_sum($w) === 100) {
+            return $w;
+        }
+
+        return match ($closing) {
+            'sinov', 'test' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30],
+            'oski' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0],
+            'oski_test' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15],
+            default => ['jb' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0],
+        };
+    }
+
+    // ───────────────────────── solishtirish (Python cmp) ─────────────────────────
+
+    private function cmp(string $label, $hemis, $pdfRaw, bool $dirty, float $tol, array &$flags, callable $set): array
+    {
+        $he = VedomostScanReader::num($hemis);
+        $raw = trim((string) $pdfRaw);
+        $p = VedomostScanReader::num($raw);
+        $c = ['hemis' => $he, 'pdf' => $p, 'raw' => $raw, 'delta' => ($p !== null && $he !== null) ? round($p - $he, 2) : null];
+
+        if ($raw === '') {
+            if ($he !== null && $he != 0) {
+                $flags[] = ['t' => 'bad', 'm' => "{$label}: PDFda bo‘sh, HEMIS " . $this->f($he)];
+                $set('bad');
+
+                return $c + ['status' => 'bad'];
+            }
+
+            return $c + ['status' => 'empty'];
+        }
+        if ($dirty && ($p === null || !$this->near($p, $he, $tol))) {
+            $flags[] = ['t' => 'ocr', 'm' => "{$label}: PDFda aniq o‘qilmadi (\"{$raw}\") — PDFdan ko‘z bilan tekshiring"];
+            $set('ocr');
+
+            return $c + ['status' => 'ocr'];
+        }
+        if ($p === null) {
+            $set('ocr');
+
+            return $c + ['status' => 'ocr'];
+        }
+        if (!$this->near($p, $he, $tol)) {
+            $flags[] = ['t' => 'bad', 'm' => "{$label}: PDF {$raw} ≠ HEMIS " . $this->f($he)];
+            $set('bad');
+
+            return $c + ['status' => 'bad'];
+        }
+
+        return $c + ['status' => 'ok'];
+    }
+
+    private function checkTm(?array $rec, $hemis, string $label, array &$flags, callable $set): array
+    {
+        $he = VedomostScanReader::num($hemis);
+        if ($rec === null) {
+            if ($he !== null && $he > 0) {
+                $flags[] = ['t' => 'bad', 'm' => "{$label}: Test markazida yo‘q (HEMIS " . $this->f($he) . ')'];
+                $set('bad');
+
+                return ['tm' => null, 'hemis' => $he, 'status' => 'bad', 'delta' => null];
+            }
+
+            return ['tm' => null, 'hemis' => $he, 'status' => 'ok', 'delta' => null, 'nd' => true];
+        }
+        $tm = (float) $rec['grade'];
+        $hv = $he ?? 0;
+        $ok = $this->near($tm, $hv, 0.05);
+        $dal = !empty($rec['dalolat']) ? ' (Dalolatnoma)' : '';
+        if (!$ok) {
+            $flags[] = ['t' => 'bad', 'm' => "{$label} (Test markazi{$dal}) " . $this->f($tm) . ' ≠ HEMIS ' . ($he !== null ? $this->f($he) : 'bo‘sh')];
+            $set('bad');
+        } elseif ($dal) {
+            $flags[] = ['t' => 'info', 'm' => "{$label}: Test markazida Dalolatnoma bilan " . $this->f($tm)];
+        }
+
+        return ['tm' => $tm, 'hemis' => $he, 'status' => $ok ? 'ok' : 'bad', 'delta' => $he !== null ? round($tm - $hv, 2) : null, 'dal' => !empty($rec['dalolat'])];
+    }
+
+    /** Python entry_check: JN/MT o'tmagan talabada imtihon bahosi; OSKE < min bo'lsa Test bahosi. */
+    private function entryCheck(array $vt, array $w, array $settings): array
+    {
+        $jn = VedomostScanReader::num($vt['D']);
+        $mtB = VedomostScanReader::num($vt['H']);
+        $oske = VedomostScanReader::num($vt['P']);
+        $test = VedomostScanReader::num($vt['S']);
+        $yn = VedomostScanReader::num($vt['V']);
+        if (!($yn !== null && $yn > 0)) {
+            return [];
+        }
+        $jnMin = (float) ($settings['jn_mt_pass'] ?? 60);
+        $mtMin = $jnMin * $w['mt'] / 100;
+        $oskeMin = (float) ($settings['oski_min'] ?? 60);
+        $useO = $w['oski'] > 0;
+        $useT = $w['test'] > 0;
+        $hasO = $oske !== null && $oske > 0;
+        $hasT = $test !== null && $test > 0;
+        $jnOk = $jn !== null && $jn >= $jnMin;
+        $mtOk = $mtB !== null && $mtB >= $mtMin;
+        $final = $useO ? 'OSKE' : ($useT ? 'Test' : 'yakuniy');
+        $out = [];
+        if ((($useO && $hasO) || ($useT && $hasT)) && (!$jnOk || !$mtOk)) {
+            $d = [];
+            if (!$jnOk) {
+                $d[] = 'JN ' . $this->f($jn) . '%';
+            }
+            if (!$mtOk) {
+                $d[] = 'MT ' . $this->f($mtB) . ' ball';
+            }
+            $out[] = implode(', ', $d) . " — {$final}ga kiritilmasligi kerak edi, lekin {$final} bahosi bor";
+        }
+        if ($useO && $useT && $hasT && $oske !== null && $oske < $oskeMin) {
+            $out[] = 'OSKE ' . $this->f($oske) . '% (<' . $this->f($oskeMin) . '%) — Testga kiritilmasligi kerak edi, lekin Test bahosi bor';
+        }
+
+        return $out;
+    }
+
+    /** Python calc_check: HEMIS JN+MT va YN qiymatlarini foiz va vaznlardan qayta hisoblash. */
+    private function calcCheck(array $vt, array $w, array $settings): ?array
+    {
+        $jn = VedomostScanReader::num($vt['D']);
+        $mt = VedomostScanReader::num($vt['G']);
+        $on = VedomostScanReader::num($vt['J']) ?? 0;
+        $oske = VedomostScanReader::num($vt['P']);
+        $test = VedomostScanReader::num($vt['S']);
+        $yn = VedomostScanReader::num($vt['V']);
+        if ($yn === null || $yn < 0 || $jn === null || $mt === null) {
+            return null;
+        }
+        $jnmt = $this->floorRound($jn * $w['jb'] / 100 + $mt * $w['mt'] / 100 + $on * $w['on'] / 100);
+        $fail = ($w['oski'] > 0 && $oske !== null && $oske < (float) ($settings['oski_min'] ?? 60))
+            || ($w['test'] > 0 && $test !== null && $test < (float) ($settings['test_min'] ?? 60));
+        $calc = $fail ? 0 : $this->floorRound($jnmt
+            + ($w['oski'] > 0 ? ($oske ?? 0) * $w['oski'] / 100 : 0)
+            + ($w['test'] > 0 ? ($test ?? 0) * $w['test'] / 100 : 0));
+        $jh = VedomostScanReader::num($vt['M']);
+
+        return [
+            'jnmtCalc' => $jnmt, 'ynCalc' => $calc, 'jnmtHemis' => $jh, 'ynHemis' => $yn,
+            'jnmtBad' => $jh !== null && (float) $jh !== (float) $jnmt, 'ynBad' => (float) $calc !== (float) $yn,
+        ];
+    }
+
+    /** 6-kurs: PDFdagi ballar rasmiy shablon formulasiga mosmi (Python kurs6). */
+    private function kurs6Checks(array $s, array $w): array
+    {
+        $n = fn ($k) => VedomostScanReader::num($s[$k] ?? null);
+        $jn = $n('jb_pct');
+        $mt = $n('mt_pct');
+        if ($jn === null || $mt === null) {
+            return [];
+        }
+        $out = [];
+        $jbE = $jn >= 60 ? $jn * $w['jb'] / 100 : 0;
+        $mbE = $mt >= 60 ? $mt * $w['mt'] / 100 : 0;
+        $jnmtE = ($jn < 60 || $mt < 60) ? 0 : $this->floorRound($jbE + $mbE);
+        foreach ([['Joriy', $jn, 'jb_ball', $jbE], ["Mustaqil ta’lim", $mt, 'mt_ball', $mbE]] as [$lbl, $pct, $bf, $e]) {
+            $b = $n($bf);
+            if ($b !== null && abs($b - $e) > 0.051) {
+                $out[] = "{$lbl} " . $this->f($pct) . '% → ' . $this->f(round($e, 2)) . ' ball bo‘lishi kerak, PDFda ' . $this->f($b);
+            }
+        }
+        $s6 = $n('jbmton_ball');
+        if ($s6 !== null && $s6 != $jnmtE) {
+            $out[] = 'JN+MT ' . $this->f(round($jbE, 2)) . ' + ' . $this->f(round($mbE, 2)) . " → {$jnmtE} bo‘lishi kerak, PDFda " . $this->f($s6);
+        }
+
+        return $out;
+    }
+
+    // ───────────────────────── moslashtirish ─────────────────────────
+
+    /**
+     * Python match_entries g'oyasi: ism yetakchi, ID yordamchi. AI ID'ni xato o'qisa
+     * ham talaba ismi bo'yicha topiladi; ID farqi izohga yoziladi.
+     *
+     * @return array{0: array<int, array{0: ?array, 1: array}>, 1: array, 2: array}
+     */
+    private function match(array $system, array $scanRows): array
+    {
+        $cands = [];
+        foreach ($scanRows as $si => $s) {
+            $sid = VedomostScanReader::digits($s['id'] ?? '');
+            foreach ($system as $ti => $stu) {
+                $tid = VedomostScanReader::digits($stu['student_id'] ?? '');
+                $sim = VedomostNames::similarity($stu['fish'] ?? '', $s['fio'] ?? '');
+                $idEq = $sid !== '' && $sid === $tid;
+                $dist = ($sid !== '' && $tid !== '') ? levenshtein($sid, $tid) : 99;
+                $ok = $sim >= 0.85 || ($idEq && $sim >= 0.5) || ($dist <= 2 && $sim >= 0.6);
+                if ($ok) {
+                    $cands[] = [$sim + ($idEq ? 0.3 : ($dist <= 2 ? 0.1 : 0)), $si, $ti, $dist, $sim];
+                }
+            }
+        }
+        usort($cands, fn ($a, $b) => $b[0] <=> $a[0]);
+
+        $pairs = [];
+        $usedScan = [];
+        foreach ($cands as [$score, $si, $ti, $dist, $sim]) {
+            if (isset($usedScan[$si]) || isset($pairs[$ti])) {
+                continue;
+            }
+            $usedScan[$si] = true;
+            $s = $scanRows[$si];
+            $stu = $system[$ti];
+            $flags = [];
+            $raw = VedomostScanReader::digits($s['id'] ?? '');
+            $tid = VedomostScanReader::digits($stu['student_id'] ?? '');
+            if ($raw !== $tid) {
+                $flags[] = $dist <= 2
+                    ? ['ocr', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ HEMIS {$tid} — {$dist} raqam farqi, ism mos. Ehtimol Gemini raqamni noto‘g‘ri o‘qigan; PDFdan ko‘z bilan tekshiring"]
+                    : ['bad', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ HEMIS {$tid} (PDFdan tekshiring)"];
+            }
+            if ($sim < 1.0 && $sim < 0.85) {
+                $flags[] = [in_array('fio', $s['unclear'] ?? [], true) ? 'ocr' : 'bad',
+                    'F.I.Sh farq qiladi (' . (int) round($sim * 100) . '%): PDF «' . ($s['fio'] ?? '') . '», HEMIS «' . ($stu['fish'] ?? '') . '»'];
+            }
+            $pairs[$ti] = [$s, $flags];
+        }
+
+        // Moslanmagan qator ism bo'yicha allaqachon moslangan talabaga to'g'ri kelsa — u PDFda ikki marta.
+        $extra = [];
+        $dup = [];
+        foreach ($scanRows as $si => $s) {
+            if (isset($usedScan[$si])) {
+                continue;
+            }
+            $twin = null;
+            foreach ($pairs as $ti => $_) {
+                if (VedomostNames::similarity($system[$ti]['fish'] ?? '', $s['fio'] ?? '') >= 0.9) {
+                    $twin = $ti;
+                    break;
+                }
+            }
+            if ($twin !== null) {
+                $dup[VedomostScanReader::digits($system[$twin]['student_id'] ?? '')] = true;
+            } else {
+                $extra[] = $s;
+            }
+        }
+
+        return [$pairs, $extra, $dup];
     }
 
     // ───────────────────────── tuzatishlar ─────────────────────────
@@ -199,6 +634,11 @@ class VedomostCheckEngine
                 $r['unclear'] = array_values(array_diff($r['unclear'] ?? [], [$f]));
                 $editedKeys[$key][] = $f;
             }
+            if (!empty($editedKeys[$key])) {
+                // Tuzatilgan qatorda eski ichki hisob muammolari endi amal qilmaydi — qayta baholanadi.
+                $r['problems'] = $this->rowProblems($r);
+                $r['verified'] = false;
+            }
             $rows[] = $r;
         }
 
@@ -210,18 +650,13 @@ class VedomostCheckEngine
                     : (string) $val;
             }
         }
-
         $weights = $scan['weights'] ?? [];
         foreach (($edits['weights'] ?? []) as $k => $val) {
             if (in_array($k, ['jb', 'mt', 'on', 'oski', 'test'], true) && is_numeric($val)) {
                 $weights[$k] = (int) $val;
             }
         }
-
-        $signatures = array_merge(
-            ['oqituvchi' => false, 'dekan' => false, 'kafedra_mudiri' => false, 'muhr' => false],
-            $scan['signatures'] ?? []
-        );
+        $signatures = array_merge(['oqituvchi' => false, 'dekan' => false, 'kafedra_mudiri' => false, 'muhr' => false], $scan['signatures'] ?? []);
         foreach (($edits['signatures'] ?? []) as $k => $val) {
             if (array_key_exists($k, $signatures)) {
                 $signatures[$k] = (bool) $val;
@@ -231,582 +666,181 @@ class VedomostCheckEngine
         return [$rows, $header, $weights, $signatures, $editedKeys];
     }
 
-    // ───────────────────────── moslashtirish ─────────────────────────
-
-    /**
-     * @return array{0: array, 1: array, 2: array} [[system, scan, note]], missing, extra
-     */
-    private function match(array $system, array $scanRows): array
+    /** Tuzatilgan qator uchun ichki hisob (ratio'siz, yig'indilar bo'yicha). */
+    private function rowProblems(array $r): array
     {
-        $scanById = [];
-        $dup = [];
-        foreach ($scanRows as $s) {
-            $id = VedomostScanReader::digits($s['id'] ?? '');
-            if ($id !== '') {
-                if (isset($scanById[$id])) {
-                    $dup[$id] = true;
-                }
-                $scanById[$id] ??= $s;
-            }
+        $n = fn ($k) => VedomostScanReader::num($r[$k] ?? null);
+        $p = [];
+        $jb = $n('jb_ball');
+        $mt = $n('mt_ball');
+        $jm = $n('jbmton_ball');
+        if ($jb !== null && $mt !== null && $jm !== null && $jm > 0 && abs($jb + $mt + ($n('on_ball') ?? 0) - $jm) > 0.51) {
+            $p[] = "JB+MT+ON ball yig‘indisi mos emas";
         }
 
-        $pairs = [];
-        $usedScan = [];
-        $leftSystem = [];
-        foreach ($system as $stu) {
-            $id = VedomostScanReader::digits($stu['student_id'] ?? '');
-            if ($id !== '' && isset($scanById[$id])) {
-                $s = $scanById[$id];
-                $usedScan[$s['key']] = true;
-                $pairs[] = [$stu, $s, isset($dup[$id]) ? ['t' => 'bad', 'm' => 'PDFda bu talaba bir necha marta uchraydi'] : null];
-            } else {
-                $leftSystem[] = $stu;
-            }
-        }
-
-        // ID bo'yicha topilmaganlar — F.I.Sh (va ID yaqinligi) bo'yicha.
-        $leftScan = array_values(array_filter($scanRows, fn ($s) => !isset($usedScan[$s['key']])));
-        $missing = [];
-        foreach ($leftSystem as $stu) {
-            $best = null;
-            $bestScore = 0.0;
-            foreach ($leftScan as $i => $s) {
-                $sim = VedomostNames::similarity($stu['fish'] ?? '', $s['fio'] ?? '');
-                $idA = VedomostScanReader::digits($stu['student_id'] ?? '');
-                $idB = VedomostScanReader::digits($s['id'] ?? '');
-                $idClose = $idA !== '' && $idB !== '' && levenshtein($idA, $idB) <= 2;
-                $score = $sim + ($idClose ? 0.2 : 0);
-                if (($sim >= 0.85 || ($idClose && $sim >= 0.6)) && $score > $bestScore) {
-                    $best = $i;
-                    $bestScore = $score;
-                }
-            }
-            if ($best === null) {
-                $missing[] = $stu;
-                continue;
-            }
-            $s = $leftScan[$best];
-            unset($leftScan[$best]);
-            $soft = in_array('id', $s['unclear'] ?? [], true);
-            $pairs[] = [$stu, $s, [
-                't' => $soft ? 'ocr' : 'bad',
-                'm' => 'ID mos emas: PDFda «' . ($s['id'] ?? '') . '», tizimda «' . ($stu['student_id'] ?? '') . '» (F.I.Sh bo\'yicha topildi)',
-            ]];
-        }
-
-        return [$pairs, $missing, array_values($leftScan)];
+        return $p;
     }
 
-    // ───────────────────────── bitta talaba ─────────────────────────
-
-    private function row(array $stu, array $s, ?array $matchNote, array $w, string $levelCode, bool $kurs6, string $closing, array $settings, array $context, array $tmUsed, float $tol): array
-    {
-        $flags = $matchNote ? [$matchNote] : [];
-        $unclear = $s['unclear'] ?? [];
-        $sys = $this->systemValues($stu, $w, $levelCode, $kurs6, $settings, $context);
-        $scan = $this->scanValues($s);
-        $cells = [];
-
-        $fieldsToCheck = ['jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'jbmton_ball'];
-        if ($w['on'] > 0 || $scan['on_pct'] !== '' || $sys['on_pct'] !== null) {
-            array_push($fieldsToCheck, 'on_pct', 'on_ball');
-        }
-        if ($w['oski'] > 0) {
-            array_push($fieldsToCheck, 'oski_pct', 'oski_ball');
-        }
-        if ($w['test'] > 0) {
-            array_push($fieldsToCheck, 'test_pct', 'test_ball');
-        }
-        $fieldsToCheck[] = 'yn';
-
-        $special = is_numeric($sys['yn']) && $sys['yn'] < 0;
-        foreach ($fieldsToCheck as $f) {
-            $cells[$f] = $this->cellStatus($sys[$f], $scan[$f], in_array($f, $unclear, true), $f === 'yn' ? 0.5 : $tol, !empty($s['verified']));
-        }
-        if (!$special && is_numeric($sys['yn']) && $sys['yn'] > 0) {
-            foreach (['ects', 'baho'] as $f) {
-                $cells[$f] = $this->strStatus($sys[$f], $scan[$f], in_array($f, $unclear, true));
-            }
-        }
-
-        $labels = $this->fieldLabels();
-        foreach ($cells as $f => $st) {
-            if ($st === 'bad') {
-                $flags[] = ['t' => 'bad', 'm' => $labels[$f] . ': PDF ' . $this->fmt($scan[$f]) . ' ≠ tizim ' . $this->fmt($sys[$f])];
-            } elseif ($st === 'ocr') {
-                $flags[] = ['t' => 'ocr', 'm' => $labels[$f] . ': PDFda aniq o\'qilmadi («' . $scan[$f] . '») — PDFdan ko\'z bilan tekshiring'];
-            }
-        }
-        if (!empty($s['verified']) && in_array('bad', $cells, true)) {
-            $flags[] = ['t' => 'info', 'm' => "Ikki marta o'qildi — natija bir xil: xato vedomostning o'zida"];
-        }
-        if (!empty($s['repaired'])) {
-            $flags[] = ['t' => 'info', 'm' => "Birinchi o'qishda xato bor edi — qayta o'qib tuzatildi"];
-        }
-
-        // F.I.Sh
-        $sim = VedomostNames::similarity($stu['fish'] ?? '', $s['fio'] ?? '');
-        if ($sim < 0.85) {
-            $flags[] = ['t' => in_array('fio', $unclear, true) ? 'ocr' : 'bad',
-                'm' => 'F.I.Sh farq qiladi (' . (int) round($sim * 100) . '%): PDF «' . ($s['fio'] ?? '') . '», tizim «' . ($stu['fish'] ?? '') . '»'];
-        }
-
-        // --- Python qoidalari (tizim baholari bo'yicha) ---
-        $intl = !empty($context['international'][VedomostScanReader::digits($stu['student_id'] ?? '')]);
-        $pass = (int) ($intl ? ($settings['jn_mt_pass_international'] ?? 60) : ($settings['jn_mt_pass'] ?? 60));
-        $jn = $this->n($stu['jn'] ?? null);
-        $mt = $this->n($stu['mt'] ?? null);
-        $oski = $this->n($stu['oski'] ?? null);
-        $test = $this->n($stu['test'] ?? null);
-
-        if ($w['oski'] === 0 && $oski !== null && $oski > 0 && !$kurs6) {
-            $flags[] = ['t' => 'bad', 'm' => "Tizimda OSKE = {$this->fmt($oski)} qo'yilgan, lekin vedomostda OSKE vazni 0 (fan OSKE bilan yopilmaydi)"];
-        }
-        if ($w['test'] === 0 && $test !== null && $test > 0 && !$kurs6) {
-            $flags[] = ['t' => 'bad', 'm' => "Tizimda Test = {$this->fmt($test)} qo'yilgan, lekin vedomostda Test vazni 0 (fan Test bilan yopilmaydi)"];
-        }
-        $hasExam = ($w['oski'] > 0 && $oski !== null && $oski > 0) || ($w['test'] > 0 && $test !== null && $test > 0);
-        if ($hasExam && (($jn !== null && $jn < $pass) || ($mt !== null && $mt < $pass))) {
-            $what = [];
-            if ($jn !== null && $jn < $pass) {
-                $what[] = "JN {$this->fmt($jn)}%";
-            }
-            if ($mt !== null && $mt < $pass) {
-                $what[] = "MT {$this->fmt($mt)}%";
-            }
-            $flags[] = ['t' => 'bad', 'm' => 'Qoida: ' . implode(', ', $what) . " (<{$pass}%) — yakuniy nazoratga kiritilmasligi kerak edi, lekin imtihon bahosi bor"];
-        }
-        $oskiMin = (float) ($settings['oski_min'] ?? 60);
-        if ($w['oski'] > 0 && $w['test'] > 0 && $test !== null && $test > 0 && $oski !== null && $oski < $oskiMin) {
-            $flags[] = ['t' => 'bad', 'm' => "Qoida: OSKE {$this->fmt($oski)}% (<{$this->fmt($oskiMin)}%) — Testga kiritilmasligi kerak edi, lekin Test bahosi bor"];
-        }
-        if ($closing === 'sinov' && $w['test'] > 0) {
-            $tScan = $this->n($scan['test_pct']);
-            $jScan = $this->n($scan['jb_pct']);
-            if ($tScan !== null && $jScan !== null && abs($tScan - $jScan) > $tol) {
-                $flags[] = ['t' => 'bad', 'm' => "Sinov fan: Test {$this->fmt($tScan)}% ≠ Joriy {$this->fmt($jScan)}% (joriy baho testga ko'chirilmagan)"];
-            }
-        }
-
-        // --- Test markazi ---
-        $tm = [];
-        $sid = VedomostScanReader::digits($stu['student_id'] ?? '');
-        foreach (['oski' => 'OSKE', 'test' => 'Test'] as $k => $label) {
-            if ($w[$k] === 0 || !$tmUsed[$k] || ($k === 'test' && $closing === 'sinov') || $kurs6) {
-                continue;
-            }
-            $rec = $context['test_center'][$sid][$k] ?? null;
-            $sysVal = $k === 'oski' ? $oski : $test;
-            if ($rec === null) {
-                if ($sysVal !== null && $sysVal > 0) {
-                    $tm[$k] = ['value' => null, 'status' => 'bad'];
-                    $flags[] = ['t' => 'bad', 'm' => "{$label}: Test markazida natija yo'q (tizimda {$this->fmt($sysVal)})"];
-                }
-                continue;
-            }
-            $ok = abs((float) $rec['grade'] - (float) ($sysVal ?? 0)) <= $tol;
-            $tm[$k] = ['value' => (float) $rec['grade'], 'status' => $ok ? 'ok' : 'bad', 'dalolat' => !empty($rec['dalolat'])];
-            if (!$ok) {
-                $flags[] = ['t' => 'bad', 'm' => "{$label}: Test markazi " . $this->fmt($rec['grade']) . (!empty($rec['dalolat']) ? ' (dalolatnoma)' : '') . ' ≠ tizim ' . $this->fmt($sysVal)];
-            } elseif (!empty($rec['dalolat'])) {
-                $flags[] = ['t' => 'info', 'm' => "{$label}: Test markazida dalolatnoma bilan " . $this->fmt($rec['grade'])];
-            }
-        }
-
-        $status = 'ok';
-        foreach ($flags as $f) {
-            if (isset(self::RANK[$f['t']]) && self::RANK[$f['t']] > self::RANK[$status]) {
-                $status = $f['t'];
-            }
-        }
-
-        return [
-            'key' => $s['key'], 'n' => $s['nr'] ?? ($stu['n'] ?? null), 'fio' => $stu['fish'] ?? ($s['fio'] ?? ''),
-            'id' => (string) ($stu['student_id'] ?? ''), 'status' => $status,
-            'system' => $sys, 'scan' => $scan, 'scan_fio' => $s['fio'] ?? '', 'scan_id' => $s['id'] ?? '',
-            'orig' => $s['orig'] ?? [], 'cells' => $cells, 'unclear' => $unclear, 'edited' => [],
-            'flags' => $flags, 'page' => $s['page'] ?? null, 'tm' => $tm,
-        ];
-    }
-
-    /** Tizim qiymatlari: foizlar + vazn bo'yicha hisoblangan ball/YN/ECTS/baho. */
-    private function systemValues(array $stu, array $w, string $levelCode, bool $kurs6, array $settings, array $context): array
-    {
-        $intl = !empty($context['international'][VedomostScanReader::digits($stu['student_id'] ?? '')]);
-        $pass = (int) ($intl ? ($settings['jn_mt_pass_international'] ?? 60) : ($settings['jn_mt_pass'] ?? 60));
-
-        $jn = $stu['jn'] ?? null;
-        $mt = $stu['mt'] ?? null;
-        $on = $stu['on'] ?? null;
-        $oski = $stu['oski'] ?? null;
-        $test = $stu['test'] ?? null;
-
-        if ($kurs6) {
-            $e = $this->kurs6($this->n($jn), $this->n($mt), $this->n($oski), $this->n($test), $w);
-        } else {
-            $e = $this->calc->compute($jn, $mt, $on, $oski, $test, $levelCode, $w, 0.0, $pass);
-        }
-
-        return [
-            'jb_pct' => $this->n($jn), 'jb_ball' => $e['jb_ball'],
-            'mt_pct' => $this->n($mt), 'mt_ball' => $e['mt_ball'],
-            'on_pct' => $this->n($on), 'on_ball' => $e['on_ball'] ?? 0,
-            'jbmton_ball' => $e['jbmton_ball'],
-            'oski_pct' => $this->n($oski), 'oski_ball' => $e['oski_ball'],
-            'test_pct' => $this->n($test), 'test_ball' => $e['test_ball'],
-            'yn' => $e['ozlashtirish'], 'ects' => $e['ects'], 'baho' => $e['baho'],
-        ];
-    }
-
-    /**
-     * 6-kurs rasmiy shablon formulasi (Python vedomost_avto, kurs6):
-     * JB/MT ball yaxlitlanmaydi; JN+MT = ROUND(JB+MT) (JB yoki MT <60 → 0);
-     * 30 lik nazorat: ROUND(%×30/100) (<60% bo'lib 18 chiqsa → 17); 15/15: ball = %×15/100.
-     * JN+MT/(wj+wm) < 60% → -2; nazorat 0 → -1; nazorat <60 → 0.
-     */
-    public function kurs6(?float $jn, ?float $mt, ?float $oski, ?float $test, array $w): array
-    {
-        $needO = $w['oski'] > 0;
-        $needT = $w['test'] > 0;
-        $dual = $needO && $needT;
-        $ctl = function (?float $pct, int $wt) use ($dual) {
-            if ($pct === null) {
-                return null;
-            }
-            if ($dual) {
-                return $pct >= 60 ? $pct * $wt / 100 : 0;
-            }
-            $r = (int) floor($pct * $wt / 100 + 0.5);
-
-            return ($r == $wt * 0.6 && $pct < 60) ? $r - 1 : $r;
-        };
-
-        $jb = $jn === null ? null : ($jn >= 60 ? $jn * $w['jn'] / 100 : 0);
-        $mb = $mt === null ? null : ($mt >= 60 ? $mt * $w['mt'] / 100 : 0);
-        $jnmt = ($jn === null || $mt === null) ? null : (($jn < 60 || $mt < 60) ? 0 : (int) floor($jb + $mb + 0.5));
-        $oE = $needO ? $ctl($oski, $w['oski']) : 0;
-        $tE = $needT ? $ctl($test, $w['test']) : 0;
-
-        $yn = null;
-        if ($jnmt !== null) {
-            $nPct = ($w['jn'] + $w['mt']) ? $jnmt / ($w['jn'] + $w['mt']) : 1;
-            if ($nPct < 0.6) {
-                $yn = -2;
-            } elseif ($dual) {
-                if (!$oski || !$test) {
-                    $yn = -1;
-                } elseif ($oski < 60 || $test < 60) {
-                    $yn = 0;
-                } else {
-                    $yn = $jnmt + (int) floor($oE + $tE + 0.5);
-                }
-            } elseif ($needO || $needT) {
-                $p = $needO ? $oski : $test;
-                $cb = $needO ? $oE : $tE;
-                $yn = !$p ? -1 : ($p < 60 ? 0 : $jnmt + $cb);
-            } else {
-                $yn = $jnmt;
-            }
-        }
-
-        return [
-            'jb_ball' => $jb, 'mt_ball' => $mb, 'on_ball' => 0, 'jbmton_ball' => $jnmt,
-            'oski_ball' => $oE, 'test_ball' => $tE,
-            'ozlashtirish' => $yn, 'ects' => $this->ects($yn), 'baho' => $this->baho($yn),
-        ];
-    }
-
-    private function scanValues(array $s): array
+    private function pdfValues(array $s): array
     {
         $out = [];
-        foreach (self::FIELDS as $f) {
+        foreach (self::PDF_FIELDS as $f) {
             $out[$f] = trim((string) ($s[$f] ?? ''));
         }
 
         return $out;
     }
 
-    private function cellStatus($sys, $scan, bool $unclear, float $tol, bool $verified): string
-    {
-        $e = $this->n($sys);
-        $f = VedomostScanReader::num($scan);
-        $scanEmpty = trim((string) $scan) === '';
+    // ───────────────────────── sarlavha (Python header_checks) ─────────────────────────
 
-        if ($e === null && $scanEmpty) {
-            return 'empty';
-        }
-        // Ball 0 va skaner bo'sh (yoki aksincha) — vedomostda odatda bir xil.
-        if ($e !== null && abs($e) < 0.001 && ($scanEmpty || ($f !== null && abs($f) < 0.001))) {
-            return 'ok';
-        }
-        if ($f === null && !$scanEmpty) {
-            return 'ocr'; // raqam emas — o'qilmagan
-        }
-        if ($e !== null && $f !== null && abs($e - $f) <= $tol) {
-            return 'ok';
-        }
-        if ($unclear && !$verified) {
-            return 'ocr';
-        }
-
-        return 'bad';
-    }
-
-    private function strStatus($sys, $scan, bool $unclear): string
-    {
-        $canon = fn ($s) => str_replace(["'", '’', 'ʼ', 'ʻ', '‘', '`', ' ', '-'], '', mb_strtolower(trim((string) $s)));
-        $a = $canon($sys);
-        $b = $canon($scan);
-        if ($a === '' && $b === '') {
-            return 'empty';
-        }
-        if ($a === $b || ($a === 'qoniqarsiz' && str_starts_with($b, 'qon'))) {
-            return 'ok';
-        }
-
-        return $unclear ? 'ocr' : 'bad';
-    }
-
-    // ───────────────────────── sarlavha ─────────────────────────
-
-    private function headerChecks(array $exp, array $h, array $context): array
+    private function headerChecks(array $exp, array $system, array $h, array $context, array $signatures): array
     {
         $out = [];
-        $add = function (string $key, string $label, $system, $scan, string $status, string $note = '') use (&$out) {
-            $out[] = compact('key', 'label', 'system', 'scan', 'status', 'note');
+        $add = function (string $key, string $k, string $v, string $st) use (&$out) {
+            $out[] = ['key' => $key, 'k' => $k, 'v' => $v, 'st' => $st];
         };
-        $str = fn ($v) => is_array($v) ? implode(', ', $v) : trim((string) ($v ?? ''));
+        $uz = fn ($x) => VedomostNames::uz(is_array($x) ? implode(', ', $x) : (string) ($x ?? ''));
+        $hv = fn (string $col) => collect($system)->pluck('vt.' . $col)->filter(fn ($x) => $x !== null && $x !== '')->map(fn ($x) => VedomostNames::uz((string) $x))->unique()->values()->all();
 
-        // Fan nomi — qat'iy (faqat bo'shliq, apostrof turi va oxirgi nuqta kechiriladi).
-        $sysFan = $str($exp['fan'] ?? '');
-        $scanFan = $str($h['fan'] ?? '');
-        if ($scanFan === '') {
-            $add('fan', 'Fan nomi', $sysFan, '', 'bad', "Skanerda o'qilmadi");
-        } else {
+        // Fan nomi — qat'iy: faqat bo'shliq, apostrof turi va oxirgi nuqta kechiriladi.
+        $pf = $uz($h['fan'] ?? '');
+        $hf = $hv('AB') ?: [$uz($exp['fan'] ?? '')];
+        if ($pf !== '') {
             $nf = fn ($x) => preg_replace('/[.\s]+$/u', '', preg_replace('/\s*([,\-–—])\s*/u', '$1', VedomostNames::uz($x)));
-            if ($nf($scanFan) === $nf($sysFan)) {
-                $add('fan', 'Fan nomi', $sysFan, $scanFan, 'ok');
-            } elseif (mb_strtolower($nf($scanFan)) === mb_strtolower($nf($sysFan))) {
-                $add('fan', 'Fan nomi', $sysFan, $scanFan, 'warn', 'Faqat katta/kichik harf farqi');
-            } else {
-                $add('fan', 'Fan nomi', $sysFan, $scanFan, 'bad', 'Nomi tizimdagidan farq qiladi');
-            }
-        }
-
-        // Guruh
-        $sysG = $str($exp['guruh'] ?? '');
-        $scanG = $str($h['guruh'] ?? '');
-        $gk = fn ($x) => preg_replace('/[^a-z0-9]/', '', mb_strtolower(VedomostNames::latin($x)));
-        $root = $gk(preg_replace('/\s*\(.*$/', '', $sysG));
-        if ($scanG === '') {
-            $add('guruh', 'Guruh', $sysG, '', 'warn', "Skanerda o'qilmadi");
+            $st = collect($hf)->contains(fn ($b) => $nf($pf) === $nf($b)) ? 'ok'
+                : (collect($hf)->contains(fn ($b) => mb_strtolower($nf($pf)) === mb_strtolower($nf($b))) ? 'warn' : 'bad');
+            $add('fan', 'Fan nomi (PDF ↔ HEMIS)', "PDF: {$pf} · HEMIS: " . implode(' / ', $hf)
+                . ($st === 'bad' ? ' — nomi HEMISdagidan farq qiladi' : ($st === 'warn' ? ' — faqat katta/kichik harf farqi' : '')), $st);
         } else {
-            $ok = $root !== '' && (str_contains($gk($scanG), $root) || str_contains($root, $gk($scanG)));
-            $add('guruh', 'Guruh', $sysG, $scanG, $ok ? 'ok' : 'bad', $ok ? '' : 'Guruh mos emas');
+            $add('fan', 'Fan nomi (PDF ↔ HEMIS)', 'PDF: ko‘rsatilmagan · HEMIS: ' . implode(' / ', $hf), 'bad');
         }
 
         // Soat / kredit
-        foreach (['soat' => ['umumiy_soat', 'Umumiy soat'], 'kredit' => ['kredit', 'Kredit']] as $k => [$ek, $label]) {
-            $sv = $this->n($exp[$ek] ?? null);
-            $pv = VedomostScanReader::num($h[$k] ?? null);
-            if ($pv === null) {
-                $add($k, $label, $this->fmt($sv), '', 'warn', "Skanerda o'qilmadi");
-            } else {
-                $add($k, $label, $this->fmt($sv), $this->fmt($pv), $sv !== null && abs($sv - $pv) < 0.01 ? 'ok' : 'bad',
-                    $sv !== null && abs($sv - $pv) < 0.01 ? '' : "O'quv rejadagi qiymatdan farq qiladi");
-            }
-        }
+        $ps = VedomostScanReader::num($h['soat'] ?? null);
+        $pk = VedomostScanReader::num($h['kredit'] ?? null);
+        $hs = array_map(fn ($x) => VedomostScanReader::num($x), $hv('AH'));
+        $hk = array_map(fn ($x) => VedomostScanReader::num($x), $hv('AI'));
+        $ok = ($ps === null || in_array($ps, $hs)) && ($pk === null || in_array($pk, $hk));
+        $add('soat', 'Soat / kredit', 'PDF: ' . ($ps === null ? '—' : $this->f($ps)) . ' / ' . ($pk === null ? '—' : $this->f($pk))
+            . ' · HEMIS: ' . implode('/', array_map(fn ($x) => $this->f($x), $hs)) . ' / ' . implode('/', array_map(fn ($x) => $this->f($x), $hk)),
+            ($ps === null && $pk === null) ? 'warn' : ($ok ? 'ok' : 'bad'));
 
         // Ma'ruzachi
-        $sysM = array_values(array_filter(array_map('trim', explode(',', $str($exp['maruzachi'] ?? '')))));
-        $scanM = $str($h['maruzachi'] ?? '');
-        if ($scanM === '') {
-            $add('maruzachi', "Ma'ruzachi", implode(', ', $sysM), '', 'bad', "Skanerda ko'rsatilmagan");
-        } elseif (empty($sysM)) {
-            $add('maruzachi', "Ma'ruzachi", '', $scanM, 'warn', "Tizimda ma'ruzachi aniqlanmadi");
-        } else {
-            $ok = collect($sysM)->contains(fn ($m) => VedomostNames::sameName($m, $scanM));
-            $add('maruzachi', "Ma'ruzachi", implode(', ', $sysM), $scanM, $ok ? 'ok' : 'bad', $ok ? '' : 'Ism mos emas');
-        }
+        $pm = $uz($h['maruzachi'] ?? '');
+        $hm = $hv('AJ');
+        $add('maruzachi', "Ma'ruzachi", 'PDF: ' . ($pm ?: "ko'rsatilmagan") . ' · HEMIS: ' . (implode(' / ', $hm) ?: '—'),
+            $pm === '' ? 'bad' : (collect($hm)->contains(fn ($b) => VedomostNames::sameName($pm, $b)) ? 'ok'
+                : (collect($hm)->contains(fn ($b) => VedomostNames::sameSurname($pm, $b)) ? 'warn' : 'bad')));
 
         // Amaliyot o'qituvchilari
-        $sysA = array_values(array_filter(array_map('trim', explode(',', $str($exp['amaliyot_oqituvchilari'] ?? '')))));
-        $scanA = array_values(array_filter(array_map('trim', is_array($h['amaliyot'] ?? null) ? $h['amaliyot'] : explode(',', $str($h['amaliyot'] ?? '')))));
-        $missA = array_values(array_filter($sysA, fn ($a) => !collect($scanA)->contains(fn ($b) => VedomostNames::sameName($a, $b))));
-        $extraA = array_values(array_filter($scanA, fn ($b) => !collect($sysA)->contains(fn ($a) => VedomostNames::sameName($a, $b))));
-        $noteA = trim(($missA ? "PDFda yo'q: " . implode(', ', $missA) . '. ' : '') . ($extraA ? "Tizimda yo'q: " . implode(', ', $extraA) : ''));
-        $add('amaliyot', "Amaliyot o'qituvchilari", implode(', ', $sysA), implode(', ', $scanA),
-            empty($scanA) ? 'bad' : ($missA || $extraA ? 'bad' : 'ok'), empty($scanA) ? "Skanerda ko'rsatilmagan" : $noteA);
+        $pa = array_values(array_filter(array_map(fn ($x) => VedomostNames::uz((string) $x), is_array($h['amaliyot'] ?? null) ? $h['amaliyot'] : explode(',', (string) ($h['amaliyot'] ?? '')))));
+        $ha = $hv('X');
+        $missP = array_values(array_filter($ha, fn ($b) => !collect($pa)->contains(fn ($a) => VedomostNames::sameName($a, $b))));
+        $extraP = array_values(array_filter($pa, fn ($a) => !collect($ha)->contains(fn ($b) => VedomostNames::sameName($a, $b))));
+        $soft = !empty($missP) && count($missP) === count($extraP)
+            && collect($missP)->every(fn ($b) => collect($extraP)->contains(fn ($a) => VedomostNames::sameSurname($a, $b)));
+        $add('amaliyot', "Amaliyot o'qituvchilari", 'PDF: ' . (implode(', ', $pa) ?: "ko'rsatilmagan") . ' · HEMIS: ' . implode(', ', $ha)
+            . ($missP ? " · PDFda yo'q: " . implode(', ', $missP) : '') . ($extraP ? " · HEMISda yo'q: " . implode(', ', $extraP) : ''),
+            empty($pa) ? 'bad' : (($missP || $extraP) ? ($soft ? 'warn' : 'bad') : 'ok'));
 
-        // Dekan
-        $sysD = $str($exp['dekan'] ?? '');
-        $scanD = $str($h['dekan'] ?? '');
-        if ($scanD === '') {
-            $add('dekan', 'Fakultet dekani', $sysD, '', 'bad', "Skanerda ko'rsatilmagan");
-        } elseif ($sysD === '') {
-            $add('dekan', 'Fakultet dekani', '', $scanD, 'warn', 'Tizimda dekan aniqlanmadi');
-        } else {
-            $ok = VedomostNames::sameName($sysD, $scanD);
-            $add('dekan', 'Fakultet dekani', $sysD, $scanD, $ok ? 'ok' : 'bad', $ok ? '' : 'Ism mos emas');
-        }
+        // Fakultet dekani
+        $pd = $uz($h['dekan'] ?? '');
+        $dk = $uz($exp['dekan'] ?? '');
+        $add('dekan', 'Fakultet dekani', 'PDF: ' . ($pd ?: "ko'rsatilmagan") . ' · HEMIS: ' . ($dk ?: '—'),
+            $pd === '' ? 'bad' : ($dk === '' ? 'warn' : (VedomostNames::sameName($pd, $dk) ? 'ok' : 'bad')));
 
         // Kafedra mudiri
-        $sysK = $str($context['kafedra_mudiri'] ?? '');
-        $scanK = $str($h['kafedra_mudiri'] ?? '');
-        if ($scanK === '') {
-            $add('kafedra_mudiri', 'Kafedra mudiri', $sysK, '', 'bad', "Skanerda ko'rsatilmagan");
-        } elseif ($sysK === '') {
-            $add('kafedra_mudiri', 'Kafedra mudiri', '', $scanK, 'warn', 'Tizimda kafedra mudiri aniqlanmadi');
-        } else {
-            $ok = VedomostNames::sameName($sysK, $scanK);
-            $add('kafedra_mudiri', 'Kafedra mudiri', $sysK, $scanK, $ok ? 'ok' : 'bad', $ok ? '' : 'Ism mos emas');
-        }
+        $km = $uz($h['kafedra_mudiri'] ?? '');
+        $kb = $uz($context['kafedra_mudiri'] ?? '');
+        $add('kafedra_mudiri', 'Kafedra mudiri', ($km ?: "ko'rsatilmagan") . ($kb ? ' · HEMIS: ' . $kb : ''),
+            $km === '' ? 'bad' : ($kb === '' ? 'warn' : (VedomostNames::sameName($km, $kb) ? 'ok' : 'bad')));
 
-        // YN sanasi
-        $sysS = $str($exp['yn_sanasi'] ?? '');
-        $scanS = $str($h['yn_sana'] ?? '');
-        $dk = fn ($x) => preg_match('/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/', $x, $m) ? sprintf('%04d%02d%02d', $m[3], $m[2], $m[1]) : '';
-        if ($scanS === '') {
-            $add('yn_sana', 'YaN sanasi', $sysS, '', 'warn', "Skanerda o'qilmadi");
-        } elseif ($sysS === '') {
-            $add('yn_sana', 'YaN sanasi', '', $scanS, 'info', 'Tizimda YN sanasi yo\'q');
-        } else {
-            $ok = collect(explode(',', $sysS))->contains(fn ($d) => $dk($d) !== '' && $dk($d) === $dk($scanS));
-            $add('yn_sana', 'YaN sanasi', $sysS, $scanS, $ok ? 'ok' : 'warn', $ok ? '' : 'Sana tizimdagidan farq qiladi');
-        }
+        // Guruh / sana
+        $pg = $uz($h['guruh'] ?? '');
+        $hg = $hv('AG');
+        $ys = $uz($h['yn_sana'] ?? '');
+        $sys = $uz($exp['yn_sanasi'] ?? '');
+        $dk2 = fn ($x) => preg_match('/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/', $x, $m) ? sprintf('%04d%02d%02d', $m[3], $m[2], $m[1]) : '';
+        $dateOk = $sys === '' || $ys === '' || collect(explode(',', $sys))->contains(fn ($d) => $dk2($d) !== '' && $dk2($d) === $dk2($ys));
+        $add('guruh', 'Guruh / sana', 'PDF: ' . ($pg ?: '—') . ' · YaN sanasi: ' . ($ys ?: '—') . ' · HEMIS: ' . implode(', ', $hg)
+            . ($sys !== '' ? ' (YN sanasi tizimda: ' . $sys . ')' : ''), $dateOk ? 'ok' : 'warn');
 
-        // Kurs / semestr
-        foreach (['kurs' => 'Kurs', 'semestr' => 'Semestr'] as $k => $label) {
-            $sv = $str($exp[$k] ?? '');
-            $pv = $str($h[$k] ?? '');
-            if ($pv === '' || $sv === '') {
-                continue;
-            }
-            $ok = VedomostScanReader::digits($sv) === VedomostScanReader::digits($pv);
-            $add($k, $label, $sv, $pv, $ok ? 'ok' : 'warn', $ok ? '' : 'Farq qiladi');
+        // Imzolar va muhr (Python'da yo'q — mark talabi)
+        $sigNames = ['oqituvchi' => "O'qituvchi imzosi", 'dekan' => 'Dekan imzosi', 'kafedra_mudiri' => 'Kafedra mudiri imzosi', 'muhr' => "Muhr (M.O')"];
+        foreach ($sigNames as $k => $label) {
+            $add('sig_' . $k, $label, !empty($signatures[$k]) ? 'bor' : "skanerda topilmadi", !empty($signatures[$k]) ? 'ok' : 'bad');
         }
 
         return $out;
     }
 
-    private function weightIssues(array $w, string $closing, bool $kurs6): array
+    private function weightIssues(array $w, string $closing, array $scanW): array
     {
         $out = [];
+        $read = array_sum(array_map(fn ($k) => (int) round((float) ($scanW[$k] ?? 0)), ['jb', 'mt', 'on', 'oski', 'test']));
+        if ($read !== 100) {
+            $out[] = ['t' => 'ocr', 'm' => 'Vaznlar PDF sarlavhasidan aniq o‘qilmadi — yopilish shakli bo‘yicha olindi: '
+                . "JN {$w['jb']} / MT {$w['mt']} / ON {$w['on']} / OSKE {$w['oski']} / Test {$w['test']} (kerak bo‘lsa Sarlavha varag‘ida tuzating)"];
+        }
         $needO = in_array($closing, ['oski', 'oski_test'], true);
         $needT = in_array($closing, ['test', 'oski_test', 'sinov'], true);
         if ($needO && $w['oski'] === 0) {
-            $out[] = ['t' => 'bad', 'm' => "Fan OSKE bilan yopiladi, lekin vedomostda OSKE vazni 0"];
+            $out[] = ['t' => 'bad', 'm' => 'Fan OSKE bilan yopiladi, lekin vedomostda OSKE vazni 0'];
         }
         if ($needT && $w['test'] === 0) {
-            $out[] = ['t' => 'bad', 'm' => "Fan Test bilan yopiladi, lekin vedomostda Test vazni 0"];
-        }
-        if (!$needO && $w['oski'] > 0 && $closing !== '') {
-            $out[] = ['t' => 'bad', 'm' => "Fan OSKE bilan yopilmaydi, lekin vedomostda OSKE vazni {$w['oski']}"];
-        }
-        if (!$needT && $w['test'] > 0 && $closing !== '' && $closing !== 'normativ') {
-            $out[] = ['t' => 'bad', 'm' => "Fan Test bilan yopilmaydi, lekin vedomostda Test vazni {$w['test']}"];
-        }
-        $sum = array_sum($w);
-        if ($sum > 0 && $sum !== 100) {
-            $out[] = ['t' => 'ocr', 'm' => "Vaznlar yig'indisi {$sum} (100 bo'lishi kerak) — vaznlar to'g'ri o'qilganini tekshiring"];
+            $out[] = ['t' => 'bad', 'm' => 'Fan Test bilan yopiladi, lekin vedomostda Test vazni 0'];
         }
 
         return $out;
     }
 
-    private function activeControls(array $w, array $rows): array
-    {
-        $out = ['jb', 'mt'];
-        $hasOn = $w['on'] > 0 || collect($rows)->contains(fn ($r) => ($r['scan']['on_pct'] ?? '') !== '' || ($r['system']['on_pct'] ?? null) !== null);
-        if ($hasOn) {
-            $out[] = 'on';
-        }
-        if ($w['oski'] > 0) {
-            $out[] = 'oski';
-        }
-        if ($w['test'] > 0) {
-            $out[] = 'test';
-        }
-
-        return $out;
-    }
-
-    private function summary(array $c, int $docBad, int $sysN, int $scanN): string
+    private function summary(array $c, int $hdrBad, int $sysN, int $scanN): string
     {
         $parts = [];
-        if ($c['bad']) {
-            $parts[] = "{$c['bad']} talabada farq";
+        foreach ([['bad', 'talabada XATO'], ['nopdf', "talaba PDFda yo'q"], ['missing', "talaba kontingentda yo'q"],
+            ['extra', 'ortiqcha talaba PDFda'], ['ocr', "qator PDFdan tekshirilsin"]] as [$k, $txt]) {
+            if ($c[$k]) {
+                $parts[] = "{$c[$k]} {$txt}";
+            }
         }
-        if ($c['missing']) {
-            $parts[] = "{$c['missing']} talaba PDFda yo'q";
-        }
-        if ($c['extra']) {
-            $parts[] = "{$c['extra']} ortiqcha talaba";
-        }
-        if ($c['ocr']) {
-            $parts[] = "{$c['ocr']} qator ko'z bilan tekshirilsin";
-        }
-        if ($docBad) {
-            $parts[] = "{$docBad} ta sarlavha/imzo xatosi";
+        if ($hdrBad) {
+            $parts[] = "{$hdrBad} ta sarlavha/imzo xatosi";
         }
 
         return ucfirst(implode(', ', $parts)) . ". Tizimda {$sysN}, skanerda {$scanN} talaba.";
     }
 
-    public function fieldLabels(): array
+    private function near($a, $b, float $t): bool
     {
-        return [
-            'jb_pct' => 'JB %', 'jb_ball' => 'JB ball', 'mt_pct' => 'MT %', 'mt_ball' => 'MT ball',
-            'on_pct' => 'ON %', 'on_ball' => 'ON ball', 'jbmton_ball' => 'JB+MT+ON ball',
-            'oski_pct' => 'OSKE %', 'oski_ball' => 'OSKE ball', 'test_pct' => 'Test %', 'test_ball' => 'Test ball',
-            'yn' => "O'zlashtirish (YN)", 'ects' => 'ECTS', 'baho' => 'Baho', 'fio' => 'F.I.Sh', 'id' => 'ID raqami',
-        ];
+        return $a !== null && $b !== null && abs((float) $a - (float) $b) <= $t + 1e-9;
     }
 
-    private function ects($v): string
+    private function floorRound(float $x): int
     {
-        if (!is_numeric($v)) {
-            return '';
-        }
-        if ($v == -1 || $v == -3) {
-            return '';
-        }
-        if ($v < 0) {
-            return 'FX';
-        }
-
-        return $v >= 90 ? 'A' : ($v >= 85 ? 'B+' : ($v >= 70 ? 'B' : ($v >= 60 ? 'C' : 'F')));
+        return (int) floor($x + 0.5 + 1e-9);
     }
 
-    private function baho($v): string
+    public function f($x): string
     {
-        if (!is_numeric($v)) {
-            return '';
+        if ($x === null || $x === '') {
+            return '—';
         }
-
-        return match (true) {
-            $v == -3 => 'davomat ≥25%',
-            $v == -2 => "qo'yilmadi",
-            $v == -1 => 'kelmadi',
-            $v >= 90 => "a'lo",
-            $v >= 70 => 'yaxshi',
-            $v >= 60 => "o'rta",
-            default => 'qoniqarsiz',
-        };
-    }
-
-    private function n($v): ?float
-    {
-        return VedomostScanReader::num($v);
-    }
-
-    public function fmt($v): string
-    {
-        $n = VedomostScanReader::num($v);
-        if ($n === null) {
-            return $v === null || $v === '' ? '—' : (string) $v;
+        if (!is_numeric($x)) {
+            return (string) $x;
         }
+        $n = (float) $x;
 
         return $n == (int) $n ? (string) (int) $n : rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
+    }
+
+    public static function fieldLabels(): array
+    {
+        return [
+            'fio' => 'F.I.Sh', 'id' => 'ID raqami',
+            'jb_pct' => 'JB %', 'jb_ball' => 'JB ball', 'mt_pct' => 'MT %', 'mt_ball' => 'MT ball',
+            'on_pct' => 'ON %', 'on_ball' => 'ON ball', 'jbmton_ball' => 'JB+MT ball', 'jbmton_pct' => 'JB+MT %',
+            'oski_pct' => 'OSKE %', 'oski_ball' => 'OSKE ball', 'test_pct' => 'TEST %', 'test_ball' => 'TEST ball',
+            'yn' => 'YN', 'ects' => 'ECTS', 'baho' => 'Baho',
+        ];
     }
 }

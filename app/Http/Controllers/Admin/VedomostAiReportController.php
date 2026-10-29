@@ -126,7 +126,7 @@ class VedomostAiReportController extends Controller
 
         $name = preg_replace('/[^\w\-]+/u', '_', ($v->group_name ?? 'guruh') . '_' . ($v->subject_name ?? 'fan'));
 
-        return app(VedomostAiReportExcel::class)->download($result['report'], $this->engine->fieldLabels(), "tekshiruv_{$name}.xlsx");
+        return app(VedomostAiReportExcel::class)->download($result['report'], "tekshiruv_{$name}.xlsx");
     }
 
     /**

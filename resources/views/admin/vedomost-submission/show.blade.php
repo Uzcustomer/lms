@@ -105,21 +105,23 @@
             {{-- AI tekshiruv (tavsiya) --}}
             @php
                 $aiRes = $v->ai_result ?? [];
-                $aiV2 = ($aiRes['version'] ?? 1) >= 2 && !empty($aiRes['report']);
+                $aiVer = $aiRes['version'] ?? 1;
+                $aiV2 = $aiVer >= \App\Services\VedomostCheckEngine::VERSION && !empty($aiRes['report']);
+                $aiOld = !$aiV2 && $aiVer >= 2;
                 $rep = $aiV2 ? $aiRes['report'] : null;
                 // Rad etish sababiga tayyor matn: AI topgan (xodim tuzatgandan keyingi) xatolar.
                 $aiRejectText = '';
                 if ($rep && in_array($v->ai_verdict, ['issues', 'wrong_document'], true)) {
                     $lines = [];
                     if ($v->ai_verdict === 'wrong_document') { $lines[] = $rep['summary']; }
-                    foreach ($rep['header'] as $h) { if ($h['status'] === 'bad') { $lines[] = "{$h['label']}: tizimda «{$h['system']}», vedomostda «{$h['scan']}»"; } }
-                    foreach ($rep['doc_issues'] as $d) { if ($d['t'] === 'bad') { $lines[] = $d['m']; } }
+                    foreach ($rep['header'] as $h) { if ($h['st'] === 'bad') { $lines[] = "{$h['k']}: {$h['v']}"; } }
                     foreach ($rep['rows'] as $row) {
-                        if (in_array($row['status'], ['bad', 'missing', 'extra'], true)) {
-                            $msgs = collect($row['flags'])->whereIn('t', ['bad', 'missing', 'extra'])->pluck('m')->implode('; ');
+                        if (in_array($row['status'], ['bad', 'missing'], true)) {
+                            $msgs = collect($row['flags'])->whereIn('t', ['bad', 'missing'])->pluck('m')->implode('; ');
                             $lines[] = trim(($row['n'] ? $row['n'] . '. ' : '') . $row['fio'] . ': ' . $msgs);
                         }
                     }
+                    foreach ($rep['extra'] ?? [] as $e) { $lines[] = "PDFda bor, HEMISda yo'q: {$e['fio']} ({$e['id']})"; }
                     $aiRejectText = implode("\n", array_slice($lines, 0, 60));
                 }
                 $vt = [
@@ -213,7 +215,7 @@
                     </div>
                     <div style="font-size:14px;color:#334155;margin-bottom:12px;">{{ $rep['summary'] }}</div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px;">
-                        @foreach([['Mos', $cnt['ok'], '#166534', '#f0fdf4'], ['Xato', $cnt['bad'], '#713f12', '#fefce8'], ["Ko'z bilan tekshirish", $cnt['ocr'], '#7c2d12', '#fff7ed'], ["PDFda yo'q", $cnt['missing'], '#991b1b', '#fef2f2'], ['Ortiqcha', $cnt['extra'], '#6b21a8', '#faf5ff']] as [$l, $n, $fg, $bg])
+                        @foreach([['Mos', $cnt['ok'], '#166534', '#f0fdf4'], ['XATO', $cnt['bad'], '#713f12', '#fefce8'], ['PDFdan tekshiring', $cnt['ocr'], '#7c2d12', '#fff7ed'], ["PDFda yo'q", $cnt['nopdf'] ?? 0, '#991b1b', '#fef2f2'], ["Kontingentda yo'q", $cnt['missing'], '#991b1b', '#fef2f2'], ["HEMISda yo'q", $cnt['extra'], '#6b21a8', '#faf5ff']] as [$l, $n, $fg, $bg])
                             <div style="background:{{ $bg }};border-radius:10px;padding:10px 12px;">
                                 <div style="font-size:22px;font-weight:800;color:{{ $fg }};font-variant-numeric:tabular-nums;">{{ $n }}</div>
                                 <div style="font-size:12px;color:#475569;">{{ $l }}</div>
@@ -221,8 +223,7 @@
                         @endforeach
                     </div>
                     @php
-                        $hdrBad = collect($rep['header'])->whereIn('status', ['bad']);
-                        $sigNames = ['oqituvchi' => "O'qituvchi", 'dekan' => 'Dekan', 'kafedra_mudiri' => 'Kafedra mudiri', 'muhr' => 'Muhr'];
+                                                $sigNames = ['oqituvchi' => "O'qituvchi", 'dekan' => 'Dekan', 'kafedra_mudiri' => 'Kafedra mudiri', 'muhr' => 'Muhr'];
                     @endphp
                     <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px;margin-bottom:6px;">
                         @foreach($sigNames as $k => $l)
@@ -230,11 +231,16 @@
                             <span style="background:{{ $ok ? '#dcfce7' : '#fee2e2' }};color:{{ $ok ? '#166534' : '#991b1b' }};padding:3px 10px;border-radius:999px;font-weight:600;">{{ $ok ? '✓' : '✕' }} {{ $l }}</span>
                         @endforeach
                         @foreach($rep['header'] as $h)
-                            @if(in_array($h['key'], ['fan', 'guruh', 'soat', 'kredit', 'maruzachi', 'amaliyot']))
-                                @php $hok = $h['status'] === 'ok'; @endphp
-                                <span title="{{ $h['note'] }}" style="background:{{ $hok ? '#f1f5f9' : ($h['status'] === 'bad' ? '#fef08a' : '#fed7aa') }};color:{{ $hok ? '#334155' : '#713f12' }};padding:3px 10px;border-radius:999px;font-weight:600;">{{ $hok ? '✓' : '!' }} {{ $h['label'] }}</span>
+                            @if(in_array($h['key'], ['fan', 'guruh', 'soat', 'kredit', 'maruzachi', 'amaliyot', 'yn_sana', 'dekan', 'kafedra_mudiri']))
+                                @php $hok = $h['st'] === 'ok'; @endphp
+                                <span title="{{ $h['v'] }}" style="background:{{ $hok ? '#f1f5f9' : ($h['st'] === 'bad' ? '#fef08a' : '#fed7aa') }};color:{{ $hok ? '#334155' : '#713f12' }};padding:3px 10px;border-radius:999px;font-weight:600;">{{ $hok ? '✓' : '!' }} {{ $h['k'] }}</span>
                             @endif
                         @endforeach
+                    </div>
+                @elseif($v->ai_check_status === 'done' && $aiOld)
+                    <div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:10px 12px;border-radius:8px;font-size:13px;">
+                        Bu natija eski formatda (Python hisobotiga moslashtirilmagan). Yangi hisobot va tahrirlanadigan jadval uchun <b>«Qayta tekshirish»</b>ni bosing.
+                        @if($v->ai_summary)<div style="margin-top:6px;color:#334155;">{{ $v->ai_summary }}</div>@endif
                     </div>
                 @elseif($v->ai_check_status === 'done')
 

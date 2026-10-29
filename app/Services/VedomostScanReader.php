@@ -29,7 +29,7 @@ use RuntimeException;
 class VedomostScanReader
 {
     /** Prompt yoki sxema o'zgarsa oshiriladi — eski kesh ishlatilmaydi. */
-    public const PROMPT_VER = 1;
+    public const PROMPT_VER = 2;
 
     public const ROW_FIELDS = [
         'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball',
@@ -67,7 +67,7 @@ class VedomostScanReader
     /**
      * @return array{header: array, rows: array, signatures: array, weights: array, meta: array}
      */
-    public function read(string $pdfPath, ?int $submissionId = null): array
+    public function read(string $pdfPath, ?int $submissionId = null, ?int $expectedRows = null): array
     {
         if (!is_file($pdfPath)) {
             throw new RuntimeException('Skaner PDF topilmadi.');
@@ -89,8 +89,8 @@ class VedomostScanReader
         }
 
         $result = self::rendererAvailable()
-            ? $this->readAsImages($pdfPath, $bands)
-            : $this->readAsPdf($pdfPath);
+            ? $this->readAsImages($pdfPath, $bands, $expectedRows)
+            : $this->readAsPdf($pdfPath, $expectedRows);
 
         $result['meta'] += ['file_hash' => $hash, 'bands' => $bands, 'cached' => false, 'read_at' => now()->toDateTimeString()];
 
@@ -102,7 +102,7 @@ class VedomostScanReader
 
     // ───────────────────────── rasm rejimi ─────────────────────────
 
-    private function readAsImages(string $pdfPath, int $bands): array
+    private function readAsImages(string $pdfPath, int $bands, ?int $expectedRows): array
     {
         $dir = storage_path('app/vedomost-ai-tmp/' . uniqid('scan_', true));
         File::ensureDirectoryExists($dir);
@@ -131,8 +131,28 @@ class VedomostScanReader
                 $head = $this->headerStrip($img);
 
                 $res = $this->readSplit($img, $head, $pn, $total, $bands, 0.10);
-                [$res, $fixed] = $this->verifyPage($res, fn () => $this->readSplit($img, $head, $pn, $total, $bands + 1, 0.16));
+                $again = null;
+                $readAgain = function () use (&$again, $img, $head, $pn, $total, $bands) {
+                    return $again ??= $this->readSplit($img, $head, $pn, $total, $bands + 1, 0.16);
+                };
+                [$res, $fixed] = $this->verifyPage($res, $readAgain);
                 $repaired += $fixed;
+
+                // Tushib qolgan qatorlar: raqamlashda bo'shliq bo'lsa (yoki oxirgi sahifada
+                // talabalar soni kam bo'lsa) — boshqacha bo'linib qayta o'qilgan natijadan
+                // yetishmagan qatorlarni qo'shamiz.
+                $shortfall = $expectedRows !== null && $pn === $total
+                    && (count($pages ? array_merge(...array_column($pages, 'rows')) : []) + count($res['rows'])) < $expectedRows;
+                if ($this->gaps($res['rows'], $pn === 1) || $shortfall) {
+                    try {
+                        $res['rows'] = $this->unionRows($res['rows'], $readAgain()['rows']);
+                        $res['reread_gaps'] = true;
+                    } catch (VedomostAiLimitException $e) {
+                        throw $e;
+                    } catch (\Throwable $e) {
+                        Log::info('[VedomostScanReader] tushib qolgan qatorlar uchun qayta o\'qish muvaffaqiyatsiz: ' . $e->getMessage());
+                    }
+                }
 
                 foreach ($res['rows'] as &$row) {
                     $row['page'] = $pn;
@@ -144,7 +164,7 @@ class VedomostScanReader
                 imagedestroy($head);
             }
 
-            return $this->combine($pages, ['mode' => 'images', 'pages' => $total, 'repaired' => $repaired]);
+            return $this->combine($pages, ['mode' => 'images', 'pages' => $total, 'repaired' => $repaired], $expectedRows);
         } finally {
             File::deleteDirectory($dir);
         }
@@ -195,26 +215,82 @@ class VedomostScanReader
 
     // ───────────────────────── PDF rejimi (zaxira) ─────────────────────────
 
-    private function readAsPdf(string $pdfPath): array
+    private function readAsPdf(string $pdfPath, ?int $expectedRows): array
     {
         $parts = [
             ['inlineData' => ['mimeType' => 'application/pdf', 'data' => base64_encode((string) file_get_contents($pdfPath))]],
             ['text' => $this->prompt(1, 1, 'the whole document (all pages)', false)],
         ];
         $res = $this->ask($parts);
-
-        // Qayta o'qish yo'q — ichki hisobi mos kelmagan kataklar "noaniq" deb belgilanadi.
-        $ratios = $this->pageRatios($res['rows']);
         foreach ($res['rows'] as &$row) {
             $row['page'] = 1;
-            foreach ($this->rowProblems($row, $ratios) as [$msg, $fields]) {
-                $row['unclear'] = array_values(array_unique(array_merge($row['unclear'], $fields)));
-                $row['trace'][] = 'ichki hisob mos emas: ' . $msg;
-            }
         }
         unset($row);
 
-        return $this->combine([$res], ['mode' => 'pdf', 'pages' => null, 'repaired' => 0]);
+        // Ichki hisob mos kelmasa yoki qatorlar tushib qolsa — butun PDF qayta o'qiladi.
+        $again = null;
+        $readAgain = function () use (&$again, $parts) {
+            if ($again === null) {
+                $again = $this->ask($parts);
+                foreach ($again['rows'] as &$row) {
+                    $row['page'] = 1;
+                }
+            }
+
+            return $again;
+        };
+        [$res, $fixed] = $this->verifyPage($res, $readAgain);
+        if ($this->gaps($res['rows'], true) || ($expectedRows !== null && count($res['rows']) < $expectedRows)) {
+            try {
+                $res['rows'] = $this->unionRows($res['rows'], $readAgain()['rows']);
+            } catch (VedomostAiLimitException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                Log::info('[VedomostScanReader] qayta o\'qish muvaffaqiyatsiz: ' . $e->getMessage());
+            }
+        }
+
+        return $this->combine([$res], ['mode' => 'pdf', 'pages' => null, 'repaired' => $fixed], $expectedRows);
+    }
+
+    /** Raqamlashda (№) bo'shliq bormi. */
+    private function gaps(array $rows, bool $firstPage): bool
+    {
+        return !empty($this->missingNrs($rows, $firstPage));
+    }
+
+    private function missingNrs(array $rows, bool $fromOne): array
+    {
+        $nrs = array_values(array_unique(array_filter(array_map(fn ($r) => $r['nr'] ?? null, $rows), fn ($x) => is_int($x) && $x > 0)));
+        if (empty($nrs)) {
+            return [];
+        }
+        sort($nrs);
+        $start = $fromOne ? 1 : $nrs[0];
+
+        return array_values(array_diff(range($start, end($nrs)), $nrs));
+    }
+
+    /** Birinchi o'qishda yo'q qatorlarni ikkinchi o'qishdan qo'shadi (mavjudlariga tegmaydi). */
+    private function unionRows(array $rows, array $more): array
+    {
+        $have = array_flip(array_filter(array_map(fn ($r) => $r['nr'] ?? null, $rows)));
+        foreach ($more as $m) {
+            $dup = isset($have[$m['nr'] ?? -1]);
+            foreach ($rows as $r) {
+                if ($dup || $this->sameRow($r, $m)) {
+                    $dup = true;
+                    break;
+                }
+            }
+            if (!$dup) {
+                $m['trace'][] = "birinchi o'qishda tushib qolgan — qayta o'qishdan olindi";
+                $rows[] = $m;
+            }
+        }
+        usort($rows, fn ($a, $b) => (int) ($a['nr'] ?? 0) <=> (int) ($b['nr'] ?? 0));
+
+        return $rows;
     }
 
     // ───────────────────────── tekshirish va qayta o'qish ─────────────────────────
@@ -248,6 +324,7 @@ class VedomostScanReader
                 continue;
             }
             $r['trace'][] = 'ichki hisob mos emas: ' . implode('; ', array_column($pr, 0));
+            $r['problems'] = array_column($pr, 0);
             $prFields = array_merge(...array_column($pr, 1));
 
             $r2 = null;
@@ -264,6 +341,7 @@ class VedomostScanReader
                 $out[] = $r;
             } elseif (empty($this->rowProblems($r2, $ratios))) {
                 $r2['repaired'] = true;
+                $r2['problems'] = [];
                 $r2['first'] = array_intersect_key($r, array_flip(array_merge(self::ROW_FIELDS, ['id', 'fio', 'ects'])));
                 $r2['trace'] = array_merge($r['trace'], ["qayta o'qish mos keldi → tuzatildi"]);
                 $out[] = $r2;
@@ -373,7 +451,7 @@ class VedomostScanReader
 
     // ───────────────────────── birlashtirish ─────────────────────────
 
-    private function combine(array $pages, array $meta): array
+    private function combine(array $pages, array $meta, ?int $expectedRows = null): array
     {
         $rows = [];
         foreach ($pages as $p) {
@@ -393,6 +471,9 @@ class VedomostScanReader
         }
 
         $meta['model'] = $this->lastModel;
+        $meta['missing_nrs'] = $this->missingNrs($rows, true);
+        $meta['rows_read'] = count($rows);
+        $meta['rows_expected'] = $expectedRows;
         $meta['unclear_cells'] = array_sum(array_map(fn ($r) => count($r['unclear']), $rows));
 
         return [

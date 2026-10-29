@@ -192,7 +192,7 @@
                 </div>
 
                 @if(!$aiConfigured)
-                    <div style="color:#b45309;font-size:13px;">AI tekshiruv sozlanmagan (ANTHROPIC_API_KEY yo'q).</div>
+                    <div style="color:#b45309;font-size:13px;">AI tekshiruv sozlanmagan — AI sozlamalarida Gemini API kaliti qo'shilmagan.</div>
                 @elseif(!$v->pdf_path)
                     <div style="color:#94a3b8;font-size:13px;">Avval skaner (PDF) yuklang.</div>
                 @elseif(in_array($v->ai_check_status, ['queued','running']))
@@ -200,7 +200,7 @@
                         <span class="ai-spinner"></span>
                         <div>
                             <div id="ai-stage" style="color:#b45309;font-size:14px;font-weight:600;">
-                                {{ $v->ai_check_status === 'running' ? 'Claude tahlil qilmoqda...' : 'Navbatda kutilmoqda...' }}
+                                {{ $v->ai_check_status === 'running' ? 'AI (Gemini) tahlil qilmoqda...' : 'Navbatda kutilmoqda...' }}
                             </div>
                             <div style="color:#92700a;font-size:12px;">O'tgan vaqt: <span id="ai-elapsed">0s</span> · tayyor bo'lishi bilan natija o'zi chiqadi</div>
                         </div>
@@ -215,7 +215,7 @@
                             const start = Date.now();
                             const elapsedEl = document.getElementById('ai-elapsed');
                             const stageEl = document.getElementById('ai-stage');
-                            const stages = { queued: 'Navbatda kutilmoqda...', running: 'Claude tahlil qilmoqda...' };
+                            const stages = { queued: 'Navbatda kutilmoqda...', running: 'AI (Gemini) tahlil qilmoqda...' };
 
                             setInterval(function () {
                                 if (elapsedEl) elapsedEl.textContent = Math.floor((Date.now() - start) / 1000) + 's';
@@ -247,7 +247,7 @@
                         @else
                             <span style="background:#fee2e2;color:#b91c1c;padding:5px 14px;border-radius:999px;font-weight:700;">⚠️ {{ count($disc) }} ta nomuvofiqlik</span>
                         @endif
-                        <span style="color:#94a3b8;font-size:12px;">{{ $v->ai_checked_at ? \Carbon\Carbon::parse($v->ai_checked_at)->format('d.m.Y H:i') : '' }}</span>
+                        <span style="color:#94a3b8;font-size:12px;">{{ $v->ai_checked_at ? \Carbon\Carbon::parse($v->ai_checked_at)->format('d.m.Y H:i') : '' }}@if(!empty($r['model'])) · {{ $r['model'] }}@endif</span>
                     </div>
                     @if($v->ai_summary)
                         <div style="font-size:14px;color:#334155;margin-bottom:10px;">{{ $v->ai_summary }}</div>
@@ -291,6 +291,9 @@
                         </div>
                     @endif
                 @else
+                    @if($v->ai_error)
+                        <div style="background:#fef3c7;color:#92400e;padding:10px;border-radius:8px;font-size:13px;margin-bottom:8px;">{{ $v->ai_error }}</div>
+                    @endif
                     <div style="color:#94a3b8;font-size:13px;">Hali tekshirilmagan. "AI tekshirish" tugmasini bosing.</div>
                 @endif
             </div>

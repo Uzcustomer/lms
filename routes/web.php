@@ -1000,6 +1000,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/manual-open', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'manualOpen'])->name('manual-open');
             Route::get('/sync/progress', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'syncProgress'])->name('sync.progress');
             Route::post('/toggle-notify', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'toggleNotify'])->name('toggle-notify');
+            // AI sozlamalari (Gemini kalitlari, model, limitlar, statistika)
+            Route::get('/ai-settings', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'index'])->name('ai-settings');
+            Route::post('/ai-settings', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'save'])->name('ai-settings.save');
+            Route::post('/ai-settings/models', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'refreshModels'])->name('ai-settings.models');
+            Route::post('/ai-settings/queue-pending', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'queuePending'])->name('ai-settings.queue-pending');
+            Route::post('/ai-settings/keys', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'storeKey'])->name('ai-settings.keys.store');
+            Route::post('/ai-settings/keys/{key}', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'updateKey'])->whereNumber('key')->name('ai-settings.keys.update');
+            Route::post('/ai-settings/keys/{key}/delete', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'destroyKey'])->whereNumber('key')->name('ai-settings.keys.destroy');
             Route::get('/{id}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'show'])->whereNumber('id')->name('show');
             Route::post('/{id}/upload', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'uploadFiles'])->whereNumber('id')->name('upload');
             Route::post('/{id}/review', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'review'])->whereNumber('id')->name('review');

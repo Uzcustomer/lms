@@ -212,6 +212,10 @@
                                     style="background:#2563eb;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
                                 + Pullik uchun shakl ochish
                             </button>
+                            <a href="{{ route('admin.vedomost-submission.ai-settings') }}"
+                               style="background:#6d28d9;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                                🤖 AI sozlamalari
+                            </a>
                         @endif
                         <a href="{{ route('admin.vedomost-submission.report', request()->query()) }}"
                            style="background:#1a3268;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">

@@ -896,7 +896,7 @@ class VedomostSubmissionController extends Controller
     }
 
     /**
-     * Yuklangan vedomostni Claude API orqali tizim ma'lumotiga solishtirib tekshirish.
+     * Yuklangan vedomostni Gemini API orqali tizim ma'lumotiga solishtirib tekshirish.
      * Faqat tavsiya — yakuniy qarorni registrator qiladi. Async (Job).
      */
     public function aiCheck($id)
@@ -905,7 +905,7 @@ class VedomostSubmissionController extends Controller
         $v = VedomostSubmission::findOrFail($id);
 
         if (!\App\Services\VedomostAiChecker::isConfigured()) {
-            return back()->with('error', "AI tekshiruv sozlanmagan (ANTHROPIC_API_KEY yo'q).");
+            return back()->with('error', "AI tekshiruv sozlanmagan — AI sozlamalarida Gemini API kaliti qo'shilmagan.");
         }
         if (!$v->pdf_path) {
             return back()->with('error', 'Avval skaner (PDF) yuklang.');
@@ -914,8 +914,7 @@ class VedomostSubmissionController extends Controller
             return back()->with('error', 'AI tekshiruv allaqachon ishlamoqda.');
         }
 
-        $v->update(['ai_check_status' => 'queued', 'ai_error' => null]);
-        \App\Jobs\CheckVedomostSubmissionWithAi::dispatch($v->id);
+        app(\App\Services\VedomostAiDispatcher::class)->queue($v);
 
         return back()->with('success', 'AI tekshiruv boshlandi. Natija bir necha daqiqada tayyor bo\'ladi (sahifani yangilash shart emas).');
     }
@@ -1027,9 +1026,13 @@ class VedomostSubmissionController extends Controller
             $this->notifier->notifyStatusChange($v);
         }
 
-        return back()->with('success', $isReplace
+        // AI sozlamalarida "avtomatik tekshirish" yoqilgan bo'lsa — darhol navbatga.
+        $autoQueued = app(\App\Services\VedomostAiDispatcher::class)->queueIfAuto($v);
+
+        return back()->with('success', ($isReplace
             ? 'Fayl almashtirildi (vedomost hali tekshirishga olinmagan).'
-            : 'Vedomost yuklandi va tekshirishga qabul qilindi.');
+            : 'Vedomost yuklandi va tekshirishga qabul qilindi.')
+            . ($autoQueued ? ' AI tekshiruv navbatga qo\'yildi.' : ''));
     }
 
     public function review($id)

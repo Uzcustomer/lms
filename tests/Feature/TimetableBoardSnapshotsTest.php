@@ -446,3 +446,74 @@ it('shablon to\'qnashuvida haftalar ko\'rsatiladi: faqat ayrim haftalarda — "3
         ->assertStatus(422)->json('error');
     expect($err)->toStartWith('Guruh band:')->toContain('Anatomiya');
 });
+
+it('sinxronlash: HEMIS\'da tuzatilgan fan nomi ("Fan " → "Fan") kartaga va bog\'liq yozuvlarga o\'tadi, karta va joylashuv saqlanadi', function () {
+    $s = snapSetup();
+    $old = 'Gigiyena ';
+    $s['old']->update(['subject_name' => $old]);
+    $card = $s['old']->fresh();
+    $bid = $s['board']->id;
+    $now = now();
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $bid, 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => $old,
+        'mode' => 'cycle', 'cycle_days' => 1]);
+    DB::table('timetable_cycle_placements')->insert(['board_id' => $bid, 'specialty_name' => 'davolash ishi', 'course' => 2,
+        'group_name' => "g-01a (o'z)", 'subject_name' => $old, 'training_type' => 'practice', 'start_index' => 0, 'created_at' => $now, 'updated_at' => $now]);
+    // Boshqa kursdagi bir xil nomli yozuv — tegilmaydi
+    DB::table('timetable_cycle_placements')->insert(['board_id' => $bid, 'specialty_name' => 'davolash ishi', 'course' => 3,
+        'group_name' => 'g-03', 'subject_name' => $old, 'training_type' => 'practice', 'start_index' => 0, 'created_at' => $now, 'updated_at' => $now]);
+    DB::table('timetable_block_tickets')->insert(['board_id' => $bid, 'card_id' => $card->id, 'week' => 3, 'lesson_date' => '2026-09-28',
+        'start_time' => '08:30', 'end_time' => '09:50', 'block_type' => 'teacher', 'group_name' => "g-01a (o'z)", 'subject_name' => $old,
+        'status' => 'open', 'created_at' => $now, 'updated_at' => $now]);
+    DB::table('timetable_change_requests')->insert(['board_id' => $bid, 'route_name' => 'x', 'target_key' => 'k', 'payload' => '{}', 'kind' => 'move',
+        'subject_name' => $old, 'summary' => 's', 'status' => 'pending', 'created_at' => $now, 'updated_at' => $now]);
+
+    // Reja (assembleRows) qatori — yangi nom bilan, qolgani o'sha karta
+    $row = collect($card->getAttributes())->only(['board_id', 'specialty_name', 'course', 'faculty_name', 'oqim_label', 'lang', 'training_type',
+        'group_name', 'group_names', 'kafedra_name', 'students', 'len_half', 'weeks'])->all();
+    $rows = [array_merge($row, ['subject_name' => 'Gigiyena', 'created_at' => $now, 'updated_at' => $now]),
+        array_merge(collect($s['other']->getAttributes())->only(array_keys($row))->all(), ['subject_name' => 'Anatomiya', 'created_at' => $now, 'updated_at' => $now])];
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'syncCards');
+    $m->setAccessible(true);
+    $res = $m->invoke($ctl, $s['board'], $rows, []);
+
+    $fresh = TimetableCard::find($card->id);
+    expect($res['renamed'])->toBe(1)
+        ->and($res['removed'])->toBe(0)->and($res['created'])->toBe(0)
+        ->and($fresh->subject_name)->toBe('Gigiyena')
+        ->and([$fresh->day, $fresh->pair, $fresh->teacher_id])->toBe([2, 3, $s['head']->id])
+        ->and(TimetableCardOverride::where('card_id', $card->id)->where('week', 5)->value('day'))->toBe(4)
+        ->and(\App\Models\TimetableSubjectSetting::where('board_id', $bid)->pluck('subject_name')->all())->toBe(['Gigiyena'])
+        ->and(DB::table('timetable_cycle_placements')->where('board_id', $bid)->orderBy('course')->pluck('subject_name')->all())->toBe(['Gigiyena', $old])
+        ->and(DB::table('timetable_block_tickets')->where('card_id', $card->id)->value('subject_name'))->toBe('Gigiyena')
+        // O'qituvchi biriktiruvi (karta o'qituvchili) va o'zgartirish so'rovi ham
+        ->and(DB::table('timetable_unit_assignments')->where('board_id', $bid)->pluck('subject_name')->all())->toBe(['Gigiyena'])
+        ->and(DB::table('timetable_change_requests')->where('board_id', $bid)->value('subject_name'))->toBe('Gigiyena');
+});
+
+it('sinxronlash: eski nom doskada boshqa kursda qolsa — yo\'nalish/kursi yo\'q o\'zgartirish so\'rovi eski nomda qoladi', function () {
+    $s = snapSetup();
+    $old = 'Gigiyena ';
+    $s['old']->update(['subject_name' => $old]);
+    $card = $s['old']->fresh();
+    $now = now();
+    // 3-kursda HEMIS nomi hali eski
+    $c3 = TimetableCard::create(array_merge($s['base'], ['course' => 3, 'group_name' => 'g-03', 'subject_name' => $old, 'len_half' => 2, 'weeks' => 15]));
+    DB::table('timetable_change_requests')->insert(['board_id' => $s['board']->id, 'route_name' => 'x', 'target_key' => 'k', 'payload' => '{}', 'kind' => 'move',
+        'subject_name' => $old, 'summary' => 's', 'status' => 'pending', 'created_at' => $now, 'updated_at' => $now]);
+    $cols = ['board_id', 'specialty_name', 'course', 'faculty_name', 'oqim_label', 'lang', 'training_type', 'group_name', 'group_names',
+        'kafedra_name', 'students', 'len_half', 'weeks'];
+    $rows = [];
+    foreach ([[$card, 'Gigiyena'], [$s['other'], 'Anatomiya'], [$c3, $old]] as [$c, $name]) {
+        $rows[] = array_merge(collect($c->getAttributes())->only($cols)->all(), ['subject_name' => $name, 'created_at' => $now, 'updated_at' => $now]);
+    }
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'syncCards');
+    $m->setAccessible(true);
+    $res = $m->invoke($ctl, $s['board'], $rows, []);
+
+    expect($res['renamed'])->toBe(1)
+        ->and(TimetableCard::find($card->id)->subject_name)->toBe('Gigiyena')
+        ->and(TimetableCard::find($c3->id)->subject_name)->toBe($old)
+        ->and(DB::table('timetable_change_requests')->where('board_id', $s['board']->id)->value('subject_name'))->toBe($old);
+});

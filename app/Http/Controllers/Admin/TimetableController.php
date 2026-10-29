@@ -1676,6 +1676,8 @@ class TimetableController extends Controller
         $kept = [];
         $toInsert = [];
         $updates = [];
+        $renames = [];       // yo'nalish¦kurs¦eski nom => [yo'nalish, kurs, eski, yangi]
+        $renamedCards = [];  // karta id => [eski, yangi]
         foreach ($rows as $row) {
             $k = $keyOf($row);
             if (!empty($existing[$k])) {
@@ -1686,6 +1688,14 @@ class TimetableController extends Controller
                     if (array_key_exists($col, $row) && (string) $card->{$col} !== (string) $row[$col]) {
                         $changes[$col] = $row[$col];
                     }
+                }
+                // Karta normallashtirilgan nom bilan topiladi — HEMIS'da nom tuzatilsa ("Fan " → "Fan"), karta
+                // o'chirilmay (joylashuvi bilan) yangi nomni oladi.
+                if (array_key_exists('subject_name', $row) && (string) $card->subject_name !== (string) $row['subject_name']) {
+                    $changes['subject_name'] = (string) $row['subject_name'];
+                    $renames[$card->specialty_name . '¦' . (int) $card->course . '¦' . $card->subject_name]
+                        = [(string) $card->specialty_name, (int) $card->course, (string) $card->subject_name, (string) $row['subject_name']];
+                    $renamedCards[(int) $card->id] = [(string) $card->subject_name, (string) $row['subject_name']];
                 }
                 if ($changes) {
                     $updates[$card->id] = $changes;
@@ -1708,7 +1718,7 @@ class TimetableController extends Controller
         $assignments = $this->assignmentsByUnit($board);
         $this->storeUnitAssignments($board, $assignments);
 
-        DB::transaction(function () use ($board, $removeIds, $toInsert, $updates, $specsFound) {
+        DB::transaction(function () use ($board, $removeIds, $toInsert, $updates, $specsFound, $renames, $renamedCards) {
             foreach (array_chunk($removeIds, 500) as $chunk) {
                 if (Schema::hasTable('timetable_card_overrides')) {
                     DB::table('timetable_card_overrides')->whereIn('card_id', $chunk)->delete();
@@ -1717,6 +1727,9 @@ class TimetableController extends Controller
             }
             foreach ($updates as $id => $changes) {
                 TimetableCard::where('id', $id)->update($changes);
+            }
+            if ($renames) {
+                $this->renameSubjectRefs($board, $renames, $renamedCards);
             }
             foreach (array_chunk($toInsert, 500) as $chunk) {
                 TimetableCard::insert($chunk);
@@ -1732,7 +1745,62 @@ class TimetableController extends Controller
             : ['restored_units' => 0, 'restored_cards' => 0];
 
         return ['ok' => true, 'mode' => 'sync', 'created' => count($toInsert), 'kept' => count($kept),
-            'removed' => count($removeIds), 'removed_placed' => $removedPlaced, 'updated' => count($updates)] + $restored;
+            'removed' => count($removeIds), 'removed_placed' => $removedPlaced, 'updated' => count($updates),
+            'renamed' => count(array_unique(array_map(fn ($r) => $r[2] . "\0" . $r[3], $renames)))] + $restored;
+    }
+
+    /**
+     * HEMIS'da fan nomi tuzatilganda kartalar bilan birga shu doskadagi bog'liq yozuvlar ham yangi nomga o'tadi — aks holda
+     * sikl joylashuvi va fan sozlamalari eski nomda qolib, joylashda nom mos kelmaydi. Moslik: yo'nalish + kurs + aniq nom.
+     * Baza solishtiruvi oxiridagi bo'sh joy va registrni farqlamaydi, shuning uchun aniq tekshiruv PHP'da.
+     */
+    private function renameSubjectRefs(TimetableBoard $board, array $renames, array $renamedCards): void
+    {
+        $sameSpec = fn (?string $a, ?string $b) => $this->specKey((string) $a) === $this->specKey((string) $b);
+        foreach ($renames as [$spec, $course, $old, $new]) {
+            foreach (['timetable_subject_settings', 'timetable_cycle_placements', 'timetable_unit_assignments'] as $table) {
+                if (!Schema::hasTable($table)) {
+                    continue;
+                }
+                $rows = DB::table($table)->where('board_id', $board->id)->where('course', $course)->where('subject_name', $old)
+                    ->get(['id', 'specialty_name', 'subject_name'])
+                    ->filter(fn ($r) => $r->subject_name === $old && $sameSpec($r->specialty_name, $spec));
+                foreach ($rows as $r) {
+                    // Fan sozlamasining kaliti (doska, yo'nalish, kurs, fan) noyob: yangi nomli yozuv bor bo'lsa — u qoladi.
+                    if ($table === 'timetable_subject_settings' && DB::table($table)->where('board_id', $board->id)->where('course', $course)
+                        ->where('subject_name', $new)->where('id', '!=', $r->id)->get(['specialty_name', 'subject_name'])
+                        ->contains(fn ($x) => $x->subject_name === $new && $sameSpec($x->specialty_name, $spec))) {
+                        DB::table($table)->where('id', $r->id)->delete();
+                        continue;
+                    }
+                    DB::table($table)->where('id', $r->id)->update(['subject_name' => $new]);
+                }
+            }
+        }
+        // Muammo xabarlari kartaga bog'langan.
+        if (Schema::hasTable('timetable_block_tickets')) {
+            foreach ($renamedCards as $cardId => [$old, $new]) {
+                $ids = DB::table('timetable_block_tickets')->where('card_id', $cardId)->where('subject_name', $old)->get(['id', 'subject_name'])
+                    ->filter(fn ($t) => $t->subject_name === $old)->pluck('id')->all();
+                if ($ids) {
+                    DB::table('timetable_block_tickets')->whereIn('id', $ids)->update(['subject_name' => $new]);
+                }
+            }
+        }
+        // O'zgartirish so'rovlarida yo'nalish/kurs yo'q — doskada eski nomli karta umuman qolmagan bo'lsagina.
+        if (Schema::hasTable('timetable_change_requests')) {
+            foreach (array_unique(array_map(fn ($r) => $r[2] . "\0" . $r[3], $renames)) as $pair) {
+                [$old, $new] = explode("\0", $pair);
+                if (TimetableCard::where('board_id', $board->id)->where('subject_name', $old)->pluck('subject_name')->contains(fn ($n) => $n === $old)) {
+                    continue;
+                }
+                $ids = DB::table('timetable_change_requests')->where('board_id', $board->id)->where('subject_name', $old)->get(['id', 'subject_name'])
+                    ->filter(fn ($q) => $q->subject_name === $old)->pluck('id')->all();
+                if ($ids) {
+                    DB::table('timetable_change_requests')->whereIn('id', $ids)->update(['subject_name' => $new]);
+                }
+            }
+        }
     }
 
     /** Biriktirishni saqlash kaliti: fakultet + yo'nalish + kurs + fan (normallashtirilgan) + tur + oqim/guruh. */

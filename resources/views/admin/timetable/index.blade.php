@@ -3214,6 +3214,7 @@
                         parts.push((j.kept || 0) + ' ta saqlandi', (j.created || 0) + ' ta yangi qo\'shildi',
                             (j.removed || 0) + ' ta o\'chirildi' + (j.removed_placed ? ' (' + j.removed_placed + ' tasi joylangan edi)' : ''));
                         if (j.updated) parts.push(j.updated + ' ta yangilandi');
+                        if (j.renamed) parts.push(j.renamed + ' ta fan nomi yangilandi');
                         if (j.kept_placement) parts.push(j.kept_placement + ' ta qayta yaratilgan karta eski joyini oldi');
                         if (j.kept_placement_conflicts) parts.push(j.kept_placement_conflicts + ' ta eski joy band — karta joylanmagan qoldi');
                     } else parts.push((j.created || 0) + ' ta kartochka yaratildi');

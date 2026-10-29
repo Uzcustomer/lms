@@ -26,7 +26,8 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
     public int $timeout = 900;
     public int $tries = 1;
 
-    public function __construct(public int $submissionId)
+    /** @param  bool  $fresh  PDF keshdan emas, AI'ga qaytadan o'qitiladi (qo'lda «Qayta tekshirish»). */
+    public function __construct(public int $submissionId, public bool $fresh = false)
     {
         $this->onQueue(self::QUEUE);
     }
@@ -52,7 +53,7 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
         $save(['ai_check_status' => 'running', 'ai_error' => null]);
 
         try {
-            $result = $checker->check($v);
+            $result = $checker->check($v, $this->fresh);
 
             $save([
                 'ai_check_status' => 'done',

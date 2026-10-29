@@ -915,7 +915,8 @@ class VedomostSubmissionController extends Controller
             return back()->with('error', 'AI tekshiruv allaqachon ishlamoqda.');
         }
 
-        app(\App\Services\VedomostAiDispatcher::class)->queue($v);
+        // Qo'lda bosilgan tekshiruv — PDF har doim AI'ga qaytadan o'qitiladi (kesh ishlatilmaydi).
+        app(\App\Services\VedomostAiDispatcher::class)->queue($v, true);
 
         return back()->with('success', 'AI tekshiruv boshlandi. Natija bir necha daqiqada tayyor bo\'ladi (sahifani yangilash shart emas).');
     }

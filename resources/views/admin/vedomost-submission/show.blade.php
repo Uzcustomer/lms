@@ -149,7 +149,7 @@
                         @endif
                         @if($v->pdf_path && $aiConfigured && $isAdminActor && !in_array($v->ai_check_status, ['queued','running']) && $v->status !== 'approved')
                             <form method="POST" action="{{ route('admin.vedomost-submission.ai-check', $v->id) }}"
-                                  @if($v->ai_check_status === 'done') onsubmit="return confirm('Qayta tekshirilsinmi? Kiritilgan tuzatishlar o\'chadi.');" @endif>
+                                  @if($v->ai_check_status === 'done') onsubmit="return confirm('Qayta tekshirilsinmi? AI PDFni qaytadan o\'qiydi (1–3 daqiqa), kiritilgan tuzatishlar o\'chadi.');" @endif>
                                 @csrf
                                 <button type="submit" style="background:#6d28d9;color:#fff;border:none;height:38px;padding:0 16px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">
                                     {{ $v->ai_check_status === 'done' || $v->ai_check_status === 'error' ? 'Qayta tekshirish' : 'AI tekshirish' }}

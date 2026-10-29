@@ -491,6 +491,50 @@ it('sinxronlash: HEMIS\'da tuzatilgan fan nomi ("Fan " → "Fan") kartaga va bog
         ->and(DB::table('timetable_change_requests')->where('board_id', $bid)->value('subject_name'))->toBe('Gigiyena');
 });
 
+it('sinxronlash: fan nomi tuzatilsa kutilayotgan so\'rovlar payload\'i va o\'qituvchi taklifi imzosi yangilanadi', function () {
+    $s = snapSetup();
+    $old = 'Gigiyena ';
+    $s['old']->update(['subject_name' => $old]);
+    $card = $s['old']->fresh();
+    $bid = $s['board']->id;
+    $req = fn (array $attrs) => \App\Models\TimetableChangeRequest::create($attrs + ['board_id' => $bid, 'target_key' => 'k', 'kind' => 'move',
+        'subject_name' => $old, 'summary' => 's', 'status' => 'pending']);
+    $place = ['specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => $old, 'group_name' => "g-01a (o'z)", 'training_type' => 'practice'];
+    // Tasdiq kutayotgan sikl joylashtiruvi — tasdiqlanganda shu payload qayta ijro etiladi
+    $pending = $req(['route_name' => 'admin.timetable.cycle-place', 'payload' => $place]);
+    // Boshqa kurs doirasi va yakunlangan so'rov — tegilmaydi
+    $course3 = $req(['route_name' => 'admin.timetable.cycle-place', 'payload' => ['course' => 3] + $place]);
+    $done = $req(['route_name' => 'admin.timetable.cycle-place', 'payload' => $place, 'status' => 'approved']);
+    // O'qituvchi taklifi: imzo karta holatidan (fan nomi ham) — nomdan boshqa narsa o'zgarmagan
+    $svc = app(\App\Services\Timetable\TimetableChangeApproval::class);
+    $proposal = $req(['route_name' => 'admin.timetable.cards.week-override', 'params' => ['card' => $card->id],
+        'payload' => ['week' => 5, 'day' => 3, 'pair' => 2], 'details' => ['original_signature' => $svc->proposalSignature($card, 5)]]);
+    // Taklifdan keyin jadval boshqacha o'zgargan — imzo eskiligicha qoladi (tasdiqda rad etiladi)
+    $stale = $req(['route_name' => 'admin.timetable.cards.week-override', 'params' => ['card' => $card->id],
+        'payload' => ['week' => 5, 'day' => 3, 'pair' => 2], 'details' => ['original_signature' => 'eski']]);
+
+    $now = now();
+    $cols = ['board_id', 'specialty_name', 'course', 'faculty_name', 'oqim_label', 'lang', 'training_type', 'group_name', 'group_names',
+        'kafedra_name', 'students', 'len_half', 'weeks'];
+    $rows = [];
+    foreach ([[$card, 'Gigiyena'], [$s['other'], 'Anatomiya']] as [$c, $name]) {
+        $rows[] = array_merge(collect($c->getAttributes())->only($cols)->all(), ['subject_name' => $name, 'created_at' => $now, 'updated_at' => $now]);
+    }
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'syncCards');
+    $m->setAccessible(true);
+    expect($m->invoke($ctl, $s['board'], $rows, [])['renamed'])->toBe(1);
+
+    $fresh = TimetableCard::find($card->id);
+    expect($pending->fresh()->payload)->toBe(array_replace($place, ['subject_name' => 'Gigiyena']))
+        ->and($pending->fresh()->subject_name)->toBe('Gigiyena')
+        ->and($course3->fresh()->payload['subject_name'])->toBe($old)
+        ->and($done->fresh()->payload['subject_name'])->toBe($old)
+        // Tasdiqdagi tekshiruv bilan bir xil: imzo kartaning hozirgi holatiga mos
+        ->and($proposal->fresh()->details['original_signature'])->toBe($svc->proposalSignature($fresh, 5))
+        ->and($stale->fresh()->details['original_signature'])->toBe('eski');
+});
+
 it('sinxronlash: eski nom doskada boshqa kursda qolsa — yo\'nalish/kursi yo\'q o\'zgartirish so\'rovi eski nomda qoladi', function () {
     $s = snapSetup();
     $old = 'Gigiyena ';

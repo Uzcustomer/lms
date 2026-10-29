@@ -1787,6 +1787,40 @@ class TimetableController extends Controller
                 }
             }
         }
+        // Kutilayotgan so'rov tasdiqlanganda payload qayta ijro etiladi (cycle-place va b. fan nomini aynan
+        // solishtiradi): payload'dagi yo'nalish/kurs doirasida eski nom yangisiga almashadi. O'qituvchi taklifining
+        // imzosi kartaning fan nomini ham o'z ichiga oladi — faqat nom o'zgargan bo'lsa, yangi nom bilan qayta imzolanadi.
+        if (Schema::hasTable('timetable_change_requests')) {
+            $approval = app(\App\Services\Timetable\TimetableChangeApproval::class);
+            foreach (\App\Models\TimetableChangeRequest::where('board_id', $board->id)
+                ->where('status', \App\Models\TimetableChangeRequest::PENDING)->get() as $req) {
+                $payload = $req->payload;
+                foreach ($renames as [$spec, $course, $old, $new]) {
+                    if (is_array($payload) && ($payload['subject_name'] ?? null) === $old && (int) ($payload['course'] ?? 0) === $course
+                        && $sameSpec($payload['specialty_name'] ?? '', $spec)) {
+                        $payload['subject_name'] = $new;
+                        $req->payload = $payload;
+                        if ($req->subject_name === $old) {
+                            $req->subject_name = $new;
+                        }
+                        break;
+                    }
+                }
+                $details = $req->details;
+                $cardId = (int) ($req->params['card'] ?? 0);
+                if (isset($renamedCards[$cardId], $details['original_signature']) && is_array($payload) && isset($payload['week'])
+                    && ($card = TimetableCard::find($cardId))) {
+                    $before = (clone $card)->setAttribute('subject_name', $renamedCards[$cardId][0]);
+                    if ($approval->proposalSignature($before, (int) $payload['week']) === $details['original_signature']) {
+                        $details['original_signature'] = $approval->proposalSignature($card, (int) $payload['week']);
+                        $req->details = $details;
+                    }
+                }
+                if ($req->isDirty()) {
+                    $req->save();
+                }
+            }
+        }
         // O'zgartirish so'rovlarida yo'nalish/kurs yo'q — doskada eski nomli karta umuman qolmagan bo'lsagina.
         if (Schema::hasTable('timetable_change_requests')) {
             foreach (array_unique(array_map(fn ($r) => $r[2] . "\0" . $r[3], $renames)) as $pair) {

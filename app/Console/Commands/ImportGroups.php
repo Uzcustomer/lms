@@ -38,6 +38,8 @@ class ImportGroups extends Command
         $page = 1;
         $pageSize = 40;
         $this->resetImportStats();
+        $seen = [];
+        $complete = false;
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/group-list?limit=$pageSize&page=$page");
@@ -72,9 +74,11 @@ class ImportGroups extends Command
                     );
 
                     $this->trackImport($group, $groupData['name'] ?? null);
+                    $seen[(int) $groupData['id']] = true;
                 }
 
                 $page++;
+                $complete = $page > $totalPages;
             } else {
                 $telegram->notify("❌ Guruhlar importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for groups.');
@@ -82,8 +86,16 @@ class ImportGroups extends Command
             }
         } while ($page <= $totalPages);
 
+        // HEMIS ro'yxatida umuman ko'rinmagan (HEMISda nofaol/o'chirilgan) guruhlar — nofaol; faqat import to'liq bo'lsa.
+        $deactivated = $complete ? Group::deactivateMissingFromHemis(array_keys($seen)) : [];
+        if ($deactivated) {
+            $this->warn('HEMIS ro\'yxatida yo\'q, nofaol qilindi: ' . count($deactivated) . ' ta — ' . implode(', ', array_slice($deactivated, 0, 15)));
+        }
+
         $this->renderImportSummary("Guruhlar");
-        $telegram->notify($this->importTelegramMessage("Guruhlar"));
+        $telegram->notify($this->importTelegramMessage("Guruhlar") . ($deactivated
+            ? "\n⚪ Nofaol qilindi (HEMIS ro'yxatida yo'q): " . count($deactivated) . ' ta — ' . implode(', ', array_slice($deactivated, 0, 10))
+            : ''));
         $this->info('Groups import completed successfully.');
     }
 }

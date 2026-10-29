@@ -176,7 +176,10 @@ test('kesilgan javob xato sifatida qayd etiladi', function () {
 
     expect(fn () => client()->generateJson([['text' => 'x']], ['type' => 'OBJECT']))
         ->toThrow(RuntimeException::class, 'Gemini javob bermadi');
-    expect(VedomostAiRequest::value('error_type'))->toBe('truncated');
+    expect(VedomostAiRequest::value('error_type'))->toBe('truncated')
+        // Zaxira model bo'sh qoldirilgan — faqat bitta so'rov.
+        ->and(VedomostAiRequest::count())->toBe(1)
+        ->and(app(VedomostAiSettings::class)->get('fallback_model'))->toBeNull();
 });
 
 test('kalit bazada shifrlangan saqlanadi', function () {

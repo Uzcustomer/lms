@@ -18,7 +18,7 @@ class VedomostAiSettings
     /** Maydon => [standart qiymat, turi]. */
     private const FIELDS = [
         'model'          => ['gemini-2.5-flash', 'string'],
-        'fallback_model' => ['gemini-2.5-flash-lite', 'string'],
+        'fallback_model' => ['gemini-2.5-flash-lite', 'string?'],
         'timeout'        => [120, 'int'],
         'max_retries'    => [2, 'int'],
         'thinking_budget' => [null, 'int?'],

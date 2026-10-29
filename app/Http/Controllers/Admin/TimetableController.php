@@ -1422,6 +1422,9 @@ class TimetableController extends Controller
         if ($request->boolean('dry_run') || !\App\Services\Timetable\BoardSnapshots::ready()) {
             return;
         }
+        // Nusxa butun doskani (8000+ karta, 40000+ haftalik yozuv) xotiraga oladi — 128M yetmaydi.
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
         $actor = $this->timetableActor($request);
         app(\App\Services\Timetable\BoardSnapshots::class)->take($board, $reason, $actor?->full_name ?? $actor?->name);
     }
@@ -1432,6 +1435,9 @@ class TimetableController extends Controller
      */
     public function generateCards(Request $request, TimetableBoard $board)
     {
+        // Sinxronlash: nusxa + oldingi/keyingi holatni solishtirish + KTR rejalari — butun doska xotirada.
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
         $specsFound = [];
         $rows = $this->assembleRows($board, null, null, $specsFound);
         if ($rows === null) {

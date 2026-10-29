@@ -10,6 +10,7 @@ use App\Models\StudentVisaInfo;
 use App\Models\StudentVisaInfoHistory;
 use App\Services\StudentVisaHistoryService;
 use App\Services\TelegramService;
+use App\Services\VisaSettings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -87,7 +88,7 @@ class InternationalStudentController extends Controller
 
         $students = $query->paginate(25)->withQueryString();
 
-        $firms = StudentVisaInfo::FIRM_OPTIONS;
+        $firms = VisaSettings::firmOptions();
 
         // Filtr ro'yxatlari FILTRLANGAN natijadan quriladi — firma tanlangandan
         // keyin qolgan ustunlarda faqat shu natijadagi qiymatlar ko'rinsin.
@@ -112,7 +113,7 @@ class InternationalStudentController extends Controller
             ->whereNotNull('level_code')->where('level_code', '!=', '')
             ->distinct()->pluck('level_code')->sort()->values();
 
-        // Firmalar: ro'yxat qat'iy (FIRM_OPTIONS), lekin qaysilari natijada
+        // Firmalar: ro'yxat qat'iy (sozlamalardagi firmalar), lekin qaysilari natijada
         // uchrashini ko'rsatish uchun mavjudlari alohida olinadi.
         $usedFirms = StudentVisaInfo::whereIn('student_id', $optionsQuery('firm', 'firms')->pluck('students.id'))
             ->whereNotNull('firm')->where('firm', '!=', '')
@@ -160,12 +161,12 @@ class InternationalStudentController extends Controller
 
         $visaUrgentCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
             ->whereNotNull('visa_end_date')
-            ->whereDate('visa_end_date', '<=', now()->addDays(30))
+            ->whereDate('visa_end_date', '<=', now()->addDays(VisaSettings::threshold('visa', 'info')))
             ->whereDate('visa_end_date', '>=', now())
             ->count();
         $regUrgentCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
             ->whereNotNull('registration_end_date')
-            ->whereDate('registration_end_date', '<=', now()->addDays(7))
+            ->whereDate('registration_end_date', '<=', now()->addDays(VisaSettings::threshold('registration', 'info')))
             ->whereDate('registration_end_date', '>=', now())
             ->count();
         $expiredVisaCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
@@ -201,7 +202,10 @@ class InternationalStudentController extends Controller
         // barcha talabalarni belgilashi uchun to'liq id ro'yxati beriladi.
         $allFilteredIds = $filteredIds->map(fn ($id) => (string) $id)->values();
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms', 'visaBlockEnabled', 'allFilteredIds'));
+        // Sozlamalar tugmasi faqat admin/superadmin ga ko'rinadi
+        $canManageSettings = (bool) auth()->user()?->hasRole(['superadmin', 'admin']);
+
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms', 'visaBlockEnabled', 'allFilteredIds', 'canManageSettings'));
     }
 
     /**
@@ -315,6 +319,18 @@ class InternationalStudentController extends Controller
             $query->where('department_id', $request->department);
         }
 
+        if (!in_array('residence_basis', $except, true) && $request->filled('residence_basis')
+            && array_key_exists($request->residence_basis, StudentVisaInfo::BASIS_LABELS)
+            && Schema::hasColumn('student_visa_infos', 'residence_basis')) {
+            $basis = $request->residence_basis;
+            $query->whereHas('visaInfo', function ($q) use ($basis) {
+                // Eski yozuvlarda asos bo'sh — ular viza bilan deb hisoblanadi
+                $basis === StudentVisaInfo::BASIS_VISA
+                    ? $q->where(fn($q2) => $q2->whereNull('residence_basis')->orWhere('residence_basis', $basis))
+                    : $q->where('residence_basis', $basis);
+            });
+        }
+
         if (!in_array('data_status', $except, true) && $request->filled('data_status')) {
             if ($request->data_status === 'filled') {
                 $query->whereHas('visaInfo', fn($q) => $q->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
@@ -426,14 +442,17 @@ class InternationalStudentController extends Controller
         $telegram = app(TelegramService::class);
         $sent = 0;
 
+        $regDanger = VisaSettings::threshold('registration', 'danger');
+        $visaDanger = VisaSettings::threshold('visa', 'danger');
+
         $visaInfos = StudentVisaInfo::with('student')
-            ->where(function ($q) {
-                $q->where(function ($q2) {
+            ->where(function ($q) use ($regDanger, $visaDanger) {
+                $q->where(function ($q2) use ($regDanger) {
                     $q2->whereNotNull('registration_end_date')
-                       ->whereDate('registration_end_date', '<=', now()->addDays(3));
-                })->orWhere(function ($q2) {
+                       ->whereDate('registration_end_date', '<=', now()->addDays($regDanger));
+                })->orWhere(function ($q2) use ($visaDanger) {
                     $q2->whereNotNull('visa_end_date')
-                       ->whereDate('visa_end_date', '<=', now()->addDays(15));
+                       ->whereDate('visa_end_date', '<=', now()->addDays($visaDanger));
                 });
             })->get();
 
@@ -446,12 +465,12 @@ class InternationalStudentController extends Controller
             $visaDays = $info->visaDaysLeft();
             $en = str_starts_with(strtolower($student->group_name ?? ''), 'xd') || str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy');
 
-            if ($regDays !== null && $regDays <= 3) {
+            if ($regDays !== null && $regDays <= $regDanger) {
                 $parts[] = $en
                     ? ($regDays <= 0 ? "Registration expired!" : "Registration expires in {$regDays} days!")
                     : ($regDays <= 0 ? "Registratsiya muddati tugagan!" : "Registratsiya muddati tugashiga {$regDays} kun!");
             }
-            if ($visaDays !== null && $visaDays <= 15) {
+            if ($visaDays !== null && $visaDays <= $visaDanger) {
                 $parts[] = $en
                     ? ($visaDays <= 0 ? "Visa expired!" : "Visa expires in {$visaDays} days!")
                     : ($visaDays <= 0 ? "Viza muddati tugagan!" : "Viza muddati tugashiga {$visaDays} kun!");
@@ -534,19 +553,22 @@ class InternationalStudentController extends Controller
             ->selectRaw('firm, count(*) as cnt')->groupBy('firm')->orderByDesc('cnt')->pluck('cnt', 'firm');
 
         // Viza muddati
+        $visaInfoDays = VisaSettings::threshold('visa', 'info');
+        $regInfoDays = VisaSettings::threshold('registration', 'info');
         $visaExpired = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '<', now())->count();
-        $visa30 = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '>=', now())->whereDate('visa_end_date', '<=', now()->addDays(30))->count();
-        $visaOk = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '>', now()->addDays(30))->count();
+        $visa30 = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '>=', now())->whereDate('visa_end_date', '<=', now()->addDays($visaInfoDays))->count();
+        $visaOk = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '>', now()->addDays($visaInfoDays))->count();
 
         // Registratsiya muddati
         $regExpired = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '<', now())->count();
-        $reg7 = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '>=', now())->whereDate('registration_end_date', '<=', now()->addDays(7))->count();
-        $regOk = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '>', now()->addDays(7))->count();
+        $reg7 = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '>=', now())->whereDate('registration_end_date', '<=', now()->addDays($regInfoDays))->count();
+        $regOk = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '>', now()->addDays($regInfoDays))->count();
 
         return view('admin.international-students.statistics', compact(
             'total', 'filled', 'notFilled', 'approved', 'pending', 'rejected',
             'byCountry', 'byLevel', 'byDept', 'byFirm',
-            'visaExpired', 'visa30', 'visaOk', 'regExpired', 'reg7', 'regOk'
+            'visaExpired', 'visa30', 'visaOk', 'regExpired', 'reg7', 'regOk',
+            'visaInfoDays', 'regInfoDays'
         ));
     }
 
@@ -850,7 +872,7 @@ class InternationalStudentController extends Controller
             'passport_handed_at' => null,
             'passport_received_by' => null,
             'status' => 'pending',
-            'visa_info_deadline' => now()->addDays(3),
+            'visa_info_deadline' => now()->addDays(VisaSettings::infoDeadlineDays()),
         ];
 
         if ($type === 'visa') {
@@ -1098,7 +1120,7 @@ class InternationalStudentController extends Controller
     public function storeVisa(Request $request, Student $student)
     {
         // Sanalarni dd.mm.yyyy / dd/mm/yyyy / dd,mm,yyyy / dd-mm-yyyy formatdan Y-m-d ga o'tkazish
-        $dateFields = ['passport_issued_date','passport_expiry_date','registration_start_date','registration_end_date','visa_start_date','visa_end_date','visa_issued_date','entry_date'];
+        $dateFields = ['passport_issued_date','passport_expiry_date','registration_start_date','registration_end_date','visa_start_date','visa_end_date','visa_issued_date','entry_date','residence_permit_issued_date','residence_permit_expiry_date'];
         foreach ($dateFields as $field) {
             $val = $request->input($field);
             if ($val && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $val)) {
@@ -1131,6 +1153,14 @@ class InternationalStudentController extends Controller
             'visa_issued_place' => 'nullable|string|max:255',
             'visa_issued_date' => 'nullable|date',
             'entry_date' => 'nullable|date',
+            'residence_basis' => 'nullable|in:' . implode(',', array_keys(StudentVisaInfo::BASIS_LABELS)),
+            'residence_permit_number' => 'nullable|string|max:50',
+            'residence_permit_pinfl' => 'nullable|digits:14',
+            'residence_permit_issued_place' => 'nullable|string|max:255',
+            'residence_permit_issued_date' => 'nullable|date',
+            'residence_permit_expiry_date' => 'nullable|date',
+        ], [
+            'residence_permit_pinfl.digits' => 'Shaxsiy raqam 14 ta raqamdan iborat bo\'lishi kerak.',
         ]);
 
         $data = $request->only([
@@ -1139,7 +1169,9 @@ class InternationalStudentController extends Controller
             'registration_start_date', 'registration_end_date',
             'visa_number', 'visa_type', 'visa_start_date', 'visa_end_date',
             'visa_entries_count', 'visa_stay_days', 'visa_issued_place', 'visa_issued_date',
-            'entry_date',
+            'entry_date', 'residence_basis',
+            'residence_permit_number', 'residence_permit_pinfl', 'residence_permit_issued_place',
+            'residence_permit_issued_date', 'residence_permit_expiry_date',
         ]);
         $data['birth_date'] = $student->birth_date;
         $data['agreement_accepted'] = true;
@@ -1153,6 +1185,12 @@ class InternationalStudentController extends Controller
         // Bo'sh qiymatlarni olib tashlash — eski ma'lumotni o'chirmasligi uchun
         $data = array_filter($data, fn($v) => $v !== null && $v !== '');
 
+        // Asos tanlangan bo'lsa, unga tegishli bo'lmagan maydonlar tozalanadi
+        $basis = $data['residence_basis'] ?? null;
+        if ($basis) {
+            $data = array_merge($data, array_intersect_key(StudentVisaInfo::fieldsClearedFor($basis), array_flip($columns)));
+        }
+
         $historyService = app(StudentVisaHistoryService::class);
         $oldValues = $existing ? $historyService->fieldsFrom($existing) : null;
 
@@ -1160,12 +1198,14 @@ class InternationalStudentController extends Controller
 
         // PDF fayllar — eski fayllar diskdan O'CHIRILMAYDI (tarix uchun saqlanadi)
         $storagePath = 'student-visa/' . $student->id;
+        $allowedDocs = VisaSettings::DOCS_BY_BASIS[$visaInfo->basis()];
         foreach ([
             'passport_scan' => 'passport_scan_path',
             'visa_scan' => 'visa_scan_path',
             'registration_doc' => 'registration_doc_path',
+            'residence_permit_scan' => 'residence_permit_scan_path',
         ] as $inputName => $dbField) {
-            if ($request->hasFile($inputName)) {
+            if ($request->hasFile($inputName) && in_array($inputName, $allowedDocs, true)) {
                 $visaInfo->$dbField = $request->file($inputName)->store($storagePath, 'public');
             }
         }
@@ -1292,7 +1332,7 @@ class InternationalStudentController extends Controller
     {
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
 
-        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path'];
+        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path', 'residence_permit_scan_path'];
         if (!in_array($field, $allowed) || !$visaInfo->$field) {
             abort(404);
         }
@@ -1324,7 +1364,7 @@ class InternationalStudentController extends Controller
      */
     public function showHistoryFile(Student $student, int $historyId, string $field)
     {
-        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path'];
+        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path', 'residence_permit_scan_path'];
         if (!in_array($field, $allowed)) {
             abort(404);
         }
@@ -1382,6 +1422,7 @@ class InternationalStudentController extends Controller
             'passport' => 'passport_scan_path',
             'viza' => 'visa_scan_path',
             'registratsiya' => 'registration_doc_path',
+            'guvohnoma' => 'residence_permit_scan_path',
         ];
 
         $tmp = tempnam(sys_get_temp_dir(), 'intl_docs_');

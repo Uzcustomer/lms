@@ -24,14 +24,14 @@ class UserController extends Controller
     public function create()
     {
         $roles = ProjectRole::staffRoles();
-        $firmOptions = StudentVisaInfo::FIRM_OPTIONS;
+        $firmOptions = \App\Services\VisaSettings::firmOptions();
         return view('admin.users.create', compact('roles', 'firmOptions'));
     }
 
     public function edit(User $user)
     {
         $roles = ProjectRole::staffRoles();
-        $firmOptions = StudentVisaInfo::FIRM_OPTIONS;
+        $firmOptions = \App\Services\VisaSettings::firmOptions();
         return view('admin.users.edit', compact('user', 'roles', 'firmOptions'));
     }
 

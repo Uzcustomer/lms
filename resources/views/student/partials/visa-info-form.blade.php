@@ -1,4 +1,15 @@
-<form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='BUTTON'){event.preventDefault();}">
+@php
+    $basisRule = $basisRule ?? \App\Services\VisaSettings::ruleFor($student);
+    $basisValue = $basisRule['show_choice']
+        ? old('residence_basis', $visaInfo?->residence_basis ?? '')
+        : ($visaInfo?->residence_basis ?: $basisRule['default_basis']);
+    $requiredDocsByBasis = [];
+    foreach (array_keys(\App\Models\StudentVisaInfo::BASIS_LABELS) as $b) {
+        $requiredDocsByBasis[$b] = \App\Services\VisaSettings::requiredDocs($b);
+    }
+@endphp
+<form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='BUTTON'){event.preventDefault();}"
+      x-data="{ basis: @js($basisValue), requiredDocs: @js($requiredDocsByBasis), docRequired(doc) { return (this.requiredDocs[this.basis] || []).includes(doc); } }">
     @csrf
 
     {{-- Ogohlantirish --}}
@@ -19,6 +30,31 @@
             <div><span class="text-[10px] text-gray-400">{{ __('Davlat') }}</span><br><span class="text-sm text-gray-800">{{ $student->country_name ? __($student->country_name) : '—' }}</span></div>
         </div>
     </div>
+
+    {{-- O'zbekistonda turish asosi --}}
+    @if($basisRule['show_choice'])
+        <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+            <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:4px;">O'zbekistonda turish asosi / Legal basis of stay <span class="text-red-500">*</span></div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">Hujjatingizga mos variantni tanlang / Choose the option that matches your documents</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                @foreach([
+                    'visa' => ['Viza bilan', 'With a visa', 'Viza va vaqtinchalik registratsiya'],
+                    'visa_free' => ['Vizasiz', 'Visa-free', 'Faqat vaqtinchalik registratsiya'],
+                    'residence_permit' => ['Yashash guvohnomasi', 'Residence permit', 'Viza va registratsiya kerak emas'],
+                ] as $key => [$uz, $en, $hint])
+                    <label class="flex items-start gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition"
+                           :class="basis === '{{ $key }}' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'">
+                        <input type="radio" name="residence_basis" value="{{ $key }}" x-model="basis" required class="mt-1 text-sky-600 focus:ring-sky-500">
+                        <span>
+                            <span class="font-semibold">{{ $uz }} / {{ $en }}</span><br>
+                            <span class="text-xs text-gray-500">{{ __($hint) }}</span>
+                        </span>
+                    </label>
+                @endforeach
+            </div>
+            @error('residence_basis') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
+    @endif
 
     {{-- Tug'ilgan joy --}}
     <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
@@ -133,9 +169,8 @@
     </div>
     </div>
 
-    {{-- Registratsiya + Viza yonma-yon --}}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div class="p-4 bg-white rounded-lg border border-gray-200">
+    {{-- Vaqtinchalik registratsiya (yashash guvohnomasi borlarga kerak emas) --}}
+    <fieldset x-show="basis === 'visa' || basis === 'visa_free'" :disabled="!(basis === 'visa' || basis === 'visa_free')" class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
             <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px;">Vaqtinchalik ro'yxatga qo'yish (registratsiya) / Temporary Registration</div>
             <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">Vaqtinchalik registratsiya — pasportingizning orqasida yopishtirilgan qog'ozda / The paper attached to the back of your passport</div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -152,9 +187,54 @@
             @error('registration_end_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
+    </fieldset>
+
+    {{-- Yashash guvohnomasi --}}
+    <fieldset x-show="basis === 'residence_permit'" :disabled="basis !== 'residence_permit'" class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+        <div style="font-size:11px;font-weight:700;color:#0e7490;margin-bottom:4px;">Xorijiy fuqaro uchun yashash guvohnomasi / Residence permit</div>
+        <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">Ma'lumotlarni guvohnoma kartasidan ko'chiring / Copy the data from your ID card</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Karta raqami / Card number <span class="text-red-500">*</span></label>
+                <input type="text" name="residence_permit_number" value="{{ old('residence_permit_number', $visaInfo?->residence_permit_number ?? '') }}" required
+                       placeholder="Masalan: XS0064114"
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 uppercase" oninput="this.value=this.value.toUpperCase()">
+                @error('residence_permit_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Shaxsiy raqam (JShShIR) / Personal number <span class="text-red-500">*</span></label>
+                <input type="text" name="residence_permit_pinfl" value="{{ old('residence_permit_pinfl', $visaInfo?->residence_permit_pinfl ?? '') }}" required
+                       inputmode="numeric" maxlength="14" pattern="\d{14}" placeholder="14 ta raqam"
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" oninput="this.value=this.value.replace(/\D/g,'')">
+                @error('residence_permit_pinfl') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Berilgan joyi / Place of issue <span class="text-red-500">*</span></label>
+                <input type="text" name="residence_permit_issued_place" value="{{ old('residence_permit_issued_place', $visaInfo?->residence_permit_issued_place ?? '') }}" required
+                       placeholder="Masalan: IIV 22000"
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 uppercase" oninput="this.value=this.value.toUpperCase()">
+                @error('residence_permit_issued_place') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Berilgan sanasi / Date of issue <span class="text-red-500">*</span></label>
+                <input type="text" data-datepicker="1" name="residence_permit_issued_date" value="{{ old('residence_permit_issued_date', $visaInfo?->residence_permit_issued_date?->format('Y-m-d') ?? '') }}" required
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                @error('residence_permit_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Amal qilish muddati / Date of expiry <span class="text-red-500">*</span></label>
+                <input type="text" data-datepicker="1" name="residence_permit_expiry_date" value="{{ old('residence_permit_expiry_date', $visaInfo?->residence_permit_expiry_date?->format('Y-m-d') ?? '') }}" required
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                @error('residence_permit_expiry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+        </div>
+    </fieldset>
 
     {{-- Yashash manzili --}}
-    <div class="mt-4" x-data="{ addressType: '{{ old('address_type', $visaInfo?->address_type ?? 'dormitory') }}' }">
+    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+    <div x-data="{ addressType: '{{ old('address_type', $visaInfo?->address_type ?? 'dormitory') }}' }">
         <label class="block text-sm font-medium text-gray-700 mb-2">{{ __('Hozirgi yashash manzili') }} <span class="text-red-500">*</span></label>
         <div class="flex gap-3 mb-3">
             <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition"
@@ -171,7 +251,7 @@
             </label>
         </div>
         <div x-show="addressType === 'dormitory'" style="padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#166534;">
-            {{ \App\Models\StudentVisaInfo::DORMITORY_ADDRESS }}
+            {{ \App\Services\VisaSettings::dormitoryAddress() }}
         </div>
         <div x-show="addressType === 'other'" x-transition>
             <input type="text" name="current_address" value="{{ old('current_address', $visaInfo?->current_address ?? '') }}"
@@ -180,12 +260,10 @@
         </div>
         @error('current_address') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
     </div>
-
-    </div>
     </div>
 
-    {{-- Viza --}}
-    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+    {{-- Viza (faqat viza bilan kelganlarga) --}}
+    <fieldset x-show="basis === 'visa'" :disabled="basis !== 'visa'" class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
         <div style="font-size:11px;font-weight:700;color:#d97706;margin-bottom:10px;">{{ __('Viza ma\'lumotlari') }}</div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
@@ -198,7 +276,7 @@
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza turi') }} <span class="text-red-500">*</span></label>
             <select name="visa_type" required class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="">{{ __('Tanlang') }}</option>
-                @foreach(\App\Models\StudentVisaInfo::VISA_TYPES as $key => $label)
+                @foreach(\App\Services\VisaSettings::visaTypes() as $key => $label)
                     <option value="{{ $key }}" {{ old('visa_type', $visaInfo?->visa_type ?? '') === $key ? 'selected' : '' }}>{{ $label }}</option>
                 @endforeach
             </select>
@@ -252,10 +330,10 @@
             @error('visa_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
-    </div>
+    </fieldset>
 
-    {{-- Chegaradan kirish --}}
-    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+    {{-- Chegaradan kirish (yashash guvohnomasi borlarga kerak emas) --}}
+    <fieldset x-show="basis && basis !== 'residence_permit'" :disabled="!basis || basis === 'residence_permit'" class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
         <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:10px;">{{ __('Chegaradan kirish') }}</div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -265,7 +343,7 @@
             @error('entry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
-    </div>
+    </fieldset>
 
     {{-- Hujjatlar --}}
     <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
@@ -279,7 +357,7 @@
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport skaneri (PDF)') }} <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport skaneri (PDF)') }} <span class="text-red-500" x-show="docRequired('passport_scan')">*</span></label>
             @if($visaInfo?->passport_scan_path)
                 <div class="mb-2">
                     <a href="{{ route('student.visa-info.file', 'passport_scan_path') }}" target="_blank" class="text-xs text-indigo-600 hover:underline">{{ __('Yuklangan faylni ko\'rish') }}</a>
@@ -290,8 +368,8 @@
             <p data-file-error class="text-xs text-red-600 mt-1 hidden"></p>
             @error('passport_scan') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza skaneri (PDF)') }} <span class="text-red-500">*</span></label>
+        <div x-show="basis === 'visa'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza skaneri (PDF)') }} <span class="text-red-500" x-show="docRequired('visa_scan')">*</span></label>
             @if($visaInfo?->visa_scan_path)
                 <div class="mb-2">
                     <a href="{{ route('student.visa-info.file', 'visa_scan_path') }}" target="_blank" class="text-xs text-indigo-600 hover:underline">{{ __('Yuklangan faylni ko\'rish') }}</a>
@@ -302,8 +380,8 @@
             <p data-file-error class="text-xs text-red-600 mt-1 hidden"></p>
             @error('visa_scan') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Ro\'yxatga olish hujjati (PDF)') }} <span class="text-red-500">*</span></label>
+        <div x-show="basis === 'visa' || basis === 'visa_free'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Ro\'yxatga olish hujjati (PDF)') }} <span class="text-red-500" x-show="docRequired('registration_doc')">*</span></label>
             @if($visaInfo?->registration_doc_path)
                 <div class="mb-2">
                     <a href="{{ route('student.visa-info.file', 'registration_doc_path') }}" target="_blank" class="text-xs text-indigo-600 hover:underline">{{ __('Yuklangan faylni ko\'rish') }}</a>
@@ -313,6 +391,19 @@
                    class="w-full text-sm border-gray-300 rounded-lg file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
             <p data-file-error class="text-xs text-red-600 mt-1 hidden"></p>
             @error('registration_doc') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
+        <div x-show="basis === 'residence_permit'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Yashash guvohnomasi skaneri (PDF)') }} <span class="text-red-500" x-show="docRequired('residence_permit_scan')">*</span></label>
+            <div style="font-size:10px;color:#64748b;margin-bottom:4px;">{{ __('Kartaning ikki tomoni bitta PDF faylda') }}</div>
+            @if($visaInfo?->residence_permit_scan_path)
+                <div class="mb-2">
+                    <a href="{{ route('student.visa-info.file', 'residence_permit_scan_path') }}" target="_blank" class="text-xs text-indigo-600 hover:underline">{{ __('Yuklangan faylni ko\'rish') }}</a>
+                </div>
+            @endif
+            <input type="file" name="residence_permit_scan" accept=".pdf" onchange="checkPdfSize(this)"
+                   class="w-full text-sm border-gray-300 rounded-lg file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+            <p data-file-error class="text-xs text-red-600 mt-1 hidden"></p>
+            @error('residence_permit_scan') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
     </div>

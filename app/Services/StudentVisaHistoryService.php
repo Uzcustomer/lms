@@ -21,6 +21,8 @@ class StudentVisaHistoryService
         'visa_issued_place', 'visa_issued_date', 'visa_entries_count', 'visa_stay_days',
         'visa_scan_path', 'visa_process_status',
         'entry_date', 'firm', 'firm_custom',
+        'residence_basis', 'residence_permit_number', 'residence_permit_pinfl', 'residence_permit_issued_place',
+        'residence_permit_issued_date', 'residence_permit_expiry_date', 'residence_permit_scan_path',
         'status', 'rejection_reason',
     ];
 

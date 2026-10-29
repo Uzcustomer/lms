@@ -1,3 +1,7 @@
+@php
+    $regT = \App\Services\VisaSettings::thresholds('registration');
+    $visaT = \App\Services\VisaSettings::thresholds('visa');
+@endphp
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">Viza va registratsiya — {{ $firmName }}</h2>
@@ -71,7 +75,7 @@
                                     $visa = $student->visaInfo;
                                     $regDays = $visa?->registrationDaysLeft();
                                     $visaDays = $visa?->visaDaysLeft();
-                                    $isUrgent = ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15);
+                                    $isUrgent = ($regDays !== null && $regDays <= $regT['danger']) || ($visaDays !== null && $visaDays <= $visaT['danger']);
                                     $rp = $visa->registration_process_status ?? 'none';
                                     $vp = $visa->visa_process_status ?? 'none';
                                 @endphp
@@ -84,11 +88,11 @@
                                     <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
                                     <td>
                                         @if($visa->registration_end_date)
-                                            <span class="int-date {{ $regDays <= 3 ? 'int-date-danger' : ($regDays <= 5 ? 'int-date-warn' : ($regDays <= 7 ? 'int-date-ok' : '')) }}">
+                                            <span class="int-date {{ $regDays <= $regT['danger'] ? 'int-date-danger' : ($regDays <= $regT['warning'] ? 'int-date-warn' : ($regDays <= $regT['info'] ? 'int-date-ok' : '')) }}">
                                                 {{ $visa->registration_end_date->format('d.m.Y') }}
                                             </span>
-                                            @if($regDays !== null && $regDays <= 7)
-                                                <span class="int-days-badge {{ $regDays <= 0 ? 'int-days-expired' : ($regDays <= 3 ? 'int-days-danger' : ($regDays <= 5 ? 'int-days-warn' : 'int-days-ok')) }}">
+                                            @if($regDays !== null && $regDays <= $regT['info'])
+                                                <span class="int-days-badge {{ $regDays <= 0 ? 'int-days-expired' : ($regDays <= $regT['danger'] ? 'int-days-danger' : ($regDays <= $regT['warning'] ? 'int-days-warn' : 'int-days-ok')) }}">
                                                     {{ $regDays <= 0 ? 'TUGAGAN' : $regDays . ' kun' }}
                                                 </span>
                                             @endif
@@ -98,11 +102,11 @@
                                     </td>
                                     <td>
                                         @if($visa->visa_end_date)
-                                            <span class="int-date {{ $visaDays <= 15 ? 'int-date-danger' : ($visaDays <= 20 ? 'int-date-warn' : ($visaDays <= 30 ? 'int-date-ok' : '')) }}">
+                                            <span class="int-date {{ $visaDays <= $visaT['danger'] ? 'int-date-danger' : ($visaDays <= $visaT['warning'] ? 'int-date-warn' : ($visaDays <= $visaT['info'] ? 'int-date-ok' : '')) }}">
                                                 {{ $visa->visa_end_date->format('d.m.Y') }}
                                             </span>
-                                            @if($visaDays !== null && $visaDays <= 30)
-                                                <span class="int-days-badge {{ $visaDays <= 0 ? 'int-days-expired' : ($visaDays <= 15 ? 'int-days-danger' : ($visaDays <= 20 ? 'int-days-warn' : 'int-days-ok')) }}">
+                                            @if($visaDays !== null && $visaDays <= $visaT['info'])
+                                                <span class="int-days-badge {{ $visaDays <= 0 ? 'int-days-expired' : ($visaDays <= $visaT['danger'] ? 'int-days-danger' : ($visaDays <= $visaT['warning'] ? 'int-days-warn' : 'int-days-ok')) }}">
                                                     {{ $visaDays <= 0 ? 'TUGAGAN' : $visaDays . ' kun' }}
                                                 </span>
                                             @endif

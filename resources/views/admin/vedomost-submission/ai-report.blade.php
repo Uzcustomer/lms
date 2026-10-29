@@ -68,11 +68,11 @@
         .xl thead tr.names th { position: sticky; top: 22px; z-index: 4; background: #fff; font-weight: 700; text-align: center; white-space: normal; line-height: 1.2; height: 34px; min-width: 48px; }
         .xl thead tr.names th.h { background: var(--head); }
         .xl .rn { position: sticky; left: 0; z-index: 3; background: var(--hdr) !important; color: var(--hdr-text); text-align: center; width: 40px; min-width: 40px; font-size: 12px; }
-        .xl thead .rn { z-index: 6; }
+        .xl thead tr th.rn { z-index: 7; }
         .xl .c-a { position: sticky; left: 40px; z-index: 2; width: 36px; min-width: 36px; text-align: center; }
         .xl .c-b { position: sticky; left: 76px; z-index: 2; width: 300px; min-width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; text-align: left; }
         .xl .c-c { position: sticky; left: 376px; z-index: 2; width: 116px; min-width: 116px; text-align: left; border-right: 2px solid #9ca3af; }
-        .xl thead .c-a, .xl thead .c-b, .xl thead .c-c { z-index: 5; }
+        .xl thead tr th.c-a, .xl thead tr th.c-b, .xl thead tr th.c-c { z-index: 6; }
         .xl td.y { background: var(--yellow); }
         .xl td.o { background: var(--orange); }
         .xl td.l { background: var(--light); }
@@ -379,7 +379,7 @@
             });
             body += `<td class="txt ${row.kont_fio === null ? 'y' : ''}">${esc(row.kont_fio ?? "KONTINGENTDA YO'Q")}</td>`;
             body += `<td class="txt"><span class="st ${row.status}">${icon(ST_ICON[row.status] || 'i-info')}${esc(STATUS_TXT[row.status] || '')}</span></td>`;
-            body += `<td class="note" data-ref="Izoh${ri + 2}" title="${esc((row.flags || []).map(f => f.m).join('\n'))}">${(row.flags || []).map(f => esc(f.m)).join(' · ')}</td></tr>`;
+            body += `<td class="note" title="${esc((row.flags || []).map(f => f.m).join('\n'))}">${(row.flags || []).map(f => esc(f.m)).join(' · ')}</td></tr>`;
         });
         document.getElementById('sheet-main').innerHTML = shown === 0
             ? `<div class="empty">${filter === 'problems' ? "Muammoli qator yo'q — barcha talabalar mos keladi." : "Filtr bo'yicha qator yo'q."}</div>`
@@ -470,7 +470,12 @@
         document.querySelectorAll('.xl td.sel').forEach(x => x.classList.remove('sel'));
         if (!td) return;
         td.classList.add('sel');
-        const ref = td.dataset.ref || '';
+        // Katak manzili: ustun harfi (sarlavha) + qator raqami — har qanday katak uchun.
+        const tr = td.parentElement;
+        const lt = td.closest('table').querySelector('thead tr.letters');
+        const col = lt ? (lt.children[td.cellIndex] || {}).textContent || '' : '';
+        const rn = tr.querySelector('.rn');
+        const ref = td.dataset.ref || (col && rn ? col + rn.textContent : '');
         document.getElementById('f-ref').textContent = ref || '—';
         let txt = td.textContent;
         if (td.dataset.field) txt = `${td.dataset.fio || ''} — ${td.dataset.label || ''}: ${td.textContent || '∅'}` + (td.dataset.hemis !== undefined ? `   |   HEMIS: ${td.dataset.hemis || '∅'}` : '');
@@ -478,8 +483,8 @@
         document.getElementById('f-val').textContent = txt;
     }
     document.addEventListener('click', e => {
-        const td = e.target.closest('.xl td');
-        if (td) showCell(td);
+        const td = e.target.closest('.xl tbody td');
+        if (td && !td.querySelector('input') && !e.target.closest('button')) selectCell(td.classList.contains('rn') ? td.nextElementSibling : td);
         const go = e.target.closest('[data-goto]');
         if (go) {
             filter = 'all'; setChips(); renderMain(); showTab('main');
@@ -505,7 +510,7 @@
         if (f === 'id') return e.scan_id ?? e.id ?? '';
         return (e.pdf || {})[f] ?? '';
     }
-    function startEdit(td) {
+    function startEdit(td, mode = 'edit') {
         if (!td || !td.dataset.key || td.querySelector('input')) return;
         const key = td.dataset.key, f = td.dataset.field;
         const e = findEntry(key);
@@ -513,6 +518,7 @@
         const orig = (e.edited || []).includes(f) ? String((e.orig || {})[f] ?? '').trim() : saved;
         const input = document.createElement('input');
         input.className = 'ci';
+        input.dataset.mode = mode;
         input.value = pdfVal(Object.assign({}, e, { key }), f);
         input.setAttribute('aria-label', (td.dataset.label || f) + ' — ' + (td.dataset.fio || ''));
         if (['fio', 'id'].includes(f)) input.style.textAlign = 'left';
@@ -533,9 +539,13 @@
         };
         input.addEventListener('keydown', ev => {
             ev.stopPropagation();
-            if (ev.key === 'Enter') { ev.preventDefault(); commit('down'); }
+            const arrows = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+            if (ev.key === 'Enter') { ev.preventDefault(); commit(ev.shiftKey ? 'up' : 'down'); }
             else if (ev.key === 'Tab') { ev.preventDefault(); commit(ev.shiftKey ? 'left' : 'right'); }
             else if (ev.key === 'Escape') { done = true; renderAll(); refocus(sheet, key, f); }
+            // Excel: yozishni boshlagan bo'lsangiz strelka katakni saqlab, keyingisiga o'tadi;
+            // F2 / Enter / ikki marta bosish bilan ochilganda chap-o'ng strelka matn ichida yuradi.
+            else if (arrows[ev.key] && (input.dataset.mode === 'type' || ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) { ev.preventDefault(); commit(arrows[ev.key]); }
         });
         input.addEventListener('blur', () => commit(null));
     }
@@ -548,32 +558,90 @@
         const sheet = td.closest('.sheet').id;
         renderAll(); refocus(sheet, key, f);
     }
-    function neighbour(td, dir) {
+    // ───────── Excel'dagidek katak bo'ylab yurish ─────────
+    // Har qanday katak tanlanadi; strelka, Tab, Enter, Home/End, PageUp/PageDown bilan yuriladi.
+    // Faqat PDF (BQ) kataklari tahrirlanadi.
+    const navCells = tr => Array.from(tr.children).filter(c => c.tagName === 'TD' && !c.classList.contains('rn'));
+    function neighbour(td, dir, step = 1) {
         const tr = td.parentElement;
-        const cells = Array.from(tr.querySelectorAll('td[data-key]'));
-        const i = cells.indexOf(td);
-        if (dir === 'left') return cells[i - 1];
-        if (dir === 'right') return cells[i + 1];
-        let s = dir === 'down' ? tr.nextElementSibling : tr.previousElementSibling;
-        while (s) { const c = s.querySelector(`td[data-key][data-field="${td.dataset.field}"]`); if (c) return c; s = dir === 'down' ? s.nextElementSibling : s.previousElementSibling; }
-        return null;
+        const row = navCells(tr);
+        const i = row.indexOf(td);
+        if (dir === 'left') return row[Math.max(0, i - step)] || null;
+        if (dir === 'right') return row[Math.min(row.length - 1, i + step)] || null;
+        if (dir === 'home') return row[0];
+        if (dir === 'end') return row[row.length - 1];
+        const rows = Array.from(tr.parentElement.children);
+        let ri = rows.indexOf(tr);
+        if (dir === 'top') ri = 0;
+        else if (dir === 'bottom') ri = rows.length - 1;
+        else ri = Math.max(0, Math.min(rows.length - 1, ri + (dir === 'down' ? step : -step)));
+        const target = navCells(rows[ri]);
+        return target[Math.min(i, target.length - 1)] || null;
+    }
+    function ensureVisible(td) {
+        const box = td.closest('.sheet');
+        if (!box) return;
+        const b = box.getBoundingClientRect(), r = td.getBoundingClientRect();
+        const head = td.closest('table').querySelector('thead');
+        const top = b.top + (head ? head.getBoundingClientRect().height : 0);
+        let left = b.left;
+        if (!td.matches('.c-a, .c-b, .c-c')) {
+            td.parentElement.querySelectorAll('.rn, .c-a, .c-b, .c-c').forEach(c => {
+                if (getComputedStyle(c).position === 'sticky') left = Math.max(left, c.getBoundingClientRect().right);
+            });
+        }
+        if (r.top < top) box.scrollTop -= top - r.top;
+        else if (r.bottom > b.bottom - 14) box.scrollTop += r.bottom - b.bottom + 14;
+        if (r.left < left) box.scrollLeft -= left - r.left;
+        else if (r.right > b.right - 14) box.scrollLeft += r.right - b.right + 14;
+    }
+    function selectCell(td) {
+        if (!td) return;
+        if (!td.hasAttribute('tabindex')) td.setAttribute('tabindex', '-1');
+        td.focus({ preventScroll: true });
+        ensureVisible(td);
+        showCell(td);
     }
     function refocus(sheet, key, f, move) {
         let t = document.querySelector(`#${sheet} td[data-key="${key}"][data-field="${f}"]`);
         if (!t) return;
         if (move) t = neighbour(t, move) || t;
-        t.focus(); showCell(t);
+        selectCell(t);
     }
     document.addEventListener('keydown', e => {
         const td = document.activeElement;
-        if (!td || td.tagName !== 'TD' || !td.dataset.key) return;
-        const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
-        if (map[e.key]) { e.preventDefault(); const n = neighbour(td, map[e.key]); if (n) { n.focus(); showCell(n); } return; }
-        if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); startEdit(td); return; }
+        if (!td || td.tagName !== 'TD' || !td.closest('.xl tbody')) return;
+        const page = Math.max(1, Math.floor((td.closest('.sheet').clientHeight - 60) / 25));
+        const ctrl = e.ctrlKey || e.metaKey;
+        const moves = {
+            ArrowLeft: ctrl ? 'home' : 'left', ArrowRight: ctrl ? 'end' : 'right',
+            ArrowUp: ctrl ? 'top' : 'up', ArrowDown: ctrl ? 'bottom' : 'down',
+            Home: ctrl ? 'top' : 'home', End: ctrl ? 'bottom' : 'end', PageUp: 'up', PageDown: 'down',
+        };
+        if (moves[e.key]) {
+            e.preventDefault();
+            selectCell(neighbour(td, moves[e.key], e.key.startsWith('Page') ? page : 1));
+            return;
+        }
+        if (e.key === 'Tab') { e.preventDefault(); selectCell(neighbour(td, e.shiftKey ? 'left' : 'right')); return; }
+        const editable = !!td.dataset.key;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (editable && !e.shiftKey) startEdit(td, 'edit');
+            else selectCell(neighbour(td, e.shiftKey ? 'up' : 'down'));
+            return;
+        }
+        if (!editable) return;
+        if (e.key === 'F2') { e.preventDefault(); startEdit(td, 'edit'); return; }
         if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); revertCell(td); return; }
-        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { startEdit(td); const inp = td.querySelector('input'); if (inp) inp.value = ''; }
+        if (e.key.length === 1 && !ctrl && !e.altKey) {
+            e.preventDefault();
+            startEdit(td, 'type');
+            const inp = td.querySelector('input');
+            if (inp) inp.value = e.key;
+        }
     });
-    document.addEventListener('dblclick', e => { const td = e.target.closest('td[data-key]'); if (td) startEdit(td); });
+    document.addEventListener('dblclick', e => { const td = e.target.closest('td[data-key]'); if (td) startEdit(td, 'edit'); });
     document.addEventListener('focusin', e => { const td = e.target.closest && e.target.closest('.xl td'); if (td) showCell(td); });
     document.addEventListener('change', e => {
         const h = e.target.closest('[data-hkey]');

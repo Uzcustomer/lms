@@ -262,6 +262,9 @@ class VedomostCheckEngine
         }
 
         $headerChecks = $this->headerChecks($expected, $system, $header, $context, $signatures);
+        // Yopilish shakli fan nomidan keyin turadi.
+        $at = array_search('fan', array_column($headerChecks, 'key'), true);
+        array_splice($headerChecks, $at === false ? 0 : $at + 1, 0, [$this->closingCheck($closing, $weights, $kurs6)]);
 
         // --- noto'g'ri hujjat ---
         $sysN = count($system);
@@ -772,6 +775,36 @@ class VedomostCheckEngine
         }
 
         return $out;
+    }
+
+    /** Yopilish shakli: HEMISdagi shakl ↔ vedomost sarlavhasidagi imtihon vaznlari (OSKE / Test). */
+    private function closingCheck(string $closing, array $scanW, bool $kurs6): array
+    {
+        $names = ['oski' => 'OSKE', 'test' => 'Test', 'oski_test' => 'OSKE + Test', 'sinov' => 'Sinov', 'normativ' => 'Normativ'];
+        $row = fn (string $v, string $st) => ['key' => 'yopilish', 'k' => 'Yopilish shakli', 'v' => $v, 'st' => $st];
+        $hemis = $names[$closing] ?? ($closing !== '' ? $closing : null);
+        if ($hemis === null) {
+            return $row("HEMISda yopilish shakli kiritilmagan — vaznlar faqat vedomostdan olindi", 'warn');
+        }
+
+        $read = [];
+        foreach (['jb', 'mt', 'on', 'oski', 'test'] as $k) {
+            $read[$k] = (int) round((float) ($scanW[$k] ?? 0));
+        }
+        if (array_sum($read) !== 100) {
+            return $row("HEMIS: {$hemis} · vedomost vaznlari aniq o'qilmadi — Sarlavha varag'ida tuzating", 'warn');
+        }
+
+        $pdf = ($read['oski'] > 0 && $read['test'] > 0) ? 'OSKE + Test' : ($read['oski'] > 0 ? 'OSKE' : ($read['test'] > 0 ? 'Test' : "imtihonsiz (JN/MT)"));
+        $needO = in_array($closing, ['oski', 'oski_test'], true);
+        $needT = in_array($closing, ['test', 'oski_test', 'sinov', 'normativ'], true);
+        $ok = ($read['oski'] > 0) === $needO && ($read['test'] > 0) === $needT;
+        // 6-kurs vedomostlari rasmiy shablon bo'yicha — imtihon ustunlari bo'lmasligi mumkin.
+        $st = $ok ? 'ok' : ($kurs6 ? 'warn' : 'bad');
+        $v = "HEMIS: {$hemis} · vedomostda: {$pdf} (JN {$read['jb']} / MT {$read['mt']}"
+            . ($read['on'] ? " / ON {$read['on']}" : '') . ($read['oski'] ? " / OSKE {$read['oski']}" : '') . ($read['test'] ? " / Test {$read['test']}" : '') . ')';
+
+        return $row($v . ($ok ? '' : ' — mos emas'), $st);
     }
 
     private function weightIssues(array $w, string $closing, array $scanW): array

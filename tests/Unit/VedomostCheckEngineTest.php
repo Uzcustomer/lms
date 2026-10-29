@@ -239,3 +239,46 @@ test('Excel hisobot: test markazi ustunlari bilan ham yaratiladi', function () {
         ->and($ws->getHighestRow())->toBe(4)
         ->and((string) $ws->getCell('B2')->getValue())->toBe('BOBOSHEROV SHOHZOD XAYRULLAYEVICH');
 });
+
+test('yopilish shakli: HEMIS shakli vedomost vaznlariga mos kelmasa XATO', function () {
+    $stu = [vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)];
+    $row = [pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())];
+
+    $ok = collect(engine()->build(expectedData($stu), scanDoc($row), [], rules(), ctx())['header'])->keyBy('key');
+    $bad = engine()->build(expectedData($stu, ['yopilish_shakli' => 'test']), scanDoc($row), [], rules(), ctx());
+    $h = collect($bad['header'])->keyBy('key');
+
+    expect($ok['yopilish']['st'])->toBe('ok')
+        ->and($h['yopilish']['st'])->toBe('bad')
+        ->and($h['yopilish']['v'])->toContain('HEMIS: Test')
+        ->and($h['yopilish']['v'])->toContain('vedomostda: OSKE + Test')
+        ->and(array_column($bad['header'], 'key')[1])->toBe('yopilish')
+        ->and($bad['verdict'])->toBe('issues');
+});
+
+test('6-kurs: PDFdagi ball rasmiy formula bo\'yicha tekshiriladi', function () {
+    $stu = [vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)];
+    $scan = scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo(['jb_ball' => '40,0']))]);
+
+    $r6 = engine()->build(expectedData($stu, ['level_code' => '16']), $scan, [], rules(), ctx());
+    $r5 = engine()->build(expectedData($stu), $scan, [], rules(), ctx());
+    $m6 = collect($r6['rows'][0]['flags'])->pluck('m')->implode(' | ');
+
+    expect($r6['kurs6'])->toBeTrue()
+        ->and($m6)->toContain('6-kurs: Joriy 83% → 41.5 ball bo‘lishi kerak, PDFda 40')
+        ->and($r6['rows'][0]['status'])->toBe('bad')
+        ->and(collect($r5['rows'][0]['flags'])->pluck('m')->implode(' | '))->not->toContain('6-kurs');
+});
+
+test('Test markazi: urinish vedomost shakliga moslanadi (1-urinish → 12-shakl)', function () {
+    $c = \App\Services\VedomostAiChecker::class;
+    $form = fn ($ft) => $c::shaklBase(\App\Models\VedomostSubmission::formLabel($ft));
+
+    expect($c::quizForm('1-urinish'))->toBe($form('12'))
+        ->and($c::quizForm('2-urinish'))->toBe($form('12a'))
+        ->and($c::quizForm('3-urinish'))->toBe($form('12b'))
+        ->and($c::quizForm("1-urinish (qo'shimcha)"))->toBe($c::shaklBase("12-qo'shimcha"))
+        ->and($c::quizForm("2-urinish qo‘shimcha"))->toBe($c::shaklBase("12a-qo'shimcha (guruh)"))
+        ->and($c::quizForm('12a-shakl'))->toBe($form('12a'))
+        ->and($c::quizForm('1-urinish'))->not->toBe($form('12a'));
+});

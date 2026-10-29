@@ -84,6 +84,22 @@ class VedomostNames
         return !($ia && $ib && $ia[0] !== $ib[0]);
     }
 
+    /**
+     * Familiya o'xshash, lekin bosh harflar farq qilishi mumkin (AI bosh harfni
+     * noto'g'ri o'qigan holat) — "XATO" emas, "Tekshiring" uchun.
+     */
+    public static function sameSurname($a, $b): bool
+    {
+        [$x] = self::nameParts($a);
+        [$y] = self::nameParts($b);
+        if ($x === '' || $y === '') {
+            return false;
+        }
+        similar_text($x, $y, $pct);
+
+        return $x === $y || $pct >= 80;
+    }
+
     /** @return array{0: string, 1: array} [familiya, bosh harflar] */
     private static function nameParts($s): array
     {

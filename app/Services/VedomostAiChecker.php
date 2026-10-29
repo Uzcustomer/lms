@@ -26,7 +26,8 @@ class VedomostAiChecker
         private VedomostMergeService $merge,
         private VedomostScanReader $reader,
         private VedomostCheckEngine $engine,
-        private VedomostAiSettings $settings
+        private VedomostAiSettings $settings,
+        private VedomostTekshirishService $vt
     ) {
     }
 
@@ -51,7 +52,13 @@ class VedomostAiChecker
             throw new RuntimeException('Tizimda bu guruh/fan uchun YN qaydnoma ma\'lumoti topilmadi.');
         }
 
-        $scan = $this->reader->read(Storage::disk('public')->path($v->pdf_path), $v->id);
+        // "Tizim" qiymatlari — "Vedomost tekshirish" eksporti bilan aynan bir xil hisob.
+        $expected['talabalar'] = $this->vtStudents($v);
+        if (empty($expected['talabalar'])) {
+            throw new RuntimeException("Vedomost tekshirish hisobi bo'yicha talabalar topilmadi.");
+        }
+
+        $scan = $this->reader->read(Storage::disk('public')->path($v->pdf_path), $v->id, count($expected['talabalar']));
         $context = $this->buildContext($v, $expected, $scan);
 
         return $this->assemble($expected, $scan, $context, []);
@@ -85,6 +92,70 @@ class VedomostAiChecker
             'edits' => $edits,
             'report' => $report,
         ];
+    }
+
+    /**
+     * Har guruhcha (sibling) uchun VedomostTekshirishService::collect() — talabalarning
+     * xom qiymatlari (JN, MT, ON, OSKI, Test, davomat, JN soni), eksport ustunlari uchun
+     * guruh ma'lumotlari va HEMIS imtihon baholari (JN+MT/YN tekshiruv ustunlari).
+     */
+    private function vtStudents(VedomostSubmission $v): array
+    {
+        $siblings = $this->merge->siblingsOf($v);
+        if (!$siblings->contains('id', $v->id)) {
+            $siblings->push($v);
+        }
+        $siblings = $siblings->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
+        $shakl = VedomostSubmission::formLabel($v->form_type);
+
+        $out = [];
+        foreach ($siblings as $sib) {
+            $group = \App\Models\Group::where('group_hemis_id', $sib->group_hemis_id)->first();
+            if (!$group) {
+                continue;
+            }
+            $c = $this->vt->collect($group, (string) $sib->subject_id, (string) $sib->semester_code);
+            if (!$c) {
+                continue;
+            }
+            $exam = \App\Models\HemisExamGrade::forComparison($c['studentHemisIds'], (string) $sib->subject_id, (string) $sib->semester_code)
+                ->get()
+                ->groupBy('student_hemis_id');
+            $meta = [
+                'group_hemis_id' => $c['groupHemisId'],
+                'group_name' => $group->name ?? '',
+                'practice_teacher' => $c['practiceTeacher'],
+                'lecture_teacher' => $c['lectureTeacher'],
+                'subject_id' => (string) $sib->subject_id,
+                'subject_name' => $c['subject']->subject_name ?? '',
+                'shakl' => $shakl,
+                'education_year' => $c['educationYearName'] ?? ($c['curriculum']?->education_year_name ?? ''),
+                'semester' => $c['semester']?->name ?? $sib->semester_code,
+                'hours' => $c['totalHours'],
+                'credit' => (int) ($c['subject']->credit ?? 0),
+                'divisor' => $c['divisor'],
+            ];
+            foreach ($c['students'] as $stu) {
+                $hid = $stu->hemis_id;
+                $he = $exam[$hid] ?? collect();
+                $out[] = [
+                    'fish' => $stu->full_name,
+                    'student_id' => (string) $stu->student_id_number,
+                    'hemis_id' => (string) $hid,
+                    'status_code' => (string) ($stu->student_status_code ?? ''),
+                    'status_name' => (string) ($stu->student_status_name ?? ''),
+                    'group' => $group->name ?? '',
+                    'raw' => $c['raw'][$hid],
+                    'meta' => $meta,
+                    'hemis_exam' => [
+                        '11' => $he->firstWhere('exam_type_code', '11')?->grade,
+                        '13' => $he->firstWhere('exam_type_code', '13')?->grade,
+                    ],
+                ];
+            }
+        }
+
+        return $out;
     }
 
     /**

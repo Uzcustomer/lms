@@ -1,270 +1,222 @@
 <?php
 
 use App\Services\VedomostCheckEngine;
-use App\Services\VedomostGradeCalculator;
 use App\Services\VedomostNames;
 use App\Services\VedomostScanReader;
+use App\Services\VedomostTekshirishService;
 
 /**
- * Vedomost tekshiruv dvigateli (Python "vedomost_avto" qoidalari) — bazasiz,
- * tayyor tizim ma'lumoti + skaner jadvali bilan.
+ * Vedomost tekshiruv dvigateli — "tizim" qiymatlari "Vedomost tekshirish" hisobidan,
+ * qoidalar Python "vedomost_avto" dasturidan. Misollar — Xirurgik kasalliklar,
+ * d1/d22-01 (rus), 5-kurs (OSKE 15 + Test 15) vedomostidan.
  */
 
 function engine(): VedomostCheckEngine
 {
-    return new VedomostCheckEngine(new VedomostGradeCalculator());
+    return new VedomostCheckEngine(new VedomostTekshirishService());
 }
 
 function rules(array $extra = []): array
 {
-    return array_merge(['jn_mt_pass' => 60, 'jn_mt_pass_international' => 60, 'tolerance' => 0.05], $extra);
+    return array_merge(['jn_mt_pass' => 60, 'tolerance' => 0.05, 'oski_min' => 60, 'test_min' => 60], $extra);
+}
+
+function vtStu(string $fio, string $id, $jn, $mt, $oski, $test, array $extra = []): array
+{
+    return array_merge([
+        'fish' => $fio, 'student_id' => $id, 'hemis_id' => 'h' . $id, 'status_code' => '11', 'status_name' => '', 'group' => 'd1/d22-01a (rus)',
+        'raw' => ['jn' => $jn, 'mt' => $mt, 'on' => 0.0, 'oski' => (float) $oski, 'test' => (float) $test, 'dav' => 0.0, 'jnCount' => 8],
+        'meta' => ['group_hemis_id' => '1139', 'group_name' => 'd1/d22-01a (rus)', 'practice_teacher' => 'IBRAGIMOV A. V.',
+            'lecture_teacher' => 'MADIYEV R. Z.', 'subject_id' => '433', 'subject_name' => 'Xirurgik kasalliklar', 'shakl' => '12-shakl',
+            'education_year' => '2026-2027', 'semester' => '9-semestr', 'hours' => 90, 'credit' => 3, 'divisor' => 8],
+        'hemis_exam' => [],
+    ], $extra);
 }
 
 function expectedData(array $students, array $extra = []): array
 {
-    return array_merge([
-        'fan' => 'Endokrinologiya',
-        'guruh' => 'd1/22-03',
-        'umumiy_soat' => 120,
-        'kredit' => 4,
-        'maruzachi' => 'Kobilov Abdumalik Ergashevich',
-        'amaliyot_oqituvchilari' => 'Bozorov Ulugbek Mamatqulovich, Qurbonov Mansur Choriyevich',
-        'dekan' => 'Berdiyev Akbar Xudoyberdiyevich',
-        'yn_sanasi' => '07.02.2026',
-        'yopilish_shakli' => 'test',
-        'level_code' => '14',
-        'kurs' => '4-kurs',
-        'semestr' => '8-semestr',
-        'talabalar' => $students,
-    ], $extra);
+    return array_merge(['fan' => 'Xirurgik kasalliklar', 'yopilish_shakli' => 'oski_test', 'level_code' => '15',
+        'dekan' => 'BERDIYEV ABDISAMAT XUDAYKULOVICH', 'yn_sanasi' => '23.10.2026', 'talabalar' => $students], $extra);
 }
 
-function stu(int $n, string $fio, string $id, $jn, $mt, $test = null, $oski = null): array
-{
-    return ['n' => $n, 'fish' => $fio, 'student_id' => $id, 'jn' => $jn, 'mt' => $mt, 'on' => null, 'oski' => $oski, 'test' => $test,
-        'hemis_id' => 'h' . $id, 'status_code' => '11', 'status_name' => "O'qimoqda"];
-}
-
-function scanRow(int $nr, string $fio, string $id, array $v, array $unclear = []): array
+function pdfRow(int $nr, string $fio, string $id, array $v, array $unclear = []): array
 {
     return array_merge([
-        'nr' => $nr, 'fio' => $fio, 'id' => $id, 'jb_pct' => '', 'jb_ball' => '', 'mt_pct' => '', 'mt_ball' => '',
-        'on_pct' => '', 'on_ball' => '', 'jbmton_ball' => '', 'jbmton_pct' => '', 'oski_pct' => '', 'oski_ball' => '',
-        'test_pct' => '', 'test_ball' => '', 'yn' => '', 'ects' => '', 'baho' => '', 'unclear' => $unclear, 'trace' => [], 'page' => 1,
+        'nr' => $nr, 'fio' => $fio, 'id' => $id, 'jb_pct' => '', 'jb_ball' => '', 'mt_pct' => '', 'mt_ball' => '', 'on_pct' => '', 'on_ball' => '',
+        'jbmton_ball' => '', 'jbmton_pct' => '', 'oski_pct' => '', 'oski_ball' => '', 'test_pct' => '', 'test_ball' => '', 'yn' => '',
+        'ects' => '', 'baho' => '', 'unclear' => $unclear, 'trace' => [], 'page' => 1,
     ], $v);
 }
 
-/** Rasmdagi 1-qator: JB 78/39, MT 90/18, JB+MT 57, Test 77/23, YN 80 B yaxshi. */
-function goodValues(): array
+/** PDF qatori: BOBOSHEROV — 83/41,5 | 88/17,6 | 59 | 100/15 | 96/14,4 | 88 B+ */
+function bobo(array $over = []): array
 {
-    return ['jb_pct' => '78,0', 'jb_ball' => '39,0', 'mt_pct' => '90,0', 'mt_ball' => '18,0', 'jbmton_ball' => '57,0',
-        'jbmton_pct' => '81', 'test_pct' => '77,0', 'test_ball' => '23,0', 'yn' => '80', 'ects' => 'B', 'baho' => 'yaxshi'];
+    return array_merge(['jb_pct' => '83,0', 'jb_ball' => '41,5', 'mt_pct' => '88,0', 'mt_ball' => '17,6', 'jbmton_ball' => '59,0', 'jbmton_pct' => '84',
+        'oski_pct' => '100,0', 'oski_ball' => '15,0', 'test_pct' => '96,0', 'test_ball' => '14,4', 'yn' => '88', 'ects' => 'B+', 'baho' => 'yaxshi'], $over);
 }
 
-function scanDoc(array $rows, array $header = []): array
+function scanDoc(array $rows, array $header = [], array $meta = []): array
 {
     return [
-        'header' => array_merge([
-            'fan' => 'Endokrinologiya', 'guruh' => 'd1/22-03', 'soat' => '120', 'kredit' => '4',
-            'maruzachi' => 'Kobilov A. E', 'amaliyot' => ['Bozorov U. M', 'Qurbonov M. Ch'], 'yn_sana' => '07.02.2026',
-            'dekan' => 'A.X Berdiyev', 'kafedra_mudiri' => 'K.M.Meliqulov', 'kurs' => '4', 'semestr' => '8',
-        ], $header),
-        'weights' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30],
+        'header' => array_merge(['fan' => 'Xirurgik kasalliklar', 'guruh' => 'd1/d22-01 (rus)', 'soat' => '90', 'kredit' => '3', 'maruzachi' => 'R.Z. Madiyev',
+            'amaliyot' => ['Ibragimov A.V'], 'yn_sana' => '23.10.2026', 'dekan' => 'A.X. Berdiyev', 'kafedra_mudiri' => 'Madiyev.R.Z'], $header),
+        'weights' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15],
         'signatures' => ['oqituvchi' => true, 'dekan' => true, 'kafedra_mudiri' => true, 'muhr' => true],
         'rows' => $rows,
-        'meta' => ['mode' => 'images'],
+        'meta' => array_merge(['mode' => 'images'], $meta),
     ];
 }
 
 function ctx(array $extra = []): array
 {
-    return array_merge(['kafedra_mudiri' => 'Meliqulov Komil Mamatovich', 'international' => [], 'test_center' => [], 'kontingent' => []], $extra);
+    return array_merge(['kafedra_mudiri' => 'MADIYEV RUSTAM ZAIROVICH', 'test_center' => [], 'kontingent' => []], $extra);
 }
 
-test('mos vedomost — ok, sarlavha va imzolar to\'g\'ri', function () {
-    $r = engine()->build(
-        expectedData([stu(1, 'ABDUXOMIDOV ASADBEK DILSHOD O\'G\'LI', '368221100230', 78, 90, 77)]),
-        scanDoc([scanRow(1, "ABDUXOMIDOV ASADBEK DILSHOD O'G'LI", '368221100230', goodValues())]),
-        [], rules(), ctx()
-    );
+test('5-kurs: tizim qiymatlari "Vedomost tekshirish" bilan bir xil (41,5 / 17,6 / 59 / 88) — farq yo\'q', function () {
+    $r = engine()->build(expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
+        scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]), [], rules(), ctx());
 
-    expect($r['verdict'])->toBe('ok')
-        ->and($r['rows'][0]['status'])->toBe('ok')
-        ->and($r['rows'][0]['system']['yn'])->toBe(80)
-        ->and(collect($r['header'])->where('status', 'bad')->pluck('key')->all())->toBe([]);
+    $row = $r['rows'][0];
+    expect($row['vt']['E'])->toBe(41.5)->and($row['vt']['H'])->toBe(17.6)->and($row['vt']['M'])->toBe(59)->and($row['vt']['V'])->toBe(88)
+        ->and($row['status'])->toBe('ok')
+        ->and($r['verdict'])->toBe('ok');
 });
 
-test('farqli katak — bad, noaniq katak — ocr', function () {
-    $v = goodValues();
-    $v['jb_pct'] = '87';
-    $r = engine()->build(
-        expectedData([
-            stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77),
-            stu(2, 'VALIYEV VALI', '368221100002', 78, 90, 77),
-        ]),
-        scanDoc([
-            scanRow(1, 'ALIYEV ALI', '368221100001', $v),
-            scanRow(2, 'VALIYEV VALI', '368221100002', array_merge(goodValues(), ['test_pct' => '71']), ['test_pct']),
-        ]),
-        [], rules(), ctx()
-    );
+test('1 kasrga yaxlitlangan ball (14,9 vs 14.85) farq emas — faqat 5 ustun solishtiriladi', function () {
+    $r = engine()->build(expectedData([vtStu('KARIMOV ABDURASUL OTAMURODOVICH', '368221100223', 88, 90, 100, 99)]),
+        scanDoc([pdfRow(1, 'KARIMOV ABDURASUL OTAMURODOVICH', '368221100223', ['jb_pct' => '88,0', 'jb_ball' => '44,0', 'mt_pct' => '90,0', 'mt_ball' => '18,0',
+            'jbmton_ball' => '62,0', 'oski_pct' => '100,0', 'oski_ball' => '15,0', 'test_pct' => '99,0', 'test_ball' => '14,9', 'yn' => '92'])]),
+        [], rules(), ctx());
+
+    expect($r['rows'][0]['status'])->toBe('ok');
+});
+
+test('AI ID ni xato o\'qisa talabalar almashib ketmaydi — ism bo\'yicha moslanadi', function () {
+    $sys = [
+        vtStu('ABDULLAYEV SHAXBOZBEK ODILJON O‘G‘LI', '368221100925', 76, 86, 90, 75),
+        vtStu('XAMRAYEVA CHAROS XALILOVNA', '368221100025', 91, 90, 100, 97),
+    ];
+    $r = engine()->build(expectedData($sys), scanDoc([
+        // AI 7-qator ID'sini …925 o'rniga …025 (XAMRAYEVA'niki) deb o'qigan
+        pdfRow(7, "ABDULLAYEV SHAXBOZBEK ODILJON O'G'LI", '368221100025', ['jb_pct' => '76,0', 'mt_ball' => '17,2', 'oski_pct' => '90,0', 'test_pct' => '75,0', 'yn' => '80']),
+        pdfRow(24, 'XAMRAYEVA CHAROS XALILOVNA', '368221100025', ['jb_pct' => '91,0', 'mt_ball' => '18,0', 'oski_pct' => '100,0', 'test_pct' => '97,0', 'yn' => '94']),
+    ]), [], rules(), ctx());
 
     $rows = collect($r['rows'])->keyBy('id');
-    expect($rows['368221100001']['status'])->toBe('bad')
-        ->and($rows['368221100001']['cells']['jb_pct'])->toBe('bad')
-        ->and($rows['368221100002']['status'])->toBe('ocr')
-        ->and($rows['368221100002']['cells']['test_pct'])->toBe('ocr')
-        ->and($r['verdict'])->toBe('issues');
+    expect($rows['368221100925']['scan_fio'])->toBe("ABDULLAYEV SHAXBOZBEK ODILJON O'G'LI")
+        ->and($rows['368221100925']['status'])->toBe('ocr')
+        ->and(collect($rows['368221100925']['flags'])->pluck('m')->implode(' '))->toContain('1 raqam farqi')
+        ->and($rows['368221100025']['scan_fio'])->toBe('XAMRAYEVA CHAROS XALILOVNA')
+        ->and($rows['368221100025']['status'])->toBe('ok')
+        ->and($r['extra'])->toBe([]);
 });
 
-test('PDFda yo\'q va ortiqcha talaba (kontingent bilan)', function () {
-    $r = engine()->build(
-        expectedData([
-            stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77),
-            stu(2, 'VALIYEV VALI', '368221100002', 78, 90, 77),
-        ]),
-        scanDoc([
-            scanRow(1, 'ALIYEV ALI', '368221100001', goodValues()),
-            scanRow(2, 'BEGIMOV BEK', '368221199999', goodValues()),
-        ]),
-        [], rules(), ctx(['kontingent' => ['368221199999' => ['fio' => 'BEGIMOV BEK', 'group' => 'd1/22-04']]])
-    );
+test('PDFdagi haqiqiy farq — XATO (Python xabari bilan)', function () {
+    // ABDURAHIMOV: PDFda OSKE 90, tizimda 0
+    $r = engine()->build(expectedData([vtStu('ABDURAHIMOV AZIZBEK ADHAMJON O‘G‘LI', '368221100036', 74, 100, 0, 78)]),
+        scanDoc([pdfRow(15, "ABDURAHIMOV AZIZBEK ADHAMJON O'G'LI", '368221100036', ['jb_pct' => '74,0', 'mt_ball' => '20,0', 'oski_pct' => '90,0', 'test_pct' => '78,0', 'yn' => '82'])]),
+        [], rules(), ctx());
 
-    $byStatus = collect($r['rows'])->keyBy('status');
-    expect($byStatus['missing']['id'])->toBe('368221100002')
-        ->and($byStatus['extra']['flags'][0]['m'])->toContain('d1/22-04')
-        ->and($r['counts']['missing'])->toBe(1)
-        ->and($r['counts']['extra'])->toBe(1);
+    $msgs = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
+    expect($r['rows'][0]['status'])->toBe('bad')
+        ->and($msgs)->toContain('OSKE%: PDF 90,0 ≠ HEMIS 0')
+        ->and($msgs)->toContain('YN: PDF 82 ≠ HEMIS -1');
 });
 
-test('ID xato o\'qilgan bo\'lsa F.I.Sh bo\'yicha moslashtiriladi', function () {
-    $r = engine()->build(
-        expectedData([stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77)]),
-        scanDoc([scanRow(1, 'ALIYEV ALI', '368221100007', goodValues(), ['id'])]),
-        [], rules(), ctx()
-    );
+test('chetlashtirilgan talaba — KONTINGENTDA YO\'Q; tushib qolgan qator — PDFdan tekshiring', function () {
+    $r = engine()->build(expectedData([
+        vtStu('NE’MATOV NOZIMJON RUSTAMJON O‘G‘LI', '368221100048', 0, 0, 0, 0, ['status_code' => '60']),
+        vtStu('QURBONOV SHAHZODXON SHUHRAT O‘G‘LI', '368221100022', 78, 86, 100, 83),
+        vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96),
+    ]), scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], [], ['missing_nrs' => [8]]), [], rules(), ctx());
 
-    expect($r['rows'])->toHaveCount(1)
-        ->and($r['rows'][0]['status'])->toBe('ocr')
-        ->and($r['rows'][0]['flags'][0]['m'])->toContain('ID mos emas');
+    $rows = collect($r['rows'])->keyBy('id');
+    expect($rows['368221100048']['status'])->toBe('missing')
+        ->and($rows['368221100048']['kont_fio'])->toBeNull()
+        ->and($rows['368221100022']['status'])->toBe('ocr')
+        ->and(collect($rows['368221100022']['flags'])->pluck('m')->implode(' '))->toContain('8-qatorni');
 });
 
 test('boshqa fan PDFi — noto\'g\'ri hujjat', function () {
-    $r = engine()->build(
-        expectedData([stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77)], ['fan' => 'Neyroxirurgiya']),
-        scanDoc([scanRow(1, 'ALIYEV ALI', '368221100001', goodValues())], ['fan' => 'Epidemiologiya. HE.']),
-        [], rules(), ctx()
-    );
+    $r = engine()->build(expectedData([vtStu('A A', '368221100001', 83, 88, 100, 96)], ['fan' => 'Neyroxirurgiya']),
+        scanDoc([pdfRow(1, 'A A', '368221100001', bobo())], ['fan' => 'Epidemiologiya. HE.']), [], rules(), ctx());
 
-    expect($r['verdict'])->toBe('wrong_document')
-        ->and($r['summary'])->toContain('Neyroxirurgiya')
-        ->and($r['summary'])->toContain('Epidemiologiya');
+    expect($r['verdict'])->toBe('wrong_document')->and($r['summary'])->toContain('Neyroxirurgiya');
 });
 
-test('talabalarning yarmidan kami mos kelsa — noto\'g\'ri hujjat', function () {
-    $r = engine()->build(
-        expectedData([stu(1, 'A A', '368221100001', 78, 90, 77), stu(2, 'B B', '368221100002', 78, 90, 77), stu(3, 'C C', '368221100003', 78, 90, 77)]),
-        scanDoc([scanRow(1, 'XXXXXX YYYYY', '111111111111', goodValues()), scanRow(2, 'ZZZZZZ WWWWW', '222222222222', goodValues())]),
-        [], rules(), ctx()
-    );
-
-    expect($r['verdict'])->toBe('wrong_document');
-});
-
-test('xodim tuzatishi hisobotni qayta quradi va belgilanadi', function () {
-    $v = goodValues();
-    $v['jb_pct'] = '87';
-    $args = [
-        expectedData([stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77)]),
-        scanDoc([scanRow(1, 'ALIYEV ALI', '368221100001', $v)]),
-    ];
+test('xodim tuzatishi hisobotni qayta quradi', function () {
+    $args = [expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
+        scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo(['test_pct' => '95,0']))])];
 
     $before = engine()->build(...[...$args, [], rules(), ctx()]);
-    $after = engine()->build(...[...$args, ['rows' => ['r0' => ['jb_pct' => '78']]], rules(), ctx()]);
+    $after = engine()->build(...[...$args, ['rows' => ['r0' => ['test_pct' => '96,0']]], rules(), ctx()]);
 
     expect($before['rows'][0]['status'])->toBe('bad')
         ->and($after['rows'][0]['status'])->toBe('ok')
-        ->and($after['rows'][0]['edited'])->toBe(['jb_pct'])
-        ->and($after['rows'][0]['orig']['jb_pct'])->toBe('87')
-        ->and($after['counts']['edited'])->toBe(1)
-        ->and($after['verdict'])->toBe('ok');
+        ->and($after['rows'][0]['edited'])->toBe(['test_pct'])
+        ->and($after['rows'][0]['orig']['test_pct'])->toBe('95,0');
 });
 
-test('qoida: JN o\'tmagan talabada imtihon bahosi bor', function () {
-    $r = engine()->build(
-        expectedData([stu(1, 'ALIYEV ALI', '368221100001', 55, 90, 77)]),
-        scanDoc([scanRow(1, 'ALIYEV ALI', '368221100001', ['jb_pct' => '55', 'jb_ball' => '0', 'mt_pct' => '90', 'mt_ball' => '18',
-            'jbmton_ball' => '0', 'test_pct' => '77', 'test_ball' => '23', 'yn' => '-2', 'ects' => 'FX', 'baho' => "qo'yilmadi"])]),
-        [], rules(), ctx()
-    );
+test('qoida va hisob tekshiruvlari (Python entry_check / calc_check)', function () {
+    // JN 52 — JN+MT 0, YN -2; PDFda OSKE/Test bahosi yo'q — qoida buzilmagan, calc_check: JN+MT HEMIS 0 ≠ hisob
+    $r = engine()->build(expectedData([vtStu('FARXODOVA MUNISA BAXRIDDIN QIZI', '368221100222', 52, 0, 0, 0)]),
+        scanDoc([pdfRow(17, 'FARXODOVA MUNISA BAXRIDDIN QIZI', '368221100222', ['jb_pct' => '52,0', 'mt_ball' => '0,0', 'oski_pct' => '', 'test_pct' => '0,0', 'yn' => '-2'])]),
+        [], rules(), ctx());
 
-    expect(collect($r['rows'][0]['flags'])->pluck('m')->implode(' | '))->toContain('kiritilmasligi kerak edi');
+    $msgs = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
+    expect($msgs)->toContain('YN: PDF -2 ≠ HEMIS 0')
+        ->and($msgs)->toContain('JN+MT hisobi: HEMIS 0 ≠ hisob 26');
 });
 
-test('sinov fan: Test % Joriy % ga teng bo\'lishi kerak', function () {
-    $v = goodValues();
-    $r = engine()->build(
-        expectedData([stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77)], ['yopilish_shakli' => 'sinov']),
-        scanDoc([scanRow(1, 'ALIYEV ALI', '368221100001', $v)]),
-        [], rules(), ctx()
-    );
+test('Test markazi natijasi HEMISdan farq qilsa', function () {
+    $r = engine()->build(expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
+        scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]), [], rules(),
+        ctx(['test_center' => ['368221100018' => ['test' => ['grade' => 90.0, 'dalolat' => false], 'oski' => ['grade' => 100.0, 'dalolat' => false]]]]));
 
-    expect(collect($r['rows'][0]['flags'])->pluck('m')->implode(' | '))->toContain('Sinov fan');
+    expect($r['rows'][0]['tm']['test']['status'])->toBe('bad')
+        ->and($r['rows'][0]['tm']['oski']['status'])->toBe('ok')
+        ->and($r['rows'][0]['status'])->toBe('bad');
 });
 
-test('Test markazi natijasi tizimdan farq qilsa', function () {
-    $r = engine()->build(
-        expectedData([stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77)]),
-        scanDoc([scanRow(1, 'ALIYEV ALI', '368221100001', goodValues())]),
-        [], rules(), ctx(['test_center' => ['368221100001' => ['test' => ['grade' => 80.0, 'dalolat' => false]]]])
-    );
-
-    expect($r['rows'][0]['status'])->toBe('bad')
-        ->and($r['rows'][0]['tm']['test']['status'])->toBe('bad');
-});
-
-test('imzo yoki muhr yo\'q — hujjat xatosi', function () {
-    $scan = scanDoc([scanRow(1, 'ALIYEV ALI', '368221100001', goodValues())]);
+test('sarlavha: bosh harf xato o\'qilsa "Tekshiring", imzo yo\'q bo\'lsa XATO', function () {
+    $scan = scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], ['amaliyot' => ['Barakaya I.I']]);
     $scan['signatures']['muhr'] = false;
-    $r = engine()->build(expectedData([stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77)]), $scan, [], rules(), ctx());
+    $stu = vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96);
+    $stu['meta']['practice_teacher'] = 'BARSKAYA L. I.';
+    $r = engine()->build(expectedData([$stu]), $scan, [], rules(), ctx());
 
-    expect($r['verdict'])->toBe('issues')
-        ->and(collect($r['doc_issues'])->pluck('m')->implode(' '))->toContain('muhr');
-
-    $fixed = engine()->build(expectedData([stu(1, 'ALIYEV ALI', '368221100001', 78, 90, 77)]), $scan,
-        ['signatures' => ['muhr' => true]], rules(), ctx());
-    expect($fixed['verdict'])->toBe('ok');
+    $h = collect($r['header'])->keyBy('key');
+    expect($h['amaliyot']['st'])->toBe('warn')
+        ->and($h['sig_muhr']['st'])->toBe('bad')
+        ->and($h['maruzachi']['st'])->toBe('ok')
+        ->and($h['dekan']['st'])->toBe('ok')
+        ->and($r['verdict'])->toBe('issues');
 });
 
-test('6-kurs formulasi', function () {
-    $e = engine()->kurs6(78.0, 90.0, null, 77.0, ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30]);
-    expect($e['jbmton_ball'])->toBe(57)->and($e['test_ball'])->toBe(23)->and($e['ozlashtirish'])->toBe(80);
+test('vaznlar o\'qilmasa yopilish shakli bo\'yicha olinadi', function () {
+    $scan = scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]);
+    $scan['weights'] = ['jb' => null, 'mt' => null, 'on' => null, 'oski' => null, 'test' => null];
+    $r = engine()->build(expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]), $scan, [], rules(), ctx());
 
-    // 30 likda 59% → 18 chiqsa 17
-    $e = engine()->kurs6(78.0, 90.0, null, 59.0, ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30]);
-    expect($e['test_ball'])->toBe(17)->and($e['ozlashtirish'])->toBe(0);
-
-    // JN+MT < 60% → -2
-    $e = engine()->kurs6(50.0, 90.0, null, 77.0, ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30]);
-    expect($e['ozlashtirish'])->toBe(-2);
+    expect($r['weights'])->toBe(['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15])
+        ->and($r['rows'][0]['status'])->toBe('ok');
 });
 
 test('skaner qatorining ichki hisobi', function () {
     $reader = app(VedomostScanReader::class);
-    $rows = [scanRow(1, 'A', '1', goodValues()), scanRow(2, 'B', '2', goodValues())];
+    $rows = [pdfRow(1, 'A', '1', bobo()), pdfRow(2, 'B', '2', bobo())];
     $ratios = $reader->pageRatios($rows);
 
     expect($reader->rowProblems($rows[0], $ratios))->toBe([]);
-
-    $bad = scanRow(3, 'C', '3', array_merge(goodValues(), ['jb_ball' => '44,0']));
+    $bad = pdfRow(3, 'C', '3', bobo(['jb_ball' => '44,0']));
     expect(collect($reader->rowProblems($bad, $ratios))->pluck(0)->implode(' '))->toContain('jb_pct va jb_ball');
 });
 
 test('ism va fan nomi solishtirish', function () {
     expect(VedomostNames::sameName('Sh.T. Maxmaraimov', 'MAHMARAIMOV SH. T.'))->toBeTrue()
-        ->and(VedomostNames::sameName('Kobilov Abdumalik Ergashevich', 'Kobilov A. E'))->toBeTrue()
-        ->and(VedomostNames::sameName('Kobilov A. E', 'Bozorov U. M'))->toBeFalse()
-        ->and(VedomostNames::similarity("ALIMOVA FERUZA SHOKIROVNA", 'ALIMOVA FEʼRUZA SHOKIROVNA'))->toBeGreaterThan(0.85)
-        ->and(VedomostNames::subjectScore('Neyroxirurgiya', 'Epidemiologiya. HE.'))->toBeLessThan(0.6)
-        ->and(VedomostNames::subjectScore('Endokrinologiya', 'ENDOKRINOLOGIYA'))->toBe(1.0);
+        ->and(VedomostNames::sameName('MADIYEV RUSTAM ZAIROVICH', 'R.Z. Madiyev'))->toBeTrue()
+        ->and(VedomostNames::sameName('BARSKAYA L. I.', 'Barakaya I.I'))->toBeFalse()
+        ->and(VedomostNames::sameSurname('BARSKAYA L. I.', 'Barakaya I.I'))->toBeTrue()
+        ->and(VedomostNames::similarity('ALIMOVA FERUZA SHOKIROVNA', 'ALIMOVA FEʼRUZA SHOKIROVNA'))->toBeGreaterThan(0.85)
+        ->and(VedomostNames::subjectScore('Neyroxirurgiya', 'Epidemiologiya. HE.'))->toBeLessThan(0.6);
 });

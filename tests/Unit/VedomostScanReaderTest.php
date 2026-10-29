@@ -103,3 +103,24 @@ test('rasm rejimi: bo\'laklar birlashadi, xato qator qayta o\'qib tuzatiladi, na
     $again = app(VedomostScanReader::class)->read($this->pdf, 7);
     expect($calls)->toBe($before)->and($again['meta']['cached'])->toBeTrue();
 });
+
+test('tushib qolgan qator (raqamlashda bo\'shliq) qayta o\'qib qo\'shiladi', function () {
+    if (!VedomostScanReader::rendererAvailable()) {
+        $this->markTestSkipped('pdftoppm yo\'q');
+    }
+    app(VedomostAiSettings::class)->save(['bands' => 1]);
+
+    Http::fake(function (Request $r) {
+        $prompt = collect($r['contents'][0]['parts'])->pluck('text')->filter()->implode(' ');
+        // 1-o'qish (butun sahifa): 2-qator tushib qolgan; qayta o'qish (2 bo'lak): bor.
+        return Http::response(str_contains($prompt, 'the whole page')
+            ? bandReply([readerRow(1, '368221100001', '39'), readerRow(3, '368221100003', '39')])
+            : bandReply([readerRow(1, '368221100001', '39'), readerRow(2, '368221100002', '39'), readerRow(3, '368221100003', '39')]));
+    });
+
+    $res = app(VedomostScanReader::class)->read($this->pdf, 7, 3);
+
+    expect(collect($res['rows'])->pluck('nr')->all())->toBe([1, 2, 3])
+        ->and($res['meta']['missing_nrs'])->toBe([])
+        ->and($res['meta']['rows_read'])->toBe(3);
+});

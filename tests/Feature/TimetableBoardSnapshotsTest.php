@@ -428,3 +428,21 @@ it('kunlik nusxa va tiklash buyruqlari xotira chegarasini 1024M gacha ko\'taradi
         ini_set('memory_limit', $orig);
     }
 });
+
+it('shablon to\'qnashuvida haftalar ko\'rsatiladi: faqat ayrim haftalarda — "3–5, 9-hafta:", barcha haftalarda — haftasiz', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $b = TimetableCard::create($fiz);   // 3, 4, 5 va 9-haftalarda juma 7-para
+    foreach ([3, 4, 5, 9] as $w) {
+        TimetableCardOverride::create(['card_id' => $b->id, 'week' => $w, 'day' => 5, 'pair' => 7, 'start_half' => 0, 'cancelled' => false]);
+    }
+    $a = TimetableCard::create(array_merge($fiz, ['subject_name' => 'Kimyo']));
+    $err = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $a), ['day' => 5, 'pair' => 7, 'layer' => 'internal'])
+        ->assertStatus(422)->json('error');
+    expect($err)->toBe('3–5, 9-hafta: Guruh band: g-01a (o\'z) — F1, 2-kurs · g-01a · Fizika (amaliy)');
+
+    // Shablondagi Anatomiya (dushanba 1-para) barcha haftalarda — haftasiz
+    $err = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $a), ['day' => 1, 'pair' => 1, 'layer' => 'internal'])
+        ->assertStatus(422)->json('error');
+    expect($err)->toStartWith('Guruh band:')->toContain('Anatomiya');
+});

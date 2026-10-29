@@ -7337,15 +7337,47 @@ class TimetableController extends Controller
     private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
     {
         $state ??= $this->calendarConflictState($card);
-        $errors = [];
+        $weeksOf = [];   // to'qnashuv matni => haftalar
+        $checked = 0;
         foreach (range(1, $this->cardGrid($card->board, $card)['weeks']) as $week) {
             $own = $state['ov'][$card->id][$week] ?? null;
             if ($own && ($own->cancelled || $own->day)) continue;
+            $checked++;
             foreach ($this->findWeekConflicts($card, $week, $day, $pair, $startHalf, $state) as $error) {
-                $errors[$error] = true;
+                $weeksOf[$error][] = $week;
             }
         }
-        return array_keys($errors);
+        // Karta shablon joyida turadigan barcha haftalarda bo'lgan to'qnashuv — haftasiz; faqat ayrim haftalarda bo'lsa
+        // qaysi haftalar ekani yoziladi ("3–5, 9-hafta: ...") — shablon ko'rinishida bu joy bo'sh ko'rinadi.
+        $errors = [];
+        foreach ($weeksOf as $error => $weeks) {
+            $errors[] = count($weeks) === $checked ? $error : $this->weekRangesText($weeks) . '-hafta: ' . $error;
+        }
+
+        return $errors;
+    }
+
+    /** Haftalar ro'yxati qisqa ko'rinishda: [3, 4, 5, 9] → "3–5, 9". */
+    private function weekRangesText(array $weeks): string
+    {
+        sort($weeks);
+        $parts = [];
+        $from = $prev = null;
+        foreach ($weeks as $w) {
+            if ($prev !== null && $w === $prev + 1) {
+                $prev = $w;
+                continue;
+            }
+            if ($from !== null) {
+                $parts[] = $from === $prev ? (string) $from : $from . '–' . $prev;
+            }
+            $from = $prev = $w;
+        }
+        if ($from !== null) {
+            $parts[] = $from === $prev ? (string) $from : $from . '–' . $prev;
+        }
+
+        return implode(', ', $parts);
     }
 
     /** Ikki dars bir vaqtda: guruh (bir yo'nalish+kurs ichida, bo'lak qo'shnilaridan tashqari), o'qituvchi va xona bandligi. */

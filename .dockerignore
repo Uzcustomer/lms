@@ -1,6 +1,6 @@
 .git
 node_modules
-storage/app/public
+storage/app
 storage/logs
 storage/framework/cache
 storage/framework/sessions

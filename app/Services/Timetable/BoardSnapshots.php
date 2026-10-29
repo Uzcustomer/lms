@@ -31,6 +31,30 @@ class BoardSnapshots
         return Schema::hasTable('timetable_board_snapshots');
     }
 
+    /**
+     * Nusxa va tiklash butun doskani (8000+ karta, 40000+ haftalik yozuv) xotiraga oladi — 128M yetmaydi. Konsol
+     * buyruqlari uchun: chegara faqat ko'tariladi (cheklovsiz -1 yoki undan katta bo'lsa tegilmaydi).
+     */
+    public static function raiseMemoryLimit(string $min = '1024M'): void
+    {
+        $bytes = function (string $v): int {
+            $v = trim($v);
+            $n = (int) $v;
+
+            return match (strtoupper(substr($v, -1))) {
+                'G' => $n * 1024 ** 3,
+                'M' => $n * 1024 ** 2,
+                'K' => $n * 1024,
+                default => $n,
+            };
+        };
+        $cur = (string) ini_get('memory_limit');
+        if ($cur === '-1' || $bytes($cur) >= $bytes($min)) {
+            return;
+        }
+        @ini_set('memory_limit', $min);
+    }
+
     /** Doskaning hozirgi holati (kartalar, haftalik o'zgartirishlar, sikl joylashuvlari). */
     public function collect(TimetableBoard $board, ?string $connection = null): array
     {

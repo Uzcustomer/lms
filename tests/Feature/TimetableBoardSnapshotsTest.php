@@ -405,3 +405,26 @@ it('kartochka yaratish va xavfli amaldan oldingi nusxa PHP xotira chegarasini 10
         ini_set('memory_limit', $orig);
     }
 });
+
+it('kunlik nusxa va tiklash buyruqlari xotira chegarasini 1024M gacha ko\'taradi, cheklovsiz (-1) bo\'lsa tegmaydi', function () {
+    $s = snapSetup();
+    $orig = ini_get('memory_limit');
+    $low = (string) (memory_get_usage(true) + 64 * 1024 * 1024);
+    try {
+        ini_set('memory_limit', $low);
+        $this->artisan('timetable:snapshot', ['board' => $s['board']->id])->assertExitCode(0);
+        expect(ini_get('memory_limit'))->toBe('1024M');
+
+        $snap = \App\Models\TimetableBoardSnapshot::where('board_id', $s['board']->id)->latest('id')->first();
+        ini_set('memory_limit', $low);
+        $this->artisan('timetable:restore-placement', ['board' => $s['board']->id, '--snapshot' => $snap->id])->assertExitCode(0);
+        expect(ini_get('memory_limit'))->toBe('1024M');
+
+        // Cheklovsiz CLI — 1024M ga tushirilmaydi
+        ini_set('memory_limit', '-1');
+        $this->artisan('timetable:snapshot', ['board' => $s['board']->id])->assertExitCode(0);
+        expect(ini_get('memory_limit'))->toBe('-1');
+    } finally {
+        ini_set('memory_limit', $orig);
+    }
+});

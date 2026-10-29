@@ -19,6 +19,7 @@ class TimetableRestorePlacement extends Command
 
     public function handle(BoardSnapshots $snapshots): int
     {
+        BoardSnapshots::raiseMemoryLimit();
         $board = TimetableBoard::findOrFail((int) $this->argument('board'));
         if ($this->option('snapshot')) {
             $old = TimetableBoardSnapshot::where('board_id', $board->id)->findOrFail((int) $this->option('snapshot'))->data();

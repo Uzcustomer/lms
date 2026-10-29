@@ -18,8 +18,6 @@ trait TimetableProgramCalendars
 
     private ?array $calendarPrograms = null;
 
-    private ?array $calendarStudentCurricula = null;
-
     private function calendarCurriculum(string $group, ?string $faculty): int
     {
         if ($this->calendarGroups === null) {
@@ -31,101 +29,25 @@ trait TimetableProgramCalendars
                     $names = [(string) $g->name, preg_replace('/\s*\(.*$/u', '', (string) $g->name)];
                     foreach (array_unique($names) as $name) {
                         $key = $fac.'|'.ProgramCalendar::groupKey($name);
-                        $this->calendarGroups[$key][] = [(int) $g->curriculum_hemis_id, (bool) ($g->active ?? true), (int) ($g->group_hemis_id ?? 0)];
+                        $this->calendarGroups[$key][] = [(int) $g->curriculum_hemis_id, (bool) ($g->active ?? true)];
                     }
                 }
             }
         }
         foreach (array_unique([$group, preg_replace('/\s*\(.*$/u', '', $group)]) as $name) {
             $key = mb_strtolower(trim((string) $faculty)).'|'.ProgramCalendar::groupKey($name);
-            if ($rows = $this->calendarGroups[$key] ?? []) {
-                return $this->sameNameCurriculum($rows);
+            $rows = $this->calendarGroups[$key] ?? [];
+            $active = array_filter($rows, fn ($r) => $r[1]);
+            $ids = array_unique(array_column($active ?: $rows, 0));
+            if (count($ids) === 1) {
+                return (int) reset($ids);
             }
+            if (count($ids) > 1) {
+                return 0;
+            } // Ambiguous groups must never inherit an arbitrary program.
         }
 
         return 0;
-    }
-
-    /**
-     * Bir xil nomli guruhlar ([reja, faol, HEMIS guruh id] qatorlari) uchun yagona reja: faollari bitta rejada
-     * bo'lsa — o'sha. Bir nechta faol guruh turli rejada (HEMIS'da eskisi nofaol qilinmagan) — guruhlardagi faol
-     * talabalar ko'pchiligi o'qiydigan reja; ular ham teng bo'linsa — 0 (noaniq guruh tasodifiy reja olmaydi).
-     */
-    private function sameNameCurriculum(array $rows): int
-    {
-        $active = array_filter($rows, fn ($r) => $r[1]);
-        $ids = array_values(array_unique(array_column($active ?: $rows, 0)));
-        if (count($ids) === 1) {
-            return (int) $ids[0];
-        }
-
-        return $ids ? $this->studentBackedCurriculum($active ?: $rows, $ids) : 0;
-    }
-
-    /**
-     * Faol (o'qiyotgan, status 11) talabalar: HEMIS guruh id => [o'quv reja id => talabalar soni].
-     * Talaba yozuvidagi o'quv reja — uning joriy semestridagi rejasi.
-     */
-    private function activeStudentCurricula(): array
-    {
-        if ($this->calendarStudentCurricula === null) {
-            $this->calendarStudentCurricula = [];
-            if (Schema::hasTable('students') && Schema::hasColumn('students', 'curriculum_id')) {
-                foreach (DB::table('students')->where('student_status_code', 11)
-                    ->whereNotNull('group_id')->whereNotNull('curriculum_id')
-                    ->selectRaw('group_id, curriculum_id, COUNT(*) as n')->groupBy('group_id', 'curriculum_id')->get() as $r) {
-                    $this->calendarStudentCurricula[(int) $r->group_id][(int) $r->curriculum_id] = (int) $r->n;
-                }
-            }
-        }
-
-        return $this->calendarStudentCurricula;
-    }
-
-    /** Nomzod guruhlarning faol talabalari ko'pchiligi o'qiydigan reja (nomzodlar orasidan); aniq ustun bo'lmasa — 0. */
-    private function studentBackedCurriculum(array $rows, array $candidates): int
-    {
-        $students = $this->activeStudentCurricula();
-        $votes = [];
-        foreach (array_unique(array_filter(array_column($rows, 2))) as $groupId) {
-            foreach ($students[$groupId] ?? [] as $cur => $n) {
-                if (in_array($cur, $candidates, true)) {
-                    $votes[$cur] = ($votes[$cur] ?? 0) + $n;
-                }
-            }
-        }
-        arsort($votes);
-        $top = array_slice($votes, 0, 2, true);
-        if (! $top || (count($top) === 2 && reset($top) === end($top))) {
-            return 0;
-        }
-
-        return (int) array_key_first($top);
-    }
-
-    /**
-     * Bir xil nomli guruhlar ichida ustunlik tartibi (oxirgisi ustun): faol, so'ng kalendar bilan bir xil qaror
-     * (sameNameCurriculum: fakultet + qavssiz nom bo'yicha) yutqazgan rejadagi guruh pastga tushadi — fanlar va
-     * talabalar soni kalendar rejasidan olinadi. Qaror yo'q (teng/talabasiz) bo'lsa — kelgan (id) tartibi.
-     */
-    private function preferStudentBackedGroups(iterable $groups): array
-    {
-        $list = is_array($groups) ? array_values($groups) : collect($groups)->values()->all();
-        $setOf = fn ($g) => mb_strtolower(trim((string) ($g->department_name ?? ''))).'|'
-            .ProgramCalendar::groupKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));
-        $sets = [];
-        foreach ($list as $g) {
-            $sets[$setOf($g)][] = [(int) $g->curriculum_hemis_id, (bool) ($g->active ?? true), (int) ($g->group_hemis_id ?? 0)];
-        }
-        $winner = array_map(fn ($rows) => $this->sameNameCurriculum($rows), $sets);
-        $keeps = function ($g) use ($winner, $setOf) {
-            $w = $winner[$setOf($g)] ?? 0;
-
-            return (int) ($w === 0 || $w === (int) $g->curriculum_hemis_id);
-        };
-        usort($list, fn ($a, $b) => [(int) ($a->active ?? 0), $keeps($a)] <=> [(int) ($b->active ?? 0), $keeps($b)]);
-
-        return $list;
     }
 
     private function cardCurriculumId($card): int

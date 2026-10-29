@@ -15,6 +15,7 @@ class TimetableSnapshot extends Command
 
     public function handle(BoardSnapshots $snapshots): int
     {
+        BoardSnapshots::raiseMemoryLimit();
         if (!BoardSnapshots::ready()) {
             $this->error('timetable_board_snapshots jadvali yo\'q — php artisan migrate');
 

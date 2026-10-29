@@ -385,3 +385,64 @@ it('rad etilgan haftalik joy keyingilarini to\'smaydi (birinchi tekshiruv haftal
         ->and(TimetableCardOverride::where('card_id', $x->id)->count())->toBe(0)
         ->and(TimetableCardOverride::where('card_id', $y->id)->where('week', 3)->value('auditorium_code'))->toBe('R5');
 });
+
+it('kartochka yaratish va xavfli amaldan oldingi nusxa PHP xotira chegarasini 1024M ga ko\'taradi (serverdagi 128M da to\'xtardi)', function () {
+    $s = snapSetup();
+    $orig = ini_get('memory_limit');
+    // Server chegarasi kabi past: hozirgi sarfdan biroz yuqori (undan past qilib bo'lmaydi).
+    $low = (string) (memory_get_usage(true) + 64 * 1024 * 1024);
+    try {
+        // Kartochkalarni yaratish (tasdiqlangan oqim yo'q — 422, lekin chegara so'rov boshida ko'tariladi)
+        ini_set('memory_limit', $low);
+        snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.generate', $s['board']));
+        expect(ini_get('memory_limit'))->toBe('1024M');
+
+        // Xavfli amaldan oldingi nusxa (bo'shatish)
+        ini_set('memory_limit', $low);
+        snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.unplace', $s['board']), ['courses' => [2], 'layer' => 'internal'])->assertOk();
+        expect(ini_get('memory_limit'))->toBe('1024M');
+    } finally {
+        ini_set('memory_limit', $orig);
+    }
+});
+
+it('kunlik nusxa va tiklash buyruqlari xotira chegarasini 1024M gacha ko\'taradi, cheklovsiz (-1) bo\'lsa tegmaydi', function () {
+    $s = snapSetup();
+    $orig = ini_get('memory_limit');
+    $low = (string) (memory_get_usage(true) + 64 * 1024 * 1024);
+    try {
+        ini_set('memory_limit', $low);
+        $this->artisan('timetable:snapshot', ['board' => $s['board']->id])->assertExitCode(0);
+        expect(ini_get('memory_limit'))->toBe('1024M');
+
+        $snap = \App\Models\TimetableBoardSnapshot::where('board_id', $s['board']->id)->latest('id')->first();
+        ini_set('memory_limit', $low);
+        $this->artisan('timetable:restore-placement', ['board' => $s['board']->id, '--snapshot' => $snap->id])->assertExitCode(0);
+        expect(ini_get('memory_limit'))->toBe('1024M');
+
+        // Cheklovsiz CLI — 1024M ga tushirilmaydi
+        ini_set('memory_limit', '-1');
+        $this->artisan('timetable:snapshot', ['board' => $s['board']->id])->assertExitCode(0);
+        expect(ini_get('memory_limit'))->toBe('-1');
+    } finally {
+        ini_set('memory_limit', $orig);
+    }
+});
+
+it('shablon to\'qnashuvida haftalar ko\'rsatiladi: faqat ayrim haftalarda — "3–5, 9-hafta:", barcha haftalarda — haftasiz', function () {
+    $s = snapSetup();
+    $fiz = array_merge($s['base'], ['subject_name' => 'Fizika', 'len_half' => 2, 'weeks' => 15]);
+    $b = TimetableCard::create($fiz);   // 3, 4, 5 va 9-haftalarda juma 7-para
+    foreach ([3, 4, 5, 9] as $w) {
+        TimetableCardOverride::create(['card_id' => $b->id, 'week' => $w, 'day' => 5, 'pair' => 7, 'start_half' => 0, 'cancelled' => false]);
+    }
+    $a = TimetableCard::create(array_merge($fiz, ['subject_name' => 'Kimyo']));
+    $err = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $a), ['day' => 5, 'pair' => 7, 'layer' => 'internal'])
+        ->assertStatus(422)->json('error');
+    expect($err)->toBe('3–5, 9-hafta: Guruh band: g-01a (o\'z) — F1, 2-kurs · g-01a · Fizika (amaliy)');
+
+    // Shablondagi Anatomiya (dushanba 1-para) barcha haftalarda — haftasiz
+    $err = snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $a), ['day' => 1, 'pair' => 1, 'layer' => 'internal'])
+        ->assertStatus(422)->json('error');
+    expect($err)->toStartWith('Guruh band:')->toContain('Anatomiya');
+});

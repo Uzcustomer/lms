@@ -1422,6 +1422,9 @@ class TimetableController extends Controller
         if ($request->boolean('dry_run') || !\App\Services\Timetable\BoardSnapshots::ready()) {
             return;
         }
+        // Nusxa butun doskani (8000+ karta, 40000+ haftalik yozuv) xotiraga oladi — 128M yetmaydi.
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
         $actor = $this->timetableActor($request);
         app(\App\Services\Timetable\BoardSnapshots::class)->take($board, $reason, $actor?->full_name ?? $actor?->name);
     }
@@ -1432,6 +1435,9 @@ class TimetableController extends Controller
      */
     public function generateCards(Request $request, TimetableBoard $board)
     {
+        // Sinxronlash: nusxa + oldingi/keyingi holatni solishtirish + KTR rejalari — butun doska xotirada.
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
         $specsFound = [];
         $rows = $this->assembleRows($board, null, null, $specsFound);
         if ($rows === null) {
@@ -7331,15 +7337,47 @@ class TimetableController extends Controller
     private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
     {
         $state ??= $this->calendarConflictState($card);
-        $errors = [];
+        $weeksOf = [];   // to'qnashuv matni => haftalar
+        $checked = 0;
         foreach (range(1, $this->cardGrid($card->board, $card)['weeks']) as $week) {
             $own = $state['ov'][$card->id][$week] ?? null;
             if ($own && ($own->cancelled || $own->day)) continue;
+            $checked++;
             foreach ($this->findWeekConflicts($card, $week, $day, $pair, $startHalf, $state) as $error) {
-                $errors[$error] = true;
+                $weeksOf[$error][] = $week;
             }
         }
-        return array_keys($errors);
+        // Karta shablon joyida turadigan barcha haftalarda bo'lgan to'qnashuv — haftasiz; faqat ayrim haftalarda bo'lsa
+        // qaysi haftalar ekani yoziladi ("3–5, 9-hafta: ...") — shablon ko'rinishida bu joy bo'sh ko'rinadi.
+        $errors = [];
+        foreach ($weeksOf as $error => $weeks) {
+            $errors[] = count($weeks) === $checked ? $error : $this->weekRangesText($weeks) . '-hafta: ' . $error;
+        }
+
+        return $errors;
+    }
+
+    /** Haftalar ro'yxati qisqa ko'rinishda: [3, 4, 5, 9] → "3–5, 9". */
+    private function weekRangesText(array $weeks): string
+    {
+        sort($weeks);
+        $parts = [];
+        $from = $prev = null;
+        foreach ($weeks as $w) {
+            if ($prev !== null && $w === $prev + 1) {
+                $prev = $w;
+                continue;
+            }
+            if ($from !== null) {
+                $parts[] = $from === $prev ? (string) $from : $from . '–' . $prev;
+            }
+            $from = $prev = $w;
+        }
+        if ($from !== null) {
+            $parts[] = $from === $prev ? (string) $from : $from . '–' . $prev;
+        }
+
+        return implode(', ', $parts);
     }
 
     /** Ikki dars bir vaqtda: guruh (bir yo'nalish+kurs ichida, bo'lak qo'shnilaridan tashqari), o'qituvchi va xona bandligi. */

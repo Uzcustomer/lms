@@ -109,6 +109,16 @@ const text = h => h.replace(/<[^>]+>/g, '');
     assert.equal(warned.length, 1);
     assert.match(warned[0], /HTTP 500/);
 
+    // Faqat sikl kartalari — "Excel (sabablar)" (haftalik kartalar diagnostikasi) bo'sh fayl berardi, ko'rsatilmaydi.
+    ctx.resetWarned();
+    summary = { weekly: { count: 0, items: [] }, cycle: { count: 1, items: [{ group: 'G-A', subject: 'Pediatriya', days: 5 }] } };
+    run = ctx.run();
+    await tick();
+    assert.match(html(), /Haftalik: 0 ta karta-hafta · Sikl: 1 ta karta/);
+    assert(!html().includes('hsUnpExcel'), 'faqat sikl kartalari bo\'lsa ham "Excel (sabablar)" chiqdi');
+    els.hsUnpCancel.onclick();
+    await run;
+
     // 6) Uzun ro'yxat — birinchi 30 qator, keyin "yana K ta".
     ctx.resetWarned();
     summary = { weekly: { count: 35, items: Array.from({ length: 35 }, (_, i) => ({ group: 'G' + String(i).padStart(2, '0'), subject: 'Fan', type: 'practice', weeks: [2] })) },

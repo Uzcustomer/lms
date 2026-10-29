@@ -4114,10 +4114,11 @@
                         '<div id="hsUnpList" class="mt-1 max-h-72 overflow-auto">' + list + '</div></details>' +
                         '<div class="flex gap-2"><button type="button" id="hsUnpGo" class="px-3 py-1 rounded bg-emerald-600 text-white">Mayli, solishtirish</button>' +
                         '<button type="button" id="hsUnpCancel" class="px-3 py-1 rounded border">Bekor qilish</button>' +
-                        '<button type="button" id="hsUnpExcel" class="tt-weekly-excel">Excel (sabablar)</button></div>');
+                        // Diagnostika (unplaced-export) faqat haftalik kartalar bo'yicha — sikl kartalari unda yo'q; faqat sikl bo'lsa bo'sh fayl bo'lardi.
+                        (nW ? '<button type="button" id="hsUnpExcel" class="tt-weekly-excel" title="Haftalik joylanmagan kartalar va sabablari (sikl kartalari bu faylga kirmaydi)">Excel (sabablar)</button>' : '') + '</div>');
                     $('hsUnpGo').onclick = () => resolve(true);
                     $('hsUnpCancel').onclick = () => { m.remove(); resolve(false); };
-                    $('hsUnpExcel').onclick = async function () {
+                    if ($('hsUnpExcel')) $('hsUnpExcel').onclick = async function () {
                         // Mavjud "Joylanmagan kartalar" diagnostikasi — ichki jadval, shu qamrov bo'yicha.
                         const params = new URLSearchParams();
                         const sb = scopeBody();

@@ -39,6 +39,8 @@
         .ot-row.expired .ot-state b { color: #b91c1c; }
         .ot-row.done .ot-state b { color: #15803d; }
         .ot-state span { color: #64748b; }
+        .ot-book { display: inline-block; margin-top: 5px; padding: 4px 10px; border-radius: 999px; background: #1e3a8a; color: #fff !important; font-size: 11.5px; font-weight: 700; text-decoration: none; }
+        .ot-book:focus-visible { outline: 2px solid #4338ca; outline-offset: 2px; }
         .ot-empty { padding: 32px 16px; text-align: center; color: #64748b; font-size: 14px; background: #fff; border-radius: 16px; border: 1px dashed #cbd5e1; }
         .ot-empty b { display: block; margin-bottom: 4px; font-size: 16px; color: #15803d; }
     </style>
@@ -102,6 +104,7 @@
                                     @endif
                                 </b>
                                 <span>{{ $item['deadline']->format('d.m.Y') }} {{ __('gacha') }}</span>
+                                <a class="ot-book" href="{{ route('student.retake-booking.index', ['subject_id' => $item['subject_id'], 'lesson_date' => $item['lesson_date']->format('Y-m-d')]) }}">{{ __('Vaqt tanlash') }}</a>
                             @endif
                         </span>
                     </div>

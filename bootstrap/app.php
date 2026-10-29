@@ -104,6 +104,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // "kirsangiz bo'ladi", overflow → zahira, no-show holatlari.
         $schedule->job(new \App\Jobs\ExamScheduleTickJob())->everyMinute()->withoutOverlapping(2);
 
+        // Qayta topshirish bronlari: Moodle'ga yetib bormaganlarini qayta yuborish
+        // (bir ishga tushishda ko'pi bilan 200 ta, daqiqasiga 60 so'rov — ~3.5 daqiqa)
+        $schedule->command('retake-bookings:sync')->everyFiveMinutes()->withoutOverlapping(10);
+
         // Talabalar so'rovnomasi — har kuni 09:00 da bajarmaganlarga Telegram eslatma
         $schedule->command('survey:remind-pending')->dailyAt('09:00')->withoutOverlapping(30);
 

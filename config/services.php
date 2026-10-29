@@ -95,6 +95,9 @@ return [
         'ws_url' => env('MOODLE_WS_URL'),
         'ws_token' => env('MOODLE_WS_TOKEN'),
         'quiz_ws_token' => env('MOODLE_QUIZ_WS_TOKEN'),
+        // local_otrabotka: talaba qarzlari va qayta topshirish vaqtini bron qilish
+        'retake_token' => env('RETAKE_BOOKING_TOKEN'),
+        'retake_timeout' => (int) env('MOODLE_RETAKE_TIMEOUT', 10),
         'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
         // "Yangilash" Moodle'dan to'g'ridan-to'g'ri tortganda, mavjud eng katta
         // attempt_id dan shuncha ORQAGA so'raladi (kech tugagan urinishlarni

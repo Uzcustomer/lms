@@ -1790,6 +1790,15 @@ Route::prefix('student')->name('student.')->group(function () {
         }
     })->name('login');
 
+    // Qayta topshirish (otrabotka) vaqtini bron qilish. Havola talabaga yuboriladi:
+    // mehmon ochsa talaba login sahifasiga, login'dan keyin shu sahifaga qaytadi.
+    Route::middleware([\App\Http\Middleware\RedirectGuestStudentToLogin::class, 'force.student.contact', 'ensure.survey.completed'])
+        ->prefix('retake-booking')->name('retake-booking.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\RetakeBookingController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\RetakeBookingController::class, 'store'])->name('store');
+            Route::post('/{booking}/cancel', [\App\Http\Controllers\Student\RetakeBookingController::class, 'cancel'])->whereNumber('booking')->name('cancel');
+        });
+
     Route::middleware(['auth:student', 'force.student.contact', 'ensure.survey.completed'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('student.dashboard');

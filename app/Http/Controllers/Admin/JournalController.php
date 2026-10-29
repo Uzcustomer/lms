@@ -7040,17 +7040,31 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Avval "Baholarni ko\'chirish" tugmasi bilan baholarni 2-ustunga ko\'chiring.'], 422);
         }
 
-        // 1) SinovTestGrade yozuvlarini qulflash (panel UI uchun belgi)
-        SinovTestGrade::where('subject_id', $data['subject_id'])
+        // 1) SinovTestGrade yozuvlarini qulflash (panel UI uchun belgi).
+        // Shu chaqiruvda qulflanganlar eslab qolinadi — yuborish yiqilsa qaytariladi.
+        $lockedNow = SinovTestGrade::where('subject_id', $data['subject_id'])
             ->where('semester_code', $data['semester_code'])
             ->where('group_hemis_id', $data['group_hemis_id'])
             ->whereNotNull('override_grade')
-            ->update(['is_locked' => true]);
+            ->where('is_locked', false)
+            ->pluck('id');
+        SinovTestGrade::whereIn('id', $lockedNow)->update(['is_locked' => true]);
 
         // 2) Qaydnomani yakunlash — submitToYn'ni ichkaridan chaqirish.
         // U JN/MT snapshot saqlaydi, YnSubmission yaratadi va sinov fani uchun
         // student_grades ga test (training_type_code=102) yozuvlarini kiritadi.
-        return $this->submitToYn($request);
+        $response = $this->submitToYn($request);
+
+        // Yuborilmadi (xato, shart bajarilmadi) — baholar qulflanib qolmasin:
+        // o'qituvchi tuzatib, qayta ko'chira olishi kerak
+        $ok = $response instanceof \Illuminate\Http\JsonResponse
+            && $response->getStatusCode() < 400
+            && ($response->getData(true)['success'] ?? false);
+        if (!$ok && $lockedNow->isNotEmpty()) {
+            SinovTestGrade::whereIn('id', $lockedNow)->update(['is_locked' => false]);
+        }
+
+        return $response;
     }
 
     /**
@@ -8329,7 +8343,9 @@ class JournalController extends Controller
                         'training_type_name' => 'YN test',
                         'employee_id' => $teacherEmployeeId,
                         'employee_name' => '',
-                        'graded_by_user_id' => $submittedByUserId,
+                        // FK users(id) — o'qituvchi (teachers.id) yozilsa insert yiqiladi;
+                        // kim yuborgani YnSubmission.submitted_by/_guard da saqlanadi
+                        'graded_by_user_id' => $submittedByGuard === 'web' ? $submittedByUserId : null,
                         'lesson_date' => $lessonDateForRow,
                         'lesson_pair_code' => '1',
                         'lesson_pair_name' => 'YN test',

@@ -70,4 +70,35 @@ class VedomostAiDispatcher
 
         return $count;
     }
+
+    /**
+     * Tasdiqlashdan oldingi AI shartlari (sozlamada yoqilgan bo'lsa):
+     *  - AI tekshiruv navbatda/ishlamoqda → tasdiqlab bo'lmaydi;
+     *  - tekshirilmagan, xato bilan tugagan yoki nomuvofiqlik topilgan → sabab yozish shart.
+     *
+     * @return array{blocked: bool, needs_reason: bool, message: ?string}
+     */
+    public function approvalGate(VedomostSubmission $v): array
+    {
+        $none = ['blocked' => false, 'needs_reason' => false, 'message' => null];
+        if (!$this->settings->get('require_ai_before_approve') || !VedomostAiChecker::isConfigured() || !$v->pdf_path) {
+            return $none;
+        }
+
+        return match (true) {
+            in_array($v->ai_check_status, ['queued', 'running'], true) => [
+                'blocked' => true, 'needs_reason' => false,
+                'message' => 'AI tekshiruvi tugashini kuting — natija chiqqach tasdiqlash mumkin bo\'ladi.',
+            ],
+            $v->ai_check_status === 'done' && $v->ai_verdict === 'ok' => $none,
+            $v->ai_check_status === 'done' => [
+                'blocked' => false, 'needs_reason' => true,
+                'message' => 'AI nomuvofiqlik topgan. Baribir tasdiqlash uchun sababini yozing (jarayon tarixiga yoziladi).',
+            ],
+            default => [
+                'blocked' => false, 'needs_reason' => true,
+                'message' => 'Vedomost AI bilan tekshirilmagan. AI tekshiruvsiz tasdiqlash uchun sababini yozing.',
+            ],
+        };
+    }
 }

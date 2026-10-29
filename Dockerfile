@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
     git \
     jpegoptim \
     optipng \
+    poppler-utils \
     pngquant \
     gifsicle \
     locales \

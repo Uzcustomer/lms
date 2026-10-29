@@ -220,3 +220,22 @@ test('ism va fan nomi solishtirish', function () {
         ->and(VedomostNames::similarity('ALIMOVA FERUZA SHOKIROVNA', 'ALIMOVA FEʼRUZA SHOKIROVNA'))->toBeGreaterThan(0.85)
         ->and(VedomostNames::subjectScore('Neyroxirurgiya', 'Epidemiologiya. HE.'))->toBeLessThan(0.6);
 });
+
+test('Excel hisobot: test markazi ustunlari bilan ham yaratiladi', function () {
+    $r = engine()->build(expectedData([
+        vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96),
+        vtStu('ABDURAHIMOV JASUR', '368221100001', 80, 90, 0, 70),
+        vtStu('TUSHGAN TALABA', '368221100004', 70, 70, 70, 70),
+    ]), scanDoc([
+        pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo()),
+        pdfRow(2, 'ABDURAHIMOV JASUR', '368221100001', bobo(['oski_pct' => '9?']), ['oski_pct']),
+        pdfRow(5, 'BEGONA ODAM', '368221109999', bobo()),
+    ], [], ['missing_nrs' => [3]]), [], rules(), ctx());
+
+    $book = app(\App\Services\VedomostAiReportExcel::class)->build($r);
+    $ws = $book->getSheetByName('Tekshirish');
+
+    expect($book->getSheetNames())->toBe(['Tekshirish', 'Sarlavha', 'Xatolar', 'pdf (BQ)'])
+        ->and($ws->getHighestRow())->toBe(4)
+        ->and((string) $ws->getCell('B2')->getValue())->toBe('BOBOSHEROV SHOHZOD XAYRULLAYEVICH');
+});

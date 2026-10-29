@@ -3718,7 +3718,7 @@
             let hemisSyncLast = null;
             let hemisSyncUntil = null;
             let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
-            let hemisSyncFilter = { onlyDiff: true, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null, groups: null };   // subjects / groups: null — barcha fanlar / guruhlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncFilter = { onlyDiff: true, periodMatch: true, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null, groups: null };   // subjects / groups: null — barcha fanlar / guruhlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -3773,6 +3773,8 @@
             // Fan filtri ro'yxati: solishtirilgan va o'tkazilgan (skipped) fanlar — o'tkazilganning sababini ham tanlab ko'rish mumkin.
             const hsSubjectNames = rep => [...new Set(rep.groups.flatMap(g => [...g.units, ...(g.skipped || [])].map(x => x.subject_name)))]
                 .sort((a, b) => a.localeCompare(b));
+            // "Bu davrda mos": tanlangan davrgacha amali yo'q, keyingi haftalarda bor ("Bu davrda moslar" belgisi olinsa yashiriladi).
+            const hsPeriodMatch = u => !u.actions.length && (u.actions_later || 0) > 0;
             // Amal qatori: qisqa xulosa (HEMIS → LMS), to'siq belgilari (xona / o'qituvchi band — alohida rangda),
             // pastda batafsil: kim, qachon, qaysi guruh va fan band qilgan; so'ng sabab.
             const HS_BLOCK = {
@@ -3823,7 +3825,7 @@
                 : !!hemisSyncFilter.ops[a.op];
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
-                let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0, opHidden: 0 };
+                let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0, opHidden: 0, periodHidden: 0 };
                 // Amal turi yoki to'siq turi bo'yicha filtr tanlangan bo'lsa — shu filtrga tushadigan amali yo'q fanlar ko'rsatilmaydi.
                 const opsNarrowed = !(F.ops.create && F.ops.update && F.ops.delete && F.ops.blocked && F.blk.room && F.blk.teacher && F.blk.other);
                 let body = '';
@@ -3834,8 +3836,11 @@
                     const picked = g.units.filter(hsSubjOk);
                     const shown = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
                     tot.hidden += picked.length - shown.length;
-                    const units = opsNarrowed ? shown.filter(u => u.actions.some(hsOpOk)) : shown;
-                    tot.opHidden += shown.length - units.length;
+                    // Faqat ko'rinish: bu fanlarning tanlangan davrda amali yo'q — Excel / JSON / to'siq xabarlari o'zgarmaydi.
+                    const inPeriod = F.periodMatch ? shown : shown.filter(u => !hsPeriodMatch(u));
+                    tot.periodHidden += shown.length - inPeriod.length;
+                    const units = opsNarrowed ? inPeriod.filter(u => u.actions.some(hsOpOk)) : inPeriod;
+                    tot.opHidden += inPeriod.length - units.length;
                     shown.filter(u => !units.includes(u)).forEach(u => { tot.later += u.actions_later || 0; });
                     // Mos fanlar yashirilsa ham guruhning ogohlantirishlari (o'tkazilgan fanlar, HEMIS rejasida topilmagan kartochkalar) qoladi.
                     // Amal/to'siq turi filtri tanlanganda — faqat shu turdagi amali bor fanlar; o'tkazilgan fanlar va
@@ -3926,6 +3931,7 @@
                     wkOpt(rep.until_week, w => w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')') +
                     '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
                     '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
+                    chk('hsPeriodMatch', F.periodMatch, '<span title="Tanlangan davrgacha amali yo\'q, keyingi haftalarda amali bor fanlar">Bu davrda moslar</span>') +
                     chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') +
                     '<span class="ml-1 pl-2 border-l border-gray-300' + (F.ops.blocked ? '' : ' opacity-40') + '">To\'siq turi: ' +
                     chk('hsBlkRoom', F.blk.room, '<span class="px-1 rounded bg-orange-100 text-orange-800">Xona band</span>') +
@@ -3943,7 +3949,8 @@
                     '<b class="text-red-700">−' + tot.delete + '</b> o\'chirish' + (tot.blocked ? ', <b class="text-red-600">' + tot.blocked + ' ta to\'siqli</b>' : '') +
                     (tot.later ? ' · tanlangan haftadan keyin yana ' + tot.later + ' ta amal (hozir yozilmaydi)' : '') +
                     (tot.hidden ? ' · ' + tot.hidden + ' ta mos fan yashirildi' : '') +
-                    (tot.opHidden ? ' · ' + tot.opHidden + ' ta fanda tanlangan turdagi amal yo\'q (yashirildi)' : '') + '.' +
+                    (tot.opHidden ? ' · ' + tot.opHidden + ' ta fanda tanlangan turdagi amal yo\'q (yashirildi)' : '') +
+                    (tot.periodHidden ? ' · ' + tot.periodHidden + ' ta fan bu davrda mos (yashirildi)' : '') + '.' +
                     (rep.fallback_room ? '' : ' <b class="text-red-600">"Kafedra mudiri xonasi" auditoriyasi topilmadi — HEMIS\'da ochib, auditoriyalarni import qiling.</b>') +
                     (rep.groups_not_in_hemis.length ? '<div class="text-red-600">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.groups_not_in_hemis.join(', ')) + '</div>' : '') + '</div>';
                 hemisSyncModal(head + body);
@@ -3961,11 +3968,12 @@
                 $('hsPTo').onchange = perChange;
                 const reFilter = () => {
                     F.onlyDiff = $('hsOnlyDiff').checked;
+                    F.periodMatch = $('hsPeriodMatch').checked;
                     F.ops = { create: $('hsOpC').checked, update: $('hsOpU').checked, delete: $('hsOpD').checked, blocked: $('hsOpB').checked };
                     F.blk = { room: $('hsBlkRoom').checked, teacher: $('hsBlkTeacher').checked, other: $('hsBlkOther').checked };
                     hemisSyncRender(rep);
                 };
-                ['hsOnlyDiff', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
+                ['hsOnlyDiff', 'hsPeriodMatch', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
                 $('hsOnlyBlocked').onclick = () => {
                     F.ops = { create: false, update: false, delete: false, blocked: true };
                     hemisSyncRender(rep);

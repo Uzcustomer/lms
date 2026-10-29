@@ -240,3 +240,38 @@ it('takes the deadline from LMS: stored grade deadline, else lesson date + level
     DB::table('student_grades')->insert(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24 00:00:00', 'reason' => 'absent', 'deadline' => '2026-10-28 23:59:59']);
     expect(RetakeBookingService::lmsDeadline(5531, '13', 181, '2026-10-24')->toDateString())->toBe('2026-10-28');
 });
+
+it('sends the student a Telegram message with a booking link per debt', function () {
+    Schema::create('students', function ($t) {
+        $t->id();
+        $t->unsignedBigInteger('hemis_id');
+        $t->string('student_id_number');
+        $t->string('full_name');
+        $t->string('telegram_chat_id')->nullable();
+        $t->string('level_code')->nullable();
+        $t->timestamps();
+    });
+    DB::table('students')->insert(['hemis_id' => 5531, 'student_id_number' => '368200000001', 'full_name' => 'Sinov Talaba', 'telegram_chat_id' => '111', 'level_code' => '13']);
+    DB::table('deadlines')->insert(['level_code' => '13', 'deadline_days' => 6]);
+    config()->set('services.telegram.bot_token', 'bot-token');
+
+    Http::fake([
+        SVC_WS => Http::response(['found' => true, 'debts' => [svcDebt(), svcDebt(['subject_id' => 200, 'state' => 'done', 'can_book' => false])]]),
+        'api.telegram.org/*' => Http::response(['ok' => true]),
+    ]);
+
+    $this->artisan('retake-bookings:notify', ['student' => '368200000001'])->assertSuccessful();
+
+    Http::assertSent(function (Request $r) {
+        if (!str_contains($r->url(), 'api.telegram.org')) {
+            return false;
+        }
+        $text = $r['text'];
+
+        return $r['chat_id'] == '111'
+            && str_contains($text, 'Tibbiy fizika')
+            && str_contains($text, 'Muddat: 30.10.2026 gacha')
+            && str_contains($text, 'retake-booking?subject_id=181&amp;lesson_date=2026-10-24')
+            && substr_count($text, '📌') === 1;
+    });
+});

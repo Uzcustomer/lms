@@ -54,6 +54,31 @@ class RetakeBookingService
         return $debts;
     }
 
+    /**
+     * Qayta topshirish muddati Moodle'niki emas, LMS'niki: sozlamadagi kurs
+     * bo'yicha kunlar (otrabotka sahifasi bilan bir xil). Muddati LMS bo'yicha
+     * o'tgan qarzga vaqt tanlab bo'lmaydi.
+     */
+    public function withLmsDeadline(array $debts, $student): array
+    {
+        $today = now()->toDateString();
+
+        return array_map(function (array $debt) use ($student, $today) {
+            if (empty($debt['subject_id']) || empty($debt['lesson_date'])) {
+                return $debt;
+            }
+            $debt['deadline'] = self::lmsDeadline(
+                (int) $student->hemis_id, $student->level_code, (int) $debt['subject_id'], (string) $debt['lesson_date']
+            )->toDateString();
+            if ($debt['deadline'] < $today && !in_array($debt['state'] ?? '', ['done', 'continue'], true)) {
+                $debt['state'] = 'expired';
+                $debt['can_book'] = false;
+            }
+
+            return $debt;
+        }, $debts);
+    }
+
     public static function findDebt(array $debts, int $subjectId, string $lessonDate): ?array
     {
         foreach ($debts as $debt) {

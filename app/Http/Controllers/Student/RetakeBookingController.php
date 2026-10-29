@@ -43,7 +43,7 @@ class RetakeBookingController extends Controller
         $lessonDate = $this->dateParam($request->query('lesson_date'));
 
         try {
-            $debts = $this->withLmsDeadline($this->service->debts($hemisId), $student);
+            $debts = $this->service->withLmsDeadline($this->service->debts($hemisId), $student);
         } catch (MoodleRetakeException $e) {
             Log::warning('Moodle otrabotka get_debts', ['student_hemis_id' => $hemisId, 'error' => $e->getMessage()]);
 
@@ -93,7 +93,7 @@ class RetakeBookingController extends Controller
         // can_book ni brauzerdan emas, Moodle'dan qayta olamiz; muddat — LMS bo'yicha
         try {
             $debt = RetakeBookingService::findDebt(
-                $this->withLmsDeadline($this->service->debts($hemisId), $student),
+                $this->service->withLmsDeadline($this->service->debts($hemisId), $student),
                 (int) $data['subject_id'],
                 $data['lesson_date']
             );
@@ -148,31 +148,6 @@ class RetakeBookingController extends Controller
         return redirect($back)->with('booking_flash', ['type' => $result['type'], 'message' => $result['message']]);
     }
 
-    /**
-     * Qayta topshirish muddati Moodle'niki emas, LMS'niki: sozlamadagi kurs
-     * bo'yicha kunlar (otrabotka sahifasi bilan bir xil). Muddati LMS bo'yicha
-     * o'tgan qarzga vaqt tanlab bo'lmaydi.
-     */
-    private function withLmsDeadline(array $debts, $student): array
-    {
-        $today = now()->toDateString();
-
-        return array_map(function (array $debt) use ($student, $today) {
-            if (empty($debt['subject_id']) || empty($debt['lesson_date'])) {
-                return $debt;
-            }
-            $debt['deadline'] = RetakeBookingService::lmsDeadline(
-                (int) $student->hemis_id, $student->level_code, (int) $debt['subject_id'], (string) $debt['lesson_date']
-            )->toDateString();
-            if ($debt['deadline'] < $today && !in_array($debt['state'] ?? '', ['done', 'continue'], true)) {
-                $debt['state'] = 'expired';
-                $debt['can_book'] = false;
-            }
-
-            return $debt;
-        }, $debts);
-    }
-
     /** Moodle qarzi + LMS'dagi bron va baholar — sahifa uchun */
     private function present(int $hemisId, array $debt): array
     {
@@ -188,8 +163,9 @@ class RetakeBookingController extends Controller
 
         $slotStart = !empty($debt['slot_start']) ? Carbon::parse($debt['slot_start']) : $local?->slot_start;
         $slotEnd = !empty($debt['slot_end']) ? Carbon::parse($debt['slot_end']) : $local?->slot_end;
-        // Moodle'ga hali yetib bormagan bron ham "tanlangan" bo'lib ko'rinadi
-        $isBooked = $state === 'booked' || ($local && $local->moodle_sync !== RetakeBooking::SYNC_OK);
+        // LMS'da amaldagi bron bo'lsa ham "tanlangan" — Moodle'ga hali yetib bormagan yoki
+        // vaqt oralig'i boshlanib Moodle holatni boshqacha qaytarsa ham talaba bekor qila olsin
+        $isBooked = $state === 'booked' || ($local && !in_array($state, ['done', 'missed'], true));
 
         return [
             'subject_id' => $subjectId,

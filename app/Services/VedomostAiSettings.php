@@ -24,6 +24,7 @@ class VedomostAiSettings
         'thinking_budget' => [null, 'int?'],
         'bands'          => [1, 'int'],
         'auto_check'     => [false, 'bool'],
+        'require_ai_before_approve' => [true, 'bool'],
         'allow_free_keys' => [true, 'bool'],
         'daily_limit'    => [null, 'int?'],
         'price_input_per_m'  => [null, 'float?'],
@@ -32,6 +33,8 @@ class VedomostAiSettings
         'jn_mt_pass'               => [MarkingSystemScore::YN_JN_MT_LIMIT, 'int'],
         'jn_mt_pass_international' => [MarkingSystemScore::INTERNATIONAL_VEDOMOST_PASS, 'int'],
         'tolerance'                => [0.05, 'float'],
+        'oski_min'                 => [60, 'int'],
+        'test_min'                 => [60, 'int'],
     ];
 
     private ?array $cache = null;

@@ -1016,6 +1016,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/allow-reupload', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'allowReupload'])->whereNumber('id')->name('allow-reupload');
             Route::post('/{id}/ai-check', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiCheck'])->whereNumber('id')->name('ai-check');
             Route::get('/{id}/ai-status', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiStatus'])->whereNumber('id')->name('ai-status');
+            Route::get('/{id}/ai-report', [\App\Http\Controllers\Admin\VedomostAiReportController::class, 'show'])->whereNumber('id')->name('ai-report');
+            Route::post('/{id}/ai-report/edits', [\App\Http\Controllers\Admin\VedomostAiReportController::class, 'saveEdits'])->whereNumber('id')->name('ai-report.edits');
+            Route::get('/{id}/ai-report/excel', [\App\Http\Controllers\Admin\VedomostAiReportController::class, 'excel'])->whereNumber('id')->name('ai-report.excel');
             Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'downloadFile'])->whereNumber('id')->name('file');
         });
 

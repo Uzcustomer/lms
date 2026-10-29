@@ -49,6 +49,7 @@ class VedomostAiSettingsController extends Controller
             'stats' => $this->stats(),
             'models' => Cache::get('vedomost_ai_models', []),
             'configured' => VedomostGeminiClient::isConfigured(),
+            'renderer' => \App\Services\VedomostScanReader::rendererAvailable(),
             'systemPass' => MarkingSystemScore::YN_JN_MT_LIMIT,
             'systemPassIntl' => MarkingSystemScore::INTERNATIONAL_VEDOMOST_PASS,
         ]);
@@ -71,8 +72,11 @@ class VedomostAiSettingsController extends Controller
             'jn_mt_pass' => 'required|integer|min:0|max:100',
             'jn_mt_pass_international' => 'required|integer|min:0|max:100',
             'tolerance' => 'required|numeric|min:0|max:5',
+            'oski_min' => 'required|integer|min:0|max:100',
+            'test_min' => 'required|integer|min:0|max:100',
         ]);
         $data['auto_check'] = $request->boolean('auto_check');
+        $data['require_ai_before_approve'] = $request->boolean('require_ai_before_approve');
         $data['allow_free_keys'] = $request->boolean('allow_free_keys');
 
         $this->settings->save($data);

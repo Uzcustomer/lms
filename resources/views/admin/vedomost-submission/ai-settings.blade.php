@@ -178,7 +178,10 @@
                     <div>
                         <label style="{{ $label }}">Sahifani bo'laklarga bo'lish</label>
                         <input type="number" name="bands" min="1" max="4" value="{{ old('bands', $s['bands']) }}" style="{{ $input }}" required>
-                        <div style="{{ $hint }}">1 — butun sahifa bitta so'rovda. 2+ keyingi yangilanishda ishga tushadi</div>
+                        <div style="{{ $hint }}">1 — butun sahifa bitta so'rovda; ichki hisob mos kelmasa avtomatik +1 bo'lak bilan qayta o'qiladi</div>
+                        @unless($renderer)
+                            <div style="font-size:11px;color:#b45309;margin-top:3px;">⚠️ Serverda pdftoppm yo'q — PDF butunligicha yuboriladi (bo'laklash va qayta o'qish ishlamaydi). Docker image'ni qayta quring.</div>
+                        @endunless
                     </div>
                     <div>
                         <label style="{{ $label }}">Kunlik umumiy so'rov limiti</label>
@@ -208,6 +211,10 @@
                         PDF yuklanishi bilan AI tekshiruvni <b>avtomatik</b> boshlash (o'chiq bo'lsa — vedomost sahifasida qo'lda)
                     </label>
                     <label style="display:flex;gap:8px;align-items:center;">
+                        <input type="checkbox" name="require_ai_before_approve" value="1" @checked(old('require_ai_before_approve', $s['require_ai_before_approve']))>
+                        Tasdiqlashdan oldin AI tekshiruvi talab qilinsin (AI xato topsa yoki tekshirmagan bo'lsa — xodim sabab yozib tasdiqlaydi)
+                    </label>
+                    <label style="display:flex;gap:8px;align-items:center;">
                         <input type="checkbox" name="allow_free_keys" value="1" @checked(old('allow_free_keys', $s['allow_free_keys']))>
                         Bepul kalitlardan ham foydalanish (pullik kalitlar har doim birinchi)
                     </label>
@@ -232,6 +239,15 @@
                         @if((int) $s['jn_mt_pass_international'] !== (int) $systemPassIntl)
                             <div style="font-size:11px;color:#b45309;margin-top:3px;">⚠️ Tizimda {{ $systemPassIntl }} ishlatiladi</div>
                         @endif
+                    </div>
+                    <div>
+                        <label style="{{ $label }}">OSKE minimal (%) — Testga kirish</label>
+                        <input type="number" name="oski_min" min="0" max="100" value="{{ old('oski_min', $s['oski_min']) }}" style="{{ $input }}" required>
+                        <div style="{{ $hint }}">OSKE+Test fanlarida OSKE shundan past bo'lsa Test bahosi bo'lmasligi kerak</div>
+                    </div>
+                    <div>
+                        <label style="{{ $label }}">Test minimal (%)</label>
+                        <input type="number" name="test_min" min="0" max="100" value="{{ old('test_min', $s['test_min']) }}" style="{{ $input }}" required>
                     </div>
                     <div>
                         <label style="{{ $label }}">Ruxsat etilgan farq (son)</label>

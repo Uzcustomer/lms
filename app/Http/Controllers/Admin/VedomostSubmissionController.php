@@ -881,6 +881,7 @@ class VedomostSubmissionController extends Controller
         $this->checkViewAccess();
         $submission = VedomostSubmission::with('logs')->findOrFail($id);
         $aiConfigured = \App\Services\VedomostAiChecker::isConfigured();
+        $approvalGate = app(\App\Services\VedomostAiDispatcher::class)->approvalGate($submission);
 
         // Birlashtirilgan (o'zak guruh × o'zak fan) ko'rinish — guruhchalar va
         // ularning o'qituvchilari jamlangan holda ko'rsatish uchun.
@@ -892,7 +893,7 @@ class VedomostSubmissionController extends Controller
             $this->rejectionInbox->markRead($submission, auth()->user());
         }
 
-        return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured', 'merged'));
+        return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured', 'merged', 'approvalGate'));
     }
 
     /**
@@ -1064,6 +1065,19 @@ class VedomostSubmissionController extends Controller
             return back()->with('error', "Bu vedomostni tasdiqlab bo'lmaydi.");
         }
 
+        // AI tekshiruv sharti (AI sozlamalarida yoqilgan bo'lsa).
+        $gate = app(\App\Services\VedomostAiDispatcher::class)->approvalGate($v);
+        if ($gate['blocked']) {
+            return back()->with('error', $gate['message']);
+        }
+        $overrideReason = null;
+        if ($gate['needs_reason']) {
+            $overrideReason = trim((string) request()->input('approve_reason', ''));
+            if (mb_strlen($overrideReason) < 5) {
+                return back()->with('error', $gate['message']);
+            }
+        }
+
         $from = $v->status;
         $approval = [
             'status' => VedomostSubmission::STATUS_APPROVED,
@@ -1076,7 +1090,9 @@ class VedomostSubmissionController extends Controller
             $sib->update($approval);
         }
         $v->refresh();
-        $this->log($v, 'approve', $from, $v->status);
+        $this->log($v, 'approve', $from, $v->status, $overrideReason
+            ? 'AI natijasiga qaramay tasdiqlandi (' . ($v->ai_check_status === 'done' ? 'AI: ' . $v->ai_summary : 'AI tekshirmagan') . "). Sabab: {$overrideReason}"
+            : null);
         $this->notifier->notifyStatusChange($v);
 
         return back()->with('success', 'Vedomost tasdiqlandi.');

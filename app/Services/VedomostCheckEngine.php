@@ -122,12 +122,24 @@ class VedomostCheckEngine
                     $set('bad');
                 }
                 $unclear = $s['unclear'] ?? [];
+                // Bo'yalgan (kulrang) qatorlarda AI minus belgisini yo'qotadi: baho «kelmadi» /
+                // «qo'yilmadi» yoki FX bo'la turib YN musbat/0 o'qilsa — o'qish xatosi deb olinadi.
+                if (VedomostScanReader::ynConflict($s)) {
+                    $unclear[] = 'yn';
+                }
                 foreach (self::COMPARE as $key => [$label, $pf, $col]) {
                     if (($key === 'oski' && !$useO) || ($key === 'test' && !$useT)) {
                         $cells[$key] = ['status' => 'skip'];
                         continue;
                     }
-                    $cells[$key] = $this->cmp($label, $vt[$col], $s[$pf] ?? '', in_array($pf, $unclear, true), $tol, $flags, $set);
+                    $hemisVal = $vt[$col];
+                    // Vedomost shablonida JN yoki MT o'tmagan talabaga YN = -2 (FX) yoziladi,
+                    // «Vedomost tekshirish» hisobida esa 0 — bu bir xil holat, farq emas.
+                    if ($key === 'yn' && VedomostScanReader::num($s[$pf] ?? null) === -2.0 && VedomostScanReader::num($hemisVal) === 0.0
+                        && $this->jnMtFailed($vt, $settings)) {
+                        $hemisVal = -2;
+                    }
+                    $cells[$key] = $this->cmp($label, $hemisVal, $s[$pf] ?? '', in_array($pf, $unclear, true), $tol, $flags, $set);
                 }
                 if (!empty($s['verified']) && !empty($s['problems'])) {
                     $flags[] = ['t' => 'bad', 'm' => "Vedomostning o'zida hisob xatosi (ikki marta o'qildi, bir xil): " . implode('; ', $s['problems'])];
@@ -501,8 +513,12 @@ class VedomostCheckEngine
         if ($yn === null || $yn < 0 || $jn === null || $mt === null) {
             return null;
         }
-        $jnmt = $this->floorRound($jn * $w['jb'] / 100 + $mt * $w['mt'] / 100 + $on * $w['on'] / 100);
-        $fail = ($w['oski'] > 0 && $oske !== null && $oske < (float) ($settings['oski_min'] ?? 60))
+        // JN yoki MT o'tish chegarasidan past bo'lsa JN+MT = 0 (vedomost shablonidagi qoida) —
+        // aks holda o'tmagan har bir talaba soxta «hisob xatosi» bo'lib chiqadi.
+        $jnmtFail = $this->jnMtFailed($vt, $settings);
+        $jnmt = $jnmtFail ? 0 : $this->floorRound($jn * $w['jb'] / 100 + $mt * $w['mt'] / 100 + $on * $w['on'] / 100);
+        $fail = $jnmtFail
+            || ($w['oski'] > 0 && $oske !== null && $oske < (float) ($settings['oski_min'] ?? 60))
             || ($w['test'] > 0 && $test !== null && $test < (float) ($settings['test_min'] ?? 60));
         $calc = $fail ? 0 : $this->floorRound($jnmt
             + ($w['oski'] > 0 ? ($oske ?? 0) * $w['oski'] / 100 : 0)
@@ -513,6 +529,15 @@ class VedomostCheckEngine
             'jnmtCalc' => $jnmt, 'ynCalc' => $calc, 'jnmtHemis' => $jh, 'ynHemis' => $yn,
             'jnmtBad' => $jh !== null && (float) $jh !== (float) $jnmt, 'ynBad' => (float) $calc !== (float) $yn,
         ];
+    }
+
+    private function jnMtFailed(array $vt, array $settings): bool
+    {
+        $pass = (float) ($settings['jn_mt_pass'] ?? 60);
+        $jn = VedomostScanReader::num($vt['D']);
+        $mt = VedomostScanReader::num($vt['G']);
+
+        return ($jn !== null && $jn < $pass) || ($mt !== null && $mt < $pass);
     }
 
     /** 6-kurs: PDFdagi ballar rasmiy shablon formulasiga mosmi (Python kurs6). */

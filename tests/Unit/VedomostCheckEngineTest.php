@@ -157,15 +157,38 @@ test('xodim tuzatishi hisobotni qayta quradi', function () {
         ->and($after['rows'][0]['orig']['test_pct'])->toBe('95,0');
 });
 
-test('qoida va hisob tekshiruvlari (Python entry_check / calc_check)', function () {
-    // JN 52 — JN+MT 0, YN -2; PDFda OSKE/Test bahosi yo'q — qoida buzilmagan, calc_check: JN+MT HEMIS 0 ≠ hisob
-    $r = engine()->build(expectedData([vtStu('FARXODOVA MUNISA BAXRIDDIN QIZI', '368221100222', 52, 0, 0, 0)]),
-        scanDoc([pdfRow(17, 'FARXODOVA MUNISA BAXRIDDIN QIZI', '368221100222', ['jb_pct' => '52,0', 'mt_ball' => '0,0', 'oski_pct' => '', 'test_pct' => '0,0', 'yn' => '-2'])]),
+test('JN < 60: vedomostdagi -2 (FX) va JN+MT 0 — farq emas (soxta hisob xatosi chiqmaydi)', function () {
+    // FARXODOVA: JN 52 — vedomost shablonida JN+MT 0, YN -2 FX; «Vedomost tekshirish»da YN 0.
+    $r = engine()->build(expectedData([vtStu('FARXODOVA MUNISA BAXRIDDIN QIZI', '368221100222', 52, 80, 0, 0)]),
+        scanDoc([pdfRow(17, 'FARXODOVA MUNISA BAXRIDDIN QIZI', '368221100222', ['jb_pct' => '52,0', 'jb_ball' => '0,0', 'mt_pct' => '80,0', 'mt_ball' => '16,0',
+            'jbmton_ball' => '0,0', 'oski_pct' => '', 'test_pct' => '', 'yn' => '-2', 'ects' => 'FX', 'baho' => "qo'yilmadi"])]),
         [], rules(), ctx());
 
     $msgs = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
-    expect($msgs)->toContain('YN: PDF -2 ≠ HEMIS 0')
-        ->and($msgs)->toContain('JN+MT hisobi: HEMIS 0 ≠ hisob 26');
+    expect($msgs)->not->toContain('JN+MT hisobi')
+        ->and($msgs)->not->toContain('YN:')
+        ->and($r['rows'][0]['status'])->toBe('ok');
+});
+
+test('kelmadi / FX qatorida YN 0 o\'qilsa — XATO emas, «PDFdan tekshiring»', function () {
+    // MISIROV: PDFda YN -1 «kelmadi» (kulrang qator), AI minusni yo'qotib 0 o'qigan.
+    $r = engine()->build(expectedData([vtStu('MISIROV AHLIDDIN SAYDULLA O‘G‘LI', '368221100747', 85, 88, 100, 0)]),
+        scanDoc([pdfRow(13, 'MISIROV AHLIDDIN SAYDULLA O‘G‘LI', '368221100747', bobo(['jb_pct' => '85,0', 'mt_ball' => '17,6', 'oski_pct' => '100,0',
+            'test_pct' => '0,0', 'yn' => '0', 'ects' => '', 'baho' => 'kelmadi']))]),
+        [], rules(), ctx());
+
+    expect($r['rows'][0]['cells']['yn']['status'])->toBe('ocr')
+        ->and($r['rows'][0]['status'])->not->toBe('bad')
+        ->and(VedomostScanReader::ynConflict(['yn' => '-1', 'baho' => 'kelmadi']))->toBeFalse()
+        ->and(VedomostScanReader::ynConflict(['yn' => '0', 'ects' => 'FX']))->toBeTrue();
+});
+
+test('hisob tekshiruvi JN va MT o\'tganda ishlaydi', function () {
+    $stu = vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96);
+    $stu['raw']['jnCount'] = 8;
+    $r = engine()->build(expectedData([$stu]), scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]), [], rules(), ctx());
+
+    expect(collect($r['rows'][0]['flags'])->pluck('m')->implode(' | '))->not->toContain('hisobi');
 });
 
 test('Test markazi natijasi HEMISdan farq qilsa', function () {

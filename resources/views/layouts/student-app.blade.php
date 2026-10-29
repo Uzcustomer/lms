@@ -162,12 +162,12 @@
                             $label = implode(' ' . __('va') . ' ', $needFill);
                             if ($deadlinePassed) {
                                 $blockSite = !$onVisaPage;
-                                $topBanner = ['level' => 'danger', 'msg' => __('Yangi') . ' ' . $label . ' ' . __("ma'lumotlaringizni kiritish muddati tugadi!")];
+                                $topBanner = ['level' => 'danger', 'msg' => __("Yangi :items ma'lumotlaringizni kiritish muddati tugadi!", ['items' => $label])];
                             } else {
                                 $showFillModal = !$onVisaPage;
                                 $daysToDeadline = $deadline ? (int) now()->startOfDay()->diffInDays($deadline, false) : null;
                                 $daysText = $daysToDeadline !== null ? " ({$daysToDeadline} " . __('kun qoldi') . ")" : '';
-                                $topBanner = ['level' => 'warning', 'msg' => __('Yangi') . ' ' . $label . " " . __("ma'lumotlaringizni kiriting!") . $daysText];
+                                $topBanner = ['level' => 'warning', 'msg' => __("Yangi :items ma'lumotlaringizni kiriting!", ['items' => $label]) . $daysText];
                             }
                         }
                     }

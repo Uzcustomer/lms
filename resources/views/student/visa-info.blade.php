@@ -72,7 +72,7 @@
 
                 @if($visaInfo && $visaInfo->status !== 'rejected')
                     <button @click="showForm = !showForm" type="button" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-                        <span x-text="showForm ? 'Yopish' : 'Ko\'rish / Tahrirlash'"></span>
+                        <span x-text="showForm ? @js(__('Yopish')) : @js(__("Ko'rish / Tahrirlash"))"></span>
                     </button>
                 @endif
             </div>

@@ -63,7 +63,8 @@ class OtrabotkaController extends Controller
 
             if ($g->retake_grade !== null) {
                 $state = 'done';
-            } elseif ($g->status === 'closed' || now()->greaterThan($deadline)) {
+            } elseif (now()->greaterThan($deadline) || ($g->status === 'closed' && !$windows[$key])) {
+                // grades:close-expired sozlamadagi muddat bo'yicha yopadi — sababli oraliqda bu hisobga olinmaydi
                 $state = 'expired';
             } else {
                 $state = 'open';

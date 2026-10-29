@@ -260,7 +260,7 @@ class FaceIdController extends Controller
             return response()->json(['success' => true, 'redirect' => route('student.complete-profile'), 'student_name' => $student->full_name, 'confidence' => round($similarityPercent, 1)]);
         }
 
-        return response()->json(['success' => true, 'redirect' => route('student.dashboard'), 'student_name' => $student->full_name, 'confidence' => round($similarityPercent, 1)]);
+        return response()->json(['success' => true, 'redirect' => $this->afterLoginUrl(), 'student_name' => $student->full_name, 'confidence' => round($similarityPercent, 1)]);
     }
 
     /**
@@ -545,6 +545,17 @@ class FaceIdController extends Controller
             return response()->json(['success' => true, 'redirect' => route('student.complete-profile')]);
         }
 
-        return response()->json(['success' => true, 'redirect' => route('student.dashboard')]);
+        return response()->json(['success' => true, 'redirect' => $this->afterLoginUrl()]);
+    }
+
+    /**
+     * Login'dan keyin qayerga: talabaga yuborilgan havola (masalan, qayta topshirish
+     * broni) orqali kelgan bo'lsa — o'sha sahifa, aks holda bosh panel.
+     */
+    private function afterLoginUrl(): string
+    {
+        $intended = (string) session()->pull('url.intended', '');
+
+        return str_starts_with($intended, url('/student/')) ? $intended : route('student.dashboard');
     }
 }

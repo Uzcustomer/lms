@@ -47,8 +47,10 @@ assert.ok(classes.has('text-amber-700'));
 assert.ok(!classes.has('text-emerald-700'));
 assert.equal(toasts.length, 1, 'pending approval uses the existing approval notice');
 
-assert.match(source.slice(source.indexOf('async function placeCycleCardAt('), source.indexOf('// Tanlangan karta', source.indexOf('async function placeCycleCardAt('))),
-    /result && result\.pending_approval \? 'pending' : 'success'/);
+const placeSource = source.slice(source.indexOf('async function placeCycleCardAt('),
+    source.indexOf('// Tanlangan karta', source.indexOf('async function placeCycleCardAt(')));
+assert.match(placeSource, /result && result\.pending_approval/);
+assert.match(placeSource, /!reloaded \|\| !reloaded\.placed/);
 
 const eventsStart = source.indexOf('function setupCycleGridEvents()');
 const eventsEnd = source.indexOf('function renderCycleCards(', eventsStart);

@@ -885,6 +885,46 @@ it('kafedra mudirlaridan HEMIS id\'si borini oladi; yagona mudirning id\'si yo\'
         ->and(implode(' ', $a['blocked']))->toContain("kafedra mudiri MUDIR ning HEMIS xodim id'si LMS'da yo'q");
 });
 
+it('joylanmagan kartalar xulosasi (HEMIS\'siz): haftalik va sikl — "Guruh bo\'yicha" joylangan sikl kartasi joylangan', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Haftalik: hsSetup kartasi joylangan; shu guruhning ma'ruzasi joylanmagan
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'lecture', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Biologiya', 'group_name' => 'p/st26-01a (rus)', 'kafedra_name' => 'B']);
+    // Sikl (5-kurs Pediatriya, 2 kun): g5-01a joylanmagan, g5-01b "Guruh bo'yicha" (guruh qatorida) joylangan
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 2]);
+    foreach (['g5-01a', 'g5-01b'] as $gr) {
+        TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+            'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Pediatriya',
+            'kafedra_name' => 'P', 'training_type' => 'practice', 'group_name' => $gr]);
+    }
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'g5-01b', 'subject_name' => 'Pediatriya', 'start_index' => 7, 'training_type' => 'practice']);
+    $summary = fn (array $body, string $role = 'admin', $user = null) => test()->withoutVite()->actingAs($user ?? $s['reg'], 'teacher')
+        ->withSession(['active_role' => $role])
+        ->postJson(route('admin.timetable.hemis-sync.unplaced-summary', $s['board']), ['today' => '2026-09-19'] + $body);
+
+    // 19.09 — 1-hafta shanbasi; "HEMIS'ga yozish" 2-hafta oxirigacha: faqat 2-hafta
+    $u = $summary(['until_week' => 2])->assertOk()->json();
+    expect($u['weekly']['count'])->toBe(1)
+        ->and(array_map(fn ($i) => [$i['group'], $i['subject'], $i['type'], $i['weeks']], $u['weekly']['items']))
+        ->toBe([['p/st26-01a', 'Biologiya', 'lecture', [2]]])
+        ->and($u['cycle']['count'])->toBe(1)
+        ->and(array_map(fn ($i) => [$i['group'], $i['subject'], $i['days']], $u['cycle']['items']))->toBe([['g5-01a', 'Pediatriya', 2]]);
+    // Qamrov va guruh filtri
+    expect($summary(['until_week' => 2, 'courses' => [1]])->json('cycle.count'))->toBe(0)
+        ->and($summary(['until_week' => 2, 'groups' => ['g5-01a']])->json())->toMatchArray(['weekly' => ['count' => 0, 'items' => []]])
+        ->and($summary(['until_week' => 2, 'groups' => ['g5-01a']])->json('cycle.count'))->toBe(1);
+    // Ruxsat — solishtirish bilan bir xil rollar (dars jadvaliga kira oladigan boshqa rol — yo'q)
+    Role::findOrCreate('kichik_admin', 'web');
+    $other = Teacher::where('full_name', 'MUDIR')->first();
+    $other->assignRole('kichik_admin');
+    $summary(['until_week' => 2], 'kichik_admin', $other)->assertForbidden();
+});
+
 it('joylanmagan kartalar: ertadan "HEMIS\'ga yozish" haftasi oxirigacha karta-haftalar va sikl kartalari sanaladi', function () {
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');

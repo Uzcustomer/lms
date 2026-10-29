@@ -1313,6 +1313,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/weekly-layer-copy', [\App\Http\Controllers\Admin\TimetableController::class, 'weeklyLayerCopy'])->name('weekly-layer-copy');
                 Route::post('/boards/{board}/ktr-weeks', [\App\Http\Controllers\Admin\TimetableController::class, 'ktrWeeks'])->name('ktr-weeks');
                 Route::post('/boards/{board}/hemis-sync', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncCompare'])->name('hemis-sync');
+                Route::post('/boards/{board}/unplaced-summary', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedSummary'])->name('hemis-sync.unplaced-summary');
                 Route::post('/boards/{board}/hemis-sync/export', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncExport'])->name('hemis-sync.export');
                 Route::get('/boards/{board}/hemis-sync/import-status', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncImportStatus'])->name('hemis-sync.import-status');
                 Route::post('/boards/{board}/hemis-sync/import', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncImportStart'])->name('hemis-sync.import');

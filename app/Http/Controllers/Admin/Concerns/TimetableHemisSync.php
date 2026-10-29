@@ -77,6 +77,147 @@ trait TimetableHemisSync
     }
 
     /**
+     * Solishtirishdan oldin (HEMIS'ga so'rovsiz, faqat LMS ma'lumoti): tanlangan qamrovda ichki jadvalda joylanmagan
+     * kartalar — ular HEMIS'ga yozilmaydi. Qamrov va "HEMIS'ga yozish" haftasi solishtirishdagi bilan bir xil.
+     */
+    public function unplacedSummary(Request $request, TimetableBoard $board)
+    {
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            abort(403, 'Faqat registrator ofisi uchun.');
+        }
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'groups'            => 'nullable|array',
+            'groups.*'          => 'string|max:255',
+            'until_week'        => 'nullable|integer|min:0|max:60',
+            'today'             => 'nullable|date',
+        ]);
+        $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
+            ? Carbon::parse($data['today'])->toDateString()
+            : now()->toDateString();
+
+        return response()->json($this->hemisUnplacedSummary($board, $data, $today));
+    }
+
+    /**
+     * LMS ichki jadvalida joylanmagan kartalar (HEMIS'ga yozilmaydi) — faqat ertadan "HEMIS'ga yozish" haftasi oxirigacha
+     * (until_week: berilmasa — joriy hafta, 0 — semestr oxiri; o'tgan kunlar HEMIS'da yopiq).
+     * weekly — haftalik kartalarning karta-haftalari: doskadagi "Doska bo'yicha (haftalik)" va unplacedExport kabi —
+     *   bekor qilingan hafta sanalmaydi, shu haftaga ko'chirilgan (kun va parasi bor) yoki shablonda joyi bor karta joylangan.
+     * cycle — ichki sikl jadvalida joylanmagan sikl kartalari (guruh qatorida — "Guruh bo'yicha" — joylangani joylangan).
+     * Bitta karta bir nechta guruhda bo'lishi mumkin: count — karta-hafta / karta bo'yicha bir martadan.
+     * $cyclePlan — ichki sikl jadvali (cyclePlan javobi) allaqachon olingan bo'lsa.
+     */
+    private function hemisUnplacedSummary(TimetableBoard $board, array $scope, string $today, ?array $cyclePlan = null): array
+    {
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
+        $q = TimetableCard::where('board_id', $board->id);
+        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
+        $cards = $q->get();
+        $cycleKeys = [];
+        foreach ($this->subjectSettingsFor($board) as $st) {
+            if (($st['mode'] ?? '') === 'cycle') {
+                $cycleKeys[$this->specKey($st['specialty_name']) . '|' . (int) $st['course'] . '|' . $this->normSubject((string) $st['subject_name'])] = true;
+            }
+        }
+        $isCycle = function (TimetableCard $c) use ($cycleKeys): bool {
+            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+            $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
+
+            return isset($cycleKeys[$k . $this->normSubject((string) $c->subject_name)])
+                || ($base !== null && isset($cycleKeys[$k . $this->normSubject($base)]));
+        };
+        $cleanGroup = fn ($n) => trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $n));
+        $want = [];
+        foreach ((array) ($scope['groups'] ?? []) as $g) {
+            $want[$this->groupNameKey($g)] = true;
+            $want[$this->groupNameKey($cleanGroup($g))] = true;
+        }
+        $groupOk = fn (string $raw) => !$want || isset($want[$this->groupNameKey($raw)]) || isset($want[$this->groupNameKey($cleanGroup($raw))]);
+        $untilWeek = array_key_exists('until_week', $scope) && $scope['until_week'] !== null ? (int) $scope['until_week'] : null;
+
+        $weeklyCards = $cards->reject($isCycle)->values();
+        $overrides = Schema::hasTable('timetable_card_overrides') && $weeklyCards->isNotEmpty()
+            ? DB::table('timetable_card_overrides')->whereIn('card_id', $weeklyCards->pluck('id'))->get()->groupBy('card_id')
+            : collect();
+        $weekly = [];
+        foreach ($weeklyCards as $c) {
+            $groups = array_values(array_filter(array_map(fn ($n) => trim((string) $n), $c->occupiedGroups()), fn ($n) => $n !== '' && $groupOk($n)));
+            if (!$groups) {
+                continue;
+            }
+            $g = $this->cardGrid($board, $c);
+            $mondays = [];
+            $current = 0;
+            for ($w = 1; $w <= $g['weeks']; $w++) {
+                $mondays[$w] = $this->weekStartDate($board, $c, $w)->toDateString();
+                if ($mondays[$w] <= $today) {
+                    $current = $w;
+                }
+            }
+            $uw = $untilWeek ?? $current;
+            $until = $uw > 0 && $mondays ? Carbon::parse($mondays[min($uw, $g['weeks'])])->addDays(6)->toDateString() : null;
+            $ov = ($overrides[$c->id] ?? collect())->keyBy('week');
+            $weeks = [];
+            foreach ($mondays as $w => $mon) {
+                if (Carbon::parse($mon)->addDays(max(1, (int) $g['days']) - 1)->toDateString() <= $today || ($until !== null && $mon > $until)) {
+                    continue;
+                }
+                $o = $ov[$w] ?? null;
+                if (($o && $o->cancelled) || ($o && $o->day && $o->pair) || ($c->day && $c->pair)) {
+                    continue;
+                }
+                $weeks[] = $w;
+            }
+            if (!$weeks) {
+                continue;
+            }
+            foreach (array_unique(array_map($cleanGroup, $groups)) as $name) {
+                $weekly[] = ['group' => $name, 'card_id' => $c->id, 'subject' => (string) $c->subject_name,
+                    'type' => $c->training_type === 'lecture' ? 'lecture' : 'practice', 'weeks' => $weeks];
+            }
+        }
+
+        $cycle = [];
+        if ($cyclePlan === null && $cards->contains($isCycle) && Schema::hasTable('timetable_cycle_placements')) {
+            $params = ['layer' => 'internal'];
+            foreach (['faculty_names', 'specialty_names', 'courses'] as $k) {
+                if (!empty($scope[$k])) {
+                    $params[$k] = $scope[$k];
+                }
+            }
+            $cyclePlan = $this->cyclePlan(Request::create('/', 'POST', $params), $board)->getData(true);
+        }
+        $rowsByKey = collect((array) ($cyclePlan['rows'] ?? []))->keyBy('row_key');
+        foreach ((array) ($cyclePlan['cycle_cards'] ?? []) as $cc) {
+            if (!empty($cc['placed'])) {
+                continue;
+            }
+            $seen = [];
+            foreach ((array) ($rowsByKey->get($cc['row_key'] ?? null)['subgroups'] ?? []) as $member) {
+                $name = $cleanGroup($member);
+                if (!$groupOk((string) $member) || isset($seen[$name])) {
+                    continue;
+                }
+                $seen[$name] = true;
+                $cycle[] = ['group' => $name, 'key' => ($cc['row_key'] ?? '') . '|' . ($cc['key'] ?? ''), 'subject' => (string) $cc['subject'],
+                    'type' => (string) ($cc['type'] ?? 'practice'), 'days' => (int) ($cc['days'] ?? 0)];
+            }
+        }
+
+        return [
+            'weekly' => ['count' => count(array_unique(array_merge([], ...array_map(fn ($u) => array_map(fn ($w) => $u['card_id'] . '|' . $w, $u['weeks']), $weekly)))),
+                'items' => $weekly],
+            'cycle' => ['count' => count(array_unique(array_column($cycle, 'key'))), 'items' => $cycle],
+        ];
+    }
+
+    /**
      * Solishtirishdan oldin: HEMIS jadvali LMS'ga oxirgi marta qachon import qilingani va
      * qo'lda boshlangan importning holati. Solishtirish har doim shu import (LMS bazasi)
      * bilan ishlaydi — HEMIS'ning o'ziga bu tugma murojaat qilmaydi.
@@ -780,8 +921,6 @@ trait TimetableHemisSync
         $missingGroups = [];
         $finals = [];        // barcha guruhlarning yakuniy (rejadagi) yozuvlari — guruhlararo tekshiruv uchun
         $handledIds = [];    // rejada qayta yoziladigan HEMIS yozuvlari (qolganlari tashqi bandlik)
-        $unplacedWeekly = [];   // joylanmagan haftalik karta-haftalar: guruh, karta, fan, tur, haftalar
-        $gnameOf = [];          // guruh kaliti => hisobotdagi guruh nomi (sikl kartalarini guruhlarga bog'lash uchun)
         foreach ($groupNames as $gk => $gInfo) {
             ['name' => $gname, 'card' => $sample] = $gInfo;
             $grp = $resolveGroup($gInfo);
@@ -805,7 +944,6 @@ trait TimetableHemisSync
                     'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'updated_at']);
 
             $gCards = $cards->filter(fn ($c) => in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true))->values();
-            $gnameOf[$gk] = $gname;
             $usedCards = [];
             $units = [];
             $unitMeta = [];
@@ -1025,30 +1163,6 @@ trait TimetableHemisSync
             if ($uw > 0) {
                 $until = Carbon::parse($weekMonday($sample, min($uw, $g['weeks'])))->addDays(6)->toDateString();
             }
-            // Joylanmagan haftalik karta-haftalar — faqat ertadan "HEMIS'ga yozish" haftasi oxirigacha (o'tgan kunlar HEMIS'da
-            // yopiq). Doskadagi "Doska bo'yicha (haftalik)" va unplacedExport kabi: bekor qilingan hafta hisobga olinmaydi, shu
-            // haftaga ko'chirilgan (kun va parasi bor) yoki shablonda joyi bor karta — joylangan.
-            foreach ($gCards as $c) {
-                $cg = $gridFor($c);
-                $ov = ($overrides[$c->id] ?? collect())->keyBy('week');
-                $weeks = [];
-                for ($w = 1; $w <= $cg['weeks']; $w++) {
-                    $mon = $weekMonday($c, $w);
-                    if (Carbon::parse($mon)->addDays(max(1, (int) $cg['days']) - 1)->toDateString() <= $today || ($until !== null && $mon > $until)) {
-                        continue;
-                    }
-                    $o = $ov[$w] ?? null;
-                    if (($o && $o->cancelled) || ($o && $o->day && $o->pair) || ($c->day && $c->pair)) {
-                        continue;
-                    }
-                    $weeks[] = $w;
-                }
-                if ($weeks) {
-                    $unplacedWeekly[] = ['group' => $gname, 'card_id' => $c->id, 'subject' => (string) $c->subject_name,
-                        'type' => $c->training_type === 'lecture' ? 'lecture' : 'practice', 'weeks' => $weeks];
-                }
-            }
-
             $results = $units ? $planner->planGroup($units, $busy, $workDates) : [];
             // Hisob davri: haftalar oralig'i (sukut 1 — joriy hafta).
             $pFrom = max(1, (int) ($scope['period_from'] ?? 1));
@@ -1152,26 +1266,6 @@ trait TimetableHemisSync
 
         $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today, $mudirFor);
 
-        // Ichki sikl jadvalida joylanmagan sikl kartalari — oqim qatoridagi har guruhga (hisobotdagi nomi bilan).
-        $unplacedCycle = [];
-        $rowsByKey = collect((array) ($cyclePlan['rows'] ?? []))->keyBy('row_key');
-        foreach ((array) ($cyclePlan['cycle_cards'] ?? []) as $cc) {
-            if (!empty($cc['placed'])) {
-                continue;
-            }
-            $row = $rowsByKey->get($cc['row_key'] ?? null);
-            $seen = [];
-            foreach ((array) ($row['subgroups'] ?? []) as $member) {
-                $name = $gnameOf[$facKey($row['faculty'] ?? '') . '|' . $this->groupNameKey((string) $member)] ?? null;
-                if ($name === null || isset($seen[$name])) {
-                    continue;
-                }
-                $seen[$name] = true;
-                $unplacedCycle[] = ['group' => $name, 'key' => ($cc['row_key'] ?? '') . '|' . ($cc['key'] ?? ''), 'subject' => (string) $cc['subject'],
-                    'type' => (string) ($cc['type'] ?? 'practice'), 'days' => (int) ($cc['days'] ?? 0)];
-            }
-        }
-
         return [
             'today' => $today,
             'board_id' => $board->id,
@@ -1184,13 +1278,8 @@ trait TimetableHemisSync
             'weeks' => array_values($weeksOut),
             'groups' => $groupsOut,
             'groups_not_in_hemis' => $missingGroups,
-            // Joylanmagan kartalar HEMIS'ga yozilmaydi — oyna ogohlantiradi. Bitta karta bir nechta guruhda bo'lishi mumkin:
-            // sanoq — karta-hafta (haftalik) / karta (sikl) bo'yicha bir martadan.
-            'unplaced' => [
-                'weekly' => ['count' => count(array_unique(array_merge([], ...array_map(fn ($u) => array_map(fn ($w) => $u['card_id'] . '|' . $w, $u['weeks']), $unplacedWeekly)))),
-                    'items' => $unplacedWeekly],
-                'cycle' => ['count' => count(array_unique(array_column($unplacedCycle, 'key'))), 'items' => $unplacedCycle],
-            ],
+            // Joylanmagan kartalar HEMIS'ga yozilmaydi — oyna ogohlantiradi (oldindan ogohlantirish bilan bir xil hisob).
+            'unplaced' => $this->hemisUnplacedSummary($board, $scope, $today, $cyclePlan),
         ];
     }
     /**

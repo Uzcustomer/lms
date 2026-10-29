@@ -4084,7 +4084,57 @@
                     } finally { btn.disabled = false; btn.innerHTML = html; }
                 };
             }
+            // Joylanmagan kartalar ogohlantirishi — faqat birinchi ochilishda (hafta yoki davr o'zgartirilsa qayta chiqmaydi).
+            let hemisSyncWarned = false;
+            // Solishtirishdan oldin (HEMIS'siz, faqat LMS): qamrovda ichki jadvalda joylanmagan kartalar bo'lsa — alohida oyna;
+            // true — davom etish, false — bekor qilindi. Xulosa olinmasa — ogohlantirishsiz davom etiladi.
+            async function hemisUnplacedGate() {
+                hemisSyncModal('<div class="p-6 text-center text-gray-500">Joylanmagan kartalar tekshirilmoqda… (' + hsEsc(scopeLabelText()) + ')</div>');
+                let u;
+                try {
+                    const body = hemisSyncUntil === null ? scopeBody() : Object.assign({ until_week: hemisSyncUntil }, scopeBody());
+                    u = await api(BASE + '/boards/' + board.id + '/unplaced-summary', 'POST', body);
+                } catch (e) {
+                    console.warn('Joylanmagan kartalar xulosasi olinmadi — ogohlantirishsiz solishtiriladi:', e);
+                    return true;
+                }
+                const nW = +((u && u.weekly && u.weekly.count) || 0), nC = +((u && u.cycle && u.cycle.count) || 0);
+                if (!nW && !nC) return true;
+                const TYPE = { lecture: 'ma\'ruza', practice: 'amaliy' };
+                const rows = ((u.weekly && u.weekly.items) || []).map(i => [i.group, i.subject, hsEsc(i.subject) + ' (' + (TYPE[i.type] || i.type) + '): ' + hsWeekRanges(i.weeks) + '-hafta'])
+                    .concat(((u.cycle && u.cycle.items) || []).map(i => [i.group, i.subject, hsEsc(i.subject) + ' (sikl): ' + i.days + ' kun']))
+                    .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+                const LIMIT = 30;
+                const list = rows.slice(0, LIMIT).map(r => '<div><b>' + hsEsc(r[0]) + '</b> · ' + r[2] + '</div>').join('')
+                    + (rows.length > LIMIT ? '<div class="text-gray-500">… yana ' + (rows.length - LIMIT) + ' ta</div>' : '');
+                return new Promise(resolve => {
+                    const m = hemisSyncModal('<h3 class="font-semibold text-[14px] mb-2 text-amber-800">⚠ Hali joylanmagan kartalar bor</h3>' +
+                        '<div id="hsUnpText" class="mb-2">Haftalik: ' + nW + ' ta karta-hafta · Sikl: ' + nC + ' ta karta. Ular HEMIS\'ga yozilmaydi, HEMIS\'da dars kam qoladi.</div>' +
+                        '<details open class="mb-3"><summary class="cursor-pointer">Guruh va fan bo\'yicha (' + rows.length + ')</summary>' +
+                        '<div id="hsUnpList" class="mt-1 max-h-72 overflow-auto">' + list + '</div></details>' +
+                        '<div class="flex gap-2"><button type="button" id="hsUnpGo" class="px-3 py-1 rounded bg-emerald-600 text-white">Mayli, solishtirish</button>' +
+                        '<button type="button" id="hsUnpCancel" class="px-3 py-1 rounded border">Bekor qilish</button>' +
+                        '<button type="button" id="hsUnpExcel" class="tt-weekly-excel">Excel (sabablar)</button></div>');
+                    $('hsUnpGo').onclick = () => resolve(true);
+                    $('hsUnpCancel').onclick = () => { m.remove(); resolve(false); };
+                    $('hsUnpExcel').onclick = async function () {
+                        // Mavjud "Joylanmagan kartalar" diagnostikasi — ichki jadval, shu qamrov bo'yicha.
+                        const params = new URLSearchParams();
+                        const sb = scopeBody();
+                        Object.keys(sb).forEach(k => sb[k].forEach(v => params.append(k + '[]', v)));
+                        params.set('layer', 'internal');
+                        this.disabled = true;
+                        try { await downloadUnplacedXlsx(params); }
+                        catch (e) { alert('Diagnostika Excelini yuklab bo\'lmadi: ' + e.message); }
+                        finally { this.disabled = false; }
+                    };
+                });
+            }
             async function hemisSyncRun() {
+                if (!hemisSyncWarned) {
+                    hemisSyncWarned = true;
+                    if (!(await hemisUnplacedGate())) return;
+                }
                 hemisSyncModal('<div class="p-6 text-center text-gray-500">HEMIS bilan solishtirilmoqda… (' + hsEsc(scopeLabelText()) + ')</div>');
                 try {
                     // Sukut (until_week yuborilmasa) — server joriy hafta oxirigacha oladi.
@@ -4164,6 +4214,7 @@
                 hemisSyncPeriod = null;
                 hemisSyncFilter.subjects = null;   // fan va guruh filtri qamrovga bog'liq — yangi solishtirishda hammasi
                 hemisSyncFilter.groups = null;
+                hemisSyncWarned = false;   // yangi solishtirish — joylanmagan kartalar ogohlantirishi qayta
                 try { await hemisSyncAsk(); } finally { this.disabled = false; }
             };
             // ===== HEMIS to'siqlari bo'yicha so'rovlar (Telegram: o'qituvchi / kafedra mudiri) =====
@@ -7180,6 +7231,27 @@
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
 
+            // Joylanmagan kartalar diagnostikasi (unplaced-export) — panel tugmasi va HEMIS solishtirish ogohlantirishi uchun.
+            async function downloadUnplacedXlsx(params) {
+                params.set('_', Date.now());
+                const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?' + params.toString(), {
+                    headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+                    cache: 'no-store',
+                });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || 'HTTP ' + response.status);
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'joylanmagan-kartalar-diagnostikasi-' + board.id + '.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
             async function downloadUnplacedDiagnostics() {
                 if (!board) return;
                 const btn = $('unplacedExportBtn');
@@ -7194,24 +7266,7 @@
                     params.set('type', typeFilter);
                     params.set('layer', weeklyLayer);
                     if (curWeek) params.set('week', curWeek);
-                    params.set('_', Date.now());
-                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?' + params.toString(), {
-                        headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-                        cache: 'no-store',
-                    });
-                    if (!response.ok) {
-                        const error = await response.json().catch(() => ({}));
-                        throw new Error(error.error || 'HTTP ' + response.status);
-                    }
-                    const blob = await response.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'joylanmagan-kartalar-diagnostikasi-' + board.id + '.xlsx';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
+                    await downloadUnplacedXlsx(params);
                 } catch (e) {
                     alert('Diagnostika Excelini yuklab bo\'lmadi: ' + e.message);
                 } finally {

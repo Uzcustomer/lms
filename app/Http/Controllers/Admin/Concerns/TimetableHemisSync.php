@@ -806,6 +806,8 @@ trait TimetableHemisSync
             $units = [];
             $unitMeta = [];
             $handledSubjects = [];
+            // O'tkazilgan fanlar; kind: finished — darslari tugagan (bugun va o'tgan kunlar HEMIS'da tahrirlanmaydi, qiladigan
+            // ish yo'q), unplaced — sikl fani ichki jadvalda joylanmagan, no_card — LMS doskasida kartochka yo'q.
             $skipped = [];
             foreach ($csRows as $cs) {
                 $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
@@ -839,11 +841,11 @@ trait TimetableHemisSync
                     && in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true));
                 if ($matched->isEmpty() && $isCycleSubject) {
                     if (!$cyc) {
-                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'sikl fani — LMS ichki sikl jadvalida joylanmagan, HEMIS\'ga tegilmaydi'];
+                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'sikl fani — LMS ichki sikl jadvalida joylanmagan, HEMIS\'ga tegilmaydi', 'kind' => 'unplaced'];
                         continue;
                     }
                     if (!array_filter($cyc, fn ($p) => $p['date'] > $today)) {
-                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'sikl fani — ichki sikl jadvalida ertadan keyin dars yo\'q, HEMIS\'ga tegilmaydi'];
+                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'sikl fani — ichki sikl jadvalida ertadan keyin dars yo\'q, HEMIS\'ga tegilmaydi', 'kind' => 'finished'];
                         continue;
                     }
                     $handledSubjects[(int) $cs->subject_id] = ($handledSubjects[(int) $cs->subject_id] ?? []) + $codes;
@@ -899,7 +901,7 @@ trait TimetableHemisSync
                 }
                 if ($matched->isEmpty()) {
                     if ($hemisRows->isNotEmpty()) {
-                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS doskasida kartochka yo\'q — HEMIS\'ga tegilmaydi'];
+                        $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS doskasida kartochka yo\'q — HEMIS\'ga tegilmaydi', 'kind' => 'no_card'];
                     }
                     continue;
                 }
@@ -911,7 +913,7 @@ trait TimetableHemisSync
                     array_push($plan, ...$cardLessons($c));
                 }
                 if (!array_filter($plan, fn ($p) => $p['date'] > $today)) {
-                    $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS ichki jadvalida ertadan keyin dars yo\'q — HEMIS\'ga tegilmaydi'];
+                    $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS ichki jadvalida ertadan keyin dars yo\'q — HEMIS\'ga tegilmaydi', 'kind' => 'finished'];
                     continue;
                 }
                 // Faqat shu birlik turlari (kodlari) uning rejasida; boshqa turdagi HEMIS darslari guruh bandligida qoladi.

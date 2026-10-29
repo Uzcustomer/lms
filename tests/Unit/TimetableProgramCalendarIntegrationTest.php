@@ -21,6 +21,7 @@ beforeEach(function () {
         $t->string('department_name');
         $t->unsignedBigInteger('curriculum_hemis_id');
         $t->boolean('active')->default(true);
+        $t->unsignedBigInteger('group_hemis_id')->nullable();
     });
     Schema::create('timetable_boards', function (Blueprint $t) {
         $t->id();
@@ -114,6 +115,48 @@ it('does not guess a curriculum for ambiguous or mixed-plan groups', function ()
     expect(programInvoke($this->controller, 'cardCurriculumId', $this->pimu))->toBe(0);
     $this->daytime->group_names = ['day-01a', 'pimu-01a'];
     expect(programInvoke($this->controller, 'cardCurriculumId', $this->daytime))->toBe(0);
+});
+
+it('resolves two active same-name groups by the curriculum their active students study', function () {
+    // HEMIS'da bir xil nomli ikki faol guruh (eskisi nofaol qilinmagan): pp/21-01 → 157 va 235.
+    DB::table('groups')->insert([
+        ['name' => 'pp/21-01', 'department_name' => 'Xalqaro', 'curriculum_hemis_id' => 157, 'group_hemis_id' => 14],
+        ['name' => 'pp/21-01', 'department_name' => 'Xalqaro', 'curriculum_hemis_id' => 235, 'group_hemis_id' => 1169],
+    ]);
+    Schema::create('students', function (Blueprint $t) {
+        $t->id();
+        $t->unsignedBigInteger('group_id')->nullable();
+        $t->unsignedBigInteger('curriculum_id')->nullable();
+        $t->string('student_status_code')->nullable();
+    });
+    $students = fn (int $group, int $curriculum, int $n, string $status = '11') => DB::table('students')->insert(
+        array_fill(0, $n, ['group_id' => $group, 'curriculum_id' => $curriculum, 'student_status_code' => $status]));
+    $card = TimetableCard::create($this->base + ['specialty_name' => 'pediatriya ishi', 'course' => 6,
+        'subject_name' => 'Vaksinoprofilaktika', 'group_name' => 'pp/21-01 (rus)', 'training_type' => 'practice']);
+    $resolve = function () use ($card) {
+        $c = new TimetableController;
+        $map = programInvoke($c, 'hemisGroupCurricula');
+
+        return [programInvoke($c, 'cardCurriculumId', $card), programInvoke($c, 'groupCurriculum', 'pp/21-01 (rus)', 'Xalqaro'),
+            $map['pp/21-01'], $map['base:pp/21-01']];
+    };
+
+    // Talabalar yo'q — kalendar uchun noaniq (0); fanlar xaritasi avvalgidek yangi (oxirgi) guruhni oladi.
+    expect($resolve())->toBe([0, 235, 235, 235]);
+
+    // Faol talabalar eski id'li guruhda (157) o'qiydi; ikkinchi guruhdagilar o'qimaydi (status 60) — hisobga olinmaydi.
+    // Kalendar, talabalar soni va fanlar bitta rejadan olinadi.
+    $students(14, 157, 20);
+    $students(1169, 235, 25, '60');
+    expect($resolve())->toBe([157, 157, 157, 157]);
+
+    // Faol talabalar ikki rejaga teng bo'lingan — kalendar tasodifiy reja olmaydi.
+    $students(1169, 235, 20);
+    expect($resolve()[0])->toBe(0);
+
+    // Faqat nomzod rejalar hisoblanadi: boshqa rejadagi talabalar ustunlik bermaydi.
+    DB::table('students')->where('curriculum_id', 157)->update(['curriculum_id' => 999]);
+    expect($resolve())->toBe([235, 235, 235, 235]);
 });
 
 it('keeps teacher and room conflict checks global across curricula', function () {

@@ -583,14 +583,35 @@ class TimetableController extends Controller
     /** groupCurriculum keshi — so'rov (controller) bo'yicha; funksiya ichidagi static butun jarayonda qolardi. */
     private ?array $groupCurriculumMap = null;
 
+    /** Guruh nomi → o'quv reja (HEMIS doskada fanlar guruhning o'z rejasidan olinadi). */
+    private function hemisGroupCurricula(): array
+    {
+        $map = [];
+        // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi; ikkalasi faol bo'lsa —
+        // faol talabalari shu rejada o'qiydigani (kalendar rejasi bilan bir xil tanlov).
+        // Ikki kalit: to'liq nom va qavssiz nom (oqimda "d1/d26-01a (o'z)", bazada "d1/d26-01a").
+        $groups = $this->preferStudentBackedGroups(DB::table('groups')->whereNotNull('curriculum_hemis_id')
+            ->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id', 'active', 'group_hemis_id']));
+        foreach ($groups as $g) {
+            $map[$this->groupNameKey((string) $g->name)] = (int) $g->curriculum_hemis_id;
+        }
+        foreach ($groups as $g) {
+            $base = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));
+            $map['base:' . $base] = (int) $g->curriculum_hemis_id;
+        }
+
+        return $map;
+    }
+
     private function groupCurriculum(string $groupName, ?string $faculty = null): ?int
     {
         $map = &$this->groupCurriculumMap;
         if ($map === null) {
             $map = [];
-            // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi.
-            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')
-                ->get(['name', 'department_name', 'curriculum_hemis_id']) as $g) {
+            // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi; ikkalasi faol bo'lsa —
+            // faol talabalari shu rejada o'qiydigani.
+            foreach ($this->preferStudentBackedGroups(DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')
+                ->get(['name', 'department_name', 'curriculum_hemis_id', 'active', 'group_hemis_id'])) as $g) {
                 $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));
                 $map[$k]['fac'][mb_strtolower(trim((string) $g->department_name))] = (int) $g->curriculum_hemis_id;
                 $map[$k]['last'] = (int) $g->curriculum_hemis_id;
@@ -995,20 +1016,7 @@ class TimetableController extends Controller
 
         // HEMIS doska: guruh nomi → o'quv reja (fanlar guruhning o'z rejasidan)
         $hemisBoard = $this->isHemisBoard($board);
-        $groupCurricula = [];
-        if ($hemisBoard) {
-            // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi.
-            // Ikki kalit: to'liq nom va qavssiz nom (oqimda "d1/d26-01a (o'z)", bazada "d1/d26-01a").
-            $groups = DB::table('groups')->whereNotNull('curriculum_hemis_id')
-                ->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id']);
-            foreach ($groups as $g) {
-                $groupCurricula[$this->groupNameKey((string) $g->name)] = (int) $g->curriculum_hemis_id;
-            }
-            foreach ($groups as $g) {
-                $base = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));
-                $groupCurricula['base:' . $base] = (int) $g->curriculum_hemis_id;
-            }
-        }
+        $groupCurricula = $hemisBoard ? $this->hemisGroupCurricula() : [];
 
         $now = now();
         $rows = [];

@@ -18,6 +18,8 @@ trait TimetableProgramCalendars
 
     private ?array $calendarPrograms = null;
 
+    private ?array $calendarStudentCurricula = null;
+
     private function calendarCurriculum(string $group, ?string $faculty): int
     {
         if ($this->calendarGroups === null) {
@@ -29,7 +31,7 @@ trait TimetableProgramCalendars
                     $names = [(string) $g->name, preg_replace('/\s*\(.*$/u', '', (string) $g->name)];
                     foreach (array_unique($names) as $name) {
                         $key = $fac.'|'.ProgramCalendar::groupKey($name);
-                        $this->calendarGroups[$key][] = [(int) $g->curriculum_hemis_id, (bool) ($g->active ?? true)];
+                        $this->calendarGroups[$key][] = [(int) $g->curriculum_hemis_id, (bool) ($g->active ?? true), (int) ($g->group_hemis_id ?? 0)];
                     }
                 }
             }
@@ -43,11 +45,68 @@ trait TimetableProgramCalendars
                 return (int) reset($ids);
             }
             if (count($ids) > 1) {
-                return 0;
-            } // Ambiguous groups must never inherit an arbitrary program.
+                // Bir xil nomli bir nechta faol guruh (HEMIS'da eskisi nofaol qilinmagan): guruhdagi faol
+                // talabalar qaysi rejada o'qisa — o'sha. Ular ham bo'linsa, noaniq guruh tasodifiy reja olmaydi.
+                return $this->studentBackedCurriculum($active ?: $rows, $ids);
+            }
         }
 
         return 0;
+    }
+
+    /**
+     * Faol (o'qiyotgan, status 11) talabalar: HEMIS guruh id => [o'quv reja id => talabalar soni].
+     * Talaba yozuvidagi o'quv reja — uning joriy semestridagi rejasi.
+     */
+    private function activeStudentCurricula(): array
+    {
+        if ($this->calendarStudentCurricula === null) {
+            $this->calendarStudentCurricula = [];
+            if (Schema::hasTable('students') && Schema::hasColumn('students', 'curriculum_id')) {
+                foreach (DB::table('students')->where('student_status_code', 11)
+                    ->whereNotNull('group_id')->whereNotNull('curriculum_id')
+                    ->selectRaw('group_id, curriculum_id, COUNT(*) as n')->groupBy('group_id', 'curriculum_id')->get() as $r) {
+                    $this->calendarStudentCurricula[(int) $r->group_id][(int) $r->curriculum_id] = (int) $r->n;
+                }
+            }
+        }
+
+        return $this->calendarStudentCurricula;
+    }
+
+    /** Nomzod guruhlarning faol talabalari ko'pchiligi o'qiydigan reja (nomzodlar orasidan); aniq ustun bo'lmasa — 0. */
+    private function studentBackedCurriculum(array $rows, array $candidates): int
+    {
+        $students = $this->activeStudentCurricula();
+        $votes = [];
+        foreach (array_unique(array_filter(array_column($rows, 2))) as $groupId) {
+            foreach ($students[$groupId] ?? [] as $cur => $n) {
+                if (in_array($cur, $candidates, true)) {
+                    $votes[$cur] = ($votes[$cur] ?? 0) + $n;
+                }
+            }
+        }
+        arsort($votes);
+        $top = array_slice($votes, 0, 2, true);
+        if (! $top || (count($top) === 2 && reset($top) === end($top))) {
+            return 0;
+        }
+
+        return (int) array_key_first($top);
+    }
+
+    /**
+     * Bir xil nomli guruhlar ichida ustunlik tartibi (oxirgisi ustun): faol, so'ng faol talabalari shu
+     * guruhning rejasida o'qiydigani; teng bo'lsa — kelgan (id) tartibi saqlanadi.
+     */
+    private function preferStudentBackedGroups(iterable $groups): array
+    {
+        $students = $this->activeStudentCurricula();
+        $list = is_array($groups) ? array_values($groups) : collect($groups)->values()->all();
+        usort($list, fn ($a, $b) => [(int) ($a->active ?? 0), (int) isset($students[(int) ($a->group_hemis_id ?? 0)][(int) $a->curriculum_hemis_id])]
+            <=> [(int) ($b->active ?? 0), (int) isset($students[(int) ($b->group_hemis_id ?? 0)][(int) $b->curriculum_hemis_id])]);
+
+        return $list;
     }
 
     private function cardCurriculumId($card): int

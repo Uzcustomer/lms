@@ -59,6 +59,11 @@ trait TimetableHemisSync
             'subjects_filter'   => 'nullable|boolean',
             'subjects'          => 'nullable|array',
             'subjects.*'        => 'string|max:255',
+            // Excel: faqat tanlangan guruhlar (groups_filter=1 bo'lsa). "groups" — qamrov (hisobot shu guruhlar uchun
+            // tuziladi), bu esa faqat chiqishni toraytiradi: guruhlararo to'siqlar oynadagidek qoladi.
+            'groups_filter'     => 'nullable|boolean',
+            'filter_groups'     => 'nullable|array',
+            'filter_groups.*'   => 'string|max:255',
         ]);
         $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
             ? Carbon::parse($data['today'])->toDateString()
@@ -1366,6 +1371,7 @@ trait TimetableHemisSync
         $onlyDiff = $request->boolean('only_diff');
         $ops = $request->boolean('ops_filter') ? (array) $request->input('ops', []) : null;
         $subjects = $request->boolean('subjects_filter') ? (array) $request->input('subjects', []) : null;
+        $groups = $request->boolean('groups_filter') ? (array) $request->input('filter_groups', []) : null;
         // To'siq turi filtri (oynadagi bilan bir xil): room / teacher / other.
         $blk = $request->boolean('blk_filter') ? (array) $request->input('blk', []) : null;
         $blockKinds = function (array $a): array {
@@ -1410,6 +1416,9 @@ trait TimetableHemisSync
         $r2 = 2;
         $r3 = 2;
         foreach ($rep['groups'] as $g) {
+            if ($groups !== null && !in_array($g['group'], $groups, true)) {
+                continue;
+            }
             foreach ($g['units'] as $u) {
                 if ($onlyDiff && $this->hemisUnitMatches($u)) {
                     continue;

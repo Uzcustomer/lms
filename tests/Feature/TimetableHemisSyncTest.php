@@ -586,6 +586,30 @@ it('Excel fan filtri: tanlanmagan fan chiqmaydi', function () {
     expect($bal)->toBeGreaterThan(1)->and($act)->toBeGreaterThan(1);
 });
 
+it('Excel guruh filtri: tanlanmagan guruh chiqmaydi, hisobot qamrovi o\'zgarmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $req = ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0];
+    $group = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), $req)->assertOk()->json('groups.0.group');
+    $rows = function (array $extra) use ($as, $s, $req) {
+        $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+        file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), $req + $extra)
+            ->assertOk()->baseResponse->getFile()->getContent());
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+        @unlink($file);
+
+        return [$book->getSheetByName('Balans')->getHighestDataRow(), $book->getSheetByName('Amallar')->getHighestDataRow()];
+    };
+    $all = $rows([]);
+    // Boshqa guruh tanlangan — na Balans'da, na Amallar'da; shu guruh tanlangani — filtrsizdagi bilan bir xil
+    expect($all[0])->toBeGreaterThan(1)->and($all[1])->toBeGreaterThan(1)
+        ->and($rows(['groups_filter' => 1, 'filter_groups' => ['boshqa-guruh']]))->toBe([1, 1])
+        ->and($rows(['groups_filter' => 1, 'filter_groups' => [$group]]))->toBe($all);
+});
+
 it('vaqti shablondan farq qilgan amalda sabab yoziladi: shablon vaqtida o\'qituvchi band', function () {
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');

@@ -885,6 +885,62 @@ it('kafedra mudirlaridan HEMIS id\'si borini oladi; yagona mudirning id\'si yo\'
         ->and(implode(' ', $a['blocked']))->toContain("kafedra mudiri MUDIR ning HEMIS xodim id'si LMS'da yo'q");
 });
 
+it('o\'tkazilgan fanlar turi: tugagan (haftalik va sikl), joylanmagan sikl, kartochkasi yo\'q', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $skipped = fn (array $courses, string $today, string $group) => collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')
+        ->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => $courses, 'today' => $today, 'until_week' => 0])
+        ->assertOk()->json('groups'))->firstWhere('group', $group)['skipped'] ?? [];
+
+    // (b) Haftalik fan: 4 haftalik karta 14.09 dan — 31.12 da ertadan keyin dars yo'q
+    $b = $skipped([1], '2026-12-31', 'p/st26-01a');
+    expect(array_column($b, 'kind'))->toBe(['finished'])
+        ->and($b[0]['reason'])->toBe('LMS ichki jadvalida ertadan keyin dars yo\'q — HEMIS\'ga tegilmaydi');
+
+    // Haftalik fanning kartasi joylanmagan (ichki jadvalda darsi yo'q) — tugagan emas: unplaced, matni o'zgarmaydi
+    $s['card']->update(['day' => null, 'pair' => null]);
+    $u = $skipped([1], '2026-09-19', 'p/st26-01a');
+    expect(array_column($u, 'kind'))->toBe(['unplaced'])->and($u[0]['reason'])->toBe($b[0]['reason']);
+    $s['card']->update(['day' => 1, 'pair' => 3]);
+
+    // (d) LMS doskasida kartochka yo'q (HEMIS'da dars bor)
+    $s['card']->update(['subject_name' => 'Boshqa fan']);
+    $d = $skipped([1], '2026-09-19', 'p/st26-01a');
+    expect(array_column($d, 'kind'))->toBe(['no_card'])
+        ->and($d[0]['reason'])->toBe('LMS doskasida kartochka yo\'q — HEMIS\'ga tegilmaydi');
+
+    // Sikl fani (5-kurs Pediatriya, 2 kun)
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 2]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Pediatriya',
+        'kafedra_name' => 'P', 'training_type' => 'practice', 'group_name' => 'g5-01a', 'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ']);
+    hsInsert('groups', ['group_hemis_id' => 2500, 'name' => 'g5-01a', 'curriculum_hemis_id' => 260, 'department_hemis_id' => 1, 'specialty_hemis_id' => 77]);
+    hsInsert('specialties', ['specialty_hemis_id' => 77, 'name' => 'davolash ishi']);
+    hsInsert('curricula', ['curricula_hemis_id' => 260, 'specialty_hemis_id' => 77, 'department_hemis_id' => 1]);
+    hsInsert('semesters', ['curriculum_hemis_id' => 260, 'code' => '19', 'education_year' => '2026', 'level_code' => '15']);
+    hsInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 2, 'curricula_hemis_id' => 260, 'subject_id' => 900, 'subject_name' => 'Pediatriya',
+        'semester_code' => '19', 'semester_name' => '9', 'department_id' => 501, 'department_name' => 'Pediatriya', 'at_semester' => 1,
+        'subject_details' => json_encode([['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 12]])]);
+    DB::table('ktr_plans')->insert(['curriculum_subject_id' => DB::table('curriculum_subjects')->where('subject_id', 900)->value('id'),
+        'week_count' => 2, 'plan_data' => json_encode(['hours' => ['1' => ['13' => 6], '2' => ['13' => 6]]]), 'created_at' => now(), 'updated_at' => now()]);
+
+    // (c) Sikl ichki jadvalda joylanmagan
+    $c = $skipped([5], '2026-09-19', 'g5-01a');
+    expect(array_column($c, 'kind'))->toBe(['unplaced'])
+        ->and($c[0]['reason'])->toBe('sikl fani — LMS ichki sikl jadvalida joylanmagan, HEMIS\'ga tegilmaydi');
+
+    // (a) Sikl 21–22.09 da — 30.09 da tugagan
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Pediatriya', 'start_index' => 7, 'training_type' => 'practice']);
+    $a = $skipped([5], '2026-09-30', 'g5-01a');
+    expect(array_column($a, 'kind'))->toBe(['finished'])
+        ->and($a[0]['reason'])->toBe('sikl fani — ichki sikl jadvalida ertadan keyin dars yo\'q, HEMIS\'ga tegilmaydi');
+});
+
 it('sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (sana, vaqt, tur KTR kuni bo\'yicha, o\'qituvchi, xona)', function () {
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');

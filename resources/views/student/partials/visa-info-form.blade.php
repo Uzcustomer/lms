@@ -34,19 +34,19 @@
     {{-- O'zbekistonda turish asosi --}}
     @if($basisRule['show_choice'])
         <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
-            <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:4px;">O'zbekistonda turish asosi / Legal basis of stay <span class="text-red-500">*</span></div>
-            <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">Hujjatingizga mos variantni tanlang / Choose the option that matches your documents</div>
+            <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:4px;">{{ __("O'zbekistonda turish asosi") }} <span class="text-red-500">*</span></div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">{{ __('Hujjatingizga mos variantni tanlang') }}</div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                 @foreach([
-                    'visa' => ['Viza bilan', 'With a visa', 'Viza va vaqtinchalik registratsiya'],
-                    'visa_free' => ['Vizasiz', 'Visa-free', 'Faqat vaqtinchalik registratsiya'],
-                    'residence_permit' => ['Yashash guvohnomasi', 'Residence permit', 'Viza va registratsiya kerak emas'],
-                ] as $key => [$uz, $en, $hint])
+                    'visa' => ['Viza bilan', 'Viza va vaqtinchalik registratsiya'],
+                    'visa_free' => ['Vizasiz', 'Faqat vaqtinchalik registratsiya'],
+                    'residence_permit' => ['Yashash guvohnomasi', 'Viza va registratsiya kerak emas'],
+                ] as $key => [$label, $hint])
                     <label class="flex items-start gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition"
                            :class="basis === '{{ $key }}' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'">
                         <input type="radio" name="residence_basis" value="{{ $key }}" x-model="basis" required class="mt-1 text-sky-600 focus:ring-sky-500">
                         <span>
-                            <span class="font-semibold">{{ $uz }} / {{ $en }}</span><br>
+                            <span class="font-semibold">{{ __($label) }}</span><br>
                             <span class="text-xs text-gray-500">{{ __($hint) }}</span>
                         </span>
                     </label>
@@ -142,7 +142,7 @@
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport raqami') }} <span class="text-red-500">*</span></label>
             <input type="text" name="passport_number" value="{{ old('passport_number', $visaInfo?->passport_number ?? '') }}" required
-                   placeholder="Masalan: AA1234567"
+                   placeholder="{{ __('Masalan') }}: AA1234567"
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 uppercase" oninput="this.value=this.value.toUpperCase()">
             @error('passport_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -171,8 +171,8 @@
 
     {{-- Vaqtinchalik registratsiya (yashash guvohnomasi borlarga kerak emas) --}}
     <fieldset x-show="basis === 'visa' || basis === 'visa_free'" :disabled="!(basis === 'visa' || basis === 'visa_free')" class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
-            <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px;">Vaqtinchalik ro'yxatga qo'yish (registratsiya) / Temporary Registration</div>
-            <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">Vaqtinchalik registratsiya — pasportingizning orqasida yopishtirilgan qog'ozda / The paper attached to the back of your passport</div>
+            <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px;">{{ __("Vaqtinchalik ro'yxatga qo'yish (registratsiya)") }}</div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">{{ __("Vaqtinchalik registratsiya — pasportingizning orqasida yopishtirilgan qog'ozda") }}</div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Boshlanish sanasi') }} <span class="text-red-500">*</span></label>
@@ -191,40 +191,40 @@
 
     {{-- Yashash guvohnomasi --}}
     <fieldset x-show="basis === 'residence_permit'" :disabled="basis !== 'residence_permit'" class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
-        <div style="font-size:11px;font-weight:700;color:#0e7490;margin-bottom:4px;">Xorijiy fuqaro uchun yashash guvohnomasi / Residence permit</div>
-        <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">Ma'lumotlarni guvohnoma kartasidan ko'chiring / Copy the data from your ID card</div>
+        <div style="font-size:11px;font-weight:700;color:#0e7490;margin-bottom:4px;">{{ __('Xorijiy fuqaro uchun yashash guvohnomasi') }}</div>
+        <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">{{ __("Ma'lumotlarni guvohnoma kartasidan ko'chiring") }}</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Karta raqami / Card number <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Karta raqami') }} <span class="text-red-500">*</span></label>
                 <input type="text" name="residence_permit_number" value="{{ old('residence_permit_number', $visaInfo?->residence_permit_number ?? '') }}" required
-                       placeholder="Masalan: XS0064114"
+                       placeholder="{{ __('Masalan') }}: XS0064114"
                        class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 uppercase" oninput="this.value=this.value.toUpperCase()">
                 @error('residence_permit_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Shaxsiy raqam (JShShIR) / Personal number <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Shaxsiy raqam (JShShIR)') }} <span class="text-red-500">*</span></label>
                 <input type="text" name="residence_permit_pinfl" value="{{ old('residence_permit_pinfl', $visaInfo?->residence_permit_pinfl ?? '') }}" required
-                       inputmode="numeric" maxlength="14" pattern="\d{14}" placeholder="14 ta raqam"
+                       inputmode="numeric" maxlength="14" pattern="\d{14}" placeholder="{{ __('14 ta raqam') }}"
                        class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" oninput="this.value=this.value.replace(/\D/g,'')">
                 @error('residence_permit_pinfl') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Berilgan joyi / Place of issue <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Berilgan joyi') }} <span class="text-red-500">*</span></label>
                 <input type="text" name="residence_permit_issued_place" value="{{ old('residence_permit_issued_place', $visaInfo?->residence_permit_issued_place ?? '') }}" required
-                       placeholder="Masalan: IIV 22000"
+                       placeholder="{{ __('Masalan') }}: IIV 22000"
                        class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 uppercase" oninput="this.value=this.value.toUpperCase()">
                 @error('residence_permit_issued_place') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Berilgan sanasi / Date of issue <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Berilgan sanasi') }} <span class="text-red-500">*</span></label>
                 <input type="text" data-datepicker="1" name="residence_permit_issued_date" value="{{ old('residence_permit_issued_date', $visaInfo?->residence_permit_issued_date?->format('Y-m-d') ?? '') }}" required
                        class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                 @error('residence_permit_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Amal qilish muddati / Date of expiry <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Amal qilish muddati') }} <span class="text-red-500">*</span></label>
                 <input type="text" data-datepicker="1" name="residence_permit_expiry_date" value="{{ old('residence_permit_expiry_date', $visaInfo?->residence_permit_expiry_date?->format('Y-m-d') ?? '') }}" required
                        class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                 @error('residence_permit_expiry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
@@ -241,13 +241,13 @@
                    :class="addressType === 'dormitory' ? 'bg-green-50 border-green-300 text-green-700 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'">
                 <input type="radio" name="address_type" value="dormitory" x-model="addressType" class="hidden">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75"/></svg>
-                Talabalar yotoqxonasi / Dormitory
+                {{ __('Talabalar yotoqxonasi') }}
             </label>
             <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition"
                    :class="addressType === 'other' ? 'bg-blue-50 border-blue-300 text-blue-700 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'">
                 <input type="radio" name="address_type" value="other" x-model="addressType" class="hidden">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21m0 0h4.5V3.545M12.75 21h7.5V10.75M2.25 21h1.5m18 0h-18M2.25 9l4.5-1.636M18.75 3l-1.5.545m0 6.205l3 1m1.5.5l-1.5-.5M6.75 7.364V3h-3v18m3-13.636l10.5-3.819"/></svg>
-                {{ __('Boshqa manzil') }} / Other address
+                {{ __('Boshqa manzil') }}
             </label>
         </div>
         <div x-show="addressType === 'dormitory'" style="padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#166534;">
@@ -289,7 +289,7 @@
                 @for($i = 1; $i <= 10; $i++)
                     <option value="{{ $i }}" {{ old('visa_entries_count', $visaInfo?->visa_entries_count ?? '') == $i ? 'selected' : '' }}>{{ $i }}</option>
                 @endfor
-                <option value="99" {{ old('visa_entries_count', $visaInfo?->visa_entries_count ?? '') == 99 ? 'selected' : '' }}>{{ __('Ko\'p marta') }} / Multiple</option>
+                <option value="99" {{ old('visa_entries_count', $visaInfo?->visa_entries_count ?? '') == 99 ? 'selected' : '' }}>{{ __('Ko\'p marta') }}</option>
             </select>
             @error('visa_entries_count') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>

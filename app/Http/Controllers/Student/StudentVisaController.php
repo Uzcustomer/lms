@@ -22,7 +22,7 @@ class StudentVisaController extends Controller
     {
         if (!Schema::hasTable('student_visa_infos')) {
             return redirect()->route('student.dashboard')
-                ->with('error', 'Viza bo\'limi hali faollashtirilmagan.');
+                ->with('error', __('Viza bo\'limi hali faollashtirilmagan.'));
         }
 
         $student = Auth::guard('student')->user();
@@ -112,44 +112,44 @@ class StudentVisaController extends Controller
             'birth_country.required' => __('Tug\'ilgan davlatni kiriting.'),
             'birth_region.required' => __('Tug\'ilgan viloyatni kiriting.'),
             'birth_city.required' => __('Tug\'ilgan shaharni kiriting.'),
-            'passport_number.required' => 'Pasport raqamini kiriting.',
-            'passport_issued_place.required' => 'Pasport berilgan joyni kiriting.',
-            'passport_issued_date.required' => 'Pasport berilgan sanani kiriting.',
-            'passport_expiry_date.required' => 'Pasport muddati tugash sanasini kiriting.',
-            'passport_expiry_date.after' => 'Tugash sanasi berilgan sanadan keyin bo\'lishi kerak.',
-            'registration_start_date.required' => 'Ro\'yxatga olish boshlanish sanasini kiriting.',
-            'registration_end_date.required' => 'Ro\'yxatga olish tugash sanasini kiriting.',
-            'registration_end_date.after' => 'Tugash sanasi boshlanish sanasidan keyin bo\'lishi kerak.',
-            'visa_number.required' => 'Viza raqamini kiriting.',
-            'visa_type.required' => 'Viza turini tanlang.',
-            'visa_start_date.required' => 'Viza boshlanish sanasini kiriting.',
-            'visa_end_date.required' => 'Viza tugash sanasini kiriting.',
-            'visa_end_date.after' => 'Viza tugash sanasi boshlanish sanasidan keyin bo\'lishi kerak.',
-            'visa_entries_count.required' => 'Kirishlar sonini kiriting.',
-            'visa_stay_days.required' => 'Istiqomat muddatini kiriting.',
-            'visa_issued_place.required' => 'Viza berilgan joyni kiriting.',
-            'visa_issued_date.required' => 'Viza berilgan vaqtni kiriting.',
-            'entry_date.required' => 'Chegaradan kirgan sanani kiriting.',
-            'residence_permit_number.required' => 'Guvohnoma (karta) raqamini kiriting.',
-            'residence_permit_pinfl.required' => 'Shaxsiy raqamni (JShShIR) kiriting.',
-            'residence_permit_pinfl.digits' => 'Shaxsiy raqam 14 ta raqamdan iborat bo\'lishi kerak.',
-            'residence_permit_issued_place.required' => 'Guvohnoma berilgan joyni kiriting.',
-            'residence_permit_issued_date.required' => 'Guvohnoma berilgan sanani kiriting.',
-            'residence_permit_expiry_date.required' => 'Guvohnoma amal qilish muddatini kiriting.',
-            'residence_permit_expiry_date.after' => 'Amal qilish muddati berilgan sanadan keyin bo\'lishi kerak.',
-            'passport_scan.required' => 'Pasport skanerini yuklang.',
-            'passport_scan.mimes' => 'Pasport skaneri faqat PDF formatida bo\'lishi kerak.',
-            'passport_scan.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
-            'visa_scan.required' => 'Viza skanerini yuklang.',
-            'visa_scan.mimes' => 'Viza skaneri faqat PDF formatida bo\'lishi kerak.',
-            'visa_scan.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
-            'registration_doc.required' => 'Ro\'yxatga olish hujjatini yuklang.',
-            'registration_doc.mimes' => 'Hujjat faqat PDF formatida bo\'lishi kerak.',
-            'registration_doc.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
-            'residence_permit_scan.required' => 'Yashash guvohnomasi skanerini yuklang.',
-            'residence_permit_scan.mimes' => 'Guvohnoma skaneri faqat PDF formatida bo\'lishi kerak.',
-            'residence_permit_scan.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
-            'agreement_accepted.accepted' => 'Javobgarlikni qabul qilishingiz shart.',
+            'passport_number.required' => __('Pasport raqamini kiriting.'),
+            'passport_issued_place.required' => __('Pasport berilgan joyni kiriting.'),
+            'passport_issued_date.required' => __('Pasport berilgan sanani kiriting.'),
+            'passport_expiry_date.required' => __('Pasport muddati tugash sanasini kiriting.'),
+            'passport_expiry_date.after' => __('Tugash sanasi berilgan sanadan keyin bo\'lishi kerak.'),
+            'registration_start_date.required' => __('Ro\'yxatga olish boshlanish sanasini kiriting.'),
+            'registration_end_date.required' => __('Ro\'yxatga olish tugash sanasini kiriting.'),
+            'registration_end_date.after' => __('Tugash sanasi boshlanish sanasidan keyin bo\'lishi kerak.'),
+            'visa_number.required' => __('Viza raqamini kiriting.'),
+            'visa_type.required' => __('Viza turini tanlang.'),
+            'visa_start_date.required' => __('Viza boshlanish sanasini kiriting.'),
+            'visa_end_date.required' => __('Viza tugash sanasini kiriting.'),
+            'visa_end_date.after' => __('Viza tugash sanasi boshlanish sanasidan keyin bo\'lishi kerak.'),
+            'visa_entries_count.required' => __('Kirishlar sonini kiriting.'),
+            'visa_stay_days.required' => __('Istiqomat muddatini kiriting.'),
+            'visa_issued_place.required' => __('Viza berilgan joyni kiriting.'),
+            'visa_issued_date.required' => __('Viza berilgan vaqtni kiriting.'),
+            'entry_date.required' => __('Chegaradan kirgan sanani kiriting.'),
+            'residence_permit_number.required' => __('Guvohnoma (karta) raqamini kiriting.'),
+            'residence_permit_pinfl.required' => __('Shaxsiy raqamni (JShShIR) kiriting.'),
+            'residence_permit_pinfl.digits' => __('Shaxsiy raqam 14 ta raqamdan iborat bo\'lishi kerak.'),
+            'residence_permit_issued_place.required' => __('Guvohnoma berilgan joyni kiriting.'),
+            'residence_permit_issued_date.required' => __('Guvohnoma berilgan sanani kiriting.'),
+            'residence_permit_expiry_date.required' => __('Guvohnoma amal qilish muddatini kiriting.'),
+            'residence_permit_expiry_date.after' => __('Amal qilish muddati berilgan sanadan keyin bo\'lishi kerak.'),
+            'passport_scan.required' => __('Pasport skanerini yuklang.'),
+            'passport_scan.mimes' => __('Pasport skaneri faqat PDF formatida bo\'lishi kerak.'),
+            'passport_scan.max' => __('Fayl hajmi 5MB dan oshmasligi kerak.'),
+            'visa_scan.required' => __('Viza skanerini yuklang.'),
+            'visa_scan.mimes' => __('Viza skaneri faqat PDF formatida bo\'lishi kerak.'),
+            'visa_scan.max' => __('Fayl hajmi 5MB dan oshmasligi kerak.'),
+            'registration_doc.required' => __('Ro\'yxatga olish hujjatini yuklang.'),
+            'registration_doc.mimes' => __('Hujjat faqat PDF formatida bo\'lishi kerak.'),
+            'registration_doc.max' => __('Fayl hajmi 5MB dan oshmasligi kerak.'),
+            'residence_permit_scan.required' => __('Yashash guvohnomasi skanerini yuklang.'),
+            'residence_permit_scan.mimes' => __('Guvohnoma skaneri faqat PDF formatida bo\'lishi kerak.'),
+            'residence_permit_scan.max' => __('Fayl hajmi 5MB dan oshmasligi kerak.'),
+            'agreement_accepted.accepted' => __('Javobgarlikni qabul qilishingiz shart.'),
         ]);
 
         $data = $request->only([
@@ -204,7 +204,7 @@ class StudentVisaController extends Controller
         } catch (\Throwable $e) {
             \Log::error('Viza ma\'lumotlarini saqlashda xato: ' . $e->getMessage());
             return redirect()->back()->withInput()
-                ->with('error', 'Saqlashda xatolik. Iltimos, administratorga murojaat qiling.');
+                ->with('error', __('Saqlashda xatolik. Iltimos, administratorga murojaat qiling.'));
         }
 
         // Registrator ofisi xodimlariga va firma javobgariga xabar yuborish

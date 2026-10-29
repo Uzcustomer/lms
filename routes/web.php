@@ -613,6 +613,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/bulk-process', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'bulkProcess'])->name('bulk-process');
             Route::post('/registration-talabnoma', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'registrationTalabnoma'])->name('registration-talabnoma');
             Route::post('/visa-talabnoma', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'visaTalabnoma'])->name('visa-talabnoma');
+            // Sozlamalar (davlat bo'yicha tanlov, muddatlar, ro'yxatlar) — faqat admin
+            Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin')->group(function () {
+                Route::get('/settings', [\App\Http\Controllers\Admin\InternationalStudentSettingsController::class, 'edit'])->name('settings');
+                Route::post('/settings', [\App\Http\Controllers\Admin\InternationalStudentSettingsController::class, 'update'])->name('settings.update');
+            });
             Route::get('/{student}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'show'])->name('show');
             Route::post('/{student}/approve', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'approve'])->name('approve');
             Route::post('/{student}/reject', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'reject'])->name('reject');

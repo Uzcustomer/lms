@@ -53,7 +53,7 @@ class FirmStudentsController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        $firmName = StudentVisaInfo::FIRM_OPTIONS[$assignedFirm] ?? $assignedFirm;
+        $firmName = \App\Services\VisaSettings::firmOptions()[$assignedFirm] ?? $assignedFirm;
 
         return view('admin.firm-students.index', compact('students', 'firmName', 'assignedFirm'));
     }
@@ -127,7 +127,7 @@ class FirmStudentsController extends Controller
             abort(403);
         }
 
-        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path'];
+        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path', 'residence_permit_scan_path'];
         if (!in_array($field, $allowed) || !$visaInfo->$field) {
             abort(404);
         }

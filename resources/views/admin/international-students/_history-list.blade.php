@@ -28,6 +28,13 @@
         'entry_date' => 'Chegaradan kirish',
         'firm' => 'Firma',
         'firm_custom' => 'Firma (boshqa)',
+        'residence_basis' => 'Turish asosi',
+        'residence_permit_number' => 'Guvohnoma raqami',
+        'residence_permit_pinfl' => 'Shaxsiy raqam',
+        'residence_permit_issued_place' => 'Guvohnoma berilgan joy',
+        'residence_permit_issued_date' => 'Guvohnoma berilgan sana',
+        'residence_permit_expiry_date' => 'Guvohnoma muddati',
+        'residence_permit_scan_path' => 'Guvohnoma skaneri',
         'status' => 'Holati',
         'rejection_reason' => 'Rad etish sababi',
     ];
@@ -54,7 +61,7 @@
         @foreach($history as $h)
             @php
                 [$color, $bg] = $changeColors[$h->change_type] ?? ['#64748b', '#f1f5f9'];
-                $hasFile = $h->passport_scan_path || $h->visa_scan_path || $h->registration_doc_path;
+                $hasFile = $h->passport_scan_path || $h->visa_scan_path || $h->registration_doc_path || $h->residence_permit_scan_path;
             @endphp
             <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;" x-data="{rowOpen:false}">
                 <div @click="rowOpen=!rowOpen" style="padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;border-left:3px solid {{ $color }};">
@@ -114,6 +121,10 @@
                         </div>
                         <div>
                             <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">Boshqa</div>
+                            <div class="hist-kv-mini"><span>Turish asosi</span><span>{{ \App\Models\StudentVisaInfo::BASIS_LABELS[$h->residence_basis ?: 'visa'] ?? $h->residence_basis }}</span></div>
+                            @if($h->residence_permit_number)
+                                <div class="hist-kv-mini"><span>Guvohnoma</span><span>{{ $h->residence_permit_number }}{{ $h->residence_permit_expiry_date ? ' · '.$h->residence_permit_expiry_date->format('d.m.Y').' gacha' : '' }}</span></div>
+                            @endif
                             <div class="hist-kv-mini"><span>Chegaradan</span><span>{{ $h->entry_date?->format('d.m.Y') ?? '—' }}</span></div>
                             <div class="hist-kv-mini"><span>Firma</span><span>{{ $h->firm ?? '—' }}{{ $h->firm_custom ? ' · '.$h->firm_custom : '' }}</span></div>
                             <div class="hist-kv-mini"><span>Holati</span><span>{{ $h->status ?? '—' }}</span></div>
@@ -125,7 +136,7 @@
                             <div>
                                 <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">Saqlangan PDF lar</div>
                                 <div style="display:flex;gap:5px;flex-wrap:wrap;">
-                                    @foreach(['passport_scan_path'=>['Pasport','#4f46e5','#eef2ff','#c7d2fe'],'visa_scan_path'=>['Viza','#059669','#ecfdf5','#a7f3d0'],'registration_doc_path'=>['Reg.','#d97706','#fffbeb','#fde68a']] as $f=>$c)
+                                    @foreach(['passport_scan_path'=>['Pasport','#4f46e5','#eef2ff','#c7d2fe'],'visa_scan_path'=>['Viza','#059669','#ecfdf5','#a7f3d0'],'registration_doc_path'=>['Reg.','#d97706','#fffbeb','#fde68a'],'residence_permit_scan_path'=>['Guvohnoma','#0e7490','#ecfeff','#a5f3fc']] as $f=>$c)
                                         @if($h->$f)
                                             <a href="{{ route('admin.international-students.history-file', [$student, $h->id, $f]) }}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;font-size:10px;font-weight:600;border-radius:5px;text-decoration:none;border:1px solid {{ $c[3] }};color:{{ $c[1] }};background:{{ $c[2] }};">
                                                 <svg style="width:11px;height:11px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>

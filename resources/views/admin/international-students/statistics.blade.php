@@ -130,7 +130,7 @@ new Chart(document.getElementById('statusChart'), {
 new Chart(document.getElementById('firmChart'), {
     type: 'pie',
     data: {
-        labels: {!! json_encode($byFirm->keys()->map(fn($k) => \App\Models\StudentVisaInfo::FIRM_OPTIONS[$k] ?? $k)) !!},
+        labels: {!! json_encode($byFirm->keys()->map(fn($k) => \App\Services\VisaSettings::firmOptions()[$k] ?? $k)) !!},
         datasets: [{
             data: {!! json_encode($byFirm->values()) !!},
             backgroundColor: ['#4f46e5','#06b6d4','#f59e0b','#10b981','#ef4444','#8b5cf6'],
@@ -143,7 +143,7 @@ new Chart(document.getElementById('firmChart'), {
 new Chart(document.getElementById('visaChart'), {
     type: 'doughnut',
     data: {
-        labels: ['Muddati tugagan','30 kun ichida','Normal'],
+        labels: ['Muddati tugagan',@js($visaInfoDays . ' kun ichida'),'Normal'],
         datasets: [{
             data: [{{ $visaExpired }},{{ $visa30 }},{{ $visaOk }}],
             backgroundColor: ['#dc2626','#f59e0b','#10b981'],
@@ -156,7 +156,7 @@ new Chart(document.getElementById('visaChart'), {
 new Chart(document.getElementById('regChart'), {
     type: 'doughnut',
     data: {
-        labels: ['Muddati tugagan','7 kun ichida','Normal'],
+        labels: ['Muddati tugagan',@js($regInfoDays . ' kun ichida'),'Normal'],
         datasets: [{
             data: [{{ $regExpired }},{{ $reg7 }},{{ $regOk }}],
             backgroundColor: ['#dc2626','#f59e0b','#10b981'],

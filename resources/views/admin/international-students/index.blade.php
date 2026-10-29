@@ -1,3 +1,7 @@
+@php
+    $regT = \App\Services\VisaSettings::thresholds('registration');
+    $visaT = \App\Services\VisaSettings::thresholds('visa');
+@endphp
 <x-app-layout>
     <x-slot name="header">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -14,6 +18,12 @@
                     <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
                     Statistika
                 </a>
+                @if($canManageSettings ?? false)
+                    <a href="{{ route('admin.international-students.settings') }}" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;font-size:12px;font-weight:600;color:#334155;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;text-decoration:none;transition:all 0.15s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                        <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Sozlamalar
+                    </a>
+                @endif
             </div>
         </div>
     </x-slot>
@@ -137,13 +147,25 @@
                                 </div>
                             </div>
                             <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Turish asosi</label>
+                                <div class="filter-wrap">
+                                    <select name="residence_basis" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
+                                    <option value="">Barchasi</option>
+                                    @foreach(\App\Models\StudentVisaInfo::BASIS_LABELS as $k => $l)
+                                        <option value="{{ $k }}" {{ request('residence_basis') === $k ? 'selected' : '' }}>{{ $l }}</option>
+                                    @endforeach
+                                    </select>
+                                    @if(request('residence_basis'))<button type="button" class="filter-clear" onclick="clearFilter('residence_basis')">&times;</button>@endif
+                                </div>
+                            </div>
+                            <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash</label>
                                 <div class="filter-wrap">
                                     <select name="visa_expiry" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
-                                        <option value="15" {{ request('visa_expiry') == '15' ? 'selected' : '' }}>15 kun</option>
-                                        <option value="20" {{ request('visa_expiry') == '20' ? 'selected' : '' }}>20 kun</option>
-                                        <option value="30" {{ request('visa_expiry') == '30' ? 'selected' : '' }}>30 kun</option>
+                                        @foreach(array_unique([$visaT['danger'], $visaT['warning'], $visaT['info']]) as $d)
+                                            <option value="{{ $d }}" {{ request('visa_expiry') == (string) $d ? 'selected' : '' }}>{{ $d }} kun</option>
+                                        @endforeach
                                     </select>
                                     @if(request('visa_expiry') !== null && request('visa_expiry') !== '')<button type="button" class="filter-clear" onclick="clearFilter('visa_expiry')">&times;</button>@endif
                                 </div>
@@ -153,9 +175,9 @@
                                 <div class="filter-wrap">
                                     <select name="registration_expiry" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
-                                        <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun</option>
-                                        <option value="5" {{ request('registration_expiry') == '5' ? 'selected' : '' }}>5 kun</option>
-                                        <option value="7" {{ request('registration_expiry') == '7' ? 'selected' : '' }}>7 kun</option>
+                                        @foreach(array_unique([$regT['danger'], $regT['warning'], $regT['info']]) as $d)
+                                            <option value="{{ $d }}" {{ request('registration_expiry') == (string) $d ? 'selected' : '' }}>{{ $d }} kun</option>
+                                        @endforeach
                                     </select>
                                     @if(request('registration_expiry') !== null && request('registration_expiry') !== '')<button type="button" class="filter-clear" onclick="clearFilter('registration_expiry')">&times;</button>@endif
                                 </div>
@@ -197,10 +219,10 @@
                             <a href="{{ $baseUrl }}?registration_expiry=0" class="int-badge int-badge-danger-orange" style="text-decoration:none;">{{ $stats['expiredRegCount'] }} registratsiya muddati o'tgan!</a>
                         @endif
                         @if($stats['visaUrgentCount'] > 0)
-                            <a href="{{ $baseUrl }}?visa_expiry=30" class="int-badge int-badge-warning" style="text-decoration:none;">{{ $stats['visaUrgentCount'] }} viza yaqin (30k)</a>
+                            <a href="{{ $baseUrl }}?visa_expiry={{ $visaT['info'] }}" class="int-badge int-badge-warning" style="text-decoration:none;">{{ $stats['visaUrgentCount'] }} viza yaqin ({{ $visaT['info'] }}k)</a>
                         @endif
                         @if($stats['regUrgentCount'] > 0)
-                            <a href="{{ $baseUrl }}?registration_expiry=7" class="int-badge int-badge-warning" style="text-decoration:none;">{{ $stats['regUrgentCount'] }} registratsiya yaqin (7k)</a>
+                            <a href="{{ $baseUrl }}?registration_expiry={{ $regT['info'] }}" class="int-badge int-badge-warning" style="text-decoration:none;">{{ $stats['regUrgentCount'] }} registratsiya yaqin ({{ $regT['info'] }}k)</a>
                         @endif
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;">
@@ -582,7 +604,7 @@
                                     $visa = $student->visaInfo;
                                     $regDays = $visa?->registrationDaysLeft();
                                     $visaDays = $visa?->visaDaysLeft();
-                                    $isUrgent = ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15);
+                                    $isUrgent = ($regDays !== null && $regDays <= $regT['danger']) || ($visaDays !== null && $visaDays <= $visaT['danger']);
                                 @endphp
                                 <tr class="{{ $isUrgent ? 'int-row-urgent' : '' }}" onclick="window.location='{{ route('admin.international-students.show', $student) }}'" style="cursor:pointer;">
                                     <td style="text-align:center;" onclick="event.stopPropagation();">
@@ -627,13 +649,13 @@
                                                 $regProc = $visa->registration_process_status ?? 'none';
                                                 $regRenewing = in_array($regProc, ['passport_accepted','registering']);
                                             @endphp
-                                            <span class="int-date {{ $regRenewing ? '' : ($regDays <= 3 ? 'int-date-danger' : ($regDays <= 5 ? 'int-date-warn' : ($regDays <= 7 ? 'int-date-ok' : ''))) }}">
+                                            <span class="int-date {{ $regRenewing ? '' : ($regDays <= $regT['danger'] ? 'int-date-danger' : ($regDays <= $regT['warning'] ? 'int-date-warn' : ($regDays <= $regT['info'] ? 'int-date-ok' : ''))) }}">
                                                 {{ $visa->registration_end_date->format('d.m.Y') }}
                                             </span>
                                             @if($regRenewing)
                                                 <span class="int-days-badge" style="background:#dbeafe;color:#1e40af;">YANGILANMOQDA</span>
-                                            @elseif($regDays !== null && $regDays <= 7)
-                                                <span class="int-days-badge {{ $regDays <= 0 ? 'int-days-expired' : ($regDays <= 3 ? 'int-days-danger' : ($regDays <= 5 ? 'int-days-warn' : 'int-days-ok')) }}">
+                                            @elseif($regDays !== null && $regDays <= $regT['info'])
+                                                <span class="int-days-badge {{ $regDays <= 0 ? 'int-days-expired' : ($regDays <= $regT['danger'] ? 'int-days-danger' : ($regDays <= $regT['warning'] ? 'int-days-warn' : 'int-days-ok')) }}">
                                                     {{ $regDays <= 0 ? 'TUGAGAN' : $regDays . ' kun' }}
                                                 </span>
                                             @endif
@@ -647,16 +669,21 @@
                                                 $visaProc = $visa->visa_process_status ?? 'none';
                                                 $visaRenewing = in_array($visaProc, ['passport_accepted','registering']);
                                             @endphp
-                                            <span class="int-date {{ $visaRenewing ? '' : ($visaDays <= 15 ? 'int-date-danger' : ($visaDays <= 20 ? 'int-date-warn' : ($visaDays <= 30 ? 'int-date-ok' : ''))) }}">
+                                            <span class="int-date {{ $visaRenewing ? '' : ($visaDays <= $visaT['danger'] ? 'int-date-danger' : ($visaDays <= $visaT['warning'] ? 'int-date-warn' : ($visaDays <= $visaT['info'] ? 'int-date-ok' : ''))) }}">
                                                 {{ $visa->visa_end_date->format('d.m.Y') }}
                                             </span>
                                             @if($visaRenewing)
                                                 <span class="int-days-badge" style="background:#dbeafe;color:#1e40af;">YANGILANMOQDA</span>
-                                            @elseif($visaDays !== null && $visaDays <= 30)
-                                                <span class="int-days-badge {{ $visaDays <= 0 ? 'int-days-expired' : ($visaDays <= 15 ? 'int-days-danger' : ($visaDays <= 20 ? 'int-days-warn' : 'int-days-ok')) }}">
+                                            @elseif($visaDays !== null && $visaDays <= $visaT['info'])
+                                                <span class="int-days-badge {{ $visaDays <= 0 ? 'int-days-expired' : ($visaDays <= $visaT['danger'] ? 'int-days-danger' : ($visaDays <= $visaT['warning'] ? 'int-days-warn' : 'int-days-ok')) }}">
                                                     {{ $visaDays <= 0 ? 'TUGAGAN' : $visaDays . ' kun' }}
                                                 </span>
                                             @endif
+                                        @elseif($visa?->hasResidencePermit())
+                                            <span class="int-days-badge" style="background:#cffafe;color:#155e75;" title="Guvohnoma amal qilish muddati">GUVOHNOMA</span>
+                                            <span class="int-date">{{ $visa->residence_permit_expiry_date?->format('d.m.Y') }}</span>
+                                        @elseif($visa?->residence_basis === \App\Models\StudentVisaInfo::BASIS_VISA_FREE)
+                                            <span class="int-days-badge" style="background:#e0f2fe;color:#075985;">VIZASIZ</span>
                                         @else
                                             <span class="int-empty">—</span>
                                         @endif

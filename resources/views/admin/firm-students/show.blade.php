@@ -1,3 +1,7 @@
+@php
+    $regT = \App\Services\VisaSettings::thresholds('registration');
+    $visaT = \App\Services\VisaSettings::thresholds('visa');
+@endphp
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center gap-3">
@@ -107,6 +111,11 @@
 
             {{-- Viza ma'lumotlari (faqat o'qish) --}}
             <div class="bg-white shadow rounded-lg p-5 mb-4 border border-gray-200">
+                <div class="mb-4">
+                    <span class="block text-xs text-gray-500">{{ __("O'zbekistonda turish asosi") }}</span>
+                    <span class="inline-flex items-center px-2 py-0.5 mt-1 text-xs font-semibold rounded-full bg-sky-100 text-sky-800">{{ $visaInfo->basisLabel() }}</span>
+                </div>
+
                 {{-- Tug'ilgan joy --}}
                 <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Tug\'ilgan joy') }}</h5>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -151,6 +160,24 @@
                     </div>
                 </div>
 
+                @if($visaInfo->hasResidencePermit())
+                {{-- Yashash guvohnomasi --}}
+                <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Yashash guvohnomasi') }}</h5>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <span class="block text-xs text-gray-500">{{ __('Karta raqami') }}</span>
+                        <span class="text-sm font-medium text-gray-800">{{ $visaInfo->residence_permit_number }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-gray-500">{{ __('Berilgan sanasi') }}</span>
+                        <span class="text-sm font-medium text-gray-800">{{ $visaInfo->residence_permit_issued_date?->format('d.m.Y') }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-gray-500">{{ __('Amal qilish muddati') }}</span>
+                        <span class="text-sm font-medium text-gray-800">{{ $visaInfo->residence_permit_expiry_date?->format('d.m.Y') }}</span>
+                    </div>
+                </div>
+                @else
                 {{-- Registratsiya --}}
                 <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Vaqtinchalik ro\'yxatga qo\'yish') }}</h5>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -162,15 +189,16 @@
                         <span class="block text-xs text-gray-500">{{ __('Tugash sanasi') }}</span>
                         <span class="text-sm font-medium text-gray-800">{{ $visaInfo->registration_end_date?->format('d.m.Y') }}</span>
                         @php $regDays = $visaInfo->registrationDaysLeft(); @endphp
-                        @if($regDays !== null && $regDays <= 7)
+                        @if($regDays !== null && $regDays <= $regT['info'])
                             <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full mt-1
-                                {{ $regDays <= 3 ? 'bg-red-100 text-red-700' : ($regDays <= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
+                                {{ $regDays <= $regT['danger'] ? 'bg-red-100 text-red-700' : ($regDays <= $regT['warning'] ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
                                 {{ $regDays <= 0 ? 'Muddati tugagan!' : $regDays . ' kun qoldi' }}
                             </span>
                         @endif
                     </div>
                 </div>
 
+                @if($visaInfo->needsVisa())
                 {{-- Viza --}}
                 <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Viza ma\'lumotlari') }}</h5>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -196,9 +224,9 @@
                         <span class="block text-xs text-gray-500">{{ __('Viza tugash') }}</span>
                         <span class="text-sm font-medium text-gray-800">{{ $visaInfo->visa_end_date?->format('d.m.Y') }}</span>
                         @php $visaDays = $visaInfo->visaDaysLeft(); @endphp
-                        @if($visaDays !== null && $visaDays <= 30)
+                        @if($visaDays !== null && $visaDays <= $visaT['info'])
                             <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full mt-1
-                                {{ $visaDays <= 15 ? 'bg-red-100 text-red-700' : ($visaDays <= 20 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
+                                {{ $visaDays <= $visaT['danger'] ? 'bg-red-100 text-red-700' : ($visaDays <= $visaT['warning'] ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
                                 {{ $visaDays <= 0 ? 'Muddati tugagan!' : $visaDays . ' kun qoldi' }}
                             </span>
                         @endif
@@ -219,6 +247,8 @@
                     </div>
                 </div>
 
+                @endif
+
                 {{-- Chegaradan kirish --}}
                 <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Chegaradan kirish') }}</h5>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -227,6 +257,8 @@
                         <span class="text-sm font-medium text-gray-800">{{ $visaInfo->entry_date?->format('d.m.Y') }}</span>
                     </div>
                 </div>
+
+                @endif
 
                 {{-- Firma --}}
                 <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Firma') }}</h5>

@@ -585,7 +585,7 @@
                             {{-- Javobgar firma bo'limi --}}
                             @php
                                 $isFirmChecked = in_array('javobgar_firma', $oldRoles);
-                                $firmOptions = \App\Models\StudentVisaInfo::FIRM_OPTIONS;
+                                $firmOptions = \App\Services\VisaSettings::firmOptions();
                             @endphp
                             <div id="firm-section" style="display: {{ $isFirmChecked ? 'block' : 'none' }}; margin-top: 10px;">
                                 <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">

@@ -4,6 +4,8 @@ namespace App\Exports;
 
 use App\Models\Student;
 use App\Models\StudentVisaInfo;
+use App\Services\VisaSettings;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -62,6 +64,15 @@ class InternationalStudentsExport implements FromQuery, WithHeadings, ShouldAuto
             }
         }
 
+        if (!empty($this->filters['residence_basis'])
+            && array_key_exists($this->filters['residence_basis'], StudentVisaInfo::BASIS_LABELS)
+            && Schema::hasColumn('student_visa_infos', 'residence_basis')) {
+            $basis = $this->filters['residence_basis'];
+            $query->whereHas('visaInfo', fn($q) => $basis === StudentVisaInfo::BASIS_VISA
+                ? $q->where(fn($q2) => $q2->whereNull('residence_basis')->orWhere('residence_basis', $basis))
+                : $q->where('residence_basis', $basis));
+        }
+
         if (!empty($this->filters['data_status'])) {
             $status = $this->filters['data_status'];
             if ($status === 'filled') {
@@ -106,7 +117,7 @@ class InternationalStudentsExport implements FromQuery, WithHeadings, ShouldAuto
         if ($visa?->firm) {
             $firmDisplay = $visa->firm === 'other'
                 ? ($visa->firm_custom ?? '')
-                : (StudentVisaInfo::FIRM_OPTIONS[$visa->firm] ?? $visa->firm ?? '');
+                : (VisaSettings::firmOptions()[$visa->firm] ?? $visa->firm ?? '');
         }
 
         return [
@@ -146,6 +157,12 @@ class InternationalStudentsExport implements FromQuery, WithHeadings, ShouldAuto
             $visa?->birth_country ?? '-',
             $visa?->birth_region ?? '-',
             $visa?->birth_city ?? '-',
+            $visa ? $visa->basisLabel() : '-',
+            $visa?->residence_permit_number ?? '-',
+            $visa?->residence_permit_pinfl ?? '-',
+            $visa?->residence_permit_issued_place ?? '-',
+            $visa?->residence_permit_issued_date?->format('d.m.Y') ?? '-',
+            $visa?->residence_permit_expiry_date?->format('d.m.Y') ?? '-',
         ];
     }
 
@@ -184,6 +201,12 @@ class InternationalStudentsExport implements FromQuery, WithHeadings, ShouldAuto
             'Tug\'ilgan davlat',
             'Tug\'ilgan viloyat',
             'Tug\'ilgan shahar',
+            'Turish asosi',
+            'Guvohnoma raqami',
+            'Shaxsiy raqam (JShShIR)',
+            'Guvohnoma berilgan joyi',
+            'Guvohnoma berilgan sana',
+            'Guvohnoma muddati',
         ];
     }
 

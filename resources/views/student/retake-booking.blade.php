@@ -42,7 +42,17 @@
         .rb-field label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; color: #475569; }
         .rb-field input { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px 12px; font-size: 16px; color: #17233a; background: #fff; }
         .rb-field input:focus { outline: none; border-color: #4338ca; box-shadow: 0 0 0 3px rgba(67, 56, 202, .15); }
-        .rb-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .rb-slots-wrap { border: 0; margin: 0; padding: 0; min-width: 0; }
+        .rb-slots-wrap legend { padding: 0; margin-bottom: 2px; font-size: 12px; font-weight: 700; color: #475569; }
+        .rb-slots { margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+        .rb-slots .rb-slot-opt { position: relative; display: block; margin: 0; cursor: pointer; }
+        .rb-slot-opt input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+        .rb-slot-opt span { display: block; padding: 10px 6px; border: 1px solid #cbd5e1; border-radius: 12px; text-align: center;
+            font-size: 14px; font-weight: 700; color: #17233a; background: #fff; font-variant-numeric: tabular-nums; transition: background .12s, border-color .12s; }
+        .rb-slot-opt:hover span { border-color: #a5b4fc; }
+        .rb-slot-opt input:checked + span { background: #1e3a8a; border-color: #1e3a8a; color: #fff; }
+        .rb-slot-opt input:focus-visible + span { outline: 2px solid #4338ca; outline-offset: 2px; }
+        .rb-slot-opt input:disabled + span { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; text-decoration: line-through; cursor: not-allowed; }
         .rb-hint { font-size: 12px; color: #64748b; line-height: 1.45; }
         .rb-error { font-size: 13px; color: #b91c1c; font-weight: 600; }
         .rb-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: #fff; border: 1px solid #e5eaf2;
@@ -143,18 +153,23 @@
                                    min="{{ now()->format('Y-m-d') }}" @if($debt['deadline']) max="{{ $debt['deadline']->format('Y-m-d') }}" @endif
                                    value="{{ old('date', $debt['is_booked'] ? $debt['slot_start']?->format('Y-m-d') : '') }}">
                         </div>
-                        <div class="rb-times">
-                            <div class="rb-field">
-                                <label for="rb-start">Boshlanish</label>
-                                <input type="time" id="rb-start" name="start_time" required
-                                       value="{{ old('start_time', $debt['is_booked'] ? $debt['slot_start']?->format('H:i') : '') }}">
+                        @php
+                            $currentSlot = old('slot', $debt['is_booked'] && $debt['slot_start'] && $debt['slot_end']
+                                ? $debt['slot_start']->format('H:i') . '-' . $debt['slot_end']->format('H:i') : '');
+                        @endphp
+                        <fieldset class="rb-field rb-slots-wrap">
+                            <legend>Vaqt oralig'i</legend>
+                            <p class="rb-hint">Shu oraliqda test markaziga borib qayta topshirasiz.</p>
+                            <div class="rb-slots" id="rb-slots">
+                                @foreach($slots as $key => [$from, $to])
+                                    <label class="rb-slot-opt">
+                                        <input type="radio" name="slot" value="{{ $key }}" data-start="{{ $from }}" @checked($currentSlot === $key)>
+                                        <span>{{ $from }}–{{ $to }}</span>
+                                    </label>
+                                @endforeach
                             </div>
-                            <div class="rb-field">
-                                <label for="rb-end">Tugash</label>
-                                <input type="time" id="rb-end" name="end_time" required
-                                       value="{{ old('end_time', $debt['is_booked'] ? $debt['slot_end']?->format('H:i') : '') }}">
-                            </div>
-                        </div>
+                            <p class="rb-hint" id="rb-no-slots" hidden>Bugun uchun bo'sh vaqt oralig'i qolmadi — boshqa kunni tanlang.</p>
+                        </fieldset>
                         <div class="rb-error" id="rb-client-error" role="alert" @unless($errors->any()) hidden @endunless>
                             {{ $errors->first('slot') ?: $errors->first() }}
                         </div>
@@ -198,18 +213,33 @@
                             errorBox.hidden = false;
                             return false;
                         }
+                        var radios = Array.prototype.slice.call(form.querySelectorAll('input[name="slot"]'));
+                        var noSlots = document.getElementById('rb-no-slots');
+                        // Tanlangan kun bugun bo'lsa, boshlanishi o'tib ketgan oraliqlar tanlanmaydi
+                        function refreshSlots() {
+                            var date = form.date.value, now = new Date(), free = 0;
+                            radios.forEach(function (r) {
+                                var past = !!date && new Date(date + 'T' + r.dataset.start) <= now;
+                                r.disabled = past;
+                                if (past && r.checked) { r.checked = false; }
+                                if (!past) { free++; }
+                            });
+                            noSlots.hidden = !date || free > 0;
+                        }
+                        form.date.addEventListener('change', function () { errorBox.hidden = true; refreshSlots(); });
+                        refreshSlots();
                         form.addEventListener('submit', function (e) {
-                            var date = form.date.value, start = form.start_time.value, end = form.end_time.value;
-                            var deadline = form.dataset.deadline;
+                            var date = form.date.value, deadline = form.dataset.deadline;
+                            var picked = radios.filter(function (r) { return r.checked; })[0];
                             var ok = true;
-                            if (!date || !start || !end) {
-                                ok = fail("Kun, boshlanish va tugash vaqtini tanlang.");
-                            } else if (new Date(date + 'T' + start) <= new Date()) {
-                                ok = fail("Boshlanish vaqti hozirgi vaqtdan keyin bo'lishi kerak.");
-                            } else if (end <= start) {
-                                ok = fail("Tugash vaqti boshlanish vaqtidan keyin bo'lishi kerak.");
+                            if (!date) {
+                                ok = fail("Kunni tanlang.");
                             } else if (deadline && date > deadline) {
                                 ok = fail("Sana qayta topshirish muddatidan kech bo'lmasligi kerak.");
+                            } else if (!picked) {
+                                ok = fail("Vaqt oralig'ini tanlang.");
+                            } else if (new Date(date + 'T' + picked.dataset.start) <= new Date()) {
+                                ok = fail("Bu vaqt oralig'i o'tib ketgan — keyingisini tanlang.");
                             }
                             if (!ok) { e.preventDefault(); }
                         });

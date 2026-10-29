@@ -205,3 +205,15 @@ it('cron does not resend a booking whose slot already passed', function () {
 
     expect(RetakeBookingService::unsyncedQuery()->count())->toBe(0);
 });
+
+it('builds time slots from the configured working hours', function () {
+    config()->set('services.moodle.retake_slot_from', '09:00');
+    config()->set('services.moodle.retake_slot_to', '12:30');
+    config()->set('services.moodle.retake_slot_minutes', 60);
+
+    expect(RetakeBookingService::slotOptions())->toBe([
+        '09:00-10:00' => ['09:00', '10:00'],
+        '10:00-11:00' => ['10:00', '11:00'],
+        '11:00-12:00' => ['11:00', '12:00'],
+    ]);
+});

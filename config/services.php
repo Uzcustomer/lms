@@ -98,6 +98,10 @@ return [
         // local_otrabotka: talaba qarzlari va qayta topshirish vaqtini bron qilish
         'retake_token' => env('RETAKE_BOOKING_TOKEN'),
         'retake_timeout' => (int) env('MOODLE_RETAKE_TIMEOUT', 10),
+        // Talaba tanlaydigan vaqt oraliqlari: test markazi ish vaqti va bitta oraliq uzunligi
+        'retake_slot_from' => env('RETAKE_SLOT_FROM', '09:00'),
+        'retake_slot_to' => env('RETAKE_SLOT_TO', '17:00'),
+        'retake_slot_minutes' => (int) env('RETAKE_SLOT_MINUTES', 60),
         'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
         // "Yangilash" Moodle'dan to'g'ridan-to'g'ri tortganda, mavjud eng katta
         // attempt_id dan shuncha ORQAGA so'raladi (kech tugagan urinishlarni

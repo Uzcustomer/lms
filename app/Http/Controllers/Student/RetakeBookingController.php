@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 /**
  * Talaba qayta topshirish (otrabotka) kuni va vaqt oralig'ini tanlaydi.
@@ -52,7 +53,10 @@ class RetakeBookingController extends Controller
         if ($subjectId && $lessonDate) {
             $debt = RetakeBookingService::findDebt($debts, $subjectId, $lessonDate);
             if ($debt) {
-                return view('student.retake-booking', ['debt' => $this->present($hemisId, $debt), 'debts' => collect(), 'loadError' => null, 'notFound' => false]);
+                return view('student.retake-booking', [
+                    'debt' => $this->present($hemisId, $debt), 'debts' => collect(), 'loadError' => null, 'notFound' => false,
+                    'slots' => RetakeBookingService::slotOptions(),
+                ]);
             }
             $notFound = true;
         }
@@ -68,17 +72,17 @@ class RetakeBookingController extends Controller
 
     public function store(Request $request)
     {
+        $slots = RetakeBookingService::slotOptions();
         $data = $request->validate([
             'subject_id' => 'required|integer',
             'lesson_date' => 'required|date_format:Y-m-d',
             'date' => 'required|date_format:Y-m-d',
-            'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i',
+            'slot' => ['required', Rule::in(array_keys($slots))],
         ], [
             'date.required' => 'Kunni tanlang.',
-            'start_time.required' => 'Boshlanish vaqtini tanlang.',
-            'end_time.required' => 'Tugash vaqtini tanlang.',
-            '*.date_format' => "Sana yoki vaqt noto'g'ri formatda.",
+            'date.date_format' => "Sana noto'g'ri formatda.",
+            'slot.required' => "Vaqt oralig'ini tanlang.",
+            'slot.in' => "Vaqt oralig'ini ro'yxatdan tanlang.",
         ]);
 
         $hemisId = (int) Auth::guard('student')->user()->hemis_id;
@@ -99,8 +103,9 @@ class RetakeBookingController extends Controller
             return redirect($back)->with('booking_flash', ['type' => 'error', 'message' => 'Bu mavzu uchun hozir vaqt tanlab bo\'lmaydi.']);
         }
 
-        $start = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $data['start_time']);
-        $end = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $data['end_time']);
+        [$startTime, $endTime] = $slots[$data['slot']];
+        $start = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $startTime);
+        $end = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $endTime);
         if ($error = RetakeBookingService::validateSlot($start, $end, $debt['deadline'] ?? null)) {
             return redirect($back)->withInput()->withErrors(['slot' => $error]);
         }

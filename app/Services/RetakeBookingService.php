@@ -62,6 +62,26 @@ class RetakeBookingService
         return null;
     }
 
+    /**
+     * Talaba tanlay oladigan vaqt oraliqlari (test markazi ish vaqti bo'yicha).
+     *
+     * @return array<string, array{0: string, 1: string}> "09:00-10:00" => ["09:00", "10:00"]
+     */
+    public static function slotOptions(): array
+    {
+        $from = Carbon::createFromFormat('H:i', (string) config('services.moodle.retake_slot_from', '09:00'));
+        $to = Carbon::createFromFormat('H:i', (string) config('services.moodle.retake_slot_to', '17:00'));
+        $minutes = max(15, (int) config('services.moodle.retake_slot_minutes', 60));
+
+        $slots = [];
+        for ($start = $from->copy(); $start->copy()->addMinutes($minutes)->lessThanOrEqualTo($to); $start->addMinutes($minutes)) {
+            $end = $start->copy()->addMinutes($minutes);
+            $slots[$start->format('H:i') . '-' . $end->format('H:i')] = [$start->format('H:i'), $end->format('H:i')];
+        }
+
+        return $slots;
+    }
+
     /** Talaba tanlagan vaqt oralig'ini tekshiradi: xato matni yoki null */
     public static function validateSlot(Carbon $start, Carbon $end, ?string $deadline): ?string
     {

@@ -2,16 +2,14 @@
 
 namespace App\Services;
 
-use App\Models\MarkingSystemScore;
 use App\Models\Student;
 use App\Models\VedomostSubmission;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 /**
  * Yuklangan vedomostni (skaner PDF + menejer Excel) tizimning YN qaydnoma
- * ma'lumoti bilan Claude API orqali solishtiradi va nomuvofiqliklarni qaytaradi.
+ * ma'lumoti bilan Gemini API orqali solishtiradi va nomuvofiqliklarni qaytaradi.
  *
  * Faqat tavsiya — yakuniy qarorni registrator ofisi xodimi qiladi.
  */
@@ -20,13 +18,15 @@ class VedomostAiChecker
     public function __construct(
         private YnQaydnomaDataService $qaydnoma,
         private VedomostMergeService $merge,
-        private VedomostGradeCalculator $calc
+        private VedomostGradeCalculator $calc,
+        private VedomostGeminiClient $gemini,
+        private VedomostAiSettings $settings
     ) {
     }
 
     public static function isConfigured(): bool
     {
-        return !empty(config('services.anthropic.api_key'));
+        return VedomostGeminiClient::isConfigured();
     }
 
     /**
@@ -34,9 +34,6 @@ class VedomostAiChecker
      */
     public function check(VedomostSubmission $v): array
     {
-        if (!self::isConfigured()) {
-            throw new RuntimeException('ANTHROPIC_API_KEY sozlanmagan.');
-        }
         if (!$v->pdf_path || !Storage::disk('public')->exists($v->pdf_path)) {
             throw new RuntimeException('Skaner PDF topilmadi.');
         }
@@ -50,164 +47,38 @@ class VedomostAiChecker
         }
 
         // 1-bosqich: AI faqat SKANERNI O'QIYDI (transkripsiya) — hisoblamaydi,
-        // solishtirmaydi. Shuning uchun thinking minimal, tez va arzon.
+        // solishtirmaydi.
         $scan = $this->transcribeScan($v, $expected);
 
         // 2-bosqich: PHP hisoblaydi va solishtiradi (determinik, aniq).
-        return $this->compare($expected, $scan);
+        $result = $this->compare($expected, $scan);
+        $result['model'] = $scan['_model'] ?? null;
+
+        return $result;
     }
 
     /**
-     * AI orqali skanerni strukturali JSONga o'qiydi (og'irliklar, talabalar
+     * Gemini orqali skanerni strukturali JSONga o'qiydi (og'irliklar, talabalar
      * yozilgan qiymatlari, imzo/muhr, sarlavha nomuvofiqliklari). Hisob yo'q.
      */
     private function transcribeScan(VedomostSubmission $v, array $expected): array
     {
-        $pdfBase64 = base64_encode(Storage::disk('public')->get($v->pdf_path));
-
-        $content = [
-            [
-                'type' => 'text',
-                'text' => "TIZIMDAGI (kutilgan) YN QAYDNOMA MA'LUMOTI (JSON) — faqat sarlavha\n"
-                    . "nomuvofiqliklarini baholash uchun:\n"
-                    . json_encode($expected, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-            ],
-            [
-                'type' => 'document',
-                'source' => [
-                    'type' => 'base64',
-                    'media_type' => 'application/pdf',
-                    'data' => $pdfBase64,
-                ],
-            ],
-            [
-                'type' => 'text',
-                'text' => "SKANER (PDF) dan sxema bo'yicha qiymatlarni O'QIB chiqing. Sonlarni"
-                    . " HISOBLAMANG va solishtirmang — faqat yozilganini ko'chiring.",
-            ],
+        $parts = [
+            ['text' => "TIZIMDAGI (kutilgan) YN QAYDNOMA MA'LUMOTI (JSON) — faqat sarlavha\n"
+                . "nomuvofiqliklarini baholash uchun:\n"
+                . json_encode($expected, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)],
+            ['inlineData' => [
+                'mimeType' => 'application/pdf',
+                'data' => base64_encode(Storage::disk('public')->get($v->pdf_path)),
+            ]],
+            ['text' => "SKANER (PDF) dan sxema bo'yicha qiymatlarni O'QIB chiqing. Sonlarni"
+                . " HISOBLAMANG va solishtirmang — faqat yozilganini ko'chiring."],
         ];
 
-        $payload = [
-            'model' => config('services.anthropic.model'),
-            // Transkripsiya chiqishi (talabalar ro'yxati) uchun keng chegara; effort low
-            // bo'lgani uchun thinking minimal — bu deyarli toza chiqish.
-            'max_tokens' => 32000,
-            'thinking' => ['type' => 'adaptive'],
-            'system' => [[
-                'type' => 'text',
-                'text' => $this->transcribePrompt(),
-                'cache_control' => ['type' => 'ephemeral'],
-            ]],
-            'output_config' => [
-                // effort: low — bu OCR/ko'chirish ishi, og'ir o'ylash kerak emas (tez).
-                'effort' => 'low',
-                'format' => ['type' => 'json_schema', 'schema' => $this->transcribeSchema()],
-            ],
-            'messages' => [[
-                'role' => 'user',
-                'content' => $content,
-            ]],
-        ];
+        $res = $this->gemini->generateJson($parts, $this->transcribeSchema(), $this->transcribePrompt(), $v->id);
+        $res['data']['_model'] = $res['model'];
 
-        $result = $this->streamMessages($payload);
-
-        $stopReason = $result['stop_reason'];
-        if ($stopReason === 'refusal') {
-            throw new RuntimeException('Claude so\'rovni rad etdi (refusal).');
-        }
-        if ($stopReason === 'max_tokens') {
-            throw new RuntimeException('Claude javobi max_tokens chegarasida kesildi — natija to\'liq emas.');
-        }
-
-        $jsonText = trim($result['text']);
-        if ($jsonText === '') {
-            throw new RuntimeException('Claude javobida natija topilmadi.');
-        }
-        $parsed = json_decode($jsonText, true);
-        if (!is_array($parsed)) {
-            throw new RuntimeException('Claude javobini JSON sifatida o\'qib bo\'lmadi.');
-        }
-
-        return $parsed;
-    }
-
-    /**
-     * Claude Messages API'ga STREAM (SSE) so'rov yuboradi va matn bo'laklarini
-     * hamda stop_reason'ni yig'ib qaytaradi. Streaming tufayli ulanish bo'sh
-     * turmaydi — uzoq javoblarda ham cURL timeout (xato 28) bo'lmaydi.
-     *
-     * @return array{text: string, stop_reason: ?string}
-     */
-    private function streamMessages(array $payload): array
-    {
-        $payload['stream'] = true;
-
-        $response = Http::withHeaders([
-            'x-api-key' => config('services.anthropic.api_key'),
-            'anthropic-version' => config('services.anthropic.version', '2023-06-01'),
-            'content-type' => 'application/json',
-        ])
-            ->withOptions(['stream' => true])
-            ->timeout((int) config('services.anthropic.timeout', 280))
-            ->post('https://api.anthropic.com/v1/messages', $payload);
-
-        if (!$response->successful()) {
-            throw new RuntimeException('Claude API xatosi: ' . $response->status() . ' ' . $response->body());
-        }
-
-        $stream = $response->toPsrResponse()->getBody();
-        $buffer = '';
-        $text = '';
-        $stopReason = null;
-
-        // Devor-soat chegarasi: manual oqim o'qishda Guzzle timeout har doim ham
-        // ishlamaydi — generatsiya cheksiz cho'zilmasligi uchun o'zimiz cheklaymiz.
-        $deadline = microtime(true) + (int) config('services.anthropic.timeout', 280);
-
-        while (!$stream->eof()) {
-            if (microtime(true) > $deadline) {
-                throw new RuntimeException('Claude javobi belgilangan vaqtda tugamadi (timeout) — qayta urinib ko\'ring.');
-            }
-            $chunk = $stream->read(8192);
-            if ($chunk === '') {
-                continue;
-            }
-            $buffer .= $chunk;
-
-            // SSE qatorma-qator: "data: {...}" bo'laklarini ajratamiz.
-            while (($nl = strpos($buffer, "\n")) !== false) {
-                $line = trim(substr($buffer, 0, $nl));
-                $buffer = substr($buffer, $nl + 1);
-
-                if ($line === '' || !str_starts_with($line, 'data:')) {
-                    continue;
-                }
-                $json = trim(substr($line, 5));
-                if ($json === '' || $json === '[DONE]') {
-                    continue;
-                }
-                $event = json_decode($json, true);
-                if (!is_array($event)) {
-                    continue;
-                }
-
-                switch ($event['type'] ?? '') {
-                    case 'content_block_delta':
-                        // Faqat matn deltalari (thinking_delta'ni e'tiborsiz qoldiramiz).
-                        if (($event['delta']['type'] ?? '') === 'text_delta') {
-                            $text .= $event['delta']['text'] ?? '';
-                        }
-                        break;
-                    case 'message_delta':
-                        $stopReason = $event['delta']['stop_reason'] ?? $stopReason;
-                        break;
-                    case 'error':
-                        throw new RuntimeException('Claude API stream xatosi: ' . ($event['error']['message'] ?? 'noma\'lum'));
-                }
-            }
-        }
-
-        return ['text' => $text, 'stop_reason' => $stopReason];
+        return $res['data'];
     }
 
     /**
@@ -342,74 +213,42 @@ Faqat sxema bo'yicha JSON qaytaring, boshqa matn yozmang.
 TXT;
     }
 
+    /**
+     * Gemini responseSchema (OpenAPI subset: turlar katta harfda, additionalProperties yo'q).
+     */
     private function transcribeSchema(): array
     {
-        $str = ['type' => 'string'];
+        $str = ['type' => 'STRING'];
+        $int = ['type' => 'INTEGER'];
+        $bool = ['type' => 'BOOLEAN'];
+        $obj = fn (array $props) => [
+            'type' => 'OBJECT',
+            'properties' => $props,
+            'required' => array_keys($props),
+            'propertyOrdering' => array_keys($props),
+        ];
+
         $studentFields = [
             'student_id', 'fish',
-            'jb_pct', 'mt_pct', 'on_pct', 'oski_pct', 'test_pct',
-            'jb_ball', 'mt_ball', 'on_ball', 'oski_ball', 'test_ball',
-            'jbmton_ball', 'ozlashtirish', 'ects', 'baho',
+            'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball',
+            'jbmton_ball', 'oski_pct', 'oski_ball', 'test_pct', 'test_ball',
+            'ozlashtirish', 'ects', 'baho',
         ];
-        $studentProps = [];
-        foreach ($studentFields as $f) {
-            $studentProps[$f] = $str;
-        }
 
-        return [
-            'type' => 'object',
-            'additionalProperties' => false,
-            'properties' => [
-                'weights' => [
-                    'type' => 'object',
-                    'additionalProperties' => false,
-                    'properties' => [
-                        'jb' => ['type' => 'integer'],
-                        'mt' => ['type' => 'integer'],
-                        'on' => ['type' => 'integer'],
-                        'oski' => ['type' => 'integer'],
-                        'test' => ['type' => 'integer'],
-                    ],
-                    'required' => ['jb', 'mt', 'on', 'oski', 'test'],
-                ],
-                'students' => [
-                    'type' => 'array',
-                    'items' => [
-                        'type' => 'object',
-                        'additionalProperties' => false,
-                        'properties' => $studentProps,
-                        'required' => $studentFields,
-                    ],
-                ],
-                'signatures' => [
-                    'type' => 'object',
-                    'additionalProperties' => false,
-                    'properties' => [
-                        'oqituvchi' => ['type' => 'boolean'],
-                        'dekan' => ['type' => 'boolean'],
-                        'kafedra_mudiri' => ['type' => 'boolean'],
-                        'muhr' => ['type' => 'boolean'],
-                    ],
-                    'required' => ['oqituvchi', 'dekan', 'kafedra_mudiri', 'muhr'],
-                ],
-                'header_issues' => [
-                    'type' => 'array',
-                    'items' => [
-                        'type' => 'object',
-                        'additionalProperties' => false,
-                        'properties' => [
-                            'field' => ['type' => 'string'],
-                            'severity' => ['type' => 'string', 'enum' => ['high', 'medium', 'low']],
-                            'expected' => ['type' => 'string'],
-                            'found' => ['type' => 'string'],
-                            'note' => ['type' => 'string'],
-                        ],
-                        'required' => ['field', 'severity', 'expected', 'found', 'note'],
-                    ],
-                ],
-            ],
-            'required' => ['weights', 'students', 'signatures', 'header_issues'],
-        ];
+        $issue = $obj([
+            'field' => $str,
+            'severity' => ['type' => 'STRING', 'enum' => ['high', 'medium', 'low']],
+            'expected' => $str,
+            'found' => $str,
+            'note' => $str,
+        ]);
+
+        return $obj([
+            'weights' => $obj(['jb' => $int, 'mt' => $int, 'on' => $int, 'oski' => $int, 'test' => $int]),
+            'students' => ['type' => 'ARRAY', 'items' => $obj(array_fill_keys($studentFields, $str))],
+            'signatures' => $obj(['oqituvchi' => $bool, 'dekan' => $bool, 'kafedra_mudiri' => $bool, 'muhr' => $bool]),
+            'header_issues' => ['type' => 'ARRAY', 'items' => $issue],
+        ]);
     }
 
     /**
@@ -448,8 +287,10 @@ TXT;
             }
         }
 
-        // JN/MT o'tish chegarasi 70, xalqaro fakultet (PIMU) talabalari uchun avvalgidek 60.
+        // JN/MT o'tish chegarasi — AI sozlamalaridan (xalqaro fakultet uchun alohida).
         $intlIds = $this->internationalStudentIds($expected['talabalar'] ?? []);
+        $pass = (int) $this->settings->get('jn_mt_pass');
+        $passIntl = (int) $this->settings->get('jn_mt_pass_international');
 
         $matched = [];
         foreach (($expected['talabalar'] ?? []) as $stu) {
@@ -475,7 +316,7 @@ TXT;
             $e = $this->calc->compute(
                 $stu['jn'] ?? null, $stu['mt'] ?? null, $stu['on'] ?? null,
                 $stu['oski'] ?? null, $stu['test'] ?? null, $levelCode, $w,
-                0.0, isset($intlIds[$id]) ? MarkingSystemScore::INTERNATIONAL_VEDOMOST_PASS : MarkingSystemScore::YN_JN_MT_LIMIT
+                0.0, isset($intlIds[$id]) ? $passIntl : $pass
             );
             $this->cmpNum($disc, $label . ' — JB ball', $e['jb_ball'], $s['jb_ball'] ?? null);
             $this->cmpNum($disc, $label . ' — MT ball', $e['mt_ball'], $s['mt_ball'] ?? null);
@@ -592,8 +433,9 @@ TXT;
     }
 
     /** Ikki sonni tolerantlik bilan solishtiradi; farq bo'lsa nomuvofiqlik qo'shadi. */
-    private function cmpNum(array &$disc, string $field, $expected, $found, float $tol = 0.05, string $sev = 'medium'): void
+    private function cmpNum(array &$disc, string $field, $expected, $found, ?float $tol = null, string $sev = 'medium'): void
     {
+        $tol ??= (float) $this->settings->get('tolerance');
         $e = $this->num($expected);
         $f = $this->num($found);
 

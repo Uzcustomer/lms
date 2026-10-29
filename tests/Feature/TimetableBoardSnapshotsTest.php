@@ -385,3 +385,23 @@ it('rad etilgan haftalik joy keyingilarini to\'smaydi (birinchi tekshiruv haftal
         ->and(TimetableCardOverride::where('card_id', $x->id)->count())->toBe(0)
         ->and(TimetableCardOverride::where('card_id', $y->id)->where('week', 3)->value('auditorium_code'))->toBe('R5');
 });
+
+it('kartochka yaratish va xavfli amaldan oldingi nusxa PHP xotira chegarasini 1024M ga ko\'taradi (serverdagi 128M da to\'xtardi)', function () {
+    $s = snapSetup();
+    $orig = ini_get('memory_limit');
+    // Server chegarasi kabi past: hozirgi sarfdan biroz yuqori (undan past qilib bo'lmaydi).
+    $low = (string) (memory_get_usage(true) + 64 * 1024 * 1024);
+    try {
+        // Kartochkalarni yaratish (tasdiqlangan oqim yo'q — 422, lekin chegara so'rov boshida ko'tariladi)
+        ini_set('memory_limit', $low);
+        snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.generate', $s['board']));
+        expect(ini_get('memory_limit'))->toBe('1024M');
+
+        // Xavfli amaldan oldingi nusxa (bo'shatish)
+        ini_set('memory_limit', $low);
+        snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.unplace', $s['board']), ['courses' => [2], 'layer' => 'internal'])->assertOk();
+        expect(ini_get('memory_limit'))->toBe('1024M');
+    } finally {
+        ini_set('memory_limit', $orig);
+    }
+});

@@ -29,7 +29,7 @@ use RuntimeException;
 class VedomostScanReader
 {
     /** Prompt yoki sxema o'zgarsa oshiriladi — eski kesh ishlatilmaydi. */
-    public const PROMPT_VER = 2;
+    public const PROMPT_VER = 3;
 
     public const ROW_FIELDS = [
         'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball',
@@ -67,7 +67,11 @@ class VedomostScanReader
     /**
      * @return array{header: array, rows: array, signatures: array, weights: array, meta: array}
      */
-    public function read(string $pdfPath, ?int $submissionId = null, ?int $expectedRows = null): array
+    /**
+     * @param  bool  $fresh  true — keshga qaramay AI'ga qaytadan o'qitish (xodim «Qayta tekshirish»ni bosganda);
+     *                       natija baribir keshga yoziladi.
+     */
+    public function read(string $pdfPath, ?int $submissionId = null, ?int $expectedRows = null, bool $fresh = false): array
     {
         if (!is_file($pdfPath)) {
             throw new RuntimeException('Skaner PDF topilmadi.');
@@ -77,9 +81,11 @@ class VedomostScanReader
         $bands = max(1, min(4, (int) $this->settings->get('bands')));
         $model = (string) $this->settings->get('model');
         $hash = sha1_file($pdfPath);
-        $cacheFile = $this->cachePath(sha1(implode('|', ['v' . self::PROMPT_VER, $hash, $bands, $model])));
+        // Rejim ham kalitda: pdftoppm keyin o'rnatilsa, butun-PDF rejimidagi eski natija qaytmasin.
+        $images = self::rendererAvailable();
+        $cacheFile = $this->cachePath(sha1(implode('|', ['v' . self::PROMPT_VER, $hash, $bands, $model, $images ? 'images' : 'pdf'])));
 
-        if (is_file($cacheFile)) {
+        if (!$fresh && is_file($cacheFile)) {
             $cached = json_decode((string) file_get_contents($cacheFile), true);
             if (is_array($cached)) {
                 $cached['meta']['cached'] = true;
@@ -88,7 +94,7 @@ class VedomostScanReader
             }
         }
 
-        $result = self::rendererAvailable()
+        $result = $images
             ? $this->readAsImages($pdfPath, $bands, $expectedRows)
             : $this->readAsPdf($pdfPath, $expectedRows);
 
@@ -397,6 +403,22 @@ class VedomostScanReader
      *
      * @return array<int, array{0: string, 1: array}>
      */
+    /**
+     * YN manfiy kod bo'lishi kerak (baho «kelmadi» → -1; «qo'yilmadi» yoki ECTS FX → -2/-3),
+     * lekin musbat yoki 0 o'qilgan. Odatda kulrang bo'yalgan qatorda minus belgisi yo'qolganda.
+     */
+    public static function ynConflict(array $row): bool
+    {
+        $yn = self::num($row['yn'] ?? null);
+        if ($yn === null || $yn < 0) {
+            return false;
+        }
+        $baho = preg_replace('/[^a-z]/', '', mb_strtolower(VedomostNames::latin((string) ($row['baho'] ?? ''))));
+        $ects = strtoupper(trim((string) ($row['ects'] ?? '')));
+
+        return str_contains($baho, 'kelmadi') || str_contains($baho, 'qoyilmadi') || $ects === 'FX';
+    }
+
     public function rowProblems(array $row, array $ratios): array
     {
         $p = [];
@@ -439,6 +461,10 @@ class VedomostScanReader
             if (abs($yn - floor($exp + 0.5 + 1e-9)) >= 1.5) {
                 $p[] = ["YN ball yig'indisiga mos emas", ['yn', 'jbmton_ball', 'oski_ball', 'test_ball']];
             }
+        }
+
+        if (self::ynConflict($row)) {
+            $p[] = ["YN baho/ECTS bilan mos emas (kelmadi → -1, qo'yilmadi/FX → -2 yoki -3)", ['yn', 'ects', 'baho']];
         }
 
         $e = strtoupper(trim((string) ($row['ects'] ?? '')));
@@ -729,7 +755,7 @@ Transcribe exactly what is PRINTED or WRITTEN. Do not calculate, correct or gues
 A table row that is cut off by the top or bottom edge of this image must be skipped (the neighbouring image shows it whole). Skip empty numbered rows and the "O'rtacha foiz" row.
 FIRST read the table's own column headings — the layout differs between subjects: some sheets have OSKE columns and no TEST columns, some have TEST and no OSKE, some have both, some have neither. Map every number by the heading above it, never by position. An EMPTY column (for example ON) still occupies its place: never shift later numbers into it or out of it. A field whose column does not exist on this sheet, or whose cell is empty, is "".
 Usual columns: № | Talabaning familiyasi, ismi-sharifi | Talabaning ID raqami | JB % | JB ball | MT % | MT ball | ON % | ON ball | JB+MT+ON ball | JB+MT+ON % | OSKE % | OSKE ball | TEST % | TEST ball | O'zlashtirish ko'rsatkichi | ECTS | signature | grade word.
-VERY IMPORTANT: "yn" is the final grade in the column "O'zlashtirish ko'rsatkichi", which stands immediately LEFT of the ECTS letter (A, B+, B, C+, C, D, E, F, FX). It can be -1 (kelmagan), -2 or -3. Always fill "yn" from that column; never put that number into test_pct or oski_pct. test_pct/test_ball come only from the column headed TEST, oski_pct/oski_ball only from the column headed OSKE. "baho" is the grade word in the last column (a'lo, yaxshi, o'rta, qoniqarsiz, kelmadi...).
+VERY IMPORTANT: "yn" is the final grade in the column "O'zlashtirish ko'rsatkichi", which stands immediately LEFT of the ECTS letter (A, B+, B, C+, C, D, E, F, FX). It can be -1 (kelmagan), -2 or -3. These negative codes are common on rows shaded grey: look carefully for the minus sign — when the grade word is "kelmadi" the value is -1, when it is "qo'yilmadi" (ECTS FX) it is -2 or -3, never 0. Always fill "yn" from that column; never put that number into test_pct or oski_pct. test_pct/test_ball come only from the column headed TEST, oski_pct/oski_ball only from the column headed OSKE. "baho" is the grade word in the last column (a'lo, yaxshi, o'rta, qoniqarsiz, kelmadi...).
 Also give "nums": every number printed in the row after the ID, left to right, exactly as printed (empty cells skipped).
 Numbers: write them as printed ("86,0" → "86,0"; "76%" → "76").
 "weights": the maximum points printed in the heading row under each control type (the small numbers under JB, MT, ON, OSKE, TEST, e.g. 50, 20, 0, 0, 30). "" if not visible.

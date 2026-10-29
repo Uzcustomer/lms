@@ -134,29 +134,34 @@ class VedomostAiReportExcel
             $c++; // bo'sh ustun
 
             foreach ([['oski', 'P', $useO, !empty($use['tm_oski'])], ['test', 'S', $useT, !empty($use['tm_test'])]] as [$k, $hc, $need, $on]) {
-                $v = $ws->getCell([$c, $rn]);
-                $d = $ws->getCell([$c + 1, $rn]);
+                // PhpSpreadsheet faqat oxirgi olingan katakni varaqqa bog'lab turadi —
+                // katak obyektini saqlab qo'ymasdan har safar qayta olinadi.
+                $v = fn () => $ws->getCell([$c, $rn]);
+                $d = fn () => $ws->getCell([$c + 1, $rn]);
                 $tm = $r['tm'][$k] ?? null;
                 if (!$need) {
-                    $v->setValue('kerak emas');
-                    $v->getStyle()->getFont()->setItalic(true)->getColor()->setARGB('FF8A8A8A');
+                    $v()->setValue('kerak emas');
+                    $v()->getStyle()->getFont()->setItalic(true)->getColor()->setARGB('FF8A8A8A');
                 } elseif (!$on) {
-                    $v->setValue("Test markazida natija yo'q");
+                    $v()->setValue("Test markazida natija yo'q");
                     $this->fill($ws, $c, $rn, self::ORANGE);
+                } elseif (($tm['status'] ?? '') === 'skip') {
+                    $v()->setValue('hisobga olinmaydi: ' . $tm['note'] . ($tm['tm'] !== null ? ' (TM ' . $tm['tm'] . ')' : ''));
+                    $v()->getStyle()->getFont()->setItalic(true)->getColor()->setARGB('FF8A8A8A');
                 } elseif (!empty($tm['sinov'])) {
-                    $v->setValue('sinov: JN ' . ($tm['jn'] ?? ''));
-                    $d->setValue(sprintf('=%s%d-D%d', $hc, $rn, $rn));
+                    $v()->setValue('sinov: JN ' . ($tm['jn'] ?? ''));
+                    $d()->setValue(sprintf('=%s%d-D%d', $hc, $rn, $rn));
                     if ($tm['status'] === 'bad') {
                         $this->fill($ws, $c, $rn, self::YELLOW);
                         $this->fill($ws, $c + 1, $rn, self::YELLOW);
                     }
                 } elseif ($tm !== null) {
                     $val = $tm['tm'];
-                    $v->setValue($val !== null ? (!empty($tm['dal']) ? $val . ' (Dalolatnoma)' : $val) : (!empty($tm['nd']) ? 'nd' : "yo'q"));
+                    $v()->setValue($val !== null ? (!empty($tm['dal']) ? $val . ' (Dalolatnoma)' : $val) : (!empty($tm['nd']) ? 'nd' : "yo'q"));
                     if (!empty($tm['nd'])) {
-                        $d->setValue('nd (test markazida yo‘q, HEMIS 0)');
+                        $d()->setValue('nd (test markazida yo‘q, HEMIS 0)');
                     } elseif ($val !== null && empty($tm['dal'])) {
-                        $d->setValue(sprintf('=%s%d-%s%d', Coordinate::stringFromColumnIndex($c), $rn, $hc, $rn));
+                        $d()->setValue(sprintf('=%s%d-%s%d', Coordinate::stringFromColumnIndex($c), $rn, $hc, $rn));
                     }
                     if ($tm['status'] === 'bad') {
                         $this->fill($ws, $c, $rn, self::YELLOW);

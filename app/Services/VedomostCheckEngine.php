@@ -122,12 +122,29 @@ class VedomostCheckEngine
                     $set('bad');
                 }
                 $unclear = $s['unclear'] ?? [];
+                // Bo'yalgan (kulrang) qatorlarda AI minus belgisini yo'qotadi: baho «kelmadi» /
+                // «qo'yilmadi» yoki FX bo'la turib YN musbat/0 o'qilsa — o'qish xatosi deb olinadi.
+                if (VedomostScanReader::ynConflict($s)) {
+                    $unclear[] = 'yn';
+                }
+                // Kulrang qatorda hamma ustun 0 o'qilsa (HEMISda JN/MT bor) — o'qish xatosi ehtimoli katta.
+                if (VedomostScanReader::num($s['jb_pct'] ?? null) === 0.0 && VedomostScanReader::num($s['mt_pct'] ?? null) === 0.0
+                    && ((VedomostScanReader::num($vt['D']) ?? 0) > 0 || (VedomostScanReader::num($vt['G']) ?? 0) > 0)) {
+                    array_push($unclear, 'jb_pct', 'mt_ball');
+                }
                 foreach (self::COMPARE as $key => [$label, $pf, $col]) {
                     if (($key === 'oski' && !$useO) || ($key === 'test' && !$useT)) {
                         $cells[$key] = ['status' => 'skip'];
                         continue;
                     }
-                    $cells[$key] = $this->cmp($label, $vt[$col], $s[$pf] ?? '', in_array($pf, $unclear, true), $tol, $flags, $set);
+                    $hemisVal = $vt[$col];
+                    // Vedomost shablonida JN yoki MT o'tmagan talabaga YN = -2 (FX) yoziladi,
+                    // «Vedomost tekshirish» hisobida esa 0 — bu bir xil holat, farq emas.
+                    if ($key === 'yn' && VedomostScanReader::num($s[$pf] ?? null) === -2.0 && VedomostScanReader::num($hemisVal) === 0.0
+                        && $this->jnMtFailed($vt, $settings)) {
+                        $hemisVal = -2;
+                    }
+                    $cells[$key] = $this->cmp($label, $hemisVal, $s[$pf] ?? '', in_array($pf, $unclear, true), $tol, $flags, $set);
                 }
                 if (!empty($s['verified']) && !empty($s['problems'])) {
                     $flags[] = ['t' => 'bad', 'm' => "Vedomostning o'zida hisob xatosi (ikki marta o'qildi, bir xil): " . implode('; ', $s['problems'])];
@@ -160,10 +177,18 @@ class VedomostCheckEngine
                 $set('missing');
             }
 
-            // Test markazi ↔ HEMIS
+            // Test markazi ↔ HEMIS. Imtihonga kiritilmagan talabada HEMISdagi 0 qoida bo'yicha
+            // to'g'ri — test markazidagi natija (topshirgan bo'lsa ham) hisobga olinmaydi.
             $tm = [];
+            $skipAll = $expelled ? 'talaba chetlashtirilgan'
+                : ($this->jnMtFailed($vt, $settings) ? 'JN/MT o‘tmagan — imtihonga kiritilmagan' : null);
+            $oskeVt = VedomostScanReader::num($vt['P']);
+            $skipTest = $skipAll ?? (($useO && $useT && $oskeVt !== null && $oskeVt < (float) ($settings['oski_min'] ?? 60))
+                ? 'OSKE ' . $this->f($oskeVt) . '% — Testga kiritilmagan' : null);
             if ($useO && $tmUsed['oski'] && !$kurs6) {
-                $tm['oski'] = $this->checkTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], 'OSKE', $flags, $set);
+                $tm['oski'] = $skipAll
+                    ? $this->skipTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], $skipAll)
+                    : $this->checkTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], 'OSKE', $flags, $set);
             }
             if ($useT && $sinov && !$kurs6) {
                 $t = VedomostScanReader::num($vt['S']);
@@ -176,6 +201,8 @@ class VedomostCheckEngine
                     $flags[] = ['t' => 'bad', 'm' => 'Sinov fan: Test ' . $this->f($t) . '% ≠ Joriy ' . $this->f($jn) . '%'];
                     $set('bad');
                 }
+            } elseif ($useT && $tmUsed['test'] && !$kurs6 && $skipTest) {
+                $tm['test'] = $this->skipTm($context['test_center'][$sid]['test'] ?? null, $vt['S'], $skipTest);
             } elseif ($useT && $tmUsed['test'] && !$kurs6) {
                 $tm['test'] = $this->checkTm($context['test_center'][$sid]['test'] ?? null, $vt['S'], 'Test', $flags, $set);
                 if (($tm['test']['tm'] ?? null) !== null) {
@@ -262,6 +289,9 @@ class VedomostCheckEngine
         }
 
         $headerChecks = $this->headerChecks($expected, $system, $header, $context, $signatures);
+        // Yopilish shakli fan nomidan keyin turadi.
+        $at = array_search('fan', array_column($headerChecks, 'key'), true);
+        array_splice($headerChecks, $at === false ? 0 : $at + 1, 0, [$this->closingCheck($closing, $weights, $kurs6)]);
 
         // --- noto'g'ri hujjat ---
         $sysN = count($system);
@@ -420,6 +450,11 @@ class VedomostCheckEngine
         return $c + ['status' => 'ok'];
     }
 
+    private function skipTm(?array $rec, $hemis, string $why): array
+    {
+        return ['tm' => $rec !== null ? (float) $rec['grade'] : null, 'hemis' => VedomostScanReader::num($hemis), 'status' => 'skip', 'delta' => null, 'note' => $why];
+    }
+
     private function checkTm(?array $rec, $hemis, string $label, array &$flags, callable $set): array
     {
         $he = VedomostScanReader::num($hemis);
@@ -498,8 +533,12 @@ class VedomostCheckEngine
         if ($yn === null || $yn < 0 || $jn === null || $mt === null) {
             return null;
         }
-        $jnmt = $this->floorRound($jn * $w['jb'] / 100 + $mt * $w['mt'] / 100 + $on * $w['on'] / 100);
-        $fail = ($w['oski'] > 0 && $oske !== null && $oske < (float) ($settings['oski_min'] ?? 60))
+        // JN yoki MT o'tish chegarasidan past bo'lsa JN+MT = 0 (vedomost shablonidagi qoida) —
+        // aks holda o'tmagan har bir talaba soxta «hisob xatosi» bo'lib chiqadi.
+        $jnmtFail = $this->jnMtFailed($vt, $settings);
+        $jnmt = $jnmtFail ? 0 : $this->floorRound($jn * $w['jb'] / 100 + $mt * $w['mt'] / 100 + $on * $w['on'] / 100);
+        $fail = $jnmtFail
+            || ($w['oski'] > 0 && $oske !== null && $oske < (float) ($settings['oski_min'] ?? 60))
             || ($w['test'] > 0 && $test !== null && $test < (float) ($settings['test_min'] ?? 60));
         $calc = $fail ? 0 : $this->floorRound($jnmt
             + ($w['oski'] > 0 ? ($oske ?? 0) * $w['oski'] / 100 : 0)
@@ -510,6 +549,15 @@ class VedomostCheckEngine
             'jnmtCalc' => $jnmt, 'ynCalc' => $calc, 'jnmtHemis' => $jh, 'ynHemis' => $yn,
             'jnmtBad' => $jh !== null && (float) $jh !== (float) $jnmt, 'ynBad' => (float) $calc !== (float) $yn,
         ];
+    }
+
+    private function jnMtFailed(array $vt, array $settings): bool
+    {
+        $pass = (float) ($settings['jn_mt_pass'] ?? 60);
+        $jn = VedomostScanReader::num($vt['D']);
+        $mt = VedomostScanReader::num($vt['G']);
+
+        return ($jn !== null && $jn < $pass) || ($mt !== null && $mt < $pass);
     }
 
     /** 6-kurs: PDFdagi ballar rasmiy shablon formulasiga mosmi (Python kurs6). */
@@ -772,6 +820,36 @@ class VedomostCheckEngine
         }
 
         return $out;
+    }
+
+    /** Yopilish shakli: HEMISdagi shakl ↔ vedomost sarlavhasidagi imtihon vaznlari (OSKE / Test). */
+    private function closingCheck(string $closing, array $scanW, bool $kurs6): array
+    {
+        $names = ['oski' => 'OSKE', 'test' => 'Test', 'oski_test' => 'OSKE + Test', 'sinov' => 'Sinov', 'normativ' => 'Normativ'];
+        $row = fn (string $v, string $st) => ['key' => 'yopilish', 'k' => 'Yopilish shakli', 'v' => $v, 'st' => $st];
+        $hemis = $names[$closing] ?? ($closing !== '' ? $closing : null);
+        if ($hemis === null) {
+            return $row("HEMISda yopilish shakli kiritilmagan — vaznlar faqat vedomostdan olindi", 'warn');
+        }
+
+        $read = [];
+        foreach (['jb', 'mt', 'on', 'oski', 'test'] as $k) {
+            $read[$k] = (int) round((float) ($scanW[$k] ?? 0));
+        }
+        if (array_sum($read) !== 100) {
+            return $row("HEMIS: {$hemis} · vedomost vaznlari aniq o'qilmadi — Sarlavha varag'ida tuzating", 'warn');
+        }
+
+        $pdf = ($read['oski'] > 0 && $read['test'] > 0) ? 'OSKE + Test' : ($read['oski'] > 0 ? 'OSKE' : ($read['test'] > 0 ? 'Test' : "imtihonsiz (JN/MT)"));
+        $needO = in_array($closing, ['oski', 'oski_test'], true);
+        $needT = in_array($closing, ['test', 'oski_test', 'sinov', 'normativ'], true);
+        $ok = ($read['oski'] > 0) === $needO && ($read['test'] > 0) === $needT;
+        // 6-kurs vedomostlari rasmiy shablon bo'yicha — imtihon ustunlari bo'lmasligi mumkin.
+        $st = $ok ? 'ok' : ($kurs6 ? 'warn' : 'bad');
+        $v = "HEMIS: {$hemis} · vedomostda: {$pdf} (JN {$read['jb']} / MT {$read['mt']}"
+            . ($read['on'] ? " / ON {$read['on']}" : '') . ($read['oski'] ? " / OSKE {$read['oski']}" : '') . ($read['test'] ? " / Test {$read['test']}" : '') . ')';
+
+        return $row($v . ($ok ? '' : ' — mos emas'), $st);
     }
 
     private function weightIssues(array $w, string $closing, array $scanW): array

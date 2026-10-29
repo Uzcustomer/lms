@@ -70,19 +70,16 @@ class RetakeBookingService
             if (empty($debt['subject_id']) || empty($debt['lesson_date'])) {
                 return $debt;
             }
-            $window = self::excuseWindow((int) $student->hemis_id, (int) $debt['subject_id'], (string) $debt['lesson_date']);
-            if ($window) {
-                [$debt['book_from'], $debt['deadline']] = $window;
+            $period = self::retakePeriod((int) $student->hemis_id, $student->level_code, (int) $debt['subject_id'], (string) $debt['lesson_date']);
+            $debt['deadline'] = $period['deadline'];
+            if ($period['excused']) {
+                $debt['book_from'] = $period['book_from'];
                 $debt['excused'] = true;
                 // Moodle o'z muddati bo'yicha "expired" desa ham sababli oraliq ichida ochiq
                 if (($debt['state'] ?? '') === 'expired' && $debt['deadline'] >= $today) {
                     $debt['state'] = 'start';
                     $debt['can_book'] = true;
                 }
-            } else {
-                $debt['deadline'] = self::lmsDeadline(
-                    (int) $student->hemis_id, $student->level_code, (int) $debt['subject_id'], (string) $debt['lesson_date']
-                )->toDateString();
             }
             if ($debt['deadline'] < $today && !in_array($debt['state'] ?? '', ['done', 'continue'], true)) {
                 $debt['state'] = 'expired';
@@ -223,6 +220,25 @@ class RetakeBookingService
         $from = Carbon::parse($makeup->makeup_date)->toDateString();
 
         return [$from, $makeup->makeup_end_date ? Carbon::parse($makeup->makeup_end_date)->toDateString() : $from];
+    }
+
+    /**
+     * Mavzuning qayta topshirish davri LMS bo'yicha (bron sahifasi va Moodle
+     * uchun API bir xil hisoblaydi): sababli ariza oralig'i, bo'lmasa sozlama.
+     *
+     * @return array{deadline: string, book_from: ?string, excused: bool} sanalar Y-m-d, deadline shu kun oxirigacha
+     */
+    public static function retakePeriod(int $studentHemisId, $levelCode, int $subjectId, string $lessonDate): array
+    {
+        if ($window = self::excuseWindow($studentHemisId, $subjectId, $lessonDate)) {
+            return ['deadline' => $window[1], 'book_from' => $window[0], 'excused' => true];
+        }
+
+        return [
+            'deadline' => self::lmsDeadline($studentHemisId, $levelCode, $subjectId, $lessonDate)->toDateString(),
+            'book_from' => null,
+            'excused' => false,
+        ];
     }
 
     /** Talabaning shu mavzu bo'yicha amaldagi broni */

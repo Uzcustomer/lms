@@ -92,6 +92,13 @@ Route::post('/moodle/trigger-push', MoodleTriggerPushController::class)
     ->middleware('throttle:10,1')
     ->name('api.moodle.trigger-push');
 
+// Moodle local_otrabotka → LMS: qayta topshirish muddatlari (sababli ariza
+// oralig'i yoki sozlama bo'yicha). Moodle muddatni o'zi hisoblamaydi.
+// Same X-SYNC-SECRET auth.
+Route::post('/otrabotka/deadlines', [\App\Http\Controllers\Api\OtrabotkaDeadlineController::class, 'deadlines'])
+    ->middleware('throttle:240,1')
+    ->name('api.moodle.otrabotka-deadlines');
+
 /*
 |--------------------------------------------------------------------------
 | Integratsiya API — /api/integration/... (tashqi saytlar, faqat o'qish)

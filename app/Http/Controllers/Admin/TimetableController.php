@@ -4098,7 +4098,7 @@ class TimetableController extends Controller
         $byFlow = [];
         $variantFirst = [];   // norm(spec|kurs|asosiy nom) => birinchi bo'lak nomi (soatlar uchun)
         if (!empty($cycleKey)) {
-            foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
+            foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'practice')->whereNotNull('group_name')) as $c) {
                 if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)
                     || ($scopeSubjects !== null && !$inMyScope($c))) {
                     continue;
@@ -4176,7 +4176,7 @@ class TimetableController extends Controller
 
         // Ma'ruza kartalarining rekvizitlari (o'qituvchi/xona) ham blokda ko'rinsin.
         if (!empty($cycleKey)) {
-            foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture')->get() as $c) {
+            foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')) as $c) {
                 if (!$inScope($c) || ($scopeSubjects !== null && !$inMyScope($c))) {
                     continue;
                 }
@@ -4332,7 +4332,7 @@ class TimetableController extends Controller
         $cycleCards = [];
         // Ichki jadvaldagi to'qnashuvlar (o'qituvchi yoki xona band): joylashuv o'zgarmaydi — blok qizil belgilanadi, karta
         // "joylashgan" hisobiga kirmaydi va panelda sababi bilan chiqadi.
-        $conflicts = $cycleLayer === 'internal' ? $this->cycleConflicts($board) : [];
+        $conflicts = $cycleLayer === 'internal' && !$request->attributes->get('cycle_no_conflicts') ? $this->cycleConflicts($board) : [];
         foreach ($groups as $g) {
             $rk = $rowKey($g);
             // Ichki jadvalda guruhcha qatori oqimning joylashuvidan foydalanadi. Guruhchaning
@@ -5857,6 +5857,7 @@ class TimetableController extends Controller
         foreach ($saved as $placement) {
             $savedByRow[(string) $placement->specialty_name . '|' . (int) $placement->course . '|' . (string) $placement->group_name][] = $placement;
         }
+        $planBlocks = $this->cyclePlanBlocks($board);
 
         $out = [];
         foreach ($rows as $g) {
@@ -5880,6 +5881,17 @@ class TimetableController extends Controller
                 $from = max(0, (int) $placement->start_index);
                 if ($from < $totalDays && $this->cycleEndIndex($workIndices, $from, max(1, (int) $g['subs'][$placement->subject_name])) !== null) {
                     $placed[$placement->subject_name] = $placement;
+                }
+            }
+            // Blok sanalari va kun soatlari — "Sikl jadvali" (ichki qatlam, cyclePlan) bloklaridan aynan: Mark, HEMIS va bandlik
+            // bitta manbadan (qator + fan bo'yicha; Mark'da blok yo'q bo'lsa — joylanmagan).
+            if ($planBlocks !== null) {
+                $placed = [];
+                foreach (array_keys($g['subs']) as $subject) {
+                    if ($b = $planBlocks[$rk . '|' . $subject] ?? null) {
+                        $placed[$subject] = (object) ['start_index' => $b['from'], 'lecture_slots' => $b['lecture_slots'], 'training_type' => 'practice',
+                            'subject_name' => $subject];
+                    }
                 }
             }
             $members = array_keys($g['members']);
@@ -6336,6 +6348,38 @@ class TimetableController extends Controller
             $out[] = [(string) $g['specialty'] . '|' . (int) $g['course'] . '|' . $parent, (string) $parent, $subjects];
         }
         $out[] = [$ownKey, (string) $g['name'], null];
+
+        return $out;
+    }
+
+    /**
+     * "Sikl jadvali" ichki qatlami (cyclePlan — Mark va HEMIS manbai) amaliy bloklari: "yo'nalish|kurs|qator|fan" => ['from', 'to',
+     * 'lecture_slots']. To'liq qamrov (sun'iy so'rov: qamrov filtrsiz), to'qnashuvlarsiz. Ichki chaqiriq ichida (cyclePlan → … →
+     * cycleInternalUnits) — null (o'z hisobi). Keshlanmaydi: bir so'rovda joylashuv/smena o'zgarishi mumkin (bandlik keshi —
+     * placedCycleUnits).
+     */
+    private function cyclePlanBlocks(TimetableBoard $board): ?array
+    {
+        if (request()->attributes->get('timetable.cycle_plan_running')) {
+            return null;
+        }
+        request()->attributes->set('timetable.cycle_plan_running', true);
+        try {
+            $req = Request::create('/', 'POST', ['layer' => 'internal']);
+            $req->attributes->set('cycle_no_conflicts', true);
+            $plan = $this->cyclePlan($req, $board)->getData(true);
+        } finally {
+            request()->attributes->remove('timetable.cycle_plan_running');
+        }
+        $out = [];
+        foreach ((array) ($plan['rows'] ?? []) as $row) {
+            foreach ((array) ($row['blocks'] ?? []) as $b) {
+                if (($b['type'] ?? 'practice') === 'practice') {
+                    $out[(string) $row['row_key'] . '|' . (string) $b['subject']] = ['from' => (int) $b['from'], 'to' => (int) $b['to'],
+                        'lecture_slots' => (array) ($b['lecture_slots'] ?? [])];
+                }
+            }
+        }
 
         return $out;
     }

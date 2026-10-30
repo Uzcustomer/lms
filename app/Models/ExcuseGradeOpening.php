@@ -50,6 +50,30 @@ class ExcuseGradeOpening extends Model
     }
 
     /**
+     * Sababli ariza ochgan NB katagi (baho qo'yilmagan absent yozuv) — YN ga
+     * yuborilgandan keyin ham o'qituvchi faqat shunday katakka baho qo'ya oladi.
+     */
+    public static function isOpenNbSlot(
+        string $studentHemisId,
+        string $subjectId,
+        string $semesterCode,
+        string $lessonDate,
+        string $lessonPairCode
+    ): bool {
+        return static::isDateOpenForStudent($studentHemisId, $subjectId, $lessonDate)
+            && \Illuminate\Support\Facades\DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereDate('lesson_date', $lessonDate)
+                ->where('lesson_pair_code', $lessonPairCode)
+                ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                ->where('reason', 'absent')
+                ->whereNull('grade')
+                ->exists();
+    }
+
+    /**
      * Berilgan talaba+fan uchun muayyan turdagi (jn/mt/oski/test) imtihon
      * sababli ravishda ochilganmi tekshirish.
      */

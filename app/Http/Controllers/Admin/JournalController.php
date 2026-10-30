@@ -6453,7 +6453,16 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked) {
+        // YN ga yuborilgan bo'lsa ham sababli ariza ochgan NB katagiga baho qo'yish mumkin
+        $ynExcusedNb = $ynLocked && ExcuseGradeOpening::isOpenNbSlot(
+            (string) $request->student_hemis_id,
+            (string) $request->subject_id,
+            (string) $request->semester_code,
+            \Carbon\Carbon::parse($request->lesson_date)->format('Y-m-d'),
+            (string) $request->lesson_pair_code
+        );
+
+        if ($ynLocked && !$ynExcusedNb) {
             return response()->json([
                 'success' => false,
                 'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -6474,7 +6483,9 @@ class JournalController extends Controller
             ->where('status', 'active')
             ->first();
 
-        if (!$opening || !$opening->isActive()) {
+        if ($ynExcusedNb) {
+            $isExcuseOpening = true;
+        } elseif (!$opening || !$opening->isActive()) {
             // Guruh bo'yicha ochilmagan — sababli ariza bo'yicha talaba-specific tekshirish
             $isExcuseOpening = ExcuseGradeOpening::isDateOpenForStudent(
                 $request->student_hemis_id,

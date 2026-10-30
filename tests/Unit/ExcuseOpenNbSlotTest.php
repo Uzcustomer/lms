@@ -78,3 +78,29 @@ it('ignores openings whose LMS excuse is no longer approved', function (?string 
 
     expect(ExcuseGradeOpening::isOpenNbSlot('77', '500', '11', '2026-10-22', '1'))->toBeFalse();
 })->with(['pending' => 'pending', 'rejected' => 'rejected', 'deleted' => null]);
+
+it('lets teachers grade excused cells only on levels set to teacher retake', function () {
+    Schema::create('semesters', function ($t) {
+        $t->id();
+        $t->string('code');
+        $t->string('level_code');
+    });
+    Schema::create('deadlines', function ($t) {
+        $t->id();
+        $t->string('level_code');
+        $t->integer('deadline_days')->default(3);
+        $t->boolean('retake_by_test_markazi')->default(false);
+        $t->boolean('retake_by_oqituvchi')->default(false);
+        $t->timestamps();
+    });
+    DB::table('semesters')->insert([['code' => '15', 'level_code' => '13'], ['code' => '17', 'level_code' => '14'], ['code' => '19', 'level_code' => '15']]);
+    DB::table('deadlines')->insert([
+        ['level_code' => '13', 'retake_by_test_markazi' => true, 'retake_by_oqituvchi' => false],
+        ['level_code' => '14', 'retake_by_test_markazi' => false, 'retake_by_oqituvchi' => true],
+    ]);
+
+    expect(\App\Models\Deadline::teacherCanRetake('15'))->toBeFalse()
+        ->and(\App\Models\Deadline::teacherCanRetake('17'))->toBeTrue()
+        ->and(\App\Models\Deadline::teacherCanRetake('19'))->toBeFalse()
+        ->and(\App\Models\Deadline::teacherCanRetake(null))->toBeFalse();
+});

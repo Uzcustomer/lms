@@ -2194,7 +2194,7 @@
                                                             }
                                                             $canEnterExcuseGrade = !$isDekan && (!$excuseDeadlinePassed || $isAdminRole);
                                                         @endphp
-                                                        @if($isExcuseOpenedForStudent && !$hasRetake && $isOqituvchi)
+                                                        @if($isExcuseOpenedForStudent && !$hasRetake && $isOqituvchi && $teacherCanEdit)
                                                             {{-- Sababli ariza asosida NB ga baho qo'yish --}}
                                                             <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-amber-50"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"

@@ -11554,27 +11554,17 @@ class JournalController extends Controller
 
     private function checkExcuseGradeRole(?string $semesterCode, bool $isTeacher)
     {
-        if (!$semesterCode) {
+        // O'qituvchi faqat sozlamada "O'qituvchi" belgilangan kurslarda (odatda 4–6) qo'yadi;
+        // daraja yoki sozlama topilmasa ham ruxsat yo'q
+        if (!$isTeacher || Deadline::teacherCanRetake($semesterCode)) {
             return true;
         }
 
-        $levelCode = DB::table('semesters')->where('code', $semesterCode)->value('level_code');
-        if (!$levelCode) {
-            return true;
+        $levelCode = $semesterCode ? DB::table('semesters')->where('code', $semesterCode)->value('level_code') : null;
+        if ($levelCode && Deadline::where('level_code', $levelCode)->value('retake_by_test_markazi')) {
+            return 'Bu kurs darajasida otrabotka bahosini faqat test markazi qo\'yishi mumkin (upload orqali).';
         }
 
-        $deadline = Deadline::where('level_code', $levelCode)->first();
-        if (!$deadline) {
-            return true;
-        }
-
-        if ($isTeacher && !$deadline->retake_by_oqituvchi) {
-            if ($deadline->retake_by_test_markazi) {
-                return 'Bu kurs darajasida otrabotka bahosini faqat test markazi qo\'yishi mumkin (upload orqali).';
-            }
-            return 'Bu kurs darajasida o\'qituvchiga sababli baho qo\'yish ruxsati yo\'q.';
-        }
-
-        return true;
+        return 'Bu kurs darajasida o\'qituvchiga sababli baho qo\'yish ruxsati yo\'q.';
     }
 }

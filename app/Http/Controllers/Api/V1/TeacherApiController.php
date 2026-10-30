@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
+use App\Models\Deadline;
 use App\Models\Group;
 use App\Models\ExcuseGradeOpening;
 use App\Models\LessonOpening;
@@ -797,7 +798,8 @@ class TeacherApiController extends Controller
         $excuseOpenedDatesPerStudent = [];
         try {
             ExcuseGradeOpening::expireOverdue();
-            $excuseOpenings = ExcuseGradeOpening::approvedExcuse()
+            // 1–3 kursda sababli bahoni test markazi yuklaydi — o'qituvchiga ochilmaydi
+            $excuseOpenings = !Deadline::teacherCanRetake((string) $semesterCode) ? collect() : ExcuseGradeOpening::approvedExcuse()
                 ->where('subject_id', $subjectId)
                 ->whereIn('student_hemis_id', $studentHemisIds)
                 ->where('status', 'active')
@@ -1055,6 +1057,14 @@ class TeacherApiController extends Controller
             if (!$isExcuseOpening) {
                 return response()->json(['success' => false, 'message' => 'Dars ochilmagan.'], 403);
             }
+        }
+
+        // Sababli baho: o'qituvchi faqat sozlamada ruxsat berilgan kurslarda (odatda 4–6)
+        if ($isExcuseOpening && !Deadline::teacherCanRetake((string) $request->semester_code)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu kurs darajasida sababli bahoni test markazi yuklaydi.',
+            ], 403);
         }
 
         // Check teacher assignment

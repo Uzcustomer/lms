@@ -107,6 +107,11 @@ class TimetableAssignmentAccess
                 ]);
             }
 
+            // Butun doska bo'yicha joylanmagan kartalar hisoboti (Excel) — o'quv bo'limiga ham.
+            if (in_array($activeRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true)) {
+                $allowed[] = 'admin.timetable.boards.unplaced-report';
+            }
+
             if (in_array($activeRole, $teacherAssignmentRoles, true)) {
                 $allowed = array_merge($allowed, [
                     'admin.timetable.teacher-units',

@@ -1139,22 +1139,64 @@ class VedomostSubmissionController extends Controller
     public function approve($id)
     {
         $this->checkAccess();
-        $v = VedomostSubmission::findOrFail($id);
+        [$ok, $message] = $this->approveSubmission(VedomostSubmission::findOrFail($id), request()->input('approve_reason'));
 
+        return back()->with($ok ? 'success' : 'error', $message);
+    }
+
+    /**
+     * Yig'ma oynadan bir nechta vedomostni tasdiqlash. Har biri alohida, odatdagi tasdiqlash
+     * sharti (approvalGate) bilan: AI muammo topgan yoki Mark qiymati o'zgartirilganlarda
+     * shu vedomost uchun yozilgan sabab majburiy; shart bajarilmaganlar o'tkazib yuboriladi.
+     */
+    public function bulkApprove(Request $request)
+    {
+        $this->checkAccess();
+        $ids = collect((array) $request->input('approve', []))->map(fn ($v) => (int) $v)->filter()->unique();
+        $reasons = (array) $request->input('reasons', []);
+        if ($ids->isEmpty()) {
+            return back()->with('error', 'Tasdiqlash uchun vedomost tanlanmagan.');
+        }
+
+        $done = 0;
+        $skipped = [];
+        foreach (VedomostSubmission::whereIn('id', $ids)->get() as $v) {
+            [$ok, $message] = $this->approveSubmission($v, $reasons[$v->id] ?? null);
+            if ($ok) {
+                $done++;
+            } else {
+                $skipped[] = ($v->group_name ?? '') . ' — ' . ($v->subject_name ?? '') . ': ' . $message;
+            }
+        }
+
+        $back = back();
+        if ($done) {
+            $back = $back->with('success', "{$done} ta vedomost tasdiqlandi.");
+        }
+        if ($skipped) {
+            $back = $back->with('error', count($skipped) . " ta tasdiqlanmadi:\n" . implode("\n", $skipped));
+        }
+
+        return $back;
+    }
+
+    /** @return array{0: bool, 1: string} */
+    private function approveSubmission(VedomostSubmission $v, ?string $reasonInput): array
+    {
         if (!in_array($v->status, [VedomostSubmission::STATUS_RECEIVED, VedomostSubmission::STATUS_REVIEWING], true)) {
-            return back()->with('error', "Bu vedomostni tasdiqlab bo'lmaydi.");
+            return [false, "Bu vedomostni tasdiqlab bo'lmaydi."];
         }
 
         // AI tekshiruv sharti (AI sozlamalarida yoqilgan bo'lsa).
         $gate = app(\App\Services\VedomostAiDispatcher::class)->approvalGate($v);
         if ($gate['blocked']) {
-            return back()->with('error', $gate['message']);
+            return [false, $gate['message']];
         }
         $overrideReason = null;
         if ($gate['needs_reason']) {
-            $overrideReason = trim((string) request()->input('approve_reason', ''));
+            $overrideReason = trim((string) $reasonInput);
             if (mb_strlen($overrideReason) < 5) {
-                return back()->with('error', $gate['message']);
+                return [false, $gate['message']];
             }
         }
 
@@ -1175,7 +1217,7 @@ class VedomostSubmissionController extends Controller
             : null);
         $this->notifier->notifyStatusChange($v);
 
-        return back()->with('success', 'Vedomost tasdiqlandi.');
+        return [true, 'Vedomost tasdiqlandi.'];
     }
 
     public function reject(Request $request, $id)

@@ -62,6 +62,61 @@ class VedomostAiReportController extends Controller
     }
 
     /**
+     * Yig'ma oyna: belgilangan bir nechta AI tekshirgan vedomost — faqat muammoli qatorlar,
+     * fan bo'yicha guruhlangan; muammosizlar bitta ro'yxatda. ids[] — index qatorlari
+     * («12,13,14» — guruhchalar yozuvlari); bitta PDF'li guruhchalar bir marta ko'rsatiladi.
+     */
+    public function review(Request $request)
+    {
+        $this->checkAccess(self::VIEW_ROLES);
+        $ids = collect((array) $request->input('ids', []))
+            ->flatMap(fn ($v) => explode(',', (string) $v))
+            ->map(fn ($v) => (int) $v)->filter()->unique()->values();
+        abort_if($ids->isEmpty(), 404, 'Vedomost tanlanmagan.');
+
+        $seen = [];
+        $items = [];
+        foreach (VedomostSubmission::whereIn('id', $ids)->get() as $v) {
+            if (isset($seen[$v->id])) {
+                continue;
+            }
+            $siblings = $this->siblings($v);
+            foreach ($siblings as $sib) {
+                $seen[$sib->id] = true;
+            }
+            $merged = $this->merge->aggregate($siblings)->first();
+            $result = $v->ai_result ?? [];
+            $checked = $v->ai_check_status === 'done' && ($result['version'] ?? 1) >= VedomostCheckEngine::VERSION;
+            $report = $checked ? $result['report'] : null;
+            $items[] = [
+                'v' => $v,
+                'merged' => $merged,
+                'checked' => $checked,
+                'report' => $report,
+                'verdict' => $checked ? $report['verdict'] : null,
+                'rows' => $checked ? array_values(array_filter($report['rows'], fn ($r) => ($r['status'] ?? 'ok') !== 'ok')) : [],
+                'extra' => $checked ? ($report['extra'] ?? []) : [],
+                'header' => $checked ? array_values(array_filter($report['header'] ?? [], fn ($h) => ($h['st'] ?? 'ok') !== 'ok')) : [],
+                'gate' => app(\App\Services\VedomostAiDispatcher::class)->approvalGate($v),
+                'canEdit' => $this->canEdit($v),
+                'approvable' => in_array($v->status, [VedomostSubmission::STATUS_RECEIVED, VedomostSubmission::STATUS_REVIEWING], true),
+            ];
+        }
+
+        // Tartib: muammolilar (XATO → tekshiring → noto'g'ri fayl) yuqorida, keyin tekshirilmaganlar, oxirida moslar.
+        $rank = ['wrong_document' => 0, 'issues' => 1, 'review' => 2, null => 3, 'ok' => 4];
+        usort($items, fn ($a, $b) => [$rank[$a['verdict']] ?? 3, $a['merged']->subject_name ?? '', $a['merged']->group_name ?? '']
+            <=> [$rank[$b['verdict']] ?? 3, $b['merged']->subject_name ?? '', $b['merged']->group_name ?? '']);
+
+        return view('admin.vedomost-submission.ai-review', [
+            'items' => $items,
+            'ids' => $ids->all(),
+            'labels' => $this->engine->fieldLabels(),
+            'canApprove' => in_array(session('active_role', ''), self::EDIT_ROLES, true),
+        ]);
+    }
+
+    /**
      * Tuzatishlarni saqlash. Kiruvchi: {rows:{r0:{jb_pct:"78"|null}}, header:{}, weights:{}, signatures:{}}.
      * null — tuzatishni bekor qilish (AI o'qigan asl qiymatga qaytish).
      */

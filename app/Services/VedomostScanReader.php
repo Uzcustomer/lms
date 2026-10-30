@@ -168,6 +168,8 @@ class VedomostScanReader
 
                 imagedestroy($img);
                 imagedestroy($head);
+                unset($readAgain, $again);
+                gc_collect_cycles();
             }
 
             return $this->combine($pages, ['mode' => 'images', 'pages' => $total, 'repaired' => $repaired], $expectedRows);
@@ -183,9 +185,11 @@ class VedomostScanReader
             $desc = $n > 1 ? sprintf('strip %d of %d (top to bottom)', $i + 1, $n) : 'the whole page';
             $send = $i === 0 ? $band : $this->stackHeader($head, $band);
             $got[] = $this->callImage($send, $pn, $total, $desc, $i > 0);
-            imagedestroy($band);
             if ($send !== $band) {
                 imagedestroy($send);
+            }
+            if ($band !== $img) {
+                imagedestroy($band);
             }
         }
 
@@ -714,7 +718,8 @@ class VedomostScanReader
         for ($i = 0; $i < $n; $i++) {
             $a = max(0.0, $i / $n - ($i > 0 ? $overlap / 2 : 0));
             $b = min(1.0, ($i + 1) / $n + ($i < $n - 1 ? $overlap / 2 : 0));
-            $out[] = $n === 1 ? $this->crop($img, 0, 0, $w, $h) : $this->crop($img, $x0, (int) ($h * $a), $cw, (int) ($h * ($b - $a)));
+            // Bitta bo'lak — sahifaning o'zi (nusxa olinmaydi: 200 dpi sahifa GD'da ~15 MB).
+            $out[] = $n === 1 ? $img : $this->crop($img, $x0, (int) ($h * $a), $cw, (int) ($h * ($b - $a)));
         }
 
         return $out;

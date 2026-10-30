@@ -904,6 +904,7 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkAccess();
         $v = VedomostSubmission::findOrFail($id);
+        app(\App\Services\VedomostAiDispatcher::class)->recoverStuck($v);
 
         if (!\App\Services\VedomostAiChecker::isConfigured()) {
             return back()->with('error', "AI tekshiruv sozlanmagan — AI sozlamalarida Gemini API kaliti qo'shilmagan.");
@@ -928,6 +929,7 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkViewAccess();
         $v = VedomostSubmission::findOrFail($id);
+        app(\App\Services\VedomostAiDispatcher::class)->recoverStuck($v);
 
         return response()->json([
             'status' => $v->ai_check_status,

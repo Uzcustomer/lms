@@ -80,3 +80,35 @@ test('eski formatdagi natijani qayta hisoblab bo\'lmaydi', function () {
     expect(fn () => app(VedomostAiChecker::class)->recompute(['version' => 1], []))
         ->toThrow(RuntimeException::class, 'eski formatda');
 });
+
+test('«tahlil qilmoqda»da qotib qolgan tekshiruv 20 daqiqadan keyin xato holatiga tiklanadi', function () {
+    foreach (glob(database_path('migrations/*vedomost_submissions*.php')) as $m) {
+        if (!str_contains($m, 'logs')) {
+            (include $m)->up();
+        }
+    }
+    Schema::create('groups', function ($t) {
+        $t->id();
+        $t->string('group_hemis_id');
+        $t->boolean('active')->default(true);
+    });
+    DB::table('groups')->insert([['group_hemis_id' => 'g1', 'active' => true], ['group_hemis_id' => 'g2', 'active' => true]]);
+    $mk = fn (string $name, $ago, string $g) => tap(VedomostSubmission::forceCreate([
+        'education_year' => '2026', 'semester_code' => '19', 'group_hemis_id' => $g, 'group_name' => $name,
+        'subject_id' => 's1', 'subject_name' => 'Xirurgik kasalliklar', 'closing_form' => 'oski_test', 'form_type' => '12',
+        'status' => 'reviewing', 'pdf_path' => 'a.pdf', 'ai_check_status' => 'running',
+    ]), function ($v) use ($ago) {
+        DB::table('vedomost_submissions')->where('id', $v->id)->update(['updated_at' => now()->subMinutes($ago)]);
+        $v->refresh();
+    });
+
+    $fresh = $mk('d1/d22-02a (rus)', 5, 'g1');
+    expect(app(VedomostAiDispatcher::class)->recoverStuck($fresh))->toBeFalse()
+        ->and($fresh->ai_check_status)->toBe('running');
+
+    $stuck = $mk('d1/d22-03a (rus)', 25, 'g2');
+    expect(app(VedomostAiDispatcher::class)->recoverStuck($stuck))->toBeTrue()
+        ->and($stuck->ai_check_status)->toBe('error')
+        ->and($stuck->ai_error)->toContain("to'xtab qoldi")
+        ->and(app(VedomostAiDispatcher::class)->approvalGate($stuck)['blocked'])->toBeFalse();
+});

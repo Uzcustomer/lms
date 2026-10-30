@@ -34,6 +34,10 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
 
     public function handle(VedomostAiChecker $checker, VedomostMergeService $merge): void
     {
+        // Sahifa rasmlari (200 dpi, GD) va Gemini so'rovlari standart 128 MB ga sig'maydi —
+        // xotira tugasa ishchi halok bo'lib, holat «tahlil qilmoqda»da qotib qolardi.
+        @ini_set('memory_limit', '1024M');
+
         $v = VedomostSubmission::find($this->submissionId);
         if (!$v) {
             return;
@@ -77,6 +81,28 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
                 'ai_error' => mb_substr($e->getMessage(), 0, 1000),
                 'ai_checked_at' => now(),
             ]);
+        }
+    }
+
+    /** Navbat ishchisi job'ni muvaffaqiyatsiz deb belgilasa (timeout va h.k.) — holat «xato» bo'ladi. */
+    public function failed(?\Throwable $e): void
+    {
+        $v = VedomostSubmission::find($this->submissionId);
+        if (!$v) {
+            return;
+        }
+        $siblings = app(VedomostMergeService::class)->siblingsOf($v);
+        if (!$siblings->contains('id', $v->id)) {
+            $siblings->push($v);
+        }
+        foreach ($siblings as $sib) {
+            if (in_array($sib->ai_check_status, ['queued', 'running'], true)) {
+                $sib->update([
+                    'ai_check_status' => 'error',
+                    'ai_error' => 'AI tekshiruvi tugamadi: ' . mb_substr($e?->getMessage() ?? "noma'lum xato", 0, 900),
+                    'ai_checked_at' => now(),
+                ]);
+            }
         }
     }
 }

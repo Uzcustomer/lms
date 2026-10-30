@@ -106,8 +106,38 @@ class VedomostAiDispatcher
      *
      * @return array{blocked: bool, needs_reason: bool, message: ?string}
      */
+    /**
+     * «Tahlil qilmoqda»da qotib qolgan tekshiruvni tiklaydi. Ishchi jarayon halok bo'lsa (masalan
+     * xotira tugasa) job o'z holatini yangilay olmaydi — holat abadiy «running» bo'lib qoladi.
+     * Job timeout'i 15 daqiqa, shuning uchun 20 daqiqadan eski «running» — aniq to'xtab qolgan.
+     */
+    public function recoverStuck(VedomostSubmission $v): bool
+    {
+        if ($v->ai_check_status !== 'running' || !$v->updated_at || $v->updated_at->gt(now()->subMinutes(self::STUCK_MINUTES))) {
+            return false;
+        }
+        $siblings = $this->merge->siblingsOf($v);
+        if (!$siblings->contains('id', $v->id)) {
+            $siblings->push($v);
+        }
+        foreach ($siblings as $sib) {
+            if ($sib->ai_check_status === 'running') {
+                $sib->update([
+                    'ai_check_status' => 'error',
+                    'ai_error' => "Tekshiruv to'xtab qoldi (ishchi jarayon " . self::STUCK_MINUTES . " daqiqada tugamadi). «Qayta tekshirish»ni bosing.",
+                ]);
+            }
+        }
+        $v->refresh();
+
+        return true;
+    }
+
+    public const STUCK_MINUTES = 20;
+
     public function approvalGate(VedomostSubmission $v): array
     {
+        $this->recoverStuck($v);
         $none = ['blocked' => false, 'needs_reason' => false, 'message' => null];
         if (!$this->settings->get('require_ai_before_approve') || !VedomostAiChecker::isConfigured() || !$v->pdf_path) {
             return $none;

@@ -7276,35 +7276,71 @@
 
             $('unplacedExportBtn').onclick = downloadUnplacedDiagnostics;
             // Butun doska bo'yicha joylanmagan kartalar hisoboti — tanlangan fakultetga qaramasdan, joriy qatlam (tashqi/ichki) bilan.
+            // Katta doskada bir necha daqiqa oladi (60 s da nginx 504) — fonda tayyorlanadi: oynada progress, tayyor bo'lsa o'zi yuklanadi.
+            // Oyna yopilsa ham hisobot tayyorlanaveradi; tugma qayta bosilsa server ishlab turgan shu hisobotni qaytaradi.
             if ($('unplacedReportBtn')) $('unplacedReportBtn').onclick = async function () {
                 if (!board) return;
-                const btn = this, old = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i> Tayyorlanmoqda…';
+                const url = BASE + '/boards/' + board.id + '/unplaced-report';
+                let m = $('unplacedReportModal');
+                if (!m) {
+                    m = document.createElement('div');
+                    m.id = 'unplacedReportModal';
+                    m.className = 'fixed inset-0 z-[9999] bg-black/40 flex items-start justify-center p-4';
+                    document.body.appendChild(m);
+                }
+                const run = {};   // shu ochilish; oyna yopilsa (yoki qayta ochilsa) eski so'rovlar to'xtaydi
+                m.run = run;
+                m.innerHTML = '<div class="bg-white rounded-xl shadow-xl w-full max-w-md p-4 text-[12px]">' +
+                    '<h3 class="font-semibold text-[14px] mb-2">Butun doska (Excel) — joylanmagan kartalar</h3>' +
+                    '<div id="urStep" class="mb-1 text-gray-700">Navbatga qo\'yilmoqda…</div>' +
+                    '<div class="w-full h-3 rounded bg-gray-200 overflow-hidden"><div id="urBar" class="h-3 bg-emerald-500 transition-all" style="width: 0%"></div></div>' +
+                    '<div id="urPct" class="mt-1 text-right text-gray-500">0%</div>' +
+                    '<div id="urErr" class="hidden mt-2 p-2 rounded border border-red-300 bg-red-50 text-red-700"></div>' +
+                    '<div class="mt-3 flex items-center justify-between gap-2"><span class="text-gray-500">Yopsangiz ham hisobot fonda tayyorlanaveradi.</span>' +
+                    '<button type="button" id="urClose" class="px-3 py-1 rounded border bg-white">Yopish</button></div></div>';
+                const alive = () => m.run === run && !run.closed;
+                $('urClose').onclick = () => { run.closed = true; m.remove(); };
+                const show = st => {
+                    const pct = Math.max(0, Math.min(100, Math.round(Number(st.percent) || 0)));
+                    $('urBar').style.width = pct + '%';
+                    $('urPct').textContent = pct + '%';
+                    $('urStep').textContent = st.step_label || st.message || '';
+                };
                 try {
-                    const params = new URLSearchParams({ layer: weeklyLayer, _: Date.now() });
-                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-report?' + params.toString(), {
-                        headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-                        cache: 'no-store',
-                    });
-                    if (!response.ok) {
-                        const error = await response.json().catch(() => ({}));
-                        throw new Error(error.error || error.message || 'HTTP ' + response.status);
+                    const started = await api(url, 'POST', { layer: weeklyLayer });
+                    const token = encodeURIComponent(started.token);
+                    let st = started.state || {}, misses = 0;
+                    while (alive()) {
+                        show(st);
+                        if (st.status === 'error') throw new Error(st.message || 'noma\'lum xato');
+                        if (st.status === 'done') {
+                            const r = await fetch(url + '/download?token=' + token, { cache: 'no-store' });
+                            if (!r.ok) {
+                                const j = await r.json().catch(() => ({}));
+                                throw new Error(j.error || j.message || 'HTTP ' + r.status);
+                            }
+                            const blob = await r.blob();
+                            const name = /filename="?([^";]+)"?/.exec(r.headers.get('Content-Disposition') || '');
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = name ? name[1] : 'joylanmagan_kartalar_butun_doska.xlsx';
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+                            if (alive()) $('urStep').textContent = 'Tayyor — fayl yuklab olindi.';
+                            return;
+                        }
+                        await new Promise(r => setTimeout(r, 1500));
+                        if (!alive()) return;
+                        // Holatni so'rash bir-ikki marta uzilsa (tarmoq) — kutamiz; ketma-ket 3 marta bo'lmasa — xato.
+                        try { st = await api(url + '/status?token=' + token); misses = 0; }
+                        catch (e) { if (++misses >= 3) throw e; }
                     }
-                    const blob = await response.blob();
-                    const name = /filename="?([^";]+)"?/.exec(response.headers.get('Content-Disposition') || '');
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = name ? name[1] : 'joylanmagan_kartalar_butun_doska.xlsx';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
                 } catch (e) {
-                    alert('Butun doska hisobotini yuklab bo\'lmadi: ' + e.message);
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = old;
+                    if (!alive()) return;
+                    $('urErr').textContent = 'Hisobotni tayyorlab bo\'lmadi: ' + e.message;
+                    $('urErr').classList.remove('hidden');
                 }
             };
 

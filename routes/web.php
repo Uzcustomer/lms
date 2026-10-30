@@ -1289,7 +1289,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::get('/boards/{board}/week-suggestions', [\App\Http\Controllers\Admin\TimetableController::class, 'weekSuggestions'])->name('boards.week-suggestions');
                 Route::get('/boards/{board}/unplaced-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedExport'])->name('boards.unplaced-export');
-                Route::get('/boards/{board}/unplaced-report', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedReport'])->name('boards.unplaced-report');
+                // Butun doska hisoboti fonda tayyorlanadi (BuildUnplacedReportJob): boshlash → holat → yuklab olish
+                Route::post('/boards/{board}/unplaced-report', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedReportStart'])->name('boards.unplaced-report');
+                Route::get('/boards/{board}/unplaced-report/status', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedReportStatus'])->name('boards.unplaced-report.status');
+                Route::get('/boards/{board}/unplaced-report/download', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedReportDownload'])->name('boards.unplaced-report.download');
                 Route::post('/boards/{board}/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'saveGrid'])->name('boards.grid');
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
                 Route::post('/cards/{card}/week-override', [\App\Http\Controllers\Admin\TimetableController::class, 'weekOverride'])->name('cards.week-override');

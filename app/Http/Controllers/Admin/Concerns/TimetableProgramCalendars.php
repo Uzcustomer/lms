@@ -18,6 +18,15 @@ trait TimetableProgramCalendars
 
     private ?array $calendarPrograms = null;
 
+    /** cardCurriculumId: "fakultet|guruhlar" => o'quv reja (calendarGroups kabi so'rov davomida o'zgarmaydi). */
+    private array $calendarCurriculumMemo = [];
+
+    /** gridFor natijalari (calendarGridCache bilan birga tozalanadi). */
+    private array $calendarGridForMemo = [];
+
+    /** Sana => [ISO hafta kuni, o'sha haftaning dushanbasi] — to'qnashuv tekshiruvida har qo'shni karta uchun qayta parse qilinmasin. */
+    private array $calendarDayMemo = [];
+
     private function calendarCurriculum(string $group, ?string $faculty): int
     {
         if ($this->calendarGroups === null) {
@@ -60,16 +69,19 @@ trait TimetableProgramCalendars
             $groups = [is_array($card) ? ($card['group_name'] ?? '') : ($card->group_name ?? '')];
         }
         $faculty = is_array($card) ? ($card['faculty_name'] ?? null) : ($card->faculty_name ?? null);
-        $ids = [];
-        foreach ($groups as $group) {
-            $id = $this->calendarCurriculum((string) $group, $faculty);
-            if (! $id) {
-                return 0;
-            }
-            $ids[$id] = true;
-        }
 
-        return count($ids) === 1 ? (int) array_key_first($ids) : 0;
+        return $this->calendarCurriculumMemo[$faculty.'|'.json_encode($groups)] ??= (function () use ($groups, $faculty): int {
+            $ids = [];
+            foreach ($groups as $group) {
+                $id = $this->calendarCurriculum((string) $group, $faculty);
+                if (! $id) {
+                    return 0;
+                }
+                $ids[$id] = true;
+            }
+
+            return count($ids) === 1 ? (int) array_key_first($ids) : 0;
+        })();
     }
 
     private function calendarSetting(TimetableBoard $board, ?string $faculty, string $specialty, int $course, int $curriculum = 0): ?object
@@ -129,12 +141,16 @@ trait TimetableProgramCalendars
                 $this->calendarWeekCache[$key][$monday->toDateString()] = $i + 1;
             }
         }
-        $day = \Illuminate\Support\Carbon::parse($date);
-        if ($day->dayOfWeekIso > $grid['days']) {
+        [$dow, $monday] = $this->calendarDayMemo[$date] ??= (function () use ($date): array {
+            $day = \Illuminate\Support\Carbon::parse($date);
+
+            return [$day->dayOfWeekIso, $day->startOfWeek()->toDateString()];
+        })();
+        if ($dow > $grid['days']) {
             return null;
         }
 
-        return $this->calendarWeekCache[$key][$day->startOfWeek()->toDateString()] ?? null;
+        return $this->calendarWeekCache[$key][$monday] ?? null;
     }
 
     private function sameCycleCapacityPool($a, $b): bool

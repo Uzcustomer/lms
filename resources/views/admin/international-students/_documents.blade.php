@@ -58,14 +58,18 @@
 <div class="docs">
     {{-- PASPORT --}}
     <figure class="doc-wrap">
+        @php
+            // Yorliq: davlat tilida / inglizcha — haqiqiy pasport ma'lumotlar sahifasidek
+            $pl = function (string $key) use ($pt) {
+                $en = \App\Support\PassportTheme::LABELS_EN[$key];
+                $native = $pt['labels'][$key] ?? null;
+                $dir = !empty($pt['rtl']) ? ' dir="rtl"' : '';
+                return '<span class="doc-l">' . ($native ? '<bdi' . $dir . '>' . e($native) . '</bdi> / ' : '') . e($en) . '</span>';
+            };
+        @endphp
         <div class="doc doc-passport" style="{{ $ptStyle }}">
-            <span class="doc-spine" aria-hidden="true"></span>
             @if($countryFlag)<img src="{{ $countryFlag }}" alt="" class="doc-watermark" aria-hidden="true">@endif
             <div class="doc-band">
-                <div>
-                    <div class="doc-kicker">@if($pt['word'] !== 'PASSPORT')<span>{{ $pt['word'] }}</span> · @endif PASSPORT</div>
-                    <div class="doc-band-sub">Tur / Type <b>P</b> &nbsp; Davlat kodi / Code <b>{{ $nationality ?? '—' }}</b></div>
-                </div>
                 <div class="doc-country">
                     @if($countryFlag)<img src="{{ $countryFlag }}" alt="" class="doc-flag">@endif
                     <span>
@@ -73,20 +77,30 @@
                         @if($pt['en'])<small>{{ $pt['en'] }}</small>@endif
                     </span>
                 </div>
+                <div class="doc-kicker">@if($pt['word'] !== 'PASSPORT')<span>{{ $pt['word'] }}</span> · @endif PASSPORT</div>
             </div>
             <div class="doc-passport-body">
                 {!! $photoHtml('doc-photo') !!}
-                <div class="doc-fields doc-fields-3">
-                    <div class="doc-f doc-f-wide"><span class="doc-l">Familiyasi / Surname</span><span class="doc-v">{{ $v($surname) }}</span></div>
-                    <div class="doc-f doc-f-num"><span class="doc-l">Pasport № / Passport No.</span><span class="doc-v doc-v-no">{{ $v($visaInfo->passport_number) }}</span></div>
-                    <div class="doc-f doc-f-wide"><span class="doc-l">Ismi / Given names</span><span class="doc-v">{{ $v($givenFull) }}</span></div>
-                    <div class="doc-f"><span class="doc-l">Jinsi / Sex</span><span class="doc-v">{{ $sexCode }}</span></div>
-                    <div class="doc-f"><span class="doc-l">Fuqaroligi / Nationality</span><span class="doc-v">{{ $v($student->country_name) }}</span></div>
-                    <div class="doc-f"><span class="doc-l">Tug'ilgan sanasi / Date of birth</span><span class="doc-v">{{ $d($birth) }}</span></div>
-                    <div class="doc-f"><span class="doc-l">Tug'ilgan joyi / Place of birth</span><span class="doc-v">{{ $v($birthPlace) }}</span></div>
-                    <div class="doc-f"><span class="doc-l">Berilgan sanasi / Date of issue</span><span class="doc-v">{{ $d($visaInfo->passport_issued_date) }}</span></div>
-                    <div class="doc-f"><span class="doc-l">Amal qilish muddati / Date of expiry</span><span class="doc-v">{{ $d($visaInfo->passport_expiry_date) }}</span></div>
-                    <div class="doc-f"><span class="doc-l">Bergan organ / Authority</span><span class="doc-v">{{ $v($visaInfo->passport_issued_place) }}</span></div>
+                {{-- ICAO 9303 ma'lumotlar sahifasi tartibi --}}
+                <div class="doc-pp">
+                    <div class="doc-pp-row doc-pp-top">
+                        <div class="doc-f">{!! $pl('type') !!}<span class="doc-v">P</span></div>
+                        <div class="doc-f">{!! $pl('code') !!}<span class="doc-v">{{ $nationality ?? '—' }}</span></div>
+                        <div class="doc-f doc-f-num">{!! $pl('no') !!}<span class="doc-v doc-v-no">{{ $v($visaInfo->passport_number) }}</span></div>
+                    </div>
+                    <div class="doc-f">{!! $pl('surname') !!}<span class="doc-v">{{ $v($surname) }}</span></div>
+                    <div class="doc-f">{!! $pl('given') !!}<span class="doc-v">{{ $v($givenFull) }}</span></div>
+                    <div class="doc-f">{!! $pl('nationality') !!}<span class="doc-v">{{ $v($student->country_name) }}</span></div>
+                    <div class="doc-pp-row">
+                        <div class="doc-f">{!! $pl('dob') !!}<span class="doc-v">{{ $d($birth) }}</span></div>
+                        <div class="doc-f">{!! $pl('sex') !!}<span class="doc-v">{{ $sexCode }}</span></div>
+                    </div>
+                    <div class="doc-f">{!! $pl('pob') !!}<span class="doc-v">{{ $v($birthPlace) }}</span></div>
+                    <div class="doc-pp-row">
+                        <div class="doc-f">{!! $pl('issue') !!}<span class="doc-v">{{ $d($visaInfo->passport_issued_date) }}</span></div>
+                        <div class="doc-f">{!! $pl('expiry') !!}<span class="doc-v">{{ $d($visaInfo->passport_expiry_date) }}</span></div>
+                    </div>
+                    <div class="doc-f">{!! $pl('authority') !!}<span class="doc-v">{{ $v($visaInfo->passport_issued_place) }}</span></div>
                 </div>
             </div>
             <div class="doc-mrz" aria-label="Mashinada o'qiladigan zona">@foreach(\App\Support\Mrz::passport($surname, $givenFull, $nationality, $visaInfo->passport_number, $birth, $sex, $visaInfo->passport_expiry_date) as $line)<div>{{ $line }}</div>@endforeach</div>
@@ -216,12 +230,11 @@
 
 <style>
     /* Ikki ustun: pasport | viza (yoki guvohnoma); blanka va izoh to'liq qatorda */
-    .docs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; align-items: stretch; }
+    /* Kartochkalar qo'shnisiga qarab cho'zilmaydi (start); pasport va viza qog'oz nisbatini saqlaydi (88×125 mm) */
+    .docs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; align-items: start; }
     .doc-span { grid-column: 1 / -1; }
-    /* Bir qatordagi kartochkalar teng balandlikda: MRZ va pastki qator bir chiziqda */
-    .doc-wrap { margin: 0; min-width: 0; container-type: inline-size; display: flex; flex-direction: column; }
-    .doc-wrap > .doc, .doc-wrap > .doc-idpair { flex: 1; }
-    .doc-passport, .doc-visa { display: flex; flex-direction: column; }
+    .doc-wrap { margin: 0; min-width: 0; container-type: inline-size; }
+    .doc-passport, .doc-visa { display: flex; flex-direction: column; min-height: calc(100cqi * .70); }
     .doc-passport > .doc-mrz, .doc-visa > .doc-mrz { margin-top: auto; }
     .doc { position: relative; overflow: hidden; border-radius: 14px; color: #1f2937;
            border: 1px solid rgba(15, 23, 42, .10);
@@ -253,22 +266,23 @@
 
     .doc-band { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 10px; }
     .doc-kicker { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-accent); }
-    .doc-band-sub { margin-top: 2px; font-size: 10.5px; color: #64748b; letter-spacing: .03em; }
-    .doc-band-sub b { color: #0f172a; font-weight: 600; }
     .doc-country { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--ink-accent); text-align: right; }
     .doc-country small { display: block; font-size: 9.5px; font-weight: 500; letter-spacing: .06em; color: #64748b; }
 
     /* Pasport */
     /* Pasport — ranglar davlat mavzusidan (PassportTheme) */
-    .doc-passport { background: linear-gradient(135deg, var(--p1) 0%, var(--p2) 55%, var(--p3) 100%); padding-left: 10px; }
+    .doc-passport { background: linear-gradient(135deg, var(--p1) 0%, var(--p2) 55%, var(--p3) 100%); }
     .doc-passport .doc-band { border-bottom: 1px solid color-mix(in srgb, var(--ink-accent) 16%, transparent); }
-    .doc-passport-body { display: flex; gap: 16px; padding: 12px 18px 12px; }
-    .doc-passport .doc-fields { gap: 7px 14px; }
+    .doc-passport-body { display: flex; gap: 18px; padding: 12px 20px 12px; }
     .doc-passport .doc-l { font-size: 8.5px; }
-    .doc-passport .doc-v { font-size: 13px; }
-    .doc-passport .doc-photo { width: 96px; height: 124px; }
-    .doc > .doc-spine { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: var(--cover);
-                        box-shadow: inset -2px 0 0 rgba(0, 0, 0, .18); }
+    .doc-passport .doc-l bdi { color: color-mix(in srgb, var(--ink-accent) 75%, #64748b); }
+    .doc-passport .doc-v { margin-top: 1px; font-size: 13px; }
+    .doc-passport .doc-photo { width: 104px; height: 134px; }
+    .doc-pp { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .doc-pp-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: end; }
+    .doc-pp-top { grid-template-columns: auto auto minmax(0, 1fr); gap: 22px; }
+    .doc-pp .doc-f-num { text-align: right; }
+    .doc-pp .doc-f-num .doc-v { font-size: 16px; }
     /* Bayroq suv belgisi: chetlari so'nadi, matn ostida xira dog' bo'lib qoladi */
     .doc > .doc-watermark { position: absolute; right: 4%; top: 26%; width: 46%; aspect-ratio: 4 / 3; object-fit: cover; opacity: .11;
                             filter: saturate(.55) blur(.3px); pointer-events: none;
@@ -355,6 +369,8 @@
     @media (max-width: 720px) {
         .doc-passport-body { flex-direction: column; }
         .doc-passport .doc-photo { width: 84px; height: 108px; }
+        .doc-pp-top { grid-template-columns: auto minmax(0, 1fr); }
+        .doc-pp-top .doc-f-num { grid-column: 1 / -1; text-align: left; }
         .doc-band { flex-wrap: wrap; }
     }
 </style>

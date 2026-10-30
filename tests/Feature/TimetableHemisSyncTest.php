@@ -1193,6 +1193,30 @@ it('sikl: ikki guruhcha bitta o\'qituvchida kesishgan davrda — HEMIS amali to\
     }
 });
 
+it('sikl: guruhcha smenasi (IV para) — bitta o\'qituvchi ikki guruhchada to\'siq emas; HEMIS amaliy darslari smena vaqtidan, ma\'ruza oqim vaqtida', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsCycleTwoSubgroups($s, true);
+    \App\Models\TimetableCyclePlacement::where('board_id', $s['board']->id)->update(['lecture_slots' => json_encode(['shift_g' => ['g5-01b' => 7]])]);
+    expect(app(\App\Http\Controllers\Admin\TimetableController::class)->internalConflicts($s['board'])['count'])->toBe(0);
+
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $slot = (new ReflectionMethod(\App\Http\Controllers\Admin\TimetableController::class, 'hemisSlotTimes'))
+        ->invoke(app(\App\Http\Controllers\Admin\TimetableController::class), $s['board']);
+    $acts = fn (string $group) => collect(collect($res['groups'])->firstWhere('group', $group)['units'][0]['actions']);
+    // KTR: 1-kun ma'ruza 2 + amaliy 4, 2-kun amaliy 6 soat (HEMIS'da har para alohida dars). 01a — oqim vaqtida (amaliy
+    // ma'ruzadan keyin: 3–6 va 1–6-soatlar), 01b — amaliy 7-soatdan (7–10 va 7–12-soatlar, IV–VI para).
+    expect($acts('g5-01a')->where('code', '13')->pluck('start')->unique()->sort()->values()->all())->toBe([$slot[1][0], $slot[3][0], $slot[5][0]])
+        ->and($acts('g5-01b')->where('code', '13')->pluck('start')->unique()->sort()->values()->all())->toBe([$slot[7][0], $slot[9][0], $slot[11][0]])
+        ->and($acts('g5-01b')->where('code', '11')->pluck('start')->unique()->values()->all())->toBe(['08:30'])
+        ->and($acts('g5-01a')->pluck('blocked')->flatten()->all())->toBe([])
+        ->and($acts('g5-01b')->pluck('blocked')->flatten()->all())->toBe([])
+        ->and($acts('g5-01b')->where('code', '13')->pluck('employee_name')->unique()->values()->all())->toBe(['USTOZ']);
+});
+
 it('xona band — to\'siq bartaraf etiladi: «Kafedra mudiri xonasi» qo\'yiladi, o\'qituvchi o\'zgarmaydi', function () {
     $s = hsSetup();
     hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan

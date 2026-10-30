@@ -323,3 +323,51 @@ it('Excel: butun doska hisobotining Sikl varag\'ida to\'qnashuvli blok sababi bi
             ['d22-05c', 'Joylanmagan'],
         ]);
 });
+
+it('sikl xonasi: sig\'im bir vaqtdagi eng yuqori yuklama bo\'yicha; "A + B" umumiy karta talabalari bir marta', function () {
+    // Codex: bitta uzun dars (1–6-soat) bir-biriga kesishmaydigan ikki qisqa dars (1–2 va 3–6) bilan bir xonada — har vaqtda 20 talaba
+    $room = Auditorium::create(['code' => 'R', 'name' => '305', 'volume' => 20, 'active' => true]);
+    $other = fn (string $c) => Auditorium::create(['code' => $c, 'name' => $c . '-xona', 'volume' => 50, 'active' => true]);
+    [$x1, $x2, $x3] = [$other('X1'), $other('X2'), $other('X3')];
+    $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 15, 'settings' => ['semester_start' => '2026-09-14']]);
+    TimetableSubjectSetting::create(['board_id' => $board->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Klinik farmakologiya', 'mode' => 'cycle', 'cycle_days' => 5]);
+    // Kunlik reja: 1–2-kun — 2 soat ma'ruza + 4 soat amaliy, keyin 6 soat amaliy
+    $mc = \Illuminate\Support\Facades\DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'x', 'specialty_name' => 'davolash ishi',
+        'plan_year' => '2022/2023', 'level_code' => '15', 'created_at' => now(), 'updated_at' => now()]);
+    \Illuminate\Support\Facades\DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Klinik farmakologiya',
+        'semester' => 9, 'lecture' => 4, 'practice' => 26, 'created_at' => now(), 'updated_at' => now()]);
+    $card = fn (string $oqim, string $type, array $groups, $room) => TimetableCard::create(['board_id' => $board->id, 'faculty_name' => 'F1',
+        'specialty_name' => 'davolash ishi', 'course' => 5, 'oqim_label' => $oqim, 'lang' => 'uz', 'students' => 10, 'training_type' => $type,
+        'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Klinik farmakologiya', 'kafedra_name' => 'K', 'auditorium_code' => $room->code,
+        'auditorium_name' => $room->name] + ($type === 'lecture' ? ['group_names' => $groups] : ['group_name' => $groups[0]]));
+    // 16.09 da: 05a (1-oqim) 1-kuni — ma'ruzasi R da (1–2); 06a (2-oqim) 1-kuni — amaliyoti R da (3–6); 07a (3-oqim) 3-kuni — amaliyoti R da (1–6)
+    $card('1-oqim', 'lecture', ['d22-05a'], $room);
+    $card('1-oqim', 'practice', ['d22-05a'], $x1);
+    $card('2-oqim', 'lecture', ['d22-06a'], $x2);
+    $card('2-oqim', 'practice', ['d22-06a'], $room);
+    $card('3-oqim', 'lecture', ['d22-07a'], $x3);
+    $c7 = $card('3-oqim', 'practice', ['d22-07a'], $room);
+    foreach (['F1 / 1-oqim' => 2, 'F1 / 2-oqim' => 2, 'F1 / 3-oqim' => 0] as $row => $from) {
+        TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+            'group_name' => $row, 'subject_name' => 'Klinik farmakologiya', 'start_index' => $from, 'training_type' => 'practice']);
+    }
+    expect(icConflicts($board))->toBe([]);
+    // Biriktirishda ham: 07a ga R xonasini qayta biriktirish — ogohlantirishsiz (eng yuqori yuklama 10 + 10 = 20)
+    $c7->update(['auditorium_code' => null, 'auditorium_name' => null]);
+    $admin = icTeacher('ADMIN', 'admin');
+    test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.assign-room', $board), ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+            'subject_name' => 'Klinik farmakologiya', 'training_type' => 'practice', 'group_name' => 'd22-07a', 'auditorium_code' => 'R'])->assertOk();
+    // Sig'im 19 bo'lsa — haqiqatan oshadi
+    $room->update(['volume' => 19]);
+    expect(icConflicts($board))->toHaveKey('davolash ishi|5|d22-07a|Klinik farmakologiya|practice');
+
+    // "A + B" umumiy amaliy kartasi (20 talaba) 25 o'rinli xonada — bitta dars, 40 emas
+    $big = Auditorium::create(['code' => 'B25', 'name' => '25-xona', 'volume' => 25, 'active' => true]);
+    $s = icSetup(['d23-01a + d23-01b' => [icTeacher('U'), $big, 20]], ['F1 / 1-oqim' => 0]);
+    expect(icConflicts($s['board']))->toBe([]);
+    $big->update(['volume' => 15]);
+    expect(array_keys(icConflicts($s['board'])))->toBe(['davolash ishi|5|d23-01a|Klinik farmakologiya|practice', 'davolash ishi|5|d23-01b|Klinik farmakologiya|practice']);
+});

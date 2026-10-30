@@ -27,9 +27,6 @@ trait TimetableProgramCalendars
     /** Sana => [ISO hafta kuni, o'sha haftaning dushanbasi] — to'qnashuv tekshiruvida har qo'shni karta uchun qayta parse qilinmasin. */
     private array $calendarDayMemo = [];
 
-    /** Doska => cycleBusyByDate (sikl darslari sana bo'yicha) — weeklyCycleWarnings har tekshiruvda qayta yuklamasin. */
-    private array $cycleBusyMemo = [];
-
     private function calendarCurriculum(string $group, ?string $faculty): int
     {
         if ($this->calendarGroups === null) {

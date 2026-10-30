@@ -91,6 +91,12 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     await tick(); await tick();
     assert.equal(calls.length, 2);
     assert.equal(ctx.cardConflict(a), null);
+    // Faqat davomiylik o'zgarsa ham (karta qisqartirildi) — qayta so'raladi
+    a.len_half = 1;
+    answers.push({ weekly: {} });
+    ctx.refreshWeeklyConflicts();
+    await tick(); await tick();
+    assert.equal(calls.length, 3, 'davomiylik o\'zgarganda to\'qnashuvlar qayta so\'ralmadi');
 
     // 4) O'qituvchi biriktirish: band o'qituvchilar ro'yxatda kulrang (sababi title'da).
     el('asgTeacher').options = [{ value: '5', style: {}, dataset: {} }, { value: '6', style: {}, dataset: {} }];

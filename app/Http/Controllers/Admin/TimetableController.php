@@ -5834,7 +5834,11 @@ class TimetableController extends Controller
                 }
                 foreach ($lessons as [$card, $from, $to]) {
                     $roomName = (string) ($card->auditorium_name ?: ($roomNames[$card->auditorium_code] ?? ''));
+                    // Xona yuklamasi: amaliy karta (umumiy "A + B" ham) — bitta dars, talabalari bir marta; oqim ma'ruzasi —
+                    // har guruhcha o'z talabalari bilan.
+                    $lecture = $card->training_type === 'lecture';
                     $out[] = ['kind' => 'cycle', 'unit' => $ui, 'lesson' => (int) $card->id, 'card' => (int) $card->id, 'from' => $from, 'to' => $to, 'date' => $date,
+                        'load_key' => $lecture ? 'l' . $card->id . '|' . $ui : 'c' . $card->id, 'load' => $lecture ? $students : (int) $card->students,
                         'students' => $students, 'teacher_id' => $card->teacher_id ? (int) $card->teacher_id : null, 'teacher' => $card->teacher_name,
                         'room' => $card->auditorium_code ?: null, 'room_name' => $roomName ?: (string) $card->auditorium_code,
                         // "Kafedra mudiri xonasi" va umumiy (raqamsiz) xonalar band hisoblanmaydi.
@@ -5897,19 +5901,25 @@ class TimetableController extends Controller
                     }
                     continue;
                 }
-                // Xona: bir vaqtdagi guruhchalar (talabalar soni) sig'imdan oshsa; sig'im/talabalar noma'lum — bittadan ko'p dars.
-                $byUnit = [];
-                foreach ($over as $o) {
-                    $byUnit[$o['unit']] = $o['students'];
-                }
+                // Xona: bir vaqtda turgan guruhchalar talabalari sig'imdan oshsa (eng yuqori yuklama — shu dars vaqtidagi har bir
+                // boshlanish nuqtasida); sig'im/talabalar noma'lum — bir vaqtda bittadan ko'p dars.
                 $vol = (int) ($rooms[$id] ?? 0);
-                $known = $vol > 0 && !in_array(0, $byUnit, true);
-                $lessons = count(array_unique(array_column($over, 'lesson')));
-                $overload = $known ? array_sum($byUnit) > $vol : $lessons > 1;
-                if ($overload && count($byUnit) > 1) {
-                    $others = array_values(array_diff(array_keys($byUnit), [$e['unit']]));
-                    $add($e['unit'], 'room', (string) $e['room_name'], $others, $date, $time,
-                        $known ? ' (' . $vol . ' o\'rin, ' . array_sum($byUnit) . ' talaba)' : '');
+                $worst = null;   // [talabalar, guruhchalar, sig'im ma'lum]
+                foreach (array_unique(array_column($over, 'from')) as $t) {
+                    $t = max($t, $e['from']);
+                    $at = array_filter($over, fn ($o) => $o['from'] <= $t && $t < $o['to']);
+                    $atUnits = array_values(array_unique(array_column($at, 'unit')));
+                    $loads = array_column($at, 'load', 'load_key');
+                    $known = $vol > 0 && !in_array(0, $loads, true);
+                    $sum = array_sum($loads);
+                    if (count($atUnits) > 1 && ($known ? $sum > $vol : count(array_unique(array_column($at, 'lesson'))) > 1)
+                        && ($worst === null || $sum > $worst[0])) {
+                        $worst = [$sum, $atUnits, $known];
+                    }
+                }
+                if ($worst) {
+                    $add($e['unit'], 'room', (string) $e['room_name'], array_values(array_diff($worst[1], [$e['unit']])), $date, $time,
+                        $worst[2] ? ' (' . $vol . ' o\'rin, ' . $worst[0] . ' talaba)' : '');
                 }
             }
         }
@@ -5991,6 +6001,7 @@ class TimetableController extends Controller
                 $room = $o?->auditorium_code ?: $c->auditorium_code;
                 $roomName = (string) ($o?->auditorium_code ? $o->auditorium_name : $c->auditorium_name);
                 $out[] = ['kind' => 'weekly', 'card' => (int) $id, 'week' => $w, 'date' => $date, 'day' => $d, 'pair' => $p, 'sh' => $sh,
+                    'load_key' => 'w' . $id, 'load' => (int) $c->students,
                     'from' => $p, 'to' => $p + $c->lenHalf(), 'teacher_id' => $c->teacher_id ? (int) $c->teacher_id : null,
                     'room' => $room ?: null, 'room_name' => $roomName ?: (string) $room,
                     'free_room' => $this->isSharedRoom($roomName) || preg_match('/kafedra\s+mudiri/iu', $roomName) === 1,
@@ -6078,22 +6089,30 @@ class TimetableController extends Controller
             }
         }
         $hits = ['teachers' => [], 'rooms' => []];
-        $roomLoad = [];   // xona => "sana|soat" => [boshqa dars => talabalar]
+        $peak = [];       // xona => boshqa darslarning bir vaqtdagi eng yuqori yuklamasi (talabalar; bitta karta — bir marta)
+        $unknown = [];    // xona => talabalar soni noma'lum dars bor
         $exclusive = [];  // haftalik darsli xona: sig'imdan qat'i nazar band (haftalik jadvalda xona — bitta dars uchun)
         foreach ($mine as $m) {
-            foreach ($others[$m['date']] ?? [] as $o) {
-                if ($o['from'] >= $m['to'] || $m['from'] >= $o['to']) {
-                    continue;
-                }
+            $over = array_filter($others[$m['date']] ?? [], fn ($o) => $o['from'] < $m['to'] && $m['from'] < $o['to']);
+            $inRoom = [];
+            foreach ($over as $o) {
                 if ($o['teacher_id']) {
                     $hits['teachers'][$o['teacher_id']][$o['label']][$m['date']] = true;
                 }
                 if ($o['room'] && !$o['free_room']) {
                     $hits['rooms'][$o['room']][$o['label']][$m['date']] = true;
-                    $roomLoad[$o['room']][$m['date'] . '|' . $m['from']][$o['label']] = $o['students'];
+                    $inRoom[$o['room']][] = $o;
                     if ($m['kind'] === 'weekly' || $o['kind'] === 'weekly') {
                         $exclusive[$o['room']] = true;
                     }
+                }
+            }
+            foreach ($inRoom as $code => $list) {
+                foreach (array_unique(array_column($list, 'from')) as $t) {
+                    $t = max($t, $m['from']);
+                    $loads = array_column(array_filter($list, fn ($o) => $o['from'] <= $t && $t < $o['to']), 'load', 'load_key');
+                    $peak[$code] = max($peak[$code] ?? 0, array_sum($loads));
+                    $unknown[$code] = ($unknown[$code] ?? false) || in_array(0, $loads, true);
                 }
             }
         }
@@ -6101,8 +6120,7 @@ class TimetableController extends Controller
         $mineStudents = (int) $unitCards->max('students');
         foreach (array_keys($hits['rooms']) as $code) {
             $vol = (int) ($volumes[$code] ?? 0);
-            $over = isset($exclusive[$code]) || $vol <= 0 || $mineStudents <= 0
-                || (bool) array_filter($roomLoad[$code], fn ($load) => in_array(0, $load, true) || array_sum($load) + $mineStudents > $vol);
+            $over = isset($exclusive[$code]) || $vol <= 0 || $mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol;
             if (!$over) {
                 unset($hits['rooms'][$code]);
             }
@@ -8349,8 +8367,13 @@ class TimetableController extends Controller
         }
         $board = $card->board;
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1);
-        // Sikl bandligi so'rov davomida bir marta yuklanadi (har tekshiruvda emas).
-        $busy = ($this->cycleBusyMemo[$board->id] ??= $this->cycleBusyByDate($board))[$date->toDateString()] ?? [];
+        // Sikl bandligi so'rov davomida bir marta yuklanadi (har tekshiruvda emas). Kesh so'rovning o'zida — kontroller obyekti
+        // marshrutda keyingi so'rovlarga ham qolishi mumkin, bandlik esa so'rovlar orasida o'zgaradi.
+        $memoKey = 'timetable.cycle_busy.' . $board->id;
+        if (!request()->attributes->has($memoKey)) {
+            request()->attributes->set($memoKey, $this->cycleBusyByDate($board));
+        }
+        $busy = request()->attributes->get($memoKey)[$date->toDateString()] ?? [];
         $from = $pair;
         $to = $pair + $card->lenHalf();
         $out = [];

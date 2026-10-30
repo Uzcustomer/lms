@@ -7289,7 +7289,7 @@
             let conflictTimer = null;
             function conflictSignature() {
                 if (!board) return '';
-                return board.id + '#' + allCards.map(c => [c.id, c.day, c.pair, c.teacher_id, c.auditorium_code].join(':')).join(',') + '#' +
+                return board.id + '#' + allCards.map(c => [c.id, c.day, c.pair, c.len_half, c.start_half, c.teacher_id, c.auditorium_code].join(':')).join(',') + '#' +
                     Object.keys(overrides).map(k => [k, overrides[k].day, overrides[k].pair, overrides[k].cancelled ? 1 : 0, overrides[k].auditorium_code].join(':')).join(',');
             }
             function refreshWeeklyConflicts() {

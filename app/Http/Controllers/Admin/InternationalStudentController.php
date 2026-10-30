@@ -205,7 +205,9 @@ class InternationalStudentController extends Controller
         // Sozlamalar tugmasi faqat admin/superadmin ga ko'rinadi
         $canManageSettings = (bool) auth()->user()?->hasRole(['superadmin', 'admin']);
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms', 'visaBlockEnabled', 'allFilteredIds', 'canManageSettings'));
+        $hemisSync = \Cache::get(self::HEMIS_SYNC_KEY);
+
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms', 'visaBlockEnabled', 'allFilteredIds', 'canManageSettings', 'hemisSync'));
     }
 
     /**
@@ -514,6 +516,86 @@ class InternationalStudentController extends Controller
         return redirect()->back()->with('success', $current === '1'
             ? "Viza bloklash o'chirildi — talabalar platformadan erkin foydalanadi"
             : 'Viza bloklash yoqildi — muddati o\'tganlar yana bloklanadi');
+    }
+
+    /** "HEMIS dan yangilash" (barcha xalqaro talabalar) jarayoni holati */
+    public const HEMIS_SYNC_KEY = 'intl_students_hemis_sync';
+
+    /**
+     * Barcha xalqaro talabalarni HEMIS dan fon rejimida yangilaydi
+     * (davlat, fuqarolik, guruh va h.k.). Natija keshda saqlanadi va
+     * ro'yxat sahifasida ko'rsatiladi.
+     */
+    public function syncAllFromHemis()
+    {
+        $state = \Cache::get(self::HEMIS_SYNC_KEY);
+        if ($state && in_array($state['state'] ?? '', ['queued', 'running'], true)
+            && \Carbon\Carbon::parse($state['queued_at'])->diffInMinutes(now()) < 60) {
+            return back()->with('error', "HEMIS dan yangilash allaqachon bajarilmoqda.");
+        }
+
+        // HEMIS da yo'q (60) talabalar har biri alohida qidirilishi kerak bo'ladi — ular kiritilmaydi
+        $ids = $this->internationalStudentsQuery()
+            ->where(fn ($q) => $q->whereNull('student_status_code')->orWhere('student_status_code', '!=', '60'))
+            ->pluck('id')->all();
+
+        $user = auth()->user();
+        $key = self::HEMIS_SYNC_KEY;
+        \Cache::put($key, [
+            'state' => 'queued',
+            'queued_at' => now()->toDateTimeString(),
+            'by' => $user?->name ?? $user?->full_name,
+            'total' => count($ids),
+        ], now()->addDays(7));
+
+        dispatch(function () use ($key, $ids) {
+            $put = fn (array $data) => \Cache::put($key, $data + \Cache::get($key, []), now()->addDays(7));
+            $put(['state' => 'running', 'started_at' => now()->toDateTimeString(), 'done' => 0]);
+            try {
+                $students = Student::whereIn('id', $ids)->get();
+                $result = app(\App\Services\HemisService::class)->refreshStudentsFromHemis(
+                    $students,
+                    fn (int $done, int $total) => $put(['done' => $done])
+                );
+                $put([
+                    'state' => 'done',
+                    'finished_at' => now()->toDateTimeString(),
+                    'checked' => $result['checked'],
+                    'changed' => array_slice($result['changed'], 0, 300),
+                    'changed_count' => count($result['changed']),
+                    'not_found' => array_slice($result['not_found'], 0, 100),
+                    'not_found_count' => count($result['not_found']),
+                    'failed_groups' => $result['failed_groups'],
+                ]);
+            } catch (\Throwable $e) {
+                $put(['state' => 'failed', 'finished_at' => now()->toDateTimeString(), 'error' => $e->getMessage()]);
+                throw $e;
+            }
+        });
+
+        return back()->with('success', count($ids) . " ta talaba HEMIS dan yangilanmoqda (fon rejimida, bir necha daqiqa). Natija shu sahifada ko'rinadi.");
+    }
+
+    /** Bitta talabani HEMIS dan darhol yangilaydi */
+    public function syncStudentFromHemis(Student $student)
+    {
+        $result = app(\App\Services\HemisService::class)->refreshStudentFromHemis($student);
+
+        if (!$result['ok']) {
+            return back()->with('error', "HEMIS dan yangilab bo'lmadi: talaba HEMIS da topilmadi yoki HEMIS javob bermadi.");
+        }
+
+        if (!$result['changes']) {
+            return back()->with('success', "HEMIS dan tekshirildi — o'zgarish yo'q.");
+        }
+
+        $labels = \App\Services\HemisService::REFRESH_TRACKED_FIELDS;
+        $parts = [];
+        foreach ($result['changes'] as $field => [$old, $new]) {
+            $parts[] = ($labels[$field] ?? $field) . ': ' . ($old ?: '—') . ' → ' . ($new ?: '—');
+        }
+
+        return back()->with('success', 'HEMIS dan yangilandi. ' . implode('; ', $parts));
     }
 
     public function toggleFalseShow()

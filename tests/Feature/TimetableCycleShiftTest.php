@@ -106,7 +106,7 @@ it('smena: ikkalasi ham I parada — to\'qnashuv; ogohlantirishda haqiqiy kesish
     expect(TimetableCyclePlacement::where('group_name', 'Ped / 3-oqim')->first()->lecture_slots['shift_g'])->toBe(['p/p22-03c' => 7]);
 });
 
-it('sana: guruhchaning fanlari har xil oqimda — joylashuv fan oqimidan olinadi (birinchi kartaning oqimidan emas)', function () {
+it('sana: guruhchaning fanlari har xil oqimda — joylashuv fan oqimidan olinadi (birinchi kartaning oqimidan emas)', function (bool $otherFirst) {
     $s = csSetup();
     // 02a ning boshqa sikl fani (birinchi karta, 1-oqim) va 1-oqimning Klinik farmakologiya joylashuvi (boshqa sanalar).
     TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'Pediatriya', 'course' => 5,
@@ -114,7 +114,9 @@ it('sana: guruhchaning fanlari har xil oqimda — joylashuv fan oqimidan olinadi
     $first = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'Ped', 'specialty_name' => 'Pediatriya', 'course' => 5,
         'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
         'subject_name' => 'Gematologiya', 'group_name' => 'p/p22-02a', 'kafedra_name' => 'K']);
-    TimetableCard::whereKey($first->id)->update(['id' => 1]);   // eng birinchi karta
+    if ($otherFirst) {
+        TimetableCard::whereKey($first->id)->update(['id' => 1]);   // eng birinchi karta (aks holda — oxirgi)
+    }
     TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => 'Ped / 1-oqim',
         'subject_name' => 'Klinik farmakologiya', 'start_index' => 21, 'training_type' => 'practice']);   // 05.10–09.10
     // 02a ning Klinik farmakologiyasi — 2-oqimda (14.09): 03c bilan kesishadi, sanalar 14.09–18.09
@@ -125,7 +127,7 @@ it('sana: guruhchaning fanlari har xil oqimda — joylashuv fan oqimidan olinadi
         ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'courses' => [5]])->assertOk()->json();
     $row = collect($plan['rows'])->firstWhere('group', 'p/p22-02a');
     expect(collect($row['blocks'])->firstWhere('subject', 'Klinik farmakologiya')['from'])->toBe(0);
-});
+})->with(['boshqa fan kartasi birinchi' => [true], 'boshqa fan kartasi oxirgi' => [false]]);
 
 it('xona: bir oqimdagi guruhcha xonasi — bir smenada band (ro\'yxatda yo\'q, saqlab bo\'lmaydi), boshqa smenada bo\'sh', function () {
     $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,

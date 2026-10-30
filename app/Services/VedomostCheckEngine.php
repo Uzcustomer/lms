@@ -328,7 +328,9 @@ class VedomostCheckEngine
         foreach ($rows as $r) {
             $counts[$r['status']]++;
         }
-        $hdrBad = count(array_filter($headerChecks, fn ($h) => $h['st'] === 'bad'));
+        // Ishchi o'quv reja bilan solishtirish faqat ko'rsatiladi — hukmga (va tasdiqlash shartiga) ta'sir qilmaydi.
+        $verdictChecks = array_values(array_filter($headerChecks, fn ($h) => !str_starts_with($h['key'], 'reja')));
+        $hdrBad = count(array_filter($verdictChecks, fn ($h) => $h['st'] === 'bad'));
 
         if ($wrong) {
             $verdict = 'wrong_document';
@@ -336,7 +338,7 @@ class VedomostCheckEngine
         } elseif ($counts['bad'] + $counts['missing'] + $counts['nopdf'] + $counts['extra'] + $hdrBad > 0) {
             $verdict = 'issues';
             $summary = $this->summary($counts, $hdrBad, $sysN, $scanN);
-        } elseif ($counts['ocr'] > 0 || collect($headerChecks)->contains('st', 'warn')) {
+        } elseif ($counts['ocr'] > 0 || collect($verdictChecks)->contains('st', 'warn')) {
             $verdict = 'review';
             $summary = "Farq topilmadi, lekin {$counts['ocr']} ta qatorni PDFdan ko'z bilan tekshirish kerak.";
         } else {
@@ -815,6 +817,36 @@ class VedomostCheckEngine
         $add('soat', 'Soat / kredit', 'PDF: ' . ($ps === null ? '—' : $this->f($ps)) . ' / ' . ($pk === null ? '—' : $this->f($pk))
             . ' · Mark: ' . implode('/', array_map(fn ($x) => $this->f($x), $hs)) . ' / ' . implode('/', array_map(fn ($x) => $this->f($x), $hk)),
             ($ps === null && $pk === null) ? 'warn' : ($ok ? 'ok' : 'bad'));
+
+        // Ishchi o'quv reja («O'quv reja to'g'riligi») — fan nomi, soat, kredit. Faqat ma'lumot uchun.
+        if (isset($context['plan'])) {
+            $plan = $context['plan'];
+            if (empty($plan['found'])) {
+                $add('reja', "O'quv reja (ishchi)", $plan['reason'] ?? 'topilmadi', 'warn');
+            } else {
+                $src = " · reja: {$plan['plan']}, {$plan['semester']}-semestr";
+                $nfk = fn ($x) => app(\App\Services\CurriculumComparisonService::class)->normalize((string) $x);
+                $rf = $plan['subject'];
+                $pdfOk = $pf === '' || $nfk($pf) === $nfk($rf);
+                $markOk = collect($hf)->contains(fn ($b) => $nfk($b) === $nfk($rf));
+                $add('reja_fan', "Fan nomi (ishchi o'quv reja)", "Reja: {$rf} · PDF: " . ($pf ?: '—') . ' · Mark: ' . implode(' / ', $hf)
+                    . (!$pdfOk ? ' — PDF rejadan farq qiladi' : (!$markOk ? ' — Mark rejadan farq qiladi' : '')) . $src,
+                    !$pdfOk ? 'bad' : (!$markOk ? 'warn' : 'ok'));
+
+                $rs = $plan['hours'];
+                $rk = $plan['credit'];
+                $same = fn ($a, $b) => $a === null || $b === null || abs((float) $a - (float) $b) < 0.011;
+                $pdfOk = $same($ps, $rs) && $same($pk, $rk);
+                $markOk = ($rs === null || empty($hs) || collect($hs)->contains(fn ($x) => $same($x, $rs)))
+                    && ($rk === null || empty($hk) || collect($hk)->contains(fn ($x) => $same($x, $rk)));
+                $fmt = fn ($x) => $x === null ? '—' : $this->f($x);
+                $add('reja_soat', "Soat / kredit (ishchi o'quv reja)", 'Reja: ' . $fmt($rs) . ' / ' . $fmt($rk)
+                    . ' · PDF: ' . $fmt($ps) . ' / ' . $fmt($pk)
+                    . ' · Mark: ' . (implode('/', array_map($fmt, $hs)) ?: '—') . ' / ' . (implode('/', array_map($fmt, $hk)) ?: '—')
+                    . (!$pdfOk ? ' — PDF rejadan farq qiladi' : (!$markOk ? ' — Mark rejadan farq qiladi' : '')) . $src,
+                    !$pdfOk ? 'bad' : (!$markOk ? 'warn' : 'ok'));
+            }
+        }
 
         // Ma'ruzachi
         $pm = $uz($h['maruzachi'] ?? '');

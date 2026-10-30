@@ -428,3 +428,29 @@ test('jamlanma: VT formati A–AJ + yopilish shakli, hisobotdagi Mark tahrirlari
         ->and((string) $ws->getComment('D2')->getText())->toContain('Mark: 83')->toContain('jurnalda xato')
         ->and($ws->getCell('AK2')->getValue())->toBe('OSKI + Test');
 });
+
+test('ishchi o\'quv reja: farq ko\'rsatiladi (PDF — XATO, Mark — tekshiring), lekin hukmga ta\'sir qilmaydi', function () {
+    $build = fn (array $plan) => engine()->build(expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
+        scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]), [], rules(), ctx(['plan' => $plan]));
+    $byKey = fn (array $r) => collect($r['header'])->keyBy('key');
+    $plan = ['found' => true, 'plan' => 'Davolash ishi — ishchi', 'semester' => 9, 'subject' => 'Xirurgik kasalliklar', 'hours' => 90.0, 'credit' => 3.0];
+
+    $ok = $build($plan);
+    expect($byKey($ok)['reja_fan']['st'])->toBe('ok')->and($byKey($ok)['reja_soat']['st'])->toBe('ok')->and($ok['verdict'])->toBe('ok');
+
+    // PDF ham, Mark ham 90/3, reja 120/4 → PDF rejadan farq qiladi (XATO), hukm baribir «mos».
+    $diff = $build(array_merge($plan, ['hours' => 120.0, 'credit' => 4.0, 'subject' => 'Xirurgik kasalliklar (umumiy)']));
+    expect($byKey($diff)['reja_soat']['st'])->toBe('bad')
+        ->and($byKey($diff)['reja_soat']['v'])->toContain('Reja: 120 / 4')->toContain('PDF rejadan farq qiladi')
+        ->and($byKey($diff)['reja_fan']['st'])->toBe('bad')
+        ->and($diff['verdict'])->toBe('ok');
+
+    // PDF rejaga mos (120/4), Mark 90/3 → faqat «tekshiring».
+    $markDiff = engine()->build(expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
+        scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], ['soat' => '120', 'kredit' => '4']), [], rules(),
+        ctx(['plan' => array_merge($plan, ['hours' => 120.0, 'credit' => 4.0])]));
+    expect($byKey($markDiff)['reja_soat']['st'])->toBe('warn')->and($byKey($markDiff)['reja_soat']['v'])->toContain('Mark rejadan farq qiladi');
+
+    $none = $build(['found' => false, 'reason' => 'ishchi reja yuklanmagan']);
+    expect($byKey($none)['reja']['st'])->toBe('warn')->and($none['verdict'])->toBe('ok');
+});

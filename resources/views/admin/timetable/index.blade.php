@@ -4600,10 +4600,21 @@
                     (res.shown < res.total ? ' (birinchi ' + res.shown + ' tasi)' : '');
                 if (!res.cards.length) { body.innerHTML = '<div style="color:#059669">Bu haftada joylanmagan karta yo\'q.</div>'; return; }
                 window.__ttSug = res.cards;
-                body.innerHTML = res.cards.map((c, ci) =>
-                    '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
+                renderSugCards(body, res, params);
+            }
+            // Takliflar ro'yxati. Vaqt byudjeti tugagan bo'lsa (partial) — sariq yozuv; qisqartirilgan kartada "To'liq takliflar"
+            // tugmasi faqat shu karta uchun (card_id) to'liq hisoblab, kartani almashtiradi.
+            function renderSugCards(body, res, params) {
+                const partialCards = window.__ttSug.filter(c => c.partial).length;
+                body.innerHTML = (partialCards
+                    ? '<div id="ttSugPartial" style="background:#fef9c3;border:1px solid #facc15;color:#854d0e;border-radius:6px;padding:6px 10px;margin-bottom:8px">⚠ ' +
+                        esc(partialCards + ' ta karta uchun to\'liq takliflar hisoblanmadi') + ' — kartadagi «To\'liq takliflar» tugmasini bosing.</div>'
+                    : '') + window.__ttSug.map((c, ci) =>
+                    '<div style="border:1px solid ' + (c.partial ? '#facc15' : '#e2e8f0') + ';border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
                     '<div><b>' + esc(c.subject) + '</b> <span style="color:#64748b">[' + (c.type === 'lecture' ? 'M' : 'A') + '] ' +
-                    esc((c.groups || []).join(', ')) + ' · ' + esc(c.teacher || 'o\'qituvchi yo\'q') + (c.room ? ' · ' + esc(c.room) : '') + '</span></div>' +
+                    esc((c.groups || []).join(', ')) + ' · ' + esc(c.teacher || 'o\'qituvchi yo\'q') + (c.room ? ' · ' + esc(c.room) : '') + '</span>' +
+                    (c.partial ? ' <button type="button" data-full="' + ci + '" style="font-size:11px;border:1px solid #facc15;border-radius:6px;padding:1px 8px;background:#fefce8;color:#854d0e">To\'liq takliflar</button>' : '') +
+                    '</div>' +
                     (c.reason ? '<div style="color:#b91c1c;margin:2px 0 4px">' + esc(c.reason) + '</div>' : '') +
                     (c.suggestions.length ? c.suggestions.map((s, si) =>
                         '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;border-top:1px dashed #f1f5f9">' +
@@ -4612,6 +4623,20 @@
                         '<button type="button" data-sug="' + ci + ':' + si + '" style="flex:0 0 auto;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:1px 8px;background:#f8fafc">Qo\'llash</button></div>'
                     ).join('') : '<div style="color:#64748b">Taklif topilmadi — qo\'lda joylash kerak.</div>') +
                     '</div>').join('');
+                body.querySelectorAll('[data-full]').forEach(btn => btn.onclick = async () => {
+                    const ci = +btn.dataset.full;
+                    btn.disabled = true; btn.textContent = 'Hisoblanmoqda…';
+                    const p = new URLSearchParams(params);
+                    p.set('card_id', window.__ttSug[ci].id);
+                    try {
+                        const one = await api(BASE + '/boards/' + board.id + '/week-suggestions?' + p.toString());
+                        if (one.cards && one.cards[0]) window.__ttSug[ci] = one.cards[0];
+                        renderSugCards(body, res, params);
+                    } catch (e) {
+                        btn.disabled = false; btn.textContent = 'To\'liq takliflar';
+                        alert('Takliflarni olib bo\'lmadi: ' + e.message);
+                    }
+                });
                 body.querySelectorAll('[data-sug]').forEach(btn => btn.onclick = async () => {
                     const [ci, si] = btn.dataset.sug.split(':').map(Number);
                     const sug = window.__ttSug[ci].suggestions[si];

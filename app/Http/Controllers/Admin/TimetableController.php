@@ -8002,6 +8002,42 @@ class TimetableController extends Controller
         return array_values(array_unique($errors));
     }
 
+    /**
+     * findWeekConflicts'ning indeksli varianti — natija aynan bir xil (tartibi ham): faqat clashCandidates tekshiriladi — shu kunga
+     * tushishi mumkin bo'lgan (tplByDay, movedByDay) va kartaning o'qituvchisi/xonasi/guruhi bilan umumiy (byKey) kartalar. Qolgan
+     * kartalarni eski funksiya baribir o'tkazib yuboradi: hafta kuni barcha kalendarlarda bir xil (hafta raqami esa har karta
+     * kalendarida sana bo'yicha topiladi), clashWith esa faqat shu uch o'lchovda to'qnashadi. Holat stateSetCard/stateSetOverride
+     * bilan yangilanadi.
+     */
+    private function findWeekConflictsIndexed(TimetableCard $card, int $week, int $day, int $pair, int $startHalf, array $state, ?string $roomCode = null): array
+    {
+        $myRoom = $roomCode ?: ((($state['ov'][$card->id][$week] ?? null)?->auditorium_code) ?: $card->auditorium_code);
+
+        return $this->findWeekConflicts($card, $week, $day, $pair, $startHalf,
+            ['cards' => array_intersect_key($state['cards'], $this->clashCandidates($card, $day, $myRoom, $state))] + $state, $roomCode);
+    }
+
+    /**
+     * To'qnashuv nomzodlari: shu kunga tushishi mumkin (shablonda shu kunda yoki biror haftada shu kunga ko'chirilgan) va
+     * kartaning o'qituvchisi, xonasi yoki guruhi bilan umumiy (clashWith faqat shu o'lchovlarda to'qnashadi). [id => id]
+     */
+    private function clashCandidates(TimetableCard $card, int $day, ?string $room, array $state): array
+    {
+        $cand = $state['tplByDay'][$day] ?? [];
+        foreach ($state['movedByDay'][$day] ?? [] as [$id]) {
+            $cand[$id] = $id;
+        }
+        if (!isset($state['byKey'])) {
+            return $cand;
+        }
+        $same = [];
+        foreach ($this->clashKeys($card, $room) as $k) {
+            $same += $state['byKey'][$k] ?? [];
+        }
+
+        return array_intersect_key($cand, $same);
+    }
+
     /** Yo'nalish+kurs uchun panjara o'lchami (alohida sozlama yoki doska sukuti). */
     private function gridFor(TimetableBoard $board, ?string $faculty, string $specialty, int $course, int $curriculum = 0): array
     {
@@ -8313,7 +8349,8 @@ class TimetableController extends Controller
         }
         $board = $card->board;
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1);
-        $busy = $this->cycleBusyByDate($board)[$date->toDateString()] ?? [];
+        // Sikl bandligi so'rov davomida bir marta yuklanadi (har tekshiruvda emas).
+        $busy = ($this->cycleBusyMemo[$board->id] ??= $this->cycleBusyByDate($board))[$date->toDateString()] ?? [];
         $from = $pair;
         $to = $pair + $card->lenHalf();
         $out = [];
@@ -8577,7 +8614,8 @@ class TimetableController extends Controller
     /** Butun doska bandligi bir marta (tiklash uchun) — daySlice shundan olinadi; yozilganlar stateSet* bilan qo'shiladi. */
     private function occupancyState(int $boardId): array
     {
-        $state = ['cards' => [], 'tplByDay' => [], 'tplDayOf' => [], 'ov' => [], 'movedByDay' => []];
+        // byKey — o'qituvchi / xona / guruh => kartalar (to'qnashuv nomzodlari indeksi; faqat qo'shiladi — ortiqchasi zararsiz).
+        $state = ['cards' => [], 'tplByDay' => [], 'tplDayOf' => [], 'ov' => [], 'movedByDay' => [], 'byKey' => []];
         foreach (TimetableCard::where('board_id', $boardId)->get() as $c) {
             $this->stateSetCard($state, $c);
         }
@@ -8601,6 +8639,25 @@ class TimetableController extends Controller
             $state['tplByDay'][(int) $c->day][$id] = $id;
             $state['tplDayOf'][$id] = (int) $c->day;
         }
+        if (isset($state['byKey'])) {
+            foreach ($this->clashKeys($c, $c->auditorium_code) as $k) {
+                $state['byKey'][$k][$id] = $id;
+            }
+        }
+    }
+
+    /** clashWith o'lchovlari: o'qituvchi, xona, guruh (yo'nalish+kurs ichida) — to'qnashuv nomzodlari indeksi kalitlari. */
+    private function clashKeys(TimetableCard $c, ?string $room): array
+    {
+        $keys = $c->teacher_id ? ['t|' . (int) $c->teacher_id] : [];
+        if ($room) {
+            $keys[] = 'r|' . $room;
+        }
+        foreach ($c->occupiedGroups() as $g) {
+            $keys[] = 'g|' . $this->groupScopeKey($c) . '|' . $g;
+        }
+
+        return $keys;
     }
 
     private function stateSetOverride(array &$state, ?TimetableCardOverride $o, ?int $cardId = null, ?int $week = null): void
@@ -8619,6 +8676,10 @@ class TimetableController extends Controller
         $state['ov'][$cardId][$week] = $o;
         if (!$o->cancelled && $o->day && $o->pair) {
             $state['movedByDay'][(int) $o->day][$cardId . '|' . $week] = [$cardId, $week, $o];
+        }
+        // Haftaga berilgan xona ham indeksga (shu karta o'sha xonani band qilishi mumkin).
+        if (isset($state['byKey']) && ($o->auditorium_code ?? null)) {
+            $state['byKey']['r|' . $o->auditorium_code][$cardId] = $cardId;
         }
     }
 

@@ -2598,6 +2598,10 @@
         .tt-card-sync-track span { position: absolute; inset-block: 0; width: 34%; border-radius: inherit; background: #2563eb;
             animation: tt-card-sync-slide 1.15s ease-in-out infinite; }
         @keyframes tt-card-sync-slide { from { left: -34%; } to { left: 100%; } }
+        /* "Butun doska (Excel)" hisoboti oynasidagi progress — o'z klassi (Tailwind build'iga bog'liq emas); xatoda qizil */
+        .tt-report-track { height: 10px; overflow: hidden; border-radius: 9999px; background: #e5e7eb; }
+        .tt-report-bar { height: 100%; width: 0; background: #10b981; transition: width .3s; }
+        .tt-report-bar.is-error { background: #ef4444; }
 </style>
 
     <script>
@@ -7293,18 +7297,20 @@
                 m.innerHTML = '<div class="bg-white rounded-xl shadow-xl w-full max-w-md p-4 text-[12px]">' +
                     '<h3 class="font-semibold text-[14px] mb-2">Butun doska (Excel) — joylanmagan kartalar</h3>' +
                     '<div id="urStep" class="mb-1 text-gray-700">Navbatga qo\'yilmoqda…</div>' +
-                    '<div class="w-full h-3 rounded bg-gray-200 overflow-hidden"><div id="urBar" class="h-3 bg-emerald-500 transition-all" style="width: 0%"></div></div>' +
+                    '<div class="tt-report-track"><div id="urBar" class="tt-report-bar" style="width: 0%"></div></div>' +
                     '<div id="urPct" class="mt-1 text-right text-gray-500">0%</div>' +
                     '<div id="urErr" class="hidden mt-2 p-2 rounded border border-red-300 bg-red-50 text-red-700"></div>' +
                     '<div class="mt-3 flex items-center justify-between gap-2"><span class="text-gray-500">Yopsangiz ham hisobot fonda tayyorlanaveradi.</span>' +
                     '<button type="button" id="urClose" class="px-3 py-1 rounded border bg-white">Yopish</button></div></div>';
                 const alive = () => m.run === run && !run.closed;
                 $('urClose').onclick = () => { run.closed = true; m.remove(); };
+                // Xato holatida foiz va bosqich yangilanmaydi ("Tayyor 100%" chiqmasin); 100% — faqat tayyor hisobot.
                 const show = st => {
-                    const pct = Math.max(0, Math.min(100, Math.round(Number(st.percent) || 0)));
+                    if (st.status === 'error') return;
+                    const pct = st.status === 'done' ? 100 : Math.max(0, Math.min(99, Math.round(Number(st.percent) || 0)));
                     $('urBar').style.width = pct + '%';
                     $('urPct').textContent = pct + '%';
-                    $('urStep').textContent = st.step_label || st.message || '';
+                    $('urStep').textContent = st.status === 'done' ? 'Fayl yuklab olinmoqda…' : (st.step_label || st.message || '');
                 };
                 try {
                     const started = await api(url, 'POST', { layer: weeklyLayer });
@@ -7339,6 +7345,9 @@
                     }
                 } catch (e) {
                     if (!alive()) return;
+                    $('urBar').classList.add('is-error');
+                    $('urStep').textContent = 'Xatolik';
+                    $('urPct').textContent = '';
                     $('urErr').textContent = 'Hisobotni tayyorlab bo\'lmadi: ' + e.message;
                     $('urErr').classList.remove('hidden');
                 }

@@ -41,6 +41,7 @@ const ctx = {
         return a;
     },
     URLSearchParams, Object, Set, Promise, Error, Number, String,
+    cycleLayerParams: () => ({ layer: 'internal' }),
 };
 vm.createContext(ctx);
 vm.runInContext(section("            // ===== Ichki (haftalik) jadvaldagi to'qnashuvlar", '            // Joylanmagan kartalar diagnostikasi (unplaced-export)')
@@ -176,6 +177,7 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     answers.push({ ok: true });
     await ctx.saveCycleAssign(false);
     assert.equal(calls[2][2].shift_start, 7);
+    assert.equal(calls[2][2].layer, 'internal');   // server smenani faqat ichki jadvalda qabul qiladi
     // Mark kataklari: amaliy — kun rejasidagi boshlanishidan (ps, smena), ma'ruzadan keyin emas
     assert.match(source, /const ps = dp\.ps != null \? \+dp\.ps : st \+ \(\+dp\.lec \|\| 0\);\n\s*if \(hour >= st && hour < st \+ \(\+dp\.lec \|\| 0\)\) kind = ' is-lecture';\n\s*else if \(hour >= ps && hour < ps \+ \(\+dp\.prc \|\| 0\)\) kind = ' is-practice';/);
 

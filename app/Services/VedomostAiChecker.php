@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Student;
 use App\Models\VedomostSubmission;
+use App\Services\VedomostAiProgress as Progress;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -62,8 +63,16 @@ class VedomostAiChecker
             throw new RuntimeException("Vedomost tekshirish hisobi bo'yicha talabalar topilmadi.");
         }
 
+        Progress::log('Mark baholari yig‘ildi: ' . count($expected['talabalar']) . ' talaba · ' . $expected['shakl']
+            . ' · yopilish shakli: ' . ($expected['yopilish_shakli'] ?: '—'));
+
         $scan = $this->reader->read(Storage::disk('public')->path($v->pdf_path), $v->id, count($expected['talabalar']), $fresh);
+        $m = $scan['meta'] ?? [];
+        Progress::log('PDF o‘qildi: ' . ($m['rows_read'] ?? count($scan['rows'] ?? [])) . ' qator'
+            . (!empty($m['missing_nrs']) ? ' · o‘qilmagan qatorlar: ' . implode(', ', $m['missing_nrs']) : '')
+            . (!empty($m['repaired']) ? ' · qayta o‘qib tuzatildi: ' . $m['repaired'] : ''), empty($m['missing_nrs']) ? 'ok' : 'warn');
         $context = $this->buildContext($v, $expected, $scan);
+        Progress::log('Test markazi: ' . count($context['test_center'] ?? []) . ' talaba natijasi topildi');
 
         return $this->assemble($expected, $scan, $context, []);
     }
@@ -115,62 +124,78 @@ class VedomostAiChecker
 
         $out = [];
         foreach ($siblings as $sib) {
-            $group = \App\Models\Group::where('group_hemis_id', $sib->group_hemis_id)->first();
-            if (!$group) {
-                continue;
-            }
-            $c = $this->vt->collect($group, (string) $sib->subject_id, (string) $sib->semester_code);
-            if (!$c) {
-                continue;
-            }
-            // 12-shakldan boshqa shakllar: talabalar ro'yxati va OSKE/Test — jurnaldagi YN qaydnoma
-            // eksporti bilan bir xil (YnStageService bosqich va urinish baholari).
-            $stage = $attempt
-                ? $this->stages->computeForGroupSubject((string) $sib->group_hemis_id, (string) $sib->subject_id, (string) $sib->semester_code)
-                : null;
-            $exam = \App\Models\HemisExamGrade::forComparison($c['studentHemisIds'], (string) $sib->subject_id, (string) $sib->semester_code)
-                ->get()
-                ->groupBy('student_hemis_id');
-            $meta = [
-                'group_hemis_id' => $c['groupHemisId'],
-                'group_name' => $group->name ?? '',
-                'practice_teacher' => $c['practiceTeacher'],
-                'lecture_teacher' => $c['lectureTeacher'],
-                'subject_id' => (string) $sib->subject_id,
-                'subject_name' => $c['subject']->subject_name ?? '',
-                'shakl' => $shakl,
-                'education_year' => $c['educationYearName'] ?? ($c['curriculum']?->education_year_name ?? ''),
-                'semester' => $c['semester']?->name ?? $sib->semester_code,
-                'hours' => $c['totalHours'],
-                'credit' => (int) ($c['subject']->credit ?? 0),
-                'divisor' => $c['divisor'],
-            ];
-            foreach ($c['students'] as $stu) {
-                $hid = $stu->hemis_id;
-                $raw = $c['raw'][$hid];
-                if ($attempt) {
-                    $st = $stage['stages'][$hid] ?? null;
-                    if ($st === null || !in_array($attempt['form'], YnAttemptStatusService::formsForStage($st), true)) {
-                        continue;
-                    }
-                    $raw = self::attemptRaw($raw, $stage['studentScenarios'][$hid] ?? [], $attempt['chain']);
+            array_push($out, ...$this->studentsFor($sib, $attempt, $shakl));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Bitta guruh yozuvi (vedomost) uchun tizim (Mark) talabalari — AI tekshiruvi va tasdiqlangan
+     * vedomostlar jamlanmasi uchun umumiy. 12-shakldan boshqa shakllarda faqat shu shaklga
+     * kiradigan talabalar va shu urinish OSKE/Test bahosi.
+     */
+    public function studentsFor(VedomostSubmission $sib, ?array $attempt = null, ?string $shakl = null): array
+    {
+        $attempt ??= self::formAttempt($sib->form_type);
+        $shakl ??= VedomostSubmission::formLabel($sib->form_type);
+        $out = [];
+        $group = \App\Models\Group::where('group_hemis_id', $sib->group_hemis_id)->first();
+        if (!$group) {
+            return [];
+        }
+        $c = $this->vt->collect($group, (string) $sib->subject_id, (string) $sib->semester_code);
+        if (!$c) {
+            return [];
+        }
+        // 12-shakldan boshqa shakllar: talabalar ro'yxati va OSKE/Test — jurnaldagi YN qaydnoma
+        // eksporti bilan bir xil (YnStageService bosqich va urinish baholari).
+        $stage = $attempt
+            ? $this->stages->computeForGroupSubject((string) $sib->group_hemis_id, (string) $sib->subject_id, (string) $sib->semester_code)
+            : null;
+        $exam = \App\Models\HemisExamGrade::forComparison($c['studentHemisIds'], (string) $sib->subject_id, (string) $sib->semester_code)
+            ->get()
+            ->groupBy('student_hemis_id');
+        $meta = [
+            'group_hemis_id' => $c['groupHemisId'],
+            'group_name' => $group->name ?? '',
+            'practice_teacher' => $c['practiceTeacher'],
+            'lecture_teacher' => $c['lectureTeacher'],
+            'subject_id' => (string) $sib->subject_id,
+            'subject_name' => $c['subject']->subject_name ?? '',
+            'shakl' => $shakl,
+            'education_year' => $c['educationYearName'] ?? ($c['curriculum']?->education_year_name ?? ''),
+            'semester' => $c['semester']?->name ?? $sib->semester_code,
+            'hours' => $c['totalHours'],
+            'credit' => (int) ($c['subject']->credit ?? 0),
+            'divisor' => $c['divisor'],
+            'level_code' => (string) ($c['semester']?->level_code ?? ''),
+        ];
+        foreach ($c['students'] as $stu) {
+            $hid = $stu->hemis_id;
+            $raw = $c['raw'][$hid];
+            if ($attempt) {
+                $st = $stage['stages'][$hid] ?? null;
+                if ($st === null || !in_array($attempt['form'], YnAttemptStatusService::formsForStage($st), true)) {
+                    continue;
                 }
-                $he = $exam[$hid] ?? collect();
-                $out[] = [
-                    'fish' => $stu->full_name,
-                    'student_id' => (string) $stu->student_id_number,
-                    'hemis_id' => (string) $hid,
-                    'status_code' => (string) ($stu->student_status_code ?? ''),
-                    'status_name' => (string) ($stu->student_status_name ?? ''),
-                    'group' => $group->name ?? '',
-                    'raw' => $raw,
-                    'meta' => $meta,
-                    'hemis_exam' => [
-                        '11' => $he->firstWhere('exam_type_code', '11')?->grade,
-                        '13' => $he->firstWhere('exam_type_code', '13')?->grade,
-                    ],
-                ];
+                $raw = self::attemptRaw($raw, $stage['studentScenarios'][$hid] ?? [], $attempt['chain']);
             }
+            $he = $exam[$hid] ?? collect();
+            $out[] = [
+                'fish' => $stu->full_name,
+                'student_id' => (string) $stu->student_id_number,
+                'hemis_id' => (string) $hid,
+                'status_code' => (string) ($stu->student_status_code ?? ''),
+                'status_name' => (string) ($stu->student_status_name ?? ''),
+                'group' => $group->name ?? '',
+                'raw' => $raw,
+                'meta' => $meta,
+                'hemis_exam' => [
+                    '11' => $he->firstWhere('exam_type_code', '11')?->grade,
+                    '13' => $he->firstWhere('exam_type_code', '13')?->grade,
+                ],
+            ];
         }
 
         return $out;

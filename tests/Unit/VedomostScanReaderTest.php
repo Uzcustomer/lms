@@ -122,7 +122,14 @@ test('tushib qolgan qator (raqamlashda bo\'shliq) qayta o\'qib qo\'shiladi', fun
             : bandReply([readerRow(1, '368221100001', '39'), readerRow(2, '368221100002', '39'), readerRow(3, '368221100003', '39')]));
     });
 
+    \App\Services\VedomostAiProgress::start($this->pdf, 'Tekshiruv boshlandi');
     $res = app(VedomostScanReader::class)->read($this->pdf, 7, 3);
+    $log = collect(\App\Services\VedomostAiProgress::lines($this->pdf))->pluck('m')->implode(' | ');
+    \App\Services\VedomostAiProgress::stop();
+
+    expect($log)->toContain('PDF → 1 sahifa rasmga aylantirildi')
+        ->and($log)->toContain('Gemini javobi: 1-sahifa')
+        ->and($log)->toContain('qatorlar tushib qolgan');
 
     expect(collect($res['rows'])->pluck('nr')->all())->toBe([1, 2, 3])
         ->and($res['meta']['missing_nrs'])->toBe([])

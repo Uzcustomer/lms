@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\VedomostSubmission;
 use App\Services\VedomostAiChecker;
 use App\Services\VedomostAiLimitException;
+use App\Services\VedomostAiProgress as Progress;
 use App\Services\VedomostMergeService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -55,9 +56,15 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
         };
 
         $save(['ai_check_status' => 'running', 'ai_error' => null]);
+        Progress::start($v->pdf_path, 'Tekshiruv boshlandi: ' . $v->group_name . ' · ' . VedomostSubmission::formLabel($v->form_type)
+            . ($this->fresh ? ' · PDF qaytadan o‘qiladi' : '') . ' · ' . $siblings->count() . ' ta guruh yozuvi');
 
         try {
             $result = $checker->check($v, $this->fresh);
+            $c = $result['report']['counts'] ?? [];
+            Progress::log('Hisobot tayyor: ' . ($c['ok'] ?? 0) . ' mos, ' . ($c['bad'] ?? 0) . ' XATO, ' . ($c['ocr'] ?? 0)
+                . ' PDFdan tekshiring · xotira cho‘qqisi ' . round(memory_get_peak_usage(true) / 1048576) . ' MB', 'ok');
+            $result['log'] = Progress::lines($v->pdf_path);
 
             $save([
                 'ai_check_status' => 'done',
@@ -68,6 +75,7 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
                 'ai_checked_at' => now(),
             ]);
         } catch (VedomostAiLimitException $e) {
+            Progress::log('AI limiti tugadi: ' . $e->getMessage(), 'error');
             // Limit tugadi — xato emas: "tekshirilmagan" holatiga qaytaramiz, keyinroq
             // "Tekshirilmaganlarni navbatga qo'shish" orqali qayta navbatga tushadi.
             $save([
@@ -75,6 +83,7 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
                 'ai_error' => 'AI limiti tugadi: ' . mb_substr($e->getMessage(), 0, 900),
             ]);
         } catch (\Throwable $e) {
+            Progress::log('Xato: ' . $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')', 'error');
             Log::warning('[VedomostAiChecker] ' . $e->getMessage());
             $save([
                 'ai_check_status' => 'error',
@@ -95,6 +104,8 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
         if (!$siblings->contains('id', $v->id)) {
             $siblings->push($v);
         }
+        Progress::attach($v->pdf_path);
+        Progress::log('Tekshiruv tugamadi: ' . mb_substr($e?->getMessage() ?? "noma'lum xato", 0, 300), 'error');
         foreach ($siblings as $sib) {
             if (in_array($sib->ai_check_status, ['queued', 'running'], true)) {
                 $sib->update([

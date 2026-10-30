@@ -119,11 +119,11 @@ test('PDFdagi haqiqiy farq — XATO (Python xabari bilan)', function () {
 
     $msgs = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
     expect($r['rows'][0]['status'])->toBe('bad')
-        ->and($msgs)->toContain('OSKE%: PDF 90,0 ≠ HEMIS 0')
-        ->and($msgs)->toContain('YN: PDF 82 ≠ HEMIS -1');
+        ->and($msgs)->toContain('OSKE%: PDF 90,0 ≠ Mark 0')
+        ->and($msgs)->toContain('YN: PDF 82 ≠ Mark -1');
 });
 
-test('chetlashtirilgan talaba — KONTINGENTDA YO\'Q; tushib qolgan qator — PDFdan tekshiring', function () {
+test('chetlashtirilgan va PDFda yo\'q talaba hisobotga chiqmaydi; tushib qolgan qator — PDFdan tekshiring', function () {
     $r = engine()->build(expectedData([
         vtStu('NE’MATOV NOZIMJON RUSTAMJON O‘G‘LI', '368221100048', 0, 0, 0, 0, ['status_code' => '60']),
         vtStu('QURBONOV SHAHZODXON SHUHRAT O‘G‘LI', '368221100022', 78, 86, 100, 83),
@@ -131,8 +131,8 @@ test('chetlashtirilgan talaba — KONTINGENTDA YO\'Q; tushib qolgan qator — PD
     ]), scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], [], ['missing_nrs' => [8]]), [], rules(), ctx());
 
     $rows = collect($r['rows'])->keyBy('id');
-    expect($rows['368221100048']['status'])->toBe('missing')
-        ->and($rows['368221100048']['kont_fio'])->toBeNull()
+    expect($rows->has('368221100048'))->toBeFalse()
+        ->and($r['counts']['total'])->toBe(2)
         ->and($rows['368221100022']['status'])->toBe('ocr')
         ->and(collect($rows['368221100022']['flags'])->pluck('m')->implode(' '))->toContain('8-qatorni');
 });
@@ -273,7 +273,7 @@ test('yopilish shakli: HEMIS shakli vedomost vaznlariga mos kelmasa XATO', funct
 
     expect($ok['yopilish']['st'])->toBe('ok')
         ->and($h['yopilish']['st'])->toBe('bad')
-        ->and($h['yopilish']['v'])->toContain('HEMIS: Test')
+        ->and($h['yopilish']['v'])->toContain('Mark: Test')
         ->and($h['yopilish']['v'])->toContain('vedomostda: OSKE + Test')
         ->and(array_column($bad['header'], 'key')[1])->toBe('yopilish')
         ->and($bad['verdict'])->toBe('issues');
@@ -380,4 +380,51 @@ test('qayta topshirish shakllari: sarlavhadagi shakl nomi, ism oxiridagi guruh, 
     // 12a o'rniga 12-shakl yuklangan bo'lsa — XATO.
     $r2 = engine()->build($exp, scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], ['shakl' => '12-shakl']), [], rules(), ctx());
     expect(collect($r2['header'])->keyBy('key')['shakl']['st'])->toBe('bad');
+});
+
+test('Mark qiymati faqat hisobotda o\'zgartiriladi: qayta hisob, asl qiymat va sabab saqlanadi', function () {
+    $stu = [vtStu('ABDURAHIMOV JASUR', '368221100001', 80, 90, 0, 70)];
+    $scan = scanDoc([pdfRow(2, 'ABDURAHIMOV JASUR', '368221100001', bobo(['jb_pct' => '80', 'jb_ball' => '40,0', 'mt_pct' => '90', 'mt_ball' => '18,0', 'oski_pct' => '90', 'oski_ball' => '13,5', 'test_pct' => '70', 'test_ball' => '10,5', 'yn' => '82']))]);
+
+    $before = engine()->build(expectedData($stu), $scan, [], rules(), ctx());
+    $after = engine()->build(expectedData($stu), $scan, ['system' => ['368221100001' => ['P' => ['v' => 90, 'why' => 'OSKE dalolatnomasi']]]], rules(), ctx());
+    $row = $after['rows'][0];
+
+    expect($before['rows'][0]['cells']['oski']['status'])->toBe('bad')
+        ->and($row['vt']['P'])->toBe(90.0)
+        ->and($row['cells']['oski']['status'])->toBe('ok')
+        ->and($row['sys_orig']['P'])->toBe(0.0)
+        ->and($row['sys_edited']['P'])->toBe('OSKE dalolatnomasi')
+        ->and($after['counts']['sys_edited'])->toBe(1)
+        ->and(collect($row['flags'])->pluck('m')->implode(' '))->toContain('Mark qiymati faqat hisobotda o‘zgartirilgan');
+
+    $ws = app(\App\Services\VedomostAiReportExcel::class)->build($after)->getSheetByName('Tekshirish');
+    expect($ws->getComment('P2')->getText()->getPlainText())->toContain('OSKE dalolatnomasi');
+});
+
+test('jamlanma: VT formati A–AJ + yopilish shakli, hisobotdagi Mark tahrirlari, chetlashtirilganlar kiritilmaydi', function () {
+    $checker = Mockery::mock(\App\Services\VedomostAiChecker::class);
+    $checker->shouldReceive('studentsFor')->andReturn([
+        vtStu('BOBOSHEROV B', '111', 83, 88, 100, 96),
+        vtStu('CHETLASHGAN C', '222', 70, 70, 70, 70, ['status_code' => '60']),
+    ]);
+    $sub = new \App\Models\VedomostSubmission(['closing_form' => 'oski_test', 'status' => 'approved']);
+    $sub->ai_result = [
+        'report' => ['weights' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15]],
+        'edits' => ['system' => ['111' => ['D' => ['v' => 90, 'why' => 'jurnalda xato']]]],
+    ];
+
+    $ws = (new \App\Services\VedomostJamlanmaExcel($checker, engine()))->build(collect([$sub]))->getActiveSheet();
+
+    expect($ws->getHighestColumn())->toBe('AK')
+        ->and($ws->getCell('AJ1')->getValue())->toBe(\App\Services\VedomostCheckEngine::VT_HEADERS['AJ'])
+        ->and($ws->getCell('AK1')->getValue())->toBe('Yopilish shakli')
+        ->and($ws->getHighestRow())->toBe(2)
+        ->and($ws->getCell('B2')->getValue())->toBe('BOBOSHEROV B')
+        ->and($ws->getCell('C2')->getValue())->toBe('111')
+        ->and((float) $ws->getCell('D2')->getValue())->toBe(90.0)
+        ->and((float) $ws->getCell('E2')->getValue())->toBe(45.0)
+        ->and($ws->getStyle('D2')->getFill()->getStartColor()->getARGB())->toBe('FFE9D5FF')
+        ->and((string) $ws->getComment('D2')->getText())->toContain('Mark: 83')->toContain('jurnalda xato')
+        ->and($ws->getCell('AK2')->getValue())->toBe('OSKI + Test');
 });

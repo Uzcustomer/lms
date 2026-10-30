@@ -83,6 +83,8 @@ class VedomostAiReportController extends Controller
             'header' => 'nullable|array',
             'weights' => 'nullable|array',
             'signatures' => 'nullable|array',
+            'system' => 'nullable|array',
+            'system.*' => 'array',
         ]);
 
         [$edits, $changes] = $this->mergeEdits($result, $incoming);
@@ -177,6 +179,51 @@ class VedomostAiReportController extends Controller
         }
         if (empty($edits['rows'])) {
             unset($edits['rows']);
+        }
+
+        // Mark qiymatlari — faqat shu hisobotda; sabab majburiy (tarixga yoziladi).
+        $byId = collect($result['report']['rows'] ?? [])->keyBy('id');
+        foreach (($incoming['system'] ?? []) as $sid => $cols) {
+            $sid = (string) $sid;
+            $row = $byId[$sid] ?? null;
+            if (!$row || !is_array($cols)) {
+                continue;
+            }
+            foreach ($cols as $col => $e) {
+                if (!isset(VedomostCheckEngine::SYSTEM_EDITABLE[$col])) {
+                    continue;
+                }
+                $label = VedomostCheckEngine::VT_HEADERS[$col] ?? $col;
+                $orig = $row['sys_orig'][$col] ?? ($row['vt'][$col] ?? null);
+                $prev = $edits['system'][$sid][$col]['v'] ?? $orig;
+                if ($e === null) {
+                    unset($edits['system'][$sid][$col]);
+                    $new = $orig;
+                    $why = '';
+                } else {
+                    $val = is_array($e) ? ($e['v'] ?? null) : $e;
+                    $why = trim((string) (is_array($e) ? ($e['why'] ?? '') : ''));
+                    $val = is_string($val) ? str_replace(',', '.', trim($val)) : $val;
+                    if (!is_numeric($val)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['system' => "{$row['fio']} — {$label}: son kiriting."]);
+                    }
+                    if (mb_strlen($why) < 3) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['system' => "{$row['fio']} — {$label}: Mark qiymatini o'zgartirish sababini yozing."]);
+                    }
+                    $edits['system'][$sid][$col] = ['v' => (float) $val, 'why' => mb_substr($why, 0, 300)];
+                    $new = (float) $val;
+                }
+                if ((string) $prev !== (string) $new) {
+                    $changes[] = "Mark qiymati (faqat hisobotda) {$row['fio']} — {$label}: " . $this->engine->f($prev) . ' → ' . $this->engine->f($new)
+                        . ($why !== '' ? " · sabab: {$why}" : ' (asl qiymat)');
+                }
+            }
+            if (empty($edits['system'][$sid])) {
+                unset($edits['system'][$sid]);
+            }
+        }
+        if (empty($edits['system'])) {
+            unset($edits['system']);
         }
 
         $sections = [

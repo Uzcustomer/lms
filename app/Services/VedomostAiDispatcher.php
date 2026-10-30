@@ -120,6 +120,8 @@ class VedomostAiDispatcher
         if (!$siblings->contains('id', $v->id)) {
             $siblings->push($v);
         }
+        VedomostAiProgress::attach($v->pdf_path);
+        VedomostAiProgress::log('Ishchi jarayon ' . self::STUCK_MINUTES . ' daqiqada javob bermadi (halok bo‘lgan bo‘lishi mumkin — masalan xotira tugashi). Oxirgi bajarilgan qadam yuqorida.', 'error');
         foreach ($siblings as $sib) {
             if ($sib->ai_check_status === 'running') {
                 $sib->update([
@@ -147,6 +149,10 @@ class VedomostAiDispatcher
             in_array($v->ai_check_status, ['queued', 'running'], true) => [
                 'blocked' => true, 'needs_reason' => false,
                 'message' => 'AI tekshiruvi tugashini kuting — natija chiqqach tasdiqlash mumkin bo\'ladi.',
+            ],
+            $v->ai_check_status === 'done' && !empty($v->ai_result['report']['counts']['sys_edited']) => [
+                'blocked' => false, 'needs_reason' => true,
+                'message' => 'Hisobotda ' . $v->ai_result['report']['counts']['sys_edited'] . ' ta Mark qiymati qo‘lda o‘zgartirilgan. Tasdiqlash uchun sababini yozing.',
             ],
             $v->ai_check_status === 'done' && $v->ai_verdict === 'ok' => $none,
             $v->ai_check_status === 'done' => [

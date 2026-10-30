@@ -98,6 +98,12 @@ class VedomostAiReportExcel
                 } elseif ($v !== null && $v !== '') {
                     $ws->getCell([$i + 1, $rn])->setValue($v);
                 }
+                // Faqat shu hisobotda o'zgartirilgan Mark qiymati — binafsha, izohda asl qiymat va sabab.
+                if (isset(($r['sys_edited'] ?? [])[$col])) {
+                    $this->fill($ws, $i + 1, $rn, 'FFE9D5FF');
+                    $ws->getComment([$i + 1, $rn])->getText()->createText('Mark qiymati faqat hisobotda o‘zgartirilgan. Asl: '
+                        . ($r['sys_orig'][$col] ?? '—') . '. Sabab: ' . $r['sys_edited'][$col]);
+                }
             }
             $c = $ncol + 1;
             foreach (self::AB as [, $key, $hc]) {
@@ -159,7 +165,7 @@ class VedomostAiReportExcel
                     $val = $tm['tm'];
                     $v()->setValue($val !== null ? (!empty($tm['dal']) ? $val . ' (Dalolatnoma)' : $val) : (!empty($tm['nd']) ? 'nd' : "yo'q"));
                     if (!empty($tm['nd'])) {
-                        $d()->setValue('nd (test markazida yo‘q, HEMIS 0)');
+                        $d()->setValue('nd (test markazida yo‘q, Mark 0)');
                     } elseif ($val !== null && empty($tm['dal'])) {
                         $d()->setValue(sprintf('=%s%d-%s%d', Coordinate::stringFromColumnIndex($c), $rn, $hc, $rn));
                     }
@@ -227,6 +233,11 @@ class VedomostAiReportExcel
                 $this->fill($ws, 3, $r, $h['st'] === 'bad' ? self::YELLOW : self::ORANGE);
             }
         }
+        if (!empty($report['counts']['sys_edited'])) {
+            $r++;
+            $ws->fromArray(['Mark qiymatlari', $report['counts']['sys_edited'] . ' ta qiymat faqat shu hisobotda qo‘lda o‘zgartirilgan (jurnal/Markda o‘zgarmagan) — Tekshirish varag‘ida binafsha', 'Tekshiring'], null, 'A' . $r);
+            $this->fill($ws, 3, $r, self::ORANGE);
+        }
         $w = $report['weights'] ?? [];
         $r++;
         $ws->fromArray(['Vaznlar (JN/MT/ON/OSKE/Test)', implode(' / ', [$w['jb'] ?? 0, $w['mt'] ?? 0, $w['on'] ?? 0, $w['oski'] ?? 0, $w['test'] ?? 0]), 'OK'], null, 'A' . $r);
@@ -252,7 +263,7 @@ class VedomostAiReportExcel
         }
         foreach ($report['extra'] ?? [] as $e) {
             $r++;
-            $ws->fromArray(['', $e['fio'], '', '', "PDFda bor, HEMISda yo'q", trim('vedomost.pdf / ' . ($e['page'] ?? 1) . ' · ' . ($e['note'] ?? ''))], null, 'A' . $r);
+            $ws->fromArray(['', $e['fio'], '', '', "PDFda bor, Markda yo'q", trim('vedomost.pdf / ' . ($e['page'] ?? 1) . ' · ' . ($e['note'] ?? ''))], null, 'A' . $r);
             $ws->getCell('C' . $r)->setValueExplicit((string) $e['id'], DataType::TYPE_STRING);
         }
         foreach ($report['issues'] ?? [] as $i) {

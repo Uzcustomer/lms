@@ -76,6 +76,23 @@ test('tuzatishlar birlashtiriladi: asl qiymatga qaytsa olib tashlanadi, tarix ma
         ->and($changes2[0])->toContain('78 → 87 (asl qiymat)');
 });
 
+test('Mark qiymatini o\'zgartirishda sabab majburiy; tarixga yoziladi', function () {
+    $result = [
+        'scan' => ['rows' => [], 'header' => [], 'weights' => [], 'signatures' => []],
+        'edits' => [],
+        'report' => ['rows' => [['key' => 'r0', 'id' => '368221100001', 'fio' => 'ALIYEV ALI', 'vt' => ['P' => 0], 'sys_orig' => []]]],
+    ];
+    $ctrl = app(VedomostAiReportController::class);
+    $merge = (new ReflectionClass($ctrl))->getMethod('mergeEdits');
+
+    expect(fn () => $merge->invoke($ctrl, $result, ['system' => ['368221100001' => ['P' => ['v' => '90', 'why' => '']]]]))
+        ->toThrow(\Illuminate\Validation\ValidationException::class);
+
+    [$edits, $changes] = $merge->invoke($ctrl, $result, ['system' => ['368221100001' => ['P' => ['v' => '90', 'why' => 'Dalolatnoma'], 'X' => ['v' => '1', 'why' => 'yo\'q ustun']]]]);
+    expect($edits)->toBe(['system' => ['368221100001' => ['P' => ['v' => 90.0, 'why' => 'Dalolatnoma']]]])
+        ->and($changes[0])->toContain('Mark qiymati (faqat hisobotda) ALIYEV ALI — OSKI: 0 → 90 · sabab: Dalolatnoma');
+});
+
 test('eski formatdagi natijani qayta hisoblab bo\'lmaydi', function () {
     expect(fn () => app(VedomostAiChecker::class)->recompute(['version' => 1], []))
         ->toThrow(RuntimeException::class, 'eski formatda');

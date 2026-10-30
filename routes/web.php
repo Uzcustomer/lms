@@ -232,6 +232,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/students/filter/semesters', [AdminStudentController::class, 'getFilterSemesters'])->name('students.filter.semesters');
         Route::get('/students/{student}', [AdminStudentController::class, 'show'])->name('students.show');
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
+        Route::post('/students/{student}/import-subjects', [AdminStudentController::class, 'importSubjects'])->name('students.import-subjects');
         Route::post('/students/{student}/toggle-five-candidate', [AdminStudentController::class, 'toggleFiveCandidate'])->name('students.toggle-five-candidate');
         Route::post('/students/bulk-reset-password', [AdminStudentController::class, 'bulkResetLocalPassword'])->name('students.bulk-reset-password');
         Route::post('/students/{student}/files', [AdminStudentController::class, 'uploadFile'])->name('students.files.upload');

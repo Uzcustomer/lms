@@ -253,6 +253,12 @@
                                 <td style="text-align:center;">
                                     <div style="display:flex;align-items:center;gap:4px;justify-content:center;">
                                         <button type="button"
+                                                class="btn-action btn-action-green"
+                                                title="HEMIS dan biriktirilgan fanlarni yuklash"
+                                                onclick="importStudentSubjects(this, '{{ route('admin.students.import-subjects', $student->id) }}')">
+                                            Fanlari
+                                        </button>
+                                        <button type="button"
                                                 class="btn-action btn-action-yellow"
                                                 onclick="openResetModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}')">
                                             Parol
@@ -380,6 +386,21 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
+        // HEMIS dan talabaga biriktirilgan fanlarni yuklash
+        function importStudentSubjects(btn, url) {
+            var label = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Yuklanmoqda...';
+            fetch(url, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+            })
+                .then(function (r) { return r.json().catch(function () { return { ok: false, message: 'Server xatosi (' + r.status + ')' }; }); })
+                .then(function (d) { alert(d.message || (d.ok ? 'Fanlar yuklandi.' : 'Xatolik yuz berdi.')); })
+                .catch(function () { alert("Tarmoq xatosi. Qayta urinib ko'ring."); })
+                .finally(function () { btn.disabled = false; btn.textContent = label; });
+        }
+
         // Modal functions
         function openResetModal(studentId, studentName, studentIdNumber) {
             document.getElementById('modalStudentName').textContent = studentName;
@@ -641,5 +662,8 @@
         .btn-action-yellow:hover { box-shadow: 0 2px 8px rgba(245,158,11,0.4); }
         .btn-action-blue { background: linear-gradient(135deg, #2b5ea7, #3b82f6); color: #fff; }
         .btn-action-blue:hover { box-shadow: 0 2px 8px rgba(59,130,246,0.4); }
+        .btn-action-green { background: linear-gradient(135deg, #059669, #10b981); color: #fff; }
+        .btn-action-green:hover { box-shadow: 0 2px 8px rgba(16,185,129,0.4); }
+        .btn-action:disabled { opacity: 0.6; cursor: wait; transform: none; }
     </style>
 </x-app-layout>

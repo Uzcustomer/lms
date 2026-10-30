@@ -946,6 +946,27 @@ class StudentController extends Controller
         }
     }
 
+    /**
+     * Talabaga HEMIS da biriktirilgan fanlarni qayta import qilish
+     * (import:student-subjects --student=... bilan bir xil).
+     */
+    public function importSubjects(Student $student, \App\Services\HemisService $hemisService)
+    {
+        if (!$student->hemis_id) {
+            return response()->json(['ok' => false, 'message' => "Talabaning HEMIS ID si yo'q."], 422);
+        }
+
+        $imported = $hemisService->importStudentSubjects(null, [(int) $student->hemis_id]);
+
+        return response()->json([
+            'ok' => $imported > 0,
+            'imported' => $imported,
+            'message' => $imported > 0
+                ? "{$student->full_name}: HEMIS dan {$imported} ta fan yuklandi."
+                : "{$student->full_name}: HEMIS dan fan kelmadi (biriktirilmagan yoki HEMIS javob bermadi).",
+        ]);
+    }
+
     public function toggleFiveCandidate(Request $request, Student $student)
     {
         $user = Auth::user();

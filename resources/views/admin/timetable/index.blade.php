@@ -5679,7 +5679,7 @@
                         specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject,
                         training_type: card.type || 'practice', view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
-                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays, ...cycleLayerParams(),
                     });
 
                     $('cycAssignKafedra').textContent = "O'qituvchi" + (j.kafedra ? ' (' + j.kafedra + ')' : '');
@@ -5757,7 +5757,7 @@
                         teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
                         auditorium_code: $('cycAssignRoom').value || null,
                         shift_start: $('cycAssignShiftBox').classList.contains('hidden') ? undefined : +$('cycAssignShift').value,
-                        start_date: $('cycleStart').value, holidays: cycleHolidays, force: force ? 1 : undefined,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays, force: force ? 1 : undefined, ...cycleLayerParams(),
                     });
                     closeCycleAssign();
                     await loadCyclePlan();

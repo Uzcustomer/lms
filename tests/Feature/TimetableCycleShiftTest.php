@@ -157,3 +157,160 @@ it('xona: bir oqimdagi guruhcha xonasi — bir smenada band (ro\'yxatda yo\'q, s
     expect($pl->fresh()->lecture_slots['shift_g'])->toBe(['p/p22-02b' => 7])
         ->and(csCall($board, 'cycleConflicts'))->toBe([]);
 });
+
+/** Qo'ng'iroq jadvali: $n ta to'liq para (80 daqiqa) — kun to'ri $n × 2 qator. */
+function csBells(TimetableBoard $board, int $n): void
+{
+    $starts = ['08:30', '10:00', '12:00', '13:30', '15:00', '16:30', '18:00', '19:30'];
+    $board->update(['bell_schedule' => array_map(fn ($t) => ['type' => 'pair', 'start' => $t,
+        'end' => \Illuminate\Support\Carbon::parse($t)->addMinutes(80)->format('H:i')], array_slice($starts, 0, $n))]);
+}
+
+/** Pediatriya 5-kurs Klinik farmakologiya soatlari (ishchi reja): amaliy 30 soat — har kun 6 soat amaliy. */
+function csHours(): void
+{
+    $mc = \Illuminate\Support\Facades\DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'x', 'specialty_name' => 'Pediatriya',
+        'plan_year' => '2022/2023', 'level_code' => '15', 'created_at' => now(), 'updated_at' => now()]);
+    \Illuminate\Support\Facades\DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Klinik farmakologiya',
+        'semester' => 9, 'lecture' => 0, 'practice' => 30, 'created_at' => now(), 'updated_at' => now()]);
+}
+
+it('smena: tashqi jadval / oqim qatori uchun tanlov yo\'q va saqlanmaydi; sig\'maydigan para (V, VI) berilmaydi va rad etiladi', function () {
+    $s = csSetup();
+    csBells($s['board'], 6);
+    $admin = csTeacher('ADMIN', 'admin');
+    $as = fn () => test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin']);
+    $flow = ['specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => 'Ped / 3-oqim', 'subject_name' => 'Klinik farmakologiya',
+        'training_type' => 'practice', 'view' => 'flow', 'layer' => 'external'];
+    expect($as()->postJson(route('admin.timetable.cycle-assign-options', $s['board']), $flow)->assertOk()->json('shift_options'))->toBe([]);
+    $as()->postJson(route('admin.timetable.cycle-assign', $s['board']), $flow + ['shift_start' => 7])
+        ->assertStatus(422)->assertJson(['error' => 'Smena faqat ichki jadvalda guruhcha uchun belgilanadi.']);
+
+    // Ichki jadval, guruhcha: 6 para (12 qator), kunlik amaliy 6 soat — eng kechi IV para (7-qator)
+    $params = ['specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => 'p/p22-03c', 'placement_group' => 'Ped / 3-oqim',
+        'subject_name' => 'Klinik farmakologiya', 'training_type' => 'practice', 'view' => 'group', 'layer' => 'internal'];
+    expect($as()->postJson(route('admin.timetable.cycle-assign-options', $s['board']), $params)->assertOk()->json('shift_options'))->toBe([
+        ['start' => 1, 'label' => 'I para (08:30)'], ['start' => 3, 'label' => 'II para (10:00)'],
+        ['start' => 5, 'label' => 'III para (12:00)'], ['start' => 7, 'label' => 'IV para (13:30)'],
+    ]);
+    $as()->postJson(route('admin.timetable.cycle-assign', $s['board']), $params + ['shift_start' => 9])->assertStatus(422);
+    $as()->postJson(route('admin.timetable.cycle-assign', $s['board']), $params + ['shift_start' => 7])->assertOk();
+    expect(TimetableCyclePlacement::where('group_name', 'Ped / 3-oqim')->first()->lecture_slots['shift_g'])->toBe(['p/p22-03c' => 7]);
+});
+
+it('haftalik jadvaldagi sikl bandligi (cycleBusyByDate) — Mark bilan bir xil kun to\'ri: 8 para, smena V para — 9–14-qatorlar', function () {
+    $s = csSetup(['p/p22-03c' => 9]);
+    csBells($s['board'], 8);
+    csHours();
+    $busy = csCall($s['board'], 'cycleBusyByDate');
+    $mine = array_values(array_filter($busy['2026-09-14'] ?? [], fn ($x) => str_contains($x[6], 'Ped / 3-oqim')));
+    expect(array_map(fn ($x) => [$x[0], $x[1]], $mine))->toBe([[9, 15]]);
+    // Mark/bandlik (cycleOccupancy) bilan bir xil
+    [$units, $calendar] = csCall($s['board'], 'placedCycleUnits');
+    $occ = (new ReflectionMethod(TimetableController::class, 'cycleOccupancy'))->invoke(app(TimetableController::class), $s['board'],
+        array_values(array_filter($units, fn ($u) => $u['unit'] === 'p/p22-03c')), $calendar);
+    expect([$occ[0]['from'], $occ[0]['to']])->toBe([9, 15]);
+});
+
+/** Butun doska: har bir joylangan ichki sikl birligi sanasi (from) — "Sikl jadvali" (cyclePlan, ichki qatlam) blokiniki bilan bir xil. */
+function csAssertUnitsMatchPlan(TimetableBoard $board): int
+{
+    $plan = test()->withoutVite()->actingAs(csTeacher('ADMIN' . random_int(1, 99999), 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-plan', $board), ['layer' => 'internal'])->assertOk()->json();
+    $fromPlan = [];
+    foreach ($plan['rows'] as $row) {
+        foreach ($row['blocks'] as $b) {
+            $fromPlan[$row['group'] . '|' . $b['subject']] = $b['from'];
+        }
+    }
+    [$units] = csCall($board, 'cycleInternalUnits');
+    $fromUnits = [];
+    foreach ($units as $u) {
+        if ($u['placement']) {
+            $fromUnits[$u['group'] . '|' . $u['subject']] = $u['from'];
+        }
+    }
+    ksort($fromPlan);
+    ksort($fromUnits);
+    expect($fromUnits)->toBe($fromPlan);
+
+    return count($fromPlan);
+}
+
+it('sana (board 7 holati): oqimda 8 ta fan bloki, guruhchalarda turli o\'qituvchilar — ogohlantirishda Mark\'dagi 30.10–10.11', function () {
+    $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 15, 'settings' => ['semester_start' => '2026-09-14']]);
+    $subjects = ['Ichki kasalliklar propedevtikasi', 'Pediatriya', 'Xirurgiya', 'Nevrologiya', 'Dermatologiya', 'Oftalmologiya', 'LOR',
+        'Klinik farmakologiya'];
+    foreach ($subjects as $subj) {
+        TimetableSubjectSetting::create(['board_id' => $board->id, 'specialty_name' => 'Pediatriya', 'course' => 5,
+            'subject_name' => $subj, 'mode' => 'cycle', 'cycle_days' => $subj === 'Klinik farmakologiya' ? 10 : 5]);
+    }
+    $yoqubov = csTeacher('YOQUBOV U. B.');
+    $groups = ["p/p22-02a (o'z)" => '2-oqim', "p/p22-02b (o'z)" => '2-oqim', "p/p22-03c (o'z)" => '3-oqim', "p/p22-03a (o'z)" => '3-oqim'];
+    foreach ($groups as $g => $oqim) {
+        foreach ($subjects as $i => $subj) {
+            // 02a ning birinchi kartasi (Ichki kasalliklar) — boshqa oqimda (1-oqim)
+            $label = $g === "p/p22-02a (o'z)" && $i === 0 ? '1-oqim' : $oqim;
+            $t = $subj === 'Klinik farmakologiya' && in_array($g, ["p/p22-02a (o'z)", "p/p22-03c (o'z)"], true) ? $yoqubov : csTeacher('T ' . $g . ' ' . $i);
+            TimetableCard::create(['board_id' => $board->id, 'faculty_name' => 'Ped', 'specialty_name' => 'Pediatriya', 'course' => 5,
+                'oqim_label' => $label, 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+                'subject_name' => $subj, 'group_name' => $g, 'kafedra_name' => 'K', 'teacher_id' => $t->id, 'teacher_name' => $t->full_name]);
+        }
+    }
+    // Oqim bloklari ketma-ket (har biri 5 kun); Klinik farmakologiya — 30.10 (46-kun) dan 10 kun. 1-oqimda shu fanlar 15.12 (92-kun) dan.
+    foreach (['2-oqim', '3-oqim', '1-oqim'] as $oq) {
+        foreach ($subjects as $i => $subj) {
+            TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => 'Ped / ' . $oq,
+                'subject_name' => $subj, 'training_type' => 'practice',
+                'start_index' => $oq === '1-oqim' ? 92 : ($subj === 'Klinik farmakologiya' ? 46 : $i * 6)]);
+        }
+    }
+    $card = TimetableCard::where('board_id', $board->id)->where('group_name', "p/p22-03c (o'z)")->where('subject_name', 'Klinik farmakologiya')->get();
+    expect(csCall($board, 'unitBusy', $card)['teachers'][$yoqubov->id])->toBe("p/p22-02a (o'z), Klinik farmakologiya, 30.10–10.11")
+        ->and(csCall($board, 'cycleConflicts')["Pediatriya|5|p/p22-03c (o'z)|Klinik farmakologiya|practice"]['text'])
+        ->toBe("O'qituvchi YOQUBOV U. B. band: p/p22-02a (o'z), Klinik farmakologiya, 30.10–10.11");
+    expect(csAssertUnitsMatchPlan($board))->toBe(32);
+});
+
+it('butun doska: ichki sikl birliklari sanalari cyclePlan bloklari bilan bir xil (tasodifiy oqimlar, guruhcha joylashuvlari)', function (int $seed) {
+    mt_srand($seed);
+    $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 15, 'settings' => ['semester_start' => '2026-09-14']]);
+    $subjects = ['Klinik farmakologiya', 'Ichki kasalliklar', 'Pediatriya', 'Xirurgiya', 'Nevrologiya', 'Dermatologiya', 'Oftalmologiya', 'LOR'];
+    foreach ($subjects as $i => $subj) {
+        TimetableSubjectSetting::create(['board_id' => $board->id, 'specialty_name' => 'Pediatriya', 'course' => 5,
+            'subject_name' => $subj, 'mode' => 'cycle', 'cycle_days' => 5 + $i % 4]);
+    }
+    $groups = ["p/p22-02a (o'z)", "p/p22-02b (o'z)", "p/p22-03c (o'z)", "p/p22-03a (o'z)"];
+    foreach ($groups as $g) {
+        foreach ($subjects as $subj) {
+            $oqim = mt_rand(0, 3) ? (str_contains($g, '-02') ? '2-oqim' : '3-oqim') : (mt_rand(0, 1) ? '1-oqim' : null);
+            TimetableCard::create(['board_id' => $board->id, 'faculty_name' => 'Ped', 'specialty_name' => 'Pediatriya', 'course' => 5,
+                'oqim_label' => $oqim, 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+                'subject_name' => $subj, 'group_name' => $g, 'kafedra_name' => 'K']);
+        }
+    }
+    foreach (['Ped / 1-oqim', 'Ped / 2-oqim', 'Ped / 3-oqim', ...$groups] as $row) {
+        foreach ($subjects as $subj) {
+            if (mt_rand(0, str_starts_with($row, 'Ped') ? 4 : 0) === 1 || (str_starts_with($row, 'Ped') && mt_rand(0, 3))) {
+                TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => $row,
+                    'subject_name' => $subj, 'start_index' => mt_rand(0, 80), 'training_type' => mt_rand(0, 3) ? 'practice' : null]);
+            }
+        }
+    }
+    expect(csAssertUnitsMatchPlan($board))->toBeGreaterThan(0);
+})->with(range(1, 6));
+
+it('kafedra mudiri: sikl jadvali "Kafedraniki" qamrovida ochiladi — faqat o\'z kafedrasi bloklari', function () {
+    $s = csSetup();
+    TimetableCard::where('board_id', $s['board']->id)->where('group_name', 'p/p22-02a')->update(['kafedra_name' => 'Boshqa kafedra']);
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 701, 'name' => 'Farmakologiya kafedrasi', 'code' => 'F',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = csTeacher('MUDIR F.', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 701])->save();
+    $plan = test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'kafedra' => 1])->assertOk()->json();
+    expect(collect($plan['rows'])->filter(fn ($r) => $r['blocks'])->pluck('group')->values()->all())->toBe(['p/p22-03c']);
+});

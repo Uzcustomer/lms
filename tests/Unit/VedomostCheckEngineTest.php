@@ -381,3 +381,23 @@ test('qayta topshirish shakllari: sarlavhadagi shakl nomi, ism oxiridagi guruh, 
     $r2 = engine()->build($exp, scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], ['shakl' => '12-shakl']), [], rules(), ctx());
     expect(collect($r2['header'])->keyBy('key')['shakl']['st'])->toBe('bad');
 });
+
+test('Mark qiymati faqat hisobotda o\'zgartiriladi: qayta hisob, asl qiymat va sabab saqlanadi', function () {
+    $stu = [vtStu('ABDURAHIMOV JASUR', '368221100001', 80, 90, 0, 70)];
+    $scan = scanDoc([pdfRow(2, 'ABDURAHIMOV JASUR', '368221100001', bobo(['jb_pct' => '80', 'jb_ball' => '40,0', 'mt_pct' => '90', 'mt_ball' => '18,0', 'oski_pct' => '90', 'oski_ball' => '13,5', 'test_pct' => '70', 'test_ball' => '10,5', 'yn' => '82']))]);
+
+    $before = engine()->build(expectedData($stu), $scan, [], rules(), ctx());
+    $after = engine()->build(expectedData($stu), $scan, ['system' => ['368221100001' => ['P' => ['v' => 90, 'why' => 'OSKE dalolatnomasi']]]], rules(), ctx());
+    $row = $after['rows'][0];
+
+    expect($before['rows'][0]['cells']['oski']['status'])->toBe('bad')
+        ->and($row['vt']['P'])->toBe(90.0)
+        ->and($row['cells']['oski']['status'])->toBe('ok')
+        ->and($row['sys_orig']['P'])->toBe(0.0)
+        ->and($row['sys_edited']['P'])->toBe('OSKE dalolatnomasi')
+        ->and($after['counts']['sys_edited'])->toBe(1)
+        ->and(collect($row['flags'])->pluck('m')->implode(' '))->toContain('Mark qiymati faqat hisobotda o‘zgartirilgan');
+
+    $ws = app(\App\Services\VedomostAiReportExcel::class)->build($after)->getSheetByName('Tekshirish');
+    expect($ws->getComment('P2')->getText()->getPlainText())->toContain('OSKE dalolatnomasi');
+});

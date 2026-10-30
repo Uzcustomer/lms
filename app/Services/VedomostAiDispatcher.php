@@ -150,6 +150,10 @@ class VedomostAiDispatcher
                 'blocked' => true, 'needs_reason' => false,
                 'message' => 'AI tekshiruvi tugashini kuting — natija chiqqach tasdiqlash mumkin bo\'ladi.',
             ],
+            $v->ai_check_status === 'done' && !empty($v->ai_result['report']['counts']['sys_edited']) => [
+                'blocked' => false, 'needs_reason' => true,
+                'message' => 'Hisobotda ' . $v->ai_result['report']['counts']['sys_edited'] . ' ta Mark qiymati qo‘lda o‘zgartirilgan. Tasdiqlash uchun sababini yozing.',
+            ],
             $v->ai_check_status === 'done' && $v->ai_verdict === 'ok' => $none,
             $v->ai_check_status === 'done' => [
                 'blocked' => false, 'needs_reason' => true,

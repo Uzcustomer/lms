@@ -25,6 +25,12 @@ class VedomostCheckEngine
     /** Xodim tahrirlay oladigan PDF maydonlari. */
     public const EDITABLE = ['fio', 'id', ...self::PDF_FIELDS];
 
+    /**
+     * Xodim faqat shu hisobot ichida o'zgartira oladigan Mark qiymatlari (VT ustuni => xom maydon).
+     * Ballar, JN+MT va YN shulardan qayta hisoblanadi; jurnal/Mark/HEMIS'ga hech narsa yozilmaydi.
+     */
+    public const SYSTEM_EDITABLE = ['D' => 'jn', 'G' => 'mt', 'J' => 'on', 'P' => 'oski', 'S' => 'test'];
+
     public const HEADER_EDITABLE = ['fan', 'guruh', 'soat', 'kredit', 'maruzachi', 'amaliyot', 'yn_sana', 'dekan', 'kafedra_mudiri', 'kurs', 'semestr', 'shakl'];
 
     /**
@@ -80,6 +86,7 @@ class VedomostCheckEngine
         // --- tizim (VT) qatorlari ---
         $system = [];
         foreach (array_values($expected['talabalar'] ?? []) as $i => $stu) {
+            $stu = $this->applySystemEdits($stu, $edits['system'][VedomostScanReader::digits($stu['student_id'] ?? '')] ?? []);
             $stu['vt'] = $this->vtRow($stu, $w, $expected, $i + 1);
             $system[] = $stu;
         }
@@ -100,6 +107,10 @@ class VedomostCheckEngine
             $vt = $stu['vt'];
             $sid = VedomostScanReader::digits($stu['student_id'] ?? '');
             $flags = [];
+            foreach ($stu['sys_edited'] ?? [] as $col => $why) {
+                $flags[] = ['t' => 'info', 'm' => 'Mark qiymati faqat hisobotda o‘zgartirilgan: ' . (self::VT_HEADERS[$col] ?? $col) . ' '
+                    . $this->f($stu['sys_orig'][$col] ?? null) . ' → ' . $this->f($stu['raw'][self::SYSTEM_EDITABLE[$col]] ?? null) . ($why !== '' ? " (sabab: {$why})" : '')];
+            }
             $status = 'ok';
             $set = function (string $s) use (&$status) {
                 if (self::RANK[$s] > self::RANK[$status]) {
@@ -252,6 +263,8 @@ class VedomostCheckEngine
                 'nr' => $s['nr'] ?? null,
                 'unclear' => $s['unclear'] ?? [],
                 'orig' => $s['orig'] ?? [],
+                'sys_edited' => $stu['sys_edited'] ?? [],
+                'sys_orig' => $stu['sys_orig'] ?? [],
                 'edited' => $s ? ($editedKeys[$s['key']] ?? []) : [],
                 'cells' => $cells,
                 'tm' => $tm,
@@ -310,7 +323,8 @@ class VedomostCheckEngine
         }
 
         $counts = ['total' => $sysN, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => count($extraRows),
-            'edited' => count(array_filter($rows, fn ($r) => !empty($r['edited']))) + count(array_filter($extraRows, fn ($r) => !empty($r['edited'])))];
+            'edited' => count(array_filter($rows, fn ($r) => !empty($r['edited']))) + count(array_filter($extraRows, fn ($r) => !empty($r['edited']))),
+            'sys_edited' => array_sum(array_map(fn ($r) => count($r['sys_edited'] ?? []), $rows))];
         foreach ($rows as $r) {
             $counts[$r['status']]++;
         }
@@ -672,6 +686,23 @@ class VedomostCheckEngine
     /**
      * @return array{0: array, 1: array, 2: array, 3: array, 4: array}
      */
+    /** Mark qiymatlarini faqat hisobot uchun almashtiradi; asl qiymat va sabab saqlanadi. */
+    private function applySystemEdits(array $stu, array $ov): array
+    {
+        foreach ($ov as $col => $e) {
+            $field = self::SYSTEM_EDITABLE[$col] ?? null;
+            $val = is_array($e) ? ($e['v'] ?? null) : $e;
+            if ($field === null || !is_numeric($val)) {
+                continue;
+            }
+            $stu['sys_orig'][$col] = $stu['raw'][$field] ?? null;
+            $stu['raw'][$field] = (float) $val;
+            $stu['sys_edited'][$col] = is_array($e) ? (string) ($e['why'] ?? '') : '';
+        }
+
+        return $stu;
+    }
+
     private function applyEdits(array $scan, array $edits): array
     {
         $rows = [];

@@ -80,6 +80,19 @@
         .xl td.sep { background: #fafafa; min-width: 14px; }
         .xl td.bq { min-width: 72px; position: relative; }
         .xl td.bq.ed { cursor: cell; }
+        .xl td.sys { cursor: cell; box-shadow: inset 0 0 0 1px #c4b5fd; }
+        .xl td.sys-edited { background: #ede9fe !important; color: #5b21b6; font-weight: 700; }
+        .xl td.sys-dirty { box-shadow: inset 0 0 0 2px #7c3aed; color: #5b21b6; font-weight: 700; }
+        .chip.sysmode[aria-pressed="true"] { border-color: #7c3aed; background: #ede9fe; color: #5b21b6; }
+        .why-dlg { border: none; border-radius: 10px; padding: 0; width: min(440px, 92vw); box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+        .why-dlg::backdrop { background: rgba(15,23,42,.45); }
+        .why-dlg form { padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+        .why-dlg h3 { margin: 0; font-size: 15px; }
+        .why-dlg p { margin: 0; font-size: 13px; color: var(--muted); }
+        .why-dlg textarea { width: 100%; min-height: 80px; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font: inherit; }
+        .why-dlg .acts { display: flex; justify-content: flex-end; gap: 8px; }
+        .why-dlg button { height: 34px; padding: 0 14px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; font-weight: 600; cursor: pointer; }
+        .why-dlg button.primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
         .xl td.edited::before { content: ""; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 8px 8px 0; border-color: transparent var(--edit) transparent transparent; }
         .xl td.dirty { box-shadow: inset 0 0 0 2px var(--edit); font-weight: 700; color: var(--edit); }
         .xl td.sel { box-shadow: inset 0 0 0 2px var(--xl); }
@@ -184,6 +197,11 @@
         <button class="chip" data-filter="edited"><span class="sw" style="background:var(--edit)"></span>Tuzatilgan <span class="n">{{ $c['edited'] }}</span></button>
     </div>
     <div class="spacer"></div>
+    @if($canEdit)
+        <button class="chip sysmode" id="sys-mode" aria-pressed="false" title="Mark qiymatlarini faqat shu hisobotda o'zgartirish (sabab majburiy). Jurnal, Mark va HEMIS'ga yozilmaydi.">
+            <span class="sw" style="background:#7c3aed"></span>Mark qiymatlarini tahrirlash @if(!empty($c['sys_edited']))<span class="n">{{ $c['sys_edited'] }}</span>@endif
+        </button>
+    @endif
     <label class="toggle"><input type="checkbox" id="all-cols"> Barcha Mark ustunlari</label>
     <div class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="search" placeholder="F.I.Sh yoki ID" aria-label="Qidirish"></div>
 </section>
@@ -249,6 +267,15 @@
     </div>
 </nav>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog class="why-dlg" id="why-dlg">
+    <form method="dialog">
+        <h3 id="why-title">Mark qiymatini o'zgartirish</h3>
+        <p>Qiymat faqat shu hisobotda o'zgaradi — jurnal, Mark va HEMIS'ga yozilmaydi. Sabab jarayon tarixiga yoziladi.</p>
+        <label for="why-text" style="font-size:13px;font-weight:600;">Sabab (majburiy)</label>
+        <textarea id="why-text" required minlength="3" placeholder="Masalan: dekanat farmoyishi №…, jurnalga hali kiritilmagan"></textarea>
+        <div class="acts"><button value="cancel" formnovalidate>Bekor qilish</button><button value="ok" class="primary">Qo'llash</button></div>
+    </form>
+</dialog>
 
 <script>
 (function () {
@@ -266,7 +293,10 @@
     const COMPACT = ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'J', 'K', 'M', 'N', 'P', 'Q', 'S', 'T', 'V', 'W', 'X', 'Y'];
     const ST_ICON = { ok: 'i-check', bad: 'i-alert', ocr: 'i-eye', missing: 'i-minus', nopdf: 'i-minus' };
 
-    const pending = { rows: {}, header: {}, weights: {}, signatures: {} };
+    const pending = { rows: {}, header: {}, weights: {}, signatures: {}, system: {} };
+    const SYS = @json(\App\Services\VedomostCheckEngine::SYSTEM_EDITABLE);
+    let sysMode = false;
+    const sysPending = (id, col) => (pending.system[id] || {})[col];
     let filter = (R.counts.bad + R.counts.ocr + R.counts.missing + R.counts.nopdf) > 0 ? 'problems' : 'all';
     let query = '';
     let allCols = false;
@@ -334,10 +364,18 @@
                 if (['A', 'B', 'C'].includes(k) && statusFill) cls += ' y';
                 if (k === 'B' && row.status === 'ocr') cls += ' o';
                 let v = vt[k];
+                let sysAttrs = '';
+                if (SYS[k] && row.id) {
+                    const p = sysPending(row.id, k);
+                    if (p !== undefined) { v = p === null ? (row.sys_orig || {})[k] ?? v : p.v; cls += ' sys-dirty'; }
+                    else if ((row.sys_edited || {})[k] !== undefined) cls += ' sys-edited';
+                    if (sysMode && CAN_EDIT) { cls += ' sys'; sysAttrs = ` tabindex="0" data-mkey="${esc(row.id)}" data-mcol="${k}" data-fio="${esc(row.fio)}" data-label="${esc(VT_HEADERS[k])} (Mark)"`; }
+                    if ((row.sys_edited || {})[k] !== undefined) sysAttrs += ` title="Asl Mark qiymati: ${esc(fmt((row.sys_orig || {})[k]))} · sabab: ${esc(row.sys_edited[k])}"`;
+                }
                 if (k === 'N' && v !== null && v !== '') v = Math.round(v * 100) + '%';
                 else if (k === 'AM' && v !== null && v !== '') v = (+(v * 100).toFixed(2)) + '%';
                 else if (['E', 'H'].includes(k) && typeof v === 'number') v = v.toFixed(1);
-                body += `<td class="${cls}" data-ref="${colL(vtIndex(k))}${ri + 2}" title="${k === 'B' ? esc((row.flags || []).map(f => f.m).join('\n')) : ''}">${esc(fmt(v))}</td>`;
+                body += `<td class="${cls}" data-ref="${colL(vtIndex(k))}${ri + 2}"${sysAttrs}${k === 'B' ? ` title="${esc((row.flags || []).map(f => f.m).join('\n'))}"` : ''}>${esc(fmt(v))}</td>`;
             });
             AB.forEach(([t, key, hc], i) => {
                 const f = COMPARE[key][1];
@@ -497,6 +535,7 @@
     function dirtyCount() {
         let n = Object.keys(pending.header).length + Object.keys(pending.weights).length + Object.keys(pending.signatures).length;
         Object.values(pending.rows).forEach(o => { n += Object.keys(o).length; });
+        Object.values(pending.system).forEach(o => { n += Object.keys(o).length; });
         return n;
     }
     function updateSavebar() {
@@ -511,6 +550,7 @@
         return (e.pdf || {})[f] ?? '';
     }
     function startEdit(td, mode = 'edit') {
+        if (td && td.dataset.mkey) return startSysEdit(td, mode);
         if (!td || !td.dataset.key || td.querySelector('input')) return;
         const key = td.dataset.key, f = td.dataset.field;
         const e = findEntry(key);
@@ -549,7 +589,75 @@
         });
         input.addEventListener('blur', () => commit(null));
     }
+    // Mark qiymati: kiritiladi → sabab so'raladi → pending.system ga yoziladi (saqlanganda qayta hisob).
+    function startSysEdit(td, mode) {
+        if (td.querySelector('input')) return;
+        const id = td.dataset.mkey, col = td.dataset.mcol;
+        const row = R.rows.find(r => r.id === id);
+        const orig = (row.sys_orig || {})[col] ?? row.vt[col];
+        const cur = sysPending(id, col);
+        const shown = cur === undefined ? row.vt[col] : (cur === null ? orig : cur.v);
+        const input = document.createElement('input');
+        input.className = 'ci';
+        input.dataset.mode = mode;
+        input.value = fmt(shown);
+        input.setAttribute('aria-label', (td.dataset.label || col) + ' — ' + (td.dataset.fio || ''));
+        td.textContent = '';
+        td.appendChild(input);
+        input.focus(); input.select();
+        let done = false;
+        const finish = move => { renderAll(); const t = document.querySelector(`#sheet-main td[data-mkey="${CSS.escape(id)}"][data-mcol="${col}"]`); if (t) selectCell(move ? (neighbour(t, move) || t) : t); };
+        const commit = move => {
+            if (done) return; done = true;
+            const raw = input.value.trim().replace(',', '.');
+            if (raw === '' || isNaN(+raw) || +raw === +shown) { finish(move); return; }
+            if (+raw === +orig) {
+                pending.system[id] = pending.system[id] || {};
+                if ((row.sys_edited || {})[col] !== undefined) pending.system[id][col] = null; else delete pending.system[id][col];
+                if (!Object.keys(pending.system[id]).length) delete pending.system[id];
+                finish(move); return;
+            }
+            const dlg = document.getElementById('why-dlg');
+            document.getElementById('why-title').textContent = `${row.fio} — ${VT_HEADERS[col]}: ${fmt(orig)} → ${fmt(+raw)}`;
+            const txt = document.getElementById('why-text');
+            txt.value = (cur && cur.why) || (row.sys_edited || {})[col] || '';
+            dlg.returnValue = '';
+            dlg.onclose = () => {
+                const why = txt.value.trim();
+                if (dlg.returnValue === 'ok' && why.length >= 3) {
+                    pending.system[id] = pending.system[id] || {};
+                    pending.system[id][col] = { v: +raw, why };
+                } else if (dlg.returnValue === 'ok') {
+                    toast("Sabab kamida 3 ta belgi bo'lishi kerak — o'zgarish qo'llanmadi", true);
+                }
+                finish(move);
+            };
+            dlg.showModal();
+            txt.focus();
+        };
+        input.addEventListener('keydown', ev => {
+            ev.stopPropagation();
+            const arrows = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+            if (ev.key === 'Enter') { ev.preventDefault(); commit(ev.shiftKey ? 'up' : 'down'); }
+            else if (ev.key === 'Tab') { ev.preventDefault(); commit(ev.shiftKey ? 'left' : 'right'); }
+            else if (ev.key === 'Escape') { done = true; finish(); }
+            else if (arrows[ev.key] && (input.dataset.mode === 'type' || ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) { ev.preventDefault(); commit(arrows[ev.key]); }
+        });
+        input.addEventListener('blur', () => { if (!document.getElementById('why-dlg').open) commit(null); });
+    }
     function revertCell(td) {
+        if (td.dataset.mkey) {
+            const id = td.dataset.mkey, col = td.dataset.mcol;
+            const row = R.rows.find(r => r.id === id);
+            pending.system[id] = pending.system[id] || {};
+            if (sysPending(id, col) !== undefined) delete pending.system[id][col];
+            else if ((row.sys_edited || {})[col] !== undefined) pending.system[id][col] = null;
+            if (!Object.keys(pending.system[id]).length) delete pending.system[id];
+            renderAll();
+            const t = document.querySelector(`#sheet-main td[data-mkey="${CSS.escape(id)}"][data-mcol="${col}"]`);
+            if (t) selectCell(t);
+            return;
+        }
         const key = td.dataset.key, f = td.dataset.field;
         const e = findEntry(key);
         if (isDirty(key, f)) delete pending.rows[key][f];
@@ -624,7 +732,7 @@
             return;
         }
         if (e.key === 'Tab') { e.preventDefault(); selectCell(neighbour(td, e.shiftKey ? 'left' : 'right')); return; }
-        const editable = !!td.dataset.key;
+        const editable = !!(td.dataset.key || td.dataset.mkey);
         if (e.key === 'Enter') {
             e.preventDefault();
             if (editable && !e.shiftKey) startEdit(td, 'edit');
@@ -641,7 +749,7 @@
             if (inp) inp.value = e.key;
         }
     });
-    document.addEventListener('dblclick', e => { const td = e.target.closest('td[data-key]'); if (td) startEdit(td, 'edit'); });
+    document.addEventListener('dblclick', e => { const td = e.target.closest('td[data-key], td[data-mkey]'); if (td) startEdit(td, 'edit'); });
     document.addEventListener('focusin', e => { const td = e.target.closest && e.target.closest('.xl td'); if (td) showCell(td); });
     document.addEventListener('change', e => {
         const h = e.target.closest('[data-hkey]');
@@ -656,7 +764,7 @@
     const toast = (m, err) => { const t = document.getElementById('toast'); t.textContent = m; t.className = 'toast show' + (err ? ' err' : ''); setTimeout(() => t.className = 'toast', 3500); };
     document.getElementById('btn-discard').addEventListener('click', () => {
         if (!confirm("Saqlanmagan o'zgarishlar bekor qilinsinmi?")) return;
-        pending.rows = {}; pending.header = {}; pending.weights = {}; pending.signatures = {};
+        pending.rows = {}; pending.header = {}; pending.weights = {}; pending.signatures = {}; pending.system = {};
         renderAll();
     });
     document.getElementById('btn-save').addEventListener('click', async () => {
@@ -666,7 +774,7 @@
             const res = await fetch(SAVE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }, body: JSON.stringify(pending) });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.message || ('Xatolik: ' + res.status));
-            pending.rows = {}; pending.header = {}; pending.weights = {}; pending.signatures = {};
+            pending.rows = {}; pending.header = {}; pending.weights = {}; pending.signatures = {}; pending.system = {};
             sessionStorage.setItem('vedomost-report-toast', data.message || 'Saqlandi');
             location.reload();
         } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Saqlash'; }
@@ -680,11 +788,18 @@
         history.replaceState(null, '', '#' + name);
     }
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
-    function setChips() { document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.filter === filter ? 'true' : 'false')); }
-    document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { filter = c.dataset.filter; setChips(); renderMain(); renderPdf(); }));
+    function setChips() { document.querySelectorAll('.chip[data-filter]').forEach(c => c.setAttribute('aria-pressed', c.dataset.filter === filter ? 'true' : 'false')); }
+    document.querySelectorAll('.chip[data-filter]').forEach(c => c.addEventListener('click', () => { filter = c.dataset.filter; setChips(); renderMain(); renderPdf(); }));
     let qt;
     document.getElementById('search').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { query = e.target.value.trim(); renderMain(); renderPdf(); }, 150); });
     document.getElementById('all-cols').addEventListener('change', e => { allCols = e.target.checked; renderMain(); });
+    const sysBtn = document.getElementById('sys-mode');
+    if (sysBtn) sysBtn.addEventListener('click', () => {
+        sysMode = !sysMode;
+        sysBtn.setAttribute('aria-pressed', sysMode ? 'true' : 'false');
+        if (sysMode) { filter = 'all'; setChips(); showTab('main'); toast("Mark ustunlari (JN, MT, ON, OSKI, Test) tahrirlanadi — faqat shu hisobotda, sabab bilan"); }
+        renderMain();
+    });
 
     setChips();
     renderAll();

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Tekshiruv — {{ $merged->group_name ?? $v->group_name }} · {{ $merged->subject_name ?? $v->subject_name }}</title>
+    <title>{{ !empty($multi) ? "Yig'ma tekshiruv — " . count($multi) . ' ta vedomost' : 'Tekshiruv — ' . ($merged->group_name ?? $v->group_name) . ' · ' . ($merged->subject_name ?? $v->subject_name) }}</title>
     <style>
         :root {
             --xl: #217346; --xl-dark: #185c37; --xl-soft: #e7f2ec;
@@ -143,6 +143,8 @@
         .legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,.2); margin-right: 4px; vertical-align: -2px; }
         .toast { position: fixed; right: 16px; bottom: 60px; padding: 10px 14px; border-radius: 6px; background: #111827; color: #fff; font-size: 13px; opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; pointer-events: none; z-index: 50; }
         .toast.show { opacity: 1; transform: none; } .toast.err { background: #991b1b; }
+        .xl td.src { max-width: 220px; min-width: 160px; overflow: hidden; text-overflow: ellipsis; color: #374151; font-size: 12px; background: #fafafa; }
+        .xl tr.src-first td { border-top: 2px solid #9ca3af; }
         @media (max-width: 900px) {
             .titlebar { flex-wrap: wrap; } .search, .search input { width: 100%; } .legend { display: none; }
             .xl .c-b { width: 170px; min-width: 170px; max-width: 170px; } .xl .c-c { left: auto; border-right: 1px solid var(--grid); } .xl td.c-c { position: static; }
@@ -153,6 +155,7 @@
 </head>
 <body>
 @php
+    $multi = $multi ?? null;
     $r = $report;
     $c = $r['counts'];
     $verdictTxt = ['ok' => 'Mos keladi', 'issues' => 'Nomuvofiqlik bor', 'review' => "Ko'z bilan tekshirish kerak", 'wrong_document' => "Noto'g'ri fayl"][$r['verdict']] ?? $r['verdict'];
@@ -173,6 +176,13 @@
 </svg>
 
 <header class="titlebar">
+    @if($multi)
+    <a class="back" href="{{ route('admin.vedomost-submission.index') }}" aria-label="Vedomostlar ro'yxatiga qaytish"><svg class="icon"><use href="#i-back"/></svg></a>
+    <div class="t">
+        <h1>Yig'ma tekshiruv — {{ count($multi) }} ta vedomost</h1>
+        <div class="sub" title="{{ collect($multi)->pluck('label')->implode("\n") }}">{{ collect($multi)->pluck('label')->implode(' · ') }}</div>
+    </div>
+    @else
     <a class="back" href="{{ route('admin.vedomost-submission.show', $v->id) }}" aria-label="Vedomost sahifasiga qaytish"><svg class="icon"><use href="#i-back"/></svg></a>
     <div class="t">
         <h1>{{ $merged->group_name ?? $v->group_name }} — {{ $merged->subject_name ?? $v->subject_name }}</h1>
@@ -182,11 +192,16 @@
             @unless($canEdit) · faqat ko'rish @endunless
         </div>
     </div>
+    @endif
     <span class="verdict {{ $r['verdict'] }}"><svg class="icon"><use href="#{{ $r['verdict'] === 'ok' ? 'i-check' : 'i-alert' }}"/></svg>{{ $verdictTxt }}</span>
+    @if($multi)
+        <button type="button" class="tbtn" data-open-tab="approve"><svg class="icon"><use href="#i-check"/></svg>Tasdiqlash</button>
+    @else
     @if($v->pdf_path)
         <a class="tbtn" href="{{ route('admin.vedomost-submission.file', [$v->id, 'pdf']) }}" target="_blank" rel="noopener"><svg class="icon"><use href="#i-file"/></svg>PDF</a>
     @endif
     <a class="tbtn" href="{{ route('admin.vedomost-submission.ai-report.excel', $v->id) }}"><svg class="icon"><use href="#i-download"/></svg>Excel</a>
+    @endif
     @if($canEdit)
         <button type="button" class="tbtn save" id="btn-save-top" disabled title="Tuzatishlarni saqlash (Ctrl+S)"><svg class="icon"><use href="#i-pencil"/></svg><span class="lbl">Saqlash</span><span class="n" id="save-top-n" hidden>0</span></button>
     @endif
@@ -227,6 +242,7 @@
     <section class="sheet" id="sheet-history" role="tabpanel" aria-label="Tarix">
         <div class="pad">
             @php $m = $r['meta'] ?? []; @endphp
+            @unless($multi)
             <div class="card">
                 <h2><svg class="icon"><use href="#i-info"/></svg>AI o'qish ma'lumotlari</h2>
                 <div class="meta-grid">
@@ -240,6 +256,7 @@
                     <div><span>O'qilgan vaqt</span>{{ $m['read_at'] ?? '—' }}</div>
                 </div>
             </div>
+            @endunless
             <div class="card">
                 <h2><svg class="icon"><use href="#i-pencil"/></svg>Xodim tuzatishlari tarixi</h2>
                 @forelse($history as $log)
@@ -250,6 +267,56 @@
             </div>
         </div>
     </section>
+    @if($multi)
+    <section class="sheet" id="sheet-approve" role="tabpanel" aria-label="Tasdiqlash">
+        <div class="pad">
+            @if(session('success'))<div class="card" style="padding:10px 14px;background:#dcfce7;color:#166534;white-space:pre-line">{{ session('success') }}</div>@endif
+            @if(session('error'))<div class="card" style="padding:10px 14px;background:#fee2e2;color:#991b1b;white-space:pre-line">{{ session('error') }}</div>@endif
+            <form method="POST" action="{{ route('admin.vedomost-submission.ai-review.approve') }}" id="approve-form">
+                @csrf
+                <div class="card">
+                    <h2><svg class="icon"><use href="#i-check"/></svg>Vedomostlar — belgilanganlar tasdiqlanadi
+                        <span style="flex:1"></span>
+                        @if($canApprove)<button type="submit" class="sbtn primary" id="btn-approve" disabled>Belgilanganlarni tasdiqlash (<span id="ap-n">0</span>)</button>@endif
+                    </h2>
+                    <table class="xl" style="width:100%">
+                        <thead><tr class="names"><th class="rn"></th><th class="h">Fan · guruh</th><th class="h">Shakl</th><th class="h">AI natijasi</th><th class="h" style="width:340px">Tasdiqlash</th><th class="h">Havolalar</th></tr></thead>
+                        <tbody>
+                        @foreach($multi as $i => $mv)
+                            @php $can = $canApprove && $mv['approvable'] && !$mv['gate']['blocked']; @endphp
+                            <tr>
+                                <td class="rn">{{ $i + 1 }}</td>
+                                <td class="txt"><b>{{ $mv['label'] }}</b></td>
+                                <td class="txt">{{ $mv['form'] }}</td>
+                                <td class="note {{ $mv['verdict'] === 'ok' ? '' : ($mv['checked'] ? 'y' : 'o') }}" style="max-width:420px;white-space:normal">{{ $mv['summary'] }}</td>
+                                <td class="txt" style="white-space:normal">
+                                    @if($can)
+                                        <label style="display:flex;align-items:center;gap:8px;font-weight:700;color:#166534;cursor:pointer">
+                                            <input type="checkbox" name="approve[]" value="{{ $mv['id'] }}" class="ap-cb" data-vid="{{ $mv['id'] }}" {{ $mv['verdict'] === 'ok' && !$mv['gate']['needs_reason'] ? 'checked' : '' }}> Tasdiqlash
+                                        </label>
+                                        @if($mv['gate']['needs_reason'])
+                                            <textarea name="reasons[{{ $mv['id'] }}]" class="ap-why" data-vid="{{ $mv['id'] }}" placeholder="Sabab (majburiy, kamida 5 belgi)" style="width:100%;margin-top:4px;min-height:34px;border:1px solid #d1d5db;border-radius:4px;padding:5px 7px;font:inherit;font-size:13px"></textarea>
+                                            <div style="font-size:11px;color:#92400e">{{ $mv['gate']['message'] }}</div>
+                                        @endif
+                                    @else
+                                        <span style="color:var(--muted)">{{ !$mv['approvable'] ? (\App\Models\VedomostSubmission::statusLabels()[$mv['status']] ?? $mv['status']) : ($mv['gate']['message'] ?? "Tasdiqlash huquqi yo'q") }}</span>
+                                    @endif
+                                </td>
+                                <td class="txt">
+                                    @if($mv['checked'])<a class="link" href="{{ $mv['report'] }}" target="_blank" rel="noopener">Alohida hisobot</a> · @endif
+                                    @if($mv['pdf'])<a class="link" href="{{ $mv['pdf'] }}" target="_blank" rel="noopener">PDF</a> · @endif
+                                    <a class="link" href="{{ $mv['show'] }}" target="_blank" rel="noopener">Vedomost</a>
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                    <div style="padding:8px 14px;font-size:12px;color:var(--muted)">Har vedomost odatdagi shart bilan tasdiqlanadi: AI muammo topgan yoki Mark qiymati o'zgartirilgan bo'lsa — shu vedomost uchun sabab majburiy. Saqlanmagan tuzatish bo'lsa, avval saqlang.</div>
+                </div>
+            </form>
+        </div>
+    </section>
+    @endif
 </main>
 
 <div class="savebar" id="savebar" role="region" aria-live="polite">
@@ -266,6 +333,7 @@
     <button class="tab" role="tab" data-tab="errors">Xatolar @if($problems + $c['extra'])<span class="n">{{ $problems + $c['extra'] }}</span>@endif</button>
     <button class="tab" role="tab" data-tab="pdf">pdf (BQ)</button>
     <button class="tab" role="tab" data-tab="history">Tarix</button>
+    @if($multi)<button class="tab" role="tab" data-tab="approve">Tasdiqlash <span class="n" id="ap-tab-n">{{ count($multi) }}</span></button>@endif
     <div class="legend">
         <span><i style="background:var(--yellow)"></i>Farq (XATO)</span>
         <span><i style="background:var(--orange)"></i>PDFdan tekshiring</span>
@@ -294,6 +362,10 @@
     const HEADER_EDITABLE = @json(\App\Services\VedomostCheckEngine::HEADER_EDITABLE);
     const CAN_EDIT = @json($canEdit);
     const SAVE_URL = @json(route('admin.vedomost-submission.ai-report.edits', $v->id));
+    // Yig'ma rejim: bir nechta vedomost bitta jadvalda; qator kalitlari «vedomost id|kalit».
+    const MULTI = @json($multi ? array_column($multi, 'save', 'id') : null);
+    const MK = row => row.mk || row.id;
+    const USE = row => row.use || R.use;
     const TOL = 0.05;
     const AB = [['JN % (BQ)', 'jn', 'D'], ['MT ball (BQ)', 'mtb', 'H'], ['OSKE % (BQ)', 'oski', 'P'], ['TEST % (BQ)', 'test', 'S'], ['YN (BQ)', 'yn', 'V']];
     const VT_KEYS = Object.keys(VT_HEADERS);
@@ -348,6 +420,7 @@
             const cls = k === 'A' ? 'c-a' : k === 'B' ? 'c-b' : k === 'C' ? 'c-c' : '';
             letters += `<th class="${cls}">${colL(vtIndex(k))}</th>`;
             names += `<th class="h ${cls}">${esc(VT_HEADERS[k])}</th>`;
+            if (MULTI && k === 'C') { letters += '<th></th>'; names += '<th class="h">Fan · guruh</th>'; }
         });
         AB.forEach(([t], i) => {
             letters += `<th>${colL(base + i * 2)}</th><th>${colL(base + i * 2 + 1)}</th>`;
@@ -364,7 +437,8 @@
             const vt = row.vt;
             const ynZero = num(vt.V) === 0;
             const statusFill = ['bad', 'missing', 'nopdf'].includes(row.status) ? 'y' : '';
-            body += `<tr data-ri="${ri}"><td class="rn">${ri + 2}</td>`;
+            const first = MULTI && (ri === 0 || R.rows[ri - 1].vid !== row.vid);
+            body += `<tr data-ri="${ri}"${first ? ' class="src-first"' : ''}><td class="rn">${ri + 2}</td>`;
             cols.forEach(k => {
                 let cls = k === 'A' ? 'c-a' : k === 'B' ? 'c-b txt' : k === 'C' ? 'c-c txt' : (['X', 'Y', 'W', 'AB', 'AC', 'AD', 'AE', 'AG', 'AJ', 'AS', 'AU', 'AW', 'AT', 'AV'].includes(k) ? 'txt' : '');
                 if (ynZero) cls += ' l';
@@ -373,20 +447,21 @@
                 let v = vt[k];
                 let sysAttrs = '';
                 if (SYS[k] && row.id) {
-                    const p = sysPending(row.id, k);
+                    const p = sysPending(MK(row), k);
                     if (p !== undefined) { v = p === null ? (row.sys_orig || {})[k] ?? v : p.v; cls += ' sys-dirty'; }
                     else if ((row.sys_edited || {})[k] !== undefined) cls += ' sys-edited';
-                    if (sysMode && CAN_EDIT) { cls += ' sys'; sysAttrs = ` tabindex="0" data-mkey="${esc(row.id)}" data-mcol="${k}" data-fio="${esc(row.fio)}" data-label="${esc(VT_HEADERS[k])} (Mark)"`; }
+                    if (sysMode && CAN_EDIT && !row.ro) { cls += ' sys'; sysAttrs = ` tabindex="0" data-mkey="${esc(MK(row))}" data-mcol="${k}" data-fio="${esc(row.fio)}" data-label="${esc(VT_HEADERS[k])} (Mark)"`; }
                     if ((row.sys_edited || {})[k] !== undefined) sysAttrs += ` title="Asl Mark qiymati: ${esc(fmt((row.sys_orig || {})[k]))} · sabab: ${esc(row.sys_edited[k])}"`;
                 }
                 if (k === 'N' && v !== null && v !== '') v = Math.round(v * 100) + '%';
                 else if (k === 'AM' && v !== null && v !== '') v = (+(v * 100).toFixed(2)) + '%';
                 else if (['E', 'H'].includes(k) && typeof v === 'number') v = v.toFixed(1);
+                if (MULTI && k === 'D') body += `<td class="txt src" title="${esc(row.src)}">${esc(row.src)}</td>`;
                 body += `<td class="${cls}" data-ref="${colL(vtIndex(k))}${ri + 2}"${sysAttrs}${k === 'B' ? ` title="${esc((row.flags || []).map(f => f.m).join('\n'))}"` : ''}>${esc(fmt(v))}</td>`;
             });
             AB.forEach(([t, key, hc], i) => {
                 const f = COMPARE[key][1];
-                const skip = (key === 'oski' && !R.use.oski) || (key === 'test' && !R.use.test);
+                const skip = (key === 'oski' && !USE(row).oski) || (key === 'test' && !USE(row).test);
                 const cc = (row.cells || {})[key];
                 const ref = colL(base + i * 2) + (ri + 2);
                 if (skip) { body += `<td class="grey" data-ref="${ref}">kerak emas</td><td></td>`; return; }
@@ -404,7 +479,7 @@
                 body += `<td class="${fill}">${d === null ? '' : esc(fmt(d))}</td>`;
             });
             body += '<td class="sep"></td>';
-            [['oski', 'P', R.use.oski, R.use.tm_oski], ['test', 'S', R.use.test, R.use.tm_test]].forEach(([k, hc, need, on]) => {
+            [['oski', 'P', USE(row).oski, USE(row).tm_oski], ['test', 'S', USE(row).test, USE(row).tm_test]].forEach(([k, hc, need, on]) => {
                 const tm = (row.tm || {})[k];
                 if (!need) { body += '<td class="grey">kerak emas</td><td></td>'; return; }
                 if (!on) { body += `<td class="o txt">Test markazida natija yo'q</td><td></td>`; return; }
@@ -479,10 +554,11 @@
             rows += `<tr><td class="rn">${i + 2}</td><td class="txt"><b>${esc(h.k)}</b></td><td class="note" style="max-width:none">${esc(h.v)}</td><td class="txt ${fill}">${h.st === 'ok' ? 'OK' : h.st === 'bad' ? 'XATO' : 'Tekshiring'}</td></tr>`;
         });
         const w = R.weights;
-        rows += `<tr><td class="rn">${R.header.length + 2}</td><td class="txt"><b>Vaznlar (JN/MT/ON/OSKE/Test)</b></td><td class="note">${[w.jb, w.mt, w.on, w.oski, w.test].join(' / ')}</td><td class="txt">OK</td></tr>`;
+        if (!MULTI) rows += `<tr><td class="rn">${R.header.length + 2}</td><td class="txt"><b>Vaznlar (JN/MT/ON/OSKE/Test)</b></td><td class="note">${[w.jb, w.mt, w.on, w.oski, w.test].join(' / ')}</td><td class="txt">OK</td></tr>`;
         let html = `<div class="pad"><div class="card"><h2>${icon('i-file')}Sarlavha tekshiruvi</h2><table class="xl" style="width:100%"><thead><tr class="names"><th class="rn">1</th><th class="h" style="width:240px">Tekshiruv</th><th class="h">Natija</th><th class="h" style="width:110px">Holat</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 
-        if (CAN_EDIT) {
+        if (MULTI && CAN_EDIT) html += `<div class="card" style="padding:10px 14px;font-size:13px;color:var(--muted)">Sarlavha, vaznlar va imzolarni tuzatish — har vedomostning alohida hisobotida («Tasdiqlash» varag'idagi havola).</div>`;
+        if (CAN_EDIT && !MULTI) {
             const sh = R.scan_header || {};
             const labels = { fan: 'Fan nomi', guruh: 'Guruh', soat: 'Umumiy soat', kredit: 'Kredit', maruzachi: "Ma'ruzachi", amaliyot: "Amaliyot o'qituvchilari (vergul bilan)", yn_sana: 'YaN sanasi', dekan: 'Fakultet dekani', kafedra_mudiri: 'Kafedra mudiri', shakl: "Vedomost shakli (o'ng yuqori burchak)" };
             html += `<div class="card"><h2>${icon('i-pencil')}AI o'qigan sarlavha — noto'g'ri o'qilgan bo'lsa tuzating</h2><div class="form-grid">`;
@@ -606,7 +682,7 @@
     function startSysEdit(td, mode) {
         if (td.querySelector('input')) return;
         const id = td.dataset.mkey, col = td.dataset.mcol;
-        const row = R.rows.find(r => r.id === id);
+        const row = R.rows.find(r => MK(r) === id);
         const orig = (row.sys_orig || {})[col] ?? row.vt[col];
         const cur = sysPending(id, col);
         const shown = cur === undefined ? row.vt[col] : (cur === null ? orig : cur.v);
@@ -661,7 +737,7 @@
     function revertCell(td) {
         if (td.dataset.mkey) {
             const id = td.dataset.mkey, col = td.dataset.mcol;
-            const row = R.rows.find(r => r.id === id);
+            const row = R.rows.find(r => MK(r) === id);
             pending.system[id] = pending.system[id] || {};
             if (sysPending(id, col) !== undefined) delete pending.system[id][col];
             else if ((row.sys_edited || {})[col] !== undefined) pending.system[id][col] = null;
@@ -787,11 +863,26 @@
         b.disabled = true; b.textContent = 'Saqlanmoqda...';
         if (top) { top.disabled = true; top.querySelector('.lbl').textContent = 'Saqlanmoqda...'; }
         try {
-            const res = await fetch(SAVE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }, body: JSON.stringify(pending) });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(data.message || ('Xatolik: ' + res.status));
+            // Yig'ma rejimda tuzatishlar vedomostlar bo'yicha ajratilib, har biri o'z hisobotiga saqlanadi.
+            const batches = {};
+            if (MULTI) {
+                const add = (vid) => (batches[vid] = batches[vid] || { rows: {}, header: {}, weights: {}, signatures: {}, system: {} });
+                Object.entries(pending.rows).forEach(([k, o]) => { const [vid, key] = k.split('|'); add(vid).rows[key] = o; });
+                Object.entries(pending.system).forEach(([k, o]) => { const i = k.indexOf('|'); add(k.slice(0, i)).system[k.slice(i + 1)] = o; });
+            } else {
+                batches[''] = pending;
+            }
+            let saved = 0;
+            for (const [vid, body] of Object.entries(batches)) {
+                const res = await fetch(MULTI ? MULTI[vid] : SAVE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }, body: JSON.stringify(body) });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((saved ? saved + " ta vedomost saqlandi, keyingisida: " : '') + (data.message || ('Xatolik: ' + res.status)));
+                saved++;
+                if (MULTI) { Object.keys(pending.rows).filter(k => k.startsWith(vid + '|')).forEach(k => delete pending.rows[k]); Object.keys(pending.system).filter(k => k.startsWith(vid + '|')).forEach(k => delete pending.system[k]); }
+                if (!MULTI) sessionStorage.setItem('vedomost-report-toast', data.message || 'Saqlandi');
+            }
+            if (MULTI) sessionStorage.setItem('vedomost-report-toast', saved + ' ta vedomostdagi tuzatishlar saqlandi');
             pending.rows = {}; pending.header = {}; pending.weights = {}; pending.signatures = {}; pending.system = {};
-            sessionStorage.setItem('vedomost-report-toast', data.message || 'Saqlandi');
             location.reload();
         } catch (err) {
             toast(err.message, true); b.disabled = false; b.textContent = 'Saqlash';
@@ -803,7 +894,7 @@
     document.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveAll(); }
     });
-    window.addEventListener('beforeunload', e => { if (dirtyCount() > 0) { e.preventDefault(); e.returnValue = ''; } });
+    window.addEventListener('beforeunload', e => { if (dirtyCount() > 0 && !window.__approving) { e.preventDefault(); e.returnValue = ''; } });
 
     // ───────── varaqlar, filtrlar ─────────
     function showTab(name) {
@@ -827,7 +918,31 @@
 
     setChips();
     renderAll();
-    showTab(['main', 'header', 'errors', 'pdf', 'history'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+    showTab(MULTI && @json((bool) (session('success') || session('error'))) ? 'approve'
+        : (['main', 'header', 'errors', 'pdf', 'history', ...(MULTI ? ['approve'] : [])].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main'));
+    document.querySelectorAll('[data-open-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.openTab)));
+    if (MULTI) {
+        const form = document.getElementById('approve-form');
+        const cbs = () => [...document.querySelectorAll('.ap-cb')];
+        const syncAp = () => {
+            const n = cbs().filter(c => c.checked).length;
+            const btn = document.getElementById('btn-approve');
+            if (!btn) return;
+            document.getElementById('ap-n').textContent = n;
+            btn.disabled = n === 0 || dirtyCount() > 0;
+            btn.title = dirtyCount() > 0 ? 'Avval tuzatishlarni saqlang' : '';
+        };
+        document.addEventListener('change', e => { if (e.target.classList?.contains('ap-cb')) syncAp(); });
+        const _upd = updateSavebar;
+        updateSavebar = function () { _upd(); syncAp(); };
+        form?.addEventListener('submit', e => {
+            const missing = cbs().filter(c => c.checked).filter(c => { const w = document.querySelector(`.ap-why[data-vid="${c.value}"]`); return w && w.value.trim().length < 5; });
+            if (missing.length) { e.preventDefault(); toast(missing.length + ' ta vedomost uchun sabab yozilmagan (kamida 5 belgi)', true); document.querySelector(`.ap-why[data-vid="${missing[0].value}"]`).focus(); return; }
+            if (!confirm(cbs().filter(c => c.checked).length + ' ta vedomost tasdiqlansinmi?')) { e.preventDefault(); return; }
+            window.__approving = true;
+        });
+        syncAp();
+    }
     const msg = sessionStorage.getItem('vedomost-report-toast');
     if (msg) { sessionStorage.removeItem('vedomost-report-toast'); toast(msg); }
 })();

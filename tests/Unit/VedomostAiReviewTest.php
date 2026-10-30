@@ -56,26 +56,29 @@ function reviewSub(int $group, string $subject, ?string $verdict, array $rows = 
     ]);
 }
 
-test('yig\'ma oyna: muammolilar yuqorida, faqat muammoli qatorlar; moslar va tekshirilmaganlar alohida', function () {
-    $ok = reviewSub(1, 'Xirurgiya', 'ok', [['status' => 'ok', 'n' => 1, 'fio' => 'MOS TALABA', 'id' => '1']]);
+test('yig\'ma oyna: bitta fan hisoboti oynasi, barcha fanlar bitta jadvalda (kalitlar vedomost bo\'yicha)', function () {
+    $ok = reviewSub(1, 'Xirurgiya', 'ok', [['status' => 'ok', 'n' => 1, 'fio' => 'MOS TALABA', 'id' => '1', 'key' => 'r0', 'vt' => ['A' => 1], 'cells' => []]]);
     $bad = reviewSub(2, 'Terapiya', 'issues', [
-        ['status' => 'ok', 'n' => 1, 'fio' => 'MOS TALABA', 'id' => '1'],
         ['status' => 'bad', 'n' => 2, 'fio' => 'XATO TALABA', 'id' => '2', 'key' => 'r1', 'vt' => ['D' => 95], 'pdf' => ['jb_pct' => '25'],
             'cells' => ['jn' => ['status' => 'bad']], 'flags' => [['t' => 'bad', 'm' => 'JN%: PDF 25 ≠ Mark 95']]],
     ]);
     $none = reviewSub(3, 'Pediatriya', null);
 
     $view = app(VedomostAiReportController::class)->review(Request::create('/', 'GET', ['ids' => [$ok->id, "{$bad->id}", $none->id]]));
-    $items = $view->getData()['items'];
+    $data = $view->getData();
 
-    expect(array_map(fn ($i) => $i['v']->id, $items))->toBe([$bad->id, $none->id, $ok->id])
-        ->and(array_column($items[0]['rows'], 'fio'))->toBe(['XATO TALABA'])
-        ->and($items[1]['checked'])->toBeFalse()
-        ->and($items[2]['rows'])->toBe([]);
+    expect($view->name())->toBe('admin.vedomost-submission.ai-report')
+        // Muammolilar birinchi, AI tekshirmagan jadvalga tushmaydi, lekin tasdiqlash ro'yxatida bor.
+        ->and(array_column($data['report']['rows'], 'fio'))->toBe(['XATO TALABA', 'MOS TALABA'])
+        ->and(array_column($data['report']['rows'], 'key'))->toBe([$bad->id . '|r1', $ok->id . '|r0'])
+        ->and(array_column($data['report']['rows'], 'src'))->toBe(['Terapiya · d1/22-02', 'Xirurgiya · d1/22-01'])
+        ->and($data['report']['verdict'])->toBe('issues')
+        ->and(array_column($data['multi'], 'id'))->toBe([$bad->id, $none->id, $ok->id])
+        ->and($data['multi'][1]['checked'])->toBeFalse();
 
     $html = $view->render();
-    expect($html)->toContain('XATO TALABA')->toContain('JN%: PDF 25 ≠ Mark 95')->not->toContain('MOS TALABA')
-        ->toContain('name="reasons[' . $bad->id . ']"');
+    expect($html)->toContain("Yig'ma tekshiruv — 3 ta vedomost")->toContain('name="reasons[' . $bad->id . ']"')
+        ->toContain('id="sheet-approve"');
 });
 
 test('ommaviy tasdiqlash: mos — darhol, muammoli — faqat sabab bilan', function () {

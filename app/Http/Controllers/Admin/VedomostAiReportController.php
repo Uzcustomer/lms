@@ -108,12 +108,112 @@ class VedomostAiReportController extends Controller
         usort($items, fn ($a, $b) => [$rank[$a['verdict']] ?? 3, $a['merged']->subject_name ?? '', $a['merged']->group_name ?? '']
             <=> [$rank[$b['verdict']] ?? 3, $b['merged']->subject_name ?? '', $b['merged']->group_name ?? '']);
 
-        return view('admin.vedomost-submission.ai-review', [
-            'items' => $items,
-            'ids' => $ids->all(),
+        $checked = array_values(array_filter($items, fn ($i) => $i['checked']));
+        abort_if(empty($checked), 404, "Tanlanganlar orasida AI tekshirgan vedomost yo'q.");
+
+        $history = VedomostSubmissionLog::whereIn('vedomost_submission_id', array_map(fn ($i) => $i['v']->id, $checked))
+            ->where('action', 'ai_edit')
+            ->orderByDesc('created_at')
+            ->limit(300)
+            ->get();
+        $labelOf = [];
+        foreach ($items as $i) {
+            $labelOf[$i['v']->id] = ($i['merged']->subject_name ?? $i['v']->subject_name) . ' · ' . ($i['merged']->group_name ?? $i['v']->group_name);
+        }
+        foreach ($history as $log) {
+            $log->note = '[' . ($labelOf[$log->vedomost_submission_id] ?? '') . "]\n" . $log->note;
+        }
+
+        return view('admin.vedomost-submission.ai-report', [
+            'v' => $checked[0]['v'],
+            'merged' => (object) ['group_name' => count($items) . ' ta vedomost', 'subject_name' => "yig'ma tekshiruv"],
+            'report' => $this->combineReports($checked),
+            'edits' => [],
             'labels' => $this->engine->fieldLabels(),
+            'canEdit' => collect($checked)->contains('canEdit', true),
+            'history' => $history,
+            'model' => null,
+            'multi' => array_map(fn ($i) => [
+                'id' => $i['v']->id,
+                'label' => $labelOf[$i['v']->id],
+                'form' => VedomostSubmission::formLabel($i['v']->form_type),
+                'checked' => $i['checked'],
+                'verdict' => $i['verdict'],
+                'summary' => $i['checked'] ? $i['report']['summary'] : match ($i['v']->ai_check_status) {
+                    'queued' => 'AI tekshiruvi navbatda', 'running' => 'AI tekshirmoqda', 'error' => 'AI xatosi',
+                    'done' => 'Eski formatdagi natija — qayta tekshiring', default => 'AI tekshirmagan',
+                },
+                'status' => $i['v']->status,
+                'gate' => $i['gate'],
+                'approvable' => $i['approvable'],
+                'canEdit' => $i['canEdit'],
+                'save' => route('admin.vedomost-submission.ai-report.edits', $i['v']->id),
+                'report' => route('admin.vedomost-submission.ai-report', $i['v']->id),
+                'pdf' => $i['v']->pdf_path ? route('admin.vedomost-submission.file', [$i['v']->id, 'pdf']) : null,
+                'show' => route('admin.vedomost-submission.show', $i['v']->id),
+            ], $items),
             'canApprove' => in_array(session('active_role', ''), self::EDIT_ROLES, true),
         ]);
+    }
+
+    /**
+     * Bir nechta hisobotni bitta jadvalga: qator kalitlari «vedomost id|kalit» (tuzatish o'z
+     * vedomostiga saqlanadi), har qatorda manba (fan · guruh) va o'sha vedomostning OSKE/Test
+     * ishlatilishi; sarlavha tekshiruvlari va ogohlantirishlar manba nomi bilan.
+     */
+    private function combineReports(array $items): array
+    {
+        $rank = ['ok' => 0, 'review' => 1, 'issues' => 2, 'wrong_document' => 3];
+        $out = ['version' => VedomostCheckEngine::VERSION, 'verdict' => 'ok', 'rows' => [],
+            'counts' => ['total' => 0, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => 0, 'edited' => 0, 'sys_edited' => 0], 'extra' => [],
+            'issues' => [], 'header' => [], 'signatures' => [], 'scan_header' => [], 'meta' => [],
+            'weights' => ['jb' => 0, 'mt' => 0, 'on' => 0, 'oski' => 0, 'test' => 0],
+            'use' => ['oski' => false, 'test' => false, 'tm_oski' => false, 'tm_test' => false]];
+        foreach ($items as $i) {
+            $vid = $i['v']->id;
+            $r = $i['report'];
+            $src = ($i['merged']->subject_name ?? $i['v']->subject_name) . ' · ' . ($i['merged']->group_name ?? $i['v']->group_name);
+            if (($rank[$r['verdict']] ?? 0) > ($rank[$out['verdict']] ?? 0)) {
+                $out['verdict'] = $r['verdict'];
+            }
+            foreach ($r['counts'] as $k => $n) {
+                $out['counts'][$k] = ($out['counts'][$k] ?? 0) + (int) $n;
+            }
+            foreach ($out['use'] as $k => $on) {
+                $out['use'][$k] = $on || !empty($r['use'][$k]);
+            }
+            $w = $r['weights'] ?? [];
+            if (($w['on'] ?? 0) > 0) {
+                $out['weights']['on'] = $w['on'];
+            }
+            foreach ($r['rows'] as $row) {
+                $row['vid'] = $vid;
+                $row['src'] = $src;
+                $row['use'] = $r['use'] ?? null;
+                $row['ro'] = !$i['canEdit'];
+                $row['mk'] = $vid . '|' . ($row['id'] ?? '');
+                $row['key'] = $i['canEdit'] && !empty($row['key']) ? $vid . '|' . $row['key'] : null;
+                $out['rows'][] = $row;
+            }
+            foreach ($r['extra'] ?? [] as $e) {
+                $e['key'] = $i['canEdit'] && !empty($e['key']) ? $vid . '|' . $e['key'] : null;
+                $e['note'] = $src . ' · ' . ($e['note'] ?? '');
+                $out['extra'][] = $e;
+            }
+            foreach ($r['issues'] ?? [] as $is) {
+                $is['m'] = $src . ': ' . $is['m'];
+                $out['issues'][] = $is;
+            }
+            foreach ($r['header'] ?? [] as $h) {
+                $h['k'] = $src . ' — ' . $h['k'];
+                $out['header'][] = $h;
+            }
+        }
+        $c = $out['counts'];
+        $out['summary'] = count($items) . ' ta vedomost, ' . ($c['total'] ?? 0) . ' talaba: '
+            . ($c['bad'] ?? 0) . ' XATO, ' . ($c['ocr'] ?? 0) . " PDFdan tekshiring, " . (($c['nopdf'] ?? 0) + ($c['missing'] ?? 0) + ($c['extra'] ?? 0)) . " ro'yxat farqi.";
+
+        return $out;
     }
 
     /**

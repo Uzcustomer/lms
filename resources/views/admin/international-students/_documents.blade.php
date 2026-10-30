@@ -41,6 +41,10 @@
         }
         return '<div class="' . $class . '"><span>' . e($initials) . '</span></div>';
     };
+    // Boshlanish va tugash sanalari marker bilan ajratiladi; tugash rangi muddat holatiga qarab
+    $hl = function ($date, string $tone) use ($d) {
+        return $date ? '<mark class="doc-hl doc-hl-' . $tone . '">' . e($d($date)) . '</mark>' : '—';
+    };
     $foot = function (string $label, array $state, ?string $file, ?string $process = null) use ($student) {
         $html = '<div class="doc-foot"><span class="doc-foot-label">' . e($label) . '</span>'
             . '<span class="sp-tone sp-tone-' . $state['tone'] . '">' . e($state['text']) . '</span>';
@@ -178,8 +182,8 @@
                         <div class="doc-vr"><dt><span>Visa No.</span></dt><dd class="doc-visa-no">{{ $visaInfo->visa_number ?: '—' }}</dd></div>
                         <div class="doc-vr"><dt>Turi<span>Type</span></dt><dd>{{ $visaInfo->visa_type ?: '—' }}</dd></div>
                         <div class="doc-vr doc-vr-2">
-                            <dt>Dan<span>From</span></dt><dd>{{ $d($visaInfo->visa_start_date) }}</dd>
-                            <dt>Gacha<span>Until</span></dt><dd>{{ $d($visaInfo->visa_end_date) }}</dd>
+                            <dt>Dan<span>From</span></dt><dd>{!! $hl($visaInfo->visa_start_date, 'start') !!}</dd>
+                            <dt>Gacha<span>Until</span></dt><dd>{!! $hl($visaInfo->visa_end_date, $docState($visaInfo->visa_end_date, $visaInfo->visaDaysLeft(), $visaT)['tone']) !!}</dd>
                         </div>
                         <div class="doc-vr"><dt>Safarlar soni<span>Number of entries</span></dt><dd>{{ $entryLabel ?: '—' }}</dd></div>
                         <div class="doc-vr doc-vr-2">
@@ -218,8 +222,8 @@
                     <div class="doc-reg-row doc-reg-full"><dt class="doc-l">Familiyasi, ismi / Full name</dt><dd class="doc-reg-v">{{ $v($student->full_name) }}</dd></div>
                     <div class="doc-reg-row"><dt class="doc-l">Fuqaroligi / Nationality</dt><dd class="doc-reg-v">{{ $v($student->country_name) }}</dd></div>
                     <div class="doc-reg-row"><dt class="doc-l">Pasport / Passport</dt><dd class="doc-reg-v">{{ $v($visaInfo->passport_number) }}</dd></div>
-                    <div class="doc-reg-row"><dt class="doc-l">Dan / From</dt><dd class="doc-reg-v">{{ $d($visaInfo->registration_start_date) }}</dd></div>
-                    <div class="doc-reg-row"><dt class="doc-l">Gacha / Until</dt><dd class="doc-reg-v">{{ $d($visaInfo->registration_end_date) }}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Dan / From</dt><dd class="doc-reg-v">{!! $hl($visaInfo->registration_start_date, 'start') !!}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Gacha / Until</dt><dd class="doc-reg-v">{!! $hl($visaInfo->registration_end_date, $docState($visaInfo->registration_end_date, $visaInfo->registrationDaysLeft(), $regT)['tone']) !!}</dd></div>
                     <div class="doc-reg-row"><dt class="doc-l">Kirgan sana / Entry</dt><dd class="doc-reg-v">{{ $d($visaInfo->entry_date) }}</dd></div>
                     <div class="doc-reg-row"><dt class="doc-l">Turar joy / Residence</dt><dd class="doc-reg-v">{{ $visaInfo->residenceTypeLabel() }}</dd></div>
                     <div class="doc-reg-row doc-reg-full"><dt class="doc-l">Yashash manzili / Address</dt><dd class="doc-reg-v">{{ $visaInfo->residenceAddress() }}</dd></div>
@@ -316,6 +320,17 @@
     .doc-vr dd { margin: 0; min-width: 0; font-family: "Courier New", Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: .03em;
                  color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .doc-vr dd.doc-visa-no { font-size: 20px; letter-spacing: .06em; }
+
+    /* Sana markeri — qog'ozga marker bilan chizilgandek: boshlanish ko'k, tugash muddat holatiga qarab */
+    .doc-hl { --hl: 59, 130, 246; display: inline-block; padding: 1px 7px; margin: -1px -7px; border-radius: .7em .3em .8em .35em;
+              color: inherit; font-weight: 700; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+              background: linear-gradient(100deg, rgba(var(--hl), .12), rgba(var(--hl), .38) 6%, rgba(var(--hl), .26) 55%, rgba(var(--hl), .36) 94%, rgba(var(--hl), .1));
+              box-shadow: inset 0 -2px 0 rgba(var(--hl), .45); }
+    .doc-hl-ok, .doc-hl-info { --hl: 34, 197, 94; }
+    .doc-hl-warn { --hl: 245, 158, 11; }
+    .doc-hl-bad { --hl: 239, 68, 68; color: #991b1b; }
+    .doc-vr dd .doc-hl { margin: 0; }
+    .doc-vr dd:has(.doc-hl) { overflow: visible; }
 
     /* Ro'yxatga qo'yish blankasi */
     .doc-reg { --g1: rgba(30, 64, 175, .035); --g2: rgba(30, 64, 175, .03); background: #fffdf8; padding: 16px 20px 18px; }

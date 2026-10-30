@@ -3436,6 +3436,7 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
+                invalidateWeeklyConflicts();
                 applyWeeklyLayer(allCards);
                 groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
@@ -7287,21 +7288,25 @@
             let weeklyConflicts = {};   // karta id => { hafta: sabab }
             let conflictSig = '';
             let conflictTimer = null;
+            let conflictGen = 0;   // so'rov avlodi: kechikkan (eskirgan holat uchun) javob yangisining ustiga yozmasin
             function conflictSignature() {
                 if (!board) return '';
                 return board.id + '#' + allCards.map(c => [c.id, c.day, c.pair, c.len_half, c.start_half, c.teacher_id, c.auditorium_code].join(':')).join(',') + '#' +
                     Object.keys(overrides).map(k => [k, overrides[k].day, overrides[k].pair, overrides[k].cancelled ? 1 : 0, overrides[k].auditorium_code].join(':')).join(',');
             }
+            // Doska qayta yuklandi (dastur kalendari/ta'til, panjara sozlamasi, boshqalarning o'zgarishi) — karta maydonlari
+            // o'zgarmasa ham sanalar boshqacha bo'lishi mumkin: keyingi chizishda albatta qayta so'raladi.
+            function invalidateWeeklyConflicts() { conflictSig = ''; }
             function refreshWeeklyConflicts() {
                 const sig = conflictSignature();
                 if (!sig || sig === conflictSig) return;
                 conflictSig = sig;
                 clearTimeout(conflictTimer);
-                const boardId = board.id;
+                const boardId = board.id, gen = ++conflictGen;
                 conflictTimer = setTimeout(async () => {
                     try {
                         const j = await api(BASE + '/boards/' + boardId + '/conflicts');
-                        if (!board || board.id !== boardId) return;
+                        if (gen !== conflictGen || !board || board.id !== boardId) return;
                         weeklyConflicts = j.weekly || {};
                         renderStats();
                         if (viewMode !== 'cycle') renderPanel();

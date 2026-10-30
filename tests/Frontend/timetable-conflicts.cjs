@@ -98,6 +98,33 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     await tick(); await tick();
     assert.equal(calls.length, 3, 'davomiylik o\'zgarganda to\'qnashuvlar qayta so\'ralmadi');
 
+    // 3a) Doska qayta yuklansa (dastur kalendari/ta'til o'zgardi, karta maydonlari esa o'zgarmagan) — baribir qayta so'raladi.
+    assert.match(source, /board = j\.board; allCards = j\.cards \|\| \[\];\n\s*invalidateWeeklyConflicts\(\);/);
+    ctx.refreshWeeklyConflicts();
+    await tick();
+    assert.equal(calls.length, 3);
+    answers.push({ weekly: { 1: { 2: 'Auditoriya band: 101' } } });
+    ctx.invalidateWeeklyConflicts();
+    ctx.refreshWeeklyConflicts();
+    await tick(); await tick();
+    assert.equal(calls.length, 4, 'doska qayta yuklangach to\'qnashuvlar qayta so\'ralmadi');
+    assert.equal(ctx.cardConflict(a), 'Auditoriya band: 101');
+
+    // 3b) Kechikkan javob: eski holat uchun so'rov yangisidan keyin qaytsa — e'tiborsiz qoladi.
+    let release;
+    answers.push(new Promise(r => { release = r; }), { weekly: {} });
+    a.teacher_id = 11;
+    ctx.refreshWeeklyConflicts();
+    await tick();
+    a.teacher_id = 12;
+    ctx.refreshWeeklyConflicts();
+    await tick(); await tick();
+    assert.equal(calls.length, 6);
+    assert.equal(ctx.cardConflict(a), null);
+    release({ weekly: { 1: { 2: 'Eski javob' } } });
+    await tick(); await tick();
+    assert.equal(ctx.cardConflict(a), null, 'eskirgan javob yangisining ustiga yozildi');
+
     // 4) O'qituvchi biriktirish: band o'qituvchilar ro'yxatda kulrang (sababi title'da).
     el('asgTeacher').options = [{ value: '5', style: {}, dataset: {} }, { value: '6', style: {}, dataset: {} }];
     ctx.setBusy({ teachers: { 5: 'p/p22-03c, Klinik farmakologiya, 30.10–10.11' }, rooms: {} });

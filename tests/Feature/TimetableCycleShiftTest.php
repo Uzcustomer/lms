@@ -301,3 +301,16 @@ it('butun doska: ichki sikl birliklari sanalari cyclePlan bloklari bilan bir xil
     }
     expect(csAssertUnitsMatchPlan($board))->toBeGreaterThan(0);
 })->with(range(1, 6));
+
+it('kafedra mudiri: sikl jadvali "Kafedraniki" qamrovida ochiladi — faqat o\'z kafedrasi bloklari', function () {
+    $s = csSetup();
+    TimetableCard::where('board_id', $s['board']->id)->where('group_name', 'p/p22-02a')->update(['kafedra_name' => 'Boshqa kafedra']);
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 701, 'name' => 'Farmakologiya kafedrasi', 'code' => 'F',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = csTeacher('MUDIR F.', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 701])->save();
+    $plan = test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'kafedra' => 1])->assertOk()->json();
+    expect(collect($plan['rows'])->filter(fn ($r) => $r['blocks'])->pluck('group')->values()->all())->toBe(['p/p22-03c']);
+});

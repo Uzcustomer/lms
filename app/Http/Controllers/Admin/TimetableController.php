@@ -6408,8 +6408,8 @@ class TimetableController extends Controller
         }
         $out = [];
         foreach ($q->orderBy('id')->get(['id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'group_name',
-            'group_names', 'subject_name', 'students', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name', 'day', 'pair',
-            'start_half', 'len_half']) as $r) {
+            'group_names', 'subject_name', 'kafedra_name', 'students', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name', 'day',
+            'pair', 'start_half', 'len_half']) as $r) {
             $r->group_names = is_string($r->group_names) ? (json_decode($r->group_names, true) ?: null) : $r->group_names;
             $out[(int) $r->id] = $r;
         }

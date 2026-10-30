@@ -169,6 +169,15 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     assert.equal(calls[1][2].teacher_id, 5);
     assert.equal(ctx.closed, true);
     assert.equal(ctx.reloaded, true);
+    // Guruhcha smenasi tanlangan bo'lsa (ichki jadval) — shift_start bilan yuboriladi (ko'rinmasa — yuborilmaydi).
+    assert.equal(calls[1][2].shift_start, undefined);
+    el('cycAssignShiftBox').classList.remove('hidden');
+    el('cycAssignShift').value = '7';
+    answers.push({ ok: true });
+    await ctx.saveCycleAssign(false);
+    assert.equal(calls[2][2].shift_start, 7);
+    // Mark kataklari: amaliy — kun rejasidagi boshlanishidan (ps, smena), ma'ruzadan keyin emas
+    assert.match(source, /const ps = dp\.ps != null \? \+dp\.ps : st \+ \(\+dp\.lec \|\| 0\);\n\s*if \(hour >= st && hour < st \+ \(\+dp\.lec \|\| 0\)\) kind = ' is-lecture';\n\s*else if \(hour >= ps && hour < ps \+ \(\+dp\.prc \|\| 0\)\) kind = ' is-practice';/);
 
     // 7) Haqiqiy api(): xato javobining tanasi (409 needs_confirm) xatoga biriktiriladi — "Baribir biriktirish" shunga tayanadi.
     const actx = { CSRF: 't', FormData: class { append() {} }, onPendingApproval() {}, ttToast() {}, esc: x => x, Object, Array, Error,

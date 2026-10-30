@@ -727,7 +727,8 @@ trait TimetableHemisSync
                             $out[$gk][$sk][] = $base + ['slot' => $start, 'len' => (int) $d['lec'], 'part' => 'L'] + $lec;
                         }
                         if ((int) ($d['prc'] ?? 0) > 0) {
-                            $out[$gk][$sk][] = $base + ['slot' => $start + (int) ($d['lec'] ?? 0), 'len' => (int) $d['prc'], 'part' => 'A'] + $prc;
+                            // Amaliy — kun rejasidagi boshlanishi (guruhcha smenasi, masalan 13:30, bilan).
+                            $out[$gk][$sk][] = $base + ['slot' => max(1, (int) ($d['ps'] ?? $start + (int) ($d['lec'] ?? 0))), 'len' => (int) $d['prc'], 'part' => 'A'] + $prc;
                         }
                     }
                 }

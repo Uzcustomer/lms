@@ -139,32 +139,45 @@
         </figure>
     @else
         @if($visaInfo->needsVisa())
-            {{-- VIZA STIKERI --}}
+            {{-- VIZA STIKERI (O'zbekiston vizasi ko'rinishida) --}}
+            @php
+                $entryWords = [1 => 'One', 2 => 'Two', 3 => 'Three', 4 => 'Four', 5 => 'Five', 6 => 'Six', 7 => 'Seven', 8 => 'Eight', 9 => 'Nine', 10 => 'Ten'];
+                $entryCount = $visaInfo->visa_entries_count;
+                $entryLabel = $entryCount === null ? '' : ((int) $entryCount === 99 ? 'MULT (Multiple)' : $entryCount . ' (' . ($entryWords[(int) $entryCount] ?? $entryCount) . ')');
+                $visaOptional = str_replace('-', '', (string) $visaInfo->visa_type) . ' ' . ($entryCount === null ? '' : ((int) $entryCount === 99 ? 'M' : $entryCount));
+            @endphp
             <figure class="doc-wrap">
                 <div class="doc doc-visa">
-                    <div class="doc-band doc-band-visa">
-                        <div class="doc-visa-word">Viza <span>Visa</span></div>
-                        <div class="doc-country">
-                            <img src="{{ $uzFlag }}" alt="" class="doc-flag">
-                            <span>O'ZBEKISTON RESPUBLIKASI<small>Republic of Uzbekistan</small></span>
+                    <svg class="doc-visa-orn" viewBox="0 0 200 200" aria-hidden="true">
+                        @foreach([88, 70, 52] as $r)
+                            <g fill="none" stroke="currentColor" stroke-width="{{ $r === 88 ? 1.4 : .9 }}">
+                                <rect x="{{ 100 - $r * .7 }}" y="{{ 100 - $r * .7 }}" width="{{ $r * 1.4 }}" height="{{ $r * 1.4 }}"/>
+                                <rect x="{{ 100 - $r * .7 }}" y="{{ 100 - $r * .7 }}" width="{{ $r * 1.4 }}" height="{{ $r * 1.4 }}" transform="rotate(45 100 100)"/>
+                            </g>
+                        @endforeach
+                        <circle cx="100" cy="100" r="30" fill="none" stroke="currentColor" stroke-width=".9"/>
+                    </svg>
+                    <div class="doc-visa-title">Republic of Uzbekistan</div>
+                    <dl class="doc-visa-rows">
+                        <div class="doc-vr"><dt><span>Visa No.</span></dt><dd class="doc-visa-no">{{ $visaInfo->visa_number ?: '—' }}</dd></div>
+                        <div class="doc-vr"><dt>Turi<span>Type</span></dt><dd>{{ $visaInfo->visa_type ?: '—' }}</dd></div>
+                        <div class="doc-vr doc-vr-2">
+                            <dt>Dan<span>From</span></dt><dd>{{ $d($visaInfo->visa_start_date) }}</dd>
+                            <dt>Gacha<span>Until</span></dt><dd>{{ $d($visaInfo->visa_end_date) }}</dd>
                         </div>
-                        <div class="doc-visa-no">№ {{ $v($visaInfo->visa_number) }}</div>
-                    </div>
-                    <div class="doc-visa-body">
-                        {!! $photoHtml('doc-photo doc-photo-sm') !!}
-                        <div class="doc-fields doc-fields-4">
-                            <div class="doc-f"><span class="doc-l">Turi / Type</span><span class="doc-v doc-v-type">{{ $v($visaInfo->visa_type) }}</span></div>
-                            <div class="doc-f"><span class="doc-l">Kirishlar soni / Entries</span><span class="doc-v">{{ $entriesText }}</span></div>
-                            <div class="doc-f"><span class="doc-l">Istiqomat / Duration of stay</span><span class="doc-v">{{ $visaInfo->visa_stay_days ? $visaInfo->visa_stay_days . ' kun' : '—' }}</span></div>
-                            <div class="doc-f"><span class="doc-l">Pasport № / Passport No.</span><span class="doc-v">{{ $v($visaInfo->passport_number) }}</span></div>
-                            <div class="doc-f"><span class="doc-l">Amal qiladi / Valid from</span><span class="doc-v">{{ $d($visaInfo->visa_start_date) }}</span></div>
-                            <div class="doc-f"><span class="doc-l">Gacha / Until</span><span class="doc-v">{{ $d($visaInfo->visa_end_date) }}</span></div>
-                            <div class="doc-f"><span class="doc-l">Berilgan joyi / Issued at</span><span class="doc-v">{{ $v($visaInfo->visa_issued_place) }}</span></div>
-                            <div class="doc-f"><span class="doc-l">Berilgan sanasi / Date of issue</span><span class="doc-v">{{ $d($visaInfo->visa_issued_date) }}</span></div>
-                            <div class="doc-f doc-f-span4"><span class="doc-l">Familiyasi, ismi / Surname, given names</span><span class="doc-v">{{ $v($student->full_name) }}</span></div>
+                        <div class="doc-vr"><dt>Safarlar soni<span>Number of entries</span></dt><dd>{{ $entryLabel ?: '—' }}</dd></div>
+                        <div class="doc-vr doc-vr-2">
+                            <dt>Istiqomat muddati<span>Duration of stay</span></dt><dd class="doc-vr-dur">{{ $visaInfo->visa_stay_days ?: '—' }}</dd>
+                            <dt class="doc-vr-days">Kun<span>Days</span></dt><dd class="doc-vr-days"></dd>
                         </div>
-                    </div>
-                    <div class="doc-mrz" aria-label="Mashinada o'qiladigan zona">@foreach(\App\Support\Mrz::visa($surname, $givenFull, $nationality, $visaInfo->passport_number, $birth, $sex, $visaInfo->visa_end_date) as $line)<div>{{ $line }}</div>@endforeach</div>
+                        <div class="doc-vr doc-vr-2">
+                            <dt>Berilgan joyi<span>Issued in</span></dt><dd>{{ $visaInfo->visa_issued_place ? \Illuminate\Support\Str::title(mb_strtolower($visaInfo->visa_issued_place)) : '—' }}</dd>
+                            <dt>Vaqti<span>On</span></dt><dd>{{ $d($visaInfo->visa_issued_date) }}</dd>
+                        </div>
+                        <div class="doc-vr"><dt>Pasport raqami<span>Passport No.</span></dt><dd>{{ $visaInfo->passport_number ?: '—' }}</dd></div>
+                        <div class="doc-vr"><dt>Izoh<span>Remarks</span></dt><dd></dd></div>
+                    </dl>
+                    <div class="doc-mrz" aria-label="Mashinada o'qiladigan zona">@foreach(\App\Support\Mrz::visa($surname, $givenFull, $nationality, $visaInfo->passport_number, $birth, $sex, $visaInfo->visa_end_date, $visaOptional) as $line)<div>{{ $line }}</div>@endforeach</div>
                 </div>
                 {!! $foot('Viza', $docState($visaInfo->visa_end_date, $visaInfo->visaDaysLeft(), $visaT), $visaInfo->visa_scan_path ? 'visa_scan_path' : null, $visaInfo->isVisaProcessActive() ? 'Yangilanmoqda' : null) !!}
             </figure>
@@ -176,7 +189,7 @@
         @endif
 
         {{-- VAQTINCHALIK RO'YXATGA QO'YISH --}}
-        <figure class="doc-wrap doc-span">
+        <figure class="doc-wrap">
             <div class="doc doc-reg">
                 <div class="doc-reg-head">
                     <div>
@@ -185,22 +198,16 @@
                     </div>
                     <img src="{{ $uzFlag }}" alt="" class="doc-flag">
                 </div>
-                <div class="doc-reg-lines">
-                    <div class="doc-reg-row"><span class="doc-l">Familiyasi, ismi / Full name</span><span class="doc-reg-v">{{ $v($student->full_name) }}</span></div>
-                    <div class="doc-reg-row"><span class="doc-l">Fuqaroligi / Nationality</span><span class="doc-reg-v">{{ $v($student->country_name) }}</span><span class="doc-l">Pasport / Passport</span><span class="doc-reg-v">{{ $v($visaInfo->passport_number) }}</span></div>
-                    <div class="doc-reg-row"><span class="doc-l">Yashash manzili / Address</span><span class="doc-reg-v">{{ $visaInfo->residenceAddress() }}</span></div>
-                    <div class="doc-reg-row"><span class="doc-l">Muddati / Period</span><span class="doc-reg-v">{{ $d($visaInfo->registration_start_date) }} — {{ $d($visaInfo->registration_end_date) }}</span><span class="doc-l">Kirgan sana / Entry</span><span class="doc-reg-v">{{ $d($visaInfo->entry_date) }}</span></div>
-                </div>
-                @if($visaInfo->registration_end_date)
-                    <svg class="doc-stamp" viewBox="0 0 120 120" aria-hidden="true">
-                        <defs><path id="stamp-ring-{{ $visaInfo->id }}" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0"/></defs>
-                        <circle cx="60" cy="60" r="56" fill="none" stroke="currentColor" stroke-width="2.5"/>
-                        <circle cx="60" cy="60" r="34" fill="none" stroke="currentColor" stroke-width="1.2"/>
-                        <text font-size="10" font-weight="700" letter-spacing="1.2" fill="currentColor"><textPath href="#stamp-ring-{{ $visaInfo->id }}" startOffset="0">RO'YXATGA OLINDI • REGISTERED •</textPath></text>
-                        <text x="60" y="57" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">GACHA</text>
-                        <text x="60" y="70" text-anchor="middle" font-size="10.5" font-weight="700" fill="currentColor">{{ $visaInfo->registration_end_date->format('d.m.y') }}</text>
-                    </svg>
-                @endif
+                <dl class="doc-reg-lines">
+                    <div class="doc-reg-row doc-reg-full"><dt class="doc-l">Familiyasi, ismi / Full name</dt><dd class="doc-reg-v">{{ $v($student->full_name) }}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Fuqaroligi / Nationality</dt><dd class="doc-reg-v">{{ $v($student->country_name) }}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Pasport / Passport</dt><dd class="doc-reg-v">{{ $v($visaInfo->passport_number) }}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Dan / From</dt><dd class="doc-reg-v">{{ $d($visaInfo->registration_start_date) }}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Gacha / Until</dt><dd class="doc-reg-v">{{ $d($visaInfo->registration_end_date) }}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Kirgan sana / Entry</dt><dd class="doc-reg-v">{{ $d($visaInfo->entry_date) }}</dd></div>
+                    <div class="doc-reg-row"><dt class="doc-l">Turar joy / Residence</dt><dd class="doc-reg-v">{{ $visaInfo->residenceTypeLabel() }}</dd></div>
+                    <div class="doc-reg-row doc-reg-full"><dt class="doc-l">Yashash manzili / Address</dt><dd class="doc-reg-v">{{ $visaInfo->residenceAddress() }}</dd></div>
+                </dl>
             </div>
             {!! $foot("Ro'yxatga qo'yish", $docState($visaInfo->registration_end_date, $visaInfo->registrationDaysLeft(), $regT), $visaInfo->registration_doc_path ? 'registration_doc_path' : null, $visaInfo->isRegistrationProcessActive() ? 'Yangilanmoqda' : null) !!}
         </figure>
@@ -243,8 +250,6 @@
                  background: linear-gradient(160deg, #e2e8f0, #cbd5e1); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(15,23,42,.12); }
     .doc-photo span { font-size: 30px; font-weight: 600; color: #64748b; letter-spacing: .04em; }
     .doc-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(.15) contrast(1.05); z-index: 1; }
-    .doc-photo-sm { width: 88px; height: 112px; }
-    .doc-photo-sm span { font-size: 24px; }
 
     .doc-band { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 10px; }
     .doc-kicker { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-accent); }
@@ -257,7 +262,11 @@
     /* Pasport — ranglar davlat mavzusidan (PassportTheme) */
     .doc-passport { background: linear-gradient(135deg, var(--p1) 0%, var(--p2) 55%, var(--p3) 100%); padding-left: 10px; }
     .doc-passport .doc-band { border-bottom: 1px solid color-mix(in srgb, var(--ink-accent) 16%, transparent); }
-    .doc-passport-body { display: flex; gap: 18px; padding: 14px 20px 16px; }
+    .doc-passport-body { display: flex; gap: 16px; padding: 12px 18px 12px; }
+    .doc-passport .doc-fields { gap: 7px 14px; }
+    .doc-passport .doc-l { font-size: 8.5px; }
+    .doc-passport .doc-v { font-size: 13px; }
+    .doc-passport .doc-photo { width: 96px; height: 124px; }
     .doc > .doc-spine { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: var(--cover);
                         box-shadow: inset -2px 0 0 rgba(0, 0, 0, .18); }
     /* Bayroq suv belgisi: chetlari so'nadi, matn ostida xira dog' bo'lib qoladi */
@@ -273,29 +282,30 @@
                font-family: "OCR B", "OCR-B", "OCRB", "Consolas", "Courier New", monospace; font-size: clamp(8px, calc((100cqi - 44px) / 35.5), 17px);
                letter-spacing: .2em; line-height: 1.55; color: #1f2937; white-space: pre; overflow-x: auto; }
 
-    /* Viza */
-    .doc-visa { --g1: rgba(21, 128, 61, .08); --g2: rgba(37, 99, 235, .07); --ink-accent: #14532d;
-                background: linear-gradient(135deg, #f1f8f2 0%, #eaf4f1 50%, #eef3fa 100%); }
-    .doc-band-visa { border-bottom: 1px solid rgba(20, 83, 45, .12); flex-wrap: wrap; }
-    .doc-band-visa .doc-country span { white-space: nowrap; }
-    .doc-visa-word { font-size: 26px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #14532d; line-height: 1; }
-    .doc-visa-word span { font-size: 12px; font-weight: 600; letter-spacing: .2em; color: #4d7c0f; margin-left: 6px; }
-    .doc-visa-no { font-size: 18px; font-weight: 700; letter-spacing: .1em; color: #b91c1c; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .doc-visa-body { display: flex; gap: 18px; padding: 14px 20px 16px; }
-    .doc-v-type { font-size: 22px; color: #14532d; letter-spacing: .04em; }
+    /* Viza — O'zbekiston vizasi stikeri: ko'k-yashil fon, o'rtada naqsh, qiymatlar yozuv mashinasi shriftida */
+    .doc-visa { --g1: rgba(37, 99, 235, .06); --g2: rgba(22, 163, 74, .07);
+                background: linear-gradient(100deg, #e5eef9 0%, #e2f0ee 48%, #d8efcf 100%); }
+    .doc > .doc-visa-orn { position: absolute; width: 56%; left: 26%; top: 6%; color: rgba(30, 64, 175, .10); pointer-events: none; }
+    .doc-visa-title { padding: 14px 18px 4px; text-align: center; font-size: clamp(16px, 4.4cqi, 27px); font-weight: 800;
+                      letter-spacing: .07em; text-transform: uppercase; color: #1e2f6b; }
+    .doc-visa-rows { margin: 0; padding: 4px 20px 12px; display: grid; gap: 2px; }
+    .doc-vr { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); align-items: center; gap: 10px; min-height: 28px; font-size: 13px; }
+    .doc-vr-2 { grid-template-columns: 9.5em minmax(0, 1fr) 4.5em minmax(0, 1fr); }
+    .doc-vr dt { font-size: 8.5px; line-height: 1.15; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #1e2f6b; }
+    .doc-vr dt span { display: block; font-weight: 600; color: #334155; }
+    .doc-vr dd { margin: 0; min-width: 0; font-family: "Courier New", Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: .03em;
+                 color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .doc-vr dd.doc-visa-no { font-size: 20px; letter-spacing: .06em; }
 
     /* Ro'yxatga qo'yish blankasi */
-    .doc-reg { --g1: rgba(30, 64, 175, .035); --g2: rgba(30, 64, 175, .03);
-               background: #fffdf8; padding: 16px 20px 18px; min-height: 196px; }
+    .doc-reg { --g1: rgba(30, 64, 175, .035); --g2: rgba(30, 64, 175, .03); background: #fffdf8; padding: 16px 20px 18px; }
     .doc-reg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid #1e3a8a; }
     .doc-reg-title { font-size: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #1e3a8a; }
     .doc-reg-sub { font-size: 10.5px; color: #64748b; letter-spacing: .04em; margin-top: 2px; }
-    .doc-reg-lines { padding-right: 132px; }
-    .doc-reg-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto auto; align-items: baseline; gap: 6px 12px; padding: 9px 0 6px; border-bottom: 1px dotted #94a3b8; }
-    .doc-reg-row > :nth-child(3) { padding-left: 12px; }
-    .doc-reg-v { font-size: 14px; font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; }
-    .doc-reg-row > .doc-reg-v:only-of-type, .doc-reg-row:not(:has(> :nth-child(3))) .doc-reg-v { grid-column: 2 / -1; }
-    .doc-stamp { position: absolute; right: 22px; bottom: 18px; width: 116px; height: 116px; color: #2643a3; opacity: .72; transform: rotate(-14deg); mix-blend-mode: multiply; }
+    .doc-reg-lines { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; }
+    .doc-reg-row { padding: 8px 0 6px; border-bottom: 1px dotted #94a3b8; min-width: 0; }
+    .doc-reg-full { grid-column: 1 / -1; }
+    .doc-reg-v { display: block; margin: 2px 0 0; font-size: 14px; font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
     /* Yashash guvohnomasi (ID-karta, 85.6 × 54 mm) */
     .doc-idpair { display: grid; grid-template-columns: 1fr; gap: 14px; }
@@ -326,29 +336,25 @@
     .doc-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 10px 4px 0; font-size: 13px; }
     .doc-foot-label { font-weight: 600; color: #0f172a; }
     .doc-foot-spacer { flex: 1; }
-    .doc-none { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px dashed #cbd5e1; border-radius: 12px; font-size: 14px; color: #334155; background: #fff; }
+    /* Vizasiz izoh hujjatlardan oldin: keyin pasport | ro'yxatga qo'yish yonma-yon */
+    .doc-none { order: -1; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px dashed #cbd5e1; border-radius: 12px; font-size: 14px; color: #334155; background: #fff; }
 
-    /* Kartochka tor bo'lsa — maydonlar 2 ustunga */
-    @container (max-width: 620px) {
-        .doc-band-visa .doc-country { order: 3; width: 100%; justify-content: flex-start; text-align: left; }
+    /* Juda tor kartochka (telefon) — maydonlar 2 ustunga */
+    @container (max-width: 460px) {
         .doc-fields-3, .doc-fields-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .doc-fields-3 .doc-f-num { grid-column: 1 / -1; grid-row: auto; text-align: left; }
         .doc-f-wide { grid-column: 1 / -1; }
-        .doc-fields-id .doc-f-wide { grid-column: 1 / -1; }
-        .doc-photo { width: 92px; height: 118px; }
+        .doc-vr-2 { grid-template-columns: 9.5em minmax(0, 1fr); }
+        .doc-vr .doc-vr-days { display: none; }
+        .doc-vr .doc-vr-dur::after { content: " KUN"; }
+        .doc-reg-lines { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 1023px) {
         .docs { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 720px) {
-        .doc-passport-body, .doc-visa-body { flex-direction: column; }
-        .doc-passport-body .doc-photo, .doc-visa-body .doc-photo { width: 84px; height: 108px; }
-        .doc-fields-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .doc-fields-3 .doc-f-num { grid-column: 1 / -1; grid-row: auto; text-align: left; }
+        .doc-passport-body { flex-direction: column; }
+        .doc-passport .doc-photo { width: 84px; height: 108px; }
         .doc-band { flex-wrap: wrap; }
-        .doc-reg-lines { padding-right: 0; padding-bottom: 96px; }
-        .doc-reg-row { grid-template-columns: 1fr; }
-        .doc-reg-row > :nth-child(3) { padding-left: 0; }
-        .doc-stamp { width: 92px; height: 92px; }
     }
 </style>

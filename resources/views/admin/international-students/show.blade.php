@@ -121,86 +121,90 @@
 
             @endphp
 
-            {{-- Amallar: tekshiruv, jarayon, firma — bir qatorda --}}
-            <div class="sp-actions-row">
+            {{-- Amallar paneli: hujjat kartochkalaridan ajralib turishi uchun to'q fonda --}}
+            <section class="sp-toolbar" aria-label="Amallar" x-data="{ reject: false, firm: @js($visaInfo->firm ?? '') }">
+                <div class="sp-tb-segs">
                     @if($visaInfo->status === 'pending')
-                        <section class="sp-card sp-card-accent" x-data="{ reject: false }">
-                            <div class="sp-card-head"><h2 class="sp-h2">Tekshiruv</h2><span class="sp-faint">Ma'lumotlar tekshirilishini kutyapti</span></div>
-                            <div class="sp-card-body">
-                                @if($visaInfo->rejection_reason)
-                                    <div class="sp-note sp-note-bad">Oldingi rad etish sababi: {{ $visaInfo->rejection_reason }}</div>
-                                @endif
-                                <div class="sp-actions">
-                                    <form method="POST" action="{{ route('admin.international-students.approve', $student) }}" style="flex:1;">
-                                        @csrf
-                                        <button type="submit" class="sp-btn sp-btn-primary" style="width:100%;" onclick="return confirm('Ma\'lumotlar tasdiqlansinmi?')">Tasdiqlash</button>
-                                    </form>
-                                    <button type="button" class="sp-btn sp-btn-ghost-bad" @click="reject = !reject" :aria-expanded="reject">Rad etish</button>
-                                </div>
-                                <form x-show="reject" x-cloak method="POST" action="{{ route('admin.international-students.reject', $student) }}" style="margin-top:10px;">
+                        <div class="sp-tb-seg">
+                            <div class="sp-tb-label">Tekshiruv <span class="sp-tb-state"><i class="sp-tb-dot" style="background:#fbbf24;"></i>Kutyapti</span></div>
+                            <div class="sp-tb-ctl">
+                                <form method="POST" action="{{ route('admin.international-students.approve', $student) }}">
                                     @csrf
-                                    <label for="rejection_reason" class="sp-label">Rad etish sababi</label>
-                                    <textarea id="rejection_reason" name="rejection_reason" rows="2" required class="sp-input" placeholder="Talabaga ko'rsatiladi"></textarea>
-                                    <button type="submit" class="sp-btn sp-btn-bad" style="margin-top:8px;">Rad etishni yuborish</button>
+                                    <button type="submit" class="sp-tb-btn sp-tb-btn-ok" onclick="return confirm('Ma\'lumotlar tasdiqlansinmi?')">
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                                        Tasdiqlash
+                                    </button>
                                 </form>
+                                <button type="button" class="sp-tb-btn sp-tb-btn-bad" @click="reject = !reject" :aria-expanded="reject">Rad etish</button>
                             </div>
-                        </section>
+                        </div>
                     @endif
 
-                    <section class="sp-card">
-                        <div class="sp-card-head"><h2 class="sp-h2">Jarayon</h2></div>
-                        <ul class="sp-list">
-                            @foreach([
-                                ['l' => 'Registratsiya', 's' => $rps, 't' => 'registration', 'sl' => ['passport_accepted' => 'Pasport olindi', 'registering' => 'Qilinmoqda', 'done' => 'Tugallandi'], 'btn' => ['passport_accepted' => 'Qilinmoqda', 'registering' => 'Yangilandi']],
-                                ['l' => 'Viza', 's' => $vps, 't' => 'visa', 'sl' => ['passport_accepted' => 'Pasport olindi', 'registering' => 'Yangilanmoqda', 'done' => 'Tugallandi'], 'btn' => ['passport_accepted' => 'Yangilanmoqda', 'registering' => 'Yangilandi']],
-                            ] as $p)
-                                @continue($p['t'] === 'registration' && !$visaInfo->needsRegistration())
-                                @continue($p['t'] === 'visa' && !$visaInfo->needsVisa())
-                                <li class="sp-row">
-                                    <div>
-                                        <div class="sp-row-title">{{ $p['l'] }}</div>
-                                        <span class="sp-pill {{ match($p['s']) { 'passport_accepted' => 'sp-pill-info', 'registering' => 'sp-pill-warn', 'done' => 'sp-pill-ok', default => '' } }}">{{ $p['sl'][$p['s']] ?? 'Kutilmoqda' }}</span>
-                                    </div>
-                                    @if($p['s'] === 'none' || $p['s'] === 'done')
-                                        <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">@csrf<input type="hidden" name="process_type" value="{{ $p['t'] }}">
-                                            <button type="submit" class="sp-btn sp-btn-ghost" onclick="return confirm('Pasport qabul qilinsinmi?')">Pasport olish</button>
-                                        </form>
-                                    @elseif($p['s'] === 'passport_accepted')
-                                        <form method="POST" action="{{ route('admin.international-students.mark-registering', $student) }}">@csrf<input type="hidden" name="process_type" value="{{ $p['t'] }}">
-                                            <button type="submit" class="sp-btn sp-btn-ghost">{{ $p['btn']['passport_accepted'] }}</button>
-                                        </form>
-                                    @elseif($p['s'] === 'registering')
-                                        <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">@csrf<input type="hidden" name="process_type" value="{{ $p['t'] }}">
-                                            <button type="submit" class="sp-btn sp-btn-ghost" onclick="return confirm('Pasport qaytarilsinmi?')">{{ $p['btn']['registering'] }}</button>
-                                        </form>
-                                    @endif
-                                </li>
-                            @endforeach
-                            @if(!$visaInfo->needsRegistration() && !$visaInfo->needsVisa())
-                                <li class="sp-row sp-faint">Yashash guvohnomasi bor — registratsiya va viza jarayoni yo'q.</li>
-                            @endif
-                        </ul>
-                    </section>
-
-                    <section class="sp-card" x-data="{ firm: @js($visaInfo->firm ?? '') }">
-                        <div class="sp-card-head"><h2 class="sp-h2">Firma</h2></div>
-                        <form method="POST" action="{{ route('admin.international-students.assign-firm', $student) }}" class="sp-card-body">
-                            @csrf
-                            <label for="firm" class="sp-sr">Firma</label>
-                            <div class="sp-actions">
-                                <select id="firm" name="firm" x-model="firm" class="sp-input" style="flex:1;" required>
-                                    <option value="">Tanlang</option>
-                                    @foreach(\App\Services\VisaSettings::firmOptions() as $key => $label)
-                                        <option value="{{ $key }}">{{ $label }}</option>
-                                    @endforeach
-                                    <option value="other">Boshqa</option>
-                                </select>
-                                <button type="submit" class="sp-btn sp-btn-ghost">Saqlash</button>
+                    @foreach([
+                        ['l' => 'Registratsiya', 's' => $rps, 't' => 'registration', 'sl' => ['passport_accepted' => 'Pasport olindi', 'registering' => 'Qilinmoqda', 'done' => 'Tugallandi'], 'btn' => ['passport_accepted' => 'Qilinmoqda', 'registering' => 'Yangilandi']],
+                        ['l' => 'Viza', 's' => $vps, 't' => 'visa', 'sl' => ['passport_accepted' => 'Pasport olindi', 'registering' => 'Yangilanmoqda', 'done' => 'Tugallandi'], 'btn' => ['passport_accepted' => 'Yangilanmoqda', 'registering' => 'Yangilandi']],
+                    ] as $p)
+                        @continue($p['t'] === 'registration' && !$visaInfo->needsRegistration())
+                        @continue($p['t'] === 'visa' && !$visaInfo->needsVisa())
+                        @php $dot = match($p['s']) { 'passport_accepted' => '#60a5fa', 'registering' => '#fbbf24', 'done' => '#4ade80', default => '#94a3b8' }; @endphp
+                        <div class="sp-tb-seg">
+                            <div class="sp-tb-label">{{ $p['l'] }} <span class="sp-tb-state"><i class="sp-tb-dot" style="background:{{ $dot }};"></i>{{ $p['sl'][$p['s']] ?? 'Kutilmoqda' }}</span></div>
+                            <div class="sp-tb-ctl">
+                                @if($p['s'] === 'none' || $p['s'] === 'done')
+                                    <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">@csrf<input type="hidden" name="process_type" value="{{ $p['t'] }}">
+                                        <button type="submit" class="sp-tb-btn" onclick="return confirm('Pasport qabul qilinsinmi?')">Pasport olish</button>
+                                    </form>
+                                @elseif($p['s'] === 'passport_accepted')
+                                    <form method="POST" action="{{ route('admin.international-students.mark-registering', $student) }}">@csrf<input type="hidden" name="process_type" value="{{ $p['t'] }}">
+                                        <button type="submit" class="sp-tb-btn">{{ $p['btn']['passport_accepted'] }}</button>
+                                    </form>
+                                @elseif($p['s'] === 'registering')
+                                    <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">@csrf<input type="hidden" name="process_type" value="{{ $p['t'] }}">
+                                        <button type="submit" class="sp-tb-btn" onclick="return confirm('Pasport qaytarilsinmi?')">{{ $p['btn']['registering'] }}</button>
+                                    </form>
+                                @endif
                             </div>
-                            <input x-show="firm === 'other'" x-cloak type="text" name="firm_custom" value="{{ $visaInfo->firm_custom }}" class="sp-input" style="margin-top:8px;" placeholder="Firma nomi" aria-label="Firma nomi">
+                        </div>
+                    @endforeach
+                    @if(!$visaInfo->needsRegistration() && !$visaInfo->needsVisa())
+                        <div class="sp-tb-seg">
+                            <div class="sp-tb-label">Jarayon</div>
+                            <div class="sp-tb-note">Yashash guvohnomasi bor — registratsiya va viza jarayoni yo'q</div>
+                        </div>
+                    @endif
+
+                    <div class="sp-tb-seg sp-tb-seg-firm">
+                        <label for="firm" class="sp-tb-label">Firma</label>
+                        <form method="POST" action="{{ route('admin.international-students.assign-firm', $student) }}" class="sp-tb-ctl">
+                            @csrf
+                            <select id="firm" name="firm" x-model="firm" class="sp-tb-input" required>
+                                <option value="">Tanlang</option>
+                                @foreach(\App\Services\VisaSettings::firmOptions() as $key => $label)
+                                    <option value="{{ $key }}">{{ $label }}</option>
+                                @endforeach
+                                <option value="other">Boshqa</option>
+                            </select>
+                            <input x-show="firm === 'other'" x-cloak type="text" name="firm_custom" value="{{ $visaInfo->firm_custom }}" class="sp-tb-input" placeholder="Firma nomi" aria-label="Firma nomi">
+                            <button type="submit" class="sp-tb-btn sp-tb-btn-line">Saqlash</button>
                         </form>
-                    </section>
-            </div>
+                    </div>
+                </div>
+
+                @if($visaInfo->status === 'pending')
+                    <form x-show="reject" x-cloak method="POST" action="{{ route('admin.international-students.reject', $student) }}" class="sp-tb-reject">
+                        @csrf
+                        @if($visaInfo->rejection_reason)
+                            <div class="sp-tb-note">Oldingi rad etish sababi: {{ $visaInfo->rejection_reason }}</div>
+                        @endif
+                        <label for="rejection_reason" class="sp-tb-label">Rad etish sababi (talabaga ko'rsatiladi)</label>
+                        <div class="sp-tb-ctl">
+                            <textarea id="rejection_reason" name="rejection_reason" rows="2" required class="sp-tb-input sp-tb-textarea"></textarea>
+                            <button type="submit" class="sp-tb-btn sp-tb-btn-bad-fill">Yuborish</button>
+                            <button type="button" class="sp-tb-btn sp-tb-btn-line" @click="reject = false">Bekor qilish</button>
+                        </div>
+                    </form>
+                @endif
+            </section>
 
             {{-- Hujjatlar — to'liq kenglikda, ikki ustun --}}
             @include('admin.international-students._documents', ['docState' => $deadline])
@@ -292,8 +296,33 @@
     .sp-tone-none { color: var(--sp-faint); }
 
     .sp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
-    /* Amallar qatori: 2-3 karta, kengligi teng */
-    .sp-actions-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+    /* Amallar paneli — och indigo fon va hoshiya: hujjatlar (qog'oz) va oq kartalardan ajralib turadi */
+    .sp-toolbar { background: #eef2ff; color: #1e1b4b; border: 1px solid #c7d2fe; border-radius: 14px; padding: 6px; }
+    .sp-tb-segs { display: flex; flex-wrap: wrap; }
+    .sp-tb-seg { flex: 1 1 220px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; padding: 10px 14px; border-left: 1px solid #c7d2fe; min-width: 0; }
+    .sp-tb-seg:first-child { border-left: 0; }
+    .sp-tb-seg-firm { flex-basis: 300px; }
+    .sp-tb-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #4338ca; }
+    .sp-tb-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #334155; white-space: nowrap; }
+    .sp-tb-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .sp-tb-ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .sp-tb-ctl form { margin: 0; }
+    .sp-tb-note { font-size: 13px; color: #475569; }
+    .sp-tb-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid transparent; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+                 background: #4f46e5; color: #fff; transition: background-color .15s, border-color .15s; }
+    .sp-tb-btn:hover { background: #4338ca; }
+    .sp-tb-btn:focus-visible, .sp-tb-input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+    .sp-tb-btn-ok { background: #16a34a; color: #fff; }
+    .sp-tb-btn-ok:hover { background: #15803d; }
+    .sp-tb-btn-bad { background: #fff; color: #b91c1c; border-color: #fecaca; }
+    .sp-tb-btn-bad:hover { background: #fef2f2; }
+    .sp-tb-btn-bad-fill { background: #dc2626; color: #fff; }
+    .sp-tb-btn-bad-fill:hover { background: #b91c1c; }
+    .sp-tb-btn-line { background: #fff; color: #3730a3; border-color: #c7d2fe; }
+    .sp-tb-btn-line:hover { background: #e0e7ff; }
+    .sp-tb-input { flex: 1 1 140px; min-width: 0; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7d2fe; background: #fff; color: #0f172a; font-size: 13px; }
+    .sp-tb-textarea { flex-basis: 100%; height: auto; padding: 8px 10px; resize: vertical; }
+    .sp-tb-reject { margin: 0; padding: 12px 14px 10px; border-top: 1px solid #c7d2fe; display: flex; flex-direction: column; gap: 8px; }
     .sp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
     .sp-kv { margin: 0; padding: 8px 16px 14px; display: grid; gap: 0; }
@@ -370,6 +399,8 @@
         .sp-kv-2 > .sp-kv-wide { grid-template-columns: 1fr; }
         .sp-kv > div { grid-template-columns: 1fr; gap: 2px; }
         .sp-identity-side { align-items: flex-start; }
+        .sp-tb-seg { flex-basis: 100%; border-left: 0; border-top: 1px solid #c7d2fe; }
+        .sp-tb-seg:first-child { border-top: 0; }
         .sp-crumb-link span, .sp-crumb-sep, .sp-crumb-current { display: none; }
     }
     @media (prefers-reduced-motion: reduce) { .sp-btn, .sp-disclosure svg { transition: none !important; } }

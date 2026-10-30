@@ -29,12 +29,13 @@ class Mrz
 
     /** Viza (MRV-A): 2 qator × 44, beruvchi davlat — O'zbekiston */
     public static function visa(string $surname, string $given, ?string $nationality, ?string $passport,
-        ?CarbonInterface $birth, ?string $sex, ?CarbonInterface $expiry): array
+        ?CarbonInterface $birth, ?string $sex, ?CarbonInterface $expiry, string $optional = ''): array
     {
         $num = self::field($passport, 9);
         $line1 = self::pad('V<UZB' . self::names($surname, $given), 44);
+        // Ixtiyoriy qism: O'zbekiston vizasida viza turi va safarlar soni ("A1<3")
         $line2 = $num . self::check($num) . self::country($nationality) . self::date($birth) . self::check(self::date($birth))
-            . self::sex($sex) . self::date($expiry) . self::check(self::date($expiry));
+            . self::sex($sex) . self::date($expiry) . self::check(self::date($expiry)) . self::clean($optional);
 
         return [$line1, self::pad($line2, 44)];
     }

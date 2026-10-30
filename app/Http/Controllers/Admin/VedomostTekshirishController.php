@@ -27,6 +27,9 @@ use PhpOffice\PhpSpreadsheet\RichText\RichText;
 
 class VedomostTekshirishController extends Controller
 {
+    /** Bitta qaydnoma faylida ko'pi bilan shuncha (guruh, fan) — har biri shablon yuklaydi */
+    public const QAYDNOMA_MAX_ROWS = 40;
+
     private array $allowedRoles = [
         'superadmin', 'admin', 'kichik_admin',
         'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori',
@@ -668,7 +671,135 @@ class VedomostTekshirishController extends Controller
         ]);
     }
 
+    /**
+     * Tanlangan (guruh, fan) qatorlari uchun YN qaydnoma — jurnaldagi "YN qaydnoma
+     * yaratish" bilan bir xil: har qator uchun 12-shakl va faol bo'lgan qo'shimcha,
+     * 12a, 12b shakllari alohida varaqlarda, hammasi bitta Excel faylda.
+     * Chetlashgan talabalar kirmaydi.
+     */
+    public function exportQaydnoma(Request $request)
+    {
+        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
+
+        $request->validate([
+            'rows'                 => 'required|array|min:1|max:' . self::QAYDNOMA_MAX_ROWS,
+            'rows.*.group_id'      => 'required',
+            'rows.*.subject_id'    => 'required|string',
+            'rows.*.semester_code' => 'required|string',
+            'weight_jn'   => 'nullable|integer|min:0|max:100',
+            'weight_mt'   => 'nullable|integer|min:0|max:100',
+            'weight_on'   => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+        ], [
+            'rows.max' => 'Bir martada ko\'pi bilan ' . self::QAYDNOMA_MAX_ROWS . ' ta qator tanlang.',
+        ]);
+
+        $weights = [
+            (int) ($request->weight_jn ?? 50), (int) ($request->weight_mt ?? 20), (int) ($request->weight_on ?? 0),
+            (int) ($request->weight_oski ?? 0), (int) ($request->weight_test ?? 30),
+        ];
+        abort_if(array_sum($weights) !== 100, 422, "Vaznlar jami 100 bo'lishi kerak");
+
+        @set_time_limit(600);
+
+        $rows = $request->input('rows');
+        $multi = count($rows) > 1;
+        $journal = app(JournalController::class);
+        $workbook = null;
+        $fileName = null;
+        $skipped = [];
+
+        foreach ($rows as $i => $r) {
+            $group = Group::find($r['group_id']);
+            if (!$group) {
+                $skipped[] = [$i + 1, '—', $r['subject_id'], 'Guruh topilmadi'];
+                continue;
+            }
+
+            $built = $journal->buildYnQaydnomaSpreadsheet(
+                (string) $r['subject_id'], (string) $r['semester_code'], (string) $group->group_hemis_id, ...$weights
+            );
+            if (is_string($built)) {
+                $skipped[] = [$i + 1, $group->name, $r['subject_id'], $built];
+                continue;
+            }
+            [$book, $fileName] = $built;
+
+            // Bir nechta qatorda varaq nomlari (guruh nomi) takrorlanadi — qator raqami bilan ajratamiz
+            foreach ($book->getWorksheetIterator() as $ws) {
+                $title = $multi ? ($i + 1) . '. ' . $ws->getTitle() : $ws->getTitle();
+                $ws->setTitle($this->uniqueSheetTitle(array_filter([$workbook, $book]), $title, $ws));
+            }
+
+            if ($workbook === null) {
+                $workbook = $book;
+                continue;
+            }
+            foreach ($book->getAllSheets() as $ws) {
+                $workbook->addExternalSheet($ws);
+            }
+            $book->disconnectWorksheets();
+        }
+
+        if ($workbook === null) {
+            return back()->with('error', 'Qaydnoma yaratilmadi: ' . implode('; ', array_map(fn ($s) => $s[3], $skipped)));
+        }
+
+        if ($skipped) {
+            $sheet = $workbook->createSheet();
+            $sheet->setTitle($this->uniqueSheetTitle([$workbook], "O'tkazib yuborilgan", $sheet));
+            $sheet->fromArray([['Qator', 'Guruh', 'Fan ID', 'Sabab'], ...$skipped]);
+            $sheet->getStyle('A1:D1')->getFont()->setBold(true);
+            foreach (range('A', 'D') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+        }
+        $workbook->setActiveSheetIndex(0);
+
+        $filename = $multi
+            ? 'YN_qaydnoma_' . now()->format('d.m.Y_His') . '.xlsx'
+            : $fileName;
+        $writer = SpreadsheetIOFactory::createWriter($workbook, 'Xlsx');
+
+        return response()->streamDownload(function () use ($writer, $workbook) {
+            $writer->save('php://output');
+            $workbook->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
     // --- Helpers ---
+
+    /**
+     * Excel varaq nomi: 31 belgigacha, berilgan workbook'larning hech birida
+     * takrorlanmaydi ($self — nomi o'zgarayotgan varaqning o'zi hisobga olinmaydi).
+     *
+     * @param Spreadsheet[] $books
+     */
+    private function uniqueSheetTitle(array $books, string $title, $self = null): string
+    {
+        $base = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $title), 0, 31);
+        $taken = function (string $name) use ($books, $self) {
+            foreach ($books as $book) {
+                $found = $book->getSheetByName($name);
+                if ($found && $found !== $self) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        $candidate = $base;
+        for ($n = 2; $taken($candidate); $n++) {
+            $suffix = ' (' . $n . ')';
+            $candidate = mb_substr($base, 0, 31 - mb_strlen($suffix)) . $suffix;
+        }
+
+        return $candidate;
+    }
 
     private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {

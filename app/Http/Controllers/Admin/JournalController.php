@@ -9867,8 +9867,6 @@ class JournalController extends Controller
      */
     public function exportYnQaydnoma(Request $request)
     {
-        $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
-
         $request->validate([
             'subject_id' => 'required',
             'semester_code' => 'required',
@@ -9892,13 +9890,44 @@ class JournalController extends Controller
             return response()->json(['error' => 'Vaznlar jami 100 bo\'lishi kerak'], 422);
         }
 
-        $subjectId = $request->subject_id;
-        $semesterCode = $request->semester_code;
-        $groupHemisId = $request->group_hemis_id;
+        $built = $this->buildYnQaydnomaSpreadsheet(
+            (string) $request->subject_id, (string) $request->semester_code, (string) $request->group_hemis_id,
+            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1)
+        );
+        if (is_string($built)) {
+            return back()->with('error', $built);
+        }
+        [$spreadsheet, $fileName] = $built;
+
+        $tempDir = storage_path('app/public/yn_qaydnoma_excel');
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
+
+        $writer = SpreadsheetIOFactory::createWriter($spreadsheet, 'Xlsx');
+        $writer->save($tempPath);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * YN qaydnoma workbook'i bitta guruh + fan uchun: 12-shakl va faol bo'lgan
+     * qo'shimcha / 12a / 12b shakllari alohida varaqlarda, o'zgarishlar tarixi bilan.
+     * Jurnal eksporti va Vedomost tekshirish (bir nechta guruh/fan) ishlatadi.
+     *
+     * @return array{0: \PhpOffice\PhpSpreadsheet\Spreadsheet, 1: string}|string  [workbook, fayl nomi] yoki xato matni
+     */
+    public function buildYnQaydnomaSpreadsheet(
+        string $subjectId, string $semesterCode, string $groupHemisId,
+        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1
+    ): array|string {
+        $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
 
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         if (!$group) {
-            return back()->with('error', 'Guruh topilmadi');
+            return 'Guruh topilmadi';
         }
 
         // Sinov fani uchun student_grades sinov_yn_test yozuvlarini eksportdan
@@ -9919,7 +9948,7 @@ class JournalController extends Controller
             ->first();
 
         if (!$subject) {
-            return back()->with('error', 'Fan topilmadi');
+            return 'Fan topilmadi';
         }
 
         // Fakultet - curriculum orqali
@@ -9928,8 +9957,12 @@ class JournalController extends Controller
 
         $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
 
-        // Talabalar
-        $students = Student::where('group_id', $groupHemisId)->orderBy('full_name')->get();
+        // Talabalar — o'qishdan chetlashganlar (HEMIS holati 60) qaydnomaga kirmaydi
+        $students = Student::where('group_id', $groupHemisId)
+            ->where(fn ($q) => $q->whereNull('student_status_code')
+                ->orWhere('student_status_code', '!=', \App\Http\Middleware\BlockExpelledStudentGrade::EXPELLED_STATUS))
+            ->orderBy('full_name')
+            ->get();
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
         // O'quv yili kodi (show metodi bilan bir xil logika)
@@ -10274,7 +10307,6 @@ class JournalController extends Controller
         $abbreviatedMaruza = $lectureTeacherName ? $abbreviateName($lectureTeacherName) : '';
 
         // Shakl (urinish turi)
-        $shaklId = (int) ($request->shakl ?? 1);
         $shakllar = config('app.shakllar', []);
         $shaklName = '12-shakl';
         foreach ($shakllar as $sh) {
@@ -10552,7 +10584,7 @@ class JournalController extends Controller
         // Shablon yuklash — har shakl uchun alohida sheet
         $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
         if (!file_exists($templatePath)) {
-            return back()->with('error', 'Shablon fayli topilmadi');
+            return 'Shablon fayli topilmadi';
         }
 
         $spreadsheet = SpreadsheetIOFactory::load($templatePath);
@@ -10921,21 +10953,11 @@ class JournalController extends Controller
             \Log::warning('Tarix sheet generatsiyada xatolik: ' . $e->getMessage());
         }
 
-        $tempDir = storage_path('app/public/yn_qaydnoma_excel');
-        if (!file_exists($tempDir)) {
-            mkdir($tempDir, 0755, true);
-        }
-
         $groupName = str_replace(['/', '\\', ' '], '_', $group->name ?? 'guruh');
         $subjectName = str_replace(['/', '\\', ' '], '_', $subject->subject_name ?? 'fan');
         $fileName = 'YN_qaydnoma_' . $groupName . '_' . $subjectName . '.xlsx';
-        $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
 
-        $writer = SpreadsheetIOFactory::createWriter($spreadsheet, 'Xlsx');
-        $writer->save($tempPath);
-        $spreadsheet->disconnectWorksheets();
-
-        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+        return [$spreadsheet, $fileName];
     }
 
     public function adminEditGrade(Request $request)

@@ -192,6 +192,16 @@
                 <h3 class="modal-title">Og'irlik koeffitsientlari</h3>
                 <button class="modal-close" onclick="closeWeightModal()">&#x2715;</button>
             </div>
+            <div class="export-kind">
+                <label class="export-kind-opt">
+                    <input type="radio" name="export_kind" value="qaydnoma" checked>
+                    <span><strong>YN qaydnoma</strong><small>12-shakl; qo'shimcha, 12a, 12b bo'lsa — alohida varaqlarda</small></span>
+                </label>
+                <label class="export-kind-opt">
+                    <input type="radio" name="export_kind" value="check">
+                    <span><strong>Tekshiruv jadvali</strong><small>Barcha talabalar bitta jadvalda, zanjir tekshiruvi bilan</small></span>
+                </label>
+            </div>
             <p style="font-size:12px;color:#64748b;margin-bottom:16px;">JN + MT + ON + OSKI + Test = 100% bo'lishi shart</p>
             <div class="modal-weights">
                 <div class="mw-row">
@@ -707,6 +717,15 @@
             $('#ef_oski').val($('#m_oski').val());
             $('#ef_test').val($('#m_test').val());
 
+            var kind=$('input[name="export_kind"]:checked').val();
+            if(kind==='qaydnoma' && selected.length>{{ \App\Http\Controllers\Admin\VedomostTekshirishController::QAYDNOMA_MAX_ROWS }}){
+                alert("YN qaydnoma uchun bir martada ko'pi bilan {{ \App\Http\Controllers\Admin\VedomostTekshirishController::QAYDNOMA_MAX_ROWS }} ta qator tanlang.");
+                return;
+            }
+            $('#export-form').attr('action', kind==='qaydnoma'
+                ? '{{ route('admin.vedomost-tekshirish.export-qaydnoma') }}'
+                : '{{ route('admin.vedomost-tekshirish.export') }}');
+
             closeWeightModal();
             $('#export-form').submit();
         }
@@ -756,6 +775,12 @@
         /* Buttons */
         .btn-calc { display:inline-flex; align-items:center; gap:8px; padding:8px 20px; background:linear-gradient(135deg,#2b5ea7,#3b7ddb); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(43,94,167,.3); height:36px; }
         .btn-calc:hover:not(:disabled) { background:linear-gradient(135deg,#1e4b8a,#2b5ea7); }
+        .export-kind { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+        .export-kind-opt { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer; }
+        .export-kind-opt:has(input:checked) { border-color:#16a34a; background:#f0fdf4; }
+        .export-kind-opt input { margin-top:3px; accent-color:#16a34a; }
+        .export-kind-opt strong { display:block; font-size:13px; color:#0f172a; }
+        .export-kind-opt small { display:block; font-size:11.5px; color:#64748b; margin-top:2px; }
         .btn-excel { display:inline-flex; align-items:center; gap:6px; padding:8px 18px; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; height:36px; transition:all .2s; white-space:nowrap; }
         .btn-disabled { background:#94a3b8; cursor:not-allowed; }
         .btn-active { background:linear-gradient(135deg,#16a34a,#22c55e); cursor:pointer; box-shadow:0 2px 8px rgba(22,163,74,.3); }

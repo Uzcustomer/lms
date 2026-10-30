@@ -119,134 +119,12 @@
                 $visaT = \App\Services\VisaSettings::thresholds('visa');
                 $permitT = \App\Services\VisaSettings::thresholds('residence_permit');
 
-                $passportDays = $visaInfo->passport_expiry_date
-                    ? (int) now()->startOfDay()->diffInDays($visaInfo->passport_expiry_date, false) : null;
-
-                $cells = [];
-                if ($visaInfo->needsRegistration()) {
-                    $cells[] = ['label' => 'Registratsiya tugashi', 'date' => $visaInfo->registration_end_date,
-                        'state' => $deadline($visaInfo->registration_end_date, $visaInfo->registrationDaysLeft(), $regT),
-                        'process' => $visaInfo->isRegistrationProcessActive() ? 'Yangilanmoqda' : null];
-                }
-                if ($visaInfo->needsVisa()) {
-                    $cells[] = ['label' => 'Viza tugashi', 'date' => $visaInfo->visa_end_date,
-                        'state' => $deadline($visaInfo->visa_end_date, $visaInfo->visaDaysLeft(), $visaT),
-                        'process' => $visaInfo->isVisaProcessActive() ? 'Yangilanmoqda' : null];
-                } elseif ($visaInfo->basis() === \App\Models\StudentVisaInfo::BASIS_VISA_FREE) {
-                    $cells[] = ['label' => 'Viza', 'date' => null, 'state' => ['tone' => 'none', 'text' => 'Vizasiz — talab qilinmaydi'], 'process' => null, 'muted' => true];
-                }
-                if ($visaInfo->hasResidencePermit()) {
-                    $cells[] = ['label' => 'Guvohnoma muddati', 'date' => $visaInfo->residence_permit_expiry_date,
-                        'state' => $deadline($visaInfo->residence_permit_expiry_date, $visaInfo->residencePermitDaysLeft(), $permitT),
-                        'process' => null];
-                }
-                // Pasport: tugagan — qizil, 90 kundan kam — sariq
-                $cells[] = ['label' => 'Pasport amal qilishi', 'date' => $visaInfo->passport_expiry_date,
-                    'state' => $deadline($visaInfo->passport_expiry_date, $passportDays, ['danger' => 0, 'warning' => 90, 'info' => 90]),
-                    'process' => null];
-
-                $docs = [
-                    'passport_scan_path' => 'Pasport',
-                    'visa_scan_path' => 'Viza',
-                    'registration_doc_path' => "Registratsiya (ro'yxatga olish)",
-                    'residence_permit_scan_path' => 'Yashash guvohnomasi',
-                ];
-                $docInputs = [
-                    'passport_scan_path' => 'passport_scan', 'visa_scan_path' => 'visa_scan',
-                    'registration_doc_path' => 'registration_doc', 'residence_permit_scan_path' => 'residence_permit_scan',
-                ];
-                $applicableDocs = \App\Services\VisaSettings::DOCS_BY_BASIS[$visaInfo->basis()];
-
-                $entries = $visaInfo->visa_entries_count;
-                $entriesText = $entries === null ? '—' : ((int) $entries === 99 ? "Ko'p martalik" : $entries . ' marta');
             @endphp
 
-            {{-- Muddatlar --}}
-            <section class="sp-card sp-strip" style="--sp-cols: {{ count($cells) }};" aria-label="Muddatlar">
-                @foreach($cells as $c)
-                    <div class="sp-strip-cell">
-                        <div class="sp-label">{{ $c['label'] }}</div>
-                        @if($c['date'])
-                            <div class="sp-figure">{{ $c['date']->format('d.m.Y') }}</div>
-                        @else
-                            <div class="sp-figure sp-figure-empty">—</div>
-                        @endif
-                        <div class="sp-state">
-                            <span class="sp-tone sp-tone-{{ $c['state']['tone'] }}">{{ $c['state']['text'] }}</span>
-                            @if($c['process'])<span class="sp-pill sp-pill-info">{{ $c['process'] }}</span>@endif
-                        </div>
-                    </div>
-                @endforeach
-            </section>
-
             <div class="sp-grid">
-                {{-- Ma'lumotlar --}}
+                {{-- Hujjatlar --}}
                 <div class="sp-col">
-                    <section class="sp-card">
-                        <div class="sp-card-head"><h2 class="sp-h2">Pasport va shaxs</h2></div>
-                        <dl class="sp-kv sp-kv-2">
-                            <div><dt>Pasport raqami</dt><dd class="sp-mono sp-strong">{{ $visaInfo->passport_number ?: '—' }}</dd></div>
-                            <div><dt>Berilgan joyi</dt><dd>{{ $visaInfo->passport_issued_place ?: '—' }}</dd></div>
-                            <div><dt>Berilgan sanasi</dt><dd class="sp-num">{{ $fmt($visaInfo->passport_issued_date) }}</dd></div>
-                            <div><dt>Amal qilish muddati</dt><dd class="sp-num">{{ $fmt($visaInfo->passport_expiry_date) }}</dd></div>
-                            <div><dt>Tug'ilgan sanasi</dt><dd class="sp-num">{{ $fmt($visaInfo->birth_date ?? $student->birth_date) }}</dd></div>
-                            <div>
-                                <dt>Tug'ilgan joyi</dt>
-                                <dd class="sp-inline">
-                                    @if($birthFlagUrl)<img src="{{ $birthFlagUrl }}" alt="" class="sp-flag-sm" width="18" height="14">@endif
-                                    {{ collect([$visaInfo->birth_country, $visaInfo->birth_region, $visaInfo->birth_city])->filter()->implode(', ') ?: '—' }}
-                                </dd>
-                            </div>
-                            <div><dt>Fuqarolik (HEMIS)</dt><dd>{{ $student->citizenship_name ?: '—' }}</dd></div>
-                            <div class="sp-kv-wide"><dt>Yashash manzili</dt><dd>{{ $visaInfo->residenceTypeLabel() }} <span class="sp-faint">— {{ $visaInfo->residenceAddress() }}</span></dd></div>
-                        </dl>
-                    </section>
-
-                    @if($visaInfo->hasResidencePermit())
-                        <section class="sp-card">
-                            <div class="sp-card-head">
-                                <h2 class="sp-h2">Yashash guvohnomasi</h2>
-                                <span class="sp-faint">Viza va registratsiya talab qilinmaydi</span>
-                            </div>
-                            <dl class="sp-kv sp-kv-2">
-                                <div><dt>Seriyasi va raqami</dt><dd class="sp-mono sp-strong">{{ $visaInfo->residence_permit_number ?: '—' }}</dd></div>
-                                <div><dt>Shaxsiy raqam (JShShIR)</dt><dd class="sp-mono">{{ $visaInfo->residence_permit_pinfl ?: '—' }}</dd></div>
-                                <div><dt>Berilgan joyi</dt><dd>{{ $visaInfo->residence_permit_issued_place ?: '—' }}</dd></div>
-                                <div><dt>Berilgan sanasi</dt><dd class="sp-num">{{ $fmt($visaInfo->residence_permit_issued_date) }}</dd></div>
-                                <div><dt>Amal qilish muddati</dt><dd class="sp-num">{{ $fmt($visaInfo->residence_permit_expiry_date) }}</dd></div>
-                            </dl>
-                        </section>
-                    @else
-                        <section class="sp-card">
-                            <div class="sp-split">
-                                <div>
-                                    <div class="sp-card-head"><h2 class="sp-h2">Registratsiya</h2></div>
-                                    <dl class="sp-kv">
-                                        <div><dt>Boshlanishi</dt><dd class="sp-num">{{ $fmt($visaInfo->registration_start_date) }}</dd></div>
-                                        <div><dt>Tugashi</dt><dd class="sp-num sp-strong">{{ $fmt($visaInfo->registration_end_date) }}</dd></div>
-                                        <div><dt>Chegaradan kirgan</dt><dd class="sp-num">{{ $fmt($visaInfo->entry_date) }}</dd></div>
-                                    </dl>
-                                </div>
-                                <div>
-                                    <div class="sp-card-head">
-                                        <h2 class="sp-h2">Viza</h2>
-                                        @if($visaInfo->needsVisa() && $visaInfo->visa_type)<span class="sp-pill">{{ $visaInfo->visa_type }}</span>@endif
-                                    </div>
-                                    @if($visaInfo->needsVisa())
-                                        <dl class="sp-kv">
-                                            <div><dt>Raqami</dt><dd class="sp-mono sp-strong">{{ $visaInfo->visa_number ?: '—' }}</dd></div>
-                                            <div><dt>Amal qilishi</dt><dd class="sp-num">{{ $fmt($visaInfo->visa_start_date) }} – {{ $fmt($visaInfo->visa_end_date) }}</dd></div>
-                                            <div><dt>Kirishlar</dt><dd>{{ $entriesText }}</dd></div>
-                                            <div><dt>Istiqomat muddati</dt><dd class="sp-num">{{ $visaInfo->visa_stay_days ? $visaInfo->visa_stay_days . ' kun' : '—' }}</dd></div>
-                                            <div><dt>Berilgan</dt><dd>{{ $visaInfo->visa_issued_place ?: '—' }}@if($visaInfo->visa_issued_date)<span class="sp-faint sp-num">, {{ $visaInfo->visa_issued_date->format('d.m.Y') }}</span>@endif</dd></div>
-                                        </dl>
-                                    @else
-                                        <p class="sp-faint sp-pad">Vizasiz — viza talab qilinmaydi.</p>
-                                    @endif
-                                </div>
-                            </div>
-                        </section>
-                    @endif
+                    @include('admin.international-students._documents', ['docState' => $deadline])
                 </div>
 
                 {{-- Amallar --}}
@@ -307,27 +185,6 @@
                             @if(!$visaInfo->needsRegistration() && !$visaInfo->needsVisa())
                                 <li class="sp-row sp-faint">Yashash guvohnomasi bor — registratsiya va viza jarayoni yo'q.</li>
                             @endif
-                        </ul>
-                    </section>
-
-                    <section class="sp-card">
-                        <div class="sp-card-head"><h2 class="sp-h2">Hujjatlar</h2></div>
-                        <ul class="sp-list">
-                            @foreach($docs as $field => $label)
-                                @php $applicable = in_array($docInputs[$field], $applicableDocs, true); @endphp
-                                @continue(!$applicable && !$visaInfo->$field)
-                                <li class="sp-row">
-                                    <span class="sp-inline">
-                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" aria-hidden="true" class="{{ $visaInfo->$field ? 'sp-ico' : 'sp-ico-faint' }}"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-                                        <span class="{{ $visaInfo->$field ? '' : 'sp-faint' }}">{{ $label }}</span>
-                                    </span>
-                                    @if($visaInfo->$field)
-                                        <a href="{{ route('admin.international-students.file', [$student, $field]) }}" target="_blank" rel="noopener" class="sp-link">Ochish</a>
-                                    @else
-                                        <span class="sp-faint">Yuklanmagan</span>
-                                    @endif
-                                </li>
-                            @endforeach
                         </ul>
                     </section>
 

@@ -46,6 +46,28 @@ class CountryFlag
         'cambodia' => 'kh', 'canada' => 'ca', 'brazil' => 'br',
     ];
 
+    /** ISO alpha-2 => alpha-3 (MRZ uchun) */
+    private const ISO3 = [
+        'af' => 'AFG', 'in' => 'IND', 'pk' => 'PAK', 'bd' => 'BGD', 'np' => 'NPL', 'lk' => 'LKA', 'bt' => 'BTN',
+        'mv' => 'MDV', 'tj' => 'TJK', 'kz' => 'KAZ', 'kg' => 'KGZ', 'tm' => 'TKM', 'uz' => 'UZB', 'ru' => 'RUS',
+        'cn' => 'CHN', 'tr' => 'TUR', 'ir' => 'IRN', 'iq' => 'IRQ', 'az' => 'AZE', 'am' => 'ARM', 'ge' => 'GEO',
+        'ua' => 'UKR', 'by' => 'BLR', 'md' => 'MDA', 'eg' => 'EGY', 'ng' => 'NGA', 'gh' => 'GHA', 'ke' => 'KEN',
+        'jo' => 'JOR', 'sy' => 'SYR', 'lb' => 'LBN', 'sa' => 'SAU', 'ae' => 'ARE', 'ye' => 'YEM', 'my' => 'MYS',
+        'id' => 'IDN', 'kr' => 'KOR', 'jp' => 'JPN', 'mn' => 'MNG', 'us' => 'USA', 'gb' => 'GBR', 'de' => 'DEU',
+        'fr' => 'FRA', 'it' => 'ITA', 'es' => 'ESP', 'pl' => 'POL', 'lv' => 'LVA', 'lt' => 'LTU', 'ee' => 'EST',
+        'sd' => 'SDN', 'so' => 'SOM', 'et' => 'ETH', 'tz' => 'TZA', 'ug' => 'UGA', 'zm' => 'ZMB', 'zw' => 'ZWE',
+        'cm' => 'CMR', 'ma' => 'MAR', 'dz' => 'DZA', 'tn' => 'TUN', 'ly' => 'LBY', 'kw' => 'KWT', 'qa' => 'QAT',
+        'om' => 'OMN', 'bh' => 'BHR', 'ps' => 'PSE', 'il' => 'ISR', 'th' => 'THA', 'vn' => 'VNM', 'ph' => 'PHL',
+        'mm' => 'MMR', 'kh' => 'KHM', 'la' => 'LAO', 'ca' => 'CAN', 'br' => 'BRA',
+    ];
+
+    public static function iso3(?string $name, ?string $code = null): ?string
+    {
+        $iso = self::code($name, $code);
+
+        return $iso ? (self::ISO3[$iso] ?? null) : null;
+    }
+
     public static function code(?string $name, ?string $code = null): ?string
     {
         $code = strtolower(trim((string) $code));

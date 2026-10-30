@@ -177,25 +177,24 @@
                         @endforeach
                         <circle cx="100" cy="100" r="30" fill="none" stroke="currentColor" stroke-width=".9"/>
                     </svg>
-                    <div class="doc-visa-title">Republic of Uzbekistan</div>
-                    <dl class="doc-visa-rows">
-                        <div class="doc-vr"><dt><span>Visa No.</span></dt><dd class="doc-visa-no">{{ $visaInfo->visa_number ?: '—' }}</dd></div>
-                        <div class="doc-vr"><dt>Turi<span>Type</span></dt><dd>{{ $visaInfo->visa_type ?: '—' }}</dd></div>
-                        <div class="doc-vr doc-vr-2">
-                            <dt>Dan<span>From</span></dt><dd>{!! $hl($visaInfo->visa_start_date, 'start') !!}</dd>
-                            <dt>Gacha<span>Until</span></dt><dd>{!! $hl($visaInfo->visa_end_date, $docState($visaInfo->visa_end_date, $visaInfo->visaDaysLeft(), $visaT)['tone']) !!}</dd>
+                    <div class="doc-visa-head">
+                        <div class="doc-visa-title">Visa</div>
+                        <div class="doc-country">
+                            <img src="{{ $uzFlag }}" alt="" class="doc-flag">
+                            <span>O'ZBEKISTON RESPUBLIKASI<small>REPUBLIC OF UZBEKISTAN</small></span>
                         </div>
-                        <div class="doc-vr"><dt>Safarlar soni<span>Number of entries</span></dt><dd>{{ $entryLabel ?: '—' }}</dd></div>
-                        <div class="doc-vr doc-vr-2">
-                            <dt>Istiqomat muddati<span>Duration of stay</span></dt><dd class="doc-vr-dur">{{ $visaInfo->visa_stay_days ?: '—' }}</dd>
-                            <dt class="doc-vr-days">Kun<span>Days</span></dt><dd class="doc-vr-days"></dd>
-                        </div>
-                        <div class="doc-vr doc-vr-2">
-                            <dt>Berilgan joyi<span>Issued in</span></dt><dd>{{ $visaInfo->visa_issued_place ? \Illuminate\Support\Str::title(mb_strtolower($visaInfo->visa_issued_place)) : '—' }}</dd>
-                            <dt>Vaqti<span>On</span></dt><dd>{{ $d($visaInfo->visa_issued_date) }}</dd>
-                        </div>
-                        <div class="doc-vr"><dt>Pasport raqami<span>Passport No.</span></dt><dd>{{ $visaInfo->passport_number ?: '—' }}</dd></div>
-                        <div class="doc-vr"><dt>Izoh<span>Remarks</span></dt><dd></dd></div>
+                    </div>
+                    @php $vf = fn ($uz, $en) => '<dt>' . e($uz) . '<span>' . e($en) . '</span></dt>'; @endphp
+                    <dl class="doc-visa-grid">
+                        <div class="doc-vf doc-vf-no">{!! $vf('Viza raqami', 'Visa No.') !!}<dd>{{ $visaInfo->visa_number ?: '—' }}</dd></div>
+                        <div class="doc-vf">{!! $vf('Turi', 'Type') !!}<dd>{{ $visaInfo->visa_type ?: '—' }}</dd></div>
+                        <div class="doc-vf">{!! $vf('Safarlar soni', 'Entries') !!}<dd>{{ $entryLabel ?: '—' }}</dd></div>
+                        <div class="doc-vf">{!! $vf('Dan', 'From') !!}<dd>{!! $hl($visaInfo->visa_start_date, 'start') !!}</dd></div>
+                        <div class="doc-vf">{!! $vf('Gacha', 'Until') !!}<dd>{!! $hl($visaInfo->visa_end_date, $docState($visaInfo->visa_end_date, $visaInfo->visaDaysLeft(), $visaT)['tone']) !!}</dd></div>
+                        <div class="doc-vf">{!! $vf('Istiqomat muddati', 'Duration of stay') !!}<dd>{{ $visaInfo->visa_stay_days ? $visaInfo->visa_stay_days . ' kun' : '—' }}</dd></div>
+                        <div class="doc-vf">{!! $vf('Berilgan joyi', 'Issued in') !!}<dd>{{ $visaInfo->visa_issued_place ? \Illuminate\Support\Str::title(mb_strtolower($visaInfo->visa_issued_place)) : '—' }}</dd></div>
+                        <div class="doc-vf">{!! $vf('Berilgan sana', 'Issued on') !!}<dd>{{ $d($visaInfo->visa_issued_date) }}</dd></div>
+                        <div class="doc-vf">{!! $vf('Pasport raqami', 'Passport No.') !!}<dd>{{ $visaInfo->passport_number ?: '—' }}</dd></div>
                     </dl>
                     <div class="doc-mrz" aria-label="Mashinada o'qiladigan zona">@foreach(\App\Support\Mrz::visa($surname, $givenFull, $nationality, $visaInfo->passport_number, $birth, $sex, $visaInfo->visa_end_date, $visaOptional) as $line)<div>{{ $line }}</div>@endforeach</div>
                 </div>
@@ -241,7 +240,6 @@
     .doc-span { grid-column: 1 / -1; }
     .doc-wrap { margin: 0; min-width: 0; container-type: inline-size; }
     .doc-passport, .doc-visa { display: flex; flex-direction: column; }
-    .doc-visa { min-height: calc(100cqi * .70); }
     .doc-passport > .doc-mrz, .doc-visa > .doc-mrz { margin-top: auto; }
     .doc { position: relative; overflow: hidden; border-radius: 14px; color: #1f2937;
            border: 1px solid rgba(15, 23, 42, .10);
@@ -309,17 +307,22 @@
     /* Viza — O'zbekiston vizasi stikeri: ko'k-yashil fon, o'rtada naqsh, qiymatlar yozuv mashinasi shriftida */
     .doc-visa { --g1: rgba(37, 99, 235, .06); --g2: rgba(22, 163, 74, .07);
                 background: linear-gradient(100deg, #e5eef9 0%, #e2f0ee 48%, #d8efcf 100%); }
-    .doc > .doc-visa-orn { position: absolute; width: 56%; left: 26%; top: 6%; color: rgba(30, 64, 175, .10); pointer-events: none; }
-    .doc-visa-title { padding: 14px 18px 4px; text-align: center; font-size: clamp(16px, 4.4cqi, 27px); font-weight: 800;
-                      letter-spacing: .07em; text-transform: uppercase; color: #1e2f6b; }
-    .doc-visa-rows { margin: 0; padding: 4px 20px 12px; display: grid; gap: 2px; }
-    .doc-vr { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); align-items: center; gap: 10px; min-height: 28px; font-size: 13px; }
-    .doc-vr-2 { grid-template-columns: 9.5em minmax(0, 1fr) 4.5em minmax(0, 1fr); }
-    .doc-vr dt { font-size: 8.5px; line-height: 1.15; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #1e2f6b; }
-    .doc-vr dt span { display: block; font-weight: 600; color: #334155; }
-    .doc-vr dd { margin: 0; min-width: 0; font-family: "Courier New", Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: .03em;
+    .doc > .doc-visa-orn { position: absolute; width: 46%; right: 4%; top: 14%; color: rgba(30, 64, 175, .09); pointer-events: none; }
+    .doc-visa-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px 10px;
+                     border-bottom: 1px solid rgba(30, 47, 107, .15); }
+    .doc-visa-title { font-size: clamp(22px, 6cqi, 34px); font-weight: 800; line-height: 1; letter-spacing: .28em; text-transform: uppercase; color: #1e2f6b; }
+    .doc-visa .doc-country { color: #1e2f6b; }
+    /* Maydonlar 3 ustunli to'r: yorliq (uz / en) tepada, qiymat yozuv mashinasi shriftida */
+    .doc-visa-grid { margin: 0; padding: 12px 20px 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; }
+    .doc-vf { min-width: 0; }
+    .doc-vf dt { font-size: 9px; line-height: 1.2; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #1e2f6b; }
+    .doc-vf dt span { font-weight: 500; color: #64748b; margin-left: 4px; }
+    .doc-vf dt span::before { content: "/ "; }
+    .doc-vf dd { margin: 4px 0 0; font-family: "Courier New", Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: .03em;
                  color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .doc-vr dd.doc-visa-no { font-size: 20px; letter-spacing: .06em; }
+    .doc-vf-no dd { font-size: 20px; letter-spacing: .06em; color: #9f1239; }
+    .doc-vf dd:has(.doc-hl) { overflow: visible; }
+    .doc-vf dd .doc-hl { margin: 0 0 0 -7px; }
 
     /* Sana markeri — qog'ozga marker bilan chizilgandek: boshlanish ko'k, tugash muddat holatiga qarab */
     .doc-hl { --hl: 59, 130, 246; display: inline-block; padding: 1px 7px; margin: -1px -7px; border-radius: .7em .3em .8em .35em;
@@ -329,8 +332,6 @@
     .doc-hl-ok, .doc-hl-info { --hl: 34, 197, 94; }
     .doc-hl-warn { --hl: 245, 158, 11; }
     .doc-hl-bad { --hl: 239, 68, 68; color: #991b1b; }
-    .doc-vr dd .doc-hl { margin: 0; }
-    .doc-vr dd:has(.doc-hl) { overflow: visible; }
 
     /* Ro'yxatga qo'yish blankasi */
     .doc-reg { --g1: rgba(30, 64, 175, .035); --g2: rgba(30, 64, 175, .03); background: #fffdf8; padding: 16px 20px 18px; }
@@ -380,9 +381,9 @@
         .doc-pp-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .doc-fields-3 .doc-f-num { grid-column: 1 / -1; grid-row: auto; text-align: left; }
         .doc-f-wide { grid-column: 1 / -1; }
-        .doc-vr-2 { grid-template-columns: 9.5em minmax(0, 1fr); }
-        .doc-vr .doc-vr-days { display: none; }
-        .doc-vr .doc-vr-dur::after { content: " KUN"; }
+        .doc-visa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .doc-vf-no { grid-column: 1 / -1; }
+        .doc-visa-head { flex-wrap: wrap; }
         .doc-reg-lines { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 1023px) {

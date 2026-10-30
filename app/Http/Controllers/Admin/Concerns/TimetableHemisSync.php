@@ -111,6 +111,7 @@ trait TimetableHemisSync
      *   bekor qilingan hafta sanalmaydi, shu haftaga ko'chirilgan (kun va parasi bor) yoki shablonda joyi bor karta joylangan.
      * cycle — ichki sikl jadvalida joylanmagan sikl kartalari (cycleUnplacedCards: guruh qatorida — "Guruh bo'yicha" —
      *   joylangani joylangan; butun doska hisoboti bilan umumiy).
+     * conflicts — ichki jadvaldagi to'qnashuvlar (internalConflicts: o'qituvchi yoki xona band), ertadan keyingilari.
      * Bitta karta bir nechta guruhda bo'lishi mumkin: count — karta-hafta / karta bo'yicha bir martadan.
      */
     private function hemisUnplacedSummary(TimetableBoard $board, array $scope, string $today): array
@@ -184,7 +185,8 @@ trait TimetableHemisSync
         }
 
         $cycle = [];
-        foreach ($cards->contains($isCycle) ? $this->cycleUnplacedCards($board, $scope) : [] as $cc) {
+        // To'qnashuvli sikl bloklari bu yerda emas — quyidagi "conflicts" bo'limida (ikki marta sanalmasin).
+        foreach ($cards->contains($isCycle) ? $this->cycleUnplacedCards($board, $scope, false, false) : [] as $cc) {
             $seen = [];
             foreach ($cc['members'] as $member) {
                 $name = $cleanGroup($member);
@@ -196,10 +198,23 @@ trait TimetableHemisSync
             }
         }
 
+        // Ichki jadvaldagi to'qnashuvlar (o'qituvchi yoki xona band): dars joyida, lekin HEMIS'ga yozilmaydi (solishtirishda —
+        // to'siq). Faqat ertadan keyingi darslar; count — darslar (karta-hafta / sikl bloki) soni.
+        $conflicts = [];
+        foreach ($this->internalConflicts($board, $scope)['items'] as $it) {
+            if (($it['to'] ?? $it['date']) <= $today || !array_filter(preg_split('/\s*(?:,|\s\+\s)\s*/u', (string) $it['group']), $groupOk)) {
+                continue;
+            }
+            $conflicts[] = ['lesson' => $it['kind'] === 'weekly' ? $it['card_id'] . '|' . $it['week'] : $it['key'], 'kind' => $it['kind'],
+                'group' => $cleanGroup($it['group']), 'subject' => $it['subject'], 'date' => $it['date'],
+                'dates' => $it['dates'] ?? null, 'time' => $it['time'], 'type' => $it['type'], 'text' => $it['text']];
+        }
+
         return [
             'weekly' => ['count' => count(array_unique(array_merge([], ...array_map(fn ($u) => array_map(fn ($w) => $u['card_id'] . '|' . $w, $u['weeks']), $weekly)))),
                 'items' => $weekly],
             'cycle' => ['count' => count(array_unique(array_column($cycle, 'key'))), 'items' => $cycle],
+            'conflicts' => ['count' => count(array_unique(array_column($conflicts, 'lesson'))), 'items' => $conflicts],
         ];
     }
 
@@ -1249,7 +1264,9 @@ trait TimetableHemisSync
             ];
         }
 
-        $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today, $mudirFor);
+        // Band o'qituvchi/xona o'rniga kafedra mudiri — faqat doska sozlamasi yoqilgan bo'lsa (sukut: to'qnashuv — to'siq).
+        $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today, $mudirFor,
+            filter_var(($board->settings ?? [])['hemis_mudir_fallback'] ?? false, FILTER_VALIDATE_BOOLEAN));
 
         return [
             'today' => $today,
@@ -1274,8 +1291,11 @@ trait TimetableHemisSync
      * O'qituvchilar ustma-ust tushmaydi; yagona istisno — o'qituvchi biriktirilmagani uchun kafedra mudiriga
      * majburan qo'yilgan darslar (o'rinbosar, yoki HEMIS'dagi dars o'qituvchisi — shu fan kafedrasining mudiri).
      * "Kafedra mudiri xonasi" (vaqtincha ustma-ust tushishiga ruxsat bor) va umumiy (raqamsiz) xonalar tekshirilmaydi.
+     * $mudirFallback (doska sozlamasi hemis_mudir_fallback, sukut o'chiq): to'qnashuvda band o'qituvchi o'rniga kafedra
+     * mudiri, band xona o'rniga "Kafedra mudiri xonasi" qo'yiladi. O'chiq bo'lsa — almashtirilmaydi: amal to'siqli
+     * (JSON'ga kirmaydi), to'siqda kim/qaysi xona, qaysi dars bilan va qaysi vaqtda band ekani yoziladi.
      */
-    private function hemisCrossCheck(array &$groupsOut, array $finals, array $handledIds, string $today, callable $mudirFor): void
+    private function hemisCrossCheck(array &$groupsOut, array $finals, array $handledIds, string $today, callable $mudirFor, bool $mudirFallback = false): void
     {
         $idx = [];   // "e|xodim|sana" / "r|xona|sana" => [[boshlanish, tugash, birlik, matn, xodim, xona], ...]
         $emps = [];
@@ -1339,7 +1359,11 @@ trait TimetableHemisSync
                     continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim)
                 }
                 if ($s < $a['end'] && $a['start'] < $e) {
-                    $text = "{$msg}: {$label} {$s}-{$e}";
+                    // Kim (o'qituvchi) yoki qaysi xona band, qaysi dars bilan, qaysi vaqtda (va u darsning xonasi/o'qituvchisi).
+                    $who = $type === 'e' ? (string) ($a['employee_name'] ?? '') : (string) ($a['auditorium_name'] ?? $id);
+                    $where = $type === 'e' ? (($info['room'] ?? null) ? ', xona ' . $info['room'] : '')
+                        : (($info['teacher'] ?? null) ? ", o'qituvchi " . $info['teacher'] : '');
+                    $text = "{$msg}: " . ($who !== '' ? $who . ' — ' : '') . "{$label} {$s}-{$e}{$where}";
 
                     return ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
                         'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
@@ -1433,7 +1457,7 @@ trait TimetableHemisSync
         };
         // Darsning navbatdagi tekshiruvlari. Mudir/xona topilmasa yoki band o'qituvchining o'zi mudir bo'lsa — to'siq
         // "hal qilinmagan" bo'lib qoladi va oxirida yakuniy bandlik bo'yicha qayta tekshiriladi.
-        $drain = function (int $i) use (&$drain, &$st, &$groupsOut, $findHit, $fbOf, $byShare, $shareSize, $apply) {
+        $drain = function (int $i) use (&$drain, &$st, &$groupsOut, $findHit, $fbOf, $byShare, $shareSize, $apply, $mudirFallback) {
             $touched = [];
             while ($st[$i]['queue']) {
                 $type = array_shift($st[$i]['queue']);
@@ -1447,7 +1471,7 @@ trait TimetableHemisSync
                     continue;
                 }
                 $fb = fn (int $j) => $fbOf[$st[$j]['gi']][$st[$j]['ui']][$type === 'e' ? 0 : 1] ?: [null, null];
-                [$fbId, $fbName] = $fb($i);
+                [$fbId, $fbName] = $mudirFallback ? $fb($i) : [null, null];
                 if (!$fbId || ($type === 'e' && (string) $fbId === (string) ($a['employee_id'] ?? ''))) {
                     $st[$i]['unresolved'][$type] = $b;
                     continue;

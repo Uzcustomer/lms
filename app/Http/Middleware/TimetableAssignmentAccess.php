@@ -54,7 +54,7 @@ class TimetableAssignmentAccess
         if ($user && in_array($activeRole, ['oqituvchi', 'fan_masuli'], true)) {
             // Excelga yuklash faqat klient yuborgan (o'zi ko'rib turgan) panjarani
             // faylga yozadi — yangi ma'lumot ochmaydi, shuning uchun ruxsat.
-            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check'])) {
+            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.boards.conflicts', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
@@ -72,6 +72,8 @@ class TimetableAssignmentAccess
             $allowed = [
                 'admin.timetable.index',
                 'admin.timetable.boards.data',
+                // Ichki jadvaldagi to'qnashuvlar (hisoblagich va panel uchun, faqat o'qiydi)
+                'admin.timetable.boards.conflicts',
                 // O'zgarish so'rovlari: o'z so'rovlarini ko'rish / bekor qilish
                 'admin.timetable.change-requests.index',
                 'admin.timetable.change-requests.cancel',
@@ -120,6 +122,8 @@ class TimetableAssignmentAccess
                 $allowed = array_merge($allowed, [
                     'admin.timetable.teacher-units',
                     'admin.timetable.assign-teacher',
+                    // Tanlangan dars birligi vaqtida band o'qituvchilar/xonalar (ro'yxatda kulrang)
+                    'admin.timetable.unit-busy',
                     // O'qituvchi biriktirish oynasidan dars birligiga xona
                     'admin.timetable.assign-room',
                 ]);

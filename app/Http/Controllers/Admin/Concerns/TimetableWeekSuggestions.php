@@ -25,6 +25,9 @@ use Illuminate\Support\Facades\Schema;
  */
 trait TimetableWeekSuggestions
 {
+    /** Tekshiruv uchun: optimizatsiyadan oldingi yo'l (indekssiz findWeekConflicts, keshsiz, 6-qadam har hafta alohida). */
+    private bool $weekSuggestionsLegacy = false;
+
     public function weekSuggestions(Request $request, TimetableBoard $board)
     {
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'], true)) {
@@ -40,6 +43,8 @@ trait TimetableWeekSuggestions
             'courses.*'         => 'integer|min:1|max:7',
             'type'              => 'nullable|in:all,lecture,practice',
             'limit'             => 'nullable|integer|min:1|max:300',
+            // Bitta karta uchun to'liq takliflar (vaqt byudjeti tugab, qisqartirilgan karta bosilganda).
+            'card_id'           => 'nullable|integer',
         ]);
         @ini_set('memory_limit', '1024M');
         @set_time_limit(300);
@@ -64,6 +69,7 @@ trait TimetableWeekSuggestions
         };
 
         $state = $this->occupancyState($board->id);
+        $state['__v'] = 0;   // holat versiyasi: rejadagi har bir ko'chirish — yangi versiya (tekshiruv keshi kaliti)
         $eff = function (TimetableCard $c, int $w) use (&$state): ?array {
             $ov = $state['ov'][(int) $c->id][$w] ?? null;
             if ($ov) {
@@ -81,6 +87,10 @@ trait TimetableWeekSuggestions
                 continue;
             }
             $unplaced[] = $c;
+        }
+        $onlyCard = isset($data['card_id']) ? (int) $data['card_id'] : null;
+        if ($onlyCard !== null) {
+            $unplaced = array_values(array_filter($unplaced, fn ($c) => (int) $c->id === $onlyCard));
         }
         $limit = (int) ($data['limit'] ?? 150);
         $total = count($unplaced);
@@ -109,22 +119,34 @@ trait TimetableWeekSuggestions
         };
         $slotText = fn (int $d, int $p, int $len) => $dayName($d) . ', ' . intdiv($p + 1, 2) . '-para' . ($p % 2 ? '' : ' (2-yarmi)')
             . ($len > 2 ? ' + ' . ($len - 2) . ' soat' : '');
-        $check = fn (TimetableCard $c, int $w, int $d, int $p, array $st) => $this->findWeekConflicts($c, $w, $d, $p, 0, $st);
-        $withMove = function (array $st, TimetableCard $c, int $w, ?int $d, ?int $p, bool $cancel = false, ?array $room = null) {
+        // Tekshiruv: faqat shu kundagi kartalar (findWeekConflictsIndexed); natija so'rov ichida eslab qolinadi — karta, o'qituvchi,
+        // xona, hafta, kun, para va holat versiyasi bo'yicha.
+        $memo = [];
+        $check = $this->weekSuggestionsLegacy
+            ? fn (TimetableCard $c, int $w, int $d, int $p, array $st) => $this->findWeekConflicts($c, $w, $d, $p, 0, $st)
+            : function (TimetableCard $c, int $w, int $d, int $p, array $st) use (&$memo) {
+                $k = ($st['__v'] ?? 0) . '|' . $c->id . '|' . $c->teacher_id . '|' . $c->auditorium_code . '|' . $w . '|' . $d . '|' . $p;
+
+                return $memo[$k] ??= $this->findWeekConflictsIndexed($c, $w, $d, $p, 0, $st);
+            };
+        $ver = 0;
+        $withMove = function (array $st, TimetableCard $c, int $w, ?int $d, ?int $p, bool $cancel = false, ?array $room = null) use (&$ver) {
             // weekOverride xona berilmagan ko'chirishda shu haftaga berilgan xonani saqlaydi (bekor qilishda tozalaydi).
             $prev = $cancel ? null : ($st['ov'][(int) $c->id][$w] ?? null);
             $o = new TimetableCardOverride();
             $o->forceFill(['card_id' => $c->id, 'week' => $w, 'day' => $d, 'pair' => $p, 'start_half' => 0, 'cancelled' => $cancel,
                 'auditorium_code' => $room ? $room[0] : $prev?->auditorium_code, 'auditorium_name' => $room ? $room[1] : $prev?->auditorium_name]);
             $this->stateSetOverride($st, $o);
+            $st['__v'] = ++$ver;
 
             return $st;
         };
-        // Shu vaqtda to'sib turgan kartalar: [karta, sabablar].
+        // Shu vaqtda to'sib turgan kartalar: [karta, sabablar]. Faqat to'qnashuv nomzodlari (kun va o'qituvchi/xona/guruh indeksi).
         $blockers = function (TimetableCard $c, int $w, int $d, int $p, array $st) use ($eff): array {
             $out = [];
             $my = [$p - 1, $p - 1 + $c->lenHalf()];
-            foreach ($st['cards'] as $o) {
+            $myRoom = ($st['ov'][(int) $c->id][$w] ?? null)?->auditorium_code ?: $c->auditorium_code;
+            foreach ($this->weekSuggestionsLegacy ? $st['cards'] : array_intersect_key($st['cards'], $this->clashCandidates($c, $d, $myRoom, $st)) as $o) {
                 if ((int) $o->id === (int) $c->id) {
                     continue;
                 }
@@ -133,7 +155,6 @@ trait TimetableWeekSuggestions
                 if (!$pl || $pl[0] !== $d || !$this->halfOverlap($my, [$pl[1] - 1, $pl[1] - 1 + $o->lenHalf()])) {
                     continue;
                 }
-                $myRoom = ($st['ov'][(int) $c->id][$w] ?? null)?->auditorium_code ?: $c->auditorium_code;
                 $why = $this->clashWith($c, $myRoom, $o, $ov?->auditorium_code ?: $o->auditorium_code, $ov?->auditorium_name ?: $o->auditorium_name);
                 if ($why) {
                     $out[] = [$o, $why];
@@ -301,9 +322,52 @@ trait TimetableWeekSuggestions
         $rooms = null;
         $roomMap = null;
         $teachersOf = [];
+        // 6-qadam: o'qituvchining barcha haftalardagi darslari (sana => [[boshi, oxiri, karta]]) — o'qituvchi bo'yicha bir marta.
+        $byTeacher = null;
+        $teacherOcc = [];
+        $weekDates = [];
+        $dateOf = function (TimetableCard $x, int $w, int $d) use (&$weekDates, $board): ?string {
+            $k = $x->faculty_name . '|' . $x->specialty_name . '|' . (int) $x->course . '|' . $this->cardCurriculumId($x) . '|' . $w;
+            $weekDates[$k] ??= (function () use ($board, $x, $w) {
+                $monday = $this->weekStartDate($board, $x, $w);
+
+                return array_map(fn ($i) => $monday->copy()->addDays($i)->toDateString(), range(0, 6));
+            })();
+
+            return $weekDates[$k][$d - 1] ?? null;
+        };
+        $occOf = function (int $tid) use (&$byTeacher, &$teacherOcc, &$state, $effIn, $gridOf, $dateOf): array {
+            if (!isset($teacherOcc[$tid])) {
+                if ($byTeacher === null) {
+                    $byTeacher = [];
+                    foreach ($state['cards'] as $o) {
+                        if ($o->teacher_id) {
+                            $byTeacher[(int) $o->teacher_id][] = $o;
+                        }
+                    }
+                }
+                $occ = [];
+                foreach ($byTeacher[$tid] ?? [] as $o) {
+                    $g = $gridOf($o);
+                    for ($w = 1; $w <= (int) $g['weeks']; $w++) {
+                        // findWeekConflicts kabi: kalendar kunlaridan tashqaridagi kun hisobga olinmaydi.
+                        if (($pl = $effIn($o, $w, $state)) && $pl[0] <= (int) $g['days'] && ($date = $dateOf($o, $w, $pl[0]))) {
+                            $occ[$date][] = [$pl[1] - 1, $pl[1] - 1 + $o->lenHalf(), (int) $o->id];
+                        }
+                    }
+                }
+                $teacherOcc[$tid] = $occ;
+            }
+
+            return $teacherOcc[$tid];
+        };
+        // Vaqt byudjeti: tugasa — qolgan kartalarga faqat tez qadamlar (bo'sh vaqt, shu kunning boshqa vaqti, xona).
+        $deadline = microtime(true) + (float) config('timetable.week_suggestions_budget', 40);
+        $partialN = 0;
 
         $result = [];
         foreach ($unplaced as $c) {
+            $full = $onlyCard !== null || microtime(true) < $deadline;
             $grid = $gridOf($c);
             $maxPair = (int) $grid['pairs'];
             $maxDay = (int) $grid['days'];
@@ -424,6 +488,16 @@ trait TimetableWeekSuggestions
                     }
                 }
                 break;
+            }
+
+            if (!$full) {
+                // Byudjet tugadi: og'ir qadamlar (3–6) hisoblanmaydi — kartani bosib, faqat shu karta uchun to'liq olish mumkin.
+                foreach ($late as $x) {
+                    $sugs[] = $x;
+                }
+                $partialN++;
+                $result[] = $this->suggestionCard($c, $W, $reason, $sugs, true);
+                continue;
             }
 
             // 3) To'sib turgan darsni shu haftaning boshqa vaqtiga surish — to'sib turgan dars ham butun blok bo'lib ko'chadi.
@@ -552,10 +626,15 @@ trait TimetableWeekSuggestions
                     if ($check($tmp, $W, $td, $tp, $state)) {
                         continue;
                     }
-                    // O'qituvchi butun semestr uchun almashadi — karta joylashgan boshqa haftalarda ham bo'sh bo'lishi kerak.
+                    // O'qituvchi butun semestr uchun almashadi — karta joylashgan boshqa haftalarda ham bo'sh bo'lishi kerak:
+                    // shu o'qituvchining barcha darslari (indeks) ichidan karta vaqti bilan kesishgani bitta o'tishda qidiriladi.
                     $busyElsewhere = false;
+                    $occ = $this->weekSuggestionsLegacy ? null : $occOf((int) $t->id);
                     foreach ($placedWeeks as $w2 => [$d2, $p2]) {
-                        if (array_filter($check($tmp, $w2, $d2, $p2, $state), fn ($m) => str_starts_with($m, 'O\'qituvchi band'))) {
+                        $busy = $occ === null
+                            ? (bool) array_filter($check($tmp, $w2, $d2, $p2, $state), fn ($m) => str_starts_with($m, 'O\'qituvchi band'))
+                            : (bool) array_filter($occ[$dateOf($c, $w2, $d2)] ?? [], fn ($x) => $x[2] !== (int) $c->id && $x[0] < $p2 - 1 + $len && $p2 - 1 < $x[1]);
+                        if ($busy) {
                             $busyElsewhere = true;
                             break;
                         }
@@ -575,12 +654,15 @@ trait TimetableWeekSuggestions
             $result[] = $this->suggestionCard($c, $W, $reason, $sugs);
         }
 
-        return response()->json(['week' => $W, 'total' => $total, 'shown' => count($result), 'cards' => $result]);
+        return response()->json(['week' => $W, 'total' => $total, 'shown' => count($result), 'cards' => $result,
+            'partial' => $partialN > 0, 'message' => $partialN ? $partialN . ' ta karta uchun to\'liq takliflar hisoblanmadi' : null]);
     }
 
-    private function suggestionCard(TimetableCard $c, int $week, string $reason, array $sugs): array
+    private function suggestionCard(TimetableCard $c, int $week, string $reason, array $sugs, bool $partial = false): array
     {
         return [
+            // true — vaqt byudjeti tugab, faqat tez qadamlar (1–2) hisoblangan; ?card_id= bilan to'liq olinadi.
+            'partial' => $partial,
             'id' => (int) $c->id,
             'subject' => $c->subject_name,
             'type' => $c->training_type,

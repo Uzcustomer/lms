@@ -113,6 +113,39 @@ const ASK = /Shu ma'lumot bilan solishtirish/;
     assert.match(warned[0], /HTTP 500/);
     assert.match(html(), ASK);
 
+    // 6) Faqat ichki jadvaldagi to'qnashuvlar (joylanmagan yo'q) — qizil oyna: "To'qnashuvlar: N ta dars" jadvali
+    // (guruh, fan, sana, vaqt, kim/qaysi xona band, kim bilan); bitta darsning ikki to'qnashuvi bir marta sanaladi.
+    calls.length = 0;
+    const conflict = (lesson, group, extra) => Object.assign({ lesson, kind: 'cycle', group, subject: 'Klinik farmakologiya', date: '2026-10-30',
+        dates: '30.10–10.11', time: '1–6-soat', type: 'teacher', text: "O'qituvchi SHARIPOV K. SH. band: p/p22-03c, Klinik farmakologiya, 30.10–10.11" }, extra || {});
+    summary = { weekly: { count: 0, items: [] }, cycle: { count: 0, items: [] }, conflicts: { count: 2, items: [
+        conflict('k1', 'd1/d22-05c'),
+        conflict('k1', 'd1/d22-05c', { type: 'room', text: "Xona 305 sig'imidan ko'p: d1/d22-05a, Klinik farmakologiya, 30.10–10.11" }),
+        conflict('7|3', 'p/p22-03c', { kind: 'weekly', dates: null, date: '2026-11-04', time: 'Seshanba, 2-para' }),
+    ] } };
+    await click();
+    assert.deepEqual(calls, ['/unplaced-summary']);
+    assert.match(html(), /⛔ Ichki jadvalda to'qnashuvlar bor/);
+    assert(!html().includes('hsUnpText'), 'joylanmagan yo\'q, lekin ularning matni chiqdi');
+    assert.match(html(), /<details open id="hsUnpConflicts"[^>]*><summary[^>]*>To'qnashuvlar: 2 ta dars<\/summary>/);
+    const rows = [...html().matchAll(/<tr><td>(.*?)<\/td><td>(.*?)<\/td><td>(.*?)<\/td><td>(.*?)<\/td><td>(.*?)<\/td><\/tr>/g)].map(m => m.slice(1).join(' | '));
+    assert.deepEqual(rows, [
+        "d1/d22-05c | Klinik farmakologiya | 30.10–10.11 | 1–6-soat | O'qituvchi SHARIPOV K. SH. band: p/p22-03c, Klinik farmakologiya, 30.10–10.11",
+        "d1/d22-05c | Klinik farmakologiya | 30.10–10.11 | 1–6-soat | Xona 305 sig'imidan ko'p: d1/d22-05a, Klinik farmakologiya, 30.10–10.11",
+        "p/p22-03c | Klinik farmakologiya | 04.11.2026 | Seshanba, 2-para | O'qituvchi SHARIPOV K. SH. band: p/p22-03c, Klinik farmakologiya, 30.10–10.11",
+    ]);
+    els.hsUnpGo.onclick();
+    await tick();
+    assert.match(html(), ASK);
+
+    // 7) Joylanmagan va to'qnashuv birga — ikkala bo'lim.
+    summary.weekly = { count: 1, items: [{ group: 'G-A', card_id: 8, subject: 'Anatomiya', type: 'practice', weeks: [6] }] };
+    await click();
+    assert.match(html(), /⛔ Hali joylanmagan kartalar bor/);
+    assert.match(html(), /id="hsUnpText"/);
+    assert.match(html(), /To'qnashuvlar: 2 ta dars/);
+    els.hsUnpClose.onclick();
+
     process.exitCode = 0;
-    console.log('5 HEMIS compare unplaced-cards red gate scenarios passed');
+    console.log('7 HEMIS compare unplaced-cards red gate scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

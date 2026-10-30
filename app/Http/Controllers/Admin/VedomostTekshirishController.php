@@ -13,6 +13,7 @@ use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Services\HemisService;
+use App\Services\YnAttemptStatusService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,9 +28,6 @@ use PhpOffice\PhpSpreadsheet\RichText\RichText;
 
 class VedomostTekshirishController extends Controller
 {
-    /** Bitta qaydnoma faylida ko'pi bilan shuncha (guruh, fan) — har biri shablon yuklaydi */
-    public const QAYDNOMA_MAX_ROWS = 40;
-
     private array $allowedRoles = [
         'superadmin', 'admin', 'kichik_admin',
         'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori',
@@ -390,12 +388,144 @@ class VedomostTekshirishController extends Controller
             }
         }
 
-        // --- Spreadsheet ---
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Tekshirish');
+        // Qo'shimcha / 12a / 12b varaqlaridagi "Qaydnoma turi" (config('app.shakllar') id'lari)
+        $formShaklIds = [
+            YnAttemptStatusService::FORM_12_QOSHIMCHA  => 2,
+            YnAttemptStatusService::FORM_12A           => 3,
+            YnAttemptStatusService::FORM_12A_QOSHIMCHA => 4,
+            YnAttemptStatusService::FORM_12B           => 5,
+            YnAttemptStatusService::FORM_12B_QOSHIMCHA => 6,
+        ];
+        $formLabels = [YnAttemptStatusService::FORM_12 => $shaklName];
+        foreach ($formShaklIds as $form => $id) {
+            $formLabels[$form] = collect($shakllar)->firstWhere('id', $id)['name'] ?? $form;
+        }
 
-        // --- Header ---
+        $calcService = app(\App\Services\VedomostTekshirishService::class);
+        $journal = app(JournalController::class);
+
+        // --- Ma'lumot yig'ish ---
+        // Har shakl alohida varaqqa: 12-shakl — avvalgidek tekshiruv hisobi bilan;
+        // qo'shimcha / 12a / 12b — jurnal YN qaydnomasidagi talabalar va baholar
+        // (ynQaydnomaForms), lekin shu jadval ustunlarida.
+        $rowsByForm = array_fill_keys(array_keys($formLabels), []);
+
+        foreach ($exportRows as $rowData) {
+            $groupId      = $rowData['group_id'];
+            $subjectId    = $rowData['subject_id'];
+            $semesterCode = $rowData['semester_code'];
+
+            $group = is_numeric($groupId)
+                ? Group::find($groupId)
+                : Group::where('group_hemis_id', $groupId)->first();
+            if (!$group) continue;
+            // Hisob (JN/MT/ON/OSKI/Test, davomat, o'qituvchilar) — umumiy servisda:
+            // AI tekshiruv ham aynan shu qiymatlarni ishlatadi.
+            $collected = $calcService->collect($group, (string) $subjectId, (string) $semesterCode);
+            if (!$collected) continue;
+            [
+                'groupHemisId' => $groupHemisId, 'curriculum' => $curriculum, 'educationYearName' => $educationYearName,
+                'subject' => $subject, 'semester' => $semester, 'students' => $students,
+                'studentHemisIds' => $studentHemisIds, 'raw' => $rawByStudent, 'lectureTeacher' => $lectureTeacher,
+                'practiceTeacher' => $practiceTeacher, 'totalHours' => $totalHours, 'divisor' => $divisor,
+            ] = $collected;
+
+            // --- HEMIS exam grades bilan taqqoslash (lokal jadvaldan) ---
+            // Sync export'dan oldin alohida AJAX so'rov (syncHemis) orqali
+            // amalga oshiriladi. Bu yerda faqat lokal ma'lumot o'qiladi.
+            // subject_id bo'yicha filtrlash — HEMIS API'dagi subject.id
+            // bilan bizning subject_id mos kelishi kerak.
+            $hemisExamGrades = HemisExamGrade::forComparison($studentHemisIds, $subjectId, $semesterCode)
+                ->get()
+                ->groupBy('student_hemis_id');
+
+            $levelCode = (string) ($semester?->level_code ?? '');
+            $common = [
+                'practiceTeacher' => $practiceTeacher, 'subjectId' => $subjectId, 'subjectName' => $subject->subject_name ?? '',
+                'educationYear' => $educationYearName ?? ($curriculum?->education_year_name ?? ''),
+                'semesterName' => $semester?->name ?? $semesterCode, 'groupHemisId' => (string) $groupHemisId,
+                'groupName' => $group->name ?? '', 'totalHours' => $totalHours, 'credit' => (int) ($subject->credit ?? 0),
+                'lectureTeacher' => $lectureTeacher, 'divisor' => $divisor,
+                'weights' => [$wJn, $wMt, $wOn, $wOski, $wTest],
+            ];
+
+            foreach ($students as $stu) {
+                $hId = $stu->hemis_id;
+                $rowsByForm[YnAttemptStatusService::FORM_12][] = $common + [
+                    'student' => $stu,
+                    'calc' => $calcService->compute($rawByStudent[$hId], $wJn, $wMt, $wOn, $wOski, $wTest, $levelCode),
+                    'jnCount' => $rawByStudent[$hId]['jnCount'],
+                    'shakl' => $formLabels[YnAttemptStatusService::FORM_12],
+                    'hemis' => $hemisExamGrades[$hId] ?? collect(),
+                ];
+            }
+
+            $forms = $journal->ynQaydnomaForms(
+                (string) $subjectId, (string) $semesterCode, (string) $groupHemisId, $wJn, $wMt, $wOn, $wOski, $wTest
+            );
+            foreach (is_array($forms) ? $forms['forms'] : [] as $form => $data) {
+                if ($form === YnAttemptStatusService::FORM_12) {
+                    continue;
+                }
+                foreach ($data['students'] as $stu) {
+                    $hId = $stu->hemis_id;
+                    $raw = [
+                        'jn'   => (int) ($data['jn'][$hId] ?? 0),
+                        'mt'   => (int) ($data['mt'][$hId] ?? 0),
+                        'on'   => round($data['other'][100][$hId] ?? 0, 0, PHP_ROUND_HALF_UP),
+                        'oski' => round($data['other'][101][$hId] ?? 0, 0, PHP_ROUND_HALF_UP),
+                        'test' => round($data['other'][102][$hId] ?? 0, 0, PHP_ROUND_HALF_UP),
+                        'dav'  => $rawByStudent[$hId]['dav'] ?? 0,
+                    ];
+                    $rowsByForm[$form][] = $common + [
+                        'student' => $stu,
+                        'calc' => $calcService->compute($raw, $wJn, $wMt, $wOn, $wOski, $wTest, $levelCode),
+                        'jnCount' => $rawByStudent[$hId]['jnCount'] ?? 0,
+                        'shakl' => $formLabels[$form],
+                        // HEMIS'dagi qayta topshirish YN bahosi bilan taqqoslanmaydi
+                        'hemis' => null,
+                    ];
+                }
+            }
+        } // end rows loop
+
+        // --- Varaqlar: 12-shakl doim, qolganlari talabasi bo'lsa ---
+        $spreadsheet = new Spreadsheet();
+        $first = true;
+        foreach ($rowsByForm as $form => $rows) {
+            if (!$first && !$rows) {
+                continue;
+            }
+            $sheet = $first ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
+            $sheet->setTitle(mb_substr($formLabels[$form], 0, 31));
+            $this->writeCheckHeader($sheet);
+            foreach ($rows as $i => $row) {
+                $this->writeCheckRow($sheet, $i + 2, $i + 1, $row);
+            }
+            // Freeze pane
+            $sheet->freezePane('D2');
+            $first = false;
+        }
+        $spreadsheet->setActiveSheetIndex(0);
+
+        // Fayl yuborish
+        $writer = SpreadsheetIOFactory::createWriter($spreadsheet, 'Xlsx');
+        if (method_exists($writer, 'setPreCalculateFormulas')) {
+            $writer->setPreCalculateFormulas(false);
+        }
+
+        $filename = 'vedomost_tekshirish_' . now()->format('d.m.Y_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    /** Tekshiruv jadvali sarlavhasi va ustun kengliklari */
+    private function writeCheckHeader($sheet): void
+    {
         $headers = [
             'A' => '#',
             'B' => 'FIO',
@@ -488,318 +618,136 @@ class VedomostTekshirishController extends Controller
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
         }
+    }
 
-        $calcService = app(\App\Services\VedomostTekshirishService::class);
+    /**
+     * Tekshiruv jadvalining bitta talaba qatori. $d['hemis'] — HEMIS baholari
+     * (taqqoslash uchun); null bo'lsa tekshiruv ustunlari bo'sh qoladi.
+     */
+    private function writeCheckRow($sheet, int $r, int $rowIndex, array $d): void
+    {
+        $stu = $d['student'];
+        $hId = $stu->hemis_id;
+        [$wJn, $wMt, $wOn, $wOski, $wTest] = $d['weights'];
+        [
+            'jn' => $jn, 'mt' => $mt, 'on' => $on, 'oski' => $oski, 'test' => $test, 'dav' => $dav,
+            'jnBall' => $jnBall, 'mtBall' => $mtBall, 'onBall' => $onBall, 'oskiBall' => $oskiBall,
+            'testBall' => $testBall, 'sumBall' => $sumBall, 'maxSum' => $maxSum, 'yn' => $yn,
+            'ects' => $ects, 'baho' => $baho, 'zanjir' => $zanjir, 'roundJnMtToInt' => $roundJnMtToInt,
+        ] = $d['calc'];
 
-        // --- Ma'lumot yig'ish ---
-        $dataRow  = 2;
-        $rowIndex = 1;
+        // Hujayralarga yozish
+        $sheet->setCellValue("A{$r}", $rowIndex);
+        $fioLabel = $stu->full_name;
+        if ($dav >= 25) {
+            // Haqiqiy davomat foizini ko'rsatamiz (1 kasr, oxiridagi
+            // nollar tozalanadi): 30 → "30", 30.5 → "30.5", 30.15 → "30.2"
+            $davStr = rtrim(rtrim(number_format($dav, 1, '.', ''), '0'), '.');
+            $fioLabel .= " ({$davStr}% davomat)";
+        }
+        $sheet->setCellValue("B{$r}", $fioLabel);
+        $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
+        $sheet->setCellValue("D{$r}", $jn);
+        $sheet->setCellValue("E{$r}", $jnBall);
+        $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
+        $sheet->setCellValue("G{$r}", $mt);
+        $sheet->setCellValue("H{$r}", $mtBall);
+        $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
+        $sheet->setCellValue("J{$r}", $on);
+        $sheet->setCellValue("K{$r}", $onBall);
+        if ($wOn > 0 && !$roundJnMtToInt) {
+            $sheet->getStyle("K{$r}")->getNumberFormat()->setFormatCode('0.0');
+        }
+        $sheet->setCellValue("M{$r}", $sumBall);
+        if ($maxSum > 0) {
+            $sheet->setCellValue("N{$r}", $sumBall / $maxSum);
+            $sheet->getStyle("N{$r}")->getNumberFormat()->setFormatCode('0%');
+        }
+        $sheet->setCellValue("P{$r}", $oski);
+        $sheet->setCellValue("Q{$r}", $oskiBall);
+        if ($wOski > 0 && $wTest > 0) {
+            // Ikkalasi ham vaznga ega — 2 kasr ko'rinishi (masalan 83*15/100=12.45)
+            $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.00');
+        }
+        $sheet->setCellValue("S{$r}", $test);
+        $sheet->setCellValue("T{$r}", $testBall);
+        if ($wOski > 0 && $wTest > 0) {
+            $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.00');
+        }
+        $sheet->setCellValue("V{$r}", $yn === '' ? '' : $yn);
+        $sheet->setCellValue("W{$r}", $ects);
+        $sheet->setCellValue("X{$r}", $d['practiceTeacher']);
+        $sheet->setCellValue("Y{$r}", $baho);
+        $sheet->setCellValue("Z{$r}", (string) $hId);
+        $sheet->setCellValue("AA{$r}", $d['subjectId']);
+        $sheet->setCellValue("AB{$r}", $d['subjectName']);
+        $sheet->setCellValue("AC{$r}", $d['shakl']);
+        // Hisobot qilinayotgan joriy o'quv yili (schedule bo'yicha),
+        // mavjud bo'lmasa curriculum'dagi yilga qaytamiz.
+        $sheet->setCellValue("AD{$r}", $d['educationYear']);
+        $sheet->setCellValue("AE{$r}", $d['semesterName']);
+        $sheet->setCellValue("AF{$r}", $d['groupHemisId']);
+        $sheet->setCellValue("AG{$r}", $d['groupName']);
+        $sheet->setCellValue("AH{$r}", $d['totalHours']);
+        $sheet->setCellValue("AI{$r}", $d['credit']);
+        $sheet->setCellValue("AJ{$r}", $d['lectureTeacher']);
+        $sheet->setCellValue("AK{$r}", $d['jnCount']);
+        $sheet->setCellValue("AL{$r}", $d['divisor']);
+        $sheet->setCellValue("AM{$r}", $dav / 100);
+        $sheet->getStyle("AM{$r}")->getNumberFormat()->setFormatCode('0.00%');
+        $sheet->setCellValue("AN{$r}", $wJn);
+        $sheet->setCellValue("AO{$r}", $wMt);
+        $sheet->setCellValue("AP{$r}", $wOn);
+        $sheet->setCellValue("AQ{$r}", $wOski);
+        $sheet->setCellValue("AR{$r}", $wTest);
+        $sheet->setCellValue("AS{$r}", $zanjir);
 
-        foreach ($exportRows as $rowData) {
-            $groupId      = $rowData['group_id'];
-            $subjectId    = $rowData['subject_id'];
-            $semesterCode = $rowData['semester_code'];
+        // --- HEMIS bilan taqqoslash ---
+        if ($d['hemis'] !== null) {
+            $studentHemisRecords = $d['hemis'];
 
-            $group = is_numeric($groupId)
-                ? Group::find($groupId)
-                : Group::where('group_hemis_id', $groupId)->first();
-            if (!$group) continue;
-            // Hisob (JN/MT/ON/OSKI/Test, davomat, o'qituvchilar) — umumiy servisda:
-            // AI tekshiruv ham aynan shu qiymatlarni ishlatadi.
-            $collected = $calcService->collect($group, (string) $subjectId, (string) $semesterCode);
-            if (!$collected) continue;
-            [
-                'groupHemisId' => $groupHemisId, 'curriculum' => $curriculum, 'educationYearName' => $educationYearName,
-                'subject' => $subject, 'semester' => $semester, 'students' => $students,
-                'studentHemisIds' => $studentHemisIds, 'raw' => $rawByStudent, 'lectureTeacher' => $lectureTeacher,
-                'practiceTeacher' => $practiceTeacher, 'totalHours' => $totalHours, 'divisor' => $divisor,
-            ] = $collected;
+            // JN+MT: examType.code = '11'
+            $hemisJnMt = $studentHemisRecords->firstWhere('exam_type_code', '11')?->grade;
+            if ($hemisJnMt === null) {
+                $jnMtCheck = 'D';
+                $jnMtReason = "Hemisda yo'q";
+            } elseif ((int) $hemisJnMt !== (int) $sumBall) {
+                $jnMtCheck = 'D';
+                $jnMtReason = "{$sumBall}≠{$hemisJnMt}";
+            } else {
+                $jnMtCheck = '';
+                $jnMtReason = '';
+            }
 
-            // --- HEMIS exam grades bilan taqqoslash (lokal jadvaldan) ---
-            // Sync export'dan oldin alohida AJAX so'rov (syncHemis) orqali
-            // amalga oshiriladi. Bu yerda faqat lokal ma'lumot o'qiladi.
-            // subject_id bo'yicha filtrlash — HEMIS API'dagi subject.id
-            // bilan bizning subject_id mos kelishi kerak.
-            $hemisExamGrades = HemisExamGrade::forComparison($studentHemisIds, $subjectId, $semesterCode)
-                ->get()
-                ->groupBy('student_hemis_id');
-
-            // --- Qatorlarni yozish ---
-            foreach ($students as $stu) {
-                $hId = $stu->hemis_id;
-
-                $levelCode = (string) ($semester?->level_code ?? '');
-                $calc = $calcService->compute($rawByStudent[$hId], $wJn, $wMt, $wOn, $wOski, $wTest, $levelCode);
-                [
-                    'jn' => $jn, 'mt' => $mt, 'on' => $on, 'oski' => $oski, 'test' => $test, 'dav' => $dav,
-                    'jnBall' => $jnBall, 'mtBall' => $mtBall, 'onBall' => $onBall, 'oskiBall' => $oskiBall,
-                    'testBall' => $testBall, 'sumBall' => $sumBall, 'maxSum' => $maxSum, 'yn' => $yn,
-                    'ects' => $ects, 'baho' => $baho, 'zanjir' => $zanjir, 'roundJnMtToInt' => $roundJnMtToInt,
-                ] = $calc;
-                $jnCount = $rawByStudent[$hId]['jnCount'];
-
-                $r = $dataRow;
-
-                // Hujayralarga yozish
-                $sheet->setCellValue("A{$r}", $rowIndex);
-                $fioLabel = $stu->full_name;
-                if ($dav >= 25) {
-                    // Haqiqiy davomat foizini ko'rsatamiz (1 kasr, oxiridagi
-                    // nollar tozalanadi): 30 → "30", 30.5 → "30.5", 30.15 → "30.2"
-                    $davStr = rtrim(rtrim(number_format($dav, 1, '.', ''), '0'), '.');
-                    $fioLabel .= " ({$davStr}% davomat)";
-                }
-                $sheet->setCellValue("B{$r}", $fioLabel);
-                $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
-                $sheet->setCellValue("D{$r}", $jn);
-                $sheet->setCellValue("E{$r}", $jnBall);
-                $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
-                $sheet->setCellValue("G{$r}", $mt);
-                $sheet->setCellValue("H{$r}", $mtBall);
-                $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
-                $sheet->setCellValue("J{$r}", $on);
-                $sheet->setCellValue("K{$r}", $onBall);
-                if ($wOn > 0 && !$roundJnMtToInt) {
-                    $sheet->getStyle("K{$r}")->getNumberFormat()->setFormatCode('0.0');
-                }
-                $sheet->setCellValue("M{$r}", $sumBall);
-                if ($maxSum > 0) {
-                    $sheet->setCellValue("N{$r}", $sumBall / $maxSum);
-                    $sheet->getStyle("N{$r}")->getNumberFormat()->setFormatCode('0%');
-                }
-                $sheet->setCellValue("P{$r}", $oski);
-                $sheet->setCellValue("Q{$r}", $oskiBall);
-                if ($wOski > 0 && $wTest > 0) {
-                    // Ikkalasi ham vaznga ega — 2 kasr ko'rinishi (masalan 83*15/100=12.45)
-                    $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.00');
-                }
-                $sheet->setCellValue("S{$r}", $test);
-                $sheet->setCellValue("T{$r}", $testBall);
-                if ($wOski > 0 && $wTest > 0) {
-                    $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.00');
-                }
-                $sheet->setCellValue("V{$r}", $yn === '' ? '' : $yn);
-                $sheet->setCellValue("W{$r}", $ects);
-                $sheet->setCellValue("X{$r}", $practiceTeacher);
-                $sheet->setCellValue("Y{$r}", $baho);
-                $sheet->setCellValue("Z{$r}", (string) $hId);
-                $sheet->setCellValue("AA{$r}", $subjectId);
-                $sheet->setCellValue("AB{$r}", $subject->subject_name ?? '');
-                $sheet->setCellValue("AC{$r}", $shaklName);
-                // Hisobot qilinayotgan joriy o'quv yili (schedule bo'yicha),
-                // mavjud bo'lmasa curriculum'dagi yilga qaytamiz.
-                $sheet->setCellValue("AD{$r}", $educationYearName ?? ($curriculum?->education_year_name ?? ''));
-                $sheet->setCellValue("AE{$r}", $semester?->name ?? $semesterCode);
-                $sheet->setCellValue("AF{$r}", (string) $groupHemisId);
-                $sheet->setCellValue("AG{$r}", $group->name ?? '');
-                $sheet->setCellValue("AH{$r}", $totalHours);
-                $sheet->setCellValue("AI{$r}", (int) ($subject->credit ?? 0));
-                $sheet->setCellValue("AJ{$r}", $lectureTeacher);
-                $sheet->setCellValue("AK{$r}", $jnCount);
-                $sheet->setCellValue("AL{$r}", $divisor);
-                $sheet->setCellValue("AM{$r}", $dav / 100);
-                $sheet->getStyle("AM{$r}")->getNumberFormat()->setFormatCode('0.00%');
-                $sheet->setCellValue("AN{$r}", $wJn);
-                $sheet->setCellValue("AO{$r}", $wMt);
-                $sheet->setCellValue("AP{$r}", $wOn);
-                $sheet->setCellValue("AQ{$r}", $wOski);
-                $sheet->setCellValue("AR{$r}", $wTest);
-                $sheet->setCellValue("AS{$r}", $zanjir);
-
-                // --- HEMIS bilan taqqoslash ---
-                $studentHemisRecords = $hemisExamGrades[$hId] ?? collect();
-
-                // JN+MT: examType.code = '11'
-                $hemisJnMt = $studentHemisRecords->firstWhere('exam_type_code', '11')?->grade;
-                if ($hemisJnMt === null) {
-                    $jnMtCheck = 'D';
-                    $jnMtReason = "Hemisda yo'q";
-                } elseif ((int) $hemisJnMt !== (int) $sumBall) {
-                    $jnMtCheck = 'D';
-                    $jnMtReason = "{$sumBall}≠{$hemisJnMt}";
-                } else {
-                    $jnMtCheck = '';
-                    $jnMtReason = '';
-                }
-
-                // YN: examType.code = '13' (faqat V > 0 bo'lganda)
-                $hemisYn = $studentHemisRecords->firstWhere('exam_type_code', '13')?->grade;
-                if (is_numeric($yn) && $yn > 0) {
-                    if ($hemisYn === null) {
-                        $ynCheck = 'D';
-                        $ynReason = "Hemisda yo'q";
-                    } elseif ((int) $hemisYn !== (int) $yn) {
-                        $ynCheck = 'D';
-                        $ynReason = "{$yn}≠{$hemisYn}";
-                    } else {
-                        $ynCheck = '';
-                        $ynReason = '';
-                    }
+            // YN: examType.code = '13' (faqat V > 0 bo'lganda)
+            $hemisYn = $studentHemisRecords->firstWhere('exam_type_code', '13')?->grade;
+            if (is_numeric($yn) && $yn > 0) {
+                if ($hemisYn === null) {
+                    $ynCheck = 'D';
+                    $ynReason = "Hemisda yo'q";
+                } elseif ((int) $hemisYn !== (int) $yn) {
+                    $ynCheck = 'D';
+                    $ynReason = "{$yn}≠{$hemisYn}";
                 } else {
                     $ynCheck = '';
                     $ynReason = '';
                 }
-
-                $sheet->setCellValue("AT{$r}", $jnMtCheck);
-                $sheet->setCellValue("AU{$r}", $jnMtReason);
-                $sheet->setCellValue("AV{$r}", $ynCheck);
-                $sheet->setCellValue("AW{$r}", $ynReason);
-
-                // Rang berish
-                $this->applyRowStyle($sheet, $r, $yn, $dav);
-
-                $dataRow++;
-                $rowIndex++;
+            } else {
+                $ynCheck = '';
+                $ynReason = '';
             }
-        } // end rows loop
 
-        // Freeze pane
-        $sheet->freezePane('D2');
-
-        // Fayl yuborish
-        $writer = SpreadsheetIOFactory::createWriter($spreadsheet, 'Xlsx');
-        if (method_exists($writer, 'setPreCalculateFormulas')) {
-            $writer->setPreCalculateFormulas(false);
+            $sheet->setCellValue("AT{$r}", $jnMtCheck);
+            $sheet->setCellValue("AU{$r}", $jnMtReason);
+            $sheet->setCellValue("AV{$r}", $ynCheck);
+            $sheet->setCellValue("AW{$r}", $ynReason);
         }
 
-        $filename = 'vedomost_tekshirish_' . now()->format('d.m.Y_His') . '.xlsx';
-
-        return response()->streamDownload(function () use ($writer) {
-            $writer->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
-    }
-
-    /**
-     * Tanlangan (guruh, fan) qatorlari uchun YN qaydnoma — jurnaldagi "YN qaydnoma
-     * yaratish" bilan bir xil: har qator uchun 12-shakl va faol bo'lgan qo'shimcha,
-     * 12a, 12b shakllari alohida varaqlarda, hammasi bitta Excel faylda.
-     * Chetlashgan talabalar kirmaydi.
-     */
-    public function exportQaydnoma(Request $request)
-    {
-        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
-
-        $request->validate([
-            'rows'                 => 'required|array|min:1|max:' . self::QAYDNOMA_MAX_ROWS,
-            'rows.*.group_id'      => 'required',
-            'rows.*.subject_id'    => 'required|string',
-            'rows.*.semester_code' => 'required|string',
-            'weight_jn'   => 'nullable|integer|min:0|max:100',
-            'weight_mt'   => 'nullable|integer|min:0|max:100',
-            'weight_on'   => 'nullable|integer|min:0|max:100',
-            'weight_oski' => 'nullable|integer|min:0|max:100',
-            'weight_test' => 'nullable|integer|min:0|max:100',
-        ], [
-            'rows.max' => 'Bir martada ko\'pi bilan ' . self::QAYDNOMA_MAX_ROWS . ' ta qator tanlang.',
-        ]);
-
-        $weights = [
-            (int) ($request->weight_jn ?? 50), (int) ($request->weight_mt ?? 20), (int) ($request->weight_on ?? 0),
-            (int) ($request->weight_oski ?? 0), (int) ($request->weight_test ?? 30),
-        ];
-        abort_if(array_sum($weights) !== 100, 422, "Vaznlar jami 100 bo'lishi kerak");
-
-        @set_time_limit(600);
-
-        $rows = $request->input('rows');
-        $multi = count($rows) > 1;
-        $journal = app(JournalController::class);
-        $workbook = null;
-        $fileName = null;
-        $skipped = [];
-
-        foreach ($rows as $i => $r) {
-            $group = Group::find($r['group_id']);
-            if (!$group) {
-                $skipped[] = [$i + 1, '—', $r['subject_id'], 'Guruh topilmadi'];
-                continue;
-            }
-
-            $built = $journal->buildYnQaydnomaSpreadsheet(
-                (string) $r['subject_id'], (string) $r['semester_code'], (string) $group->group_hemis_id, ...$weights
-            );
-            if (is_string($built)) {
-                $skipped[] = [$i + 1, $group->name, $r['subject_id'], $built];
-                continue;
-            }
-            [$book, $fileName] = $built;
-
-            // Bir nechta qatorda varaq nomlari (guruh nomi) takrorlanadi — qator raqami bilan ajratamiz
-            foreach ($book->getWorksheetIterator() as $ws) {
-                $title = $multi ? ($i + 1) . '. ' . $ws->getTitle() : $ws->getTitle();
-                $ws->setTitle($this->uniqueSheetTitle(array_filter([$workbook, $book]), $title, $ws));
-            }
-
-            if ($workbook === null) {
-                $workbook = $book;
-                continue;
-            }
-            foreach ($book->getAllSheets() as $ws) {
-                $workbook->addExternalSheet($ws);
-            }
-            $book->disconnectWorksheets();
-        }
-
-        if ($workbook === null) {
-            return back()->with('error', 'Qaydnoma yaratilmadi: ' . implode('; ', array_map(fn ($s) => $s[3], $skipped)));
-        }
-
-        if ($skipped) {
-            $sheet = $workbook->createSheet();
-            $sheet->setTitle($this->uniqueSheetTitle([$workbook], "O'tkazib yuborilgan", $sheet));
-            $sheet->fromArray([['Qator', 'Guruh', 'Fan ID', 'Sabab'], ...$skipped]);
-            $sheet->getStyle('A1:D1')->getFont()->setBold(true);
-            foreach (range('A', 'D') as $col) {
-                $sheet->getColumnDimension($col)->setAutoSize(true);
-            }
-        }
-        $workbook->setActiveSheetIndex(0);
-
-        $filename = $multi
-            ? 'YN_qaydnoma_' . now()->format('d.m.Y_His') . '.xlsx'
-            : $fileName;
-        $writer = SpreadsheetIOFactory::createWriter($workbook, 'Xlsx');
-
-        return response()->streamDownload(function () use ($writer, $workbook) {
-            $writer->save('php://output');
-            $workbook->disconnectWorksheets();
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        // Rang berish
+        $this->applyRowStyle($sheet, $r, $yn, $dav);
     }
 
     // --- Helpers ---
-
-    /**
-     * Excel varaq nomi: 31 belgigacha, berilgan workbook'larning hech birida
-     * takrorlanmaydi ($self — nomi o'zgarayotgan varaqning o'zi hisobga olinmaydi).
-     *
-     * @param Spreadsheet[] $books
-     */
-    private function uniqueSheetTitle(array $books, string $title, $self = null): string
-    {
-        $base = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $title), 0, 31);
-        $taken = function (string $name) use ($books, $self) {
-            foreach ($books as $book) {
-                $found = $book->getSheetByName($name);
-                if ($found && $found !== $self) {
-                    return true;
-                }
-            }
-
-            return false;
-        };
-
-        $candidate = $base;
-        for ($n = 2; $taken($candidate); $n++) {
-            $suffix = ' (' . $n . ')';
-            $candidate = mb_substr($base, 0, 31 - mb_strlen($suffix)) . $suffix;
-        }
-
-        return $candidate;
-    }
 
     private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {

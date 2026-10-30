@@ -76,10 +76,13 @@ class VedomostTekshirishService
             ->where('code', $semesterCode)
             ->first();
 
-        $students = Student::where('group_id', $groupHemisId)->orderBy('full_name')->get();
+        // O'qishdan chetlashganlar (HEMIS holati 60) vedomostga kirmaydi
+        $notExpelled = fn ($q) => $q->whereNull('student_status_code')
+            ->orWhere('student_status_code', '!=', \App\Http\Middleware\BlockExpelledStudentGrade::EXPELLED_STATUS);
+        $students = Student::where('group_id', $groupHemisId)->where($notExpelled)->orderBy('full_name')->get();
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
         if (empty($studentHemisIds)) {
-            $students = Student::where('group_id', $group->group_hemis_id)->orderBy('full_name')->get();
+            $students = Student::where('group_id', $group->group_hemis_id)->where($notExpelled)->orderBy('full_name')->get();
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             if (empty($studentHemisIds)) return null;
         }

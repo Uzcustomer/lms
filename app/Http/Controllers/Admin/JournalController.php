@@ -9915,13 +9915,34 @@ class JournalController extends Controller
     /**
      * YN qaydnoma workbook'i bitta guruh + fan uchun: 12-shakl va faol bo'lgan
      * qo'shimcha / 12a / 12b shakllari alohida varaqlarda, o'zgarishlar tarixi bilan.
-     * Jurnal eksporti va Vedomost tekshirish (bir nechta guruh/fan) ishlatadi.
      *
      * @return array{0: \PhpOffice\PhpSpreadsheet\Spreadsheet, 1: string}|string  [workbook, fayl nomi] yoki xato matni
      */
     public function buildYnQaydnomaSpreadsheet(
         string $subjectId, string $semesterCode, string $groupHemisId,
         int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1
+    ): array|string {
+        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, false);
+    }
+
+    /**
+     * YN qaydnoma shakllari Excel'siz: har faol shakl (12-shakl, 12-qo'shimcha,
+     * 12a, 12b va ularning qo'shimchalari) uchun unga tushadigan talabalar va
+     * shu shaklning JN / MT / ON-OSKI-Test baholari — qaydnoma eksporti bilan
+     * aynan bir xil hisob. Vedomost tekshirish o'z jadvalida ishlatadi.
+     *
+     * @return array{forms: array<string, array{students: \Illuminate\Support\Collection, jn: array, mt: array, other: array}>}|string  xato matni
+     */
+    public function ynQaydnomaForms(
+        string $subjectId, string $semesterCode, string $groupHemisId,
+        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest
+    ): array|string {
+        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, 1, true);
+    }
+
+    private function ynQaydnoma(
+        string $subjectId, string $semesterCode, string $groupHemisId,
+        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId, bool $formsOnly
     ): array|string {
         $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
 
@@ -10581,6 +10602,49 @@ class JournalController extends Controller
 
         $svc = \App\Services\YnAttemptStatusService::class;
 
+        // Har shakl uchun mos baho map'lari
+        $gradeMapsFor = function (string $form) use (
+            $calculatedJnGradesV1, $calculatedJnGradesV2,
+            $calculatedMtGradesV1, $calculatedMtGradesV2,
+            $gradesByTypeV1, $gradesByTypeV2,
+            $gradesByType12aMain, $gradesByType12aQosh,
+            $gradesByType12bMain, $gradesByType12bQosh
+        ) {
+            switch ($form) {
+                case \App\Services\YnAttemptStatusService::FORM_12:
+                    return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
+                case \App\Services\YnAttemptStatusService::FORM_12_QOSHIMCHA:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByTypeV2];
+                case \App\Services\YnAttemptStatusService::FORM_12A:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12aMain];
+                case \App\Services\YnAttemptStatusService::FORM_12A_QOSHIMCHA:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12aQosh];
+                case \App\Services\YnAttemptStatusService::FORM_12B:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12bMain];
+                case \App\Services\YnAttemptStatusService::FORM_12B_QOSHIMCHA:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12bQosh];
+            }
+            return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
+        };
+
+        if ($formsOnly) {
+            $forms = [];
+            foreach ([$svc::FORM_12, $svc::FORM_12_QOSHIMCHA, $svc::FORM_12A, $svc::FORM_12A_QOSHIMCHA, $svc::FORM_12B, $svc::FORM_12B_QOSHIMCHA] as $form) {
+                // Eksportdagi kabi: 12-shakl — hamma talaba, qolganlari faol bo'lsa va talabasi bo'lsa
+                if ($form !== $svc::FORM_12 && empty($activeForms[$form])) {
+                    continue;
+                }
+                $list = $form === $svc::FORM_12 ? $students : $studentsForForm($form);
+                if ($form !== $svc::FORM_12 && $list->isEmpty()) {
+                    continue;
+                }
+                [$jnMap, $mtMap, $otherMap] = $gradeMapsFor($form);
+                $forms[$form] = ['students' => $list, 'jn' => $jnMap, 'mt' => $mtMap, 'other' => $otherMap];
+            }
+
+            return ['forms' => $forms];
+        }
+
         // Shablon yuklash — har shakl uchun alohida sheet
         $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
         if (!file_exists($templatePath)) {
@@ -10836,31 +10900,6 @@ class JournalController extends Controller
                 \App\Services\YnAttemptStatusService::FORM_12B            => '12b-shakl',
                 \App\Services\YnAttemptStatusService::FORM_12B_QOSHIMCHA  => '12b-shakl qo\'shimchasi',
             ][$form] ?? $shaklName;
-        };
-
-        // Har shakl uchun mos baho map'lari
-        $gradeMapsFor = function (string $form) use (
-            $calculatedJnGradesV1, $calculatedJnGradesV2,
-            $calculatedMtGradesV1, $calculatedMtGradesV2,
-            $gradesByTypeV1, $gradesByTypeV2,
-            $gradesByType12aMain, $gradesByType12aQosh,
-            $gradesByType12bMain, $gradesByType12bQosh
-        ) {
-            switch ($form) {
-                case \App\Services\YnAttemptStatusService::FORM_12:
-                    return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
-                case \App\Services\YnAttemptStatusService::FORM_12_QOSHIMCHA:
-                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByTypeV2];
-                case \App\Services\YnAttemptStatusService::FORM_12A:
-                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12aMain];
-                case \App\Services\YnAttemptStatusService::FORM_12A_QOSHIMCHA:
-                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12aQosh];
-                case \App\Services\YnAttemptStatusService::FORM_12B:
-                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12bMain];
-                case \App\Services\YnAttemptStatusService::FORM_12B_QOSHIMCHA:
-                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12bQosh];
-            }
-            return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
         };
 
         // Har shakl uchun sheet to'ldirish

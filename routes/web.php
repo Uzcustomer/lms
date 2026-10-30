@@ -522,7 +522,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
             Route::get('/search', [VedomostTekshirishController::class, 'search'])->name('search');
             Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
-            Route::post('/export-qaydnoma', [VedomostTekshirishController::class, 'exportQaydnoma'])->name('export-qaydnoma');
             Route::post('/sync-hemis', [VedomostTekshirishController::class, 'syncHemis'])->name('sync-hemis');
         });
 

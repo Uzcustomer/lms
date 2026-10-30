@@ -5291,10 +5291,12 @@ class TimetableController extends Controller
             $total = $lec + $prc;
             $start = (int) ($starts[$k] ?? $starts[(string) $k] ?? 1);
             $start = max(1, min($start, max(1, $gridHours - $total + 1)));
-            // Amaliy — ma'ruzadan keyin; guruhcha smenasi bo'lsa — smena soatidan (ma'ruza bilan ustma-ust tushmasdan).
+            // Amaliy — ma'ruzadan keyin; guruhcha smenasi bo'lsa — smena soatidan, ma'ruzadan oldin ham (masalan amaliy
+            // 8:30–11:20, ma'ruza 12:00): ma'ruza bilan kesishsa — ma'ruzadan keyin.
             $ps = $start + $lec;
             if (isset($practiceStarts[$k])) {
-                $ps = max($ps, min((int) $practiceStarts[$k], max(1, $gridHours - $prc + 1)));
+                $want = max(1, min((int) $practiceStarts[$k], max(1, $gridHours - $prc + 1)));
+                $ps = $lec > 0 && $want < $start + $lec && $start < $want + $prc ? $start + $lec : $want;
             }
             $out[$ci - $from] = [
                 'k' => $k + 1, 'lec' => $lec, 'prc' => $prc, 'start' => $start, 'ps' => $ps,
@@ -5690,10 +5692,12 @@ class TimetableController extends Controller
             } else {
                 $current['starts'] = $starts;
             }
-            $placement->update(['lecture_slots' => [
+            // Boshqa kalitlar (guruhcha smenasi shift_g va h.k.) saqlanadi; faqat eski formatdagi raqamli belgilar tashlanadi.
+            $named = array_filter($current, fn ($key) => !is_int($key) && !ctype_digit((string) $key), ARRAY_FILTER_USE_KEY);
+            $placement->update(['lecture_slots' => array_merge($named, [
                 'starts' => (array) ($current['starts'] ?? []),
                 'starts_g' => (array) ($current['starts_g'] ?? []),
-            ]]);
+            ])]);
 
             return response()->json(['ok' => true, 'starts' => $starts]);
         }
@@ -5722,7 +5726,9 @@ class TimetableController extends Controller
             }
         }
 
-        $placement->update(['lecture_slots' => $slots]);
+        // Guruhcha smenasi (shift_g — "O'qituvchi biriktirish" oynasidan) ma'ruza belgilari bilan o'chmasin.
+        $shifts = ((array) ($placement->lecture_slots ?? []))['shift_g'] ?? null;
+        $placement->update(['lecture_slots' => $shifts ? $slots + ['shift_g' => $shifts] : $slots]);
 
         return response()->json(['ok' => true, 'slots' => $slots]);
     }

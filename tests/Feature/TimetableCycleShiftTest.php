@@ -314,3 +314,99 @@ it('kafedra mudiri: sikl jadvali "Kafedraniki" qamrovida ochiladi — faqat o\'z
         ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'kafedra' => 1])->assertOk()->json();
     expect(collect($plan['rows'])->filter(fn ($r) => $r['blocks'])->pluck('group')->values()->all())->toBe(['p/p22-03c']);
 });
+
+it('ma\'ruza vaqtini o\'zgartirish (oqim, guruhcha, eski belgilar) guruhcha smenasini o\'chirmaydi', function () {
+    $s = csSetup(['p/p22-03c' => 7]);
+    $admin = csTeacher('ADMIN', 'admin');
+    $as = fn () => test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin']);
+    $p = ['specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => 'Ped / 3-oqim', 'subject_name' => 'Klinik farmakologiya',
+        'training_type' => 'practice', 'view' => 'group'];
+    $slots = fn () => TimetableCyclePlacement::where('group_name', 'Ped / 3-oqim')->first()->lecture_slots;
+    $as()->postJson(route('admin.timetable.cycle-lecture-slots', $s['board']), $p + ['day_index' => 0, 'start_hour' => 5])->assertOk();
+    expect($slots())->toBe(['shift_g' => ['p/p22-03c' => 7], 'starts' => [5], 'starts_g' => []]);
+    $as()->postJson(route('admin.timetable.cycle-lecture-slots', $s['board']), $p + ['day_index' => 1, 'start_hour' => 3, 'sub_group' => 'p/p22-03c'])->assertOk();
+    expect($slots())->toBe(['shift_g' => ['p/p22-03c' => 7], 'starts' => [5], 'starts_g' => ['p/p22-03c' => ['1' => 3]]]);
+    $as()->postJson(route('admin.timetable.cycle-lecture-slots', $s['board']), $p + ['slots_json' => json_encode(['0' => [1, 2]])])->assertOk();
+    expect($slots()['shift_g'])->toBe(['p/p22-03c' => 7]);
+});
+
+it('smena ma\'ruzadan oldin (02a/03b): ma\'ruza 12:00, 02a amaliy 8:30–11:20, 03b amaliy ma\'ruzadan keyin — to\'qnashuv yo\'q; Mark, bandlik, HEMIS bir xil', function () {
+    $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 15, 'settings' => ['semester_start' => '2026-09-14']]);
+    csBells($board, 6);
+    TimetableSubjectSetting::create(['board_id' => $board->id, 'specialty_name' => 'Pediatriya', 'course' => 5,
+        'subject_name' => 'Klinik farmakologiya', 'mode' => 'cycle', 'cycle_days' => 5]);
+    // Reja: 10 soat ma'ruza, 20 soat amaliy — har kun ma'ruza 2 + amaliy 4 soat
+    $mc = \Illuminate\Support\Facades\DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'x', 'specialty_name' => 'Pediatriya',
+        'plan_year' => '2022/2023', 'level_code' => '15', 'created_at' => now(), 'updated_at' => now()]);
+    \Illuminate\Support\Facades\DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Klinik farmakologiya',
+        'semester' => 9, 'lecture' => 10, 'practice' => 20, 'created_at' => now(), 'updated_at' => now()]);
+    $t = csTeacher('YOQUBOV U. B.');
+    $lector = csTeacher('LEKTOR');
+    $base = ['board_id' => $board->id, 'faculty_name' => 'Ped', 'specialty_name' => 'Pediatriya', 'course' => 5, 'oqim_label' => '2-oqim',
+        'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Klinik farmakologiya', 'kafedra_name' => 'K'];
+    foreach (['p/p22-02a', 'p/p22-03b'] as $g) {
+        TimetableCard::create($base + ['training_type' => 'practice', 'group_name' => $g, 'teacher_id' => $t->id, 'teacher_name' => 'YOQUBOV U. B.']);
+    }
+    TimetableCard::create($base + ['training_type' => 'lecture', 'group_name' => null, 'group_names' => ['p/p22-02a', 'p/p22-03b'],
+        'students' => 20, 'teacher_id' => $lector->id, 'teacher_name' => 'LEKTOR']);
+    // Oqim ma'ruzasi har kuni 12:00 (5-soat); 02a — I para smenasi, 03b — IV para
+    TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => 'Ped / 2-oqim',
+        'subject_name' => 'Klinik farmakologiya', 'start_index' => 0, 'training_type' => 'practice',
+        'lecture_slots' => ['starts' => [5, 5, 5, 5, 5], 'shift_g' => ['p/p22-02a' => 1, 'p/p22-03b' => 7]]]);
+
+    $admin = csTeacher('ADMIN', 'admin');
+    $plan = test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-plan', $board), ['layer' => 'internal'])->assertOk()->json();
+    $day = fn (string $g) => collect(collect($plan['rows'])->firstWhere('group', $g)['blocks'][0]['day_plan'])
+        ->map(fn ($d) => [$d['lec'], $d['start'], $d['prc'], $d['ps']])->unique()->values()->all();
+    expect($day('p/p22-02a'))->toBe([[2, 5, 4, 1]])      // amaliy 1–4 (8:30–11:20), ma'ruza 5–6 (12:00–13:20)
+        ->and($day('p/p22-03b'))->toBe([[2, 5, 4, 7]]);  // ma'ruza 5–6, amaliy 7–10 (13:30–16:20)
+
+    // Bandlik: bitta amaliy o'qituvchi — kesishmaydi
+    expect(csCall($board, 'cycleConflicts'))->toBe([]);
+    [$units, $calendar] = csCall($board, 'placedCycleUnits');
+    $occ = collect((new ReflectionMethod(TimetableController::class, 'cycleOccupancy'))->invoke(app(TimetableController::class), $board, $units, $calendar))
+        ->where('date', '2026-09-14');
+    $span = fn (string $g, string $kind) => $occ->filter(fn ($e) => str_starts_with($e['label'], $g) && str_starts_with($e['load_key'], $kind))
+        ->map(fn ($e) => [$e['from'], $e['to']])->values()->all();
+    expect($span('p/p22-02a', 'c'))->toBe([[1, 5]])->and($span('p/p22-02a', 'l'))->toBe([[5, 7]])
+        ->and($span('p/p22-03b', 'c'))->toBe([[7, 11]])->and($span('p/p22-03b', 'l'))->toBe([[5, 7]]);
+
+    // HEMIS: 02a amaliy 1-soatdan (8:30), ma'ruza 5-soatdan (12:00); 03b amaliy 7-soatdan (13:30)
+    $lessons = (new ReflectionMethod(TimetableController::class, 'hemisCycleLessons'))
+        ->invoke(app(TimetableController::class), $board, [], TimetableCard::where('board_id', $board->id)->get());
+    $first = function (string $g, string $part) use ($lessons) {
+        foreach ($lessons as $gk => $bySubject) {
+            if (str_contains($gk, mb_strtolower(substr($g, -3)))) {
+                foreach ($bySubject as $list) {
+                    foreach ($list as $l) {
+                        if ($l['part'] === $part && $l['date'] === '2026-09-14') {
+                            return [$l['slot'], $l['len']];
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    };
+    expect($first('p/p22-02a', 'A'))->toBe([1, 4])->and($first('p/p22-02a', 'L'))->toBe([5, 2])
+        ->and($first('p/p22-03b', 'A'))->toBe([7, 4]);
+
+    // Smena ma'ruza bilan kesishsa (II para: 3–6 va ma'ruza 5–6) — amaliy ma'ruzadan keyin (7–10)
+    TimetableCyclePlacement::where('board_id', $board->id)->update(['lecture_slots' => json_encode(['starts' => [5, 5, 5, 5, 5],
+        'shift_g' => ['p/p22-02a' => 3, 'p/p22-03b' => 1]])]);
+    [$units, $calendar] = csCall($board, 'placedCycleUnits');
+    $occ = collect((new ReflectionMethod(TimetableController::class, 'cycleOccupancy'))->invoke(app(TimetableController::class), $board, $units, $calendar))
+        ->where('date', '2026-09-14');
+    $span = fn (string $g, string $kind) => $occ->filter(fn ($e) => str_starts_with($e['label'], $g) && str_starts_with($e['load_key'], $kind))
+        ->map(fn ($e) => [$e['from'], $e['to']])->values()->all();
+    expect($span('p/p22-02a', 'c'))->toBe([[7, 11]])->and($span('p/p22-03b', 'c'))->toBe([[1, 5]]);
+
+    // Ikkala smena ham I para bo'lsa — amaliy darslar ustma-ust: to'qnashuv
+    TimetableCyclePlacement::where('board_id', $board->id)->update(['lecture_slots' => json_encode(['starts' => [5, 5, 5, 5, 5],
+        'shift_g' => ['p/p22-02a' => 1, 'p/p22-03b' => 1]])]);
+    expect(array_keys(csCall($board, 'cycleConflicts')))->toBe(['Pediatriya|5|p/p22-02a|Klinik farmakologiya|practice',
+        'Pediatriya|5|p/p22-03b|Klinik farmakologiya|practice']);
+});

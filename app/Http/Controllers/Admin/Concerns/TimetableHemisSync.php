@@ -109,11 +109,11 @@ trait TimetableHemisSync
      * (until_week: berilmasa — joriy hafta, 0 — semestr oxiri; o'tgan kunlar HEMIS'da yopiq).
      * weekly — haftalik kartalarning karta-haftalari: doskadagi "Doska bo'yicha (haftalik)" va unplacedExport kabi —
      *   bekor qilingan hafta sanalmaydi, shu haftaga ko'chirilgan (kun va parasi bor) yoki shablonda joyi bor karta joylangan.
-     * cycle — ichki sikl jadvalida joylanmagan sikl kartalari (guruh qatorida — "Guruh bo'yicha" — joylangani joylangan).
+     * cycle — ichki sikl jadvalida joylanmagan sikl kartalari (cycleUnplacedCards: guruh qatorida — "Guruh bo'yicha" —
+     *   joylangani joylangan; butun doska hisoboti bilan umumiy).
      * Bitta karta bir nechta guruhda bo'lishi mumkin: count — karta-hafta / karta bo'yicha bir martadan.
-     * $cyclePlan — ichki sikl jadvali (cyclePlan javobi) allaqachon olingan bo'lsa.
      */
-    private function hemisUnplacedSummary(TimetableBoard $board, array $scope, string $today, ?array $cyclePlan = null): array
+    private function hemisUnplacedSummary(TimetableBoard $board, array $scope, string $today): array
     {
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
         $q = TimetableCard::where('board_id', $board->id);
@@ -184,29 +184,15 @@ trait TimetableHemisSync
         }
 
         $cycle = [];
-        if ($cyclePlan === null && $cards->contains($isCycle) && Schema::hasTable('timetable_cycle_placements')) {
-            $params = ['layer' => 'internal'];
-            foreach (['faculty_names', 'specialty_names', 'courses'] as $k) {
-                if (!empty($scope[$k])) {
-                    $params[$k] = $scope[$k];
-                }
-            }
-            $cyclePlan = $this->cyclePlan(Request::create('/', 'POST', $params), $board)->getData(true);
-        }
-        $rowsByKey = collect((array) ($cyclePlan['rows'] ?? []))->keyBy('row_key');
-        foreach ((array) ($cyclePlan['cycle_cards'] ?? []) as $cc) {
-            if (!empty($cc['placed'])) {
-                continue;
-            }
+        foreach ($cards->contains($isCycle) ? $this->cycleUnplacedCards($board, $scope) : [] as $cc) {
             $seen = [];
-            foreach ((array) ($rowsByKey->get($cc['row_key'] ?? null)['subgroups'] ?? []) as $member) {
+            foreach ($cc['members'] as $member) {
                 $name = $cleanGroup($member);
                 if (!$groupOk((string) $member) || isset($seen[$name])) {
                     continue;
                 }
                 $seen[$name] = true;
-                $cycle[] = ['group' => $name, 'key' => ($cc['row_key'] ?? '') . '|' . ($cc['key'] ?? ''), 'subject' => (string) $cc['subject'],
-                    'type' => (string) ($cc['type'] ?? 'practice'), 'days' => (int) ($cc['days'] ?? 0)];
+                $cycle[] = ['group' => $name, 'key' => $cc['key'], 'subject' => $cc['subject'], 'type' => $cc['type'], 'days' => $cc['days']];
             }
         }
 
@@ -663,7 +649,7 @@ trait TimetableHemisSync
      * Qaytaradi: ["fakultet|guruh kaliti" => [fan kaliti => [dars, ...]]]; dars: date, week (= sikl kuni,
      * KTR qatori), slot, len, part, employee_*, auditorium_*, cycle.
      */
-    private function hemisCycleLessons(TimetableBoard $board, array $scope, $cycleCards, ?array &$plan = null): array
+    private function hemisCycleLessons(TimetableBoard $board, array $scope, $cycleCards): array
     {
         if (!Schema::hasTable('timetable_cycle_placements')) {
             return [];
@@ -842,8 +828,7 @@ trait TimetableHemisSync
                 $groupNames[$groupKey($c, $raw)] ??= ['name' => $cleanGroup($raw), 'raw' => $raw, 'card' => $c];
             }
         }
-        $cyclePlan = null;   // ichki sikl jadvali (cyclePlan javobi) — joylanmagan sikl kartalari shundan
-        $cycleLessons = $cycleCards->isNotEmpty() ? $this->hemisCycleLessons($board, $scope, $cycleCards, $cyclePlan) : [];
+        $cycleLessons = $cycleCards->isNotEmpty() ? $this->hemisCycleLessons($board, $scope, $cycleCards) : [];
         if (!empty($scope['groups'])) {
             $want = [];
             foreach ($scope['groups'] as $g) {
@@ -1279,7 +1264,7 @@ trait TimetableHemisSync
             'groups' => $groupsOut,
             'groups_not_in_hemis' => $missingGroups,
             // Joylanmagan kartalar HEMIS'ga yozilmaydi — oyna ogohlantiradi (oldindan ogohlantirish bilan bir xil hisob).
-            'unplaced' => $this->hemisUnplacedSummary($board, $scope, $today, $cyclePlan),
+            'unplaced' => $this->hemisUnplacedSummary($board, $scope, $today),
         ];
     }
     /**

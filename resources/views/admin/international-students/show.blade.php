@@ -122,11 +122,12 @@
             @endphp
 
             {{-- Amallar paneli: hujjat kartochkalaridan ajralib turishi uchun to'q fonda --}}
-            <section class="sp-toolbar" aria-label="Amallar" x-data="{ reject: false, firm: @js($visaInfo->firm ?? '') }">
+            @php $noProcess = $visaInfo->status !== 'pending' && !$visaInfo->needsRegistration() && !$visaInfo->needsVisa(); @endphp
+            <section class="sp-toolbar {{ $noProcess ? 'sp-toolbar-inline' : '' }}" aria-label="Amallar" x-data="{ reject: false, firm: @js($visaInfo->firm ?? '') }">
                 <div class="sp-tb-segs">
                     @if($visaInfo->status === 'pending')
                         <div class="sp-tb-seg">
-                            <div class="sp-tb-label">Tekshiruv <span class="sp-tb-state"><i class="sp-tb-dot" style="background:#fbbf24;"></i>Kutyapti</span></div>
+                            <div class="sp-tb-label">Tekshiruv <span class="sp-tb-state sp-st-warn"><i class="sp-tb-dot"></i>Kutyapti</span></div>
                             <div class="sp-tb-ctl">
                                 <form method="POST" action="{{ route('admin.international-students.approve', $student) }}">
                                     @csrf
@@ -146,9 +147,9 @@
                     ] as $p)
                         @continue($p['t'] === 'registration' && !$visaInfo->needsRegistration())
                         @continue($p['t'] === 'visa' && !$visaInfo->needsVisa())
-                        @php $dot = match($p['s']) { 'passport_accepted' => '#60a5fa', 'registering' => '#fbbf24', 'done' => '#4ade80', default => '#94a3b8' }; @endphp
+                        @php $tone = match($p['s']) { 'passport_accepted' => 'info', 'registering' => 'warn', 'done' => 'ok', default => 'idle' }; @endphp
                         <div class="sp-tb-seg">
-                            <div class="sp-tb-label">{{ $p['l'] }} <span class="sp-tb-state"><i class="sp-tb-dot" style="background:{{ $dot }};"></i>{{ $p['sl'][$p['s']] ?? 'Kutilmoqda' }}</span></div>
+                            <div class="sp-tb-label">{{ $p['l'] }} <span class="sp-tb-state sp-st-{{ $tone }}"><i class="sp-tb-dot"></i>{{ $p['sl'][$p['s']] ?? 'Kutilmoqda' }}</span></div>
                             <div class="sp-tb-ctl">
                                 @if($p['s'] === 'none' || $p['s'] === 'done')
                                     <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">@csrf<input type="hidden" name="process_type" value="{{ $p['t'] }}">
@@ -166,10 +167,10 @@
                             </div>
                         </div>
                     @endforeach
-                    @if(!$visaInfo->needsRegistration() && !$visaInfo->needsVisa())
-                        <div class="sp-tb-seg">
-                            <div class="sp-tb-label">Jarayon</div>
-                            <div class="sp-tb-note">Yashash guvohnomasi bor — registratsiya va viza jarayoni yo'q</div>
+                    @if($noProcess)
+                        <div class="sp-tb-info">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+                            <span><b>Yashash guvohnomasi bor</b> — registratsiya va viza jarayoni talab qilinmaydi</span>
                         </div>
                     @endif
 
@@ -303,8 +304,17 @@
     .sp-tb-seg:first-child { border-left: 0; }
     .sp-tb-seg-firm { flex-basis: 300px; }
     .sp-tb-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #4338ca; }
-    .sp-tb-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #334155; white-space: nowrap; }
-    .sp-tb-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    /* Jarayon holati — rangli belgi: bir qarashda ko'rinadi */
+    .sp-tb-state { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid;
+                   font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; }
+    .sp-tb-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: currentColor; }
+    .sp-st-info { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
+    .sp-st-warn { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
+    .sp-st-warn .sp-tb-dot { animation: sp-pulse 1.6s ease-in-out infinite; }
+    .sp-st-ok { background: #dcfce7; border-color: #86efac; color: #15803d; }
+    .sp-st-idle { background: #fff; border-color: #cbd5e1; color: #475569; }
+    @keyframes sp-pulse { 50% { opacity: .35; } }
+    @media (prefers-reduced-motion: reduce) { .sp-st-warn .sp-tb-dot { animation: none; } }
     .sp-tb-ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .sp-tb-ctl form { margin: 0; }
     .sp-tb-note { font-size: 13px; color: #475569; }
@@ -322,6 +332,13 @@
     .sp-tb-btn-line:hover { background: #e0e7ff; }
     .sp-tb-input { flex: 1 1 140px; min-width: 0; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7d2fe; background: #fff; color: #0f172a; font-size: 13px; }
     .sp-tb-textarea { flex-basis: 100%; height: auto; padding: 8px 10px; resize: vertical; }
+    /* Jarayonsiz talaba (yashash guvohnomasi): bitta qator — izoh chapda, firma o'ngda */
+    .sp-toolbar-inline .sp-tb-segs { align-items: center; gap: 8px 16px; padding: 4px 8px; }
+    .sp-tb-info { flex: 1 1 320px; display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; color: #334155; }
+    .sp-tb-info svg { flex: none; color: #16a34a; }
+    .sp-tb-info b { color: #0f172a; font-weight: 600; }
+    .sp-toolbar-inline .sp-tb-seg-firm { flex: 0 1 460px; flex-direction: row; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; }
+    .sp-toolbar-inline .sp-tb-seg-firm .sp-tb-ctl { flex: 1; }
     .sp-tb-reject { margin: 0; padding: 12px 14px 10px; border-top: 1px solid #c7d2fe; display: flex; flex-direction: column; gap: 8px; }
     .sp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
@@ -375,6 +392,12 @@
     .sp-note-bad { background: var(--sp-bad-bg); color: var(--sp-bad); }
     .sp-link { color: var(--sp-accent); font-size: 13px; font-weight: 500; text-decoration: none; }
     .sp-link:hover { text-decoration: underline; }
+    /* Skaner tugmasi — hujjat kartochkasi ostida ko'zga tashlanadi */
+    .sp-scan { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; background: #4f46e5; color: #fff;
+               font-size: 13px; font-weight: 600; text-decoration: none; box-shadow: 0 1px 2px rgba(79, 70, 229, .3); transition: background-color .15s; }
+    .sp-scan:hover { background: #4338ca; }
+    .sp-scan:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+    .sp-scan-none { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px dashed #cbd5e1; color: #94a3b8; font-size: 13px; }
     .sp-link-quiet { color: var(--sp-muted); text-decoration: none; }
     .sp-link-quiet:hover { color: var(--sp-ink); text-decoration: underline; }
     .sp-danger { margin: 0; padding: 0 4px; }

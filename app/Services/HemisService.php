@@ -342,6 +342,154 @@ class HemisService
         return ['ok' => $ok, 'error' => $error, 'url' => $this->apiUrl('data/student-list') . '?_group=' . $groupHemisId, 'items' => $items];
     }
 
+    /** Qo'lda yangilashda foydalanuvchiga ko'rsatiladigan o'zgarishlar */
+    public const REFRESH_TRACKED_FIELDS = [
+        'full_name' => 'F.I.Sh',
+        'country_name' => 'Davlat',
+        'citizenship_name' => 'Fuqarolik',
+        'group_name' => 'Guruh',
+        'level_name' => 'Kurs',
+        'student_status_name' => 'Holati',
+    ];
+
+    /**
+     * Bitta talabani HEMIS dan yangilaydi (student-list qidiruvi orqali).
+     * Topilmasa talaba o'zgarmaydi va chetlashtirilmaydi.
+     *
+     * @return array{ok: bool, error: ?string, changes: array<string, array{0: mixed, 1: mixed}>}
+     */
+    public function refreshStudentFromHemis(Student $student): array
+    {
+        $data = $this->findStudentInHemis($student);
+        if ($data === null) {
+            return ['ok' => false, 'error' => "HEMIS da topilmadi", 'changes' => []];
+        }
+
+        return ['ok' => true, 'error' => null, 'changes' => $this->applyStudentRefresh($student, $data)];
+    }
+
+    /**
+     * Berilgan talabalarni HEMIS dan yangilaydi: avval guruhlari bo'yicha
+     * (har guruhga 1-2 so'rov), guruhida topilmaganlarini alohida qidirib.
+     * Butun bazani tortadigan students:import dan ancha yengil va hech kimni
+     * "chetlashgan" deb belgilamaydi.
+     *
+     * @param  \Illuminate\Support\Collection<int, Student>  $students
+     * @param  callable|null  $onProgress  fn(int $done, int $total)
+     * @return array{checked: int, changed: array<int, array{name: string, changes: array}>, not_found: string[], failed_groups: int}
+     */
+    public function refreshStudentsFromHemis($students, ?callable $onProgress = null): array
+    {
+        $byHemisId = $students->keyBy(fn (Student $s) => (string) $s->hemis_id);
+        $found = [];
+        $changed = [];
+        $failedGroups = 0;
+        $total = $byHemisId->count();
+
+        $record = function (Student $student, array $data) use (&$changed, &$found) {
+            $found[(string) $student->hemis_id] = true;
+            $changes = $this->applyStudentRefresh($student, $data);
+            if ($changes) {
+                $changed[] = ['name' => $student->full_name, 'changes' => $changes];
+            }
+        };
+
+        foreach ($students->pluck('group_id')->filter()->unique() as $groupId) {
+            $page = 1;
+            do {
+                $response = $this->fetchStudentsForGroup((int) $groupId, $page);
+                if (!$response || empty($response['success'])) {
+                    $failedGroups++;
+                    break;
+                }
+                foreach ($response['data']['items'] ?? [] as $item) {
+                    $student = $byHemisId->get((string) ($item['id'] ?? ''));
+                    if ($student && !isset($found[(string) $student->hemis_id])) {
+                        $record($student, $item);
+                    }
+                }
+                $pagination = $response['data']['pagination'] ?? [];
+                $hasMore = ($pagination['page'] ?? 1) < ($pagination['pageCount'] ?? 1);
+                $page++;
+            } while ($hasMore);
+
+            if ($onProgress) {
+                $onProgress(count($found), $total);
+            }
+        }
+
+        // Guruhi o'zgargan yoki guruhi yo'q talabalar — alohida qidiriladi
+        $notFound = [];
+        foreach ($byHemisId as $hemisId => $student) {
+            if (isset($found[$hemisId])) {
+                continue;
+            }
+            $data = $this->findStudentInHemis($student);
+            if ($data === null) {
+                $notFound[] = $student->full_name;
+                continue;
+            }
+            $record($student, $data);
+            if ($onProgress) {
+                $onProgress(count($found), $total);
+            }
+        }
+
+        return [
+            'checked' => count($found),
+            'changed' => $changed,
+            'not_found' => $notFound,
+            'failed_groups' => $failedGroups,
+        ];
+    }
+
+    /** student-list?search= orqali talabaning HEMIS yozuvi (id mos kelgani) */
+    protected function findStudentInHemis(Student $student): ?array
+    {
+        $queries = array_values(array_unique(array_filter([
+            (string) $student->student_id_number,
+            (string) $student->hemis_id,
+        ])));
+
+        foreach ($queries as $q) {
+            try {
+                $response = Http::withoutVerifying()->withToken($this->token)->timeout(30)
+                    ->get($this->apiUrl('data/student-list'), ['search' => $q, 'limit' => 20]);
+            } catch (\Throwable $e) {
+                Log::warning('HEMIS student search failed', ['q' => $q, 'message' => $e->getMessage()]);
+                continue;
+            }
+            if (!$response->successful()) {
+                continue;
+            }
+            foreach ($response->json()['data']['items'] ?? [] as $item) {
+                if ((string) ($item['id'] ?? '') === (string) $student->hemis_id) {
+                    return $item;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** HEMIS ma'lumotini yozadi va kuzatilgan maydonlardagi o'zgarishlarni qaytaradi */
+    protected function applyStudentRefresh(Student $student, array $data): array
+    {
+        $before = $student->only(array_keys(self::REFRESH_TRACKED_FIELDS));
+        $this->updateOrCreateStudent($data);
+        $student->refresh();
+
+        $changes = [];
+        foreach ($before as $field => $old) {
+            $new = $student->getAttribute($field);
+            if (trim((string) $old) !== trim((string) $new)) {
+                $changes[$field] = [$old, $new];
+            }
+        }
+
+        return $changes;
+    }
+
     /**
      * Guruh bo'yicha talabalar ro'yxatini HEMIS dan sinxronlash
      */

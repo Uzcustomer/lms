@@ -608,6 +608,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/notify-danger', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'notifyDanger'])->name('notify-danger');
             Route::post('/toggle-false-show', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'toggleFalseShow'])->name('toggle-false-show');
             Route::post('/toggle-visa-block', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'toggleVisaBlock'])->name('toggle-visa-block');
+            Route::post('/sync-hemis', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'syncAllFromHemis'])->name('sync-hemis');
             Route::post('/bulk-assign-firm', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'bulkAssignFirm'])->name('bulk-assign-firm');
             Route::post('/download-documents', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'downloadDocuments'])->name('download-documents');
             // Bir nechta talabaning registratsiya/viza jarayonini birdan o'zgartirish
@@ -620,6 +621,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/settings', [\App\Http\Controllers\Admin\InternationalStudentSettingsController::class, 'update'])->name('settings.update');
             });
             Route::get('/{student}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'show'])->name('show');
+            Route::post('/{student}/sync-hemis', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'syncStudentFromHemis'])->name('sync-hemis-student');
             Route::post('/{student}/approve', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'approve'])->name('approve');
             Route::post('/{student}/reject', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'reject'])->name('reject');
             Route::post('/{student}/store-visa', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'storeVisa'])->name('store-visa');

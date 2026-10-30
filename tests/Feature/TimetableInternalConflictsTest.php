@@ -9,6 +9,15 @@ use App\Models\TimetableCyclePlacement;
 use App\Models\TimetableSubjectSetting;
 use Spatie\Permission\Models\Role;
 
+require_once __DIR__ . '/../Support/TimetableLegacyOccupancy.php';
+
+// Har fixture oxirida: yengil unitBusy va haftalik to'qnashuvlar eski (butun doska, modellar) hisobi bilan aynan bir xil.
+afterEach(function () {
+    foreach (TimetableBoard::all() as $board) {
+        assertBusyMatchesLegacy($board);
+    }
+});
+
 function icTeacher(string $name, ?string $role = null): Teacher
 {
     $t = new Teacher();

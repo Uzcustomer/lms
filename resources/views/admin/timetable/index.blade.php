@@ -4597,9 +4597,10 @@
                 let res;
                 try { res = await api(BASE + '/boards/' + board.id + '/week-suggestions?' + params.toString()); }
                 catch (e) { body.innerHTML = '<div style="color:#dc2626">' + esc(e.message) + '</div>'; return; }
-                box.querySelector('#ttSugTitle').textContent = 'Takliflar — ' + res.week + '-hafta · joylanmagan: ' + res.total +
-                    (res.shown < res.total ? ' (birinchi ' + res.shown + ' tasi)' : '');
-                if (!res.cards.length) { body.innerHTML = '<div style="color:#059669">Bu haftada joylanmagan karta yo\'q.</div>'; return; }
+                // Joylanmagan va (joyi bor, lekin) to'qnashuvli kartalar alohida sanaladi; ikkalasi ham bo'lmasa — "yo'q".
+                box.querySelector('#ttSugTitle').textContent = 'Takliflar — ' + res.week + '-hafta · Joylanmagan: ' + (res.unplaced_total ?? res.total) +
+                    ' · To\'qnashuvli: ' + (res.conflict_total || 0) + (res.shown < res.total ? ' (birinchi ' + res.shown + ' tasi)' : '');
+                if (!res.total || !res.cards.length) { body.innerHTML = '<div style="color:#059669">Bu haftada joylanmagan yoki to\'qnashuvli karta yo\'q.</div>'; return; }
                 window.__ttSug = res.cards;
                 renderSugCards(body, res, params);
             }
@@ -4614,6 +4615,7 @@
                     '<div style="border:1px solid ' + (c.partial ? '#facc15' : '#e2e8f0') + ';border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
                     '<div><b>' + esc(c.subject) + '</b> <span style="color:#64748b">[' + (c.type === 'lecture' ? 'M' : 'A') + '] ' +
                     esc((c.groups || []).join(', ')) + ' · ' + esc(c.teacher || 'o\'qituvchi yo\'q') + (c.room ? ' · ' + esc(c.room) : '') + '</span>' +
+                    (c.conflict ? ' <span class="sug-conflict" style="font-size:10px;font-weight:700;color:#fff;background:#dc2626;border-radius:4px;padding:1px 6px">⚠ To\'qnashuv</span>' : '') +
                     (c.partial ? ' <button type="button" data-full="' + ci + '" style="font-size:11px;border:1px solid #facc15;border-radius:6px;padding:1px 8px;background:#fefce8;color:#854d0e">To\'liq takliflar</button>' : '') +
                     '</div>' +
                     (c.reason ? '<div style="color:#b91c1c;margin:2px 0 4px">' + esc(c.reason) + '</div>' : '') +

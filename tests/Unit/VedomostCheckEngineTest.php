@@ -342,3 +342,16 @@ test('kulrang qatorda hamma ustun 0 o\'qilsa — XATO emas, «PDFdan tekshiring�
     expect($r['rows'][0]['cells']['jn']['status'])->toBe('ocr')
         ->and($r['rows'][0]['cells']['mtb']['status'])->toBe('ocr');
 });
+
+test('12a/12b: OSKE/Test shu urinishdan, bo\'lmasa oldingisidan olinadi (jurnal eksporti zanjiri)', function () {
+    $c = \App\Services\VedomostAiChecker::class;
+    $raw = ['jn' => 83, 'mt' => 88, 'on' => 0.0, 'oski' => 40.0, 'test' => 45.0, 'dav' => 0.0, 'jnCount' => 8];
+    $sc = ['main' => ['oski' => 40, 'test' => 45], 'a' => ['oski' => 80, 'test' => 77], 'b' => null];
+
+    expect($c::formAttempt('12'))->toBeNull()
+        ->and($c::formAttempt('12a')['form'])->toBe(\App\Services\YnAttemptStatusService::FORM_12A)
+        ->and($c::formAttempt('12ag')['form'])->toBe(\App\Services\YnAttemptStatusService::FORM_12A_QOSHIMCHA)
+        ->and($c::attemptRaw($raw, $sc, $c::formAttempt('12a')['chain']))->toMatchArray(['oski' => 80.0, 'test' => 77.0, 'jn' => 83])
+        ->and($c::attemptRaw($raw, $sc, $c::formAttempt('12b')['chain']))->toMatchArray(['oski' => 80.0, 'test' => 77.0])
+        ->and($c::attemptRaw($raw, ['main' => ['oski' => 40, 'test' => 45]], $c::formAttempt('12a')['chain']))->toMatchArray(['oski' => 40.0, 'test' => 45.0]);
+});

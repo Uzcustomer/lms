@@ -27,7 +27,8 @@ class VedomostAiChecker
         private VedomostScanReader $reader,
         private VedomostCheckEngine $engine,
         private VedomostAiSettings $settings,
-        private VedomostTekshirishService $vt
+        private VedomostTekshirishService $vt,
+        private YnStageService $stages
     ) {
     }
 
@@ -107,6 +108,7 @@ class VedomostAiChecker
         }
         $siblings = $siblings->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
         $shakl = VedomostSubmission::formLabel($v->form_type);
+        $attempt = self::formAttempt($v->form_type);
 
         $out = [];
         foreach ($siblings as $sib) {
@@ -118,6 +120,11 @@ class VedomostAiChecker
             if (!$c) {
                 continue;
             }
+            // 12-shakldan boshqa shakllar: talabalar ro'yxati va OSKE/Test — jurnaldagi YN qaydnoma
+            // eksporti bilan bir xil (YnStageService bosqich va urinish baholari).
+            $stage = $attempt
+                ? $this->stages->computeForGroupSubject((string) $sib->group_hemis_id, (string) $sib->subject_id, (string) $sib->semester_code)
+                : null;
             $exam = \App\Models\HemisExamGrade::forComparison($c['studentHemisIds'], (string) $sib->subject_id, (string) $sib->semester_code)
                 ->get()
                 ->groupBy('student_hemis_id');
@@ -137,6 +144,14 @@ class VedomostAiChecker
             ];
             foreach ($c['students'] as $stu) {
                 $hid = $stu->hemis_id;
+                $raw = $c['raw'][$hid];
+                if ($attempt) {
+                    $st = $stage['stages'][$hid] ?? null;
+                    if ($st === null || !in_array($attempt['form'], YnAttemptStatusService::formsForStage($st), true)) {
+                        continue;
+                    }
+                    $raw = self::attemptRaw($raw, $stage['studentScenarios'][$hid] ?? [], $attempt['chain']);
+                }
                 $he = $exam[$hid] ?? collect();
                 $out[] = [
                     'fish' => $stu->full_name,
@@ -145,7 +160,7 @@ class VedomostAiChecker
                     'status_code' => (string) ($stu->student_status_code ?? ''),
                     'status_name' => (string) ($stu->student_status_name ?? ''),
                     'group' => $group->name ?? '',
-                    'raw' => $c['raw'][$hid],
+                    'raw' => $raw,
                     'meta' => $meta,
                     'hemis_exam' => [
                         '11' => $he->firstWhere('exam_type_code', '11')?->grade,
@@ -156,6 +171,39 @@ class VedomostAiChecker
         }
 
         return $out;
+    }
+
+    /**
+     * Vedomost shakli → YnAttemptStatusService shakli va OSKE/Test olinadigan urinishlar zanjiri
+     * (jurnal eksportidagi fallback bilan bir xil: 12a = 2-urinish ?? 1-urinish, 12b = 3 ?? 2 ?? 1).
+     * 12-shakl uchun null — «Vedomost tekshirish» hisobi o'zgarishsiz ishlatiladi.
+     *
+     * @return array{form: string, chain: string[]}|null
+     */
+    public static function formAttempt(?string $formType): ?array
+    {
+        return match ($formType) {
+            VedomostSubmission::FORM_12Q => ['form' => YnAttemptStatusService::FORM_12_QOSHIMCHA, 'chain' => ['qoshimcha', 'main']],
+            VedomostSubmission::FORM_12A => ['form' => YnAttemptStatusService::FORM_12A, 'chain' => ['a', 'main']],
+            VedomostSubmission::FORM_12AQ, VedomostSubmission::FORM_12AG => ['form' => YnAttemptStatusService::FORM_12A_QOSHIMCHA, 'chain' => ['aQoshimcha', 'main']],
+            VedomostSubmission::FORM_12B => ['form' => YnAttemptStatusService::FORM_12B, 'chain' => ['b', 'a', 'main']],
+            VedomostSubmission::FORM_12BQ, VedomostSubmission::FORM_12BG => ['form' => YnAttemptStatusService::FORM_12B_QOSHIMCHA, 'chain' => ['bQoshimcha', 'aQoshimcha', 'main']],
+            default => null,
+        };
+    }
+
+    /** Shu urinishning OSKE/Test bahosini «Vedomost tekshirish» xom qiymatlariga qo'yadi (JN/MT/ON/davomat o'zgarmaydi). */
+    public static function attemptRaw(array $raw, array $scenarios, array $chain): array
+    {
+        foreach ($chain as $key) {
+            if (!empty($scenarios[$key])) {
+                $raw['oski'] = (float) ($scenarios[$key]['oski'] ?? 0);
+                $raw['test'] = (float) ($scenarios[$key]['test'] ?? 0);
+                break;
+            }
+        }
+
+        return $raw;
     }
 
     /**

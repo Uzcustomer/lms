@@ -240,6 +240,10 @@
     .doc-span { grid-column: 1 / -1; }
     .doc-wrap { margin: 0; min-width: 0; container-type: inline-size; }
     .doc-passport, .doc-visa { display: flex; flex-direction: column; }
+    /* Pasport va viza yonma-yon bo'lsa — bir xil balandlikda (guvohnoma juftligiga esa cho'zilmaydi) */
+    .docs:has(.doc-visa) > .doc-wrap:has(> .doc-passport), .docs > .doc-wrap:has(> .doc-visa) { align-self: stretch; display: flex; flex-direction: column; }
+    .docs:has(.doc-visa) > .doc-wrap > .doc-passport, .docs > .doc-wrap > .doc-visa { flex: 1; }
+    .doc-visa-grid { flex: 1; align-content: space-evenly; }
     .doc-passport > .doc-mrz, .doc-visa > .doc-mrz { margin-top: auto; }
     .doc { position: relative; overflow: hidden; border-radius: 14px; color: #1f2937;
            border: 1px solid rgba(15, 23, 42, .10);

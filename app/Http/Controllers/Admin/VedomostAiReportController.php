@@ -189,6 +189,8 @@ class VedomostAiReportController extends Controller
             foreach ($r['rows'] as $row) {
                 $row['vid'] = $vid;
                 $row['src'] = $src;
+                $row['fan'] = $i['merged']->subject_name ?? $i['v']->subject_name;
+                $row['grp'] = ($row['group'] ?? '') !== '' ? $row['group'] : ($i['merged']->group_name ?? $i['v']->group_name);
                 $row['use'] = $r['use'] ?? null;
                 $row['ro'] = !$i['canEdit'];
                 $row['mk'] = $vid . '|' . ($row['id'] ?? '');

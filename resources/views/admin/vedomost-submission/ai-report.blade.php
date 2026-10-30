@@ -31,6 +31,10 @@
         .verdict.ok { color: #166534; } .verdict.issues { color: #92400e; } .verdict.review { color: #9a3412; } .verdict.wrong_document { color: #b91c1c; }
         .tbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.5); color: #fff; background: transparent; text-decoration: none; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
         .tbtn:hover { background: rgba(255,255,255,.15); }
+        .tbtn.save { background: #fff; color: var(--xl); border-color: #fff; }
+        .tbtn.save:hover { background: #e8f3ec; }
+        .tbtn.save:disabled { opacity: .55; cursor: default; background: #fff; }
+        .tbtn.save .n { background: var(--xl); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 11px; line-height: 18px; }
 
         /* Ribbon */
         .ribbon { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--grid); flex-wrap: wrap; }
@@ -183,6 +187,9 @@
         <a class="tbtn" href="{{ route('admin.vedomost-submission.file', [$v->id, 'pdf']) }}" target="_blank" rel="noopener"><svg class="icon"><use href="#i-file"/></svg>PDF</a>
     @endif
     <a class="tbtn" href="{{ route('admin.vedomost-submission.ai-report.excel', $v->id) }}"><svg class="icon"><use href="#i-download"/></svg>Excel</a>
+    @if($canEdit)
+        <button type="button" class="tbtn save" id="btn-save-top" disabled title="Tuzatishlarni saqlash (Ctrl+S)"><svg class="icon"><use href="#i-pencil"/></svg><span class="lbl">Saqlash</span><span class="n" id="save-top-n" hidden>0</span></button>
+    @endif
 </header>
 
 <section class="ribbon" aria-label="Filtrlar">
@@ -542,6 +549,12 @@
         const n = dirtyCount();
         document.getElementById('dirty-count').textContent = n;
         document.getElementById('savebar').classList.toggle('show', n > 0);
+        const top = document.getElementById('btn-save-top');
+        if (top) {
+            top.disabled = n === 0;
+            document.getElementById('save-top-n').textContent = n;
+            document.getElementById('save-top-n').hidden = n === 0;
+        }
     }
     function findEntry(key) { return R.rows.find(r => r.key === key) || (R.extra || []).find(e => e.key === key); }
     function savedVal(e, f) {
@@ -767,9 +780,12 @@
         pending.rows = {}; pending.header = {}; pending.weights = {}; pending.signatures = {}; pending.system = {};
         renderAll();
     });
-    document.getElementById('btn-save').addEventListener('click', async () => {
+    async function saveAll() {
         const b = document.getElementById('btn-save');
+        const top = document.getElementById('btn-save-top');
+        if (b.disabled || dirtyCount() === 0) return;
         b.disabled = true; b.textContent = 'Saqlanmoqda...';
+        if (top) { top.disabled = true; top.querySelector('.lbl').textContent = 'Saqlanmoqda...'; }
         try {
             const res = await fetch(SAVE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }, body: JSON.stringify(pending) });
             const data = await res.json().catch(() => ({}));
@@ -777,7 +793,15 @@
             pending.rows = {}; pending.header = {}; pending.weights = {}; pending.signatures = {}; pending.system = {};
             sessionStorage.setItem('vedomost-report-toast', data.message || 'Saqlandi');
             location.reload();
-        } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Saqlash'; }
+        } catch (err) {
+            toast(err.message, true); b.disabled = false; b.textContent = 'Saqlash';
+            if (top) { top.querySelector('.lbl').textContent = 'Saqlash'; updateSavebar(); }
+        }
+    }
+    document.getElementById('btn-save').addEventListener('click', saveAll);
+    document.getElementById('btn-save-top')?.addEventListener('click', saveAll);
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveAll(); }
     });
     window.addEventListener('beforeunload', e => { if (dirtyCount() > 0) { e.preventDefault(); e.returnValue = ''; } });
 

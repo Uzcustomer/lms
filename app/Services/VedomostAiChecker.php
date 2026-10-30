@@ -22,6 +22,11 @@ use RuntimeException;
  */
 class VedomostAiChecker
 {
+    /** Test markazidagi YN quiz turlari — Test markazi natijalarini jurnalga o'tkazishdagi ro'yxat (QuizResultController). */
+    public const TM_OSKI_TYPES = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+    public const TM_TEST_TYPES = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
     public function __construct(
         private YnQaydnomaDataService $qaydnoma,
         private VedomostMergeService $merge,
@@ -249,7 +254,8 @@ class VedomostAiChecker
         return [
             'kafedra_mudiri' => $v->kafedra_mudiri_name,
             'international' => $this->internationalIds($sysIds),
-            'test_center' => $this->testCenter($sysIds, $expected, VedomostSubmission::formLabel($v->form_type)),
+            'test_center' => $this->testCenter($sysIds, $expected, VedomostSubmission::formLabel($v->form_type),
+                (string) ($expected['talabalar'][0]['meta']['semester'] ?? '')),
             'kontingent' => $this->kontingent(array_values(array_diff($scanIds, $sysIds))),
         ];
     }
@@ -269,11 +275,14 @@ class VedomostAiChecker
 
     /**
      * Test markazi (hemis_quiz_results): talaba ID → ['oski'|'test' => [grade, dalolat, date]].
-     * Fan: fan_id = subject_id yoki nom o'xshashligi ≥ 0.85; urinish vedomost shakliga mos
+     * Fan: fan_id = subject_id yoki aynan bir xil nom; urinish vedomost shakliga mos
      * (1-urinish → 12, 2-urinish → 12a, 3-urinish → 12b; qo'shimcha/farmoyish → "…-qo'shimcha").
-     * Qayta o'qish (retake) quizlari hisobga olinmaydi.
+     * Qayta o'qish (retake) quizlari hisobga olinmaydi. Faqat YN quizlari (OSKI / YN test —
+     * jurnalga o'tkaziladigan turlar bilan bir xil), aynan shu fan (fan_id yoki aynan bir xil nom)
+     * va aynan shu semestr: bir fan bir necha semestrda o'qitilsa, boshqa semestr natijasi shu
+     * vedomostga tushmaydi; semestri ko'rsatilmagan yozuv ham olinmaydi.
      */
-    private function testCenter(array $ids, array $expected, string $formLabel): array
+    private function testCenter(array $ids, array $expected, string $formLabel, string $semester = ''): array
     {
         if (empty($ids) || !Schema::hasTable('hemis_quiz_results')) {
             return [];
@@ -282,7 +291,8 @@ class VedomostAiChecker
         $q = DB::table('hemis_quiz_results')
             ->whereIn('student_id', $ids)
             ->where('is_active', 1)
-            ->select('student_id', 'fan_id', 'fan_name', 'quiz_type', 'shakl', 'attempt_name', 'grade', 'date_finish');
+            ->whereIn('quiz_type', array_merge(self::TM_OSKI_TYPES, self::TM_TEST_TYPES))
+            ->select('student_id', 'fan_id', 'fan_name', 'quiz_type', 'shakl', 'attempt_name', 'grade', 'date_finish', 'semester');
         if (Schema::hasColumn('hemis_quiz_results', 'not_actual')) {
             $q->where(fn ($w) => $w->where('not_actual', false)->orWhereNull('not_actual'));
         }
@@ -290,18 +300,26 @@ class VedomostAiChecker
         $subjectId = (string) ($expected['subject_id'] ?? '');
         $fan = (string) ($expected['fan'] ?? '');
         $base = self::shaklBase($formLabel);
+        $semNum = self::semesterNumber($semester);
+        $skippedSem = 0;
 
         $best = [];
         foreach ($q->get() as $r) {
+            // Aynan shu fan: fan_id teng yoki nomi aynan bir xil (o'xshash nom emas —
+            // «Xirurgik kasalliklar» ≠ «Bolalar xirurgik kasalliklari»).
             $fanOk = ($subjectId !== '' && (string) $r->fan_id === $subjectId)
-                || VedomostNames::subjectScore($r->fan_name, $fan) >= 0.85;
+                || ($fan !== '' && VedomostNames::subjectKey($r->fan_name) === VedomostNames::subjectKey($fan));
             if (!$fanOk || self::quizForm((string) $r->shakl) !== $base
                 || \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)) {
                 continue;
             }
-            $type = mb_strtolower((string) $r->quiz_type);
-            $kind = str_contains($type, 'oski') || str_contains($type, 'oske') ? 'oski' : (str_contains($type, 'test') ? 'test' : null);
-            if ($kind === null || $r->grade === null) {
+            // Aynan shu semestr: semestri ko'rsatilmagan yozuv ham olinmaydi.
+            if ($semNum !== null && self::semesterNumber((string) $r->semester) !== $semNum) {
+                $skippedSem++;
+                continue;
+            }
+            $kind = in_array($r->quiz_type, self::TM_OSKI_TYPES, true) ? 'oski' : 'test';
+            if ($r->grade === null) {
                 continue;
             }
             $dal = str_contains(mb_strtolower($r->attempt_name . ' ' . $r->shakl), 'dalolat');
@@ -314,6 +332,10 @@ class VedomostAiChecker
             }
         }
 
+        if ($skippedSem > 0) {
+            Progress::log("Test markazi: boshqa yoki ko'rsatilmagan semestrdagi {$skippedSem} ta natija hisobga olinmadi (vedomost: {$semNum}-semestr).");
+        }
+
         foreach ($best as &$kinds) {
             foreach ($kinds as &$rec) {
                 unset($rec['_rank']);
@@ -321,6 +343,12 @@ class VedomostAiChecker
         }
 
         return $best;
+    }
+
+    /** «9-semestr», «9», «9-sem» → 9; raqam yo'q bo'lsa null (filtrlanmaydi). */
+    public static function semesterNumber(string $s): ?int
+    {
+        return preg_match('/(\d+)/', $s, $m) ? (int) $m[1] : null;
     }
 
     /**

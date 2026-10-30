@@ -129,3 +129,31 @@ test('«tahlil qilmoqda»da qotib qolgan tekshiruv 20 daqiqadan keyin xato holat
         ->and($stuck->ai_error)->toContain("to'xtab qoldi")
         ->and(app(VedomostAiDispatcher::class)->approvalGate($stuck)['blocked'])->toBeFalse();
 });
+
+test('test markazi: faqat aynan shu fan va semestrning YN quizlari', function () {
+    Schema::create('hemis_quiz_results', function ($t) {
+        $t->id();
+        foreach (['student_id', 'fan_name', 'quiz_type', 'shakl', 'attempt_name', 'semester'] as $c) {
+            $t->string($c)->nullable();
+        }
+        $t->unsignedBigInteger('fan_id')->nullable();
+        $t->decimal('grade', 10, 2)->nullable();
+        $t->dateTime('date_finish')->nullable();
+        $t->tinyInteger('is_active')->default(1);
+    });
+    $row = fn (array $a) => array_merge(['student_id' => '368221100747', 'fan_id' => 433, 'fan_name' => 'Xirurgik kasalliklar',
+        'shakl' => '1-urinish', 'attempt_name' => 'YN', 'semester' => '9', 'date_finish' => '2026-10-21 10:00:00'], $a);
+    DB::table('hemis_quiz_results')->insert([
+        $row(['quiz_type' => 'OSKI (rus)', 'grade' => 100]),
+        $row(['quiz_type' => 'YN test (rus)', 'grade' => 52, 'semester' => '8', 'date_finish' => '2026-05-20 10:00:00']), // oldingi semestr
+        $row(['quiz_type' => 'Oraliq test (rus)', 'grade' => 80, 'date_finish' => '2026-10-25 10:00:00']),                    // YN emas
+        $row(['quiz_type' => 'YN test (rus)', 'grade' => 70, 'semester' => null, 'date_finish' => '2026-10-26 10:00:00']),    // semestri yo'q
+        $row(['quiz_type' => 'YN test (rus)', 'grade' => 60, 'fan_id' => 999, 'fan_name' => 'Bolalar xirurgik kasalliklari']), // boshqa fan
+    ]);
+
+    $tc = (new ReflectionMethod(VedomostAiChecker::class, 'testCenter'))
+        ->invoke(app(VedomostAiChecker::class), ['368221100747'], ['subject_id' => '433', 'fan' => 'Xirurgik kasalliklar'], '12-shakl', '9-semestr');
+
+    expect($tc['368221100747']['oski']['grade'])->toBe(100.0)
+        ->and($tc['368221100747'])->not->toHaveKey('test');
+});

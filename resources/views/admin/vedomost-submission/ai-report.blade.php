@@ -143,6 +143,28 @@
         .legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,.2); margin-right: 4px; vertical-align: -2px; }
         .toast { position: fixed; right: 16px; bottom: 60px; padding: 10px 14px; border-radius: 6px; background: #111827; color: #fff; font-size: 13px; opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; pointer-events: none; z-index: 50; }
         .toast.show { opacity: 1; transform: none; } .toast.err { background: #991b1b; }
+        .xl th.cf-th { position: sticky; }
+        .xl th.cf-th span { display: block; padding-right: 14px; }
+        .cf-btn { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; padding: 0; border: 1px solid #b6bcc6; border-radius: 3px; background: #fff; color: #374151; font-size: 10px; line-height: 14px; cursor: pointer; }
+        .cf-btn:hover { background: #eef2ff; }
+        .cf-btn.on { background: var(--xl); border-color: var(--xl); color: #fff; }
+        .cf-pop { position: fixed; z-index: 60; width: 280px; background: #fff; border: 1px solid #c7ccd4; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 8px; font-size: 13px; }
+        .cf-sort { display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid #eee; padding-bottom: 6px; margin-bottom: 6px; }
+        .cf-sort button { text-align: left; border: none; background: none; padding: 4px 6px; border-radius: 4px; cursor: pointer; font: inherit; }
+        .cf-sort button:hover { background: #f3f4f6; }
+        .cf-q { width: 100%; height: 28px; border: 1px solid #d1d5db; border-radius: 4px; padding: 0 8px; font: inherit; }
+        .cf-all { display: flex; gap: 6px; align-items: center; padding: 6px 2px 4px; font-weight: 700; }
+        .cf-list { max-height: 240px; overflow: auto; border: 1px solid #eee; border-radius: 4px; }
+        .cf-list label { display: flex; gap: 6px; align-items: center; padding: 3px 6px; cursor: pointer; }
+        .cf-list label:hover { background: #f8fafc; }
+        .cf-list label span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cf-list label i { font-style: normal; color: var(--muted); font-size: 11px; }
+        .cf-acts { display: flex; gap: 6px; margin-top: 8px; }
+        .cf-acts button { height: 28px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; cursor: pointer; font: inherit; }
+        .cf-acts .cf-ok { background: var(--xl); border-color: var(--xl); color: #fff; }
+        .cf-info { font-size: 12px; color: var(--xl-dark); display: inline-flex; gap: 6px; align-items: center; }
+        .cf-info[hidden], .cf-list label[hidden] { display: none; }
+        .xl td.grp { color: #374151; font-size: 12px; background: #fafafa; }
         .xl td.src { max-width: 220px; min-width: 160px; overflow: hidden; text-overflow: ellipsis; color: #374151; font-size: 12px; background: #fafafa; }
         .xl tr.src-first td { border-top: 2px solid #9ca3af; }
         @media (max-width: 900px) {
@@ -224,6 +246,7 @@
             <span class="sw" style="background:#7c3aed"></span>Mark qiymatlarini tahrirlash @if(!empty($c['sys_edited']))<span class="n">{{ $c['sys_edited'] }}</span>@endif
         </button>
     @endif
+    <span class="cf-info" id="cf-info" hidden><b></b> <button type="button" class="link" id="cf-reset">Ustun filtrlarini tozalash</button></span>
     <label class="toggle"><input type="checkbox" id="all-cols"> Barcha Mark ustunlari</label>
     <div class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="search" placeholder="F.I.Sh yoki ID" aria-label="Qidirish"></div>
 </section>
@@ -420,7 +443,7 @@
             const cls = k === 'A' ? 'c-a' : k === 'B' ? 'c-b' : k === 'C' ? 'c-c' : '';
             letters += `<th class="${cls}">${colL(vtIndex(k))}</th>`;
             names += `<th class="h ${cls}">${esc(VT_HEADERS[k])}</th>`;
-            if (MULTI && k === 'C') { letters += '<th></th>'; names += '<th class="h">Fan · guruh</th>'; }
+            if (MULTI && k === 'C') { letters += '<th></th><th></th>'; names += '<th class="h">Fan</th><th class="h">Guruh</th>'; }
         });
         AB.forEach(([t], i) => {
             letters += `<th>${colL(base + i * 2)}</th><th>${colL(base + i * 2 + 1)}</th>`;
@@ -456,7 +479,7 @@
                 if (k === 'N' && v !== null && v !== '') v = Math.round(v * 100) + '%';
                 else if (k === 'AM' && v !== null && v !== '') v = (+(v * 100).toFixed(2)) + '%';
                 else if (['E', 'H'].includes(k) && typeof v === 'number') v = v.toFixed(1);
-                if (MULTI && k === 'D') body += `<td class="txt src" title="${esc(row.src)}">${esc(row.src)}</td>`;
+                if (MULTI && k === 'D') body += `<td class="txt src" title="${esc(row.fan)}">${esc(row.fan)}</td><td class="txt grp">${esc(row.grp)}</td>`;
                 body += `<td class="${cls}" data-ref="${colL(vtIndex(k))}${ri + 2}"${sysAttrs}${k === 'B' ? ` title="${esc((row.flags || []).map(f => f.m).join('\n'))}"` : ''}>${esc(fmt(v))}</td>`;
             });
             AB.forEach(([t, key, hc], i) => {
@@ -504,7 +527,109 @@
         document.getElementById('sheet-main').innerHTML = shown === 0
             ? `<div class="empty">${filter === 'problems' ? "Muammoli qator yo'q — barcha talabalar mos keladi." : "Filtr bo'yicha qator yo'q."}</div>`
             : `<table class="xl" aria-label="Tekshirish varag'i"><thead>${letters}${names}</thead><tbody>${body}</tbody></table>`;
+        setupColFilters();
     }
+
+    // ───────── ustun filtrlari (Excel'dagidek: ▾ — qiymatlar ro'yxati, qidiruv, saralash) ─────────
+    const colFilters = {};   // ustun id => Set(ruxsat etilgan matnlar)
+    let colSort = null;      // {cid, dir: 1|-1}
+    const EMPTY = "(bo'sh)";
+    const cellText = td => { const t = (td ? td.textContent : '').trim(); return t === '' ? EMPTY : t; };
+    const cmpVal = (a, b) => { const x = num(a), y = num(b); return x !== null && y !== null ? x - y : String(a).localeCompare(String(b), 'uz', { numeric: true }); };
+    function colMap(table) {
+        // Ustun id: harf (A, B, … — barqaror) yoki sarlavha matni; Δ ustunlari oldingi ustun nomi bilan.
+        const letters = [...table.querySelectorAll('thead tr.letters th')];
+        const names = [...table.querySelectorAll('thead tr.names th')];
+        const map = {};
+        names.forEach((th, i) => {
+            if (th.classList.contains('rn') || !th.classList.contains('h')) return;
+            const label = th.dataset.label || th.textContent.trim();
+            th.dataset.label = label;
+            const cid = (letters[i] && letters[i].textContent.trim()) || label;
+            th.dataset.cid = cid;
+            map[cid] = i;
+        });
+        return map;
+    }
+    function rowPasses(tr, map, except) {
+        return Object.entries(colFilters).every(([cid, set]) => cid === except || !(cid in map) || set.has(cellText(tr.children[map[cid]])));
+    }
+    function setupColFilters() {
+        const table = document.querySelector('#sheet-main table.xl');
+        if (!table) return;
+        const map = colMap(table);
+        table.querySelectorAll('thead tr.names th[data-cid]').forEach(th => {
+            const on = th.dataset.cid in colFilters || (colSort && colSort.cid === th.dataset.cid);
+            th.classList.add('cf-th');
+            th.innerHTML = `<span>${esc(th.dataset.label)}</span><button type="button" class="cf-btn${on ? ' on' : ''}" data-cid="${esc(th.dataset.cid)}" aria-label="${esc(th.dataset.label)} — filtr">${colSort && colSort.cid === th.dataset.cid ? (colSort.dir > 0 ? '↑' : '↓') : (th.dataset.cid in colFilters ? '⧩' : '▾')}</button>`;
+        });
+        const tbody = table.tBodies[0];
+        if (colSort && colSort.cid in map) {
+            const ci = map[colSort.cid];
+            [...tbody.rows].sort((a, b) => colSort.dir * cmpVal(cellText(a.children[ci]), cellText(b.children[ci]))).forEach(tr => tbody.appendChild(tr));
+        }
+        let shown = 0;
+        [...tbody.rows].forEach(tr => { tr.hidden = !rowPasses(tr, map, null); if (!tr.hidden) shown++; });
+        const total = tbody.rows.length;
+        const active = Object.keys(colFilters).length;
+        const info = document.getElementById('cf-info');
+        if (info) {
+            info.hidden = !active && !colSort;
+            info.querySelector('b').textContent = active ? `${shown} / ${total} qator · ${active} ta ustun filtri` : 'Saralangan';
+        }
+    }
+    function closeCf() { document.getElementById('cf-pop')?.remove(); }
+    function openCf(btn) {
+        closeCf();
+        const table = btn.closest('table');
+        const map = colMap(table);
+        const cid = btn.dataset.cid, ci = map[cid];
+        // Qiymatlar — boshqa ustun filtrlaridan o'tgan qatorlardan (Excel'dagidek).
+        const counts = new Map();
+        [...table.tBodies[0].rows].forEach(tr => { if (rowPasses(tr, map, cid)) { const v = cellText(tr.children[ci]); counts.set(v, (counts.get(v) || 0) + 1); } });
+        const values = [...counts.keys()].sort(cmpVal);
+        const sel = colFilters[cid] ? new Set(colFilters[cid]) : new Set(values);
+        const pop = document.createElement('div');
+        pop.id = 'cf-pop';
+        pop.className = 'cf-pop';
+        pop.innerHTML = `<div class="cf-sort"><button type="button" data-sort="1">↑ A→Z / kichikdan</button><button type="button" data-sort="-1">↓ Z→A / kattadan</button></div>
+            <input type="search" class="cf-q" placeholder="Qidirish…" aria-label="Qiymatni qidirish">
+            <label class="cf-all"><input type="checkbox" class="cf-allcb"> (Hammasi)</label>
+            <div class="cf-list">${values.map(v => `<label><input type="checkbox" value="${esc(v)}" ${sel.has(v) ? 'checked' : ''}><span>${esc(v)}</span><i>${counts.get(v)}</i></label>`).join('')}</div>
+            <div class="cf-acts"><button type="button" class="cf-clear">Tozalash</button><span style="flex:1"></span><button type="button" class="cf-cancel">Bekor</button><button type="button" class="cf-ok">OK</button></div>`;
+        document.body.appendChild(pop);
+        const r = btn.getBoundingClientRect();
+        pop.style.top = Math.min(r.bottom + 4, innerHeight - pop.offsetHeight - 8) + 'px';
+        pop.style.left = Math.max(8, Math.min(r.left - 180, innerWidth - pop.offsetWidth - 8)) + 'px';
+        const boxes = () => [...pop.querySelectorAll('.cf-list input')];
+        const syncAll = () => { const vis = boxes().filter(b => !b.closest('label').hidden); pop.querySelector('.cf-allcb').checked = vis.length > 0 && vis.every(b => b.checked); };
+        syncAll();
+        pop.querySelector('.cf-allcb').addEventListener('change', e => { boxes().filter(b => !b.closest('label').hidden).forEach(b => b.checked = e.target.checked); });
+        pop.querySelector('.cf-list').addEventListener('change', syncAll);
+        pop.querySelector('.cf-q').addEventListener('input', e => {
+            const q = e.target.value.trim().toLowerCase();
+            boxes().forEach(b => { const l = b.closest('label'); l.hidden = q !== '' && !b.value.toLowerCase().includes(q); if (q) b.checked = !l.hidden; });
+            syncAll();
+        });
+        const apply = () => {
+            const chosen = new Set(boxes().filter(b => b.checked).map(b => b.value));
+            if (chosen.size === values.length) delete colFilters[cid]; else colFilters[cid] = chosen;
+            closeCf(); setupColFilters();
+        };
+        pop.querySelector('.cf-ok').addEventListener('click', apply);
+        pop.querySelector('.cf-q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+        pop.querySelector('.cf-cancel').addEventListener('click', closeCf);
+        pop.querySelector('.cf-clear').addEventListener('click', () => { delete colFilters[cid]; if (colSort && colSort.cid === cid) colSort = null; closeCf(); renderMain(); });
+        pop.querySelectorAll('[data-sort]').forEach(b => b.addEventListener('click', () => { colSort = { cid, dir: +b.dataset.sort }; apply(); }));
+        pop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); closeCf(); btn.focus(); } });
+        pop.querySelector('.cf-q').focus();
+    }
+    document.addEventListener('click', e => {
+        const b = e.target.closest('.cf-btn');
+        if (b) { e.stopPropagation(); if (document.getElementById('cf-pop') && document.getElementById('cf-pop').dataset.for === b.dataset.cid) closeCf(); else { openCf(b); document.getElementById('cf-pop').dataset.for = b.dataset.cid; } return; }
+        if (!e.target.closest('#cf-pop')) closeCf();
+    }, true);
+    document.getElementById('cf-reset')?.addEventListener('click', () => { Object.keys(colFilters).forEach(k => delete colFilters[k]); colSort = null; renderMain(); });
 
     // ───────── pdf (BQ) ─────────
     function renderPdf() {
@@ -767,7 +892,7 @@
         if (dir === 'right') return row[Math.min(row.length - 1, i + step)] || null;
         if (dir === 'home') return row[0];
         if (dir === 'end') return row[row.length - 1];
-        const rows = Array.from(tr.parentElement.children);
+        const rows = Array.from(tr.parentElement.children).filter(r => !r.hidden);
         let ri = rows.indexOf(tr);
         if (dir === 'top') ri = 0;
         else if (dir === 'bottom') ri = rows.length - 1;

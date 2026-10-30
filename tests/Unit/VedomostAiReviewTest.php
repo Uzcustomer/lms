@@ -71,7 +71,8 @@ test('yig\'ma oyna: bitta fan hisoboti oynasi, barcha fanlar bitta jadvalda (kal
         // Muammolilar birinchi, AI tekshirmagan jadvalga tushmaydi, lekin tasdiqlash ro'yxatida bor.
         ->and(array_column($data['report']['rows'], 'fio'))->toBe(['XATO TALABA', 'MOS TALABA'])
         ->and(array_column($data['report']['rows'], 'key'))->toBe([$bad->id . '|r1', $ok->id . '|r0'])
-        ->and(array_column($data['report']['rows'], 'src'))->toBe(['Terapiya · d1/22-02', 'Xirurgiya · d1/22-01'])
+        ->and(array_column($data['report']['rows'], 'fan'))->toBe(['Terapiya', 'Xirurgiya'])
+        ->and(array_column($data['report']['rows'], 'grp'))->toBe(['d1/22-02', 'd1/22-01'])
         ->and($data['report']['verdict'])->toBe('issues')
         ->and(array_column($data['multi'], 'id'))->toBe([$bad->id, $none->id, $ok->id])
         ->and($data['multi'][1]['checked'])->toBeFalse();

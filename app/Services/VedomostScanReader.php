@@ -29,7 +29,7 @@ use RuntimeException;
 class VedomostScanReader
 {
     /** Prompt yoki sxema o'zgarsa oshiriladi — eski kesh ishlatilmaydi. */
-    public const PROMPT_VER = 3;
+    public const PROMPT_VER = 4;
 
     public const ROW_FIELDS = [
         'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball',
@@ -38,7 +38,7 @@ class VedomostScanReader
 
     private const HEADER_FIELDS = [
         'fakultet', 'oquv_yili', 'yonalish', 'fan', 'kurs', 'semestr', 'guruh', 'soat', 'kredit',
-        'maruzachi', 'yn_sana', 'dekan', 'kafedra_mudiri',
+        'maruzachi', 'yn_sana', 'dekan', 'kafedra_mudiri', 'shakl',
     ];
 
     private const PAIRS = [
@@ -168,6 +168,8 @@ class VedomostScanReader
 
                 imagedestroy($img);
                 imagedestroy($head);
+                unset($readAgain, $again);
+                gc_collect_cycles();
             }
 
             return $this->combine($pages, ['mode' => 'images', 'pages' => $total, 'repaired' => $repaired], $expectedRows);
@@ -183,9 +185,11 @@ class VedomostScanReader
             $desc = $n > 1 ? sprintf('strip %d of %d (top to bottom)', $i + 1, $n) : 'the whole page';
             $send = $i === 0 ? $band : $this->stackHeader($head, $band);
             $got[] = $this->callImage($send, $pn, $total, $desc, $i > 0);
-            imagedestroy($band);
             if ($send !== $band) {
                 imagedestroy($send);
+            }
+            if ($band !== $img) {
+                imagedestroy($band);
             }
         }
 
@@ -714,7 +718,8 @@ class VedomostScanReader
         for ($i = 0; $i < $n; $i++) {
             $a = max(0.0, $i / $n - ($i > 0 ? $overlap / 2 : 0));
             $b = min(1.0, ($i + 1) / $n + ($i < $n - 1 ? $overlap / 2 : 0));
-            $out[] = $n === 1 ? $this->crop($img, 0, 0, $w, $h) : $this->crop($img, $x0, (int) ($h * $a), $cw, (int) ($h * ($b - $a)));
+            // Bitta bo'lak — sahifaning o'zi (nusxa olinmaydi: 200 dpi sahifa GD'da ~15 MB).
+            $out[] = $n === 1 ? $img : $this->crop($img, $x0, (int) ($h * $a), $cw, (int) ($h * ($b - $a)));
         }
 
         return $out;
@@ -750,7 +755,7 @@ class VedomostScanReader
             : '';
 
         return <<<TXT
-You are reading a scanned Uzbek medical-university grading sheet ("BAHOLASH QAYDNOMASI", 12-shakl). The image is {$part} of page {$pn} of {$total}. Neighbouring images overlap, so a table row can appear in two images.{$stack}
+You are reading a scanned Uzbek medical-university grading sheet ("BAHOLASH QAYDNOMASI"; form 12, 12a, 12b or their "qo'shimcha" variants). The image is {$part} of page {$pn} of {$total}. Neighbouring images overlap, so a table row can appear in two images.{$stack}
 Transcribe exactly what is PRINTED or WRITTEN. Do not calculate, correct or guess values from other columns. Copy every student's name and ID exactly as printed, even if it looks wrong. If a value is hard to read, give your best reading and put that field's name in "unclear".
 A table row that is cut off by the top or bottom edge of this image must be skipped (the neighbouring image shows it whole). Skip empty numbered rows and the "O'rtacha foiz" row.
 FIRST read the table's own column headings — the layout differs between subjects: some sheets have OSKE columns and no TEST columns, some have TEST and no OSKE, some have both, some have neither. Map every number by the heading above it, never by position. An EMPTY column (for example ON) still occupies its place: never shift later numbers into it or out of it. A field whose column does not exist on this sheet, or whose cell is empty, is "".
@@ -759,7 +764,7 @@ VERY IMPORTANT: "yn" is the final grade in the column "O'zlashtirish ko'rsatkich
 Also give "nums": every number printed in the row after the ID, left to right, exactly as printed (empty cells skipped).
 Numbers: write them as printed ("86,0" → "86,0"; "76%" → "76").
 "weights": the maximum points printed in the heading row under each control type (the small numbers under JB, MT, ON, OSKE, TEST, e.g. 50, 20, 0, 0, 30). "" if not visible.
-Header (top of the page) and footer (bottom): fakultet, oquv_yili, yonalish = "Ta'lim yo'nalishi", fan = "Fan(modul) nomi", kurs, semestr, guruh, soat = "umumiy soat" number, kredit number, maruzachi = "Ma'ruzachi", amaliyot = every "Amaliyot o'qituvchisi" name, yn_sana = "YaN o'tkazilgan sana", dekan = the name printed in the "Fakultet dekani" block, kafedra_mudiri = the name printed in the "Kafedra mudiri" block. A header field not visible in this image is "".
+Header (top of the page) and footer (bottom): fakultet, oquv_yili, yonalish = "Ta'lim yo'nalishi", fan = "Fan(modul) nomi", kurs, semestr, guruh, soat = "umumiy soat" number, kredit number, maruzachi = "Ma'ruzachi", amaliyot = every "Amaliyot o'qituvchisi" name, yn_sana = "YaN o'tkazilgan sana", dekan = the name printed in the "Fakultet dekani" block, kafedra_mudiri = the name printed in the "Kafedra mudiri" block, shakl = the form name in the TOP-RIGHT corner exactly as printed (e.g. "12- shakl", "12A- shakl", "12b- shakl", "12-q'oshimcha shakl", "12A.QO'SHIMCHA shakl"). In some forms the student name is followed by the student's group (e.g. "AMINOVA SHAXZODA ASLIDDINOVNA 21-02b"): copy it as printed. A header field not visible in this image is "".
 "signatures": true only if a REAL hand-drawn signature (pen strokes) is visible: oqituvchi = in the student rows' signature column or next to the teacher; dekan = next to "Fakultet dekani"; kafedra_mudiri = next to "Kafedra mudiri"; muhr = a round official stamp/seal anywhere in the footer. Printed words like "imzo", "M.O'", "F.I.Sh" are NOT signatures. If that part of the page is not in this image, false.
 Reply with JSON only.
 TXT;

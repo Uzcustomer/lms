@@ -26,6 +26,28 @@ class VedomostNames
         return trim(preg_replace('/\s+/u', ' ', $s));
     }
 
+    /**
+     * Vedomost shakli nomi → solishtirish kaliti: "12A- shakl" → "12a", "12A.QO'SHIMCHA shakl" →
+     * "12aqoshimcha", "12-q'oshimcha shakl" → "12qoshimcha", "12a-qo'shimcha (guruh)" → "12aqoshimcha".
+     */
+    public static function formKey(?string $s): string
+    {
+        $t = preg_replace('/[^a-z0-9]/', '', mb_strtolower(self::latin((string) $s)));
+        $t = preg_replace('/\(?guruh\)?/', '', $t);
+        $t = str_replace('shakl', '', $t);
+        if (preg_match('/^(\d+[ab]?)/', $t, $m)) {
+            return $m[1] . (str_contains($t, 'qoshimcha') || str_contains($t, 'qshimcha') ? 'qoshimcha' : '');
+        }
+
+        return $t;
+    }
+
+    /** F.I.Sh oxiridagi guruh qo'shimchasini olib tashlaydi: "AMINOVA SHAXZODA 21-02b" → "AMINOVA SHAXZODA". */
+    public static function stripGroupSuffix(?string $s): string
+    {
+        return trim((string) preg_replace('/\s+\(?[a-z]{0,3}\d{1,2}\/?\d{0,2}-\d{1,2}[a-zа-я]?\)?\s*$/iu', '', (string) $s));
+    }
+
     public static function latin($s): string
     {
         $s = mb_strtoupper(self::uz($s));

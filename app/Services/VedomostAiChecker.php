@@ -78,6 +78,10 @@ class VedomostAiChecker
             . (!empty($m['repaired']) ? ' · qayta o‘qib tuzatildi: ' . $m['repaired'] : ''), empty($m['missing_nrs']) ? 'ok' : 'warn');
         $context = $this->buildContext($v, $expected, $scan);
         Progress::log('Test markazi: ' . count($context['test_center'] ?? []) . ' talaba natijasi topildi');
+        $plan = $context['plan'] ?? [];
+        Progress::log(!empty($plan['found'])
+            ? "Ishchi o'quv reja: {$plan['plan']} — {$plan['subject']}, " . ($plan['hours'] ?? '—') . ' soat / ' . ($plan['credit'] ?? '—') . ' kredit'
+            : "Ishchi o'quv reja: " . ($plan['reason'] ?? 'topilmadi'), !empty($plan['found']) ? 'ok' : 'warn');
 
         return $this->assemble($expected, $scan, $context, []);
     }
@@ -257,7 +261,61 @@ class VedomostAiChecker
             'test_center' => $this->testCenter($sysIds, $expected, VedomostSubmission::formLabel($v->form_type),
                 (string) ($expected['talabalar'][0]['meta']['semester'] ?? '')),
             'kontingent' => $this->kontingent(array_values(array_diff($scanIds, $sysIds))),
+            'plan' => $this->workingPlan($v, $expected),
         ];
+    }
+
+    /**
+     * «O'quv reja to'g'riligi»dagi ishchi o'quv reja: vedomost o'quv rejasi va semestriga mos
+     * yozuvdan shu fan qatori (soat, kredit, nom). Fan nomi «O'quv reja to'g'riligi»dagi kabi
+     * normallashtirib moslanadi (Markdagi nom yoki «namunaviy rejadagi nomi»); bir fan bir necha
+     * semestrda bo'lsa — faqat shu semestr qatori. Topilmasa — sababi bilan (xato emas).
+     */
+    public function workingPlan(VedomostSubmission $v, array $expected): array
+    {
+        $semNum = \App\Services\CurriculumComparisonService::semesterNumber((string) $v->semester_code);
+        if (!$v->curriculum_hemis_id || !Schema::hasTable('manual_curricula')) {
+            return ['found' => false, 'reason' => "Vedomostda o'quv reja ko'rsatilmagan"];
+        }
+        $plans = \App\Models\ManualCurriculum::where('type', 'ishchi')
+            ->where('curricula_hemis_id', $v->curriculum_hemis_id)
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn ($c) => $c->semester_code === null || $c->semester_code === ''
+                || \App\Services\CurriculumComparisonService::semesterNumber((string) $c->semester_code) === $semNum)
+            // Aynan shu semestr uchun yuklangani ustun, keyin semestrsiz (rejalashtirilgan) yozuv.
+            ->sortBy(fn ($c) => $c->semester_code ? 0 : 1)
+            ->values();
+        if ($plans->isEmpty()) {
+            return ['found' => false, 'reason' => "«O'quv reja to'g'riligi»da bu o'quv reja uchun {$semNum}-semestr ishchi rejasi yuklanmagan"];
+        }
+
+        $cmp = app(\App\Services\CurriculumComparisonService::class);
+        $names = collect($expected['talabalar'] ?? [])->pluck('meta.subject_name')
+            ->push($expected['fan'] ?? null, $v->subject_name)
+            ->filter()->unique()->values();
+        $keys = $names->map(fn ($n) => $cmp->normalize((string) $n))->filter()->unique()->all();
+
+        foreach ($plans as $plan) {
+            $rows = $plan->subjects()->orderBy('id')->get()
+                ->filter(fn ($s) => $s->semester === null || $s->semester === '' || (int) $s->semester === $semNum);
+            $hit = $rows->first(fn ($s) => in_array($cmp->normalize((string) $s->subject_name), $keys, true)
+                || ($s->reference_name && in_array($cmp->normalize((string) $s->reference_name), $keys, true)));
+            if ($hit) {
+                return [
+                    'found' => true,
+                    'plan' => $plan->name,
+                    'plan_id' => $plan->id,
+                    'semester' => $semNum,
+                    'subject' => trim((string) $hit->subject_name),
+                    'hours' => $hit->total_hours !== null ? (float) $hit->total_hours : null,
+                    'credit' => $hit->credit !== null ? (float) $hit->credit : null,
+                ];
+            }
+        }
+
+        return ['found' => false, 'plan' => $plans->first()->name,
+            'reason' => "Ishchi rejada ({$plans->first()->name}, {$semNum}-semestr) «" . $names->implode(' / ') . "» fani topilmadi"];
     }
 
     private function internationalIds(array $ids): array

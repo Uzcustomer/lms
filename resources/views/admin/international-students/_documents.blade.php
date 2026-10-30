@@ -76,6 +76,10 @@
         <div class="doc doc-passport" style="{{ $ptStyle }}">
             @if($countryFlag)<img src="{{ $countryFlag }}" alt="" class="doc-watermark" aria-hidden="true">@endif
             <div class="doc-band">
+                <div class="doc-title">
+                    Passport
+                    @if($pt['word'] !== 'PASSPORT')<small @if(!empty($pt['rtl'])) dir="rtl" @endif>{{ $pt['word'] }}</small>@endif
+                </div>
                 <div class="doc-country">
                     @if($countryFlag)<img src="{{ $countryFlag }}" alt="" class="doc-flag">@endif
                     <span>
@@ -83,7 +87,6 @@
                         @if($pt['en'])<small>{{ $pt['en'] }}</small>@endif
                     </span>
                 </div>
-                <div class="doc-kicker">@if($pt['word'] !== 'PASSPORT')<span>{{ $pt['word'] }}</span> · @endif PASSPORT</div>
             </div>
             <div class="doc-passport-body">
                 {!! $photoHtml('doc-photo') !!}
@@ -178,7 +181,7 @@
                         <circle cx="100" cy="100" r="30" fill="none" stroke="currentColor" stroke-width=".9"/>
                     </svg>
                     <div class="doc-visa-head">
-                        <div class="doc-visa-title">Visa</div>
+                        <div class="doc-title">Visa</div>
                         <div class="doc-country">
                             <img src="{{ $uzFlag }}" alt="" class="doc-flag">
                             <span>O'ZBEKISTON RESPUBLIKASI<small>REPUBLIC OF UZBEKISTAN</small></span>
@@ -212,11 +215,11 @@
             <div class="doc doc-reg">
                 <img src="{{ asset('images/iiv-emblem.webp') }}" alt="" class="doc-reg-emblem" aria-hidden="true">
                 <div class="doc-reg-head">
-                    <div>
-                        <div class="doc-reg-title">Vaqtinchalik ro'yxatga qo'yish</div>
-                        <div class="doc-reg-sub">Temporary registration of a foreign citizen</div>
+                    <div class="doc-title">Registratsiya<small>Vaqtinchalik ro'yxatga qo'yish / Temporary registration</small></div>
+                    <div class="doc-country">
+                        <img src="{{ $uzFlag }}" alt="" class="doc-flag">
+                        <span>O'ZBEKISTON RESPUBLIKASI<small>REPUBLIC OF UZBEKISTAN</small></span>
                     </div>
-                    <img src="{{ $uzFlag }}" alt="" class="doc-flag">
                 </div>
                 <dl class="doc-reg-lines">
                     <div class="doc-reg-row doc-reg-full"><dt class="doc-l">Familiyasi, ismi / Full name</dt><dd class="doc-reg-v">{{ $v($student->full_name) }}</dd></div>
@@ -275,7 +278,12 @@
     .doc-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(.15) contrast(1.05); z-index: 1; }
 
     .doc-band { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 10px; }
-    .doc-kicker { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-accent); }
+    /* Hujjat sarlavhasi — pasport, viza, registratsiyada bir xil: chapda, katta va qalin; o'ngda davlat */
+    .doc-title { font-size: clamp(20px, 5.4cqi, 32px); font-weight: 800; line-height: 1; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-accent, #1e2f6b); min-width: 0; }
+    .doc-title small { display: block; margin-top: 5px; font-size: 10px; font-weight: 600; line-height: 1.2; letter-spacing: .06em; text-transform: none; color: #64748b; }
+    .doc-title small[dir="rtl"] { font-size: 13px; letter-spacing: 0; text-align: left; }
+    .doc-reg .doc-title { font-size: clamp(18px, 4.6cqi, 28px); letter-spacing: .12em; }
+    .doc-band > .doc-country, .doc-visa-head > .doc-country, .doc-reg-head > .doc-country { flex: none; white-space: nowrap; }
     .doc-country { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--ink-accent); text-align: right; }
     .doc-country small { display: block; font-size: 9.5px; font-weight: 500; letter-spacing: .06em; color: #64748b; }
 
@@ -315,8 +323,7 @@
     .doc > .doc-visa-orn { position: absolute; width: 46%; right: 4%; top: 14%; color: rgba(30, 64, 175, .09); pointer-events: none; }
     .doc-visa-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px 10px;
                      border-bottom: 1px solid rgba(30, 47, 107, .15); }
-    .doc-visa-title { font-size: clamp(22px, 6cqi, 34px); font-weight: 800; line-height: 1; letter-spacing: .28em; text-transform: uppercase; color: #1e2f6b; }
-    .doc-visa .doc-country { color: #1e2f6b; }
+    .doc-visa { --ink-accent: #1e2f6b; }
     /* Maydonlar 3 ustunli to'r: yorliq (uz / en) tepada, qiymat yozuv mashinasi shriftida */
     .doc-visa-grid { margin: 0; padding: 12px 20px 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; }
     .doc-vf { min-width: 0; }
@@ -345,9 +352,8 @@
                              opacity: .2; filter: saturate(.8); pointer-events: none;
                              -webkit-mask-image: radial-gradient(circle at center, #000 42%, rgba(0, 0, 0, .55) 58%, transparent 71%);
                              mask-image: radial-gradient(circle at center, #000 42%, rgba(0, 0, 0, .55) 58%, transparent 71%); }
-    .doc-reg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid #1e3a8a; }
-    .doc-reg-title { font-size: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #1e3a8a; }
-    .doc-reg-sub { font-size: 10.5px; color: #64748b; letter-spacing: .04em; margin-top: 2px; }
+    .doc-reg { --ink-accent: #1e3a8a; }
+    .doc-reg-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid #1e3a8a; }
     .doc-reg-lines { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; }
     .doc-reg-row { padding: 8px 0 6px; border-bottom: 1px dotted #94a3b8; min-width: 0; }
     .doc-reg-full { grid-column: 1 / -1; }
@@ -393,7 +399,7 @@
         .doc-f-wide { grid-column: 1 / -1; }
         .doc-visa-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .doc-vf-no { grid-column: 1 / -1; }
-        .doc-visa-head { flex-wrap: wrap; }
+        .doc-visa-head, .doc-reg-head { flex-wrap: wrap; }
         .doc-reg-lines { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 1023px) {

@@ -230,6 +230,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/students/filter/groups', [AdminStudentController::class, 'getFilterGroups'])->name('students.filter.groups');
         Route::get('/students/filter/levels', [AdminStudentController::class, 'getFilterLevels'])->name('students.filter.levels');
         Route::get('/students/filter/semesters', [AdminStudentController::class, 'getFilterSemesters'])->name('students.filter.semesters');
+        Route::post('/students/hemis-import', [AdminStudentController::class, 'startImport'])->name('students.hemis-import');
+        Route::get('/students/hemis-import/status', [AdminStudentController::class, 'importStatus'])->name('students.hemis-import.status');
         Route::get('/students/{student}', [AdminStudentController::class, 'show'])->name('students.show');
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
         Route::post('/students/{student}/import-subjects', [AdminStudentController::class, 'importSubjects'])->name('students.import-subjects');

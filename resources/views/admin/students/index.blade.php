@@ -181,6 +181,15 @@
                     <span class="badge" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ $students->total() }} ta talaba</span>
                     <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
                     @if(in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+                    <button type="button" id="hemisImportBtn" onclick="startHemisImport()"
+                            style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:600;color:#fff;background:linear-gradient(135deg,#0e7490,#06b6d4);border:none;border-radius:8px;cursor:pointer;transition:opacity 0.2s;"
+                            onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'"
+                            title="Barcha talabalarni HEMIS dan yangilash (students:import)">
+                        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        HEMIS dan import
+                    </button>
                     {{-- Starostalar ro'yxati alohida menyu emas — shu yerdan ochiladi --}}
                     <a href="{{ route('admin.starostalar.index') }}"
                        style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:600;color:#fff;background:linear-gradient(135deg,#7c3aed,#a855f7);border-radius:8px;text-decoration:none;transition:opacity 0.2s;"
@@ -203,6 +212,20 @@
                     @endif
                     </div>
                 </div>
+
+                @if(in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+                {{-- HEMIS dan talabalar importi holati (navbatdagi job, keshdan o'qiladi) --}}
+                <div id="hemisImportPanel" style="display:none;padding:10px 20px;border-bottom:1px solid #e2e8f0;background:#f0f9ff;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;">
+                        <span id="hemisImportTitle" style="font-weight:600;color:#0e7490;"></span>
+                        <span id="hemisImportMeta" style="color:#64748b;font-size:12px;"></span>
+                    </div>
+                    <div style="margin-top:6px;height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
+                        <div id="hemisImportBar" style="height:100%;width:0;background:linear-gradient(90deg,#0e7490,#06b6d4);transition:width 0.4s;"></div>
+                    </div>
+                    <div id="hemisImportMsg" style="margin-top:6px;font-size:12px;color:#334155;"></div>
+                </div>
+                @endif
 
                 <div class="overflow-x-auto">
                     <table class="student-table">
@@ -384,6 +407,79 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    @if(in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+    <script>
+        // HEMIS dan barcha talabalar importi: boshlash va holatni kuzatish
+        var hemisImportTimer = null;
+
+        function fmtDt(s) {
+            if (!s) return '';
+            var p = s.split(/[- :]/);
+            return p[2] + '.' + p[1] + '.' + p[0] + ' ' + p[3] + ':' + p[4];
+        }
+
+        function renderHemisImport(st) {
+            var panel = document.getElementById('hemisImportPanel');
+            var btn = document.getElementById('hemisImportBtn');
+            if (!st) { panel.style.display = 'none'; return false; }
+
+            var running = st.status === 'queued' || st.status === 'running';
+            var colors = { done: '#16a34a', error: '#dc2626' };
+            panel.style.display = 'block';
+            panel.style.background = st.status === 'error' ? '#fef2f2' : (st.status === 'done' ? '#f0fdf4' : '#f0f9ff');
+            document.getElementById('hemisImportTitle').textContent = running
+                ? 'HEMIS dan talabalar importi — ' + (st.percent || 0) + '%'
+                : (st.status === 'done' ? 'Oxirgi import tugadi: ' + fmtDt(st.finished_at) : "Oxirgi import xato bilan to'xtadi: " + fmtDt(st.finished_at));
+            document.getElementById('hemisImportTitle').style.color = colors[st.status] || '#0e7490';
+            document.getElementById('hemisImportMeta').textContent =
+                (st.started_by ? st.started_by + ' · ' : '') + 'boshlandi ' + fmtDt(st.started_at);
+            var bar = document.getElementById('hemisImportBar');
+            bar.style.width = (st.percent || 0) + '%';
+            bar.style.background = colors[st.status] || 'linear-gradient(90deg,#0e7490,#06b6d4)';
+            document.getElementById('hemisImportMsg').textContent = st.message || '';
+
+            btn.disabled = running;
+            btn.style.cursor = running ? 'wait' : 'pointer';
+            btn.style.opacity = running ? '0.6' : '1';
+            return running;
+        }
+
+        function pollHemisImport(notifyOnFinish) {
+            fetch('{{ route('admin.students.hemis-import.status') }}', { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var running = renderHemisImport(d.state);
+                    clearTimeout(hemisImportTimer);
+                    if (running) {
+                        hemisImportTimer = setTimeout(function () { pollHemisImport(true); }, 3000);
+                    } else if (notifyOnFinish && d.state) {
+                        alert(d.state.status === 'done' ? d.state.message : 'Import xato bilan tugadi: ' + d.state.message);
+                    }
+                })
+                .catch(function () {
+                    hemisImportTimer = setTimeout(function () { pollHemisImport(notifyOnFinish); }, 5000);
+                });
+        }
+
+        function startHemisImport() {
+            if (!confirm("Barcha talabalar HEMIS dan yangilanadi. Bu bir necha daqiqa davom etadi. Boshlaysizmi?")) return;
+            fetch('{{ route('admin.students.hemis-import') }}', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.already_running) alert('Import allaqachon ketmoqda — holati pastda ko\'rsatiladi.');
+                    renderHemisImport(d.state);
+                    pollHemisImport(true);
+                })
+                .catch(function () { alert("Importni boshlab bo'lmadi. Qayta urinib ko'ring."); });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () { pollHemisImport(false); });
+    </script>
+    @endif
 
     <script>
         // HEMIS dan talabaga biriktirilgan fanlarni yuklash

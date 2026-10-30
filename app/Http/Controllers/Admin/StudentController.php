@@ -967,6 +967,58 @@ class StudentController extends Controller
         ]);
     }
 
+    /** Talabalar sahifasidan HEMIS importini boshlay oladigan rollar. */
+    private const IMPORT_ROLES = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+
+    /**
+     * Barcha talabalarni HEMIS'dan import qilishni boshlash (students:import,
+     * navbat orqali). Bir vaqtda faqat bitta.
+     */
+    public function startImport()
+    {
+        abort_unless(auth()->user()?->hasAnyRole(self::IMPORT_ROLES), 403);
+
+        $key = \App\Jobs\ImportStudentsWithProgressJob::PROGRESS_KEY;
+        $state = \Illuminate\Support\Facades\Cache::get($key);
+
+        // Ishlayotgan import — 10 daqiqa ichida yangilangan bo'lsa haqiqiy
+        // (aks holda worker o'lgan, qotib qolgan holat)
+        if ($state && in_array($state['status'] ?? null, ['queued', 'running'], true)
+            && !empty($state['updated_at'])
+            && Carbon::parse($state['updated_at'])->gt(now()->subMinutes(10))) {
+            return response()->json(['success' => true, 'already_running' => true, 'state' => $state]);
+        }
+
+        $name = (string) (auth()->user()->name ?? auth()->user()->full_name ?? '');
+        $state = [
+            'status' => 'queued',
+            'page' => 0,
+            'pages' => 0,
+            'imported' => 0,
+            'total' => 0,
+            'percent' => 0,
+            'started_by' => $name,
+            'started_at' => now()->toDateTimeString(),
+            'updated_at' => now()->toDateTimeString(),
+            'message' => 'Navbatda — import tez orada boshlanadi...',
+        ];
+        \Illuminate\Support\Facades\Cache::put($key, $state, now()->addDay());
+
+        \App\Jobs\ImportStudentsWithProgressJob::dispatch($name);
+
+        return response()->json(['success' => true, 'already_running' => false, 'state' => $state]);
+    }
+
+    /** Talabalar importi holati (progress bar uchun). */
+    public function importStatus()
+    {
+        abort_unless(auth()->user()?->hasAnyRole(self::IMPORT_ROLES), 403);
+
+        return response()->json([
+            'state' => \Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportStudentsWithProgressJob::PROGRESS_KEY),
+        ]);
+    }
+
     public function toggleFiveCandidate(Request $request, Student $student)
     {
         $user = Auth::user();

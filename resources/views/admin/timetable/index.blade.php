@@ -346,6 +346,7 @@
                             <label>Xona (bo'sh xonalar)</label>
                             <select id="cycAssignRoom"><option value="">— Tanlanmagan —</option></select>
                         </div>
+                        <div id="cycAssignWarn" class="hidden" style="grid-column: 1 / -1; font-size: 12px;"></div>
                     </div>
                     <div class="cyc-assign-foot">
                         <button type="button" id="cycAssignReset" title="O'qituvchi, vaqt va xonani olib tashlash">Tozalash</button>
@@ -618,6 +619,9 @@
                                     </label>
                                     <label class="flex items-center gap-2 text-sm text-gray-600">
                                         <input id="stShowNum" type="checkbox" class="rounded border-gray-300"> Kun nomi o'rniga raqamini ko'rsatish
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-600" title="O'chiq (sukut): LMS'dagi o'qituvchi yoki xona shu vaqtda band bo'lsa, HEMIS amali to'siq bo'ladi va JSON'ga kirmaydi. Yoqilsa — band o'qituvchi o'rniga kafedra mudiri, band xona o'rniga «Kafedra mudiri xonasi» qo'yiladi.">
+                                        <input id="stHemisMudir" type="checkbox" class="rounded border-gray-300"> HEMIS solishtirish: to'qnashuvda kafedra mudiri / mudir xonasini qo'yish
                                     </label>
                                 </div>
                                 <div class="col-span-2">
@@ -1286,6 +1290,13 @@
         /* O'qituvchi biriktirilmagan fan nomi — kulrang, qizil uzuq hoshiya, belgili */
         #cycleGrid .cyc-mk-over .cyc-mk-title.is-noteacher { background: rgba(229, 231, 235, .92); border: 1.5px dashed #dc2626; color: #475569; }
         #cycleGrid .cyc-mk-over .cyc-mk-title.is-noteacher i { color: #dc2626; font-size: 1.05em; }
+        /* To'qnashuvli blok (o'qituvchi yoki xona band): joyida qoladi, qizil hoshiya va belgi bilan */
+        #cycleGrid .cyc-block.is-conflict { box-shadow: inset 0 0 0 3px #dc2626; }
+        #cycleGrid .cyc-conflict-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; margin-right: 3px;
+            border-radius: 9999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+        .cycle-pn-card.is-conflict, .pn-card.conflict { border-color: #dc2626; box-shadow: inset 0 0 0 1px #dc2626; }
+        .pn-conflict { margin-top: 2px; color: #b91c1c; font-size: 9px; line-height: 1.2; }
+        .cycle-pn-conflict { display: block; margin-top: 3px; color: #b91c1c; font-size: 11px; line-height: 1.25; }
         #cycleGrid .cyc-mk-over .cyc-mk-title:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .55); }
         #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .6);
             font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2965,7 +2976,13 @@
                 }
                 const r = await fetch(url, opt);
                 const j = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error(j.error || (j.errors ? Object.values(j.errors).flat().join(' · ') : j.message) || ('HTTP ' + r.status));
+                if (!r.ok) {
+                    // Javob tanasi ham xatoda: masalan 409 needs_confirm — "Baribir biriktirish" so'rovi.
+                    const err = new Error(j.error || (j.errors ? Object.values(j.errors).flat().join(' · ') : j.message) || ('HTTP ' + r.status));
+                    err.status = r.status;
+                    err.data = j;
+                    throw err;
+                }
                 if (j && j.pending_approval) onPendingApproval(j);
                 // Server ogohlantirishi (masalan o'qituvchi/xona shu sanada sikl darsida band) — joylash bajarildi.
                 if (j && Array.isArray(j.warnings) && j.warnings.length) {
@@ -3792,9 +3809,18 @@
                 const weekly = ((u.weekly && u.weekly.items) || []).filter(hsGroupOk);
                 const cycle = ((u.cycle && u.cycle.items) || []).filter(hsGroupOk);
                 const cycleCards = new Set(cycle.map(i => i.key)).size;
+                // Ichki jadvaldagi to'qnashuvlar (o'qituvchi/xona band): darslar (karta-hafta yoki sikl bloki) bo'yicha.
+                const conflicts = ((u.conflicts && u.conflicts.items) || []).filter(hsGroupOk);
                 return { weekly, cycle, cycleCards, cardWeeks: new Set(weekly.flatMap(i => i.weeks.map(w => i.card_id + '|' + w))).size,
-                    cards: new Set(weekly.map(i => i.card_id)).size + cycleCards };
+                    cards: new Set(weekly.map(i => i.card_id)).size + cycleCards,
+                    conflicts, conflictLessons: new Set(conflicts.map(i => i.lesson)).size };
             };
+            // To'qnashuvlar jadvali: guruh, fan, sana (sikl — oraliq), vaqt, kim yoki qaysi xona band va kim bilan.
+            function hsConflictListHtml(un) {
+                return '<table class="w-full text-[11px]"><thead><tr class="text-left"><th>Guruh</th><th>Fan</th><th>Sana</th><th>Vaqt</th><th>Kim / qaysi xona band, kim bilan</th></tr></thead><tbody>' +
+                    un.conflicts.map(i => '<tr><td>' + hsEsc(i.group) + '</td><td>' + hsEsc(i.subject) + '</td><td>' + hsEsc(i.dates || String(i.date).split('-').reverse().join('.')) +
+                        '</td><td>' + hsEsc(i.time || '') + '</td><td>' + hsEsc(i.text) + '</td></tr>').join('') + '</tbody></table>';
+            }
             let hsUnplacedOpen = false;   // "Ro'yxat" ochiqmi (qayta chizishda saqlanadi)
             const hsWeekRanges = ws => ws.reduce((acc, w) => {
                 const last = acc[acc.length - 1];
@@ -4113,12 +4139,21 @@
                     return hemisSyncAsk();
                 }
                 const un = hsUnplaced({ unplaced: u });
-                if (!un.cardWeeks && !un.cycleCards) return hemisSyncAsk();
+                const hasUnplaced = un.cardWeeks || un.cycleCards;
+                if (!hasUnplaced && !un.conflictLessons) return hemisSyncAsk();
                 const m = hemisSyncModal('<div id="hsUnpBox" class="p-3 rounded border border-red-400 bg-red-50 text-red-800">' +
-                    '<h3 class="font-semibold text-[14px] mb-2">⛔ Hali joylanmagan kartalar bor</h3>' +
-                    '<div id="hsUnpText" class="mb-2">Haftalik — ' + un.cardWeeks + ' ta karta-hafta, sikl — ' + un.cycleCards + ' ta karta. Ular HEMIS\'ga yozilmaydi, HEMIS\'da dars kam qoladi.</div>' +
-                    '<details open class="mb-3"><summary class="cursor-pointer">Guruh bo\'yicha ro\'yxat</summary>' +
-                    '<div id="hsUnpList" class="mt-1 max-h-72 overflow-auto">' + hsUnplacedListHtml(un) + '</div></details>' +
+                    '<h3 class="font-semibold text-[14px] mb-2">⛔ ' + (hasUnplaced ? 'Hali joylanmagan kartalar bor' : 'Ichki jadvalda to\'qnashuvlar bor') + '</h3>' +
+                    (hasUnplaced
+                        ? '<div id="hsUnpText" class="mb-2">Haftalik — ' + un.cardWeeks + ' ta karta-hafta, sikl — ' + un.cycleCards + ' ta karta. Ular HEMIS\'ga yozilmaydi, HEMIS\'da dars kam qoladi.</div>' +
+                            '<details open class="mb-3"><summary class="cursor-pointer">Guruh bo\'yicha ro\'yxat</summary>' +
+                            '<div id="hsUnpList" class="mt-1 max-h-72 overflow-auto">' + hsUnplacedListHtml(un) + '</div></details>'
+                        : '') +
+                    // O'qituvchi yoki xona shu vaqtda band — kafedra mudiriga almashtirilmaydi, HEMIS'ga yozilmaydi (to'siq).
+                    (un.conflictLessons
+                        ? '<details open id="hsUnpConflicts" class="mb-3"><summary class="cursor-pointer font-semibold">To\'qnashuvlar: ' + un.conflictLessons + ' ta dars</summary>' +
+                            '<div class="text-[11px] my-1">O\'qituvchi yoki xona shu vaqtda boshqa darsda band — bunday darslar HEMIS\'ga yozilmaydi. O\'qituvchi yoki xonani almashtiring.</div>' +
+                            '<div class="max-h-72 overflow-auto">' + hsConflictListHtml(un) + '</div></details>'
+                        : '') +
                     '<div class="flex gap-2"><button type="button" id="hsUnpGo" class="px-3 py-1 rounded bg-red-600 text-white">Baribir davom etish</button>' +
                     // Diagnostika (unplaced-export) faqat haftalik kartalar bo'yicha — sikl kartalari unda yo'q; faqat sikl bo'lsa bo'sh fayl bo'lardi.
                     (un.cardWeeks ? '<button type="button" id="hsUnpExcel" class="tt-weekly-excel" title="Haftalik joylanmagan kartalar va sabablari (sikl kartalari bu faylga kirmaydi)">Excel (sabablar)</button>' : '') +
@@ -5275,7 +5310,7 @@
                         restore(); requestAnimationFrame(restore);
                     }
                     $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
-                        ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
+                        ((j.cycle_cards || []).filter(card => card.placed && !card.conflict).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
                     $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ((j.view || cycleViewMode) === 'group' ? ' guruh · ' : ' oqim · ') + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
                         (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
 
@@ -5604,6 +5639,7 @@
                 $('cycAssignKafedra').textContent = "O'qituvchi";
                 $('cycAssignTeacher').innerHTML = '<option value="">Yuklanmoqda...</option>';
                 $('cycAssignRoom').innerHTML = '<option value="">Yuklanmoqda...</option>';
+                $('cycAssignWarn').classList.add('hidden');
                 $('cycAssignModal').classList.add('open');
 
                 try {
@@ -5615,8 +5651,11 @@
                     });
 
                     $('cycAssignKafedra').textContent = "O'qituvchi" + (j.kafedra ? ' (' + j.kafedra + ')' : '');
+                    // Blok sanalarida boshqa guruhcha bilan band o'qituvchilar — kulrang, sababi title'da.
+                    const busyT = j.busy_teachers || {};
                     $('cycAssignTeacher').innerHTML = '<option value="">— Tanlanmagan —</option>' +
-                        (j.teachers || []).map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('');
+                        (j.teachers || []).map(t => '<option value="' + t.id + '"' + (busyT[t.id] ? ' style="color:#9ca3af" title="Band: ' + esc(busyT[t.id]) + '"' : '') + '>' +
+                            esc(t.name) + (busyT[t.id] ? ' — band' : '') + '</option>').join('');
                     $('cycAssignRoom').innerHTML = '<option value="">— Tanlanmagan —</option>' +
                         (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '') + '</option>').join('');
 
@@ -5667,7 +5706,7 @@
                 if (ev.target === $('cycAssignModal')) closeCycleAssign();
             });
 
-            $('cycAssignSave').addEventListener('click', async () => {
+            async function saveCycleAssign(force) {
                 if (!cycAssignCard) return;
                 const button = $('cycAssignSave');
                 button.disabled = true;
@@ -5678,16 +5717,19 @@
                         training_type: cycAssignCard.type || 'practice', view: cycleEffView(), placement_group: (cycAssignCard && cycAssignCard.placement_group) || undefined,
                         teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
                         auditorium_code: $('cycAssignRoom').value || null,
-                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays, force: force ? 1 : undefined,
                     });
                     closeCycleAssign();
                     await loadCyclePlan();
                 } catch (e) {
-                    alert('Saqlab bo\u2018lmadi: ' + e.message);
+                    // O'qituvchi/xona blok sanalarida band — kim bilan, qachon; "Baribir biriktirish" bilan saqlanadi.
+                    if (e.data && e.data.needs_confirm) showBusyConfirm($('cycAssignWarn'), e.message, () => saveCycleAssign(true));
+                    else alert('Saqlab bo\u2018lmadi: ' + e.message);
                 } finally {
                     button.disabled = false;
                 }
-            });
+            }
+            $('cycAssignSave').addEventListener('click', () => saveCycleAssign(false));
 
             // ── Fan nomining blok ichidagi joyi ──
             // Sukut: M/A darslar egallagan soatlar oralig'ining o'rtasi (gorizontal — blok
@@ -5984,7 +6026,7 @@
                                             + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + esc(blockTip) + '"></button>';
                                     }
                                 }
-                                cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block is-mark' + (block.conflict ? ' is-conflict' : '') + '" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + visDays.length + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
@@ -5994,6 +6036,8 @@
                                         ? '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Bosing — fan haqida (soatlar, o\'qituvchi, xona). Ushlab blok ichida siljiting; ikki marta bosing — markazga qaytadi." style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">'
                                         : '<span class="cyc-mk-title is-noteacher" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="O\'qituvchi biriktirilmagan — ⚙ orqali biriktiring. Bosing — fan haqida; ushlab siljiting; ikki marta bosing — markazga qaytadi.">'
                                             + '<i class="bi bi-person-fill-exclamation" aria-label="O\'qituvchi biriktirilmagan"></i> ') +
+                                    // To'qnashuv (o'qituvchi yoki xona band) — qizil belgi, sababi title'da.
+                                    (block.conflict ? '<span class="cyc-conflict-badge" title="To\'qnashuv: ' + esc(block.conflict) + '">!</span>' : '') +
                                     esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     // O'qituvchi/xona doskada yozilmaydi — fan nomi bosilganda oynada chiqadi.
                                     '</div>' +
@@ -6511,7 +6555,8 @@
                     ? 'Blok ichidagi kataklarni bosing yoki sudrang — belgilangan soatlar ma\'ruza bo\'ladi.'
                     : 'Kartani bosing, so‘ng o‘z oqim qatoridagi boshlanish kunini bosing (yoki sudrab tashlang)';
                 $('cardPanelHint').classList.remove('hidden');
-                const unplaced = cycleCards.filter(card => !card.placed &&
+                // To'qnashuvli blok (joyida, lekin o'qituvchi yoki xona band) ham joylanmaganlar qatorida — sababi bilan.
+                const unplaced = cycleCards.filter(card => (!card.placed || card.conflict) &&
                     (!cycleGroupFilter || card.group === cycleGroupFilter)).sort((a, b) =>
                     (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
                 $('unplacedCount').textContent = unplaced.length + ' ta';
@@ -6522,11 +6567,12 @@
                     const typeChip = (j && j.simple)
                         ? ''
                         : '<span class="cycle-pn-type ' + (card.type || 'practice') + '">' + (card.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '</span>';
-                    return '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) +
+                    return '<div class="cycle-pn-card' + (card.conflict ? ' is-conflict' : '') + '" draggable="true" data-cycle-key="' + esc(card.key) +
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
-                        'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
+                        'title="' + esc(card.subject) + ' — ' + esc(card.group) + (card.conflict ? ' · To\'qnashuv: ' + esc(card.conflict) : '') + '">' +
                         '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + '</span>' +
-                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span></div>';
+                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span>' +
+                        (card.conflict ? '<span class="cycle-pn-conflict">⚠ To\'qnashuv: ' + esc(card.conflict) + '</span>' : '') + '</div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     // Bosib tanlash: sudrash ishlamagan holatlarda ham karta
@@ -7209,13 +7255,49 @@
             });
 
             // ===== Render =====
-            function renderAll() { resetCompactCache(); try { buildSubjectColors(colorScopeCards()); } catch (e) { } buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
+            function renderAll() { resetCompactCache(); try { buildSubjectColors(colorScopeCards()); } catch (e) { } buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); refreshWeeklyConflicts(); }
+
+            // ===== Ichki (haftalik) jadvaldagi to'qnashuvlar: karta joyida qoladi, lekin "Joylashgan" hisobiga kirmaydi va =====
+            // joylanmaganlar panelida sababi bilan chiqadi. Joylashuv/o'qituvchi/xona o'zgarsa — serverdan qayta so'raladi.
+            let weeklyConflicts = {};   // karta id => { hafta: sabab }
+            let conflictSig = '';
+            let conflictTimer = null;
+            function conflictSignature() {
+                if (!board) return '';
+                return board.id + '#' + allCards.map(c => [c.id, c.day, c.pair, c.teacher_id, c.auditorium_code].join(':')).join(',') + '#' +
+                    Object.keys(overrides).map(k => [k, overrides[k].day, overrides[k].pair, overrides[k].cancelled ? 1 : 0, overrides[k].auditorium_code].join(':')).join(',');
+            }
+            function refreshWeeklyConflicts() {
+                const sig = conflictSignature();
+                if (!sig || sig === conflictSig) return;
+                conflictSig = sig;
+                clearTimeout(conflictTimer);
+                const boardId = board.id;
+                conflictTimer = setTimeout(async () => {
+                    try {
+                        const j = await api(BASE + '/boards/' + boardId + '/conflicts');
+                        if (!board || board.id !== boardId) return;
+                        weeklyConflicts = j.weekly || {};
+                        renderStats();
+                        if (viewMode !== 'cycle') renderPanel();
+                    } catch (e) { console.warn('To\'qnashuvlar olinmadi:', e); }
+                }, 600);
+            }
+            // Joylashgan kartaning ichki jadvaldagi to'qnashuvi (joriy hafta; shablon ko'rinishida — birorta haftada bo'lsa).
+            function cardConflict(c) {
+                if (weeklyLayer === 'external' || !effPlace(c)) return null;
+                const byWeek = weeklyConflicts[c.id];
+                if (!byWeek) return null;
+                if (curWeek) return byWeek[curWeek] || null;
+                const weeks = Object.keys(byWeek).sort((a, b) => a - b);
+                return weeks.length ? weeks.join(', ') + '-hafta: ' + byWeek[weeks[0]] : null;
+            }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda
                 // ular "joylashmagan" bo'lib ko'rinib qolardi.
                 const sc = weekActiveCards();
-                const placed = sc.filter(c => effPlace(c)).length;
+                const placed = sc.filter(c => effPlace(c) && !cardConflict(c)).length;
                 // Sikl (4-6 kurs) kartalari haftalik panjaraga (kun/para) emas, sikl kalendariga
                 // joylanadi — haftalik hisobga qo'shilsa, doim "joylanmagan" bo'lib ko'rinadi.
                 const boardCards = cards.filter(c => !weekCancelled(c) && !isCycleCardAny(c));
@@ -7225,12 +7307,12 @@
                 const cyc = (viewMode === 'cycle' && cyclePlanData && Array.isArray(cyclePlanData.cycle_cards)) ? cyclePlanData.cycle_cards : null;
                 const first = cyc
                     ? '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700" title="Tanlangan qamrovdagi sikl bloklari (fan × oqim/guruh × mashg\'ulot turi)">Sikl bloklari: <b>' +
-                        cyc.filter(c => c.placed).length + '/' + cyc.length + '</b></span>'
+                        cyc.filter(c => c.placed && !c.conflict).length + '/' + cyc.length + '</b></span>'
                     : '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>';
                 $('statChips').innerHTML = first +
                     '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600" title="Haftalik jadval kartalari (sikl fanlari bundan tashqari — ular sikl kalendarida)">Doska bo\'yicha (haftalik): <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
-                $('unplacedExportBtn').classList.toggle('hidden', !sc.some(c => !effPlace(c)));
+                $('unplacedExportBtn').classList.toggle('hidden', !sc.some(c => !effPlace(c) || cardConflict(c)));
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
 
@@ -7399,7 +7481,8 @@
                 $('cardPanelTitle').textContent = 'Joylashmagan kartalar';
                 $('cardPanelHint').classList.add('hidden');
                 const bySubject = (a, b) => a.subject_name.localeCompare(b.subject_name, 'uz');
-                const un = weekActiveCards().filter(c => !effPlace(c)).sort(bySubject);
+                // To'qnashuvli (joylashgan, lekin o'qituvchi/xona/guruh band) kartalar ham — sababi bilan.
+                const un = weekActiveCards().filter(c => !effPlace(c) || cardConflict(c)).sort(bySubject);
                 // Shu haftada o'tilmaydigan kartalar — odatda yashirin. Ular joylashgan,
                 // shunchaki bu haftaga tegishli emas; qo'lda bekor qilinganini qaytarish
                 // uchun "ko'rsatish" tugmasi orqali chiqariladi.
@@ -7425,16 +7508,16 @@
                 $('pnFilterCount').classList.toggle('hidden', !filtering);
                 $('pnFilterCount').textContent = 'Filtrda: ' + unShown.length + ' / ' + un.length + ' ta';
 
-                const panelCard = (c, skip) =>
-                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (selected && selected.id === c.id ? ' sel' : '') +
-                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
+                const panelCard = (c, skip, conflict = skip ? null : cardConflict(c)) =>
+                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (conflict ? ' conflict' : '') + (selected && selected.id === c.id ? ' sel' : '') +
+                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '') + (conflict ? ' · To\'qnashuv: ' + conflict : '')) + '">' +
                     cardLabel(c, true) +
                     '<div class="text-[9px] text-gray-500">' +
                     (c.training_type === 'lecture'
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
-                    '</div></div>';
+                    '</div>' + (conflict ? '<div class="pn-conflict">⚠ To\'qnashuv: ' + esc(conflict) + '</div>' : '') + '</div>';
 
                 $('cardPanel').innerHTML =
                     unShown.map(c => panelCard(c, false)).join('') +
@@ -9445,6 +9528,7 @@
                     $('stDayOff').value = (set.days_off || []).join(', ');
                     $('stAllowZero').checked = !!set.allow_zero;
                     $('stShowNum').checked = !!set.show_day_number;
+                    $('stHemisMudir').checked = !!+(set.hemis_mudir_fallback || 0);
                     const br = (set.weekly_breaks || [])[0] || {};
                     $('stBreakFrom').value = br.from || '';
                     $('stBreakTo').value = br.to || '';
@@ -9744,6 +9828,7 @@
                 dayOff.forEach((d, i) => fd.append('settings[days_off][' + i + ']', d));
                 fd.append('settings[allow_zero]', $('stAllowZero').checked ? 1 : 0);
                 fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
+                fd.append('settings[hemis_mudir_fallback]', $('stHemisMudir').checked ? 1 : 0);
                 if ($('stBreakFrom').value && $('stBreakTo').value) {
                     fd.append('settings[weekly_breaks][0][from]', $('stBreakFrom').value);
                     fd.append('settings[weekly_breaks][0][to]', $('stBreakTo').value);
@@ -9766,6 +9851,32 @@
             let asgUnits = [];        // dars birliklari
             let asgSel = null;        // tanlangan birlik
             let asgTeacherTimer = null;
+            // Tanlangan birlik darslari vaqtida boshqa guruhcha bilan band o'qituvchilar/xonalar — ro'yxatda kulrang.
+            let asgBusy = { teachers: {}, rooms: {} };
+            const asgUnitParams = u => ({ faculty_name: u.faculty_name || '', specialty_name: u.specialty_name, course: u.course,
+                subject_name: u.subject_name, training_type: u.training_type, oqim_label: u.oqim_label || '', group_name: u.group_name || '' });
+            async function loadAsgBusy(u) {
+                asgBusy = { teachers: {}, rooms: {} };
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/unit-busy?' + new URLSearchParams(asgUnitParams(u)));
+                    if (asgSel === u) asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {} };
+                } catch (e) { console.warn('Bandlik olinmadi:', e); }
+            }
+            function markAsgBusy() {
+                [...$('asgTeacher').options].forEach(o => {
+                    const busy = asgBusy.teachers[o.value];
+                    o.style.color = busy ? '#9ca3af' : '';
+                    o.title = busy ? 'Band: ' + busy : '';
+                    o.dataset.busy = busy ? '1' : '';
+                });
+            }
+            // Band o'qituvchi/xona ogohlantirishi (kim bilan, qachon) — "Baribir biriktirish" bosilsa force bilan qayta yuboriladi.
+            function showBusyConfirm(el, message, onForce) {
+                el.innerHTML = '<div style="color:#b45309">⚠ ' + esc(message) + '</div>' +
+                    '<button type="button" class="busy-force" style="margin-top:4px;padding:2px 8px;border:1px solid #b45309;border-radius:6px;color:#b45309;background:#fff">Baribir biriktirish</button>';
+                el.classList.remove('hidden');
+                el.querySelector('.busy-force').onclick = onForce;
+            }
             const ASG_HEADER_KEYS = ['subject', 'type', 'scope', 'department', 'cards', 'teacher'];
             let asgAudRooms = [];
             let asgAudSel = null;
@@ -10075,7 +10186,8 @@
                     (u.training_type === 'lecture' ? "Ma'ruza · " + esc(u.oqim_label || '') : 'Amaliy · ' + esc(u.group_name || '')) +
                     ' · ' + u.cards + ' karta' + (u.kafedra_name ? '<br><span class="text-gray-400">' + esc(u.kafedra_name) + '</span>' : '');
                 renderAsgRoomCurrent();
-                await loadAsgTeachers('');
+                await Promise.all([loadAsgTeachers(''), loadAsgBusy(u)]);
+                markAsgBusy();
             }
 
             // ----- Xona (auditoriya): ro'yxat alohida oynada, bir marta yuklanadi -----
@@ -10113,7 +10225,8 @@
                 const list = asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name]
                     .some(v => String(v || '').toLowerCase().includes(q)));
                 $('asgRoomList').innerHTML = list.map(room =>
-                    '<button type="button" class="rm-row' + (asgSel.auditorium_code === room.code ? ' is-current' : '') + '" data-code="' + esc(room.code) + '">' +
+                    '<button type="button" class="rm-row' + (asgSel.auditorium_code === room.code ? ' is-current' : '') + '" data-code="' + esc(room.code) + '"' +
+                    (asgBusy.rooms[room.code] ? ' style="opacity:.55" title="Band: ' + esc(asgBusy.rooms[room.code]) + '"' : '') + '>' +
                     '<b>' + esc(room.name || room.code) + '</b>' +
                     '<span>' + esc([room.building_name, room.auditorium_type_name].filter(Boolean).join(' · ')) + '</span>' +
                     '<span class="rm-vol">' + (room.volume ? room.volume + ' o\'rin' : '') + '</span></button>').join('')
@@ -10129,16 +10242,13 @@
                 if (row) applyAsgRoom(row.dataset.code);
             });
 
-            async function applyAsgRoom(code) {
+            async function applyAsgRoom(code, force) {
                 if (!asgSel) return;
                 $('asgRoomOpen').disabled = $('asgRoomClear').disabled = true;
                 try {
-                    const j = await api(BASE + '/boards/' + board.id + '/assign-room', 'POST', {
-                        faculty_name: asgSel.faculty_name || '', specialty_name: asgSel.specialty_name, course: asgSel.course,
-                        subject_name: asgSel.subject_name, training_type: asgSel.training_type,
-                        oqim_label: asgSel.oqim_label || '', group_name: asgSel.group_name || '',
-                        auditorium_code: code || '',
-                    });
+                    const j = await api(BASE + '/boards/' + board.id + '/assign-room', 'POST', Object.assign(asgUnitParams(asgSel), {
+                        auditorium_code: code || '', force: force ? 1 : undefined,
+                    }));
                     asgSel.auditorium_code = j.auditorium_code || null;
                     asgSel.auditorium_name = j.auditorium_name || null;
                     asgSel.room_mixed = false;
@@ -10156,6 +10266,12 @@
                     renderAsgRoomCurrent();
                     closeAsgRoomModal();
                 } catch (e) {
+                    if (e.data && e.data.needs_confirm) {
+                        closeAsgRoomModal();
+                        showBusyConfirm($('asgMsg'), e.message, () => applyAsgRoom(code, true));
+                        $('asgRoomOpen').disabled = $('asgRoomClear').disabled = false;
+                        return;
+                    }
                     $('asgMsg').textContent = 'Xatolik: ' + e.message;
                     // Oyna ochiq bo'lsa xatoni shu yerda ham ko'rsatamiz
                     if (!$('asgRoomModal').classList.contains('hidden')) {
@@ -10187,6 +10303,7 @@
                         '<option value="' + t.id + '"' + (asgSel.teacher_id === t.id ? ' selected' : '') + '>' +
                         esc(t.short_name || t.full_name) + (t.lavozim ? ' · ' + esc(t.lavozim) : '') + '</option>').join('')
                         || '<option disabled>topilmadi</option>';
+                    markAsgBusy();
                 } catch (e) { $('asgTeacher').innerHTML = '<option disabled>xato</option>'; }
             }
             $('asgTeacherSearch').oninput = function () {
@@ -10198,16 +10315,13 @@
             $('asgApply').onclick = () => applyAsg($('asgTeacher').value || null);
             $('asgClear').onclick = () => applyAsg(null);
 
-            async function applyAsg(teacherId) {
+            async function applyAsg(teacherId, force) {
                 if (!asgSel) return;
                 $('asgApply').disabled = $('asgClear').disabled = true;
                 try {
-                    const j = await api(BASE + '/boards/' + board.id + '/assign-teacher', 'POST', {
-                        faculty_name: asgSel.faculty_name || '', specialty_name: asgSel.specialty_name, course: asgSel.course,
-                        subject_name: asgSel.subject_name, training_type: asgSel.training_type,
-                        oqim_label: asgSel.oqim_label || '', group_name: asgSel.group_name || '',
-                        teacher_id: teacherId || '',
-                    });
+                    const j = await api(BASE + '/boards/' + board.id + '/assign-teacher', 'POST', Object.assign(asgUnitParams(asgSel), {
+                        teacher_id: teacherId || '', force: force ? 1 : undefined,
+                    }));
                     // Mahalliy holatni yangilaymiz (birlik + tegishli kartalar)
                     asgSel.teacher_id = teacherId ? +teacherId : null;
                     asgSel.teacher_name = j.teacher_name;
@@ -10223,7 +10337,10 @@
                     $('asgMsg').textContent = (j.teacher_name ? '«' + j.teacher_name + '» biriktirildi' : 'Biriktirish olib tashlandi') +
                         ' · ' + j.affected + ' karta';
                     renderAsgTable();
-                } catch (e) { $('asgMsg').textContent = 'Xatolik: ' + e.message; }
+                } catch (e) {
+                    if (e.data && e.data.needs_confirm) showBusyConfirm($('asgMsg'), e.message, () => applyAsg(teacherId, true));
+                    else $('asgMsg').textContent = 'Xatolik: ' + e.message;
+                }
                 $('asgApply').disabled = $('asgClear').disabled = false;
             }
 

@@ -26,6 +26,12 @@ function hsInsert(string $table, array $data): void
     DB::table($table)->insert($data);
 }
 
+// Doska sozlamasi: HEMIS solishtirishda band o'qituvchi/xona o'rniga kafedra mudiri (sukut — o'chiq, to'qnashuv to'siq bo'ladi).
+function hsMudirFallback(array $s): void
+{
+    $s['board']->update(['settings' => ['hemis_mudir_fallback' => true] + ($s['board']->settings ?? [])]);
+}
+
 function hsSetup(): array
 {
     Role::findOrCreate('registrator_ofisi', 'web');
@@ -185,6 +191,7 @@ it('guruh HEMIS\'da fakulteti va to\'liq nomi bo\'yicha topiladi', function () {
 
 it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS darslari o\'qituvchi bandligida hisobga olinadi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     // Boshqa kafedraning va faol bo'lmagan "Kafedra mudiri xonasi" — tanlanmaydi; fan kafedrasi (501) niki olinadi
@@ -1095,10 +1102,10 @@ it('sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (sana, vaqt,
     expect($u['before']['hours_diff'])->toBe(['11' => 0, '13' => 0]);
 });
 
-it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq emas, amaliy har guruhchaning o\'z kartasidan', function () {
-    $s = hsSetup();
-    Role::findOrCreate('admin', 'web');
-    $s['reg']->assignRole('admin');
+// 5-kurs sikli (Pediatriya, 2 kun, 21.09 dan): oqimning ikki guruhchasi (g5-01a — USTOZ, g5-01b — UST2 yoki $sameTeacher bo'lsa
+// USTOZ), umumiy ma'ruza (MUDIR), HEMIS'da guruhlar, fan va KTR.
+function hsCycleTwoSubgroups(array $s, bool $sameTeacher = false): void
+{
     \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
         'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 2]);
     $lecT = Teacher::where('full_name', 'MUDIR')->first();
@@ -1108,7 +1115,8 @@ it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq e
     $base = ['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
         'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Pediatriya', 'kafedra_name' => 'P'];
     TimetableCard::create($base + ['training_type' => 'practice', 'group_name' => 'g5-01a', 'teacher_id' => $pa->id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '71', 'auditorium_name' => '423']);
-    TimetableCard::create($base + ['training_type' => 'practice', 'group_name' => 'g5-01b', 'teacher_id' => $pb->id, 'teacher_name' => 'UST2', 'auditorium_code' => '72', 'auditorium_name' => '424']);
+    $tb = $sameTeacher ? $pa : $pb;
+    TimetableCard::create($base + ['training_type' => 'practice', 'group_name' => 'g5-01b', 'teacher_id' => $tb->id, 'teacher_name' => $tb->full_name, 'auditorium_code' => '72', 'auditorium_name' => '424']);
     TimetableCard::create($base + ['training_type' => 'lecture', 'group_name' => null, 'group_names' => ['g5-01a', 'g5-01b'],
         'teacher_id' => $lecT->id, 'teacher_name' => 'MUDIR', 'auditorium_code' => 'Y1', 'auditorium_name' => 'Y301']);
     \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
@@ -1126,7 +1134,13 @@ it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq e
     $cs = DB::table('curriculum_subjects')->where('subject_id', 900)->value('id');
     DB::table('ktr_plans')->insert(['curriculum_subject_id' => $cs, 'week_count' => 2,
         'plan_data' => json_encode(['hours' => ['1' => ['11' => 2, '13' => 4], '2' => ['13' => 6]]]), 'created_at' => now(), 'updated_at' => now()]);
+}
 
+it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq emas, amaliy har guruhchaning o\'z kartasidan', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsCycleTwoSubgroups($s);
     $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
         ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])
         ->assertOk()->json();
@@ -1141,8 +1155,47 @@ it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq e
     }
 });
 
+it('sikl: ikki guruhcha bitta o\'qituvchida kesishgan davrda — HEMIS amali to\'siq (JSON\'ga kirmaydi), mudir qo\'yilmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsCycleTwoSubgroups($s, true);
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+
+    // LMS ichki jadvali: ikkala guruhcha bloki to'qnashuvli
+    $ic = app(\App\Http\Controllers\Admin\TimetableController::class)->internalConflicts($s['board']);
+    expect(array_keys($ic['cycle']))->toBe(['davolash ishi|5|g5-01a|Pediatriya|practice', 'davolash ishi|5|g5-01b|Pediatriya|practice'])
+        ->and($ic['cycle']['davolash ishi|5|g5-01a|Pediatriya|practice']['text'])->toBe("O'qituvchi USTOZ band: g5-01b, Pediatriya, 21.09–22.09");
+    // Qizil oyna (HEMIS'siz xulosa): "To'qnashuvlar: 2 ta dars", joylanmaganlar orasida emas
+    $sum = $as()->postJson(route('admin.timetable.hemis-sync.unplaced-summary', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    expect($sum['conflicts']['count'])->toBe(2)
+        ->and($sum['cycle']['count'])->toBe(0)
+        ->and(collect($sum['conflicts']['items'])->pluck('group')->unique()->sort()->values()->all())->toBe(['g5-01a', 'g5-01b'])
+        ->and($sum['conflicts']['items'][0])->toMatchArray(['kind' => 'cycle', 'type' => 'teacher', 'subject' => 'Pediatriya', 'dates' => '21.09–22.09'])
+        // O'tib ketgan to'qnashuv (HEMIS'da yopiq) — sanalmaydi
+        ->and($as()->postJson(route('admin.timetable.hemis-sync.unplaced-summary', $s['board']), ['courses' => [5], 'today' => '2026-09-23', 'until_week' => 0])
+            ->assertOk()->json('conflicts.count'))->toBe(0);
+
+    $res = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $acts = fn (string $group) => collect(collect($res['groups'])->firstWhere('group', $group)['units'][0]['actions']);
+    foreach (['g5-01a' => 'g5-01b', 'g5-01b' => 'g5-01a'] as $group => $other) {
+        $prc = $acts($group)->where('code', '13');
+        expect($prc)->not->toBeEmpty()
+            // Amaliy — to'siq: o'qituvchi almashtirilmaydi, mudir qo'yilmaydi; kim, qaysi dars bilan, qachon band
+            ->and($prc->every(fn ($a) => count($a['blocked']) > 0))->toBeTrue()
+            ->and($prc->pluck('employee_name')->unique()->values()->all())->toBe(['USTOZ'])
+            ->and($prc->pluck('flags')->flatten()->all())->not->toContain('mudir')
+            ->and($prc->first()['blocked'][0])->toContain("o'qituvchi band: USTOZ — {$other} · Pediatriya")
+            // Umumiy ma'ruza (bitta o'qituvchi, bitta xona) — to'siq emas
+            ->and($acts($group)->where('code', '11')->pluck('blocked')->flatten()->all())->toBe([]);
+    }
+});
+
 it('xona band — to\'siq bartaraf etiladi: «Kafedra mudiri xonasi» qo\'yiladi, o\'qituvchi o\'zgarmaydi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
@@ -1168,6 +1221,7 @@ it('xona band — to\'siq bartaraf etiladi: «Kafedra mudiri xonasi» qo\'yiladi
 
 it('ikki LMS darsi bir o\'qituvchida bir vaqtda — faqat bittasiga kafedra mudiri qo\'yiladi, ikkinchisi o\'qituvchida qoladi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
@@ -1187,8 +1241,39 @@ it('ikki LMS darsi bir o\'qituvchida bir vaqtda — faqat bittasiga kafedra mudi
         ->and(collect([$a['employee_id'], $b['employee_id']])->sort()->values()->all())->toBe([5001, 9001]);
 });
 
+it('sukut (hemis_mudir_fallback o\'chiq): ikki LMS darsi bir o\'qituvchida bir vaqtda — almashtirilmaydi, ikkalasi to\'siq', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    TimetableCard::create(array_merge($s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name', 'day', 'pair', 'teacher_id', 'teacher_name']),
+        ['group_name' => 'p/st26-01b (rus)', 'auditorium_code' => '72', 'auditorium_name' => '424']));
+    $run = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $res = $run();
+    $on = fn (array $res, string $group) => collect(collect($res['groups'])->firstWhere('group', $group)['units'][0]['actions'])
+        ->first(fn ($a) => $a['date'] === '2026-09-21' && $a['start'] === '10:00');
+    $a = $on($res, 'p/st26-01a');
+    $b = $on($res, 'p/st26-01b');
+    expect([$a['employee_id'], $b['employee_id']])->toBe([5001, 5001])
+        ->and(array_merge($a['flags'], $b['flags']))->not->toContain('mudir')->not->toContain("to'siq sababli")
+        ->and($a['resolved'] ?? [])->toBe([])
+        // To'siqda: kim band, qaysi dars bilan, qaysi vaqtda, u darsning xonasi
+        ->and($a['blocked'])->toBe(["o'qituvchi band: USTOZ — p/st26-01b · Odam anatomiyasi 10:00-11:20, xona 424"])
+        ->and($b['blocked'][0])->toStartWith("o'qituvchi band: USTOZ — p/st26-01a · Odam anatomiyasi 10:00-11:20")
+        ->and($a['blocks'][0])->toMatchArray(['type' => 'teacher', 'teacher' => 'USTOZ', 'group' => 'p/st26-01b', 'source' => 'LMS', 'time' => '10:00–11:20']);
+
+    // Sozlama yoqilsa — avvalgidek kafedra mudiri qo'yiladi
+    hsMudirFallback($s);
+    $res = $run();
+    expect(collect([$on($res, 'p/st26-01a')['employee_id'], $on($res, 'p/st26-01b')['employee_id']])->sort()->values()->all())->toBe([5001, 9001]);
+});
+
 it('ikki LMS darsi bir xonada bir vaqtda — faqat bittasiga «Kafedra mudiri xonasi» qo\'yiladi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
@@ -1214,6 +1299,7 @@ it('ikki LMS darsi bir xonada bir vaqtda — faqat bittasiga «Kafedra mudiri xo
 
 it('bartarafdan keyin bandlik haqiqiy qiymatlar bilan: bir xonada ikki xil o\'qituvchi yoki bir o\'qituvchi ikki xonada qolmaydi', function (string $cTeacher, string $cRoom) {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     $ust2 = Teacher::where('full_name', 'USTOZ')->first()->replicate()->forceFill(['hemis_id' => 5002, 'full_name' => 'UST2', 'short_name' => 'UST2',
@@ -1250,6 +1336,7 @@ it('bartarafdan keyin bandlik haqiqiy qiymatlar bilan: bir xonada ikki xil o\'qi
 
 it('almashtirishdan keyin ikkinchi tur yangi qiymat bilan qayta tekshiriladi: o\'zgarmagan umumiy dars sherigi bilan to\'qnashuv qolmaydi', function (string $cTeacher, string $cRoom) {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     $ust2 = Teacher::where('full_name', 'USTOZ')->first()->replicate()->forceFill(['hemis_id' => 5002, 'full_name' => 'UST2', 'short_name' => 'UST2',
@@ -1290,6 +1377,7 @@ it('almashtirishdan keyin ikkinchi tur yangi qiymat bilan qayta tekshiriladi: o\
 
 it('hal qilinmagan to\'siq ikkinchi tur almashgandan keyin qayta tekshiriladi: endi bitta dars bo\'lsa, to\'siq yo\'qoladi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     Teacher::where('hemis_id', 9001)->update(['hemis_id' => 0]);   // mudirni qo'yib bo'lmaydi — o'qituvchi to'sig'i qoladi
@@ -1322,6 +1410,7 @@ it('hal qilinmagan to\'siq ikkinchi tur almashgandan keyin qayta tekshiriladi: e
 
 it('HEMIS\'da allaqachon mudir bo\'lsa (ismi boshqacha yozilgan) — ortiqcha o\'zgartirish chiqmaydi: id bo\'yicha solishtiriladi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
@@ -1340,6 +1429,7 @@ it('HEMIS\'da allaqachon mudir bo\'lsa (ismi boshqacha yozilgan) — ortiqcha o\
 
 it('hal qilinmagan to\'siq oxirida yakuniy bandlik bo\'yicha qayta tekshiriladi: keyingi dars mudirga o\'tib, to\'qnashuv yo\'qolsa — to\'siq qolmaydi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     // A (01a): fan kafedrasi 502 — mudiri yo'q, almashtirib bo'lmaydi. B (01b): o'sha fan boshqa o'quv rejada, kafedra 501 — mudir bor.
@@ -1366,6 +1456,7 @@ it('hal qilinmagan to\'siq oxirida yakuniy bandlik bo\'yicha qayta tekshiriladi:
 
 it('umumiy dars bo\'linmaydi: u bilan to\'qnashgan alohida dars kafedra mudiriga o\'tadi, umumiy dars o\'qituvchida qoladi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     // A (01a) va B (01b) — USTOZ · 71, bitta umumiy dars; C (01c) — USTOZ · 73. Ro'yxat tartibi A, C, B.
@@ -1389,6 +1480,7 @@ it('umumiy dars bo\'linmaydi: u bilan to\'qnashgan alohida dars kafedra mudiriga
 
 it('umumiy darsni almashtirish kerak bo\'lsa — uning hamma guruhlari birga, o\'sha xonada kafedra mudiriga o\'tadi', function () {
     $s = hsSetup();
+    hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     // A (01a) va B (01b) — USTOZ · 71, bitta umumiy dars; USTOZ shu vaqtda HEMIS'da boshqa guruhda (o'zgartirib bo'lmaydi).

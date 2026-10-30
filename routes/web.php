@@ -1290,6 +1290,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::get('/boards/{board}/week-suggestions', [\App\Http\Controllers\Admin\TimetableController::class, 'weekSuggestions'])->name('boards.week-suggestions');
                 Route::get('/boards/{board}/unplaced-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedExport'])->name('boards.unplaced-export');
+                Route::get('/boards/{board}/conflicts', [\App\Http\Controllers\Admin\TimetableController::class, 'boardConflicts'])->name('boards.conflicts');
                 // Butun doska hisoboti fonda tayyorlanadi (BuildUnplacedReportJob): boshlash → holat → yuklab olish
                 Route::post('/boards/{board}/unplaced-report', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedReportStart'])->name('boards.unplaced-report');
                 Route::get('/boards/{board}/unplaced-report/status', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedReportStatus'])->name('boards.unplaced-report.status');
@@ -1342,6 +1343,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/boards/{board}/teacher-units', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherUnits'])->name('teacher-units');
                 Route::post('/boards/{board}/assign-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignTeacher'])->name('assign-teacher');
                 Route::post('/boards/{board}/assign-room', [\App\Http\Controllers\Admin\TimetableController::class, 'assignUnitRoom'])->name('assign-room');
+                Route::get('/boards/{board}/unit-busy', [\App\Http\Controllers\Admin\TimetableController::class, 'unitBusyResources'])->name('unit-busy');
                 Route::get('/boards/{board}/assignment-report', [\App\Http\Controllers\Admin\TimetableController::class, 'assignmentReport'])->name('assignment-report');
                 Route::get('/boards/{board}/auditorium-teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriumTeacherAssignments'])->name('auditorium-teachers');
                 Route::post('/boards/{board}/assign-auditorium-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignAuditoriumTeacher'])->name('assign-auditorium-teacher');

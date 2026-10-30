@@ -55,14 +55,30 @@
             @endif
             <div id="vedomost-sync-box" style="display:none;background:#e0f2fe;color:#075985;padding:10px 16px;border-radius:8px;margin-bottom:12px;border:1px solid #bae6fd;"></div>
 
-            {{-- Statistika --}}
-            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+            {{-- Statistika — kartochkalar ham filtr: bosilganda shu status bo'yicha saralanadi --}}
+            @php
+                $activeStatus = request('status');
+                $overdueOn = request()->boolean('overdue');
+                $statUrl = fn (array $q) => route('admin.vedomost-submission.index', array_merge(\Illuminate\Support\Arr::except(request()->query(), ['status', 'overdue', 'page']), $q));
+            @endphp
+            <div class="vd-stats">
+                <a href="{{ $statUrl([]) }}" class="vd-stat {{ !$activeStatus && !$overdueOn ? 'is-active' : '' }}" style="--c:#1a3268;--bg:#eef2ff;">
+                    <span class="vd-stat-label">Jami</span>
+                    <span class="vd-stat-num">{{ $stats['total'] ?? 0 }}</span>
+                </a>
                 @foreach($statusBadge as $key => $b)
-                    <div style="flex:1;min-width:130px;background:{{ $b[2] }};border-radius:10px;padding:12px 16px;">
-                        <div style="font-size:12px;color:{{ $b[1] }};font-weight:600;">{{ $b[0] }}</div>
-                        <div style="font-size:22px;font-weight:700;color:{{ $b[1] }};">{{ $stats[$key] ?? 0 }}</div>
-                    </div>
+                    <a href="{{ $statUrl($activeStatus === $key ? [] : ['status' => $key]) }}" class="vd-stat {{ $activeStatus === $key ? 'is-active' : '' }}" style="--c:{{ $b[1] }};--bg:{{ $b[2] }};">
+                        <span class="vd-stat-label">{{ $b[0] }}</span>
+                        <span class="vd-stat-num">{{ $stats[$key] ?? 0 }}</span>
+                        @if(($stats['total'] ?? 0) > 0)
+                            <span class="vd-stat-bar"><span style="width:{{ round(($stats[$key] ?? 0) * 100 / $stats['total']) }}%"></span></span>
+                        @endif
+                    </a>
                 @endforeach
+                <a href="{{ $statUrl($overdueOn ? [] : ['overdue' => 1]) }}" class="vd-stat {{ $overdueOn ? 'is-active' : '' }}" style="--c:#b91c1c;--bg:#fff1f2;">
+                    <span class="vd-stat-label">Muddati o'tgan</span>
+                    <span class="vd-stat-num">{{ $stats['overdue'] ?? 0 }}</span>
+                </a>
             </div>
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow:visible;">
@@ -118,8 +134,8 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:170px;">
-                                <label class="filter-label">&nbsp;</label>
+                            <div class="filter-item vs-switch-item" style="min-width:170px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> Davr</label>
                                 {{-- Standart yoqilgan: o'chirilganda yashirin "0" yuboriladi --}}
                                 <input type="hidden" name="current_semester" value="0">
                                 <label class="vs-switch" title="Faqat guruhlar hozir o'qiyotgan semestr vedomostlari">
@@ -129,6 +145,9 @@
                                     <span class="vs-switch-track" aria-hidden="true"><span class="vs-switch-thumb"></span></span>
                                     Joriy semestr
                                 </label>
+                                @if(!empty($currentSemesterHint))
+                                    <span class="vs-switch-hint" title="Har guruh o'zi hozir o'qiyotgan semestr bo'yicha (talabalar ma'lumotidan)">{{ $currentSemesterHint }}</span>
+                                @endif
                             </div>
                         </div>
 
@@ -202,47 +221,62 @@
                     </div>
                 </form>
 
-                {{-- Generatsiya + Excel --}}
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;flex-wrap:wrap;gap:8px;">
-                    <span style="font-size:13px;color:#64748b;">Jami: {{ $submissions->total() }} ta</span>
-                    <div style="display:flex;gap:8px;">
-                        @if(!empty($canManage))
-                            <button type="button"
-                                    id="manual-open-trigger"
-                                    style="background:#2563eb;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-                                + Pullik uchun shakl ochish
-                            </button>
-                            <a href="{{ route('admin.vedomost-submission.ai-settings') }}"
-                               style="background:#6d28d9;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
-                                🤖 AI sozlamalari
-                            </a>
+                {{-- Faol filtrlar + amallar --}}
+                @php
+                    $filterLabels = [
+                        'faculty' => fn ($v) => 'Fakultet: ' . ($faculties->firstWhere('id', $v)->name ?? $v),
+                        'specialty' => fn ($v) => "Yo'nalish: " . $v,
+                        'level_code' => fn ($v) => 'Kurs: ' . (is_numeric($v) ? ((int) $v - 10) . '-kurs' : $v),
+                        'semester_code' => fn ($v) => 'Semestr: ' . (is_numeric($v) ? ((int) $v - 10) . '-semestr' : $v),
+                        'subject_name' => fn ($v) => 'Fan: ' . $v,
+                        'closing_form_filter' => fn ($v) => 'Yopilish: ' . ($closingForms[$v] ?? $v),
+                        'form_type' => fn ($v) => 'Shakl: ' . ($formLabels[$v] ?? $v),
+                        'status' => fn ($v) => 'Status: ' . (\App\Models\VedomostSubmission::statusLabels()[$v] ?? $v),
+                        'overdue' => fn ($v) => "Muddati o'tgan",
+                    ];
+                    $activeFilters = [];
+                    foreach ($filterLabels as $k => $label) {
+                        if (request()->filled($k) && !($k === 'overdue' && !request()->boolean('overdue'))) {
+                            $activeFilters[$k] = $label(request($k));
+                        }
+                    }
+                    $currentOn = request('current_semester', '1') === '1';
+                @endphp
+                <div class="vd-toolbar">
+                    <div class="vd-toolbar-left">
+                        <span class="vd-total"><b>{{ $submissions->total() }}</b> ta vedomost</span>
+                        <span class="vd-chip {{ $currentOn ? 'is-green' : 'is-gray' }}">{{ $currentOn ? 'Joriy semestr' : 'Barcha semestrlar' }}</span>
+                        @foreach($activeFilters as $k => $label)
+                            <a class="vd-chip" href="{{ route('admin.vedomost-submission.index', \Illuminate\Support\Arr::except(request()->query(), [$k, 'page'])) }}" title="Filtrni olib tashlash">{{ $label }} <span aria-hidden="true">✕</span></a>
+                        @endforeach
+                        @if(!empty($activeFilters))
+                            <a class="vd-reset" href="{{ route('admin.vedomost-submission.index', array_filter(['education_type' => request('education_type'), 'current_semester' => request('current_semester'), 'per_page' => request('per_page')])) }}">Filtrlarni tozalash</a>
                         @endif
-                        <a href="{{ route('admin.vedomost-submission.report', request()->query()) }}"
-                           style="background:#1a3268;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
-                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h13M9 17H4V5a2 2 0 012-2h7l5 5v9h-5M9 17v4h10v-4"/></svg>
-                            Hisobot
-                        </a>
-                        <a href="{{ route('admin.vedomost-submission.export', request()->query()) }}"
-                           style="background:#1d6f42;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
-                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
-                            Excel
-                        </a>
-                        <a href="{{ route('admin.vedomost-submission.jamlanma', request()->query()) }}"
-                           title="Joriy filtrdagi barcha TASDIQLANGAN vedomostlar — bitta jadvalda («Vedomost tekshirish» formati, A–AJ + yopilish shakli)"
-                           style="background:#0f766e;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
-                            ⬇ Tasdiqlanganlar jamlanmasi
-                        </a>
-                        <button type="submit" form="jam-form" id="jam-selected" disabled
-                                title="Jadvalda belgilangan tasdiqlangan vedomostlar jamlanmasi"
-                                style="background:#0f766e;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;opacity:.5;">
-                            ⬇ Tanlanganlar (<span id="jam-count">0</span>)
-                        </button>
+                    </div>
+                    <div class="vd-toolbar-right">
+                        <div class="vd-group" role="group" aria-label="Yuklab olish">
+                            <a class="vd-btn" href="{{ route('admin.vedomost-submission.report', request()->query()) }}" title="Svodnaya hisobot">
+                                <svg viewBox="0 0 24 24"><path d="M9 17v-6h13M9 17H4V5a2 2 0 012-2h7l5 5v9h-5M9 17v4h10v-4"/></svg>Hisobot
+                            </a>
+                            <a class="vd-btn" href="{{ route('admin.vedomost-submission.export', request()->query()) }}" title="Jadvalni Excelga yuklash">
+                                <svg viewBox="0 0 24 24"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>Excel
+                            </a>
+                        </div>
+                        <div class="vd-group is-teal" role="group" aria-label="Tasdiqlanganlar jamlanmasi">
+                            <span class="vd-group-label">Jamlanma</span>
+                            <a class="vd-btn" href="{{ route('admin.vedomost-submission.jamlanma', request()->query()) }}"
+                               title="Joriy filtrdagi barcha TASDIQLANGAN vedomostlar — bitta jadvalda («Vedomost tekshirish» formati, A–AJ + yopilish shakli)">Filtrdagilar</a>
+                            <button type="submit" form="jam-form" id="jam-selected" class="vd-btn" disabled
+                                    title="Jadvalda belgilangan tasdiqlangan vedomostlar jamlanmasi">Tanlanganlar <span class="vd-badge" id="jam-count">0</span></button>
+                        </div>
+                        @if(!empty($canManage))
+                            <a class="vd-btn is-ghost" href="{{ route('admin.vedomost-submission.ai-settings') }}">🤖 AI sozlamalari</a>
+                            <button type="button" id="manual-open-trigger" class="vd-btn is-ghost">+ Pullik uchun shakl</button>
+                        @endif
                         <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
                               onsubmit="return confirm('Joriy semestr bo\'yicha vedomost yozuvlari yangilansinmi?');">
                             @csrf
-                            <button id="vedomost-sync-btn" type="submit" style="background:#1a3268;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
-                                ↻ Joriy semestr bo'yicha yangilash
-                            </button>
+                            <button id="vedomost-sync-btn" type="submit" class="vd-btn is-primary" title="Joriy semestr bo'yicha vedomost yozuvlarini yaratish/yangilash">↻ Yangilash</button>
                         </form>
                     </div>
                 </div>
@@ -310,7 +344,7 @@
                 @endif
 
                 <form id="jam-form" method="GET" action="{{ route('admin.vedomost-submission.jamlanma') }}"></form>
-                <div style="overflow-x:auto;">
+                <div class="vd-table-wrap">
                     <table class="vd-table">
                         <thead>
                             <tr>
@@ -335,7 +369,7 @@
                         <tbody>
                             @forelse($submissions as $i => $v)
                                 @php $overdue = $v->deadline && \Carbon\Carbon::parse($v->deadline)->isPast() && !\Carbon\Carbon::parse($v->deadline)->isToday() && $v->status !== 'approved'; @endphp
-                                <tr>
+                                <tr class="{{ $overdue ? 'is-overdue' : '' }} {{ $v->status === 'approved' ? 'is-approved' : '' }}">
                                     <td>
                                         @if($v->status === 'approved' || !empty($v->is_mixed_status))
                                             <input type="checkbox" class="jam-cb" name="ids[]" form="jam-form" value="{{ implode(',', $v->ids ?? [$v->id]) }}" title="Jamlanmaga qo'shish (faqat tasdiqlangan guruhchalar olinadi)">
@@ -383,7 +417,17 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="16" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
+                                <tr><td colspan="16" class="vd-empty">
+                                    <div class="vd-empty-title">Vedomost topilmadi</div>
+                                    @if(!empty($activeFilters))
+                                        Tanlangan filtrlarga mos yozuv yo'q — filtrlarni o'zgartiring yoki tozalang.
+                                    @elseif($currentOn)
+                                        Joriy semestr uchun yozuvlar hali yaratilmagan bo'lishi mumkin — «↻ Yangilash» tugmasini bosing.
+                                        O'tgan semestrlarni ko'rish uchun «Joriy semestr»ni o'chiring.
+                                    @else
+                                        «↻ Yangilash» tugmasini bosing.
+                                    @endif
+                                </td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -403,7 +447,6 @@
                 const n = cbs().filter(c => c.checked).length;
                 document.getElementById('jam-count').textContent = n;
                 btn.disabled = n === 0;
-                btn.style.opacity = n ? '1' : '.5';
                 if (all) all.checked = n > 0 && n === cbs().length;
             };
             all?.addEventListener('change', () => { cbs().forEach(c => c.checked = all.checked); sync(); });
@@ -675,7 +718,7 @@
 
     <style>
         .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; border-radius: 12px 12px 0 0; }
-        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: flex-end; }
         .filter-row:last-child { margin-bottom: 0; }
         .filter-item { display: flex; flex-direction: column; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
@@ -715,6 +758,52 @@
         #manual-open-modal .select2-container {
             width: 100% !important;
         }
+        /* Statistika kartochkalari */
+        .vd-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .vd-stat { position: relative; display: flex; flex-direction: column; gap: 2px; background: var(--bg); border: 2px solid transparent; border-radius: 12px; padding: 11px 14px 13px; text-decoration: none; color: var(--c); transition: transform .12s, box-shadow .12s, border-color .12s; }
+        .vd-stat:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,.08); }
+        .vd-stat.is-active { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 15%, transparent); }
+        .vd-stat-label { font-size: 12px; font-weight: 600; }
+        .vd-stat-num { font-size: 24px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .vd-stat-bar { position: absolute; left: 14px; right: 14px; bottom: 6px; height: 3px; border-radius: 3px; background: color-mix(in srgb, var(--c) 15%, transparent); overflow: hidden; }
+        .vd-stat-bar span { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+
+        /* Amallar paneli */
+        .vd-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid #eef2f7; }
+        .vd-toolbar-left, .vd-toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .vd-total { font-size: 13px; color: #475569; margin-right: 4px; }
+        .vd-total b { color: #0f172a; font-size: 15px; }
+        .vd-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 600; text-decoration: none; border: 1px solid #e2e8f0; }
+        a.vd-chip:hover { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
+        .vd-chip.is-green { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .vd-chip.is-gray { background: #f8fafc; color: #64748b; }
+        .vd-reset { font-size: 12px; color: #2563eb; font-weight: 600; text-decoration: none; }
+        .vd-reset:hover { text-decoration: underline; }
+        .vd-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
+        .vd-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+        .vd-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .vd-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .vd-btn.is-primary { background: #1a3268; border-color: #1a3268; color: #fff; }
+        .vd-btn.is-primary:hover { background: #15264f; }
+        .vd-btn.is-ghost { border-color: transparent; background: #f8fafc; }
+        .vd-btn.is-ghost:hover { background: #eef2ff; border-color: #c7d2fe; }
+        .vd-group { display: inline-flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 9px; overflow: hidden; background: #fff; }
+        .vd-group .vd-btn { border: none; border-radius: 0; height: 32px; }
+        .vd-group .vd-btn + .vd-btn { border-left: 1px solid #e2e8f0; }
+        .vd-group.is-teal { border-color: #99f6e4; }
+        .vd-group.is-teal .vd-btn { color: #0f766e; }
+        .vd-group.is-teal .vd-btn:hover:not(:disabled) { background: #f0fdfa; }
+        .vd-group-label { padding: 0 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #fff; background: #0f766e; align-self: stretch; display: flex; align-items: center; }
+        .vd-badge { min-width: 18px; padding: 0 6px; border-radius: 999px; background: #0f766e; color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+
+        /* Jadval */
+        .vd-table-wrap { overflow: auto; max-height: calc(100vh - 140px); }
+        .vd-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 #e2e8f0; }
+        .vd-table tbody tr.is-overdue td:first-child { box-shadow: inset 3px 0 0 #dc2626; }
+        .vd-table tbody tr.is-approved { background: #fbfefc; }
+        .vd-empty { padding: 48px 20px !important; text-align: center; color: #64748b; font-size: 13px; line-height: 1.7; }
+        .vd-empty-title { font-size: 15px; font-weight: 700; color: #334155; margin-bottom: 4px; }
+
             /* Joriy semestr toggle */
         .vs-switch { display: flex; align-items: center; gap: 8px; height: 36px; font-size: 13px; font-weight: 600; color: #334155; cursor: pointer; user-select: none; }
         .vs-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
@@ -723,5 +812,7 @@
         .vs-switch input:checked + .vs-switch-track { background: #16a34a; }
         .vs-switch input:checked + .vs-switch-track .vs-switch-thumb { transform: translateX(16px); }
         .vs-switch input:focus-visible + .vs-switch-track { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .vs-switch-item { position: relative; }
+        .vs-switch-hint { position: absolute; left: 0; top: 100%; font-size: 10.5px; color: #64748b; white-space: nowrap; }
     </style>
 </x-app-layout>

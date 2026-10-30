@@ -172,12 +172,23 @@ class VedomostSubmissionController extends Controller
         if ($request->filled('semester_code')) {
             $query->where('vs.semester_code', $request->semester_code);
         }
-        // Joriy semestr (standart yoqilgan): faqat guruhlar hozir o'qiyotgan
-        // semestr va o'sha o'quv yilining vedomostlari — o'tgan semestrlar yashiriladi.
+        // Joriy semestr (standart yoqilgan): har GURUHning o'zi hozir o'qiyotgan semestri
+        // va o'sha o'quv yili. Oldin «yil|semestr» juftligi barcha guruhlar uchun umumiy
+        // edi — boshqa guruh shu semestrda o'qiyotgan bo'lsa, o'tgan semestr vedomosti ham
+        // chiqib qolardi (masalan, bahorda boshlagan kohortalar sabab).
         if ($request->get('current_semester', '1') === '1') {
-            $pairs = $this->currentYearSemesterPairs();
-            if (!empty($pairs)) {
-                $query->whereIn(DB::raw("CONCAT(vs.education_year, '|', vs.semester_code)"), $pairs);
+            $current = $this->currentGroupSemesters();
+            if (!empty($current)) {
+                $query->where(function ($w) use ($current) {
+                    foreach ($current as $key => $groupIds) {
+                        [$year, $code] = explode('|', $key, 2);
+                        foreach (array_chunk($groupIds, 1000) as $chunk) {
+                            $w->orWhere(fn ($q) => $q->where('vs.education_year', $year)
+                                ->where('vs.semester_code', $code)
+                                ->whereIn('vs.group_hemis_id', $chunk));
+                        }
+                    }
+                });
             }
         }
         if ($request->filled('subject_name')) {
@@ -214,20 +225,20 @@ class VedomostSubmissionController extends Controller
     }
 
     /**
-     * Hozirgi "o'quv yili|semestr kodi" juftliklari: har guruhning joriy
-     * semestri talabalar jadvalidan (VedomostSubmissionService bilan bir xil),
-     * o'quv yili esa o'sha reja+semestrning semesters yozuvidan.
+     * Har guruhning joriy semestri: ["o'quv yili|semestr kodi" => [group_hemis_id, ...]].
+     * Semestr talabalar jadvalidan (VedomostSubmissionService bilan bir xil), o'quv yili —
+     * o'sha reja+semestrning semesters yozuvidan (bo'lmasa joriy o'quv yili).
      */
-    private function currentYearSemesterPairs(): array
+    private function currentGroupSemesters(): array
     {
-        static $pairs = null;
-        if ($pairs !== null) {
-            return $pairs;
+        static $result = null;
+        if ($result !== null) {
+            return $result;
         }
 
         $semByGroup = $this->service->currentSemestersByGroup();
         if ($semByGroup->isEmpty()) {
-            return $pairs = [];
+            return $result = [];
         }
 
         $groupCurricula = DB::table('groups')
@@ -247,11 +258,31 @@ class VedomostSubmissionController extends Controller
             $curriculum = $groupCurricula[$groupId] ?? null;
             $year = $curriculum !== null ? ($years[$curriculum . '|' . $sem->code] ?? $currentYear) : $currentYear;
             if ($year) {
-                $result[$year . '|' . $sem->code] = true;
+                $result[$year . '|' . $sem->code][] = (string) $groupId;
             }
         }
+        ksort($result);
 
-        return $pairs = array_keys($result);
+        return $result;
+    }
+
+    /** Filtr yonidagi izoh: joriy o'quv yili(lar) va semestrlar (masalan «2026-2027 · 1, 3, 5, 7, 9, 11-semestr»). */
+    private function currentSemesterHint(): string
+    {
+        $byYear = [];
+        foreach (array_keys($this->currentGroupSemesters()) as $key) {
+            [$year, $code] = explode('|', $key, 2);
+            $n = is_numeric($code) && (int) $code > 10 ? (int) $code - 10 : $code;
+            $byYear[$year][] = $n;
+        }
+        $parts = [];
+        foreach ($byYear as $year => $nums) {
+            $nums = array_unique($nums);
+            sort($nums);
+            $parts[] = $year . ' · ' . implode(', ', $nums) . '-semestr';
+        }
+
+        return implode('; ', $parts);
     }
 
     /**
@@ -363,8 +394,18 @@ class VedomostSubmissionController extends Controller
         // guruhcha (a/b/c) va fan variant harflari kesilib, bitta vedomost qatori bo'ladi.
         $aggregated = $this->sortAggregated($this->merge->aggregate($query->get()), $request);
 
-        // Status statistikasi — jamlangan (o'zak) vedomostlar bo'yicha, jadval bilan mos.
-        $stats = $aggregated->groupBy('status')->map->count()->all();
+        // Status statistikasi — jamlangan (o'zak) vedomostlar bo'yicha. Status/kechikkan
+        // filtrisiz hisoblanadi: kartochkalar ham filtr, ular bosilganda raqamlar o'zgarmasin.
+        $statusFiltered = $request->filled('status') || $request->boolean('overdue');
+        $statsRows = $statusFiltered
+            ? $this->merge->aggregate($this->filteredQuery($request->duplicate(\Illuminate\Support\Arr::except($request->query(), ['status', 'overdue', 'page'])))[0]->get())
+            : $aggregated;
+        $stats = $statsRows->groupBy('status')->map->count()->all();
+        $today = now()->toDateString();
+        $stats['overdue'] = $statsRows->filter(fn ($v) => $v->deadline && substr((string) $v->deadline, 0, 10) < $today
+            && $v->status !== VedomostSubmission::STATUS_APPROVED)->count();
+        $stats['total'] = $statsRows->count();
+        $currentSemesterHint = $this->currentSemesterHint();
 
         $perPage = (int) $request->get('per_page', 50);
         $page = max(1, (int) $request->get('page', 1));
@@ -397,7 +438,8 @@ class VedomostSubmissionController extends Controller
             'canToggleNotify',
             'canManage',
             'manualOpenGroups',
-            'syncProgress'
+            'syncProgress',
+            'currentSemesterHint'
         ));
     }
 

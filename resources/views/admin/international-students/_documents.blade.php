@@ -210,6 +210,7 @@
         {{-- VAQTINCHALIK RO'YXATGA QO'YISH --}}
         <figure class="doc-wrap">
             <div class="doc doc-reg">
+                <img src="{{ asset('images/iiv-emblem.webp') }}" alt="" class="doc-reg-emblem" aria-hidden="true">
                 <div class="doc-reg-head">
                     <div>
                         <div class="doc-reg-title">Vaqtinchalik ro'yxatga qo'yish</div>
@@ -339,6 +340,11 @@
 
     /* Ro'yxatga qo'yish blankasi */
     .doc-reg { --g1: rgba(30, 64, 175, .035); --g2: rgba(30, 64, 175, .03); background: #fffdf8; padding: 16px 20px 18px; }
+    /* IIV emblemasi — fonda xira, chetlari radial gradient bilan so'nadi */
+    .doc > .doc-reg-emblem { position: absolute; width: min(62%, 300px); aspect-ratio: 1; right: 6%; top: 50%; transform: translateY(-46%);
+                             opacity: .2; filter: saturate(.8); pointer-events: none;
+                             -webkit-mask-image: radial-gradient(circle at center, #000 42%, rgba(0, 0, 0, .55) 58%, transparent 71%);
+                             mask-image: radial-gradient(circle at center, #000 42%, rgba(0, 0, 0, .55) 58%, transparent 71%); }
     .doc-reg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid #1e3a8a; }
     .doc-reg-title { font-size: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #1e3a8a; }
     .doc-reg-sub { font-size: 10.5px; color: #64748b; letter-spacing: .04em; margin-top: 2px; }

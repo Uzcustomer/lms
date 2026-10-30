@@ -269,6 +269,9 @@
                             <button type="submit" form="jam-form" id="jam-selected" class="vd-btn" disabled
                                     title="Jadvalda belgilangan tasdiqlangan vedomostlar jamlanmasi">Tanlanganlar <span class="vd-badge" id="jam-count">0</span></button>
                         </div>
+                        <button type="button" id="ai-review-btn" class="vd-btn is-review" disabled
+                                data-url="{{ route('admin.vedomost-submission.ai-review') }}"
+                                title="Belgilangan AI tekshirgan vedomostlarni bitta oynada ko'rish va tasdiqlash">🧾 Yig'ma tekshiruv <span class="vd-badge is-indigo" id="ai-review-count">0</span></button>
                         @if(!empty($canManage))
                             <a class="vd-btn is-ghost" href="{{ route('admin.vedomost-submission.ai-settings') }}">🤖 AI sozlamalari</a>
                             <button type="button" id="manual-open-trigger" class="vd-btn is-ghost">+ Pullik uchun shakl</button>
@@ -348,7 +351,7 @@
                     <table class="vd-table">
                         <thead>
                             <tr>
-                                <th style="width:28px;"><input type="checkbox" id="jam-all" title="Sahifadagi barcha tasdiqlanganlarni belgilash"></th>
+                                <th style="width:28px;"><input type="checkbox" id="jam-all" title="Sahifadagi barchasini belgilash"></th>
                                 <th>#</th>
                                 <th><a href="{{ $sortUrl('group') }}">Guruh {!! $arrow('group') !!}</a></th>
                                 <th>Shakl</th>
@@ -371,8 +374,11 @@
                                 @php $overdue = $v->deadline && \Carbon\Carbon::parse($v->deadline)->isPast() && !\Carbon\Carbon::parse($v->deadline)->isToday() && $v->status !== 'approved'; @endphp
                                 <tr class="{{ $overdue ? 'is-overdue' : '' }} {{ $v->status === 'approved' ? 'is-approved' : '' }}">
                                     <td>
-                                        @if($v->status === 'approved' || !empty($v->is_mixed_status))
-                                            <input type="checkbox" class="jam-cb" name="ids[]" form="jam-form" value="{{ implode(',', $v->ids ?? [$v->id]) }}" title="Jamlanmaga qo'shish (faqat tasdiqlangan guruhchalar olinadi)">
+                                        @php $aiDone = ($v->ai_check_status ?? null) === 'done'; @endphp
+                                        @if($v->status === 'approved' || !empty($v->is_mixed_status) || $aiDone)
+                                            <input type="checkbox" class="jam-cb" name="ids[]" form="jam-form" value="{{ implode(',', $v->ids ?? [$v->id]) }}"
+                                                   data-approved="{{ $v->status === 'approved' || !empty($v->is_mixed_status) ? 1 : 0 }}" data-ai="{{ $aiDone ? 1 : 0 }}"
+                                                   title="Belgilash: tasdiqlanganlar — jamlanmaga, AI tekshirganlar — yig'ma tekshiruvga">
                                         @endif
                                     </td>
                                     <td style="color:#94a3b8;">{{ $submissions->firstItem() + $i }}</td>
@@ -443,12 +449,22 @@
             const all = document.getElementById('jam-all');
             const btn = document.getElementById('jam-selected');
             const cbs = () => [...document.querySelectorAll('.jam-cb')];
+            const reviewBtn = document.getElementById('ai-review-btn');
             const sync = () => {
-                const n = cbs().filter(c => c.checked).length;
-                document.getElementById('jam-count').textContent = n;
-                btn.disabled = n === 0;
-                if (all) all.checked = n > 0 && n === cbs().length;
+                const checked = cbs().filter(c => c.checked);
+                const nJam = checked.filter(c => c.dataset.approved === '1').length;
+                const nAi = checked.filter(c => c.dataset.ai === '1').length;
+                document.getElementById('jam-count').textContent = nJam;
+                btn.disabled = nJam === 0;
+                document.getElementById('ai-review-count').textContent = nAi;
+                reviewBtn.disabled = nAi === 0;
+                if (all) all.checked = checked.length > 0 && checked.length === cbs().length;
             };
+            reviewBtn.addEventListener('click', () => {
+                const q = new URLSearchParams();
+                cbs().filter(c => c.checked && c.dataset.ai === '1').forEach(c => q.append('ids[]', c.value));
+                window.open(reviewBtn.dataset.url + '?' + q.toString(), '_blank', 'noopener');
+            });
             all?.addEventListener('change', () => { cbs().forEach(c => c.checked = all.checked); sync(); });
             document.addEventListener('change', e => { if (e.target.classList?.contains('jam-cb')) sync(); });
         })();
@@ -794,6 +810,9 @@
         .vd-group.is-teal .vd-btn { color: #0f766e; }
         .vd-group.is-teal .vd-btn:hover:not(:disabled) { background: #f0fdfa; }
         .vd-group-label { padding: 0 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #fff; background: #0f766e; align-self: stretch; display: flex; align-items: center; }
+        .vd-btn.is-review { border-color: #c7d2fe; color: #3730a3; }
+        .vd-btn.is-review:hover:not(:disabled) { background: #eef2ff; }
+        .vd-badge.is-indigo { background: #4f46e5; }
         .vd-badge { min-width: 18px; padding: 0 6px; border-radius: 999px; background: #0f766e; color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
 
         /* Jadval */

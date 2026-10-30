@@ -191,6 +191,10 @@ class VedomostMergeService
             'reupload_allowed_at' => $rep->reupload_allowed_at ?? null,
             'reupload_allowed_by_name' => $rep->reupload_allowed_by_name ?? null,
 
+            // AI tekshiruv (guruhchalar bitta PDF — natija umumiy, vakil yozuvdan).
+            'ai_check_status' => $rep->ai_check_status ?? null,
+            'ai_verdict' => $rep->ai_verdict ?? null,
+
             'status' => $status,
             'status_counts' => $statusCounts->all(),
             'is_mixed_status' => $statusCounts->count() > 1,

@@ -466,6 +466,10 @@ trait TimetableWeekSuggestions
                         $o = $x['card'];
                         $inScope = in_array((int) $o->id, $scopeIds, true);
                         foreach ($this->freeRoomsFor($o, (int) $x['week'], $x['day'], $x['pair'], $state, $check, 2) as $r) {
+                            // Faqat shu ko'chirishdan keyin karta to'qnashuvsiz bo'lsa (shu xonada boshqa dars ham bo'lsa — yo'q).
+                            if ($check($c, $W, $td, $tp, $withMove($state, $o, (int) $x['week'], $x['day'], $x['pair'], false, [$r->code, $r->name]))) {
+                                continue;
+                            }
                             $add('room', 'Ikkinchi tomon — «' . $o->subject_name . '» (' . implode(', ', $o->occupiedGroups()) . ') xonasini almashtirish: '
                                 . $r->name . ($r->volume ? ' (' . $r->volume . ' o\'rin)' : '') . ' — ' . $slotText($x['day'], $x['pair'], $o->lenHalf()),
                                 [$mv($o, (int) $x['week'], $x['day'], $x['pair'], $r->code)],

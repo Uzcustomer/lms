@@ -422,3 +422,29 @@ it('takliflar: o\'qituvchi to\'qnashuvida — mavjud qadamlar, o\'qituvchini alm
     expect($card['conflict'])->toBeTrue()->and($card['reason'])->toBe('O\'qituvchi SHARIPOV K. band: g-02b · Gigiyena · Seshanba II para')
         ->and($types)->not->toContain('room')->and($types[0])->toBe('slot')->and(end($types))->toBe('teacher');
 });
+
+it('takliflar: karta xonada ikki dars bilan to\'qnashsa — bitta tomonning xonasini almashtirish taklif qilinmaydi (to\'qnashuv qolardi)', function () {
+    $s = sugSetup();
+    foreach ([['R215', '215', 40], ['R216', '216', 40]] as [$code, $name, $vol]) {
+        \App\Models\Auditorium::create(['code' => $code, 'name' => $name, 'volume' => $vol, 'active' => true]);
+    }
+    $base = ['board_id' => $s['board']->id, 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Anatomiya kafedrasi', 'auditorium_code' => 'R215', 'auditorium_name' => '215'];
+    $a = TimetableCard::create($base + ['faculty_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi', 'course' => 1,
+        'oqim_label' => '6-oqim', 'group_name' => 'd1/d26-06b']);
+    $others = [];
+    foreach (['p/p25-02b', 'p/p25-02c'] as $g) {
+        $others[] = TimetableCard::create($base + ['faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+            'oqim_label' => '2-oqim', 'group_name' => $g]);
+    }
+    foreach (array_merge([$a], $others) as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    }
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board'])
+        . '?' . http_build_query(['week' => 7, 'faculty_names' => ['1-son davolash'], 'courses' => [1]]))->assertOk()->json();
+    $card = $res['cards'][0];
+    expect($card['id'])->toBe($a->id)
+        ->and($card['reason'])->toBe('Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para; Xona 215 band: p/p25-02c · Odam anatomiyasi · Juma V para')
+        ->and($card['suggestions'][0]['actions'][0])->toMatchArray(['card_id' => $a->id, 'auditorium_code' => 'R216'])
+        ->and(collect($card['suggestions'])->filter(fn ($x) => str_starts_with($x['title'], 'Ikkinchi tomon'))->all())->toBe([]);
+});

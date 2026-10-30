@@ -29,6 +29,8 @@
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
+    // Butun doska bo'yicha joylanmagan kartalar hisoboti (Excel) — serverdagi ruxsat bilan bir xil rollar.
+    $timetableCanBoardReport = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableUsesChangeRequests = $timetableCanApprove
         || in_array($timetableActiveRole, ['oqituvchi', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
@@ -320,6 +322,13 @@
                                 title="Joylanmagan kartalar va sabablarini Excelga yuklash">
                                 <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Excel (sabablar)
                             </button>
+                            @if ($timetableCanBoardReport)
+                            <button type="button" id="unplacedReportBtn"
+                                class="text-[11px] rounded px-2 py-1 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                title="Butun doska bo'yicha joylanmagan kartalar: fakultet, yo'nalish, kurs va hafta kesimida (tanlangan fakultetga qaramasdan, joriy qatlam bo'yicha)">
+                                <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Butun doska (Excel)
+                            </button>
+                            @endif
                         </div>
                     </div>
                     <div class="cyc-assign-backdrop" id="cycAssignModal">
@@ -7266,6 +7275,38 @@
             }
 
             $('unplacedExportBtn').onclick = downloadUnplacedDiagnostics;
+            // Butun doska bo'yicha joylanmagan kartalar hisoboti — tanlangan fakultetga qaramasdan, joriy qatlam (tashqi/ichki) bilan.
+            if ($('unplacedReportBtn')) $('unplacedReportBtn').onclick = async function () {
+                if (!board) return;
+                const btn = this, old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i> Tayyorlanmoqda…';
+                try {
+                    const params = new URLSearchParams({ layer: weeklyLayer, _: Date.now() });
+                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-report?' + params.toString(), {
+                        headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+                        cache: 'no-store',
+                    });
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.error || error.message || 'HTTP ' + response.status);
+                    }
+                    const blob = await response.blob();
+                    const name = /filename="?([^";]+)"?/.exec(response.headers.get('Content-Disposition') || '');
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = name ? name[1] : 'joylanmagan_kartalar_butun_doska.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+                } catch (e) {
+                    alert('Butun doska hisobotini yuklab bo\'lmadi: ' + e.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = old;
+                }
+            };
 
             // Bo'lakli fan ("Tibbiyot kasbiga kirish. Terapiya (a)"): qisqa nomda asosiy qism
             // (oxirgi nuqtadan keyingisi — "Terapiya") va bo'lak harfi doim ko'rinadi,

@@ -6352,6 +6352,214 @@ class TimetableController extends Controller
         }
     }
 
+    /**
+     * Butun doska bo'yicha joylanmagan kartalar hisoboti (XLSX) — qamrov filtrisiz (ekranda bitta fakultet ochiq bo'lsa ham).
+     * Haftalik kartalar: har karta-hafta unplacedExport'dagi ($week > 0) kabi — bekor qilingan hafta sanalmaydi, ichki qatlamda
+     * shu haftaga ko'chirilgan (kun va parasi bor) yoki shablonda joyi bor karta joylangan; hafta — kartaning kalendari (term)
+     * doirasida. Sikl fanlari — ichki sikl jadvali (cyclePlan, cycle_cards placed=false): oqim yoki guruh ("Guruh bo'yicha")
+     * qatorida joylangani joylangan.
+     */
+    public function unplacedReport(Request $request, TimetableBoard $board)
+    {
+        if (!in_array($this->timetableActiveRole($request), ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true)) {
+            abort(403, 'Bu hisobot uchun ruxsat yo\'q.');
+        }
+        $data = $request->validate([
+            'layer'     => 'nullable|in:internal,external',
+            'from_week' => 'nullable|integer|min:1|max:60',
+            'to_week'   => 'nullable|integer|min:1|max:60',
+        ]);
+        // Katta doska: barcha karta-haftalar va har biriga sabab — generateCards'dagidek.
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $external = ($data['layer'] ?? 'internal') === 'external';
+        [$dayCol, $pairCol] = $external ? ['ext_day', 'ext_pair'] : ['day', 'pair'];
+        $from = (int) ($data['from_week'] ?? 1);
+        $to = (int) ($data['to_week'] ?? 0) ?: PHP_INT_MAX;
+        if ($to < $from) {
+            [$from, $to] = [$to, $from];
+        }
+        $cycleKeys = $this->cycleSubjectKeys($board);
+        $isCycle = function (TimetableCard $c) use ($cycleKeys): bool {
+            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+            $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
+
+            return isset($cycleKeys[$k . $this->normSubject((string) $c->subject_name)])
+                || ($base !== null && isset($cycleKeys[$k . $this->normSubject($base)]));
+        };
+        $cards = TimetableCard::where('board_id', $board->id)
+            ->orderBy('faculty_name')->orderBy('specialty_name')->orderBy('course')->orderBy('subject_name')->orderBy('id')
+            ->get()->reject($isCycle)->values();
+        $overrides = collect();
+        if (Schema::hasTable('timetable_card_overrides') && $cards->isNotEmpty()) {
+            foreach ($cards->pluck('id')->chunk(5000) as $ids) {
+                $overrides = $overrides->concat(TimetableCardOverride::whereIn('card_id', $ids->all())->get());
+            }
+        }
+        $ovOf = $overrides->groupBy('card_id')->map(fn ($os) => $os->keyBy('week'));
+
+        // Joylanmagan karta-haftalar.
+        $items = [];      // [karta, hafta]
+        $maxWeek = 0;
+        foreach ($cards as $card) {
+            $term = $this->cardGrid($board, $card)['weeks'];
+            $last = min($term, $to);
+            $maxWeek = max($maxWeek, $last);
+            for ($w = max(1, $from); $w <= $last; $w++) {
+                $o = $ovOf[$card->id][$w] ?? null;
+                if (($o && $o->cancelled) || (!$external && $o && $o->day && $o->pair) || ($card->{$dayCol} && $card->{$pairCol})) {
+                    continue;
+                }
+                $items[] = [$card, $w];
+            }
+        }
+
+        // Sikl fanlari: ichki sikl jadvalida joylanmaganlar.
+        $cycleRows = [];
+        if ($cycleKeys) {
+            $plan = $this->cyclePlan(Request::create('/', 'POST', ['layer' => 'internal']), $board)->getData(true);
+            $rowsByKey = collect((array) ($plan['rows'] ?? []))->keyBy('row_key');
+            foreach ((array) ($plan['cycle_cards'] ?? []) as $cc) {
+                if (!empty($cc['placed'])) {
+                    continue;
+                }
+                $cycleRows[] = [(string) ($rowsByKey->get($cc['row_key'] ?? null)['faculty'] ?? '') ?: '—', (string) ($cc['specialty'] ?? ''),
+                    (int) ($cc['course'] ?? 0), (string) ($cc['group'] ?? ''), (string) ($cc['subject'] ?? ''), (int) ($cc['days'] ?? 0),
+                    (string) ($cc['hours'] ?? '')];
+            }
+            usort($cycleRows, fn ($a, $b) => [$a[0], $a[1], $a[2], $a[3], $a[4]] <=> [$b[0], $b[1], $b[2], $b[3], $b[4]]);
+        }
+
+        $fac = fn (TimetableCard $c) => (string) ($c->faculty_name ?: '—');
+        $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $bold = fn ($sheet, string $range) => $sheet->getStyle($range)->getFont()->setBold(true);
+        $col = fn (int $i) => \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
+
+        // 1) Yig'ma: Fakultet → Yo'nalish → Kurs × haftalar (0 — bo'sh), fakultet oraliq jamilari, Jami.
+        $sum = $book->getActiveSheet();
+        $sum->setTitle('Yig\'ma');
+        $weeks = $maxWeek >= max(1, $from) ? range(max(1, $from), $maxWeek) : [];
+        $sum->fromArray(array_merge(['Fakultet', 'Yo\'nalish', 'Kurs'], array_map(fn ($w) => $w . '-hafta', $weeks), ['Jami']), null, 'A1');
+        $grid = [];   // fakultet => "yo'nalish|kurs" => [yo'nalish, kurs, [hafta => son]]
+        $maxCell = 1;
+        foreach ($items as [$card, $w]) {
+            $k = $card->specialty_name . '|' . (int) $card->course;
+            $grid[$fac($card)][$k] ??= [(string) $card->specialty_name, (int) $card->course, []];
+            $maxCell = max($maxCell, $grid[$fac($card)][$k][2][$w] = ($grid[$fac($card)][$k][2][$w] ?? 0) + 1);
+        }
+        $r = 2;
+        $grand = [];
+        $lastCol = $col(3 + count($weeks) + 1);
+        $writeCounts = function (int $row, array $counts) use ($sum, $weeks, $col): int {
+            foreach ($weeks as $i => $w) {
+                if (!empty($counts[$w])) {
+                    $sum->setCellValue($col(4 + $i) . $row, $counts[$w]);
+                }
+            }
+            $total = array_sum($counts);
+            $sum->setCellValue($col(4 + count($weeks)) . $row, $total ?: null);
+
+            return $total;
+        };
+        foreach ($grid as $facName => $rows) {
+            $facTot = [];
+            uasort($rows, fn ($a, $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
+            foreach ($rows as [$spec, $course, $counts]) {
+                $sum->fromArray([$facName, $spec, $course], null, 'A' . $r);
+                $writeCounts($r, $counts);
+                // Sariq → qizil shkala (eng katta qiymat — qizil).
+                foreach ($weeks as $i => $w) {
+                    if (!empty($counts[$w])) {
+                        $t = $counts[$w] / $maxCell;
+                        $rgb = sprintf('%02X%02X%02X', 255, (int) round(235 - 155 * $t), (int) round(130 - 80 * $t));
+                        $sum->getStyle($col(4 + $i) . $r)->getFill()->setFillType('solid')->getStartColor()->setRGB($rgb);
+                    }
+                }
+                foreach ($counts as $w => $n) {
+                    $facTot[$w] = ($facTot[$w] ?? 0) + $n;
+                    $grand[$w] = ($grand[$w] ?? 0) + $n;
+                }
+                $r++;
+            }
+            $sum->setCellValue('A' . $r, $facName . ' — jami');
+            $writeCounts($r, $facTot);
+            $bold($sum, 'A' . $r . ':' . $lastCol . $r);
+            $r++;
+        }
+        $sum->setCellValue('A' . $r, 'Jami');
+        $writeCounts($r, $grand);
+        $bold($sum, 'A' . $r . ':' . $lastCol . $r);
+        $bold($sum, 'A1:' . $lastCol . '1');
+        $sum->freezePane('D2');
+
+        // 2) Batafsil (haftalik): bitta karta-hafta — bitta qator; sabab — unplacedReasonFn (shu hafta uchun).
+        $det = $book->createSheet();
+        $det->setTitle('Batafsil (haftalik)');
+        $det->fromArray(['Fakultet', 'Yo\'nalish', 'Kurs', 'Oqim', 'Guruh', 'Fan', 'Turi', 'Hafta', 'Soat', 'O\'qituvchi', 'Auditoriya',
+            'Tekshirilgan vaqt', 'Sabab'], null, 'A1');
+        $state = $items ? $this->occupancyState($board->id) : null;
+        $reasonFns = [];
+        $rows = [];
+        foreach ($items as [$card, $w]) {
+            [$slotText, $reason] = ($reasonFns[$w] ??= $this->unplacedReasonFn($board, $external, $w, $state))($card);
+            $rows[] = [$fac($card), $card->specialty_name, (int) $card->course, $card->oqim_label ?: '—',
+                $card->group_name ?: (is_array($card->group_names) ? implode(', ', $card->group_names) : '—'), $card->subject_name,
+                $card->training_type === 'lecture' ? 'Ma\'ruza' : 'Amaliy', $w, $card->lenHalf(),
+                $external ? '—' : ($card->teacher_name ?: 'Biriktirilmagan'), $external ? '—' : ($card->auditorium_name ?: 'Biriktirilmagan'),
+                $slotText, $reason];
+        }
+        if ($rows) {
+            $det->fromArray($rows, null, 'A2');
+        }
+        $det->setAutoFilter('A1:M' . max(1, 1 + count($rows)));
+        $bold($det, 'A1:M1');
+        $det->freezePane('A2');
+
+        // 3) Sikl (joylanmagan).
+        $cyc = $book->createSheet();
+        $cyc->setTitle('Sikl (joylanmagan)');
+        $cyc->fromArray(['Fakultet', 'Yo\'nalish', 'Kurs', 'Guruh/oqim', 'Fan', 'Kun soni', 'Soat'], null, 'A1');
+        if ($cycleRows) {
+            $cyc->fromArray($cycleRows, null, 'A2');
+        }
+        $bold($cyc, 'A1:G1');
+        $cyc->freezePane('A2');
+
+        // 4) Fanlar bo'yicha: joylanmagan karta-haftalar soni va qaysi haftalar ("1–4, 7, 9–11").
+        $subj = $book->createSheet();
+        $subj->setTitle('Fanlar bo\'yicha');
+        $subj->fromArray(['Fakultet', 'Yo\'nalish', 'Kurs', 'Fan', 'Joylanmagan karta-haftalar', 'Haftalar'], null, 'A1');
+        $bySubject = [];
+        foreach ($items as [$card, $w]) {
+            $k = $fac($card) . '|' . $card->specialty_name . '|' . (int) $card->course . '|' . $card->subject_name;
+            $bySubject[$k] ??= [$fac($card), (string) $card->specialty_name, (int) $card->course, (string) $card->subject_name, 0, []];
+            $bySubject[$k][4]++;
+            $bySubject[$k][5][$w] = $w;
+        }
+        $rows = array_map(fn ($x) => [$x[0], $x[1], $x[2], $x[3], $x[4], $this->weekRangesText(array_values($x[5]))], array_values($bySubject));
+        if ($rows) {
+            $subj->fromArray($rows, null, 'A2');
+        }
+        $bold($subj, 'A1:F1');
+        $subj->freezePane('A2');
+
+        foreach ([$sum, $det, $cyc, $subj] as $sh) {
+            $hi = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($sh->getHighestColumn());
+            for ($i = 1; $i <= $hi; $i++) {
+                $sh->getColumnDimension($col($i))->setAutoSize(true);
+            }
+        }
+        $det->getColumnDimension('M')->setAutoSize(false)->setWidth(80);
+        $book->setActiveSheetIndex(0);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'unplaced_xlsx_');
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($tmp);
+
+        return response()->download($tmp, 'joylanmagan_kartalar_butun_doska_' . now()->format('Y-m-d') . '.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
+    }
+
     /** Joylanmagan kartalar ro'yxatini XLSX ga chiqaradi. */
     public function unplacedExport(Request $request, TimetableBoard $board)
     {
@@ -6512,9 +6720,10 @@ class TimetableController extends Controller
      * ko'pi), bo'lmasa tashqi jadvaldagi joyi; tashqi jadval uchun — ichki jadvaldagi joyi, bo'lmasa odatiy ichki joyi.
      * Joyi umuman bo'lmasa — shuni aytadi. Chegara — yo'nalish panjarasi (gridFor). Qaytaradi: [tekshirilgan vaqt, sabab].
      */
-    private function unplacedReasonFn(TimetableBoard $board, bool $external, int $week): \Closure
+    private function unplacedReasonFn(TimetableBoard $board, bool $external, int $week, ?array $state = null): \Closure
     {
-        $state = $this->occupancyState($board->id);
+        // Ko'p haftali hisobotda doska holati bir marta yuklanib, har hafta uchun qayta ishlatiladi.
+        $state ??= $this->occupancyState($board->id);
         $grids = [];
         // Kun nomlari — doska sozlamasidan (jadvaldagi kabi), bo'lmasa sukutdagilar.
         $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;

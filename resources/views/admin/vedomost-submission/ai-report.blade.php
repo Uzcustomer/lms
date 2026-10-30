@@ -439,7 +439,7 @@
 
         if (CAN_EDIT) {
             const sh = R.scan_header || {};
-            const labels = { fan: 'Fan nomi', guruh: 'Guruh', soat: 'Umumiy soat', kredit: 'Kredit', maruzachi: "Ma'ruzachi", amaliyot: "Amaliyot o'qituvchilari (vergul bilan)", yn_sana: 'YaN sanasi', dekan: 'Fakultet dekani', kafedra_mudiri: 'Kafedra mudiri' };
+            const labels = { fan: 'Fan nomi', guruh: 'Guruh', soat: 'Umumiy soat', kredit: 'Kredit', maruzachi: "Ma'ruzachi", amaliyot: "Amaliyot o'qituvchilari (vergul bilan)", yn_sana: 'YaN sanasi', dekan: 'Fakultet dekani', kafedra_mudiri: 'Kafedra mudiri', shakl: "Vedomost shakli (o'ng yuqori burchak)" };
             html += `<div class="card"><h2>${icon('i-pencil')}AI o'qigan sarlavha — noto'g'ri o'qilgan bo'lsa tuzating</h2><div class="form-grid">`;
             Object.keys(labels).forEach(k => {
                 const orig = Array.isArray(sh[k]) ? sh[k].join(', ') : (sh[k] ?? '');

@@ -55,6 +55,9 @@ class VedomostAiChecker
 
         // "Tizim" qiymatlari — "Vedomost tekshirish" eksporti bilan aynan bir xil hisob.
         $expected['talabalar'] = $this->vtStudents($v);
+        // Shakl: sarlavhadagi shakl nomini tekshirish va qayta topshirish shakllaridagi yumshoqroq qoidalar uchun.
+        $expected['form_type'] = (string) ($v->form_type ?: VedomostSubmission::FORM_12);
+        $expected['shakl'] = VedomostSubmission::formLabel($v->form_type);
         if (empty($expected['talabalar'])) {
             throw new RuntimeException("Vedomost tekshirish hisobi bo'yicha talabalar topilmadi.");
         }

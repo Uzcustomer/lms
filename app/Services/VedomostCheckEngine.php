@@ -25,7 +25,7 @@ class VedomostCheckEngine
     /** Xodim tahrirlay oladigan PDF maydonlari. */
     public const EDITABLE = ['fio', 'id', ...self::PDF_FIELDS];
 
-    public const HEADER_EDITABLE = ['fan', 'guruh', 'soat', 'kredit', 'maruzachi', 'amaliyot', 'yn_sana', 'dekan', 'kafedra_mudiri', 'kurs', 'semestr'];
+    public const HEADER_EDITABLE = ['fan', 'guruh', 'soat', 'kredit', 'maruzachi', 'amaliyot', 'yn_sana', 'dekan', 'kafedra_mudiri', 'kurs', 'semestr', 'shakl'];
 
     /**
      * Python cmp(): PDF ↔ HEMIS solishtiriladigan 5 ustun.
@@ -602,7 +602,7 @@ class VedomostCheckEngine
             $sid = VedomostScanReader::digits($s['id'] ?? '');
             foreach ($system as $ti => $stu) {
                 $tid = VedomostScanReader::digits($stu['student_id'] ?? '');
-                $sim = VedomostNames::similarity($stu['fish'] ?? '', $s['fio'] ?? '');
+                $sim = VedomostNames::similarity($stu['fish'] ?? '', VedomostNames::stripGroupSuffix($s['fio'] ?? ''));
                 $idEq = $sid !== '' && $sid === $tid;
                 $dist = ($sid !== '' && $tid !== '') ? levenshtein($sid, $tid) : 99;
                 $ok = $sim >= 0.85 || ($idEq && $sim >= 0.5) || ($dist <= 2 && $sim >= 0.6);
@@ -646,7 +646,7 @@ class VedomostCheckEngine
             }
             $twin = null;
             foreach ($pairs as $ti => $_) {
-                if (VedomostNames::similarity($system[$ti]['fish'] ?? '', $s['fio'] ?? '') >= 0.9) {
+                if (VedomostNames::similarity($system[$ti]['fish'] ?? '', VedomostNames::stripGroupSuffix($s['fio'] ?? '')) >= 0.9) {
                     $twin = $ti;
                     break;
                 }
@@ -787,9 +787,23 @@ class VedomostCheckEngine
         $extraP = array_values(array_filter($pa, fn ($a) => !collect($ha)->contains(fn ($b) => VedomostNames::sameName($a, $b))));
         $soft = !empty($missP) && count($missP) === count($extraP)
             && collect($missP)->every(fn ($b) => collect($extraP)->contains(fn ($a) => VedomostNames::sameSurname($a, $b)));
+        // Qayta topshirish shakllarida (12a/12b, qo'shimcha) imtihonni boshqa o'qituvchilar oladi va
+        // bu qator ko'pincha qo'lda yoziladi yoki bo'sh qoladi — XATO emas, «Tekshiring».
+        $retakeForm = ($exp['form_type'] ?? '12') !== '12';
+        if ($retakeForm && (empty($pa) || $missP || $extraP)) {
+            $soft = true;
+        }
         $add('amaliyot', "Amaliyot o'qituvchilari", 'PDF: ' . (implode(', ', $pa) ?: "ko'rsatilmagan") . ' · HEMIS: ' . implode(', ', $ha)
             . ($missP ? " · PDFda yo'q: " . implode(', ', $missP) : '') . ($extraP ? " · HEMISda yo'q: " . implode(', ', $extraP) : ''),
-            empty($pa) ? 'bad' : (($missP || $extraP) ? ($soft ? 'warn' : 'bad') : 'ok'));
+            empty($pa) ? ($retakeForm ? 'warn' : 'bad') : (($missP || $extraP) ? ($soft ? 'warn' : 'bad') : 'ok'));
+
+        // Shakl (o'ng yuqori burchak): 12a o'rniga 12-shakl yuklanib qolishining oldini oladi.
+        if (!empty($exp['shakl'])) {
+            $ps = $uz($h['shakl'] ?? '');
+            $want = VedomostNames::formKey($exp['shakl']);
+            $add('shakl', 'Vedomost shakli', 'PDF: ' . ($ps ?: "o'qilmadi") . ' · tizimda: ' . $exp['shakl'],
+                $ps === '' ? 'warn' : (VedomostNames::formKey($ps) === $want ? 'ok' : 'bad'));
+        }
 
         // Fakultet dekani
         $pd = $uz($h['dekan'] ?? '');

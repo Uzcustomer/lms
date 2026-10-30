@@ -130,7 +130,7 @@ test('«tahlil qilmoqda»da qotib qolgan tekshiruv 20 daqiqadan keyin xato holat
         ->and(app(VedomostAiDispatcher::class)->approvalGate($stuck)['blocked'])->toBeFalse();
 });
 
-test('test markazi: faqat shu semestrning YN quizlari (oraliq testlar va oldingi semestr hisobga olinmaydi)', function () {
+test('test markazi: faqat aynan shu fan va semestrning YN quizlari', function () {
     Schema::create('hemis_quiz_results', function ($t) {
         $t->id();
         foreach (['student_id', 'fan_name', 'quiz_type', 'shakl', 'attempt_name', 'semester'] as $c) {
@@ -147,6 +147,8 @@ test('test markazi: faqat shu semestrning YN quizlari (oraliq testlar va oldingi
         $row(['quiz_type' => 'OSKI (rus)', 'grade' => 100]),
         $row(['quiz_type' => 'YN test (rus)', 'grade' => 52, 'semester' => '8', 'date_finish' => '2026-05-20 10:00:00']), // oldingi semestr
         $row(['quiz_type' => 'Oraliq test (rus)', 'grade' => 80, 'date_finish' => '2026-10-25 10:00:00']),                    // YN emas
+        $row(['quiz_type' => 'YN test (rus)', 'grade' => 70, 'semester' => null, 'date_finish' => '2026-10-26 10:00:00']),    // semestri yo'q
+        $row(['quiz_type' => 'YN test (rus)', 'grade' => 60, 'fan_id' => 999, 'fan_name' => 'Bolalar xirurgik kasalliklari']), // boshqa fan
     ]);
 
     $tc = (new ReflectionMethod(VedomostAiChecker::class, 'testCenter'))

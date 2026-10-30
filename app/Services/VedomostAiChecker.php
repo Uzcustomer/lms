@@ -275,12 +275,12 @@ class VedomostAiChecker
 
     /**
      * Test markazi (hemis_quiz_results): talaba ID → ['oski'|'test' => [grade, dalolat, date]].
-     * Fan: fan_id = subject_id yoki nom o'xshashligi ≥ 0.85; urinish vedomost shakliga mos
+     * Fan: fan_id = subject_id yoki aynan bir xil nom; urinish vedomost shakliga mos
      * (1-urinish → 12, 2-urinish → 12a, 3-urinish → 12b; qo'shimcha/farmoyish → "…-qo'shimcha").
      * Qayta o'qish (retake) quizlari hisobga olinmaydi. Faqat YN quizlari (OSKI / YN test —
-     * jurnalga o'tkaziladigan turlar bilan bir xil) va faqat shu semestr: bir fan bir necha
-     * semestrda o'qitilsa (masalan, Xirurgik kasalliklar 7–9-semestr), oldingi semestr natijasi
-     * shu vedomostga tushmasin.
+     * jurnalga o'tkaziladigan turlar bilan bir xil), aynan shu fan (fan_id yoki aynan bir xil nom)
+     * va aynan shu semestr: bir fan bir necha semestrda o'qitilsa, boshqa semestr natijasi shu
+     * vedomostga tushmaydi; semestri ko'rsatilmagan yozuv ham olinmaydi.
      */
     private function testCenter(array $ids, array $expected, string $formLabel, string $semester = ''): array
     {
@@ -301,17 +301,21 @@ class VedomostAiChecker
         $fan = (string) ($expected['fan'] ?? '');
         $base = self::shaklBase($formLabel);
         $semNum = self::semesterNumber($semester);
+        $skippedSem = 0;
 
         $best = [];
         foreach ($q->get() as $r) {
+            // Aynan shu fan: fan_id teng yoki nomi aynan bir xil (o'xshash nom emas —
+            // «Xirurgik kasalliklar» ≠ «Bolalar xirurgik kasalliklari»).
             $fanOk = ($subjectId !== '' && (string) $r->fan_id === $subjectId)
-                || VedomostNames::subjectScore($r->fan_name, $fan) >= 0.85;
+                || ($fan !== '' && VedomostNames::subjectKey($r->fan_name) === VedomostNames::subjectKey($fan));
             if (!$fanOk || self::quizForm((string) $r->shakl) !== $base
                 || \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)) {
                 continue;
             }
-            $rowSem = self::semesterNumber((string) $r->semester);
-            if ($semNum !== null && $rowSem !== null && $rowSem !== $semNum) {
+            // Aynan shu semestr: semestri ko'rsatilmagan yozuv ham olinmaydi.
+            if ($semNum !== null && self::semesterNumber((string) $r->semester) !== $semNum) {
+                $skippedSem++;
                 continue;
             }
             $kind = in_array($r->quiz_type, self::TM_OSKI_TYPES, true) ? 'oski' : 'test';
@@ -326,6 +330,10 @@ class VedomostAiChecker
             if ($cur === null || $rank > $cur['_rank']) {
                 $best[$sid][$kind] = ['grade' => (float) $r->grade, 'dalolat' => $dal, 'date' => (string) $r->date_finish, '_rank' => $rank];
             }
+        }
+
+        if ($skippedSem > 0) {
+            Progress::log("Test markazi: boshqa yoki ko'rsatilmagan semestrdagi {$skippedSem} ta natija hisobga olinmadi (vedomost: {$semNum}-semestr).");
         }
 
         foreach ($best as &$kinds) {

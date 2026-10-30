@@ -227,6 +227,16 @@
                             <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
                             Excel
                         </a>
+                        <a href="{{ route('admin.vedomost-submission.jamlanma', request()->query()) }}"
+                           title="Joriy filtrdagi barcha TASDIQLANGAN vedomostlar — bitta jadvalda («Vedomost tekshirish» formati, A–AJ + yopilish shakli)"
+                           style="background:#0f766e;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                            ⬇ Tasdiqlanganlar jamlanmasi
+                        </a>
+                        <button type="submit" form="jam-form" id="jam-selected" disabled
+                                title="Jadvalda belgilangan tasdiqlangan vedomostlar jamlanmasi"
+                                style="background:#0f766e;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;opacity:.5;">
+                            ⬇ Tanlanganlar (<span id="jam-count">0</span>)
+                        </button>
                         <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
                               onsubmit="return confirm('Joriy semestr bo\'yicha vedomost yozuvlari yangilansinmi?');">
                             @csrf
@@ -299,10 +309,12 @@
                     </div>
                 @endif
 
+                <form id="jam-form" method="GET" action="{{ route('admin.vedomost-submission.jamlanma') }}"></form>
                 <div style="overflow-x:auto;">
                     <table class="vd-table">
                         <thead>
                             <tr>
+                                <th style="width:28px;"><input type="checkbox" id="jam-all" title="Sahifadagi barcha tasdiqlanganlarni belgilash"></th>
                                 <th>#</th>
                                 <th><a href="{{ $sortUrl('group') }}">Guruh {!! $arrow('group') !!}</a></th>
                                 <th>Shakl</th>
@@ -324,6 +336,11 @@
                             @forelse($submissions as $i => $v)
                                 @php $overdue = $v->deadline && \Carbon\Carbon::parse($v->deadline)->isPast() && !\Carbon\Carbon::parse($v->deadline)->isToday() && $v->status !== 'approved'; @endphp
                                 <tr>
+                                    <td>
+                                        @if($v->status === 'approved' || !empty($v->is_mixed_status))
+                                            <input type="checkbox" class="jam-cb" name="ids[]" form="jam-form" value="{{ implode(',', $v->ids ?? [$v->id]) }}" title="Jamlanmaga qo'shish (faqat tasdiqlangan guruhchalar olinadi)">
+                                        @endif
+                                    </td>
                                     <td style="color:#94a3b8;">{{ $submissions->firstItem() + $i }}</td>
                                     <td style="font-weight:600;">
                                         {{ $v->group_name }}
@@ -366,7 +383,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="15" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
+                                <tr><td colspan="16" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -377,6 +394,22 @@
         </div>
     </div>
 
+    <script>
+        (function () {
+            const all = document.getElementById('jam-all');
+            const btn = document.getElementById('jam-selected');
+            const cbs = () => [...document.querySelectorAll('.jam-cb')];
+            const sync = () => {
+                const n = cbs().filter(c => c.checked).length;
+                document.getElementById('jam-count').textContent = n;
+                btn.disabled = n === 0;
+                btn.style.opacity = n ? '1' : '.5';
+                if (all) all.checked = n > 0 && n === cbs().length;
+            };
+            all?.addEventListener('change', () => { cbs().forEach(c => c.checked = all.checked); sync(); });
+            document.addEventListener('change', e => { if (e.target.classList?.contains('jam-cb')) sync(); });
+        })();
+    </script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>

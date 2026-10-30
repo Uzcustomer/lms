@@ -367,7 +367,7 @@ class VedomostCheckEngine
     // ───────────────────────── VT qatori ─────────────────────────
 
     /** "Vedomost tekshirish" Excel qatori (A..AW) — eksport bilan aynan bir xil hisob. */
-    private function vtRow(array $stu, array $w, array $expected, int $n): array
+    public function vtRow(array $stu, array $w, array $expected, int $n): array
     {
         $raw = $stu['raw'];
         $c = $this->vt->compute($raw, $w['jb'], $w['mt'], $w['on'], $w['oski'], $w['test'], (string) ($expected['level_code'] ?? ''));
@@ -420,7 +420,13 @@ class VedomostCheckEngine
             return $w;
         }
 
-        return match ($closing) {
+        return self::defaultWeights($closing);
+    }
+
+    /** Yopilish shakli bo'yicha standart vaznlar («Vedomost tekshirish» eksport oynasidagidek). */
+    public static function defaultWeights(?string $closing): array
+    {
+        return match ((string) $closing) {
             'sinov', 'test' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30],
             'oski' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0],
             'oski_test' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15],

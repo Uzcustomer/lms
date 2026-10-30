@@ -401,3 +401,25 @@ test('Mark qiymati faqat hisobotda o\'zgartiriladi: qayta hisob, asl qiymat va s
     $ws = app(\App\Services\VedomostAiReportExcel::class)->build($after)->getSheetByName('Tekshirish');
     expect($ws->getComment('P2')->getText()->getPlainText())->toContain('OSKE dalolatnomasi');
 });
+
+test('jamlanma: VT formatidagi A–AJ ustunlar + yopilish shakli, chetlashtirilganlar kiritilmaydi', function () {
+    $checker = Mockery::mock(\App\Services\VedomostAiChecker::class);
+    $checker->shouldReceive('studentsFor')->andReturn([
+        vtStu('BOBOSHEROV B', '111', 83, 88, 100, 96),
+        vtStu('CHETLASHGAN C', '222', 70, 70, 70, 70, ['status_code' => '60']),
+    ]);
+    $sub = new \App\Models\VedomostSubmission(['closing_form' => 'oski_test', 'status' => 'approved']);
+    $sub->ai_result = ['report' => ['weights' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15]]];
+
+    $ws = (new \App\Services\VedomostJamlanmaExcel($checker, engine()))->build(collect([$sub]))->getActiveSheet();
+
+    expect($ws->getHighestColumn())->toBe('AK')
+        ->and($ws->getCell('AJ1')->getValue())->toBe(\App\Services\VedomostCheckEngine::VT_HEADERS['AJ'])
+        ->and($ws->getCell('AK1')->getValue())->toBe('Yopilish shakli')
+        ->and($ws->getHighestRow())->toBe(2)
+        ->and($ws->getCell('B2')->getValue())->toBe('BOBOSHEROV B')
+        ->and($ws->getCell('C2')->getValue())->toBe('111')
+        ->and((float) $ws->getCell('E2')->getValue())->toBe(41.5)
+        ->and((int) $ws->getCell('V2')->getValue())->toBe(88)
+        ->and($ws->getCell('AK2')->getValue())->toBe('OSKI + Test');
+});

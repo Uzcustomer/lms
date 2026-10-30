@@ -997,6 +997,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'index'])->name('index');
             Route::get('/export', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'export'])->name('export');
             Route::get('/report', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'report'])->name('report');
+            Route::get('/jamlanma', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'jamlanma'])->name('jamlanma');
             Route::post('/sync', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'sync'])->name('sync');
             Route::post('/manual-open', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'manualOpen'])->name('manual-open');
             Route::get('/sync/progress', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'syncProgress'])->name('sync.progress');

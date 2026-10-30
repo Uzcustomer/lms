@@ -732,6 +732,40 @@ class VedomostSubmissionController extends Controller
         }
     }
 
+    /**
+     * Tasdiqlangan vedomostlar jamlanmasi (bitta jadval, «Vedomost tekshirish» Excel formati A–AJ +
+     * yopilish shakli). ids[] berilsa — faqat belgilanganlar, aks holda joriy filtrdagi barcha
+     * tasdiqlanganlar. Tasdiqlanmagan yozuvlar har doim chiqarib tashlanadi.
+     */
+    public function jamlanma(Request $request, \App\Services\VedomostJamlanmaExcel $excel)
+    {
+        $this->checkViewAccess();
+        @set_time_limit(900);
+        @ini_set('memory_limit', '1024M');
+
+        // Belgilangan qatorlar: har qator «12,13,14» (jamlangan guruhchalar yozuvlari).
+        $ids = collect((array) $request->input('ids', []))
+            ->flatMap(fn ($v) => explode(',', (string) $v))
+            ->map(fn ($v) => (int) $v)->filter()->unique()->values()->all();
+        if (!$ids) {
+            [$query] = $this->filteredQuery($request);
+            $ids = $this->merge->aggregate($query->get())
+                ->flatMap(fn ($v) => $v->ids)
+                ->all();
+        }
+
+        $submissions = VedomostSubmission::whereIn('id', $ids)
+            ->where('status', VedomostSubmission::STATUS_APPROVED)
+            ->get()
+            ->sortBy(fn ($v) => mb_strtolower(($v->subject_name ?? '') . '|' . ($v->group_name ?? '')), SORT_NATURAL)
+            ->values();
+        if ($submissions->isEmpty()) {
+            return back()->with('error', "Tanlangan/filtrdagi vedomostlar orasida tasdiqlangani yo'q.");
+        }
+
+        return $excel->download($submissions, 'Tasdiqlangan_vedomostlar_jamlanma_' . now()->format('Y-m-d_H-i') . '.xlsx');
+    }
+
     public function export(Request $request)
     {
         $this->checkViewAccess();

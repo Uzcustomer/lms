@@ -7,6 +7,7 @@ use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
 use App\Models\TimetableCardOverride;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Role;
 
@@ -44,6 +45,30 @@ function urSheets($response): array
         'filter' => $det->getAutoFilter()->getRange(), 'freeze' => $det->getFreezePane()];
 
     return $out;
+}
+
+// Prod'da faylni navbat worker'i (root) yozadi, php-fpm (www-data) o'qiydi: testlar root nomidan ishlasa, yuklab olish
+// boshqa foydalanuvchi (nobody) nomidan bajariladi — 0600 fayl o'qilmay qolishi aynan shu yerda takrorlanadi.
+function urAsWebUser(callable $fn)
+{
+    $switch = function_exists('posix_geteuid') && posix_geteuid() === 0;
+    if ($switch) {
+        posix_seteuid(65534);
+    }
+    try {
+        return $fn();
+    } finally {
+        if ($switch) {
+            posix_seteuid(0);
+        }
+    }
+}
+
+function urPerms(string $path): string
+{
+    clearstatcache(true, $path);
+
+    return substr(sprintf('%o', fileperms($path)), -4);
 }
 
 beforeEach(function () {
@@ -84,9 +109,12 @@ beforeEach(function () {
         expect($start->json('already_running'))->toBeFalse()
             ->and(($this->as)($u, $role)->getJson(($this->url)('.status', ['token' => $token]))->assertOk()->json())
             ->toBe(['status' => 'done', 'percent' => 100, 'step_label' => 'Tayyor', 'message' => 'Hisobot tayyor'])
-            ->and(is_file(BuildUnplacedReportJob::path($token)))->toBeTrue();
+            ->and(is_file(BuildUnplacedReportJob::path($token)))->toBeTrue()
+            // Veb-server foydalanuvchisi o'qiy olsin: fayl 0664, papka 0775
+            ->and(urPerms(BuildUnplacedReportJob::path($token)))->toBe('0664')
+            ->and(urPerms(dirname(BuildUnplacedReportJob::path($token))))->toBe('0775');
 
-        return ($this->as)($u, $role)->get(($this->url)('.download', ['token' => $token]));
+        return urAsWebUser(fn () => ($this->as)($u, $role)->get(($this->url)('.download', ['token' => $token])));
     };
     $this->tokens = [];
 });
@@ -98,6 +126,9 @@ afterEach(function () {
 });
 
 it('fonda tayyorlanadi: yig\'ma, batafsil (sikl fanisiz), sikl va fanlar varaqlari; tanlangan fakultet hisobga olinmaydi', function () {
+    // Avvalgi versiya yaratgan papka (umask bilan 0755) — job uni 0775 qiladi
+    @mkdir(dirname(BuildUnplacedReportJob::path('x')), 0755, true);
+    chmod(dirname(BuildUnplacedReportJob::path('x')), 0755);
     // Ekranda F2 tanlangan bo'lsa ham — butun doska
     $resp = ($this->report)('registrator_ofisi', ['faculty_names' => ['F2'], 'layer' => 'internal'])->assertOk();
     expect($resp->headers->get('content-disposition'))->toContain('joylanmagan_kartalar_butun_doska_' . now()->format('Y-m-d') . '.xlsx');
@@ -204,11 +235,53 @@ it('job xatosi holatga yoziladi va oynada ko\'rinadi', function () {
     $this->partialMock(TimetableController::class, fn ($m) => $m->shouldReceive('buildUnplacedReport')->andThrow(new RuntimeException('test xato')));
     $u = urTeacher('Ue', 'admin');
     $start = ($this->as)($u, 'admin')->postJson(($this->url)(''))->assertOk();
-    expect($start->json('state'))->toMatchArray(['status' => 'error', 'message' => 'Xatolik: test xato'])
+    expect($start->json('state'))->toMatchArray(['status' => 'error', 'step_label' => 'Xatolik', 'message' => 'Xatolik: test xato'])
         ->and(($this->as)($u, 'admin')->getJson(($this->url)('.status', ['token' => $start->json('token')]))->json('status'))->toBe('error')
         ->and(is_file(BuildUnplacedReportJob::path($start->json('token'))))->toBeFalse();
     // Xato bilan tugagani — qayta bosilsa yangisi boshlanadi
     expect(($this->as)($u, 'admin')->postJson(($this->url)(''))->assertOk()->json('token'))->not->toBe($start->json('token'));
+});
+
+it('xato oxirgi bosqichda bo\'lsa ham — 100% va "Tayyor" emas (100% faqat tayyor hisobotda)', function () {
+    $this->partialMock(TimetableController::class, fn ($m) => $m->shouldReceive('buildUnplacedReport')
+        ->andReturnUsing(function ($board, $opts, $progress) {
+            $progress(100, 'Tayyor');
+            throw new RuntimeException('disk to\'la');
+        }));
+    $u = urTeacher('Ut', 'admin');
+    $start = ($this->as)($u, 'admin')->postJson(($this->url)(''))->assertOk();
+    expect(($this->as)($u, 'admin')->getJson(($this->url)('.status', ['token' => $start->json('token')]))->json())
+        ->toBe(['status' => 'error', 'percent' => 99, 'step_label' => 'Xatolik', 'message' => 'Xatolik: disk to\'la'])
+        // Eski (xato) holat keshda 100 bo'lsa ham — tashqariga 99 chiqadi
+        ->and(BuildUnplacedReportJob::publicState(['status' => 'running', 'percent' => 100])['percent'])->toBe(99)
+        ->and(BuildUnplacedReportJob::publicState(['status' => 'done', 'percent' => 40])['percent'])->toBe(100);
+});
+
+it('yuklab olish: fayl o\'qilmasa yoki yuborib bo\'lmasa — aniq JSON xato (500) va log', function () {
+    $u = urTeacher('Ur', 'admin');
+    $token = ($this->as)($u, 'admin')->postJson(($this->url)(''))->assertOk()->json('token');
+    $this->tokens[] = $token;
+    $path = BuildUnplacedReportJob::path($token);
+    Log::spy();
+    Log::shouldReceive('channel')->andReturnSelf();   // middleware Log::channel('daily') ga yozadi
+
+    // Fayl faqat egasiga (eski 0600 holati): veb-server foydalanuvchisi o'qiy olmaydi
+    $root = function_exists('posix_geteuid') && posix_geteuid() === 0;
+    chmod($path, $root ? 0600 : 0000);
+    $resp = urAsWebUser(fn () => ($this->as)($u, 'admin')->get(($this->url)('.download', ['token' => $token])));
+    chmod($path, 0664);
+    expect($resp->getStatusCode())->toBe(500)
+        ->and($resp->json())->toBe(['error' => 'Fayl o\'qib bo\'lmadi (ruxsat)']);
+    Log::shouldHaveReceived('error')->withArgs(fn ($msg, $ctx) => str_contains($msg, 'faylni o\'qib bo\'lmadi') && $ctx['path'] === $path)->once();
+
+    // response()->download o'zi xato bersa — ushlanadi, logga yoziladi
+    $factory = \Mockery::mock(app(\Illuminate\Contracts\Routing\ResponseFactory::class));
+    $factory->shouldReceive('download')->andThrow(new \Symfony\Component\HttpFoundation\File\Exception\FileException('File must be readable.'));
+    app()->instance(\Illuminate\Contracts\Routing\ResponseFactory::class, $factory);
+    $resp = ($this->as)($u, 'admin')->get(($this->url)('.download', ['token' => $token]));
+    expect($resp->getStatusCode())->toBe(500)
+        ->and($resp->json())->toBe(['error' => 'Faylni yuborib bo\'lmadi: File must be readable.']);
+    Log::shouldHaveReceived('error')->withArgs(fn ($msg, $ctx) => str_contains($msg, 'yuborib bo\'lmadi') && $ctx['error'] === 'File must be readable.')->once();
 });
 
 it('navbatga qo\'yib bo\'lmasa — holat "error", "queued" da qotib qolmaydi', function () {
@@ -287,10 +360,11 @@ it('progress: bosqichlar ketma-ket, foiz o\'smaydi-kamaymaydi', function () {
     $pcts = array_column($steps, 0);
     $sorted = $pcts;
     sort($sorted);
-    expect(array_values(array_unique(array_column($steps, 1))))->toBe(['Haftalik kartalar…', 'Sabablar…', 'Sikl…', 'Excel yozilmoqda…', 'Tayyor'])
+    // "Tayyor" va 100% — faqat job faylni joyiga qo'yib bo'lganda (holat "done")
+    expect(array_values(array_unique(array_column($steps, 1))))->toBe(['Haftalik kartalar…', 'Sabablar…', 'Sikl…', 'Excel yozilmoqda…'])
         ->and($pcts)->toBe($sorted)
         // Keshga faqat o'zgarganda yoziladi
         ->and(collect($steps)->map(fn ($x) => implode('|', $x))->unique()->count())->toBe(count($steps))
         ->and($pcts[0])->toBe(0)
-        ->and(end($pcts))->toBe(100);
+        ->and(end($pcts))->toBe(95);
 });

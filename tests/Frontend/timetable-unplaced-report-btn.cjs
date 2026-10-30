@@ -14,6 +14,13 @@ const b = source.indexOf('\n            };\n', a);
 assert(a > 0 && b > a);
 const code = source.slice(a, b) + '\n            };';
 assert(!/alert\(/.test(code), 'xato alert bilan chiqmasin');
+// Progress bar rangini o'z klassidan oladi (saytning tayyor CSS'ida Tailwind'ning h-3/bg-emerald-500 klasslari yo'q).
+assert.match(code, /<div class="tt-report-track"><div id="urBar" class="tt-report-bar" style="width: 0%"><\/div><\/div>/);
+assert(!/bg-emerald-500|bg-gray-200|\bh-3\b/.test(code), 'progress bar Tailwind klasslariga bog\'liq bo\'lmasin');
+const css = source.slice(source.indexOf('.tt-report-track {'), source.indexOf('.tt-report-bar.is-error {') + 80);
+assert.match(css, /\.tt-report-track \{[^}]*height: 10px;[^}]*overflow: hidden;[^}]*border-radius: 9999px;[^}]*background: #e5e7eb;/);
+assert.match(css, /\.tt-report-bar \{[^}]*height: 100%;[^}]*background: #10b981;[^}]*transition: width \.3s;/);
+assert.match(css, /\.tt-report-bar\.is-error \{ background: #ef4444; \}/);
 
 process.exitCode = 1;   // osilib qolsa (promise hal bo'lmasa) — muvaffaqiyatsiz
 const tick = () => new Promise(r => setImmediate(r));
@@ -85,9 +92,10 @@ const st = (status, percent, step_label, message = '') => ({ status, percent, st
     await run;
     assert.deepEqual(c.calls.map(x => x[0] + ' ' + x[1]).slice(1), ['GET /admin/boards/7/unplaced-report/status?token=T%2F1',
         'GET /admin/boards/7/unplaced-report/status?token=T%2F1', 'FETCH /admin/boards/7/unplaced-report/download?token=T%2F1']);
-    assert.deepEqual(c.log.urStep, ['Navbatda', 'Sabablar…', 'Tayyor', 'Tayyor — fayl yuklab olindi.']);
+    assert.deepEqual(c.log.urStep, ['Navbatda', 'Sabablar…', 'Fayl yuklab olinmoqda…', 'Tayyor — fayl yuklab olindi.']);
     assert.deepEqual(c.log.urPct, ['0%', '37%', '100%']);
     assert.equal(c.$('urBar').style.width, '100%');
+    assert(!c.$('urBar').classList.contains('is-error'));
     assert.deepEqual(c.downloads, ['joylanmagan_kartalar_butun_doska_2026-10-30.xlsx']);
     assert.equal(c.txt('urPct'), '100%');
     assert.equal(c.txt('urStep'), 'Tayyor — fayl yuklab olindi.');
@@ -103,6 +111,19 @@ const st = (status, percent, step_label, message = '') => ({ status, percent, st
     assert(!c.$('urErr').classList.contains('hidden'));
     assert.equal(c.txt('urErr'), 'Hisobotni tayyorlab bo\'lmadi: Xatolik: xotira yetmadi');
     assert.deepEqual(c.downloads, []);
+    // Bar qizil, to'xtagan joyida; xato holatidagi foiz/bosqich ko'rsatilmaydi
+    assert(c.$('urBar').classList.contains('is-error'));
+    assert.equal(c.$('urBar').style.width, '10%');
+    assert.deepEqual(c.log.urStep, ['Haftalik kartalar…', 'Xatolik']);
+    assert.deepEqual(c.log.urPct, ['10%', '']);
+
+    // 2b) Xato holati 100% va "Tayyor" bilan kelsa ham (eski holat) — "Tayyor 100%" chiqmaydi; ishlayotganda 100% emas.
+    c = makeCtx();
+    c.answers.push({ token: 'T2b', state: st('running', 100, 'Excel yozilmoqda…') }, st('error', 100, 'Tayyor', 'Xatolik: disk to\'la'));
+    await c.btn.onclick.call(c.btn);
+    assert.deepEqual(c.log.urPct, ['99%', '']);
+    assert.deepEqual(c.log.urStep, ['Excel yozilmoqda…', 'Xatolik']);
+    assert(c.$('urBar').classList.contains('is-error'));
 
     // 3) Boshlashning o'zi rad etildi (403) — xabar oynada.
     c = makeCtx();
@@ -137,6 +158,16 @@ const st = (status, percent, step_label, message = '') => ({ status, percent, st
     await c.btn.onclick.call(c.btn);
     assert.equal(c.txt('urErr'), 'Hisobotni tayyorlab bo\'lmadi: Hisobot hali tayyor emas yoki fayl o\'chirilgan.');
 
+    // 7) Yuklab olishda server xatosi (500, ruxsat) — aniq xabar, bar qizil, "Tayyor 100%" qolmaydi.
+    c = makeCtx();
+    c.answers.push({ token: 'T6', state: st('done', 100, 'Tayyor') });
+    c.download = { ok: false, status: 500, json: async () => ({ error: 'Fayl o\'qib bo\'lmadi (ruxsat)' }) };
+    await c.btn.onclick.call(c.btn);
+    assert.equal(c.txt('urErr'), 'Hisobotni tayyorlab bo\'lmadi: Fayl o\'qib bo\'lmadi (ruxsat)');
+    assert(c.$('urBar').classList.contains('is-error'));
+    assert.equal(c.txt('urStep'), 'Xatolik');
+    assert.equal(c.txt('urPct'), '');
+
     process.exitCode = 0;
-    console.log('timetable unplaced report button: 6 scenarios passed');
+    console.log('timetable unplaced report button: 8 scenarios passed');
 })().catch(e => { console.error(e); process.exitCode = 1; });

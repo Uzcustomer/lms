@@ -6576,9 +6576,24 @@ class TimetableController extends Controller
         if (($state['status'] ?? null) !== 'done' || !is_file($path)) {
             return response()->json(['error' => 'Hisobot hali tayyor emas yoki fayl o\'chirilgan.'], 409);
         }
+        // Faylni navbat worker'i (boshqa foydalanuvchi) yozadi — veb-server o'qiy olmasa nomsiz 500 emas, aniq xato.
+        $handle = is_readable($path) ? @fopen($path, 'rb') : false;
+        if (!$handle) {
+            Log::error('Joylanmagan kartalar hisoboti: faylni o\'qib bo\'lmadi (ruxsat)', ['path' => $path,
+                'perms' => substr(sprintf('%o', (int) @fileperms($path)), -4), 'owner' => @fileowner($path),
+                'reader' => function_exists('posix_geteuid') ? posix_geteuid() : null]);
 
-        return response()->download($path, $state['filename'] ?? basename($path),
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+            return new \Illuminate\Http\JsonResponse(['error' => 'Fayl o\'qib bo\'lmadi (ruxsat)'], 500);
+        }
+        fclose($handle);
+        try {
+            return response()->download($path, $state['filename'] ?? basename($path),
+                ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        } catch (\Throwable $e) {
+            Log::error('Joylanmagan kartalar hisobotini yuborib bo\'lmadi', ['path' => $path, 'error' => $e->getMessage()]);
+
+            return new \Illuminate\Http\JsonResponse(['error' => 'Faylni yuborib bo\'lmadi: ' . mb_substr($e->getMessage(), 0, 200)], 500);
+        }
     }
 
     /**
@@ -6813,8 +6828,8 @@ class TimetableController extends Controller
         $book->setActiveSheetIndex(0);
 
         $tmp = tempnam(sys_get_temp_dir(), 'unplaced_xlsx_');
+        $step(95, 'Excel yozilmoqda…');
         (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($tmp);
-        $step(100, 'Tayyor');
 
         return $tmp;
     }

@@ -27,6 +27,11 @@ beforeEach(function () {
         $t->string('status');
         $t->timestamps();
     });
+    Schema::create('absence_excuses', function ($t) {
+        $t->id();
+        $t->string('status');
+        $t->timestamps();
+    });
     Schema::create('student_grades', function ($t) {
         $t->id();
         $t->string('student_hemis_id');
@@ -40,8 +45,9 @@ beforeEach(function () {
         $t->timestamps();
     });
 
+    DB::table('absence_excuses')->insert(['id' => 5, 'status' => 'approved']);
     ExcuseGradeOpening::create([
-        'student_hemis_id' => '77', 'subject_id' => '500', 'date_from' => '2026-10-21',
+        'absence_excuse_id' => 5, 'student_hemis_id' => '77', 'subject_id' => '500', 'date_from' => '2026-10-21',
         'date_to' => '2026-10-23', 'deadline' => now()->addDays(3), 'status' => 'active',
     ]);
     $row = ['student_hemis_id' => '77', 'subject_id' => '500', 'semester_code' => '11', 'training_type_code' => 13];
@@ -64,3 +70,11 @@ it('closes once the excuse opening deadline passes', function () {
 
     expect(ExcuseGradeOpening::isOpenNbSlot('77', '500', '11', '2026-10-22', '1'))->toBeFalse();
 });
+
+it('ignores openings whose LMS excuse is no longer approved', function (?string $status) {
+    $status === null
+        ? DB::table('absence_excuses')->delete()
+        : DB::table('absence_excuses')->update(['status' => $status]);
+
+    expect(ExcuseGradeOpening::isOpenNbSlot('77', '500', '11', '2026-10-22', '1'))->toBeFalse();
+})->with(['pending' => 'pending', 'rejected' => 'rejected', 'deleted' => null]);

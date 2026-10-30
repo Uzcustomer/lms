@@ -1698,7 +1698,8 @@ class JournalController extends Controller
         $excuseOpenedDatesPerStudent = [];
         try {
             ExcuseGradeOpening::expireOverdue();
-            $excuseOpenings = ExcuseGradeOpening::where('subject_id', $subjectId)
+            $excuseOpenings = ExcuseGradeOpening::approvedExcuse()
+                ->where('subject_id', $subjectId)
                 ->whereIn('student_hemis_id', $studentHemisIds)
                 ->where('status', 'active')
                 ->where('deadline', '>', now())

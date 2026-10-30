@@ -38,9 +38,19 @@ class ExcuseGradeOpening extends Model
     /**
      * Berilgan talaba+fan uchun muayyan sana faol ochilganmi tekshirish
      */
+    /**
+     * Faqat LMS da hozir ham tasdiqlangan sababli arizaga tegishli ochilishlar
+     * (ariza pending ga qaytarilgan yoki o'chirilgan bo'lsa — ochilish hisoblanmaydi).
+     */
+    public function scopeApprovedExcuse($query)
+    {
+        return $query->whereHas('absenceExcuse', fn ($q) => $q->where('status', 'approved'));
+    }
+
     public static function isDateOpenForStudent(string $studentHemisId, string $subjectId, string $lessonDate): bool
     {
-        return static::where('student_hemis_id', $studentHemisId)
+        return static::approvedExcuse()
+            ->where('student_hemis_id', $studentHemisId)
             ->where('subject_id', $subjectId)
             ->where('date_from', '<=', $lessonDate)
             ->where('date_to', '>=', $lessonDate)

@@ -359,3 +359,92 @@ it('joylanmagan kartalar Exceli sikl fanlarini ko\'rsatmaydi', function () {
     @unlink($file);
     expect($subjects)->toBe(['Gigiyena']);
 });
+
+it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birinchi taklif bo\'sh xona; qo\'llangach to\'qnashuv va takliflar yo\'q', function () {
+    $s = sugSetup();
+    foreach ([['R215', '215', 30], ['R216', '216', 30], ['R217', '217', 5]] as [$code, $name, $vol]) {
+        \App\Models\Auditorium::create(['code' => $code, 'name' => $name, 'volume' => $vol, 'active' => true]);
+    }
+    $base = ['board_id' => $s['board']->id, 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Anatomiya kafedrasi', 'auditorium_code' => 'R215', 'auditorium_name' => '215'];
+    // 7-haftada juma V para (9-yarim-slot), ikkalasi 215-xonada: 1-son davolash 1-kurs va Pediatriya 2-kurs.
+    $a = TimetableCard::create($base + ['faculty_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi', 'course' => 1,
+        'oqim_label' => '6-oqim', 'group_name' => 'd1/d26-06b', 'teacher_id' => sugTeacher('USTOZ A.')->id, 'teacher_name' => 'USTOZ A.']);
+    $b = TimetableCard::create($base + ['faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+        'oqim_label' => '2-oqim', 'group_name' => 'p/p25-02b', 'teacher_id' => sugTeacher('USTOZ B.')->id, 'teacher_name' => 'USTOZ B.']);
+    foreach ([$a, $b] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    }
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    expect($ctl->internalConflicts($s['board'])['count'])->toBe(2);
+    $params = ['week' => 7, 'faculty_names' => ['1-son davolash'], 'courses' => [1]];
+
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?' . http_build_query($params))
+        ->assertOk()->json();
+    expect($res['total'])->toBe(1)->and($res['unplaced_total'])->toBe(0)->and($res['conflict_total'])->toBe(1)
+        ->and($res['cards'])->toHaveCount(1);
+    $card = $res['cards'][0];
+    expect($card['id'])->toBe($a->id)->and($card['conflict'])->toBeTrue()
+        ->and($card['reason'])->toBe('Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para');
+    // Birinchi — shu vaqtda bo'sh xona (217 sig'imi yetmaydi), keyin ikkinchi tomonning xonasi (boshqa yo'nalish belgisi bilan).
+    expect($card['suggestions'][0])->toMatchArray(['type' => 'room', 'title' => 'Xonani almashtirish: 216 (30 o\'rin) — Juma, 5-para',
+        'actions' => [['op' => 'move', 'card_id' => $a->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'auditorium_code' => 'R216']]])
+        ->and($card['suggestions'][1])->toMatchArray(['type' => 'room',
+            'title' => 'Ikkinchi tomon — «Odam anatomiyasi» (p/p25-02b) xonasini almashtirish: 216 (30 o\'rin) — Juma, 5-para',
+            'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'auditorium_code' => 'R216']],
+            'note' => 'Faqat shu hafta; boshqa yo\'nalish: Pediatriya, 2-kurs'])
+        ->and(collect($card['suggestions'])->pluck('type')->all())->not->toContain('teacher');
+
+    // Qo'llash (sahifadagi kabi week-override) — to'qnashuv yo'qoladi, takliflar bo'sh.
+    $act = $card['suggestions'][0]['actions'][0];
+    sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $a),
+        ['week' => $act['week'], 'action' => 'move', 'day' => $act['day'], 'pair' => $act['pair'], 'layer' => 'internal', 'auditorium_code' => $act['auditorium_code']])
+        ->assertOk();
+    expect(app(\App\Http\Controllers\Admin\TimetableController::class)->internalConflicts($s['board'])['count'])->toBe(0);
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?' . http_build_query($params))
+        ->assertOk()->json();
+    expect($res['total'])->toBe(0)->and($res['conflict_total'])->toBe(0)->and($res['cards'])->toBe([]);
+});
+
+it('takliflar: o\'qituvchi to\'qnashuvida — mavjud qadamlar, o\'qituvchini almashtirish eng oxirida; sabab o\'qituvchi bilan', function () {
+    $s = sugSetup();
+    $t = sugTeacher('SHARIPOV K.');
+    $free = sugTeacher('BOSH O.');
+    $base = ['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'oqim_label' => '1-oqim',
+        'lang' => 'uz', 'students' => 15, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15, 'kafedra_name' => 'Gigiyena kafedrasi',
+        'teacher_id' => $t->id, 'teacher_name' => 'SHARIPOV K.', 'day' => 2, 'pair' => 3];
+    $x = TimetableCard::create($base + ['subject_name' => 'Gigiyena', 'group_name' => 'g-02a']);
+    TimetableCard::create($base + ['subject_name' => 'Gigiyena', 'group_name' => 'g-02b']);
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')->assertOk()->json();
+    expect($res['conflict_total'])->toBe(2)->and($res['unplaced_total'])->toBe(2);
+    $card = collect($res['cards'])->firstWhere('id', $x->id);
+    $types = collect($card['suggestions'])->pluck('type')->all();
+    expect($card['conflict'])->toBeTrue()->and($card['reason'])->toBe('O\'qituvchi SHARIPOV K. band: g-02b · Gigiyena · Seshanba II para')
+        ->and($types)->not->toContain('room')->and($types[0])->toBe('slot')->and(end($types))->toBe('teacher');
+});
+
+it('takliflar: karta xonada ikki dars bilan to\'qnashsa — bitta tomonning xonasini almashtirish taklif qilinmaydi (to\'qnashuv qolardi)', function () {
+    $s = sugSetup();
+    foreach ([['R215', '215', 40], ['R216', '216', 40]] as [$code, $name, $vol]) {
+        \App\Models\Auditorium::create(['code' => $code, 'name' => $name, 'volume' => $vol, 'active' => true]);
+    }
+    $base = ['board_id' => $s['board']->id, 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Anatomiya kafedrasi', 'auditorium_code' => 'R215', 'auditorium_name' => '215'];
+    $a = TimetableCard::create($base + ['faculty_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi', 'course' => 1,
+        'oqim_label' => '6-oqim', 'group_name' => 'd1/d26-06b']);
+    $others = [];
+    foreach (['p/p25-02b', 'p/p25-02c'] as $g) {
+        $others[] = TimetableCard::create($base + ['faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+            'oqim_label' => '2-oqim', 'group_name' => $g]);
+    }
+    foreach (array_merge([$a], $others) as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    }
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board'])
+        . '?' . http_build_query(['week' => 7, 'faculty_names' => ['1-son davolash'], 'courses' => [1]]))->assertOk()->json();
+    $card = $res['cards'][0];
+    expect($card['id'])->toBe($a->id)
+        ->and($card['reason'])->toBe('Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para; Xona 215 band: p/p25-02c · Odam anatomiyasi · Juma V para')
+        ->and($card['suggestions'][0]['actions'][0])->toMatchArray(['card_id' => $a->id, 'auditorium_code' => 'R216'])
+        ->and(collect($card['suggestions'])->filter(fn ($x) => str_starts_with($x['title'], 'Ikkinchi tomon'))->all())->toBe([]);
+});

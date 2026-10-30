@@ -60,6 +60,19 @@ const card = (id, partial, sugs) => ({ id, subject: 'S' + id, type: 'practice', 
     assert.deepEqual(ctx.body.querySelectorAll('[data-full]'), []);
     assert.match(ctx.body.innerHTML, /Boshqa kun: Juma, 1-para/);
 
+    // To'qnashuvli karta: sarlavhada alohida son, kartada belgi; ikkalasi ham 0 bo'lsa — "yo'q" xabari.
+    answers.push({ week: 7, total: 2, unplaced_total: 1, conflict_total: 1, shown: 2, partial: false, message: null,
+        cards: [card(3, false, [sug('Bo\'sh: Dushanba, 1-para', 'slot')]),
+            Object.assign(card(4, false, [sug('Xonani almashtirish: 216', 'room')]), { conflict: true, reason: 'Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para' })] });
+    await ctx.openWeekSuggestions();
+    assert.equal(ctx.title.textContent, "Takliflar — 7-hafta · Joylanmagan: 1 · To'qnashuvli: 1");
+    assert.equal((ctx.body.innerHTML.match(/class="sug-conflict"/g) || []).length, 1);
+    assert.match(ctx.body.innerHTML, /Xona 215 band: p\/p25-02b · Odam anatomiyasi · Juma V para/);
+    answers.push({ week: 7, total: 0, unplaced_total: 0, conflict_total: 0, shown: 0, partial: false, message: null, cards: [] });
+    await ctx.openWeekSuggestions();
+    assert.equal(ctx.title.textContent, "Takliflar — 7-hafta · Joylanmagan: 0 · To'qnashuvli: 0");
+    assert.match(ctx.body.innerHTML, /Bu haftada joylanmagan yoki to'qnashuvli karta yo'q\./);
+
     process.exitCode = 0;
-    console.log('timetable week suggestions partial: 2 scenarios passed');
+    console.log('timetable week suggestions partial: 3 scenarios passed');
 })().catch(e => { console.error(e); process.exitCode = 1; });

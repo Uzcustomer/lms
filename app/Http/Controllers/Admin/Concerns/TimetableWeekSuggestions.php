@@ -11,7 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * "Takliflar": tanlangan haftada joylanmagan har bir karta uchun uni sig'dirish yo'llari, tartib bo'yicha:
+ * "Takliflar": tanlangan haftada joylanmagan har bir karta (va joyi bor, lekin ichki jadvalda to'qnashuvli karta — panel va
+ * hisoblagichdagidek, weeklyConflicts) uchun uni sig'dirish yo'llari, tartib bo'yicha:
  *   1) shu kunning bo'sh vaqti (shu fanning joylashgan qismiga ulab);
  *   2) xona band — shu vaqtda bo'sh boshqa xona (faqat shu hafta);
  *   3) to'sib turgan amaliy darsni (o'qituvchi/guruh/xona) shu haftaning boshqa vaqtiga surish;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\Schema;
  *   6) eng oxirida — shu kafedraning shu vaqtda bo'sh o'qituvchisini biriktirish.
  * Hech narsa yozilmaydi: har bir taklifda bajariladigan amallar (`actions`) qaytariladi, ularni foydalanuvchi
  * "Qo'llash" bilan oddiy endpointlar orqali bajaradi (har birida server qayta tekshiradi).
+ * To'qnashuvli karta: maqsad — hozirgi joyi; xona to'qnashuvida birinchi — shu vaqtda bo'sh boshqa xona (shu hafta), so'ng
+ * ikkinchi tomonning (to'sayotgan kartaning) boshqa xonasi, keyin 1, 3–6-qadamlar.
  * Ma'ruza vaqti tashqi jadvaldagi kun/vaqt (ma'ruza xonalari umumiy): uni siljitadigan takliflar (ma'ruzaning o'zini
  * yoki to'sib turgan ma'ruzani surish) ogohlantirish bilan oxirroqda — o'qituvchi almashtirishdan oldin — beriladi.
  */
@@ -27,6 +30,11 @@ trait TimetableWeekSuggestions
 {
     /** Tekshiruv uchun: optimizatsiyadan oldingi yo'l (indekssiz findWeekConflicts, keshsiz, 6-qadam har hafta alohida). */
     private bool $weekSuggestionsLegacy = false;
+
+    /** freeRoomsFor: faol xonalar va xona–o'qituvchi xaritasi (so'rov davomida). */
+    private $sugRooms = null;
+
+    private ?array $sugRoomMap = null;
 
     public function weekSuggestions(Request $request, TimetableBoard $board)
     {
@@ -81,20 +89,37 @@ trait TimetableWeekSuggestions
         $cancelled = fn (TimetableCard $c, int $w) => (bool) (($state['ov'][(int) $c->id][$w] ?? null)?->cancelled);
 
         $unplaced = [];
+        $placedIds = [];
         foreach ($scopeIds as $id) {
             $c = $state['cards'][$id] ?? null;
-            if (!$c || $isCycle($c) || $cancelled($c, $W) || $eff($c, $W)) {
+            if (!$c || $isCycle($c) || $cancelled($c, $W)) {
                 continue;
             }
-            $unplaced[] = $c;
+            if ($eff($c, $W)) {
+                $placedIds[$id] = true;
+            } else {
+                $unplaced[] = $c;
+            }
+        }
+        // Joyi bor, lekin shu haftada to'qnashuvli kartalar (panel va hisoblagichdagi internalConflicts mantig'i — yengil variant).
+        $conflicts = $placedIds ? $this->weeklyConflicts($board, $state, $placedIds, $W) : [];
+        $conflicted = [];
+        foreach ($conflicts as $id => $weeks) {
+            if (isset($weeks[$W])) {
+                $conflicted[] = $state['cards'][$id];
+            }
         }
         $onlyCard = isset($data['card_id']) ? (int) $data['card_id'] : null;
         if ($onlyCard !== null) {
             $unplaced = array_values(array_filter($unplaced, fn ($c) => (int) $c->id === $onlyCard));
+            $conflicted = array_values(array_filter($conflicted, fn ($c) => (int) $c->id === $onlyCard));
         }
         $limit = (int) ($data['limit'] ?? 150);
-        $total = count($unplaced);
-        $unplaced = array_slice($unplaced, 0, $limit);
+        $unplacedTotal = count($unplaced);
+        $conflictTotal = count($conflicted);
+        $total = $unplacedTotal + $conflictTotal;
+        $conflictIds = array_flip(array_map(fn ($c) => (int) $c->id, $conflicted));
+        $unplaced = array_slice(array_merge($unplaced, $conflicted), 0, $limit);
 
         $baseSubj = fn (?string $s) => trim(preg_replace('/\s*\([abc]\)\s*$/u', '', (string) $s));
         $isBolak = fn (TimetableCard $c) => (bool) preg_match('/\([abc]\)\s*$/u', (string) $c->subject_name);
@@ -123,11 +148,11 @@ trait TimetableWeekSuggestions
         // xona, hafta, kun, para va holat versiyasi bo'yicha.
         $memo = [];
         $check = $this->weekSuggestionsLegacy
-            ? fn (TimetableCard $c, int $w, int $d, int $p, array $st) => $this->findWeekConflicts($c, $w, $d, $p, 0, $st)
-            : function (TimetableCard $c, int $w, int $d, int $p, array $st) use (&$memo) {
-                $k = ($st['__v'] ?? 0) . '|' . $c->id . '|' . $c->teacher_id . '|' . $c->auditorium_code . '|' . $w . '|' . $d . '|' . $p;
+            ? fn (TimetableCard $c, int $w, int $d, int $p, array $st, ?string $room = null) => $this->findWeekConflicts($c, $w, $d, $p, 0, $st, $room)
+            : function (TimetableCard $c, int $w, int $d, int $p, array $st, ?string $room = null) use (&$memo) {
+                $k = ($st['__v'] ?? 0) . '|' . $c->id . '|' . $c->teacher_id . '|' . $c->auditorium_code . '|' . $w . '|' . $d . '|' . $p . '|' . $room;
 
-                return $memo[$k] ??= $this->findWeekConflictsIndexed($c, $w, $d, $p, 0, $st);
+                return $memo[$k] ??= $this->findWeekConflictsIndexed($c, $w, $d, $p, 0, $st, $room);
             };
         $ver = 0;
         $withMove = function (array $st, TimetableCard $c, int $w, ?int $d, ?int $p, bool $cancel = false, ?array $room = null) use (&$ver) {
@@ -385,7 +410,8 @@ trait TimetableWeekSuggestions
             $mv = fn (TimetableCard $x, int $w, int $d, int $p, ?string $room = null) =>
                 ['op' => 'move', 'card_id' => (int) $x->id, 'week' => $w, 'day' => $d, 'pair' => $p] + ($room ? ['auditorium_code' => $room] : []);
 
-            // Maqsad: shu fanning shu haftada joylashgan qismi yonida, aks holda tashqi jadvaldagi joyi.
+            $isConflict = isset($conflictIds[(int) $c->id]);
+            // Maqsad: shu fanning shu haftada joylashgan qismi yonida, aks holda tashqi jadvaldagi joyi; to'qnashuvli karta — hozirgi joyi.
             $targets = [];
             $sibs = [];
             if (!$lecture && !$isBolak($c)) {
@@ -395,7 +421,9 @@ trait TimetableWeekSuggestions
                     }
                 }
             }
-            if ($sibs) {
+            if ($isConflict) {
+                $targets = [$eff($c, $W)];
+            } elseif ($sibs) {
                 $d = $sibs[0][1][0];
                 $sameDay = array_filter($sibs, fn ($s) => $s[1][0] === $d);
                 $lo = min(array_map(fn ($s) => $s[1][1], $sameDay));
@@ -410,15 +438,46 @@ trait TimetableWeekSuggestions
             }
             [$td, $tp] = $targets[0];
             $why0 = [];
-            foreach ($targets as [$d, $p]) {
+            $freeFound = false;
+            foreach ($isConflict ? [] : $targets as [$d, $p]) {
                 $e = $check($c, $W, $d, $p, $state);
                 if (!$e) {
                     $add('slot', 'Bo\'sh: ' . $slotText($d, $p, $len), [$mv($c, $W, $d, $p)]);
+                    $freeFound = true;
                     break;
                 }
                 $why0 = $why0 ?: $e;
             }
             $reason = $why0 ? implode('; ', $why0) : '';
+            if ($isConflict) {
+                // Sabab: kim bilan, nima band (xona / o'qituvchi / guruh) va qachon. Xona to'qnashuvi — birinchi bo'lib bo'sh xona:
+                // shu kartaga, so'ng ikkinchi tomonga (uning o'z kalendaridagi haftasi bilan).
+                $clashes = $this->weekClashes($c, $W, $td, $tp, 0, ['cards' => array_intersect_key($state['cards'],
+                    $this->clashCandidates($c, $td, ($state['ov'][(int) $c->id][$W] ?? null)?->auditorium_code ?: $c->auditorium_code, $state))] + $state, null);
+                $reason = implode('; ', array_unique(array_merge(...array_map(fn ($x) => $this->clashTexts($x, $dayName), $clashes))))
+                    ?: ($conflicts[(int) $c->id][$W]['text'] ?? $reason);
+                $roomOnly = $clashes && !array_filter($clashes, fn ($x) => (bool) array_filter($x['errors'], fn ($m) => !str_starts_with($m, 'Auditoriya band')));
+                if ($roomOnly) {
+                    foreach ($this->freeRoomsFor($c, $W, $td, $tp, $state, $check, 3) as $r) {
+                        $add('room', 'Xonani almashtirish: ' . $r->name . ($r->volume ? ' (' . $r->volume . ' o\'rin)' : '') . ' — ' . $slotText($td, $tp, $len),
+                            [$mv($c, $W, $td, $tp, $r->code)], 'Faqat shu hafta');
+                    }
+                    foreach ($clashes as $x) {
+                        $o = $x['card'];
+                        $inScope = in_array((int) $o->id, $scopeIds, true);
+                        foreach ($this->freeRoomsFor($o, (int) $x['week'], $x['day'], $x['pair'], $state, $check, 2) as $r) {
+                            // Faqat shu ko'chirishdan keyin karta to'qnashuvsiz bo'lsa (shu xonada boshqa dars ham bo'lsa — yo'q).
+                            if ($check($c, $W, $td, $tp, $withMove($state, $o, (int) $x['week'], $x['day'], $x['pair'], false, [$r->code, $r->name]))) {
+                                continue;
+                            }
+                            $add('room', 'Ikkinchi tomon — «' . $o->subject_name . '» (' . implode(', ', $o->occupiedGroups()) . ') xonasini almashtirish: '
+                                . $r->name . ($r->volume ? ' (' . $r->volume . ' o\'rin)' : '') . ' — ' . $slotText($x['day'], $x['pair'], $o->lenHalf()),
+                                [$mv($o, (int) $x['week'], $x['day'], $x['pair'], $r->code)],
+                                'Faqat shu hafta' . ($inScope ? '' : '; boshqa yo\'nalish: ' . trim($o->specialty_name . ', ' . $o->course . '-kurs')));
+                        }
+                    }
+                }
+            }
             // Shu darsning butun bloki (karta ulanadigan, maqsad joyiga tutash ketma-ket qism + shu karta) — ko'chirilsa
             // birga ko'chadi. Shu kundagi shu fanning boshqa, alohida darsi blokka kirmaydi.
             $cb = [];
@@ -439,7 +498,7 @@ trait TimetableWeekSuggestions
             $cbLen = array_sum(array_map(fn ($x) => $x->lenHalf(), $cb));
 
             // 1) Shu kunning boshqa bo'sh vaqti — butun dars (joylashgan qismi bilan birga) ko'chadi.
-            if (!$sugs) {
+            if (!$freeFound) {
                 $n = 0;
                 $skip = null;
                 while ($n < 2 && ($f = $searchBlock($cb, $W, $state, $td, $cbStart ?? $tp, $maxDay, $maxPair, false, $skip))) {
@@ -457,8 +516,8 @@ trait TimetableWeekSuggestions
                 }
             }
 
-            // 2) Xona band — shu vaqtda bo'sh boshqa xona (faqat shu hafta uchun).
-            foreach ($targets as [$d, $p]) {
+            // 2) Xona band — shu vaqtda bo'sh boshqa xona (faqat shu hafta uchun). To'qnashuvli karta uchun — yuqorida, birinchi.
+            foreach ($isConflict ? [] : $targets as [$d, $p]) {
                 $bl = $blockers($c, $W, $d, $p, $state);
                 if (!$bl) {
                     continue;
@@ -496,7 +555,7 @@ trait TimetableWeekSuggestions
                     $sugs[] = $x;
                 }
                 $partialN++;
-                $result[] = $this->suggestionCard($c, $W, $reason, $sugs, true);
+                $result[] = $this->suggestionCard($c, $W, $reason, $sugs, true, $isConflict);
                 continue;
             }
 
@@ -651,18 +710,21 @@ trait TimetableWeekSuggestions
                 }
             }
 
-            $result[] = $this->suggestionCard($c, $W, $reason, $sugs);
+            $result[] = $this->suggestionCard($c, $W, $reason, $sugs, false, $isConflict);
         }
 
-        return response()->json(['week' => $W, 'total' => $total, 'shown' => count($result), 'cards' => $result,
+        return response()->json(['week' => $W, 'total' => $total, 'unplaced_total' => $unplacedTotal, 'conflict_total' => $conflictTotal,
+            'shown' => count($result), 'cards' => $result,
             'partial' => $partialN > 0, 'message' => $partialN ? $partialN . ' ta karta uchun to\'liq takliflar hisoblanmadi' : null]);
     }
 
-    private function suggestionCard(TimetableCard $c, int $week, string $reason, array $sugs, bool $partial = false): array
+    private function suggestionCard(TimetableCard $c, int $week, string $reason, array $sugs, bool $partial = false, bool $conflict = false): array
     {
         return [
             // true — vaqt byudjeti tugab, faqat tez qadamlar (1–2) hisoblangan; ?card_id= bilan to'liq olinadi.
             'partial' => $partial,
+            // true — joyi bor, lekin shu haftada to'qnashuvli (reason — kim bilan).
+            'conflict' => $conflict,
             'id' => (int) $c->id,
             'subject' => $c->subject_name,
             'type' => $c->training_type,
@@ -675,6 +737,49 @@ trait TimetableWeekSuggestions
             'reason' => $reason,
             'suggestions' => $sugs,
         ];
+    }
+
+    /**
+     * Shu vaqtda (hafta, kun, para) karta uchun bo'sh boshqa xonalar — faol, sig'imi yetadi, kartaning o'qituvchisiga ruxsat
+     * (auditoriumAllowedForCard); tekshiruv shu haftaga xos xona bilan (week-override auditorium_code). Ko'pi bilan $max ta.
+     */
+    private function freeRoomsFor(TimetableCard $c, int $w, int $d, int $p, array $state, \Closure $check, int $max): array
+    {
+        $this->sugRooms ??= Schema::hasTable('auditoriums') ? Auditorium::where('active', true)->orderBy('name')->get() : collect();
+        $this->sugRoomMap ??= $this->auditoriumTeacherMap();
+        $cur = ($state['ov'][(int) $c->id][$w] ?? null)?->auditorium_code ?: $c->auditorium_code;
+        $out = [];
+        foreach ($this->sugRooms as $r) {
+            if ($r->code === $cur || ($r->volume && $c->students && (int) $r->volume < (int) $c->students)
+                || !$this->auditoriumAllowedForCard($r, $c, $this->sugRoomMap) || $check($c, $w, $d, $p, $state, $r->code)) {
+                continue;
+            }
+            $out[] = $r;
+            if (count($out) >= $max) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /** weekClashes yozuvi — "Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para" (o'qituvchi / guruh ham). */
+    private function clashTexts(array $x, \Closure $dayName): array
+    {
+        $o = $x['card'];
+        $roman = [1 => 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+        $para = intdiv((int) $x['pair'] + 1, 2);
+        $tail = implode(', ', $o->occupiedGroups()) . ' · ' . $o->subject_name . ' · ' . $dayName((int) $x['day']) . ' ' . ($roman[$para] ?? $para) . ' para';
+        $out = [];
+        foreach ($x['errors'] as $m) {
+            $out[] = match (true) {
+                str_starts_with($m, 'Auditoriya band') => 'Xona ' . ($x['room_name'] ?: $x['room']) . ' band: ' . $tail,
+                str_starts_with($m, 'O\'qituvchi band') => 'O\'qituvchi ' . ($o->teacher_name ?: '—') . ' band: ' . $tail,
+                default => 'Guruh ' . (preg_match('/^Guruh band: (.*?) — /u', $m, $g) ? $g[1] : '') . ' band: ' . $tail,
+            };
+        }
+
+        return $out;
     }
 
     /** Kafedra o'qituvchilari (o'qituvchilar ro'yxatidagi kafedra filtri bilan bir xil). */

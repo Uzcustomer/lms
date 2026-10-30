@@ -798,7 +798,7 @@ class TimetableController extends Controller
      * shu qamrov ichida tekshiriladi — aks holda bir fakultetning darsi ikkinchisining
      * guruhini "band" qilib qo'yadi.
      */
-    private function groupScopeKey(TimetableCard $c): string
+    private function groupScopeKey(object $c): string
     {
         return ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . (int) $c->course;
     }
@@ -3922,7 +3922,7 @@ class TimetableController extends Controller
         return null;
     }
 
-    private function cycleFlowName(TimetableCard $card, ?string $member = null): string
+    private function cycleFlowName(object $card, ?string $member = null): string
     {
         $label = trim((string) ($card->oqim_label ?? ''));
         if ($label !== '') {
@@ -3948,10 +3948,10 @@ class TimetableController extends Controller
     }
 
     /** Karta ichidagi birlashtirilgan nomlarni haqiqiy a/b/c guruhlarga yoyadi. */
-    private function cycleCardGroups(TimetableCard $card): array
+    private function cycleCardGroups(object $card): array
     {
         $groups = [];
-        foreach ($card->occupiedGroups() as $name) {
+        foreach ($this->cardGroupsOf($card) as $name) {
             foreach (preg_split('/\s+\+\s+/u', trim((string) $name)) ?: [] as $member) {
                 $member = trim($member);
                 if ($member !== '') {
@@ -4662,7 +4662,7 @@ class TimetableController extends Controller
                 'volume' => (int) $room->volume,
             ])->values(),
             // Blok sanalarida boshqa guruhcha bilan band o'qituvchilar (ro'yxatda kulrang) — id => kim bilan, qachon.
-            'busy_teachers' => (object) $this->unitBusy($board, $flowCards)['teachers'],
+            'busy_teachers' => (object) ($this->unitBusySafe($request, $board, $flowCards)['teachers'] ?? []),
             'current' => [
                 'teacher_id' => $currentTeacherId,
                 'lesson_time' => $placement->lesson_time,
@@ -4745,7 +4745,7 @@ class TimetableController extends Controller
         $teacherChanged = $newTeacher && $flowCards->contains(fn ($c) => (int) $c->teacher_id !== (int) $newTeacher);
         $roomChanged = $newRoom && $flowCards->contains(fn ($c) => $c->auditorium_code !== $newRoom);
         if (!$request->boolean('force') && ($teacherChanged || $roomChanged)) {
-            $busy = $this->unitBusy($board, $flowCards);
+            $busy = $this->unitBusySafe($request, $board, $flowCards) ?? ['teachers' => [], 'rooms' => []];
             $parts = array_filter([
                 $teacherChanged && isset($busy['teachers'][$newTeacher]) ? "O'qituvchi {$teacherName}: " . $busy['teachers'][$newTeacher] : null,
                 $roomChanged && isset($busy['rooms'][$newRoom]) ? "Xona «{$roomName}»: " . $busy['rooms'][$newRoom] : null,
@@ -5663,7 +5663,8 @@ class TimetableController extends Controller
         }
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
         $rows = [];
-        foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->whereNotNull('group_name')->orderBy('id')->get() as $c) {
+        // Yengil qatorlar (model emas — katta doskada xotira): faqat kerakli ustunlar.
+        foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'practice')->whereNotNull('group_name')) as $c) {
             if (!$c->group_name || ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')]))
                 || ($specSet !== null && !isset($specSet[(string) $c->specialty_name])) || ($courseSet !== null && !isset($courseSet[(int) $c->course]))) {
                 continue;
@@ -5778,7 +5779,7 @@ class TimetableController extends Controller
      * boshlanishi; KTR ham soat ham yo'q — amaliy 6 soat). Yozuv: unit (birlik indeksi), lesson/card (karta id), date,
      * from/to (soat qatorlari), students, teacher_id, teacher, room, room_name, free_room, label (guruh, fan).
      */
-    private function cycleOccupancy(TimetableBoard $board, array $units, array $calendar): array
+    private function cycleOccupancy(TimetableBoard $board, array $units, array $calendar, ?array $onlyDates = null, ?array $onlyCards = null): array
     {
         [$dates, $workIndices] = $calendar;
         $hasSlots = Schema::hasColumn('timetable_cycle_placements', 'lecture_slots');
@@ -5788,13 +5789,24 @@ class TimetableController extends Controller
         $gridHours = max(6, ($bellPairs ?: max(1, (int) $board->pairs_per_day)) * $this->cycleRowHours($board));
         // Oqim ma'ruzasi: oqim nomi + fan bo'yicha ma'ruza kartalari.
         $lectures = [];
-        foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture')->get() as $c) {
+        foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')) as $c) {
             $lectures[mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($this->cycleFlowName($c))
                 . '|' . mb_strtolower(trim((string) $c->subject_name))][] = $c;
         }
         $roomNames = Auditorium::pluck('name', 'code')->all();
         $out = [];
         foreach ($units as $ui => $u) {
+            $lecCards = $lectures[mb_strtolower(trim((string) $u['specialty'])) . '|' . (int) $u['course'] . '|' . mb_strtolower($u['parent'])
+                . '|' . mb_strtolower(trim((string) $u['subject']))] ?? [];
+            // Filtrlar (unitBusy): faqat berilgan kartalar darslari va/yoki faqat berilgan sanalar — keraksiz birlik hisoblanmaydi.
+            if ($onlyCards !== null && !array_filter(array_merge($u['cards'], $lecCards), fn ($c) => isset($onlyCards[(int) $c->id]))) {
+                continue;
+            }
+            $pos = array_search((int) $u['from'], $workIndices, true);
+            if ($onlyDates !== null && ($pos === false || !array_filter(array_slice($workIndices, $pos, (int) $u['days']),
+                fn ($ci) => isset($dates[$ci]) && isset($onlyDates[$dates[$ci]->toDateString()])))) {
+                continue;
+            }
             $faculty = (string) ($u['faculty'] ?? '');
             $kk = $this->cycleKtrKey((string) $u['specialty'], (int) $u['course'], (string) $u['subject']);
             $base = $this->cycleSubjectVariantBase((string) $u['subject']);
@@ -5806,16 +5818,16 @@ class TimetableController extends Controller
             $starts = array_replace((array) ($slots['starts'] ?? []), (array) (($slots['starts_g'] ?? [])[$u['unit']] ?? []));
             $dayPlan = ($plan !== null || $hrs !== null)
                 ? $this->cycleDayPlan($plan, $hrs, (int) $u['days'], (int) $u['from'], $workIndices, $starts, 6, $gridHours) : null;
-            $lecCards = $lectures[mb_strtolower(trim((string) $u['specialty'])) . '|' . (int) $u['course'] . '|' . mb_strtolower($u['parent'])
-                . '|' . mb_strtolower(trim((string) $u['subject']))] ?? [];
             $students = (int) collect($u['cards'])->max('students');
-            $pos = array_search((int) $u['from'], $workIndices, true);
             for ($k = 0; $pos !== false && $k < (int) $u['days']; $k++) {
                 $ci = $workIndices[$pos + $k] ?? null;
                 if ($ci === null) {
                     break;
                 }
                 $date = $dates[$ci]->toDateString();
+                if ($onlyDates !== null && !isset($onlyDates[$date])) {
+                    continue;
+                }
                 $d = $dayPlan[$ci - (int) $u['from']] ?? null;
                 $start = (int) ($d['start'] ?? $starts[$k] ?? $starts[(string) $k] ?? 1);
                 // [karta (dars), boshlanish, tugash]: ma'ruza — oqim kartasi, amaliy — guruhcha kartalari.
@@ -5833,6 +5845,9 @@ class TimetableController extends Controller
                     }
                 }
                 foreach ($lessons as [$card, $from, $to]) {
+                    if ($onlyCards !== null && !isset($onlyCards[(int) $card->id])) {
+                        continue;
+                    }
                     $roomName = (string) ($card->auditorium_name ?: ($roomNames[$card->auditorium_code] ?? ''));
                     // Xona yuklamasi: amaliy karta (umumiy "A + B" ham) — bitta dars, talabalari bir marta; oqim ma'ruzasi —
                     // har guruhcha o'z talabalari bilan.
@@ -5951,7 +5966,7 @@ class TimetableController extends Controller
     /** Karta sikl fanigami (bo'lakli fan — asosiy nomi bo'yicha ham); $cycleKeys — cycleSubjectKeys. */
     private function cycleCardTest(array $cycleKeys): \Closure
     {
-        return function (TimetableCard $c) use ($cycleKeys): bool {
+        return function (object $c) use ($cycleKeys): bool {
             $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
             $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
 
@@ -5965,21 +5980,22 @@ class TimetableController extends Controller
      * hafta — yo'q), sikl fanlarisiz. Yozuv: card, week, date, day, pair, sh, from/to (yarim-para, 1 dan — sikl soatlari bilan bir
      * o'lchovda), teacher_id, room (shu haftadagi xona), free_room, groups ("qamrov|guruh"), students, label (guruh, fan).
      */
-    private function weeklyOccupancy(TimetableBoard $board, array $state): array
+    private function weeklyOccupancy(TimetableBoard $board, array $state, ?array $onlyDates = null): array
     {
         $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
         $grids = [];
         $days = [];      // grid|hafta => [kun => sana]
         $out = [];
         foreach ($state['cards'] as $id => $c) {
-            $c->setRelation('board', $board);
+            if ($c instanceof TimetableCard) {
+                $c->setRelation('board', $board);
+            }
             if ($isCycle($c)) {
                 continue;
             }
             $gk = $c->faculty_name . '|' . $c->specialty_name . '|' . (int) $c->course . '|' . $this->cardCurriculumId($c);
             $grid = $grids[$gk] ??= $this->cardGrid($board, $c);
-            $groups = array_map(fn ($g) => $this->groupScopeKey($c) . '|' . $g, $c->occupiedGroups());
-            $label = ($c->group_name ?: implode(', ', $c->occupiedGroups())) . ', ' . $c->subject_name;
+            $groups = $label = null;
             for ($w = 1; $w <= (int) $grid['weeks']; $w++) {
                 $o = $state['ov'][$id][$w] ?? null;
                 if ($o && $o->cancelled) {
@@ -5995,14 +6011,16 @@ class TimetableController extends Controller
 
                     return array_map(fn ($i) => $monday->copy()->addDays($i)->toDateString(), range(0, 6));
                 })())[$d - 1] ?? null;
-                if ($date === null) {
+                if ($date === null || ($onlyDates !== null && !isset($onlyDates[$date]))) {
                     continue;
                 }
+                $groups ??= array_map(fn ($g) => $this->groupScopeKey($c) . '|' . $g, $this->cardGroupsOf($c));
+                $label ??= ($c->group_name ?: implode(', ', $this->cardGroupsOf($c))) . ', ' . $c->subject_name;
                 $room = $o?->auditorium_code ?: $c->auditorium_code;
                 $roomName = (string) ($o?->auditorium_code ? $o->auditorium_name : $c->auditorium_name);
                 $out[] = ['kind' => 'weekly', 'card' => (int) $id, 'week' => $w, 'date' => $date, 'day' => $d, 'pair' => $p, 'sh' => $sh,
                     'load_key' => 'w' . $id, 'load' => (int) $c->students,
-                    'from' => $p, 'to' => $p + $c->lenHalf(), 'teacher_id' => $c->teacher_id ? (int) $c->teacher_id : null,
+                    'from' => $p, 'to' => $p + max(1, (int) ($c->len_half ?? 2)), 'teacher_id' => $c->teacher_id ? (int) $c->teacher_id : null,
                     'room' => $room ?: null, 'room_name' => $roomName ?: (string) $room,
                     'free_room' => $this->isSharedRoom($roomName) || preg_match('/kafedra\s+mudiri/iu', $roomName) === 1,
                     'groups' => $groups, 'students' => (int) $c->students, 'label' => $label];
@@ -6019,51 +6037,248 @@ class TimetableController extends Controller
      * findWeekConflicts bilan tekshiriladi. Sikl fanlari — sikl jadvalida (cycleConflicts).
      * Qaytaradi: [karta id => [hafta => ['text' => sabab, 'date' => Y-m-d, 'day' => kun, 'pair' => yarim-para]]].
      */
-    private function weeklyConflicts(TimetableBoard $board, ?array $state = null): array
+    private function weeklyConflicts(TimetableBoard $board, ?array $state = null, ?array $onlyCards = null, ?int $onlyWeek = null): array
     {
-        $state ??= $this->occupancyState($board->id);
-        $buckets = [];   // "t|o'qituvchi|sana" / "r|xona|sana" / "g|qamrov|guruh|sana" => [[boshi, oxiri, karta, hafta], ...]
-        $placed = [];    // karta => hafta => [kun, para, yarim, sana]
-        foreach ($this->weeklyOccupancy($board, $state) as $e) {
-            $placed[$e['card']][$e['week']] = [$e['day'], $e['pair'], $e['sh'], $e['date']];
-            $x = [$e['from'], $e['to'], $e['card'], $e['week']];
-            if ($e['teacher_id']) {
-                $buckets['t|' . $e['teacher_id'] . '|' . $e['date']][] = $x;
+        // Butun doska model sifatida emas (128 MB): yengil qatorlar va haqiqiy kalendar haftasi bo'yicha — har hafta uchun faqat shu
+        // haftaning darslari xotirada. Modellar faqat kesishgan nomzodlar uchun (findWeekConflicts) olinadi; $state berilsa — undagi.
+        // $onlyCards — faqat shu kartalarning to'qnashuvlari (sherigi har qanday karta bo'lishi mumkin); $onlyWeek — faqat ularning
+        // shu haftasi (har karta o'z kalendari bo'yicha).
+        $hasOv = Schema::hasTable('timetable_card_overrides');
+        $rows = $this->cardRows($board, fn ($q) => $q->where(fn ($w) => $w->where(fn ($t) => $t->whereNotNull('day')->whereNotNull('pair'))
+            ->when($hasOv, fn ($x) => $x->orWhereIn('id', DB::table('timetable_card_overrides')->select('card_id')))));
+        $ov = $this->overrideRows($board);
+        $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
+        $grids = [];     // kalendar (panjara) => ['mon' => [dushanba => hafta], 'ids' => [karta, ...]]
+        foreach ($rows as $id => $c) {
+            if ($isCycle($c)) {
+                continue;
             }
-            if ($e['room']) {
-                $buckets['r|' . $e['room'] . '|' . $e['date']][] = $x;
+            $gk = $c->faculty_name . '|' . $c->specialty_name . '|' . (int) $c->course . '|' . $this->cardCurriculumId($c);
+            if (!isset($grids[$gk])) {
+                $mon = [];
+                for ($w = (int) $this->cardGrid($board, $c)['weeks']; $w >= 1; $w--) {
+                    $mon[$this->weekStartDate($board, $c, $w)->toDateString()] = $w;
+                }
+                $grids[$gk] = ['mon' => $mon, 'ids' => []];
             }
-            foreach ($e['groups'] as $g) {
-                $buckets['g|' . $g . '|' . $e['date']][] = $x;
+            $grids[$gk]['ids'][] = $id;
+            if ($onlyWeek !== null && isset($onlyCards[$id]) && ($m = array_search($onlyWeek, $grids[$gk]['mon'], true)) !== false) {
+                $onlyMondays[$m] = true;
             }
         }
-        // Vaqti kesishgan juftliklar: karta|hafta => [boshqa kartalar].
-        $cand = [];
-        foreach ($buckets as $list) {
-            $n = count($list);
-            for ($i = 0; $i < $n; $i++) {
-                for ($j = $i + 1; $j < $n; $j++) {
-                    [$af, $at, $aid, $aw] = $list[$i];
-                    [$bf, $bt, $bid, $bw] = $list[$j];
-                    if ($aid !== $bid && $af < $bt && $bf < $at) {
-                        $cand[$aid . '|' . $aw][$bid] = true;
-                        $cand[$bid . '|' . $bw][$aid] = true;
+        $mondays = [];
+        foreach ($grids as $g) {
+            $mondays += $g['mon'];
+        }
+        if ($onlyWeek !== null) {
+            $mondays = array_intersect_key($mondays, $onlyMondays ?? []);
+        }
+        ksort($mondays);
+        $models = $state['cards'] ?? [];
+        $out = [];
+        foreach (array_keys($mondays) as $monday) {
+            $mondayC = Carbon::parse($monday);
+            $dateOf = [];
+            for ($d = 1; $d <= 7; $d++) {
+                $dateOf[$d] = $mondayC->copy()->addDays($d - 1)->toDateString();
+            }
+            $buckets = [];   // "t|o'qituvchi|sana" / "r|xona|sana" / "g|qamrov|guruh|sana" => [[boshi, oxiri, karta], ...]
+            $placed = [];    // karta => [hafta, kun, para, yarim, sana]
+            foreach ($grids as $g) {
+                $w = $g['mon'][$monday] ?? null;
+                if ($w === null) {
+                    continue;
+                }
+                foreach ($g['ids'] as $id) {
+                    $c = $rows[$id];
+                    $o = $ov[$id][$w] ?? null;
+                    if ($o && $o->cancelled) {
+                        continue;
+                    }
+                    [$d, $p, $sh] = $o && $o->day && $o->pair ? [(int) $o->day, (int) $o->pair, (int) ($o->start_half ?? 0)]
+                        : [(int) $c->day, (int) $c->pair, (int) ($c->start_half ?? 0)];
+                    if (!$d || !$p || !isset($dateOf[$d])) {
+                        continue;
+                    }
+                    $date = $dateOf[$d];
+                    $placed[$id] = [$w, $d, $p, $sh, $date];
+                    $x = [$p, $p + max(1, (int) ($c->len_half ?? 2)), $id];
+                    if ($c->teacher_id) {
+                        $buckets['t|' . (int) $c->teacher_id . '|' . $date][] = $x;
+                    }
+                    if ($room = $o?->auditorium_code ?: $c->auditorium_code) {
+                        $buckets['r|' . $room . '|' . $date][] = $x;
+                    }
+                    foreach ($this->cardGroupsOf($c) as $grp) {
+                        $buckets['g|' . $this->groupScopeKey($c) . '|' . $grp . '|' . $date][] = $x;
+                    }
+                }
+            }
+            // Vaqti kesishgan juftliklar: karta => [boshqa kartalar].
+            $cand = [];
+            foreach ($buckets as $list) {
+                $n = count($list);
+                for ($i = 0; $i < $n; $i++) {
+                    for ($j = $i + 1; $j < $n; $j++) {
+                        [$af, $at, $aid] = $list[$i];
+                        [$bf, $bt, $bid] = $list[$j];
+                        if ($aid !== $bid && $af < $bt && $bf < $at) {
+                            $cand[$aid][$bid] = true;
+                            $cand[$bid][$aid] = true;
+                        }
+                    }
+                }
+            }
+            unset($buckets);
+            if ($onlyCards !== null) {
+                $cand = array_filter(array_intersect_key($cand, $onlyCards), fn ($id) => $onlyWeek === null || $placed[$id][0] === $onlyWeek,
+                    ARRAY_FILTER_USE_KEY);
+            }
+            if (!$cand) {
+                continue;
+            }
+            $need = [];
+            foreach ($cand as $id => $others) {
+                $need += [$id => true] + $others;
+            }
+            if ($missing = array_keys(array_diff_key($need, $models))) {
+                foreach (TimetableCard::whereIn('id', $missing)->get() as $m) {
+                    $models[(int) $m->id] = $m;
+                }
+            }
+            foreach ($cand as $id => $others) {
+                [$w, $d, $p, $sh, $date] = $placed[$id];
+                $narrow = array_intersect_key($models, $others + [$id => true]);
+                ksort($narrow);
+                foreach ($narrow as $m) {
+                    $m->setRelation('board', $board);
+                }
+                $errs = $this->findWeekConflicts($models[$id], $w, $d, $p, $sh, ['cards' => $narrow, 'ov' => $ov]);
+                if ($errs) {
+                    $out[$id][$w] = ['text' => implode('; ', $errs), 'date' => $date, 'day' => $d, 'pair' => $p];
+                }
+            }
+        }
+        ksort($out);
+        foreach ($out as &$weeks) {
+            ksort($weeks);
+        }
+        unset($weeks);
+
+        return $out;
+    }
+
+    /** Joylangan ichki sikl birliklari va kalendar (cycleInternalUnits) — so'rov davomida bir marta. */
+    private function placedCycleUnits(TimetableBoard $board): array
+    {
+        $memoKey = 'timetable.cycle_units.' . $board->id;
+        if (!request()->attributes->has($memoKey)) {
+            [$units, $calendar] = $this->cycleInternalUnits($board);
+            request()->attributes->set($memoKey, [array_values(array_filter($units, fn ($u) => $u['placement'] !== null)), $calendar]);
+        }
+
+        return request()->attributes->get($memoKey);
+    }
+
+    /**
+     * Karta qatorlari — model emas, faqat bandlik/to'qnashuv uchun kerakli ustunlar (id tartibida, id => qator; group_names —
+     * massiv). Katta doskada Eloquent modellar xotirani (128 MB) tugatadi.
+     */
+    private function cardRows(TimetableBoard $board, ?\Closure $where = null): array
+    {
+        $q = DB::table('timetable_cards')->where('board_id', $board->id);
+        if ($where) {
+            $where($q);
+        }
+        $out = [];
+        foreach ($q->orderBy('id')->get(['id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'group_name',
+            'group_names', 'subject_name', 'students', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name', 'day', 'pair',
+            'start_half', 'len_half']) as $r) {
+            $r->group_names = is_string($r->group_names) ? (json_decode($r->group_names, true) ?: null) : $r->group_names;
+            $out[(int) $r->id] = $r;
+        }
+
+        return $out;
+    }
+
+    /** Haftalik istisnolar (o — timetable_card_overrides, c — kartalar) qatorlari: karta => hafta => qator. */
+    private function overrideRows(TimetableBoard $board, ?\Closure $where = null): array
+    {
+        if (!Schema::hasTable('timetable_card_overrides')) {
+            return [];
+        }
+        $q = DB::table('timetable_card_overrides as o')->join('timetable_cards as c', 'c.id', '=', 'o.card_id')->where('c.board_id', $board->id);
+        if ($where) {
+            $where($q);
+        }
+        $out = [];
+        foreach ($q->orderBy('o.id')->get(['o.*']) as $o) {
+            $out[(int) $o->card_id][(int) $o->week] = $o;
+        }
+
+        return $out;
+    }
+
+    /** Karta guruhlari — TimetableCard::occupiedGroups kabi (model yoki cardRows qatori). */
+    private function cardGroupsOf(object $c): array
+    {
+        $names = $c->group_names ?? null;
+        if (is_string($names)) {
+            $names = json_decode($names, true);
+        }
+
+        return $names ?: ($c->group_name ? [$c->group_name] : []);
+    }
+
+    /**
+     * Sanalar qaysi hafta raqamlariga tushadi — doskadagi barcha kalendarlar (panjara sozlamalari va doska sukuti) bo'yicha
+     * (gridFor/weekStartDate kabi). Istisnolarni (hafta, kun) bo'yicha oldindan filtrlash uchun — ortiqchasi zararsiz.
+     */
+    private function weeksAt(TimetableBoard $board, array $dates): array
+    {
+        $weeks = [];
+        $settings = $this->calendarGridCache[$board->id] ??= TimetableGridSetting::where('board_id', $board->id)->get();
+        foreach (array_merge([null], $settings->all()) as $gs) {
+            $start = ($gs->start_date ?? null) ? Carbon::parse($gs->start_date)->startOfDay() : $this->weeklySemesterStart($board);
+            $mondays = $this->weekMondays($board, $start, max(1, (int) ($gs->weeks ?? $board->weeks ?? 15)), $gs->weekly_breaks ?? null);
+            foreach ($mondays as $i => $monday) {
+                $from = $monday->toDateString();
+                $to = $monday->copy()->addDays(6)->toDateString();
+                foreach ($dates as $d) {
+                    if ($d >= $from && $d <= $to) {
+                        $weeks[$i + 1] = true;
                     }
                 }
             }
         }
-        $out = [];
-        foreach ($cand as $key => $others) {
-            [$id, $w] = array_map('intval', explode('|', $key));
-            [$d, $p, $sh, $date] = $placed[$id][$w];
-            $narrow = ['cards' => array_intersect_key($state['cards'], $others + [$id => true])] + $state;
-            $errs = $this->findWeekConflicts($state['cards'][$id], $w, $d, $p, $sh, $narrow);
-            if ($errs) {
-                $out[$id][$w] = ['text' => implode('; ', $errs), 'date' => $date, 'day' => $d, 'pair' => $p];
+
+        return array_keys($weeks);
+    }
+
+    /**
+     * unitBusy: berilgan sanalarga tushishi mumkin bo'lgan boshqa haftalik darslar holati (weeklyOccupancy uchun) — shablonda shu
+     * hafta kunlarida va $maxTo dan oldin boshlanadigan kartalar, shu kunlarga ko'chirilganlari va ularning istisnolari ((hafta, kun)
+     * bo'yicha). Aniq sana va vaqt tekshiruvi — keyin (weeklyOccupancy, unitBusy).
+     */
+    private function weeklyStateOn(TimetableBoard $board, array $dates, int $maxTo, array $exceptIds): array
+    {
+        $dows = array_values(array_unique(array_map(fn ($d) => Carbon::parse($d)->dayOfWeekIso, $dates)));
+        $weeks = $this->weeksAt($board, $dates);
+        $ov = $this->overrideRows($board, fn ($q) => $q->whereIn('o.week', $weeks)
+            ->where(fn ($w) => $w->whereIn('o.day', $dows)->orWhereIn('c.day', $dows)));
+        $moved = [];
+        foreach ($ov as $cid => $byWeek) {
+            foreach ($byWeek as $o) {
+                if (!$o->cancelled && $o->day && $o->pair && in_array((int) $o->day, $dows, true) && (int) $o->pair < $maxTo) {
+                    $moved[$cid] = true;
+                }
             }
         }
+        $cards = $this->cardRows($board, fn ($q) => $q->whereNotIn('id', array_keys($exceptIds))
+            ->where(fn ($w) => $w->where(fn ($t) => $t->whereIn('day', $dows)->whereNotNull('pair')->where('pair', '<', $maxTo))
+                ->orWhereIn('id', array_keys($moved))));
 
-        return $out;
+        return ['cards' => $cards, 'ov' => array_intersect_key($ov, $cards)];
     }
 
     /**
@@ -6072,23 +6287,33 @@ class TimetableController extends Controller
      * uchun. Xona: "Kafedra mudiri xonasi" va umumiy xonalar band emas; sikl darslari o'zaro — sig'im va talabalar soni ma'lum
      * bo'lsa, sig'imdan oshsagina band; haftalik dars bilan — har qanday kesishish (clashWith kabi). Qaytaradi: ['teachers' => [id => "guruh, fan, 30.10–10.11; ..."], 'rooms' => [kod => matn]].
      */
-    private function unitBusy(TimetableBoard $board, $unitCards): array
+    protected function unitBusy(TimetableBoard $board, $unitCards): array
     {
+        $hits = ['teachers' => [], 'rooms' => []];
         $ids = array_flip($unitCards->pluck('id')->map(fn ($id) => (int) $id)->all());
-        $state = $this->occupancyState($board->id);
-        [$units, $calendar] = $this->cycleInternalUnits($board);
-        $entries = array_merge($this->weeklyOccupancy($board, $state),
-            $this->cycleOccupancy($board, array_values(array_filter($units, fn ($u) => $u['placement'] !== null)), $calendar));
-        $mine = [];
+        if (!$ids) {
+            return $hits;
+        }
+        // Butun doska model sifatida yuklanmaydi (128 MB): avval shu birlik darslarining sanalari va vaqtlari, so'ng faqat shu
+        // sanalarga (hafta kuni, kalendar haftasi) va vaqtgacha tushadigan boshqa darslar — yengil qatorlar. Sikl birliklari so'rov
+        // davomida bir marta olinadi.
+        [$units, $calendar] = $this->placedCycleUnits($board);
+        $mine = array_merge($this->weeklyOccupancy($board, ['cards' => $this->cardRows($board, fn ($q) => $q->whereIn('id', array_keys($ids))),
+            'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($ids)))]),
+            $this->cycleOccupancy($board, $units, $calendar, null, $ids));
+        if (!$mine) {
+            return $hits;
+        }
+        $dates = array_flip(array_column($mine, 'date'));
         $others = [];
-        foreach ($entries as $e) {
-            if (isset($ids[$e['card']])) {
-                $mine[] = $e;
-            } else {
-                $others[$e['date']][] = $e;
+        foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), max(array_column($mine, 'to')), $ids), $dates),
+            $this->cycleOccupancy($board, $units, $calendar, $dates)] as $entries) {
+            foreach ($entries as $e) {
+                if (!isset($ids[$e['card']])) {
+                    $others[$e['date']][] = $e;
+                }
             }
         }
-        $hits = ['teachers' => [], 'rooms' => []];
         $peak = [];       // xona => boshqa darslarning bir vaqtdagi eng yuqori yuklamasi (talabalar; bitta karta — bir marta)
         $unknown = [];    // xona => talabalar soni noma'lum dars bor
         $exclusive = [];  // haftalik darsli xona: sig'imdan qat'i nazar band (haftalik jadvalda xona — bitta dars uchun)
@@ -6141,6 +6366,48 @@ class TimetableController extends Controller
         return $hits;
     }
 
+    /**
+     * unitBusy — yordamchi tekshiruv, biriktirishni to'xtatmasligi kerak: xato bo'lsa logga yoziladi va null qaytadi (bandlik
+     * tekshiruvi o'tkazib yuboriladi). try/catch ushlamaydigan PHP fatal (xotira/vaqt) ham shutdown orqali logga yoziladi.
+     */
+    private function unitBusySafe(Request $request, TimetableBoard $board, $unitCards): ?array
+    {
+        $first = $unitCards->first();
+        $context = ['board' => $board->id, 'role' => $this->timetableActiveRole($request), 'cards' => $unitCards->count(),
+            'unit' => $first ? implode(' · ', array_filter([$first->faculty_name, $first->specialty_name, $first->course . '-kurs',
+                $first->subject_name, $first->training_type, $first->training_type === 'lecture' ? $first->oqim_label : $first->group_name])) : null];
+        $running = true;
+        $reserve = str_repeat(' ', 65536);   // xotira tugaganda log yozishga joy
+        register_shutdown_function(function () use (&$running, &$reserve, $context) {
+            $reserve = null;
+            $err = error_get_last();
+            if (!$running || !$err || !in_array($err['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE], true)) {
+                return;
+            }
+            @ini_set('memory_limit', (string) (memory_get_usage() + 32 * 1024 * 1024));
+            self::logUnitBusyFailure($context + ['fatal' => true, 'message' => $err['message'], 'at' => $err['file'] . ':' . $err['line']]);
+        });
+        try {
+            return $this->unitBusy($board, $unitCards);
+        } catch (\Throwable $e) {
+            self::logUnitBusyFailure($context + ['message' => $e->getMessage(), 'at' => $e->getFile() . ':' . $e->getLine()]);
+
+            return null;
+        } finally {
+            $running = false;
+        }
+    }
+
+    /** Laravel logiga yozib bo'lmasa (ruxsat va h.k.) — PHP error_log (veb-server logi). */
+    private static function logUnitBusyFailure(array $context): void
+    {
+        try {
+            Log::error('unitBusy failed', $context);
+        } catch (\Throwable $e) {
+            error_log('unitBusy failed: ' . json_encode($context, JSON_UNESCAPED_UNICODE));
+        }
+    }
+
     /** Biriktirish oynasi: tanlangan dars birligi vaqtida band o'qituvchilar va xonalar (unitBusy) — ro'yxatda kulrang. */
     public function unitBusyResources(Request $request, TimetableBoard $board)
     {
@@ -6153,9 +6420,10 @@ class TimetableController extends Controller
             'oqim_label'     => 'nullable|string|max:50',
             'group_name'     => 'nullable|string|max:255',
         ]);
-        $busy = $this->unitBusy($board, $this->unitCardsQuery($board, $data)->get());
+        $busy = $this->unitBusySafe($request, $board, $this->unitCardsQuery($board, $data)->get());
 
-        return response()->json(['teachers' => (object) $busy['teachers'], 'rooms' => (object) $busy['rooms']]);
+        return response()->json(['teachers' => (object) ($busy['teachers'] ?? []), 'rooms' => (object) ($busy['rooms'] ?? [])]
+            + ($busy === null ? ['warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."] : []));
     }
 
     /** Biriktirishdan oldin: tanlangan o'qituvchi/xona band bo'lsa — ogohlantirish ("Baribir biriktirish" — force=1). */
@@ -6178,20 +6446,20 @@ class TimetableController extends Controller
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope ?? []);
         $inScope = fn ($fac, $spec, $course) => ($facSet === null || isset($facSet[(string) ($fac ?? '')]))
             && ($specSet === null || isset($specSet[(string) $spec])) && ($courseSet === null || isset($courseSet[(int) $course]));
-        $state = $this->occupancyState($board->id);
-        $weekly = array_filter($this->weeklyConflicts($board, $state),
-            fn ($weeks, $id) => $inScope($state['cards'][$id]->faculty_name, $state['cards'][$id]->specialty_name, $state['cards'][$id]->course),
+        $all = $this->weeklyConflicts($board);
+        $rows = $all ? $this->cardRows($board, fn ($q) => $q->whereIn('id', array_keys($all))) : [];
+        $weekly = array_filter($all, fn ($weeks, $id) => isset($rows[$id]) && $inScope($rows[$id]->faculty_name, $rows[$id]->specialty_name, $rows[$id]->course),
             ARRAY_FILTER_USE_BOTH);
         $cycle = array_filter($this->cycleConflicts($board),
             fn ($c) => $inScope($c['items'][0]['faculty'] ?? null, $c['items'][0]['specialty'] ?? '', $c['items'][0]['course'] ?? 0));
         $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
         $items = [];
         foreach ($weekly as $id => $weeks) {
-            $c = $state['cards'][$id];
+            $c = $rows[$id];
             foreach ($weeks as $w => $x) {
                 $type = str_starts_with($x['text'], "O'qituvchi") ? 'teacher' : (str_starts_with($x['text'], 'Auditoriya') ? 'room' : 'group');
                 $items[] = ['kind' => 'weekly', 'card_id' => (int) $id, 'week' => (int) $w, 'type' => $type,
-                    'group' => $c->group_name ?: implode(', ', $c->occupiedGroups()), 'subject' => (string) $c->subject_name,
+                    'group' => $c->group_name ?: implode(', ', $this->cardGroupsOf($c)), 'subject' => (string) $c->subject_name,
                     'date' => $x['date'], 'time' => ($dayNames[$x['day'] - 1] ?? $x['day'] . '-kun') . ', ' . intdiv($x['pair'] + 1, 2) . '-para',
                     'text' => $x['text'], 'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
             }
@@ -8001,6 +8269,24 @@ class TimetableController extends Controller
         $myOverride = $state['ov'][$card->id][$week] ?? null;
         $myRoomCode = $roomCode ?: ($myOverride?->auditorium_code ?: $card->auditorium_code);
         $errors = [];
+        foreach ($this->weekClashes($card, $week, $day, $pair, $startHalf, $state, $roomCode, $date, $myRoomCode, $myRange) as $clash) {
+            array_push($errors, ...$clash['errors']);
+        }
+        return array_values(array_unique($errors));
+    }
+
+    /**
+     * findWeekConflicts tafsiloti: shu sanada kesishgan har bir karta — ['card', 'week' (uning kalendaridagi hafta), 'day', 'pair',
+     * 'room', 'room_name', 'errors' (clashWith)]. "Takliflar"dagi to'qnashuv sababi va ikkinchi tomon takliflari uchun.
+     */
+    private function weekClashes(TimetableCard $card, int $week, int $day, int $pair, int $startHalf, array $state, ?string $roomCode,
+        ?string $date = null, ?string $myRoomCode = null, ?array $myRange = null): array
+    {
+        $board = $card->board;
+        $date ??= $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
+        $myRange ??= $this->rangeFor($card, $pair, $startHalf);
+        $myRoomCode ??= $roomCode ?: (($state['ov'][$card->id][$week] ?? null)?->auditorium_code ?: $card->auditorium_code);
+        $out = [];
         foreach ($state['cards'] as $id => $o) {
             if ((int) $id === (int) $card->id) continue;
             // Haftalik ko'chirishi yo'q karta shablon kunida turadi: boshqa kunda (yoki joysiz) bo'lsa — kalendarni hisoblamasdan o'tamiz.
@@ -8014,10 +8300,13 @@ class TimetableController extends Controller
             $op = $ov ? $ov->pair : $o->pair;
             $osh = (int) ($ov ? ($ov->start_half ?? 0) : ($o->start_half ?? 0));
             if (!$od || !$op || (int) $od !== $day || !$this->halfOverlap($myRange, $this->rangeFor($o, (int) $op, $osh))) continue;
-            array_push($errors, ...$this->clashWith($card, $myRoomCode, $o,
-                $ov?->auditorium_code ?: $o->auditorium_code, $ov?->auditorium_name ?: $o->auditorium_name));
+            $oRoom = $ov?->auditorium_code ?: $o->auditorium_code;
+            $oRoomName = $ov?->auditorium_name ?: $o->auditorium_name;
+            if ($errs = $this->clashWith($card, $myRoomCode, $o, $oRoom, $oRoomName)) {
+                $out[] = ['card' => $o, 'week' => $otherWeek, 'day' => (int) $od, 'pair' => (int) $op, 'room' => $oRoom, 'room_name' => $oRoomName, 'errors' => $errs];
+            }
         }
-        return array_values(array_unique($errors));
+        return $out;
     }
 
     /**
@@ -9681,7 +9970,7 @@ class TimetableController extends Controller
         }
         // Xona shu darslar vaqtida (boshqa haftalar, sikl) boshqa guruhcha bilan band — ogohlantirish.
         if ($room && !$request->boolean('force') && $cards->contains(fn ($c) => $c->getOriginal('auditorium_code') !== $room->code)
-            && ($warn = $this->busyWarning("Xona «{$room->name}»", $this->unitBusy($board, $cards)['rooms'][$room->code] ?? null))) {
+            && ($warn = $this->busyWarning("Xona «{$room->name}»", $this->unitBusySafe($request, $board, $cards)['rooms'][$room->code] ?? null))) {
             return $warn;
         }
 
@@ -9991,7 +10280,7 @@ class TimetableController extends Controller
             // O'qituvchi shu darslar vaqtida boshqa guruhcha bilan band — ogohlantirish (o'zi biriktirilgan bo'lsa — tekshirilmaydi).
             $unitCards = (clone $q)->get();
             if (!$request->boolean('force') && $unitCards->contains(fn ($c) => (int) $c->teacher_id !== (int) $t->id)
-                && ($warn = $this->busyWarning("O'qituvchi {$teacherName}", $this->unitBusy($board, $unitCards)['teachers'][$t->id] ?? null))) {
+                && ($warn = $this->busyWarning("O'qituvchi {$teacherName}", $this->unitBusySafe($request, $board, $unitCards)['teachers'][$t->id] ?? null))) {
                 return $warn;
             }
             $affected = $q->update(['teacher_id' => $t->id, 'teacher_name' => $teacherName]);

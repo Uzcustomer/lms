@@ -346,6 +346,10 @@
                             <label>Xona (bo'sh xonalar)</label>
                             <select id="cycAssignRoom"><option value="">— Tanlanmagan —</option></select>
                         </div>
+                        <div id="cycAssignShiftBox" class="hidden" style="grid-column: 1 / -1;">
+                            <label title="Guruhchaning butun bloki shu paradan boshlanadi (masalan, ikkinchi smena — 13:30)">Boshlanish (smena)</label>
+                            <select id="cycAssignShift"><option value="0">Oqimdagidek</option></select>
+                        </div>
                         <div id="cycAssignWarn" class="hidden" style="grid-column: 1 / -1; font-size: 12px;"></div>
                     </div>
                     <div class="cyc-assign-foot">
@@ -5695,6 +5699,13 @@
                     const current = j.current || {};
                     if (current.teacher_id) $('cycAssignTeacher').value = String(current.teacher_id);
                     if (current.auditorium_code) $('cycAssignRoom').value = current.auditorium_code;
+                    // Guruhcha smenasi (ichki jadval): butun blok shu paradan — masalan, IV para (13:30).
+                    const shiftOpts = j.shift_options || [];
+                    $('cycAssignShiftBox').classList.toggle('hidden', !shiftOpts.length);
+                    $('cycAssignShift').innerHTML = '<option value="0">Oqimdagidek</option>' +
+                        shiftOpts.map(o => '<option value="' + (+o.start) + '">' + esc(o.label) + '</option>').join('');
+                    $('cycAssignShift').value = String(+j.shift_start || 0);
+                    if ($('cycAssignShift').value !== String(+j.shift_start || 0)) $('cycAssignShift').value = '0';
                 } catch (e) {
                     $('cycAssignModal').classList.remove('open');
                     alert('Ma\u2019lumotlarni yuklab bo\u2018lmadi: ' + e.message);
@@ -5745,6 +5756,7 @@
                         training_type: cycAssignCard.type || 'practice', view: cycleEffView(), placement_group: (cycAssignCard && cycAssignCard.placement_group) || undefined,
                         teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
                         auditorium_code: $('cycAssignRoom').value || null,
+                        shift_start: $('cycAssignShiftBox').classList.contains('hidden') ? undefined : +$('cycAssignShift').value,
                         start_date: $('cycleStart').value, holidays: cycleHolidays, force: force ? 1 : undefined,
                     });
                     closeCycleAssign();
@@ -6038,8 +6050,10 @@
                                         let kind = '';
                                         if (!off && dp) {
                                             const st = +dp.start || 1;
+                                            // Amaliy boshlanishi (ps): guruhcha smenasi bo'lsa — ma'ruzadan keyin emas, smena soatidan.
+                                            const ps = dp.ps != null ? +dp.ps : st + (+dp.lec || 0);
                                             if (hour >= st && hour < st + (+dp.lec || 0)) kind = ' is-lecture';
-                                            else if (hour >= st + (+dp.lec || 0) && hour < st + (+dp.lec || 0) + (+dp.prc || 0)) kind = ' is-practice';
+                                            else if (hour >= ps && hour < ps + (+dp.prc || 0)) kind = ' is-practice';
                                         }
                                         const offLabel = off && hour === Math.ceil(dayHours / 2) ? (date.holiday ? 'bayram' : 'dam') : '';
                                         inner += '<button type="button" class="cyc-mk-cell'
@@ -6301,7 +6315,7 @@
                     '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div>' +
                     (dp.lec > 0 ? '<div class="dp-row"><span class="dp-tag l">M</span><div><b>Ma\'ruza ' + dp.lec + ' s</b> <span class="dp-sub">' + range(st, +dp.lec) + '</span>' +
                         (dp.tl ? '<div class="dp-topic">' + esc(dp.tl) + '</div>' : '') + '</div></div>' : '') +
-                    (dp.prc > 0 ? '<div class="dp-row"><span class="dp-tag p">A</span><div><b>Amaliy ' + dp.prc + ' s</b> <span class="dp-sub">' + range(st + (+dp.lec || 0), +dp.prc) + '</span>' +
+                    (dp.prc > 0 ? '<div class="dp-row"><span class="dp-tag p">A</span><div><b>Amaliy ' + dp.prc + ' s</b> <span class="dp-sub">' + range(dp.ps != null ? +dp.ps : st + (+dp.lec || 0), +dp.prc) + '</span>' +
                         (dp.tp ? '<div class="dp-topic">' + esc(dp.tp) + '</div>' : '') + '</div></div>' : '') +
                     (total === 0 ? '<div class="dp-sub">Bu kuni KTR bo\'yicha dars yo\'q.</div>' : '') +
                     (dp.ktr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
@@ -9269,8 +9283,9 @@
                                 if (b.ghost) { cells.push({ t: '', bg: '#f5f3ff' }); return; }   // dars bo'lak qatorida
                                 const dp = (b.day_plan || {})[i - b.from];
                                 const st = dp ? (+dp.start || 1) : 0, l = dp ? (+dp.lec || 0) : 0, p = dp ? (+dp.prc || 0) : 0;
+                                const ps = dp && dp.ps != null ? +dp.ps : st + l;
                                 if (dp && hour >= st && hour < st + l) cells.push({ t: 'M', b: 1, bg: '#facc15', fc: '#713f12' });
-                                else if (dp && hour >= st + l && hour < st + l + p) cells.push({ t: 'A', b: 1, bg: '#c9e8e5', fc: '#0f766e' });
+                                else if (dp && hour >= ps && hour < ps + p) cells.push({ t: 'A', b: 1, bg: '#c9e8e5', fc: '#0f766e' });
                                 else cells.push({ t: '', bg: subjColor(b.subject).bg });
                             });
                             push(cells, 13);

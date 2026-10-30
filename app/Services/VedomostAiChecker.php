@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Student;
 use App\Models\VedomostSubmission;
+use App\Services\VedomostAiProgress as Progress;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -62,8 +63,16 @@ class VedomostAiChecker
             throw new RuntimeException("Vedomost tekshirish hisobi bo'yicha talabalar topilmadi.");
         }
 
+        Progress::log('Mark baholari yig‘ildi: ' . count($expected['talabalar']) . ' talaba · ' . $expected['shakl']
+            . ' · yopilish shakli: ' . ($expected['yopilish_shakli'] ?: '—'));
+
         $scan = $this->reader->read(Storage::disk('public')->path($v->pdf_path), $v->id, count($expected['talabalar']), $fresh);
+        $m = $scan['meta'] ?? [];
+        Progress::log('PDF o‘qildi: ' . ($m['rows_read'] ?? count($scan['rows'] ?? [])) . ' qator'
+            . (!empty($m['missing_nrs']) ? ' · o‘qilmagan qatorlar: ' . implode(', ', $m['missing_nrs']) : '')
+            . (!empty($m['repaired']) ? ' · qayta o‘qib tuzatildi: ' . $m['repaired'] : ''), empty($m['missing_nrs']) ? 'ok' : 'warn');
         $context = $this->buildContext($v, $expected, $scan);
+        Progress::log('Test markazi: ' . count($context['test_center'] ?? []) . ' talaba natijasi topildi');
 
         return $this->assemble($expected, $scan, $context, []);
     }

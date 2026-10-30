@@ -121,7 +121,7 @@
                             $lines[] = trim(($row['n'] ? $row['n'] . '. ' : '') . $row['fio'] . ': ' . $msgs);
                         }
                     }
-                    foreach ($rep['extra'] ?? [] as $e) { $lines[] = "PDFda bor, HEMISda yo'q: {$e['fio']} ({$e['id']})"; }
+                    foreach ($rep['extra'] ?? [] as $e) { $lines[] = "PDFda bor, Markda yo'q: {$e['fio']} ({$e['id']})"; }
                     $aiRejectText = implode("\n", array_slice($lines, 0, 60));
                 }
                 $vt = [
@@ -198,6 +198,9 @@
                                             return;
                                         }
                                         if (stageEl && stages[d.status]) stageEl.textContent = stages[d.status];
+                                        if (window.renderAiLog) window.renderAiLog(d.log);
+                                        // Oxirgi qadamni progress paneliga ham chiqaramiz.
+                                        if (stageEl && Array.isArray(d.log) && d.log.length) stageEl.textContent = d.log[d.log.length - 1].m;
                                         setTimeout(poll, 3000);
                                     })
                                     .catch(function () { setTimeout(poll, 5000); });
@@ -215,7 +218,7 @@
                     </div>
                     <div style="font-size:14px;color:#334155;margin-bottom:12px;">{{ $rep['summary'] }}</div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px;">
-                        @foreach([['Mos', $cnt['ok'], '#166534', '#f0fdf4'], ['XATO', $cnt['bad'], '#713f12', '#fefce8'], ['PDFdan tekshiring', $cnt['ocr'], '#7c2d12', '#fff7ed'], ["PDFda yo'q", $cnt['nopdf'] ?? 0, '#991b1b', '#fef2f2'], ["Kontingentda yo'q", $cnt['missing'], '#991b1b', '#fef2f2'], ["HEMISda yo'q", $cnt['extra'], '#6b21a8', '#faf5ff']] as [$l, $n, $fg, $bg])
+                        @foreach([['Mos', $cnt['ok'], '#166534', '#f0fdf4'], ['XATO', $cnt['bad'], '#713f12', '#fefce8'], ['PDFdan tekshiring', $cnt['ocr'], '#7c2d12', '#fff7ed'], ["PDFda yo'q", $cnt['nopdf'] ?? 0, '#991b1b', '#fef2f2'], ["Kontingentda yo'q", $cnt['missing'], '#991b1b', '#fef2f2'], ["Markda yo'q", $cnt['extra'], '#6b21a8', '#faf5ff']] as [$l, $n, $fg, $bg])
                             <div style="background:{{ $bg }};border-radius:10px;padding:10px 12px;">
                                 <div style="font-size:22px;font-weight:800;color:{{ $fg }};font-variant-numeric:tabular-nums;">{{ $n }}</div>
                                 <div style="font-size:12px;color:#475569;">{{ $l }}</div>
@@ -299,6 +302,40 @@
                         <div style="background:#fef3c7;color:#92400e;padding:10px;border-radius:8px;font-size:13px;margin-bottom:8px;">{{ $v->ai_error }}</div>
                     @endif
                     <div style="color:#94a3b8;font-size:13px;">Hali tekshirilmagan. "AI tekshirish" tugmasini bosing.</div>
+                @endif
+
+                {{-- Jarayon logi: har qadam vaqti bilan (tekshiruv davomida jonli yangilanadi) --}}
+                @php
+                    $aiLog = \App\Services\VedomostAiProgress::lines($v->pdf_path) ?: ($aiRes['log'] ?? []);
+                    $aiLive = in_array($v->ai_check_status, ['queued', 'running'], true);
+                @endphp
+                @if(!empty($aiLog) || $aiLive)
+                    <details id="ai-log" style="margin-top:12px;border-top:1px solid #f1f5f9;padding-top:10px;" @if($v->ai_check_status === 'error') open @endif>
+                        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#475569;list-style:none;display:inline-flex;align-items:center;gap:6px;">
+                            <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                            Jarayonni ko'rish <span id="ai-log-count" style="font-weight:400;color:#94a3b8;">({{ count($aiLog) }} qadam)</span>
+                        </summary>
+                        <ol id="ai-log-list" style="list-style:none;margin:10px 0 0;padding:10px 12px;background:#0f172a;border-radius:8px;max-height:320px;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cbd5e1;">
+                            @foreach($aiLog as $ln)
+                                <li><span style="color:#64748b;">{{ $ln['t'] }} +{{ $ln['s'] }}s</span>
+                                    <span style="color:{{ ['ok' => '#4ade80', 'warn' => '#fbbf24', 'error' => '#f87171'][$ln['l']] ?? '#cbd5e1' }};">{{ $ln['m'] }}</span></li>
+                            @endforeach
+                            @if(empty($aiLog))<li style="color:#64748b;">Navbatda — ishchi hali boshlamadi…</li>@endif
+                        </ol>
+                    </details>
+                    <script>
+                        window.renderAiLog = function (lines) {
+                            const list = document.getElementById('ai-log-list');
+                            if (!list || !Array.isArray(lines) || !lines.length) return;
+                            const colors = { ok: '#4ade80', warn: '#fbbf24', error: '#f87171' };
+                            const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                            const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
+                            list.innerHTML = lines.map(l => `<li><span style="color:#64748b;">${esc(l.t)} +${esc(l.s)}s</span> <span style="color:${colors[l.l] || '#cbd5e1'};">${esc(l.m)}</span></li>`).join('');
+                            if (atBottom) list.scrollTop = list.scrollHeight;
+                            const cnt = document.getElementById('ai-log-count');
+                            if (cnt) cnt.textContent = '(' + lines.length + ' qadam)';
+                        };
+                    </script>
                 @endif
             </div>
 

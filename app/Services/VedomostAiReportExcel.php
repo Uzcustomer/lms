@@ -159,7 +159,7 @@ class VedomostAiReportExcel
                     $val = $tm['tm'];
                     $v()->setValue($val !== null ? (!empty($tm['dal']) ? $val . ' (Dalolatnoma)' : $val) : (!empty($tm['nd']) ? 'nd' : "yo'q"));
                     if (!empty($tm['nd'])) {
-                        $d()->setValue('nd (test markazida yo‘q, HEMIS 0)');
+                        $d()->setValue('nd (test markazida yo‘q, Mark 0)');
                     } elseif ($val !== null && empty($tm['dal'])) {
                         $d()->setValue(sprintf('=%s%d-%s%d', Coordinate::stringFromColumnIndex($c), $rn, $hc, $rn));
                     }
@@ -252,7 +252,7 @@ class VedomostAiReportExcel
         }
         foreach ($report['extra'] ?? [] as $e) {
             $r++;
-            $ws->fromArray(['', $e['fio'], '', '', "PDFda bor, HEMISda yo'q", trim('vedomost.pdf / ' . ($e['page'] ?? 1) . ' · ' . ($e['note'] ?? ''))], null, 'A' . $r);
+            $ws->fromArray(['', $e['fio'], '', '', "PDFda bor, Markda yo'q", trim('vedomost.pdf / ' . ($e['page'] ?? 1) . ' · ' . ($e['note'] ?? ''))], null, 'A' . $r);
             $ws->getCell('C' . $r)->setValueExplicit((string) $e['id'], DataType::TYPE_STRING);
         }
         foreach ($report['issues'] ?? [] as $i) {

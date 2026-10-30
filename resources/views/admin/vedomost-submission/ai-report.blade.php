@@ -184,7 +184,7 @@
         <button class="chip" data-filter="edited"><span class="sw" style="background:var(--edit)"></span>Tuzatilgan <span class="n">{{ $c['edited'] }}</span></button>
     </div>
     <div class="spacer"></div>
-    <label class="toggle"><input type="checkbox" id="all-cols"> Barcha HEMIS ustunlari</label>
+    <label class="toggle"><input type="checkbox" id="all-cols"> Barcha Mark ustunlari</label>
     <div class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="search" placeholder="F.I.Sh yoki ID" aria-label="Qidirish"></div>
 </section>
 
@@ -405,7 +405,7 @@
                 const st = f === 'fio' ? ' style="min-width:260px"' : f === 'id' ? ' style="min-width:120px"' : '';
                 body += `<td class="${cls}"${st} ${CAN_EDIT ? `tabindex="0" data-key="${e.key}" data-field="${f}"` : ''} data-label="${esc(LABELS[f] || f)}" data-fio="${esc(e.scan_fio)}">${esc(pdfVal(e, f))}</td>`;
             });
-            body += `<td class="txt ${e.matched ? '' : 'y'}">${e.matched ? esc(e.fio) : esc("HEMISda yo'q — " + (e.note || ''))}</td><td class="txt">${esc(e.id)}</td><td class="txt ${(e.unclear || []).length ? 'o' : ''}">${esc((e.unclear || []).join(', '))}</td></tr>`;
+            body += `<td class="txt ${e.matched ? '' : 'y'}">${e.matched ? esc(e.fio) : esc("Markda yo'q — " + (e.note || ''))}</td><td class="txt">${esc(e.id)}</td><td class="txt ${(e.unclear || []).length ? 'o' : ''}">${esc((e.unclear || []).join(', '))}</td></tr>`;
         });
         document.getElementById('sheet-pdf').innerHTML = body ? `<table class="xl" aria-label="PDFdan o'qilgan jadval"><thead>${head}</thead><tbody>${body}</tbody></table>` : '<div class="empty">Qator yo\'q.</div>';
     }
@@ -419,7 +419,7 @@
             n++;
             body += `<tr><td class="rn">${n}</td><td>${esc(row.vt.A)}</td><td class="txt">${esc(row.vt.B)}</td><td class="txt">${esc(row.id)}</td><td class="txt">${esc(row.group)}</td><td class="txt"><span class="st ${row.status}">${icon(ST_ICON[row.status] || 'i-info')}${esc(STATUS_TXT[row.status])}</span></td><td class="note">${(row.flags || []).map(f => esc(f.m)).join('<br>')} <button class="link" data-goto="${ri}">Jadvalda</button></td></tr>`;
         });
-        (R.extra || []).forEach(e => { n++; body += `<tr><td class="rn">${n}</td><td></td><td class="txt">${esc(e.fio)}</td><td class="txt">${esc(e.id)}</td><td></td><td class="txt y">PDFda bor, HEMISda yo'q</td><td class="note">vedomost.pdf / ${esc(e.page || 1)} · ${esc(e.note)}</td></tr>`; });
+        (R.extra || []).forEach(e => { n++; body += `<tr><td class="rn">${n}</td><td></td><td class="txt">${esc(e.fio)}</td><td class="txt">${esc(e.id)}</td><td></td><td class="txt y">PDFda bor, Markda yo'q</td><td class="note">vedomost.pdf / ${esc(e.page || 1)} · ${esc(e.note)}</td></tr>`; });
         (R.issues || []).forEach(i => { n++; body += `<tr><td class="rn">${n}</td><td></td><td></td><td></td><td></td><td class="txt">Ogohlantirish</td><td class="note">${esc(i.m)}</td></tr>`; });
         R.header.filter(h => h.st !== 'ok').forEach(h => { n++; body += `<tr><td class="rn">${n}</td><td></td><td></td><td></td><td></td><td class="txt ${h.st === 'bad' ? 'y' : 'o'}">Sarlavha: ${esc(h.k)}</td><td class="note">${esc(h.v)}</td></tr>`; });
         const head = '<tr class="names"><th class="rn">1</th>' + ['#', 'FIO', 'ID', 'Guruh', 'Holat', 'Izoh'].map(h => `<th class="h">${h}</th>`).join('') + '</tr>';
@@ -478,7 +478,7 @@
         const ref = td.dataset.ref || (col && rn ? col + rn.textContent : '');
         document.getElementById('f-ref').textContent = ref || '—';
         let txt = td.textContent;
-        if (td.dataset.field) txt = `${td.dataset.fio || ''} — ${td.dataset.label || ''}: ${td.textContent || '∅'}` + (td.dataset.hemis !== undefined ? `   |   HEMIS: ${td.dataset.hemis || '∅'}` : '');
+        if (td.dataset.field) txt = `${td.dataset.fio || ''} — ${td.dataset.label || ''}: ${td.textContent || '∅'}` + (td.dataset.hemis !== undefined ? `   |   Mark: ${td.dataset.hemis || '∅'}` : '');
         if ((td.classList.contains('c-b') || td.classList.contains('note')) && td.title) txt = td.textContent + '  —  ' + td.title.replace(/\n/g, ' · ');
         document.getElementById('f-val').textContent = txt;
     }

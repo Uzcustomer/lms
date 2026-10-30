@@ -109,6 +109,10 @@ class VedomostCheckEngine
             $cells = [];
             [$s, $matchFlags] = $pairs[$idx] ?? [null, []];
             $expelled = ($stu['status_code'] ?? '') === '60';
+            // Chetlashtirilgan va PDFda ham yo'q talaba — hisobotga chiqmaydi (vedomostda bo'lishi shart emas).
+            if ($expelled && $s === null) {
+                continue;
+            }
 
             if ($s !== null) {
                 foreach ($matchFlags as [$t, $m]) {
@@ -162,7 +166,7 @@ class VedomostCheckEngine
             } else {
                 $gapNote = !empty($missingNrs) ? ' (AI PDFdagi ' . implode(', ', $missingNrs) . '-qatorni o\'qiy olmadi — PDFdan tekshiring)' : '';
                 if ($expelled) {
-                    $flags[] = ['t' => 'missing', 'm' => "KONTINGENTDA YO'Q va PDFda ham yo'q (HEMISda «chetlashgan» deb belgilangan)"];
+                    $flags[] = ['t' => 'missing', 'm' => "KONTINGENTDA YO'Q va PDFda ham yo'q (Markda «chetlashgan» deb belgilangan)"];
                     $set('missing');
                 } elseif ($gapNote !== '') {
                     $flags[] = ['t' => 'ocr', 'm' => "PDFda topilmadi" . $gapNote];
@@ -214,7 +218,7 @@ class VedomostCheckEngine
             foreach ([[$useO, 'P', 'OSKE', 'oski_vazn'], [$useT, 'S', 'Test', 'test_vazn']] as [$use, $col, $nm, $vn]) {
                 $v = VedomostScanReader::num($vt[$col]);
                 if (!$use && $v !== null && $v != 0 && !$kurs6) {
-                    $flags[] = ['t' => 'bad', 'm' => "HEMISda {$nm} = " . $this->f($v) . " qo‘yilgan, lekin bu fan {$nm} bilan yopilmaydi ({$vn} 0)"];
+                    $flags[] = ['t' => 'bad', 'm' => "Markda {$nm} = " . $this->f($v) . " qo‘yilgan, lekin bu fan {$nm} bilan yopilmaydi ({$vn} 0)"];
                     $set('bad');
                 }
             }
@@ -225,11 +229,11 @@ class VedomostCheckEngine
             }
             if (!$kurs6 && ($cc = $this->calcCheck($vt, $w, $settings))) {
                 if ($cc['jnmtBad']) {
-                    $flags[] = ['t' => 'bad', 'm' => 'JN+MT hisobi: HEMIS ' . $this->f($cc['jnmtHemis']) . ' ≠ hisob ' . $cc['jnmtCalc']];
+                    $flags[] = ['t' => 'bad', 'm' => 'JN+MT hisobi: Mark ' . $this->f($cc['jnmtHemis']) . ' ≠ hisob ' . $cc['jnmtCalc']];
                     $set('bad');
                 }
                 if ($cc['ynBad']) {
-                    $flags[] = ['t' => 'bad', 'm' => 'YN hisobi: HEMIS ' . $this->f($cc['ynHemis']) . ' ≠ hisob ' . $cc['ynCalc']];
+                    $flags[] = ['t' => 'bad', 'm' => 'YN hisobi: Mark ' . $this->f($cc['ynHemis']) . ' ≠ hisob ' . $cc['ynCalc']];
                     $set('bad');
                 }
             }
@@ -294,7 +298,7 @@ class VedomostCheckEngine
         array_splice($headerChecks, $at === false ? 0 : $at + 1, 0, [$this->closingCheck($closing, $weights, $kurs6)]);
 
         // --- noto'g'ri hujjat ---
-        $sysN = count($system);
+        $sysN = count($rows);
         $scanN = count($scanRows);
         $matchedN = count(array_filter($pairs, fn ($p) => ($p[0] ?? null) !== null));
         $wrong = [];
@@ -421,10 +425,12 @@ class VedomostCheckEngine
 
         if ($raw === '') {
             if ($he !== null && $he != 0) {
-                $flags[] = ['t' => 'bad', 'm' => "{$label}: PDFda bo‘sh, HEMIS " . $this->f($he)];
-                $set('bad');
+                // Vedomost Markdan chop etiladi: Markda qiymat bo'la turib PDF katagi bo'sh bo'lishi deyarli
+                // uchramaydi — odatda AI kulrang qatordagi katakni o'qimagan. XATO emas, «PDFdan tekshiring».
+                $flags[] = ['t' => 'ocr', 'm' => "{$label}: PDFda bo‘sh o‘qildi (Mark " . $this->f($he) . ') — PDFdan ko‘z bilan tekshiring'];
+                $set('ocr');
 
-                return $c + ['status' => 'bad'];
+                return $c + ['status' => 'ocr'];
             }
 
             return $c + ['status' => 'empty'];
@@ -441,7 +447,7 @@ class VedomostCheckEngine
             return $c + ['status' => 'ocr'];
         }
         if (!$this->near($p, $he, $tol)) {
-            $flags[] = ['t' => 'bad', 'm' => "{$label}: PDF {$raw} ≠ HEMIS " . $this->f($he)];
+            $flags[] = ['t' => 'bad', 'm' => "{$label}: PDF {$raw} ≠ Mark " . $this->f($he)];
             $set('bad');
 
             return $c + ['status' => 'bad'];
@@ -460,7 +466,7 @@ class VedomostCheckEngine
         $he = VedomostScanReader::num($hemis);
         if ($rec === null) {
             if ($he !== null && $he > 0) {
-                $flags[] = ['t' => 'bad', 'm' => "{$label}: Test markazida yo‘q (HEMIS " . $this->f($he) . ')'];
+                $flags[] = ['t' => 'bad', 'm' => "{$label}: Test markazida yo‘q (Mark " . $this->f($he) . ')'];
                 $set('bad');
 
                 return ['tm' => null, 'hemis' => $he, 'status' => 'bad', 'delta' => null];
@@ -473,7 +479,7 @@ class VedomostCheckEngine
         $ok = $this->near($tm, $hv, 0.05);
         $dal = !empty($rec['dalolat']) ? ' (Dalolatnoma)' : '';
         if (!$ok) {
-            $flags[] = ['t' => 'bad', 'm' => "{$label} (Test markazi{$dal}) " . $this->f($tm) . ' ≠ HEMIS ' . ($he !== null ? $this->f($he) : 'bo‘sh')];
+            $flags[] = ['t' => 'bad', 'm' => "{$label} (Test markazi{$dal}) " . $this->f($tm) . ' ≠ Mark ' . ($he !== null ? $this->f($he) : 'bo‘sh')];
             $set('bad');
         } elseif ($dal) {
             $flags[] = ['t' => 'info', 'm' => "{$label}: Test markazida Dalolatnoma bilan " . $this->f($tm)];
@@ -627,12 +633,12 @@ class VedomostCheckEngine
             $tid = VedomostScanReader::digits($stu['student_id'] ?? '');
             if ($raw !== $tid) {
                 $flags[] = $dist <= 2
-                    ? ['ocr', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ HEMIS {$tid} — {$dist} raqam farqi, ism mos. Ehtimol Gemini raqamni noto‘g‘ri o‘qigan; PDFdan ko‘z bilan tekshiring"]
-                    : ['bad', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ HEMIS {$tid} (PDFdan tekshiring)"];
+                    ? ['ocr', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} — {$dist} raqam farqi, ism mos. Ehtimol Gemini raqamni noto‘g‘ri o‘qigan; PDFdan ko‘z bilan tekshiring"]
+                    : ['bad', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} (PDFdan tekshiring)"];
             }
             if ($sim < 1.0 && $sim < 0.85) {
                 $flags[] = [in_array('fio', $s['unclear'] ?? [], true) ? 'ocr' : 'bad',
-                    'F.I.Sh farq qiladi (' . (int) round($sim * 100) . '%): PDF «' . ($s['fio'] ?? '') . '», HEMIS «' . ($stu['fish'] ?? '') . '»'];
+                    'F.I.Sh farq qiladi (' . (int) round($sim * 100) . '%): PDF «' . ($s['fio'] ?? '') . '», Mark «' . ($stu['fish'] ?? '') . '»'];
             }
             $pairs[$ti] = [$s, $flags];
         }
@@ -757,10 +763,10 @@ class VedomostCheckEngine
             $nf = fn ($x) => preg_replace('/[.\s]+$/u', '', preg_replace('/\s*([,\-–—])\s*/u', '$1', VedomostNames::uz($x)));
             $st = collect($hf)->contains(fn ($b) => $nf($pf) === $nf($b)) ? 'ok'
                 : (collect($hf)->contains(fn ($b) => mb_strtolower($nf($pf)) === mb_strtolower($nf($b))) ? 'warn' : 'bad');
-            $add('fan', 'Fan nomi (PDF ↔ HEMIS)', "PDF: {$pf} · HEMIS: " . implode(' / ', $hf)
-                . ($st === 'bad' ? ' — nomi HEMISdagidan farq qiladi' : ($st === 'warn' ? ' — faqat katta/kichik harf farqi' : '')), $st);
+            $add('fan', 'Fan nomi (PDF ↔ Mark)', "PDF: {$pf} · Mark: " . implode(' / ', $hf)
+                . ($st === 'bad' ? ' — nomi Markdagidan farq qiladi' : ($st === 'warn' ? ' — faqat katta/kichik harf farqi' : '')), $st);
         } else {
-            $add('fan', 'Fan nomi (PDF ↔ HEMIS)', 'PDF: ko‘rsatilmagan · HEMIS: ' . implode(' / ', $hf), 'bad');
+            $add('fan', 'Fan nomi (PDF ↔ Mark)', 'PDF: ko‘rsatilmagan · Mark: ' . implode(' / ', $hf), 'bad');
         }
 
         // Soat / kredit
@@ -770,13 +776,13 @@ class VedomostCheckEngine
         $hk = array_map(fn ($x) => VedomostScanReader::num($x), $hv('AI'));
         $ok = ($ps === null || in_array($ps, $hs)) && ($pk === null || in_array($pk, $hk));
         $add('soat', 'Soat / kredit', 'PDF: ' . ($ps === null ? '—' : $this->f($ps)) . ' / ' . ($pk === null ? '—' : $this->f($pk))
-            . ' · HEMIS: ' . implode('/', array_map(fn ($x) => $this->f($x), $hs)) . ' / ' . implode('/', array_map(fn ($x) => $this->f($x), $hk)),
+            . ' · Mark: ' . implode('/', array_map(fn ($x) => $this->f($x), $hs)) . ' / ' . implode('/', array_map(fn ($x) => $this->f($x), $hk)),
             ($ps === null && $pk === null) ? 'warn' : ($ok ? 'ok' : 'bad'));
 
         // Ma'ruzachi
         $pm = $uz($h['maruzachi'] ?? '');
         $hm = $hv('AJ');
-        $add('maruzachi', "Ma'ruzachi", 'PDF: ' . ($pm ?: "ko'rsatilmagan") . ' · HEMIS: ' . (implode(' / ', $hm) ?: '—'),
+        $add('maruzachi', "Ma'ruzachi", 'PDF: ' . ($pm ?: "ko'rsatilmagan") . ' · Mark: ' . (implode(' / ', $hm) ?: '—'),
             $pm === '' ? 'bad' : (collect($hm)->contains(fn ($b) => VedomostNames::sameName($pm, $b)) ? 'ok'
                 : (collect($hm)->contains(fn ($b) => VedomostNames::sameSurname($pm, $b)) ? 'warn' : 'bad')));
 
@@ -793,8 +799,8 @@ class VedomostCheckEngine
         if ($retakeForm && (empty($pa) || $missP || $extraP)) {
             $soft = true;
         }
-        $add('amaliyot', "Amaliyot o'qituvchilari", 'PDF: ' . (implode(', ', $pa) ?: "ko'rsatilmagan") . ' · HEMIS: ' . implode(', ', $ha)
-            . ($missP ? " · PDFda yo'q: " . implode(', ', $missP) : '') . ($extraP ? " · HEMISda yo'q: " . implode(', ', $extraP) : ''),
+        $add('amaliyot', "Amaliyot o'qituvchilari", 'PDF: ' . (implode(', ', $pa) ?: "ko'rsatilmagan") . ' · Mark: ' . implode(', ', $ha)
+            . ($missP ? " · PDFda yo'q: " . implode(', ', $missP) : '') . ($extraP ? " · Markda yo'q: " . implode(', ', $extraP) : ''),
             empty($pa) ? ($retakeForm ? 'warn' : 'bad') : (($missP || $extraP) ? ($soft ? 'warn' : 'bad') : 'ok'));
 
         // Shakl (o'ng yuqori burchak): 12a o'rniga 12-shakl yuklanib qolishining oldini oladi.
@@ -808,13 +814,13 @@ class VedomostCheckEngine
         // Fakultet dekani
         $pd = $uz($h['dekan'] ?? '');
         $dk = $uz($exp['dekan'] ?? '');
-        $add('dekan', 'Fakultet dekani', 'PDF: ' . ($pd ?: "ko'rsatilmagan") . ' · HEMIS: ' . ($dk ?: '—'),
+        $add('dekan', 'Fakultet dekani', 'PDF: ' . ($pd ?: "ko'rsatilmagan") . ' · Mark: ' . ($dk ?: '—'),
             $pd === '' ? 'bad' : ($dk === '' ? 'warn' : (VedomostNames::sameName($pd, $dk) ? 'ok' : 'bad')));
 
         // Kafedra mudiri
         $km = $uz($h['kafedra_mudiri'] ?? '');
         $kb = $uz($context['kafedra_mudiri'] ?? '');
-        $add('kafedra_mudiri', 'Kafedra mudiri', ($km ?: "ko'rsatilmagan") . ($kb ? ' · HEMIS: ' . $kb : ''),
+        $add('kafedra_mudiri', 'Kafedra mudiri', ($km ?: "ko'rsatilmagan") . ($kb ? ' · Mark: ' . $kb : ''),
             $km === '' ? 'bad' : ($kb === '' ? 'warn' : (VedomostNames::sameName($km, $kb) ? 'ok' : 'bad')));
 
         // Guruh / sana
@@ -824,7 +830,7 @@ class VedomostCheckEngine
         $sys = $uz($exp['yn_sanasi'] ?? '');
         $dk2 = fn ($x) => preg_match('/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/', $x, $m) ? sprintf('%04d%02d%02d', $m[3], $m[2], $m[1]) : '';
         $dateOk = $sys === '' || $ys === '' || collect(explode(',', $sys))->contains(fn ($d) => $dk2($d) !== '' && $dk2($d) === $dk2($ys));
-        $add('guruh', 'Guruh / sana', 'PDF: ' . ($pg ?: '—') . ' · YaN sanasi: ' . ($ys ?: '—') . ' · HEMIS: ' . implode(', ', $hg)
+        $add('guruh', 'Guruh / sana', 'PDF: ' . ($pg ?: '—') . ' · YaN sanasi: ' . ($ys ?: '—') . ' · Mark: ' . implode(', ', $hg)
             . ($sys !== '' ? ' (YN sanasi tizimda: ' . $sys . ')' : ''), $dateOk ? 'ok' : 'warn');
 
         // Imzolar va muhr (Python'da yo'q — mark talabi)
@@ -843,7 +849,7 @@ class VedomostCheckEngine
         $row = fn (string $v, string $st) => ['key' => 'yopilish', 'k' => 'Yopilish shakli', 'v' => $v, 'st' => $st];
         $hemis = $names[$closing] ?? ($closing !== '' ? $closing : null);
         if ($hemis === null) {
-            return $row("HEMISda yopilish shakli kiritilmagan — vaznlar faqat vedomostdan olindi", 'warn');
+            return $row("Markda yopilish shakli kiritilmagan — vaznlar faqat vedomostdan olindi", 'warn');
         }
 
         $read = [];
@@ -851,7 +857,7 @@ class VedomostCheckEngine
             $read[$k] = (int) round((float) ($scanW[$k] ?? 0));
         }
         if (array_sum($read) !== 100) {
-            return $row("HEMIS: {$hemis} · vedomost vaznlari aniq o'qilmadi — Sarlavha varag'ida tuzating", 'warn');
+            return $row("Mark: {$hemis} · vedomost vaznlari aniq o'qilmadi — Sarlavha varag'ida tuzating", 'warn');
         }
 
         $pdf = ($read['oski'] > 0 && $read['test'] > 0) ? 'OSKE + Test' : ($read['oski'] > 0 ? 'OSKE' : ($read['test'] > 0 ? 'Test' : "imtihonsiz (JN/MT)"));
@@ -860,7 +866,7 @@ class VedomostCheckEngine
         $ok = ($read['oski'] > 0) === $needO && ($read['test'] > 0) === $needT;
         // 6-kurs vedomostlari rasmiy shablon bo'yicha — imtihon ustunlari bo'lmasligi mumkin.
         $st = $ok ? 'ok' : ($kurs6 ? 'warn' : 'bad');
-        $v = "HEMIS: {$hemis} · vedomostda: {$pdf} (JN {$read['jb']} / MT {$read['mt']}"
+        $v = "Mark: {$hemis} · vedomostda: {$pdf} (JN {$read['jb']} / MT {$read['mt']}"
             . ($read['on'] ? " / ON {$read['on']}" : '') . ($read['oski'] ? " / OSKE {$read['oski']}" : '') . ($read['test'] ? " / Test {$read['test']}" : '') . ')';
 
         return $row($v . ($ok ? '' : ' — mos emas'), $st);

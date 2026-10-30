@@ -120,6 +120,8 @@ class VedomostAiDispatcher
         if (!$siblings->contains('id', $v->id)) {
             $siblings->push($v);
         }
+        VedomostAiProgress::attach($v->pdf_path);
+        VedomostAiProgress::log('Ishchi jarayon ' . self::STUCK_MINUTES . ' daqiqada javob bermadi (halok bo‘lgan bo‘lishi mumkin — masalan xotira tugashi). Oxirgi bajarilgan qadam yuqorida.', 'error');
         foreach ($siblings as $sib) {
             if ($sib->ai_check_status === 'running') {
                 $sib->update([

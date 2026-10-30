@@ -935,6 +935,7 @@ class VedomostSubmissionController extends Controller
             'status' => $v->ai_check_status,
             'verdict' => $v->ai_verdict,
             'error' => $v->ai_error,
+            'log' => \App\Services\VedomostAiProgress::lines($v->pdf_path) ?: ($v->ai_result['log'] ?? []),
         ]);
     }
 

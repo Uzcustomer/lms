@@ -89,11 +89,13 @@ class VedomostScanReader
             $cached = json_decode((string) file_get_contents($cacheFile), true);
             if (is_array($cached)) {
                 $cached['meta']['cached'] = true;
+                VedomostAiProgress::log('PDF o‘qish natijasi keshdan olindi (AI chaqirilmadi)');
 
                 return $cached;
             }
         }
 
+        VedomostAiProgress::log($images ? "O‘qish rejimi: rasm, {$bands} bo‘lak · model {$model}" : "O‘qish rejimi: butun PDF (pdftoppm yo‘q) · model {$model}");
         $result = $images
             ? $this->readAsImages($pdfPath, $bands, $expectedRows)
             : $this->readAsPdf($pdfPath, $expectedRows);
@@ -126,6 +128,7 @@ class VedomostScanReader
             }
 
             $total = count($files);
+            VedomostAiProgress::log("PDF → {$total} sahifa rasmga aylantirildi");
             $pages = [];
             $repaired = 0;
             foreach ($files as $i => $file) {
@@ -150,6 +153,7 @@ class VedomostScanReader
                 $shortfall = $expectedRows !== null && $pn === $total
                     && (count($pages ? array_merge(...array_column($pages, 'rows')) : []) + count($res['rows'])) < $expectedRows;
                 if ($this->gaps($res['rows'], $pn === 1) || $shortfall) {
+                    VedomostAiProgress::log("{$pn}-sahifada qatorlar tushib qolgan" . ($shortfall ? ' (talabalar soni kam)' : '') . ' → qayta o‘qilmoqda', 'warn');
                     try {
                         $res['rows'] = $this->unionRows($res['rows'], $readAgain()['rows']);
                         $res['reread_gaps'] = true;
@@ -184,7 +188,7 @@ class VedomostScanReader
         foreach ($this->splitBands($img, $n, $overlap) as $i => $band) {
             $desc = $n > 1 ? sprintf('strip %d of %d (top to bottom)', $i + 1, $n) : 'the whole page';
             $send = $i === 0 ? $band : $this->stackHeader($head, $band);
-            $got[] = $this->callImage($send, $pn, $total, $desc, $i > 0);
+            $got[] = $this->callImage($send, $pn, $total, $desc, $i > 0, "{$pn}-sahifa" . ($n > 1 ? ', bo‘lak ' . ($i + 1) . "/{$n}" : ''));
             if ($send !== $band) {
                 imagedestroy($send);
             }
@@ -201,7 +205,7 @@ class VedomostScanReader
         ];
     }
 
-    private function callImage(GdImage $img, int $pn, int $total, string $part, bool $stacked): array
+    private function callImage(GdImage $img, int $pn, int $total, string $part, bool $stacked, string $label = ''): array
     {
         ob_start();
         imagejpeg($img, null, 88);
@@ -212,15 +216,24 @@ class VedomostScanReader
             ['text' => $this->prompt($pn, $total, $part, $stacked)],
         ];
 
-        return $this->ask($parts);
+        return $this->ask($parts, $label);
     }
 
-    private function ask(array $parts): array
+    private function ask(array $parts, string $label = 'butun PDF'): array
     {
-        $res = $this->gemini->generateJson($parts, $this->schema(), null, $this->submissionId);
+        $t0 = microtime(true);
+        VedomostAiProgress::log("Gemini so‘rovi yuborildi: {$label}");
+        try {
+            $res = $this->gemini->generateJson($parts, $this->schema(), null, $this->submissionId);
+        } catch (\Throwable $e) {
+            VedomostAiProgress::log("Gemini xatosi ({$label}): " . mb_substr($e->getMessage(), 0, 300), 'error');
+            throw $e;
+        }
         $this->lastModel = $res['model'];
+        $out = $this->normalize($res['data']);
+        VedomostAiProgress::log(sprintf('Gemini javobi: %s · %d qator · %.1f s · %s', $label, count($out['rows'] ?? []), microtime(true) - $t0, $res['model']), 'ok');
 
-        return $this->normalize($res['data']);
+        return $out;
     }
 
     // ───────────────────────── PDF rejimi (zaxira) ─────────────────────────
@@ -315,6 +328,7 @@ class VedomostScanReader
         if (empty($bad)) {
             return [$res, 0];
         }
+        VedomostAiProgress::log(count($bad) . ' qatorda ichki hisob mos emas (' . implode(', ', array_map(fn ($r) => $r['nr'] ?? '?', $bad)) . '-qator) → boshqacha bo‘lib qayta o‘qilmoqda', 'warn');
 
         try {
             $res2 = $readAgain();

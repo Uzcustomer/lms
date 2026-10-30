@@ -119,11 +119,11 @@ test('PDFdagi haqiqiy farq — XATO (Python xabari bilan)', function () {
 
     $msgs = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
     expect($r['rows'][0]['status'])->toBe('bad')
-        ->and($msgs)->toContain('OSKE%: PDF 90,0 ≠ HEMIS 0')
-        ->and($msgs)->toContain('YN: PDF 82 ≠ HEMIS -1');
+        ->and($msgs)->toContain('OSKE%: PDF 90,0 ≠ Mark 0')
+        ->and($msgs)->toContain('YN: PDF 82 ≠ Mark -1');
 });
 
-test('chetlashtirilgan talaba — KONTINGENTDA YO\'Q; tushib qolgan qator — PDFdan tekshiring', function () {
+test('chetlashtirilgan va PDFda yo\'q talaba hisobotga chiqmaydi; tushib qolgan qator — PDFdan tekshiring', function () {
     $r = engine()->build(expectedData([
         vtStu('NE’MATOV NOZIMJON RUSTAMJON O‘G‘LI', '368221100048', 0, 0, 0, 0, ['status_code' => '60']),
         vtStu('QURBONOV SHAHZODXON SHUHRAT O‘G‘LI', '368221100022', 78, 86, 100, 83),
@@ -131,8 +131,8 @@ test('chetlashtirilgan talaba — KONTINGENTDA YO\'Q; tushib qolgan qator — PD
     ]), scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], [], ['missing_nrs' => [8]]), [], rules(), ctx());
 
     $rows = collect($r['rows'])->keyBy('id');
-    expect($rows['368221100048']['status'])->toBe('missing')
-        ->and($rows['368221100048']['kont_fio'])->toBeNull()
+    expect($rows->has('368221100048'))->toBeFalse()
+        ->and($r['counts']['total'])->toBe(2)
         ->and($rows['368221100022']['status'])->toBe('ocr')
         ->and(collect($rows['368221100022']['flags'])->pluck('m')->implode(' '))->toContain('8-qatorni');
 });
@@ -273,7 +273,7 @@ test('yopilish shakli: HEMIS shakli vedomost vaznlariga mos kelmasa XATO', funct
 
     expect($ok['yopilish']['st'])->toBe('ok')
         ->and($h['yopilish']['st'])->toBe('bad')
-        ->and($h['yopilish']['v'])->toContain('HEMIS: Test')
+        ->and($h['yopilish']['v'])->toContain('Mark: Test')
         ->and($h['yopilish']['v'])->toContain('vedomostda: OSKE + Test')
         ->and(array_column($bad['header'], 'key')[1])->toBe('yopilish')
         ->and($bad['verdict'])->toBe('issues');

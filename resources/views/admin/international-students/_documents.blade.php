@@ -10,6 +10,9 @@
     $givenFull = trim($given . ' ' . $patronymic);
     $nationality = \App\Support\CountryFlag::iso3($student->country_name, $student->country_code);
     $countryFlag = \App\Support\CountryFlag::url($student->country_name, $student->country_code);
+    $pt = \App\Support\PassportTheme::for(\App\Support\CountryFlag::code($student->country_name, $student->country_code));
+    $ptStyle = "--cover:{$pt['cover']};--ink-accent:{$pt['ink']};--g1:{$pt['g1']};--g2:{$pt['g2']};"
+        . "--p1:{$pt['paper'][0]};--p2:{$pt['paper'][1]};--p3:{$pt['paper'][2]};";
     $uzFlag = asset('images/flags/uz.svg');
     $birth = $visaInfo->birth_date ?? $student->birth_date;
     $sex = $student->gender_name;
@@ -55,15 +58,20 @@
 <div class="docs">
     {{-- PASPORT --}}
     <figure class="doc-wrap">
-        <div class="doc doc-passport">
+        <div class="doc doc-passport" style="{{ $ptStyle }}">
+            <span class="doc-spine" aria-hidden="true"></span>
+            @if($countryFlag)<img src="{{ $countryFlag }}" alt="" class="doc-watermark" aria-hidden="true">@endif
             <div class="doc-band">
                 <div>
-                    <div class="doc-kicker">Pasport · Passport</div>
+                    <div class="doc-kicker">@if($pt['word'] !== 'PASSPORT')<span>{{ $pt['word'] }}</span> · @endif PASSPORT</div>
                     <div class="doc-band-sub">Tur / Type <b>P</b> &nbsp; Davlat kodi / Code <b>{{ $nationality ?? '—' }}</b></div>
                 </div>
                 <div class="doc-country">
                     @if($countryFlag)<img src="{{ $countryFlag }}" alt="" class="doc-flag">@endif
-                    <span>{{ mb_strtoupper($student->country_name ?: '—') }}</span>
+                    <span>
+                        <span @if(!empty($pt['rtl'])) dir="rtl" lang="ps" @endif class="doc-native">{{ $pt['native'] ?? mb_strtoupper($student->country_name ?: '—') }}</span>
+                        @if($pt['en'])<small>{{ $pt['en'] }}</small>@endif
+                    </span>
                 </div>
             </div>
             <div class="doc-passport-body">
@@ -161,14 +169,14 @@
                 {!! $foot('Viza', $docState($visaInfo->visa_end_date, $visaInfo->visaDaysLeft(), $visaT), $visaInfo->visa_scan_path ? 'visa_scan_path' : null, $visaInfo->isVisaProcessActive() ? 'Yangilanmoqda' : null) !!}
             </figure>
         @else
-            <div class="doc-none">
+            <div class="doc-none doc-span">
                 <img src="{{ $uzFlag }}" alt="" class="doc-flag">
                 <span><b>Vizasiz</b> — {{ $student->country_name ?: 'bu davlat' }} fuqarolari uchun viza talab qilinmaydi. Faqat vaqtinchalik ro'yxatga qo'yish kerak.</span>
             </div>
         @endif
 
         {{-- VAQTINCHALIK RO'YXATGA QO'YISH --}}
-        <figure class="doc-wrap">
+        <figure class="doc-wrap doc-span">
             <div class="doc doc-reg">
                 <div class="doc-reg-head">
                     <div>
@@ -200,8 +208,14 @@
 </div>
 
 <style>
-    .docs { display: flex; flex-direction: column; gap: 20px; }
-    .doc-wrap { margin: 0; }
+    /* Ikki ustun: pasport | viza (yoki guvohnoma); blanka va izoh to'liq qatorda */
+    .docs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; align-items: stretch; }
+    .doc-span { grid-column: 1 / -1; }
+    /* Bir qatordagi kartochkalar teng balandlikda: MRZ va pastki qator bir chiziqda */
+    .doc-wrap { margin: 0; min-width: 0; container-type: inline-size; display: flex; flex-direction: column; }
+    .doc-wrap > .doc, .doc-wrap > .doc-idpair { flex: 1; }
+    .doc-passport, .doc-visa { display: flex; flex-direction: column; }
+    .doc-passport > .doc-mrz, .doc-visa > .doc-mrz { margin-top: auto; }
     .doc { position: relative; overflow: hidden; border-radius: 14px; color: #1f2937;
            border: 1px solid rgba(15, 23, 42, .10);
            box-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 10px 28px -16px rgba(15, 23, 42, .35); }
@@ -240,20 +254,30 @@
     .doc-country small { display: block; font-size: 9.5px; font-weight: 500; letter-spacing: .06em; color: #64748b; }
 
     /* Pasport */
-    .doc-passport { --g1: rgba(190, 18, 60, .07); --g2: rgba(13, 148, 136, .08); --ink-accent: #7f1d1d;
-                    background: linear-gradient(135deg, #fbf7ef 0%, #f6efe3 55%, #f3ece4 100%); }
-    .doc-passport .doc-band { border-bottom: 1px solid rgba(127, 29, 29, .12); }
-    .doc-passport-body { display: flex; gap: 20px; padding: 16px 20px 18px; }
+    /* Pasport — ranglar davlat mavzusidan (PassportTheme) */
+    .doc-passport { background: linear-gradient(135deg, var(--p1) 0%, var(--p2) 55%, var(--p3) 100%); padding-left: 10px; }
+    .doc-passport .doc-band { border-bottom: 1px solid color-mix(in srgb, var(--ink-accent) 16%, transparent); }
+    .doc-passport-body { display: flex; gap: 18px; padding: 14px 20px 16px; }
+    .doc > .doc-spine { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: var(--cover);
+                        box-shadow: inset -2px 0 0 rgba(0, 0, 0, .18); }
+    /* Bayroq suv belgisi: chetlari so'nadi, matn ostida xira dog' bo'lib qoladi */
+    .doc > .doc-watermark { position: absolute; right: 4%; top: 26%; width: 46%; aspect-ratio: 4 / 3; object-fit: cover; opacity: .11;
+                            filter: saturate(.55) blur(.3px); pointer-events: none;
+                            -webkit-mask-image: radial-gradient(ellipse at center, #000 18%, transparent 68%);
+                            mask-image: radial-gradient(ellipse at center, #000 18%, transparent 68%); }
+    .doc-native { display: block; font-size: 12.5px; }
+    .doc-native[dir="rtl"] { font-size: 16px; letter-spacing: 0; }
 
     /* MRZ */
     .doc-mrz { background: rgba(255, 255, 255, .78); border-top: 1px solid rgba(15, 23, 42, .08); padding: 10px 20px 12px;
-               font-family: "OCR B", "OCR-B", "OCRB", "Consolas", "Courier New", monospace; font-size: clamp(10px, 1.2vw, 17px);
+               font-family: "OCR B", "OCR-B", "OCRB", "Consolas", "Courier New", monospace; font-size: clamp(8px, calc((100cqi - 44px) / 35.5), 17px);
                letter-spacing: .2em; line-height: 1.55; color: #1f2937; white-space: pre; overflow-x: auto; }
 
     /* Viza */
     .doc-visa { --g1: rgba(21, 128, 61, .08); --g2: rgba(37, 99, 235, .07); --ink-accent: #14532d;
                 background: linear-gradient(135deg, #f1f8f2 0%, #eaf4f1 50%, #eef3fa 100%); }
-    .doc-band-visa { border-bottom: 1px solid rgba(20, 83, 45, .12); }
+    .doc-band-visa { border-bottom: 1px solid rgba(20, 83, 45, .12); flex-wrap: wrap; }
+    .doc-band-visa .doc-country span { white-space: nowrap; }
     .doc-visa-word { font-size: 26px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #14532d; line-height: 1; }
     .doc-visa-word span { font-size: 12px; font-weight: 600; letter-spacing: .2em; color: #4d7c0f; margin-left: 6px; }
     .doc-visa-no { font-size: 18px; font-weight: 700; letter-spacing: .1em; color: #b91c1c; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -274,7 +298,7 @@
     .doc-stamp { position: absolute; right: 22px; bottom: 18px; width: 116px; height: 116px; color: #2643a3; opacity: .72; transform: rotate(-14deg); mix-blend-mode: multiply; }
 
     /* Yashash guvohnomasi (ID-karta, 85.6 × 54 mm) */
-    .doc-idpair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .doc-idpair { display: grid; grid-template-columns: 1fr; gap: 14px; }
     .doc-id { --g1: rgba(14, 116, 144, .08); --g2: rgba(22, 163, 74, .07); --ink-accent: #0e4f6b;
               /* ID-karta ko'rinishi; balandlikni mazmun belgilaydi (tor ustunda nisbat maydonlarni kesardi) */
               min-height: 250px; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column;
@@ -297,16 +321,24 @@
     .doc-chip::after { content: ""; position: absolute; inset: 9px 12px; border: 1px solid rgba(120, 85, 20, .45); border-radius: 3px; }
     .doc-id-serial { font-size: 13px; font-weight: 700; letter-spacing: .1em; color: #475569; font-variant-numeric: tabular-nums; }
     .doc-fields-back { margin-top: 8px; grid-template-columns: 1fr; }
-    .doc-mrz-id { margin: auto -14px -12px; font-size: clamp(8.5px, .9vw, 13px); padding: 8px 14px 10px; letter-spacing: .16em; border-radius: 0 0 16px 16px; }
+    .doc-mrz-id { margin: auto -14px -12px; font-size: clamp(8px, calc((100cqi - 32px) / 24.5), 14px); padding: 8px 14px 10px; letter-spacing: .16em; border-radius: 0 0 16px 16px; }
 
     .doc-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 10px 4px 0; font-size: 13px; }
     .doc-foot-label { font-weight: 600; color: #0f172a; }
     .doc-foot-spacer { flex: 1; }
     .doc-none { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px dashed #cbd5e1; border-radius: 12px; font-size: 14px; color: #334155; background: #fff; }
 
-    @media (max-width: 1279px) {
-        .doc-idpair { grid-template-columns: 1fr; max-width: 560px; }
-        .doc-fields-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* Kartochka tor bo'lsa — maydonlar 2 ustunga */
+    @container (max-width: 620px) {
+        .doc-band-visa .doc-country { order: 3; width: 100%; justify-content: flex-start; text-align: left; }
+        .doc-fields-3, .doc-fields-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .doc-fields-3 .doc-f-num { grid-column: 1 / -1; grid-row: auto; text-align: left; }
+        .doc-f-wide { grid-column: 1 / -1; }
+        .doc-fields-id .doc-f-wide { grid-column: 1 / -1; }
+        .doc-photo { width: 92px; height: 118px; }
+    }
+    @media (max-width: 1023px) {
+        .docs { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 720px) {
         .doc-passport-body, .doc-visa-body { flex-direction: column; }
@@ -318,6 +350,5 @@
         .doc-reg-row { grid-template-columns: 1fr; }
         .doc-reg-row > :nth-child(3) { padding-left: 0; }
         .doc-stamp { width: 92px; height: 92px; }
-        .doc-mrz { font-size: 9px; letter-spacing: .08em; }
     }
 </style>

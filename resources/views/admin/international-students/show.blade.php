@@ -121,14 +121,8 @@
 
             @endphp
 
-            <div class="sp-grid">
-                {{-- Hujjatlar --}}
-                <div class="sp-col">
-                    @include('admin.international-students._documents', ['docState' => $deadline])
-                </div>
-
-                {{-- Amallar --}}
-                <aside class="sp-col">
+            {{-- Amallar: tekshiruv, jarayon, firma — bir qatorda --}}
+            <div class="sp-actions-row">
                     @if($visaInfo->status === 'pending')
                         <section class="sp-card sp-card-accent" x-data="{ reject: false }">
                             <div class="sp-card-head"><h2 class="sp-h2">Tekshiruv</h2><span class="sp-faint">Ma'lumotlar tekshirilishini kutyapti</span></div>
@@ -206,13 +200,10 @@
                             <input x-show="firm === 'other'" x-cloak type="text" name="firm_custom" value="{{ $visaInfo->firm_custom }}" class="sp-input" style="margin-top:8px;" placeholder="Firma nomi" aria-label="Firma nomi">
                         </form>
                     </section>
-
-                    <form method="POST" action="{{ route('admin.international-students.destroy-visa-info', $student) }}" class="sp-danger">
-                        @csrf @method('DELETE')
-                        <button type="submit" class="sp-link-bad" onclick="return confirm('Talabaning viza ma\'lumotlari o\'chirilsinmi? Tarix saqlanib qoladi.')">Viza ma'lumotlarini o'chirish</button>
-                    </form>
-                </aside>
             </div>
+
+            {{-- Hujjatlar — to'liq kenglikda, ikki ustun --}}
+            @include('admin.international-students._documents', ['docState' => $deadline])
 
             {{-- Tahrirlash --}}
             <section class="sp-card" x-data="{ open: false }">
@@ -235,6 +226,11 @@
                     @include('admin.international-students._history-list', ['history' => $history, 'student' => $student])
                 </div>
             </section>
+
+            <form method="POST" action="{{ route('admin.international-students.destroy-visa-info', $student) }}" class="sp-danger">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="sp-link-bad" onclick="return confirm('Talabaning viza ma\'lumotlari o\'chirilsinmi? Tarix saqlanib qoladi.')">Viza ma'lumotlarini o'chirish</button>
+                    </form>
         @endif
     </div>
 
@@ -296,6 +292,8 @@
     .sp-tone-none { color: var(--sp-faint); }
 
     .sp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+    /* Amallar qatori: 2-3 karta, kengligi teng */
+    .sp-actions-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
     .sp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
     .sp-kv { margin: 0; padding: 8px 16px 14px; display: grid; gap: 0; }

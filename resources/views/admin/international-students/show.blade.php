@@ -122,7 +122,8 @@
             @endphp
 
             {{-- Amallar paneli: hujjat kartochkalaridan ajralib turishi uchun to'q fonda --}}
-            <section class="sp-toolbar" aria-label="Amallar" x-data="{ reject: false, firm: @js($visaInfo->firm ?? '') }">
+            @php $noProcess = $visaInfo->status !== 'pending' && !$visaInfo->needsRegistration() && !$visaInfo->needsVisa(); @endphp
+            <section class="sp-toolbar {{ $noProcess ? 'sp-toolbar-inline' : '' }}" aria-label="Amallar" x-data="{ reject: false, firm: @js($visaInfo->firm ?? '') }">
                 <div class="sp-tb-segs">
                     @if($visaInfo->status === 'pending')
                         <div class="sp-tb-seg">
@@ -166,10 +167,10 @@
                             </div>
                         </div>
                     @endforeach
-                    @if(!$visaInfo->needsRegistration() && !$visaInfo->needsVisa())
-                        <div class="sp-tb-seg">
-                            <div class="sp-tb-label">Jarayon</div>
-                            <div class="sp-tb-note">Yashash guvohnomasi bor — registratsiya va viza jarayoni yo'q</div>
+                    @if($noProcess)
+                        <div class="sp-tb-info">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+                            <span><b>Yashash guvohnomasi bor</b> — registratsiya va viza jarayoni talab qilinmaydi</span>
                         </div>
                     @endif
 
@@ -322,6 +323,13 @@
     .sp-tb-btn-line:hover { background: #e0e7ff; }
     .sp-tb-input { flex: 1 1 140px; min-width: 0; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7d2fe; background: #fff; color: #0f172a; font-size: 13px; }
     .sp-tb-textarea { flex-basis: 100%; height: auto; padding: 8px 10px; resize: vertical; }
+    /* Jarayonsiz talaba (yashash guvohnomasi): bitta qator — izoh chapda, firma o'ngda */
+    .sp-toolbar-inline .sp-tb-segs { align-items: center; gap: 8px 16px; padding: 4px 8px; }
+    .sp-tb-info { flex: 1 1 320px; display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; color: #334155; }
+    .sp-tb-info svg { flex: none; color: #16a34a; }
+    .sp-tb-info b { color: #0f172a; font-weight: 600; }
+    .sp-toolbar-inline .sp-tb-seg-firm { flex: 0 1 460px; flex-direction: row; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; }
+    .sp-toolbar-inline .sp-tb-seg-firm .sp-tb-ctl { flex: 1; }
     .sp-tb-reject { margin: 0; padding: 12px 14px 10px; border-top: 1px solid #c7d2fe; display: flex; flex-direction: column; gap: 8px; }
     .sp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 

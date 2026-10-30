@@ -90,17 +90,17 @@
                     </div>
                     <div class="doc-f">{!! $pl('surname') !!}<span class="doc-v">{{ $v($surname) }}</span></div>
                     <div class="doc-f">{!! $pl('given') !!}<span class="doc-v">{{ $v($givenFull) }}</span></div>
-                    <div class="doc-f">{!! $pl('nationality') !!}<span class="doc-v">{{ $v($student->country_name) }}</span></div>
-                    <div class="doc-pp-row">
-                        <div class="doc-f">{!! $pl('dob') !!}<span class="doc-v">{{ $d($birth) }}</span></div>
+                    <div class="doc-pp-row doc-pp-3">
+                        <div class="doc-f">{!! $pl('nationality') !!}<span class="doc-v">{{ $pt['nat'] ?? $nationality ?? $v($student->country_name) }}</span></div>
                         <div class="doc-f">{!! $pl('sex') !!}<span class="doc-v">{{ $sexCode }}</span></div>
+                        <div class="doc-f">{!! $pl('dob') !!}<span class="doc-v">{{ $d($birth) }}</span></div>
                     </div>
                     <div class="doc-f">{!! $pl('pob') !!}<span class="doc-v">{{ $v($birthPlace) }}</span></div>
-                    <div class="doc-pp-row">
+                    <div class="doc-pp-row doc-pp-3 doc-pp-eq">
                         <div class="doc-f">{!! $pl('issue') !!}<span class="doc-v">{{ $d($visaInfo->passport_issued_date) }}</span></div>
                         <div class="doc-f">{!! $pl('expiry') !!}<span class="doc-v">{{ $d($visaInfo->passport_expiry_date) }}</span></div>
+                        <div class="doc-f">{!! $pl('authority') !!}<span class="doc-v">{{ $v($visaInfo->passport_issued_place) }}</span></div>
                     </div>
-                    <div class="doc-f">{!! $pl('authority') !!}<span class="doc-v">{{ $v($visaInfo->passport_issued_place) }}</span></div>
                 </div>
             </div>
             <div class="doc-mrz" aria-label="Mashinada o'qiladigan zona">@foreach(\App\Support\Mrz::passport($surname, $givenFull, $nationality, $visaInfo->passport_number, $birth, $sex, $visaInfo->passport_expiry_date) as $line)<div>{{ $line }}</div>@endforeach</div>
@@ -234,7 +234,8 @@
     .docs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; align-items: start; }
     .doc-span { grid-column: 1 / -1; }
     .doc-wrap { margin: 0; min-width: 0; container-type: inline-size; }
-    .doc-passport, .doc-visa { display: flex; flex-direction: column; min-height: calc(100cqi * .70); }
+    .doc-passport, .doc-visa { display: flex; flex-direction: column; }
+    .doc-visa { min-height: calc(100cqi * .70); }
     .doc-passport > .doc-mrz, .doc-visa > .doc-mrz { margin-top: auto; }
     .doc { position: relative; overflow: hidden; border-radius: 14px; color: #1f2937;
            border: 1px solid rgba(15, 23, 42, .10);
@@ -272,15 +273,18 @@
     /* Pasport */
     /* Pasport — ranglar davlat mavzusidan (PassportTheme) */
     .doc-passport { background: linear-gradient(135deg, var(--p1) 0%, var(--p2) 55%, var(--p3) 100%); }
-    .doc-passport .doc-band { border-bottom: 1px solid color-mix(in srgb, var(--ink-accent) 16%, transparent); }
-    .doc-passport-body { display: flex; gap: 18px; padding: 12px 20px 12px; }
+    .doc-passport .doc-band { padding: 10px 18px 8px; border-bottom: 1px solid color-mix(in srgb, var(--ink-accent) 16%, transparent); }
+    /* Foto 35×45 nisbatida, maydonlar foto bo'yiga teng taqsimlanadi — foto ostida bo'sh joy qolmaydi */
+    .doc-passport-body { display: flex; gap: 16px; padding: 10px 18px; }
     .doc-passport .doc-l { font-size: 8.5px; }
     .doc-passport .doc-l bdi { color: color-mix(in srgb, var(--ink-accent) 75%, #64748b); }
     .doc-passport .doc-v { margin-top: 1px; font-size: 13px; }
-    .doc-passport .doc-photo { width: 104px; height: 134px; }
-    .doc-pp { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .doc-passport .doc-photo { width: clamp(96px, 25cqi, 150px); height: auto; aspect-ratio: 35 / 45; align-self: flex-start; }
+    .doc-pp { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 4px; }
     .doc-pp-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: end; }
     .doc-pp-top { grid-template-columns: auto auto minmax(0, 1fr); gap: 22px; }
+    .doc-pp-3 { grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr) minmax(0, 1fr); }
+    .doc-pp-eq { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .doc-pp .doc-f-num { text-align: right; }
     .doc-pp .doc-f-num .doc-v { font-size: 16px; }
     /* Bayroq suv belgisi: chetlari so'nadi, matn ostida xira dog' bo'lib qoladi */
@@ -356,6 +360,7 @@
     /* Juda tor kartochka (telefon) — maydonlar 2 ustunga */
     @container (max-width: 460px) {
         .doc-fields-3, .doc-fields-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .doc-pp-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .doc-fields-3 .doc-f-num { grid-column: 1 / -1; grid-row: auto; text-align: left; }
         .doc-f-wide { grid-column: 1 / -1; }
         .doc-vr-2 { grid-template-columns: 9.5em minmax(0, 1fr); }
@@ -368,7 +373,7 @@
     }
     @media (max-width: 720px) {
         .doc-passport-body { flex-direction: column; }
-        .doc-passport .doc-photo { width: 84px; height: 108px; }
+        .doc-passport .doc-photo { width: 96px; }
         .doc-pp-top { grid-template-columns: auto minmax(0, 1fr); }
         .doc-pp-top .doc-f-num { grid-column: 1 / -1; text-align: left; }
         .doc-band { flex-wrap: wrap; }

@@ -16,10 +16,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * Tasdiqlangan vedomostlar jamlanmasi — «Vedomost tekshirish» Excel eksporti formatida
  * (A–AJ ustunlar, xuddi o'sha sarlavha, kenglik va son formatlari) + oxirgi ustunda yopilish shakli.
  *
- * Qiymatlar — Mark hisobi (AI tekshiruvi ishlatgan o'sha hisob): 12-shakl — «Vedomost tekshirish»,
- * 12a/12b va qo'shimcha shakllar — shu urinish talabalari va OSKE/Test bahosi. Vaznlar AI o'qigan
- * vedomost sarlavhasidan (bo'lmasa yopilish shakli bo'yicha standart). Chetlashtirilgan talabalar
- * kiritilmaydi.
+ * Qiymatlar — xodim tekshirib saqlagan AI hisobotidagi Mark qiymatlari: Mark hisobi (12-shakl —
+ * «Vedomost tekshirish», 12a/12b va qo'shimcha shakllar — shu urinish talabalari va OSKE/Test
+ * bahosi) + hisobotda «faqat hisobotda» o'zgartirilgan qiymatlar (binafsha katak, izohda asl qiymat
+ * va sabab). Vaznlar AI o'qigan vedomost sarlavhasidan (bo'lmasa yopilish shakli bo'yicha standart).
+ * Chetlashtirilgan talabalar kiritilmaydi.
  */
 class VedomostJamlanmaExcel
 {
@@ -79,10 +80,12 @@ class VedomostJamlanmaExcel
         $n = 0;
         foreach ($submissions as $sub) {
             $w = $this->weightsFor($sub);
+            $sysEdits = $sub->ai_result['edits']['system'] ?? [];
             foreach ($this->checker->studentsFor($sub) as $stu) {
                 if (($stu['status_code'] ?? '') === '60') {
                     continue;
                 }
+                $stu = $this->engine->applySystemEdits($stu, $sysEdits[VedomostScanReader::digits($stu['student_id'] ?? '')] ?? []);
                 $vt = $this->engine->vtRow($stu, $w, ['level_code' => $stu['meta']['level_code'] ?? ''], ++$n);
                 $r++;
                 foreach (array_keys($cols) as $col) {
@@ -96,6 +99,13 @@ class VedomostJamlanmaExcel
                     } elseif ($v !== null && $v !== '') {
                         $ws->setCellValue($col . $r, $v);
                     }
+                }
+                foreach (($stu['sys_edited'] ?? []) as $col => $why) {
+                    $ws->getStyle($col . $r)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE9D5FF');
+                    $orig = $stu['sys_orig'][$col] ?? null;
+                    $ws->getComment($col . $r)->getText()->createText(
+                        'Hisobotda o‘zgartirilgan. Mark: ' . ($orig === null ? '—' : $orig) . ($why !== '' ? "\nSabab: {$why}" : '')
+                    );
                 }
                 // «Vedomost tekshirish» eksportidagi son formatlari.
                 $ws->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');

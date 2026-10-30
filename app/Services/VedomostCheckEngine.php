@@ -693,7 +693,7 @@ class VedomostCheckEngine
      * @return array{0: array, 1: array, 2: array, 3: array, 4: array}
      */
     /** Mark qiymatlarini faqat hisobot uchun almashtiradi; asl qiymat va sabab saqlanadi. */
-    private function applySystemEdits(array $stu, array $ov): array
+    public function applySystemEdits(array $stu, array $ov): array
     {
         foreach ($ov as $col => $e) {
             $field = self::SYSTEM_EDITABLE[$col] ?? null;

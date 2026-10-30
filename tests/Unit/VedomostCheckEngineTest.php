@@ -402,14 +402,17 @@ test('Mark qiymati faqat hisobotda o\'zgartiriladi: qayta hisob, asl qiymat va s
     expect($ws->getComment('P2')->getText()->getPlainText())->toContain('OSKE dalolatnomasi');
 });
 
-test('jamlanma: VT formatidagi A–AJ ustunlar + yopilish shakli, chetlashtirilganlar kiritilmaydi', function () {
+test('jamlanma: VT formati A–AJ + yopilish shakli, hisobotdagi Mark tahrirlari, chetlashtirilganlar kiritilmaydi', function () {
     $checker = Mockery::mock(\App\Services\VedomostAiChecker::class);
     $checker->shouldReceive('studentsFor')->andReturn([
         vtStu('BOBOSHEROV B', '111', 83, 88, 100, 96),
         vtStu('CHETLASHGAN C', '222', 70, 70, 70, 70, ['status_code' => '60']),
     ]);
     $sub = new \App\Models\VedomostSubmission(['closing_form' => 'oski_test', 'status' => 'approved']);
-    $sub->ai_result = ['report' => ['weights' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15]]];
+    $sub->ai_result = [
+        'report' => ['weights' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15]],
+        'edits' => ['system' => ['111' => ['D' => ['v' => 90, 'why' => 'jurnalda xato']]]],
+    ];
 
     $ws = (new \App\Services\VedomostJamlanmaExcel($checker, engine()))->build(collect([$sub]))->getActiveSheet();
 
@@ -419,7 +422,9 @@ test('jamlanma: VT formatidagi A–AJ ustunlar + yopilish shakli, chetlashtirilg
         ->and($ws->getHighestRow())->toBe(2)
         ->and($ws->getCell('B2')->getValue())->toBe('BOBOSHEROV B')
         ->and($ws->getCell('C2')->getValue())->toBe('111')
-        ->and((float) $ws->getCell('E2')->getValue())->toBe(41.5)
-        ->and((int) $ws->getCell('V2')->getValue())->toBe(88)
+        ->and((float) $ws->getCell('D2')->getValue())->toBe(90.0)
+        ->and((float) $ws->getCell('E2')->getValue())->toBe(45.0)
+        ->and($ws->getStyle('D2')->getFill()->getStartColor()->getARGB())->toBe('FFE9D5FF')
+        ->and((string) $ws->getComment('D2')->getText())->toContain('Mark: 83')->toContain('jurnalda xato')
         ->and($ws->getCell('AK2')->getValue())->toBe('OSKI + Test');
 });

@@ -460,15 +460,15 @@
             const cls = k === 'A' ? 'c-a' : k === 'B' ? 'c-b' : k === 'C' ? 'c-c' : '';
             letters += `<th class="${cls}">${colL(vtIndex(k))}</th>`;
             names += `<th class="h ${cls}">${esc(VT_HEADERS[k])}</th>`;
-            // Talabaning aniq guruhi (guruhcha: d1/d25-01a) — har doim; Fan — faqat yig'ma rejimda.
-            if (k === 'C') { letters += MULTI ? '<th></th><th></th>' : '<th></th>'; names += (MULTI ? '<th class="h">Fan</th>' : '') + '<th class="h">Guruh</th>'; }
+            // Fan — faqat yig'ma rejimda (C dan keyin); talabaning aniq guruhi — oxirida, «FIO (kontingent)» oldida.
+            if (MULTI && k === 'C') { letters += '<th></th>'; names += '<th class="h">Fan</th>'; }
         });
         AB.forEach(([t], i) => {
             letters += `<th>${colL(base + i * 2)}</th><th>${colL(base + i * 2 + 1)}</th>`;
             names += `<th class="h">${esc(t)}</th><th class="h">Δ</th>`;
         });
-        letters += `<th>${colL(base + 10)}</th><th>${colL(base + 11)}</th><th>${colL(base + 12)}</th><th>${colL(base + 13)}</th><th>${colL(base + 14)}</th><th>${colL(base + 15)}</th><th>${colL(base + 16)}</th><th>${colL(base + 17)}</th></tr>`;
-        names += '<th></th><th class="h">OSKE test markazi</th><th class="h">Δ</th><th class="h">TEST test markazi</th><th class="h">Δ</th><th class="h">FIO (kontingent)</th><th class="h">Holat</th><th class="h">Izoh</th></tr>';
+        letters += `<th>${colL(base + 10)}</th><th>${colL(base + 11)}</th><th>${colL(base + 12)}</th><th>${colL(base + 13)}</th><th>${colL(base + 14)}</th><th>${colL(base + 15)}</th><th>${colL(base + 16)}</th><th>${colL(base + 17)}</th><th>${colL(base + 18)}</th></tr>`;
+        names += '<th></th><th class="h">OSKE test markazi</th><th class="h">Δ</th><th class="h">TEST test markazi</th><th class="h">Δ</th><th class="h">Guruh</th><th class="h">FIO (kontingent)</th><th class="h">Holat</th><th class="h">Izoh</th></tr>';
 
         let body = '';
         let shown = 0;
@@ -497,7 +497,7 @@
                 if (k === 'N' && v !== null && v !== '') v = Math.round(v * 100) + '%';
                 else if (k === 'AM' && v !== null && v !== '') v = (+(v * 100).toFixed(2)) + '%';
                 else if (['E', 'H'].includes(k) && typeof v === 'number') v = v.toFixed(1);
-                if (k === 'D') body += (MULTI ? `<td class="txt src" title="${esc(row.fan)}">${esc(row.fan)}</td>` : '') + `<td class="txt grp">${esc(row.grp || row.group || '')}</td>`;
+                if (MULTI && k === 'D') body += `<td class="txt src" title="${esc(row.fan)}">${esc(row.fan)}</td>`;
                 body += `<td class="${cls}" data-ref="${colL(vtIndex(k))}${ri + 2}"${sysAttrs}${k === 'B' ? ` title="${esc((row.flags || []).map(f => f.m).join('\n'))}"` : ''}>${esc(fmt(v))}</td>`;
             });
             AB.forEach(([t, key, hc], i) => {
@@ -538,6 +538,7 @@
                 const v = tm.tm !== null ? (tm.dal ? tm.tm + ' (Dalolatnoma)' : fmt(tm.tm)) : (tm.nd ? 'nd' : "yo'q");
                 body += `<td class="${fill}">${esc(v)}</td><td class="${fill}">${tm.nd ? 'nd' : esc(fmt(tm.delta))}</td>`;
             });
+            body += `<td class="txt grp">${esc(row.grp || row.group || '')}</td>`;
             body += `<td class="txt ${row.kont_fio === null ? 'y' : ''}">${esc(row.kont_fio ?? "KONTINGENTDA YO'Q")}</td>`;
             body += `<td class="txt"><span class="st ${row.status}">${icon(ST_ICON[row.status] || 'i-info')}${esc(STATUS_TXT[row.status] || '')}</span></td>`;
             body += `<td class="note" title="${esc((row.flags || []).map(f => f.m).join('\n'))}">${(row.flags || []).map(f => esc(f.m)).join(' · ')}</td></tr>`;
@@ -1055,7 +1056,7 @@
     if (sysBtn) sysBtn.addEventListener('click', () => {
         sysMode = !sysMode;
         sysBtn.setAttribute('aria-pressed', sysMode ? 'true' : 'false');
-        if (sysMode) { filter = 'all'; setChips(); showTab('main'); toast("Mark ustunlari (JN, MT, ON, OSKI, Test) tahrirlanadi — faqat shu hisobotda, sabab bilan"); }
+        if (sysMode) { filter = 'all'; setChips(); showTab('main'); toast("Mark ustunlari (JN, MT, ON, OSKI, Test, YN) tahrirlanadi — faqat shu hisobotda, sabab bilan"); }
         renderMain();
     });
 

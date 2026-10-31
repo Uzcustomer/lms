@@ -55,6 +55,32 @@ class VedomostAiSettingsController extends Controller
         ]);
     }
 
+    /** supervisord.conf dagi vedomost-ai ishchilari soni (numprocs). */
+    private const EXPECTED_WORKERS = 3;
+
+    /**
+     * Shu konteynerda ishlayotgan «queue:work --queue=vedomost-ai» jarayonlari soni.
+     * Aniqlab bo'lmasa (masalan /proc yo'q) — null.
+     */
+    private function runningAiWorkers(): ?int
+    {
+        $dirs = @glob('/proc/[0-9]*', GLOB_ONLYDIR);
+        if (!$dirs) {
+            return null;
+        }
+        $count = 0;
+        foreach ($dirs as $dir) {
+            // cmdline — argumentlar \0 bilan ajratilgan: «php artisan queue:work ... --queue=vedomost-ai».
+            $args = explode("\0", (string) @file_get_contents($dir . '/cmdline'));
+            if (in_array('queue:work', $args, true)
+                && in_array('--queue=' . \App\Jobs\CheckVedomostSubmissionWithAi::QUEUE, $args, true)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     /**
      * Jonli kuzatuv (5 s da yangilanadi): navbatdagi va tekshirilayotgan vedomostlar (oxirgi qadam
      * bilan), kalit ijaralari (qaysi ishchi qaysi kalitda), navbat holati va oxirgi Gemini so'rovlari.
@@ -109,7 +135,10 @@ class VedomostAiSettingsController extends Controller
 
         return response()->json([
             'now' => now()->format('H:i:s'),
-            'workers' => 3,
+            // Haqiqatda ishlayotgan AI ishchilari soni (supervisord sozlamasi konteyner qurilganda
+            // o'rnatiladi — qayta qurilmagan bo'lsa eski 1 ta ishchi qolib ketadi).
+            'workers' => $workers = $this->runningAiWorkers(),
+            'workers_expected' => self::EXPECTED_WORKERS,
             'active' => $active,
             'leases' => collect($leases)->map(fn ($l, $kid) => [
                 'key' => $keyName($kid),
@@ -117,6 +146,8 @@ class VedomostAiSettingsController extends Controller
                 'since' => $l['at'] ?? null,
             ])->values(),
             'keys_total' => $keys->where('enabled', true)->count(),
+            // Haqiqatda ishlatiladigan kalitlar («Bepul kalitlarga ruxsat» o'chiq bo'lsa bepullar kirmaydi).
+            'keys_usable' => $this->gemini->usableKeys()->count(),
             'jobs' => $jobs,
             // Navbatda vazifa bor-u, 2 daqiqadan beri hech biri olinmagan — ishchi ishlamayotgan bo'lishi mumkin.
             'worker_warning' => $jobs['pending'] > 0 && ($jobs['oldest_wait'] ?? 0) > 120 && $jobs['reserved'] === 0,

@@ -10,6 +10,9 @@ services:
         command: [ "/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf" ]
         volumes:
             - ./:/var/www/html
+            # supervisord sozlamasi (masalan AI ishchilari soni) git pull'dan keyin konteyner qayta qurilmasdan
+            # qo'llanishi uchun: docker exec lmsttatf_app supervisorctl reread && supervisorctl update
+            - ./supervisord.conf:/etc/supervisor/conf.d/supervisord.conf:ro
             - ./storage:/var/www/html/storage
             - ./public:/var/www/html/public
         ports:

@@ -662,14 +662,18 @@
                     const d = await r.json();
                     const running = d.active.filter(a => a.status === 'running').length;
                     document.getElementById('lv-kpis').innerHTML = [
-                        ['Tekshirilmoqda', running + ' / ' + d.workers + ' ishchi'],
+                        ['Tekshirilmoqda', running + ' / ' + (d.workers ?? d.workers_expected) + ' ishchi'],
                         ['Navbatda', d.active.length - running],
-                        ['Band kalitlar', d.leases.length + ' / ' + d.keys_total],
+                        ['Band kalitlar', d.leases.length + ' / ' + d.keys_usable + (d.keys_usable < d.keys_total ? ' (jami ' + d.keys_total + ')' : '')],
                         ['Navbat vazifalari', d.jobs.pending + ' tayyor · ' + d.jobs.delayed + ' kalit kutmoqda'],
                     ].map(([t, v]) => `<div class="lv-kpi"><div class="t">${t}</div><div class="v">${esc(v)}</div></div>`).join('');
                     const al = document.getElementById('lv-alert');
-                    al.hidden = !d.worker_warning;
-                    al.innerHTML = d.worker_warning ? `Navbatda ${d.jobs.pending} ta vazifa ${dur(d.jobs.oldest_wait)} dan beri turibdi, lekin hech biri boshlanmadi — AI ishchisi ishlamayotgan bo'lishi mumkin. Serverda: <code>docker exec lmsttatf_app php artisan queue:restart</code>` : '';
+                    const warns = [];
+                    if (d.worker_warning) warns.push(`Navbatda ${d.jobs.pending} ta vazifa ${dur(d.jobs.oldest_wait)} dan beri turibdi, lekin hech biri boshlanmadi — AI ishchisi ishlamayotgan bo'lishi mumkin. Serverda: <code>docker exec lmsttatf_app php artisan queue:restart</code>`);
+                    if (d.workers !== null && d.workers < d.workers_expected) warns.push(`Serverda faqat <b>${d.workers}</b> ta AI ishchisi ishlayapti (kerak: ${d.workers_expected}) — shuning uchun vedomostlar parallel emas, ketma-ket tekshiriladi. Ishchilar soni konteyner qurilganda o'rnatiladi; serverda konteynerni qayta quring: <code>docker compose -f docker-compose.production.yml up -d --build app</code>`);
+                    if (d.keys_usable < d.keys_total) warns.push(`${d.keys_total} ta yoqilgan kalitdan faqat ${d.keys_usable} tasi ishlatiladi — «Bepul kalitlarga ruxsat» o'chiq, bepul kalitlar ishlatilmaydi.`);
+                    al.hidden = !warns.length;
+                    al.innerHTML = warns.join('<br><br>');
                     document.getElementById('lv-active').innerHTML = d.active.length ? d.active.map(a => `<tr>
                         <td><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a><div class="lv-muted">${esc(a.form)} · #${a.id}</div></td>
                         <td>${a.stuck ? '<span class="lv-b stuck">Qotib qolgan?</span>' : a.status === 'running' ? '<span class="lv-b run">Tekshirilmoqda</span>' : '<span class="lv-b q">Navbatda</span>'}</td>

@@ -77,6 +77,8 @@
         .xl thead tr.letters th { position: sticky; top: 0; z-index: 4; background: var(--hdr); color: var(--hdr-text); font-weight: 400; font-size: 12px; height: 22px; text-align: center; }
         .xl thead tr.names th { position: sticky; top: 22px; z-index: 4; background: #fff; font-weight: 700; text-align: center; white-space: normal; line-height: 1.2; height: 34px; min-width: 48px; }
         .xl thead tr.names th.h { background: var(--head); }
+        /* Harfli qator bo'lmagan jadvallarda (Xatolar, Sarlavha, Tasdiqlash) sarlavha tepaga yopishadi. */
+        .xl thead tr.names:first-child th { top: 0; }
         .xl .rn { position: sticky; left: 0; z-index: 3; background: var(--hdr) !important; color: var(--hdr-text); text-align: center; width: 40px; min-width: 40px; font-size: 12px; }
         .xl thead tr th.rn { z-index: 7; }
         .xl .c-a { position: sticky; left: 40px; z-index: 2; width: 36px; min-width: 36px; text-align: center; }
@@ -924,7 +926,8 @@
         if (!box) return;
         const b = box.getBoundingClientRect(), r = td.getBoundingClientRect();
         const head = td.closest('table').querySelector('thead');
-        const top = b.top + (head ? head.getBoundingClientRect().height : 0);
+        // Yopishqoq sarlavhaning haqiqiy pastki cheti — katak uning tagida qolmasin.
+        const top = head ? Math.max(b.top, head.getBoundingClientRect().bottom) : b.top;
         let left = b.left;
         if (!td.matches('.c-a, .c-b, .c-c')) {
             td.parentElement.querySelectorAll('.rn, .c-a, .c-b, .c-c').forEach(c => {

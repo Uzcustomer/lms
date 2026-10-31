@@ -27,7 +27,7 @@
         $maxDay = max(1, collect($stats['days'])->max('total'));
         $hasFreeKeys = $keys->contains(fn ($k) => !$k->is_paid && $k->enabled);
         $outTotal = max(1, array_sum($o));
-        $tabs = ['overview' => 'Umumiy holat', 'settings' => 'Sozlamalar', 'rules' => 'Tekshiruv qoidalari'];
+        $tabs = ['overview' => 'Umumiy holat', 'live' => 'Jonli kuzatuv', 'settings' => 'Sozlamalar', 'rules' => 'Tekshiruv qoidalari'];
         if ($canManageKeys) {
             $tabs['keys'] = 'API kalitlar';
         }
@@ -71,6 +71,24 @@
         .ais .card-h h3 { margin:0; font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; }
         .ais .card-h p { margin:2px 0 0; font-size:13px; color:var(--muted); }
         .ais .card-b { padding:16px 18px; }
+        .ais .lv-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:16px 0 14px; }
+        .ais .lv-kpi { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+        .ais .lv-kpi .t { font-size:12px; color:var(--muted); font-weight:600; }
+        .ais .lv-kpi .v { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; }
+        .ais .lv-alert { margin-top:16px; padding:10px 14px; border-radius:10px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; font-size:13px; }
+        .ais .lv-upd { font-size:12px; color:var(--muted); }
+        .ais .lv-wrap { overflow-x:auto; }
+        .ais .lv-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+        .ais .lv-tbl th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); padding:8px 12px; background:var(--soft); border-bottom:1px solid var(--line); white-space:nowrap; }
+        .ais .lv-tbl td { padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+        .ais .lv-tbl td.empty { text-align:center; color:var(--muted); padding:22px; }
+        .ais .lv-tbl a { color:#1d4ed8; text-decoration:none; font-weight:600; }
+        .ais .lv-b { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap; }
+        .ais .lv-b.run { background:#dbeafe; color:#1d4ed8; } .ais .lv-b.q { background:#f1f5f9; color:#475569; }
+        .ais .lv-b.ok { background:#dcfce7; color:#166534; } .ais .lv-b.err { background:#fee2e2; color:#b91c1c; } .ais .lv-b.stuck { background:#fef3c7; color:#92400e; }
+        .ais .lv-step { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; color:#334155; }
+        .ais .lv-step.warn { color:#92400e; } .ais .lv-step.error { color:#b91c1c; } .ais .lv-step.ok { color:#166534; }
+        .ais .lv-muted { color:var(--muted); font-size:12px; }
 
         /* KPI */
         .ais .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
@@ -236,6 +254,20 @@
                     <button type="button" class="tab" role="tab" id="tab-{{ $id }}" aria-controls="panel-{{ $id }}" data-tab="{{ $id }}">{{ $title }}</button>
                 @endforeach
             </div>
+
+            {{-- ───────── Jonli kuzatuv (5 s da yangilanadi) ───────── --}}
+            <section class="panel" id="panel-live" role="tabpanel" aria-labelledby="tab-live" data-url="{{ route('admin.vedomost-submission.ai-settings.live') }}">
+                <div class="lv-alert" id="lv-alert" hidden></div>
+                <div class="lv-kpis" id="lv-kpis"></div>
+                <div class="card">
+                    <div class="card-h"><div><h3>Hozir ishlayotgan va navbatdagi vedomostlar</h3><p>Har ishchi o'z kalitida bitta vedomostni tekshiradi; bo'sh kalit bo'lmasa vedomost navbatda kutadi.</p></div><span class="lv-upd" id="lv-upd">yuklanmoqda…</span></div>
+                    <div class="lv-wrap"><table class="lv-tbl"><thead><tr><th>Vedomost</th><th>Holat</th><th>Vaqt</th><th>Kalit</th><th>Oxirgi qadam</th></tr></thead><tbody id="lv-active"></tbody></table></div>
+                </div>
+                <div class="card">
+                    <div class="card-h"><div><h3>Oxirgi 50 ta Gemini so'rovi</h3><p>So'rov tugagach yoziladi — hozir yuborilayotgani yuqoridagi «Oxirgi qadam»da ko'rinadi.</p></div></div>
+                    <div class="lv-wrap"><table class="lv-tbl"><thead><tr><th>Vaqt</th><th>Vedomost</th><th>Kalit</th><th>Model</th><th>Holat</th><th>Davomiyligi</th><th>Xato</th></tr></thead><tbody id="lv-req"></tbody></table></div>
+                </div>
+            </section>
 
             {{-- ───────── Umumiy holat ───────── --}}
             <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
@@ -617,6 +649,51 @@
                 }
             });
             show(@json($errTab) || location.hash.slice(1) || 'overview');
+
+            // Jonli kuzatuv — faqat tab ochiq bo'lganda, 5 s da bir.
+            const live = document.getElementById('panel-live');
+            const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const dur = s => s === null || s === undefined ? '—' : (s >= 3600 ? Math.floor(s / 3600) + ' soat ' : '') + (s >= 60 ? Math.floor(s % 3600 / 60) + ' daq ' : '') + (s % 60) + ' s';
+            async function poll() {
+                if (!live.classList.contains('active') || document.hidden) return;
+                try {
+                    const r = await fetch(live.dataset.url, { headers: { Accept: 'application/json' } });
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    const d = await r.json();
+                    const running = d.active.filter(a => a.status === 'running').length;
+                    document.getElementById('lv-kpis').innerHTML = [
+                        ['Tekshirilmoqda', running + ' / ' + d.workers + ' ishchi'],
+                        ['Navbatda', d.active.length - running],
+                        ['Band kalitlar', d.leases.length + ' / ' + d.keys_total],
+                        ['Navbat vazifalari', d.jobs.pending + ' tayyor · ' + d.jobs.delayed + ' kalit kutmoqda'],
+                    ].map(([t, v]) => `<div class="lv-kpi"><div class="t">${t}</div><div class="v">${esc(v)}</div></div>`).join('');
+                    const al = document.getElementById('lv-alert');
+                    al.hidden = !d.worker_warning;
+                    al.innerHTML = d.worker_warning ? `Navbatda ${d.jobs.pending} ta vazifa ${dur(d.jobs.oldest_wait)} dan beri turibdi, lekin hech biri boshlanmadi — AI ishchisi ishlamayotgan bo'lishi mumkin. Serverda: <code>docker exec lmsttatf_app php artisan queue:restart</code>` : '';
+                    document.getElementById('lv-active').innerHTML = d.active.length ? d.active.map(a => `<tr>
+                        <td><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a><div class="lv-muted">${esc(a.form)} · #${a.id}</div></td>
+                        <td>${a.stuck ? '<span class="lv-b stuck">Qotib qolgan?</span>' : a.status === 'running' ? '<span class="lv-b run">Tekshirilmoqda</span>' : '<span class="lv-b q">Navbatda</span>'}</td>
+                        <td style="white-space:nowrap">${dur(a.seconds)}</td>
+                        <td style="white-space:nowrap">${esc(a.key || "—")}</td>
+                        <td>${a.step ? `<span class="lv-step ${esc(a.step.l)}">${esc(a.step.t)} · ${esc(a.step.m)}</span><div class="lv-muted">${a.steps} qadam</div>` : '<span class="lv-muted">—</span>'}</td>
+                    </tr>`).join('') : '<tr><td colspan="5" class="empty">Hozir hech qanday vedomost tekshirilmayapti.</td></tr>';
+                    document.getElementById('lv-req').innerHTML = d.requests.length ? d.requests.map(q => `<tr>
+                        <td style="white-space:nowrap">${esc(q.at)}</td>
+                        <td>${q.url ? `<a href="${esc(q.url)}" target="_blank" rel="noopener">${esc(q.title || '#' + q.submission)}</a>` : '<span class="lv-muted">—</span>'}</td>
+                        <td>${esc(q.key)}</td>
+                        <td class="lv-muted">${esc(q.model)}</td>
+                        <td>${q.status === 'ok' ? '<span class="lv-b ok">OK</span>' : `<span class="lv-b err">${esc(q.error_type || 'xato')}${q.http ? ' ' + q.http : ''}</span>`}</td>
+                        <td style="white-space:nowrap">${q.ms !== null ? (q.ms / 1000).toFixed(1) + ' s' : '—'}</td>
+                        <td class="lv-muted" style="max-width:380px">${esc(q.error || '')}</td>
+                    </tr>`).join('') : '<tr><td colspan="7" class="empty">So\'rovlar yo\'q.</td></tr>';
+                    document.getElementById('lv-upd').textContent = 'Yangilandi: ' + d.now;
+                } catch (e) {
+                    document.getElementById('lv-upd').textContent = 'Yangilab bo\'lmadi: ' + e.message;
+                }
+            }
+            setInterval(poll, 5000);
+            tabs.forEach(t => t.addEventListener('click', () => { if (t.dataset.tab === 'live') poll(); }));
+            poll();
 
             // Saqlanmagan o'zgarishlar
             const initial = new FormData(form);

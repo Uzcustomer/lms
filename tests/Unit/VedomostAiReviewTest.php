@@ -128,3 +128,36 @@ test('12a umumiy vedomost: birlikning barcha guruhlari (yo\'nalish, fan, fakulte
     expect(array_column($links, 'label'))->toBe(['d2/21-01', 'd2/21-02'])
         ->and($links[1]['url'])->toContain('/journal/show/')->toContain('/502/20');
 });
+
+test('jonli kuzatuv: ishlayotgan vedomost (oxirgi qadam, kalit), navbat va oxirgi so\'rovlar', function () {
+    config()->set('cache.default', 'array');
+    Schema::create('jobs', function ($t) {
+        $t->id();
+        $t->string('queue');
+        $t->longText('payload');
+        $t->unsignedTinyInteger('attempts')->default(0);
+        $t->unsignedInteger('reserved_at')->nullable();
+        $t->unsignedInteger('available_at');
+        $t->unsignedInteger('created_at');
+    });
+    $run = reviewSub(1, 'Xirurgiya', null);
+    $run->update(['ai_check_status' => 'running']);
+    \App\Services\VedomostAiProgress::start($run->pdf_path, 'Tekshiruv boshlandi');
+    \App\Services\VedomostAiProgress::log('Gemini so‘rovi: 1-bo‘lak');
+    \App\Services\VedomostAiProgress::stop();
+    $client = app(\App\Services\VedomostGeminiClient::class);
+    $key = $client->leaseKey($run->id);
+    \App\Models\VedomostAiRequest::create(['vedomost_submission_id' => $run->id, 'vedomost_ai_key_id' => $key->id, 'model' => 'gemini-x', 'status' => 'error', 'http_status' => 429, 'error_type' => 'rate_limit', 'error_message' => 'Too many', 'latency_ms' => 1200, 'created_at' => now()]);
+    DB::table('jobs')->insert(['queue' => 'vedomost-ai', 'payload' => '{}', 'available_at' => now()->subMinutes(5)->getTimestamp(), 'created_at' => now()->getTimestamp()]);
+
+    $d = app(\App\Http\Controllers\Admin\VedomostAiSettingsController::class)->live()->getData(true);
+    $client->releaseLease();
+
+    expect($d['active'][0]['status'])->toBe('running')
+        ->and($d['active'][0]['step']['m'])->toContain('1-bo‘lak')
+        ->and($d['active'][0]['key'])->toContain('…xxxx')
+        ->and($d['leases'])->toHaveCount(1)
+        ->and($d['jobs']['pending'])->toBe(1)
+        ->and($d['worker_warning'])->toBeTrue()
+        ->and($d['requests'][0]['error_type'])->toBe('rate_limit');
+});

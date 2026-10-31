@@ -55,6 +55,88 @@ class VedomostAiSettingsController extends Controller
         ]);
     }
 
+    /**
+     * Jonli kuzatuv (5 s da yangilanadi): navbatdagi va tekshirilayotgan vedomostlar (oxirgi qadam
+     * bilan), kalit ijaralari (qaysi ishchi qaysi kalitda), navbat holati va oxirgi Gemini so'rovlari.
+     */
+    public function live()
+    {
+        $this->checkAccess();
+
+        $keys = VedomostAiKey::orderByDesc('is_paid')->orderBy('id')->get()->keyBy('id');
+        $keyName = fn ($id) => $id && isset($keys[$id]) ? trim(($keys[$id]->label ?: 'Kalit #' . $id) . ' ' . $keys[$id]->key_hint) : ($id ? 'Kalit #' . $id : '—');
+        $leases = $this->gemini->leases();
+        $leaseBySub = collect($leases)->mapWithKeys(fn ($l, $kid) => [(int) ($l['submission'] ?? 0) => $kid])->all();
+
+        $active = VedomostSubmission::whereIn('ai_check_status', ['queued', 'running'])
+            ->orderByRaw("ai_check_status = 'running' desc")->orderBy('updated_at')
+            ->limit(200)->get()
+            ->unique(fn ($v) => $v->pdf_path ?: 'id' . $v->id)
+            ->values()
+            ->map(function ($v) use ($leaseBySub, $keyName) {
+                $log = \App\Services\VedomostAiProgress::lines($v->pdf_path);
+                $last = end($log) ?: null;
+                $secs = $v->updated_at ? now()->diffInSeconds($v->updated_at, true) : null;
+
+                return [
+                    'id' => $v->id,
+                    'url' => route('admin.vedomost-submission.show', $v->id),
+                    'title' => trim(($v->group_name ?? '') . ' — ' . ($v->subject_name ?? '')),
+                    'form' => VedomostSubmission::formLabel($v->form_type),
+                    'status' => $v->ai_check_status,
+                    'seconds' => $secs !== null ? (int) $secs : null,
+                    'stuck' => $v->ai_check_status === 'running' && $secs !== null && $secs > VedomostAiDispatcher::STUCK_MINUTES * 60,
+                    'step' => $last ? ['t' => $last['t'], 'm' => $last['m'], 'l' => $last['l']] : null,
+                    'steps' => count($log),
+                    'key' => isset($leaseBySub[$v->id]) ? $keyName($leaseBySub[$v->id]) : null,
+                ];
+            });
+
+        $jobs = ['pending' => 0, 'reserved' => 0, 'delayed' => 0, 'oldest_wait' => null];
+        if (\Illuminate\Support\Facades\Schema::hasTable('jobs')) {
+            $q = fn () => DB::table('jobs')->where('queue', \App\Jobs\CheckVedomostSubmissionWithAi::QUEUE);
+            $now = now()->getTimestamp();
+            $jobs['reserved'] = $q()->whereNotNull('reserved_at')->count();
+            $jobs['pending'] = $q()->whereNull('reserved_at')->where('available_at', '<=', $now)->count();
+            $jobs['delayed'] = $q()->whereNull('reserved_at')->where('available_at', '>', $now)->count();
+            $oldest = $q()->whereNull('reserved_at')->where('available_at', '<=', $now)->min('available_at');
+            $jobs['oldest_wait'] = $oldest ? $now - (int) $oldest : null;
+        }
+
+        $requests = VedomostAiRequest::orderByDesc('id')->limit(50)->get();
+        $subNames = VedomostSubmission::whereIn('id', $requests->pluck('vedomost_submission_id')->filter()->unique()->all())
+            ->get(['id', 'group_name', 'subject_name'])->keyBy('id');
+
+        return response()->json([
+            'now' => now()->format('H:i:s'),
+            'workers' => 3,
+            'active' => $active,
+            'leases' => collect($leases)->map(fn ($l, $kid) => [
+                'key' => $keyName($kid),
+                'submission' => $l['submission'] ?? null,
+                'since' => $l['at'] ?? null,
+            ])->values(),
+            'keys_total' => $keys->where('enabled', true)->count(),
+            'jobs' => $jobs,
+            // Navbatda vazifa bor-u, 2 daqiqadan beri hech biri olinmagan — ishchi ishlamayotgan bo'lishi mumkin.
+            'worker_warning' => $jobs['pending'] > 0 && ($jobs['oldest_wait'] ?? 0) > 120 && $jobs['reserved'] === 0,
+            'requests' => $requests->map(fn ($r) => [
+                'at' => optional($r->created_at)->format('d.m H:i:s'),
+                'submission' => $r->vedomost_submission_id,
+                'url' => $r->vedomost_submission_id ? route('admin.vedomost-submission.show', $r->vedomost_submission_id) : null,
+                'title' => isset($subNames[$r->vedomost_submission_id]) ? trim($subNames[$r->vedomost_submission_id]->group_name . ' — ' . $subNames[$r->vedomost_submission_id]->subject_name) : null,
+                'key' => $keyName($r->vedomost_ai_key_id),
+                'model' => $r->model,
+                'purpose' => $r->purpose,
+                'status' => $r->status,
+                'http' => $r->http_status,
+                'error_type' => $r->error_type,
+                'error' => $r->error_message ? mb_substr($r->error_message, 0, 300) : null,
+                'ms' => $r->latency_ms,
+            ]),
+        ]);
+    }
+
     public function save(Request $request)
     {
         $this->checkAccess();

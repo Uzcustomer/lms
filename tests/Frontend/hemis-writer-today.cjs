@@ -123,5 +123,62 @@ const rep = {
     await new Promise(r => setTimeout(r, 50));
     assert.deepEqual(fetched, []);
     assert.match(els.hwSummary.innerHTML, /Bajariladi: <b>0<\/b>/);
-    console.log('HEMIS writer: bugungi darslar — faqat o\'zgartirish, davomat/baho qayta tekshiruvi');
+    // after: B (#21) A (#20) bo'shatgan joyga ko'chadi — A filtrda yo'q yoki yozilmasa, B ga tegilmaydi.
+    ctx.Date = class extends RealDate { constructor(...a) { if (a.length) super(...a); else super('2099-11-02T10:00:00'); } };
+    const dep = { mode: 'today', today: '2099-11-02', hemis_pairs: rep.hemis_pairs, lock_check_url: LOCK, groups: [
+        { group: 'p/st26-01b', group_hemis_id: 1597, units: [{ subject_id: 1, subject_name: 'Tarix', code_names: {}, actions: [act({ op: 'update', hemis_id: 20, gseq: 1 })] }] },
+        { group: 'p/st26-01a', group_hemis_id: 1596, units: [{ subject_id: 2, subject_name: 'Kimyo', code_names: {}, actions: [act({ op: 'update', hemis_id: 21, gseq: 2, after: [20], start: '10:00', end: '11:20' })] }] },
+    ] };
+    await els.hwFile.onchange.call({ files: [{ text: async () => JSON.stringify(dep) }] });
+    assert.match(els.hwSummary.innerHTML, /Bajariladi: <b>2<\/b>/);
+    els.hwGroup.value = 'p/st26-01a';
+    els.hwGroup.onchange();
+    assert.match(els.hwSummary.innerHTML, /Bajariladi: <b>0<\/b>/);
+    els.hwGroup.value = '';
+    els.hwGroup.onchange();
+    // A shu orada belgilandi — B yozilmaydi (tekshiruv ham so'ralmaydi).
+    const lockOf = { 20: { 20: 'davomat olingan' } };
+    fetched.length = 0;
+    ctx.fetch = async (url, opt) => {
+        fetched.push([url, opt && opt.credentials]);
+        if (url.startsWith(LOCK)) {
+            const id = url.split('ids=')[1];
+            return { ok: true, status: 200, json: async () => ({ locked: lockOf[id] || {}, failed: [] }) };
+        }
+        return { status: 404 };
+    };
+    els.hwApply.onclick();
+    while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
+    assert.deepEqual(fetched, [[LOCK + '&ids=20', 'omit']]);
+    assert.match(els.hwList.textContent, /#21 \(xona: 73 → 74\)  — avval #20 ko'chishi kerak edi — u yozilmadi, tegilmadi/);
+    // A muvaffaqiyatli yozilsa (HEMIS formasi — soxta sahifada "forma to'g'ri" o'rniga 404 xato beradi) — B ham kutadi; tekshirish
+    // rejimida A ning formasi topilmasa (xato) B yana yozilmaydi.
+    delete lockOf[20];
+    fetched.length = 0;
+    els.hwCheck.onclick();
+    while (!/Tekshirildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
+    assert.deepEqual(fetched, [[LOCK + '&ids=20', 'omit'], ['/curriculum/schedule-edit?id=20', undefined]]);
+    assert.match(els.hwList.textContent, /#21 .* avval #20 ko'chishi kerak edi/);
+    // A haqiqatan yozilsa — B ham yoziladi (HEMIS formasining kichik soxtasi: tahrirlash sahifasi va saqlash).
+    const opt = v => ({ value: String(v), selected: false, removeAttribute() {}, setAttribute() {} });
+    const select = () => ({ options: ['13', '12', '74', '1', '2', '141', '1596', '1597'].map(opt), appendChild(o) { this.options.push(o); } });
+    const form = { querySelector: q => (q.startsWith('select') ? select() : {}), getAttribute: () => null };
+    ctx.DOMParser = class { parseFromString(html) {
+        return html === 'FORM' ? { querySelectorAll: q => (q === 'form' ? [form] : []), createElement: () => opt('') }
+            : { querySelectorAll: () => [], querySelector: () => null };
+    } };
+    ctx.FormData = class { append() {} set() {} };
+    const posted = [];
+    fetched.length = 0;
+    ctx.fetch = async (url, o) => {
+        fetched.push([url, o && o.credentials]);
+        if (url.startsWith(LOCK)) return { ok: true, status: 200, json: async () => ({ locked: {}, failed: [] }) };
+        if (o && o.method === 'POST') { posted.push(url); return { ok: true, url: '/curriculum/schedule', text: async () => 'DONE' }; }
+        return { status: 200, ok: true, text: async () => 'FORM' };
+    };
+    els.hwApply.onclick();
+    while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
+    assert.deepEqual(posted, ['/curriculum/schedule-edit?id=20', '/curriculum/schedule-edit?id=21']);
+    assert.match(els.hwList.textContent, /Yozildi: 2 ta muvaffaqiyatli, 0 ta xato/);
+    console.log('HEMIS writer: bugungi darslar — faqat o\'zgartirish, davomat/baho qayta tekshiruvi, navbat (after)');
 })().catch(e => { console.error(e); process.exit(1); });

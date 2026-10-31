@@ -153,7 +153,19 @@
                 }
             }
         }
-        jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
+        // Bugungi navbat (after): oldin ko'chishi kerak dars ro'yxatda bo'lmasa (filtr, to'siq, kun) — bunisi ham yozilmaydi.
+        for (let more = true; more;) {
+            const ids = new Set(jobs.map(j => String(j.hemis_id)));
+            more = false;
+            jobs = jobs.filter(j => {
+                const miss = (j.after || []).filter(id => !ids.has(String(id)));
+                if (!miss.length) return true;
+                skipped.push(Object.assign({}, j, { skip: 'avval #' + miss.join(', #') + ' ko\'chishi kerak — u yozilmaydi' }));
+                more = true;
+                return false;
+            });
+        }
+        jobs.sort((x, y) => (x.gseq || 0) - (y.gseq || 0) || String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
             || OP_ORDER[x.op] - OP_ORDER[y.op] || x.date.localeCompare(y.date) || (x.seq || 0) - (y.seq || 0) || x.start.localeCompare(y.start));
         const c = { create: 0, update: 0, delete: 0 };
         jobs.forEach(j => c[j.op]++);
@@ -214,6 +226,7 @@
         const list = $('hwList');
         list.textContent = '';
         let lastGroup = null;
+        const okIds = new Set();   // shu yozishda muvaffaqiyatli bajarilgan darslar (after tekshiruvi uchun)
         for (const j of batch) {
             if (stop) { results.push(Object.assign({}, j, { status: 'skipped', reason: 'to\'xtatildi' })); continue; }
             // Yozish yarim tundan o'tib ketsa — endi bugun bo'lib qolgan darslar yozilmaydi (bugungi dars — kun almashsa).
@@ -222,6 +235,14 @@
                 const why = j.today === true ? 'bugungi kun emas' : 'bugun yoki o\'tgan kun';
                 results.push(Object.assign({}, j, { status: 'skipped', reason: why }));
                 list.textContent += '  – ' + line(j) + '  — ' + why + ', yozilmadi\n';
+                continue;
+            }
+            // Oldin ko'chishi kerak dars yozilmagan bo'lsa (to'siq, belgilangan, xato) — uning joyi band, bunisiga tegilmaydi.
+            const waits = (j.after || []).filter(id => !okIds.has(String(id)));
+            if (waits.length) {
+                const why = 'avval #' + waits.join(', #') + ' ko\'chishi kerak edi — u yozilmadi, tegilmadi';
+                results.push(Object.assign({}, j, { status: 'skipped', reason: why }));
+                list.textContent += '  – ' + line(j) + '  — ' + why + '\n';
                 continue;
             }
             if (j.today === true) {
@@ -240,6 +261,7 @@
             let res;
             try { res = await runInPage({ job: j, apply }); } catch (e) { res = { ok: false, error: String(e && e.message || e) }; }
             results.push(Object.assign({}, j, { status: res.ok ? 'ok' : 'error', note: res.note || null, error: res.error || null }));
+            if (res.ok) okIds.add(String(j.hemis_id));
             list.textContent += (res.ok ? '  ✓ ' : '  ✗ ') + line(j) + (res.ok ? (res.note ? '  — ' + res.note : '') : '  — ' + res.error) + '\n';
             box.scrollTop = box.scrollHeight;
             await sleep(apply ? 400 : 100);

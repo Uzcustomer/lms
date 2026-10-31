@@ -1014,6 +1014,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/toggle-notify', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'toggleNotify'])->name('toggle-notify');
             // AI sozlamalari (Gemini kalitlari, model, limitlar, statistika)
             Route::get('/ai-settings', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'index'])->name('ai-settings');
+            Route::get('/ai-settings/live', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'live'])->name('ai-settings.live');
             Route::post('/ai-settings', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'save'])->name('ai-settings.save');
             Route::post('/ai-settings/models', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'refreshModels'])->name('ai-settings.models');
             Route::post('/ai-settings/queue-pending', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'queuePending'])->name('ai-settings.queue-pending');

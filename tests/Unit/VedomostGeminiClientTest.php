@@ -203,3 +203,32 @@ test('sozlamalar standart qiymatlar bilan to\'ldiriladi va turlarga keltiriladi'
         ->and($fresh->all())->not->toHaveKey('unknown')
         ->and($fresh->get('jn_mt_pass'))->toBe(\App\Models\MarkingSystemScore::YN_JN_MT_LIMIT);
 });
+
+test('kalit ijarasi: bitta kalit — bitta ishchi; band bo\'lsa null; ijara egasi faqat o\'z kalitidan so\'rov yuboradi', function () {
+    config()->set('cache.default', 'array');
+    $k1 = aiKey('paid-key-aaaaaaaaaaaaaaaaaaaaaaaaaaaa', true);
+    $k2 = aiKey('paid-key-bbbbbbbbbbbbbbbbbbbbbbbbbbbb', true);
+    $client = app(VedomostGeminiClient::class);
+
+    expect($client->leaseKey(11)->id)->toBe($k1->id);
+    $other = new VedomostGeminiClient(app(VedomostAiSettings::class));
+    // Boshqa ishchi (statik ijara shu jarayonda umumiy — testda qo'lda tozalab, ikkinchi ishchini taqlid qilamiz).
+    $first = VedomostGeminiClient::leasedKeyId();
+    (fn () => self::$leasedKeyId = null)->call($other);
+    expect($other->leaseKey(12)->id)->toBe($k2->id)
+        ->and($other->leaseKey(13))->toBeNull()
+        ->and(array_keys($client->leases()))->toBe([$k1->id, $k2->id]);
+
+    // Ijara egasi faqat o'z kaliti bilan so'rov yuboradi.
+    (fn () => self::$leasedKeyId = $first)->call($client);
+    $used = [];
+    Http::fake(function (Request $req) use (&$used) {
+        $used[] = $req->header('x-goog-api-key')[0] ?? '';
+        return Http::response(geminiOk(['ok' => true]), 200);
+    });
+    $client->generateJson([['text' => 'x']], ['type' => 'object'], null, 11);
+    expect($used)->toBe(['paid-key-aaaaaaaaaaaaaaaaaaaaaaaaaaaa']);
+
+    $client->releaseLease();
+    expect(array_keys($client->leases()))->toBe([$k2->id])->and(VedomostGeminiClient::leasedKeyId())->toBeNull();
+});

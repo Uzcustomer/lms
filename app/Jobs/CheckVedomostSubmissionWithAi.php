@@ -25,7 +25,16 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
     public const QUEUE = 'vedomost-ai';
 
     public int $timeout = 900;
-    public int $tries = 1;
+
+    /**
+     * Bo'sh kalit bo'lmasa job 30 s dan keyin qayta navbatga qo'yiladi (release) — urinishlar shu
+     * uchun ko'p. Xatolar handle() ichida ushlanadi; timeout esa darhol muvaffaqiyatsiz (qayta urinmaydi).
+     */
+    public int $tries = 60;
+
+    public bool $failOnTimeout = true;
+
+    private const KEY_WAIT_SECONDS = 30;
 
     /** @param  bool  $fresh  PDF keshdan emas, AI'ga qaytadan o'qitiladi (qo'lda «Qayta tekshirish»). */
     public function __construct(public int $submissionId, public bool $fresh = false)
@@ -55,9 +64,23 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
             }
         };
 
+        // Bitta kalit — bitta ishchi: bo'sh kalit bo'lmasa (boshqa ishchilar band) keyinroq qaytamiz.
+        $client = app(\App\Services\VedomostGeminiClient::class);
+        if ($client->usableKeys()->isNotEmpty() && !$client->leaseKey($v->id)) {
+            Progress::attach($v->pdf_path);
+            Progress::log("Barcha kalitlar boshqa vedomostlarni tekshirmoqda — bo'sh kalit kutilmoqda (navbatda)", 'warn');
+            $this->release(self::KEY_WAIT_SECONDS);
+
+            return;
+        }
+
         $save(['ai_check_status' => 'running', 'ai_error' => null]);
         Progress::start($v->pdf_path, 'Tekshiruv boshlandi: ' . $v->group_name . ' · ' . VedomostSubmission::formLabel($v->form_type)
             . ($this->fresh ? ' · PDF qaytadan o‘qiladi' : '') . ' · ' . $siblings->count() . ' ta guruh yozuvi');
+        if ($kid = \App\Services\VedomostGeminiClient::leasedKeyId()) {
+            $k = \App\Models\VedomostAiKey::find($kid);
+            Progress::log('Kalit: ' . ($k?->label ?: 'kalit #' . $kid) . ' ' . ($k?->key_hint ?? '') . ' — tekshiruv tugaguncha faqat shu ishchida');
+        }
 
         try {
             $result = $checker->check($v, $this->fresh);
@@ -91,6 +114,8 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
                 'ai_error' => mb_substr($e->getMessage(), 0, 1000),
                 'ai_checked_at' => now(),
             ]);
+        } finally {
+            $client->releaseLease();
         }
     }
 
@@ -105,6 +130,7 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
         if (!$siblings->contains('id', $v->id)) {
             $siblings->push($v);
         }
+        app(\App\Services\VedomostGeminiClient::class)->releaseLease();
         Progress::attach($v->pdf_path);
         Progress::log('Tekshiruv tugamadi: ' . mb_substr($e?->getMessage() ?? "noma'lum xato", 0, 300), 'error');
         foreach ($siblings as $sib) {

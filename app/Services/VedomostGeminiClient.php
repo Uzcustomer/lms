@@ -56,6 +56,63 @@ class VedomostGeminiClient
             ->get();
     }
 
+    // ───────── kalit ijarasi: bitta kalit — bitta ishchi ─────────
+    // Bir necha ishchi parallel ishlaganda har biri o'z kalitini «ijaraga» oladi — bitta kalitga
+    // bir vaqtda faqat bitta tekshiruv so'rov yuboradi (daqiqalik limit oshib ketmasin).
+
+    private const LEASE_PREFIX = 'vedomost-ai-lease:';
+
+    private const LEASE_TTL = 1000; // job timeout'idan (900 s) uzoqroq — ishchi halok bo'lsa ham o'zi bo'shaydi
+
+    /** Shu jarayon (ishchi) ijaraga olgan kalit. */
+    private static ?int $leasedKeyId = null;
+
+    /**
+     * Bo'sh (boshqa ishchi ijaraga olmagan, kunlik limiti tugamagan) kalitni ijaraga oladi.
+     * Hammasi band bo'lsa null — job keyinroq qayta navbatga qo'yiladi.
+     */
+    public function leaseKey(?int $submissionId, array $except = []): ?VedomostAiKey
+    {
+        foreach ($this->usableKeys() as $key) {
+            if (in_array($key->id, $except, true) || $this->dailyExhausted($key)) {
+                continue;
+            }
+            if (Cache::add(self::LEASE_PREFIX . $key->id, ['submission' => $submissionId, 'at' => now()->toDateTimeString(), 'pid' => getmypid()], self::LEASE_TTL)) {
+                self::$leasedKeyId = $key->id;
+
+                return $key;
+            }
+        }
+
+        return null;
+    }
+
+    public function releaseLease(): void
+    {
+        if (self::$leasedKeyId !== null) {
+            Cache::forget(self::LEASE_PREFIX . self::$leasedKeyId);
+            self::$leasedKeyId = null;
+        }
+    }
+
+    public static function leasedKeyId(): ?int
+    {
+        return self::$leasedKeyId;
+    }
+
+    /** Monitoring: kalit id => ijara (qaysi vedomost, qachondan). */
+    public function leases(): array
+    {
+        $out = [];
+        foreach ($this->usableKeys() as $key) {
+            if ($l = Cache::get(self::LEASE_PREFIX . $key->id)) {
+                $out[$key->id] = $l;
+            }
+        }
+
+        return $out;
+    }
+
     /**
      * Strukturali JSON javob oladi.
      *
@@ -82,6 +139,10 @@ class VedomostGeminiClient
         if ($keys->isEmpty()) {
             throw new RuntimeException("Ishlatsa bo'ladigan Gemini API kaliti yo'q (AI sozlamalari).");
         }
+        // Ijara rejimi (navbat ishchisi): faqat o'z kaliti; u ishlamay qolsa — boshqa bo'sh kalitga o'tadi.
+        if (self::$leasedKeyId !== null) {
+            $keys = $keys->where('id', self::$leasedKeyId)->values();
+        }
 
         $body = $this->buildBody($parts, $schema, $systemPrompt);
         $maxRetries = max(0, (int) $this->settings->get('max_retries'));
@@ -93,6 +154,15 @@ class VedomostGeminiClient
                 $this->assertGlobalLimit();
 
                 $available = $keys->reject(fn ($k) => isset($dead[$k->id]) || $this->dailyExhausted($k))->values();
+                if ($available->isEmpty() && self::$leasedKeyId !== null) {
+                    $old = self::$leasedKeyId;
+                    $this->releaseLease();
+                    $next = $this->leaseKey($submissionId, array_merge(array_keys($dead), [$old]));
+                    if ($next) {
+                        $keys = collect([$next]);
+                        $available = $keys->reject(fn ($k) => isset($dead[$k->id]))->values();
+                    }
+                }
                 if ($available->isEmpty()) {
                     throw new VedomostAiLimitException(
                         'Barcha kalitlarning limiti tugadi yoki ular ishlamayapti.'

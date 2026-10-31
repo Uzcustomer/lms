@@ -135,3 +135,12 @@ test('tushib qolgan qator (raqamlashda bo\'shliq) qayta o\'qib qo\'shiladi', fun
         ->and($res['meta']['missing_nrs'])->toBe([])
         ->and($res['meta']['rows_read'])->toBe(3);
 });
+
+test('ichki hisob: ball foiz×vazn yoki uning butun songacha yaxlitlangani (12a, 4–5 kurs) — xato emas', function () {
+    $reader = app(\App\Services\VedomostScanReader::class);
+    $ratios = ['jb' => 0.5, 'mt' => 0.2];
+    $p = fn (array $row) => array_column($reader->rowProblems($row, $ratios), 0);
+    expect($p(['jb_pct' => '77,0', 'jb_ball' => '39,0', 'mt_pct' => '88,0', 'mt_ball' => '18,0']))->toBe([])
+        ->and($p(['jb_pct' => '77,0', 'jb_ball' => '38,5', 'mt_pct' => '88,0', 'mt_ball' => '17,6']))->toBe([])
+        ->and($p(['jb_pct' => '77,0', 'jb_ball' => '40,0']))->toContain("jb_pct va jb_ball o'zaro mos emas");
+});

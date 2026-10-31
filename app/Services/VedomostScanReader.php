@@ -447,7 +447,8 @@ class VedomostScanReader
             if (in_array($key, ['oski', 'test', 'jb', 'mt'], true) && $pv !== null && $pv < 60 && $bv !== null && abs($bv) < 0.001) {
                 continue; // o'tmagan: foiz bor, ball 0 — vedomostda shunday yoziladi
             }
-            if ($w && $pv !== null && $bv !== null && abs($bv - $pv * $w) > 0.11) {
+            // Ball foiz × vazn ga teng yoki (4–5 kurs qayta topshirish shakllarida) butun songacha yaxlitlangan.
+            if ($w && $pv !== null && $bv !== null && abs($bv - $pv * $w) > 0.11 && abs($bv - floor($pv * $w + 0.5)) > 0.001) {
                 $p[] = ["{$pf} va {$bf} o'zaro mos emas", [$pf, $bf]];
             }
         }

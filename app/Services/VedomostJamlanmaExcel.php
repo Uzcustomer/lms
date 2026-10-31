@@ -86,7 +86,7 @@ class VedomostJamlanmaExcel
                     continue;
                 }
                 $stu = $this->engine->applySystemEdits($stu, $sysEdits[VedomostScanReader::digits($stu['student_id'] ?? '')] ?? []);
-                $vt = $this->engine->vtRow($stu, $w, ['level_code' => $stu['meta']['level_code'] ?? ''], ++$n);
+                $vt = $this->engine->vtRow($stu, $w, ['level_code' => $stu['meta']['level_code'] ?? '', 'form_type' => (string) ($sub->form_type ?: '12')], ++$n);
                 $r++;
                 foreach (array_keys($cols) as $col) {
                     if ($col === self::CLOSING_COL) {

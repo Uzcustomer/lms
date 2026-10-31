@@ -369,7 +369,7 @@ test('qayta topshirish shakllari: sarlavhadagi shakl nomi, ism oxiridagi guruh, 
         ->and(VedomostNames::stripGroupSuffix('RAXMONOV BEHRUZ ALIZODA'))->toBe('RAXMONOV BEHRUZ ALIZODA');
 
     // 12a vedomostida ism + guruh, amaliyot bo'sh, shakl 12A — moslanadi, sarlavha XATO emas.
-    $exp = expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)], ['form_type' => '12a', 'shakl' => '12a-shakl']);
+    $exp = expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)], ['form_type' => '12a', 'shakl' => '12a-shakl', 'level_code' => '13']);
     $r = engine()->build($exp, scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH 22-01a', '368221100018', bobo())], ['amaliyot' => [], 'shakl' => '12A- shakl']), [], rules(), ctx());
     $h = collect($r['header'])->keyBy('key');
     expect($r['rows'][0]['status'])->toBe('ok')
@@ -473,4 +473,28 @@ test('chetlashtirilgan talaba vedomost PDFda bo\'lsa — faqat ma\'lumot; shu gu
     $own = $build('11', 'd1/d22-01b (rus)');
     expect($own['extra'][0]['note'])->toContain('Shu guruh talabasi')->and($own['verdict'])->toBe('issues');
     expect($build('11', 'd1/d22-05a (rus)')['extra'][0]['note'])->toContain('Boshqa guruh talabasi');
+});
+
+test('12a/12b, 4–5 kurs: jurnal eksportidagidek JN/MT ball butun songacha, YN shu ballardan; 12-shakl o\'zgarmaydi', function () {
+    $stu = vtStu('HAYDAROV FARHOD TO\'RAMURODOVICH', '368211100391', 85, 88, 90, 71);
+    // Vedomost (12A): JB 85 → 43 (42.5), MT 88 → 18 (17.6), JB+MT 61, OSKE 13.5, Test 10.65 → YN 61 + 24 = 85.
+    $row = pdfRow(1, "HAYDAROV FARHOD TO'RAMURODOVICH 21-04b", '368211100391', ['jb_pct' => '85,0', 'jb_ball' => '43,0', 'mt_pct' => '88,0', 'mt_ball' => '18,0',
+        'jbmton_ball' => '61,0', 'jbmton_pct' => '87', 'oski_pct' => '90,0', 'oski_ball' => '13,5', 'test_pct' => '71,0', 'test_ball' => '10,7', 'yn' => '85', 'ects' => 'B+', 'baho' => 'yaxshi']);
+
+    $r = engine()->build(expectedData([$stu], ['form_type' => '12a', 'shakl' => '12a-shakl', 'level_code' => '15']), scanDoc([$row], ['shakl' => '12A- shakl', 'amaliyot' => []]), [], rules(), ctx());
+    expect($r['rows'][0]['vt']['E'])->toBe(43)->and($r['rows'][0]['vt']['H'])->toBe(18)->and($r['rows'][0]['vt']['V'])->toBe(85)
+        ->and($r['rows'][0]['status'])->toBe('ok');
+
+    // 12-shakl («Vedomost tekshirish») — avvalgidek yaxlitlanmaydi.
+    $r12 = engine()->build(expectedData([$stu], ['level_code' => '15']), scanDoc([$row]), [], rules(), ctx());
+    expect($r12['rows'][0]['vt']['E'])->toBe(42.5)->and($r12['rows'][0]['vt']['H'])->toBe(17.6);
+});
+
+test('qayta topshirish: shu urinishda bahosi yo\'q va vedomostda ham yo\'q talaba — xato emas, ma\'lumot', function () {
+    $a = vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96, ['attempt_taken' => true]);
+    $b = vtStu('MAHMUDOVA FARIDA BARODJON QIZI', '368211100346', 0, 90, 0, 0, ['attempt_taken' => false]);
+    $r = engine()->build(expectedData([$a, $b], ['form_type' => '12a', 'shakl' => '12a-shakl', 'level_code' => '13']),
+        scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], ['shakl' => '12A- shakl', 'amaliyot' => []]), [], rules(), ctx());
+    expect($r['rows'])->toHaveCount(1)->and($r['counts']['nopdf'])->toBe(0)
+        ->and(collect($r['issues'])->pluck('m')->implode(' '))->toContain("1 ta talaba Markda shu bosqichda, lekin bu urinishda bahosi yo'q");
 });

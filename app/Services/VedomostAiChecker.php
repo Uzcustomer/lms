@@ -191,12 +191,17 @@ class VedomostAiChecker
         foreach ($c['students'] as $stu) {
             $hid = $stu->hemis_id;
             $raw = $c['raw'][$hid];
+            $attemptTaken = true;
             if ($attempt) {
                 $st = $stage['stages'][$hid] ?? null;
                 if ($st === null || !in_array($attempt['form'], YnAttemptStatusService::formsForStage($st), true)) {
                     continue;
                 }
-                $raw = self::attemptRaw($raw, $stage['studentScenarios'][$hid] ?? [], $attempt['chain']);
+                $scen = $stage['studentScenarios'][$hid] ?? [];
+                $raw = self::attemptRaw($raw, $scen, $attempt['chain']);
+                // Shu urinishda (12a, 12b, qo'shimcha) birorta bahosi yo'q — imtihonga kirmagan (masalan,
+                // pullik, to'lov qilmagan); bunday talaba qayta topshirish vedomostiga chop etilmaydi.
+                $attemptTaken = !empty($scen[$attempt['chain'][0]]);
             }
             $he = $exam[$hid] ?? collect();
             $out[] = [
@@ -204,6 +209,7 @@ class VedomostAiChecker
                 'student_id' => (string) $stu->student_id_number,
                 'hemis_id' => (string) $hid,
                 'status_code' => (string) ($stu->student_status_code ?? ''),
+                'attempt_taken' => $attemptTaken,
                 'status_name' => (string) ($stu->student_status_name ?? ''),
                 'group' => $group->name ?? '',
                 'raw' => $raw,

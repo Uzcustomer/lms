@@ -300,6 +300,10 @@ class VedomostAiChecker
             'test_center' => $this->testCenter($sysIds, $expected, (string) ($v->form_type ?: VedomostSubmission::FORM_12),
                 (string) ($expected['talabalar'][0]['meta']['semester'] ?? '')),
             'kontingent' => $this->kontingent(array_values(array_diff($scanIds, $sysIds))),
+            // ID xato o'qilsa (boshqa talabaga tegishli bo'lsa) — ism bo'yicha ham.
+            'kontingent_by_name' => $this->kontingentByName(collect($scan['rows'] ?? [])
+                ->filter(fn ($r) => !in_array(VedomostScanReader::digits($r['id'] ?? ''), $sysIds, true))
+                ->pluck('fio')->filter()->all()),
             'plan' => $this->workingPlan($v, $expected),
         ];
     }
@@ -372,11 +376,11 @@ class VedomostAiChecker
 
     /**
      * Test markazi (hemis_quiz_results): talaba ID → ['oski'|'test' => [grade, dalolat, date]].
-     * Fan: fan_id = subject_id yoki aynan bir xil nom; urinish vedomost shakliga mos
+     * Fan: fan_id = subject_id yoki nom o'xshashligi ≥ 0.85 (eng mosi); urinish vedomost shakliga mos
      * (1-urinish → 12, 2-urinish → 12a, 3-urinish → 12b; qo'shimcha/farmoyish → "…-qo'shimcha").
      * Qayta o'qish (retake) quizlari hisobga olinmaydi. Faqat YN quizlari (OSKI / YN test —
-     * jurnalga o'tkaziladigan turlar bilan bir xil), aynan shu fan (fan_id yoki aynan bir xil nom)
-     * va aynan shu semestr: bir fan bir necha semestrda o'qitilsa, boshqa semestr natijasi shu
+     * jurnalga o'tkaziladigan turlar bilan bir xil), shu fan (fan_id yoki nom o'xshashligi ≥ 0.85,
+     * eng mosi) va aynan shu semestr: bir fan bir necha semestrda o'qitilsa, boshqa semestr natijasi shu
      * vedomostga tushmaydi; semestri ko'rsatilmagan yozuv ham olinmaydi.
      */
     private function testCenter(array $ids, array $expected, string $formType, string $semester = ''): array
@@ -394,18 +398,34 @@ class VedomostAiChecker
             $q->where(fn ($w) => $w->where('not_actual', false)->orWhereNull('not_actual'));
         }
 
-        $subjectId = (string) ($expected['subject_id'] ?? '');
+        // Fan ID'lari: vedomostdagi barcha guruhlarning fan ID'si (12a/12b umumiy vedomostida har
+        // guruh o'z o'quv rejasidan — fan ID'lari har xil bo'lishi mumkin).
+        $subjectIds = collect($expected['talabalar'] ?? [])->pluck('meta.subject_id')
+            ->push($expected['subject_id'] ?? null)->filter()->map(fn ($x) => (string) $x)->unique()->all();
         $fan = (string) ($expected['fan'] ?? '');
         $chain = self::tmChain($formType);
         $semNum = self::semesterNumber($semester);
         $skippedSem = 0;
 
-        $best = [];
+        // Python check_tm kabi: fan nomi o'xshashligi ≥ 0.85 (Test markazida nom xato yozilishi mumkin —
+        // «Yukumli» / «Yuqumli»); talaba bo'yicha faqat eng yuqori o'xshashlikdagi yozuvlar olinadi —
+        // aniq mos fan bor bo'lsa, o'xshash nomli boshqa fan («Bolalar xirurgik…») chetda qoladi.
+        $rows = [];
         foreach ($q->get() as $r) {
-            // Aynan shu fan: fan_id teng yoki nomi aynan bir xil (o'xshash nom emas —
-            // «Xirurgik kasalliklar» ≠ «Bolalar xirurgik kasalliklari»).
-            $fanOk = ($subjectId !== '' && (string) $r->fan_id === $subjectId)
-                || ($fan !== '' && VedomostNames::subjectKey($r->fan_name) === VedomostNames::subjectKey($fan));
+            $score = in_array((string) $r->fan_id, $subjectIds, true) ? 1.0 : VedomostNames::subjectScore($r->fan_name, $fan);
+            if ($score >= 0.85) {
+                $rows[] = [$r, $score];
+            }
+        }
+        $top = [];
+        foreach ($rows as [$r, $score]) {
+            $sid = VedomostScanReader::digits($r->student_id);
+            $top[$sid] = max($top[$sid] ?? 0, $score);
+        }
+
+        $best = [];
+        foreach ($rows as [$r, $score]) {
+            $fanOk = $score >= $top[VedomostScanReader::digits($r->student_id)];
             $pos = array_search(self::quizForm((string) $r->shakl), $chain, true);
             if (!$fanOk || $pos === false
                 || \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)) {
@@ -487,6 +507,33 @@ class VedomostAiChecker
                 'fio' => $s->full_name, 'group' => $s->group_name, 'status' => (string) $s->student_status_code,
             ]])
             ->all();
+    }
+
+    /**
+     * Ism bo'yicha kontingent: familiya + ism bilan boshlanadigan talabalar, kalit —
+     * VedomostNames::nameKey (guruh qo'shimchasisiz). Bir xil familiya-ism bir nechta bo'lsa — tashlanadi.
+     */
+    private function kontingentByName(array $fios): array
+    {
+        $out = [];
+        foreach (array_slice(array_unique($fios), 0, 40) as $fio) {
+            $clean = VedomostNames::stripGroupSuffix($fio);
+            $parts = preg_split('/\s+/', trim($clean));
+            if (count($parts) < 2) {
+                continue;
+            }
+            $hits = Student::where('full_name', 'like', $parts[0] . '%')
+                ->limit(50)
+                ->get(['student_id_number', 'full_name', 'group_name', 'student_status_code'])
+                ->filter(fn ($st) => VedomostNames::similarity($st->full_name, $clean) >= 0.85);
+            if ($hits->count() === 1) {
+                $st = $hits->first();
+                $out[VedomostNames::nameKey($clean)] = ['fio' => $st->full_name, 'group' => $st->group_name,
+                    'status' => (string) $st->student_status_code, 'id' => (string) $st->student_id_number];
+            }
+        }
+
+        return $out;
     }
 
     /**

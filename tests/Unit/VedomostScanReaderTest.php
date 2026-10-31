@@ -144,3 +144,13 @@ test('ichki hisob: ball foiz×vazn yoki uning butun songacha yaxlitlangani (12a,
         ->and($p(['jb_pct' => '77,0', 'jb_ball' => '38,5', 'mt_pct' => '88,0', 'mt_ball' => '17,6']))->toBe([])
         ->and($p(['jb_pct' => '77,0', 'jb_ball' => '40,0']))->toContain("jb_pct va jb_ball o'zaro mos emas");
 });
+
+test('vazn nisbati yaxlitlangan ballardan ham aniq (0.505 emas, 0.50) — soxta «o\'zaro mos emas» yo\'q', function () {
+    $reader = app(\App\Services\VedomostScanReader::class);
+    // 12a, 5-kurs: toq foizlarda ball yuqoriga yaxlitlangan (77 → 39, 91 → 46, 75 → 38).
+    $rows = array_map(fn ($x) => ['jb_pct' => (string) $x[0], 'jb_ball' => (string) $x[1], 'mt_pct' => (string) $x[2], 'mt_ball' => (string) $x[3]],
+        [[77, 39, 75, 15], [91, 46, 88, 18], [75, 38, 95, 19], [83, 42, 85, 17], [87, 44, 91, 18], [94, 47, 95, 19], [90, 45, 82, 16]]);
+    $ratios = $reader->pageRatios($rows);
+    expect($ratios['jb'])->toBe(0.5)->and($ratios['mt'])->toBe(0.2)
+        ->and($reader->rowProblems(['jb_pct' => '94,0', 'jb_ball' => '47,0', 'mt_pct' => '95,0', 'mt_ball' => '19,0'], $ratios))->toBe([]);
+});

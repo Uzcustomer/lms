@@ -513,3 +513,27 @@ test('Mark qiymatini tahrirlash: YN ham (faqat hisobotda) — asl qiymat saqlana
         ->and(collect($row['flags'])->pluck('m')->implode(' '))->toContain('YN natija 88 → 90')
         ->and(collect($row['flags'])->pluck('m')->implode(' '))->not->toContain('YN hisobi');
 });
+
+test('ortiqcha qator: vedomost PDFdagi ID boshqa talabaniki — ism bo\'yicha kontingentdan topiladi', function () {
+    $stu = vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96);
+    $rows = [pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo()),
+        pdfRow(2, "ISMATOV SHAVKAT G'AYRATOVICH 21-04c", '368221100068', bobo())];
+    $r = engine()->build(expectedData([$stu]), scanDoc($rows), [], rules(), ctx([
+        'kontingent' => ['368221100068' => ['fio' => 'QAMBARALIYEV JAVXARBEK SHUKURULLO O‘G‘LI', 'group' => 'p/p22-05a', 'status' => '11']],
+        'kontingent_by_name' => [\App\Services\VedomostNames::nameKey("ISMATOV SHAVKAT G'AYRATOVICH") => ['fio' => 'ISMATOV SHAVKAT G‘AYRATOVICH', 'group' => 'd1/d22-01c (rus)', 'status' => '11', 'id' => '368211100068']],
+    ]));
+    expect($r['extra'][0]['note'])->toContain('ID boshqa talabaga tegishli (QAMBARALIYEV')
+        ->toContain('Shu guruh talabasi (d1/d22-01c (rus))');
+});
+
+test('ID 1 raqamga farq, ism va guruh mos (Python match_entries) — ma\'lumot, «tekshiring» emas', function () {
+    $stu = vtStu('ABSALOMOVA KOMILA ABDURAHMONOVNA', '368211100549', 83, 88, 100, 96, ['group' => 'd2/d21-03b (rus)']);
+    $row = pdfRow(1, 'ABSALOMOVA KOMILA ABDURAHMONOVNA 21-03b', '368221100549', bobo());
+    $r = engine()->build(expectedData([$stu]), scanDoc([$row]), [], rules(), ctx());
+    expect($r['rows'][0]['status'])->toBe('ok')
+        ->and(collect($r['rows'][0]['flags'])->pluck('m')->implode(' '))->toContain('ism va guruh bo‘yicha moslandi');
+
+    // Guruh mos emas (21-05a) — avvalgidek «tekshiring».
+    $r2 = engine()->build(expectedData([$stu]), scanDoc([pdfRow(1, 'ABSALOMOVA KOMILA ABDURAHMONOVNA 21-05a', '368221100549', bobo())]), [], rules(), ctx());
+    expect($r2['rows'][0]['status'])->toBe('ocr');
+});

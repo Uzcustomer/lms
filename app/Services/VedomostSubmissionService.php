@@ -979,7 +979,11 @@ class VedomostSubmissionService
         // 12q — har guruh alohida: farmoyish imtihoni (attempt=1) bo'lsa, 12-shakl qatorini klonlaymiz.
         foreach ($attemptsByKey as $key => $atts) {
             [$gid, $subjectId, $sem] = explode('|', $key);
-            $id = $this->upsertQoshimcha12Row($gid, $subjectId, $sem, !empty($atts[1]));
+            // Varaq faqat unga tushadigan talaba bo'lsa ochiladi — jurnaldagi YN qaydnoma eksporti va
+            // AI tekshiruvi bilan bir xil qoida. Aks holda (masalan, farmoyishli talaba chetlashtirilgan
+            // yoki qo'shimchada ham yiqilib 12a ga o'tgan) bo'sh varaq ochilib, AI «talabalar topilmadi» derdi.
+            $open = !empty($atts[1]) && $this->qoshimcha12HasStudents($gid, $subjectId, $sem);
+            $id = $this->upsertQoshimcha12Row($gid, $subjectId, $sem, $open);
             if ($id) {
                 $keptIds[] = $id;
             }
@@ -1035,6 +1039,39 @@ class VedomostSubmissionService
         }
 
         return $keptIds;
+    }
+
+    /**
+     * Guruhda 12-qo'shimcha varag'iga tushadigan (chetlashtirilmagan) talaba bormi — YnStageService
+     * bosqichi bo'yicha, jurnal eksporti va AI tekshiruvi (VedomostAiChecker::studentsFor) kabi.
+     * Bosqichni hisoblab bo'lmasa — eski xatti-harakat (ochiladi).
+     */
+    private function qoshimcha12HasStudents(string $groupHemisId, string $subjectId, string $semesterCode): bool
+    {
+        try {
+            $stage = app(YnStageService::class)->computeForGroupSubject($groupHemisId, $subjectId, $semesterCode);
+        } catch (\Throwable $e) {
+            return true;
+        }
+        if ($stage === null) {
+            return true;
+        }
+
+        $expelled = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->where('student_status_code', \App\Http\Middleware\BlockExpelledStudentGrade::EXPELLED_STATUS)
+            ->pluck('hemis_id')
+            ->map(fn ($h) => (string) $h)
+            ->flip();
+
+        foreach ($stage['stages'] ?? [] as $hemisId => $st) {
+            if ($st && !isset($expelled[(string) $hemisId])
+                && in_array(YnAttemptStatusService::FORM_12_QOSHIMCHA, YnAttemptStatusService::formsForStage($st), true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

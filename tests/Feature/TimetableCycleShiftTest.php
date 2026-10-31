@@ -535,3 +535,35 @@ it('avtomatik smena: hozirgi smena 13:30 bo\'lsa — 8:30 ga; yangi smenada ham 
         ->and(collect($res['unresolved'])->pluck('why')->unique()->values()->all())->toBe(['Boshqa smenada ham band'])
         ->and(csCall($s['board'], 'cycleConflicts'))->toBe($before);
 });
+
+it('"Smenalarni avtomatik ajratish": yangi smenada haftalik dars bo\'lsa — o\'tkazilmaydi; juftining smenasi bilan hal bo\'lgani ro\'yxatda qolmaydi', function () {
+    // 1) YOQUBOV dushanba 13:30 da haftalik darsda: 02a ham, 03c ham 13:30 ga o'tkazilmaydi (ikki joyda band bo'lardi)
+    $s = csSetup();
+    csBells($s['board'], 6);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'Ped', 'specialty_name' => 'Pediatriya', 'course' => 2,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Farmakologiya', 'group_name' => 'p/p25-01a', 'kafedra_name' => 'Farmakologiya kafedrasi',
+        'teacher_id' => $s['teacher']->id, 'teacher_name' => 'YOQUBOV U. B.', 'day' => 1, 'pair' => 7]);
+    $as = fn () => test()->withoutVite()->actingAs(csTeacher('ADMIN' . random_int(1, 99999), 'admin'), 'teacher')->withSession(['active_role' => 'admin']);
+    $res = $as()->postJson(route('admin.timetable.cycle-auto-shift', $s['board']), ['courses' => [5]])->assertOk()->json();
+    expect($res['changed'])->toBe([])->and(collect($res['unresolved'])->pluck('why')->unique()->values()->all())->toBe(['Boshqa smenada ham band'])
+        ->and(TimetableCyclePlacement::whereNotNull('lecture_slots')->count())->toBe(0);
+
+    // 2) 02a ni 13:30 ga o'tkazib bo'lmaydi (xonasi 02b bilan sig'imdan oshadi), 03c — o'tkaziladi: 02a ham hal bo'ladi, "hal bo'lmadi"da yo'q
+    $s = csSetup();
+    csBells($s['board'], 6);
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '101', 'volume' => 15, 'active' => true]);
+    $s['cards']['p/p22-02a']->update(['auditorium_code' => 'R1', 'auditorium_name' => '101']);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'Ped', 'specialty_name' => 'Pediatriya', 'course' => 5,
+        'oqim_label' => '2-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Klinik farmakologiya', 'group_name' => 'p/p22-02b', 'kafedra_name' => 'Farmakologiya kafedrasi',
+        'teacher_id' => csTeacher('BOSHQA')->id, 'teacher_name' => 'BOSHQA', 'auditorium_code' => 'R1', 'auditorium_name' => '101']);
+    TimetableCyclePlacement::where('group_name', 'Ped / 2-oqim')->update(['lecture_slots' => json_encode(['shift_g' => ['p/p22-02b' => 7]])]);
+    expect(array_keys(csCall($s['board'], 'cycleConflicts')))->toBe(['Pediatriya|5|p/p22-02a|Klinik farmakologiya|practice',
+        'Pediatriya|5|p/p22-03c|Klinik farmakologiya|practice']);
+    $res = $as()->postJson(route('admin.timetable.cycle-auto-shift', $s['board']), ['courses' => [5]])->assertOk()->json();
+    expect(collect($res['changed'])->pluck('group')->all())->toBe(['p/p22-03c'])
+        ->and($res['unresolved'])->toBe([])
+        ->and($res['message'])->toBe("1 ta guruhcha smenasi o'zgartirildi")
+        ->and(csCall($s['board'], 'cycleConflicts'))->toBe([]);
+});

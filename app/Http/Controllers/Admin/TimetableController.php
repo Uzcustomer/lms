@@ -4906,7 +4906,7 @@ class TimetableController extends Controller
             if (!isset($current[$key])) {
                 continue;   // boshqa guruhchaning smenasi almashgach hal bo'ldi
             }
-            $item = ['group' => $u['group'], 'subject' => $u['subject'], 'specialty' => $u['specialty'], 'course' => (int) $u['course']];
+            $item = ['key' => $key, 'group' => $u['group'], 'subject' => $u['subject'], 'specialty' => $u['specialty'], 'course' => (int) $u['course']];
             $own = $this->ownKafedraCycleSubjects($request, $board, (string) $u['specialty'], (int) $u['course']);
             if ($own !== null && !isset($own[mb_strtolower(trim((string) $u['subject']))])) {
                 $unresolved[] = $item + ['reason' => $current[$key]['text'], 'why' => 'Boshqa kafedra fani'];
@@ -4928,13 +4928,30 @@ class TimetableController extends Controller
                 $unresolved[] = $item + ['reason' => $current[$key]['text'], 'why' => 'Boshqa smenada ham band'];
                 continue;
             }
+            // Haftalik darslar ham (cycleConflicts — faqat sikl): yangi smenada shu guruhcha o'qituvchisi/xonasi band bo'lmasin.
+            DB::beginTransaction();
             $this->saveCycleShift($placement, (string) $u['unit'], $target[1]);
+            $busy = $this->unitBusySafe($request, $board, collect($u['cards']));
+            $weeklyBusy = $busy === null || collect($u['cards'])->contains(fn ($c) => ($c->teacher_id && isset($busy['teachers'][(int) $c->teacher_id]))
+                || ($c->auditorium_code && isset($busy['rooms'][$c->auditorium_code])));
+            if ($weeklyBusy) {
+                DB::rollBack();
+                request()->attributes->remove('timetable.cycle_units.' . $board->id);
+                $unresolved[] = $item + ['reason' => $current[$key]['text'], 'why' => 'Boshqa smenada ham band'];
+                continue;
+            }
+            DB::commit();
             $changed[] = $item + ['from' => $target[0], 'to' => $target[1], 'reason' => $current[$key]['text'],
                 'message' => $u['group'] . ' · ' . $u['subject'] . ': ' . $this->cycleRowTime($board, $target[0] ?: 1) . ' → '
                     . $this->cycleRowTime($board, $target[1]) . ' smenasi'];
             $units = $trial;
             $current = $after;
         }
+
+        // Keyingi o'zgarishlar bilan hal bo'lganlari (juftining smenasi almashgan) — ro'yxatdan chiqariladi.
+        $unresolved = array_values(array_filter($unresolved, fn ($x) => isset($current[$x['key']])));
+        $strip = fn (array $list) => array_map(fn ($x) => array_diff_key($x, ['key' => true]), $list);
+        [$changed, $unresolved] = [$strip($changed), $strip($unresolved)];
 
         return response()->json(['ok' => true, 'changed' => $changed, 'unresolved' => $unresolved,
             'message' => count($changed) . ' ta guruhcha smenasi o\'zgartirildi' . ($unresolved ? ', ' . count($unresolved) . ' ta to\'qnashuv hal bo\'lmadi' : '')]);

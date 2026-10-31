@@ -101,6 +101,7 @@ class VedomostCheckEngine
             $tmUsed['test'] = $tmUsed['test'] || isset($rec['test']);
         }
 
+        $notTaken = [];
         $rows = [];
         $tmTestFound = 0;
         foreach ($system as $idx => $stu) {
@@ -122,6 +123,12 @@ class VedomostCheckEngine
             $expelled = ($stu['status_code'] ?? '') === '60';
             // Chetlashtirilgan va PDFda ham yo'q talaba — hisobotga chiqmaydi (vedomostda bo'lishi shart emas).
             if ($expelled && $s === null) {
+                continue;
+            }
+            // Qayta topshirish shaklida shu urinishda bahosi yo'q va vedomostda ham yo'q — imtihonga
+            // kirmagan (vedomostga chop etilmaydi): xato emas, faqat soni ma'lumot sifatida.
+            if ($s === null && ($stu['attempt_taken'] ?? true) === false) {
+                $notTaken[] = $stu['fish'] ?? '';
                 continue;
             }
 
@@ -238,7 +245,9 @@ class VedomostCheckEngine
                 $flags[] = ['t' => 'bad', 'm' => 'Qoida: ' . $p];
                 $set('bad');
             }
-            if (!$kurs6 && ($cc = $this->calcCheck($vt, $w, $settings))) {
+            // 12a/12b (4–5 kurs) ballari jurnal formulasi bilan yaxlitlangan — Python hisob tekshiruvi (yaxlitlashsiz) mos kelmaydi.
+            $journalRounded = ($expected['form_type'] ?? '12') !== '12' && in_array((string) ($expected['level_code'] ?? ''), ['14', '15'], true);
+            if (!$kurs6 && !$journalRounded && ($cc = $this->calcCheck($vt, $w, $settings))) {
                 if ($cc['jnmtBad']) {
                     $flags[] = ['t' => 'bad', 'm' => 'JN+MT hisobi: Mark ' . $this->f($cc['jnmtHemis']) . ' ≠ hisob ' . $cc['jnmtCalc']];
                     $set('bad');
@@ -312,6 +321,10 @@ class VedomostCheckEngine
         }
         foreach ($this->weightIssues($w, $closing, $weights) as $wi) {
             $issues[] = $wi;
+        }
+        if (!empty($notTaken)) {
+            $issues[] = ['t' => 'info', 'm' => count($notTaken) . " ta talaba Markda shu bosqichda, lekin bu urinishda bahosi yo'q (imtihonga kirmagan) — vedomostda bo'lmasligi normal: "
+                . implode(', ', array_slice($notTaken, 0, 12)) . (count($notTaken) > 12 ? ' …' : '')];
         }
         if (!empty($missingNrs)) {
             $issues[] = ['t' => 'ocr', 'm' => 'AI vedomost PDFdagi ' . implode(', ', $missingNrs) . "-qator(lar)ni o'qiy olmadi — vedomost PDFdan ko'z bilan tekshiring yoki qayta tekshiring."];
@@ -388,7 +401,22 @@ class VedomostCheckEngine
     public function vtRow(array $stu, array $w, array $expected, int $n): array
     {
         $raw = $stu['raw'];
-        $c = $this->vt->compute($raw, $w['jb'], $w['mt'], $w['on'], $w['oski'], $w['test'], (string) ($expected['level_code'] ?? ''));
+        $level = (string) ($expected['level_code'] ?? '');
+        $c = $this->vt->compute($raw, $w['jb'], $w['mt'], $w['on'], $w['oski'], $w['test'], $level);
+        // Qayta topshirish shakllari (12a/12b, qo'shimcha) jurnal eksportidan chop etiladi — u 4–5 kursda
+        // JN/MT/ON ballni butun songacha yaxlitlaydi va YN ni shu ballardan hisoblaydi
+        // (YnAttemptStatusService::computeV). «Vedomost tekshirish» (12-shakl) hisobi o'zgarmaydi.
+        if (($expected['form_type'] ?? '12') !== '12' && in_array($level, ['14', '15'], true)) {
+            $half = fn ($pct, $wt) => $pct >= 60 ? (int) floor($pct * $wt / 100 + 0.5) : 0;
+            $c['jnBall'] = $half($c['jn'], $w['jb']);
+            $c['mtBall'] = $half($c['mt'], $w['mt']);
+            $c['onBall'] = $half($c['on'], $w['on']);
+            $c['sumBall'] = ($c['jn'] < 60 || $c['mt'] < 60) ? 0 : $c['jnBall'] + $c['mtBall'] + $c['onBall'];
+            $c['yn'] = \App\Services\YnAttemptStatusService::computeV((int) round($c['jn']), (int) round($c['mt']), (float) $c['on'], (float) $c['oski'], (float) $c['test'],
+                (float) $c['dav'], $w['jb'], $w['mt'], $w['on'], $w['oski'], $w['test'], $level);
+            $c['ects'] = $this->vt->toEcts($c['yn']);
+            $c['baho'] = $this->vt->toBaho($c['yn']);
+        }
         $m = $stu['meta'] ?? [];
         $dav = (float) $c['dav'];
         $fio = $stu['fish'] ?? '';
@@ -649,7 +677,8 @@ class VedomostCheckEngine
                 $sim = VedomostNames::similarity($stu['fish'] ?? '', VedomostNames::stripGroupSuffix($s['fio'] ?? ''));
                 $idEq = $sid !== '' && $sid === $tid;
                 $dist = ($sid !== '' && $tid !== '') ? levenshtein($sid, $tid) : 99;
-                $ok = $sim >= 0.85 || ($idEq && $sim >= 0.5) || ($dist <= 2 && $sim >= 0.6);
+                // ID 1–2 raqam farq qilsa ism yetarlicha o'xshash bo'lishi kerak (QULSOATOV XUSHNUD ≠ QULSAXATOVA DURDONA).
+                $ok = $sim >= 0.85 || ($idEq && $sim >= 0.5) || ($dist <= 2 && $sim >= 0.75);
                 if ($ok) {
                     $cands[] = [$sim + ($idEq ? 0.3 : ($dist <= 2 ? 0.1 : 0)), $si, $ti, $dist, $sim];
                 }
@@ -872,7 +901,9 @@ class VedomostCheckEngine
                 : (collect($hm)->contains(fn ($b) => VedomostNames::sameSurname($pm, $b)) ? 'warn' : 'bad')));
 
         // Amaliyot o'qituvchilari
-        $pa = array_values(array_filter(array_map(fn ($x) => VedomostNames::uz((string) $x), is_array($h['amaliyot'] ?? null) ? $h['amaliyot'] : explode(',', (string) ($h['amaliyot'] ?? '')))));
+        // Bo'sh qatordagi bosma yorliq («Amaliyot o'qituvchisi») ism emas.
+        $pa = array_values(array_filter(array_map(fn ($x) => VedomostNames::uz((string) $x), is_array($h['amaliyot'] ?? null) ? $h['amaliyot'] : explode(',', (string) ($h['amaliyot'] ?? ''))),
+            fn ($x) => trim($x) !== '' && !preg_match('/^amaliyot\s+o\W?\s*qituvchi/iu', VedomostNames::latin($x))));
         $ha = $hv('X');
         $missP = array_values(array_filter($ha, fn ($b) => !collect($pa)->contains(fn ($a) => VedomostNames::sameName($a, $b))));
         $extraP = array_values(array_filter($pa, fn ($a) => !collect($ha)->contains(fn ($b) => VedomostNames::sameName($a, $b))));

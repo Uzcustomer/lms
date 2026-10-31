@@ -65,7 +65,10 @@ class VedomostAiChecker
         $expected['form_type'] = (string) ($v->form_type ?: VedomostSubmission::FORM_12);
         $expected['shakl'] = VedomostSubmission::formLabel($v->form_type);
         if (empty($expected['talabalar'])) {
-            throw new RuntimeException("Vedomost tekshirish hisobi bo'yicha talabalar topilmadi.");
+            throw new RuntimeException(self::formAttempt($v->form_type)
+                ? "Tizimda bu guruhda «{$expected['shakl']}» varag'iga tushadigan talaba yo'q (jurnaldagi YN qaydnomada ham bu varaq chiqmaydi). "
+                    . "Farmoyishli talaba chetlashtirilgan yoki keyingi urinishga o'tgan bo'lishi mumkin — bu shakl ortiqcha ochilgan bo'lsa, vedomostni rad eting."
+                : "Vedomost tekshirish hisobi bo'yicha talabalar topilmadi (guruhda chetlashtirilmagan talaba yo'q).");
         }
 
         Progress::log('Mark baholari yig‘ildi: ' . count($expected['talabalar']) . ' talaba · ' . $expected['shakl']

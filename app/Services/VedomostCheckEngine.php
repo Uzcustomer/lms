@@ -313,6 +313,9 @@ class VedomostCheckEngine
                 'pdf' => $this->pdfValues($s), 'unclear' => $s['unclear'] ?? [], 'orig' => $s['orig'] ?? [],
                 'edited' => $editedKeys[$s['key']] ?? [],
                 'expelled' => $expelled,
+                // Kontingentda topilgan (haqiqiy talaba, faqat Mark ro'yxatiga kirmagan) — «noto'g'ri fayl» hisobida
+                // izohlangan qator sifatida olinadi.
+                'known' => $k !== null,
                 'note' => ($idOwner ? 'Vedomost PDFdagi ID boshqa talabaga tegishli (' . ($idOwner['fio'] ?? '') . ') — ID xato o\'qilgan bo\'lishi mumkin. ' : '') . match (true) {
                     $expelled => "O'qishdan chetlashtirilgan talaba (" . ($k['group'] ?? '?') . ') — Mark ro\'yxatida yo\'q, ma\'lumot uchun',
                     $k !== null && !empty($k['reason']) => $k['reason'],
@@ -359,7 +362,12 @@ class VedomostCheckEngine
         if (($header['fan'] ?? '') !== '' && VedomostNames::subjectScore($header['fan'], $expected['fan'] ?? '') < 0.6) {
             $wrong[] = 'fan nomi: tizimda «' . ($expected['fan'] ?? '') . '», skanerda «' . $header['fan'] . '»';
         }
-        if ($sysN > 0 && $scanN > 0 && $matchedN / max($sysN, $scanN) < 0.5) {
+        // Mark kutgan talabalardan birortasi ham yo'q — boshqa vedomost. Kamida bittasi bor bo'lsa, vedomost PDFdagi
+        // kontingentda topilgan (guruhi o'zgargan, bosqichi boshqa va h.k.) talabalar ham izohlangan hisoblanadi:
+        // fayl to'g'ri, farq Mark ma'lumotida — bu «nomuvofiqlik», «noto'g'ri fayl» emas.
+        $knownExtraN = count(array_filter($extraRows, fn ($e) => !empty($e['known'])));
+        if ($sysN > 0 && $scanN > 0
+            && ($matchedN === 0 || ($matchedN + $knownExtraN) / max($sysN, $scanN) < 0.5)) {
             $wrong[] = "talabalar: tizimdagi {$sysN} talabadan faqat {$matchedN} tasi skanerda topildi";
         }
 

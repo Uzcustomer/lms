@@ -340,6 +340,69 @@ class VedomostMergeService
     }
 
     /**
+     * Umumiy 12a/12b uchun jurnal guruhlari: birlikning barcha guruhlari emas, faqat AI tekshiruvidagi
+     * talabalar guruhlari — Mark ro'yxatidagilar va vedomost PDFdagi (kontingentda topilgan) talabalar,
+     * shu jumladan hozir boshqa guruh/fakultetda turganlar. AI natijasi bo'lmasa — birlikning barcha guruhlari.
+     */
+    private function combinedJournalRows(VedomostSubmission $v): Collection
+    {
+        $unit = $this->unitGroupsOf($v);
+        $res = is_array($v->ai_result) ? $v->ai_result : [];
+        if (empty($res['expected']['talabalar']) && empty($res['context'])) {
+            return $unit;
+        }
+
+        $ids = [];
+        $names = [];
+        foreach ($res['expected']['talabalar'] ?? [] as $t) {
+            if (!empty($t['meta']['group_hemis_id'])) {
+                $ids[] = (string) $t['meta']['group_hemis_id'];
+            }
+        }
+        foreach (['kontingent', 'kontingent_by_name'] as $k) {
+            foreach ($res['context'][$k] ?? [] as $st) {
+                if ((string) ($st['status'] ?? '') === '60') {
+                    continue;
+                }
+                if (!empty($st['group_id'])) {
+                    $ids[] = (string) $st['group_id'];
+                } elseif (!empty($st['group'])) {
+                    $names[] = (string) $st['group'];
+                }
+            }
+        }
+        if ($names) {
+            array_push($ids, ...\App\Models\Group::whereIn('name', array_unique($names))->pluck('group_hemis_id')->map(fn ($g) => (string) $g)->all());
+        }
+        $ids = array_values(array_unique(array_filter($ids)));
+        if (empty($ids)) {
+            return $unit;
+        }
+
+        $byGroup = $unit->keyBy(fn ($r) => (string) $r->group_hemis_id);
+        $rootSubject = $this->rootSubjectName($v->subject_name);
+        $out = collect();
+        foreach ($ids as $gid) {
+            if ($byGroup->has($gid)) {
+                $out->push($byGroup[$gid]);
+                continue;
+            }
+            // Birlikdan tashqaridagi guruh (talaba guruhi/fakulteti o'zgargan) — o'sha guruhning shu fan
+            // bo'yicha 12-shakl yozuvi (fan ID si boshqa o'quv rejada boshqacha bo'lishi mumkin).
+            $row = VedomostSubmission::where('group_hemis_id', $gid)
+                ->where('form_type', VedomostSubmission::FORM_12)
+                ->orderByDesc('education_year')
+                ->get()
+                ->first(fn ($r) => $this->rootSubjectName($r->subject_name) === $rootSubject);
+            if ($row) {
+                $out->push($row);
+            }
+        }
+
+        return $out->isNotEmpty() ? $out : $unit;
+    }
+
+    /**
      * Vedomostga kiradigan har guruhning jurnali (yangi oynada ochish uchun): 12-shakl —
      * guruhchalar, 12a/12b umumiy — birlikning barcha guruhlari.
      *
@@ -347,7 +410,7 @@ class VedomostMergeService
      */
     public function journalLinks(VedomostSubmission $v): array
     {
-        $rows = $v->isCombinedForm() && $v->manual_opened_at === null ? $this->unitGroupsOf($v) : $this->siblingsOf($v);
+        $rows = $v->isCombinedForm() && $v->manual_opened_at === null ? $this->combinedJournalRows($v) : $this->siblingsOf($v);
         if (!$rows->contains('id', $v->id) && !$v->isCombinedForm()) {
             $rows->push($v);
         }

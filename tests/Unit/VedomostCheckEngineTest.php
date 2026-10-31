@@ -144,6 +144,33 @@ test('boshqa fan PDFi — noto\'g\'ri hujjat', function () {
     expect($r['verdict'])->toBe('wrong_document')->and($r['summary'])->toContain('Neyroxirurgiya');
 });
 
+test('Markda yo\'q, lekin kontingentda topilgan talabalar — noto\'g\'ri hujjat emas, nomuvofiqlik', function () {
+    // Onkologiya 12b holati: Mark 1 talabani kutadi, PDFda yana 3 ta — guruhi o'zgargan / bosqichi boshqa.
+    $scan = scanDoc([
+        pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo()),
+        pdfRow(2, 'KARIMOV SHAHZOD RAHIM', '368211100059', bobo()),
+        pdfRow(3, 'ESHMAMATOV HUSAN QULMAMAT', '368221100834', bobo()),
+        pdfRow(4, 'ABSALOMOVA KOMILA ABDURAHMONOVNA', '368211100549', bobo()),
+    ]);
+    $kont = [
+        '368211100059' => ['fio' => 'KARIMOV SHAHZOD RAHIM', 'group' => 'd1/d21-02a', 'status' => '11', 'reason' => 'Markda hozir d1/d21-02a guruhida'],
+        '368221100834' => ['fio' => 'ESHMAMATOV HUSAN QULMAMAT', 'group' => 'd1/d21-08b', 'status' => '11'],
+        '368211100549' => ['fio' => 'ABSALOMOVA KOMILA ABDURAHMONOVNA', 'group' => 'd2/d21-03b', 'status' => '11'],
+    ];
+    $r = engine()->build(expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
+        $scan, [], rules(), ctx(['kontingent' => $kont]));
+
+    $notes = collect($r['extra'] ?? [])->pluck('note')->implode(' | ');
+    expect($r['verdict'])->toBe('issues')
+        ->and($r['counts']['extra'])->toBe(3)
+        ->and($notes)->toContain('Markda hozir d1/d21-02a guruhida');
+
+    // Mark kutgan talabadan birortasi ham yo'q — avvalgidek noto'g'ri hujjat.
+    $r2 = engine()->build(expectedData([vtStu('A A', '368221100001', 83, 88, 100, 96)]),
+        scanDoc([pdfRow(1, 'KARIMOV SHAHZOD RAHIM', '368211100059', bobo())]), [], rules(), ctx(['kontingent' => $kont]));
+    expect($r2['verdict'])->toBe('wrong_document');
+});
+
 test('xodim tuzatishi hisobotni qayta quradi', function () {
     $args = [expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
         scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo(['test_pct' => '95,0']))])];

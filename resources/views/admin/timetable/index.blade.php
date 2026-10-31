@@ -226,6 +226,7 @@
                             @endunless
                             @if($timetableCanApprove)
                             <button type="button" id="hemisSyncBtn" class="tt-ktr-weeks-btn" title="Tanlangan qamrov: LMS ichki jadvali va KTR ↔ HEMIS dars jadvali. Bugungacha o'tilgan darslar balansi (soat va soni), ertadan boshlab tuzatish takliflari va HEMIS'da qilinadigan amallar">HEMIS solishtirish</button>
+                            <button type="button" id="hemisTodayBtn" class="tt-ktr-weeks-btn" title="Faqat bugungi darslar (tanlangan qamrov): LMS ↔ HEMIS — o'qituvchi, xona va para vaqti. Faqat o'zgartirish: bugun dars qo'shilmaydi va o'chirilmaydi; davomat olingan yoki baho qo'yilgan darsga tegilmaydi">Bugungi darslar (HEMIS)</button>
                             @endif
                             @if(in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'kafedra_mudiri', 'oqituvchi'], true))
                             <button type="button" id="blockTicketsBtn" class="tt-ktr-weeks-btn" title="HEMIS to'siqlari bo'yicha so'rovlar: javob berish va (kafedra mudiri) hal qilish">To'siq so'rovlari</button>
@@ -4261,6 +4262,99 @@
                 hemisSyncFilter.groups = null;
                 // Eng birinchi — joylanmagan kartalar (bo'lsa qizil oyna), so'ng odatdagi hemisSyncAsk().
                 try { await hemisUnplacedGate(); } finally { this.disabled = false; }
+            };
+            // ===== "Bugungi darslar (HEMIS)": faqat bugun, faqat o'zgartirish (o'qituvchi, xona, para vaqti) =====
+            // Bugun qo'shilmaydi va o'chirilmaydi; davomat olingan / baho qo'yilgan darsga tegilmaydi (kulrang).
+            const HT_STATUS = {
+                update: ['O\'zgartiriladi', 'text-amber-700'], locked: ['Tegilmaydi', 'text-gray-500'], blocked: ['To\'siqli', 'text-red-700'],
+                info: ['Ma\'lumot', 'text-sky-700'], ok: ['Mos', 'text-emerald-700'],
+            };
+            let hemisTodayLast = null;
+            let hemisTodayGroup = '';   // oynadagi guruh filtri ('' — hammasi): ko'rinish, JSON va Excel
+            const htRows = (rep, group) => (rep.rows || []).filter(r => !group || r.group === group);
+            const htDate = d => String(d || '').split('-').reverse().join('.');
+            function hemisTodayHtml(rep, group) {
+                const rows = htRows(rep, group);
+                const n = s => rows.filter(r => r.status === s).length;
+                const groups = [...new Set((rep.rows || []).map(r => r.group))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                const head = '<div class="flex flex-wrap items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">Bugun (' + hsEsc(htDate(rep.today)) + '): ' +
+                    rows.length + ' ta dars · ' + n('update') + ' ta o\'zgartiriladi · ' + n('locked') + ' ta davomat/baho bor — tegilmaydi · ' + n('blocked') + ' ta to\'siqli</h3>' +
+                    '<select id="htGroup" class="border rounded px-1 py-0.5"><option value="">Barcha guruhlar</option>' +
+                    groups.map(g => '<option value="' + hsEsc(g) + '"' + (g === group ? ' selected' : '') + '>' + hsEsc(g) + '</option>').join('') + '</select>' +
+                    '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
+                    '<button type="button" id="htExcel" class="tt-weekly-excel">Excel</button>' +
+                    '<button type="button" id="htClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
+                    '<div class="text-gray-500 text-[11px] mb-2">Faqat o\'zgartirish (o\'qituvchi, xona, para vaqti): bugun HEMIS\'ga dars qo\'shilmaydi va o\'chirilmaydi. ' +
+                    'Davomat olingan yoki baho qo\'yilgan darsga tegilmaydi — xatcho\'p yozishdan oldin HEMIS\'dan yana tekshiradi.</div>' +
+                    (rep.missing_groups && rep.missing_groups.length ? '<div class="text-amber-700 mb-1">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.missing_groups.join(', ')) + '</div>' : '') +
+                    (rep.import_failed ? '<div class="text-red-700 mb-1">' + rep.import_failed + ' ta guruh jadvali HEMIS\'dan yangilanmadi (javob bermadi) — ularning o\'zgartirishlari to\'siqli.</div>' : '');
+                const who = (a, b) => hsEsc(a || '—') + (b && b !== a ? ' → <b>' + hsEsc(b) + '</b>' : '');
+                const body = rows.map(r => {
+                    const st = HT_STATUS[r.status] || [r.status, ''];
+                    const grey = r.status === 'locked' ? ' bg-gray-100 text-gray-400' : '';
+                    const time = hsEsc(r.start + '–' + r.end) + (r.new_start && (r.new_start !== r.start || r.new_end !== r.end) ? ' → <b>' + hsEsc(r.new_start + '–' + r.new_end) + '</b>' : '');
+                    const why = r.status === 'blocked' ? (r.blocked || []).join('; ') : (r.reason || (r.status === 'ok' ? 'mos' : ''));
+                    return '<tr class="align-top' + grey + '" data-status="' + r.status + '"><td class="border px-1">' + hsEsc(r.group) + '</td>' +
+                        '<td class="border px-1">' + hsEsc(r.subject) + '<div class="text-gray-400">' + hsEsc(r.type) + (r.hemis_id ? ' · #' + r.hemis_id : '') + '</div></td>' +
+                        '<td class="border px-1 whitespace-nowrap">' + time + '</td>' +
+                        '<td class="border px-1">' + who(r.employee_name, r.new_employee_name) + '</td>' +
+                        '<td class="border px-1">' + who(r.auditorium_name, r.new_auditorium_name) + '</td>' +
+                        '<td class="border px-1"><span class="font-semibold ' + (grey ? '' : st[1]) + '">' + st[0] + '</span>' + (why ? '<div>' + hsEsc(why) + '</div>' : '') +
+                        (r.note ? '<div class="text-amber-700">' + hsEsc(r.note) + '</div>' : '') + '</td></tr>';
+                }).join('');
+                return head + (body ? '<div class="max-h-[70vh] overflow-auto"><table class="w-full border text-[11px]"><thead class="bg-gray-50 sticky top-0"><tr>' +
+                    ['Guruh', 'Fan', 'Vaqt', 'O\'qituvchi', 'Xona', 'Holat'].map(h => '<th class="border px-1">' + h + '</th>').join('') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+                    : '<div class="text-gray-500">Bugun qamrovda dars yo\'q.</div>');
+            }
+            // Xatcho'p uchun JSON: faqat to'siqsiz o'zgartirishlar (server tayyorlagan, today: true), tanlangan guruh bo'yicha.
+            function hemisTodayJson(rep, group) {
+                const out = JSON.parse(JSON.stringify(rep.json || {}));
+                out.groups = (out.groups || []).filter(g => !group || g.group === group)
+                    .map(g => Object.assign(g, { units: g.units.map(u => Object.assign(u, { actions: u.actions.filter(a => a.op === 'update' && a.today === true) })) }));
+                return out;
+            }
+            function hemisTodayExcel(rep, group) {
+                const cell = (t, o) => Object.assign({ t: String(t == null ? '' : t) }, o || {});
+                const rows = [['Guruh', 'Fan', 'Dars turi', 'HEMIS id', 'Vaqt (HEMIS)', 'Yangi vaqt', 'O\'qituvchi (HEMIS)', 'Yangi o\'qituvchi', 'Xona (HEMIS)', 'Yangi xona', 'Holat', 'Sabab / o\'zgarish']
+                    .map(h => cell(h, { b: 1, bg: '#f3f4f6' }))];
+                htRows(rep, group).forEach(r => {
+                    const grey = r.status === 'locked' ? { fc: '#9ca3af' } : null;
+                    rows.push([r.group, r.subject, r.type, r.hemis_id || '', r.start + '–' + r.end, r.new_start ? r.new_start + '–' + r.new_end : '',
+                        r.employee_name, r.new_employee_name || '', r.auditorium_name, r.new_auditorium_name || '', (HT_STATUS[r.status] || [r.status])[0],
+                        [r.status === 'blocked' ? (r.blocked || []).join('; ') : r.reason, (r.changes || []).join('; '), r.note].filter(Boolean).join(' · ')].map(v => cell(v, grey)));
+                });
+                return { rows, sheet_title: 'Bugungi darslar', freeze_rows: 1 };
+            }
+            function hemisTodayRender(rep) {
+                const m = hemisSyncModal(hemisTodayHtml(rep, hemisTodayGroup));
+                $('htGroup').onchange = e => { hemisTodayGroup = e.target.value; hemisTodayRender(rep); };
+                $('htClose').onclick = () => m.remove();
+                $('htJson').onclick = () => {
+                    const blob = new Blob([JSON.stringify(hemisTodayJson(rep, hemisTodayGroup), null, 1)], { type: 'application/json' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob); a.download = 'hemis_bugun_' + rep.today + (hemisTodayGroup ? '_' + hemisTodayGroup.replace(/[^\w\-]+/g, '_') : '') + '.json';
+                    document.body.appendChild(a); a.click(); a.remove();
+                };
+                $('htExcel').onclick = function () {
+                    return sendExcelExport(hemisTodayExcel(rep, hemisTodayGroup), 'Bugungi darslar (HEMIS) · ' + htDate(rep.today) + ' · ' + scopeLabelText(),
+                        'hemis_bugun_' + rep.today, this);
+                };
+            }
+            async function hemisTodayRun() {
+                hemisSyncModal('<div class="p-6 text-center text-gray-500">Bugungi darslar HEMIS bilan solishtirilmoqda… (' + hsEsc(scopeLabelText()) +
+                    ')<div class="text-[11px] text-gray-400 mt-1">HEMIS\'dan bugungi jadval, davomat va baholar olinmoqda</div></div>');
+                try {
+                    hemisTodayLast = await api(BASE + '/boards/' + board.id + '/hemis-today', 'POST', scopeBody());
+                    hemisTodayGroup = '';
+                    hemisTodayRender(hemisTodayLast);
+                } catch (e) {
+                    hemisSyncModal('<div class="p-4 text-red-600">' + hsEsc(hsErrText(e)) + '</div>' + HS_CLOSE);
+                }
+            }
+            if ($('hemisTodayBtn')) $('hemisTodayBtn').onclick = async function () {
+                if (!board) return;
+                this.disabled = true;
+                try { await hemisTodayRun(); } finally { this.disabled = false; }
             };
             // ===== HEMIS to'siqlari bo'yicha so'rovlar (Telegram: o'qituvchi / kafedra mudiri) =====
             const TICKET_FROM_URL = new URLSearchParams(location.search).get('ticket');

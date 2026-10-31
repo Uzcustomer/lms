@@ -249,3 +249,58 @@ it('katta doska (3000+ karta): unit-busy < 1 s va < 64 MB xotira, natija eski (b
     fwrite(STDERR, sprintf("conflicts: %.3f s, %.1f MB, %d karta\n", $elapsed, $peakMb, count($res['weekly'])));
     expect(count($res['weekly']))->toBeGreaterThan(50)->and($peakMb)->toBeLessThan(64.0);
 });
+
+it('katta doska: "Bugungi darslar (HEMIS)" bitta fakultet uchun < 10 s va < 128 MB (HEMIS so\'rovlari — faqat bugun va qamrov guruhlari)', function () {
+    $big = ubBigBoard();
+    $board = $big['board'];
+    Role::findOrCreate('registrator_ofisi', 'web');
+    $reg = ubTeacher('REG', 'registrator_ofisi');
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-21 10:00'));   // dushanba
+    $today = '2026-09-21';
+    $cols = collect(DB::select('SHOW COLUMNS FROM `groups`'))->filter(fn ($c) => $c->Null === 'NO' && $c->Default === null && $c->Field !== 'id');
+    $names = array_merge(array_map(fn ($k) => 'g' . $k, range(0, 800)), array_map(fn ($k) => 'c' . $k, range(0, 47)));
+    $rows = [];
+    foreach ($names as $n => $name) {
+        $r = ['group_hemis_id' => 10000 + $n, 'name' => $name, 'department_name' => 'F1', 'curriculum_hemis_id' => 1];
+        foreach ($cols as $c) {
+            $r[$c->Field] ??= str_contains(strtolower($c->Type), 'int') ? 0 : 'x';
+        }
+        $rows[] = $r;
+    }
+    DB::table('groups')->insert($rows);
+    // HEMIS: har guruhda bugun 3 ta dars (biri vaqti, biri xonasi farqli), davomat — har uchinchi guruhda.
+    $ts = \Illuminate\Support\Carbon::parse($today, 'UTC')->timestamp;
+    $n = fn ($v) => ['id' => $v, 'code' => (string) $v, 'name' => (string) $v, 'structureType' => ['code' => '1', 'name' => 'x']];
+    $item = fn (int $id, int $g, string $subject, string $st, string $en, string $room) => ['id' => $id, 'subject' => ['id' => crc32($subject) % 100000, 'name' => $subject, 'code' => 'S'],
+        'semester' => ['code' => '11', 'name' => '1'], 'educationYear' => ['code' => '2026', 'name' => '2026-2027', 'current' => true],
+        'group' => ['id' => $g, 'name' => 'g', 'educationLang' => ['code' => '11', 'name' => 'uz']], 'faculty' => $n(1), 'department' => $n(2),
+        'auditorium' => ['code' => $room, 'name' => $room, 'auditoriumType' => ['code' => '1', 'name' => 'x'], 'building' => ['id' => 1, 'name' => 'B']],
+        'trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'lessonPair' => ['code' => '1', 'name' => '1', 'start_time' => $st, 'end_time' => $en],
+        'employee' => ['id' => 1, 'name' => 'E'], 'lesson_date' => $ts, '_week' => 1];
+    $page = fn (array $items) => \Illuminate\Support\Facades\Http::response(['success' => true, 'data' => ['items' => $items, 'pagination' => ['pageCount' => 1]]]);
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    \Illuminate\Support\Facades\Http::fake([
+        '*schedule-list*' => function ($req) use ($item, $page) {
+            $g = (int) $req->data()['_group'];
+            return $page([$item($g * 10 + 1, $g, 'Fan ' . ($g % 40), '08:30', '09:50', 'B1'), $item($g * 10 + 2, $g, 'Fan ' . (($g + 3) % 40), '12:00', '13:20', 'B' . ($g % 60)),
+                $item($g * 10 + 3, $g, 'Sikl A', '10:00', '11:20', 'B2')]);
+        },
+        '*attendance-control-list*' => fn ($req) => $page((int) $req->data()['_group'] % 3 ? [] : [['_subject_schedule' => (int) $req->data()['_group'] * 10 + 1,
+            'group' => ['id' => (int) $req->data()['_group']], 'lesson_date' => $ts]]),
+        '*student-grade-list*' => fn () => $page([]),
+    ]);
+
+    gc_collect_cycles();
+    memory_reset_peak_usage();
+    $base = memory_get_usage();
+    $t0 = microtime(true);
+    $res = test()->withoutVite()->actingAs($reg, 'teacher')->withSession(['active_role' => 'registrator_ofisi'])
+        ->postJson(route('admin.timetable.hemis-today', $board), ['faculty_names' => ['F1']])->assertOk()->json();
+    $elapsed = microtime(true) - $t0;
+    $peakMb = (memory_get_peak_usage() - $base) / 1048576;
+    $sent = count(\Illuminate\Support\Facades\Http::recorded());
+    fwrite(STDERR, sprintf("hemis-today F1: %.2f s, %.1f MB, %d ta dars, %d ta HEMIS so'rovi, %s\n", $elapsed, $peakMb, $res['counts']['lessons'], $sent, json_encode($res['counts'])));
+    expect($res['today'])->toBe($today)->and($res['counts']['updates'])->toBeGreaterThan(0)->and($elapsed)->toBeLessThan(10.0)->and($peakMb)->toBeLessThan(128.0);
+    \Illuminate\Support\Facades\Http::assertNotSent(fn ($req) => (int) $req->data()['lesson_date_from'] !== \Illuminate\Support\Carbon::parse($today)->startOfDay()->timestamp
+        || (int) $req->data()['_group'] < 10000);
+});

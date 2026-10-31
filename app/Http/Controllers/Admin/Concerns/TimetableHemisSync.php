@@ -738,6 +738,42 @@ trait TimetableHemisSync
         return $out;
     }
 
+    /**
+     * HEMIS guruhi (groups qatori) kartadagi guruh nomi bo'yicha: ['name' => qo'shimchasiz nom, 'raw' => kartadagi nom,
+     * 'card' => namuna karta]. Nom fakultetlararo takrorlanadi — avval o'z fakulteti; bir xil nomlilardan faoli, shu semestrda
+     * HEMIS jadvali va o'quv rejasida shu semestr fanlari borligi.
+     */
+    private function hemisGroupResolver(TimetableBoard $board, array $groupNames): \Closure
+    {
+        $facKey = fn ($f) => mb_strtolower(trim((string) $f));
+        $groupRows = DB::table('groups')
+            ->whereIn('name', array_values(array_unique(array_merge(array_column($groupNames, 'raw'), array_column($groupNames, 'name')))))
+            ->get()->groupBy(fn ($g) => $this->groupNameKey($g->name));
+        $hasGroupActive = Schema::hasColumn('groups', 'active');
+        $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
+        $parityKuzgi = $board->semester_parity !== 'bahorgi';
+        return function (array $g) use ($groupRows, $facKey, $hasGroupActive, $hasCsActive, $parityKuzgi) {
+            $cands = $groupRows[$this->groupNameKey($g['raw'])] ?? $groupRows[$this->groupNameKey($g['name'])] ?? collect();
+            $own = $cands->filter(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
+            $pool = $own->isNotEmpty() ? $own : ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands : collect());
+            if ($pool->count() <= 1) {
+                return $pool->first();
+            }
+            // Bir xil nomli bir nechta guruh (eski / qayta ochilgan): faol, shu semestrda HEMIS jadvali bor,
+            // o'quv rejasida shu semestr fanlari bor guruh tanlanadi.
+            $course = (int) $g['card']->course;
+            $sem = (string) ($parityKuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course);
+            return $pool->sortByDesc(fn ($r) => [
+                $hasGroupActive ? (int) (bool) ($r->active ?? 1) : 1,
+                (int) DB::table('schedules')->where('group_id', $r->group_hemis_id)->where('semester_code', $sem)->whereNull('deleted_at')->exists(),
+                // Fanlar keyingi so'rovdagidek: HEMIS'dan olib tashlanganlari (is_active = false) hisobga olinmaydi.
+                (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)
+                    ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->exists(),
+                (int) $r->group_hemis_id,
+            ])->first();
+        };
+    }
+
     private function hemisSyncReport(TimetableBoard $board, array $scope, string $today): array
     {
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
@@ -853,32 +889,8 @@ trait TimetableHemisSync
             }
             $groupNames = array_filter($groupNames, fn ($g) => isset($want[$this->groupNameKey($g['raw'])]) || isset($want[$this->groupNameKey($g['name'])]));
         }
-        $groupRows = DB::table('groups')
-            ->whereIn('name', array_values(array_unique(array_merge(array_column($groupNames, 'raw'), array_column($groupNames, 'name')))))
-            ->get()->groupBy(fn ($g) => $this->groupNameKey($g->name));
-        $hasGroupActive = Schema::hasColumn('groups', 'active');
+        $resolveGroup = $this->hemisGroupResolver($board, $groupNames);
         $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
-        $parityKuzgi = $board->semester_parity !== 'bahorgi';
-        $resolveGroup = function (array $g) use ($groupRows, $facKey, $hasGroupActive, $hasCsActive, $parityKuzgi) {
-            $cands = $groupRows[$this->groupNameKey($g['raw'])] ?? $groupRows[$this->groupNameKey($g['name'])] ?? collect();
-            $own = $cands->filter(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
-            $pool = $own->isNotEmpty() ? $own : ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands : collect());
-            if ($pool->count() <= 1) {
-                return $pool->first();
-            }
-            // Bir xil nomli bir nechta guruh (eski / qayta ochilgan): faol, shu semestrda HEMIS jadvali bor,
-            // o'quv rejasida shu semestr fanlari bor guruh tanlanadi.
-            $course = (int) $g['card']->course;
-            $sem = (string) ($parityKuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course);
-            return $pool->sortByDesc(fn ($r) => [
-                $hasGroupActive ? (int) (bool) ($r->active ?? 1) : 1,
-                (int) DB::table('schedules')->where('group_id', $r->group_hemis_id)->where('semester_code', $sem)->whereNull('deleted_at')->exists(),
-                // Fanlar keyingi so'rovdagidek: HEMIS'dan olib tashlanganlari (is_active = false) hisobga olinmaydi.
-                (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)
-                    ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->exists(),
-                (int) $r->group_hemis_id,
-            ])->first();
-        };
 
         $kuzgi = $board->semester_parity !== 'bahorgi';
         // "Kafedra mudiri xonasi" (faqat faollari; aynan shu nomlisi ustuvor): avval fanning o'z kafedrasiniki
@@ -1657,5 +1669,564 @@ trait TimetableHemisSync
 
         return response()->download($tmp, 'hemis_solishtirish_' . $rep['today'] . '.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * "Bugungi darslar (HEMIS)": faqat bugun uchun yengil solishtirish — faqat o'zgartirish (o'qituvchi, xona, para vaqti).
+     * Bugun HEMIS'ga qo'shilmaydi va o'chirilmaydi (mos kelmaganlari — ma'lumot); davomat olingan yoki baho qo'yilgan
+     * darsga tegilmaydi. To'liq solishtirish (hemisSyncReport) chaqirilmaydi: faqat bugungi darslar va qamrov guruhlari.
+     */
+    public function hemisToday(Request $request, TimetableBoard $board)
+    {
+        $this->hemisSyncDenyUnlessRegistrar($request);
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'groups'            => 'nullable|array',
+            'groups.*'          => 'string|max:255',
+            'today'             => 'nullable|date',
+        ]);
+        $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
+            ? Carbon::parse($data['today'])->toDateString()
+            : now()->toDateString();
+        @set_time_limit(120);
+
+        return response()->json($this->hemisTodayReport($board, $data, $today));
+    }
+
+    /**
+     * Xatcho'p (HEMIS sahifasida) bugungi darsni yozishdan oldin: shu HEMIS yozuvlarida davomat olinganmi yoki baho
+     * qo'yilganmi — HEMIS'dan qaytadan (keshsiz). Imzolangan havola (kun oxirigacha amal qiladi; ids — imzodan tashqari),
+     * HEMIS sahifasidan chaqiriladi (CORS). Qaytaradi: {locked: {id: sabab}, failed: [tekshirib bo'lmagan id]}.
+     */
+    public function hemisTodayLocks(Request $request, TimetableBoard $board)
+    {
+        $origin = (string) $request->headers->get('Origin', '');
+        $allowed = parse_url((string) config('services.hemis.web_url', 'https://hemis.ttatf.uz'), PHP_URL_HOST);
+        $cors = $origin !== '' && $allowed && parse_url($origin, PHP_URL_HOST) === $allowed ? ['Access-Control-Allow-Origin' => $origin, 'Vary' => 'Origin'] : [];
+        if (!\Illuminate\Support\Facades\URL::hasValidSignature($request, true, ['ids'])) {
+            return response()->json(['error' => 'Havola eskirgan — mark\'da «Bugungi darslar (HEMIS)» JSON\'ini qayta yuklab oling.'], 403, $cors);
+        }
+        $date = (string) $request->query('date');
+        $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $request->query('ids', '')))))), 0, 50);
+        $rows = $ids ? DB::table('schedules')->whereIn('schedule_hemis_id', $ids)->get(['schedule_hemis_id', 'group_id', 'lesson_date']) : collect();
+        $byGroup = [];
+        $failed = [];
+        foreach ($ids as $id) {
+            $r = $rows->firstWhere('schedule_hemis_id', $id);
+            if ($r && substr((string) $r->lesson_date, 0, 10) === $date) {
+                $byGroup[(int) $r->group_id][] = $id;
+            } else {
+                $failed[] = $id;   // bugungi dars emas yoki bazada yo'q — yozilmasin
+            }
+        }
+        [$locks, $failedGroups] = $this->hemisTodayLockMap($byGroup, $date);
+        foreach ($failedGroups as $g) {
+            array_push($failed, ...$byGroup[$g]);
+        }
+
+        return response()->json(['locked' => array_map(fn ($l) => $this->hemisTodayLockReason($l), $locks), 'failed' => $failed], 200, $cors);
+    }
+
+    private function hemisTodayLockReason(array $l): string
+    {
+        return implode(', ', array_filter([!empty($l['att']) ? 'davomat olingan' : null, !empty($l['grade']) ? 'baho qo\'yilgan' : null]));
+    }
+
+    /** HEMIS REST manzili: services.hemis.base_url (".../rest" yoki ".../rest/v1/") + /v1/data/{endpoint}. */
+    private function hemisApiUrl(string $endpoint): string
+    {
+        $base = rtrim((string) config('services.hemis.base_url', 'https://student.ttatf.uz/rest/v1/'), '/');
+
+        return (str_ends_with($base, '/v1') ? $base : $base . '/v1') . '/data/' . $endpoint;
+    }
+
+    /**
+     * Davomat (attendance-control-list) va baho (student-grade-list) — guruh va kun bo'yicha HEMIS'dan qaytadan, hamda bazadagi
+     * attendance_controls / student_grades. $idsByGroup — [HEMIS guruh id => [subject_schedule id, ...]].
+     * Qaytaradi: [[id => ['att' => bool, 'grade' => bool]] (faqat belgilanganlari), [HEMIS javob bermagan guruh id, ...]].
+     */
+    private function hemisTodayLockMap(array $idsByGroup, string $date): array
+    {
+        $all = array_merge(...array_values($idsByGroup ?: [[]]));
+        if (!$all) {
+            return [[], []];
+        }
+        $want = array_flip($all);
+        $locks = [];
+        $mark = function ($id, string $k) use (&$locks, $want) {
+            if (isset($want[(int) $id])) {
+                $locks[(int) $id][$k] = true;
+            }
+        };
+        foreach (['attendance_controls' => 'att', 'student_grades' => 'grade'] as $table => $k) {
+            if (Schema::hasTable($table)) {
+                DB::table($table)->whereIn('subject_schedule_id', $all)
+                    ->when(Schema::hasColumn($table, 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
+                    ->distinct()->pluck('subject_schedule_id')->each(fn ($id) => $mark($id, $k));
+            }
+        }
+        // Bazada belgisi yo'q yozuvlar — HEMIS'dan (import kechasi bo'ladi, bugungi davomat hali bazada bo'lmaydi). Baho — faqat
+        // davomati ham olinmagan yozuvlar guruhlari uchun.
+        $failed = [];
+        foreach (['attendance-control-list' => 'att', 'student-grade-list' => 'grade'] as $endpoint => $k) {
+            $ask = [];
+            foreach ($idsByGroup as $g => $ids) {
+                if (!isset($failed[$g]) && array_filter($ids, fn ($id) => !isset($locks[(int) $id]))) {
+                    $ask[] = (int) $g;
+                }
+            }
+            foreach ($this->hemisPooledDayList($endpoint, $ask, $date) as $g => $items) {
+                if ($items === null) {
+                    $failed[$g] = true;
+                    continue;
+                }
+                foreach ($items as $it) {
+                    $mark($it['_subject_schedule'] ?? ($it['subject_schedule']['id'] ?? null), $k);
+                }
+            }
+        }
+
+        return [$locks, array_keys($failed)];
+    }
+
+    /**
+     * HEMIS ro'yxati (davomat / baho / jadval) — har guruh uchun shu kun (_group + lesson_date_from/to), barcha sahifalar.
+     * So'rovlar parallel, bir vaqtda 20 tadan. Qaytaradi: [guruh => yozuvlar | null (HEMIS javob bermadi)].
+     */
+    private function hemisPooledDayList(string $endpoint, array $groupIds, string $date): array
+    {
+        $token = (string) config('services.hemis.token');
+        $url = $this->hemisApiUrl($endpoint);
+        $from = Carbon::parse($date)->startOfDay()->timestamp;
+        $to = Carbon::parse($date)->endOfDay()->timestamp;
+        $out = array_fill_keys($groupIds, []);
+        $pending = array_map(fn ($g) => [$g, 1], $groupIds);
+        while ($pending) {
+            $batch = array_splice($pending, 0, 20);
+            $responses = \Illuminate\Support\Facades\Http::pool(fn ($pool) => array_map(fn ($job) => $pool->as($job[0] . '|' . $job[1])
+                ->withoutVerifying()->connectTimeout(5)->timeout(20)->withToken($token)
+                ->get($url, ['_group' => $job[0], 'lesson_date_from' => $from, 'lesson_date_to' => $to, 'limit' => 200, 'page' => $job[1]]), $batch));
+            foreach ($batch as [$g, $page]) {
+                $r = $responses[$g . '|' . $page] ?? null;
+                if ($out[$g] === null) {
+                    continue;
+                }
+                if (!$r instanceof \Illuminate\Http\Client\Response || !$r->successful() || $r->json('success') === false) {
+                    $out[$g] = null;
+                    continue;
+                }
+                // Sana/guruh bo'yicha qayta saralanmaydi: davomat va baho dars yozuviga (_subject_schedule) aynan bog'langan,
+                // vaqt mintaqasi farqi belgini yashirib qo'ymasin.
+                array_push($out[$g], ...((array) $r->json('data.items', [])));
+                if ($page === 1) {
+                    for ($p = 2; $p <= (int) $r->json('data.pagination.pageCount', 1); $p++) {
+                        $pending[] = [$g, $p];
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Bugungi darslar hisoboti. LMS: haftalik darslar (shu haftaning shu kuni, ko'chirilgan/bekor qilinganlari bilan) va
+     * sikl darslari (bugungi kun rejasi, guruhcha smenasi bilan). HEMIS: shu guruhlarning bugungi jadvali — avval HEMIS'dan
+     * qayta import qilinadi. Juftlash: guruh + fan + qism (ma'ruza / amaliy qism) + vaqt (avval aynan, so'ng eng yaqini).
+     */
+    private function hemisTodayReport(TimetableBoard $board, array $scope, string $today): array
+    {
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
+        $cards = $this->cardRows($board, fn ($q) => $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet));
+        $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
+        $weekly = array_filter($cards, fn ($c) => !$isCycle($c));
+        $cycleIds = array_keys(array_diff_key($cards, $weekly));
+        $teacherHemis = Teacher::whereIn('id', array_values(array_unique(array_filter(array_column($cards, 'teacher_id')))))->pluck('hemis_id', 'id')->all();
+        $slotTimes = $this->hemisSlotTimes($board);
+        $facKey = fn ($f) => mb_strtolower(trim((string) $f));
+        $cleanGroup = fn ($n) => trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $n));
+
+        // Qamrov guruhlari (to'liq solishtirishdagidek: fakultet + nom; sikl kartalari — guruhcha a'zolari).
+        $groupNames = [];
+        foreach ($cards as $id => $c) {
+            $names = in_array($id, $cycleIds, true) ? $this->cycleCardGroups($c) : $this->cardGroupsOf($c);
+            foreach ($names as $raw) {
+                $raw = trim((string) $raw);
+                if ($raw !== '') {
+                    $groupNames[$facKey($c->faculty_name) . '|' . $this->groupNameKey($raw)] ??= ['name' => $cleanGroup($raw), 'raw' => $raw, 'card' => $c];
+                }
+            }
+        }
+        if (!empty($scope['groups'])) {
+            $want = [];
+            foreach ($scope['groups'] as $g) {
+                $want[$this->groupNameKey($g)] = true;
+                $want[$this->groupNameKey($cleanGroup($g))] = true;
+            }
+            $groupNames = array_filter($groupNames, fn ($g) => isset($want[$this->groupNameKey($g['raw'])]) || isset($want[$this->groupNameKey($g['name'])]));
+        }
+
+        // LMS'dagi bugungi darslar: guruh kaliti => [dars, ...] (slot va len — yarim-para).
+        $lms = [];
+        $lesson = fn (string $subject, string $part, int $slot, int $len, $emp, $empName, $room, $roomName, bool $cycle) => [
+            'subject' => $subject, 'key' => $this->hemisSubjectKey($subject), 'part' => $part, 'slot' => $slot, 'len' => max(1, $len),
+            'emp' => $emp ?: null, 'emp_name' => $empName ?: null, 'room' => $room ?: null, 'room_name' => $roomName ?: null, 'cycle' => $cycle,
+        ];
+        if ($weekly) {
+            $state = ['cards' => $weekly, 'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($weekly)))];
+            foreach ($this->weeklyOccupancy($board, $state, [$today => true]) as $e) {
+                $c = $weekly[$e['card']];
+                $l = $lesson((string) $c->subject_name, $c->training_type === 'lecture' ? 'L' : 'A', (int) $e['from'], (int) $e['to'] - (int) $e['from'],
+                    $c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null, $c->teacher_id ? $c->teacher_name : null,
+                    $e['room'], $e['room_name'], false);
+                foreach ($this->cardGroupsOf($c) as $raw) {
+                    $lms[$facKey($c->faculty_name) . '|' . $this->groupNameKey(trim((string) $raw))][] = $l;
+                }
+            }
+        }
+        if ($cycleIds) {
+            $cycleCards = TimetableCard::whereIn('id', $cycleIds)->get();
+            $names = [];
+            foreach ($cycleCards as $c) {
+                $names[$this->hemisSubjectKey((string) $c->subject_name)] ??= (string) $c->subject_name;
+            }
+            foreach ($this->hemisCycleLessons($board, $scope, $cycleCards) as $gk => $bySubject) {
+                foreach ($bySubject as $sk => $list) {
+                    foreach ($list as $x) {
+                        if ($x['date'] === $today) {
+                            $lms[$gk][] = $lesson($names[$sk] ?? $sk, $x['part'], (int) $x['slot'], (int) $x['len'], $x['employee_id'], $x['employee_name'],
+                                $x['auditorium_code'], $x['auditorium_name'], true);
+                        }
+                    }
+                }
+            }
+        }
+
+        // HEMIS guruhlari; bir HEMIS guruhiga tushgan nomlar birlashadi.
+        $resolveGroup = $this->hemisGroupResolver($board, $groupNames);
+        $groups = [];
+        $missing = [];
+        foreach ($groupNames as $gk => $g) {
+            $row = $resolveGroup($g);
+            if (!$row) {
+                if (!empty($lms[$gk])) {
+                    $missing[] = $g['name'];
+                }
+                continue;
+            }
+            $gid = (int) $row->group_hemis_id;
+            $groups[$gid] ??= ['row' => $row, 'lms' => []];
+            array_push($groups[$gid]['lms'], ...($lms[$gk] ?? []));
+        }
+        $date = Carbon::parse($today);
+        $import = $groups ? app(\App\Services\ScheduleImportService::class)->importGroupsOnDate(array_keys($groups), $date) : ['failed' => []];
+        $importFailed = array_flip($import['failed']);
+        $hemisRows = $groups ? DB::table('schedules')->whereIn('group_id', array_keys($groups))->whereNull('deleted_at')
+            ->whereBetween('lesson_date', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
+            ->orderBy('lesson_pair_start_time')->orderBy('schedule_hemis_id')
+            ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_id', 'subject_name', 'training_type_code', 'training_type_name',
+                'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name',
+                'department_id', 'semester_code', 'education_year_code'])->groupBy('group_id') : collect();
+
+        $toMin = fn (string $t) => (int) substr($t, 0, 2) * 60 + (int) substr($t, 3, 2);
+        $hm = fn ($t) => substr((string) $t, 0, 5);
+        $out = [];   // qatorlar
+        $hemisOf = [];
+        foreach ($groups as $gid => $g) {
+            $gname = (string) $g['row']->name;
+            // LMS darslari HEMIS yozuvlariga (to'liq yoki yarim para) bo'linadi — SchedulePlanner::records kabi.
+            $buckets = [];
+            foreach ($g['lms'] as $l) {
+                $bk = $l['key'] . '|' . $l['part'];
+                for ($s = $l['slot']; $s < $l['slot'] + $l['len']; $s++) {
+                    $buckets[$bk]['slots'][$s] = $l;
+                }
+            }
+            $records = [];
+            foreach ($buckets as $bk => $b) {
+                ksort($b['slots']);
+                $keys = array_keys($b['slots']);
+                for ($i = 0; $i < count($keys); $i++) {
+                    $s = $keys[$i];
+                    $a = $b['slots'][$s];
+                    $len = 1;
+                    $nx = $keys[$i + 1] ?? null;
+                    $same = $nx !== null && (string) $a['emp'] === (string) $b['slots'][$nx]['emp'] && (string) $a['room'] === (string) $b['slots'][$nx]['room'];
+                    if ($s % 2 === 1 && $nx === $s + 1 && $same) {
+                        $len = 2;
+                        $i++;
+                    }
+                    $records[$bk][] = $a + ['start' => $slotTimes[$s][0] ?? '', 'end' => $slotTimes[$s + $len - 1][1] ?? ''];
+                }
+            }
+            // HEMIS yozuvlari fan va qism bo'yicha (umumiy ma'ruza bo'lakli fan nomida bo'lishi mumkin — asosiy nomi bilan).
+            $hb = [];
+            foreach ($hemisRows[$gid] ?? [] as $h) {
+                $part = $this->hemisPartOf((string) $h->training_type_name);
+                $hemisOf[(int) $h->schedule_hemis_id] = $h;
+                if ($part === null) {
+                    continue;   // mustaqil ta'lim, amaliyot — solishtirilmaydi
+                }
+                $k = $this->hemisSubjectKey((string) $h->subject_name) . '|' . $part;
+                if (!isset($records[$k]) && $part === 'L' && isset($records[$this->hemisSubjectBase((string) $h->subject_name) . '|L'])) {
+                    $k = $this->hemisSubjectBase((string) $h->subject_name) . '|L';
+                }
+                $hb[$k][] = $h;
+            }
+            foreach (array_unique(array_merge(array_keys($records), array_keys($hb))) as $bk) {
+                $R = $records[$bk] ?? [];
+                $H = $hb[$bk] ?? [];
+                $pairs = [];
+                $usedR = [];
+                $usedH = [];
+                // Avval vaqti aynan mos (boshlanishi va tugashi), so'ng eng yaqin vaqtlisi bilan.
+                $cand = [];
+                foreach ($R as $ri => $r) {
+                    foreach ($H as $hi => $h) {
+                        $cand[] = [abs($toMin($r['start']) - $toMin($hm($h->lesson_pair_start_time))),
+                            abs($toMin($r['end']) - $toMin($hm($h->lesson_pair_end_time))), $ri, $hi];
+                    }
+                }
+                sort($cand);
+                foreach ($cand as [, , $ri, $hi]) {
+                    if (!isset($usedR[$ri]) && !isset($usedH[$hi])) {
+                        $pairs[] = [$ri, $hi];
+                        $usedR[$ri] = $usedH[$hi] = true;
+                    }
+                }
+                foreach ($pairs as [$ri, $hi]) {
+                    $r = $R[$ri];
+                    $h = $H[$hi];
+                    $x = ['group' => $gname, 'group_hemis_id' => $gid, 'subject' => (string) $h->subject_name, 'type' => (string) $h->training_type_name,
+                        'hemis_id' => (int) $h->schedule_hemis_id, 'start' => $hm($h->lesson_pair_start_time), 'end' => $hm($h->lesson_pair_end_time),
+                        'employee_id' => $h->employee_id, 'employee_name' => $h->employee_name, 'auditorium_code' => $h->auditorium_code,
+                        'auditorium_name' => $h->auditorium_name, 'new_start' => $r['start'], 'new_end' => $r['end'],
+                        // Biriktirilmagan (LMS'da o'qituvchi yo'q) — HEMIS'dagisi qoladi; kafedra mudiriga avtomatik almashtirilmaydi.
+                        'new_employee_id' => $r['emp'] ?: $h->employee_id, 'new_employee_name' => $r['emp'] ? $r['emp_name'] : $h->employee_name,
+                        'new_auditorium_code' => $r['room'] ?: $h->auditorium_code, 'new_auditorium_name' => $r['room'] ? $r['room_name'] : $h->auditorium_name,
+                        'teacher_set' => $r['emp_name'] !== null, 'changes' => [], 'blocked' => [], 'status' => 'ok', 'reason' => null,
+                        'code' => (string) $h->training_type_code, 'subject_id' => (int) $h->subject_id, 'cycle' => $r['cycle']];
+                    if ($x['new_start'] !== $x['start'] || $x['new_end'] !== $x['end']) {
+                        $x['changes'][] = "vaqt: {$x['start']}–{$x['end']} → {$x['new_start']}–{$x['new_end']}";
+                    }
+                    if ((string) $x['new_employee_id'] !== (string) $x['employee_id']) {
+                        $x['changes'][] = "o'qituvchi: " . ($x['employee_name'] ?: '—') . ' → ' . $x['new_employee_name'];
+                    }
+                    if ((string) $x['new_auditorium_code'] !== (string) $x['auditorium_code']) {
+                        $x['changes'][] = 'xona: ' . ($x['auditorium_name'] ?: '—') . ' → ' . $x['new_auditorium_name'];
+                    }
+                    if ($r['emp_name'] !== null && !$r['emp']) {
+                        $x['note'] = "LMS o'qituvchisi {$r['emp_name']} ning HEMIS xodim id'si yo'q — o'qituvchi solishtirilmadi";
+                    }
+                    if ($x['changes']) {
+                        $x['status'] = 'update';
+                    }
+                    $out[] = $x;
+                }
+                foreach ($R as $ri => $r) {
+                    if (!isset($usedR[$ri])) {
+                        $out[] = ['group' => $gname, 'group_hemis_id' => $gid, 'subject' => $r['subject'], 'type' => $r['part'] === 'L' ? 'Ma\'ruza' : 'Amaliy',
+                            'hemis_id' => null, 'start' => $r['start'], 'end' => $r['end'], 'employee_name' => $r['emp_name'], 'auditorium_name' => $r['room_name'],
+                            'status' => 'info', 'changes' => [], 'blocked' => [], 'reason' => 'yangi dars kerak — bugun qo\'shilmaydi', 'cycle' => $r['cycle']];
+                    }
+                }
+                foreach ($H as $hi => $h) {
+                    if (!isset($usedH[$hi])) {
+                        $out[] = ['group' => $gname, 'group_hemis_id' => $gid, 'subject' => (string) $h->subject_name, 'type' => (string) $h->training_type_name,
+                            'hemis_id' => (int) $h->schedule_hemis_id, 'start' => $hm($h->lesson_pair_start_time), 'end' => $hm($h->lesson_pair_end_time),
+                            'employee_name' => $h->employee_name, 'auditorium_name' => $h->auditorium_name, 'status' => 'info', 'changes' => [], 'blocked' => [],
+                            'reason' => 'ortiqcha dars (LMS\'da bugun yo\'q) — bugun o\'chirilmaydi'];
+                    }
+                }
+            }
+        }
+
+        // Davomat / baho: o'zgaradigan darslar uchun (bazada, so'ng HEMIS'dan qaytadan).
+        $askIds = [];
+        foreach ($out as $i => $x) {
+            if ($x['status'] === 'update') {
+                if (isset($importFailed[$x['group_hemis_id']])) {
+                    $out[$i]['status'] = 'blocked';
+                    $out[$i]['blocked'][] = 'HEMIS jadvali yangilanmadi (javob bermadi) — bugungi holat noma\'lum';
+                    continue;
+                }
+                $askIds[$x['group_hemis_id']][] = $x['hemis_id'];
+            }
+        }
+        [$locks, $lockFailed] = $this->hemisTodayLockMap($askIds, $today);
+        $lockFailed = array_flip($lockFailed);
+        foreach ($out as $i => $x) {
+            if ($x['status'] !== 'update') {
+                continue;
+            }
+            if (isset($locks[$x['hemis_id']])) {
+                $out[$i]['status'] = 'locked';
+                $out[$i]['reason'] = $this->hemisTodayLockReason($locks[$x['hemis_id']]) . ' — tegilmaydi';
+            } elseif (isset($lockFailed[$x['group_hemis_id']])) {
+                $out[$i]['status'] = 'blocked';
+                $out[$i]['blocked'][] = 'HEMIS\'dan davomat/baho tekshirib bo\'lmadi (javob bermadi)';
+            }
+        }
+        $this->hemisTodayBlocks($out, $hemisRows, $today);
+
+        // Xatcho'p uchun JSON: faqat to'siqsiz o'zgartirishlar (today: true).
+        $jsonGroups = [];
+        foreach ($out as $x) {
+            if ($x['status'] !== 'update') {
+                continue;
+            }
+            $gid = $x['group_hemis_id'];
+            $h = $hemisOf[$x['hemis_id']];
+            $jsonGroups[$gid] ??= ['group' => $x['group'], 'group_hemis_id' => $gid, 'curriculum_hemis_id' => (int) $groups[$gid]['row']->curriculum_hemis_id,
+                'education_year' => (int) $h->education_year_code, 'semester_code' => (string) $h->semester_code, 'units' => []];
+            $uk = $x['subject_id'];
+            $jsonGroups[$gid]['units'][$uk] ??= ['subject_name' => $x['subject'], 'subject_id' => $x['subject_id'], 'code_names' => [], 'actions' => []];
+            $jsonGroups[$gid]['units'][$uk]['code_names'][$x['code']] = $x['type'];
+            $jsonGroups[$gid]['units'][$uk]['actions'][] = ['op' => 'update', 'today' => true, 'date' => $today, 'hemis_id' => $x['hemis_id'],
+                'start' => $x['new_start'], 'end' => $x['new_end'], 'code' => $x['code'],
+                'employee_id' => $x['new_employee_id'], 'employee_name' => $x['new_employee_name'],
+                'auditorium_code' => $x['new_auditorium_code'], 'auditorium_name' => $x['new_auditorium_name'], 'changes' => $x['changes'], 'blocked' => []];
+        }
+        foreach ($jsonGroups as &$jg) {
+            $jg['units'] = array_values($jg['units']);
+        }
+        unset($jg);
+        usort($out, fn ($a, $b) => [$a['group'], $a['start'], $a['subject']] <=> [$b['group'], $b['start'], $b['subject']]);
+        $count = fn (string $s) => count(array_filter($out, fn ($x) => $x['status'] === $s));
+        $rows = array_map(fn ($x) => array_diff_key($x, array_flip(['employee_id', 'new_employee_id', 'teacher_set', 'code', 'subject_id'])), $out);
+
+        return [
+            'today' => $today,
+            'counts' => ['lessons' => count($out), 'updates' => $count('update'), 'locked' => $count('locked'), 'blocked' => $count('blocked'),
+                'info' => $count('info'), 'ok' => $count('ok')],
+            'rows' => $rows,
+            'missing_groups' => array_values(array_unique($missing)),
+            'import_failed' => count($importFailed),
+            'json' => [
+                'mode' => 'today', 'today' => $today, 'hemis_pairs' => self::HEMIS_PAIRS,
+                'lock_check_url' => \Illuminate\Support\Facades\URL::temporarySignedRoute('hemis-today-locks', $this->hemisTodayLockExpiry($today),
+                    ['board' => $board->id, 'date' => $today]),
+                'groups' => array_values($jsonGroups),
+            ],
+        ];
+    }
+
+    /** Qulf tekshiruvi havolasi shu kun oxirigacha amal qiladi (ertasi kun — eskirgan JSON). */
+    private function hemisTodayLockExpiry(string $today): Carbon
+    {
+        return max(Carbon::parse($today)->endOfDay(), now()->addMinutes(5));
+    }
+
+    /**
+     * O'zgartirishning to'siqlari (bugun): HEMIS'da yangi para vaqti yo'q; vaqt o'zgarsa — guruhning boshqa bugungi darsi bilan
+     * ustma-ust; o'qituvchi yoki xona band (HEMIS'dagi bugungi darslar: hozirgi joyi va qolgan o'zgartirishlardan keyingi joyi).
+     * Bir dars bir necha guruhga (bitta o'qituvchi, bitta xona) — bandlik emas; kafedra mudiriga majburan qo'yilgan dars
+     * (LMS'da o'qituvchi biriktirilmagan) va "Kafedra mudiri xonasi" / umumiy xona — to'siq emas. To'siqli bo'lsa — status blocked.
+     */
+    private function hemisTodayBlocks(array &$out, $hemisRows, string $today): void
+    {
+        $cand = array_keys(array_filter($out, fn ($x) => $x['status'] === 'update'));
+        if (!$cand) {
+            return;
+        }
+        $hm = fn ($t) => substr((string) $t, 0, 5);
+        $freeRoom = fn ($name) => $this->isSharedRoom($name) || preg_match('/kafedra\s+mudiri/iu', (string) $name) === 1;
+        // Bandlik joylari: [boshi, oxiri, hemis id, guruh, fan, o'qituvchi id, o'qituvchi, xona kodi, xona, kafedra, majburiy mudir].
+        $spots = [];
+        $mine = [];
+        foreach ($out as $x) {
+            if (!empty($x['hemis_id']) && array_key_exists('new_start', $x)) {
+                $mine[$x['hemis_id']] = $x;
+            }
+        }
+        $emps = [];
+        $rooms = [];
+        foreach ($cand as $i) {
+            if ($out[$i]['new_employee_id']) {
+                $emps[(string) $out[$i]['new_employee_id']] = true;
+            }
+            if ($out[$i]['new_auditorium_code']) {
+                $rooms[(string) $out[$i]['new_auditorium_code']] = true;
+            }
+        }
+        $day = Carbon::parse($today);
+        $ext = DB::table('schedules')->whereNull('deleted_at')->whereBetween('lesson_date', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
+            ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
+            ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_name', 'lesson_pair_start_time', 'lesson_pair_end_time',
+                'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
+        $all = collect($hemisRows)->flatten(1)->keyBy('schedule_hemis_id');
+        foreach ($ext as $r) {
+            $all[$r->schedule_hemis_id] ??= $r;
+        }
+        $mudirIds = [];
+        $isMudir = function ($deptId, $emp) use (&$mudirIds): bool {
+            if (!$deptId || !$emp) {
+                return false;
+            }
+            $mudirIds[$deptId] ??= array_map('strval', Teacher::headsOfDepartment($deptId)->whereNotNull('hemis_id')->pluck('hemis_id')->all());
+
+            return in_array((string) $emp, $mudirIds[$deptId], true);
+        };
+        foreach ($all as $id => $r) {
+            $base = ['id' => (int) $id, 'group_id' => (int) $r->group_id, 'group' => $r->group_name, 'subject' => $r->subject_name, 'dept' => $r->department_id];
+            $x = $mine[(int) $id] ?? null;
+            // LMS'da o'qituvchisi biriktirilmagan dars — HEMIS'dagi o'qituvchisi (kafedra mudiri) bandlik hisoblanmaydi.
+            $forced = $x ? !$x['teacher_set'] : $isMudir($r->department_id, $r->employee_id);
+            $spots[] = $base + ['s' => $hm($r->lesson_pair_start_time), 'e' => $hm($r->lesson_pair_end_time), 'emp' => (string) $r->employee_id,
+                'emp_name' => $r->employee_name, 'room' => (string) $r->auditorium_code, 'room_name' => $r->auditorium_name, 'forced' => $forced];
+            if ($x && $x['status'] === 'update') {
+                $spots[] = $base + ['s' => $x['new_start'], 'e' => $x['new_end'], 'emp' => (string) $x['new_employee_id'], 'emp_name' => $x['new_employee_name'],
+                    'room' => (string) $x['new_auditorium_code'], 'room_name' => $x['new_auditorium_name'], 'forced' => $forced];
+            }
+        }
+        foreach ($cand as $i) {
+            $x = $out[$i];
+            [$s, $e] = [$x['new_start'], $x['new_end']];
+            $timeChanged = $s !== $x['start'] || $e !== $x['end'];
+            $emp = (string) $x['new_employee_id'];
+            $room = (string) $x['new_auditorium_code'];
+            $blocked = [];
+            if (!isset(self::HEMIS_PAIRS[$s . '-' . $e])) {
+                $blocked[] = "HEMIS'da {$s}-{$e} para vaqti yo'q";
+            }
+            // HEMIS formasi o'qituvchi va xonasiz saqlanmaydi (LMS'da ham, HEMIS'da ham yo'q bo'lsa).
+            if ($emp === '') {
+                $blocked[] = "o'qituvchi yo'q (LMS'da biriktirilmagan, HEMIS'da ham yo'q)";
+            }
+            if ($room === '') {
+                $blocked[] = "xona yo'q (LMS'da biriktirilmagan, HEMIS'da ham yo'q)";
+            }
+            $checkEmp = $emp !== '' && $x['teacher_set'] && ($timeChanged || $emp !== (string) $x['employee_id']);
+            $checkRoom = $room !== '' && !$freeRoom($x['new_auditorium_name']) && ($timeChanged || $room !== (string) $x['auditorium_code']);
+            $seen = [];
+            foreach ($spots as $o) {
+                if ($o['id'] === $x['hemis_id'] || !($o['s'] < $e && $s < $o['e'])) {
+                    continue;
+                }
+                $label = $o['group'] . ' · ' . $o['subject'] . ' ' . $o['s'] . '–' . $o['e'];
+                $shared = $emp !== '' && $room !== '' && $o['emp'] === $emp && $o['room'] === $room;
+                $text = null;
+                if ($timeChanged && $o['group_id'] === (int) $x['group_hemis_id']) {
+                    $text = "guruhning boshqa darsi bilan ustma-ust: {$o['subject']} {$o['s']}–{$o['e']}";
+                } elseif ($checkEmp && !$shared && !$o['forced'] && $o['emp'] === $emp) {
+                    $text = "o'qituvchi band: {$x['new_employee_name']} — {$label}";
+                } elseif ($checkRoom && !$shared && $o['room'] === $room && !$freeRoom($o['room_name'])) {
+                    $text = "xona band: {$x['new_auditorium_name']} — {$label}";
+                }
+                if ($text !== null && !isset($seen[$text])) {
+                    $seen[$text] = true;
+                    $blocked[] = $text;
+                }
+            }
+            if ($blocked) {
+                $out[$i]['status'] = 'blocked';
+                $out[$i]['blocked'] = array_merge($out[$i]['blocked'], $blocked);
+            }
+        }
     }
 }

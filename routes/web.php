@@ -148,6 +148,10 @@ Route::get('/fan-testi-attempt-images/{attempt}/{question}', [\App\Http\Controll
     ->middleware([\App\Http\Middleware\UniversityNetworkOnly::class, \App\Http\Middleware\RegisteredTestDevice::class])
     ->name('fan-testi.attempt-image');
 
+// "Bugungi darslar (HEMIS)" xatcho'pi: HEMIS sahifasidan (boshqa domen, sessiyasiz) davomat/baho tekshiruvi — imzolangan havola.
+Route::get('/hemis-today-locks/{board}', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisTodayLocks'])
+    ->name('hemis-today-locks')->middleware('throttle:120,1');
+
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
         Route::post('/login', [AdminAuthController::class, 'login'])->name('login.post');
@@ -1331,6 +1335,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/hemis-sync/export', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncExport'])->name('hemis-sync.export');
                 Route::get('/boards/{board}/hemis-sync/import-status', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncImportStatus'])->name('hemis-sync.import-status');
                 Route::post('/boards/{board}/hemis-sync/import', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisSyncImportStart'])->name('hemis-sync.import');
+                Route::post('/boards/{board}/hemis-today', [\App\Http\Controllers\Admin\TimetableController::class, 'hemisToday'])->name('hemis-today');
                 // Jadval o'zgarishlari — registrator ofisi tasdig'i
                 Route::post('/cards/{card}/time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkTime'])->name('cards.time-proposal.check');
                 Route::post('/cards/{card}/time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeTime'])->name('cards.time-proposal');

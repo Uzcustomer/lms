@@ -455,7 +455,8 @@ class ScheduleImportService
                 ]), $batch));
             foreach ($batch as [$g, $page]) {
                 $r = $responses[$g . '|' . $page] ?? null;
-                if (!$r instanceof \Illuminate\Http\Client\Response || !$r->successful()) {
+                // HTTP 200, lekin success: false — ham xato (eski yozuvlar bo'yicha o'zgartirish qilinmasin).
+                if (!$r instanceof \Illuminate\Http\Client\Response || !$r->successful() || $r->json('success') === false) {
                     $failed[$g] = true;
                     continue;
                 }

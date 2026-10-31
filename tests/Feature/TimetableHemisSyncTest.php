@@ -1558,8 +1558,10 @@ function htFake(array $schedule, array $attendance = [], array $grades = []): vo
     \Illuminate\Support\Facades\Http::preventStrayRequests();
     \Illuminate\Support\Facades\Http::fake([
         '*schedule-list*' => fn ($req) => $page($schedule[$group($req)] ?? []),
-        '*attendance-control-list*' => fn ($req) => $page(array_map(fn ($id) => ['id' => 70000 + $id, '_subject_schedule' => $id, 'group' => ['id' => $group($req)],
-            'lesson_date' => (int) $req->data()['lesson_date_from']], $attendance[$group($req)] ?? [])),
+        // Davomat: id yoki [id, load] (load = 0 — yozuv bor, davomat olinmagan).
+        '*attendance-control-list*' => fn ($req) => $page(array_map(fn ($x) => ['id' => 70000 + (int) ((array) $x)[0], '_subject_schedule' => (int) ((array) $x)[0],
+            'group' => ['id' => $group($req)], 'lesson_date' => (int) $req->data()['lesson_date_from']] + (is_array($x) ? ['load' => $x[1]] : []),
+            $attendance[$group($req)] ?? [])),
         '*student-grade-list*' => fn ($req) => $page(array_map(fn ($id) => ['id' => 80000 + $id, '_subject_schedule' => $id, 'group' => ['id' => $group($req)],
             'lesson_date' => (int) $req->data()['lesson_date_from']], $grades[$group($req)] ?? [])),
     ]);
@@ -1715,14 +1717,16 @@ it('bugungi darslar: faqat registrator ofisi va admin; HEMIS javob bermasa — t
         ->and($res['rows'][0]['blocked'])->toBe(["HEMIS'dan davomat/baho tekshirib bo'lmadi (javob bermadi)"])
         ->and($res['json']['groups'])->toBe([]);
 
-    // Jadval yangilanmasa (HEMIS 502) — bazadagi eski yozuv bo'yicha o'zgartirish qilinmaydi, davomat ham so'ralmaydi.
-    \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory(app('events')));
-    \Illuminate\Support\Facades\Http::preventStrayRequests();
-    \Illuminate\Support\Facades\Http::fake(['*schedule-list*' => \Illuminate\Support\Facades\Http::response('', 502)]);
-    $res = htCall($s)->assertOk()->json();
-    expect($res['import_failed'])->toBe(1)->and($res['rows'][0]['status'])->toBe('blocked')
-        ->and($res['rows'][0]['blocked'])->toBe(["HEMIS jadvali yangilanmadi (javob bermadi) — bugungi holat noma'lum"]);
-    \Illuminate\Support\Facades\Http::assertSentCount(1);
+    // Jadval yangilanmasa (HEMIS 502 yoki 200 + success: false) — bazadagi eski yozuv bo'yicha o'zgartirish qilinmaydi, davomat ham so'ralmaydi.
+    foreach ([\Illuminate\Support\Facades\Http::response('', 502), \Illuminate\Support\Facades\Http::response(['success' => false, 'error' => 'x'])] as $resp) {
+        \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory(app('events')));
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Http::fake(['*schedule-list*' => $resp]);
+        $res = htCall($s)->assertOk()->json();
+        expect($res['import_failed'])->toBe(1)->and($res['rows'][0]['status'])->toBe('blocked')
+            ->and($res['rows'][0]['blocked'])->toBe(["HEMIS jadvali yangilanmadi (javob bermadi) — bugungi holat noma'lum"]);
+        \Illuminate\Support\Facades\Http::assertSentCount(1);
+    }
 });
 
 it('bugungi darslar: xatcho\'p yozishdan oldin davomat/bahoni HEMIS\'dan qayta tekshiradi (imzolangan havola, CORS)', function () {
@@ -1828,4 +1832,19 @@ it('bugungi darslar: ikki o\'zgartirish bir-biri bilan to\'qnashsa (o\'zgartiris
     $rows = collect(htCall($s)->assertOk()->json('rows'))->keyBy('hemis_id');
     expect($rows[1]['status'])->toBe('blocked')->and($rows[1]['blocked'])->toBe(["o'qituvchi band: USTOZ — p/st26-01b · Biologiya 13:30–14:50"])
         ->and($rows[2]['status'])->toBe('blocked')->and($rows[2]['blocked'])->toBe(["o'qituvchi band: USTOZ — p/st26-01a · Odam anatomiyasi 13:30–14:50"]);
+});
+
+it('bugungi darslar: davomat yozuvi bor, lekin belgilanmagan (load = 0) — qulf emas; load berilmagan — qulf', function () {
+    $s = hsSetup();
+    $s['card']->update(['auditorium_code' => '74', 'auditorium_name' => '74']);
+    htCard($s, 'Biologiya', 5, '75');
+    // Bazada ham load = 0 (davomat olinmagan) yozuvi.
+    hsInsert('attendance_controls', ['hemis_id' => 1, 'subject_schedule_id' => 1, 'group_id' => 1596, 'load' => 0, 'lesson_date' => '2026-09-14 00:00:00']);
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20'), htItem(2, '2026-09-14', '12:00', '13:20', ['subject_id' => 475, 'subject' => 'Biologiya', 'room' => '71'])]],
+        [1596 => [[1, 0], 2]]);
+    $st = collect(htCall($s)->assertOk()->json('rows'))->mapWithKeys(fn ($r) => [$r['hemis_id'] => $r['status']])->sortKeys()->all();
+    expect($st)->toBe([1 => 'update', 2 => 'locked']);
+    // Bazada belgilangan (load > 0) — qulf.
+    DB::table('attendance_controls')->where('subject_schedule_id', 1)->update(['load' => 2]);
+    expect(htCall($s)->assertOk()->json('rows.0.status'))->toBe('locked');
 });

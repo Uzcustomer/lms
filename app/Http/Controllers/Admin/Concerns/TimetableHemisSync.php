@@ -1763,10 +1763,12 @@ trait TimetableHemisSync
                 $locks[(int) $id][$k] = true;
             }
         };
+        // Davomat — faqat belgilangani (load > 0; load = 0 — yozuv bor, lekin davomat olinmagan), boshqa joylardagidek.
         foreach (['attendance_controls' => 'att', 'student_grades' => 'grade'] as $table => $k) {
             if (Schema::hasTable($table)) {
                 DB::table($table)->whereIn('subject_schedule_id', $all)
                     ->when(Schema::hasColumn($table, 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
+                    ->when($k === 'att', fn ($q) => $q->where('load', '>', 0))
                     ->distinct()->pluck('subject_schedule_id')->each(fn ($id) => $mark($id, $k));
             }
         }
@@ -1786,6 +1788,10 @@ trait TimetableHemisSync
                     continue;
                 }
                 foreach ($items as $it) {
+                    // load berilmagan bo'lsa — belgilangan deb (import ham shunday: sukut 2).
+                    if ($k === 'att' && (int) ($it['load'] ?? 2) <= 0) {
+                        continue;
+                    }
                     $mark($it['_subject_schedule'] ?? ($it['subject_schedule']['id'] ?? null), $k);
                 }
             }

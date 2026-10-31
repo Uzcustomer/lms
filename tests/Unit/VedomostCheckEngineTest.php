@@ -498,3 +498,18 @@ test('qayta topshirish: shu urinishda bahosi yo\'q va vedomostda ham yo\'q talab
     expect($r['rows'])->toHaveCount(1)->and($r['counts']['nopdf'])->toBe(0)
         ->and(collect($r['issues'])->pluck('m')->implode(' '))->toContain("1 ta talaba Markda shu bosqichda, lekin bu urinishda bahosi yo'q");
 });
+
+test('Mark qiymatini tahrirlash: YN ham (faqat hisobotda) — asl qiymat saqlanadi, ECTS/baho shu YN dan, PDF bilan solishtiriladi', function () {
+    $stu = vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96);
+    $edits = ['system' => ['368221100018' => ['V' => ['v' => 90, 'why' => 'apellyatsiya qarori']]]];
+    $r = engine()->build(expectedData([$stu]), scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]), $edits, rules(), ctx());
+    $row = $r['rows'][0];
+
+    expect($row['vt']['V'])->toBe(90)
+        ->and($row['sys_orig']['V'])->toBe(88)
+        ->and($row['sys_edited'])->toHaveKey('V')
+        ->and($row['vt'])->not->toHaveKey('_yn_orig')
+        ->and($row['cells']['yn']['status'])->toBe('bad')   // PDF 88 ≠ (tahrirlangan) Mark 90
+        ->and(collect($row['flags'])->pluck('m')->implode(' '))->toContain('YN natija 88 → 90')
+        ->and(collect($row['flags'])->pluck('m')->implode(' '))->not->toContain('YN hisobi');
+});

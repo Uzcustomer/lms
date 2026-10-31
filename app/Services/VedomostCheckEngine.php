@@ -29,7 +29,7 @@ class VedomostCheckEngine
      * Xodim faqat shu hisobot ichida o'zgartira oladigan Mark qiymatlari (VT ustuni => xom maydon).
      * Ballar, JN+MT va YN shulardan qayta hisoblanadi; jurnal/Mark/HEMIS'ga hech narsa yozilmaydi.
      */
-    public const SYSTEM_EDITABLE = ['D' => 'jn', 'G' => 'mt', 'J' => 'on', 'P' => 'oski', 'S' => 'test'];
+    public const SYSTEM_EDITABLE = ['D' => 'jn', 'G' => 'mt', 'J' => 'on', 'P' => 'oski', 'S' => 'test', 'V' => 'yn'];
 
     public const HEADER_EDITABLE = ['fan', 'guruh', 'soat', 'kredit', 'maruzachi', 'amaliyot', 'yn_sana', 'dekan', 'kafedra_mudiri', 'kurs', 'semestr', 'shakl'];
 
@@ -88,6 +88,11 @@ class VedomostCheckEngine
         foreach (array_values($expected['talabalar'] ?? []) as $i => $stu) {
             $stu = $this->applySystemEdits($stu, $edits['system'][VedomostScanReader::digits($stu['student_id'] ?? '')] ?? []);
             $stu['vt'] = $this->vtRow($stu, $w, $expected, $i + 1);
+            // YN qo'lda berilgan bo'lsa — asl (hisoblangan) qiymat vtRow'dan.
+            if (array_key_exists('_yn_orig', $stu['vt'])) {
+                $stu['sys_orig']['V'] = $stu['vt']['_yn_orig'];
+                unset($stu['vt']['_yn_orig']);
+            }
             $system[] = $stu;
         }
 
@@ -110,7 +115,7 @@ class VedomostCheckEngine
             $flags = [];
             foreach ($stu['sys_edited'] ?? [] as $col => $why) {
                 $flags[] = ['t' => 'info', 'm' => 'Mark qiymati faqat hisobotda o‘zgartirilgan: ' . (self::VT_HEADERS[$col] ?? $col) . ' '
-                    . $this->f($stu['sys_orig'][$col] ?? null) . ' → ' . $this->f($stu['raw'][self::SYSTEM_EDITABLE[$col]] ?? null) . ($why !== '' ? " (sabab: {$why})" : '')];
+                    . $this->f($stu['sys_orig'][$col] ?? null) . ' → ' . $this->f($col === 'V' ? ($stu['yn_override'] ?? null) : ($stu['raw'][self::SYSTEM_EDITABLE[$col]] ?? null)) . ($why !== '' ? " (sabab: {$why})" : '')];
             }
             $status = 'ok';
             $set = function (string $s) use (&$status) {
@@ -252,7 +257,7 @@ class VedomostCheckEngine
                     $flags[] = ['t' => 'bad', 'm' => 'JN+MT hisobi: Mark ' . $this->f($cc['jnmtHemis']) . ' ≠ hisob ' . $cc['jnmtCalc']];
                     $set('bad');
                 }
-                if ($cc['ynBad']) {
+                if ($cc['ynBad'] && !array_key_exists('yn_override', $stu)) {
                     $flags[] = ['t' => 'bad', 'm' => 'YN hisobi: Mark ' . $this->f($cc['ynHemis']) . ' ≠ hisob ' . $cc['ynCalc']];
                     $set('bad');
                 }
@@ -417,6 +422,12 @@ class VedomostCheckEngine
             $c['ects'] = $this->vt->toEcts($c['yn']);
             $c['baho'] = $this->vt->toBaho($c['yn']);
         }
+        if (array_key_exists('yn_override', $stu)) {
+            $ynOrig = $c['yn'];
+            $c['yn'] = $stu['yn_override'];
+            $c['ects'] = $this->vt->toEcts($c['yn']);
+            $c['baho'] = $this->vt->toBaho($c['yn']);
+        }
         $m = $stu['meta'] ?? [];
         $dav = (float) $c['dav'];
         $fio = $stu['fish'] ?? '';
@@ -438,6 +449,10 @@ class VedomostCheckEngine
             'AL' => $m['divisor'] ?? null, 'AM' => $dav / 100,
             'AN' => $w['jb'], 'AO' => $w['mt'], 'AP' => $w['on'], 'AQ' => $w['oski'], 'AR' => $w['test'], 'AS' => $c['zanjir'],
         ];
+
+        if (isset($ynOrig) || array_key_exists('yn_override', $stu)) {
+            $row['_yn_orig'] = $ynOrig ?? null;
+        }
 
         // HEMIS bilan taqqoslash (eksportdagidek): JN+MT — 11, YN — 13 (faqat V > 0)
         $he = $stu['hemis_exam'] ?? [];
@@ -746,6 +761,12 @@ class VedomostCheckEngine
             $field = self::SYSTEM_EDITABLE[$col] ?? null;
             $val = is_array($e) ? ($e['v'] ?? null) : $e;
             if ($field === null || !is_numeric($val)) {
+                continue;
+            }
+            // YN — hisoblanadigan qiymat: xom maydon emas, vtRow'da hisob natijasining o'rniga qo'yiladi.
+            if ($field === 'yn') {
+                $stu['yn_override'] = (float) $val == (int) $val ? (int) $val : (float) $val;
+                $stu['sys_edited'][$col] = is_array($e) ? (string) ($e['why'] ?? '') : '';
                 continue;
             }
             $stu['sys_orig'][$col] = $stu['raw'][$field] ?? null;

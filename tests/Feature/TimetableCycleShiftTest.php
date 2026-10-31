@@ -410,3 +410,128 @@ it('smena ma\'ruzadan oldin (02a/03b): ma\'ruza 12:00, 02a amaliy 8:30–11:20, 
     expect(array_keys(csCall($board, 'cycleConflicts')))->toBe(['Pediatriya|5|p/p22-02a|Klinik farmakologiya|practice',
         'Pediatriya|5|p/p22-03b|Klinik farmakologiya|practice']);
 });
+
+function csInsert(string $table, array $data): void
+{
+    foreach (\Illuminate\Support\Facades\DB::select('SHOW COLUMNS FROM `' . $table . '`') as $col) {
+        if ($col->Field === 'id' || array_key_exists($col->Field, $data) || $col->Null === 'YES' || $col->Default !== null) {
+            continue;
+        }
+        $t = strtolower($col->Type);
+        $data[$col->Field] = match (true) {
+            str_contains($t, 'int') || str_contains($t, 'decimal') || str_contains($t, 'double') => 0,
+            str_contains($t, 'datetime') || str_contains($t, 'timestamp') => now(),
+            str_contains($t, 'date') => '2026-01-01',
+            str_contains($t, 'json') => '[]',
+            default => 'x',
+        };
+    }
+    \Illuminate\Support\Facades\DB::table($table)->insert($data);
+}
+
+/** Pediatriya 5-kurs Klinik farmakologiya KTR'i: har kuni $practice soat amaliy (5 kun). */
+function csKtr(int $practice): void
+{
+    csInsert('specialties', ['specialty_hemis_id' => 88, 'name' => 'Pediatriya']);
+    csInsert('curricula', ['curricula_hemis_id' => 880, 'specialty_hemis_id' => 88, 'department_hemis_id' => 1]);
+    csInsert('semesters', ['curriculum_hemis_id' => 880, 'code' => '19', 'education_year' => '2026', 'level_code' => '15']);
+    csInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 8, 'curricula_hemis_id' => 880, 'subject_id' => 901, 'subject_name' => 'Klinik farmakologiya',
+        'semester_code' => '19', 'semester_name' => '9', 'department_id' => 501, 'department_name' => 'F', 'at_semester' => 1,
+        'subject_details' => json_encode([['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 5 * $practice]])]);
+    $cs = \Illuminate\Support\Facades\DB::table('curriculum_subjects')->where('subject_id', 901)->value('id');
+    \Illuminate\Support\Facades\DB::table('ktr_plans')->insert(['curriculum_subject_id' => $cs, 'week_count' => 5,
+        'plan_data' => json_encode(['hours' => array_fill_keys(['1', '2', '3', '4', '5'], ['13' => $practice])]), 'created_at' => now(), 'updated_at' => now()]);
+}
+
+function csAssignParams(): array
+{
+    return ['specialty_name' => 'Pediatriya', 'course' => 5, 'group_name' => 'p/p22-03c', 'placement_group' => 'Ped / 3-oqim',
+        'subject_name' => 'Klinik farmakologiya', 'training_type' => 'practice', 'view' => 'group', 'layer' => 'internal'];
+}
+
+it('biriktirish: o\'qituvchi shu vaqtda boshqa guruhchada band — guruhcha avtomatik 13:30 smenasiga o\'tadi, to\'qnashuv yo\'q', function () {
+    $s = csSetup();
+    csBells($s['board'], 6);
+    TimetableCard::whereKey($s['cards']['p/p22-03c']->id)->update(['teacher_id' => null, 'teacher_name' => null]);
+    $admin = csTeacher('ADMIN', 'admin');
+    $res = test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-assign', $s['board']), csAssignParams() + ['teacher_id' => $s['teacher']->id, 'shift_start' => 0])
+        ->assertOk()->json();
+    expect($res['auto_shift'])->toBe(['from' => 0, 'to' => 7, 'reason' => "O'qituvchi YOQUBOV U. B. 08:30 da p/p22-02a da band",
+        'message' => "O'qituvchi YOQUBOV U. B. 08:30 da p/p22-02a da band — p/p22-03c 13:30 smenasiga o'tkazildi"])
+        ->and($res['shift_start'])->toBe(7)
+        ->and((int) $s['cards']['p/p22-03c']->fresh()->teacher_id)->toBe($s['teacher']->id)
+        ->and(csCall($s['board'], 'cycleConflicts'))->toBe([]);
+});
+
+it('biriktirish: kunlik amaliy 8 soat — boshqa smena sig\'maydi, ogohlantirish ("Baribir biriktirish"), hech narsa o\'zgarmaydi', function () {
+    $s = csSetup();
+    csBells($s['board'], 6);
+    csKtr(8);
+    TimetableCard::whereKey($s['cards']['p/p22-03c']->id)->update(['teacher_id' => null, 'teacher_name' => null]);
+    $admin = csTeacher('ADMIN', 'admin');
+    test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-assign', $s['board']), csAssignParams() + ['teacher_id' => $s['teacher']->id, 'shift_start' => 0])
+        ->assertStatus(409)->assertJson(['needs_confirm' => true]);
+    expect(TimetableCyclePlacement::where('group_name', 'Ped / 3-oqim')->first()->lecture_slots)->toBeNull()
+        ->and($s['cards']['p/p22-03c']->fresh()->teacher_id)->toBeNull();
+});
+
+it('"Smenalarni avtomatik ajratish": qamrovdagi sikl to\'qnashuvi hal qilinadi; sig\'masa — hal bo\'lmaganlar ro\'yxatida', function (bool $fits) {
+    $s = csSetup();
+    csBells($s['board'], 6);
+    if (!$fits) {
+        csKtr(8);
+    }
+    expect(csCall($s['board'], 'cycleConflicts'))->toHaveCount(2);
+    $admin = csTeacher('ADMIN', 'admin');
+    $res = test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-auto-shift', $s['board']), ['courses' => [5]])->assertOk()->json();
+    if ($fits) {
+        expect($res['changed'])->toHaveCount(1)->and($res['unresolved'])->toBe([])
+            ->and($res['changed'][0])->toMatchArray(['group' => 'p/p22-02a', 'subject' => 'Klinik farmakologiya', 'from' => 0, 'to' => 7,
+                'message' => 'p/p22-02a · Klinik farmakologiya: 08:30 → 13:30 smenasi'])
+            ->and($res['message'])->toBe("1 ta guruhcha smenasi o'zgartirildi")
+            ->and(TimetableCyclePlacement::where('group_name', 'Ped / 2-oqim')->first()->lecture_slots['shift_g'])->toBe(['p/p22-02a' => 7])
+            ->and(csCall($s['board'], 'cycleConflicts'))->toBe([]);
+    } else {
+        expect($res['changed'])->toBe([])->and(collect($res['unresolved'])->pluck('group')->all())->toBe(['p/p22-02a', 'p/p22-03c'])
+            ->and($res['unresolved'][0]['why'])->toBe("Boshqa smenaga kunlik darslar sig'maydi")
+            ->and($res['message'])->toBe("0 ta guruhcha smenasi o'zgartirildi, 2 ta to'qnashuv hal bo'lmadi")
+            ->and(csCall($s['board'], 'cycleConflicts'))->toHaveCount(2);
+    }
+})->with(['sig\'adi' => [true], 'sig\'maydi (8 soat)' => [false]]);
+
+it('avtomatik smena: hozirgi smena 13:30 bo\'lsa — 8:30 ga; yangi smenada ham band bo\'lsa — ogohlantirish va "hal bo\'lmadi"', function () {
+    // 1) Ikkalasi ham 13:30 da — 03c 8:30 ga o'tadi
+    $s = csSetup(['p/p22-02a' => 7, 'p/p22-03c' => 7]);
+    csBells($s['board'], 6);
+    TimetableCard::whereKey($s['cards']['p/p22-03c']->id)->update(['teacher_id' => null, 'teacher_name' => null]);
+    $as = fn () => test()->withoutVite()->actingAs(csTeacher('ADMIN' . random_int(1, 99999), 'admin'), 'teacher')->withSession(['active_role' => 'admin']);
+    $res = $as()->postJson(route('admin.timetable.cycle-assign', $s['board']), csAssignParams() + ['teacher_id' => $s['teacher']->id, 'shift_start' => 7])
+        ->assertOk()->json();
+    expect($res['auto_shift'])->toMatchArray(['from' => 7, 'to' => 1,
+        'message' => "O'qituvchi YOQUBOV U. B. 13:30 da p/p22-02a da band — p/p22-03c 08:30 smenasiga o'tkazildi"]);
+
+    // 2) Uchinchi guruhcha (03a, o'sha o'qituvchi) 13:30 da: 03c ni 13:30 ga o'tkazish ham band — ogohlantirish, smena o'zgarmaydi
+    $s = csSetup();
+    csBells($s['board'], 6);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'Ped', 'specialty_name' => 'Pediatriya', 'course' => 5,
+        'oqim_label' => '3-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Klinik farmakologiya', 'group_name' => 'p/p22-03a', 'kafedra_name' => 'Farmakologiya kafedrasi',
+        'teacher_id' => $s['teacher']->id, 'teacher_name' => 'YOQUBOV U. B.']);
+    TimetableCyclePlacement::where('group_name', 'Ped / 3-oqim')->update(['lecture_slots' => json_encode(['shift_g' => ['p/p22-03a' => 7]])]);
+    expect(array_keys(csCall($s['board'], 'cycleConflicts')))->toHaveCount(2);   // 02a ↔ 03c (8:30)
+    TimetableCard::whereKey($s['cards']['p/p22-03c']->id)->update(['teacher_id' => null, 'teacher_name' => null]);
+    $as()->postJson(route('admin.timetable.cycle-assign', $s['board']), csAssignParams() + ['teacher_id' => $s['teacher']->id, 'shift_start' => 0])
+        ->assertStatus(409)->assertJson(['needs_confirm' => true]);
+    expect(TimetableCyclePlacement::where('group_name', 'Ped / 3-oqim')->first()->lecture_slots['shift_g'])->toBe(['p/p22-03a' => 7]);
+
+    // Doska tugmasi: 02a ham, 03c ham 13:30 ga o'tsa — 03a bilan to'qnashadi: hal bo'lmadi, hech narsa o'zgarmaydi
+    TimetableCard::whereKey($s['cards']['p/p22-03c']->id)->update(['teacher_id' => $s['teacher']->id, 'teacher_name' => 'YOQUBOV U. B.']);
+    $before = csCall($s['board'], 'cycleConflicts');
+    $res = $as()->postJson(route('admin.timetable.cycle-auto-shift', $s['board']), ['courses' => [5]])->assertOk()->json();
+    expect($res['changed'])->toBe([])
+        ->and(collect($res['unresolved'])->pluck('why')->unique()->values()->all())->toBe(['Boshqa smenada ham band'])
+        ->and(csCall($s['board'], 'cycleConflicts'))->toBe($before);
+});

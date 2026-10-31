@@ -189,7 +189,10 @@ it('haftalik: findWeekConflicts bilan — bir vaqtda bitta o\'qituvchi ikki guru
 it('biriktirish: sikl blokiga band o\'qituvchi — ogohlantirish (kim bilan, qachon), "Baribir" bilan saqlanadi; ro\'yxatda band', function () {
     $sharipov = icTeacher('SHARIPOV K. SH.');
     $other = icTeacher('BOSHQA');
-    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$other, null, 10]], ['d22-05a' => 0, 'd22-05b' => 2]);
+    // d22-05c — SHARIPOV o'sha sanalarda 13:30 smenasida: 05b ni boshqa smenaga o'tkazib bo'lmaydi (avtomatik smena chiqish emas).
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$other, null, 10], 'd22-05c' => [$sharipov, null, 10]],
+        ['d22-05a' => 0, 'd22-05b' => 2, 'd22-05c' => 2]);
+    TimetableCyclePlacement::where('group_name', 'd22-05c')->update(['lecture_slots' => json_encode(['shift_g' => ['d22-05c' => 7]])]);
     $admin = icTeacher('ADMIN', 'admin');
     $as = fn () => test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin']);
     $body = ['specialty_name' => 'davolash ishi', 'course' => 5, 'group_name' => 'd22-05b', 'subject_name' => 'Klinik farmakologiya',

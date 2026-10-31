@@ -1321,6 +1321,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-assign-options', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignOptions'])->name('cycle-assign-options');
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
+                Route::post('/boards/{board}/cycle-auto-shift', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAutoShift'])->name('cycle-auto-shift');
                 // Haftalik fanlar: kartochka haftalarini KTR'dan belgilash
                 // Haftalik jadval: hozirgi joylashuvni tashqi qatlamga ko'chirish (admin)
                 Route::post('/boards/{board}/weekly-layer-copy', [\App\Http\Controllers\Admin\TimetableController::class, 'weeklyLayerCopy'])->name('weekly-layer-copy');

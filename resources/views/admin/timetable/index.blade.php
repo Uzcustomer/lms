@@ -270,6 +270,8 @@
                             <button type="button" id="cycLayerInternal" class="px-2 py-1 bg-white text-gray-500">Ichki</button>
                         </span>
                         <span id="cycLayerRo" class="hidden text-[11px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">faqat ko'rish</span>
+                        <button type="button" id="cycleAutoShiftBtn" class="hidden text-[11px] px-2 py-1 rounded-lg border border-violet-300 bg-violet-50 text-violet-700"
+                            title="Qamrovdagi sikl to'qnashuvlari (o'qituvchi, xona) guruhcha smenasini 8:30 ⇄ 13:30 almashtirib hal qilinadi">Smenalarni avtomatik ajratish</button>
                         <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Ko'rinish rejimi">
                             <button type="button" id="cycViewFlow" class="px-2 py-1 bg-blue-600 font-semibold text-white">Oqim bo'yicha</button>
                             <button type="button" id="cycViewGroup" class="px-2 py-1 bg-white text-gray-500">Guruh bo'yicha</button>
@@ -5272,6 +5274,7 @@
                     b.className = 'px-2 py-1 ' + (on ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
                 if ($('cycLayerRo')) $('cycLayerRo').classList.toggle('hidden', !(j && j.can_edit === false));
+                if ($('cycleAutoShiftBtn')) $('cycleAutoShiftBtn').classList.toggle('hidden', !(j && j.layer === 'internal' && j.can_edit));
                 // Ichki jadval doim guruhcha bo'yicha — Oqim/Guruh almashtirgichi kerak emas.
                 const viewSwitch = $('cycViewFlow') ? $('cycViewFlow').parentElement : null;
                 if (viewSwitch && j) viewSwitch.classList.toggle('hidden', Boolean(j.sub_rows));
@@ -5750,7 +5753,7 @@
                 const button = $('cycAssignSave');
                 button.disabled = true;
                 try {
-                    await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
+                    const saved = await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
                         specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
                         group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
                         training_type: cycAssignCard.type || 'practice', view: cycleEffView(), placement_group: (cycAssignCard && cycAssignCard.placement_group) || undefined,
@@ -5759,6 +5762,8 @@
                         shift_start: $('cycAssignShiftBox').classList.contains('hidden') ? undefined : +$('cycAssignShift').value,
                         start_date: $('cycleStart').value, holidays: cycleHolidays, force: force ? 1 : undefined, ...cycleLayerParams(),
                     });
+                    // O'qituvchi/xona shu vaqtda band edi — guruhcha boshqa smenaga o'tkazildi (to'qnashuv yo'q).
+                    if (saved && saved.auto_shift) ttToast('<b>&#8634; Smena o\'zgartirildi</b><div>' + esc(saved.auto_shift.message) + '</div>', 'warn');
                     closeCycleAssign();
                     await loadCyclePlan();
                 } catch (e) {
@@ -5770,6 +5775,44 @@
                 }
             }
             $('cycAssignSave').addEventListener('click', () => saveCycleAssign(false));
+
+            // "Smenalarni avtomatik ajratish" (ichki jadval): qamrovdagi sikl to'qnashuvlari guruhcha smenasini 8:30 ⇄ 13:30
+            // almashtirib hal qilinadi; nima o'zgargani va hal bo'lmaganlari ro'yxat bilan.
+            function cycleAutoShiftHtml(j) {
+                const li = (x, extra) => '<li><b>' + esc(x.group) + '</b> · ' + esc(x.subject) + (extra ? ' — ' + esc(extra) : '') + '</li>';
+                return '<div style="font-weight:600;margin-bottom:6px">' + esc(j.message || '') + '</div>' +
+                    ((j.changed || []).length ? '<div style="color:#059669;font-weight:600">O\'zgartirildi:</div><ul id="cycAutoChanged" style="margin:2px 0 6px 16px;list-style:disc">' +
+                        j.changed.map(x => li(x, x.message.split(': ').slice(1).join(': ') + ' (' + x.reason + ')')).join('') + '</ul>' : '') +
+                    ((j.unresolved || []).length ? '<div style="color:#b91c1c;font-weight:600">Hal bo\'lmadi:</div><ul id="cycAutoUnresolved" style="margin:2px 0 0 16px;list-style:disc">' +
+                        j.unresolved.map(x => li(x, x.why + ': ' + x.reason)).join('') + '</ul>' : '');
+            }
+            async function cycleAutoShift() {
+                if (!board || !confirm('Qamrovdagi sikl to\'qnashuvlari guruhcha smenasini (8:30 ⇄ 13:30) almashtirib hal qilinsinmi?')) return;
+                const btn = $('cycleAutoShiftBtn');
+                btn.disabled = true;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/cycle-auto-shift', 'POST', Object.assign(scopeBody(), cycleLayerParams()));
+                    if (j && !j.pending_approval) {
+                        let box = document.getElementById('cycAutoShiftModal');
+                        if (!box) {
+                            box = document.createElement('div');
+                            box.id = 'cycAutoShiftModal';
+                            box.style.cssText = 'position:fixed;inset:0;z-index:70;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+                            box.addEventListener('click', ev => { if (ev.target === box || ev.target.id === 'cycAutoShiftClose') box.remove(); });
+                            document.body.appendChild(box);
+                        }
+                        box.innerHTML = '<div style="background:#fff;border-radius:12px;width:min(760px,100%);max-height:85vh;overflow:auto;padding:14px 18px;font-size:12px">' +
+                            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Smenalarni avtomatik ajratish</b>' +
+                            '<button type="button" id="cycAutoShiftClose" style="font-size:20px;line-height:1">&times;</button></div>' + cycleAutoShiftHtml(j) + '</div>';
+                    }
+                    await loadCyclePlan();
+                } catch (e) {
+                    alert('Bajarilmadi: ' + e.message);
+                } finally {
+                    btn.disabled = false;
+                }
+            }
+            if ($('cycleAutoShiftBtn')) $('cycleAutoShiftBtn').addEventListener('click', cycleAutoShift);
 
             // ── Fan nomining blok ichidagi joyi ──
             // Sukut: M/A darslar egallagan soatlar oralig'ining o'rtasi (gorizontal — blok

@@ -62,8 +62,9 @@ class CheckVedomostSubmissionWithAi implements ShouldQueue
         try {
             $result = $checker->check($v, $this->fresh);
             $c = $result['report']['counts'] ?? [];
+            Progress::log('Server xotira sarfi (cho‘qqi): ' . round(memory_get_peak_usage(true) / 1048576) . ' MB — natijaga ta’sir qilmaydi');
             Progress::log('Hisobot tayyor: ' . ($c['ok'] ?? 0) . ' mos, ' . ($c['bad'] ?? 0) . ' XATO, ' . ($c['ocr'] ?? 0)
-                . ' PDFdan tekshiring · xotira cho‘qqisi ' . round(memory_get_peak_usage(true) / 1048576) . ' MB', 'ok');
+                . ' vedomost PDFdan tekshiring', 'ok');
             $result['log'] = Progress::lines($v->pdf_path);
 
             $save([

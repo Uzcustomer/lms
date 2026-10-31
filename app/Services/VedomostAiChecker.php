@@ -123,9 +123,17 @@ class VedomostAiChecker
      */
     private function vtStudents(VedomostSubmission $v): array
     {
-        $siblings = $this->merge->siblingsOf($v);
-        if (!$siblings->contains('id', $v->id)) {
-            $siblings->push($v);
+        // 12a/12b umumiy vedomosti: bitta yozuv, lekin birlikning barcha guruhlari — har guruhning
+        // 12-shakl yozuvidan shu urinish talabalari olinadi.
+        if ($v->isCombinedForm() && $v->manual_opened_at === null) {
+            $siblings = $this->merge->unitGroupsOf($v);
+            Progress::log("Umumiy vedomost: birlikda {$siblings->count()} ta guruh topildi"
+                . (preg_match('/\((\d+) ta\)/u', (string) $v->group_name, $m) ? " (vedomostda {$m[1]} ta)" : ''));
+        } else {
+            $siblings = $this->merge->siblingsOf($v);
+            if (!$siblings->contains('id', $v->id)) {
+                $siblings->push($v);
+            }
         }
         $siblings = $siblings->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
         $shakl = VedomostSubmission::formLabel($v->form_type);
@@ -232,15 +240,40 @@ class VedomostAiChecker
     /** Shu urinishning OSKE/Test bahosini «Vedomost tekshirish» xom qiymatlariga qo'yadi (JN/MT/ON/davomat o'zgarmaydi). */
     public static function attemptRaw(array $raw, array $scenarios, array $chain): array
     {
-        foreach ($chain as $key) {
-            if (!empty($scenarios[$key])) {
-                $raw['oski'] = (float) ($scenarios[$key]['oski'] ?? 0);
-                $raw['test'] = (float) ($scenarios[$key]['test'] ?? 0);
-                break;
+        // Har komponent alohida: OSKE 1-urinishda, Test qo'shimcha urinishda topshirilgan bo'lishi
+        // mumkin — zanjirdagi birinchi shu komponent bahosi bor urinish olinadi.
+        foreach (['oski', 'test'] as $k) {
+            $val = null;
+            foreach ($chain as $key) {
+                if (!empty($scenarios[$key]) && ($scenarios[$key][$k] ?? null) !== null) {
+                    $val = $scenarios[$key][$k];
+                    break;
+                }
+            }
+            if ($val !== null || collect($chain)->contains(fn ($key) => !empty($scenarios[$key]))) {
+                $raw[$k] = (float) ($val ?? 0);
             }
         }
 
         return $raw;
+    }
+
+    /**
+     * Test markazi qidiruvi uchun shakl zanjiri (YnStageService dagi urinishlarni birlashtirish
+     * tartibi bilan bir xil): har komponent (OSKE / Test) zanjirdagi birinchi topilgan urinishdan.
+     *
+     * @return string[] quizForm() kalitlari, ustunlik tartibida
+     */
+    public static function tmChain(?string $formType): array
+    {
+        return match ($formType) {
+            VedomostSubmission::FORM_12Q => ['12', '12qoshimcha'],
+            VedomostSubmission::FORM_12A => ['12a', '12'],
+            VedomostSubmission::FORM_12AQ, VedomostSubmission::FORM_12AG => ['12aqoshimcha', '12'],
+            VedomostSubmission::FORM_12B => ['12b', '12a', '12'],
+            VedomostSubmission::FORM_12BQ, VedomostSubmission::FORM_12BG => ['12bqoshimcha', '12aqoshimcha', '12'],
+            default => ['12'],
+        };
     }
 
     /**
@@ -258,7 +291,7 @@ class VedomostAiChecker
         return [
             'kafedra_mudiri' => $v->kafedra_mudiri_name,
             'international' => $this->internationalIds($sysIds),
-            'test_center' => $this->testCenter($sysIds, $expected, VedomostSubmission::formLabel($v->form_type),
+            'test_center' => $this->testCenter($sysIds, $expected, (string) ($v->form_type ?: VedomostSubmission::FORM_12),
                 (string) ($expected['talabalar'][0]['meta']['semester'] ?? '')),
             'kontingent' => $this->kontingent(array_values(array_diff($scanIds, $sysIds))),
             'plan' => $this->workingPlan($v, $expected),
@@ -340,7 +373,7 @@ class VedomostAiChecker
      * va aynan shu semestr: bir fan bir necha semestrda o'qitilsa, boshqa semestr natijasi shu
      * vedomostga tushmaydi; semestri ko'rsatilmagan yozuv ham olinmaydi.
      */
-    private function testCenter(array $ids, array $expected, string $formLabel, string $semester = ''): array
+    private function testCenter(array $ids, array $expected, string $formType, string $semester = ''): array
     {
         if (empty($ids) || !Schema::hasTable('hemis_quiz_results')) {
             return [];
@@ -357,7 +390,7 @@ class VedomostAiChecker
 
         $subjectId = (string) ($expected['subject_id'] ?? '');
         $fan = (string) ($expected['fan'] ?? '');
-        $base = self::shaklBase($formLabel);
+        $chain = self::tmChain($formType);
         $semNum = self::semesterNumber($semester);
         $skippedSem = 0;
 
@@ -367,7 +400,8 @@ class VedomostAiChecker
             // «Xirurgik kasalliklar» ≠ «Bolalar xirurgik kasalliklari»).
             $fanOk = ($subjectId !== '' && (string) $r->fan_id === $subjectId)
                 || ($fan !== '' && VedomostNames::subjectKey($r->fan_name) === VedomostNames::subjectKey($fan));
-            if (!$fanOk || self::quizForm((string) $r->shakl) !== $base
+            $pos = array_search(self::quizForm((string) $r->shakl), $chain, true);
+            if (!$fanOk || $pos === false
                 || \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)) {
                 continue;
             }
@@ -383,8 +417,8 @@ class VedomostAiChecker
             $dal = str_contains(mb_strtolower($r->attempt_name . ' ' . $r->shakl), 'dalolat');
             $sid = VedomostScanReader::digits($r->student_id);
             $cur = $best[$sid][$kind] ?? null;
-            // Dalolatnomasiz natija afzal; keyin eng so'nggisi (Python check_tm).
-            $rank = [$dal ? 0 : 1, (string) $r->date_finish];
+            // Zanjirda oldingi urinish (shu shakl) ustun; keyin dalolatnomasiz, keyin eng so'nggisi (Python check_tm).
+            $rank = [-$pos, $dal ? 0 : 1, (string) $r->date_finish];
             if ($cur === null || $rank > $cur['_rank']) {
                 $best[$sid][$kind] = ['grade' => (float) $r->grade, 'dalolat' => $dal, 'date' => (string) $r->date_finish, '_rank' => $rank];
             }

@@ -121,7 +121,7 @@
                             $lines[] = trim(($row['n'] ? $row['n'] . '. ' : '') . $row['fio'] . ': ' . $msgs);
                         }
                     }
-                    foreach ($rep['extra'] ?? [] as $e) { $lines[] = "PDFda bor, Markda yo'q: {$e['fio']} ({$e['id']})"; }
+                    foreach ($rep['extra'] ?? [] as $e) { if (empty($e['expelled'])) { $lines[] = "Vedomost PDFda bor, Markda yo'q: {$e['fio']} ({$e['id']})"; } }
                     $aiRejectText = implode("\n", array_slice($lines, 0, 60));
                 }
                 $vt = [
@@ -218,7 +218,7 @@
                     </div>
                     <div style="font-size:14px;color:#334155;margin-bottom:12px;">{{ $rep['summary'] }}</div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px;">
-                        @foreach([['Mos', $cnt['ok'], '#166534', '#f0fdf4'], ['XATO', $cnt['bad'], '#713f12', '#fefce8'], ['PDFdan tekshiring', $cnt['ocr'], '#7c2d12', '#fff7ed'], ["PDFda yo'q", $cnt['nopdf'] ?? 0, '#991b1b', '#fef2f2'], ["Kontingentda yo'q", $cnt['missing'], '#991b1b', '#fef2f2'], ["Markda yo'q", $cnt['extra'], '#6b21a8', '#faf5ff']] as [$l, $n, $fg, $bg])
+                        @foreach(array_merge([['Mos', $cnt['ok'], '#166534', '#f0fdf4'], ['XATO', $cnt['bad'], '#713f12', '#fefce8'], ['Vedomost PDFdan tekshiring', $cnt['ocr'], '#7c2d12', '#fff7ed'], ["Vedomost PDFda yo'q", $cnt['nopdf'] ?? 0, '#991b1b', '#fef2f2'], ["Kontingentda yo'q", $cnt['missing'], '#991b1b', '#fef2f2'], ["Markda yo'q", $cnt['extra'], '#6b21a8', '#faf5ff']], !empty($cnt['expelled']) ? [["Chetlashtirilgan (ma'lumot)", $cnt['expelled'], '#475569', '#f1f5f9']] : []) as [$l, $n, $fg, $bg])
                             <div style="background:{{ $bg }};border-radius:10px;padding:10px 12px;">
                                 <div style="font-size:22px;font-weight:800;color:{{ $fg }};font-variant-numeric:tabular-nums;">{{ $n }}</div>
                                 <div style="font-size:12px;color:#475569;">{{ $l }}</div>
@@ -302,6 +302,22 @@
                         <div style="background:#fef3c7;color:#92400e;padding:10px;border-radius:8px;font-size:13px;margin-bottom:8px;">{{ $v->ai_error }}</div>
                     @endif
                     <div style="color:#94a3b8;font-size:13px;">Hali tekshirilmagan. "AI tekshirish" tugmasini bosing.</div>
+                @endif
+
+                {{-- Tekshirilgan vedomost guruh(lar)ining jurnali — yangi oynada --}}
+                @if($v->ai_check_status === 'done')
+                    @php $journalLinks = rescue(fn () => app(\App\Services\VedomostMergeService::class)->journalLinks($v), [], false); @endphp
+                    @if(count($journalLinks))
+                        <div style="margin-top:12px;border-top:1px solid #f1f5f9;padding-top:10px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;">
+                            <span style="font-size:13px;font-weight:600;color:#475569;margin-right:4px;">Jurnal{{ count($journalLinks) > 1 ? ' (' . count($journalLinks) . ' ta guruh)' : '' }}:</span>
+                            @foreach($journalLinks as $jl)
+                                <a href="{{ $jl['url'] }}" target="_blank" rel="noopener"
+                                   style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid #c7d2fe;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">
+                                    📖 {{ $jl['label'] }} ↗
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
                 @endif
 
                 {{-- Jarayon logi: har qadam vaqti bilan (tekshiruv davomida jonli yangilanadi) --}}

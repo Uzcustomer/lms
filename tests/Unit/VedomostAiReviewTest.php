@@ -98,3 +98,33 @@ test('ommaviy tasdiqlash: mos — darhol, muammoli — faqat sabab bilan', funct
     expect($bad->fresh()->status)->toBe('approved')
         ->and(DB::table('vedomost_submission_logs')->where('vedomost_submission_id', $bad->id)->value('note'))->toContain('Sabab: qog');
 });
+
+test('12a umumiy vedomost: birlikning barcha guruhlari (yo\'nalish, fan, fakultet bo\'yicha) va har biriga jurnal havolasi', function () {
+    Schema::create('curricula', function ($t) {
+        $t->id();
+        $t->string('curricula_hemis_id');
+        $t->string('department_hemis_id')->nullable();
+    });
+    DB::table('curricula')->insert([['curricula_hemis_id' => '10', 'department_hemis_id' => 'F1'], ['curricula_hemis_id' => '11', 'department_hemis_id' => 'F1'], ['curricula_hemis_id' => '20', 'department_hemis_id' => 'F2']]);
+    $mk = function (int $g, string $form, array $over = []) {
+        DB::table('groups')->insertOrIgnore(['group_hemis_id' => (string) $g, 'active' => true]);
+        return VedomostSubmission::create(array_merge([
+            'education_year' => '2025-2026', 'semester_code' => '20', 'group_hemis_id' => $g, 'group_name' => "d2/21-0{$g}",
+            'curriculum_hemis_id' => 10, 'subject_id' => 500 + $g, 'subject_name' => 'Yuqumli kasalliklar', 'specialty_name' => 'Davolash ishi',
+            'closing_form' => 'oski_test', 'form_type' => $form, 'status' => 'reviewing', 'ai_check_status' => 'none',
+        ], $over));
+    };
+    $mk(1, '12');
+    $mk(2, '12', ['curriculum_hemis_id' => 11]);                      // boshqa reja, lekin shu fakultet
+    $mk(3, '12', ['specialty_name' => 'Pediatriya']);                 // boshqa yo'nalish
+    $mk(4, '12', ['curriculum_hemis_id' => 20]);                      // boshqa fakultet
+    $mk(5, '12', ['subject_name' => 'Ichki kasalliklar']);            // boshqa fan
+    $combined = $mk(1, '12a', ['group_name' => 'Barcha guruhlar (2 ta)', 'subject_id' => 501]);
+
+    $merge = app(\App\Services\VedomostMergeService::class);
+    expect($merge->unitGroupsOf($combined)->pluck('group_hemis_id')->map(fn ($g) => (int) $g)->all())->toBe([1, 2]);
+
+    $links = $merge->journalLinks($combined);
+    expect(array_column($links, 'label'))->toBe(['d2/21-01', 'd2/21-02'])
+        ->and($links[1]['url'])->toContain('/journal/show/')->toContain('/502/20');
+});

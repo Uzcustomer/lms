@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\VedomostSubmission;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Vedomost topshirish ro'yxatini "o'zak guruh × o'zak fan" bo'yicha birlashtiradi.
@@ -301,5 +302,65 @@ class VedomostMergeService
             return $groupMatch
                 && $this->rootSubjectName($row->subject_name) === $rootSubject;
         })->values();
+    }
+
+    /**
+     * 12a/12b (va ularning qo'shimcha) UMUMIY vedomosti bitta guruh nomidan yaratiladi
+     * («Barcha guruhlar (N ta)»), lekin unga birlikning BARCHA guruhlari kiradi. Birlik
+     * sinxronizatsiyadagi bilan bir xil aniqlanadi: o'quv yili, semestr, yo'nalish, yopilish
+     * shakli, o'zak fan nomi va fakultet (reja bo'limi). Natija — o'sha guruhlarning
+     * 12-shakl yozuvlari (har birida o'z guruhi, o'quv rejasi va fan ID'si bor).
+     *
+     * @return Collection<int, VedomostSubmission>
+     */
+    public function unitGroupsOf(VedomostSubmission $v): Collection
+    {
+        $faculty = fn ($cid) => (string) (DB::table('curricula')->where('curricula_hemis_id', $cid)->value('department_hemis_id') ?? $cid);
+        $myFaculty = $faculty($v->curriculum_hemis_id);
+        $rootSubject = $this->rootSubjectName($v->subject_name);
+
+        $rows = VedomostSubmission::query()
+            ->whereIn('group_hemis_id', fn ($q) => $q->select('group_hemis_id')->from('groups')->where('active', true))
+            ->where('form_type', VedomostSubmission::FORM_12)
+            ->where('education_year', $v->education_year)
+            ->where('semester_code', $v->semester_code)
+            ->where('closing_form', $v->closing_form)
+            ->when($v->specialty_name === null, fn ($q) => $q->whereNull('specialty_name'), fn ($q) => $q->where('specialty_name', $v->specialty_name))
+            ->get()
+            ->filter(fn ($row) => $this->rootSubjectName($row->subject_name) === $rootSubject);
+
+        $faculties = DB::table('curricula')
+            ->whereIn('curricula_hemis_id', $rows->pluck('curriculum_hemis_id')->unique()->filter()->all())
+            ->pluck('department_hemis_id', 'curricula_hemis_id');
+
+        return $rows->filter(fn ($row) => (string) ($faculties[$row->curriculum_hemis_id] ?? $row->curriculum_hemis_id) === $myFaculty)
+            ->unique(fn ($row) => $row->group_hemis_id . '|' . $row->subject_id)
+            ->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+    }
+
+    /**
+     * Vedomostga kiradigan har guruhning jurnali (yangi oynada ochish uchun): 12-shakl —
+     * guruhchalar, 12a/12b umumiy — birlikning barcha guruhlari.
+     *
+     * @return array<int, array{label: string, url: string}>
+     */
+    public function journalLinks(VedomostSubmission $v): array
+    {
+        $rows = $v->isCombinedForm() && $v->manual_opened_at === null ? $this->unitGroupsOf($v) : $this->siblingsOf($v);
+        if (!$rows->contains('id', $v->id) && !$v->isCombinedForm()) {
+            $rows->push($v);
+        }
+        $groupIds = \App\Models\Group::whereIn('group_hemis_id', $rows->pluck('group_hemis_id')->unique()->all())->pluck('id', 'group_hemis_id');
+
+        return $rows->filter(fn ($r) => isset($groupIds[$r->group_hemis_id]) && $r->subject_id)
+            ->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->map(fn ($r) => [
+                'label' => (string) $r->group_name,
+                'url' => route('admin.journal.show', [$groupIds[$r->group_hemis_id], $r->subject_id, $r->semester_code]),
+            ])
+            ->unique('url')
+            ->values()
+            ->all();
     }
 }

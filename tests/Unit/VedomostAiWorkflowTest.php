@@ -152,8 +152,34 @@ test('test markazi: faqat aynan shu fan va semestrning YN quizlari', function ()
     ]);
 
     $tc = (new ReflectionMethod(VedomostAiChecker::class, 'testCenter'))
-        ->invoke(app(VedomostAiChecker::class), ['368221100747'], ['subject_id' => '433', 'fan' => 'Xirurgik kasalliklar'], '12-shakl', '9-semestr');
+        ->invoke(app(VedomostAiChecker::class), ['368221100747'], ['subject_id' => '433', 'fan' => 'Xirurgik kasalliklar'], '12', '9-semestr');
 
     expect($tc['368221100747']['oski']['grade'])->toBe(100.0)
         ->and($tc['368221100747'])->not->toHaveKey('test');
+});
+
+test('test markazi: qo\'shimcha shaklda OSKE 1-urinishdan, Test qo\'shimchadan (zanjir); attemptRaw ham komponent bo\'yicha', function () {
+    Schema::create('hemis_quiz_results', function ($t) {
+        $t->id();
+        foreach (['student_id', 'fan_name', 'quiz_type', 'shakl', 'attempt_name', 'semester'] as $c) {
+            $t->string($c)->nullable();
+        }
+        $t->unsignedBigInteger('fan_id')->nullable();
+        $t->decimal('grade', 10, 2)->nullable();
+        $t->dateTime('date_finish')->nullable();
+        $t->tinyInteger('is_active')->default(1);
+    });
+    $row = fn (array $a) => array_merge(['student_id' => '1001', 'fan_id' => 433, 'fan_name' => 'Pediatriya', 'attempt_name' => 'YN', 'semester' => '9', 'date_finish' => '2026-10-21 10:00:00'], $a);
+    DB::table('hemis_quiz_results')->insert([
+        $row(['quiz_type' => 'OSKI (rus)', 'shakl' => '1-urinish', 'grade' => 80]),
+        $row(['quiz_type' => 'YN test (rus)', 'shakl' => "1-urinish (qo'shimcha)", 'grade' => 72, 'date_finish' => '2026-10-28 10:00:00']),
+        $row(['quiz_type' => 'YN test (rus)', 'shakl' => '2-urinish', 'grade' => 99]), // 12a — qo'shimcha zanjirida yo'q
+    ]);
+    $tc = (new ReflectionMethod(VedomostAiChecker::class, 'testCenter'))
+        ->invoke(app(VedomostAiChecker::class), ['1001'], ['subject_id' => '433', 'fan' => 'Pediatriya'], '12q', '9-semestr');
+    expect($tc['1001']['oski']['grade'])->toBe(80.0)->and($tc['1001']['test']['grade'])->toBe(72.0);
+
+    // Qo'shimcha ssenariyda OSKE yo'q (null), asosiyda bor → OSKE asosiydan.
+    $raw = VedomostAiChecker::attemptRaw(['oski' => 0.0, 'test' => 0.0], ['qoshimcha' => ['oski' => null, 'test' => 72], 'main' => ['oski' => 80, 'test' => null]], ['qoshimcha', 'main']);
+    expect($raw['oski'])->toBe(80.0)->and($raw['test'])->toBe(72.0);
 });

@@ -119,8 +119,8 @@ test('PDFdagi haqiqiy farq — XATO (Python xabari bilan)', function () {
 
     $msgs = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
     expect($r['rows'][0]['status'])->toBe('bad')
-        ->and($msgs)->toContain('OSKE%: PDF 90,0 ≠ Mark 0')
-        ->and($msgs)->toContain('YN: PDF 82 ≠ Mark -1');
+        ->and($msgs)->toContain('OSKE%: vedomost PDF 90,0 ≠ Mark 0')
+        ->and($msgs)->toContain('YN: vedomost PDF 82 ≠ Mark -1');
 });
 
 test('chetlashtirilgan va PDFda yo\'q talaba hisobotga chiqmaydi; tushib qolgan qator — PDFdan tekshiring', function () {
@@ -288,7 +288,7 @@ test('6-kurs: PDFdagi ball rasmiy formula bo\'yicha tekshiriladi', function () {
     $m6 = collect($r6['rows'][0]['flags'])->pluck('m')->implode(' | ');
 
     expect($r6['kurs6'])->toBeTrue()
-        ->and($m6)->toContain('6-kurs: Joriy 83% → 41.5 ball bo‘lishi kerak, PDFda 40')
+        ->and($m6)->toContain('6-kurs: Joriy 83% → 41.5 ball bo‘lishi kerak, vedomost PDFda 40')
         ->and($r6['rows'][0]['status'])->toBe('bad')
         ->and(collect($r5['rows'][0]['flags'])->pluck('m')->implode(' | '))->not->toContain('6-kurs');
 });
@@ -453,4 +453,24 @@ test('ishchi o\'quv reja: farq ko\'rsatiladi (PDF — XATO, Mark — tekshiring)
 
     $none = $build(['found' => false, 'reason' => 'ishchi reja yuklanmagan']);
     expect($byKey($none)['reja']['st'])->toBe('warn')->and($none['verdict'])->toBe('ok');
+});
+
+test('chetlashtirilgan talaba vedomost PDFda bo\'lsa — faqat ma\'lumot; shu guruhcha «boshqa guruh» emas', function () {
+    $stu = vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96);
+    $rows = [pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo()),
+        pdfRow(2, "NE'MATOV NOZIMJON RUSTAMJON O'G'LI", '368221100048', ['jb_pct' => '0', 'yn' => '-2', 'ects' => 'FX'])];
+    $build = fn (string $status, string $group) => engine()->build(expectedData([$stu]), scanDoc($rows), [], rules(),
+        ctx(['kontingent' => ['368221100048' => ['fio' => "NE'MATOV NOZIMJON RUSTAMJON O'G'LI", 'group' => $group, 'status' => $status]]]));
+
+    $r = $build('60', 'd1/d22-01b (rus)');
+    expect($r['extra'][0]['expelled'])->toBeTrue()
+        ->and($r['extra'][0]['note'])->toContain('chetlashtirilgan')
+        ->and($r['counts']['extra'])->toBe(0)->and($r['counts']['expelled'])->toBe(1)
+        ->and($r['verdict'])->toBe('ok')
+        ->and($r['summary'])->toContain('1 ta chetlashtirilgan talaba');
+
+    // Faol, lekin shu guruhcha (d1/d22-01b ⊂ d1/d22-01) — «Shu guruh talabasi», XATO sifatida qoladi.
+    $own = $build('11', 'd1/d22-01b (rus)');
+    expect($own['extra'][0]['note'])->toContain('Shu guruh talabasi')->and($own['verdict'])->toBe('issues');
+    expect($build('11', 'd1/d22-05a (rus)')['extra'][0]['note'])->toContain('Boshqa guruh talabasi');
 });

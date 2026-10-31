@@ -153,7 +153,7 @@
                 }
             }
         }
-        jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
+        jobs.sort((x, y) => (x.gseq || 0) - (y.gseq || 0) || String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
             || OP_ORDER[x.op] - OP_ORDER[y.op] || x.date.localeCompare(y.date) || (x.seq || 0) - (y.seq || 0) || x.start.localeCompare(y.start));
         const c = { create: 0, update: 0, delete: 0 };
         jobs.forEach(j => c[j.op]++);

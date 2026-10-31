@@ -98,8 +98,9 @@ for (const g of rep.groups || []) {
 // Guruh bo'yicha; guruh ichida avval o'chirish, so'ng o'zgartirish, so'ng qo'shish — bo'shaydigan vaqtga yangi
 // dars eskisi olib tashlangandan keyin qo'yiladi. Kun ichida surilgan darslar LMS bergan navbatda (seq):
 // o'rni bo'shaydigan dars avval suriladi.
+// «Bugungi darslar» JSON'ida gseq — guruhlararo navbat (o'qituvchi/xona bo'shaydigan dars avval); boshqasida yo'q.
 const OP_ORDER = { delete: 0, update: 1, create: 2 };
-jobs.sort((x, y) => String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
+jobs.sort((x, y) => (x.gseq || 0) - (y.gseq || 0) || String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
     || OP_ORDER[x.op] - OP_ORDER[y.op] || x.date.localeCompare(y.date) || (x.seq || 0) - (y.seq || 0) || x.start.localeCompare(y.start));
 
 const line = j => `${OP_NAME[j.op].padEnd(12)} ${j.group.padEnd(12)} ${j.date} ${j.start}-${j.end}  ${j.subject.slice(0, 34).padEnd(34)} ${String(j.type).padEnd(12)} ${j.employee_name || '—'} · ${j.auditorium_name || '—'}${j.hemis_id ? ' · #' + j.hemis_id : ''}${j.changes && j.changes.length ? '  (' + j.changes.join('; ') + ')' : ''}`;

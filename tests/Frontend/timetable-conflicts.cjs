@@ -42,12 +42,14 @@ const ctx = {
     },
     URLSearchParams, Object, Set, Promise, Error, Number, String,
     cycleLayerParams: () => ({ layer: 'internal' }),
+    ttToast: html => { (ctx.toasts = ctx.toasts || []).push(html); },
 };
 vm.createContext(ctx);
 vm.runInContext(section("            // ===== Ichki (haftalik) jadvaldagi to'qnashuvlar", '            // Joylanmagan kartalar diagnostikasi (unplaced-export)')
     + section("            // Tanlangan birlik darslari vaqtida boshqa guruhcha bilan band", '            let asgAudSel = null;')
     + section('            async function applyAsg(teacherId, force) {', '            async function loadAsgAuditoriums() {')
     + section('            async function saveCycleAssign(force) {', "            $('cycAssignSave').addEventListener")
+    + section('            function cycleAutoShiftHtml(j) {', '            async function cycleAutoShift() {')
     + '; this.wc = () => weeklyConflicts; this.setBusy = b => { asgBusy = b; };', ctx);
 const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { needs_confirm: true, error: msg } });
 
@@ -178,6 +180,19 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     await ctx.saveCycleAssign(false);
     assert.equal(calls[2][2].shift_start, 7);
     assert.equal(calls[2][2].layer, 'internal');   // server smenani faqat ichki jadvalda qabul qiladi
+    // Server guruhchani boshqa smenaga o'tkazgan bo'lsa (o'qituvchi band edi) — xabar ko'rsatiladi
+    assert.equal(ctx.toasts, undefined);
+    answers.push({ ok: true, auto_shift: { from: 0, to: 7, reason: "O'qituvchi X 08:30 da p/p22-05c da band",
+        message: "O'qituvchi X 08:30 da p/p22-05c da band — d2/d22-02a 13:30 smenasiga o'tkazildi" } });
+    await ctx.saveCycleAssign(false);
+    assert.equal(ctx.toasts.length, 1);
+    assert.match(ctx.toasts[0], /Smena o'zgartirildi.*O'qituvchi X 08:30 da p\/p22-05c da band — d2\/d22-02a 13:30 smenasiga o'tkazildi/);
+    // "Smenalarni avtomatik ajratish" natijasi: o'zgarganlar va hal bo'lmaganlar alohida ro'yxat
+    const html = ctx.cycleAutoShiftHtml({ message: "1 ta guruhcha smenasi o'zgartirildi, 1 ta to'qnashuv hal bo'lmadi",
+        changed: [{ group: 'p/p22-02a', subject: 'KF', message: 'p/p22-02a · KF: 08:30 → 13:30 smenasi', reason: "O'qituvchi X band: p/p22-03c, KF, 14.09–18.09" }],
+        unresolved: [{ group: 'p/p22-05c', subject: 'Nevrologiya', why: "Boshqa smenaga kunlik darslar sig'maydi", reason: 'Xona 215 sig\'imidan ko\'p' }] });
+    assert.match(html, /<ul id="cycAutoChanged"[^>]*><li><b>p\/p22-02a<\/b> · KF — 08:30 → 13:30 smenasi \(O'qituvchi X band: p\/p22-03c, KF, 14\.09–18\.09\)<\/li><\/ul>/);
+    assert.match(html, /<ul id="cycAutoUnresolved"[^>]*><li><b>p\/p22-05c<\/b> · Nevrologiya — Boshqa smenaga kunlik darslar sig'maydi: Xona 215 sig'imidan ko'p<\/li><\/ul>/);
     // Mark kataklari: amaliy — kun rejasidagi boshlanishidan (ps, smena), ma'ruzadan keyin emas
     assert.match(source, /const ps = dp\.ps != null \? \+dp\.ps : st \+ \(\+dp\.lec \|\| 0\);\n\s*if \(hour >= st && hour < st \+ \(\+dp\.lec \|\| 0\)\) kind = ' is-lecture';\n\s*else if \(hour >= ps && hour < ps \+ \(\+dp\.prc \|\| 0\)\) kind = ' is-practice';/);
 

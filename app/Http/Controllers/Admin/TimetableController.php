@@ -4779,9 +4779,17 @@ class TimetableController extends Controller
                     $newRoom && ($roomChanged || $shiftChanged) && isset($busy['rooms'][$newRoom]) ? "Xona «{$roomName}»: " . $busy['rooms'][$newRoom] : null,
                 ]);
                 if ($warn = $this->busyWarning('Tanlangan o\'qituvchi/xona', $parts ? implode('; ', $parts) : null)) {
-                    DB::rollBack();
+                    // Faqat vaqt bo'yicha to'qnashuv bo'lsa (sanalar kesishadi, smena bir xil) — guruhchani boshqa smenaga (1 ⇄ 7)
+                    // o'tkazib ko'ramiz; foydalanuvchi smenani o'zi tanlagan bo'lsa — uning tanlovi.
+                    $autoShift = !$shiftChanged && $this->cycleShiftable($request, $data)
+                        ? $this->tryCycleAutoShift($request, $board, $placement, $flowCards, (string) $data['group_name'], (string) $data['subject_name'],
+                            $newTeacher ? [(int) $newTeacher, (string) $teacherName] : null, $newRoom ? [(string) $newRoom, (string) $roomName] : null, $busy)
+                        : null;
+                    if (!$autoShift) {
+                        DB::rollBack();
 
-                    return $warn;
+                        return $warn;
+                    }
                 }
             }
             DB::commit();
@@ -4806,8 +4814,157 @@ class TimetableController extends Controller
             'teacher_name' => $teacherName,
             'lesson_time' => $placement->lesson_time,
             'auditorium_name' => $roomName,
-            'shift_start' => $this->cycleShiftOf($placement, (string) $data['group_name']),
+            'shift_start' => $this->cycleShiftOf($placement->fresh() ?? $placement, (string) $data['group_name']),
+            'auto_shift' => $autoShift ?? null,
         ]);
+    }
+
+    /**
+     * Guruhcha smenasini avtomatik almashtirish uchun nishon: I para ⇄ IV para (hozirgi smena 7 bo'lsa — 1, aks holda — 7);
+     * kunlik amaliy darsi sig'masa (cycleShiftLimit) — null. Qaytaradi: [hozirgi, yangi].
+     */
+    private function cycleAutoShiftTarget(TimetableBoard $board, TimetableCyclePlacement $placement, string $unit, string $subject): ?array
+    {
+        $from = $this->cycleShiftOf($placement, $unit);
+        $to = $from === 7 ? 1 : 7;
+
+        return $to <= $this->cycleShiftLimit($board, $unit, $subject) ? [$from, $to] : null;
+    }
+
+    /** Soat qatori boshlanish vaqti (HEMIS yarim-para vaqtlari bilan bir xil): 1 — "08:30", 7 — "13:30". */
+    private function cycleRowTime(TimetableBoard $board, int $row): string
+    {
+        return $this->hemisSlotTimes($board)[max(1, $row)][0] ?? ($row . '-soat');
+    }
+
+    /**
+     * Biriktirishda bandlik ogohlantirishi o'rniga: guruhchani boshqa smenaga o'tkazib, bandlikni qayta tekshiradi. To'qnashuv
+     * yo'qolsa — smena saqlanadi (chaqiruvchining tranzaksiyasida) va ['from', 'to', 'reason', 'message'] qaytadi; aks holda
+     * smena qaytariladi va null. $teacher — [id, nomi], $room — [kod, nomi], $busy — avvalgi bandlik (sabab matni uchun).
+     */
+    private function tryCycleAutoShift(Request $request, TimetableBoard $board, TimetableCyclePlacement $placement, $flowCards, string $unit,
+        string $subject, ?array $teacher, ?array $room, array $busy): ?array
+    {
+        $target = $this->cycleAutoShiftTarget($board, $placement, $unit, $subject);
+        if (!$target || !$this->saveCycleShift($placement, $unit, $target[1])) {
+            return null;
+        }
+        $after = $this->unitBusySafe($request, $board, $flowCards);
+        if ($after === null || ($teacher && isset($after['teachers'][$teacher[0]])) || ($room && isset($after['rooms'][$room[0]]))) {
+            $this->saveCycleShift($placement, $unit, $target[0]);
+
+            return null;
+        }
+        $fromTime = $this->cycleRowTime($board, $target[0] ?: 1);
+        $who = fn (?string $text) => trim(explode(',', (string) $text)[0]);
+        $reason = implode('; ', array_filter([
+            $teacher && isset($busy['teachers'][$teacher[0]]) ? "O'qituvchi {$teacher[1]} {$fromTime} da " . $who($busy['teachers'][$teacher[0]]) . ' da band' : null,
+            $room && isset($busy['rooms'][$room[0]]) ? "Xona «{$room[1]}» {$fromTime} da " . $who($busy['rooms'][$room[0]]) . ' da band' : null,
+        ]));
+
+        return ['from' => $target[0], 'to' => $target[1], 'reason' => $reason,
+            'message' => $reason . ' — ' . $unit . ' ' . $this->cycleRowTime($board, $target[1]) . ' smenasiga o\'tkazildi'];
+    }
+
+    /**
+     * "Smenalarni avtomatik ajratish": qamrovdagi ichki sikl to'qnashuvlari (o'qituvchi, xona — cycleConflicts) guruhchani boshqa
+     * smenaga (1 ⇄ 7) o'tkazib hal qilinadi — o'zgarish xotirada sinab ko'riladi: shu blokning to'qnashuvi yo'qolsa va yangi
+     * to'qnashuv paydo bo'lmasa, saqlanadi. Qaytaradi: changed (nima o'zgardi) va unresolved (hal bo'lmaganlar, sababi bilan).
+     */
+    public function cycleAutoShift(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+        ]);
+        abort_unless(Schema::hasTable('timetable_cycle_placements') && Schema::hasColumn('timetable_cycle_placements', 'lecture_slots'), 503,
+            'Sikl jadvali migratsiyasi hali ishga tushirilmagan.');
+        if (!$this->cycleLayerEditable($this->timetableActiveRole($request), 'internal')) {
+            return $this->cycleLayerDenied('internal');
+        }
+        @set_time_limit(300);
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        [$units, $calendar] = $this->placedCycleUnits($board);
+        $current = $this->cycleConflicts($board, $units, $calendar);
+        $indexOf = [];
+        foreach ($units as $i => $u) {
+            $indexOf[$u['key']] = $i;
+        }
+        $changed = [];
+        $unresolved = [];
+        foreach (array_keys($current) as $key) {
+            $i = $indexOf[$key] ?? null;
+            $u = $i !== null ? $units[$i] : null;
+            if (!$u || ($facSet !== null && !isset($facSet[(string) ($u['faculty'] ?? '')])) || ($specSet !== null && !isset($specSet[(string) $u['specialty']]))
+                || ($courseSet !== null && !isset($courseSet[(int) $u['course']]))) {
+                continue;
+            }
+            if (!isset($current[$key])) {
+                continue;   // boshqa guruhchaning smenasi almashgach hal bo'ldi
+            }
+            $item = ['key' => $key, 'group' => $u['group'], 'subject' => $u['subject'], 'specialty' => $u['specialty'], 'course' => (int) $u['course']];
+            $own = $this->ownKafedraCycleSubjects($request, $board, (string) $u['specialty'], (int) $u['course']);
+            if ($own !== null && !isset($own[mb_strtolower(trim((string) $u['subject']))])) {
+                $unresolved[] = $item + ['reason' => $current[$key]['text'], 'why' => 'Boshqa kafedra fani'];
+                continue;
+            }
+            $placement = $this->cycleRealPlacement($board, $u);
+            $target = $placement ? $this->cycleAutoShiftTarget($board, $placement, (string) $u['unit'], (string) $u['subject']) : null;
+            if (!$target) {
+                $unresolved[] = $item + ['reason' => $current[$key]['text'], 'why' => 'Boshqa smenaga kunlik darslar sig\'maydi'];
+                continue;
+            }
+            // Xotirada sinab ko'rish: shu birlik smenasi almashgan holat.
+            $trial = $units;
+            $slots = (array) ($u['placement']->lecture_slots ?? []);
+            $slots['shift_g'] = array_replace((array) ($slots['shift_g'] ?? []), [(string) $u['unit'] => $target[1]]);
+            $trial[$i]['placement'] = (object) (array_replace((array) $u['placement'], ['lecture_slots' => $slots]));
+            $after = $this->cycleConflicts($board, $trial, $calendar);
+            if (isset($after[$key]) || array_diff_key($after, $current)) {
+                $unresolved[] = $item + ['reason' => $current[$key]['text'], 'why' => 'Boshqa smenada ham band'];
+                continue;
+            }
+            // Haftalik darslar ham (cycleConflicts — faqat sikl): yangi smenada shu guruhcha o'qituvchisi/xonasi band bo'lmasin.
+            DB::beginTransaction();
+            $this->saveCycleShift($placement, (string) $u['unit'], $target[1]);
+            $busy = $this->unitBusySafe($request, $board, collect($u['cards']));
+            $weeklyBusy = $busy === null || collect($u['cards'])->contains(fn ($c) => ($c->teacher_id && isset($busy['teachers'][(int) $c->teacher_id]))
+                || ($c->auditorium_code && isset($busy['rooms'][$c->auditorium_code])));
+            if ($weeklyBusy) {
+                DB::rollBack();
+                request()->attributes->remove('timetable.cycle_units.' . $board->id);
+                $unresolved[] = $item + ['reason' => $current[$key]['text'], 'why' => 'Boshqa smenada ham band'];
+                continue;
+            }
+            DB::commit();
+            $changed[] = $item + ['from' => $target[0], 'to' => $target[1], 'reason' => $current[$key]['text'],
+                'message' => $u['group'] . ' · ' . $u['subject'] . ': ' . $this->cycleRowTime($board, $target[0] ?: 1) . ' → '
+                    . $this->cycleRowTime($board, $target[1]) . ' smenasi'];
+            $units = $trial;
+            $current = $after;
+        }
+
+        // Keyingi o'zgarishlar bilan hal bo'lganlari (juftining smenasi almashgan) — ro'yxatdan chiqariladi.
+        $unresolved = array_values(array_filter($unresolved, fn ($x) => isset($current[$x['key']])));
+        $strip = fn (array $list) => array_map(fn ($x) => array_diff_key($x, ['key' => true]), $list);
+        [$changed, $unresolved] = [$strip($changed), $strip($unresolved)];
+
+        return response()->json(['ok' => true, 'changed' => $changed, 'unresolved' => $unresolved,
+            'message' => count($changed) . ' ta guruhcha smenasi o\'zgartirildi' . ($unresolved ? ', ' . count($unresolved) . ' ta to\'qnashuv hal bo\'lmadi' : '')]);
+    }
+
+    /** Ichki sikl birligining DB dagi joylashuvi (cyclePlan kabi: guruhchaning o'z qatori ustuvor, aks holda fanining oqimi). */
+    private function cycleRealPlacement(TimetableBoard $board, array $u): ?TimetableCyclePlacement
+    {
+        $find = fn (string $group) => TimetableCyclePlacement::where('board_id', $board->id)->where('specialty_name', $u['specialty'])
+            ->where('course', (int) $u['course'])->where('group_name', $group)->where('subject_name', $u['subject'])
+            ->where(fn ($w) => $w->where('training_type', 'practice')->orWhereNull('training_type'))->orderByDesc('id')->first();
+
+        return $find((string) (explode('|', (string) $u['row_key'], 3)[2] ?? $u['group'])) ?? $find((string) $u['parent']);
     }
 
     /** Ichki sikl jadvali kun to'ri — qatorlar soni: qo'ng'iroq jadvalidagi paralar × para soati (Mark, bandlik bir xil). */

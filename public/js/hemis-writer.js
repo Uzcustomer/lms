@@ -3,6 +3,8 @@
  * mark (LMS) "HEMIS solishtirish" oynasidan yuklangan JSON'dagi amallarni HEMIS'ning o'z
  * qo'shish / tahrirlash / o'chirish formalari orqali bajaradi — tools/hemis-sync/hemis-write.mjs bilan bir xil mantiq:
  * bugun va o'tgan kunlarga yozilmaydi, to'siqli amallar o'tkaziladi, boshida bir marta tasdiq so'raladi.
+ * Istisno — «Bugungi darslar (HEMIS)» JSON'i (amalda today: true): faqat bugungi kun va faqat o'zgartirish (qo'shish/o'chirish
+ * rad etiladi); har biridan oldin davomat/baho HEMIS'dan qayta tekshiriladi (mark'dagi imzolangan havola) — belgilangan bo'lsa tegilmaydi.
  */
 (function () {
     'use strict';
@@ -136,7 +138,11 @@
                 if (f.subject && u.subject_name !== f.subject) continue;
                 for (const a of u.actions || []) {
                     const base = Object.assign({ group: g.group, subject: u.subject_name, type: (u.code_names || {})[a.code] || a.code }, a);
-                    if (a.date <= today) { skipped.push(Object.assign(base, { skip: 'bugun yoki o\'tgan kun' })); continue; }
+                    if (a.today === true) {
+                        // Bugungi dars: faqat o'zgartirish va faqat bugun (JSON kecha olingan bo'lsa — o'tgan kun).
+                        if (a.op !== 'update') { skipped.push(Object.assign(base, { skip: 'bugungi darsga faqat o\'zgartirish — qo\'shish/o\'chirish rad etildi' })); continue; }
+                        if (a.date !== localToday()) { skipped.push(Object.assign(base, { skip: 'bugungi kun emas' })); continue; }
+                    } else if (a.date <= today) { skipped.push(Object.assign(base, { skip: 'bugun yoki o\'tgan kun' })); continue; }
                     if (f.until && a.date > f.until) { skipped.push(Object.assign(base, { skip: 'chegaradan keyin' })); continue; }
                     if (!f.ops.includes(a.op)) { skipped.push(Object.assign(base, { skip: 'amal turi tanlanmagan' })); continue; }
                     if (a.blocked && a.blocked.length) { skipped.push(Object.assign(base, { skip: 'to\'siq: ' + a.blocked.join('; ') })); continue; }
@@ -152,7 +158,9 @@
         const c = { create: 0, update: 0, delete: 0 };
         jobs.forEach(j => c[j.op]++);
         const blk = skipped.filter(s => s.skip.startsWith('to\'siq')).length;
-        $('hwSummary').innerHTML = 'Bugun: <b>' + esc(today) + '</b> (bugun va undan oldingi kunlarga yozilmaydi). Bajariladi: <b>' + jobs.length + '</b> ta — '
+        $('hwSummary').innerHTML = 'Bugun: <b>' + esc(today) + '</b> (' + (rep.mode === 'today'
+            ? 'bugungi darslar: faqat o\'zgartirish; davomat olingan yoki baho qo\'yilgan darsga tegilmaydi'
+            : 'bugun va undan oldingi kunlarga yozilmaydi') + '). Bajariladi: <b>' + jobs.length + '</b> ta — '
             + '<span style="color:#047857">+' + c.create + ' qo\'shish</span>, <span style="color:#b45309">~' + c.update + ' o\'zgartirish</span>, '
             + '<span style="color:#b91c1c">−' + c.delete + ' o\'chirish</span>. O\'tkaziladi: ' + skipped.length + ' ta' + (blk ? ' (shundan to\'siqli ' + blk + ')' : '') + '.';
         $('hwList').textContent = jobs.map(j => '  ' + line(j)).join('\n');
@@ -177,6 +185,19 @@
         build();
     };
 
+    // Bugungi dars: yozishdan oldin HEMIS'da davomat olinmaganini / baho qo'yilmaganini mark orqali qayta tekshirish.
+    // Javob: { locked: sabab | null } yoki { error } — xatoda ham yozilmaydi.
+    const todayLock = async j => {
+        if (!rep.lock_check_url) return { error: 'tekshiruv havolasi yo\'q (JSON\'ni qayta yuklab oling)' };
+        try {
+            const r = await fetch(rep.lock_check_url + '&ids=' + encodeURIComponent(j.hemis_id), { credentials: 'omit', cache: 'no-store' });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) return { error: d.error || ('HTTP ' + r.status) };
+            if ((d.failed || []).map(String).includes(String(j.hemis_id))) return { error: 'HEMIS javob bermadi' };
+            return { locked: (d.locked || {})[j.hemis_id] || null };
+        } catch (e) { return { error: String(e && e.message || e) }; }
+    };
+
     async function run(apply) {
         if (running) return;
         // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — tasdiqdagi son
@@ -195,11 +216,22 @@
         let lastGroup = null;
         for (const j of batch) {
             if (stop) { results.push(Object.assign({}, j, { status: 'skipped', reason: 'to\'xtatildi' })); continue; }
-            // Yozish yarim tundan o'tib ketsa — endi bugun bo'lib qolgan darslar yozilmaydi.
-            if (j.date <= cutoff()) {
-                results.push(Object.assign({}, j, { status: 'skipped', reason: 'bugun yoki o\'tgan kun' }));
-                list.textContent += '  – ' + line(j) + '  — bugun yoki o\'tgan kun, yozilmadi\n';
+            // Yozish yarim tundan o'tib ketsa — endi bugun bo'lib qolgan darslar yozilmaydi (bugungi dars — kun almashsa).
+            const late = j.today === true ? (j.op !== 'update' || j.date !== localToday()) : j.date <= cutoff();
+            if (late) {
+                const why = j.today === true ? 'bugungi kun emas' : 'bugun yoki o\'tgan kun';
+                results.push(Object.assign({}, j, { status: 'skipped', reason: why }));
+                list.textContent += '  – ' + line(j) + '  — ' + why + ', yozilmadi\n';
                 continue;
+            }
+            if (j.today === true) {
+                const lock = await todayLock(j);
+                const why = lock.error ? 'davomat/baho tekshirib bo\'lmadi (' + lock.error + ') — tegilmadi' : lock.locked ? 'belgilandi — tegilmadi (' + lock.locked + ')' : null;
+                if (why) {
+                    results.push(Object.assign({}, j, { status: 'skipped', reason: why }));
+                    list.textContent += '  – ' + line(j) + '  — ' + why + '\n';
+                    continue;
+                }
             }
             if (j.group_id !== lastGroup) {
                 list.textContent += '— ' + j.group + ' (' + batch.filter(x => x.group_id === j.group_id).length + ' ta amal)\n';

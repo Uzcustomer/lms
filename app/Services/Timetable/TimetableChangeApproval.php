@@ -43,6 +43,7 @@ class TimetableChangeApproval
         'admin.timetable.cycle-place'         => ['cyclePlace', 'board', 'cycle'],
         'admin.timetable.cycle-assign'        => ['cycleAssignSave', 'board', 'teacher'],
         'admin.timetable.cycle-lecture-slots' => ['cycleLectureSlots', 'board', 'hour'],
+        'admin.timetable.cycle-auto-shift'    => ['cycleAutoShift', 'board', 'hour'],
         'admin.timetable.assign-teacher'      => ['assignTeacher', 'board', 'teacher'],
         'admin.timetable.assign-room'         => ['assignUnitRoom', 'board', 'room'],
     ];
@@ -610,6 +611,7 @@ class TimetableChangeApproval
                 ])));
                 $text = match ($route) {
                     'admin.timetable.cycle-plan' => 'Sikl bloklarini bo\'shatish',
+                    'admin.timetable.cycle-auto-shift' => 'Sikl to\'qnashuvlari — guruhcha smenalari avtomatik ajratildi',
                     'admin.timetable.ktr-weeks' => 'Haftalar KTR bo\'yicha belgilandi',
                     'admin.timetable.weekly-layer-copy' => 'Haftalik joylashuv tashqi jadvalga ko\'chirildi'
                         . (!empty($p['clear_internal']) ? ', ichki jadval bo\'shatildi' : ''),

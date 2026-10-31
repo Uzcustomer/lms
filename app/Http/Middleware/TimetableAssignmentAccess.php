@@ -106,6 +106,8 @@ class TimetableAssignmentAccess
                     'admin.timetable.cycle-assign-options',
                     'admin.timetable.cycle-assign',
                     'admin.timetable.cycle-lecture-slots',
+                    // Sikl to'qnashuvlarini guruhcha smenasi bilan avtomatik hal qilish
+                    'admin.timetable.cycle-auto-shift',
                 ]);
             }
 

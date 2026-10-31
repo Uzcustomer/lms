@@ -430,6 +430,71 @@ class ScheduleImportService
     }
 
     /**
+     * Bir kunlik jadvalni faqat berilgan guruhlar uchun qayta import qilish ("Bugungi darslar": import:schedules-partially
+     * --date_from=bugun --date_to=bugun mantig'i, lekin butun universitet emas). So'rovlar parallel (bir vaqtda $concurrency ta).
+     * HEMIS'da endi yo'q yozuvlar — faqat shu guruh va shu kunda, guruh javobi muvaffaqiyatli va bo'sh bo'lmaganda o'chiriladi.
+     * Qaytaradi: ['count' => yozuvlar, 'failed' => [javob bermagan guruh id, ...]].
+     */
+    public function importGroupsOnDate(array $groupIds, Carbon $date, int $concurrency = 20): array
+    {
+        $token = (string) config('services.hemis.token');
+        $base = rtrim((string) config('services.hemis.base_url', 'https://student.ttatf.uz/rest/v1/'), '/');
+        $url = (str_ends_with($base, '/v1') ? $base : $base . '/v1') . '/data/schedule-list';
+        $from = $date->copy()->startOfDay();
+        $to = $date->copy()->endOfDay();
+        $groupIds = array_values(array_unique(array_map('intval', array_filter($groupIds))));
+        $pending = array_map(fn ($g) => [$g, 1], $groupIds);
+        $items = array_fill_keys($groupIds, []);
+        $failed = [];
+        while ($pending) {
+            $batch = array_splice($pending, 0, max(1, $concurrency));
+            $responses = Http::pool(fn ($pool) => array_map(fn ($job) => $pool->as($job[0] . '|' . $job[1])->withoutVerifying()
+                ->connectTimeout(5)->timeout(20)->withToken($token)->get($url, [
+                    '_group' => $job[0], 'lesson_date_from' => $from->timestamp, 'lesson_date_to' => $to->timestamp,
+                    'limit' => 200, 'page' => $job[1],
+                ]), $batch));
+            foreach ($batch as [$g, $page]) {
+                $r = $responses[$g . '|' . $page] ?? null;
+                // HTTP 200, lekin success: false — ham xato (eski yozuvlar bo'yicha o'zgartirish qilinmasin).
+                if (!$r instanceof \Illuminate\Http\Client\Response || !$r->successful() || $r->json('success') === false) {
+                    $failed[$g] = true;
+                    continue;
+                }
+                array_push($items[$g], ...((array) $r->json('data.items', [])));
+                if ($page === 1) {
+                    for ($p = 2; $p <= (int) $r->json('data.pagination.pageCount', 1); $p++) {
+                        $pending[] = [$g, $p];
+                    }
+                }
+            }
+        }
+        $count = 0;
+        foreach ($items as $g => $list) {
+            if (isset($failed[$g])) {
+                continue;
+            }
+            $ids = [];
+            foreach ($list as $item) {
+                $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
+                $schedule->fill($this->map($item));
+                if ($schedule->trashed()) {
+                    $schedule->restore();
+                }
+                $schedule->save();
+                if ((int) ($item['group']['id'] ?? 0) === (int) $g) {
+                    $ids[] = $item['id'];
+                }
+                $count++;
+            }
+            if ($ids) {
+                Schedule::where('group_id', $g)->whereBetween('lesson_date', [$from, $to])->whereNotIn('schedule_hemis_id', $ids)->delete();
+            }
+        }
+
+        return ['count' => $count, 'failed' => array_keys($failed)];
+    }
+
+    /**
      * Xavfsiz log — log fayl permission xatosi importni buzmaydi
      */
     protected function safeLog(string $level, string $message, array $context = []): void

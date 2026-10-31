@@ -302,11 +302,14 @@ class VedomostAiChecker
             'international' => $this->internationalIds($sysIds),
             'test_center' => $this->testCenter($sysIds, $expected, (string) ($v->form_type ?: VedomostSubmission::FORM_12),
                 (string) ($expected['talabalar'][0]['meta']['semester'] ?? '')),
-            'kontingent' => $this->kontingent(array_values(array_diff($scanIds, $sysIds))),
+            'kontingent' => $this->withMissingReasons($v, $this->kontingent(array_values(array_diff($scanIds, $sysIds)))),
             // ID xato o'qilsa (boshqa talabaga tegishli bo'lsa) — ism bo'yicha ham.
-            'kontingent_by_name' => $this->kontingentByName(collect($scan['rows'] ?? [])
+            'kontingent_by_name' => $this->withMissingReasons($v, $this->kontingentByName(collect($scan['rows'] ?? [])
                 ->filter(fn ($r) => !in_array(VedomostScanReader::digits($r['id'] ?? ''), $sysIds, true))
-                ->pluck('fio')->filter()->all()),
+                ->pluck('fio')->filter()->all())),
+            // Vedomostga kiradigan guruhlar (umumiy 12a/12b — birlikning barcha guruhlari): «boshqa guruh
+            // talabasi» shu ro'yxatga nisbatan aniqlanadi, faqat topilgan talabalar guruhlariga emas.
+            'scope_groups' => $this->scopeRows($v)->pluck('group_name')->filter()->unique()->values()->all(),
             'plan' => $this->workingPlan($v, $expected),
         ];
     }
@@ -498,6 +501,71 @@ class VedomostAiChecker
     }
 
     /** Ortiqcha (guruhda yo'q) talabalar uchun kontingent ma'lumoti. */
+    /** Vedomostga kiradigan guruh yozuvlari: umumiy 12a/12b — birlikning barcha guruhlari, aks holda guruhchalar. */
+    private function scopeRows(VedomostSubmission $v)
+    {
+        if ($v->isCombinedForm() && $v->manual_opened_at === null) {
+            return $this->merge->unitGroupsOf($v);
+        }
+        $rows = $this->merge->siblingsOf($v);
+        if (!$rows->contains('id', $v->id)) {
+            $rows->push($v);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Vedomost PDFda bor, Mark ro'yxatida yo'q talabalar uchun sabab (hisobot izohiga):
+     *  - hozir vedomost guruhlaridan tashqaridagi guruhda (boshqa fakultet bo'lsa — alohida aytiladi);
+     *  - vedomost guruhida, lekin Mark bo'yicha bosqichi shu shaklga tushmaydi.
+     */
+    private function withMissingReasons(VedomostSubmission $v, array $list): array
+    {
+        if (empty($list)) {
+            return $list;
+        }
+        try {
+            $scope = $this->scopeRows($v)->keyBy(fn ($r) => (string) $r->group_hemis_id);
+            $attempt = self::formAttempt($v->form_type);
+            $shakl = VedomostSubmission::formLabel($v->form_type);
+            $facultyOf = fn ($groupId) => DB::table('groups as g')
+                ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
+                ->leftJoin('departments as d', 'd.department_hemis_id', '=', 'c.department_hemis_id')
+                ->where('g.group_hemis_id', $groupId)
+                ->first(['c.department_hemis_id', 'd.name']);
+            $myFaculty = $scope->isNotEmpty() ? $facultyOf($scope->keys()->first()) : null;
+            $stageCache = [];
+
+            foreach ($list as $key => $k) {
+                $gid = (string) ($k['group_id'] ?? '');
+                if ($gid === '' || (string) ($k['status'] ?? '') === '60') {
+                    continue;
+                }
+                if (!$scope->has($gid)) {
+                    $f = $facultyOf($gid);
+                    $otherFaculty = $f && $myFaculty && (string) $f->department_hemis_id !== (string) $myFaculty->department_hemis_id;
+                    $list[$key]['reason'] = 'Markda hozir ' . ($k['group'] ?? '?') . ' guruhida — bu vedomost guruhlari ro\'yxatida emas'
+                        . ($otherFaculty ? ' (boshqa fakultet: ' . ($f->name ?? '?') . '; umumiy varaq fakultet bo\'yicha tuziladi)' : '')
+                        . '. Talaba guruhi o\'zgargan bo\'lishi mumkin.';
+                    continue;
+                }
+                if ($attempt === null) {
+                    continue;
+                }
+                $row = $scope[$gid];
+                $stageCache[$gid] ??= $this->stages->computeForGroupSubject($gid, (string) $row->subject_id, (string) $row->semester_code);
+                $st = $stageCache[$gid]['stages'][(string) ($k['hemis_id'] ?? '')] ?? null;
+                $label = $st ? (YnAttemptStatusService::stageLabel($st)['label'] ?? $st) : "bosqich aniqlanmadi (baholari yo'q)";
+                $list[$key]['reason'] = "Vedomost guruhi talabasi, lekin Mark bo'yicha «{$shakl}»ga tushmaydi — bosqichi: {$label}. Jurnaldagi urinish baholarini tekshiring.";
+            }
+        } catch (\Throwable $e) {
+            Progress::log('Markda yo\'q talabalar sababini aniqlab bo\'lmadi: ' . $e->getMessage(), 'warn');
+        }
+
+        return $list;
+    }
+
     private function kontingent(array $ids): array
     {
         if (empty($ids)) {
@@ -505,9 +573,10 @@ class VedomostAiChecker
         }
 
         return Student::whereIn('student_id_number', $ids)
-            ->get(['student_id_number', 'full_name', 'group_name', 'student_status_code'])
+            ->get(['student_id_number', 'full_name', 'group_name', 'student_status_code', 'hemis_id', 'group_id'])
             ->mapWithKeys(fn ($s) => [VedomostScanReader::digits($s->student_id_number) => [
                 'fio' => $s->full_name, 'group' => $s->group_name, 'status' => (string) $s->student_status_code,
+                'hemis_id' => (string) $s->hemis_id, 'group_id' => (string) $s->group_id,
             ]])
             ->all();
     }
@@ -527,12 +596,13 @@ class VedomostAiChecker
             }
             $hits = Student::where('full_name', 'like', $parts[0] . '%')
                 ->limit(50)
-                ->get(['student_id_number', 'full_name', 'group_name', 'student_status_code'])
+                ->get(['student_id_number', 'full_name', 'group_name', 'student_status_code', 'hemis_id', 'group_id'])
                 ->filter(fn ($st) => VedomostNames::similarity($st->full_name, $clean) >= 0.85);
             if ($hits->count() === 1) {
                 $st = $hits->first();
                 $out[VedomostNames::nameKey($clean)] = ['fio' => $st->full_name, 'group' => $st->group_name,
-                    'status' => (string) $st->student_status_code, 'id' => (string) $st->student_id_number];
+                    'status' => (string) $st->student_status_code, 'id' => (string) $st->student_id_number,
+                    'hemis_id' => (string) $st->hemis_id, 'group_id' => (string) $st->group_id];
             }
         }
 

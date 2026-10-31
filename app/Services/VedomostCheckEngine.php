@@ -290,7 +290,7 @@ class VedomostCheckEngine
 
         // O'zak guruh (d1/d22-01a → d1/d22-01): guruhcha shu vedomostniki bo'lsa — «boshqa guruh» emas.
         $root = fn ($g) => mb_strtolower(preg_match('~^(.*?\d+-\d+)~u', trim((string) $g), $m) ? $m[1] : trim((string) $g));
-        $ownRoots = collect($system)->pluck('group')->filter()->map($root)->unique()->all();
+        $ownRoots = collect($system)->pluck('group')->merge($context['scope_groups'] ?? [])->filter()->map($root)->unique()->all();
         $extraRows = [];
         foreach ($extra as $s) {
             $sid = VedomostScanReader::digits($s['id'] ?? '');
@@ -315,6 +315,7 @@ class VedomostCheckEngine
                 'expelled' => $expelled,
                 'note' => ($idOwner ? 'Vedomost PDFdagi ID boshqa talabaga tegishli (' . ($idOwner['fio'] ?? '') . ') — ID xato o\'qilgan bo\'lishi mumkin. ' : '') . match (true) {
                     $expelled => "O'qishdan chetlashtirilgan talaba (" . ($k['group'] ?? '?') . ') — Mark ro\'yxatida yo\'q, ma\'lumot uchun',
+                    $k !== null && !empty($k['reason']) => $k['reason'],
                     $k !== null && $ownGroup => 'Shu guruh talabasi (' . ($k['group'] ?? '?') . "), lekin Mark ro'yxatida yo'q",
                     $k !== null => 'Boshqa guruh talabasi: ' . ($k['group'] ?? '?') . ' (' . ($k['fio'] ?? '') . ')',
                     default => "Kontingentda yo'q",

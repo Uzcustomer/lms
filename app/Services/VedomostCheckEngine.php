@@ -97,7 +97,7 @@ class VedomostCheckEngine
         }
 
         // --- PDF ↔ tizim moslashtirish ---
-        [$pairs, $extra, $dupIds] = $this->match($system, $scanRows);
+        [$pairs, $extra, $dupIds] = $this->match($system, $scanRows, (string) ($header['guruh'] ?? ''));
         $missingNrs = $scan['meta']['missing_nrs'] ?? [];
 
         $tmUsed = ['oski' => false, 'test' => false];
@@ -692,8 +692,26 @@ class VedomostCheckEngine
      *
      * @return array{0: array<int, array{0: ?array, 1: array}>, 1: array, 2: array}
      */
-    private function match(array $system, array $scanRows): array
+    private function match(array $system, array $scanRows, string $pageGroup = ''): array
     {
+        // Guruh mosligi (Python match_entries: «ism + guruh mos + ID 1–2 raqam farq — shu talaba»):
+        // 12a/12b'da ism oxiridagi «21-03b», 12-shaklda sarlavhadagi guruh o'zagi.
+        $markIds = array_flip(array_filter(array_map(fn ($t) => VedomostScanReader::digits($t['student_id'] ?? ''), $system)));
+        $gkey = fn ($g) => mb_strtolower(preg_replace('/[^0-9a-zа-я-]/iu', '', (string) $g));
+        $sameGroup = function (array $s, array $stu) use ($gkey, $pageGroup): bool {
+            $mark = $gkey($stu['group'] ?? '');
+            if ($mark === '') {
+                return false;
+            }
+            if (preg_match('/(\d{2}-\d{2}[a-zа-я]?)\s*\)?\s*$/iu', VedomostNames::latin((string) ($s['fio'] ?? '')), $m)) {
+                return str_contains($mark, $gkey($m[1]));
+            }
+            if (preg_match('~(\d+-\d+)~u', (string) $pageGroup, $m)) {
+                return str_contains($mark, $gkey($m[1]));
+            }
+
+            return false;
+        };
         $cands = [];
         foreach ($scanRows as $si => $s) {
             $sid = VedomostScanReader::digits($s['id'] ?? '');
@@ -724,9 +742,13 @@ class VedomostCheckEngine
             $raw = VedomostScanReader::digits($s['id'] ?? '');
             $tid = VedomostScanReader::digits($stu['student_id'] ?? '');
             if ($raw !== $tid) {
-                $flags[] = $dist <= 2
-                    ? ['ocr', "ID: vedomost PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} — {$dist} raqam farqi, ism mos. Ehtimol Gemini raqamni noto‘g‘ri o‘qigan; vedomost PDFdan ko‘z bilan tekshiring"]
-                    : ['bad', "ID: vedomost PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} (vedomost PDFdan tekshiring)"];
+                $flags[] = match (true) {
+                    // …lekin o'qilgan ID shu ro'yxatdagi boshqa talabaniki bo'lsa — baribir tekshirish kerak.
+                    $dist <= 2 && $sim >= 0.85 && $sameGroup($s, $stu) && !isset($markIds[$raw])
+                        => ['info', "ID vedomost PDFda " . ($s['id'] ?: '—') . ", Markda {$tid} — ism va guruh bo‘yicha moslandi (AI raqamni noto‘g‘ri o‘qigan bo‘lishi mumkin)"],
+                    $dist <= 2 => ['ocr', "ID: vedomost PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} — {$dist} raqam farqi, ism mos. Ehtimol Gemini raqamni noto‘g‘ri o‘qigan; vedomost PDFdan ko‘z bilan tekshiring"],
+                    default => ['bad', "ID: vedomost PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} (vedomost PDFdan tekshiring)"],
+                };
             }
             if ($sim < 1.0 && $sim < 0.85) {
                 $flags[] = [in_array('fio', $s['unclear'] ?? [], true) ? 'ocr' : 'bad',

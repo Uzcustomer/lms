@@ -525,3 +525,15 @@ test('ortiqcha qator: vedomost PDFdagi ID boshqa talabaniki — ism bo\'yicha ko
     expect($r['extra'][0]['note'])->toContain('ID boshqa talabaga tegishli (QAMBARALIYEV')
         ->toContain('Shu guruh talabasi (d1/d22-01c (rus))');
 });
+
+test('ID 1 raqamga farq, ism va guruh mos (Python match_entries) — ma\'lumot, «tekshiring» emas', function () {
+    $stu = vtStu('ABSALOMOVA KOMILA ABDURAHMONOVNA', '368211100549', 83, 88, 100, 96, ['group' => 'd2/d21-03b (rus)']);
+    $row = pdfRow(1, 'ABSALOMOVA KOMILA ABDURAHMONOVNA 21-03b', '368221100549', bobo());
+    $r = engine()->build(expectedData([$stu]), scanDoc([$row]), [], rules(), ctx());
+    expect($r['rows'][0]['status'])->toBe('ok')
+        ->and(collect($r['rows'][0]['flags'])->pluck('m')->implode(' '))->toContain('ism va guruh bo‘yicha moslandi');
+
+    // Guruh mos emas (21-05a) — avvalgidek «tekshiring».
+    $r2 = engine()->build(expectedData([$stu]), scanDoc([pdfRow(1, 'ABSALOMOVA KOMILA ABDURAHMONOVNA 21-05a', '368221100549', bobo())]), [], rules(), ctx());
+    expect($r2['rows'][0]['status'])->toBe('ocr');
+});

@@ -81,7 +81,7 @@ class VedomostJamlanmaExcel
         foreach ($submissions as $sub) {
             $w = $this->weightsFor($sub);
             $sysEdits = $sub->ai_result['edits']['system'] ?? [];
-            foreach ($this->checker->studentsFor($sub) as $stu) {
+            foreach ($this->studentsOf($sub) as $stu) {
                 if (($stu['status_code'] ?? '') === '60') {
                     continue;
                 }
@@ -125,6 +125,22 @@ class VedomostJamlanmaExcel
         $ws->setAutoFilter('A1:' . self::CLOSING_COL . max(1, $r));
 
         return $book;
+    }
+
+    /** 12a/12b umumiy vedomosti — birlikning barcha guruhlari (shu urinish talabalari); boshqalari — o'z guruhi. */
+    private function studentsOf(VedomostSubmission $sub): array
+    {
+        if (!$sub->isCombinedForm() || $sub->manual_opened_at !== null) {
+            return $this->checker->studentsFor($sub);
+        }
+        $attempt = VedomostAiChecker::formAttempt($sub->form_type);
+        $shakl = VedomostSubmission::formLabel($sub->form_type);
+        $out = [];
+        foreach (app(VedomostMergeService::class)->unitGroupsOf($sub) as $g) {
+            array_push($out, ...$this->checker->studentsFor($g, $attempt, $shakl));
+        }
+
+        return $out;
     }
 
     /** Vaznlar: AI o'qigan vedomost sarlavhasidan; tekshirilmagan bo'lsa — yopilish shakli bo'yicha. */

@@ -31,6 +31,12 @@
         .verdict.ok { color: #166534; } .verdict.issues { color: #92400e; } .verdict.review { color: #9a3412; } .verdict.wrong_document { color: #b91c1c; }
         .tbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.5); color: #fff; background: transparent; text-decoration: none; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
         .tbtn:hover { background: rgba(255,255,255,.15); }
+        .jdrop { position: relative; }
+        .jdrop summary { list-style: none; }
+        .jdrop summary::-webkit-details-marker { display: none; }
+        .jdrop-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 70; min-width: 220px; max-height: 360px; overflow: auto; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 4px; }
+        .jdrop-menu a { display: block; padding: 6px 10px; border-radius: 6px; color: #1f2937; text-decoration: none; font-size: 13px; white-space: nowrap; }
+        .jdrop-menu a:hover { background: #eef2ff; }
         .tbtn.save { background: #fff; color: var(--xl); border-color: #fff; }
         .tbtn.save:hover { background: #e8f3ec; }
         .tbtn.save:disabled { opacity: .55; cursor: default; background: #fff; }
@@ -223,6 +229,17 @@
         <a class="tbtn" href="{{ route('admin.vedomost-submission.file', [$v->id, 'pdf']) }}" target="_blank" rel="noopener"><svg class="icon"><use href="#i-file"/></svg>PDF</a>
     @endif
     <a class="tbtn" href="{{ route('admin.vedomost-submission.ai-report.excel', $v->id) }}"><svg class="icon"><use href="#i-download"/></svg>Excel</a>
+    @php $journalLinks = rescue(fn () => app(\App\Services\VedomostMergeService::class)->journalLinks($v), [], false); @endphp
+    @if(count($journalLinks) === 1)
+        <a class="tbtn" href="{{ $journalLinks[0]['url'] }}" target="_blank" rel="noopener" title="{{ $journalLinks[0]['label'] }} — jurnal (yangi oynada)">📖 Jurnal</a>
+    @elseif(count($journalLinks) > 1)
+        <details class="jdrop">
+            <summary class="tbtn">📖 Jurnal ({{ count($journalLinks) }})</summary>
+            <div class="jdrop-menu">
+                @foreach($journalLinks as $jl)<a href="{{ $jl['url'] }}" target="_blank" rel="noopener">{{ $jl['label'] }} ↗</a>@endforeach
+            </div>
+        </details>
+    @endif
     @endif
     @if($canEdit)
         <button type="button" class="tbtn save" id="btn-save-top" disabled title="Tuzatishlarni saqlash (Ctrl+S)"><svg class="icon"><use href="#i-pencil"/></svg><span class="lbl">Saqlash</span><span class="n" id="save-top-n" hidden>0</span></button>
@@ -235,8 +252,8 @@
         <button class="chip" data-filter="problems">Muammolilar <span class="n">{{ $problems }}</span></button>
         <button class="chip" data-filter="all">Hammasi <span class="n">{{ $c['total'] }}</span></button>
         <button class="chip" data-filter="bad"><span class="sw" style="background:var(--yellow)"></span>XATO <span class="n">{{ $c['bad'] }}</span></button>
-        <button class="chip" data-filter="ocr"><span class="sw" style="background:var(--orange)"></span>PDFdan tekshiring <span class="n">{{ $c['ocr'] }}</span></button>
-        <button class="chip" data-filter="nopdf"><span class="sw" style="background:#fecaca"></span>PDFda yo'q <span class="n">{{ $c['nopdf'] }}</span></button>
+        <button class="chip" data-filter="ocr"><span class="sw" style="background:var(--orange)"></span>Vedomost PDFdan tekshiring <span class="n">{{ $c['ocr'] }}</span></button>
+        <button class="chip" data-filter="nopdf"><span class="sw" style="background:#fecaca"></span>Vedomost PDFda yo'q <span class="n">{{ $c['nopdf'] }}</span></button>
         <button class="chip" data-filter="missing"><span class="sw" style="background:#fecaca"></span>Kontingentda yo'q <span class="n">{{ $c['missing'] }}</span></button>
         <button class="chip" data-filter="edited"><span class="sw" style="background:var(--edit)"></span>Tuzatilgan <span class="n">{{ $c['edited'] }}</span></button>
     </div>
@@ -359,7 +376,7 @@
     @if($multi)<button class="tab" role="tab" data-tab="approve">Tasdiqlash <span class="n" id="ap-tab-n">{{ count($multi) }}</span></button>@endif
     <div class="legend">
         <span><i style="background:var(--yellow)"></i>Farq (XATO)</span>
-        <span><i style="background:var(--orange)"></i>PDFdan tekshiring</span>
+        <span><i style="background:var(--orange)"></i>Vedomost PDFdan tekshiring</span>
         <span><i style="background:var(--light)"></i>YN = 0</span>
         <span><i style="background:var(--edit-soft);border-color:var(--edit)"></i>Tuzatilgan</span>
     </div>
@@ -443,7 +460,8 @@
             const cls = k === 'A' ? 'c-a' : k === 'B' ? 'c-b' : k === 'C' ? 'c-c' : '';
             letters += `<th class="${cls}">${colL(vtIndex(k))}</th>`;
             names += `<th class="h ${cls}">${esc(VT_HEADERS[k])}</th>`;
-            if (MULTI && k === 'C') { letters += '<th></th><th></th>'; names += '<th class="h">Fan</th><th class="h">Guruh</th>'; }
+            // Talabaning aniq guruhi (guruhcha: d1/d25-01a) — har doim; Fan — faqat yig'ma rejimda.
+            if (k === 'C') { letters += MULTI ? '<th></th><th></th>' : '<th></th>'; names += (MULTI ? '<th class="h">Fan</th>' : '') + '<th class="h">Guruh</th>'; }
         });
         AB.forEach(([t], i) => {
             letters += `<th>${colL(base + i * 2)}</th><th>${colL(base + i * 2 + 1)}</th>`;
@@ -479,7 +497,7 @@
                 if (k === 'N' && v !== null && v !== '') v = Math.round(v * 100) + '%';
                 else if (k === 'AM' && v !== null && v !== '') v = (+(v * 100).toFixed(2)) + '%';
                 else if (['E', 'H'].includes(k) && typeof v === 'number') v = v.toFixed(1);
-                if (MULTI && k === 'D') body += `<td class="txt src" title="${esc(row.fan)}">${esc(row.fan)}</td><td class="txt grp">${esc(row.grp)}</td>`;
+                if (k === 'D') body += (MULTI ? `<td class="txt src" title="${esc(row.fan)}">${esc(row.fan)}</td>` : '') + `<td class="txt grp">${esc(row.grp || row.group || '')}</td>`;
                 body += `<td class="${cls}" data-ref="${colL(vtIndex(k))}${ri + 2}"${sysAttrs}${k === 'B' ? ` title="${esc((row.flags || []).map(f => f.m).join('\n'))}"` : ''}>${esc(fmt(v))}</td>`;
             });
             AB.forEach(([t, key, hc], i) => {
@@ -488,7 +506,7 @@
                 const cc = (row.cells || {})[key];
                 const ref = colL(base + i * 2) + (ri + 2);
                 if (skip) { body += `<td class="grey" data-ref="${ref}">kerak emas</td><td></td>`; return; }
-                if (!row.pdf) { body += `<td class="txt" data-ref="${ref}">PDFda yo'q</td><td></td>`; return; }
+                if (!row.pdf) { body += `<td class="txt" data-ref="${ref}">Vedomost PDFda yo'q</td><td></td>`; return; }
                 const dirty = isDirty(row.key, f);
                 const raw = pdfVal(row, f);
                 let st = cc ? cc.status : '';
@@ -636,7 +654,7 @@
         const F = ['fio', 'id', 'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball', 'jbmton_ball', 'jbmton_pct', 'oski_pct', 'oski_ball', 'test_pct', 'test_ball', 'yn', 'ects'];
         const entries = [];
         R.rows.forEach(r => { if (r.pdf) entries.push(Object.assign({ matched: true }, r)); });
-        (R.extra || []).forEach(e => entries.push({ matched: false, key: e.key, page: e.page, nr: e.nr, fio: '', id: '', scan_fio: e.fio, scan_id: e.id, pdf: e.pdf, unclear: e.unclear, edited: e.edited, orig: e.orig, note: e.note, status: 'extra' }));
+        (R.extra || []).forEach(e => entries.push({ matched: false, key: e.key, page: e.page, nr: e.nr, fio: '', id: '', scan_fio: e.fio, scan_id: e.id, pdf: e.pdf, unclear: e.unclear, edited: e.edited, orig: e.orig, note: e.note, expelled: e.expelled, status: 'extra' }));
         entries.sort((a, b) => ((a.page || 0) - (b.page || 0)) || ((a.nr || 0) - (b.nr || 0)));
         let head = '<tr class="letters"><th class="rn"></th>' + ['Fayl / bet', '№', ...F.map(f => f === 'fio' ? 'FIO (PDF)' : f === 'id' ? 'ID (PDF)' : LABELS[f]), 'FIO (moslashtirilgan)', 'ID (moslashtirilgan)', "Aniq o'qilmagan"].map((_, i) => `<th>${colL(i)}</th>`).join('') + '</tr>';
         head += '<tr class="names"><th class="rn">1</th>' + ['Fayl / bet', '№', ...F.map(f => f === 'fio' ? 'FIO (PDF)' : f === 'id' ? 'ID (PDF)' : LABELS[f]), 'FIO (moslashtirilgan)', 'ID (moslashtirilgan)', "Aniq o'qilmagan"].map(h => `<th class="h">${esc(h)}</th>`).join('') + '</tr>';
@@ -650,7 +668,7 @@
                 const st = f === 'fio' ? ' style="min-width:260px"' : f === 'id' ? ' style="min-width:120px"' : '';
                 body += `<td class="${cls}"${st} ${CAN_EDIT ? `tabindex="0" data-key="${e.key}" data-field="${f}"` : ''} data-label="${esc(LABELS[f] || f)}" data-fio="${esc(e.scan_fio)}">${esc(pdfVal(e, f))}</td>`;
             });
-            body += `<td class="txt ${e.matched ? '' : 'y'}">${e.matched ? esc(e.fio) : esc("Markda yo'q — " + (e.note || ''))}</td><td class="txt">${esc(e.id)}</td><td class="txt ${(e.unclear || []).length ? 'o' : ''}">${esc((e.unclear || []).join(', '))}</td></tr>`;
+            body += `<td class="txt ${e.matched ? '' : (e.expelled ? 'grey' : 'y')}">${e.matched ? esc(e.fio) : esc(e.expelled ? (e.note || '') : "Markda yo'q — " + (e.note || ''))}</td><td class="txt">${esc(e.id)}</td><td class="txt ${(e.unclear || []).length ? 'o' : ''}">${esc((e.unclear || []).join(', '))}</td></tr>`;
         });
         document.getElementById('sheet-pdf').innerHTML = body ? `<table class="xl" aria-label="PDFdan o'qilgan jadval"><thead>${head}</thead><tbody>${body}</tbody></table>` : '<div class="empty">Qator yo\'q.</div>';
     }
@@ -664,7 +682,7 @@
             n++;
             body += `<tr><td class="rn">${n}</td><td>${esc(row.vt.A)}</td><td class="txt">${esc(row.vt.B)}</td><td class="txt">${esc(row.id)}</td><td class="txt">${esc(row.group)}</td><td class="txt"><span class="st ${row.status}">${icon(ST_ICON[row.status] || 'i-info')}${esc(STATUS_TXT[row.status])}</span></td><td class="note">${(row.flags || []).map(f => esc(f.m)).join('<br>')} <button class="link" data-goto="${ri}">Jadvalda</button></td></tr>`;
         });
-        (R.extra || []).forEach(e => { n++; body += `<tr><td class="rn">${n}</td><td></td><td class="txt">${esc(e.fio)}</td><td class="txt">${esc(e.id)}</td><td></td><td class="txt y">PDFda bor, Markda yo'q</td><td class="note">vedomost.pdf / ${esc(e.page || 1)} · ${esc(e.note)}</td></tr>`; });
+        (R.extra || []).forEach(e => { n++; body += `<tr><td class="rn">${n}</td><td></td><td class="txt">${esc(e.fio)}</td><td class="txt">${esc(e.id)}</td><td></td><td class="txt ${e.expelled ? 'grey' : 'y'}">${e.expelled ? "Chetlashtirilgan (ma'lumot)" : "Vedomost PDFda bor, Markda yo'q"}</td><td class="note">vedomost.pdf / ${esc(e.page || 1)} · ${esc(e.note)}</td></tr>`; });
         (R.issues || []).forEach(i => { n++; body += `<tr><td class="rn">${n}</td><td></td><td></td><td></td><td></td><td class="txt">Ogohlantirish</td><td class="note">${esc(i.m)}</td></tr>`; });
         R.header.filter(h => h.st !== 'ok').forEach(h => { n++; body += `<tr><td class="rn">${n}</td><td></td><td></td><td></td><td></td><td class="txt ${h.st === 'bad' ? 'y' : 'o'}">Sarlavha: ${esc(h.k)}</td><td class="note">${esc(h.v)}</td></tr>`; });
         const head = '<tr class="names"><th class="rn">1</th>' + ['#', 'FIO', 'ID', 'Guruh', 'Holat', 'Izoh'].map(h => `<th class="h">${h}</th>`).join('') + '</tr>';

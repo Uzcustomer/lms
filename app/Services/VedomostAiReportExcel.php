@@ -114,7 +114,7 @@ class VedomostAiReportExcel
                     $vc->setValue('kerak emas');
                     $vc->getStyle()->getFont()->setItalic(true)->getColor()->setARGB('FF8A8A8A');
                 } elseif ($r['pdf'] === null) {
-                    $vc->setValue("PDFda yo'q");
+                    $vc->setValue("Vedomost PDFda yo'q");
                 } elseif ($cc) {
                     $val = ($cc['status'] === 'ocr' && $cc['raw'] !== '') ? $cc['raw'] : ($cc['pdf'] ?? ($cc['raw'] !== '' ? $cc['raw'] : null));
                     if ($val !== null) {
@@ -263,7 +263,7 @@ class VedomostAiReportExcel
         }
         foreach ($report['extra'] ?? [] as $e) {
             $r++;
-            $ws->fromArray(['', $e['fio'], '', '', "PDFda bor, Markda yo'q", trim('vedomost.pdf / ' . ($e['page'] ?? 1) . ' · ' . ($e['note'] ?? ''))], null, 'A' . $r);
+            $ws->fromArray(['', $e['fio'], '', '', !empty($e['expelled']) ? 'Chetlashtirilgan (ma\'lumot)' : "Vedomost PDFda bor, Markda yo'q", trim('vedomost.pdf / ' . ($e['page'] ?? 1) . ' · ' . ($e['note'] ?? ''))], null, 'A' . $r);
             $ws->getCell('C' . $r)->setValueExplicit((string) $e['id'], DataType::TYPE_STRING);
         }
         foreach ($report['issues'] ?? [] as $i) {

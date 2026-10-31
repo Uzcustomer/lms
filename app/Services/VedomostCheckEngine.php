@@ -58,7 +58,7 @@ class VedomostCheckEngine
     ];
 
     public const STATUS_TXT = [
-        'ok' => 'OK', 'bad' => 'XATO', 'ocr' => 'PDFdan tekshiring', 'missing' => "KONTINGENTDA YO'Q", 'nopdf' => "PDFda yo'q",
+        'ok' => 'OK', 'bad' => 'XATO', 'ocr' => 'Vedomost PDFdan tekshiring', 'missing' => "KONTINGENTDA YO'Q", 'nopdf' => "Vedomost PDFda yo'q",
     ];
 
     private const RANK = ['ok' => 0, 'ocr' => 1, 'bad' => 2, 'nopdf' => 3, 'missing' => 4];
@@ -133,7 +133,7 @@ class VedomostCheckEngine
                     }
                 }
                 if (isset($dupIds[$sid])) {
-                    $flags[] = ['t' => 'bad', 'm' => 'PDFda bu talaba bir necha marta uchraydi (ID mos)'];
+                    $flags[] = ['t' => 'bad', 'm' => 'Vedomost PDFda bu talaba bir necha marta uchraydi (ID mos)'];
                     $set('bad');
                 }
                 $unclear = $s['unclear'] ?? [];
@@ -165,7 +165,7 @@ class VedomostCheckEngine
                     $flags[] = ['t' => 'bad', 'm' => "Vedomostning o'zida hisob xatosi (ikki marta o'qildi, bir xil): " . implode('; ', $s['problems'])];
                     $set('bad');
                 } elseif (!empty($s['problems'])) {
-                    $flags[] = ['t' => 'ocr', 'm' => "PDF qatorining ichki hisobi mos emas: " . implode('; ', $s['problems']) . ' — PDFdan tekshiring'];
+                    $flags[] = ['t' => 'ocr', 'm' => "Vedomost PDF qatorining ichki hisobi mos emas: " . implode('; ', $s['problems']) . ' — vedomost PDFdan tekshiring'];
                     $set('ocr');
                 }
                 if ($kurs6) {
@@ -175,15 +175,15 @@ class VedomostCheckEngine
                     }
                 }
             } else {
-                $gapNote = !empty($missingNrs) ? ' (AI PDFdagi ' . implode(', ', $missingNrs) . '-qatorni o\'qiy olmadi — PDFdan tekshiring)' : '';
+                $gapNote = !empty($missingNrs) ? ' (AI vedomost PDFdagi ' . implode(', ', $missingNrs) . '-qatorni o\'qiy olmadi — vedomost PDFdan tekshiring)' : '';
                 if ($expelled) {
-                    $flags[] = ['t' => 'missing', 'm' => "KONTINGENTDA YO'Q va PDFda ham yo'q (Markda «chetlashgan» deb belgilangan)"];
+                    $flags[] = ['t' => 'missing', 'm' => "KONTINGENTDA YO'Q va vedomost PDFda ham yo'q (Markda «chetlashgan» deb belgilangan)"];
                     $set('missing');
                 } elseif ($gapNote !== '') {
-                    $flags[] = ['t' => 'ocr', 'm' => "PDFda topilmadi" . $gapNote];
+                    $flags[] = ['t' => 'ocr', 'm' => "Vedomost PDFda topilmadi" . $gapNote];
                     $set('ocr');
                 } else {
-                    $flags[] = ['t' => 'nopdf', 'm' => "PDFda yo'q"];
+                    $flags[] = ['t' => 'nopdf', 'm' => "Vedomost PDFda yo'q"];
                     $set('nopdf');
                 }
             }
@@ -274,15 +274,27 @@ class VedomostCheckEngine
             ];
         }
 
+        // O'zak guruh (d1/d22-01a → d1/d22-01): guruhcha shu vedomostniki bo'lsa — «boshqa guruh» emas.
+        $root = fn ($g) => mb_strtolower(preg_match('~^(.*?\d+-\d+)~u', trim((string) $g), $m) ? $m[1] : trim((string) $g));
+        $ownRoots = collect($system)->pluck('group')->filter()->map($root)->unique()->all();
         $extraRows = [];
         foreach ($extra as $s) {
             $sid = VedomostScanReader::digits($s['id'] ?? '');
             $k = $context['kontingent'][$sid] ?? null;
+            // Chetlashtirilgan talaba Mark ro'yxatiga kirmaydi — vedomostda bo'lsa, faqat ma'lumot (xato emas).
+            $expelled = $k !== null && (string) ($k['status'] ?? '') === '60';
+            $ownGroup = $k !== null && in_array($root($k['group'] ?? ''), $ownRoots, true);
             $extraRows[] = [
                 'key' => $s['key'], 'id' => $s['id'] ?? '', 'fio' => $s['fio'] ?? '', 'page' => $s['page'] ?? null, 'nr' => $s['nr'] ?? null,
                 'pdf' => $this->pdfValues($s), 'unclear' => $s['unclear'] ?? [], 'orig' => $s['orig'] ?? [],
                 'edited' => $editedKeys[$s['key']] ?? [],
-                'note' => $k ? 'Boshqa guruh talabasi: ' . ($k['group'] ?? '?') . ' (' . ($k['fio'] ?? '') . ')' : "Kontingentda yo'q",
+                'expelled' => $expelled,
+                'note' => match (true) {
+                    $expelled => "O'qishdan chetlashtirilgan talaba (" . ($k['group'] ?? '?') . ') — Mark ro\'yxatida yo\'q, ma\'lumot uchun',
+                    $k !== null && $ownGroup => 'Shu guruh talabasi (' . ($k['group'] ?? '?') . "), lekin Mark ro'yxatida yo'q",
+                    $k !== null => 'Boshqa guruh talabasi: ' . ($k['group'] ?? '?') . ' (' . ($k['fio'] ?? '') . ')',
+                    default => "Kontingentda yo'q",
+                },
             ];
         }
 
@@ -302,7 +314,7 @@ class VedomostCheckEngine
             $issues[] = $wi;
         }
         if (!empty($missingNrs)) {
-            $issues[] = ['t' => 'ocr', 'm' => 'AI PDFdagi ' . implode(', ', $missingNrs) . "-qator(lar)ni o'qiy olmadi — PDFdan ko'z bilan tekshiring yoki qayta tekshiring."];
+            $issues[] = ['t' => 'ocr', 'm' => 'AI vedomost PDFdagi ' . implode(', ', $missingNrs) . "-qator(lar)ni o'qiy olmadi — vedomost PDFdan ko'z bilan tekshiring yoki qayta tekshiring."];
         }
 
         $headerChecks = $this->headerChecks($expected, $system, $header, $context, $signatures);
@@ -322,7 +334,8 @@ class VedomostCheckEngine
             $wrong[] = "talabalar: tizimdagi {$sysN} talabadan faqat {$matchedN} tasi skanerda topildi";
         }
 
-        $counts = ['total' => $sysN, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => count($extraRows),
+        $counts = ['total' => $sysN, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => count(array_filter($extraRows, fn ($e) => !$e['expelled'])),
+            'expelled' => count(array_filter($extraRows, fn ($e) => $e['expelled'])),
             'edited' => count(array_filter($rows, fn ($r) => !empty($r['edited']))) + count(array_filter($extraRows, fn ($r) => !empty($r['edited']))),
             'sys_edited' => array_sum(array_map(fn ($r) => count($r['sys_edited'] ?? []), $rows))];
         foreach ($rows as $r) {
@@ -334,16 +347,19 @@ class VedomostCheckEngine
 
         if ($wrong) {
             $verdict = 'wrong_document';
-            $summary = "Yuklangan PDF bu vedomostga tegishli emas ko'rinadi (" . implode('; ', $wrong) . "). To'g'ri faylni yuklang.";
+            $summary = "Yuklangan vedomost PDF bu vedomostga tegishli emas ko'rinadi (" . implode('; ', $wrong) . "). To'g'ri faylni yuklang.";
         } elseif ($counts['bad'] + $counts['missing'] + $counts['nopdf'] + $counts['extra'] + $hdrBad > 0) {
             $verdict = 'issues';
             $summary = $this->summary($counts, $hdrBad, $sysN, $scanN);
         } elseif ($counts['ocr'] > 0 || collect($verdictChecks)->contains('st', 'warn')) {
             $verdict = 'review';
-            $summary = "Farq topilmadi, lekin {$counts['ocr']} ta qatorni PDFdan ko'z bilan tekshirish kerak.";
+            $summary = "Farq topilmadi, lekin {$counts['ocr']} ta qatorni vedomost PDFdan ko'z bilan tekshirish kerak.";
         } else {
             $verdict = 'ok';
             $summary = "Vedomost tizim ma'lumotiga to'liq mos keladi ({$sysN} talaba).";
+        }
+        if ($counts['expelled'] > 0 && $verdict !== 'wrong_document') {
+            $summary .= " Vedomostda {$counts['expelled']} ta chetlashtirilgan talaba bor (ma'lumot uchun).";
         }
 
         return [
@@ -449,7 +465,7 @@ class VedomostCheckEngine
             if ($he !== null && $he != 0) {
                 // Vedomost Markdan chop etiladi: Markda qiymat bo'la turib PDF katagi bo'sh bo'lishi deyarli
                 // uchramaydi — odatda AI kulrang qatordagi katakni o'qimagan. XATO emas, «PDFdan tekshiring».
-                $flags[] = ['t' => 'ocr', 'm' => "{$label}: PDFda bo‘sh o‘qildi (Mark " . $this->f($he) . ') — PDFdan ko‘z bilan tekshiring'];
+                $flags[] = ['t' => 'ocr', 'm' => "{$label}: vedomost PDFda bo‘sh o‘qildi (Mark " . $this->f($he) . ') — vedomost PDFdan ko‘z bilan tekshiring'];
                 $set('ocr');
 
                 return $c + ['status' => 'ocr'];
@@ -458,7 +474,7 @@ class VedomostCheckEngine
             return $c + ['status' => 'empty'];
         }
         if ($dirty && ($p === null || !$this->near($p, $he, $tol))) {
-            $flags[] = ['t' => 'ocr', 'm' => "{$label}: PDFda aniq o‘qilmadi (\"{$raw}\") — PDFdan ko‘z bilan tekshiring"];
+            $flags[] = ['t' => 'ocr', 'm' => "{$label}: vedomost PDFda aniq o‘qilmadi (\"{$raw}\") — vedomost PDFdan ko‘z bilan tekshiring"];
             $set('ocr');
 
             return $c + ['status' => 'ocr'];
@@ -469,7 +485,7 @@ class VedomostCheckEngine
             return $c + ['status' => 'ocr'];
         }
         if (!$this->near($p, $he, $tol)) {
-            $flags[] = ['t' => 'bad', 'm' => "{$label}: PDF {$raw} ≠ Mark " . $this->f($he)];
+            $flags[] = ['t' => 'bad', 'm' => "{$label}: vedomost PDF {$raw} ≠ Mark " . $this->f($he)];
             $set('bad');
 
             return $c + ['status' => 'bad'];
@@ -604,12 +620,12 @@ class VedomostCheckEngine
         foreach ([['Joriy', $jn, 'jb_ball', $jbE], ["Mustaqil ta’lim", $mt, 'mt_ball', $mbE]] as [$lbl, $pct, $bf, $e]) {
             $b = $n($bf);
             if ($b !== null && abs($b - $e) > 0.051) {
-                $out[] = "{$lbl} " . $this->f($pct) . '% → ' . $this->f(round($e, 2)) . ' ball bo‘lishi kerak, PDFda ' . $this->f($b);
+                $out[] = "{$lbl} " . $this->f($pct) . '% → ' . $this->f(round($e, 2)) . ' ball bo‘lishi kerak, vedomost PDFda ' . $this->f($b);
             }
         }
         $s6 = $n('jbmton_ball');
         if ($s6 !== null && $s6 != $jnmtE) {
-            $out[] = 'JN+MT ' . $this->f(round($jbE, 2)) . ' + ' . $this->f(round($mbE, 2)) . " → {$jnmtE} bo‘lishi kerak, PDFda " . $this->f($s6);
+            $out[] = 'JN+MT ' . $this->f(round($jbE, 2)) . ' + ' . $this->f(round($mbE, 2)) . " → {$jnmtE} bo‘lishi kerak, vedomost PDFda " . $this->f($s6);
         }
 
         return $out;
@@ -655,12 +671,12 @@ class VedomostCheckEngine
             $tid = VedomostScanReader::digits($stu['student_id'] ?? '');
             if ($raw !== $tid) {
                 $flags[] = $dist <= 2
-                    ? ['ocr', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} — {$dist} raqam farqi, ism mos. Ehtimol Gemini raqamni noto‘g‘ri o‘qigan; PDFdan ko‘z bilan tekshiring"]
-                    : ['bad', "ID: PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} (PDFdan tekshiring)"];
+                    ? ['ocr', "ID: vedomost PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} — {$dist} raqam farqi, ism mos. Ehtimol Gemini raqamni noto‘g‘ri o‘qigan; vedomost PDFdan ko‘z bilan tekshiring"]
+                    : ['bad', "ID: vedomost PDFda " . ($s['id'] ?: '—') . " ≠ Mark {$tid} (vedomost PDFdan tekshiring)"];
             }
             if ($sim < 1.0 && $sim < 0.85) {
                 $flags[] = [in_array('fio', $s['unclear'] ?? [], true) ? 'ocr' : 'bad',
-                    'F.I.Sh farq qiladi (' . (int) round($sim * 100) . '%): PDF «' . ($s['fio'] ?? '') . '», Mark «' . ($stu['fish'] ?? '') . '»'];
+                    'F.I.Sh farq qiladi (' . (int) round($sim * 100) . '%): vedomost PDF «' . ($s['fio'] ?? '') . '», Mark «' . ($stu['fish'] ?? '') . '»'];
             }
             $pairs[$ti] = [$s, $flags];
         }
@@ -802,10 +818,10 @@ class VedomostCheckEngine
             $nf = fn ($x) => preg_replace('/[.\s]+$/u', '', preg_replace('/\s*([,\-–—])\s*/u', '$1', VedomostNames::uz($x)));
             $st = collect($hf)->contains(fn ($b) => $nf($pf) === $nf($b)) ? 'ok'
                 : (collect($hf)->contains(fn ($b) => mb_strtolower($nf($pf)) === mb_strtolower($nf($b))) ? 'warn' : 'bad');
-            $add('fan', 'Fan nomi (PDF ↔ Mark)', "PDF: {$pf} · Mark: " . implode(' / ', $hf)
+            $add('fan', 'Fan nomi (vedomost PDF ↔ Mark)', "Vedomost PDF: {$pf} · Mark: " . implode(' / ', $hf)
                 . ($st === 'bad' ? ' — nomi Markdagidan farq qiladi' : ($st === 'warn' ? ' — faqat katta/kichik harf farqi' : '')), $st);
         } else {
-            $add('fan', 'Fan nomi (PDF ↔ Mark)', 'PDF: ko‘rsatilmagan · Mark: ' . implode(' / ', $hf), 'bad');
+            $add('fan', 'Fan nomi (vedomost PDF ↔ Mark)', 'Vedomost PDF: ko‘rsatilmagan · Mark: ' . implode(' / ', $hf), 'bad');
         }
 
         // Soat / kredit
@@ -814,7 +830,7 @@ class VedomostCheckEngine
         $hs = array_map(fn ($x) => VedomostScanReader::num($x), $hv('AH'));
         $hk = array_map(fn ($x) => VedomostScanReader::num($x), $hv('AI'));
         $ok = ($ps === null || in_array($ps, $hs)) && ($pk === null || in_array($pk, $hk));
-        $add('soat', 'Soat / kredit', 'PDF: ' . ($ps === null ? '—' : $this->f($ps)) . ' / ' . ($pk === null ? '—' : $this->f($pk))
+        $add('soat', 'Soat / kredit', 'Vedomost PDF: ' . ($ps === null ? '—' : $this->f($ps)) . ' / ' . ($pk === null ? '—' : $this->f($pk))
             . ' · Mark: ' . implode('/', array_map(fn ($x) => $this->f($x), $hs)) . ' / ' . implode('/', array_map(fn ($x) => $this->f($x), $hk)),
             ($ps === null && $pk === null) ? 'warn' : ($ok ? 'ok' : 'bad'));
 
@@ -829,8 +845,8 @@ class VedomostCheckEngine
                 $rf = $plan['subject'];
                 $pdfOk = $pf === '' || $nfk($pf) === $nfk($rf);
                 $markOk = collect($hf)->contains(fn ($b) => $nfk($b) === $nfk($rf));
-                $add('reja_fan', "Fan nomi (ishchi o'quv reja)", "Reja: {$rf} · PDF: " . ($pf ?: '—') . ' · Mark: ' . implode(' / ', $hf)
-                    . (!$pdfOk ? ' — PDF rejadan farq qiladi' : (!$markOk ? ' — Mark rejadan farq qiladi' : '')) . $src,
+                $add('reja_fan', "Fan nomi (ishchi o'quv reja)", "Reja: {$rf} · vedomost PDF: " . ($pf ?: '—') . ' · Mark: ' . implode(' / ', $hf)
+                    . (!$pdfOk ? ' — vedomost PDF rejadan farq qiladi' : (!$markOk ? ' — Mark rejadan farq qiladi' : '')) . $src,
                     !$pdfOk ? 'bad' : (!$markOk ? 'warn' : 'ok'));
 
                 $rs = $plan['hours'];
@@ -841,9 +857,9 @@ class VedomostCheckEngine
                     && ($rk === null || empty($hk) || collect($hk)->contains(fn ($x) => $same($x, $rk)));
                 $fmt = fn ($x) => $x === null ? '—' : $this->f($x);
                 $add('reja_soat', "Soat / kredit (ishchi o'quv reja)", 'Reja: ' . $fmt($rs) . ' / ' . $fmt($rk)
-                    . ' · PDF: ' . $fmt($ps) . ' / ' . $fmt($pk)
+                    . ' · vedomost PDF: ' . $fmt($ps) . ' / ' . $fmt($pk)
                     . ' · Mark: ' . (implode('/', array_map($fmt, $hs)) ?: '—') . ' / ' . (implode('/', array_map($fmt, $hk)) ?: '—')
-                    . (!$pdfOk ? ' — PDF rejadan farq qiladi' : (!$markOk ? ' — Mark rejadan farq qiladi' : '')) . $src,
+                    . (!$pdfOk ? ' — vedomost PDF rejadan farq qiladi' : (!$markOk ? ' — Mark rejadan farq qiladi' : '')) . $src,
                     !$pdfOk ? 'bad' : (!$markOk ? 'warn' : 'ok'));
             }
         }
@@ -851,7 +867,7 @@ class VedomostCheckEngine
         // Ma'ruzachi
         $pm = $uz($h['maruzachi'] ?? '');
         $hm = $hv('AJ');
-        $add('maruzachi', "Ma'ruzachi", 'PDF: ' . ($pm ?: "ko'rsatilmagan") . ' · Mark: ' . (implode(' / ', $hm) ?: '—'),
+        $add('maruzachi', "Ma'ruzachi", 'Vedomost PDF: ' . ($pm ?: "ko'rsatilmagan") . ' · Mark: ' . (implode(' / ', $hm) ?: '—'),
             $pm === '' ? 'bad' : (collect($hm)->contains(fn ($b) => VedomostNames::sameName($pm, $b)) ? 'ok'
                 : (collect($hm)->contains(fn ($b) => VedomostNames::sameSurname($pm, $b)) ? 'warn' : 'bad')));
 
@@ -868,22 +884,22 @@ class VedomostCheckEngine
         if ($retakeForm && (empty($pa) || $missP || $extraP)) {
             $soft = true;
         }
-        $add('amaliyot', "Amaliyot o'qituvchilari", 'PDF: ' . (implode(', ', $pa) ?: "ko'rsatilmagan") . ' · Mark: ' . implode(', ', $ha)
-            . ($missP ? " · PDFda yo'q: " . implode(', ', $missP) : '') . ($extraP ? " · Markda yo'q: " . implode(', ', $extraP) : ''),
+        $add('amaliyot', "Amaliyot o'qituvchilari", 'Vedomost PDF: ' . (implode(', ', $pa) ?: "ko'rsatilmagan") . ' · Mark: ' . implode(', ', $ha)
+            . ($missP ? " · vedomost PDFda yo'q: " . implode(', ', $missP) : '') . ($extraP ? " · Markda yo'q: " . implode(', ', $extraP) : ''),
             empty($pa) ? ($retakeForm ? 'warn' : 'bad') : (($missP || $extraP) ? ($soft ? 'warn' : 'bad') : 'ok'));
 
         // Shakl (o'ng yuqori burchak): 12a o'rniga 12-shakl yuklanib qolishining oldini oladi.
         if (!empty($exp['shakl'])) {
             $ps = $uz($h['shakl'] ?? '');
             $want = VedomostNames::formKey($exp['shakl']);
-            $add('shakl', 'Vedomost shakli', 'PDF: ' . ($ps ?: "o'qilmadi") . ' · tizimda: ' . $exp['shakl'],
+            $add('shakl', 'Vedomost shakli', 'Vedomost PDF: ' . ($ps ?: "o'qilmadi") . ' · tizimda: ' . $exp['shakl'],
                 $ps === '' ? 'warn' : (VedomostNames::formKey($ps) === $want ? 'ok' : 'bad'));
         }
 
         // Fakultet dekani
         $pd = $uz($h['dekan'] ?? '');
         $dk = $uz($exp['dekan'] ?? '');
-        $add('dekan', 'Fakultet dekani', 'PDF: ' . ($pd ?: "ko'rsatilmagan") . ' · Mark: ' . ($dk ?: '—'),
+        $add('dekan', 'Fakultet dekani', 'Vedomost PDF: ' . ($pd ?: "ko'rsatilmagan") . ' · Mark: ' . ($dk ?: '—'),
             $pd === '' ? 'bad' : ($dk === '' ? 'warn' : (VedomostNames::sameName($pd, $dk) ? 'ok' : 'bad')));
 
         // Kafedra mudiri
@@ -899,7 +915,9 @@ class VedomostCheckEngine
         $sys = $uz($exp['yn_sanasi'] ?? '');
         $dk2 = fn ($x) => preg_match('/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/', $x, $m) ? sprintf('%04d%02d%02d', $m[3], $m[2], $m[1]) : '';
         $dateOk = $sys === '' || $ys === '' || collect(explode(',', $sys))->contains(fn ($d) => $dk2($d) !== '' && $dk2($d) === $dk2($ys));
-        $add('guruh', 'Guruh / sana', 'PDF: ' . ($pg ?: '—') . ' · YaN sanasi: ' . ($ys ?: '—') . ' · Mark: ' . implode(', ', $hg)
+        // 12a/12b umumiy vedomostida o'nlab guruh — ro'yxat qisqartiriladi.
+        $hgTxt = count($hg) > 6 ? implode(', ', array_slice($hg, 0, 4)) . ' … (jami ' . count($hg) . ' ta guruh)' : implode(', ', $hg);
+        $add('guruh', 'Guruh / sana', 'Vedomost PDF: ' . ($pg ?: '—') . ' · YaN sanasi: ' . ($ys ?: '—') . ' · Mark: ' . $hgTxt
             . ($sys !== '' ? ' (YN sanasi tizimda: ' . $sys . ')' : ''), $dateOk ? 'ok' : 'warn');
 
         // Imzolar va muhr (Python'da yo'q — mark talabi)
@@ -946,7 +964,7 @@ class VedomostCheckEngine
         $out = [];
         $read = array_sum(array_map(fn ($k) => (int) round((float) ($scanW[$k] ?? 0)), ['jb', 'mt', 'on', 'oski', 'test']));
         if ($read !== 100) {
-            $out[] = ['t' => 'ocr', 'm' => 'Vaznlar PDF sarlavhasidan aniq o‘qilmadi — yopilish shakli bo‘yicha olindi: '
+            $out[] = ['t' => 'ocr', 'm' => 'Vaznlar vedomost PDF sarlavhasidan aniq o‘qilmadi — yopilish shakli bo‘yicha olindi: '
                 . "JN {$w['jb']} / MT {$w['mt']} / ON {$w['on']} / OSKE {$w['oski']} / Test {$w['test']} (kerak bo‘lsa Sarlavha varag‘ida tuzating)"];
         }
         $needO = in_array($closing, ['oski', 'oski_test'], true);
@@ -964,8 +982,8 @@ class VedomostCheckEngine
     private function summary(array $c, int $hdrBad, int $sysN, int $scanN): string
     {
         $parts = [];
-        foreach ([['bad', 'talabada XATO'], ['nopdf', "talaba PDFda yo'q"], ['missing', "talaba kontingentda yo'q"],
-            ['extra', 'ortiqcha talaba PDFda'], ['ocr', "qator PDFdan tekshirilsin"]] as [$k, $txt]) {
+        foreach ([['bad', 'talabada XATO'], ['nopdf', "talaba vedomost PDFda yo'q"], ['missing', "talaba kontingentda yo'q"],
+            ['extra', 'ortiqcha talaba vedomost PDFda'], ['ocr', "qator vedomost PDFdan tekshirilsin"]] as [$k, $txt]) {
             if ($c[$k]) {
                 $parts[] = "{$c[$k]} {$txt}";
             }

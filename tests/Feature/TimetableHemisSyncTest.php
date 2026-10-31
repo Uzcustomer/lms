@@ -1995,6 +1995,8 @@ it('bugungi darslar: joy almashish — avval yangi vaqti bo\'sh amal, so\'ng uni
     expect($rows[1]['status'])->toBe('update')->and($rows[2]['status'])->toBe('update');
     $actions = collect($res['json']['groups'][0]['units'])->flatMap(fn ($u) => $u['actions'])->sortBy('gseq')->values();
     expect($actions->map(fn ($a) => $a['hemis_id'] . ' ' . $a['start'] . ' #' . $a['gseq'])->all())->toBe(['2 13:30 #1', '1 12:00 #2']);
+    // after — oldin ko'chishi kerak dars: xatcho'p u yozilmaguncha bunisiga tegmaydi.
+    expect($actions->map(fn ($a) => $a['after'])->all())->toBe([[], [2]]);
 
     // Sof almashinuv: ma'ruza 12:00 → 08:30, amaliy 08:30 → 12:00 — ikkalasi to'siqli.
     $lec->update(['pair' => 1]);

@@ -2059,7 +2059,7 @@ trait TimetableHemisSync
             $jsonGroups[$gid]['units'][$uk] ??= ['subject_name' => $x['subject'], 'subject_id' => $x['subject_id'], 'code_names' => [], 'actions' => []];
             $jsonGroups[$gid]['units'][$uk]['code_names'][$x['code']] = $x['type'];
             // gseq — yozish navbati (guruhlararo ham): o'rni bo'shaydigan dars avval suriladi.
-            $jsonGroups[$gid]['units'][$uk]['actions'][] = ['op' => 'update', 'today' => true, 'date' => $today, 'hemis_id' => $x['hemis_id'], 'gseq' => $x['gseq'] ?? 0,
+            $jsonGroups[$gid]['units'][$uk]['actions'][] = ['op' => 'update', 'today' => true, 'date' => $today, 'hemis_id' => $x['hemis_id'], 'gseq' => $x['gseq'] ?? 0, 'after' => $x['after'] ?? [],
                 'start' => $x['new_start'], 'end' => $x['new_end'], 'code' => $x['code'],
                 'employee_id' => $x['new_employee_id'], 'employee_name' => $x['new_employee_name'],
                 'auditorium_code' => $x['new_auditorium_code'], 'auditorium_name' => $x['new_auditorium_name'], 'changes' => $x['changes'], 'blocked' => []];
@@ -2074,7 +2074,7 @@ trait TimetableHemisSync
         unset($jg);
         usort($out, fn ($a, $b) => [$a['group'], $a['start'], $a['subject']] <=> [$b['group'], $b['start'], $b['subject']]);
         $count = fn (string $s) => count(array_filter($out, fn ($x) => $x['status'] === $s));
-        $rows = array_map(fn ($x) => array_diff_key($x, array_flip(['employee_id', 'new_employee_id', 'teacher_set', 'code', 'subject_id', 'time_passed'])), $out);
+        $rows = array_map(fn ($x) => array_diff_key($x, array_flip(['employee_id', 'new_employee_id', 'teacher_set', 'code', 'subject_id', 'time_passed', 'after'])), $out);
 
         return [
             'today' => $today,
@@ -2289,8 +2289,10 @@ trait TimetableHemisSync
             $out[$i]['status'] = 'blocked';
             $out[$i]['blocked'] = array_merge($out[$i]['blocked'], $texts);
         }
+        // after — oldin ko'chishi kerak darslar (HEMIS id): xatcho'p ular muvaffaqiyatli yozilmaguncha bu darsga tegmaydi.
         foreach ($done as $i => $n) {
             $out[$i]['gseq'] = $n;
+            $out[$i]['after'] = array_map(fn ($j) => (int) $out[$j]['hemis_id'], array_keys($deps[$i] ?? []));
         }
     }
 }

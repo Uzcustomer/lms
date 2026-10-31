@@ -388,20 +388,41 @@ class VedomostScanReader
         return [$res, $fixed];
     }
 
-    /** Har nazorat turi uchun ball/foiz nisbati (sahifa medianasi) — vedomostning o'z vaznlari. */
+    /**
+     * Har nazorat turi uchun ball/foiz nisbati — vedomostning o'z vaznlari. Vazn butun foiz
+     * bo'lgani uchun nisbat 0.01 qadamli: mediana atrofidagi nomzodlardan eng ko'p qator
+     * (aniq yoki butun songacha yaxlitlangan — 12a/12b, 4–5 kurs) mos keladigani olinadi.
+     * Oddiy mediana yaxlitlangan ballarda 0.5 o'rniga 0.505 berib, soxta «mos emas» chiqarardi.
+     */
     public function pageRatios(array $rows): array
     {
         $out = [];
         foreach (self::PAIRS as $key => [$p, $b]) {
             $xs = [];
+            $pairs = [];
             foreach ($rows as $r) {
                 $pv = self::num($r[$p] ?? null);
                 $bv = self::num($r[$b] ?? null);
                 if ($pv && $bv !== null && $bv > 0) {
                     $xs[] = $bv / $pv;
+                    $pairs[] = [$pv, $bv];
                 }
             }
-            $out[$key] = self::median($xs);
+            $med = self::median($xs);
+            if ($med === null) {
+                $out[$key] = null;
+                continue;
+            }
+            $best = $med;
+            $bestHits = -1;
+            foreach (array_unique([floor($med * 100), round($med * 100), ceil($med * 100)]) as $c) {
+                $rt = $c / 100;
+                $hits = count(array_filter($pairs, fn ($q) => abs($q[1] - $q[0] * $rt) <= 0.11 || abs($q[1] - floor($q[0] * $rt + 0.5)) < 0.001));
+                if ($c > 0 && $hits > $bestHits) {
+                    [$best, $bestHits] = [$rt, $hits];
+                }
+            }
+            $out[$key] = $best;
         }
         $xs = [];
         foreach ($rows as $r) {

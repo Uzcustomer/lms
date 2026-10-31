@@ -295,6 +295,16 @@ class VedomostCheckEngine
         foreach ($extra as $s) {
             $sid = VedomostScanReader::digits($s['id'] ?? '');
             $k = $context['kontingent'][$sid] ?? null;
+            $cleanFio = VedomostNames::stripGroupSuffix($s['fio'] ?? '');
+            // ID boshqa (ismi butunlay boshqa) talabaga tegishli — AI ID'ni xato o'qigan: ism bo'yicha topamiz.
+            $idOwner = null;
+            if ($k !== null && $cleanFio !== '' && VedomostNames::similarity($k['fio'] ?? '', $cleanFio) < 0.7) {
+                $idOwner = $k;
+                $k = null;
+            }
+            if ($k === null) {
+                $k = $context['kontingent_by_name'][VedomostNames::nameKey($cleanFio)] ?? null;
+            }
             // Chetlashtirilgan talaba Mark ro'yxatiga kirmaydi — vedomostda bo'lsa, faqat ma'lumot (xato emas).
             $expelled = $k !== null && (string) ($k['status'] ?? '') === '60';
             $ownGroup = $k !== null && in_array($root($k['group'] ?? ''), $ownRoots, true);
@@ -303,7 +313,7 @@ class VedomostCheckEngine
                 'pdf' => $this->pdfValues($s), 'unclear' => $s['unclear'] ?? [], 'orig' => $s['orig'] ?? [],
                 'edited' => $editedKeys[$s['key']] ?? [],
                 'expelled' => $expelled,
-                'note' => match (true) {
+                'note' => ($idOwner ? 'Vedomost PDFdagi ID boshqa talabaga tegishli (' . ($idOwner['fio'] ?? '') . ') — ID xato o\'qilgan bo\'lishi mumkin. ' : '') . match (true) {
                     $expelled => "O'qishdan chetlashtirilgan talaba (" . ($k['group'] ?? '?') . ') — Mark ro\'yxatida yo\'q, ma\'lumot uchun',
                     $k !== null && $ownGroup => 'Shu guruh talabasi (' . ($k['group'] ?? '?') . "), lekin Mark ro'yxatida yo'q",
                     $k !== null => 'Boshqa guruh talabasi: ' . ($k['group'] ?? '?') . ' (' . ($k['fio'] ?? '') . ')',

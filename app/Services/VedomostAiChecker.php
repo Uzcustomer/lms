@@ -300,6 +300,10 @@ class VedomostAiChecker
             'test_center' => $this->testCenter($sysIds, $expected, (string) ($v->form_type ?: VedomostSubmission::FORM_12),
                 (string) ($expected['talabalar'][0]['meta']['semester'] ?? '')),
             'kontingent' => $this->kontingent(array_values(array_diff($scanIds, $sysIds))),
+            // ID xato o'qilsa (boshqa talabaga tegishli bo'lsa) — ism bo'yicha ham.
+            'kontingent_by_name' => $this->kontingentByName(collect($scan['rows'] ?? [])
+                ->filter(fn ($r) => !in_array(VedomostScanReader::digits($r['id'] ?? ''), $sysIds, true))
+                ->pluck('fio')->filter()->all()),
             'plan' => $this->workingPlan($v, $expected),
         ];
     }
@@ -487,6 +491,33 @@ class VedomostAiChecker
                 'fio' => $s->full_name, 'group' => $s->group_name, 'status' => (string) $s->student_status_code,
             ]])
             ->all();
+    }
+
+    /**
+     * Ism bo'yicha kontingent: familiya + ism bilan boshlanadigan talabalar, kalit —
+     * VedomostNames::nameKey (guruh qo'shimchasisiz). Bir xil familiya-ism bir nechta bo'lsa — tashlanadi.
+     */
+    private function kontingentByName(array $fios): array
+    {
+        $out = [];
+        foreach (array_slice(array_unique($fios), 0, 40) as $fio) {
+            $clean = VedomostNames::stripGroupSuffix($fio);
+            $parts = preg_split('/\s+/', trim($clean));
+            if (count($parts) < 2) {
+                continue;
+            }
+            $hits = Student::where('full_name', 'like', $parts[0] . '%')
+                ->limit(50)
+                ->get(['student_id_number', 'full_name', 'group_name', 'student_status_code'])
+                ->filter(fn ($st) => VedomostNames::similarity($st->full_name, $clean) >= 0.85);
+            if ($hits->count() === 1) {
+                $st = $hits->first();
+                $out[VedomostNames::nameKey($clean)] = ['fio' => $st->full_name, 'group' => $st->group_name,
+                    'status' => (string) $st->student_status_code, 'id' => (string) $st->student_id_number];
+            }
+        }
+
+        return $out;
     }
 
     /**

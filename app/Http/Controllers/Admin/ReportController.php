@@ -1842,7 +1842,7 @@ class ReportController extends Controller
             $kafedraQuery->where('c.education_type_code', $selectedEducationType);
         }
         if ($request->filled('faculty')) {
-            $kafedraQuery->where('f.id', $request->faculty);
+            $this->whereScheduleReportFaculty($kafedraQuery, $request->faculty);
         }
         $this->whereScheduleReportCurrentSemester($kafedraQuery, 's');
 
@@ -1885,6 +1885,25 @@ class ReportController extends Controller
 
         return $query->where("{$alias}.education_year", $window['year'])
             ->whereIn("{$alias}.code", $window['codes']);
+    }
+
+    /**
+     * Fakultet filtri. Guruhning fakulteti (groups.department_hemis_id) o'quv reja
+     * bo'limidan (curricula.department_hemis_id) farq qilishi mumkin — masalan
+     * Pediatriya guruhlari boshqa fakultet rejasiga bog'langan. Yo'nalish/guruh
+     * dropdownlari guruh fakulteti bo'yicha ishlaydi, shuning uchun ikkalasi ham olinadi.
+     */
+    private function whereScheduleReportFaculty($query, $facultyId)
+    {
+        $deptHemisId = Department::where('id', $facultyId)->value('department_hemis_id');
+        if (!$deptHemisId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function ($q) use ($deptHemisId) {
+            $q->where('g.department_hemis_id', $deptHemisId)
+                ->orWhere('c.department_hemis_id', $deptHemisId);
+        });
     }
 
     private function scheduleReportCurrentSemesterWindow(): ?array
@@ -1936,6 +1955,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('departments as gf', 'gf.department_hemis_id', '=', 'g.department_hemis_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->where(function ($q) {
@@ -1953,10 +1973,7 @@ class ReportController extends Controller
         }
 
         if ($request->filled('faculty')) {
-            $faculty = Department::find($request->faculty);
-            if ($faculty) {
-                $csQuery->where('c.department_hemis_id', $faculty->department_hemis_id);
-            }
+            $this->whereScheduleReportFaculty($csQuery, $request->faculty);
         }
 
         if ($request->filled('specialty')) {
@@ -2000,7 +2017,7 @@ class ReportController extends Controller
             'g.id as group_id',
             'g.group_hemis_id',
             'g.name as group_name',
-            'f.name as faculty_name',
+            DB::raw('COALESCE(gf.name, f.name) as faculty_name'),
             'g.specialty_name',
             's.level_name',
             's.name as semester_name',

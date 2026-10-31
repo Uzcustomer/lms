@@ -5190,7 +5190,15 @@ class JournalController extends Controller
             $query->where('c.education_year_code', $request->education_year);
         }
         if ($request->filled('faculty_id')) {
-            $query->where('f.id', $request->faculty_id);
+            // Guruh fakulteti o'quv reja bo'limidan farq qilishi mumkin (masalan Pediatriya) —
+            // guruhlar ro'yxati bilan bir xil bo'lishi uchun ikkalasi ham olinadi.
+            $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
+            $query->where(function ($q) use ($request, $facultyDeptHemisId) {
+                $q->where('f.id', $request->faculty_id);
+                if ($facultyDeptHemisId) {
+                    $q->orWhere('g.department_hemis_id', $facultyDeptHemisId);
+                }
+            });
         }
         if ($request->filled('department_id')) {
             $query->where('cs.department_id', $request->department_id);

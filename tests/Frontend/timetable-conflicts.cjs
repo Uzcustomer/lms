@@ -213,7 +213,8 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     const actx = { CSRF: 't', FormData: class { append() {} }, onPendingApproval() {}, ttToast() {}, esc: x => x, Object, Array, Error,
         fetch: async () => ({ ok: false, status: 409, json: async () => ({ error: 'Band', needs_confirm: true }) }) };
     vm.createContext(actx);
-    vm.runInContext(section("            async function api(url, method = 'GET', body = null) {", '\n            }\n') + '\n            }; this.api = api;', actx);
+    vm.runInContext(section('            function appendFormValue(fd, key, v) {', '            async function api(url, method')
+        + section("            async function api(url, method = 'GET', body = null) {", '\n            }\n') + '\n            }; this.api = api;', actx);
     const err = await actx.api('/x', 'POST', { a: 1 }).then(() => null, e => e);
     assert.equal(err.message, 'Band');
     assert.equal(err.status, 409);

@@ -3,7 +3,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin/timetable/index.blade.php'), 'utf8');
-const a = source.indexOf('            async function openWeekSuggestions() {');
+const a = source.indexOf('            function sugNote(body, html, kind) {');
 const b = source.indexOf("            if ($('suggestWeekBtn'))", a);
 assert(a > 0 && b > a);
 process.exitCode = 1;

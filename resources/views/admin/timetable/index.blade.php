@@ -3011,19 +3011,30 @@
                 return 'background-color:' + s.bg + ';border-left-color:' + s.border + ';';
             };
 
+            // So'rov tanasi PHP uslubida: oddiy massiv — key[]=..., obyektlar massivi — key[0][op]=... (Takliflar actions va b.),
+            // obyekt — key[field]=...; aks holda obyekt "[object Object]" satri bo'lib ketadi (actions.0.op 422).
+            function appendFormValue(fd, key, v) {
+                if (v === undefined || v === null) return;
+                if (Array.isArray(v)) {
+                    v.forEach((x, i) => {
+                        if (x !== null && typeof x === 'object' && !(typeof Blob !== 'undefined' && x instanceof Blob)) appendFormValue(fd, key + '[' + i + ']', x);
+                        else if (x !== undefined && x !== null) fd.append(key + '[]', x);
+                    });
+                    return;
+                }
+                if (typeof v === 'object' && !(typeof Blob !== 'undefined' && v instanceof Blob)) {
+                    Object.entries(v).forEach(([k2, v2]) => appendFormValue(fd, key + '[' + k2 + ']', v2));
+                    return;
+                }
+                fd.append(key, v);
+            }
             async function api(url, method = 'GET', body = null) {
                 // Doska ma'lumoti tez o'zgaradi — brauzer eski GET javobini keshdan bermasin.
                 const opt = { method, cache: 'no-store', headers: { 'Accept': 'application/json' } };
                 if (body) {
                     const fd = new FormData();
                     fd.append('_token', CSRF);
-                    Object.entries(body).forEach(([k, v]) => {
-                        if (v === undefined || v === null) return;
-                        // Massivlarni PHP uslubida (key[]=...) yuboramiz — aks holda
-                        // vergul bilan qo'shilib bitta satr bo'lib qoladi (nullable|array 422).
-                        if (Array.isArray(v)) v.forEach(x => fd.append(k + '[]', x));
-                        else fd.append(k, v);
-                    });
+                    Object.entries(body).forEach(([k, v]) => appendFormValue(fd, k, v));
                     opt.body = fd;
                 }
                 const r = await fetch(url, opt);
@@ -4755,7 +4766,18 @@
             // ===== Takliflar: joylanmagan kartalarni sig'dirish yo'llari (server hisoblaydi, foydalanuvchi tanlaydi) =====
             const SUG_LABEL = { slot: 'Bo\'sh vaqt', room: 'Boshqa xona', blocker: 'Darsni surish', day: 'Boshqa kun', week: 'Boshqa hafta', lecture: 'Ma\'ruzani surish', teacher: 'Boshqa o\'qituvchi' };
             const SUG_COLOR = { slot: '#059669', room: '#0284c7', blocker: '#7c3aed', day: '#d97706', week: '#b45309', lecture: '#a16207', teacher: '#dc2626' };
-            async function openWeekSuggestions() {
+            // Takliflar oynasi ichidagi xabar (alert sahifani to'sib qo'yadi): kind — 'err' | 'ok'.
+            function sugNote(body, html, kind) {
+                if (!body) return;
+                let n = body.querySelector('#ttSugNote');
+                if (!n) { n = document.createElement('div'); n.id = 'ttSugNote'; body.prepend(n); }
+                n.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+                n.style.cssText = 'border-radius:6px;padding:6px 10px;margin-bottom:8px;' + (kind === 'err'
+                    ? 'background:#fef2f2;border:1px solid #fca5a5;color:#991b1b' : 'background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46');
+                n.innerHTML = html;
+                if (n.scrollIntoView) n.scrollIntoView({ block: 'nearest' });
+            }
+            async function openWeekSuggestions(notice) {
                 if (!board || !curWeek || weeklyLayer !== 'internal') return;
                 let box = document.getElementById('ttSugModal');
                 if (!box) {
@@ -4787,6 +4809,8 @@
                 if (!res.total || !res.cards.length) { body.innerHTML = '<div style="color:#059669">Bu haftada joylanmagan yoki to\'qnashuvli karta yo\'q.</div>'; return; }
                 window.__ttSug = res.cards;
                 renderSugCards(body, res, params);
+                // Oldingi qo'llashda bajarilmaganlar — qayta hisoblangan ro'yxat ustida.
+                if (notice && notice.html) sugNote(body, notice.html, notice.kind);
             }
             // Takliflar ro'yxati. Vaqt byudjeti tugagan bo'lsa (partial) — sariq yozuv; qisqartirilgan kartada "To'liq takliflar"
             // tugmasi faqat shu karta uchun (card_id) to'liq hisoblab, kartani almashtiradi.
@@ -4817,7 +4841,7 @@
                         renderSugCards(body, res, params);
                     } catch (e) {
                         btn.disabled = false; btn.textContent = 'To\'liq takliflar';
-                        alert('Takliflarni olib bo\'lmadi: ' + e.message);
+                        sugNote(body, 'Takliflarni olib bo\'lmadi: ' + esc(e.message), 'err');
                     }
                 });
                 // Bir kartaning takliflari muqobil — bittasi tanlanadi.
@@ -4839,11 +4863,11 @@
                 const confirmSug = sug => !((sug.type === 'teacher' && !confirm('O\'qituvchi butun semestr uchun almashadi. Davom etamizmi?'))
                     || (sug.type === 'lecture' && !confirm('Ma\'ruza vaqti tashqi jadvaldan farq qiladi. Davom etamizmi?'))
                     || (sug.type === 'week' && !confirm('KTR taqsimoti o\'zgaradi (' + sug.note + '). Davom etamizmi?')));
-                const finish = async msgs => {
+                const finish = async (msgs, errs = []) => {
                     if (msgs.length) ttToast(msgs.map(esc).join('<br>'), 'ok');
                     await loadChangeRequests();
                     await loadBoard(board.id);
-                    openWeekSuggestions();
+                    openWeekSuggestions(errs.length ? { kind: 'err', html: '<b>Bajarilmaganlar (jadval o\'zgarmadi):</b>' + errs.map(x => '<div>' + esc(x) + '</div>').join('') } : null);
                 };
                 body.querySelectorAll('[data-sug]').forEach(btn => btn.onclick = async () => {
                     const [ci, si] = btn.dataset.sug.split(':').map(Number);
@@ -4852,7 +4876,7 @@
                     btn.disabled = true; btn.textContent = '…';
                     // Yaxlit: server barcha amallarni bitta tranzaksiyada bajaradi (yoki bitta so'rov yaratadi) — qisman bajarilmaydi.
                     try { const r = await applyOne(ci, si); await finish([r.message || 'Qo\'llandi.']); }
-                    catch (e) { alert('Bajarilmadi (jadval o\'zgarmadi): ' + e.message); btn.disabled = false; btn.textContent = sugApplyLabel(sug.mode); }
+                    catch (e) { sugNote(body, 'Bajarilmadi (jadval o\'zgarmadi): ' + esc(e.message), 'err'); btn.disabled = false; btn.textContent = sugApplyLabel(sug.mode); }
                 });
                 const all = body.querySelector('[data-sug-apply-all]');
                 if (all) all.onclick = async () => {
@@ -4865,8 +4889,8 @@
                         try { const r = await applyOne(ci, si); msgs.push(c.subject + ': ' + (r.message || 'qo\'llandi')); }
                         catch (e) { errs.push(c.subject + ': ' + e.message); }
                     }
-                    if (errs.length) alert('Bajarilmaganlar (jadval o\'zgarmadi):\n' + errs.join('\n'));
-                    await finish(msgs);
+                    // Har tanlangan taklif — alohida so'rov; bajarilmaganlari oyna ichida (qayta hisoblangan ro'yxat ustida).
+                    await finish(msgs, errs);
                 };
                 sync();
             }

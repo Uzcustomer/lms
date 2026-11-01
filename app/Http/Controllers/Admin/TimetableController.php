@@ -42,6 +42,7 @@ class TimetableController extends Controller
     use Concerns\TimetableBlockTickets;
     use Concerns\TimetableBoardSnapshotsActions;
     use Concerns\TimetableWeekSuggestions;
+    use Concerns\TimetableSuggestionApply;
 
     public function index(Request $request)
     {
@@ -8652,6 +8653,14 @@ class TimetableController extends Controller
      */
     public function teacherProposalAllowed(string $route, array $params, array $payload, int $teacherId, string $as): bool
     {
+        // Takliflar: huquq hozirgi rollar bo'yicha qayta hisoblanadi; kafedra mudiri so'rovi — kafedra darajasida qolishi kerak.
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+            $t = Teacher::find($teacherId);
+            $mode = $board && $t ? $this->suggestionApplyCheck($this->suggestionRights($t), $board, $payload, null, null, false, [])['mode'] : null;
+
+            return $mode !== null && ($as !== 'kafedra_mudiri' || in_array($mode, ['registrar', 'direct'], true));
+        }
         if ($as !== 'fan_masuli') {
             return $this->teacherProposalOwned($route, $params, $payload, $teacherId);
         }
@@ -8691,6 +8700,15 @@ class TimetableController extends Controller
     /** Bandlik va qoidalar (sana ham) — ValidationException bilan. */
     public function teacherProposalValidate(string $route, array $params, array $payload, array $ignoreIds): void
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::findOrFail($params['board'] ?? 0);
+            if ($why = $this->suggestionExpired($board, $payload)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['actions' => $why]);
+            }
+            $this->suggestionDryRun($board, $payload);
+
+            return;
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $board = TimetableBoard::findOrFail($params['board'] ?? 0);
             if ($why = $this->teacherProposalExpired($route, $params, $payload)) {
@@ -8706,6 +8724,11 @@ class TimetableController extends Controller
     /** Dars sanasi (eski yoki yangi) bugun yoki o'tgan — sababi (har tasdiq bosqichida tekshiriladi). */
     public function teacherProposalExpired(string $route, array $params, array $payload): ?string
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+
+            return $board ? $this->suggestionExpired($board, $payload) : null;
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $date = (string) ($payload['date'] ?? '');
 
@@ -8721,6 +8744,11 @@ class TimetableController extends Controller
     /** Taklif yuborilgandagi holat imzosi: shu orada dars (joyi, o'qituvchi, xona, sikl boshlanishlari) o'zgarsa — qo'llanmaydi. */
     public function teacherProposalSignature(string $route, array $params, array $payload): string
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+
+            return $board ? $this->suggestionSignature($board, $payload) : '';
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $board = TimetableBoard::find($params['board'] ?? 0);
             $units = $board ? $this->cycleProposalUnits($board, $payload, null) : [];
@@ -8736,6 +8764,11 @@ class TimetableController extends Controller
 
     public function teacherProposalDepartmentMatches(string $route, array $params, array $payload, int $deptId): bool
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $card = TimetableCard::where('board_id', (int) ($params['board'] ?? 0))->find((int) ($payload['card_id'] ?? 0));
+
+            return $card && $this->proposalDepartmentMatches($card, $deptId);
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $board = TimetableBoard::find($params['board'] ?? 0);
             $cards = $board ? collect($this->cycleProposalUnits($board, $payload, null))->flatMap(fn ($x) => $x['u']['cards']) : collect();

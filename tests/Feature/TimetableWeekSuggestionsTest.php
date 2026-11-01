@@ -448,3 +448,203 @@ it('takliflar: karta xonada ikki dars bilan to\'qnashsa — bitta tomonning xona
         ->and($card['suggestions'][0]['actions'][0])->toMatchArray(['card_id' => $a->id, 'auditorium_code' => 'R216'])
         ->and(collect($card['suggestions'])->filter(fn ($x) => str_starts_with($x['title'], 'Ikkinchi tomon'))->all())->toBe([]);
 });
+
+// ─── Takliflar: boshqa rollar uchun ko'rish va qo'llash (tasdiq zanjiri bilan) ───
+
+/** O'qituvchi T (own kartasi), registrator, talaba (g-01a); semestrdan oldin (barcha sanalar — ertadan keyin). */
+function sapSetup(): array
+{
+    $s = sugSetup();
+    foreach (['oqituvchi', 'registrator_ofisi', 'fan_masuli'] as $r) {
+        Role::findOrCreate($r, 'web');
+    }
+    $s['t'] = sugTeacher('OQITUVCHI T.');
+    $s['t']->assignRole('oqituvchi');
+    $s['reg'] = sugTeacher('REGISTRATOR');
+    $s['reg']->assignRole('registrator_ofisi');
+    $s['head']->update(['department' => 'Gigiyena kafedrasi']);
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $s['t']->id, 'teacher_name' => 'OQITUVCHI T.']);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    DB::table('students')->insert(['hemis_id' => 9501, 'full_name' => 'TALABA', 'short_name' => 'T', 'first_name' => 'T', 'second_name' => 'T',
+        'third_name' => 'T', 'student_id_number' => '9501', 'group_name' => 'g-01a', 'student_status_code' => 11, 'department_id' => 77,
+        'department_name' => 'F1', 'created_at' => now(), 'updated_at' => now()]);
+    $s['date'] = fn (int $week, int $day) => app(\App\Http\Controllers\Admin\TimetableController::class)
+        ->weeklyProposalDates($s['own']->fresh(), ['week' => $week, 'day' => $day])[1];
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](1, 1) . ' 09:00', 'Asia/Tashkent')->subDays(3));
+
+    return $s;
+}
+
+function sapGet(Teacher $t, string $role, array $s): array
+{
+    return sugAs($t, $role)->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')->assertOk()->json();
+}
+
+function sapBody(array $card, array $sug): array
+{
+    return ['week' => 3, 'card_id' => $card['id'], 'type' => $sug['type'], 'title' => $sug['title'], 'actions' => $sug['actions']];
+}
+
+it('takliflar: o\'quv bo\'limi ko\'radi, qo\'llashda 403; o\'qituvchi faqat o\'z darsini ko\'radi', function () {
+    $s = sapSetup();
+    $res = sapGet($s['oquv'], 'oquv_bolimi', $s);
+    $card = collect($res['cards'])->firstWhere('id', $s['own']->id);
+    expect($res['apply_mode'])->toBeNull()->and($card['suggestions'])->not->toBeEmpty()
+        ->and(collect($card['suggestions'])->pluck('can_apply')->unique()->all())->toBe([false]);
+    $sug = $card['suggestions'][0];
+    sugAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertForbidden();
+    sugAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), sapBody($card, $sug))->assertForbidden();
+    // O'qituvchi: faqat o'z darsi (boshqa o'qituvchining unplaced kartasi ko'rinmaydi).
+    $other = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => sugTeacher('BOSHQA')->id, 'ext_day' => 3, 'ext_pair' => 1,
+        'kafedra_name' => 'Gigiyena kafedrasi']);
+    $ids = collect(sapGet($s['t'], 'oqituvchi', $s)['cards'])->pluck('id')->all();
+    expect($ids)->toContain($s['own']->id)->not->toContain($other->id);
+    // Kafedra mudiri — o'z kafedrasi fanlari; boshqa kafedra kartasi ko'rinmaydi (o'quv bo'limi — hammasi).
+    $fz = sugCard($s, ['subject_name' => 'Fizika', 'group_name' => 'g-01c', 'kafedra_name' => 'Fizika kafedrasi', 'ext_day' => 4, 'ext_pair' => 1]);
+    $headIds = collect(sapGet($s['head'], 'kafedra_mudiri', $s)['cards'])->pluck('id')->all();
+    expect($headIds)->toContain($other->id)->not->toContain($fz->id)
+        ->and(collect(sapGet($s['oquv'], 'oquv_bolimi', $s)['cards'])->pluck('id')->all())->toContain($fz->id);
+    expect(TimetableCardOverride::where('week', 3)->where('cancelled', false)->count())->toBe(0);
+});
+
+it('takliflar: o\'qituvchi o\'z darsiga qo\'llaydi — so\'rov ikki bosqichdan o\'tadi, jadval o\'zgaradi, talabaga xabar; ikkinchi so\'rov — xato', function () {
+    $s = sapSetup();
+    $res = sapGet($s['t'], 'oqituvchi', $s);
+    expect($res['apply_mode'])->toBe('request');
+    $card = collect($res['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->firstWhere('type', 'slot');
+    expect($sug['can_apply'])->toBeTrue()->and($sug['mode'])->toBe('department');
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), sapBody($card, $sug))->assertForbidden();
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))
+        ->assertOk()->assertJsonPath('pending_approval', true);
+    $req = \App\Models\TimetableChangeRequest::sole();
+    expect($req->route_name)->toBe('admin.timetable.week-suggestions.apply')->and($req->requester_role)->toBe('oqituvchi')
+        ->and($req->approval_stage)->toBe('department')->and($req->details['card_ids'])->toBe([$s['own']->id])
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->exists())->toBeFalse();
+    // Kartada bosqich: kutilayotgan so'rov kartaga bog'langan; ikkinchi so'rov — xato.
+    $row = sugAs($s['t'], 'oqituvchi')->getJson(route('admin.timetable.change-requests.index', $s['board']) . '?status=pending')->json('requests.0');
+    expect($row['card_ids'])->toBe([$s['own']->id])->and($row['approval_stage'])->toBe('department');
+    $again = collect(collect(sapGet($s['t'], 'oqituvchi', $s)['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->firstWhere('type', 'slot');
+    expect($again['can_apply'])->toBeFalse()->and($again['why'])->toContain("allaqachon so'rov bor");
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, "allaqachon so'rov bor"));
+
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($req->fresh()->approval_stage)->toBe('registrar')->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->exists())->toBeFalse();
+    sugAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($req->fresh()->status)->toBe('approved');
+    $ov = TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->first();
+    expect([$ov->day, $ov->pair])->toBe([$sug['actions'][0]['day'], $sug['actions'][0]['pair']]);
+    $msg = \App\Models\StudentNotification::where('student_id', DB::table('students')->where('hemis_id', 9501)->value('id'))->sole()->message;
+    expect($msg)->toContain('Fan: Gigiyena')->toContain("O'qituvchi: OQITUVCHI T.")->toContain('Eski vaqt: o‘tilmaydi')->toContain('Yangi vaqt: ');
+});
+
+it('takliflar: kafedra mudiri qo\'llasa — faqat registrator tasdiqlaydi; ko\'p amalli taklif rad etilsa jadval o\'zgarmaydi', function () {
+    $s = sapSetup();
+    // Guruhni to'sib turgan Biologiya (boshqa o'qituvchi) — "Darsni surish" (ko'p amalli) taklifi.
+    $b = sugTeacher('BOSHQA O.');
+    $blk = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01a', 'teacher_id' => $b->id, 'teacher_name' => 'BOSHQA O.', 'kafedra_name' => 'Gigiyena kafedrasi']);
+    TimetableCardOverride::create(['card_id' => $blk->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+    $card = collect(sapGet($s['head'], 'kafedra_mudiri', $s)['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->firstWhere('type', 'blocker');
+    expect($sug)->not->toBeNull()->and(count($sug['actions']))->toBeGreaterThan(1)->and($sug['mode'])->toBe('registrar');
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertOk();
+    $req = \App\Models\TimetableChangeRequest::sole();
+    expect($req->approval_stage)->toBe('registrar')->and($req->requester_role)->toBe('kafedra_mudiri')
+        ->and(collect($req->details['card_ids'])->sort()->values()->all())->toBe(collect([$s['own']->id, $blk->id])->sort()->values()->all())
+        ->and($req->details['lesson_teacher_ids'])->toContain($b->id);
+    // Dars o'qituvchisiga (so'rovni o'zi yubormagan) — xabar.
+    expect(\App\Models\TeacherNotification::where('teacher_id', $b->id)->value('title'))->toContain("Takliflar");
+    $before = TimetableCardOverride::orderBy('id')->get(['card_id', 'week', 'day', 'pair', 'cancelled'])->toArray();
+    sugAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.reject', $req), ['note' => 'Yo‘q'])->assertOk();
+    expect($req->fresh()->status)->toBe('rejected')
+        ->and(TimetableCardOverride::orderBy('id')->get(['card_id', 'week', 'day', 'pair', 'cancelled'])->toArray())->toBe($before);
+    // Qayta yuborib, registrator tasdiqlasa — ikkala amal ham qo'llanadi.
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertOk();
+    $req2 = \App\Models\TimetableChangeRequest::where('status', 'pending')->sole();
+    sugAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req2))->assertOk();
+    expect($req2->fresh()->status)->toBe('approved')
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3)
+        ->and(TimetableCardOverride::where('card_id', $blk->id)->where('week', 3)->first())->not->toMatchArray(['day' => 2, 'pair' => 3]);
+    // Kafedra mudiri so'rovi ham registrator tasdig'ida qayta tekshiriladi: sana o'tgan — "Muddati o'tgan", mudirga xabar.
+    $own2 = sugCard($s, ['subject_name' => 'Gigiyena', 'group_name' => 'g-01d', 'kafedra_name' => 'Gigiyena kafedrasi', 'ext_day' => 5, 'ext_pair' => 5]);
+    $c2 = collect(sapGet($s['head'], 'kafedra_mudiri', $s)['cards'])->firstWhere('id', $own2->id);
+    $sg2 = collect($c2['suggestions'])->firstWhere('type', 'slot');
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($c2, $sg2))->assertOk();
+    $req3 = \App\Models\TimetableChangeRequest::where('status', 'pending')->sole();
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, $sg2['actions'][0]['day']) . ' 08:00', 'Asia/Tashkent'));
+    sugAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req3))->assertUnprocessable();
+    expect($req3->fresh()->status)->toBe('expired')
+        ->and(\App\Models\TeacherNotification::where('teacher_id', $s['head']->id)->where('title', "Vaqt o'zgarishi so'rovi muddati o'tgan")->exists())->toBeTrue()
+        ->and(TimetableCardOverride::where('card_id', $own2->id)->exists())->toBeFalse();
+});
+
+it('takliflar: o\'qituvchi boshqa o\'qituvchining darsini suradigan taklifni va bugungi kunga tegadiganini qo\'llay olmaydi', function () {
+    $s = sapSetup();
+    $b = sugTeacher('BOSHQA O.');
+    $blk = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01a', 'teacher_id' => $b->id, 'teacher_name' => 'BOSHQA O.', 'kafedra_name' => 'Gigiyena kafedrasi']);
+    TimetableCardOverride::create(['card_id' => $blk->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+    $card = collect(sapGet($s['t'], 'oqituvchi', $s)['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->firstWhere('type', 'blocker');
+    expect($sug['can_apply'])->toBeFalse()->and($sug['why'])->toContain("Boshqa o'qituvchining darsini surish");
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertForbidden();
+    // O'qituvchini almashtirish ham — faqat kafedra mudiri va adminlar.
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['week' => 3, 'card_id' => $s['own']->id,
+        'actions' => [['op' => 'teacher', 'card_id' => $s['own']->id, 'teacher_id' => $b->id]]])
+        ->assertForbidden()->assertJsonPath('message', fn ($m) => str_contains($m, "O'qituvchini almashtirish"));
+    // Bugungi kunga tegadigan taklif: ko'rinadi, lekin qo'llab bo'lmaydi (admin ham).
+    $blk->delete();
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, 2) . ' 08:00', 'Asia/Tashkent'));
+    foreach ([[$s['t'], 'oqituvchi', 'propose'], [$s['admin'], 'superadmin', 'apply']] as [$who, $role, $ep]) {
+        $card = collect(sapGet($who, $role, $s)['cards'])->firstWhere('id', $s['own']->id);
+        $sug = collect($card['suggestions'])->first(fn ($x) => $x['actions'][0]['day'] === 2);
+        expect($sug['can_apply'])->toBeFalse()->and($sug['why'])->toContain("Bugungi yoki o'tgan");
+        sugAs($who, $role)->postJson(route('admin.timetable.week-suggestions.' . $ep, $s['board']), sapBody($card, $sug))->assertUnprocessable();
+    }
+    expect(\App\Models\TimetableChangeRequest::count())->toBe(0)->and(TimetableCardOverride::where('card_id', $s['own']->id)->exists())->toBeFalse();
+});
+
+it('takliflar: tasdiq paytida to\'qnashuv chiqsa — "Qo\'llanmadi"; sana o\'tib ketsa — "Muddati o\'tgan"', function () {
+    $s = sapSetup();
+    $card = collect(sapGet($s['t'], 'oqituvchi', $s)['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->firstWhere('type', 'slot');
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertOk();
+    $req = \App\Models\TimetableChangeRequest::sole();
+    // Shu orada guruhga shu vaqtda boshqa dars qo'yildi.
+    $x = sugCard($s, ['subject_name' => 'Fizika', 'group_name' => 'g-01a', 'kafedra_name' => 'Fizika kafedrasi']);
+    TimetableCardOverride::create(['card_id' => $x->id, 'week' => 3, 'day' => $sug['actions'][0]['day'], 'pair' => $sug['actions'][0]['pair']]);
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
+    expect($req->fresh())->status->toBe('failed')->error->toContain('Guruh band')
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->exists())->toBeFalse();
+    expect(\App\Models\TeacherNotification::where('teacher_id', $s['t']->id)->latest('id')->value('title'))->toBe("Vaqt o'zgarishi qo'llanmadi");
+    // Muddati o'tgan.
+    $x->delete();
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertOk();
+    $req = \App\Models\TimetableChangeRequest::where('status', 'pending')->sole();
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, $sug['actions'][0]['day']) . ' 08:00', 'Asia/Tashkent'));
+    sugAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
+    expect($req->fresh()->status)->toBe('expired')
+        ->and(\App\Models\TeacherNotification::where('teacher_id', $s['t']->id)->latest('id')->value('title'))->toBe("Vaqt o'zgarishi so'rovi muddati o'tgan");
+});
+
+it('takliflar: admin darhol, yaxlit qo\'llaydi — bitta amal o\'tmasa hech biri qo\'llanmaydi', function () {
+    $s = sapSetup();
+    $x = sugCard($s, ['subject_name' => 'Fizika', 'group_name' => 'g-01a', 'kafedra_name' => 'Fizika kafedrasi']);
+    TimetableCardOverride::create(['card_id' => $x->id, 'week' => 3, 'day' => 4, 'pair' => 1]);
+    $url = route('admin.timetable.week-suggestions.apply', $s['board']);
+    // 1-amal o'tadi, 2-amal (shu guruh band vaqtiga) — o'tmaydi: hech narsa yozilmaydi.
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+        ['op' => 'move', 'card_id' => $x->id, 'week' => 3, 'day' => 5, 'pair' => 1],
+        ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 5, 'pair' => 1],
+    ]])->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'Guruh band'));
+    expect(TimetableCardOverride::where('card_id', $x->id)->where('week', 3)->value('day'))->toBe(4)
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->exists())->toBeFalse();
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+        ['op' => 'move', 'card_id' => $x->id, 'week' => 3, 'day' => 5, 'pair' => 1],
+        ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1],
+    ]])->assertOk();
+    expect(TimetableCardOverride::where('card_id', $x->id)->where('week', 3)->value('day'))->toBe(5)
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(4)
+        ->and(\App\Models\TimetableChangeRequest::sole()->status)->toBe('applied');
+});

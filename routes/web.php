@@ -1301,6 +1301,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::get('/boards/{board}/week-suggestions', [\App\Http\Controllers\Admin\TimetableController::class, 'weekSuggestions'])->name('boards.week-suggestions');
+                // Takliflar: admin — yaxlit darhol qo'llash; boshqa rollar — bitta so'rov (tasdiq zanjiri bilan).
+                Route::post('/boards/{board}/week-suggestions/apply', [\App\Http\Controllers\Admin\TimetableController::class, 'weekSuggestionApply'])->name('week-suggestions.apply');
+                Route::post('/boards/{board}/week-suggestions/propose', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeSuggestion'])->name('week-suggestions.propose');
                 Route::get('/boards/{board}/unplaced-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedExport'])->name('boards.unplaced-export');
                 Route::get('/boards/{board}/conflicts', [\App\Http\Controllers\Admin\TimetableController::class, 'boardConflicts'])->name('boards.conflicts');
                 // Butun doska hisoboti fonda tayyorlanadi (BuildUnplacedReportJob): boshlash → holat → yuklab olish

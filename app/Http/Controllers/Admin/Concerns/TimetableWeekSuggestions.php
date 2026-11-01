@@ -38,8 +38,10 @@ trait TimetableWeekSuggestions
 
     public function weekSuggestions(Request $request, TimetableBoard $board)
     {
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'], true)) {
-            abort(403, 'Takliflar faqat jadval tuzuvchilar uchun.');
+        // Huquq — foydalanuvchining barcha rollaridan eng kengi; oynada faqat qamrovidagi kartalar (server filtrlaydi).
+        $rights = $this->suggestionRights($this->timetableActor($request));
+        if ($rights['level'] === null && !$rights['view']) {
+            abort(403, 'Takliflar sizning rolingiz uchun ochiq emas.');
         }
         $data = $request->validate([
             'week'              => 'required|integer|min:1|max:60',
@@ -92,7 +94,7 @@ trait TimetableWeekSuggestions
         $placedIds = [];
         foreach ($scopeIds as $id) {
             $c = $state['cards'][$id] ?? null;
-            if (!$c || $isCycle($c) || $cancelled($c, $W)) {
+            if (!$c || $isCycle($c) || $cancelled($c, $W) || !$this->suggestionInScope($rights, $c)) {
                 continue;
             }
             if ($eff($c, $W)) {
@@ -713,8 +715,26 @@ trait TimetableWeekSuggestions
             $result[] = $this->suggestionCard($c, $W, $reason, $sugs, false, $isConflict);
         }
 
+        // Har taklif: shu foydalanuvchi qo'llay oladimi (qamrov, ma'ruza / o'qituvchi almashtirish, sana, kutilayotgan so'rov) va qanday
+        // (direct — darhol; registrar — so'rov registratorga; department — kafedra mudiri → registrator).
+        $pendingCards = $rights['level'] && $rights['level'] !== 'admin' ? $this->pendingCardRequests($board->id) : [];
+        $cardOf = fn (int $id) => $state['cards'][$id] ?? null;
+        $ovOf = fn (int $id, int $w) => $state['ov'][$id][$w] ?? null;
+        foreach ($result as &$rc) {
+            foreach ($rc['suggestions'] as &$sg) {
+                $chk = $this->suggestionApplyCheck($rights, $board, ['week' => $W, 'card_id' => $rc['id'],
+                    'actions' => array_map(fn ($a) => $a + ['week' => $W], $sg['actions'])], $cardOf, $ovOf, true, $pendingCards);
+                $sg['can_apply'] = $chk['mode'] !== null;
+                $sg['mode'] = $chk['mode'];
+                $sg['why'] = $chk['why'];
+            }
+            unset($sg);
+        }
+        unset($rc);
+
         return response()->json(['week' => $W, 'total' => $total, 'unplaced_total' => $unplacedTotal, 'conflict_total' => $conflictTotal,
             'shown' => count($result), 'cards' => $result,
+            'apply_mode' => $rights['level'] === 'admin' ? 'direct' : ($rights['level'] ? 'request' : null),
             'partial' => $partialN > 0, 'message' => $partialN ? $partialN . ' ta karta uchun to\'liq takliflar hisoblanmadi' : null]);
     }
 

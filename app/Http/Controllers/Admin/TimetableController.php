@@ -8707,7 +8707,7 @@ class TimetableController extends Controller
             if ($why = $this->suggestionExpired($board, $payload)) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['actions' => $why]);
             }
-            $this->suggestionDryRun($board, $payload);
+            $this->suggestionDryRun($board, $payload, $ignoreIds);
 
             return;
         }
@@ -9068,18 +9068,30 @@ class TimetableController extends Controller
         if (!\App\Services\Timetable\TimetableChangeApproval::tableReady()) return [];
         $pending = \App\Models\TimetableChangeRequest::where('board_id', $card->board_id)
             ->where('status', \App\Models\TimetableChangeRequest::PENDING)
-            ->whereIn('route_name', ['admin.timetable.cards.week-override', 'admin.timetable.cards.place'])
+            ->whereIn('route_name', ['admin.timetable.cards.week-override', 'admin.timetable.cards.place', self::SUGGESTION_ROUTE])
             ->when($ignoreIds, fn ($q) => $q->whereNotIn('id', $ignoreIds))->get();
         $week = (int) $data['week'];
         $sourceRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
         $room = $sourceRoom?->auditorium_code ?: $card->auditorium_code;
         $errors = [];
+        // Bron: [so'rov, karta, joy] — haftalik ko'chirish / joylash so'rovi bitta, Takliflar so'rovi — har "move" amali.
+        $holds = [];
         foreach ($pending as $req) {
-            $p = $req->payload ?? [];
+            if ($req->route_name === self::SUGGESTION_ROUTE) {
+                foreach ((array) (($req->payload ?? [])['actions'] ?? []) as $a) {
+                    if (($a['op'] ?? '') === 'move' && (int) ($a['week'] ?? 0) === $week) {
+                        $holds[] = [$req, (int) ($a['card_id'] ?? 0), ['day' => $a['day'] ?? null, 'pair' => $a['pair'] ?? null, 'week' => $week, 'action' => 'move']];
+                    }
+                }
+            } else {
+                $holds[] = [$req, (int) ($req->params['card'] ?? 0), $req->payload ?? []];
+            }
+        }
+        foreach ($holds as [$req, $otherId, $p]) {
             if (($p['layer'] ?? 'internal') === 'external' || empty($p['day']) || empty($p['pair'])) continue;
-            if ($req->route_name === 'admin.timetable.cards.week-override'
+            if ($req->route_name !== 'admin.timetable.cards.place'
                 && (($p['action'] ?? '') !== 'move' || (int) ($p['week'] ?? 0) !== $week)) continue;
-            $other = TimetableCard::find($req->params['card'] ?? 0);
+            $other = TimetableCard::find($otherId);
             if (!$other) continue;
             // Competing proposals for one lesson cannot both be pending for this week.
             $sameCard = (int) $other->id === (int) $card->id;

@@ -680,3 +680,28 @@ it('takliflar: o\'qituvchini almashtirish saqlangan biriktiruvga ham yoziladi; b
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0)
         ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(4);
 });
+
+it('takliflar: yangi joy dastur to\'ridan tashqarida bo\'lsa — qo\'llanmaydi; kutilayotgan so\'rov band qilgan vaqtga boshqa so\'rov yuborilmaydi', function () {
+    $s = sapSetup();
+    $url = route('admin.timetable.week-suggestions.apply', $s['board']);
+    // To'r: 6 kun, 12 katak; karta 2 katak — 7-kun ham, 12-katakdan boshlash ham chegaradan tashqarida.
+    foreach ([[7, 1], [2, 12]] as [$d, $p]) {
+        sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+            ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => $d, 'pair' => $p],
+        ]])->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'jadval chegarasidan tashqarida'));
+    }
+    expect(TimetableCardOverride::where('card_id', $s['own']->id)->exists())->toBeFalse();
+    // O'qituvchi o'z darsini 2-kun 3-katakka so'radi (kutilmoqda) — shu guruhning boshqa darsini shu vaqtga so'rab bo'lmaydi.
+    $card = collect(sapGet($s['t'], 'oqituvchi', $s)['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->first(fn ($x) => $x['actions'][0]['day'] === 2 && $x['actions'][0]['pair'] === 3);
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertOk();
+    $fz = sugCard($s, ['subject_name' => 'Fizika', 'group_name' => 'g-01a', 'kafedra_name' => 'Gigiyena kafedrasi']);
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['week' => 3, 'card_id' => $fz->id,
+        'actions' => [['op' => 'move', 'card_id' => $fz->id, 'week' => 3, 'day' => 2, 'pair' => 3]]])
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan'));
+    // Haftalik o'qituvchi so'rovi ham Takliflar bronini ko'radi.
+    $fz->update(['teacher_id' => $s['t']->id, 'day' => 4, 'pair' => 1]);
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $fz), ['week' => 3, 'day' => 2, 'pair' => 3])
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan'));
+    expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(1);
+});

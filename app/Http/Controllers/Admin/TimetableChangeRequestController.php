@@ -226,7 +226,7 @@ class TimetableChangeRequestController extends Controller
         $data['actions'] = array_map(fn ($a) => $a + ['week' => (int) $data['week']], array_values($data['actions']));
         $check = $ctl->suggestionApplyCheck($rights, $board, $data);
         abort_unless($check['mode'] !== null, $check['code'], (string) $check['why']);
-        $run = $ctl->suggestionDryRun($board, $data);
+        $run = $ctl->suggestionDryRun($board, $data, []);
         $cards = $ctl->suggestionCards($board, $data);
         $primary = $cards->firstWhere('id', (int) $data['card_id']) ?? $cards->first();
         $tid = (int) $actor->id;

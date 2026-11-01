@@ -281,6 +281,11 @@ trait TimetableSuggestionApply
                 if (!$day || !$pair) {
                     return 'Kun va para ko‘rsatilishi kerak.';
                 }
+                // Dastur to'ri (validateTimeProposal bilan bir xil): kunlar soni va dars oxiri — paralar ichida.
+                $grid = $this->cardGrid($board, $card);
+                if ($day > (int) $grid['days'] || $pair + $card->lenHalf() - 1 > (int) $grid['pairs']) {
+                    return '«' . $card->subject_name . '»: tanlangan vaqt jadval chegarasidan tashqarida.';
+                }
                 $room = null;
                 if (!empty($a['auditorium_code'])) {
                     $room = Auditorium::where('code', $a['auditorium_code'])->first();
@@ -410,9 +415,18 @@ trait TimetableSuggestionApply
      * xona) va guruhlari; o'tmasa — ValidationException (sababi bilan).
      * @return array{notices: array, teacher_ids: int[]}
      */
-    public function suggestionDryRun(TimetableBoard $board, array $p): array
+    public function suggestionDryRun(TimetableBoard $board, array $p, ?array $ignorePending = null): array
     {
         $acts = array_map(fn ($a) => $a + ['week' => (int) ($p['week'] ?? 0)], array_values((array) ($p['actions'] ?? [])));
+        // So'rov (tasdiq zanjiri): boshqa kutilayotgan so'rovlar band qilgan guruh / o'qituvchi / xona vaqti ham (o'zi bundan mustasno).
+        if ($ignorePending !== null) {
+            foreach ($acts as $a) {
+                $c = ($a['op'] ?? '') === 'move' ? TimetableCard::where('board_id', $board->id)->find((int) $a['card_id']) : null;
+                if ($c && ($errs = $this->pendingTimeConflicts($c, ['week' => (int) $a['week'], 'day' => (int) ($a['day'] ?? 0), 'pair' => (int) ($a['pair'] ?? 0)], $ignorePending))) {
+                    throw ValidationException::withMessages(['actions' => '«' . $c->subject_name . '»: ' . implode(' · ', $errs)]);
+                }
+            }
+        }
         $cards = $this->suggestionCards($board, $p);
         $weeks = [];
         foreach ($acts as $a) {

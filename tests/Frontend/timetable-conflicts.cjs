@@ -36,6 +36,11 @@ const ctx = {
     weekActiveCards: () => ctx.cards, renderPanel: () => { ctx.panelRenders = (ctx.panelRenders || 0) + 1; },
     setTimeout: (fn) => { ctx.timers = (ctx.timers || 0) + 1; setImmediate(fn); }, clearTimeout() {},
     api: async (url, method = 'GET', body = null) => {
+        // Tanlangan hafta tuzilgan ro'yxati (qisqa belgi uchun) — alohida yozib boriladi.
+        if (url.includes('/conflicts?items=1')) {
+            (ctx.itemCalls = ctx.itemCalls || []).push(url.replace('/admin/boards/7', ''));
+            return ctx.itemsAnswer || { weekly_items: {} };
+        }
         calls.push([method, url.replace('/admin/boards/7', ''), body && plain(body)]);
         const a = answers.shift();
         if (a instanceof Error) throw a;
@@ -51,7 +56,7 @@ vm.runInContext(section("            // ===== Ichki (haftalik) jadvaldagi to'qna
     + section('            async function applyAsg(teacherId, force) {', '            async function loadAsgAuditoriums() {')
     + section('            async function saveCycleAssign(force) {', "            $('cycAssignSave').addEventListener")
     + section('            function cycleAutoShiftHtml(j) {', '            async function cycleAutoShift() {')
-    + '; this.wc = () => weeklyConflicts; this.setBusy = b => { asgBusy = b; };', ctx);
+    + '; this.wc = () => weeklyConflicts; this.wci = () => weeklyConflictItems; this.setBusy = b => { asgBusy = b; };', ctx);
 const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { needs_confirm: true, error: msg } });
 
 (async () => {
@@ -72,7 +77,13 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     assert.equal(ctx.cardConflict(a), null);
     ctx.weeklyLayer = 'internal';
     ctx.curWeek = 2;
-    assert.equal(ctx.panelRenders, 1, 'javobdan keyin panel qayta chizilmadi');
+    assert.ok(ctx.panelRenders >= 1, 'javobdan keyin panel qayta chizilmadi');
+    // Javobdan keyin joriy hafta tuzilgan ro'yxati bir marta so'raladi; shu hafta uchun qayta so'ralmaydi.
+    assert.deepEqual(ctx.itemCalls, ['/conflicts?items=1&week=2']);
+    ctx.loadWeekConflictItems();
+    await tick();
+    assert.equal(ctx.itemCalls.length, 1);
+    assert.equal(ctx.wci().__week, 2);
 
     // 2) Hisoblagich: to'qnashuvli karta joylashganlar sonidan chiqadi, joylanmaganlar soniga qo'shiladi.
     ctx.renderStats();

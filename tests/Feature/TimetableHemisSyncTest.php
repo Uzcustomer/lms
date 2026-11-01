@@ -1156,6 +1156,8 @@ it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq e
 });
 
 it('sikl: ikki guruhcha bitta o\'qituvchida kesishgan davrda — HEMIS amali to\'siq (JSON\'ga kirmaydi), mudir qo\'yilmaydi', function () {
+    // Ichki to'qnashuvlar — faqat kelgusilari: "bugun" — sinov kuni (19.09), kesishuv 21–22.09.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-19 07:00'));
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');

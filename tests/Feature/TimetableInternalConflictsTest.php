@@ -398,7 +398,7 @@ it('to\'qnashuvlar: tuzilgan ro\'yxat (kind, teacher_id, groups, sanalar), o\'tg
     $a = $c['davolash ishi|5|d22-05a|Klinik farmakologiya|practice'];
     expect($a['level'])->toBe('red')
         ->and($a['items'][0])->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $sharipov->id, 'card_teacher_id' => $sharipov->id,
-            'groups' => ['d22-05b'], 'lecture' => false, 'dates_from' => '2026-09-16', 'dates_to' => '2026-09-18', 'past' => false])
+            'groups' => ['d22-05b'], 'lecture' => false, 'date_from' => '2026-09-16', 'date_to' => '2026-09-18', 'past' => false])
         ->and($a['items'][0]['detail'])->toContain("O'qituvchi SHARIPOV K. SH. band: d22-05b")->toContain("boshqa o'qituvchi biriktiring");
     $cc = $c['davolash ishi|5|d22-05c|Klinik farmakologiya|practice'];
     expect($cc['level'])->toBe('yellow')->and($cc['items'][0])->toMatchArray(['kind' => 'room_capacity', 'room' => 'R305', 'groups' => ['d22-05d']]);
@@ -406,7 +406,7 @@ it('to\'qnashuvlar: tuzilgan ro\'yxat (kind, teacher_id, groups, sanalar), o\'tg
     // Qisman o'tgan (bugun 17.09): faqat kelgusi sanalar — 17–18.09.
     $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-17 09:00', 'Asia/Tashkent'));
     $a = icConflicts($s['board'])['davolash ishi|5|d22-05a|Klinik farmakologiya|practice'];
-    expect($a['items'][0])->toMatchArray(['dates_from' => '2026-09-17', 'dates_to' => '2026-09-18', 'past' => false, 'dates' => '17.09–18.09'])
+    expect($a['items'][0])->toMatchArray(['date_from' => '2026-09-17', 'date_to' => '2026-09-18', 'past' => false, 'dates' => '17.09–18.09'])
         ->and($a['text'])->toContain('17.09–18.09');
     // Butunlay o'tgan: belgi (matn, rang) yo'q — ro'yxatda "o'tgan"; kelgusilar hisobida (internalConflicts) — chiqmaydi.
     $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-19 09:00', 'Asia/Tashkent'));
@@ -441,4 +441,134 @@ it('to\'qnashuvlar: sikl rejasida bloklarda tuzilgan ro\'yxat; "Faqat meniki" �
     // Panel kartasi ham shu (qamrovli) ro'yxat bilan.
     $card = collect($plan($other, 'oqituvchi', ['mine' => 1])['cycle_cards'])->firstWhere('group', 'd22-05c');
     expect($card['conflict_level'])->toBe('yellow')->and($card['conflict'])->toContain("Xona 305 sig'imidan ko'p");
+});
+
+/** 1-oqim (05a, 05b) ma'ruzasi (LEKTOR, R-ZAL) va amaliyoti (USTOZ); 2-oqim ma'ruzasi shu vaqtda (LEKTOR) — ma'ruza to'qnashuvi. */
+function icLectureSetup(Teacher $lector, Teacher $practice, ?Auditorium $hall = null): array
+{
+    // 05b — boshqa amaliy o'qituvchisi (bitta o'qituvchi ikki guruhchada bir vaqtda — o'zi to'qnashuv bo'lardi).
+    $s = icSetup(['d22-05a' => [$practice, null, 10], 'd22-05b' => [icTeacher('USTOZ2'), null, 10]], ['F1 / 1-oqim' => 0]);
+    $mc = \Illuminate\Support\Facades\DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'x', 'specialty_name' => 'davolash ishi',
+        'plan_year' => '2022/2023', 'level_code' => '15', 'created_at' => now(), 'updated_at' => now()]);
+    \Illuminate\Support\Facades\DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Klinik farmakologiya',
+        'semester' => 9, 'lecture' => 4, 'practice' => 26, 'created_at' => now(), 'updated_at' => now()]);
+    $lecture = fn (string $oqim, array $groups, int $students) => TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1',
+        'specialty_name' => 'davolash ishi', 'course' => 5, 'oqim_label' => $oqim, 'lang' => 'uz', 'students' => $students, 'training_type' => 'lecture',
+        'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Klinik farmakologiya', 'group_names' => $groups, 'kafedra_name' => 'Farmakologiya kafedrasi',
+        'teacher_id' => $lector->id, 'teacher_name' => $lector->full_name, 'auditorium_code' => $hall?->code, 'auditorium_name' => $hall?->name]);
+    $s['lecture'] = $lecture('1-oqim', ['d22-05a', 'd22-05b'], 20);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '2-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Klinik farmakologiya', 'group_name' => 'd22-06a', 'kafedra_name' => 'Farmakologiya kafedrasi']);
+    $lecture('2-oqim', ['d22-06a'], 10);
+    TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 2-oqim', 'subject_name' => 'Klinik farmakologiya', 'start_index' => 1, 'training_type' => 'practice']);
+
+    return $s;
+}
+
+it('to\'qnashuvlar: faqat boshqa o\'qituvchiga tegishli (ma\'ruza o\'qituvchisi band) — amaliy o\'qituvchisi kartasida oddiy rang; ma\'ruzachining o\'ziga ko\'rinadi', function () {
+    $lector = icTeacher('LEKTOR', 'oqituvchi');
+    $ustoz = icTeacher('USTOZ', 'oqituvchi');
+    $s = icLectureSetup($lector, $ustoz);
+    $admin = icTeacher('ADMIN', 'admin');
+    $plan = fn ($who, string $role, array $extra = []) => test()->withoutVite()->actingAs($who, 'teacher')->withSession(['active_role' => $role])
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'] + $extra)->assertOk()->json();
+    $block = fn (array $p, string $g) => collect($p['rows'])->firstWhere('group', $g)['blocks'][0] ?? null;
+    // Admin: 05a blokida ma'ruza o'qituvchisi bandligi (ma'ruza belgisi bilan), qizil.
+    $a = $block($plan($admin, 'admin'), 'd22-05a');
+    expect($a['conflict_level'])->toBe('red')->and(collect($a['conflicts'])->firstWhere('kind', 'teacher_busy'))
+        ->toMatchArray(['teacher_id' => $lector->id, 'teacher_name' => 'LEKTOR', 'lecture' => true, 'lecture_id' => $s['lecture']->id]);
+    // USTOZ "Faqat meniki": 05a — faqat boshqaga (LEKTOR) tegishli to'qnashuv: ro'yxat bo'sh, rang oddiy, panel kartasida yo'q.
+    $p = $plan($ustoz, 'oqituvchi', ['mine' => 1]);
+    $u = $block($p, 'd22-05a');
+    expect($u['conflicts'])->toBe([])->and($u['conflict'])->toBeNull()->and($u['conflict_level'])->toBeNull()
+        ->and(collect($p['cycle_cards'])->firstWhere('group', 'd22-05a')['conflict'])->toBeNull();
+    // LEKTOR "Faqat meniki": o'zi o'qiydigan ma'ruza — bandligi ko'rinadi.
+    $l = $block($plan($lector, 'oqituvchi', ['mine' => 1]), 'd22-05a');
+    expect(collect($l['conflicts'])->pluck('kind')->all())->toContain('teacher_busy')->and($l['conflict_level'])->toBe('red');
+});
+
+it('to\'qnashuvlar: ma\'ruza zali sig\'imi — ma\'ruzachiga ko\'rinadi, amaliy o\'qituvchisiga yo\'q; amaliyot ma\'ruza bilan ustma-ust — lecture_overlap (qizil)', function () {
+    $hall = Auditorium::create(['code' => 'ZAL', 'name' => 'Zal', 'volume' => 15, 'active' => true]);
+    $lector = icTeacher('LEKTOR', 'oqituvchi');
+    $ustoz = icTeacher('USTOZ', 'oqituvchi');
+    $s = icLectureSetup($lector, $ustoz, $hall);
+    // 2-oqim ma'ruzasini boshqa ma'ruzachiga — faqat zal sig'imi qoladi (1-oqim 20 + 2-oqim 10 > 15).
+    TimetableCard::where('oqim_label', '2-oqim')->where('training_type', 'lecture')->update(['teacher_id' => icTeacher('BOSHQA')->id, 'teacher_name' => 'BOSHQA']);
+    $plan = fn ($who, array $extra = []) => test()->withoutVite()->actingAs($who, 'teacher')->withSession(['active_role' => 'oqituvchi'])
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'mine' => 1] + $extra)->assertOk()->json();
+    $block = fn (array $p, string $g) => collect($p['rows'])->firstWhere('group', $g)['blocks'][0] ?? null;
+    // 14.09 — 1-oqim o'zi (20 > 15), 15.09 — ikkala oqim (30 > 15): ikkalasi ham zal sig'imi.
+    expect(collect($block($plan($lector), 'd22-05a')['conflicts'])->pluck('kind')->unique()->values()->all())->toBe(['room_capacity'])
+        ->and($block($plan($lector), 'd22-05a')['conflict_level'])->toBe('yellow')
+        ->and($block($plan($ustoz), 'd22-05a')['conflicts'])->toBe([]);
+    // 05a shu davrda boshqa sikl fanida ham (Ichki kasalliklar, AMALIYCHI, soatlarsiz — 1–6-soat amaliy): uning amaliyoti
+    // Klinik farmakologiya ma'ruzasi (1–2-soat) bilan ustma-ust — lecture_overlap (qizil), amaliy–amaliy — group_busy ikkala tomonda.
+    $amaliychi = icTeacher('AMALIYCHI', 'oqituvchi');
+    TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Ichki kasalliklar', 'mode' => 'cycle', 'cycle_days' => 5]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Ichki kasalliklar', 'group_name' => 'd22-05a', 'kafedra_name' => 'Ichki kasalliklar kafedrasi',
+        'teacher_id' => $amaliychi->id, 'teacher_name' => 'AMALIYCHI']);
+    TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'd22-05a', 'subject_name' => 'Ichki kasalliklar', 'start_index' => 0, 'training_type' => 'practice']);
+    $subjectBlock = fn (array $p, string $g, string $subject) => collect($p['rows'])->where('group', $g)->flatMap(fn ($r) => $r['blocks'])
+        ->firstWhere('subject', $subject);
+    $b = $subjectBlock($plan($amaliychi), 'd22-05a', 'Ichki kasalliklar');
+    expect(collect($b['conflicts'])->pluck('kind')->sort()->values()->all())->toBe(['group_busy', 'lecture_overlap'])
+        ->and($b['conflict_level'])->toBe('red')
+        ->and(collect($b['conflicts'])->firstWhere('kind', 'lecture_overlap'))
+        ->toMatchArray(['type' => 'group', 'groups' => ['d22-05a'], 'date_from' => '2026-09-14', 'date_to' => '2026-09-15'])
+        ->and(collect($b['conflicts'])->firstWhere('kind', 'lecture_overlap')['detail'])
+        ->toBe("Amaliy dars ma'ruza bilan ustma-ust: d22-05a — d22-05a, Klinik farmakologiya ma'ruzasi, 14.09–15.09 — amaliyot vaqtini ma'ruzadan keyinga suring");
+    // Rang: faqat ma'ruza bilan ustma-ust ham qizil; faqat xona — sariq; hammasi o'tgan — null.
+    expect(TimetableController::conflictLevel([['kind' => 'lecture_overlap', 'past' => false]]))->toBe('red')
+        ->and(TimetableController::conflictLevel([['kind' => 'room_busy', 'past' => false], ['kind' => 'teacher_busy', 'past' => true]]))->toBe('yellow')
+        ->and(TimetableController::conflictLevel([['kind' => 'teacher_busy', 'past' => true]]))->toBeNull();
+    // USTOZ (Klinik farmakologiya amaliyoti): guruh band (Ichki kasalliklar amaliyoti), ma'ruza tomonida ustma-ust yozilmaydi.
+    $u = $subjectBlock($plan($ustoz), 'd22-05a', 'Klinik farmakologiya');
+    expect(collect($u['conflicts'])->pluck('kind')->unique()->values()->all())->toBe(['group_busy'])->and($u['conflict_level'])->toBe('red');
+    // Boshqa fan davri kesishmasa — guruh to'qnashuvlari yo'q.
+    TimetableCyclePlacement::where('subject_name', 'Ichki kasalliklar')->update(['start_index' => 10]);
+    expect($subjectBlock($plan($amaliychi), 'd22-05a', 'Ichki kasalliklar')['conflicts'])->toBe([]);
+});
+
+it('to\'qnashuvlar: sikl rejasida o\'tgan to\'qnashuv qizil emas (kulrang "o\'tgan"), admin hammasini ko\'radi', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10]], ['d22-05a' => 0, 'd22-05b' => 2]);
+    $admin = icTeacher('ADMIN', 'admin');
+    $get = fn () => collect(test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'])->assertOk()->json('rows'))->firstWhere('group', 'd22-05a')['blocks'][0];
+    expect($get()['conflict_level'])->toBe('red');
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-25 09:00', 'Asia/Tashkent'));
+    $b = $get();
+    expect($b['conflict'])->toBeNull()->and($b['conflict_level'])->toBeNull()->and($b['conflicts'][0]['past'])->toBeTrue();
+});
+
+it('haftalik: /conflicts?items=1&week=N — shu hafta tuzilgan ro\'yxati (o\'tgani past), oddiy so\'rov — faqat kelgusi matn', function () {
+    $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 3, 'settings' => ['semester_start' => '2026-09-14']]);
+    $t = icTeacher('USTOZ');
+    $mk = fn (string $g, string $room) => TimetableCard::create(['board_id' => $board->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi',
+        'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 3,
+        'subject_name' => 'Anatomiya', 'group_name' => $g, 'kafedra_name' => 'K', 'teacher_id' => $t->id, 'teacher_name' => 'USTOZ',
+        'auditorium_code' => $room, 'auditorium_name' => $room, 'day' => 2, 'pair' => 3]);
+    $a = $mk('d2-01a', '101');
+    $mk('d2-01b', '102');
+    $admin = icTeacher('ADMIN', 'admin');
+    $get = fn (array $q = []) => test()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->getJson(route('admin.timetable.boards.conflicts', $board) . ($q ? '?' . http_build_query($q) : ''))->assertOk()->json();
+    // Bugun 21.09: 1-hafta (15.09) o'tgan, 2-hafta (22.09) kelgusi.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-21 09:00', 'Asia/Tashkent'));
+    $w1 = $get(['items' => 1, 'week' => 1]);
+    expect($w1['week'])->toBe(1)->and(array_keys($w1['weekly_items'][$a->id]))->toBe([1])
+        ->and($w1['weekly_items'][$a->id][1][0])->toMatchArray(['kind' => 'teacher_busy', 'type' => 'teacher', 'teacher_id' => $t->id,
+            'teacher_name' => 'USTOZ', 'groups' => ['d2-01b'], 'past' => true]);
+    $w2 = $get(['items' => 1, 'week' => 2])['weekly_items'][$a->id][2][0];
+    expect($w2)->toMatchArray(['kind' => 'teacher_busy', 'past' => false, 'date_from' => '2026-09-22', 'date_to' => '2026-09-22'])
+        ->and($w2['detail'])->toContain('USTOZ');
+    // Oddiy so'rov: faqat kelgusi haftalar matni.
+    expect(array_keys($get()['weekly'][$a->id]))->toBe([2, 3]);
 });

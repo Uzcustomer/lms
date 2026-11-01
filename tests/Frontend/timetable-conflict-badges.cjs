@@ -30,7 +30,7 @@ const line = ctx.cfLineHtml(T({ groups: ['a', 'b', 'c', 'd'] }));
 assert.match(line, /^<li class="cf-line cf-red"><b>O'qituvchi band<\/b> SHARIPOV K\. — a, b, c \+1 ta, 16\.09–18\.09 <span class="cf-todo">→ boshqa o'qituvchi biriktiring<\/span><\/li>$/);
 assert.match(ctx.cfLineHtml(T({ past: true })), /cf-line cf-past.*o‘tgan/);
 // Haftalik yozuv (who yo'q) — server matni.
-assert.match(ctx.cfLineHtml({ kind: 'group_busy', detail: 'Guruh band: d-01a — Fizika', dates_from: '2026-09-15', dates_to: '2026-09-15', past: false }),
+assert.match(ctx.cfLineHtml({ kind: 'group_busy', detail: 'Guruh band: d-01a — Fizika', date_from: '2026-09-15', date_to: '2026-09-15', past: false }),
   /<b>Guruh band<\/b> d-01a — Fizika, 15\.09 <span class="cf-todo">→ darsni boshqa vaqtga suring/);
 
 // Oqim ma'ruzasi to'qnashuvi: birinchi blokda to'liq, boshqasida — havola.

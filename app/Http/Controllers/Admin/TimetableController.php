@@ -6265,8 +6265,8 @@ class TimetableController extends Controller
      * Qaytaradi: [birlik kaliti (rk|fan|practice) => ['text' => sabab, 'items' => [...], 'level' => red|yellow|null]]; item: type
      * (teacher|room), who, with (guruh · fan), from/to (sanalar), time, group, subject va tuzilgan maydonlar: kind (teacher_busy |
      * room_capacity | room_busy), teacher_id (band o'qituvchi), card_teacher_id (shu birlik darsining o'qituvchisi), room (kod),
-     * groups (to'qnashgan guruhchalar), lecture / lecture_id (oqim ma'ruzasi — guruhcha kartalarida takrorlanmasin), dates_from /
-     * dates_to (kelgusi sanalar — bugundan), past (hammasi o'tgan), detail (bir qator: kim, qachon, nima qilish kerak).
+     * groups (to'qnashgan guruhchalar), lecture / lecture_id (oqim ma'ruzasi — guruhcha kartalarida takrorlanmasin), date_from /
+     * date_to (kelgusi sanalar — bugundan), past (hammasi o'tgan), detail (bir qator: kim, qachon, nima qilish kerak).
      * $futureOnly — faqat kelgusi to'qnashuvlar (o'tganlari hisobga olinmaydi: hisoblagich, qizil belgi, hisobotlar).
      */
     private function cycleConflicts(TimetableBoard $board, ?array $units = null, ?array $calendar = null, bool $futureOnly = false): array
@@ -6280,7 +6280,14 @@ class TimetableController extends Controller
         }
         $rooms = Auditorium::pluck('volume', 'code')->all();
         $occ = [];   // "t|o'qituvchi|sana" / "r|xona|sana" => [yozuv, ...]
+        $byGroup = [];   // "guruhcha|sana" => [yozuv, ...] — guruh bir vaqtda ikki joyda
         foreach ($this->cycleOccupancy($board, $units, $calendar) as $e) {
+            // Umumiy "A + B" birligi — har bir guruhcha nomi bo'yicha.
+            foreach (preg_split('/\s*\+\s*/u', mb_strtolower(trim((string) ($units[$e['unit']]['group'] ?? '')))) as $g) {
+                if ($g !== '') {
+                    $byGroup[$g . '|' . $e['date']][] = $e;
+                }
+            }
             if ($e['teacher_id']) {
                 $occ['t|' . $e['teacher_id'] . '|' . $e['date']][] = $e;
             }
@@ -6293,7 +6300,7 @@ class TimetableController extends Controller
         $hits = [];
         $add = function (int $ui, string $type, string $who, array $others, string $date, string $time, string $extra = '', array $e = [], ?string $kind = null) use (&$hits) {
             $lecture = isset($e['load_key']) && str_starts_with((string) $e['load_key'], 'l');
-            $k = $type . '|' . $who . '|' . implode(',', $others) . '|' . ($lecture ? 'L' . $e['lesson'] : 'P');
+            $k = $type . '|' . $who . '|' . implode(',', $others) . '|' . ($lecture ? 'L' . $e['lesson'] : 'P') . '|' . $kind;
             $hits[$ui][$k] ??= ['type' => $type, 'who' => $who, 'others' => $others, 'dates' => [], 'time' => $time, 'extra' => $extra,
                 'kind' => $kind ?? ($type === 'teacher' ? 'teacher_busy' : 'room_busy'), 'teacher_id' => $type === 'teacher' ? ($e['teacher_id'] ?? null) : null,
                 'card_teacher_id' => $e['teacher_id'] ?? null, 'room' => $type === 'room' ? ($e['room'] ?? null) : null,
@@ -6336,6 +6343,31 @@ class TimetableController extends Controller
             }
         }
 
+        // Guruh bir vaqtda ikki joyda (boshqa sikl fani bilan kesishgan davr): amaliyot boshqa fan ma'ruzasi bilan — lecture_overlap
+        // ("darsingiz ma'ruza bilan ustma-ust", amaliy blokida); qolganlari (amaliy–amaliy, ma'ruza–ma'ruza) — group_busy.
+        // Bir birlik ichida amaliy o'z ma'ruzasidan keyin turadi (cycleDayPlan), shuning uchun faqat boshqa birliklar solishtiriladi.
+        $isLec = fn (array $e) => str_starts_with((string) $e['load_key'], 'l');
+        foreach ($byGroup as $list) {
+            foreach ($list as $e) {
+                $over = array_filter($list, fn ($o) => $o['unit'] !== $e['unit'] && $o['lesson'] !== $e['lesson']
+                    && $o['from'] < $e['to'] && $e['from'] < $o['to']);
+                if (!$over) {
+                    continue;
+                }
+                $time = $e['from'] . '–' . ($e['to'] - 1) . '-soat';
+                $who = (string) ($units[$e['unit']]['group'] ?? '');
+                $lec = array_filter($over, $isLec);
+                if (!$isLec($e) && $lec) {
+                    $add($e['unit'], 'group', $who, array_values(array_unique(array_column($lec, 'unit'))), $e['date'], $time, '', $e, 'lecture_overlap');
+                }
+                // Amaliy — boshqa amaliy bilan; ma'ruza — boshqa ma'ruza bilan (ma'ruza–amaliy faqat amaliy tomonida, yuqorida).
+                $rest = array_filter($over, fn ($o) => $isLec($o) === $isLec($e));
+                if ($rest) {
+                    $add($e['unit'], 'group', $who, array_values(array_unique(array_column($rest, 'unit'))), $e['date'], $time, '', $e, 'group_busy');
+                }
+            }
+        }
+
         $fmt = fn (string $d) => Carbon::parse($d)->format('d.m');
         $range = fn (array $ds) => $fmt($ds[0]) . (count($ds) > 1 ? '–' . $fmt(end($ds)) : '');
         $today = self::proposalToday();
@@ -6352,10 +6384,16 @@ class TimetableController extends Controller
                 $past = !$future;
                 $shown = $future ?: $ds;
                 $with = implode('; ', array_map(fn ($o) => $units[$o]['group'] . ', ' . $units[$o]['subject'], $h['others']));
-                $line = $h['type'] === 'teacher'
-                    ? "O'qituvchi {$h['who']} band: {$with}, {$range($shown)}"
-                    : "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range($shown)}";
+                $line = match ($h['type']) {
+                    'teacher' => "O'qituvchi {$h['who']} band: {$with}, {$range($shown)}",
+                    'group' => $h['kind'] === 'lecture_overlap'
+                        ? "Amaliy dars ma'ruza bilan ustma-ust: {$h['who']} — {$with} ma'ruzasi, {$range($shown)}"
+                        : "Guruh {$h['who']} band: {$with}, {$range($shown)}",
+                    default => "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range($shown)}",
+                };
                 $todo = match ($h['kind']) {
+                    'lecture_overlap' => "amaliyot vaqtini ma'ruzadan keyinga suring",
+                    'group_busy' => 'guruhcha davrini yoki vaqtini boshqa fan bilan kesishmaydigan qilib suring',
                     'teacher_busy' => $h['lecture'] ? "ma'ruza o'qituvchisini yoki vaqtini o'zgartiring" : "boshqa o'qituvchi biriktiring yoki smenani almashtiring",
                     'room_capacity' => $h['lecture'] ? "kattaroq ma'ruza zali tanlang" : 'kattaroq xona tanlang yoki guruhchani boshqa xonaga',
                     default => 'boshqa xona tanlang yoki smenani almashtiring',
@@ -6370,10 +6408,11 @@ class TimetableController extends Controller
                     'time' => $h['time'], 'group' => $u['group'], 'subject' => $u['subject'], 'faculty' => $u['faculty'],
                     'specialty' => $u['specialty'], 'course' => (int) $u['course'],
                     'kind' => $h['kind'], 'teacher_id' => $h['teacher_id'] ? (int) $h['teacher_id'] : null,
+                    'teacher_name' => $h['type'] === 'teacher' ? $h['who'] : null,
                     'card_teacher_id' => $h['card_teacher_id'] ? (int) $h['card_teacher_id'] : null, 'room' => $h['room'],
                     'groups' => array_values(array_unique(array_map(fn ($o) => (string) $units[$o]['group'], $h['others']))),
                     'lecture' => $h['lecture'], 'lecture_id' => $h['lecture_id'],
-                    'dates_from' => $future[0] ?? null, 'dates_to' => $future ? end($future) : null, 'past' => $past,
+                    'date_from' => $future[0] ?? null, 'date_to' => $future ? end($future) : null, 'past' => $past,
                     'line' => $line, 'todo' => $todo, 'detail' => $line . ($past ? " (o'tgan)" : ' — ' . $todo)];
             }
             if (!$items) {
@@ -6396,7 +6435,7 @@ class TimetableController extends Controller
             return null;
         }
 
-        return array_filter($live, fn ($i) => in_array($i['kind'] ?? '', ['teacher_busy', 'group_busy'], true)) ? 'red' : 'yellow';
+        return array_filter($live, fn ($i) => in_array($i['kind'] ?? '', ['teacher_busy', 'group_busy', 'lecture_overlap'], true)) ? 'red' : 'yellow';
     }
 
     /**
@@ -6409,8 +6448,9 @@ class TimetableController extends Controller
             return array_values($items);
         }
 
+        // O'z darsi (amaliy yoki o'zi o'qiydigan ma'ruza) xonasi va ma'ruza bilan ustma-ust — o'z darsi bo'yicha.
         return array_values(array_filter($items, fn ($i) => ($i['type'] === 'teacher' && (int) ($i['teacher_id'] ?? 0) === $mineTeacherId)
-            || ($i['type'] === 'room' && empty($i['lecture']) && (int) ($i['card_teacher_id'] ?? 0) === $mineTeacherId)));
+            || (in_array($i['type'], ['room', 'group'], true) && (int) ($i['card_teacher_id'] ?? 0) === $mineTeacherId)));
     }
 
     /** Karta sikl fanigami (bo'lakli fan — asosiy nomi bo'yicha ham); $cycleKeys — cycleSubjectKeys. */
@@ -6487,7 +6527,7 @@ class TimetableController extends Controller
      * findWeekConflicts bilan tekshiriladi. Sikl fanlari — sikl jadvalida (cycleConflicts).
      * Qaytaradi: [karta id => [hafta => ['text' => sabab, 'date' => Y-m-d, 'day' => kun, 'pair' => yarim-para]]].
      */
-    private function weeklyConflicts(TimetableBoard $board, ?array $state = null, ?array $onlyCards = null, ?int $onlyWeek = null): array
+    private function weeklyConflicts(TimetableBoard $board, ?array $state = null, ?array $onlyCards = null, ?int $onlyWeek = null, bool $withItems = false): array
     {
         // Butun doska model sifatida emas (128 MB): yengil qatorlar va haqiqiy kalendar haftasi bo'yicha — har hafta uchun faqat shu
         // haftaning darslari xotirada. Modellar faqat kesishgan nomzodlar uchun (findWeekConflicts) olinadi; $state berilsa — undagi.
@@ -6610,16 +6650,21 @@ class TimetableController extends Controller
                 foreach ($clashes as $x) {
                     foreach ($x['errors'] as $m) {
                         $errs[$m] = true;
+                        if (!$withItems) {
+                            continue;   // butun doska: faqat matn (xotira) — ro'yxat tanlangan hafta uchun alohida (boardConflicts ?week=)
+                        }
                         $kind = str_starts_with($m, "O'qituvchi band") ? 'teacher_busy' : (str_starts_with($m, 'Auditoriya band') ? 'room_busy' : 'group_busy');
                         $items[] = ['kind' => $kind, 'type' => $kind === 'teacher_busy' ? 'teacher' : ($kind === 'room_busy' ? 'room' : 'group'),
                             'teacher_id' => $kind === 'teacher_busy' ? (int) $models[$id]->teacher_id : null,
+                            'teacher_name' => $kind === 'teacher_busy' ? (string) $models[$id]->teacher_name : null,
                             'room' => $kind === 'room_busy' ? ($x['room'] ?: null) : null, 'groups' => array_values($x['card']->occupiedGroups()),
-                            'with_card' => (int) $x['card']->id, 'dates_from' => $date, 'dates_to' => $date, 'past' => $date < self::proposalToday(),
+                            'with_card' => (int) $x['card']->id, 'date_from' => $date, 'date_to' => $date, 'past' => $date < self::proposalToday(),
                             'detail' => $m];
                     }
                 }
                 if ($errs) {
-                    $out[$id][$w] = ['text' => implode('; ', array_keys($errs)), 'date' => $date, 'day' => $d, 'pair' => $p, 'items' => $items];
+                    $out[$id][$w] = ['text' => implode('; ', array_keys($errs)), 'date' => $date, 'day' => $d, 'pair' => $p]
+                        + ($withItems ? ['items' => $items] : []);
                 }
             }
         }
@@ -6988,8 +7033,7 @@ class TimetableController extends Controller
         }
         foreach ($cycle as $key => $c) {
             foreach ($c['items'] as $it) {
-                $items[] = ['kind' => 'cycle', 'key' => $key, 'date' => $it['from'], 'text' => ($it['type'] === 'teacher'
-                    ? "O'qituvchi {$it['who']} band: {$it['with']}, {$it['dates']}" : "Xona {$it['who']} sig'imidan ko'p: {$it['with']}, {$it['dates']}")] + $it;
+                $items[] = ['kind' => 'cycle', 'key' => $key, 'date' => $it['from'], 'text' => $it['line']] + $it;
             }
         }
         usort($items, fn ($a, $b) => [$a['date'], $a['group'], $a['subject']] <=> [$b['date'], $b['group'], $b['subject']]);
@@ -8118,22 +8162,32 @@ class TimetableController extends Controller
      * Haftalik (ichki) jadvaldagi to'qnashuvlar — sahifa doskani yuklagach alohida so'raydi: [karta id => [hafta => sabab]].
      * Bunday karta joyida qoladi, lekin "Joylashgan" hisobiga kirmaydi va joylanmaganlar panelida sababi bilan chiqadi.
      */
-    public function boardConflicts(TimetableBoard $board)
+    public function boardConflicts(Request $request, TimetableBoard $board)
     {
-        // weekly — kelgusi to'qnashuvlar matni (karta qizil); weekly_items — tuzilgan ro'yxat (o'tganlari ham — past: true, kulrang).
+        // ?week=N&items=1 — faqat shu hafta: tuzilgan ro'yxat (o'tganlari ham — past: true), yengil (butun doska emas).
+        if ($request->boolean('items') && ($week = (int) $request->query('week')) > 0) {
+            $ids = DB::table('timetable_cards')->where('board_id', $board->id)->pluck('id')->map(fn ($id) => (int) $id)->flip()->all();
+            $items = [];
+            foreach ($this->weeklyConflicts($board, null, $ids, $week, true) as $id => $weeks) {
+                foreach ($weeks as $w => $x) {
+                    $items[$id][$w] = $x['items'] ?? [];
+                }
+            }
+
+            return response()->json(['week' => $week, 'weekly_items' => (object) $items]);
+        }
+        // weekly — kelgusi to'qnashuvlar matni (karta qizil; o'tganlari hisoblanmaydi).
         $weekly = [];
-        $items = [];
         $today = self::proposalToday();
         foreach ($this->weeklyConflicts($board) as $id => $weeks) {
             foreach ($weeks as $w => $x) {
                 if ($x['date'] >= $today) {
                     $weekly[$id][$w] = $x['text'];
                 }
-                $items[$id][$w] = $x['items'] ?? [];
             }
         }
 
-        return response()->json(['weekly' => (object) $weekly, 'weekly_items' => (object) $items]);
+        return response()->json(['weekly' => (object) $weekly]);
     }
 
     /** Joylanmagan kartalar ro'yxatini XLSX ga chiqaradi. */

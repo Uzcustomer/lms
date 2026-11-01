@@ -6492,11 +6492,12 @@
             }
 
             // ===== To'qnashuvlar: qisqa belgi, rang, bir qatorli tafsilot (server — tuzilgan ro'yxat, ko'rish qamrovi bo'yicha) =====
-            const CF_LABEL = { teacher_busy: "O'qituvchi band", group_busy: 'Guruh band', room_capacity: "Xona sig'maydi", room_busy: 'Xona band' };
+            const CF_LABEL = { teacher_busy: "O'qituvchi band", group_busy: 'Guruh band', lecture_overlap: "Ma'ruza bilan ustma-ust",
+                room_capacity: "Xona sig'maydi", room_busy: 'Xona band' };
             const CF_TODO = { teacher_busy: "boshqa vaqt yoki o'qituvchi tanlang", group_busy: 'darsni boshqa vaqtga suring',
-                room_capacity: 'kattaroq xona tanlang', room_busy: 'boshqa xona tanlang' };
+                lecture_overlap: "amaliyot vaqtini ma'ruzadan keyinga suring", room_capacity: 'kattaroq xona tanlang', room_busy: 'boshqa xona tanlang' };
             const cfLive = items => (items || []).filter(i => !i.past);
-            const cfKindLevel = kind => (kind === 'teacher_busy' || kind === 'group_busy') ? 'red' : 'yellow';
+            const cfKindLevel = kind => (kind === 'teacher_busy' || kind === 'group_busy' || kind === 'lecture_overlap') ? 'red' : 'yellow';
             // Rang: qizil — o'qituvchi yoki guruh ikki joyda; sariq — faqat xona; hammasi o'tgan — kulrang (past); yo'q — null.
             function cfLevel(items) {
                 const live = cfLive(items);
@@ -6516,7 +6517,7 @@
             const cfDate = d => String(d || '').split('-').reverse().slice(0, 2).join('.');
             // Bir qator: kim/nima to'qnashdi, qaysi sanalarda, nima qilish kerak (o'tgan — kulrang).
             function cfLineHtml(i) {
-                const when = i.dates || (i.dates_from ? cfDate(i.dates_from) + (i.dates_to && i.dates_to !== i.dates_from ? '–' + cfDate(i.dates_to) : '') : '');
+                const when = i.dates || (i.date_from ? cfDate(i.date_from) + (i.date_to && i.date_to !== i.date_from ? '–' + cfDate(i.date_to) : '') : '');
                 const body = i.who !== undefined
                     ? (i.who ? ' ' + esc(i.who) : '') + ((i.groups || []).length ? ' — ' + esc(cfGroups(i.groups)) : '')
                     : ' ' + esc(String(i.detail || '').replace(/^[^:]*:\s*/, ''));
@@ -7764,11 +7765,26 @@
                         const j = await api(BASE + '/boards/' + boardId + '/conflicts');
                         if (gen !== conflictGen || !board || board.id !== boardId) return;
                         weeklyConflicts = j.weekly || {};
-                        weeklyConflictItems = j.weekly_items || {};
+                        weeklyConflictItems = {};
                         renderStats();
+                        loadWeekConflictItems();
                         if (viewMode !== 'cycle') renderPanel();
                     } catch (e) { console.warn('To\'qnashuvlar olinmadi:', e); }
                 }, 600);
+            }
+            // Tanlangan hafta to'qnashuvlarining tuzilgan ro'yxati (panel kartasidagi qisqa belgi uchun) — faqat shu hafta, yengil so'rov.
+            async function loadWeekConflictItems() {
+                if (!board || !curWeek || weeklyLayer === 'external' || weeklyConflictItems.__week === curWeek || weeklyConflictItems.__loading === curWeek) return;
+                const boardId = board.id, week = curWeek, gen = conflictGen;
+                weeklyConflictItems.__loading = week;
+                try {
+                    const j = await api(BASE + '/boards/' + boardId + '/conflicts?items=1&week=' + week);
+                    if (gen !== conflictGen || !board || board.id !== boardId || curWeek !== week) return;
+                    weeklyConflictItems = {};
+                    Object.entries(j.weekly_items || {}).forEach(([id, weeks]) => { weeklyConflictItems[id] = weeks; });
+                    weeklyConflictItems.__week = week;
+                    if (viewMode !== 'cycle') renderPanel();
+                } catch (e) { /* belgi — matn bilan qoladi */ }
             }
             // Joylashgan kartaning ichki jadvaldagi to'qnashuvi (joriy hafta; shablon ko'rinishida — birorta haftada bo'lsa).
             function cardConflict(c) {
@@ -7958,6 +7974,8 @@
             // ravishda ketma-ket chiqadi (fan bo'yicha saralangan, guruhlash chizig'i yo'q).
             // Hafta ko'rinishida shu haftada o'tilmaydigan kartalar bu yerga tushmaydi.
             function renderPanel() {
+                // Hafta almashdi — shu haftaning to'qnashuvlar ro'yxati (qisqa belgi uchun).
+                if (curWeek && weeklyConflictItems.__week !== curWeek) loadWeekConflictItems();
                 $('pnFilters').classList.toggle('hidden', viewMode === 'cycle');
                 if (viewMode === 'cycle') {
                     renderCycleCards(cyclePlanData);

@@ -216,7 +216,10 @@ it('katta doska (3000+ karta): unit-busy < 1 s va < 64 MB xotira, natija eski (b
         request()->attributes->remove('timetable.cycle_units.' . $board->id);
         expect($busy->invoke($ctl, $board, $cards))->toBe(legacyUnitBusy($board, $cards), 'kartalar: ' . $cards->pluck('id')->implode(','));
     }
-    expect((new ReflectionMethod($ctl, 'weeklyConflicts'))->invoke($ctl, $board))->toBe(legacyWeeklyConflicts($board));
+    // Tuzilgan ro'yxat (items) — yangi maydon; matn, sana, kun, para eski hisob bilan aynan bir xil.
+    $weekly = array_map(fn ($weeks) => array_map(fn ($x) => array_diff_key($x, ['items' => true]), $weeks),
+        (new ReflectionMethod($ctl, 'weeklyConflicts'))->invoke($ctl, $board));
+    expect($weekly)->toBe(legacyWeeklyConflicts($board));
 
     // HTTP: sikl guruhchasi va haftalik karta uchun unit-busy — vaqt va eng yuqori xotira (so'rov davomida).
     $head = $s['head'];

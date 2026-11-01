@@ -3451,7 +3451,8 @@
                     crs: p.getAll('crs').map(Number).filter(Number.isInteger),
                     type: p.get('type') || 'all',
                     week: Number.isInteger(week) && week > 0 ? week : 0,
-                    view: p.get('view') || 'group',
+                    // syncUrl sukut kesimini (DEFAULT_VIEW — o'qituvchiga 'teacher') yozmaydi — yo'q bo'lsa o'sha.
+                    view: p.get('view') || DEFAULT_VIEW,
                 };
             }
             // Joriy holatni URLga yozamiz (tarixga yangi yozuv qo'shmasdan). Faqat

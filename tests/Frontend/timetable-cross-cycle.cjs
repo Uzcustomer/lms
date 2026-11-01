@@ -17,6 +17,17 @@ assert.match(source, /if \(viewMode !== DEFAULT_VIEW\) p\.set\('view', viewMode\
 assert.match(source, /const DEFAULT_VIEW = TEACHER_DEFAULTS \? 'teacher' : 'group';/);
 assert.match(source, /let scopeMode = TIMETABLE_HAS_SUBJECTS && TIMETABLE_ROLE === 'fan_masuli' \? 'subjects' : \(TEACHER_DEFAULTS \? 'mine' : 'all'\);/);
 
+// URL: sukut kesimi yozilmaydi — o'qilganda ham sukut (o'qituvchiga 'teacher', boshqalarga 'group').
+{
+    const fn = section('            function parseViewFromUrl() {', '            // URLdan o\'qilgan tanlovlarni doska yuklanganda');
+    for (const [def, search, want] of [['teacher', '?board=7&week=3', 'teacher'], ['group', '?board=7', 'group'], ['teacher', '?board=7&view=group', 'group']]) {
+        const c = { DEFAULT_VIEW: def, location: { search }, URLSearchParams, Number };
+        vm.createContext(c);
+        vm.runInContext(fn + '; this.v = parseViewFromUrl();', c);
+        assert.equal(c.v.view, want, search + ' (' + def + ')');
+    }
+}
+
 const els = {};
 let gridClick = null;
 const el = id => els[id] || (els[id] = { id, innerHTML: '', textContent: '', addEventListener(t, fn) { if (id === 'grid' && t === 'click') gridClick = fn; } });

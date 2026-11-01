@@ -1082,3 +1082,15 @@ it('sikl kuni ↑/↓ bilan surilsa, tasdiqlangan amaliy boshlanishi (ps_g) ham 
     $move(['sub_group' => 'g5-01a', 'start_hour' => 1]);
     expect($pl->fresh()->lecture_slots['ps_g']['g5-01a'])->toBe([0 => 3, 1 => 5])->and($pl->fresh()->lecture_slots['shift_g'])->toBe(['g5-01b' => 7]);
 });
+
+it('sikl kun rejasi: amaliy o\'z soatida bo\'lsa kun boshini faqat ma\'ruza cheklaydi (↓ bilan ma\'ruza ham suriladi)', function () {
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $plan = fn (int $start, array $ps) => (new ReflectionMethod($ctl, 'cycleDayPlan'))->invoke($ctl,
+        [['lec' => 2, 'prc' => 4, 'tl' => '', 'tp' => '']], null, 1, 0, [0], [0 => $start], 6, 12, $ps)[0];
+    // Ma'ruza 7–8, amaliy 1–4 (tasdiqlangan): kun 8 ga surilsa — ma'ruza 8–9 (avval 7 da qisilib qolardi), amaliy 2.
+    expect($plan(8, [0 => 2]))->toMatchArray(['start' => 8, 'ps' => 2, 'lec' => 2, 'prc' => 4]);
+    expect($plan(11, [0 => 2]))->toMatchArray(['start' => 11, 'ps' => 2]);
+    expect($plan(12, [0 => 2]))->toMatchArray(['start' => 11]);
+    // Amaliy ma'ruzadan keyin (o'z soati yo'q) — ikkalasi kun ichida sig'ishi kerak: 12 - 6 + 1 = 7.
+    expect($plan(8, []))->toMatchArray(['start' => 7, 'ps' => 9]);
+});

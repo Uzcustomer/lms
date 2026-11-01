@@ -5480,7 +5480,9 @@ class TimetableController extends Controller
             }
             $total = $lec + $prc;
             $start = (int) ($starts[$k] ?? $starts[(string) $k] ?? 1);
-            $start = max(1, min($start, max(1, $gridHours - $total + 1)));
+            // Amaliy o'z soatida (ps_g so'rovi yoki smena) — kun boshini faqat ma'ruza cheklaydi; aks holda ikkalasi ketma-ket.
+            $own = isset($practiceStarts[$k]) || isset($practiceStarts[(string) $k]);
+            $start = max(1, min($start, max(1, $gridHours - ($own ? $lec : $total) + 1)));
             // Amaliy — ma'ruzadan keyin; guruhcha smenasi bo'lsa — smena soatidan, ma'ruzadan oldin ham (masalan amaliy
             // 8:30–11:20, ma'ruza 12:00): ma'ruza bilan kesishsa — ma'ruzadan keyin.
             $ps = $start + $lec;

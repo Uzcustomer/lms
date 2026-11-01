@@ -275,8 +275,9 @@ trait TimetableSuggestionApply
                     'auditorium_code' => $a['auditorium_code'] ?? null];
             } elseif ($op === 'reset') {
                 $c = TimetableCard::find($cid);
+                // Xona ham shablondagisi (haftalik yozuvdagi xona o'chadi; shablonda xona yo'q bo'lsa — xonasiz).
                 $out[$k] = $c && $c->day && $c->pair ? ['card_id' => $cid, 'week' => $w, 'day' => (int) $c->day, 'pair' => (int) $c->pair,
-                    'auditorium_code' => null] : null;
+                    'auditorium_code' => (string) $c->auditorium_code, 'room_fixed' => true] : null;
             } else {
                 $out[$k] = null;
             }
@@ -497,7 +498,7 @@ trait TimetableSuggestionApply
                 $moved[$k] = true;
                 $c = $fp ? $cardWith($fp['card_id']) : null;
                 if ($c && ($errs = $this->pendingTimeConflicts($c, ['week' => $fp['week'], 'day' => $fp['day'], 'pair' => $fp['pair'],
-                    'auditorium_code' => $fp['auditorium_code']], $ignorePending))) {
+                    'auditorium_code' => $fp['auditorium_code'], 'room_fixed' => !empty($fp['room_fixed'])], $ignorePending))) {
                     $fail($c, $errs);
                 }
             }

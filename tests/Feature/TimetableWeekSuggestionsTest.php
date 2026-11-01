@@ -880,3 +880,36 @@ it('takliflar: yakuniy "reset" joyi ham bron — ikki tomonda (kutilayotgan rese
     sugAs($s['head'], 'kafedra_mudiri')->postJson($url, $moveX)->assertOk();
     sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan'));
 });
+
+it('takliflar: yakuniy "reset" — bron shablon xonasi bilan (haftalik yozuvdagi xona emas), ikki tomonda', function () {
+    $s = sapSetup();
+    // own: shablonda 1-kun 5-katak, R1; 3-haftada 4-kun 1-katakka R2 xonada ko'chirilgan. y — boshqa guruh/o'qituvchi, xonasi R1.
+    $s['own']->update(['day' => 1, 'pair' => 5, 'auditorium_code' => 'R1', 'auditorium_name' => 'R1']);
+    TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1, 'auditorium_code' => 'R2', 'auditorium_name' => 'R2']);
+    $y = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-31', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
+        'auditorium_code' => 'R1', 'auditorium_name' => 'R1']);
+    $reset = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
+    $moveY = ['week' => 3, 'card_id' => $y->id, 'actions' => [['op' => 'move', 'card_id' => $y->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
+    $url = route('admin.timetable.week-suggestions.propose', $s['board']);
+    sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertOk();
+    sugAs($s['head'], 'kafedra_mudiri')->postJson($url, $moveY)->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'auditoriya: R1'));
+    \App\Models\TimetableChangeRequest::where('status', 'pending')->update(['status' => 'cancelled']);
+    sugAs($s['head'], 'kafedra_mudiri')->postJson($url, $moveY)->assertOk();
+    sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'auditoriya: R1'));
+});
+
+it('takliflar: yakuniy "reset" — shablonda xona yo\'q bo\'lsa, haftalik yozuvdagi xona band qilinmaydi', function () {
+    $s = sapSetup();
+    $s['own']->update(['day' => 1, 'pair' => 5, 'auditorium_code' => null, 'auditorium_name' => null]);
+    TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1, 'auditorium_code' => 'R2', 'auditorium_name' => 'R2']);
+    $y = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-32', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
+        'auditorium_code' => 'R2', 'auditorium_name' => 'R2']);
+    $reset = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
+    $moveY = ['week' => 3, 'card_id' => $y->id, 'actions' => [['op' => 'move', 'card_id' => $y->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
+    $url = route('admin.timetable.week-suggestions.propose', $s['board']);
+    // Kutilayotgan reset R2 ni band qilmaydi — y R2 da shu vaqtga so'ray oladi; teskarisi ham.
+    sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertOk();
+    sugAs($s['head'], 'kafedra_mudiri')->postJson($url, $moveY)->assertOk();
+    \App\Models\TimetableChangeRequest::where('requester_role', 'oqituvchi')->update(['status' => 'cancelled']);
+    sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertOk();
+});

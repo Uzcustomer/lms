@@ -9074,7 +9074,9 @@ class TimetableController extends Controller
         $week = (int) $data['week'];
         $sourceRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
         // Yangi joyda beriladigan xona (Takliflar: "boshqa xona") — aks holda haftalik yozuvdagi yoki kartaning xonasi.
-        $room = ($data['auditorium_code'] ?? null) ?: ($sourceRoom?->auditorium_code ?: $card->auditorium_code);
+        // room_fixed — xona aniq berilgan (reset: shablon xonasi, bo'sh bo'lsa — xonasiz).
+        $room = !empty($data['room_fixed']) ? (string) ($data['auditorium_code'] ?? '')
+            : (($data['auditorium_code'] ?? null) ?: ($sourceRoom?->auditorium_code ?: $card->auditorium_code));
         $errors = [];
         // Bron: [so'rov, karta, joy] — haftalik ko'chirish / joylash so'rovi bitta, Takliflar so'rovi — har "move" amali.
         $holds = [];
@@ -9100,7 +9102,7 @@ class TimetableController extends Controller
                     $moved[$cid] = true;
                     if ($fp) {
                         $holds[] = [$req, $cid, ['day' => $fp['day'], 'pair' => $fp['pair'], 'week' => $week, 'action' => 'move',
-                            'auditorium_code' => $fp['auditorium_code']], $subst[$cid] ?? null, null];
+                            'auditorium_code' => $fp['auditorium_code'], 'room_fixed' => !empty($fp['room_fixed'])], $subst[$cid] ?? null, null];
                     }
                 }
                 foreach ($subst as $cid => $tid) {
@@ -9136,10 +9138,11 @@ class TimetableController extends Controller
             if ($card->teacher_id && (int) $card->teacher_id === (int) $other->teacher_id) $resources[] = 'o‘qituvchi';
             $ov = TimetableCardOverride::where('card_id', $other->id)->where('week', $week)->first();
             // Bron qilingan xona — so'rovda berilgan yangi xona (bo'lsa), aks holda darsning hozirgi xonasi.
-            $otherRoom = ($p['auditorium_code'] ?? null) ?: ($ov?->auditorium_code ?: $other->auditorium_code);
-            $otherRoomName = !empty($p['auditorium_code'])
+            $otherRoom = !empty($p['room_fixed']) ? (string) ($p['auditorium_code'] ?? '')
+                : (($p['auditorium_code'] ?? null) ?: ($ov?->auditorium_code ?: $other->auditorium_code));
+            $otherRoomName = !empty($p['room_fixed']) ? (string) $other->auditorium_name : (!empty($p['auditorium_code'])
                 ? (\App\Models\Auditorium::where('code', $p['auditorium_code'])->value('name') ?: $p['auditorium_code'])
-                : ($ov?->auditorium_name ?: $other->auditorium_name);
+                : ($ov?->auditorium_name ?: $other->auditorium_name));
             if ($room && $room === $otherRoom && !$this->isSharedRoom($otherRoomName)) $resources[] = 'auditoriya: ' . $room;
             // Faqat o'qituvchi broni (almashtirishning boshqa haftalari) — qolgan turlar hisobga olinmaydi.
             $types = array_values(array_intersect((array) ($only ?? ['teacher', 'group', 'room', 'same']), (array) ($holdOnly ?? ['teacher', 'group', 'room', 'same'])));

@@ -438,7 +438,8 @@ trait TimetableSuggestionApply
         if ($ignorePending !== null) {
             foreach ($acts as $a) {
                 $c = ($a['op'] ?? '') === 'move' ? TimetableCard::where('board_id', $board->id)->find((int) $a['card_id']) : null;
-                if ($c && ($errs = $this->pendingTimeConflicts($c, ['week' => (int) $a['week'], 'day' => (int) ($a['day'] ?? 0), 'pair' => (int) ($a['pair'] ?? 0)], $ignorePending))) {
+                if ($c && ($errs = $this->pendingTimeConflicts($c, ['week' => (int) $a['week'], 'day' => (int) ($a['day'] ?? 0), 'pair' => (int) ($a['pair'] ?? 0),
+                    'auditorium_code' => $a['auditorium_code'] ?? null], $ignorePending))) {
                     throw ValidationException::withMessages(['actions' => '«' . $c->subject_name . '»: ' . implode(' · ', $errs)]);
                 }
             }

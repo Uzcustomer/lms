@@ -9072,7 +9072,8 @@ class TimetableController extends Controller
             ->when($ignoreIds, fn ($q) => $q->whereNotIn('id', $ignoreIds))->get();
         $week = (int) $data['week'];
         $sourceRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
-        $room = $sourceRoom?->auditorium_code ?: $card->auditorium_code;
+        // Yangi joyda beriladigan xona (Takliflar: "boshqa xona") — aks holda haftalik yozuvdagi yoki kartaning xonasi.
+        $room = ($data['auditorium_code'] ?? null) ?: ($sourceRoom?->auditorium_code ?: $card->auditorium_code);
         $errors = [];
         // Bron: [so'rov, karta, joy] — haftalik ko'chirish / joylash so'rovi bitta, Takliflar so'rovi — har "move" amali.
         $holds = [];
@@ -9080,7 +9081,8 @@ class TimetableController extends Controller
             if ($req->route_name === self::SUGGESTION_ROUTE) {
                 foreach ((array) (($req->payload ?? [])['actions'] ?? []) as $a) {
                     if (($a['op'] ?? '') === 'move' && (int) ($a['week'] ?? 0) === $week) {
-                        $holds[] = [$req, (int) ($a['card_id'] ?? 0), ['day' => $a['day'] ?? null, 'pair' => $a['pair'] ?? null, 'week' => $week, 'action' => 'move']];
+                        $holds[] = [$req, (int) ($a['card_id'] ?? 0), ['day' => $a['day'] ?? null, 'pair' => $a['pair'] ?? null, 'week' => $week, 'action' => 'move',
+                            'auditorium_code' => $a['auditorium_code'] ?? null]];
                     }
                 }
             } else {
@@ -9106,8 +9108,12 @@ class TimetableController extends Controller
             }
             if ($card->teacher_id && (int) $card->teacher_id === (int) $other->teacher_id) $resources[] = 'o‘qituvchi';
             $ov = TimetableCardOverride::where('card_id', $other->id)->where('week', $week)->first();
-            if ($room && $room === ($ov?->auditorium_code ?: $other->auditorium_code)
-                && !$this->isSharedRoom($ov?->auditorium_name ?: $other->auditorium_name)) $resources[] = 'auditoriya: ' . $room;
+            // Bron qilingan xona — so'rovda berilgan yangi xona (bo'lsa), aks holda darsning hozirgi xonasi.
+            $otherRoom = ($p['auditorium_code'] ?? null) ?: ($ov?->auditorium_code ?: $other->auditorium_code);
+            $otherRoomName = !empty($p['auditorium_code'])
+                ? (\App\Models\Auditorium::where('code', $p['auditorium_code'])->value('name') ?: $p['auditorium_code'])
+                : ($ov?->auditorium_name ?: $other->auditorium_name);
+            if ($room && $room === $otherRoom && !$this->isSharedRoom($otherRoomName)) $resources[] = 'auditoriya: ' . $room;
             if (!$resources) continue;
             $dayName = ($card->board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES)[(int) $p['day'] - 1] ?? $p['day'] . '-kun';
             $schedule = array_values(array_filter($card->board->bell_schedule ?: [], fn ($slot) => ($slot['type'] ?? 'pair') === 'pair'));

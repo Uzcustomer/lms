@@ -733,3 +733,21 @@ it('takliflar: sana — boshidagi va yakuniy joy bo\'yicha; blokni qayta qo\'yis
     expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
         ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(2);
 });
+
+it('takliflar: kutilayotgan so\'rovdagi yangi xona ham bron — boshqa guruh va o\'qituvchi shu vaqtda shu xonani so\'ray olmaydi', function () {
+    $s = sapSetup();
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => 'R1', 'active' => true, 'volume' => 40]);
+    \App\Models\Auditorium::create(['code' => 'R2', 'name' => 'R2', 'active' => true, 'volume' => 40]);
+    $mk = fn (string $g, string $room) => sugCard($s, ['subject_name' => 'Fizika ' . $g, 'group_name' => $g, 'kafedra_name' => 'Gigiyena kafedrasi',
+        'teacher_id' => sugTeacher('T ' . $g)->id, 'auditorium_code' => $room, 'auditorium_name' => $room]);
+    [$a, $b] = [$mk('g-05a', 'R2'), $mk('g-05b', 'R2')];
+    $propose = fn ($c, string $room) => sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']),
+        ['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1, 'auditorium_code' => $room]]]);
+    // a: 4-kun 1-katak, R1 xonada (hozirgi xonasi R2) — kutilmoqda.
+    $propose($a, 'R1')->assertOk();
+    // b: shu vaqtda R1 — bron bilan to'qnashadi (a ning hozirgi xonasi R2 bo'lsa ham).
+    $propose($b, 'R1')->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan') && str_contains($m, 'auditoriya: R1'));
+    // b: shu vaqtda R2 — bron emas (a R2 dan chiqib ketadi).
+    $propose($b, 'R2')->assertOk();
+    expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(2);
+});

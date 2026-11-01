@@ -2115,3 +2115,23 @@ it('bugungi darslar: bir guruhning parallel bo\'laklari (Fan (a) / Fan (c)) bir 
     $rows = collect(htCall($s)->assertOk()->json('rows'))->keyBy('hemis_id');
     expect($rows)->toHaveCount(2)->and($rows[1]['status'])->toBe('ok')->and($rows[2]['status'])->toBe('ok');
 });
+
+it('bugungi darslar: qulf tekshiruvi (lock_check_url) har darsni HEMIS\'dan jonli tekshiradi; javob bo\'lmasa — failed; ids yo\'q — 422', function () {
+    $s = hsSetup();
+    htFake([1596 => [htItem(3, '2026-09-14', '12:00', '13:20'), htItem(4, '2026-09-14', '13:30', '14:50')]]);
+    $url = htCall($s)->assertOk()->json('json.lock_check_url');
+    // HEMIS: 3 — davomat olingan (load > 0), 4 — toza.
+    htFake([], [1596 => [[3, 2]]]);
+    $res = test()->getJson($url . '&ids=3,4')->assertOk()->json();
+    expect(array_keys($res['locked']))->toBe([3])->and($res['failed'])->toBe([]);
+    \Illuminate\Support\Facades\Http::assertSent(fn ($r) => str_contains($r->url(), 'attendance-control-list') && (int) $r->data()['_group'] === 1596);
+    // HEMIS javob bermadi (qayta urinishlardan keyin ham) — tekshirib bo'lmadi: failed (xatcho'p tegmaydi).
+    \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory(app('events')));
+    \Illuminate\Support\Sleep::fake();
+    \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([], 503)]);
+    $res = test()->getJson($url . '&ids=3,4')->assertOk()->json();
+    expect($res['locked'])->toBe([])->and(collect($res['failed'])->sort()->values()->all())->toBe([3, 4]);
+    // ids berilmasa — bo'sh "qulf yo'q" emas, xato; imzosiz — 403.
+    test()->getJson($url)->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'ids berilmagan'));
+    test()->getJson(preg_replace('/signature=[^&]+/', 'signature=x', $url) . '&ids=3')->assertForbidden();
+});

@@ -46,6 +46,8 @@ class TimetableChangeApproval
         'admin.timetable.cycle-auto-shift'    => ['cycleAutoShift', 'board', 'hour'],
         // Sikl guruhchasi amaliy darsi shu kun(lar)da boshqa soatda (o'qituvchi so'rovi tasdiqlangach shu amal bajariladi).
         'admin.timetable.cycle-practice-starts' => ['cyclePracticeStarts', 'board', 'hour'],
+        // "Takliflar": bitta taklifning barcha amallari yaxlit (o'qituvchi, fan mas'uli, kafedra mudiri so'rovi tasdiqlangach).
+        TimetableController::SUGGESTION_ROUTE => ['weekSuggestionApply', 'board', 'move'],
         'admin.timetable.assign-teacher'      => ['assignTeacher', 'board', 'teacher'],
         'admin.timetable.assign-room'         => ['assignUnitRoom', 'board', 'room'],
     ];
@@ -59,6 +61,17 @@ class TimetableChangeApproval
         'admin.timetable.boards.merge-variant-lectures' => ['mergeVariantLectures', 'board', 'merge'],   // dry_run emas
         'admin.timetable.boards.add-missing-groups' => ['addMissingGroupCards', 'board', 'groups'],   // dry_run emas
     ];
+
+    /**
+     * Ikki bosqichli (kafedra mudiri → registrator ofisi) vaqt so'rovini yuboruvchi: o'qituvchi (o'z darsi) yoki fan mas'uli
+     * (mas'ul fanidagi istalgan o'qituvchi darsi, sikl) — requester_role.
+     */
+    public const TEACHER_PROPOSAL_ROLES = ['oqituvchi', 'fan_masuli'];
+
+    public static function isTeacherProposal(TimetableChangeRequest $req): bool
+    {
+        return in_array((string) $req->requester_role, self::TEACHER_PROPOSAL_ROLES, true);
+    }
 
     /** Tasdiqlay oladigan rollar. */
     public const APPROVER_ROLES = ['superadmin', 'admin', 'registrator_ofisi'];
@@ -144,7 +157,7 @@ class TimetableChangeApproval
             return ['ok' => false, 'error' => "Muddati o'tgan: " . $why];
         }
         $requester = $req->requester;
-        if (!$requester instanceof Teacher || !$ctl->teacherProposalOwned($req->route_name, $params, $payload, (int) $requester->id)) {
+        if (!$requester instanceof Teacher || !$ctl->teacherProposalAllowed($req->route_name, $params, $payload, (int) $requester->id, (string) $req->requester_role)) {
             $this->conclude($req, TimetableChangeRequest::FAILED, "Dars biriktiruvi o'zgargan. Yangi taklif yuboring.", $actor);
 
             return ['ok' => false, 'error' => "Dars biriktiruvi o'zgargan. Yangi taklif yuboring."];
@@ -183,11 +196,16 @@ class TimetableChangeApproval
         $req->forceFill(['details' => $details])->save();
     }
 
-    /** O'qituvchi so'rovi bosqichi natijasi — o'qituvchiga. */
+    /** O'qituvchi so'rovi bosqichi natijasi — yuboruvchiga; yakuniy natija (muddati o'tgan, qo'llanmadi) — dars o'qituvchisiga ham. */
     private function notifyTeacherOutcome(TimetableChangeRequest $req, string $outcome): void
     {
-        if ($req->requester_role !== 'oqituvchi' || !$req->requester instanceof Teacher) {
+        if ((!self::isTeacherProposal($req) && $req->route_name !== TimetableController::SUGGESTION_ROUTE) || !$req->requester instanceof Teacher) {
             return;
+        }
+        if (in_array($outcome, [TimetableChangeRequest::EXPIRED, TimetableChangeRequest::FAILED], true)) {
+            $this->notifyLessonTeachers($req, $outcome === TimetableChangeRequest::EXPIRED
+                ? "Darsingiz vaqtini o'zgartirish so'rovi muddati o'tgan" : "Darsingiz vaqtini o'zgartirish so'rovi qo'llanmadi",
+                'Sabab: ' . $req->error);
         }
         [$title, $tail] = match ($outcome) {
             'endorsed' => ["Vaqt o'zgarishi: kafedra mudiri tasdiqladi", "Endi registrator ofisi tasdiqlaydi; jadval hali o'zgarmadi."],
@@ -199,6 +217,27 @@ class TimetableChangeApproval
             $this->sendToTeacher($req->requester, $title, $req->summary . "
 " . $tail, $req);
         }
+    }
+
+    /**
+     * Fan mas'uli boshqa o'qituvchi darsiga yuborgan so'rov: dars o'qituvchisi(lari)ga (details.lesson_teacher_ids) — so'rov
+     * yaratilganda va yakuniy natijada. O'qituvchining o'z so'rovida bunday qabul qiluvchi yo'q.
+     */
+    private function notifyLessonTeachers(TimetableChangeRequest $req, string $title, ?string $tail = null): void
+    {
+        $ids = array_values(array_diff(array_map('intval', (array) (($req->details ?? [])['lesson_teacher_ids'] ?? [])), [(int) $req->requester_id]));
+        if (($req->requester_role !== 'fan_masuli' && $req->route_name !== TimetableController::SUGGESTION_ROUTE) || !$ids) {
+            return;
+        }
+        $body = ($req->requester_name ? $req->requester_name . ' (' . self::proposerLabel($req) . "):\n" : '') . $req->summary . ($tail ? "\n" . $tail : '');
+        Teacher::whereIn('id', $ids)->get()->each(fn (Teacher $t) => $this->sendToTeacher($t, $title, $body, $req));
+    }
+
+    public static function proposerLabel(TimetableChangeRequest $req): string
+    {
+        return match ((string) $req->requester_role) {
+            'fan_masuli' => "fan mas'uli", 'kafedra_mudiri' => 'kafedra mudiri', 'oqituvchi' => "o'qituvchi", default => (string) $req->requester_role,
+        };
     }
 
     public function departmentHeads(int $departmentId)
@@ -213,8 +252,9 @@ class TimetableChangeApproval
         dispatch(function () use ($id) {
             $fresh = TimetableChangeRequest::find($id);
             if ($fresh && $fresh->status === TimetableChangeRequest::PENDING && $fresh->approval_stage === 'department') {
+                $who = $fresh->requester_role === 'fan_masuli' ? "Fan mas'uli" : "O'qituvchi";
                 $this->departmentHeads((int) $fresh->department_hemis_id)->each(fn (Teacher $t) =>
-                    $this->sendToTeacher($t, "O'qituvchi vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda", $fresh->requester_name . ":\n" . $fresh->summary, $fresh));
+                    $this->sendToTeacher($t, $who . " vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda", $fresh->requester_name . ":\n" . $fresh->summary, $fresh));
             }
         })->afterResponse();
     }
@@ -256,7 +296,9 @@ class TimetableChangeApproval
      */
     public static function shouldIntercept(Request $request, string $activeRole, ?TimetableBoard $board): bool
     {
+        // Takliflarning o'z oqimi bor (week-suggestions/propose) — umumiy ushlash ularga tegmaydi.
         return in_array($activeRole, self::GATED_ROLES, true)
+            && (string) optional($request->route())->getName() !== TimetableController::SUGGESTION_ROUTE
             && isset(self::GATED[(string) optional($request->route())->getName()])
             && self::isChange($request)
             && self::boardRequiresApproval($board);
@@ -331,15 +373,26 @@ class TimetableChangeApproval
     /** Tasdiq so'rovini yozadi (shu foydalanuvchining shu joy bo'yicha kutilayotgan so'rovi — almashtiriladi). */
     public function submit(array $draft): TimetableChangeRequest
     {
-        return DB::transaction(function () use ($draft) {
+        $req = DB::transaction(function () use ($draft) {
             // Serialize booking checks on a stable row; concurrent requests cannot both reserve a free slot.
             TimetableBoard::whereKey($draft['board_id'])->lockForUpdate()->firstOrFail();
-            if (($draft['requester_role'] ?? '') === 'oqituvchi') {
+            // Takliflar: bitta kartaga bir vaqtda bitta kutilayotgan so'rov.
+            if (($draft['route_name'] ?? '') === TimetableController::SUGGESTION_ROUTE) {
+                $pending = app(TimetableController::class)->pendingCardRequests((int) $draft['board_id']);
+                foreach ((array) ($draft['details']['card_ids'] ?? []) as $cid) {
+                    abort_if(isset($pending[(int) $cid]), 422, "Bu kartaga allaqachon so'rov bor (#" . ($pending[(int) $cid]['id'] ?? '') . ', '
+                        . ($pending[(int) $cid]['stage'] ?? '') . ').');
+                }
+            }
+            // O'qituvchi so'rovi va Takliflar (kafedra mudiri so'rovi ham): huquq va bandlik (bronlar bilan) qulf ostida qayta — parallel
+            // so'rovlar bir vaqtni ikkalasi band qila olmaydi.
+            if (in_array($draft['requester_role'] ?? '', self::TEACHER_PROPOSAL_ROLES, true)
+                || ($draft['route_name'] ?? '') === TimetableController::SUGGESTION_ROUTE) {
                 $replaced = TimetableChangeRequest::where('board_id', $draft['board_id'])
                     ->where('requester_type', $draft['requester_type'])->where('requester_id', $draft['requester_id'])
                     ->where('target_key', $draft['target_key'])->where('status', TimetableChangeRequest::PENDING)->pluck('id')->all();
                 $ctl = app(TimetableController::class);
-                abort_unless($ctl->teacherProposalOwned($draft['route_name'], $draft['params'], $draft['payload'], (int) $draft['requester_id']), 403);
+                abort_unless($ctl->teacherProposalAllowed($draft['route_name'], $draft['params'], $draft['payload'], (int) $draft['requester_id'], (string) $draft['requester_role']), 403);
                 $ctl->teacherProposalValidate($draft['route_name'], $draft['params'], $draft['payload'], $replaced);
             } elseif (!empty($draft['params']['card'])) {
                 $replaced = TimetableChangeRequest::where('board_id', $draft['board_id'])
@@ -360,6 +413,13 @@ class TimetableChangeApproval
 
             return $req;
         });
+        // Fan mas'uli boshqa o'qituvchi darsiga: dars o'qituvchisiga — so'rov yaratildi (tranzaksiyadan keyin).
+        $this->notifyLessonTeachers($req, $req->route_name === TimetableController::SUGGESTION_ROUTE
+            ? ucfirst(self::proposerLabel($req)) . " darsingizga oid o'zgarishni so'radi (Takliflar)" : "Fan mas'uli darsingiz vaqtini o'zgartirishni so'radi",
+            ($req->approval_stage === 'department' ? 'Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi.' : 'Registrator ofisi tasdiqlaydi.')
+            . " Shu vaqtgacha jadval o'zgarmaydi.");
+
+        return $req;
     }
 
     /** Tasdiqsiz, darhol qo'llangan o'zgarish — tarix uchun yoziladi. */
@@ -434,7 +494,7 @@ class TimetableChangeApproval
     public function reject(TimetableChangeRequest $req, $approver, ?string $note, ?string $role = null): bool
     {
         $done = $this->whilePending($req, function (TimetableChangeRequest $locked) use ($approver, $note, $role) {
-            if ($locked->requester_role === 'oqituvchi') {
+            if (self::isTeacherProposal($locked)) {
                 abort_unless($this->canReviewTeacherProposal($locked, $approver, $role ?? (string) session('active_role')), 403);
             }
             $stage = $locked->approval_stage;
@@ -453,9 +513,10 @@ class TimetableChangeApproval
             return false;
         }
         if ($done->requester instanceof Teacher) {
-            $who = $done->requester_role === 'oqituvchi' ? (($done->head_reviewed_at || !empty($done->details['head_skipped'])) ? ' (registrator ofisi)' : ' (kafedra mudiri)') : '';
+            $who = self::isTeacherProposal($done) ? (($done->head_reviewed_at || !empty($done->details['head_skipped'])) ? ' (registrator ofisi)' : ' (kafedra mudiri)') : '';
             $this->sendToTeacher($done->requester, 'Dars jadvali o\'zgarishi rad etildi' . $who,
                 $done->summary . ($note ? "\nIzoh: " . $note : ''), $done);
+            $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi rad etildi" . $who, $note ? 'Izoh: ' . $note : null);
         }
 
         return true;
@@ -464,12 +525,17 @@ class TimetableChangeApproval
     /** Yuboruvchi so'rovni qaytarib oladi; so'rov endi kutilmayotgan bo'lsa false. */
     public function cancel(TimetableChangeRequest $req, $actor = null): bool
     {
-        return (bool) $this->whilePending($req, function (TimetableChangeRequest $locked) use ($actor) {
+        $done = $this->whilePending($req, function (TimetableChangeRequest $locked) use ($actor) {
             $locked->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => 'Yuboruvchi bekor qildi', 'reviewed_at' => now()]);
             $this->step($locked, 'Bekor qilindi', $actor);
 
-            return true;
+            return $locked;
         });
+        if ($done) {
+            $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi bekor qilindi", "Fan mas'uli so'rovni qaytarib oldi; jadval o'zgarmadi.");
+        }
+
+        return (bool) $done;
     }
 
     /**
@@ -492,11 +558,15 @@ class TimetableChangeApproval
     {
         // O'qituvchining o'zi kafedra mudiri bo'lsa (head_skipped) — 1-bosqich bo'lmaydi, so'rov to'g'ridan-to'g'ri registratorda.
         $headSkipped = !empty($req->details['head_skipped']);
-        if ($req->requester_role === 'oqituvchi' && ($req->approval_stage !== 'registrar' || (!$req->head_reviewed_at && !$headSkipped))) {
+        $teacherProposal = self::isTeacherProposal($req);
+        if ($teacherProposal && ($req->approval_stage !== 'registrar' || (!$req->head_reviewed_at && !$headSkipped))) {
             return ['ok' => false, 'error' => 'Avval kafedra mudiri tasdiqlashi kerak.'];
         }
-        if ($req->requester_role === 'oqituvchi') {
+        if ($teacherProposal) {
             abort_unless($this->canReviewTeacherProposal($req, $approver, (string) session('active_role')), 403);
+        }
+        // O'qituvchi so'rovi va Takliflar (kafedra mudiri so'rovi ham): sana, huquq, imzo va bandlik qayta tekshiriladi.
+        if ($teacherProposal || $req->route_name === TimetableController::SUGGESTION_ROUTE) {
             if ($problem = $this->teacherProposalProblem($req, $approver)) {
                 return $problem;
             }
@@ -514,14 +584,14 @@ class TimetableChangeApproval
             return $this->finish($req, $approver, false, 'Doska yoki kartochka endi mavjud emas.');
         }
 
-        if ($model instanceof TimetableCard && $req->requester_role !== 'oqituvchi') {
+        if ($model instanceof TimetableCard && !$teacherProposal) {
             try {
                 app(TimetableController::class)->validatePendingTimeProposal($model, $req->payload, $req->route_name, [$req->id]);
             } catch (ValidationException $e) {
                 return $this->finish($req, $approver, false, collect($e->errors())->flatten()->first());
             }
         }
-        if ($req->requester_role === 'oqituvchi') {
+        if ($teacherProposal) {
             // Bajaruvchi — tasdiqlagan kafedra mudiri (o'qituvchining o'zi mudir bo'lsa — o'zi, mudir sifatida).
             $head = $headSkipped ? $requester : Teacher::find($req->head_reviewer_id);
             if (!$requester instanceof Teacher || !$head instanceof Teacher || !$head->hasRole('kafedra_mudiri')
@@ -534,6 +604,8 @@ class TimetableChangeApproval
         }
         $sub = Request::create('/', 'POST', $req->payload ?? []);
         $sub->headers->set('Accept', 'application/json');
+        // Tasdiqlangan so'rovni qayta bajarish (to'g'ridan-to'g'ri HTTP chaqiruv emas).
+        $sub->attributes->set('timetable.change_replay', (int) $req->id);
         $sub->setUserResolver(fn () => $requester);
         if (request()->hasSession()) {
             $sub->setLaravelSession(request()->session());
@@ -572,7 +644,7 @@ class TimetableChangeApproval
             'error' => $error,
             'reviewed_at' => now(),
         ]);
-        if ($req->requester_role === 'oqituvchi') {
+        if (self::isTeacherProposal($req)) {
             $this->step($req, $ok ? "Registrator ofisi tasdiqladi — jadvalga qo'llandi" : "Qo'llanmadi", $approver, $error);
         }
 
@@ -595,6 +667,9 @@ class TimetableChangeApproval
     {
         if ($card) {
             return collect([$card]);
+        }
+        if ($route === TimetableController::SUGGESTION_ROUTE) {
+            return app(TimetableController::class)->suggestionCards($board, $p);
         }
         if (in_array($route, ['admin.timetable.boards.unplace', 'admin.timetable.cycle-plan', 'admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed', 'admin.timetable.boards.merge-variant-lectures', 'admin.timetable.boards.add-missing-groups'], true)) {
             return collect();
@@ -652,6 +727,13 @@ class TimetableChangeApproval
             : ($p['group_name'] ?? ($p['oqim_label'] ?? ''));
         $head = trim($subject . ($group ? ' · ' . $group : '') . (($card->training_type ?? $p['training_type'] ?? null) ? ' (' . $type($card->training_type ?? $p['training_type']) . ')' : ''));
 
+        if ($route === TimetableController::SUGGESTION_ROUTE) {
+            $first = $cards->first();
+            $subject = $first?->subject_name;
+
+            return [$subject, 'Takliflar · ' . ($p['week'] ?? '?') . '-hafta: ' . trim(($first ? $first->subject_name . ' · ' . implode(', ', $first->occupiedGroups()) . ' — ' : '')
+                . (string) ($p['title'] ?? 'taklif qo\'llanadi'))];
+        }
         switch ($route) {
             case 'admin.timetable.cards.place':
                 $ext = $this->externalLayer($p);
@@ -733,6 +815,7 @@ class TimetableChangeApproval
             'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index']),
             'admin.timetable.cycle-place', 'admin.timetable.cycle-assign' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
             'admin.timetable.cycle-practice-starts' => $pick(['specialty_name', 'course', 'subject_name', 'units', 'date']),
+            TimetableController::SUGGESTION_ROUTE => 'card:' . ($p['card_id'] ?? '') . ':w' . ($p['week'] ?? ''),
             'admin.timetable.assign-teacher', 'admin.timetable.assign-room' => $pick(['faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'oqim_label', 'group_name']),
             default => md5(json_encode([$p['faculty_names'] ?? null, $p['specialty_names'] ?? null, $p['specialty_name'] ?? null, $p['courses'] ?? null, $p['course'] ?? null])),
         };
@@ -791,7 +874,8 @@ class TimetableChangeApproval
             $send($head);
         }
         // O'qituvchi(lar)
-        $teacherIds = array_unique(array_merge((array) ($details['teacher_ids'] ?? []), array_filter([(int) ($details['new_teacher_id'] ?? 0)])));
+        $teacherIds = array_unique(array_merge((array) ($details['teacher_ids'] ?? []), (array) ($details['lesson_teacher_ids'] ?? []),
+            array_filter([(int) ($details['new_teacher_id'] ?? 0)])));
         if ($teacherIds) {
             Teacher::whereIn('id', $teacherIds)->get()->each(fn (Teacher $t) => $send($t));
         }
@@ -814,13 +898,28 @@ class TimetableChangeApproval
         $link = Route::has('student.schedule') ? route('student.schedule') : null;
         $telegram = new TelegramService();
         // O'qituvchi so'rovi: fan, o'qituvchi, eski → yangi kun va vaqt, xona.
+        $text = fn (array $n) => implode("\n", array_filter([
+            'Fan: ' . ($n['subject'] ?? ''), 'O\'qituvchi: ' . ($n['teacher'] ?? ''),
+            'Eski vaqt: ' . ($n['old'] ?? ''), 'Yangi vaqt: ' . ($n['new'] ?? ''),
+            !empty($n['room']) ? 'Xona: ' . $n['room'] : null,
+        ]));
         $notice = (array) ($details['notice'] ?? []);
-        $studentText = $notice ? implode("\n", array_filter([
-            'Fan: ' . ($notice['subject'] ?? ''), 'O\'qituvchi: ' . ($notice['teacher'] ?? ''),
-            'Eski vaqt: ' . ($notice['old'] ?? ''), 'Yangi vaqt: ' . ($notice['new'] ?? ''),
-            !empty($notice['room']) ? 'Xona: ' . $notice['room'] : null,
-        ])) : $req->summary;
+        $studentText = $notice ? $text($notice) : $req->summary;
+        // Takliflar: har o'zgargan dars — faqat o'z guruhlari talabalariga (talabaga bir nechta bo'lsa — bitta xabarda).
+        $perStudent = [];
+        foreach ((array) ($details['notices'] ?? []) as $n) {
+            foreach ($this->studentsOfGroups((array) ($n['groups'] ?? []), (array) ($n['faculties'] ?? [])) as $st) {
+                $perStudent[$st->id] ??= ['st' => $st, 'texts' => []];
+                $perStudent[$st->id]['texts'][] = $text((array) $n);
+            }
+        }
+        if (!empty($details['notices'])) {
+            $students = collect($perStudent)->pluck('st');
+        }
         foreach ($students as $st) {
+            if (isset($perStudent[$st->id])) {
+                $studentText = implode("\n\n", $perStudent[$st->id]['texts']);
+            }
             try {
                 StudentNotification::create([
                     'student_id' => $st->id,

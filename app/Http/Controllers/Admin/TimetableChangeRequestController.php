@@ -42,8 +42,12 @@ class TimetableChangeRequestController extends Controller
                 if ($role === 'kafedra_mudiri' && Schema::hasColumn('timetable_change_requests', 'approval_stage')) {
                     $deptId = (int) ($actor?->head_department_hemis_id ?: ($actor?->department_hemis_id ?? 0));
                     if ($deptId > 0) {
-                        $q->orWhere(fn ($incoming) => $incoming->where('requester_role', 'oqituvchi')->where('department_hemis_id', $deptId));
+                        $q->orWhere(fn ($incoming) => $incoming->whereIn('requester_role', TimetableChangeApproval::TEACHER_PROPOSAL_ROLES)->where('department_hemis_id', $deptId));
                     }
+                }
+                // Dars o'qituvchisi: boshqa kishi (fan mas'uli, Takliflar) uning darsiga so'rov yuborgan bo'lsa — ko'radi (tasdiqlamaydi).
+                if ($actor instanceof Teacher && in_array($role, TimetableChangeApproval::TEACHER_PROPOSAL_ROLES, true)) {
+                    $q->orWhere(fn ($lesson) => $lesson->whereJsonContains('details->lesson_teacher_ids', (int) $actor->id));
                 }
             });
         }
@@ -61,7 +65,7 @@ class TimetableChangeRequestController extends Controller
             'status' => $r->status,
             'approval_stage' => $r->approval_stage,
             'head_reviewer_name' => $r->head_reviewer_name,
-            'can_review' => $r->requester_role === 'oqituvchi'
+            'can_review' => TimetableChangeApproval::isTeacherProposal($r)
                 ? app(TimetableChangeApproval::class)->canReviewTeacherProposal($r, $actor, $role)
                 : ($canApprove && $r->status === TimetableChangeRequest::PENDING),
             'kind' => $r->kind,
@@ -148,7 +152,7 @@ class TimetableChangeRequestController extends Controller
 
     public function proposeCycleTime(Request $request, TimetableBoard $board, TimetableChangeApproval $svc)
     {
-        [$data, $units] = $this->cycleProposalInput($request, $board, true);
+        [$data, $units, $as, $lessonTeachers] = $this->cycleProposalInput($request, $board, true);
         $actor = $this->actor($request);
         $controller = app(TimetableController::class);
         $cards = TimetableCard::whereIn('id', collect($units)->flatMap(fn ($x) => array_map(fn ($c) => (int) $c->id, $x['u']['cards'])))->get();
@@ -158,8 +162,11 @@ class TimetableChangeRequestController extends Controller
             'date' => $data['date'], 'scope' => $data['scope'] ?? 'day', 'start_hour' => (int) $data['start_hour'],
             'layer' => 'internal', 'view' => 'group', 'training_type' => 'practice', '_change_hint' => $data['reason']];
         $notice = $controller->cycleProposalLabels($board, $units, $payload);
-        $draft = $svc->draft($this->proposalRequest(TimetableController::TEACHER_CYCLE_ROUTE, $payload, 'board', $board), $actor, $board, 'oqituvchi');
+        // Kim yubordi: o'qituvchi (o'z darsi) yoki fan mas'uli (mas'ul fanidagi boshqa o'qituvchi darsi) — requester_role.
+        $draft = $svc->draft($this->proposalRequest(TimetableController::TEACHER_CYCLE_ROUTE, $payload, 'board', $board), $actor, $board, $as);
         $draft['details'] = array_merge($draft['details'], $svc->detailsFromCards($cards));
+        $draft['details']['proposer'] = ['as' => $as, 'teacher_id' => (int) $actor->id];
+        $draft['details']['lesson_teacher_ids'] = $lessonTeachers;
         $draft['details']['original_signature'] = $controller->teacherProposalSignature(TimetableController::TEACHER_CYCLE_ROUTE, ['board' => $board->id], $payload);
         $draft['summary'] = $notice['subject'] . ' · ' . $notice['groups'] . ' (amaliy, sikl): ' . $notice['old'] . ' → ' . $notice['new']
             . ' — ' . mb_substr($data['reason'], 0, 300);
@@ -167,11 +174,16 @@ class TimetableChangeRequestController extends Controller
         return $this->submitProposal($svc, $draft, $department, $actor, $notice, $data['reason']);
     }
 
-    /** Sikl so'rovi kiritmasi: o'qituvchi va uning shu guruhcha(lar)dagi amaliy darsi; bandlik va sana tekshiriladi. */
+    /**
+     * Sikl so'rovi kiritmasi: shu guruhcha(lar)dagi amaliy dars — o'qituvchining o'z darsi YOKI fani uning mas'ul fanlari
+     * ro'yxatida (fan mas'uli — shu fanning istalgan o'qituvchisi darsi); bandlik va sana tekshiriladi.
+     * @return array{0: array, 1: array, 2: string, 3: int[]} [ma'lumot, guruhchalar, kim (oqituvchi|fan_masuli), dars o'qituvchilari (o'zidan boshqa)]
+     */
     private function cycleProposalInput(Request $request, TimetableBoard $board, bool $withReason): array
     {
         $actor = $this->actor($request);
-        abort_unless($this->activeRole($request) === 'oqituvchi' && $actor instanceof Teacher, 403, "Faqat o'qituvchi so'rov yuboradi.");
+        abort_unless(in_array($this->activeRole($request), TimetableChangeApproval::TEACHER_PROPOSAL_ROLES, true) && $actor instanceof Teacher,
+            403, "Faqat o'qituvchi yoki fan mas'uli so'rov yuboradi.");
         $this->ensureProposalTable();
         $data = $request->validate([
             'specialty_name' => 'required|string|max:255',
@@ -183,12 +195,71 @@ class TimetableChangeRequestController extends Controller
             'start_hour' => 'required|integer|min:1|max:24',
         ] + ($withReason ? ['reason' => 'required|string|max:1000'] : []));
         $controller = app(TimetableController::class);
-        $units = $controller->cycleProposalUnits($board, $data, (int) $actor->id);
-        abort_unless($units, 403, "Faqat o'zingizga biriktirilgan dars vaqtini taklif qila olasiz.");
+        $tid = (int) $actor->id;
+        // Mas'ul fani — guruhning shu fandagi barcha guruhchalari (har o'qituvchisi); aks holda faqat o'zi o'tadiganlari.
+        $all = $controller->cycleProposalUnits($board, $data, null);
+        $units = $all && $controller->cycleUnitsResponsible($all, $tid) ? $all : $controller->cycleProposalUnits($board, $data, $tid);
+        abort_unless($units, 403, "Faqat o'zingizga biriktirilgan yoki mas'ul faningizdagi dars vaqtini taklif qila olasiz.");
+        $own = fn ($x) => collect($x['u']['cards'])->contains(fn ($c) => (int) $c->teacher_id === $tid);
+        $as = collect($units)->every($own) ? 'oqituvchi' : 'fan_masuli';
+        $lessonTeachers = collect($units)->flatMap(fn ($x) => array_map(fn ($c) => (int) $c->teacher_id, $x['u']['cards']))
+            ->filter(fn ($id) => $id > 0 && $id !== $tid)->unique()->sort()->values()->all();
         $data['units'] = array_map(fn ($x) => (string) $x['u']['unit'], $units);
         $controller->teacherProposalValidate(TimetableController::TEACHER_CYCLE_ROUTE, ['board' => $board->id], $data, []);
 
-        return [$data, $units];
+        return [$data, $units, $as, $lessonTeachers];
+    }
+
+    /**
+     * "Takliflar"ni qo'llash (admin bo'lmaganlar): jadval darhol o'zgarmaydi — bitta so'rov (taklifning barcha amallari yaxlit).
+     * O'qituvchi / fan mas'uli — kafedra mudiri → registrator ofisi; kafedra mudiri — faqat registrator ofisi. Huquq (eng keng rol),
+     * qamrov, sana va bandlik shu yerda, keyin har tasdiq bosqichida qayta tekshiriladi.
+     */
+    public function proposeSuggestion(Request $request, TimetableBoard $board, TimetableChangeApproval $svc)
+    {
+        $this->ensureProposalTable();
+        $actor = $this->actor($request);
+        $ctl = app(TimetableController::class);
+        $rights = $ctl->suggestionRights($actor);
+        abort_if($rights['level'] === 'admin', 422, "Admin uchun taklif darhol qo'llanadi (week-suggestions/apply).");
+        $data = $ctl->suggestionPayload($request);
+        $data['actions'] = array_map(fn ($a) => $a + ['week' => (int) $data['week']], array_values($data['actions']));
+        $check = $ctl->suggestionApplyCheck($rights, $board, $data);
+        abort_unless($check['mode'] !== null, $check['code'], (string) $check['why']);
+        $run = $ctl->suggestionDryRun($board, $data, []);
+        $cards = $ctl->suggestionCards($board, $data);
+        $primary = $cards->firstWhere('id', (int) $data['card_id']) ?? $cards->first();
+        $tid = (int) $actor->id;
+        $as = $check['mode'] === 'registrar' ? 'kafedra_mudiri'
+            : ($cards->every(fn ($c) => (int) $c->teacher_id === $tid) ? 'oqituvchi' : 'fan_masuli');
+        $payload = ['week' => (int) $data['week'], 'card_id' => (int) $data['card_id'], 'type' => $data['type'] ?? null,
+            'title' => $data['title'] ?? null, 'actions' => $data['actions']];
+        $draft = $svc->draft($this->proposalRequest(TimetableController::SUGGESTION_ROUTE, $payload, 'board', $board), $actor, $board, $as);
+        $draft['details']['proposer'] = ['as' => $as, 'teacher_id' => $tid];
+        $draft['details']['lesson_teacher_ids'] = array_values(array_diff($run['teacher_ids'], [$tid]));
+        $draft['details']['notices'] = $run['notices'];
+        $draft['details']['original_signature'] = $ctl->suggestionSignature($board, $payload);
+        $first = $run['notices'][0] ?? ['old' => '—', 'new' => (string) ($data['title'] ?? ''), 'subject' => (string) $primary->subject_name,
+            'teacher' => (string) $primary->teacher_name, 'room' => (string) ($primary->auditorium_name ?: $primary->auditorium_code)];
+        $notice = ['old' => $first['old'], 'new' => $first['new'], 'subject' => $first['subject'], 'teacher' => $first['teacher'], 'room' => $first['room'] ?? ''];
+        $reason = 'Takliflar: ' . (string) ($data['title'] ?? '');
+        if ($as !== 'kafedra_mudiri') {
+            $department = $this->proposalDepartment(fn (int $id) => $ctl->proposalDepartmentMatches($primary, $id));
+
+            return $this->submitProposal($svc, $draft, $department, $actor, $notice, $reason);
+        }
+        $deptId = (int) ($actor->head_department_hemis_id ?: $actor->department_hemis_id);
+        $draft['approval_stage'] = 'registrar';
+        $draft['department_hemis_id'] = $deptId ?: null;
+        $draft['kafedra_name'] = Department::where('department_hemis_id', $deptId)->value('name') ?: $draft['kafedra_name'];
+        $draft['details']['reason'] = $reason;
+        $draft['details']['notice'] = $notice;
+        $draft['details']['steps'] = [['at' => now('Asia/Tashkent')->format('d.m.Y H:i'), 'by' => $actor->full_name,
+            'action' => "So'rov yuborildi (kafedra mudiri): " . $notice['old'] . ' → ' . $notice['new'], 'note' => mb_substr($reason, 0, 500)]];
+        $change = $svc->submit($draft);
+
+        return response()->json(['ok' => true, 'pending_approval' => true, 'change_request_id' => $change->id, 'summary' => $change->summary,
+            'message' => "Taklif registrator ofisiga yuborildi. Registrator tasdiqlagach jadval o'zgaradi."]);
     }
 
     /** Fan kafedrasi (aniq bitta). */
@@ -228,7 +299,8 @@ class TimetableChangeRequestController extends Controller
         $draft['details']['notice'] = $notice;
         $draft['details']['head_skipped'] = $isHead;
         $draft['details']['steps'] = [['at' => now('Asia/Tashkent')->format('d.m.Y H:i'), 'by' => $actor->full_name,
-            'action' => "So'rov yuborildi: " . $notice['old'] . ' → ' . $notice['new'], 'note' => mb_substr($reason, 0, 500)]];
+            'action' => "So'rov yuborildi" . (($draft['requester_role'] ?? '') === 'fan_masuli' ? " (fan mas'uli)" : '') . ': ' . $notice['old'] . ' → ' . $notice['new'],
+            'note' => mb_substr($reason, 0, 500)]];
         $change = $svc->submit($draft);
 
         return response()->json(['ok' => true, 'pending_approval' => true, 'change_request_id' => $change->id,
@@ -245,7 +317,7 @@ class TimetableChangeRequestController extends Controller
 
     public function approve(Request $request, TimetableChangeRequest $changeRequest, TimetableChangeApproval $svc)
     {
-        if ($changeRequest->requester_role === 'oqituvchi') {
+        if (TimetableChangeApproval::isTeacherProposal($changeRequest)) {
             abort_unless($svc->canReviewTeacherProposal($changeRequest, $this->actor($request), $this->activeRole($request)), 403);
             if ($changeRequest->approval_stage === 'department') {
                 $result = $svc->endorse($changeRequest, $this->actor($request), $this->activeRole($request));
@@ -265,7 +337,7 @@ class TimetableChangeRequestController extends Controller
 
     public function reject(Request $request, TimetableChangeRequest $changeRequest, TimetableChangeApproval $svc)
     {
-        if ($changeRequest->requester_role === 'oqituvchi') {
+        if (TimetableChangeApproval::isTeacherProposal($changeRequest)) {
             abort_unless($svc->canReviewTeacherProposal($changeRequest, $this->actor($request), $this->activeRole($request)), 403);
         } else {
             $this->ensureApprover($request);

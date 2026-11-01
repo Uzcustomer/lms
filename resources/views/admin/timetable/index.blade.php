@@ -32,7 +32,7 @@
     // Butun doska bo'yicha joylanmagan kartalar hisoboti (Excel) — serverdagi ruxsat bilan bir xil rollar.
     $timetableCanBoardReport = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableUsesChangeRequests = $timetableCanApprove
-        || in_array($timetableActiveRole, ['oqituvchi', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+        || in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
 
     <x-slot name="header">
@@ -221,9 +221,10 @@
                             <button type="button" id="weeklyExcel" class="tt-weekly-excel" title="Ekrandagi haftalik jadvalni (tanlangan hafta, qatlam va ko'rinish qamrovi bilan) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                             @unless($timetableAssignmentOnly)
                             <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni blok bo'lib (bir fanning kartalari ketma-ket, bo'linmasdan) tashqi joyiga yoki o'sha kunning ichidagi eng yaqin bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
-                            <button type="button" id="suggestWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Shu haftada joylanmagan kartalarni sig'dirish takliflari: bo'sh vaqt, boshqa xona, to'sib turgan darsni surish, boshqa kun, boshqa hafta va eng oxirida boshqa o'qituvchi. Hech narsa o'zi yozilmaydi — har bir taklif «Qo'llash» bilan bajariladi.">Takliflar</button>
                             <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
                             @endunless
+                            {{-- Takliflar: admin — darhol; kafedra mudiri, fan mas'uli, o'qituvchi — so'rov; o'quv bo'limi — faqat ko'radi (qamrovni server beradi). --}}
+                            <button type="button" id="suggestWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Shu haftada joylanmagan kartalarni sig'dirish takliflari: bo'sh vaqt, boshqa xona, to'sib turgan darsni surish, boshqa kun, boshqa hafta va eng oxirida boshqa o'qituvchi. Hech narsa o'zi yozilmaydi — har bir taklif «Qo'llash» bilan bajariladi.">Takliflar</button>
                             @if($timetableCanApprove)
                             <button type="button" id="hemisSyncBtn" class="tt-ktr-weeks-btn" title="Tanlangan qamrov: LMS ichki jadvali va KTR ↔ HEMIS dars jadvali. Bugungacha o'tilgan darslar balansi (soat va soni), ertadan boshlab tuzatish takliflari va HEMIS'da qilinadigan amallar">HEMIS solishtirish</button>
                             <button type="button" id="hemisTodayBtn" class="tt-ktr-weeks-btn" title="Faqat bugungi darslar (tanlangan qamrov): LMS ↔ HEMIS — o'qituvchi, xona va para vaqti. Faqat o'zgartirish: bugun dars qo'shilmaydi va o'chirilmaydi; davomat olingan yoki baho qo'yilgan darsga tegilmaydi">Bugungi darslar (HEMIS)</button>
@@ -1404,6 +1405,9 @@
         .tt-req-badge.hidden { display: none; }
         .tt-pending-chg { outline: 2px dashed #f59e0b !important; outline-offset: -2px; position: relative; }
         .tt-pending-chg::after { content: '\23F3'; position: absolute; right: 2px; top: 1px; font-size: 10px; }
+        /* Bosqich: "Kafedra mudiri tasdig'ida" / "Registrator ofisi tasdig'ida". */
+        .tt-pending-chg[data-cr-stage]::after { content: '\23F3  ' attr(data-cr-stage); font-size: 9px; line-height: 1.2; background: #fef3c7; color: #92400e;
+            border-radius: 3px; padding: 0 3px; max-width: calc(100% - 4px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #cyclePendingBar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 5px 12px; font-size: 11px;
             background: #fffbeb; border-bottom: 1px solid #fde68a; color: #78350f; }
         #cyclePendingBar.hidden { display: none; }
@@ -2643,6 +2647,8 @@
             const TIMETABLE_ROLE = @json($timetableActiveRole);
             // Haftalik jadval qatlami (sikl kabi): tashqi — o'quv bo'limi, ichki — kafedra mudiri.
             const WEEKLY_ADMIN = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'].includes(TIMETABLE_ROLE);
+            // "Takliflar" oynasi: qaysi rollarga ochiq (qamrov va "Qo'llash" huquqini server beradi).
+            const SUGGEST_ROLES = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri', 'fan_masuli', 'oqituvchi'];
             const WEEKLY_OQUV = ['oquv_bolimi', 'oquv_bolimi_boshligi'].includes(TIMETABLE_ROLE);
             let weeklyLayer = WEEKLY_OQUV ? 'external' : 'internal';
             try { const v = localStorage.getItem('lms:timetable-weekly-layer'); if (v === 'external' || v === 'internal') weeklyLayer = v; } catch (e) { }
@@ -3034,6 +3040,21 @@
                 }, 300);
             }
             function pendingReqs() { return (changeReqs.requests || []).filter(r => r.status === 'pending'); }
+            // Kutilayotgan so'rov bosqichi: o'qituvchi / fan mas'uli so'rovi avval kafedra mudirida, keyin (va kafedra mudiri so'rovi) — registratorda.
+            function crStageText(r) { return r && r.approval_stage === 'department' ? 'Kafedra mudiri tasdig‘ida' : 'Registrator ofisi tasdig‘ida'; }
+            // Sikl kun oynasi: shu guruhcha va sanadagi amaliy darsga kutilayotgan vaqt so'rovi (cycle-practice-starts).
+            function pendingPracticeAsk(card, iso) {
+                if (!card || !iso) return null;
+                return pendingReqs().find(r => r.route === 'admin.timetable.cycle-practice-starts' && r.payload
+                    && r.payload.subject_name === card.subject
+                    && (r.payload.group_name === card.group || (r.payload.units || []).includes(card.group))
+                    && (r.payload.date === iso || (r.payload.scope === 'rest' && iso > r.payload.date))) || null;
+            }
+            // "Vaqtini o'zgartirishni so'rash": o'qituvchi yoki fan mas'uli, server ruxsat bergan (o'z darsi / mas'ul fani) amaliy dars, ertadan.
+            function cycCanAsk(card, dp, date, today) {
+                return ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && Boolean(card && card.ask && card.type === 'practice')
+                    && +(dp && dp.prc) > 0 && Boolean(date && date.iso > today);
+            }
             async function loadChangeRequests() {
                 if (!board || !$('changeReqBtn')) return;
                 try { changeReqs = await api(BASE + '/boards/' + board.id + '/change-requests?status=pending&_=' + Date.now()); }
@@ -3059,12 +3080,13 @@
                 renderChangeReqModal();
             }
             function markPendingChanges() {
-                const ids = new Set();
-                pendingReqs().forEach(r => { if (/\.cards\./.test(r.route)) (r.card_ids || []).forEach(id => ids.add(+id)); });
+                const ids = new Map();
+                pendingReqs().forEach(r => { if (/\.cards\.|week-suggestions/.test(r.route)) (r.card_ids || []).forEach(id => ids.set(+id, crStageText(r))); });
                 document.querySelectorAll('[data-chip], .pn-card[data-id]').forEach(el => {
-                    const on = ids.has(+(el.dataset.chip || el.dataset.id));
-                    el.classList.toggle('tt-pending-chg', on);
-                    if (on && !/Tasdiq kutilmoqda/.test(el.title)) el.title = '⏳ Tasdiq kutilmoqda · ' + el.title;
+                    const stage = ids.get(+(el.dataset.chip || el.dataset.id));
+                    el.classList.toggle('tt-pending-chg', Boolean(stage));
+                    if (stage) el.dataset.crStage = stage; else delete el.dataset.crStage;
+                    el.title = (stage ? '⏳ ' + stage + ' · ' : '') + String(el.title || '').replace(/^⏳ [^·]*· /, '');
                 });
             }
             function renderCyclePendingBar() {
@@ -3074,7 +3096,7 @@
                 bar.classList.toggle('hidden', !list.length);
                 if (!list.length) { bar.innerHTML = ''; return; }
                 bar.innerHTML = '<b>&#9203; Tasdiq kutilmoqda (' + list.length + '):</b> ' +
-                    list.slice(0, 3).map(r => '<span>' + esc(r.summary) + '</span>').join('') +
+                    list.slice(0, 3).map(r => '<span>' + esc(r.summary) + ' · <b>' + crStageText(r) + '</b></span>').join('') +
                     (list.length > 3 ? '<span>… yana ' + (list.length - 3) + ' ta</span>' : '') +
                     ' <button type="button" data-cr-open>Ko\'rish</button>';
                 bar.querySelector('[data-cr-open]').onclick = openChangeReqModal;
@@ -3120,7 +3142,7 @@
                 const modeHtml = approver
                     ? '<label class="cr-mode"><input type="checkbox" id="crModeChk"' + (changeReqs.approval_required ? ' checked' : '') + '> ' +
                       'Kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tsin</label>'
-                    : '<div class="cr-mode-info">' + (TIMETABLE_ROLE === 'oqituvchi'
+                    : '<div class="cr-mode-info">' + (TIMETABLE_ROLE === 'oqituvchi' || TIMETABLE_ROLE === 'fan_masuli'
                         ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi tasdiqlagach jadvalga tushadi.'
                         : TIMETABLE_DEPARTMENT_HEAD
                         ? (changeReqs.approval_required
@@ -3132,8 +3154,8 @@
                 const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
                 const rows = list.length ? list.map(r => {
-                    const st = r.status === 'pending' && r.approval_stage
-                        ? [r.approval_stage === 'department' ? 'Kafedra mudiri tasdig‘ida' : 'Registrator ofisi tasdig‘ida', '#b45309', '#fef3c7']
+                    const st = r.status === 'pending'
+                        ? [crStageText(r), '#b45309', '#fef3c7']
                         : CR_STATUS[r.status] || [r.status, '#334155', '#e2e8f0'];
                     const acts = r.status !== 'pending' ? '' : r.can_review
                         ? '<button type="button" class="cr-ok" data-cr-approve="' + r.id + '">Tasdiqlash</button><button type="button" class="cr-no" data-cr-reject="' + r.id + '">Rad etish</button>'
@@ -4293,6 +4315,11 @@
                     '<select id="htGroup" class="border rounded px-1 py-0.5"><option value="">Barcha guruhlar</option>' +
                     groups.map(g => '<option value="' + hsEsc(g) + '"' + (g === group ? ' selected' : '') + '>' + hsEsc(g) + '</option>').join('') + '</select>' +
                     '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
+                    // Xatcho'p: HEMIS sahifasida bosiladi, yuklangan JSON'dagi faqat bugungi to'siqsiz o'zgartirishlarni yozadi (har biridan oldin
+                    // davomat/baho jonli tekshiriladi, boshida "N ta dars o'zgartiriladi" tasdig'i, natija har dars bo'yicha).
+                    '<a id="htWriter" href="' + hsEsc("javascript:(function(){var s=document.createElement('script');s.charset='utf-8';s.src='" + HS_WRITER_URL + "?v='+Date.now();document.body.appendChild(s);})();") + '"' +
+                    ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Avval «JSON» tugmasi bilan faylni yuklab oling, keyin HEMIS sahifasida (kirib turgan holda) xatcho\\\'pni bosing va shu faylni tanlang.\'); return false;"' +
+                    ' title="Sichqoncha bilan xatcho\'plar paneliga torting, so\'ng HEMIS sahifasida bosing" class="px-2 py-1 rounded border border-indigo-400 bg-indigo-50 text-indigo-700 cursor-move">⭐ Bugungi o\'zgarishlarni yozish (xatcho\'p)</a>' +
                     '<button type="button" id="htExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="htClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
                     '<div class="text-gray-500 text-[11px] mb-2">Faqat o\'zgartirish (o\'qituvchi, xona, para vaqti): bugun HEMIS\'ga dars qo\'shilmaydi va o\'chirilmaydi. ' +
@@ -4730,13 +4757,9 @@
                     (c.partial ? ' <button type="button" data-full="' + ci + '" style="font-size:11px;border:1px solid #facc15;border-radius:6px;padding:1px 8px;background:#fefce8;color:#854d0e">To\'liq takliflar</button>' : '') +
                     '</div>' +
                     (c.reason ? '<div style="color:#b91c1c;margin:2px 0 4px">' + esc(c.reason) + '</div>' : '') +
-                    (c.suggestions.length ? c.suggestions.map((s, si) =>
-                        '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;border-top:1px dashed #f1f5f9">' +
-                        '<span style="flex:0 0 auto;font-size:10px;font-weight:700;color:#fff;border-radius:4px;padding:1px 6px;background:' + (SUG_COLOR[s.type] || '#475569') + '">' + (SUG_LABEL[s.type] || s.type) + '</span>' +
-                        '<span style="flex:1 1 auto">' + esc(s.title) + (s.note ? ' <i style="color:#64748b">(' + esc(s.note) + ')</i>' : '') + '</span>' +
-                        '<button type="button" data-sug="' + ci + ':' + si + '" style="flex:0 0 auto;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:1px 8px;background:#f8fafc">Qo\'llash</button></div>'
-                    ).join('') : '<div style="color:#64748b">Taklif topilmadi — qo\'lda joylash kerak.</div>') +
-                    '</div>').join('');
+                    (c.suggestions.length ? c.suggestions.map((s, si) => sugRowHtml(s, ci, si, res.apply_mode)).join('')
+                        : '<div style="color:#64748b">Taklif topilmadi — qo\'lda joylash kerak.</div>') +
+                    '</div>').join('') + sugFooterHtml(res.apply_mode);
                 body.querySelectorAll('[data-full]').forEach(btn => btn.onclick = async () => {
                     const ci = +btn.dataset.full;
                     btn.disabled = true; btn.textContent = 'Hisoblanmoqda…';
@@ -4751,32 +4774,75 @@
                         alert('Takliflarni olib bo\'lmadi: ' + e.message);
                     }
                 });
+                // Bir kartaning takliflari muqobil — bittasi tanlanadi.
+                const pick = () => [...body.querySelectorAll('[data-sug-pick]:checked')].map(x => x.dataset.sugPick.split(':').map(Number));
+                const sync = () => {
+                    const b = body.querySelector('[data-sug-apply-all]');
+                    if (b) { const n = pick().length; b.disabled = !n; b.textContent = 'Tanlanganlarni qo\'llash' + (n ? ' (' + n + ')' : ''); }
+                };
+                body.querySelectorAll('[data-sug-pick]').forEach(chk => chk.onchange = () => {
+                    if (chk.checked) body.querySelectorAll('[data-sug-pick^="' + chk.dataset.sugPick.split(':')[0] + ':"]').forEach(o => { if (o !== chk) o.checked = false; });
+                    sync();
+                });
+                const applyOne = async (ci, si) => {
+                    const c = window.__ttSug[ci], sug = c.suggestions[si];
+                    const r = await api(BASE + '/boards/' + board.id + '/week-suggestions/' + (sug.mode === 'direct' ? 'apply' : 'propose'), 'POST',
+                        { week: res.week, card_id: c.id, type: sug.type, title: sug.title, actions: sug.actions });
+                    return r;
+                };
+                const confirmSug = sug => !((sug.type === 'teacher' && !confirm('O\'qituvchi butun semestr uchun almashadi. Davom etamizmi?'))
+                    || (sug.type === 'lecture' && !confirm('Ma\'ruza vaqti tashqi jadvaldan farq qiladi. Davom etamizmi?'))
+                    || (sug.type === 'week' && !confirm('KTR taqsimoti o\'zgaradi (' + sug.note + '). Davom etamizmi?')));
+                const finish = async msgs => {
+                    if (msgs.length) ttToast(msgs.map(esc).join('<br>'), 'ok');
+                    await loadChangeRequests();
+                    await loadBoard(board.id);
+                    openWeekSuggestions();
+                };
                 body.querySelectorAll('[data-sug]').forEach(btn => btn.onclick = async () => {
                     const [ci, si] = btn.dataset.sug.split(':').map(Number);
                     const sug = window.__ttSug[ci].suggestions[si];
-                    if (sug.type === 'teacher' && !confirm('O\'qituvchi butun semestr uchun almashadi. Davom etamizmi?')) return;
-                    if (sug.type === 'lecture' && !confirm('Ma\'ruza vaqti tashqi jadvaldan farq qiladi. Davom etamizmi?')) return;
-                    if (sug.type === 'week' && !confirm('KTR taqsimoti o\'zgaradi (' + sug.note + '). Davom etamizmi?')) return;
+                    if (!sug.can_apply || !confirmSug(sug)) return;
                     btn.disabled = true; btn.textContent = '…';
-                    try {
-                        for (const a of sug.actions) {
-                            if (a.op === 'move') {
-                                await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST',
-                                    { week: a.week, action: 'move', day: a.day, pair: a.pair, layer: 'internal', auditorium_code: a.auditorium_code });
-                            } else if (a.op === 'reset') {
-                                await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST', { week: a.week, action: 'reset', layer: 'internal' });
-                            } else if (a.op === 'cancel') {
-                                await api(BASE + '/cards/' + a.card_id + '/week-override', 'POST', { week: a.week, action: 'cancel', layer: 'internal' });
-                            } else if (a.op === 'teacher') {
-                                await api(BASE + '/cards/' + a.card_id + '/update', 'POST', { teacher_id: a.teacher_id });
-                            }
-                        }
-                    } catch (e) {
-                        alert('Bajarilmadi: ' + e.message + (sug.actions.length > 1 ? '\n\nTaklifning bir qismi bajarilgan bo\'lishi mumkin — jadvalni tekshiring.' : ''));
-                    }
-                    await loadBoard(board.id);
-                    openWeekSuggestions();
+                    // Yaxlit: server barcha amallarni bitta tranzaksiyada bajaradi (yoki bitta so'rov yaratadi) — qisman bajarilmaydi.
+                    try { const r = await applyOne(ci, si); await finish([r.message || 'Qo\'llandi.']); }
+                    catch (e) { alert('Bajarilmadi (jadval o\'zgarmadi): ' + e.message); btn.disabled = false; btn.textContent = sugApplyLabel(sug.mode); }
                 });
+                const all = body.querySelector('[data-sug-apply-all]');
+                if (all) all.onclick = async () => {
+                    const list = pick();
+                    if (!list.length || list.some(([ci, si]) => !confirmSug(window.__ttSug[ci].suggestions[si]))) return;
+                    all.disabled = true;
+                    const msgs = [], errs = [];
+                    for (const [ci, si] of list) {
+                        const c = window.__ttSug[ci];
+                        try { const r = await applyOne(ci, si); msgs.push(c.subject + ': ' + (r.message || 'qo\'llandi')); }
+                        catch (e) { errs.push(c.subject + ': ' + e.message); }
+                    }
+                    if (errs.length) alert('Bajarilmaganlar (jadval o\'zgarmadi):\n' + errs.join('\n'));
+                    await finish(msgs);
+                };
+                sync();
+            }
+            // Taklif qatori: katakcha (qo'llash mumkin bo'lsa), turi, matni, "Qo'llash" (yoki o'chiq — sababi bilan).
+            function sugApplyLabel(mode) { return mode === 'direct' ? 'Qo\'llash' : 'So\'rov yuborish'; }
+            function sugRowHtml(s, ci, si, applyMode) {
+                const can = Boolean(s.can_apply);
+                return '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;border-top:1px dashed #f1f5f9">' +
+                    (applyMode && can ? '<input type="checkbox" data-sug-pick="' + ci + ':' + si + '" style="margin-top:2px">' : '') +
+                    '<span style="flex:0 0 auto;font-size:10px;font-weight:700;color:#fff;border-radius:4px;padding:1px 6px;background:' + (SUG_COLOR[s.type] || '#475569') + '">' + (SUG_LABEL[s.type] || s.type) + '</span>' +
+                    '<span style="flex:1 1 auto">' + esc(s.title) + (s.note ? ' <i style="color:#64748b">(' + esc(s.note) + ')</i>' : '') +
+                    (!can && s.why && applyMode ? '<div class="sug-why" style="color:#b45309;font-size:11px">' + esc(s.why) + '</div>' : '') + '</span>' +
+                    (applyMode ? '<button type="button" data-sug="' + ci + ':' + si + '"' + (can ? '' : ' disabled title="' + esc(s.why || '') + '"') +
+                        ' style="flex:0 0 auto;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:1px 8px;background:#f8fafc' + (can ? '' : ';opacity:.5;cursor:not-allowed') + '">' + sugApplyLabel(s.mode) + '</button>' : '') +
+                    '</div>';
+            }
+            function sugFooterHtml(applyMode) {
+                if (!applyMode) return '<div style="color:#64748b;margin-top:6px">Faqat ko\'rish: takliflarni qo\'llash huquqingiz yo\'q.</div>';
+                return '<div style="position:sticky;bottom:-12px;background:#fff;border-top:1px solid #e2e8f0;padding:8px 0;display:flex;gap:10px;align-items:center">' +
+                    '<button type="button" data-sug-apply-all disabled style="font-size:12px;border-radius:6px;padding:4px 12px;background:#2563eb;color:#fff">Tanlanganlarni qo\'llash</button>' +
+                    '<span style="color:#64748b">' + (applyMode === 'direct' ? 'Har taklif yaxlit qo\'llanadi: yo hamma amali, yo hech biri.'
+                        : 'Har taklif bitta so\'rov bo\'lib tasdiqqa boradi; jadval yakuniy tasdiqdan keyin o\'zgaradi.') + '</span></div>';
             }
             if ($('suggestWeekBtn')) $('suggestWeekBtn').onclick = openWeekSuggestions;
             if ($('compactWeekBtn')) $('compactWeekBtn').onclick = async function () {
@@ -6452,9 +6518,12 @@
                 const canEdit = Boolean(cyclePlanData.day_edit);
                 const dayCard = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
                 const pendingSlot = pendingDaySlot(dayCard, dp.k - 1);
+                const pendingAsk = pendingPracticeAsk(dayCard, date && date.iso);
                 // Tasdiq kutilayotgan bo'lsa, keyingi ↑/↓ shu so'ralgan soatdan hisoblanadi.
                 // Faqat o'z so'rovi: registrator/o'quv bo'limi boshqaning so'rovidan emas, joriy soatdan siljitadi.
                 const baseSt = pendingSlot && pendingSlot.mine ? +pendingSlot.payload.start_hour : st;
+                // Amaliy alohida soatda (ps, tasdiqlangan so'rov) — kun bilan birga suriladi: chegaralar shu oraliq bo'yicha.
+                const psOff = dp.ps != null ? (+dp.ps - st) : (+dp.lec || 0);
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML =
@@ -6467,13 +6536,14 @@
                         (dp.tp ? '<div class="dp-topic">' + esc(dp.tp) + '</div>' : '') + '</div></div>' : '') +
                     (total === 0 ? '<div class="dp-sub">Bu kuni KTR bo\'yicha dars yo\'q.</div>' : '') +
                     (dp.ktr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
-                    (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: darslar <b>' + (+pendingSlot.payload.start_hour) + '-soatdan</b> — registrator tasdig\'i kutilmoqda</div>' : '') +
-                    // O'qituvchi: o'z amaliy darsi (ertangi va keyingi kunlar) uchun vaqt o'zgarishi so'rovi.
-                    (TIMETABLE_ROLE === 'oqituvchi' && dayCard && dayCard.type === 'practice' && +dp.prc > 0 && date && date.iso > cycLocalToday()
+                    (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: darslar <b>' + (+pendingSlot.payload.start_hour) + '-soatdan</b> — ' + crStageText(pendingSlot) + '</div>' : '') +
+                    (pendingAsk ? '<div class="dp-pending">&#9203; So\'rov: amaliy <b>' + (+pendingAsk.payload.start_hour) + '-soatdan</b> — ' + crStageText(pendingAsk) + '</div>' : '') +
+                    // O'qituvchi / fan mas'uli: o'z amaliy darsi yoki mas'ul fanidagi dars (ertangi va keyingi kunlar) — vaqt o'zgarishi so'rovi.
+                    (cycCanAsk(dayCard, dp, date, cycLocalToday())
                         ? '<div class="dp-actions"><button type="button" data-dp-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '') +
                     (canEdit && total > 0
-                        ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (baseSt <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
-                          '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (baseSt + total - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
+                        ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (Math.min(baseSt, baseSt + psOff) <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
+                          '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (Math.max(baseSt + (+dp.lec || 0), baseSt + psOff + (+dp.prc || 0)) - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
                           '<span class="dp-sub">Darslar ' + st + '-soatdan boshlanadi</span></div>'
                         : '');
                 document.body.appendChild(pop);
@@ -6986,7 +7056,7 @@
                 if ($('compactWeekBtn')) $('compactWeekBtn').classList.toggle('hidden',
                     !(WEEKLY_ADMIN && weeklyLayer === 'internal' && curWeek && viewMode !== 'cycle'));
                 if ($('suggestWeekBtn')) $('suggestWeekBtn').classList.toggle('hidden',
-                    !(WEEKLY_ADMIN && weeklyLayer === 'internal' && curWeek && viewMode !== 'cycle'));
+                    !(SUGGEST_ROLES.includes(TIMETABLE_ROLE) && weeklyLayer === 'internal' && curWeek && viewMode !== 'cycle'));
                 document.body.classList.toggle('tt-weekly-external', weeklyLayer === 'external');
             }
             async function setWeeklyLayer(l) {

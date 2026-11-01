@@ -42,6 +42,7 @@ class TimetableController extends Controller
     use Concerns\TimetableBlockTickets;
     use Concerns\TimetableBoardSnapshotsActions;
     use Concerns\TimetableWeekSuggestions;
+    use Concerns\TimetableSuggestionApply;
 
     public function index(Request $request)
     {
@@ -4047,6 +4048,16 @@ class TimetableController extends Controller
         if ($cycleSubRows) {
             $cycleView = 'group';
         }
+        // O'qituvchi / fan mas'uli: "Vaqtini o'zgartirishni so'rash" faqat o'z amaliy darsi yoki mas'ul fanidagi amaliy dars uchun
+        // (cycle-time-proposal ham shuni tekshiradi). Faqat ichki jadval — kun oynasi shu yerda.
+        $askTeacherId = $cycleLayer === 'internal' && in_array($cycleRole, ['oqituvchi', 'fan_masuli'], true)
+            && $this->timetableActor($request) instanceof Teacher ? $this->timetableTeacherId($request) : 0;
+        try {
+            $askKeys = $askTeacherId > 0 ? $this->responsibleSubjectKeysFor($askTeacherId) : [];
+        } catch (\Throwable $e) {
+            $askKeys = [];
+        }
+        $canAsk = fn ($c) => $askTeacherId > 0 && ((int) $c->teacher_id === $askTeacherId || $this->responsibleMatch($askKeys, $c));
         $cycleCanEdit = $this->cycleLayerEditable($cycleRole, $cycleLayer);
         if ($request->boolean('clear') && !$cycleCanEdit) {
             return $this->cycleLayerDenied($cycleLayer);
@@ -4175,6 +4186,9 @@ class TimetableController extends Controller
                     }
                     if ($c->auditorium_name || $c->auditorium_code) {
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
+                    }
+                    if ($canAsk($c)) {
+                        $byFlow[$flowKey]['req'][$reqKey]['ask'] = true;
                     }
                     if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$rowSubject][(string) $c->training_type] = true;
@@ -4527,6 +4541,8 @@ class TimetableController extends Controller
                         'conflict' => $block['conflict'] ?? null,
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
+                        // Vaqt so'rovi tugmasi (o'qituvchi: o'z darsi; fan mas'uli: mas'ul fani).
+                        'ask' => $cardType === 'practice' && !empty($g['req'][$subject . '|practice']['ask']),
                     ];
                 }
             }
@@ -5464,7 +5480,9 @@ class TimetableController extends Controller
             }
             $total = $lec + $prc;
             $start = (int) ($starts[$k] ?? $starts[(string) $k] ?? 1);
-            $start = max(1, min($start, max(1, $gridHours - $total + 1)));
+            // Amaliy o'z soatida (ps_g so'rovi yoki smena) — kun boshini faqat ma'ruza cheklaydi; aks holda ikkalasi ketma-ket.
+            $own = isset($practiceStarts[$k]) || isset($practiceStarts[(string) $k]);
+            $start = max(1, min($start, max(1, $gridHours - ($own ? $lec : $total) + 1)));
             // Amaliy — ma'ruzadan keyin; guruhcha smenasi bo'lsa — smena soatidan, ma'ruzadan oldin ham (masalan amaliy
             // 8:30–11:20, ma'ruza 12:00): ma'ruza bilan kesishsa — ma'ruzadan keyin.
             $ps = $start + $lec;
@@ -5865,6 +5883,23 @@ class TimetableController extends Controller
                 $current['starts_g'] = $byGroup;
             } else {
                 $current['starts'] = $starts;
+            }
+            // Tasdiqlangan amaliy boshlanishi (ps_g, o'qituvchi so'rovi) kun bilan birga suriladi — aks holda ↑/↓ amaliyni qo'zg'atmaydi.
+            // Har guruhcha o'z kun boshlanishi (starts_g, aks holda oqimniki) qanchaga surilgan bo'lsa, shuncha.
+            $before = (array) ($placement->lecture_slots ?? []);
+            $dayStart = fn (array $sl, string $unit) => max(1, (int) ((((array) ($sl['starts_g'] ?? []))[$unit] ?? [])[$k]
+                ?? ((array) ($sl['starts'] ?? []))[$k] ?? 1));
+            $ps = (array) ($current['ps_g'] ?? []);
+            foreach ($ps as $unit => $days) {
+                $delta = $dayStart($current, (string) $unit) - $dayStart($before, (string) $unit);
+                foreach ((array) $days as $day => $h) {
+                    if ($delta !== 0 && (int) $day === (int) $k && (int) $h > 0) {
+                        $ps[$unit][$day] = max(1, (int) $h + $delta);
+                    }
+                }
+            }
+            if ($ps) {
+                $current['ps_g'] = $ps;
             }
             // Boshqa kalitlar (guruhcha smenasi shift_g va h.k.) saqlanadi; faqat eski formatdagi raqamli belgilar tashlanadi.
             $named = array_filter($current, fn ($key) => !is_int($key) && !ctype_digit((string) $key), ARRAY_FILTER_USE_KEY);
@@ -8614,6 +8649,41 @@ class TimetableController extends Controller
 
     public const TEACHER_CYCLE_ROUTE = 'admin.timetable.cycle-practice-starts';
 
+    /**
+     * So'rov huquqi (yuborishda va har tasdiq bosqichida): o'qituvchi ($as = oqituvchi) — o'z darsi; fan mas'uli ($as = fan_masuli,
+     * faqat sikl) — so'rovdagi barcha guruhchalar amaliy darsining fani hamon uning mas'ul fanlari ro'yxatida.
+     */
+    public function teacherProposalAllowed(string $route, array $params, array $payload, int $teacherId, string $as): bool
+    {
+        // Takliflar: huquq hozirgi rollar bo'yicha qayta hisoblanadi; kafedra mudiri so'rovi — kafedra darajasida qolishi kerak.
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+            $t = Teacher::find($teacherId);
+            $mode = $board && $t ? $this->suggestionApplyCheck($this->suggestionRights($t), $board, $payload, null, null, false, [])['mode'] : null;
+
+            return $mode !== null && ($as !== 'kafedra_mudiri' || in_array($mode, ['registrar', 'direct'], true));
+        }
+        if ($as !== 'fan_masuli') {
+            return $this->teacherProposalOwned($route, $params, $payload, $teacherId);
+        }
+        if ($route !== self::TEACHER_CYCLE_ROUTE) {
+            return false;
+        }
+        $board = TimetableBoard::find($params['board'] ?? 0);
+        $units = $board ? $this->cycleProposalUnits($board, $payload, null) : [];
+
+        return $units && count($units) === count((array) ($payload['units'] ?? [])) && $this->cycleUnitsResponsible($units, $teacherId);
+    }
+
+    /** Sikl guruhchalari amaliy darslari (har kartasi) fani shu o'qituvchining mas'ul fanlari ro'yxatidami. */
+    public function cycleUnitsResponsible(array $units, int $teacherId): bool
+    {
+        $keys = $this->responsibleSubjectKeysFor($teacherId);
+
+        return $keys && $units && !array_filter($units, fn ($x) => !$x['u']['cards']
+            || collect($x['u']['cards'])->contains(fn ($c) => !$this->responsibleMatch($keys, $c)));
+    }
+
     /** So'rov o'qituvchiniki: haftalik — kartaning o'qituvchisi; sikl — har guruhchaning amaliy kartasi o'qituvchisi. */
     public function teacherProposalOwned(string $route, array $params, array $payload, int $teacherId): bool
     {
@@ -8632,6 +8702,15 @@ class TimetableController extends Controller
     /** Bandlik va qoidalar (sana ham) — ValidationException bilan. */
     public function teacherProposalValidate(string $route, array $params, array $payload, array $ignoreIds): void
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::findOrFail($params['board'] ?? 0);
+            if ($why = $this->suggestionExpired($board, $payload)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['actions' => $why]);
+            }
+            $this->suggestionDryRun($board, $payload, $ignoreIds);
+
+            return;
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $board = TimetableBoard::findOrFail($params['board'] ?? 0);
             if ($why = $this->teacherProposalExpired($route, $params, $payload)) {
@@ -8647,6 +8726,11 @@ class TimetableController extends Controller
     /** Dars sanasi (eski yoki yangi) bugun yoki o'tgan — sababi (har tasdiq bosqichida tekshiriladi). */
     public function teacherProposalExpired(string $route, array $params, array $payload): ?string
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+
+            return $board ? $this->suggestionExpired($board, $payload) : null;
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $date = (string) ($payload['date'] ?? '');
 
@@ -8662,6 +8746,11 @@ class TimetableController extends Controller
     /** Taklif yuborilgandagi holat imzosi: shu orada dars (joyi, o'qituvchi, xona, sikl boshlanishlari) o'zgarsa — qo'llanmaydi. */
     public function teacherProposalSignature(string $route, array $params, array $payload): string
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+
+            return $board ? $this->suggestionSignature($board, $payload) : '';
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $board = TimetableBoard::find($params['board'] ?? 0);
             $units = $board ? $this->cycleProposalUnits($board, $payload, null) : [];
@@ -8677,6 +8766,11 @@ class TimetableController extends Controller
 
     public function teacherProposalDepartmentMatches(string $route, array $params, array $payload, int $deptId): bool
     {
+        if ($route === self::SUGGESTION_ROUTE) {
+            $card = TimetableCard::where('board_id', (int) ($params['board'] ?? 0))->find((int) ($payload['card_id'] ?? 0));
+
+            return $card && $this->proposalDepartmentMatches($card, $deptId);
+        }
         if ($route === self::TEACHER_CYCLE_ROUTE) {
             $board = TimetableBoard::find($params['board'] ?? 0);
             $cards = $board ? collect($this->cycleProposalUnits($board, $payload, null))->flatMap(fn ($x) => $x['u']['cards']) : collect();
@@ -8969,24 +9063,67 @@ class TimetableController extends Controller
     }
 
     /** Pending internal moves reserve the same group, teacher and room until released. */
-    private function pendingTimeConflicts(TimetableCard $card, array $data, array $ignoreIds): array
+    /** $only — faqat shu bron turlari ('teacher', 'group', 'room', 'same'); null — hammasi. */
+    private function pendingTimeConflicts(TimetableCard $card, array $data, array $ignoreIds, ?array $only = null): array
     {
         if (!\App\Services\Timetable\TimetableChangeApproval::tableReady()) return [];
         $pending = \App\Models\TimetableChangeRequest::where('board_id', $card->board_id)
             ->where('status', \App\Models\TimetableChangeRequest::PENDING)
-            ->whereIn('route_name', ['admin.timetable.cards.week-override', 'admin.timetable.cards.place'])
+            ->whereIn('route_name', ['admin.timetable.cards.week-override', 'admin.timetable.cards.place', self::SUGGESTION_ROUTE])
             ->when($ignoreIds, fn ($q) => $q->whereNotIn('id', $ignoreIds))->get();
         $week = (int) $data['week'];
         $sourceRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
-        $room = $sourceRoom?->auditorium_code ?: $card->auditorium_code;
+        // Yangi joyda beriladigan xona (Takliflar: "boshqa xona") — aks holda haftalik yozuvdagi yoki kartaning xonasi.
+        // room_fixed — xona aniq berilgan (reset: shablon xonasi, bo'sh bo'lsa — xonasiz).
+        $room = !empty($data['room_fixed']) ? (string) ($data['auditorium_code'] ?? '')
+            : (($data['auditorium_code'] ?? null) ?: ($sourceRoom?->auditorium_code ?: $card->auditorium_code));
         $errors = [];
+        // Bron: [so'rov, karta, joy] — haftalik ko'chirish / joylash so'rovi bitta, Takliflar so'rovi — har "move" amali.
+        $holds = [];
         foreach ($pending as $req) {
-            $p = $req->payload ?? [];
+            if ($req->route_name === self::SUGGESTION_ROUTE) {
+                $acts = (array) (($req->payload ?? [])['actions'] ?? []);
+                // O'qituvchi almashtirish (butun semestr): bronda yangi o'qituvchi; shu haftada ko'chmaydigan kartasi — joriy joyida
+                // (faqat o'qituvchi broni).
+                $subst = [];
+                $moved = [];
+                foreach ($acts as $a) {
+                    if (($a['op'] ?? '') === 'teacher') {
+                        $subst[(int) ($a['card_id'] ?? 0)] = (int) ($a['teacher_id'] ?? 0);
+                    }
+                }
+                // Bron — har (karta, hafta) yakuniy joyi (ko'chirish yoki "reset" — shablon joyi), shu hafta uchun; bekor qilinadigani
+                // (yakuniy joyi yo'q) bron qilmaydi. Ikkala holda ham karta joriy joyida turmaydi.
+                foreach ($this->suggestionFinalPlaces($acts) as $k => $fp) {
+                    [$cid, $w] = array_map('intval', explode('|', $k));
+                    if ($w !== $week) {
+                        continue;
+                    }
+                    $moved[$cid] = true;
+                    if ($fp) {
+                        $holds[] = [$req, $cid, ['day' => $fp['day'], 'pair' => $fp['pair'], 'week' => $week, 'action' => 'move',
+                            'auditorium_code' => $fp['auditorium_code'], 'room_fixed' => !empty($fp['room_fixed'])], $subst[$cid] ?? null, null];
+                    }
+                }
+                foreach ($subst as $cid => $tid) {
+                    $sc = isset($moved[$cid]) ? null : TimetableCard::find($cid);
+                    if ($sc && ($pl = $this->suggestionPlace($sc, $week))) {
+                        $holds[] = [$req, $cid, ['day' => $pl[0], 'pair' => $pl[1], 'week' => $week, 'action' => 'move'], $tid, ['teacher']];
+                    }
+                }
+            } else {
+                $holds[] = [$req, (int) ($req->params['card'] ?? 0), $req->payload ?? [], null, null];
+            }
+        }
+        foreach ($holds as [$req, $otherId, $p, $otherTeacher, $holdOnly]) {
             if (($p['layer'] ?? 'internal') === 'external' || empty($p['day']) || empty($p['pair'])) continue;
-            if ($req->route_name === 'admin.timetable.cards.week-override'
+            if ($req->route_name !== 'admin.timetable.cards.place'
                 && (($p['action'] ?? '') !== 'move' || (int) ($p['week'] ?? 0) !== $week)) continue;
-            $other = TimetableCard::find($req->params['card'] ?? 0);
+            $other = TimetableCard::find($otherId);
             if (!$other) continue;
+            if ($otherTeacher) {
+                $other->teacher_id = $otherTeacher;   // saqlanmaydi — faqat bron solishtiruvi uchun
+            }
             // Competing proposals for one lesson cannot both be pending for this week.
             $sameCard = (int) $other->id === (int) $card->id;
             if (!$sameCard && ((int) $p['day'] !== (int) $data['day']
@@ -9000,8 +9137,18 @@ class TimetableController extends Controller
             }
             if ($card->teacher_id && (int) $card->teacher_id === (int) $other->teacher_id) $resources[] = 'o‘qituvchi';
             $ov = TimetableCardOverride::where('card_id', $other->id)->where('week', $week)->first();
-            if ($room && $room === ($ov?->auditorium_code ?: $other->auditorium_code)
-                && !$this->isSharedRoom($ov?->auditorium_name ?: $other->auditorium_name)) $resources[] = 'auditoriya: ' . $room;
+            // Bron qilingan xona — so'rovda berilgan yangi xona (bo'lsa), aks holda darsning hozirgi xonasi.
+            $otherRoom = !empty($p['room_fixed']) ? (string) ($p['auditorium_code'] ?? '')
+                : (($p['auditorium_code'] ?? null) ?: ($ov?->auditorium_code ?: $other->auditorium_code));
+            $otherRoomName = !empty($p['room_fixed']) ? (string) $other->auditorium_name : (!empty($p['auditorium_code'])
+                ? (\App\Models\Auditorium::where('code', $p['auditorium_code'])->value('name') ?: $p['auditorium_code'])
+                : ($ov?->auditorium_name ?: $other->auditorium_name));
+            if ($room && $room === $otherRoom && !$this->isSharedRoom($otherRoomName)) $resources[] = 'auditoriya: ' . $room;
+            // Faqat o'qituvchi broni (almashtirishning boshqa haftalari) — qolgan turlar hisobga olinmaydi.
+            $types = array_values(array_intersect((array) ($only ?? ['teacher', 'group', 'room', 'same']), (array) ($holdOnly ?? ['teacher', 'group', 'room', 'same'])));
+            $resources = array_values(array_filter($resources, fn ($x) => in_array(match (true) {
+                $x === 'shu dars' => 'same', $x === 'o‘qituvchi' => 'teacher', str_starts_with($x, 'guruh') => 'group', default => 'room',
+            }, $types, true)));
             if (!$resources) continue;
             $dayName = ($card->board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES)[(int) $p['day'] - 1] ?? $p['day'] . '-kun';
             $schedule = array_values(array_filter($card->board->bell_schedule ?: [], fn ($slot) => ($slot['type'] ?? 'pair') === 'pair'));
@@ -10862,7 +11009,12 @@ class TimetableController extends Controller
      */
     private function responsibleSubjectKeys(Request $request): array
     {
-        $tid = $this->timetableTeacherId($request);
+        return $this->responsibleSubjectKeysFor($this->timetableTeacherId($request));
+    }
+
+    /** responsibleSubjectKeys — berilgan o'qituvchi (teachers.id) uchun. */
+    public function responsibleSubjectKeysFor(int $tid): array
+    {
         if ($tid <= 0 || !Schema::hasTable('teacher_responsible_subjects')) {
             return [];
         }

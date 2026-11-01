@@ -20,7 +20,7 @@ const buttons = sel => {
         .map(m => ({ dataset: { full: m[1], sug: m[1] }, disabled: false, textContent: '' })));
 };
 const ctx = {
-    body: { innerHTML: '', querySelectorAll: buttons },
+    body: { innerHTML: '', querySelectorAll: buttons, querySelector: () => null },
     title: { textContent: '' },
     board: { id: 7 }, BASE: '/admin', curWeek: 7, weeklyLayer: 'internal', typeFilter: 'all',
     selectedFaculties: new Set(['F1']), selectedDirs: new Set(), selectedCourses: new Set([1]),

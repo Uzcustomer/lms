@@ -4047,6 +4047,16 @@ class TimetableController extends Controller
         if ($cycleSubRows) {
             $cycleView = 'group';
         }
+        // O'qituvchi / fan mas'uli: "Vaqtini o'zgartirishni so'rash" faqat o'z amaliy darsi yoki mas'ul fanidagi amaliy dars uchun
+        // (cycle-time-proposal ham shuni tekshiradi). Faqat ichki jadval — kun oynasi shu yerda.
+        $askTeacherId = $cycleLayer === 'internal' && in_array($cycleRole, ['oqituvchi', 'fan_masuli'], true)
+            && $this->timetableActor($request) instanceof Teacher ? $this->timetableTeacherId($request) : 0;
+        try {
+            $askKeys = $askTeacherId > 0 ? $this->responsibleSubjectKeysFor($askTeacherId) : [];
+        } catch (\Throwable $e) {
+            $askKeys = [];
+        }
+        $canAsk = fn ($c) => $askTeacherId > 0 && ((int) $c->teacher_id === $askTeacherId || $this->responsibleMatch($askKeys, $c));
         $cycleCanEdit = $this->cycleLayerEditable($cycleRole, $cycleLayer);
         if ($request->boolean('clear') && !$cycleCanEdit) {
             return $this->cycleLayerDenied($cycleLayer);
@@ -4175,6 +4185,9 @@ class TimetableController extends Controller
                     }
                     if ($c->auditorium_name || $c->auditorium_code) {
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
+                    }
+                    if ($canAsk($c)) {
+                        $byFlow[$flowKey]['req'][$reqKey]['ask'] = true;
                     }
                     if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$rowSubject][(string) $c->training_type] = true;
@@ -4527,6 +4540,8 @@ class TimetableController extends Controller
                         'conflict' => $block['conflict'] ?? null,
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
+                        // Vaqt so'rovi tugmasi (o'qituvchi: o'z darsi; fan mas'uli: mas'ul fani).
+                        'ask' => $cardType === 'practice' && !empty($g['req'][$subject . '|practice']['ask']),
                     ];
                 }
             }
@@ -5865,6 +5880,23 @@ class TimetableController extends Controller
                 $current['starts_g'] = $byGroup;
             } else {
                 $current['starts'] = $starts;
+            }
+            // Tasdiqlangan amaliy boshlanishi (ps_g, o'qituvchi so'rovi) kun bilan birga suriladi — aks holda ↑/↓ amaliyni qo'zg'atmaydi.
+            // Har guruhcha o'z kun boshlanishi (starts_g, aks holda oqimniki) qanchaga surilgan bo'lsa, shuncha.
+            $before = (array) ($placement->lecture_slots ?? []);
+            $dayStart = fn (array $sl, string $unit) => max(1, (int) ((((array) ($sl['starts_g'] ?? []))[$unit] ?? [])[$k]
+                ?? ((array) ($sl['starts'] ?? []))[$k] ?? 1));
+            $ps = (array) ($current['ps_g'] ?? []);
+            foreach ($ps as $unit => $days) {
+                $delta = $dayStart($current, (string) $unit) - $dayStart($before, (string) $unit);
+                foreach ((array) $days as $day => $h) {
+                    if ($delta !== 0 && (int) $day === (int) $k && (int) $h > 0) {
+                        $ps[$unit][$day] = max(1, (int) $h + $delta);
+                    }
+                }
+            }
+            if ($ps) {
+                $current['ps_g'] = $ps;
             }
             // Boshqa kalitlar (guruhcha smenasi shift_g va h.k.) saqlanadi; faqat eski formatdagi raqamli belgilar tashlanadi.
             $named = array_filter($current, fn ($key) => !is_int($key) && !ctype_digit((string) $key), ARRAY_FILTER_USE_KEY);
@@ -8614,6 +8646,33 @@ class TimetableController extends Controller
 
     public const TEACHER_CYCLE_ROUTE = 'admin.timetable.cycle-practice-starts';
 
+    /**
+     * So'rov huquqi (yuborishda va har tasdiq bosqichida): o'qituvchi ($as = oqituvchi) — o'z darsi; fan mas'uli ($as = fan_masuli,
+     * faqat sikl) — so'rovdagi barcha guruhchalar amaliy darsining fani hamon uning mas'ul fanlari ro'yxatida.
+     */
+    public function teacherProposalAllowed(string $route, array $params, array $payload, int $teacherId, string $as): bool
+    {
+        if ($as !== 'fan_masuli') {
+            return $this->teacherProposalOwned($route, $params, $payload, $teacherId);
+        }
+        if ($route !== self::TEACHER_CYCLE_ROUTE) {
+            return false;
+        }
+        $board = TimetableBoard::find($params['board'] ?? 0);
+        $units = $board ? $this->cycleProposalUnits($board, $payload, null) : [];
+
+        return $units && count($units) === count((array) ($payload['units'] ?? [])) && $this->cycleUnitsResponsible($units, $teacherId);
+    }
+
+    /** Sikl guruhchalari amaliy darslari (har kartasi) fani shu o'qituvchining mas'ul fanlari ro'yxatidami. */
+    public function cycleUnitsResponsible(array $units, int $teacherId): bool
+    {
+        $keys = $this->responsibleSubjectKeysFor($teacherId);
+
+        return $keys && $units && !array_filter($units, fn ($x) => !$x['u']['cards']
+            || collect($x['u']['cards'])->contains(fn ($c) => !$this->responsibleMatch($keys, $c)));
+    }
+
     /** So'rov o'qituvchiniki: haftalik — kartaning o'qituvchisi; sikl — har guruhchaning amaliy kartasi o'qituvchisi. */
     public function teacherProposalOwned(string $route, array $params, array $payload, int $teacherId): bool
     {
@@ -10862,7 +10921,12 @@ class TimetableController extends Controller
      */
     private function responsibleSubjectKeys(Request $request): array
     {
-        $tid = $this->timetableTeacherId($request);
+        return $this->responsibleSubjectKeysFor($this->timetableTeacherId($request));
+    }
+
+    /** responsibleSubjectKeys — berilgan o'qituvchi (teachers.id) uchun. */
+    public function responsibleSubjectKeysFor(int $tid): array
+    {
         if ($tid <= 0 || !Schema::hasTable('teacher_responsible_subjects')) {
             return [];
         }

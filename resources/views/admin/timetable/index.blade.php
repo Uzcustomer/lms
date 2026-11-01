@@ -32,7 +32,7 @@
     // Butun doska bo'yicha joylanmagan kartalar hisoboti (Excel) — serverdagi ruxsat bilan bir xil rollar.
     $timetableCanBoardReport = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableUsesChangeRequests = $timetableCanApprove
-        || in_array($timetableActiveRole, ['oqituvchi', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+        || in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
 
     <x-slot name="header">
@@ -3034,6 +3034,21 @@
                 }, 300);
             }
             function pendingReqs() { return (changeReqs.requests || []).filter(r => r.status === 'pending'); }
+            // Kutilayotgan so'rov bosqichi: o'qituvchi / fan mas'uli so'rovi avval kafedra mudirida, keyin (va kafedra mudiri so'rovi) — registratorda.
+            function crStageText(r) { return r && r.approval_stage === 'department' ? 'Kafedra mudiri tasdig‘ida' : 'Registrator ofisi tasdig‘ida'; }
+            // Sikl kun oynasi: shu guruhcha va sanadagi amaliy darsga kutilayotgan vaqt so'rovi (cycle-practice-starts).
+            function pendingPracticeAsk(card, iso) {
+                if (!card || !iso) return null;
+                return pendingReqs().find(r => r.route === 'admin.timetable.cycle-practice-starts' && r.payload
+                    && r.payload.subject_name === card.subject
+                    && (r.payload.group_name === card.group || (r.payload.units || []).includes(card.group))
+                    && (r.payload.date === iso || (r.payload.scope === 'rest' && iso > r.payload.date))) || null;
+            }
+            // "Vaqtini o'zgartirishni so'rash": o'qituvchi yoki fan mas'uli, server ruxsat bergan (o'z darsi / mas'ul fani) amaliy dars, ertadan.
+            function cycCanAsk(card, dp, date, today) {
+                return ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && Boolean(card && card.ask && card.type === 'practice')
+                    && +(dp && dp.prc) > 0 && Boolean(date && date.iso > today);
+            }
             async function loadChangeRequests() {
                 if (!board || !$('changeReqBtn')) return;
                 try { changeReqs = await api(BASE + '/boards/' + board.id + '/change-requests?status=pending&_=' + Date.now()); }
@@ -3074,7 +3089,7 @@
                 bar.classList.toggle('hidden', !list.length);
                 if (!list.length) { bar.innerHTML = ''; return; }
                 bar.innerHTML = '<b>&#9203; Tasdiq kutilmoqda (' + list.length + '):</b> ' +
-                    list.slice(0, 3).map(r => '<span>' + esc(r.summary) + '</span>').join('') +
+                    list.slice(0, 3).map(r => '<span>' + esc(r.summary) + ' · <b>' + crStageText(r) + '</b></span>').join('') +
                     (list.length > 3 ? '<span>… yana ' + (list.length - 3) + ' ta</span>' : '') +
                     ' <button type="button" data-cr-open>Ko\'rish</button>';
                 bar.querySelector('[data-cr-open]').onclick = openChangeReqModal;
@@ -3120,7 +3135,7 @@
                 const modeHtml = approver
                     ? '<label class="cr-mode"><input type="checkbox" id="crModeChk"' + (changeReqs.approval_required ? ' checked' : '') + '> ' +
                       'Kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tsin</label>'
-                    : '<div class="cr-mode-info">' + (TIMETABLE_ROLE === 'oqituvchi'
+                    : '<div class="cr-mode-info">' + (TIMETABLE_ROLE === 'oqituvchi' || TIMETABLE_ROLE === 'fan_masuli'
                         ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi tasdiqlagach jadvalga tushadi.'
                         : TIMETABLE_DEPARTMENT_HEAD
                         ? (changeReqs.approval_required
@@ -3132,8 +3147,8 @@
                 const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
                 const rows = list.length ? list.map(r => {
-                    const st = r.status === 'pending' && r.approval_stage
-                        ? [r.approval_stage === 'department' ? 'Kafedra mudiri tasdig‘ida' : 'Registrator ofisi tasdig‘ida', '#b45309', '#fef3c7']
+                    const st = r.status === 'pending'
+                        ? [crStageText(r), '#b45309', '#fef3c7']
                         : CR_STATUS[r.status] || [r.status, '#334155', '#e2e8f0'];
                     const acts = r.status !== 'pending' ? '' : r.can_review
                         ? '<button type="button" class="cr-ok" data-cr-approve="' + r.id + '">Tasdiqlash</button><button type="button" class="cr-no" data-cr-reject="' + r.id + '">Rad etish</button>'
@@ -6452,9 +6467,12 @@
                 const canEdit = Boolean(cyclePlanData.day_edit);
                 const dayCard = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
                 const pendingSlot = pendingDaySlot(dayCard, dp.k - 1);
+                const pendingAsk = pendingPracticeAsk(dayCard, date && date.iso);
                 // Tasdiq kutilayotgan bo'lsa, keyingi ↑/↓ shu so'ralgan soatdan hisoblanadi.
                 // Faqat o'z so'rovi: registrator/o'quv bo'limi boshqaning so'rovidan emas, joriy soatdan siljitadi.
                 const baseSt = pendingSlot && pendingSlot.mine ? +pendingSlot.payload.start_hour : st;
+                // Amaliy alohida soatda (ps, tasdiqlangan so'rov) — kun bilan birga suriladi: chegaralar shu oraliq bo'yicha.
+                const psOff = dp.ps != null ? (+dp.ps - st) : (+dp.lec || 0);
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML =
@@ -6467,13 +6485,14 @@
                         (dp.tp ? '<div class="dp-topic">' + esc(dp.tp) + '</div>' : '') + '</div></div>' : '') +
                     (total === 0 ? '<div class="dp-sub">Bu kuni KTR bo\'yicha dars yo\'q.</div>' : '') +
                     (dp.ktr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
-                    (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: darslar <b>' + (+pendingSlot.payload.start_hour) + '-soatdan</b> — registrator tasdig\'i kutilmoqda</div>' : '') +
-                    // O'qituvchi: o'z amaliy darsi (ertangi va keyingi kunlar) uchun vaqt o'zgarishi so'rovi.
-                    (TIMETABLE_ROLE === 'oqituvchi' && dayCard && dayCard.type === 'practice' && +dp.prc > 0 && date && date.iso > cycLocalToday()
+                    (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: darslar <b>' + (+pendingSlot.payload.start_hour) + '-soatdan</b> — ' + crStageText(pendingSlot) + '</div>' : '') +
+                    (pendingAsk ? '<div class="dp-pending">&#9203; So\'rov: amaliy <b>' + (+pendingAsk.payload.start_hour) + '-soatdan</b> — ' + crStageText(pendingAsk) + '</div>' : '') +
+                    // O'qituvchi / fan mas'uli: o'z amaliy darsi yoki mas'ul fanidagi dars (ertangi va keyingi kunlar) — vaqt o'zgarishi so'rovi.
+                    (cycCanAsk(dayCard, dp, date, cycLocalToday())
                         ? '<div class="dp-actions"><button type="button" data-dp-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '') +
                     (canEdit && total > 0
-                        ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (baseSt <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
-                          '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (baseSt + total - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
+                        ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (Math.min(baseSt, baseSt + psOff) <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
+                          '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (Math.max(baseSt + (+dp.lec || 0), baseSt + psOff + (+dp.prc || 0)) - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
                           '<span class="dp-sub">Darslar ' + st + '-soatdan boshlanadi</span></div>'
                         : '');
                 document.body.appendChild(pop);

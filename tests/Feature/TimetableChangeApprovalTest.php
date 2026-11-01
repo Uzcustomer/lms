@@ -928,3 +928,157 @@ it('o\'qituvchi so\'rovi (sikl): ma\'ruza vaqti bilan, guruhning haftalik darsi 
     $rest = asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), array_merge($body, ['scope' => 'rest', 'start_hour' => 7]));
     expect($rest->assertUnprocessable()->json('message'))->toContain('Guruh band: g5-01a, Fizika');
 });
+
+// ─── Fan mas'uli: mas'ul fanidagi istalgan o'qituvchi darsi (sikl) vaqtini o'zgartirishni so'rash ───
+
+function fmTeacher(string $name, string $role): Teacher
+{
+    Role::findOrCreate($role, 'web');
+    $t = new Teacher();
+    $t->forceFill(['hemis_id' => random_int(100000, 999999), 'full_name' => $name, 'short_name' => $name, 'first_name' => $name, 'second_name' => $name,
+        'employee_id_number' => (string) random_int(100000, 999999), 'birth_date' => '1980-01-01', 'year_of_enter' => 2010,
+        'gender' => 'm', 'department' => 'Boshqa', 'employment_form' => 'x', 'employment_staff' => 'x', 'staff_position' => 'x',
+        'employee_status' => 'x', 'employee_type' => 'x', 'contract_number' => '1', 'decree_number' => '1',
+        'contract_date' => '2020-01-01', 'decree_date' => '2020-01-01',
+        'status' => true, 'login' => 'u' . random_int(100000, 999999), 'password' => bcrypt('x')])->save();
+    $t->assignRole($role);
+
+    return $t;
+}
+
+/** O'qituvchini fanga mas'ul qiladi (5-kurs, 9-semestr: davolash ishi). */
+function fmResponsible(Teacher $t, string $subject): int
+{
+    if (!DB::table('specialties')->where('specialty_hemis_id', 9001)->exists()) {
+        DB::table('specialties')->insert(['specialty_hemis_id' => 9001, 'name' => 'Davolash ishi', 'code' => '60910200', 'locality_type_code' => '1',
+            'locality_type_name' => 'x', 'education_type_code' => '11', 'education_type_name' => 'B']);
+        DB::table('curricula')->insert(['curricula_hemis_id' => 8001, 'name' => 'R', 'specialty_hemis_id' => 9001, 'department_hemis_id' => 1,
+            'education_year_code' => '2026', 'education_year_name' => '2026-2027', 'current' => 1, 'education_type_code' => '11', 'education_type_name' => 'B',
+            'education_form_code' => '11', 'education_form_name' => 'K', 'marking_system_code' => '11', 'marking_system_name' => 'M',
+            'marking_system_minimum_limit' => 60, 'marking_system_gpa_limit' => 2.4, 'semester_count' => 12, 'education_period' => 6]);
+    }
+    $csId = DB::table('curriculum_subjects')->insertGetId(['curriculum_subject_hemis_id' => random_int(10000, 99999), 'curricula_hemis_id' => 8001,
+        'subject_id' => 1, 'subject_name' => $subject, 'subject_code' => 'G1', 'semester_code' => '19', 'semester_name' => '9-semestr', 'at_semester' => 1]);
+
+    return DB::table('teacher_responsible_subjects')->insertGetId(['teacher_id' => $t->id, 'curriculum_subject_id' => $csId]);
+}
+
+/** Sikl: g5-01a (o'qituvchi A), g5-01b boshqa o'qituvchida — 13:30 dan bo'sh; 2-kun ertaga. */
+function fmSetup(): array
+{
+    $s = approvalSetup();
+    $c = tpCycle($s);
+    $c['g5b']->update(['teacher_id' => $s['head']->id, 'teacher_name' => $s['head']->full_name]);
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    test()->travelTo(\Illuminate\Support\Carbon::parse($c['dates'][0] . ' 10:00', 'Asia/Tashkent'));
+    $s['fm'] = fmTeacher("FAN MAS'ULI", 'fan_masuli');
+    $s['body'] = ['specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Gigiyena', 'group_name' => 'g5-01a',
+        'date' => $c['dates'][1], 'scope' => 'day', 'start_hour' => 7];
+
+    return $s + $c;
+}
+
+it('fan mas\'uli: o\'z fanidagi boshqa o\'qituvchi darsiga so\'rov — ikki bosqich, jadval o\'zgaradi; dars o\'qituvchisiga yaratilganda va natijada xabar', function () {
+    $s = fmSetup();
+    fmResponsible($s['fm'], 'Gigiyena');
+    $plan = asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'courses' => [5]])->assertOk()->json('cycle_cards');
+    expect(collect($plan)->firstWhere('group', 'g5-01a')['ask'])->toBeTrue();
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $s['body'])->assertOk();
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $s['body'] + ['reason' => 'Klinika'])
+        ->assertOk()->assertJsonPath('pending_approval', true);
+    $req = TimetableChangeRequest::sole();
+    expect($req->requester_role)->toBe('fan_masuli')->and($req->requester_id)->toBe($s['fm']->id)
+        ->and($req->approval_stage)->toBe('department')
+        ->and($req->details['proposer'])->toBe(['as' => 'fan_masuli', 'teacher_id' => $s['fm']->id])
+        ->and($req->details['lesson_teacher_ids'])->toBe([$s['teacher']->id])
+        ->and($req->details['steps'][0]['action'])->toContain("(fan mas'uli)");
+    expect(TeacherNotification::where('teacher_id', $s['teacher']->id)->pluck('title')->all())->toBe(["Fan mas'uli darsingiz vaqtini o'zgartirishni so'radi"]);
+    expect(TeacherNotification::where('teacher_id', $s['head']->id)->value('title'))->toBe("Fan mas'uli vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda");
+    // Kafedra mudiri ko'radi va tasdiqlay oladi; dars o'qituvchisi ko'radi (tasdiqlamaydi, bekor qilmaydi).
+    $row = asRole($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.change-requests.index', $s['board']) . '?status=pending')->json('requests.0');
+    expect($row['can_review'])->toBeTrue()->and($row['requester_role'])->toBe("Fan mas'uli");
+    $row = asRole($s['teacher'], 'oqituvchi')->getJson(route('admin.timetable.change-requests.index', $s['board']) . '?status=pending')->json('requests');
+    expect($row)->toHaveCount(1)->and($row[0]['mine'])->toBeFalse()->and($row[0]['can_review'])->toBeFalse();
+    asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.change-requests.cancel', $req))->assertForbidden();
+
+    asRole($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($s['placement']->fresh()->lecture_slots)->not->toHaveKey('ps_g');
+    asRole($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($req->fresh()->status)->toBe('approved')->and($s['placement']->fresh()->lecture_slots['ps_g'])->toBe(['g5-01a' => [1 => 7]]);
+    expect(TeacherNotification::where('teacher_id', $s['teacher']->id)->pluck('title')->all())
+        ->toBe(["Fan mas'uli darsingiz vaqtini o'zgartirishni so'radi", "Dars jadvali o'zgardi"]);
+    expect(StudentNotification::where('student_id', DB::table('students')->where('hemis_id', 9101)->value('id'))->sole()->message)->toContain('Fan: Gigiyena');
+});
+
+it('fan mas\'uli: boshqa fanga — 403; oddiy o\'qituvchi boshqaning darsiga — 403; tugma ham chiqmaydi', function () {
+    $s = fmSetup();
+    fmResponsible($s['fm'], 'Anatomiya');
+    $other = fmTeacher('OQITUVCHI B.', 'oqituvchi');
+    foreach ([[$s['fm'], 'fan_masuli'], [$other, 'oqituvchi']] as [$who, $role]) {
+        $plan = asRole($who, $role)->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'courses' => [5]])->assertOk()->json('cycle_cards');
+        expect(collect($plan)->firstWhere('group', 'g5-01a')['ask'])->toBeFalse();
+        asRole($who, $role)->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $s['body'])->assertForbidden();
+        asRole($who, $role)->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $s['body'] + ['reason' => 'x'])->assertForbidden();
+    }
+    // O'qituvchining o'z darsi — tugma bor.
+    $plan = asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'courses' => [5]])->assertOk()->json('cycle_cards');
+    expect(collect($plan)->firstWhere('group', 'g5-01a')['ask'])->toBeTrue();
+    expect(TimetableChangeRequest::count())->toBe(0);
+});
+
+it('fan mas\'uli: bugungi yoki o\'tgan darsga so\'rov — 422', function () {
+    $s = fmSetup();
+    fmResponsible($s['fm'], 'Gigiyena');
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), array_merge($s['body'], ['date' => $s['dates'][0], 'start_hour' => 3, 'reason' => 'x']))
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['dates'][1] . ' 18:00', 'Asia/Tashkent')->addDay());
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $s['body'])
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+    expect(TimetableChangeRequest::count())->toBe(0);
+});
+
+it('fan mas\'uli: mas\'ulligi olib tashlansa — tasdiqda qo\'llanmaydi; rad etish va bekor qilish dars o\'qituvchisiga xabar beradi', function () {
+    $s = fmSetup();
+    $link = fmResponsible($s['fm'], 'Gigiyena');
+    $send = fn () => asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $s['body'] + ['reason' => 'x'])->assertOk()->json('change_request_id');
+    // Rad etish.
+    $id = $send();
+    asRole($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.reject', $id), ['note' => 'Kerak emas'])->assertOk();
+    expect(TeacherNotification::where('teacher_id', $s['teacher']->id)->latest('id')->first())
+        ->title->toBe("Darsingiz vaqtini o'zgartirish so'rovi rad etildi (kafedra mudiri)")->message->toContain('Izoh: Kerak emas');
+    // Bekor qilish.
+    $id = $send();
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.change-requests.cancel', $id))->assertOk();
+    expect(TeacherNotification::where('teacher_id', $s['teacher']->id)->latest('id')->value('title'))->toBe("Darsingiz vaqtini o'zgartirish so'rovi bekor qilindi");
+    // Mas'ullik olib tashlandi — kafedra mudiri bosqichida qo'llanmaydi.
+    $id = $send();
+    DB::table('teacher_responsible_subjects')->where('id', $link)->delete();
+    asRole($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $id))->assertUnprocessable();
+    expect(TimetableChangeRequest::find($id))->status->toBe('failed')->error->toContain("Dars biriktiruvi o'zgargan");
+    expect(TeacherNotification::where('teacher_id', $s['teacher']->id)->latest('id')->value('title'))->toBe("Darsingiz vaqtini o'zgartirish so'rovi qo'llanmadi");
+    expect($s['placement']->fresh()->lecture_slots)->not->toHaveKey('ps_g');
+});
+
+it('sikl kuni ↑/↓ bilan surilsa, tasdiqlangan amaliy boshlanishi (ps_g) ham shu kun bilan suriladi', function () {
+    $s = approvalSetup(false);
+    ['placement' => $pl, 'dates' => $dates] = tpCycle($s);
+    $pl->update(['lecture_slots' => ['shift_g' => ['g5-01b' => 7], 'ps_g' => ['g5-01a' => [0 => 3, 1 => 5], 'g5-01b' => [1 => 3]]]]);
+    $move = fn (array $extra) => asRole($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-lecture-slots', $s['board']), [
+        'specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Gigiyena', 'group_name' => 'F1 / 1-oqim', 'training_type' => 'practice',
+        'view' => 'group', 'day_index' => 1] + $extra)->assertOk();
+    $prac = function () use ($s, $dates) {
+        request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+        return app(\App\Http\Controllers\Admin\TimetableController::class)->cycleProposalUnits($s['board'],
+            ['specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Gigiyena', 'group_name' => 'g5-01a'], null)[0]['prac'][$dates[1]];
+    };
+    expect($prac())->toBe([5, 11]);
+    // Guruhcha kuni 1 → 2: faqat shu guruhchaning amaliysi 5 → 6.
+    $move(['sub_group' => 'g5-01a', 'start_hour' => 2]);
+    expect($pl->fresh()->lecture_slots['ps_g'])->toBe(['g5-01a' => [0 => 3, 1 => 6], 'g5-01b' => [1 => 3]])->and($prac())->toBe([6, 12]);
+    // Oqim kuni 1 → 2: o'zi surmagan guruhcha (g5-01b) 3 → 4; g5-01a (o'z kuni bor) o'zgarmaydi.
+    $move(['start_hour' => 2]);
+    expect($pl->fresh()->lecture_slots['ps_g'])->toBe(['g5-01a' => [0 => 3, 1 => 6], 'g5-01b' => [1 => 4]]);
+    // Guruhcha 2 → 1 (oqim 2-soatda — o'z qiymati saqlanadi): 6 → 5.
+    $move(['sub_group' => 'g5-01a', 'start_hour' => 1]);
+    expect($pl->fresh()->lecture_slots['ps_g']['g5-01a'])->toBe([0 => 3, 1 => 5])->and($pl->fresh()->lecture_slots['shift_g'])->toBe(['g5-01b' => 7]);
+});

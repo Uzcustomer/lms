@@ -296,7 +296,9 @@ class TimetableChangeApproval
      */
     public static function shouldIntercept(Request $request, string $activeRole, ?TimetableBoard $board): bool
     {
+        // Takliflarning o'z oqimi bor (week-suggestions/propose) — umumiy ushlash ularga tegmaydi.
         return in_array($activeRole, self::GATED_ROLES, true)
+            && (string) optional($request->route())->getName() !== TimetableController::SUGGESTION_ROUTE
             && isset(self::GATED[(string) optional($request->route())->getName()])
             && self::isChange($request)
             && self::boardRequiresApproval($board);
@@ -599,6 +601,8 @@ class TimetableChangeApproval
         }
         $sub = Request::create('/', 'POST', $req->payload ?? []);
         $sub->headers->set('Accept', 'application/json');
+        // Tasdiqlangan so'rovni qayta bajarish (to'g'ridan-to'g'ri HTTP chaqiruv emas).
+        $sub->attributes->set('timetable.change_replay', (int) $req->id);
         $sub->setUserResolver(fn () => $requester);
         if (request()->hasSession()) {
             $sub->setLaravelSession(request()->session());

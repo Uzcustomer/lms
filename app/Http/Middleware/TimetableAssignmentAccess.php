@@ -56,7 +56,8 @@ class TimetableAssignmentAccess
             // faylga yozadi — yangi ma'lumot ochmaydi, shuning uchun ruxsat.
             if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.boards.conflicts', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check', 'admin.timetable.cycle-time-proposal', 'admin.timetable.cycle-time-proposal.check',
                 // Takliflar: o'z qamrovida ko'rish va so'rov yuborish (huquqni controller tekshiradi).
-                'admin.timetable.boards.week-suggestions', 'admin.timetable.week-suggestions.propose'])) {
+                // apply — faqat admin huquqi bo'lsa (boshqa roli admin bo'lsa ham): executor o'zi tekshiradi.
+                'admin.timetable.boards.week-suggestions', 'admin.timetable.week-suggestions.propose', 'admin.timetable.week-suggestions.apply'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
@@ -86,6 +87,7 @@ class TimetableAssignmentAccess
                 // Takliflar: ko'rish; qo'llash — so'rov (o'quv bo'limiga controller 403 qaytaradi).
                 'admin.timetable.boards.week-suggestions',
                 'admin.timetable.week-suggestions.propose',
+                'admin.timetable.week-suggestions.apply',
             ];
 
             if (in_array($activeRole, $auditoriumAssignmentRoles, true)) {

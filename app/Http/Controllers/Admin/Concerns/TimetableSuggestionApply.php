@@ -304,6 +304,8 @@ trait TimetableSuggestionApply
                     return 'O‘qituvchi topilmadi.';
                 }
                 $card->update(['teacher_id' => $t->id, 'teacher_name' => $t->short_name ?: $t->full_name]);
+                // Saqlangan biriktiruv ham (updateCard kabi) — keyingi rejadan sinxronlash eski o'qituvchini qaytarmasin.
+                $this->recordUnitAssignment($card);
                 $teacherChanged[$card->id] = $card;
             }
         }
@@ -476,8 +478,9 @@ trait TimetableSuggestionApply
      */
     public function weekSuggestionApply(Request $request, TimetableBoard $board)
     {
-        $role = $this->timetableActiveRole($request);
-        if (!in_array($role, self::SUGGESTION_ADMIN_ROLES, true) && $role !== 'kafedra_mudiri') {
+        // Darhol — admin huquqi (barcha rollaridan, takliflar oynasidagidek); tasdiqlangan so'rovni qayta bajarish — applyLocked belgisi bilan.
+        if (!$request->attributes->has('timetable.change_replay')
+            && $this->suggestionRights($this->timetableActor($request))['level'] !== 'admin') {
             abort(403, 'Taklifni darhol qo‘llash faqat adminlar uchun — boshqa rollar so‘rov yuboradi.');
         }
         $data = $this->suggestionPayload($request);

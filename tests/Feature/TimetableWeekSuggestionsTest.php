@@ -648,3 +648,35 @@ it('takliflar: admin darhol, yaxlit qo\'llaydi — bitta amal o\'tmasa hech biri
         ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(4)
         ->and(\App\Models\TimetableChangeRequest::sole()->status)->toBe('applied');
 });
+
+it('takliflar: o\'qituvchini almashtirish saqlangan biriktiruvga ham yoziladi; boshqa roli admin bo\'lsa — darhol qo\'llaydi, kafedra mudiri apply\'ga — 403', function () {
+    $s = sapSetup();
+    $new = sugTeacher('YANGI O.');
+    $u = sugTeacher('ADMIN-OQITUVCHI');
+    $u->assignRole('superadmin');
+    $u->assignRole('oqituvchi');
+    // Faol rol — o'qituvchi, lekin admin roli ham bor: oynada "darhol", apply ishlaydi.
+    expect(sapGet($u, 'oqituvchi', $s)['apply_mode'])->toBe('direct');
+    sugAs($u, 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+        ['op' => 'teacher', 'card_id' => $s['own']->id, 'teacher_id' => $new->id],
+        ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 2, 'pair' => 3],
+    ]])->assertOk();
+    expect($s['own']->fresh()->teacher_id)->toBe($new->id)
+        ->and(DB::table('timetable_unit_assignments')->where('board_id', $s['board']->id)->where('subject_name', 'Gigiyena')->value('teacher_id'))->toBe($new->id);
+    // Kafedra mudiri apply'ni to'g'ridan-to'g'ri chaqira olmaydi (doskada tasdiq rejimi yoqilgan bo'lsa ham — umumiy ushlashga tushmaydi).
+    $s['board']->update(['settings' => ['approval_required' => true]]);
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+        ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1],
+    ]])->assertForbidden();
+    expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0)
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(2);
+    // Admin + kafedra mudiri (faol — kafedra mudiri), tasdiq rejimi yoqilgan doska: so'rovga aylanmaydi, darhol qo'llanadi.
+    $hk = sugTeacher('ADMIN-MUDIR', ['department_hemis_id' => 501]);
+    $hk->assignRole('superadmin');
+    $hk->assignRole('kafedra_mudiri');
+    sugAs($hk, 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+        ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1],
+    ]])->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0)
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(4);
+});

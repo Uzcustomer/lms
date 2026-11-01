@@ -338,6 +338,10 @@ trait TimetableSuggestionApply
             }
             [$d, $p] = $pl;
             $days[$key][$d] = true;
+            // Yakuniy joy (oxirgi amal "reset" bo'lsa — shablon joyi) yakuniy holatga nisbatan: guruh, o'qituvchi, xona.
+            if ($c = $this->findWeekConflicts($card, $w, $d, $p)) {
+                return '«' . $card->subject_name . '»: ' . implode(' · ', $c);
+            }
             $date = $this->weekStartDate($board, $card, $w)->addDays($d - 1)->toDateString();
             if ($errs = $this->weeklyProposalBusy($card, $w, $d, $p, $date)) {
                 return '«' . $card->subject_name . '»: ' . implode(' · ', $errs);

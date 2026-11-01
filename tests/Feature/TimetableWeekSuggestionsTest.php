@@ -845,3 +845,19 @@ it('takliflar: almashtirishning boshqa haftalari — yangi o\'qituvchi bandligi 
     $propose(['week' => 3, 'card_id' => $d->id, 'actions' => [['op' => 'teacher', 'card_id' => $d->id, 'teacher_id' => $n->id],
         ['op' => 'move', 'card_id' => $d->id, 'week' => 3, 'day' => 5, 'pair' => 3]]])->assertOk();
 });
+
+it('takliflar: yakuniy "reset" joyi ham to\'qnashuvga tekshiriladi (shablon joyida guruhning boshqa darsi)', function () {
+    $s = sapSetup();
+    // own: shablonda 1-kun 5-katak, 3-haftada bekor; shu haftada guruhga shu vaqtda boshqa fan qo'yilgan.
+    $s['own']->update(['day' => 1, 'pair' => 5]);
+    TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'cancelled' => true]);
+    $x = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-01a', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
+        'auditorium_code' => 'R7', 'auditorium_name' => 'R7']);
+    TimetableCardOverride::create(['card_id' => $x->id, 'week' => 3, 'day' => 1, 'pair' => 5]);
+    $body = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
+    sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), $body)
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'Guruh band'));
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body)->assertUnprocessable();
+    expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('cancelled'))->toBeTrue()
+        ->and(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0);
+});

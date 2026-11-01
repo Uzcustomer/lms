@@ -2100,3 +2100,18 @@ it('hemis:today-locks-check — guruh bo\'yicha bazadagi va HEMIS\'dagi davomat 
         ->assertSuccessful();
     test()->artisan('hemis:today-locks-check', ['date' => '14.09.2026'])->assertFailed();
 });
+
+it('bugungi darslar: bir guruhning parallel bo\'laklari (Fan (a) / Fan (c)) bir vaqtda — har biri o\'z HEMIS yozuvi bilan', function () {
+    $s = hsSetup();
+    $s['card']->update(['day' => null, 'pair' => null]);
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    htCard($s, 'Kimyo (a)', 5, '72');
+    htCard($s, 'Kimyo (c)', 5, '73', ['teacher_id' => $mudir->id, 'teacher_name' => 'MUDIR']);
+    // HEMIS'da (c) oldin keladi (kichik id) — tartib bo'yicha emas, nomi bo'yicha juftlanadi.
+    htFake([1596 => [
+        htItem(2, '2026-09-14', '12:00', '13:20', ['subject_id' => 476, 'subject' => 'Kimyo (a)', 'room' => '72']),
+        htItem(1, '2026-09-14', '12:00', '13:20', ['subject_id' => 477, 'subject' => 'Kimyo (c)', 'room' => '73', 'emp' => 9001]),
+    ]]);
+    $rows = collect(htCall($s)->assertOk()->json('rows'))->keyBy('hemis_id');
+    expect($rows)->toHaveCount(2)->and($rows[1]['status'])->toBe('ok')->and($rows[2]['status'])->toBe('ok');
+});

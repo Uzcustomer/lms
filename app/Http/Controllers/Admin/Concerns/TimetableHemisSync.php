@@ -1907,10 +1907,11 @@ trait TimetableHemisSync
         $hemisOf = [];
         foreach ($groups as $gid => $g) {
             $gname = (string) $g['row']->name;
-            // LMS darslari HEMIS yozuvlariga (to'liq yoki yarim para) bo'linadi — SchedulePlanner::records kabi.
+            // LMS darslari HEMIS yozuvlariga (to'liq yoki yarim para) bo'linadi — SchedulePlanner::records kabi. Har bo'lak (parallel
+            // "Fan (a)" / "Fan (c)" bir vaqtda) o'z yozuvlari bilan; juftlashda — asosiy nom bo'yicha bitta guruhda.
             $buckets = [];
             foreach ($g['lms'] as $l) {
-                $bk = $this->hemisSubjectBase($l['subject']) . '|' . $l['part'];
+                $bk = $l['key'] . '|' . $l['part'];
                 for ($s = $l['slot']; $s < $l['slot'] + $l['len']; $s++) {
                     $buckets[$bk]['slots'][$s] = $l;
                 }
@@ -1929,9 +1930,14 @@ trait TimetableHemisSync
                         $len = 2;
                         $i++;
                     }
-                    $records[$bk][] = $a + ['start' => $slotTimes[$s][0] ?? '', 'end' => $slotTimes[$s + $len - 1][1] ?? ''];
+                    $records[$this->hemisSubjectBase($a['subject']) . '|' . $a['part']][] = $a + ['xkey' => $a['key'],
+                        'start' => $slotTimes[$s][0] ?? '', 'end' => $slotTimes[$s + $len - 1][1] ?? ''];
                 }
             }
+            foreach ($records as &$list) {
+                usort($list, fn ($x, $y) => [$x['start'], $x['end']] <=> [$y['start'], $y['end']]);
+            }
+            unset($list);
             // Juftlash: fan (asosiy nomi — bo'lakli "Fan (a)" ham, umumiy ma'ruza ham) va mashg'ulot turi (ma'ruza / amaliy qism)
             // bo'yicha, so'ng shu tur ichida vaqt tartibida: 1-HEMIS amaliy ↔ 1-LMS amaliy, 2-si ↔ 2-si. Soni farq qilsa — ortiqchasi
             // tartib saqlangan holda, vaqti eng uzoq bo'yicha ("ortiqcha dars" / "yangi dars kerak").
@@ -1948,13 +1954,23 @@ trait TimetableHemisSync
                 // Ikkalasi ham vaqt tartibida: LMS yozuvlari — yarim-slotlar tartibida, HEMIS — so'rovda boshlanish bo'yicha.
                 $R = $records[$bk] ?? [];
                 $H = $hb[$bk] ?? [];
-                $pairs = $this->hemisTodayAlign(array_map(fn ($r) => [$toMin($r['start']), $toMin($r['end'])], $R),
-                    array_map(fn ($h) => [$toMin($hm($h->lesson_pair_start_time)), $toMin($hm($h->lesson_pair_end_time))], $H));
+                $rt = fn (array $ix) => array_map(fn ($i) => [$toMin($R[$i]['start']), $toMin($R[$i]['end'])], $ix);
+                $ht = fn (array $ix) => array_map(fn ($i) => [$toMin($hm($H[$i]->lesson_pair_start_time)), $toMin($hm($H[$i]->lesson_pair_end_time))], $ix);
+                $pairs = [];
                 $usedR = [];
                 $usedH = [];
-                foreach ($pairs as [$ri, $hi]) {
-                    $usedR[$ri] = $usedH[$hi] = true;
+                $align = function (array $ri, array $hi) use (&$pairs, &$usedR, &$usedH, $rt, $ht) {
+                    foreach ($this->hemisTodayAlign($rt($ri), $ht($hi)) as [$a, $b]) {
+                        $pairs[] = [$ri[$a], $hi[$b]];
+                        $usedR[$ri[$a]] = $usedH[$hi[$b]] = true;
+                    }
+                };
+                // Avval aynan bir xil nomli (bo'lagi ham) darslar, so'ng qolganlari asosiy nom bo'yicha (bir tomonda bo'lakli nom).
+                foreach (array_unique(array_column($R, 'xkey')) as $xk) {
+                    $align(array_keys(array_filter($R, fn ($r) => $r['xkey'] === $xk)),
+                        array_keys(array_filter($H, fn ($h) => $this->hemisSubjectKey((string) $h->subject_name) === $xk)));
                 }
+                $align(array_values(array_diff(array_keys($R), array_keys($usedR))), array_values(array_diff(array_keys($H), array_keys($usedH))));
                 foreach ($pairs as [$ri, $hi]) {
                     $r = $R[$ri];
                     $h = $H[$hi];

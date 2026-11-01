@@ -916,4 +916,15 @@ it('o\'qituvchi so\'rovi (sikl): ma\'ruza vaqti bilan, guruhning haftalik darsi 
     [, $day] = tpWeekOf($weekly, $dates[0]);
     $weekly->update(['day' => $day]);
     expect($check(7)->assertUnprocessable()->json('message'))->toContain('Guruh band: g5-01a, Tarix');
+    // "Shu kundan blok oxirigacha": 2-kun amaliy 6 soat (1-kun 4 soat) — 2-kunning oxirgi soatlariga tushadigan haftalik dars ham.
+    $weekly->delete();
+    $late = $weekly->replicate();
+    $late->subject_name = 'Fizika';
+    $late->pair = 11;
+    [, $day2] = tpWeekOf($late, $dates[1]);
+    $late->day = $day2;
+    $late->save();
+    $check(7)->assertOk();
+    $rest = asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), array_merge($body, ['scope' => 'rest', 'start_hour' => 7]));
+    expect($rest->assertUnprocessable()->json('message'))->toContain('Guruh band: g5-01a, Fizika');
 });

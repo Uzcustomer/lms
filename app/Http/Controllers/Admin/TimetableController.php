@@ -8809,10 +8809,11 @@ class TimetableController extends Controller
                         $groupKeys[$this->groupScopeKey($c) . '|' . $g] = true;
                     }
                 }
+                // Har kunning o'z amaliy davomiyligi (KTR: kunlar har xil bo'lishi mumkin).
                 $mineDates = array_values($days[(string) $x['u']['unit']]);
-                $len = $x['prac'][$mineDates[0]][1] - $x['prac'][$mineDates[0]][0];
-                foreach ($this->weeklyOccupancy($board, $this->weeklyStateOn($board, $mineDates, $h + $len, []), array_flip($mineDates)) as $e) {
-                    if (array_intersect_key(array_flip($e['groups']), $groupKeys) && $e['from'] < $h + $len && $h < $e['to']) {
+                $lenOf = array_map(fn ($d) => $x['prac'][$d][1] - $x['prac'][$d][0], array_combine($mineDates, $mineDates));
+                foreach ($this->weeklyOccupancy($board, $this->weeklyStateOn($board, $mineDates, $h + max($lenOf), []), array_flip($mineDates)) as $e) {
+                    if (array_intersect_key(array_flip($e['groups']), $groupKeys) && $e['from'] < $h + $lenOf[$e['date']] && $h < $e['to']) {
                         $errors[] = 'Guruh band: ' . $e['label'] . ' (' . Carbon::parse($e['date'])->format('d.m') . ', ' . $this->cycleHoursTime($board, $e['from'], $e['to']) . ')';
                     }
                 }

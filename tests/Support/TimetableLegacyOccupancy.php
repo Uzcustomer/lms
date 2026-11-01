@@ -160,7 +160,9 @@ if (!function_exists('legacyUnitBusy')) {
             request()->attributes->remove('timetable.cycle_units.' . $board->id);
             expect($busy->invoke($ctl, $board, $cards))->toBe(legacyUnitBusy($board, $cards), 'birlik: ' . $k);
         }
-        expect($weekly->invoke($ctl, $board))->toBe(legacyWeeklyConflicts($board));
+        // Tuzilgan ro'yxat (items) — yangi maydon; matn, sana, kun, para eski hisob bilan aynan bir xil.
+        $strip = fn (array $all) => array_map(fn ($weeks) => array_map(fn ($x) => array_diff_key($x, ['items' => true]), $weeks), $all);
+        expect($strip($weekly->invoke($ctl, $board)))->toBe(legacyWeeklyConflicts($board));
 
         return count($units);
     }

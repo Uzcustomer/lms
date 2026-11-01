@@ -4500,7 +4500,15 @@ class TimetableController extends Controller
                     'auditorium_name' => $audNames
                         ? ($audNames[0] . (count($audNames) > 1 ? ' +' . (count($audNames) - 1) : ''))
                         : null,
-                    'conflict' => $conflicts[$subjectKey($g, $placement->subject_name) . '|' . $blockType]['text'] ?? null,
+                    // To'qnashuvlar (ko'rish qamrovi bo'yicha): conflict — kelgusilari matni (qizil/sariq, hisoblagichlar), conflicts —
+                    // tuzilgan ro'yxat (o'tganlari ham — kulrang), conflict_level — red | yellow | null.
+                    ...(function () use ($conflicts, $subjectKey, $g, $placement, $blockType, $mineTeacherId) {
+                        $items = $this->scopedConflictItems($conflicts[$subjectKey($g, $placement->subject_name) . '|' . $blockType]['items'] ?? [], $mineTeacherId);
+                        $live = array_filter($items, fn ($i) => empty($i['past']));
+
+                        return ['conflict' => $live ? implode('; ', array_column($live, 'line')) : null,
+                            'conflicts' => $items, 'conflict_level' => self::conflictLevel($items)];
+                    })(),
                 ];
             }
             $placedSubjects = collect($blocks)->keyBy(fn ($b) => $b['subject'] . '|' . $b['type']);
@@ -4539,6 +4547,8 @@ class TimetableController extends Controller
                         'placed' => (bool) $block && !array_diff_key($g['vsubs'][$subject] ?? [], $variantPlaced[$subject] ?? []),
                         // To'qnashuv sababi (blok joyida qoladi, lekin "joylashgan" hisoblanmaydi).
                         'conflict' => $block['conflict'] ?? null,
+                        'conflicts' => $block['conflicts'] ?? [],
+                        'conflict_level' => $block['conflict_level'] ?? null,
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
                         // Vaqt so'rovi tugmasi (o'qituvchi: o'z darsi; fan mas'uli: mas'ul fani).
@@ -6135,7 +6145,7 @@ class TimetableController extends Controller
         if (!$units) {
             return [];
         }
-        $conflicts = $withConflicts ? $this->cycleConflicts($board) : [];
+        $conflicts = $withConflicts ? $this->cycleConflicts($board, null, null, true) : [];
         $cycleHours = $withHours ? $this->cycleSubjectHoursMap($board) : [];
         $fmtHours = fn (?float $v) => $v === null ? null : (fmod($v, 1.0) == 0.0 ? (int) $v : round($v, 1));
         $out = [];
@@ -6252,10 +6262,14 @@ class TimetableController extends Controller
      * - bir xonada bir vaqtda sig'imidan ko'p guruhcha (talabalar soni bo'yicha; sig'im yoki talabalar soni noma'lum bo'lsa —
      *   bir vaqtda bittadan ko'p dars). "Kafedra mudiri xonasi" va umumiy (raqamsiz) xonalar tekshirilmaydi.
      * Kunlik vaqt — ichki jadvaldagidek (KTR kun rejasi, ma'ruza boshlanishi; KTR ham soat ham yo'q — amaliy 6 soat).
-     * Qaytaradi: [birlik kaliti (rk|fan|practice) => ['text' => sabab, 'items' => [...]]]; item: type (teacher|room), who,
-     * with (guruh · fan), from/to (sanalar), time, group, subject.
+     * Qaytaradi: [birlik kaliti (rk|fan|practice) => ['text' => sabab, 'items' => [...], 'level' => red|yellow|null]]; item: type
+     * (teacher|room), who, with (guruh · fan), from/to (sanalar), time, group, subject va tuzilgan maydonlar: kind (teacher_busy |
+     * room_capacity | room_busy), teacher_id (band o'qituvchi), card_teacher_id (shu birlik darsining o'qituvchisi), room (kod),
+     * groups (to'qnashgan guruhchalar), lecture / lecture_id (oqim ma'ruzasi — guruhcha kartalarida takrorlanmasin), dates_from /
+     * dates_to (kelgusi sanalar — bugundan), past (hammasi o'tgan), detail (bir qator: kim, qachon, nima qilish kerak).
+     * $futureOnly — faqat kelgusi to'qnashuvlar (o'tganlari hisobga olinmaydi: hisoblagich, qizil belgi, hisobotlar).
      */
-    private function cycleConflicts(TimetableBoard $board, ?array $units = null, ?array $calendar = null): array
+    private function cycleConflicts(TimetableBoard $board, ?array $units = null, ?array $calendar = null, bool $futureOnly = false): array
     {
         if ($units === null) {
             [$units, $calendar] = $this->cycleInternalUnits($board);
@@ -6277,9 +6291,13 @@ class TimetableController extends Controller
 
         // Juftlik bo'yicha: birlik => "tur|kim|boshqa birlik" => [sanalar, vaqt, boshqa birliklar].
         $hits = [];
-        $add = function (int $ui, string $type, string $who, array $others, string $date, string $time, string $extra = '') use (&$hits) {
-            $k = $type . '|' . $who . '|' . implode(',', $others);
-            $hits[$ui][$k] ??= ['type' => $type, 'who' => $who, 'others' => $others, 'dates' => [], 'time' => $time, 'extra' => $extra];
+        $add = function (int $ui, string $type, string $who, array $others, string $date, string $time, string $extra = '', array $e = [], ?string $kind = null) use (&$hits) {
+            $lecture = isset($e['load_key']) && str_starts_with((string) $e['load_key'], 'l');
+            $k = $type . '|' . $who . '|' . implode(',', $others) . '|' . ($lecture ? 'L' . $e['lesson'] : 'P');
+            $hits[$ui][$k] ??= ['type' => $type, 'who' => $who, 'others' => $others, 'dates' => [], 'time' => $time, 'extra' => $extra,
+                'kind' => $kind ?? ($type === 'teacher' ? 'teacher_busy' : 'room_busy'), 'teacher_id' => $type === 'teacher' ? ($e['teacher_id'] ?? null) : null,
+                'card_teacher_id' => $e['teacher_id'] ?? null, 'room' => $type === 'room' ? ($e['room'] ?? null) : null,
+                'lecture' => $lecture, 'lecture_id' => $lecture ? (int) $e['lesson'] : null];
             $hits[$ui][$k]['dates'][$date] = true;
         };
         foreach ($occ as $key => $list) {
@@ -6291,7 +6309,7 @@ class TimetableController extends Controller
                     $others = array_values(array_unique(array_map(fn ($o) => $o['unit'],
                         array_filter($over, fn ($o) => $o['lesson'] !== $e['lesson'] && $o['unit'] !== $e['unit']))));
                     if ($others) {
-                        $add($e['unit'], 'teacher', (string) ($e['teacher'] ?: $id), $others, $date, $time);
+                        $add($e['unit'], 'teacher', (string) ($e['teacher'] ?: $id), $others, $date, $time, '', $e);
                     }
                     continue;
                 }
@@ -6313,12 +6331,14 @@ class TimetableController extends Controller
                 }
                 if ($worst) {
                     $add($e['unit'], 'room', (string) $e['room_name'], array_values(array_diff($worst[1], [$e['unit']])), $date, $time,
-                        $worst[2] ? ' (' . $vol . ' o\'rin, ' . $worst[0] . ' talaba)' : '');
+                        $worst[2] ? ' (' . $vol . ' o\'rin, ' . $worst[0] . ' talaba)' : '', $e, $worst[2] ? 'room_capacity' : 'room_busy');
                 }
             }
         }
 
         $fmt = fn (string $d) => Carbon::parse($d)->format('d.m');
+        $range = fn (array $ds) => $fmt($ds[0]) . (count($ds) > 1 ? '–' . $fmt(end($ds)) : '');
+        $today = self::proposalToday();
         $out = [];
         foreach ($hits as $ui => $byKey) {
             $u = $units[$ui];
@@ -6327,19 +6347,70 @@ class TimetableController extends Controller
             foreach ($byKey as $h) {
                 $ds = array_keys($h['dates']);
                 sort($ds);
-                $range = $fmt($ds[0]) . (count($ds) > 1 ? '–' . $fmt(end($ds)) : '');
+                // Qisman o'tgan — faqat kelgusi sanalar; butunlay o'tgan — "o'tgan" (kulrang, hisoblanmaydi).
+                $future = array_values(array_filter($ds, fn ($d) => $d >= $today));
+                $past = !$future;
+                $shown = $future ?: $ds;
                 $with = implode('; ', array_map(fn ($o) => $units[$o]['group'] . ', ' . $units[$o]['subject'], $h['others']));
-                $texts[] = $h['type'] === 'teacher'
-                    ? "O'qituvchi {$h['who']} band: {$with}, {$range}"
-                    : "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range}";
-                $items[] = ['type' => $h['type'], 'who' => $h['who'], 'with' => $with, 'from' => $ds[0], 'to' => end($ds), 'dates' => $range,
+                $line = $h['type'] === 'teacher'
+                    ? "O'qituvchi {$h['who']} band: {$with}, {$range($shown)}"
+                    : "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range($shown)}";
+                $todo = match ($h['kind']) {
+                    'teacher_busy' => $h['lecture'] ? "ma'ruza o'qituvchisini yoki vaqtini o'zgartiring" : "boshqa o'qituvchi biriktiring yoki smenani almashtiring",
+                    'room_capacity' => $h['lecture'] ? "kattaroq ma'ruza zali tanlang" : 'kattaroq xona tanlang yoki guruhchani boshqa xonaga',
+                    default => 'boshqa xona tanlang yoki smenani almashtiring',
+                };
+                if (!$past) {
+                    $texts[] = $line;
+                }
+                if ($futureOnly && $past) {
+                    continue;
+                }
+                $items[] = ['type' => $h['type'], 'who' => $h['who'], 'with' => $with, 'from' => $ds[0], 'to' => end($ds), 'dates' => $range($shown),
                     'time' => $h['time'], 'group' => $u['group'], 'subject' => $u['subject'], 'faculty' => $u['faculty'],
-                    'specialty' => $u['specialty'], 'course' => (int) $u['course']];
+                    'specialty' => $u['specialty'], 'course' => (int) $u['course'],
+                    'kind' => $h['kind'], 'teacher_id' => $h['teacher_id'] ? (int) $h['teacher_id'] : null,
+                    'card_teacher_id' => $h['card_teacher_id'] ? (int) $h['card_teacher_id'] : null, 'room' => $h['room'],
+                    'groups' => array_values(array_unique(array_map(fn ($o) => (string) $units[$o]['group'], $h['others']))),
+                    'lecture' => $h['lecture'], 'lecture_id' => $h['lecture_id'],
+                    'dates_from' => $future[0] ?? null, 'dates_to' => $future ? end($future) : null, 'past' => $past,
+                    'line' => $line, 'todo' => $todo, 'detail' => $line . ($past ? " (o'tgan)" : ' — ' . $todo)];
             }
-            $out[$u['key']] = ['text' => implode('; ', $texts), 'items' => $items];
+            if (!$items) {
+                continue;
+            }
+            $out[$u['key']] = ['text' => implode('; ', $texts), 'items' => $items, 'level' => self::conflictLevel($items)];
         }
 
         return $out;
+    }
+
+    /**
+     * To'qnashuv rangi (faqat kelgusilari): qizil — o'qituvchi yoki guruh bir vaqtda ikki joyda; sariq — faqat xona (sig'im / band);
+     * kelgusi yo'q — null.
+     */
+    public static function conflictLevel(array $items): ?string
+    {
+        $live = array_filter($items, fn ($i) => empty($i['past']));
+        if (!$live) {
+            return null;
+        }
+
+        return array_filter($live, fn ($i) => in_array($i['kind'] ?? '', ['teacher_busy', 'group_busy'], true)) ? 'red' : 'yellow';
+    }
+
+    /**
+     * Ko'rish qamrovi bo'yicha to'qnashuvlar: "Faqat meniki" (o'qituvchi) — faqat o'zi band bo'lgan holatlar va o'z amaliy darsi
+     * xonasi (ma'ruza zali sig'imi, boshqa o'qituvchilar bandligi chiqmaydi); boshqa qamrovlar — hammasi (bloklar o'zi qamrovda).
+     */
+    private function scopedConflictItems(array $items, ?int $mineTeacherId): array
+    {
+        if ($mineTeacherId === null) {
+            return array_values($items);
+        }
+
+        return array_values(array_filter($items, fn ($i) => ($i['type'] === 'teacher' && (int) ($i['teacher_id'] ?? 0) === $mineTeacherId)
+            || ($i['type'] === 'room' && empty($i['lecture']) && (int) ($i['card_teacher_id'] ?? 0) === $mineTeacherId)));
     }
 
     /** Karta sikl fanigami (bo'lakli fan — asosiy nomi bo'yicha ham); $cycleKeys — cycleSubjectKeys. */
@@ -6532,9 +6603,23 @@ class TimetableController extends Controller
                 foreach ($narrow as $m) {
                     $m->setRelation('board', $board);
                 }
-                $errs = $this->findWeekConflicts($models[$id], $w, $d, $p, $sh, ['cards' => $narrow, 'ov' => $ov]);
+                // findWeekConflicts bilan bir xil (weekClashes), qo'shimcha — tuzilgan ro'yxat: har to'qnashuv turi bitta qator.
+                $clashes = $this->weekClashes($models[$id], $w, $d, $p, $sh, ['cards' => $narrow, 'ov' => $ov], null);
+                $errs = [];
+                $items = [];
+                foreach ($clashes as $x) {
+                    foreach ($x['errors'] as $m) {
+                        $errs[$m] = true;
+                        $kind = str_starts_with($m, "O'qituvchi band") ? 'teacher_busy' : (str_starts_with($m, 'Auditoriya band') ? 'room_busy' : 'group_busy');
+                        $items[] = ['kind' => $kind, 'type' => $kind === 'teacher_busy' ? 'teacher' : ($kind === 'room_busy' ? 'room' : 'group'),
+                            'teacher_id' => $kind === 'teacher_busy' ? (int) $models[$id]->teacher_id : null,
+                            'room' => $kind === 'room_busy' ? ($x['room'] ?: null) : null, 'groups' => array_values($x['card']->occupiedGroups()),
+                            'with_card' => (int) $x['card']->id, 'dates_from' => $date, 'dates_to' => $date, 'past' => $date < self::proposalToday(),
+                            'detail' => $m];
+                    }
+                }
                 if ($errs) {
-                    $out[$id][$w] = ['text' => implode('; ', $errs), 'date' => $date, 'day' => $d, 'pair' => $p];
+                    $out[$id][$w] = ['text' => implode('; ', array_keys($errs)), 'date' => $date, 'day' => $d, 'pair' => $p, 'items' => $items];
                 }
             }
         }
@@ -6881,11 +6966,13 @@ class TimetableController extends Controller
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope ?? []);
         $inScope = fn ($fac, $spec, $course) => ($facSet === null || isset($facSet[(string) ($fac ?? '')]))
             && ($specSet === null || isset($specSet[(string) $spec])) && ($courseSet === null || isset($courseSet[(int) $course]));
-        $all = $this->weeklyConflicts($board);
+        // Faqat kelgusi to'qnashuvlar (o'tganlari hisoblanmaydi).
+        $today = self::proposalToday();
+        $all = array_filter(array_map(fn ($weeks) => array_filter($weeks, fn ($x) => $x['date'] >= $today), $this->weeklyConflicts($board)));
         $rows = $all ? $this->cardRows($board, fn ($q) => $q->whereIn('id', array_keys($all))) : [];
         $weekly = array_filter($all, fn ($weeks, $id) => isset($rows[$id]) && $inScope($rows[$id]->faculty_name, $rows[$id]->specialty_name, $rows[$id]->course),
             ARRAY_FILTER_USE_BOTH);
-        $cycle = array_filter($this->cycleConflicts($board),
+        $cycle = array_filter($this->cycleConflicts($board, null, null, true),
             fn ($c) => $inScope($c['items'][0]['faculty'] ?? null, $c['items'][0]['specialty'] ?? '', $c['items'][0]['course'] ?? 0));
         $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
         $items = [];
@@ -8033,14 +8120,20 @@ class TimetableController extends Controller
      */
     public function boardConflicts(TimetableBoard $board)
     {
+        // weekly — kelgusi to'qnashuvlar matni (karta qizil); weekly_items — tuzilgan ro'yxat (o'tganlari ham — past: true, kulrang).
         $weekly = [];
+        $items = [];
+        $today = self::proposalToday();
         foreach ($this->weeklyConflicts($board) as $id => $weeks) {
             foreach ($weeks as $w => $x) {
-                $weekly[$id][$w] = $x['text'];
+                if ($x['date'] >= $today) {
+                    $weekly[$id][$w] = $x['text'];
+                }
+                $items[$id][$w] = $x['items'] ?? [];
             }
         }
 
-        return response()->json(['weekly' => (object) $weekly]);
+        return response()->json(['weekly' => (object) $weekly, 'weekly_items' => (object) $items]);
     }
 
     /** Joylanmagan kartalar ro'yxatini XLSX ga chiqaradi. */

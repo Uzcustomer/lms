@@ -362,6 +362,8 @@ it('joylanmagan kartalar Exceli sikl fanlarini ko\'rsatmaydi', function () {
 
 it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birinchi taklif bo\'sh xona; qo\'llangach to\'qnashuv va takliflar yo\'q', function () {
     $s = sugSetup();
+    // To'qnashuvlar hisobi — faqat kelgusi sanalar: 7-hafta oldinda bo'lsin.
+    test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
     foreach ([['R215', '215', 30], ['R216', '216', 30], ['R217', '217', 5]] as [$code, $name, $vol]) {
         \App\Models\Auditorium::create(['code' => $code, 'name' => $name, 'volume' => $vol, 'active' => true]);
     }

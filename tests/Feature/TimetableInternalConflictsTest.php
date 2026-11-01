@@ -11,6 +11,9 @@ use Spatie\Permission\Models\Role;
 
 require_once __DIR__ . '/../Support/TimetableLegacyOccupancy.php';
 
+// To'qnashuvlar faqat kelgusi sanalar bo'yicha hisoblanadi (o'tganlari — kulrang): sinov sanalari (2026-sentabr) oldinda bo'lsin.
+beforeEach(fn () => $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent')));
+
 // Har fixture oxirida: yengil unitBusy va haftalik to'qnashuvlar eski (butun doska, modellar) hisobi bilan aynan bir xil.
 afterEach(function () {
     foreach (TimetableBoard::all() as $board) {
@@ -382,4 +385,60 @@ it('sikl xonasi: sig\'im bir vaqtdagi eng yuqori yuklama bo\'yicha; "A + B" umum
     expect(icConflicts($s['board']))->toBe([]);
     $big->update(['volume' => 15]);
     expect(array_keys(icConflicts($s['board'])))->toBe(['davolash ishi|5|d23-01a|Klinik farmakologiya|practice', 'davolash ishi|5|d23-01b|Klinik farmakologiya|practice']);
+});
+
+it('to\'qnashuvlar: tuzilgan ro\'yxat (kind, teacher_id, groups, sanalar), o\'tgan va qisman o\'tgan sanalar, rang darajasi', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    $room = Auditorium::create(['code' => 'R305', 'name' => '305', 'volume' => 12, 'active' => true]);
+    // 05a va 05b: bitta o'qituvchi, 16–18.09 kesishadi (qizil); 05c va 05d: bitta xonada, sig'im yetmaydi (sariq).
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10],
+        'd22-05c' => [icTeacher('C'), $room, 10], 'd22-05d' => [icTeacher('D'), $room, 10]],
+        ['d22-05a' => 0, 'd22-05b' => 2, 'd22-05c' => 7, 'd22-05d' => 7]);
+    $c = icConflicts($s['board']);
+    $a = $c['davolash ishi|5|d22-05a|Klinik farmakologiya|practice'];
+    expect($a['level'])->toBe('red')
+        ->and($a['items'][0])->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $sharipov->id, 'card_teacher_id' => $sharipov->id,
+            'groups' => ['d22-05b'], 'lecture' => false, 'dates_from' => '2026-09-16', 'dates_to' => '2026-09-18', 'past' => false])
+        ->and($a['items'][0]['detail'])->toContain("O'qituvchi SHARIPOV K. SH. band: d22-05b")->toContain("boshqa o'qituvchi biriktiring");
+    $cc = $c['davolash ishi|5|d22-05c|Klinik farmakologiya|practice'];
+    expect($cc['level'])->toBe('yellow')->and($cc['items'][0])->toMatchArray(['kind' => 'room_capacity', 'room' => 'R305', 'groups' => ['d22-05d']]);
+
+    // Qisman o'tgan (bugun 17.09): faqat kelgusi sanalar — 17–18.09.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-17 09:00', 'Asia/Tashkent'));
+    $a = icConflicts($s['board'])['davolash ishi|5|d22-05a|Klinik farmakologiya|practice'];
+    expect($a['items'][0])->toMatchArray(['dates_from' => '2026-09-17', 'dates_to' => '2026-09-18', 'past' => false, 'dates' => '17.09–18.09'])
+        ->and($a['text'])->toContain('17.09–18.09');
+    // Butunlay o'tgan: belgi (matn, rang) yo'q — ro'yxatda "o'tgan"; kelgusilar hisobida (internalConflicts) — chiqmaydi.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-19 09:00', 'Asia/Tashkent'));
+    $a = icConflicts($s['board'])['davolash ishi|5|d22-05a|Klinik farmakologiya|practice'];
+    expect($a['text'])->toBe('')->and($a['level'])->toBeNull()->and($a['items'][0]['past'])->toBeTrue()
+        ->and($a['items'][0]['detail'])->toContain("(o'tgan)");
+    $all = app(TimetableController::class)->internalConflicts($s['board']);
+    expect(collect($all['items'])->pluck('group')->unique()->sort()->values()->all())->toBe(['d22-05c', 'd22-05d']);
+});
+
+it('to\'qnashuvlar: sikl rejasida bloklarda tuzilgan ro\'yxat; "Faqat meniki" — faqat o\'zi band bo\'lgan va o\'z xonasi', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.', 'oqituvchi');
+    $room = Auditorium::create(['code' => 'R305', 'name' => '305', 'volume' => 12, 'active' => true]);
+    $other = icTeacher('BOSHQA', 'oqituvchi');
+    // 05a: SHARIPOV, R305; 05b: SHARIPOV (o'qituvchi band); 05c: BOSHQA, R305 (05a bilan xona sig'imi).
+    $s = icSetup(['d22-05a' => [$sharipov, $room, 10], 'd22-05b' => [$sharipov, null, 10], 'd22-05c' => [$other, $room, 10]],
+        ['d22-05a' => 0, 'd22-05b' => 2, 'd22-05c' => 0]);
+    $admin = icTeacher('ADMIN', 'admin');
+    $plan = fn ($who, string $role, array $extra = []) => test()->withoutVite()->actingAs($who, 'teacher')->withSession(['active_role' => $role])
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'] + $extra)->assertOk()->json();
+    $block = fn (array $p, string $g) => collect($p['rows'])->firstWhere('group', $g)['blocks'][0];
+    $a = $block($plan($admin, 'admin'), 'd22-05a');
+    expect(collect($a['conflicts'])->pluck('kind')->sort()->values()->all())->toBe(['room_capacity', 'teacher_busy'])
+        ->and($a['conflict_level'])->toBe('red');
+    // BOSHQA "Faqat meniki": 05c — faqat o'z xonasi sig'imi (SHARIPOV bandligi — boshqa o'qituvchi, ko'rinmaydi).
+    $c = $block($plan($other, 'oqituvchi', ['mine' => 1]), 'd22-05c');
+    expect(collect($c['conflicts'])->pluck('kind')->all())->toBe(['room_capacity'])->and($c['conflict_level'])->toBe('yellow');
+    // SHARIPOV "Faqat meniki": 05a — o'zi band + o'z xonasi; 05b — o'zi band.
+    $p = $plan($sharipov, 'oqituvchi', ['mine' => 1]);
+    expect(collect($block($p, 'd22-05a')['conflicts'])->pluck('kind')->sort()->values()->all())->toBe(['room_capacity', 'teacher_busy'])
+        ->and(collect($block($p, 'd22-05b')['conflicts'])->pluck('kind')->all())->toBe(['teacher_busy']);
+    // Panel kartasi ham shu (qamrovli) ro'yxat bilan.
+    $card = collect($plan($other, 'oqituvchi', ['mine' => 1])['cycle_cards'])->firstWhere('group', 'd22-05c');
+    expect($card['conflict_level'])->toBe('yellow')->and($card['conflict'])->toContain("Xona 305 sig'imidan ko'p");
 });

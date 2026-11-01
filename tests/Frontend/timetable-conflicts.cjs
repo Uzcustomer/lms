@@ -15,12 +15,13 @@ const plain = x => JSON.parse(JSON.stringify(x));
 // Ichki jadvaldagi to'qnashuv: karta joyida qoladi, lekin "Joylashgan" hisobiga kirmaydi; sikl bloki — qizil belgi bilan;
 // biriktirishda band o'qituvchi/xona — ogohlantirish va "Baribir biriktirish".
 
-// 0) Sikl kalendari: to'qnashuvli blok qizil hoshiyali, nomi oldida "!" belgisi (sababi title'da); panelda sababi bilan.
-assert.match(source, /'<td class="cyc-cell cyc-block is-mark' \+ \(block\.conflict \? ' is-conflict' : ''\)/);
-assert.match(source, /\(block\.conflict \? '<span class="cyc-conflict-badge" title="To\\'qnashuv: ' \+ esc\(block\.conflict\) \+ '">!<\/span>' : ''\)/);
+// 0) Sikl kalendari: to'qnashuvli blok rangli hoshiyali (qizil — o'qituvchi/guruh, sariq — xona, kulrang — o'tgan), nomi oldida qisqa belgi
+// (tafsilot — bosilganda; timetable-conflict-badges.cjs); panelda qisqa belgi bilan.
+assert.match(source, /'<td class="cyc-cell cyc-block is-mark' \+ cfBlockClass\(block\.key, block\.conflicts, cfOwners\)/);
+assert.match(source, /cfBadgeHtml\(block\.key, block\.conflicts, cfOwners\) \+/);
 assert.match(source, /#cycleGrid \.cyc-block\.is-conflict \{ box-shadow: inset 0 0 0 3px #dc2626; \}/);
 assert.match(source, /const unplaced = cycleCards\.filter\(card => \(!card\.placed \|\| card\.conflict\) &&/);
-assert.match(source, /\(card\.conflict \? '<span class="cycle-pn-conflict">⚠ To\\'qnashuv: ' \+ esc\(card\.conflict\) \+ '<\/span>' : ''\)/);
+assert.match(source, /\(card\.conflict \? '<span class="cycle-pn-conflict lvl-' \+ \(lvl \|\| 'red'\) \+ '">⚠ ' \+ esc\(cfBadgeText\(card\.conflicts\) \|\| card\.conflict\) \+ '<\/span>' : ''\)/);
 
 const els = {};
 const el = id => els[id] || (els[id] = { id, innerHTML: '', textContent: '', value: '', options: [], dataset: {},

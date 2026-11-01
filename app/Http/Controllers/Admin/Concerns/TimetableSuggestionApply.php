@@ -205,22 +205,38 @@ trait TimetableSuggestionApply
         return $out;
     }
 
-    /** Taklif tegadigan darslar sanalari (eski — hozirgi joyi, yangi — ko'chiriladigan kun); bugun yoki o'tgan bo'lsa — sababi. */
+    /**
+     * Taklif tegadigan darslar sanalari: har (karta, hafta) uchun boshidagi joyi va barcha amallardan keyingi yakuniy joyi (oraliq
+     * "reset" — blokni qayta qo'yishdan oldingi bo'shatish — haqiqiy joy emas). Bugun yoki o'tgan bo'lsa — sababi.
+     */
     private function suggestionExpiredWith(TimetableBoard $board, array $acts, \Closure $cardOf, \Closure $ovOf): ?string
     {
         $today = self::proposalToday();
+        $orig = [];
+        $final = [];
         foreach ($acts as $a) {
             $c = $cardOf((int) ($a['card_id'] ?? 0));
             $w = (int) ($a['week'] ?? 0);
             if (!$c || $w < 1) {
                 continue;
             }
+            $k = $c->id . '|' . $w;
+            if (!isset($orig[$k])) {
+                $ov = $ovOf((int) $c->id, $w);
+                $cur = $ov ? ($ov->cancelled || !$ov->day || !$ov->pair ? 0 : (int) $ov->day) : ($c->day && $c->pair ? (int) $c->day : 0);
+                $orig[$k] = [$c, $w, $cur];
+                $final[$k] = $cur;
+            }
+            $final[$k] = match ($a['op'] ?? '') {
+                'move' => (int) ($a['day'] ?? 0),
+                'reset' => $c->day && $c->pair ? (int) $c->day : 0,
+                'cancel' => 0,
+                default => $final[$k],
+            };
+        }
+        foreach ($orig as $k => [$c, $w, $cur]) {
             $monday = $this->weekStartDate($board, $c, $w);
-            $ov = $ovOf((int) $c->id, $w);
-            $cur = $ov ? ($ov->cancelled || !$ov->day || !$ov->pair ? 0 : (int) $ov->day) : ($c->day && $c->pair ? (int) $c->day : 0);
-            $days = array_filter([$cur, ($a['op'] ?? '') === 'move' ? (int) ($a['day'] ?? 0) : 0,
-                ($a['op'] ?? '') === 'reset' && $c->day && $c->pair ? (int) $c->day : 0]);
-            foreach ($days as $d) {
+            foreach (array_unique(array_filter([$cur, $final[$k]])) as $d) {
                 $date = $monday->copy()->addDays($d - 1)->toDateString();
                 if ($date <= $today) {
                     return "Bugungi yoki o'tgan kunga tegadi (" . Carbon::parse($date)->format('d.m.Y') . ') — taklifni qo‘llab bo‘lmaydi.';

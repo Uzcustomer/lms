@@ -705,3 +705,31 @@ it('takliflar: yangi joy dastur to\'ridan tashqarida bo\'lsa — qo\'llanmaydi; 
         ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan'));
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(1);
 });
+
+it('takliflar: sana — boshidagi va yakuniy joy bo\'yicha; blokni qayta qo\'yishdagi oraliq "reset" (o\'tgan shablon kuni) to\'sqinlik qilmaydi', function () {
+    $s = sapSetup();
+    // Blok (2 karta) shablonda 1-kunda, 3-haftada 4-kunga ko'chirilgan; bugun — 3-haftaning 2-kuni (shablon kuni o'tgan).
+    $mk = fn (int $p) => sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'kafedra_name' => 'Gigiyena kafedrasi', 'day' => 1, 'pair' => $p]);
+    [$b1, $b2] = [$mk(1), $mk(3)];
+    TimetableCardOverride::create(['card_id' => $b1->id, 'week' => 3, 'day' => 4, 'pair' => 1]);
+    TimetableCardOverride::create(['card_id' => $b2->id, 'week' => 3, 'day' => 4, 'pair' => 3]);
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, 2) . ' 08:00', 'Asia/Tashkent'));
+    $acts = fn (int $d) => [['op' => 'reset', 'card_id' => $b1->id, 'week' => 3], ['op' => 'reset', 'card_id' => $b2->id, 'week' => 3],
+        ['op' => 'move', 'card_id' => $b1->id, 'week' => 3, 'day' => $d, 'pair' => 1], ['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => $d, 'pair' => 3]];
+    $url = route('admin.timetable.week-suggestions.apply', $s['board']);
+    // Yakuniy joy — o'tgan kun (1-kun): rad.
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b1->id, 'actions' => $acts(1)])
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+    // 4-kundan 5-kunga (ikkalasi kelgusi): o'tadi.
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b1->id, 'actions' => $acts(5)])->assertOk();
+    expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
+        ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(5);
+    // Faqat "reset" (yakuniy joy — o'tgan shablon kuni) — rad; bugungi darsni (boshidagi joyi bugun) kelgusi kunga ko'chirish — rad.
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b1->id, 'actions' => [['op' => 'reset', 'card_id' => $b1->id, 'week' => 3]]])
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+    TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->update(['day' => 2]);
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b2->id, 'actions' => [['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => 6, 'pair' => 3]]])
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+    expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
+        ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(2);
+});

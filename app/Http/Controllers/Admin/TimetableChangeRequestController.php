@@ -42,7 +42,9 @@ class TimetableChangeRequestController extends Controller
                 if ($role === 'kafedra_mudiri' && Schema::hasColumn('timetable_change_requests', 'approval_stage')) {
                     $deptId = (int) ($actor?->head_department_hemis_id ?: ($actor?->department_hemis_id ?? 0));
                     if ($deptId > 0) {
-                        $q->orWhere(fn ($incoming) => $incoming->whereIn('requester_role', TimetableChangeApproval::TEACHER_PROPOSAL_ROLES)->where('department_hemis_id', $deptId));
+                        // Kafedra — bir xil nomli yozuvlari bilan (asosiy va o'rindoshlik).
+                        $ids = app(\App\Services\Timetable\KafedraResolver::class)->group($deptId);
+                        $q->orWhere(fn ($incoming) => $incoming->whereIn('requester_role', TimetableChangeApproval::TEACHER_PROPOSAL_ROLES)->whereIn('department_hemis_id', $ids));
                     }
                 }
                 // Dars o'qituvchisi: boshqa kishi (fan mas'uli, Takliflar) uning darsiga so'rov yuborgan bo'lsa — ko'radi (tasdiqlamaydi).
@@ -248,7 +250,7 @@ class TimetableChangeRequestController extends Controller
 
             return $this->submitProposal($svc, $draft, $department, $actor, $notice, $reason);
         }
-        $deptId = (int) ($actor->head_department_hemis_id ?: $actor->department_hemis_id);
+        $deptId = app(\App\Services\Timetable\KafedraResolver::class)->teacherDepartment($actor);
         $draft['approval_stage'] = 'registrar';
         $draft['department_hemis_id'] = $deptId ?: null;
         $draft['kafedra_name'] = Department::where('department_hemis_id', $deptId)->value('name') ?: $draft['kafedra_name'];
@@ -262,14 +264,19 @@ class TimetableChangeRequestController extends Controller
             'message' => "Taklif registrator ofisiga yuborildi. Registrator tasdiqlagach jadval o'zgaradi."]);
     }
 
-    /** Fan kafedrasi (aniq bitta). */
+    /**
+     * Fan kafedrasi (aniq bitta) — id bo'yicha: bir xil nomli yozuvlar (asosiy va o'rindoshlik) bitta kafedra, natija — asosiy
+     * yozuv (mudiri biriktirilgani). Turli kafedralar mos kelsa — aniq emas (422).
+     */
     private function proposalDepartment(callable $matches): Department
     {
-        $departments = Department::where('structure_type_code', 12)->where('active', true)->get()
-            ->filter(fn ($dept) => $matches((int) $dept->department_hemis_id));
-        abort_unless($departments->count() === 1, 422, "Fan kafedrasi aniq topilmadi. Registrator ofisiga murojaat qiling.");
+        $kaf = app(\App\Services\Timetable\KafedraResolver::class);
+        $primaries = Department::where('structure_type_code', 12)->where('active', true)->get()
+            ->filter(fn ($dept) => $matches((int) $dept->department_hemis_id))
+            ->map(fn ($dept) => $kaf->primary((int) $dept->department_hemis_id))->unique()->values();
+        abort_unless($primaries->count() === 1, 422, "Fan kafedrasi aniq topilmadi. Registrator ofisiga murojaat qiling.");
 
-        return $departments->first();
+        return Department::where('department_hemis_id', $primaries->first())->firstOrFail();
     }
 
     private function proposalRequest(string $routeName, array $payload, string $param, $model): Request

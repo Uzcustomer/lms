@@ -1094,3 +1094,35 @@ it('sikl kun rejasi: amaliy o\'z soatida bo\'lsa kun boshini faqat ma\'ruza chek
     // Amaliy ma'ruzadan keyin (o'z soati yo'q) — ikkalasi kun ichida sig'ishi kerak: 12 - 6 + 1 = 7.
     expect($plan(8, []))->toMatchArray(['start' => 7, 'ps' => 9]);
 });
+
+it('kafedra id bo\'yicha: bir xil nomli asosiy va o\'rindoshlik yozuvlari bitta kafedra — so\'rov asosiyga (mudir bor), mudir ko\'radi va tasdiqlaydi', function () {
+    $s = fmSetup();
+    fmResponsible($s['fm'], 'Gigiyena');
+    // O'rindoshlik yozuvi — o'sha nom bilan (mudiri yo'q), id kichikroq ham bo'lishi mumkin.
+    DB::table('departments')->insert(['department_hemis_id' => 400, 'name' => 'Gigiyena  kafedrasi', 'code' => 'G1o', 'structure_type_code' => 12,
+        'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    $kaf = app(\App\Services\Timetable\KafedraResolver::class);
+    expect($kaf->group(501))->toBe([400, 501])->and($kaf->primary(400))->toBe(501)->and($kaf->same(400, 501))->toBeTrue()
+        ->and($kaf->heads(400)->pluck('id')->all())->toBe([$s['head']->id]);
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $s['body'])->assertOk();
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $s['body'] + ['reason' => 'Klinika'])
+        ->assertOk()->assertJsonPath('pending_approval', true);
+    $req = TimetableChangeRequest::sole();
+    expect($req->department_hemis_id)->toBe(501)->and($req->approval_stage)->toBe('department')
+        ->and(TeacherNotification::where('teacher_id', $s['head']->id)->exists())->toBeTrue();
+    // Mudir o'rindoshlik yozuviga biriktirilgan bo'lsa ham — o'sha kafedra: ko'radi va tasdiqlaydi; jadval o'zgaradi.
+    $s['head']->update(['department_hemis_id' => 400]);
+    $row = asRole($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.change-requests.index', $s['board']) . '?status=pending')->json('requests.0');
+    expect($row['can_review'])->toBeTrue();
+    asRole($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    asRole($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($req->fresh()->status)->toBe('approved')->and($s['placement']->fresh()->lecture_slots['ps_g'])->toBe(['g5-01a' => [1 => 7]]);
+    // Boshqa nomdagi kafedra ham mos kelsa — aniq emas (422).
+    DB::table('departments')->insert(['department_hemis_id' => 777, 'name' => 'Boshqa kafedra', 'code' => 'B1', 'structure_type_code' => 12,
+        'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('curriculum_subjects')->insert(['curriculum_subject_hemis_id' => 55555, 'curricula_hemis_id' => 8001, 'subject_id' => 2, 'subject_name' => 'X',
+        'subject_code' => 'X1', 'semester_code' => '19', 'semester_name' => '9', 'at_semester' => 1, 'department_id' => 777, 'department_name' => 'Gigiyena kafedrasi']);
+    $body = array_merge($s['body'], ['start_hour' => 3]);
+    asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $body + ['reason' => 'x'])
+        ->assertUnprocessable()->assertJsonPath('message', 'Fan kafedrasi aniq topilmadi. Registrator ofisiga murojaat qiling.');
+});

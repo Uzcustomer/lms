@@ -98,7 +98,7 @@ class TimetableChangeApproval
             $departmentId = (int) ($actor?->head_department_hemis_id ?: ($actor?->department_hemis_id ?? 0));
             return $actor instanceof Teacher && $role === 'kafedra_mudiri'
                 && $actor->hasRole('kafedra_mudiri') && $departmentId > 0
-                && $departmentId === (int) $req->department_hemis_id;
+                && app(KafedraResolver::class)->same($departmentId, (int) $req->department_hemis_id);
         }
 
         return $req->approval_stage === 'registrar' && in_array($role, self::APPROVER_ROLES, true)
@@ -240,10 +240,10 @@ class TimetableChangeApproval
         };
     }
 
+    /** Kafedra mudirlari — kafedra id si bo'yicha (bir xil nomli asosiy va o'rindoshlik yozuvlari bitta kafedra). */
     public function departmentHeads(int $departmentId)
     {
-        return $this->teachersWithRoles(['kafedra_mudiri'])->filter(fn (Teacher $t) =>
-            (int) ($t->head_department_hemis_id ?: $t->department_hemis_id) === $departmentId);
+        return app(KafedraResolver::class)->heads($departmentId);
     }
 
     private function notifyDepartmentHeads(TimetableChangeRequest $req): void
@@ -595,7 +595,7 @@ class TimetableChangeApproval
             // Bajaruvchi — tasdiqlagan kafedra mudiri (o'qituvchining o'zi mudir bo'lsa — o'zi, mudir sifatida).
             $head = $headSkipped ? $requester : Teacher::find($req->head_reviewer_id);
             if (!$requester instanceof Teacher || !$head instanceof Teacher || !$head->hasRole('kafedra_mudiri')
-                || (int) ($head->head_department_hemis_id ?: $head->department_hemis_id) !== (int) $req->department_hemis_id
+                || !app(KafedraResolver::class)->same((int) ($head->head_department_hemis_id ?: $head->department_hemis_id), (int) $req->department_hemis_id)
                 || !app(TimetableController::class)->teacherProposalDepartmentMatches($req->route_name, (array) $req->params, (array) $req->payload, (int) $req->department_hemis_id)) {
                 return $this->finish($req, $approver, false, "Dars biriktiruvi yoki kafedra vakolati o'zgargan. Yangi taklif yuboring.");
             }

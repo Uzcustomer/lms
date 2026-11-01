@@ -9063,7 +9063,8 @@ class TimetableController extends Controller
     }
 
     /** Pending internal moves reserve the same group, teacher and room until released. */
-    private function pendingTimeConflicts(TimetableCard $card, array $data, array $ignoreIds): array
+    /** $only — faqat shu bron turlari ('teacher', 'group', 'room', 'same'); null — hammasi. */
+    private function pendingTimeConflicts(TimetableCard $card, array $data, array $ignoreIds, ?array $only = null): array
     {
         if (!\App\Services\Timetable\TimetableChangeApproval::tableReady()) return [];
         $pending = \App\Models\TimetableChangeRequest::where('board_id', $card->board_id)
@@ -9079,22 +9080,42 @@ class TimetableController extends Controller
         $holds = [];
         foreach ($pending as $req) {
             if ($req->route_name === self::SUGGESTION_ROUTE) {
-                foreach ((array) (($req->payload ?? [])['actions'] ?? []) as $a) {
+                $acts = (array) (($req->payload ?? [])['actions'] ?? []);
+                // O'qituvchi almashtirish (butun semestr): bronda yangi o'qituvchi; shu haftada ko'chmaydigan kartasi — joriy joyida
+                // (faqat o'qituvchi broni).
+                $subst = [];
+                $moved = [];
+                foreach ($acts as $a) {
+                    if (($a['op'] ?? '') === 'teacher') {
+                        $subst[(int) ($a['card_id'] ?? 0)] = (int) ($a['teacher_id'] ?? 0);
+                    }
+                }
+                foreach ($acts as $a) {
                     if (($a['op'] ?? '') === 'move' && (int) ($a['week'] ?? 0) === $week) {
+                        $moved[(int) ($a['card_id'] ?? 0)] = true;
                         $holds[] = [$req, (int) ($a['card_id'] ?? 0), ['day' => $a['day'] ?? null, 'pair' => $a['pair'] ?? null, 'week' => $week, 'action' => 'move',
-                            'auditorium_code' => $a['auditorium_code'] ?? null]];
+                            'auditorium_code' => $a['auditorium_code'] ?? null], $subst[(int) ($a['card_id'] ?? 0)] ?? null, null];
+                    }
+                }
+                foreach ($subst as $cid => $tid) {
+                    $sc = isset($moved[$cid]) ? null : TimetableCard::find($cid);
+                    if ($sc && ($pl = $this->suggestionPlace($sc, $week))) {
+                        $holds[] = [$req, $cid, ['day' => $pl[0], 'pair' => $pl[1], 'week' => $week, 'action' => 'move'], $tid, ['teacher']];
                     }
                 }
             } else {
-                $holds[] = [$req, (int) ($req->params['card'] ?? 0), $req->payload ?? []];
+                $holds[] = [$req, (int) ($req->params['card'] ?? 0), $req->payload ?? [], null, null];
             }
         }
-        foreach ($holds as [$req, $otherId, $p]) {
+        foreach ($holds as [$req, $otherId, $p, $otherTeacher, $holdOnly]) {
             if (($p['layer'] ?? 'internal') === 'external' || empty($p['day']) || empty($p['pair'])) continue;
             if ($req->route_name !== 'admin.timetable.cards.place'
                 && (($p['action'] ?? '') !== 'move' || (int) ($p['week'] ?? 0) !== $week)) continue;
             $other = TimetableCard::find($otherId);
             if (!$other) continue;
+            if ($otherTeacher) {
+                $other->teacher_id = $otherTeacher;   // saqlanmaydi — faqat bron solishtiruvi uchun
+            }
             // Competing proposals for one lesson cannot both be pending for this week.
             $sameCard = (int) $other->id === (int) $card->id;
             if (!$sameCard && ((int) $p['day'] !== (int) $data['day']
@@ -9114,6 +9135,11 @@ class TimetableController extends Controller
                 ? (\App\Models\Auditorium::where('code', $p['auditorium_code'])->value('name') ?: $p['auditorium_code'])
                 : ($ov?->auditorium_name ?: $other->auditorium_name);
             if ($room && $room === $otherRoom && !$this->isSharedRoom($otherRoomName)) $resources[] = 'auditoriya: ' . $room;
+            // Faqat o'qituvchi broni (almashtirishning boshqa haftalari) — qolgan turlar hisobga olinmaydi.
+            $types = array_values(array_intersect((array) ($only ?? ['teacher', 'group', 'room', 'same']), (array) ($holdOnly ?? ['teacher', 'group', 'room', 'same'])));
+            $resources = array_values(array_filter($resources, fn ($x) => in_array(match (true) {
+                $x === 'shu dars' => 'same', $x === 'o‘qituvchi' => 'teacher', str_starts_with($x, 'guruh') => 'group', default => 'room',
+            }, $types, true)));
             if (!$resources) continue;
             $dayName = ($card->board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES)[(int) $p['day'] - 1] ?? $p['day'] . '-kun';
             $schedule = array_values(array_filter($card->board->bell_schedule ?: [], fn ($slot) => ($slot['type'] ?? 'pair') === 'pair'));

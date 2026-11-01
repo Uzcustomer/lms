@@ -795,3 +795,53 @@ it('takliflar: o\'qituvchi almashtirishda boshqa haftalarda faqat yangi o\'qituv
     expect($s['own']->fresh()->teacher_id)->toBe($n->id)
         ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(2);
 });
+
+it('takliflar: o\'qituvchi almashtirish bronida yangi o\'qituvchi — shu vaqtga va boshqa haftalarda boshqa dars uni band qila olmaydi', function () {
+    $s = sapSetup();
+    $n = sugTeacher('YANGI O.');
+    $mk = fn (string $g, array $x = []) => sugCard($s, $x + ['subject_name' => 'Fizika ' . $g, 'group_name' => $g, 'kafedra_name' => 'Gigiyena kafedrasi',
+        'teacher_id' => sugTeacher('T ' . $g)->id, 'auditorium_code' => 'X' . $g, 'auditorium_name' => 'X' . $g]);
+    $propose = fn (array $body) => sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body);
+    // a: o'qituvchi → N, 3-haftada 4-kun 1-katakka; shablonda 1-kun 5-katak (boshqa haftalarda ham N shu vaqtda).
+    $a = $mk('g-11', ['day' => 1, 'pair' => 5]);
+    $propose(['week' => 3, 'card_id' => $a->id, 'actions' => [['op' => 'teacher', 'card_id' => $a->id, 'teacher_id' => $n->id],
+        ['op' => 'move', 'card_id' => $a->id, 'week' => 3, 'day' => 4, 'pair' => 1]]])->assertOk();
+    // b (boshqa guruh, xona): o'qituvchisi N — shu vaqtga so'rov (kutilayotgan almashtirish N ni band qilgan).
+    $b = $mk('g-12', ['teacher_id' => $n->id]);
+    $propose(['week' => 3, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 3, 'day' => 4, 'pair' => 1]]])
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan') && str_contains($m, 'o‘qituvchi'));
+    // c: o'qituvchi → N va shu vaqtga — ham rad (kiruvchi tomonda ham yangi o'qituvchi).
+    $c = $mk('g-13');
+    $propose(['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'teacher', 'card_id' => $c->id, 'teacher_id' => $n->id],
+        ['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1]]])->assertUnprocessable();
+    // Boshqa hafta: 5-haftada a shablon joyida (1-kun 5-katak) N bilan — b ni 5-haftada shu vaqtga so'rab bo'lmaydi.
+    $propose(['week' => 5, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 5, 'day' => 1, 'pair' => 5]]])
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'o‘qituvchi'));
+    // Boshqa vaqt — mumkin.
+    $propose(['week' => 3, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 3, 'day' => 5, 'pair' => 1]]])->assertOk();
+    expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(2);
+});
+
+it('takliflar: almashtirishning boshqa haftalari — yangi o\'qituvchi bandligi bron bilan tekshiriladi, guruh/xona broni esa to\'smaydi', function () {
+    $s = sapSetup();
+    $n = sugTeacher('YANGI O.');
+    $mk = fn (string $g, array $x = []) => sugCard($s, $x + ['subject_name' => 'Fizika ' . $g, 'group_name' => $g, 'kafedra_name' => 'Gigiyena kafedrasi',
+        'teacher_id' => sugTeacher('T ' . $g)->id, 'auditorium_code' => 'X' . $g, 'auditorium_name' => 'X' . $g]);
+    $propose = fn (array $body) => sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body);
+    $subst = fn ($c) => ['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'teacher', 'card_id' => $c->id, 'teacher_id' => $n->id],
+        ['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1]]];
+    // b (o'qituvchisi N) 5-haftada 1-kun 5-katakka so'ragan (kutilmoqda).
+    $b = $mk('g-21', ['teacher_id' => $n->id]);
+    $propose(['week' => 5, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 5, 'day' => 1, 'pair' => 5]]])->assertOk();
+    // c shablonda 1-kun 5-katakda: o'qituvchini N ga almashtirish — 5-haftada N band (bron) — rad.
+    $c = $mk('g-22', ['day' => 1, 'pair' => 5]);
+    $propose($subst($c))->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan') && str_contains($m, 'o‘qituvchi'));
+    // d: shu guruhga (g-23) boshqa dars 6-haftada 2-kun 1-katakka bron qilgan; keyin d o'zi (admin) shu joyga qo'yildi.
+    $e = $mk('g-23');
+    $propose(['week' => 6, 'card_id' => $e->id, 'actions' => [['op' => 'move', 'card_id' => $e->id, 'week' => 6, 'day' => 2, 'pair' => 1]]])->assertOk();
+    $d = $mk('g-23', ['subject_name' => 'Kimyo g-23']);
+    TimetableCardOverride::create(['card_id' => $d->id, 'week' => 6, 'day' => 2, 'pair' => 1]);
+    // d ning o'qituvchisini N ga almashtirish: 6-haftadagi guruh broni (e) to'smaydi — faqat o'qituvchi tekshiriladi.
+    $propose(['week' => 3, 'card_id' => $d->id, 'actions' => [['op' => 'teacher', 'card_id' => $d->id, 'teacher_id' => $n->id],
+        ['op' => 'move', 'card_id' => $d->id, 'week' => 3, 'day' => 5, 'pair' => 3]]])->assertOk();
+});

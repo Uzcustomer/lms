@@ -440,11 +440,40 @@ trait TimetableSuggestionApply
         $acts = array_map(fn ($a) => $a + ['week' => (int) ($p['week'] ?? 0)], array_values((array) ($p['actions'] ?? [])));
         // So'rov (tasdiq zanjiri): boshqa kutilayotgan so'rovlar band qilgan guruh / o'qituvchi / xona vaqti ham (o'zi bundan mustasno).
         if ($ignorePending !== null) {
+            // O'qituvchi almashtirish: bron yangi o'qituvchi bilan; boshqa haftalar (butun semestr) — faqat o'qituvchi broni.
+            $subst = [];
+            $moved = [];
             foreach ($acts as $a) {
-                $c = ($a['op'] ?? '') === 'move' ? TimetableCard::where('board_id', $board->id)->find((int) $a['card_id']) : null;
+                if (($a['op'] ?? '') === 'teacher') {
+                    $subst[(int) $a['card_id']] = (int) ($a['teacher_id'] ?? 0);
+                }
+            }
+            $cardWith = function (int $id) use ($board, $subst) {
+                $c = TimetableCard::where('board_id', $board->id)->find($id);
+                if ($c && isset($subst[$id])) {
+                    $c->teacher_id = $subst[$id];   // saqlanmaydi
+                }
+
+                return $c;
+            };
+            $fail = fn ($c, array $errs) => throw ValidationException::withMessages(['actions' => '«' . $c->subject_name . '»: ' . implode(' · ', $errs)]);
+            foreach ($acts as $a) {
+                $c = ($a['op'] ?? '') === 'move' ? $cardWith((int) $a['card_id']) : null;
+                if ($c) {
+                    $moved[$c->id . '|' . (int) $a['week']] = true;
+                }
                 if ($c && ($errs = $this->pendingTimeConflicts($c, ['week' => (int) $a['week'], 'day' => (int) ($a['day'] ?? 0), 'pair' => (int) ($a['pair'] ?? 0),
                     'auditorium_code' => $a['auditorium_code'] ?? null], $ignorePending))) {
-                    throw ValidationException::withMessages(['actions' => '«' . $c->subject_name . '»: ' . implode(' · ', $errs)]);
+                    $fail($c, $errs);
+                }
+            }
+            foreach (array_keys($subst) as $cid) {
+                $c = $cardWith($cid);
+                for ($w = 1; $c && $w <= (int) $this->cardGrid($board, $c)['weeks']; $w++) {
+                    if (!isset($moved[$cid . '|' . $w]) && ($pl = $this->suggestionPlace($c, $w))
+                        && ($errs = $this->pendingTimeConflicts($c, ['week' => $w, 'day' => $pl[0], 'pair' => $pl[1]], $ignorePending, ['teacher']))) {
+                        $fail($c, $errs);
+                    }
                 }
             }
         }

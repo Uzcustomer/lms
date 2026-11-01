@@ -9090,11 +9090,17 @@ class TimetableController extends Controller
                         $subst[(int) ($a['card_id'] ?? 0)] = (int) ($a['teacher_id'] ?? 0);
                     }
                 }
-                foreach ($acts as $a) {
-                    if (($a['op'] ?? '') === 'move' && (int) ($a['week'] ?? 0) === $week) {
-                        $moved[(int) ($a['card_id'] ?? 0)] = true;
-                        $holds[] = [$req, (int) ($a['card_id'] ?? 0), ['day' => $a['day'] ?? null, 'pair' => $a['pair'] ?? null, 'week' => $week, 'action' => 'move',
-                            'auditorium_code' => $a['auditorium_code'] ?? null], $subst[(int) ($a['card_id'] ?? 0)] ?? null, null];
+                // Bron — har (karta, hafta) yakuniy joyi (ko'chirish yoki "reset" — shablon joyi), shu hafta uchun; bekor qilinadigani
+                // (yakuniy joyi yo'q) bron qilmaydi. Ikkala holda ham karta joriy joyida turmaydi.
+                foreach ($this->suggestionFinalPlaces($acts) as $k => $fp) {
+                    [$cid, $w] = array_map('intval', explode('|', $k));
+                    if ($w !== $week) {
+                        continue;
+                    }
+                    $moved[$cid] = true;
+                    if ($fp) {
+                        $holds[] = [$req, $cid, ['day' => $fp['day'], 'pair' => $fp['pair'], 'week' => $week, 'action' => 'move',
+                            'auditorium_code' => $fp['auditorium_code']], $subst[$cid] ?? null, null];
                     }
                 }
                 foreach ($subst as $cid => $tid) {

@@ -254,6 +254,37 @@ trait TimetableSuggestionApply
             fn (int $id, int $w) => TimetableCardOverride::where('card_id', $id)->where('week', $w)->first());
     }
 
+    /**
+     * Har (karta, hafta) uchun yakuniy joy: move — yangi kun / para / xona; reset — shablon joyi (shablonda joysiz — null);
+     * cancel — null. Oraliq "reset" (keyin move) hisobga olinmaydi. Bron va tekshiruv shu joy bo'yicha.
+     * @return array<string, ?array{card_id: int, week: int, day: int, pair: int, auditorium_code: ?string}>
+     */
+    public function suggestionFinalPlaces(array $acts, int $defaultWeek = 0): array
+    {
+        $out = [];
+        foreach ($acts as $a) {
+            $op = (string) ($a['op'] ?? '');
+            if (!in_array($op, ['move', 'reset', 'cancel'], true)) {
+                continue;
+            }
+            $cid = (int) ($a['card_id'] ?? 0);
+            $w = (int) ($a['week'] ?? $defaultWeek);
+            $k = $cid . '|' . $w;
+            if ($op === 'move') {
+                $out[$k] = ['card_id' => $cid, 'week' => $w, 'day' => (int) ($a['day'] ?? 0), 'pair' => (int) ($a['pair'] ?? 0),
+                    'auditorium_code' => $a['auditorium_code'] ?? null];
+            } elseif ($op === 'reset') {
+                $c = TimetableCard::find($cid);
+                $out[$k] = $c && $c->day && $c->pair ? ['card_id' => $cid, 'week' => $w, 'day' => (int) $c->day, 'pair' => (int) $c->pair,
+                    'auditorium_code' => null] : null;
+            } else {
+                $out[$k] = null;
+            }
+        }
+
+        return $out;
+    }
+
     /** Taklif tegadigan kartalar (amallar tartibida, takrorsiz). */
     public function suggestionCards(TimetableBoard $board, array $p)
     {
@@ -461,13 +492,12 @@ trait TimetableSuggestionApply
                 return $c;
             };
             $fail = fn ($c, array $errs) => throw ValidationException::withMessages(['actions' => '«' . $c->subject_name . '»: ' . implode(' · ', $errs)]);
-            foreach ($acts as $a) {
-                $c = ($a['op'] ?? '') === 'move' ? $cardWith((int) $a['card_id']) : null;
-                if ($c) {
-                    $moved[$c->id . '|' . (int) $a['week']] = true;
-                }
-                if ($c && ($errs = $this->pendingTimeConflicts($c, ['week' => (int) $a['week'], 'day' => (int) ($a['day'] ?? 0), 'pair' => (int) ($a['pair'] ?? 0),
-                    'auditorium_code' => $a['auditorium_code'] ?? null], $ignorePending))) {
+            // Har (karta, hafta) yakuniy joyi (ko'chirish yoki "reset" — shablon joyi) bo'yicha.
+            foreach ($this->suggestionFinalPlaces($acts) as $k => $fp) {
+                $moved[$k] = true;
+                $c = $fp ? $cardWith($fp['card_id']) : null;
+                if ($c && ($errs = $this->pendingTimeConflicts($c, ['week' => $fp['week'], 'day' => $fp['day'], 'pair' => $fp['pair'],
+                    'auditorium_code' => $fp['auditorium_code']], $ignorePending))) {
                     $fail($c, $errs);
                 }
             }

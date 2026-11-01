@@ -689,14 +689,51 @@ it('mas’ul fanlar filtri biriktirish olib tashlanganda yangilanadi', function 
         ->assertSee('id="weeklyExcel"', false);
 });
 
-it('mas’ul fanlar filtri boshqa fakultetdagi ayni nomli kartani olmaydi', function () {
+it('mas’ul fanlar: fan nomi va kafedra bo\'yicha — boshqa fakultet/kursdagi o\'sha kafedra kartasi ham, boshqa kafedradagi ayni nomli karta emas', function () {
     $s = responsibleScopeSetup();
+    // Profildagi fan — "Gigiyena (a)" (o'zi va umumiy "Gigiyena" kartasi), kafedrasi — Gigiyena kafedrasi; yo'nalish/kurs cheklovi yo'q.
+    DB::table('curriculum_subjects')->where('id', $s['responsible_subject_id'])->update(['department_name' => 'Gigiyena kafedrasi']);
     $other = $s['own']->replicate();
     $other->faculty_name = 'F2';
+    $other->course = 5;
     $other->save();
+    $alien = $s['own']->replicate();
+    $alien->kafedra_name = 'Boshqa kafedra';
+    $alien->save();
     $res = layerAs($s['head'], 'fan_masuli')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
-    expect($res->json('my_subject_card_ids'))->toContain($s['own']->id)->not->toContain($other->id);
+    expect($res->json('my_subject_card_ids'))->toContain($s['own']->id)->toContain($other->id)->not->toContain($alien->id);
 });
+
+it('mas’ul fanlar: HEMIS fan id si bo\'yicha — boshqa o\'quv rejadagi nomi ham; bir fanga ikki mas\'ul', function () {
+    $s = responsibleScopeSetup();
+    // Mas'ul fan (subject_id = 1) boshqa rejada "Umumiy gigiyena" nomi bilan — o'sha fan.
+    DB::table('curriculum_subjects')->insert(['curriculum_subject_hemis_id' => 7002, 'curricula_hemis_id' => 8001, 'subject_id' => 1,
+        'subject_name' => 'Umumiy gigiyena', 'subject_code' => 'G2', 'semester_code' => '15', 'semester_name' => '5', 'at_semester' => 1]);
+    $renamed = $s['own']->replicate();
+    $renamed->subject_name = 'Umumiy gigiyena';
+    $renamed->course = 3;
+    $renamed->save();
+    $second = fmTeacherLayers("IKKINCHI MAS'UL");
+    DB::table('teacher_responsible_subjects')->insert(['teacher_id' => $second->id, 'curriculum_subject_id' => $s['responsible_subject_id']]);
+    foreach ([$s['head'], $second] as $t) {
+        $ids = layerAs($t, 'fan_masuli')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json('my_subject_card_ids');
+        expect($ids)->toContain($s['own']->id)->toContain($renamed->id)->not->toContain($s['foreign']->id);
+    }
+});
+
+function fmTeacherLayers(string $name): \App\Models\Teacher
+{
+    $t = new \App\Models\Teacher();
+    $t->forceFill(['hemis_id' => random_int(100000, 999999), 'full_name' => $name, 'short_name' => $name, 'first_name' => $name, 'second_name' => $name,
+        'employee_id_number' => (string) random_int(100000, 999999), 'birth_date' => '1980-01-01', 'year_of_enter' => 2010,
+        'gender' => 'm', 'department' => 'Boshqa', 'employment_form' => 'x', 'employment_staff' => 'x', 'staff_position' => 'x',
+        'employee_status' => 'x', 'employee_type' => 'x', 'contract_number' => '1', 'decree_number' => '1',
+        'contract_date' => '2020-01-01', 'decree_date' => '2020-01-01',
+        'status' => true, 'login' => 'u' . random_int(100000, 999999), 'password' => bcrypt('x')])->save();
+    $t->assignRole('fan_masuli');
+
+    return $t;
+}
 
 it('mas’ul fanlar filtri siklda ham ishlaydi va bo‘sh biriktirishda jadvalni kengaytirmaydi', function (string $layer) {
     $s = responsibleScopeSetup();

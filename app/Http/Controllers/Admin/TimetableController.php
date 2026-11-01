@@ -11272,39 +11272,40 @@ class TimetableController extends Controller
         if ($tid <= 0 || !Schema::hasTable('teacher_responsible_subjects')) {
             return [];
         }
-        $rows = DB::table('teacher_responsible_subjects as t')
+        // Profildagi mas'ul fanlar: fan nomi (HEMIS fan id si bo'lsa — shu fanning barcha o'quv rejalaridagi nomlari) va kafedra
+        // bo'yicha — yo'nalish va kurs bilan cheklanmaydi (bir fanga bir nechta mas'ul bo'lishi mumkin). '@names' — [fan nomi => kafedralar].
+        $subjects = DB::table('teacher_responsible_subjects as t')
             ->join('curriculum_subjects as cs', 'cs.id', '=', 't.curriculum_subject_id')
-            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
-            ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->where('t.teacher_id', $tid)
-            ->get(['cs.subject_name', 'cs.semester_code', 'sp.name as specialty_name', 'f.name as faculty_name']);
-        $keys = [];
-        foreach ($rows as $r) {
-            $sem = (int) $r->semester_code - 10;
-            if ($sem < 1) {
-                continue;
+            ->get(['cs.subject_id', 'cs.subject_name', 'cs.department_name']);
+        $names = [];
+        $addName = function (string $name, ?string $kafedra) use (&$names) {
+            foreach (array_filter([$name, $this->cycleSubjectVariantBase($name)]) as $n) {
+                $k = $this->normSubject((string) $n);
+                if ($k === '') {
+                    continue;
+                }
+                $names[$k] ??= [];
+                if (trim((string) $kafedra) !== '') {
+                    $names[$k][trim((string) $kafedra)] = true;
+                } else {
+                    $names[$k]['*'] = true;   // kafedrasi noma'lum — faqat nom bo'yicha
+                }
             }
-            [$facultyAlias, $spec] = $this->curriculumScopeAlias((string) $r->specialty_name);
-            $faculty = trim((string) ($r->faculty_name ?: $facultyAlias));
-            $prefix = ($faculty !== '' ? $this->specKey($faculty) . '|' : '')
-                . $this->specKey($spec) . '|' . (int) ceil($sem / 2) . '|';
-            $keys[$prefix . $this->normSubject((string) $r->subject_name)] = true;
-            $base = $this->cycleSubjectVariantBase((string) $r->subject_name);
-            if ($base !== null) {
-                $keys[$prefix . $this->normSubject($base)] = true;
+        };
+        foreach ($subjects as $r) {
+            $addName((string) $r->subject_name, $r->department_name);
+        }
+        $hemisIds = $subjects->pluck('subject_id')->filter()->unique()->values()->all();
+        if ($hemisIds) {
+            foreach (DB::table('curriculum_subjects')->whereIn('subject_id', $hemisIds)->distinct()->get(['subject_name', 'department_name']) as $r) {
+                $addName((string) $r->subject_name, $r->department_name);
             }
         }
 
-        return $keys;
+        return $names ? ['@names' => array_map(fn ($k) => array_keys($k), $names)] : [];
     }
 
-    private function responsibleCardKey($card): string
-    {
-        $card = (object) (is_array($card) ? $card : ($card instanceof TimetableCard ? $card->getAttributes() : (array) $card));
-
-        return $this->specKey((string) ($card->specialty_name ?? '')) . '|' . (int) ($card->course ?? 0) . '|' . $this->normSubject((string) ($card->subject_name ?? ''));
-    }
 
     /** Doskadagi mas'ul fanlarning aniq bo'laklari va umumiy kartalari id lari. */
     private function responsibleCardIds(Request $request, $cards): array
@@ -11332,11 +11333,16 @@ class TimetableController extends Controller
         if (!$keys) {
             return false;
         }
-        $key = $this->responsibleCardKey($card);
-        $faculty = (string) (is_array($card) ? ($card['faculty_name'] ?? '') : ($card->faculty_name ?? ''));
-        $facultyPrefix = $this->specKey($faculty) . '|';
-        // Asosiy nom kaliti umumiy kartaga tegishli; boshqa bo'lak unga aylantirilmaydi.
-        return isset($keys[$facultyPrefix . $key]) || isset($keys[$key]);
+        // Fan nomi va kafedra bo'yicha (profildagi mas'ul fanlar; yo'nalish/kurs cheklovi yo'q). Asosiy nom kaliti umumiy kartaga
+        // tegishli; boshqa bo'lak unga aylantirilmaydi (kartaning aniq nomi tekshiriladi).
+        $subject = $this->normSubject((string) (is_array($card) ? ($card['subject_name'] ?? '') : ($card->subject_name ?? '')));
+        if (isset($keys['@names'][$subject])) {
+            $kafedras = array_values(array_diff($keys['@names'][$subject], ['*']));
+            $cardKafedra = (string) (is_array($card) ? ($card['kafedra_name'] ?? '') : ($card->kafedra_name ?? ''));
+            return in_array('*', $keys['@names'][$subject], true) || ($kafedras && $this->sameKafedra($cardKafedra, $kafedras));
+        }
+
+        return false;
     }
 
     /** departmentHeadKafedra, lekin kafedra aniqlanmasa so'rovni yiqitmaydi (null). */

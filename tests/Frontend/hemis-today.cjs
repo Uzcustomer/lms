@@ -35,7 +35,7 @@ vm.runInContext(section('            // ===== "Bugungi darslar (HEMIS)"', "     
 
 const row = o => Object.assign({ group: 'p/st26-01a', type: 'Amaliy', changes: [], blocked: [], reason: null }, o);
 const rep = {
-    today: '2026-09-14', missing_groups: [], import_failed: 0,
+    today: '2026-09-14', missing_groups: [], import_failed: 0, timing: { groups: 2, hemis_ms: 2450, total_ms: 3120 },
     rows: [
         row({ subject: 'Biologiya', hemis_id: 2, start: '08:30', end: '09:50', new_start: '08:30', new_end: '09:50', employee_name: 'E6006', new_employee_name: 'USTOZ',
             auditorium_name: '71', new_auditorium_name: '71', status: 'locked', reason: 'baho qo\'yilgan — tegilmaydi', changes: ["o'qituvchi: E6006 → USTOZ"] }),
@@ -57,6 +57,8 @@ const rep = {
     await el('hemisTodayBtn').onclick.call(el('hemisTodayBtn'));
     assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['POST', '/admin/boards/7/hemis-today', { faculty_names: ['F1'], specialty_names: ['stomatologiya'], courses: [1] }]]);
     assert.match(modalHtml, /Bugun \(14\.09\.2026\): 5 ta dars · 1 ta o'zgartiriladi · 2 ta davomat\/baho bor — tegilmaydi · 1 ta to'siqli/);
+    // Vaqt o'lchovi (saytda "≤ 10 s" tekshiruvi uchun).
+    assert.match(modalHtml, /· 2 guruh, HEMIS 2\.5 s \/ jami 3\.1 s<\/span>/);
     // Tegilmaydigan darslar kulrang, sababi bilan; o'zgarish eski → yangi; to'siq matni.
     const tr = s => (modalHtml.match(new RegExp('<tr class="align-top[^"]*" data-status="' + s + '">[\\s\\S]*?</tr>', 'g')) || []);
     assert.equal(tr('locked').length, 2);

@@ -333,6 +333,24 @@ it('bir necha guruhga umumiy karta va HEMIS\'dagi oqim darsi o\'qituvchi/xona to
         }
     }
     expect($creates)->toBeGreaterThan(2)->and($blocked)->toBe([]);
+
+    // O'sha o'qituvchi, o'sha xona, lekin boshqa (kesishgan) vaqt — bitta dars emas: 28.09 dagi amal to'siqli.
+    DB::table('schedules')->where('schedule_hemis_id', 80)->update(['lesson_pair_start_time' => '10:40:00', 'lesson_pair_end_time' => '12:00:00']);
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $blocked = [];
+    foreach ($res['groups'] as $g) {
+        foreach ($g['units'] as $u) {
+            foreach ($u['actions'] as $a) {
+                if ($a['blocked']) {
+                    $blocked[] = $g['group'] . ' ' . $a['date'] . ': ' . implode('; ', $a['blocked']);
+                }
+            }
+        }
+    }
+    expect($blocked)->not->toBe([])
+        ->and(collect($blocked)->every(fn ($b) => str_contains($b, '2026-09-28') && str_contains($b, 'p/st26-09a')))->toBeTrue();
 });
 
 it('faqat tanlangan haftagacha amallar chiqadi; sukut — joriy hafta oxirigacha', function () {
@@ -1156,6 +1174,8 @@ it('sikl fani: oqimning ikki guruhchasi — umumiy ma\'ruza bir-biriga to\'siq e
 });
 
 it('sikl: ikki guruhcha bitta o\'qituvchida kesishgan davrda — HEMIS amali to\'siq (JSON\'ga kirmaydi), mudir qo\'yilmaydi', function () {
+    // Ichki to'qnashuvlar — faqat kelgusilari: "bugun" — sinov kuni (19.09), kesishuv 21–22.09.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-19 07:00'));
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
@@ -1557,14 +1577,16 @@ function htFake(array $schedule, array $attendance = [], array $grades = []): vo
     \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory(app('events')));
     \Illuminate\Support\Sleep::fake();
     \Illuminate\Support\Facades\Http::preventStrayRequests();
+    // _group berilmasa — kunning umumiy ro'yxati (hamma guruhlar, HemisDayClient::bulkDayList).
+    $groups = fn ($req, array $by) => $group($req) ? [$group($req)] : array_keys($by);
     \Illuminate\Support\Facades\Http::fake([
-        '*schedule-list*' => fn ($req) => $page($schedule[$group($req)] ?? []),
+        '*schedule-list*' => fn ($req) => $page(array_merge([], ...array_map(fn ($g) => $schedule[$g] ?? [], $groups($req, $schedule)))),
         // Davomat: id yoki [id, load] (load = 0 — yozuv bor, davomat olinmagan).
-        '*attendance-control-list*' => fn ($req) => $page(array_map(fn ($x) => ['id' => 70000 + (int) ((array) $x)[0], '_subject_schedule' => (int) ((array) $x)[0],
-            'group' => ['id' => $group($req)], 'lesson_date' => (int) $req->data()['lesson_date_from']] + (is_array($x) ? ['load' => $x[1]] : []),
-            $attendance[$group($req)] ?? [])),
-        '*student-grade-list*' => fn ($req) => $page(array_map(fn ($id) => ['id' => 80000 + $id, '_subject_schedule' => $id, 'group' => ['id' => $group($req)],
-            'lesson_date' => (int) $req->data()['lesson_date_from']], $grades[$group($req)] ?? [])),
+        '*attendance-control-list*' => fn ($req) => $page(array_merge([], ...array_map(fn ($g) => array_map(fn ($x) => ['id' => 70000 + (int) ((array) $x)[0],
+            '_subject_schedule' => (int) ((array) $x)[0], 'group' => ['id' => $g], 'lesson_date' => (int) $req->data()['lesson_date_from']]
+            + (is_array($x) ? ['load' => $x[1]] : []), $attendance[$g] ?? []), $groups($req, $attendance)))),
+        '*student-grade-list*' => fn ($req) => $page(array_merge([], ...array_map(fn ($g) => array_map(fn ($id) => ['id' => 80000 + $id, '_subject_schedule' => $id,
+            'group' => ['id' => $g], 'lesson_date' => (int) $req->data()['lesson_date_from']], $grades[$g] ?? []), $groups($req, $grades)))),
     ]);
 }
 
@@ -1921,36 +1943,118 @@ it('bugungi darslar: HEMIS birinchi urinishda 5xx / 429 / success: false qaytars
     expect($res['import_failed'])->toBe(0)->and(array_map(fn ($r) => [$r['hemis_id'], $r['status'], $r['changes']], $res['rows']))->toBe($results[0]);
 });
 
-it('bugungi darslar: HEMIS bir vaqtda ko\'pi bilan 4 ta so\'rov oladi; ulanish 5 s, javob 30 s', function () {
+it('bugungi darslar: HEMIS bir vaqtda ko\'pi bilan 4 ta so\'rov oladi (sirpanuvchi oyna — to\'da kutilmaydi); ulanish 5 s, javob 30 s', function () {
     expect(\App\Services\HemisSync\HemisDayClient::CONCURRENCY)->toBe(4)
         ->and(\App\Services\HemisSync\HemisDayClient::RETRY_DELAYS_MS)->toBe([500, 1500]);
-    // Http::pool'ga har gal nechta so'rov va qanday vaqt chegaralari bilan berilishi.
-    \Illuminate\Support\Facades\Http::swap(new class (app('events')) extends \Illuminate\Http\Client\Factory {
-        public array $sizes = [];
+    // Ishlovchi (curl multi o'rnida): javob kutilganda (wait) tugaydi; yo'ldagi so'rovlar soni har yangi so'rov boshlanganda yoziladi.
+    // Http::fake va'dani darhol kutadi — shuning uchun soxta emas, ishlovchining o'zi.
+    \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory(app('events')));
+    $client = new class extends \App\Services\HemisSync\HemisDayClient {
+        public int $inflight = 0;
+        public array $atStart = [];
         public array $opts = [];
 
-        public function __construct($events)
+        protected function handler(): callable
         {
-            parent::__construct($events);
-            $this->fake(fn () => \Illuminate\Http\Client\Factory::response(['success' => true, 'data' => ['items' => [], 'pagination' => ['pageCount' => 1]]]));
-        }
+            return function ($request, $options) {
+                $this->inflight++;
+                $this->atStart[] = $this->inflight;
+                $this->opts[] = $options;
+                $p = new \GuzzleHttp\Promise\Promise(function () use (&$p) {
+                    $this->inflight--;
+                    $p->resolve(new \GuzzleHttp\Psr7\Response(200, [], json_encode(['success' => true, 'data' => ['items' => [], 'pagination' => ['pageCount' => 1]]])));
+                });
 
-        public function pool(callable $callback)
-        {
-            $p = new \Illuminate\Http\Client\Pool($this);
-            $callback($p);
-            $this->sizes[] = count($p->getRequests());
-            foreach ($p->getRequests() as $r) {
-                $this->opts[] = $r->getOptions();
+                return $p;
+            };
+        }
+    };
+    // Baho ro'yxati — har doim guruh bo'yicha (umumiy ro'yxat yo'q): 10 so'rov.
+    $out = $client->dayList('student-grade-list', range(1, 10), '2026-09-14');
+    expect(array_keys($out))->toBe(range(1, 10))->and(array_filter($out, fn ($l) => $l !== []))->toBe([])
+        // 5-so'rov birinchisi tugashi bilan — qolgan uchtasi hali yo'lda (to'da kutilmaydi); ko'pi bilan 4 ta.
+        ->and($client->atStart)->toBe([1, 2, 3, 4, 4, 4, 4, 4, 4, 4])->and($client->inflight)->toBe(0)
+        ->and($client->opts[0]['connect_timeout'])->toBe(5)->and($client->opts[0]['timeout'])->toBe(30);
+});
+
+it('bugungi darslar: guruhlar ko\'p bo\'lsa — kunning umumiy ro\'yxati (guruh filtrisiz, sahifalab); arzon bo\'lmasa yoki chala — guruh bo\'yicha', function () {
+    // $pages — umumiy ro'yxat sahifalari; guruh bo'yicha so'rovda — shu guruh yozuvlari (1 sahifa).
+    $fake = function (array $pages, ?int $failPage = null) {
+        \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory(app('events')));
+        \Illuminate\Support\Sleep::fake();
+        \Illuminate\Support\Facades\Http::fake(function ($req) use ($pages, $failPage) {
+            $d = $req->data();
+            if (isset($d['_group'])) {
+                $items = array_values(array_filter(array_merge(...$pages), fn ($it) => ($it['group']['id'] ?? 0) === (int) $d['_group']));
+
+                return \Illuminate\Support\Facades\Http::response(['success' => true, 'data' => ['items' => $items, 'pagination' => ['pageCount' => 1]]]);
+            }
+            if ((int) $d['page'] === $failPage) {
+                return \Illuminate\Support\Facades\Http::response('', 503);
             }
 
-            return parent::pool($callback);
-        }
-    });
-    $out = app(\App\Services\HemisSync\HemisDayClient::class)->dayList('schedule-list', range(1, 10), '2026-09-14');
-    $f = \Illuminate\Support\Facades\Http::getFacadeRoot();
-    expect(array_keys($out))->toBe(range(1, 10))->and($f->sizes)->toBe([4, 4, 2])
-        ->and($f->opts[0]['connect_timeout'])->toBe(5)->and($f->opts[0]['timeout'])->toBe(30);
+            return \Illuminate\Support\Facades\Http::response(['success' => true,
+                'data' => ['items' => $pages[(int) $d['page'] - 1], 'pagination' => ['pageCount' => count($pages)]]]);
+        });
+    };
+    $it = fn (int $id, ?int $g) => ['id' => $id] + ($g ? ['group' => ['id' => $g]] : []);
+    $client = app(\App\Services\HemisSync\HemisDayClient::class);
+    $sent = fn () => collect(\Illuminate\Support\Facades\Http::recorded())->map(fn ($r) => isset($r[0]->data()['_group']) ? 'g' . $r[0]->data()['_group'] : 'p' . $r[0]->data()['page'])->all();
+    // 8 guruh, 2 sahifa — 2 so'rov; boshqa guruh (99) yozuvi tashlanadi, yozuvsiz guruh — bo'sh ro'yxat (null emas).
+    $fake([[$it(1, 1), $it(2, 2), $it(3, 99)], [$it(4, 1), $it(5, 8)]]);
+    $out = $client->dayList('schedule-list', range(1, 8), '2026-09-14');
+    expect($sent())->toBe(['p1', 'p2'])
+        ->and(array_map(fn ($l) => array_column($l, 'id'), $out))->toBe([1 => [1, 4], 2 => [2], 3 => [], 4 => [], 5 => [], 6 => [], 7 => [], 8 => [5]]);
+    // Davomat ham umumiy; baho — guruh bo'yicha.
+    $fake([[$it(1, 1)]]);
+    $client->dayList('attendance-control-list', range(1, 6), '2026-09-14');
+    expect($sent())->toBe(['p1']);
+    $fake([[$it(1, 1)]]);
+    $client->dayList('student-grade-list', range(1, 6), '2026-09-14');
+    expect($sent())->toBe(['g1', 'g2', 'g3', 'g4', 'g5', 'g6']);
+    // Guruhlar kam (5) — darhol guruh bo'yicha.
+    $fake([[$it(1, 1)]]);
+    $client->dayList('schedule-list', range(1, 5), '2026-09-14');
+    expect($sent())->toBe(['g1', 'g2', 'g3', 'g4', 'g5']);
+    // Sahifalar guruhlardan kam emas (6 ≥ 6) — 1-sahifadan keyin guruh bo'yicha.
+    $fake(array_fill(0, 6, [$it(1, 1)]));
+    $client->dayList('schedule-list', range(1, 6), '2026-09-14');
+    expect($sent())->toBe(['p1', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6']);
+    // Biror sahifa qayta urinishlardan keyin ham olinmasa — guruh bo'yicha (chala ro'yxat ishlatilmaydi).
+    $fake([[$it(1, 1)], [$it(2, 2)]], 2);
+    $out = $client->dayList('schedule-list', range(1, 6), '2026-09-14');
+    expect($sent())->toBe(['p1', 'p2', 'p2', 'p2', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6'])
+        ->and(array_column($out[2], 'id'))->toBe([2]);
+    // Yozuvda guruh yo'q — guruh bo'yicha.
+    $fake([[$it(1, null)]]);
+    $client->dayList('schedule-list', range(1, 6), '2026-09-14');
+    expect($sent())->toBe(['p1', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6']);
+});
+
+it('bugungi darslar: umumiy ro\'yxat bilan natija guruh bo\'yicha so\'ralgandagidek, so\'rovlar kam', function () {
+    $s = hsSetup();
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    $s['card']->update(['auditorium_code' => '74', 'auditorium_name' => '74']);
+    htCard($s, 'Biologiya', 5, '75', ['group_name' => 'p/st26-01b (rus)']);
+    $items = [1596 => [htItem(1, '2026-09-14', '10:00', '11:20')],
+        1597 => [htItem(2, '2026-09-14', '12:00', '13:20', ['group' => 1597, 'group_name' => 'p/st26-01b', 'subject_id' => 475, 'subject' => 'Biologiya', 'room' => '71'])]];
+    $run = function (int $min) use ($s, $items) {
+        config(['services.hemis.day_bulk_min_groups' => $min]);
+        htFake($items, [1597 => [2]]);
+        $res = htCall($s)->assertOk()->json();
+
+        expect($res['timing']['groups'])->toBe(2)->and($res['timing']['hemis_ms'])->toBeInt()
+            ->and($res['timing']['total_ms'])->toBeGreaterThanOrEqual($res['timing']['hemis_ms']);
+
+        return [array_map(fn ($r) => [$r['hemis_id'], $r['status'], $r['changes'], $r['reason']], $res['rows']), $res['import_failed'],
+            count(\Illuminate\Support\Facades\Http::recorded())];
+    };
+    [$byGroup, $f1, $n1] = $run(6);
+    [$bulk, $f2, $n2] = $run(1);
+    expect($bulk)->toBe($byGroup)->and($f1)->toBe(0)->and($f2)->toBe(0)
+        ->and(collect($bulk)->pluck(1)->all())->toBe(['update', 'locked'])
+        // Guruh bo'yicha: jadval 2 + davomat 2 + baho 1 (01a); umumiy: jadval 1 + davomat 1 + baho 1.
+        ->and($n1)->toBe(5)->and($n2)->toBe(3);
 });
 
 it('bugungi darslar: bir xil turdagi darslar tur ichida vaqt tartibida juftlanadi (10:00 → 13:30, 12:00 → 15:00)', function () {
@@ -2134,4 +2238,61 @@ it('bugungi darslar: qulf tekshiruvi (lock_check_url) har darsni HEMIS\'dan jonl
     // ids berilmasa — bo'sh "qulf yo'q" emas, xato; imzosiz — 403.
     test()->getJson($url)->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'ids berilmagan'));
     test()->getJson(preg_replace('/signature=[^&]+/', 'signature=x', $url) . '&ids=3')->assertForbidden();
+});
+
+it('bugungi darslar: bitta LMS ma\'ruza oqimi guruhlari bir zalga birga ko\'chadi (HEMIS\'da o\'qituvchi/xona har xil bo\'lsa ham); boshqa fan, boshqa vaqt — to\'siq', function () {
+    $s = hsSetup();
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    $s['card']->update(['day' => null, 'pair' => null]);   // amaliy bugun yo'q
+    // Oqim ma'ruzasi 13:30–14:50, L1 zal, LMS'da o'qituvchi biriktirilmagan — har guruhda HEMIS'dagi o'qituvchi qoladi (5001 va 6006).
+    $lecCard = htCard($s, 'Odam anatomiyasi', 7, 'L1', ['training_type' => 'lecture', 'group_name' => null,
+        'group_names' => ['p/st26-01a (rus)', 'p/st26-01b (rus)'], 'teacher_id' => null, 'teacher_name' => null]);
+    $lec = ['subject' => 'Odam anatomiyasi', 'code' => '11', 'type' => "Ma'ruza"];
+    htFake([
+        1596 => [htItem(1, '2026-09-14', '08:30', '09:50', $lec + ['room' => 'L1', 'emp' => 5001])],
+        1597 => [htItem(2, '2026-09-14', '08:30', '09:50', $lec + ['group' => 1597, 'group_name' => 'p/st26-01b', 'room' => 'L2', 'emp' => 6006])],
+    ]);
+    $status = fn () => collect(htCall($s)->assertOk()->json('rows'))->filter(fn ($r) => $r['hemis_id'])
+        ->mapWithKeys(fn ($r) => [$r['hemis_id'] => $r['status'] . ' ' . implode('; ', $r['blocked'])])->sortKeys()->all();
+    expect($status())->toBe([1 => 'update ', 2 => 'update ']);
+
+    // Zalda shu vaqtda boshqa fan darsi (qamrovdan tashqari guruh) — ikkala guruh ham to'siqli.
+    hsInsert('schedules', ['schedule_hemis_id' => 600, 'subject_id' => 1, 'subject_name' => 'Tarix', 'semester_code' => '11', 'group_id' => 2000,
+        'group_name' => 'x-01', 'training_type_code' => '11', 'training_type_name' => "Ma'ruza", 'lesson_date' => '2026-09-14 00:00:00',
+        'lesson_pair_start_time' => '13:30', 'lesson_pair_end_time' => '14:50', 'employee_id' => 7007, 'employee_name' => 'E7007',
+        'auditorium_code' => 'L1', 'auditorium_name' => 'L1', 'department_id' => 501]);
+    expect($status())->toBe([1 => 'blocked xona band: L1 — x-01 · Tarix 13:30–14:50', 2 => 'blocked xona band: L1 — x-01 · Tarix 13:30–14:50']);
+
+    // LMS'da o'qituvchi USTOZ (5001). Boshqa fan darsi o'sha o'qituvchi bilan o'sha zalda — bitta dars emas: to'siq.
+    $lecCard->update(['teacher_id' => Teacher::where('full_name', 'USTOZ')->value('id'), 'teacher_name' => 'USTOZ']);
+    DB::table('schedules')->where('schedule_hemis_id', 600)->update(['employee_id' => 5001, 'employee_name' => 'E5001']);
+    expect($status())->toBe([1 => "blocked o'qituvchi band: USTOZ — x-01 · Tarix 13:30–14:50", 2 => "blocked o'qituvchi band: USTOZ — x-01 · Tarix 13:30–14:50"]);
+    // HEMIS'dagi oqimning boshqa guruhi: o'sha fan, o'qituvchi, zal va aynan o'sha vaqt — bitta dars, to'siq emas.
+    DB::table('schedules')->where('schedule_hemis_id', 600)->update(['subject_name' => 'Odam anatomiyasi']);
+    expect($status())->toBe([1 => 'update ', 2 => 'update ']);
+    // O'sha fan, lekin boshqa (kesishgan) vaqt — to'siq.
+    DB::table('schedules')->where('schedule_hemis_id', 600)->update(['lesson_pair_start_time' => '14:10', 'lesson_pair_end_time' => '15:30']);
+    expect($status()[1])->toBe("blocked o'qituvchi band: USTOZ — x-01 · Odam anatomiyasi 14:10–15:30");
+
+    // Oqimning bir guruhi HEMIS'da allaqachon LMS'dagidek (13:30, L1, o'z o'qituvchisi 6006 — o'zgarish yo'q): ikkinchisi (5001) shu
+    // zalga to'siqsiz ko'chadi — bitta LMS darsi.
+    DB::table('schedules')->where('schedule_hemis_id', 600)->delete();
+    $lecCard->update(['teacher_id' => null, 'teacher_name' => null]);
+    htFake([
+        1596 => [htItem(1, '2026-09-14', '08:30', '09:50', $lec + ['room' => 'L1', 'emp' => 5001])],
+        1597 => [htItem(2, '2026-09-14', '13:30', '14:50', $lec + ['group' => 1597, 'group_name' => 'p/st26-01b', 'room' => 'L1', 'emp' => 6006])],
+    ]);
+    expect(collect(htCall($s)->assertOk()->json('rows'))->filter(fn ($r) => $r['hemis_id'])->mapWithKeys(fn ($r) => [$r['hemis_id'] => $r['status']])
+        ->sortKeys()->all())->toBe([1 => 'update', 2 => 'ok']);
+
+    // Amaliy — oqim emas: ikki guruhning alohida amaliy kartalari (o'qituvchisiz) bitta xonada bir vaqtda — to'siq.
+    $lecCard->update(['training_type' => 'practice', 'group_names' => null, 'group_name' => 'p/st26-01a (rus)']);
+    htCard($s, 'Odam anatomiyasi', 7, 'L1', ['group_name' => 'p/st26-01b (rus)', 'teacher_id' => null, 'teacher_name' => null]);
+    $prc = ['subject' => 'Odam anatomiyasi'];
+    htFake([
+        1596 => [htItem(1, '2026-09-14', '08:30', '09:50', $prc + ['room' => 'L1', 'emp' => 5001])],
+        1597 => [htItem(2, '2026-09-14', '08:30', '09:50', $prc + ['group' => 1597, 'group_name' => 'p/st26-01b', 'room' => 'L2', 'emp' => 6006])],
+    ]);
+    expect(collect(htCall($s)->assertOk()->json('rows'))->filter(fn ($r) => $r['hemis_id'])->pluck('status', 'hemis_id')->sortKeys()->all())
+        ->toBe([1 => 'blocked', 2 => 'blocked']);
 });

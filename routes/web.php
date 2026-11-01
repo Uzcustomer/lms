@@ -1325,6 +1325,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
                 // Sikl (4-6 kurs) kalendar rejasi
                 Route::post('/boards/{board}/cycle-plan', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlan'])->name('cycle-plan');
+                // Haftalik kesimlar (o'qituvchi / fan / xona): tanlangan haftadagi sikl darslari (faqat ko'rish)
+                Route::post('/boards/{board}/cycle-week', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleWeek'])->name('cycle-week');
                 Route::post('/boards/{board}/cycle-place', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlace'])->name('cycle-place');
                 Route::post('/boards/{board}/cycle-assign-options', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignOptions'])->name('cycle-assign-options');
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');

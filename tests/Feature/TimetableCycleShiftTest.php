@@ -10,6 +10,9 @@ use Spatie\Permission\Models\Role;
 
 require_once __DIR__ . '/../Support/TimetableLegacyOccupancy.php';
 
+// To'qnashuvlar faqat kelgusi sanalar bo'yicha hisoblanadi (o'tganlari — kulrang): sinov sanalari (2026-sentabr) oldinda bo'lsin.
+beforeEach(fn () => $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent')));
+
 function csTeacher(string $name, ?string $role = null): Teacher
 {
     $t = new Teacher();

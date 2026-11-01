@@ -15,12 +15,13 @@ const plain = x => JSON.parse(JSON.stringify(x));
 // Ichki jadvaldagi to'qnashuv: karta joyida qoladi, lekin "Joylashgan" hisobiga kirmaydi; sikl bloki — qizil belgi bilan;
 // biriktirishda band o'qituvchi/xona — ogohlantirish va "Baribir biriktirish".
 
-// 0) Sikl kalendari: to'qnashuvli blok qizil hoshiyali, nomi oldida "!" belgisi (sababi title'da); panelda sababi bilan.
-assert.match(source, /'<td class="cyc-cell cyc-block is-mark' \+ \(block\.conflict \? ' is-conflict' : ''\)/);
-assert.match(source, /\(block\.conflict \? '<span class="cyc-conflict-badge" title="To\\'qnashuv: ' \+ esc\(block\.conflict\) \+ '">!<\/span>' : ''\)/);
+// 0) Sikl kalendari: to'qnashuvli blok rangli hoshiyali (qizil — o'qituvchi/guruh, sariq — xona, kulrang — o'tgan), nomi oldida qisqa belgi
+// (tafsilot — bosilganda; timetable-conflict-badges.cjs); panelda qisqa belgi bilan.
+assert.match(source, /'<td class="cyc-cell cyc-block is-mark' \+ cfBlockClass\(block\.key, block\.conflicts, cfOwners\)/);
+assert.match(source, /cfBadgeHtml\(block\.key, block\.conflicts, cfOwners\) \+/);
 assert.match(source, /#cycleGrid \.cyc-block\.is-conflict \{ box-shadow: inset 0 0 0 3px #dc2626; \}/);
 assert.match(source, /const unplaced = cycleCards\.filter\(card => \(!card\.placed \|\| card\.conflict\) &&/);
-assert.match(source, /\(card\.conflict \? '<span class="cycle-pn-conflict">⚠ To\\'qnashuv: ' \+ esc\(card\.conflict\) \+ '<\/span>' : ''\)/);
+assert.match(source, /\(card\.conflict \? '<span class="cycle-pn-conflict lvl-' \+ \(lvl \|\| 'red'\) \+ '">⚠ ' \+ esc\(cfBadgeText\(card\.conflicts\) \|\| card\.conflict\) \+ '<\/span>' : ''\)/);
 
 const els = {};
 const el = id => els[id] || (els[id] = { id, innerHTML: '', textContent: '', value: '', options: [], dataset: {},
@@ -35,6 +36,11 @@ const ctx = {
     weekActiveCards: () => ctx.cards, renderPanel: () => { ctx.panelRenders = (ctx.panelRenders || 0) + 1; },
     setTimeout: (fn) => { ctx.timers = (ctx.timers || 0) + 1; setImmediate(fn); }, clearTimeout() {},
     api: async (url, method = 'GET', body = null) => {
+        // Tanlangan hafta tuzilgan ro'yxati (qisqa belgi uchun) — alohida yozib boriladi.
+        if (url.includes('/conflicts?items=1')) {
+            (ctx.itemCalls = ctx.itemCalls || []).push(url.replace('/admin/boards/7', ''));
+            return ctx.itemsAnswer || { weekly_items: {} };
+        }
         calls.push([method, url.replace('/admin/boards/7', ''), body && plain(body)]);
         const a = answers.shift();
         if (a instanceof Error) throw a;
@@ -42,6 +48,7 @@ const ctx = {
     },
     URLSearchParams, Object, Set, Promise, Error, Number, String,
     cycleLayerParams: () => ({ layer: 'internal' }),
+    CROSS_MODES: ['teacher', 'subject', 'room'], cycleWeekLessons: () => [],
     ttToast: html => { (ctx.toasts = ctx.toasts || []).push(html); },
 };
 vm.createContext(ctx);
@@ -50,7 +57,7 @@ vm.runInContext(section("            // ===== Ichki (haftalik) jadvaldagi to'qna
     + section('            async function applyAsg(teacherId, force) {', '            async function loadAsgAuditoriums() {')
     + section('            async function saveCycleAssign(force) {', "            $('cycAssignSave').addEventListener")
     + section('            function cycleAutoShiftHtml(j) {', '            async function cycleAutoShift() {')
-    + '; this.wc = () => weeklyConflicts; this.setBusy = b => { asgBusy = b; };', ctx);
+    + '; this.wc = () => weeklyConflicts; this.wci = () => weeklyConflictItems; this.setBusy = b => { asgBusy = b; };', ctx);
 const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { needs_confirm: true, error: msg } });
 
 (async () => {
@@ -71,7 +78,13 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     assert.equal(ctx.cardConflict(a), null);
     ctx.weeklyLayer = 'internal';
     ctx.curWeek = 2;
-    assert.equal(ctx.panelRenders, 1, 'javobdan keyin panel qayta chizilmadi');
+    assert.ok(ctx.panelRenders >= 1, 'javobdan keyin panel qayta chizilmadi');
+    // Javobdan keyin joriy hafta tuzilgan ro'yxati bir marta so'raladi; shu hafta uchun qayta so'ralmaydi.
+    assert.deepEqual(ctx.itemCalls, ['/conflicts?items=1&week=2']);
+    ctx.loadWeekConflictItems();
+    await tick();
+    assert.equal(ctx.itemCalls.length, 1);
+    assert.equal(ctx.wci().__week, 2);
 
     // 2) Hisoblagich: to'qnashuvli karta joylashganlar sonidan chiqadi, joylanmaganlar soniga qo'shiladi.
     ctx.renderStats();

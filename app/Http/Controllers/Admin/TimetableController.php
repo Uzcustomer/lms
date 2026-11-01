@@ -6226,7 +6226,7 @@ class TimetableController extends Controller
                 'auditorium_volume' => $e['room'] !== null ? ($volumes[$e['room']] ?? null) : null,
                 'date' => $e['date'], 'day' => $day, 'pair' => intdiv((int) $e['from'] - 1, $rh) + 1,
                 'len_half' => max(1, intdiv(max((int) $e['from'], (int) $e['to'] - 1) - 1, $rh) - intdiv((int) $e['from'] - 1, $rh) + 1),
-                'hour' => (int) $e['from'], 'hours' => max(1, (int) $e['to'] - (int) $e['from']),
+                'hour' => (int) $e['from'], 'hours' => max(1, (int) $e['to'] - (int) $e['from']), 'row_hours' => $rh,
                 'dp' => $dp, 'ask' => $ask,
             ];
         }

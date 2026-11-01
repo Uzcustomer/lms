@@ -8178,9 +8178,16 @@
                 const keyOf = c => mode === 'teacher' ? (c.teacher_name || '— (biriktirilmagan)')
                     : mode === 'room' ? (c.auditorium_name || '— (xona yo\'q)')
                     : c.subject_name;
-                // Darslar (haftalik karta va sikl darsi) — ustun, kun va [boshlanish, tugash) qatorlari.
-                const items = placed.map(c => { const pl = effPlace(c); return { col: keyOf(c), day: +pl.day, from: +pl.pair, to: +pl.pair + cardLen(c), c: c }; })
-                    .concat(cyc.map((l, i) => ({ col: keyOf(l), day: +l.day, from: +l.pair, to: +l.pair + Math.max(1, +l.len_half || 1), l: l, i: i })));
+                // Darslar (haftalik karta va sikl darsi) — ustun, kun va [boshlanish, tugash) qatorlari (chizish uchun); fa/fb — akademik
+                // soatlardagi aniq oraliq (to'qnashuv uchun): to'liq parada 1 qator = rh soat, sikl darsi qatori yaxlitlangan bo'lishi mumkin.
+                const rh = Math.max(1, +((cyc[0] || {}).row_hours) || 1);
+                const items = placed.map(c => {
+                    const pl = effPlace(c), to = +pl.pair + cardLen(c);
+                    return { col: keyOf(c), day: +pl.day, from: +pl.pair, to: to, fa: (+pl.pair - 1) * rh + 1, fb: (to - 1) * rh + 1, c: c };
+                }).concat(cyc.map((l, i) => {
+                    const from = +l.pair, to = from + Math.max(1, +l.len_half || 1), fa = +l.hour || (from - 1) * rh + 1;
+                    return { col: keyOf(l), day: +l.day, from: from, to: to, fa: fa, fb: fa + (+l.hours || (to - from) * rh), l: l, i: i };
+                }));
                 const cols = [...new Set(items.map(it => it.col))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
                 let D = board.days;
                 Object.values(grids).forEach(gg => { D = Math.max(D, gg.days); });
@@ -8262,7 +8269,7 @@
                                     '</div>';
                             }).join('');
                             // Bir katakda bir nechta dars (o'qituvchi/xona kesimida; haftalik ham, sikl ham) — to'qnashuv
-                            const clash = cl.items.length > 1 && !noClash(col);
+                            const clash = !noClash(col) && cl.items.some((a, x) => cl.items.some((b, y) => y > x && a.fa < b.fb && b.fa < a.fb));
                             const conflict = clash ? ' style="outline:2px solid #ef4444;outline-offset:-2px" data-cross-clash="1" title="To\'qnashuv: bir vaqtda ' + cl.items.length + ' ta dars"' : '';
                             h += '<td class="tt-cell' + rowEndCls(p + vs - 1) + '"' + rs + ' data-day="' + d + '" data-pair="' + p + '"' + conflict + '>' + inner + '</td>';
                         });

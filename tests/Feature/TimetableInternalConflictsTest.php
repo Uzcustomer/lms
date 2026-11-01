@@ -592,7 +592,7 @@ it('cycle-week: tanlangan haftadagi sikl darslari — ma\'ruza bir marta (oqim g
         ['2026-09-15', 'F1 / 1-oqim', ['d22-05a', 'd22-05b'], 2, 1, 2],
         ['2026-09-15', 'F1 / 2-oqim', ['d22-06a'], 2, 1, 2],
         ['2026-09-16', 'F1 / 2-oqim', ['d22-06a'], 3, 1, 2],
-    ])->and($lec[0])->toMatchArray(['cycle' => true, 'teacher_id' => $lector->id, 'teacher_name' => 'LEKTOR', 'auditorium_name' => 'Zal',
+    ])->and($lec[0])->toMatchArray(['cycle' => true, 'row_hours' => 1, 'teacher_id' => $lector->id, 'teacher_name' => 'LEKTOR', 'auditorium_name' => 'Zal',
         'auditorium_volume' => 15, 'subject_name' => 'Klinik farmakologiya', 'ask' => false]);
     // Fan kesimi: barcha Klinik farmakologiya guruhlari.
     expect($all->pluck('group_name')->unique()->sort()->values()->all())->toBe(['d22-05a', 'd22-05b', 'd22-06a']);
@@ -616,8 +616,8 @@ it('cycle-week: tanlangan haftadagi sikl darslari — ma\'ruza bir marta (oqim g
     // To'liq 80 daqiqalik paralar (1 para = 2 soat): panjara qatoriga aylantiriladi, asl soatlar — hour / hours.
     $s['board']->update(['bell_schedule' => \App\Models\TimetableBoard::defaultBellSchedule(6)]);
     $p = collect($week($admin, 'admin', ['week' => 1])['lessons'])->where('group_name', 'd22-05a')->where('date', '2026-09-14')->values();
-    expect($p->map(fn ($l) => [$l['training_type'], $l['pair'], $l['len_half'], $l['hour'], $l['hours']])->all())
-        ->toBe([['lecture', 1, 1, 1, 2], ['practice', 2, 2, 3, 4]]);
+    expect($p->map(fn ($l) => [$l['training_type'], $l['pair'], $l['len_half'], $l['hour'], $l['hours'], $l['row_hours']])->all())
+        ->toBe([['lecture', 1, 1, 1, 2, 2], ['practice', 2, 2, 3, 4, 2]]);
     // 2-hafta: 1-oqim bloki tugagan (14–18.09), 2-oqim — 15–19.09: darslar yo'q.
     expect($week($admin, 'admin', ['week' => 2])['lessons'])->toBe([])
         // Qamrov (kurs) va tashqi qatlam — bo'sh.

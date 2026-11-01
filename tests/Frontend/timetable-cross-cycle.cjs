@@ -37,7 +37,7 @@ const ctx = {
     scopeBody: () => ({ faculty_names: ['F1'], specialty_names: ['davolash ishi'], courses: [5] }),
     renderGrid: () => { ctx.renders = (ctx.renders || 0) + 1; ctx.renderGridCross(ctx.viewMode); }, renderStats() {},
     openCycleTimeProposal: (...a) => { ctx.proposal = a; },
-    cycHourTimes: () => [null].concat(Array.from({ length: 12 }, (_, i) => [String(8 + i).padStart(2, '0') + ':00', String(8 + i).padStart(2, '0') + ':40'])),
+    cycHourTimes: () => [null].concat(Array.from({ length: 12 }, (_, i) => [String(8 + i).padStart(2, '0') + ':05', String(8 + i).padStart(2, '0') + ':45'])),   // soatlar — qatorlardan farqli
     api: async (url, method, body) => { calls.push([url.replace('/admin/boards/7', ''), JSON.parse(JSON.stringify(body))]); return answers.shift(); },
     document: { addEventListener() {}, getElementById: id => appended.find(x => x.id === id && !x.removed) || null,
         createElement: () => { const n = { innerHTML: '', style: {}, offsetWidth: 100, offsetHeight: 80, remove() { n.removed = true; },
@@ -48,11 +48,14 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(section("            // ===== Haftalik kesimlarda (o'qituvchi / fan / xona) sikl darslari", "            // Para ustuni (sikl ichki jadvali kabi)")
-    + '; this.renderGridCross = renderGridCross; this.cycleWeekLessons = cycleWeekLessons; this.loadCycleWeek = loadCycleWeek; this.invalidateCycleWeek = invalidateCycleWeek;', ctx);
+    + '; this.renderGridCross = renderGridCross; this.cycleWeekLessons = cycleWeekLessons; this.loadCycleWeek = loadCycleWeek; this.invalidateCycleWeek = invalidateCycleWeek;'
+    + ' this.cwGet = () => cycleWeek.lessons; this.cwSet = l => { cycleWeek.lessons = l; };', ctx);
+const cycleWeekData = () => ctx.cwGet();
+const setLessons = l => ctx.cwSet(l);
 
 const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_name: 'davolash ishi', course: 5, subject_name: 'Klinik farmakologiya',
     training_type: 'practice', group_name: 'd22-06a', group_names: ['d22-06a'], flow: 'F1 / 2-oqim', teacher_id: 5, teacher_name: 'MAHMARAIMOV SH. T.',
-    auditorium_code: '101', auditorium_name: '101', date: '2026-11-02', day: 1, pair: 3, len_half: 4, hour: 5, hours: 4,   // soat — akademik (qatordan farqli)
+    auditorium_code: '101', auditorium_name: '101', date: '2026-11-02', day: 1, pair: 3, len_half: 4, hour: 3, hours: 4,
     dp: { k: 2, lec: 2, prc: 4, start: 1, ps: 3 }, ask: true }, o);
 
 (async () => {
@@ -90,7 +93,7 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     gridClick({ target: chip, preventDefault() {}, stopPropagation() { stopped = true; } });
     assert(stopped, 'boshqa ishlovchilarga o\'tmasligi kerak');
     const pop = appended[appended.length - 1];
-    assert.match(pop.innerHTML, /02\.11\.2026 · 2-kun · 12:00–15:40/);
+    assert.match(pop.innerHTML, /02\.11\.2026 · 2-kun · 10:05–13:45/);
     assert.match(pop.innerHTML, /Amaliy 4 s/);
     assert.match(pop.innerHTML, /Guruh: d22-06a · F1 \/ 2-oqim/);
     assert.match(pop.innerHTML, /data-cyc-ask/);
@@ -100,6 +103,30 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     // Ma'ruza (yoki ruxsatsiz dars) — so'rash tugmasi yo'q.
     gridClick({ target: Object.assign({}, chip, { dataset: { cyc: '1' }, closest() { return this; } }), preventDefault() {}, stopPropagation() {} });
     assert.doesNotMatch(appended[appended.length - 1].innerHTML, /data-cyc-ask/);
+
+    // 3b) To'liq paralar (1 qator = 2 soat): bir o'qituvchining 1–3 va 4–6-soat darslari bir qatorga tushadi (qatorlar 1–2 va 2–3),
+    // lekin aniq oraliqlari kesishmaydi — to'qnashuv emas; 3–4-soat bilan kesishsa — to'qnashuv.
+    const saveWeekly = ctx.weekly, saveLessons = cycleWeekData();
+    ctx.weekly = [];
+    setLessons([lesson({ id: 31, day: 4, pair: 1, len_half: 2, hour: 1, hours: 3, row_hours: 2 }),
+        lesson({ id: 32, day: 4, pair: 2, len_half: 2, hour: 4, hours: 3, row_hours: 2 })]);
+    ctx.renderGridCross('teacher');
+    assert.match(el('grid').innerHTML, /rowspan="3" data-day="4" data-pair="1">/);
+    assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
+    setLessons([lesson({ id: 31, day: 4, pair: 1, len_half: 2, hour: 1, hours: 4, row_hours: 2 }),
+        lesson({ id: 32, day: 4, pair: 2, len_half: 2, hour: 4, hours: 3, row_hours: 2 })]);
+    ctx.renderGridCross('teacher');
+    assert.match(el('grid').innerHTML, /data-day="4" data-pair="1" style="outline:2px solid #ef4444/);
+    // Haftalik dars (2-qator = 3–4-soat) va sikl 1–2-soat (1-qator) — kesishmaydi; 4-soatdan — kesishadi.
+    ctx.weekly = [Object.assign({}, saveWeekly[0], { id: 13, day: 5, pair: 2, len_half: 1 })];
+    setLessons([lesson({ id: 33, day: 5, pair: 1, len_half: 1, hour: 1, hours: 2, row_hours: 2 })]);
+    ctx.renderGridCross('teacher');
+    assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
+    setLessons([lesson({ id: 33, day: 5, pair: 2, len_half: 1, hour: 4, hours: 1, row_hours: 2 })]);
+    ctx.renderGridCross('teacher');
+    assert.match(el('grid').innerHTML, /data-day="5" data-pair="2" style="outline:2px solid #ef4444/);
+    ctx.weekly = saveWeekly;
+    setLessons(saveLessons);
 
     // 4) Kesim almashsa — qayta so'ralmaydi (ma'lumot bir xil). Fan kesimi: o'sha fan ustma-ust bo'lsa ham to'qnashuv emas.
     calls.length = 0;

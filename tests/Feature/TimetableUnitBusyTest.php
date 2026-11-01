@@ -98,7 +98,7 @@ it('kafedra mudiri: unit-busy va assign-room 200 qaytaradi (Patologik anatomiya 
 it('unitBusy xato bersa: logga yoziladi, unit-busy bo\'sh ro\'yxat + warning, biriktirish ogohlantirishsiz bajariladi', function () {
     $s = ubSetup();
     app()->bind(TimetableController::class, fn () => new class extends TimetableController {
-        protected function unitBusy(TimetableBoard $board, $unitCards): array
+        protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null): array
         {
             throw new RuntimeException('sinov xatosi');
         }

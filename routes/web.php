@@ -1326,6 +1326,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
                 Route::post('/boards/{board}/cycle-auto-shift', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAutoShift'])->name('cycle-auto-shift');
+                Route::post('/boards/{board}/cycle-practice-starts', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePracticeStarts'])->name('cycle-practice-starts');
                 // Haftalik fanlar: kartochka haftalarini KTR'dan belgilash
                 // Haftalik jadval: hozirgi joylashuvni tashqi qatlamga ko'chirish (admin)
                 Route::post('/boards/{board}/weekly-layer-copy', [\App\Http\Controllers\Admin\TimetableController::class, 'weeklyLayerCopy'])->name('weekly-layer-copy');
@@ -1339,6 +1340,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Jadval o'zgarishlari — registrator ofisi tasdig'i
                 Route::post('/cards/{card}/time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkTime'])->name('cards.time-proposal.check');
                 Route::post('/cards/{card}/time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeTime'])->name('cards.time-proposal');
+                Route::post('/boards/{board}/cycle-time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkCycleTime'])->name('cycle-time-proposal.check');
+                Route::post('/boards/{board}/cycle-time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeCycleTime'])->name('cycle-time-proposal');
                 Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');
                 Route::post('/boards/{board}/change-requests/mode', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'setMode'])->name('change-requests.mode');
                 Route::post('/change-requests/{changeRequest}/approve', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'approve'])->name('change-requests.approve');

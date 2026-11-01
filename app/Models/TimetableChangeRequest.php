@@ -11,6 +11,8 @@ class TimetableChangeRequest extends Model
     public const REJECTED = 'rejected';
     public const FAILED = 'failed';
     public const CANCELLED = 'cancelled';
+    /** O'qituvchi so'rovi: tasdiqlanguncha dars sanasi (eski yoki yangi) bugun yoki o'tgan kun bo'lib qolgan. */
+    public const EXPIRED = 'expired';
     /** Tasdiqsiz, darhol qo'llangan o'zgarish (faqat tarix uchun). */
     public const APPLIED = 'applied';
 

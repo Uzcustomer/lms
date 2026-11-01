@@ -751,3 +751,22 @@ it('takliflar: kutilayotgan so\'rovdagi yangi xona ham bron — boshqa guruh va 
     $propose($b, 'R2')->assertOk();
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(2);
 });
+
+it('takliflar: kafedra mudiri so\'rovi ham doska qulfi ostida bronlar bilan qayta tekshiriladi (parallel so\'rov o\'tmaydi)', function () {
+    $s = sapSetup();
+    $mk = fn (string $g) => sugCard($s, ['subject_name' => 'Fizika ' . $g, 'group_name' => 'g-06', 'kafedra_name' => 'Gigiyena kafedrasi']);
+    [$a, $b] = [$mk('a'), $mk('b')];
+    $body = fn ($c) => ['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1]]];
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body($a))->assertOk();
+    // b ning so'rovi a dan oldin sinovdan o'tgan deb (parallel) — to'g'ridan-to'g'ri submit: qulf ostida bron bilan rad etiladi.
+    $sub = \Illuminate\Http\Request::create('/', 'POST', $body($b));
+    $route = (new \Illuminate\Routing\Route('POST', '/', []))->name(\App\Http\Controllers\Admin\TimetableController::SUGGESTION_ROUTE);
+    $route->bind($sub);
+    $route->setParameter('board', $s['board']);
+    $sub->setRouteResolver(fn () => $route);
+    $svc = app(\App\Services\Timetable\TimetableChangeApproval::class);
+    $draft = $svc->draft($sub, $s['head'], $s['board'], 'kafedra_mudiri');
+    $draft['approval_stage'] = 'registrar';
+    expect(fn () => $svc->submit($draft))->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(1);
+});

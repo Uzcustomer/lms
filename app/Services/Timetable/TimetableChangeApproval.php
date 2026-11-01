@@ -384,7 +384,10 @@ class TimetableChangeApproval
                         . ($pending[(int) $cid]['stage'] ?? '') . ').');
                 }
             }
-            if (in_array($draft['requester_role'] ?? '', self::TEACHER_PROPOSAL_ROLES, true)) {
+            // O'qituvchi so'rovi va Takliflar (kafedra mudiri so'rovi ham): huquq va bandlik (bronlar bilan) qulf ostida qayta — parallel
+            // so'rovlar bir vaqtni ikkalasi band qila olmaydi.
+            if (in_array($draft['requester_role'] ?? '', self::TEACHER_PROPOSAL_ROLES, true)
+                || ($draft['route_name'] ?? '') === TimetableController::SUGGESTION_ROUTE) {
                 $replaced = TimetableChangeRequest::where('board_id', $draft['board_id'])
                     ->where('requester_type', $draft['requester_type'])->where('requester_id', $draft['requester_id'])
                     ->where('target_key', $draft['target_key'])->where('status', TimetableChangeRequest::PENDING)->pluck('id')->all();

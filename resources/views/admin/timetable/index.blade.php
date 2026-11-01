@@ -4340,7 +4340,9 @@
                     '<button type="button" id="htExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="htClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
                     '<div class="text-gray-500 text-[11px] mb-2">Faqat o\'zgartirish (o\'qituvchi, xona, para vaqti): bugun HEMIS\'ga dars qo\'shilmaydi va o\'chirilmaydi. ' +
-                    'Davomat olingan yoki baho qo\'yilgan darsga tegilmaydi — xatcho\'p yozishdan oldin HEMIS\'dan yana tekshiradi.</div>' +
+                    'Davomat olingan yoki baho qo\'yilgan darsga tegilmaydi — xatcho\'p yozishdan oldin HEMIS\'dan yana tekshiradi.' +
+                    (rep.timing ? ' <span title="HEMIS\'ni kutish / jami">· ' + rep.timing.groups + ' guruh, HEMIS ' + (rep.timing.hemis_ms / 1000).toFixed(1) +
+                        ' s / jami ' + (rep.timing.total_ms / 1000).toFixed(1) + ' s</span>' : '') + '</div>' +
                     (rep.missing_groups && rep.missing_groups.length ? '<div class="text-amber-700 mb-1">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.missing_groups.join(', ')) + '</div>' : '') +
                     (rep.import_failed ? '<div class="text-red-700 mb-1">' + rep.import_failed + ' ta guruh jadvali HEMIS\'dan yangilanmadi (javob bermadi) — ularning o\'zgartirishlari to\'siqli.</div>' : '');
                 const who = (a, b) => hsEsc(a || '—') + (b && b !== a ? ' → <b>' + hsEsc(b) + '</b>' : '');

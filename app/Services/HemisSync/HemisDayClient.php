@@ -9,12 +9,20 @@ use Illuminate\Support\Sleep;
 
 /**
  * HEMIS REST ro'yxatlari ("Bugungi darslar"): bir kunlik, guruh bo'yicha (schedule-list, attendance-control-list,
- * student-grade-list). HEMIS bir vaqtdagi ko'p so'rovni rad etadi — bir vaqtda ko'pi bilan CONCURRENCY ta so'rov,
- * muvaffaqiyatsizi (timeout, 5xx, 429, success: false) RETRY_DELAYS_MS kutib qayta yuboriladi.
+ * student-grade-list). HEMIS bir vaqtdagi ko'p so'rovni rad etadi — bir vaqtda ko'pi bilan CONCURRENCY ta so'rov
+ * (sirpanuvchi oyna: biri tugashi bilan keyingisi — to'da eng sekin so'rovni kutmaydi), muvaffaqiyatsizi (timeout, 5xx,
+ * 429, success: false) RETRY_DELAYS_MS kutib qayta yuboriladi. Guruhlar ko'p bo'lsa — kunning umumiy ro'yxati (guruh
+ * filtrisiz, sahifalab), sahifalari guruhlar sonidan kam bo'lsa: so'rovlar soni kamayadi.
  */
 class HemisDayClient
 {
     public const CONCURRENCY = 4;
+
+    /** Kunning umumiy ro'yxati shuncha va undan ko'p guruh so'ralganda sinab ko'riladi. */
+    public const BULK_MIN_GROUPS = 6;
+
+    /** Umumiy ro'yxat olinadigan ro'yxatlar (baho — har talaba bo'yicha, kunlik ro'yxati juda katta). */
+    public const BULK_ENDPOINTS = ['schedule-list', 'attendance-control-list'];
 
     /** Qayta urinishlar oldidan kutish (ms): 1-urinish muvaffaqiyatsiz bo'lsa 0.5 s, 2-sidan keyin 1.5 s. */
     public const RETRY_DELAYS_MS = [500, 1500];
@@ -50,18 +58,13 @@ class HemisDayClient
                 Sleep::for($delay)->milliseconds();
             }
             $retry = [];
-            foreach (array_chunk($pending, self::CONCURRENCY) as $batch) {
-                $responses = Http::pool(fn ($pool) => array_map(fn ($k) => $pool->as($k)->withoutVerifying()
-                    ->connectTimeout(self::CONNECT_TIMEOUT)->timeout(self::TIMEOUT)->withToken($token)->get($url, $requests[$k]), $batch));
-                foreach ($batch as $k) {
-                    $r = $responses[$k] ?? null;
-                    if ($r instanceof Response && $r->successful() && $r->json('success') !== false) {
-                        $out[$k] = $r;
-                    } elseif (!$r instanceof Response || $r->serverError() || $r->status() === 429 || $r->successful()) {
-                        $retry[] = $k;   // timeout/ulanish, 5xx, 429, success: false
-                    } else {
-                        $out[$k] = null;
-                    }
+            foreach ($this->sendLimited($url, $token, array_intersect_key($requests, array_flip($pending))) as $k => $r) {
+                if ($r instanceof Response && $r->successful() && $r->json('success') !== false) {
+                    $out[$k] = $r;
+                } elseif (!$r instanceof Response || $r->serverError() || $r->status() === 429 || $r->successful()) {
+                    $retry[] = $k;   // timeout/ulanish, 5xx, 429, success: false
+                } else {
+                    $out[$k] = null;
                 }
             }
             $pending = $retry;
@@ -73,6 +76,37 @@ class HemisDayClient
         return $out;
     }
 
+    /** Guzzle ishlovchisi (curl multi) — barcha so'rovlar uchun bitta, Http::pool dagidek. */
+    protected function handler(): callable
+    {
+        return \GuzzleHttp\Utils::chooseHandler();
+    }
+
+    /**
+     * So'rovlar sirpanuvchi oynada: bir vaqtda ko'pi bilan CONCURRENCY ta, biri tugashi bilan keyingisi yuboriladi (Http::pool
+     * dagidek bitta curl multi). Qaytaradi: [kalit => Response | ulanish xatosi (Throwable)] — so'rovlar tartibida.
+     */
+    private function sendLimited(string $url, string $token, array $requests): array
+    {
+        $handler = $this->handler();
+        $make = function () use ($requests, $handler, $url, $token) {
+            foreach ($requests as $k => $q) {
+                yield (string) $k => Http::setHandler($handler)->async()->withoutVerifying()->connectTimeout(self::CONNECT_TIMEOUT)
+                    ->timeout(self::TIMEOUT)->withToken($token)->get($url, $q);
+            }
+        };
+        $got = [];
+        \GuzzleHttp\Promise\Each::ofLimit($make(), self::CONCURRENCY,
+            function ($r, $k) use (&$got) {
+                $got[(string) $k] = $r;
+            },
+            function ($e, $k) use (&$got) {
+                $got[(string) $k] = $e;
+            })->wait();
+
+        return array_replace(array_fill_keys(array_keys($requests), null), $got);
+    }
+
     /**
      * Har guruh uchun shu kunning barcha sahifalari (_group + lesson_date_from/to): [guruh => yozuvlar | null].
      * Biror sahifa olinmasa — guruh null (chala ro'yxat ishlatilmaydi).
@@ -82,6 +116,10 @@ class HemisDayClient
         $groupIds = array_values(array_unique(array_map('intval', array_filter($groupIds))));
         $base = ['lesson_date_from' => Carbon::parse($date)->startOfDay()->timestamp,
             'lesson_date_to' => Carbon::parse($date)->endOfDay()->timestamp, 'limit' => 200];
+        if (count($groupIds) >= max(1, (int) config('services.hemis.day_bulk_min_groups', self::BULK_MIN_GROUPS)) && in_array($endpoint, self::BULK_ENDPOINTS, true)
+            && ($bulk = $this->bulkDayList($endpoint, $groupIds, $base)) !== null) {
+            return $bulk;
+        }
         $page = fn (int $g, int $p) => $base + ['_group' => $g, 'page' => $p];
         $out = [];
         $more = [];
@@ -96,6 +134,45 @@ class HemisDayClient
         foreach ($more ? $this->getMany($endpoint, $more) : [] as $k => $r) {
             $g = (int) explode('|', $k)[0];
             $out[$g] = $r && $out[$g] !== null ? array_merge($out[$g], (array) $r->json('data.items', [])) : null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Kunning umumiy ro'yxati (guruh filtrisiz): 1-sahifa, so'ng qolgan sahifalar birga; yozuvlar guruh bo'yicha ajratiladi.
+     * null — guruhlab so'rash kerak: sahifalar guruhlar sonidan kam emas (arzon emas), biror sahifa olinmadi yoki yozuvda
+     * guruh yo'q (chala/aniqlanmaydigan ro'yxat ishlatilmaydi).
+     */
+    private function bulkDayList(string $endpoint, array $groupIds, array $base): ?array
+    {
+        $first = $this->getMany($endpoint, ['1' => $base + ['page' => 1]])['1'] ?? null;
+        if (!$first) {
+            return null;
+        }
+        $pages = max(1, (int) $first->json('data.pagination.pageCount', 1));
+        if ($pages >= count($groupIds)) {
+            return null;
+        }
+        $items = (array) $first->json('data.items', []);
+        if ($pages > 1) {
+            $rest = range(2, $pages);
+            foreach ($this->getMany($endpoint, array_combine($rest, array_map(fn ($p) => $base + ['page' => $p], $rest))) as $r) {
+                if (!$r) {
+                    return null;
+                }
+                array_push($items, ...array_values((array) $r->json('data.items', [])));
+            }
+        }
+        $out = array_fill_keys($groupIds, []);
+        foreach ($items as $it) {
+            $g = (int) ($it['group']['id'] ?? 0);
+            if ($g === 0) {
+                return null;
+            }
+            if (isset($out[$g])) {
+                $out[$g][] = $it;
+            }
         }
 
         return $out;

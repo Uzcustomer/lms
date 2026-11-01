@@ -1368,8 +1368,8 @@ trait TimetableHemisSync
                 if ($k === $unitKey && $s === $a['start']) {
                     continue;   // shu yozuvning o'zi
                 }
-                if ($emp !== '' && $room !== '' && $oEmp === $emp && $oRoom === $room) {
-                    continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim)
+                if ($emp !== '' && $room !== '' && $oEmp === $emp && $oRoom === $room && $s === $a['start'] && $e === $a['end']) {
+                    continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim) — aynan o'sha vaqtda; boshqa vaqt — to'siq
                 }
                 if ($s < $a['end'] && $a['start'] < $e) {
                     // Kim (o'qituvchi) yoki qaysi xona band, qaysi dars bilan, qaysi vaqtda (va u darsning xonasi/o'qituvchisi).
@@ -1810,6 +1810,8 @@ trait TimetableHemisSync
      */
     private function hemisTodayReport(TimetableBoard $board, array $scope, string $today): array
     {
+        $t0 = microtime(true);
+        $hemisMs = 0;   // HEMIS'ni kutish (jadval importi + davomat/baho) — "≤ 10 s" tekshiruvi uchun javobda
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
         $cards = $this->cardRows($board, fn ($q) => $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet));
         $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
@@ -1893,7 +1895,9 @@ trait TimetableHemisSync
             array_push($groups[$gid]['lms'], ...($lms[$gk] ?? []));
         }
         $date = Carbon::parse($today);
+        $t = microtime(true);
         $import = $groups ? app(\App\Services\ScheduleImportService::class)->importGroupsOnDate(array_keys($groups), $date) : ['failed' => []];
+        $hemisMs += (int) round((microtime(true) - $t) * 1000);
         $importFailed = array_flip($import['failed']);
         $hemisRows = $groups ? DB::table('schedules')->whereIn('group_id', array_keys($groups))->whereNull('deleted_at')
             ->whereBetween('lesson_date', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
@@ -1994,6 +1998,10 @@ trait TimetableHemisSync
                         $x['time_passed'] = "{$x['new_start']}–{$x['new_end']}";
                         [$x['new_start'], $x['new_end']] = [$x['start'], $x['end']];
                     }
+                    // Bitta LMS ma'ruza oqimi (bir xil fan, LMS o'qituvchisi, xona va yakuniy vaqt) — guruhlari bir-birini to'smaydi
+                    // (HEMIS'dagi o'qituvchi/xonasi hozir har xil bo'lsa ham).
+                    $x['flow'] = $r['part'] === 'L'
+                        ? implode('|', ['L', $r['key'], (string) $r['emp'], (string) $r['room'], $x['new_start'], $x['new_end']]) : null;
                     if ($x['new_start'] !== $x['start'] || $x['new_end'] !== $x['end']) {
                         $x['changes'][] = "vaqt: {$x['start']}–{$x['end']} → {$x['new_start']}–{$x['new_end']}";
                     }
@@ -2049,7 +2057,9 @@ trait TimetableHemisSync
                 $askIds[$x['group_hemis_id']][] = $x['hemis_id'];
             }
         }
+        $t = microtime(true);
         [$locks, $lockFailed] = $this->hemisTodayLockMap($askIds, $today);
+        $hemisMs += (int) round((microtime(true) - $t) * 1000);
         $lockFailed = array_flip($lockFailed);
         foreach ($out as $i => $x) {
             if ($x['status'] !== 'update') {
@@ -2103,6 +2113,7 @@ trait TimetableHemisSync
             'rows' => $rows,
             'missing_groups' => array_values(array_unique($missing)),
             'import_failed' => count($importFailed),
+            'timing' => ['groups' => count($groups), 'hemis_ms' => $hemisMs, 'total_ms' => (int) round((microtime(true) - $t0) * 1000)],
             'json' => [
                 'mode' => 'today', 'today' => $today, 'hemis_pairs' => self::HEMIS_PAIRS,
                 'lock_check_url' => \Illuminate\Support\Facades\URL::temporarySignedRoute('hemis-today-locks', $this->hemisTodayLockExpiry($today),
@@ -2211,12 +2222,14 @@ trait TimetableHemisSync
             // LMS'da o'qituvchisi biriktirilmagan dars — HEMIS'dagi o'qituvchisi (kafedra mudiri) bandlik hisoblanmaydi.
             $forced = $x ? !$x['teacher_set'] : $isMudir($r->department_id, $r->employee_id);
             // moving — hozirgi joy, lekin dars o'zgartiriladi (shu nomzod indeksi): u ko'chgach bo'shaydi.
+            // flow — LMS oqim kaliti: o'zgarmaydigan (ok) darsning hozirgi joyi LMS'dagisi bilan bir xil; o'zgaradiganniki — yangi joyida.
             $spots[] = $base + ['s' => $hm($r->lesson_pair_start_time), 'e' => $hm($r->lesson_pair_end_time), 'emp' => (string) $r->employee_id,
                 'emp_name' => $r->employee_name, 'room' => (string) $r->auditorium_code, 'room_name' => $r->auditorium_name, 'forced' => $forced,
-                'moving' => $candOf[(int) $id] ?? null];
+                'moving' => $candOf[(int) $id] ?? null, 'flow' => $x && $x['status'] === 'ok' ? ($x['flow'] ?? null) : null];
             if ($x && $x['status'] === 'update') {
                 $spots[] = $base + ['s' => $x['new_start'], 'e' => $x['new_end'], 'emp' => (string) $x['new_employee_id'], 'emp_name' => $x['new_employee_name'],
-                    'room' => (string) $x['new_auditorium_code'], 'room_name' => $x['new_auditorium_name'], 'forced' => $forced, 'moving' => null];
+                    'room' => (string) $x['new_auditorium_code'], 'room_name' => $x['new_auditorium_name'], 'forced' => $forced, 'moving' => null,
+                    'flow' => $x['flow'] ?? null];
             }
         }
         $deps = [];      // nomzod => [kutadigan nomzod => sabab]: u o'z joyidan avval ko'chishi kerak
@@ -2246,7 +2259,11 @@ trait TimetableHemisSync
                     continue;
                 }
                 $label = $o['group'] . ' · ' . $o['subject'] . ' ' . $o['s'] . '–' . $o['e'];
-                $shared = $emp !== '' && $room !== '' && $o['emp'] === $emp && $o['room'] === $room;
+                // Bitta dars: shu LMS oqimi yoki HEMIS'dagi oqim/umumiy dars — o'sha fan, o'qituvchi, xona va aynan o'sha vaqt.
+                // Boshqa fan, boshqa o'qituvchi yoki boshqa (kesishgan) vaqt — to'siq.
+                $shared = ($x['flow'] ?? null) !== null && $o['flow'] === $x['flow']
+                    || $emp !== '' && $room !== '' && $o['emp'] === $emp && $o['room'] === $room && $o['s'] === $s && $o['e'] === $e
+                        && $this->hemisSubjectKey((string) $o['subject']) === $this->hemisSubjectKey((string) $x['subject']);
                 $text = null;
                 if ($timeChanged && $o['group_id'] === (int) $x['group_hemis_id']) {
                     $text = "guruhning boshqa darsi bilan ustma-ust: {$o['subject']} {$o['s']}–{$o['e']}";

@@ -770,3 +770,28 @@ it('takliflar: kafedra mudiri so\'rovi ham doska qulfi ostida bronlar bilan qayt
     expect(fn () => $svc->submit($draft))->toThrow(\Illuminate\Validation\ValidationException::class);
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(1);
 });
+
+it('takliflar: o\'qituvchi almashtirishda boshqa haftalarda faqat yangi o\'qituvchi bandligi tekshiriladi (kartaning o\'z xona to\'qnashuvi to\'smaydi)', function () {
+    $s = sapSetup();
+    $n = sugTeacher('YANGI O.');
+    // own: shablonda 1-kun 5-katak, xona R9; 4-haftada shu xonada boshqa guruh darsi (kartaning o'z, eski xona to'qnashuvi).
+    $s['own']->update(['day' => 1, 'pair' => 5, 'auditorium_code' => 'R9', 'auditorium_name' => 'R9']);
+    $x = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-07', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
+        'auditorium_code' => 'R9', 'auditorium_name' => 'R9']);
+    TimetableCardOverride::create(['card_id' => $x->id, 'week' => 4, 'day' => 1, 'pair' => 5]);
+    $body = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+        ['op' => 'teacher', 'card_id' => $s['own']->id, 'teacher_id' => $n->id],
+        ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 2, 'pair' => 3],
+    ]];
+    $url = route('admin.timetable.week-suggestions.apply', $s['board']);
+    // Yangi o'qituvchi 5-haftada shu vaqtda band — rad (o'qituvchi to'qnashuvi).
+    $z = sugCard($s, ['subject_name' => 'Fizika', 'group_name' => 'g-08', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => $n->id]);
+    $zo = TimetableCardOverride::create(['card_id' => $z->id, 'week' => 5, 'day' => 1, 'pair' => 5]);
+    sugAs($s['admin'], 'superadmin')->postJson($url, $body)->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, '5-hafta') && str_contains($m, "O'qituvchi band"));
+    expect($s['own']->fresh()->teacher_id)->toBe($s['t']->id);
+    // U bo'shasa — 4-haftadagi xona to'qnashuviga qaramay qo'llanadi.
+    $zo->delete();
+    sugAs($s['admin'], 'superadmin')->postJson($url, $body)->assertOk();
+    expect($s['own']->fresh()->teacher_id)->toBe($n->id)
+        ->and(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(2);
+});

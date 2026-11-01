@@ -348,11 +348,15 @@ trait TimetableSuggestionApply
                 return implode(' · ', $errs);
             }
         }
+        // Almashgan o'qituvchi butun semestr uchun: boshqa haftalarda faqat uning bandligi (takliflar hisobidagidek) — kartaning boshqa
+        // haftadagi o'z (xona/guruh) to'qnashuvi bu almashtirishni to'smaydi; ko'chirilgan hafta yuqorida to'liq tekshirilgan.
         foreach ($teacherChanged as $card) {
             $card->refresh();
             $card->setRelation('board', $board);
             for ($w = 1; $w <= (int) $this->cardGrid($board, $card)['weeks']; $w++) {
-                if (($pl = $this->suggestionPlace($card, $w)) && ($c = $this->findWeekConflicts($card, $w, $pl[0], $pl[1]))) {
+                $c = ($pl = $this->suggestionPlace($card, $w)) ? array_values(array_filter($this->findWeekConflicts($card, $w, $pl[0], $pl[1]),
+                    fn ($m) => str_starts_with((string) $m, "O'qituvchi band"))) : [];
+                if ($c) {
                     return '«' . $card->subject_name . '» (' . $w . '-hafta): ' . implode(' · ', $c);
                 }
             }

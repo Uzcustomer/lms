@@ -6380,10 +6380,13 @@ class TimetableController extends Controller
         $occ = [];   // "t|o'qituvchi|sana" / "r|xona|sana" => [yozuv, ...]
         $byGroup = [];   // "guruhcha|sana" => [yozuv, ...] — guruh bir vaqtda ikki joyda
         foreach ($this->cycleOccupancy($board, $units, $calendar) as $e) {
-            // Umumiy "A + B" birligi — har bir guruhcha nomi bo'yicha.
-            foreach (preg_split('/\s*\+\s*/u', mb_strtolower(trim((string) ($units[$e['unit']]['group'] ?? '')))) as $g) {
+            // Umumiy "A + B" birligi — har bir guruhcha nomi bo'yicha; guruh nomi fakultet / yo'nalish / kurslar bo'ylab takrorlanadi —
+            // kalitda qamrov ham (groupScopeKey dagidek).
+            $gu = $units[$e['unit']] ?? [];
+            $scope = mb_strtolower(trim((string) ($gu['faculty'] ?? ''))) . '|' . mb_strtolower(trim((string) ($gu['specialty'] ?? ''))) . '|' . (int) ($gu['course'] ?? 0);
+            foreach (preg_split('/\s*\+\s*/u', mb_strtolower(trim((string) ($gu['group'] ?? '')))) as $g) {
                 if ($g !== '') {
-                    $byGroup[$g . '|' . $e['date']][] = $e;
+                    $byGroup[$scope . '|' . $g . '|' . $e['date']][] = $e;
                 }
             }
             if ($e['teacher_id']) {

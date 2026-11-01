@@ -6139,6 +6139,7 @@
                 if (typeof closeCycDayPop === 'function') closeCycDayPop();
                 const dates = j.dates || [], allRows = j.rows || [];
                 cfOwners = cfLectureOwners(allRows);
+                cfMergeLectureItems(allRows, cfOwners);
                 cfBlocks = {};
                 allRows.forEach(r => (r.blocks || []).forEach(b => { cfBlocks[b.key] = { key: b.key, subject: b.subject, group: r.group, conflicts: b.conflicts || [] }; }));
                 // "Guruh" ustuni sarlavhasidan tanlangan bitta guruh/oqim (bo'lmasa hammasi).
@@ -6560,6 +6561,19 @@
                     if (i.lecture && i.lecture_id && !owner[i.lecture_id]) owner[i.lecture_id] = b.key;
                 })));
                 return owner;
+            }
+            // Guruhchalarning joylashuvi / ma'ruza soati har xil bo'lsa, bitta ma'ruzaning to'qnashuvlari ham har xil: egasi blokiga
+            // boshqa bloklardagi farqli bandlar qo'shiladi (aks holda "ma'ruzada muammo bor ↗" egasidagi boshqa bandni ko'rsatardi).
+            function cfMergeLectureItems(rows, owner) {
+                const byKey = {};
+                (rows || []).forEach(r => (r.blocks || []).forEach(b => { byKey[b.key] = b; }));
+                (rows || []).forEach(r => (r.blocks || []).forEach(b => (b.conflicts || []).forEach(i => {
+                    const ok = i.lecture && i.lecture_id ? owner[i.lecture_id] : null;
+                    const target = ok && ok !== b.key ? byKey[ok] : null;
+                    if (!target) return;
+                    const sig = x => [x.kind, x.line || x.detail || '', x.past ? 1 : 0].join('|');
+                    if (!(target.conflicts || []).some(x => sig(x) === sig(i))) target.conflicts = (target.conflicts || []).concat([i]);
+                })));
             }
             function cfSplit(key, items, owner) {
                 const own = (items || []).filter(i => !i.lecture || !i.lecture_id || owner[i.lecture_id] === key);

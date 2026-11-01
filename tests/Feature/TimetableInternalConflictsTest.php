@@ -616,3 +616,23 @@ it('cycle-week: tanlangan haftadagi sikl darslari — ma\'ruza bir marta (oqim g
         ->and($week($admin, 'admin', ['week' => 1, 'courses' => [4]])['lessons'])->toBe([])
         ->and($week($admin, 'admin', ['week' => 1, 'layer' => 'external']))->toMatchArray(['lessons' => []]);
 });
+
+it('to\'qnashuvlar: guruh bandligi qamrov bo\'yicha — boshqa yo\'nalishdagi bir xil nomli guruhcha (Codex)', function () {
+    $s = icSetup(['d22-05a' => [icTeacher('USTOZ'), null, 10]], ['d22-05a' => 0]);
+    // Pediatriyada ham "d22-05a" (nom fakultet/yo'nalishlar bo'ylab takrorlanadi) — shu kunlarda boshqa sikl fani, boshqa o'qituvchi.
+    TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'pediatriya', 'course' => 5,
+        'subject_name' => 'Pediatriya', 'mode' => 'cycle', 'cycle_days' => 5]);
+    $card = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'pediatriya', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Pediatriya', 'group_name' => 'd22-05a', 'kafedra_name' => 'Pediatriya kafedrasi',
+        'teacher_id' => icTeacher('BOSHQA')->id, 'teacher_name' => 'BOSHQA']);
+    TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'pediatriya', 'course' => 5,
+        'group_name' => 'd22-05a', 'subject_name' => 'Pediatriya', 'start_index' => 0, 'training_type' => 'practice']);
+    expect(icConflicts($s['board']))->toBe([]);
+    // O'sha yo'nalishda (davolash ishi) bo'lsa — guruh band.
+    $card->update(['specialty_name' => 'davolash ishi']);
+    TimetableSubjectSetting::where('subject_name', 'Pediatriya')->update(['specialty_name' => 'davolash ishi']);
+    TimetableCyclePlacement::where('subject_name', 'Pediatriya')->update(['specialty_name' => 'davolash ishi']);
+    $c = icConflicts($s['board']);
+    expect(collect($c)->flatMap(fn ($x) => array_column($x['items'], 'kind'))->unique()->values()->all())->toBe(['group_busy']);
+});

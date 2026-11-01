@@ -10,7 +10,7 @@ const b = source.indexOf('            // Ichki jadval: kun ustunini tanlash, kun
 assert(a > 0 && b > a);
 const ctx = { esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') };
 vm.createContext(ctx);
-vm.runInContext(source.slice(a, b) + '\nObject.assign(this, { cfLevel, cfBadgeText, cfGroups, cfLineHtml, cfLectureOwners, cfSplit, cfBadgeHtml, cfBlockClass, cfSummaryCounts, cfMatchesFilter, audVolumeHtml });', ctx);
+vm.runInContext(source.slice(a, b) + '\nObject.assign(this, { cfLevel, cfBadgeText, cfGroups, cfLineHtml, cfLectureOwners, cfMergeLectureItems, cfSplit, cfBadgeHtml, cfBlockClass, cfSummaryCounts, cfMatchesFilter, audVolumeHtml });', ctx);
 
 const T = (o = {}) => Object.assign({ kind: 'teacher_busy', type: 'teacher', who: 'SHARIPOV K.', groups: ['d22-05b'], dates: '16.09–18.09', past: false, todo: "boshqa o'qituvchi biriktiring" }, o);
 const R = (o = {}) => T(Object.assign({ kind: 'room_capacity', type: 'room', who: '305', groups: ['d22-05c'], todo: 'kattaroq xona tanlang' }, o));
@@ -46,6 +46,21 @@ assert.equal(ctx.cfBlockClass('B', [L, R()], owner), ' is-conflict-warn');
 assert.equal(ctx.cfBlockClass('A', [L], owner), ' is-conflict');
 assert.equal(ctx.cfBlockClass('C', [T({ past: true })], owner), ' is-conflict-past');
 
+// Guruhchalarda bitta ma'ruzaning to'qnashuvlari har xil (joylashuv / soat farqi): egasida o'tgan, boshqasida kelgusi — egasiga qo'shiladi,
+// takrorlanganlari bir marta; egasi bloki rangi kelgusi bo'yicha, havola egasidagi to'liq ro'yxatni ochadi.
+const Lp = T({ lecture: true, lecture_id: 88, who: 'LEKTOR', past: true, line: "O'qituvchi LEKTOR band: d22-07a, 01.09" });
+const Lf = T({ lecture: true, lecture_id: 88, who: 'LEKTOR', line: "O'qituvchi LEKTOR band: d22-07b, 21.09" });
+const rows2 = [{ blocks: [{ key: 'P', conflicts: [Lp] }] }, { blocks: [{ key: 'Q', conflicts: [Lf, Lp] }] }, { blocks: [{ key: 'S', conflicts: [Lf] }] }];
+assert.match(source, /cfOwners = cfLectureOwners\(allRows\);\n\s+cfMergeLectureItems\(allRows, cfOwners\);/);
+const owner2 = ctx.cfLectureOwners(rows2);
+assert.equal(owner2[88], 'P');
+ctx.cfMergeLectureItems(rows2, owner2);
+ctx.cfMergeLectureItems(rows2, owner2);   // qayta chizish — takrorlanmaydi
+assert.deepEqual(rows2[0].blocks[0].conflicts.map(i => i.line), ["O'qituvchi LEKTOR band: d22-07a, 01.09", "O'qituvchi LEKTOR band: d22-07b, 21.09"]);
+assert.equal(ctx.cfBlockClass('P', rows2[0].blocks[0].conflicts, owner2), ' is-conflict');
+assert.equal(rows2[1].blocks[0].conflicts.length, 2);   // boshqa bloklar o'zgarmaydi (havola bilan)
+assert.match(ctx.cfBadgeHtml('Q', rows2[1].blocks[0].conflicts, owner2), /^<span class="cf-lecture-link"[^>]*data-cf-lecture="88"/);
+
 // Yig'indi: ma'ruza bir marta; filtr turi bo'yicha.
 const cards = [{ key: 'A', conflicts: [L] }, { key: 'B', conflicts: [L, R()] }, { key: 'C', conflicts: [T({ past: true })] }];
 assert.deepEqual(JSON.parse(JSON.stringify(ctx.cfSummaryCounts(cards))), { teacher: 1, room: 1 });
@@ -57,4 +72,4 @@ assert.equal(ctx.cfMatchesFilter(cards[2], 'teacher'), false);
 assert.match(ctx.audVolumeHtml(0), /aud-vol-bad.*kiritilmagan/);
 assert.match(ctx.audVolumeHtml(10), /aud-vol-warn.*10 · shubhali/);
 assert.equal(ctx.audVolumeHtml(30), '30');
-console.log('timetable conflict badges: 7 scenarios passed');
+console.log('timetable conflict badges: 8 scenarios passed');

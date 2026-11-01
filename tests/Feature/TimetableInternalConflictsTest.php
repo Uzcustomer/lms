@@ -572,3 +572,47 @@ it('haftalik: /conflicts?items=1&week=N — shu hafta tuzilgan ro\'yxati (o\'tga
     // Oddiy so'rov: faqat kelgusi haftalar matni.
     expect(array_keys($get()['weekly'][$a->id]))->toBe([2, 3]);
 });
+
+it('cycle-week: tanlangan haftadagi sikl darslari — ma\'ruza bir marta (oqim guruhlari bilan), amaliy kun rejasi bo\'yicha, so\'rash huquqi, hafta chegarasi', function () {
+    $hall = Auditorium::create(['code' => 'ZAL', 'name' => 'Zal', 'volume' => 15, 'active' => true]);
+    $lector = icTeacher('LEKTOR', 'oqituvchi');
+    $ustoz = icTeacher('USTOZ', 'oqituvchi');
+    $s = icLectureSetup($lector, $ustoz, $hall);
+    $admin = icTeacher('ADMIN', 'admin');
+    $week = fn ($who, string $role, array $body) => test()->withoutVite()->actingAs($who, 'teacher')->withSession(['active_role' => $role])
+        ->postJson(route('admin.timetable.cycle-week', $s['board']), $body)->assertOk()->json();
+    $all = collect($week($admin, 'admin', ['week' => 1])['lessons']);
+    // Ma'ruzalar: 1-oqim 14.09 va 15.09 (05a + 05b birga, bitta dars), 2-oqim 15.09 va 16.09 (06a) — LEKTOR, Zal.
+    $lec = $all->where('training_type', 'lecture')->values();
+    expect($lec->map(fn ($l) => [$l['date'], $l['flow'], $l['group_names'], $l['day'], $l['pair'], $l['len_half']])->all())->toBe([
+        ['2026-09-14', 'F1 / 1-oqim', ['d22-05a', 'd22-05b'], 1, 1, 2],
+        ['2026-09-15', 'F1 / 1-oqim', ['d22-05a', 'd22-05b'], 2, 1, 2],
+        ['2026-09-15', 'F1 / 2-oqim', ['d22-06a'], 2, 1, 2],
+        ['2026-09-16', 'F1 / 2-oqim', ['d22-06a'], 3, 1, 2],
+    ])->and($lec[0])->toMatchArray(['cycle' => true, 'teacher_id' => $lector->id, 'teacher_name' => 'LEKTOR', 'auditorium_name' => 'Zal',
+        'auditorium_volume' => 15, 'subject_name' => 'Klinik farmakologiya', 'ask' => false]);
+    // Fan kesimi: barcha Klinik farmakologiya guruhlari.
+    expect($all->pluck('group_name')->unique()->sort()->values()->all())->toBe(['d22-05a', 'd22-05b', 'd22-06a']);
+    // 05a amaliyoti: 14.09 — ma'ruzadan keyin 3-soatdan 4 soat; 16.09 — 1-soatdan 6 soat (ma'ruza yo'q).
+    $p05a = $all->where('training_type', 'practice')->where('group_name', 'd22-05a')->values();
+    expect($p05a->map(fn ($l) => [$l['date'], $l['pair'], $l['len_half']])->all())->toBe([
+        ['2026-09-14', 3, 4], ['2026-09-15', 3, 4], ['2026-09-16', 1, 6], ['2026-09-17', 1, 6], ['2026-09-18', 1, 6],
+    ])->and($p05a[0])->toMatchArray(['teacher_id' => $ustoz->id, 'key' => 'davolash ishi|5|d22-05a|Klinik farmakologiya|practice'])
+        ->and($p05a[0]['dp'])->toMatchArray(['k' => 1, 'lec' => 2, 'prc' => 4, 'start' => 1, 'ps' => 3]);
+    // So'rash: o'qituvchining o'z amaliy darsi (ertadan); boshqalarniki va ma'ruza — yo'q.
+    $mine = collect($week($ustoz, 'oqituvchi', ['week' => 1])['lessons']);
+    expect($mine->where('group_name', 'd22-05a')->where('training_type', 'practice')->pluck('ask')->unique()->all())->toBe([true])
+        ->and($mine->where('group_name', 'd22-05b')->pluck('ask')->unique()->all())->toBe([false])
+        ->and($mine->where('training_type', 'lecture')->pluck('ask')->unique()->all())->toBe([false])
+        // Ma'ruzachining o'z ma'ruzasi ham — so'rash faqat amaliy dars uchun.
+        ->and(collect($week($lector, 'oqituvchi', ['week' => 1])['lessons'])->where('teacher_id', $lector->id)->pluck('ask')->unique()->all())->toBe([false]);
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-16 09:00', 'Asia/Tashkent'));
+    expect(collect($week($ustoz, 'oqituvchi', ['week' => 1])['lessons'])->where('group_name', 'd22-05a')->where('training_type', 'practice')
+        ->mapWithKeys(fn ($l) => [$l['date'] => $l['ask']])->all())
+        ->toBe(['2026-09-14' => false, '2026-09-15' => false, '2026-09-16' => false, '2026-09-17' => true, '2026-09-18' => true]);
+    // 2-hafta: 1-oqim bloki tugagan (14–18.09), 2-oqim — 15–19.09: darslar yo'q.
+    expect($week($admin, 'admin', ['week' => 2])['lessons'])->toBe([])
+        // Qamrov (kurs) va tashqi qatlam — bo'sh.
+        ->and($week($admin, 'admin', ['week' => 1, 'courses' => [4]])['lessons'])->toBe([])
+        ->and($week($admin, 'admin', ['week' => 1, 'layer' => 'external']))->toMatchArray(['lessons' => []]);
+});

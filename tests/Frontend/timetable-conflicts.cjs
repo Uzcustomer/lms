@@ -48,6 +48,7 @@ const ctx = {
     },
     URLSearchParams, Object, Set, Promise, Error, Number, String,
     cycleLayerParams: () => ({ layer: 'internal' }),
+    CROSS_MODES: ['teacher', 'subject', 'room'], cycleWeekLessons: () => [],
     ttToast: html => { (ctx.toasts = ctx.toasts || []).push(html); },
 };
 vm.createContext(ctx);

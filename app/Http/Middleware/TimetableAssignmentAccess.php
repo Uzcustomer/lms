@@ -54,7 +54,7 @@ class TimetableAssignmentAccess
         if ($user && in_array($activeRole, ['oqituvchi', 'fan_masuli'], true)) {
             // Excelga yuklash faqat klient yuborgan (o'zi ko'rib turgan) panjarani
             // faylga yozadi — yangi ma'lumot ochmaydi, shuning uchun ruxsat.
-            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.boards.conflicts', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check', 'admin.timetable.cycle-time-proposal', 'admin.timetable.cycle-time-proposal.check',
+            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.boards.conflicts', 'admin.timetable.cycle-plan', 'admin.timetable.cycle-week', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check', 'admin.timetable.cycle-time-proposal', 'admin.timetable.cycle-time-proposal.check',
                 // Takliflar: o'z qamrovida ko'rish va so'rov yuborish (huquqni controller tekshiradi).
                 // apply — faqat admin huquqi bo'lsa (boshqa roli admin bo'lsa ham): executor o'zi tekshiradi.
                 'admin.timetable.boards.week-suggestions', 'admin.timetable.week-suggestions.propose', 'admin.timetable.week-suggestions.apply'])) {
@@ -77,6 +77,8 @@ class TimetableAssignmentAccess
                 'admin.timetable.boards.data',
                 // Ichki jadvaldagi to'qnashuvlar (hisoblagich va panel uchun, faqat o'qiydi)
                 'admin.timetable.boards.conflicts',
+                // Haftalik kesimlardagi sikl darslari (faqat o'qiydi)
+                'admin.timetable.cycle-week',
                 // O'zgarish so'rovlari: o'z so'rovlarini ko'rish / bekor qilish
                 'admin.timetable.change-requests.index',
                 'admin.timetable.change-requests.cancel',

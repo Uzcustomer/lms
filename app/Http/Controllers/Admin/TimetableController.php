@@ -6195,6 +6195,9 @@ class TimetableController extends Controller
         $cardInfo = $cardIds ? DB::table('timetable_cards')->whereIn('id', $cardIds)
             ->get(['id', 'training_type', 'kafedra_name', 'subject_name', 'specialty_name', 'course', 'faculty_name', 'teacher_id'])->keyBy('id') : collect();
         $volumes = Auditorium::pluck('volume', 'code')->all();
+        // Sikl kun rejasi akademik soatlarda (to'liq 80–90 daqiqalik parada 1 para = 2 soat, cycleRowHours) — haftalik panjara
+        // qatori esa bitta qo'ng'iroq bandi: pair / len_half — panjara qatorlarida, hour / hours — asl soatlar (oyna vaqti uchun).
+        $rh = max(1, $this->cycleRowHours($board));
         $lessons = [];
         foreach ($occ as $e) {
             $u = $units[$e['unit']];
@@ -6204,8 +6207,9 @@ class TimetableController extends Controller
             }
             $card = $cardInfo[(int) $e['card']] ?? null;
             $lecture = str_starts_with((string) $e['load_key'], 'l');
-            // Oqim ma'ruzasi har guruhcha birligida takrorlanadi — bitta dars, guruhlari qo'shiladi.
-            $k = ($lecture ? 'L' : 'P' . $e['unit'] . '|') . $e['card'] . '|' . $e['date'] . '|' . $e['from'];
+            // Oqim ma'ruzasi va umumiy ("A + B") amaliy karta har guruhcha birligida takrorlanadi — o'sha karta, sana va vaqt — bitta
+            // dars, guruhlari qo'shiladi; joylashuvi / vaqti boshqa bo'lsa — alohida dars.
+            $k = ($lecture ? 'L' : 'P') . $e['card'] . '|' . $e['date'] . '|' . $e['from'] . '|' . $e['to'];
             if (isset($lessons[$k])) {
                 $lessons[$k]['group_names'] = array_values(array_unique(array_merge($lessons[$k]['group_names'], [(string) $u['group']])));
                 continue;
@@ -6220,7 +6224,9 @@ class TimetableController extends Controller
                 'kafedra_name' => $card->kafedra_name ?? null, 'teacher_id' => $e['teacher_id'], 'teacher_name' => $e['teacher'],
                 'auditorium_code' => $e['room'], 'auditorium_name' => $e['room_name'] ?: null,
                 'auditorium_volume' => $e['room'] !== null ? ($volumes[$e['room']] ?? null) : null,
-                'date' => $e['date'], 'day' => $day, 'pair' => (int) $e['from'], 'len_half' => max(1, (int) $e['to'] - (int) $e['from']),
+                'date' => $e['date'], 'day' => $day, 'pair' => intdiv((int) $e['from'] - 1, $rh) + 1,
+                'len_half' => max(1, intdiv(max((int) $e['from'], (int) $e['to'] - 1) - 1, $rh) - intdiv((int) $e['from'] - 1, $rh) + 1),
+                'hour' => (int) $e['from'], 'hours' => max(1, (int) $e['to'] - (int) $e['from']),
                 'dp' => $dp, 'ask' => $ask,
             ];
         }

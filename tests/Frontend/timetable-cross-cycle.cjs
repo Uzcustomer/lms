@@ -37,6 +37,7 @@ const ctx = {
     scopeBody: () => ({ faculty_names: ['F1'], specialty_names: ['davolash ishi'], courses: [5] }),
     renderGrid: () => { ctx.renders = (ctx.renders || 0) + 1; ctx.renderGridCross(ctx.viewMode); }, renderStats() {},
     openCycleTimeProposal: (...a) => { ctx.proposal = a; },
+    cycHourTimes: () => [null].concat(Array.from({ length: 12 }, (_, i) => [String(8 + i).padStart(2, '0') + ':00', String(8 + i).padStart(2, '0') + ':40'])),
     api: async (url, method, body) => { calls.push([url.replace('/admin/boards/7', ''), JSON.parse(JSON.stringify(body))]); return answers.shift(); },
     document: { addEventListener() {}, getElementById: id => appended.find(x => x.id === id && !x.removed) || null,
         createElement: () => { const n = { innerHTML: '', style: {}, offsetWidth: 100, offsetHeight: 80, remove() { n.removed = true; },
@@ -47,11 +48,11 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(section("            // ===== Haftalik kesimlarda (o'qituvchi / fan / xona) sikl darslari", "            // Para ustuni (sikl ichki jadvali kabi)")
-    + '; this.renderGridCross = renderGridCross; this.cycleWeekLessons = cycleWeekLessons; this.loadCycleWeek = loadCycleWeek;', ctx);
+    + '; this.renderGridCross = renderGridCross; this.cycleWeekLessons = cycleWeekLessons; this.loadCycleWeek = loadCycleWeek; this.invalidateCycleWeek = invalidateCycleWeek;', ctx);
 
 const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_name: 'davolash ishi', course: 5, subject_name: 'Klinik farmakologiya',
     training_type: 'practice', group_name: 'd22-06a', group_names: ['d22-06a'], flow: 'F1 / 2-oqim', teacher_id: 5, teacher_name: 'MAHMARAIMOV SH. T.',
-    auditorium_code: '101', auditorium_name: '101', date: '2026-11-02', day: 1, pair: 3, len_half: 4,
+    auditorium_code: '101', auditorium_name: '101', date: '2026-11-02', day: 1, pair: 3, len_half: 4, hour: 5, hours: 4,   // soat — akademik (qatordan farqli)
     dp: { k: 2, lec: 2, prc: 4, start: 1, ps: 3 }, ask: true }, o);
 
 (async () => {
@@ -89,7 +90,8 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     gridClick({ target: chip, preventDefault() {}, stopPropagation() { stopped = true; } });
     assert(stopped, 'boshqa ishlovchilarga o\'tmasligi kerak');
     const pop = appended[appended.length - 1];
-    assert.match(pop.innerHTML, /02\.11\.2026 · 2-kun · 10:00–13:40/);
+    assert.match(pop.innerHTML, /02\.11\.2026 · 2-kun · 12:00–15:40/);
+    assert.match(pop.innerHTML, /Amaliy 4 s/);
     assert.match(pop.innerHTML, /Guruh: d22-06a · F1 \/ 2-oqim/);
     assert.match(pop.innerHTML, /data-cyc-ask/);
     pop.ask.onclick();
@@ -119,6 +121,27 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     assert.match(el('grid').innerHTML, /№ Kafedra mudiri xonasi/);
     assert.match(el('grid').innerHTML, /rowspan="5" data-day="3" data-pair="1">/);
     assert.doesNotMatch(el('grid').innerHTML, /data-day="3"[^>]*outline/);
+
+    // 4b) Doska / sikl rejasi qayta yuklandi — kesh eskiradi: qayta so'raladi, yo'ldagi (eski) javob e'tiborsiz.
+    calls.length = 0;
+    let hold;
+    ctx.api = async (url, method, body) => { calls.push([url, body]); return new Promise(r => { hold = r; }); };
+    ctx.invalidateCycleWeek();
+    assert.equal(ctx.cycleWeekLessons().length, 0);
+    ctx.renderGridCross('room');
+    assert.equal(calls.length, 1);
+    const old = hold;
+    ctx.invalidateCycleWeek();
+    ctx.renderGridCross('room');
+    assert.equal(calls.length, 2);
+    old({ week: 8, lessons: [lesson({ id: 77 })] });
+    await tick(); await tick();
+    assert.equal(ctx.cycleWeekLessons().length, 0, 'eski javob qabul qilinmasligi kerak');
+    hold({ week: 8, lessons: [lesson({ id: 78 })] });
+    await tick(); await tick();
+    assert.deepEqual(ctx.cycleWeekLessons().map(l => l.id), [78]);
+    assert.match(source, /invalidateWeeklyConflicts\(\);\n\s+invalidateCycleWeek\(\);/);
+    assert.match(source, /cyclePlanData = j;\n\s+invalidateCycleWeek\(\);/);
 
     // 5) Eskirgan javob (hafta o'zgardi) — e'tiborsiz; tashqi qatlam — so'ralmaydi, sikl darslari yo'q.
     ctx.viewMode = 'teacher';

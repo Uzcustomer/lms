@@ -3513,6 +3513,7 @@
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
                 invalidateWeeklyConflicts();
+                invalidateCycleWeek();
                 applyWeeklyLayer(allCards);
                 groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
@@ -5548,6 +5549,7 @@
                     const gw = $('cycleGridWrap');
                     const keep = gw ? { top: gw.scrollTop, left: gw.scrollLeft, page: window.scrollY } : null;
                     cyclePlanData = j;
+                    invalidateCycleWeek();   // sikl joylashuvi / o'qituvchi / xona o'zgargan bo'lishi mumkin — kesimlar qayta so'raydi
                     try { buildSubjectColors(colorScopeCards()); } catch (e) { }
                     renderCycleLayerUi(j);
                     if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
@@ -8125,11 +8127,13 @@
             // ("Vaqtini o'zgartirishni so'rash" — ruxsat bo'lsa). Haftalik dars bilan ustma-ust — to'qnashuv (katak qizil hoshiyali).
             const CROSS_MODES = ['teacher', 'subject', 'room'];
             let cycleWeek = { sig: '', lessons: [], loading: '' };
+            let cycleWeekGen = 0;   // doska / sikl rejasi qayta yuklansa — kesh eskiradi (yo'ldagi javob ham)
+            function invalidateCycleWeek() { cycleWeekGen++; }
             let crossCycleShown = [];   // joriy panjaradagi sikl darslari (data-cyc indeksi)
             function cycleWeekSig() {
                 if (!board || !curWeek || weeklyLayer !== 'internal' || !CROSS_MODES.includes(viewMode)) return '';
                 return [board.id, curWeek, [...selectedFaculties].sort().join(','), [...selectedDirs].sort().join(','),
-                    [...selectedCourses].sort((a, b) => a - b).join(',')].join('#');
+                    [...selectedCourses].sort((a, b) => a - b).join(','), cycleWeekGen].join('#');
             }
             async function loadCycleWeek() {
                 const sig = cycleWeekSig();
@@ -8274,9 +8278,12 @@
             function openCrossCycPop(l, anchor) {
                 closeCrossCycPop();
                 const dp = l.dp || {};
+                // Vaqt — asl akademik soatlardan (yarim para aniqligida); bo'lmasa panjara qatorlaridan.
+                const hours = cycHourTimes(), h0 = +l.hour || 0, hn = +l.hours || 0;
                 const sched = boardSchedule().filter(it => it.type === 'pair');
                 const from = sched[+l.pair - 1], to = sched[+l.pair + (+l.len_half || 1) - 2];
-                const time = from && to ? from.start + '–' + to.end : l.pair + '-soatdan ' + l.len_half + ' soat';
+                const time = h0 && hours[h0] && hours[h0 + hn - 1] ? hours[h0][0] + '–' + hours[h0 + hn - 1][1]
+                    : from && to ? from.start + '–' + to.end : l.pair + '-qatordan';
                 const iso = String(l.date || '');
                 const d = iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
                 const isLec = l.training_type === 'lecture';
@@ -8286,7 +8293,7 @@
                 pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(l.subject_name) + ' <span class="tt-cyc-badge">sikl</span></div>' +
                     '<div class="dp-sub">' + esc(d) + (dp.k ? ' · ' + dp.k + '-kun' : '') + ' · ' + esc(time) + '</div></div>' +
                     '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div>' +
-                    '<div class="dp-row"><span class="dp-tag ' + (isLec ? 'l' : 'p') + '">' + (isLec ? 'M' : 'A') + '</span><div><b>' + (isLec ? 'Ma\'ruza' : 'Amaliy') + ' ' + (+l.len_half || 1) + ' s</b>' +
+                    '<div class="dp-row"><span class="dp-tag ' + (isLec ? 'l' : 'p') + '">' + (isLec ? 'M' : 'A') + '</span><div><b>' + (isLec ? 'Ma\'ruza' : 'Amaliy') + ' ' + (+l.hours || +l.len_half || 1) + ' s</b>' +
                     (isLec && dp.tl ? '<div class="dp-topic">' + esc(dp.tl) + '</div>' : '') + (!isLec && dp.tp ? '<div class="dp-topic">' + esc(dp.tp) + '</div>' : '') + '</div></div>' +
                     '<div class="dp-sub">' + esc((l.faculty_name || '—') + ' · ' + l.specialty_name + ' · ' + l.course + '-kurs') + '</div>' +
                     '<div class="dp-sub">Guruh: ' + esc((l.group_names && l.group_names.length ? l.group_names : [l.group_name]).join(', ')) + (l.flow ? ' · ' + esc(l.flow) : '') + '</div>' +

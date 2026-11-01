@@ -19,6 +19,7 @@ let modalHtml = '';
 const ctx = {
     $: id => (modalHtml.includes('id="' + id + '"') || id === 'hemisTodayBtn' ? el(id) : null),
     hsEsc: v => String(v == null ? '' : v).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])),
+    HS_WRITER_URL: 'https://mark.example/js/hemis-writer.js',
     hemisSyncModal: html => { modalHtml = html; return { remove() { modalHtml = ''; } }; },
     HS_CLOSE: '<button>Yopish</button>', hsErrText: e => 'Xatolik: ' + e.message,
     scopeBody: () => ({ faculty_names: ['F1'], specialty_names: ['stomatologiya'], courses: [1] }), scopeLabelText: () => 'F1 · stomatologiya · 1-kurs',
@@ -66,6 +67,10 @@ const rep = {
     assert.match(tr('info')[0], /yangi dars kerak — bugun qo'shilmaydi/);
     assert.match(tr('blocked')[0], /To'siqli<\/span><div>o'qituvchi band: E2/);
 
+    // Xatcho'p: JSON yonida "Bugungi o'zgarishlarni yozish" — hemis-writer.js ni yuklaydi.
+    assert.match(modalHtml, /<a id="htWriter" href="javascript:\(function\(\)\{var s=document\.createElement\(&#39;script&#39;\)|<a id="htWriter" href="javascript:\(function\(\)\{var s=document\.createElement\('script'\)/);
+    assert.match(modalHtml, /hemis-writer\.js/);
+    assert.match(modalHtml, />⭐ Bugungi o'zgarishlarni yozish \(xatcho'p\)<\/a>/);
     // JSON: faqat bugungi o'zgartirishlar.
     el('htJson').onclick();
     assert.deepEqual(downloads[0].groups.map(g => g.units[0].actions.map(a => a.hemis_id)), [[3], [10]]);

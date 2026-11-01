@@ -1719,6 +1719,10 @@ trait TimetableHemisSync
         }
         $date = (string) $request->query('date');
         $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $request->query('ids', '')))))), 0, 50);
+        // Tekshiriladigan darslar berilmasa — bo'sh "qulf yo'q" javobi emas, xato (xatcho'p har dars uchun ids bilan so'raydi).
+        if (!$ids) {
+            return response()->json(['error' => "ids berilmagan — tekshiriladigan darslarning HEMIS id'lari kerak (masalan &ids=123,456)."], 422, $cors);
+        }
         $rows = $ids ? DB::table('schedules')->whereIn('schedule_hemis_id', $ids)->get(['schedule_hemis_id', 'group_id', 'lesson_date']) : collect();
         $byGroup = [];
         $failed = [];

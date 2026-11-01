@@ -219,7 +219,10 @@
         if (!batch.length) return;
         // Bitta tasdiq — butun ro'yxat uchun (guruhlar soni bilan); guruh almashganda qayta so'ralmaydi. To'xtatish — "To'xtatish" tugmasi.
         const nGroups = new Set(batch.map(x => x.group_id)).size;
-        if (apply && !confirm(batch.length + ' ta amal (' + nGroups + ' ta guruh) HEMIS\'ga yoziladi. Guruhlar orasida qayta so\'ralmaydi — kerak bo\'lsa "To\'xtatish" tugmasini bosing.\n\nBoshlaymizmi?')) return;
+        if (apply && !confirm((rep.mode === 'today'
+            ? batch.length + ' ta dars o\'zgartiriladi (bugun, ' + nGroups + ' ta guruh). Har biridan oldin davomat/baho HEMIS\'dan qayta tekshiriladi — belgilangan darsga tegilmaydi.'
+            : batch.length + ' ta amal (' + nGroups + ' ta guruh) HEMIS\'ga yoziladi.')
+            + ' Guruhlar orasida qayta so\'ralmaydi — kerak bo\'lsa "To\'xtatish" tugmasini bosing.\n\nBoshlaymizmi?')) return;
         running = true; stop = false; results = []; lastMode = apply ? 'apply' : 'check';
         ['hwCheck', 'hwApply', 'hwFile'].concat(FILTERS).forEach(id => { $(id).disabled = true; });
         $('hwStop').disabled = false; $('hwLog').disabled = true;

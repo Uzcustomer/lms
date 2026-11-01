@@ -28,13 +28,14 @@ class El {
     click() {}
 }
 const RealDate = Date;
+const confirms = [];
 const ctx = {
     window: {}, location: { hostname: 'hemis.ttatf.uz', pathname: '/curriculum/schedule-info' },
     document: {
         getElementById: id => els[id] || null, createElement: () => new El(null), body: { appendChild() {} },
         querySelector: s => s.includes('csrf') ? { content: '_csrf-backend' } : null,
     },
-    alert: m => { throw new Error('alert: ' + m); }, confirm: () => true, setTimeout, console, encodeURIComponent,
+    alert: m => { throw new Error('alert: ' + m); }, confirm: m => { confirms.push(m); return true; }, setTimeout, console, encodeURIComponent,
     Date: class extends RealDate { constructor(...a) { if (a.length) super(...a); else super('2099-11-02T10:00:00'); } },
 };
 vm.createContext(ctx);
@@ -76,6 +77,8 @@ const rep = {
     };
     els.hwApply.onclick();
     while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
+    // Tasdiq: "N ta dars o'zgartiriladi" (bugungi rejim).
+    assert.match(confirms[0], /^4 ta dars o'zgartiriladi \(bugun, \d+ ta guruh\)\. Har biridan oldin davomat\/baho HEMIS'dan qayta tekshiriladi/);
     // Tartib — vaqt bo'yicha (10:00 lar oldin).
     assert.deepEqual(fetched, [
         [LOCK + '&ids=4', 'omit'],

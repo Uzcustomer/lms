@@ -4315,6 +4315,11 @@
                     '<select id="htGroup" class="border rounded px-1 py-0.5"><option value="">Barcha guruhlar</option>' +
                     groups.map(g => '<option value="' + hsEsc(g) + '"' + (g === group ? ' selected' : '') + '>' + hsEsc(g) + '</option>').join('') + '</select>' +
                     '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
+                    // Xatcho'p: HEMIS sahifasida bosiladi, yuklangan JSON'dagi faqat bugungi to'siqsiz o'zgartirishlarni yozadi (har biridan oldin
+                    // davomat/baho jonli tekshiriladi, boshida "N ta dars o'zgartiriladi" tasdig'i, natija har dars bo'yicha).
+                    '<a id="htWriter" href="' + hsEsc("javascript:(function(){var s=document.createElement('script');s.charset='utf-8';s.src='" + HS_WRITER_URL + "?v='+Date.now();document.body.appendChild(s);})();") + '"' +
+                    ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Avval «JSON» tugmasi bilan faylni yuklab oling, keyin HEMIS sahifasida (kirib turgan holda) xatcho\\\'pni bosing va shu faylni tanlang.\'); return false;"' +
+                    ' title="Sichqoncha bilan xatcho\'plar paneliga torting, so\'ng HEMIS sahifasida bosing" class="px-2 py-1 rounded border border-indigo-400 bg-indigo-50 text-indigo-700 cursor-move">⭐ Bugungi o\'zgarishlarni yozish (xatcho\'p)</a>' +
                     '<button type="button" id="htExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="htClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
                     '<div class="text-gray-500 text-[11px] mb-2">Faqat o\'zgartirish (o\'qituvchi, xona, para vaqti): bugun HEMIS\'ga dars qo\'shilmaydi va o\'chirilmaydi. ' +

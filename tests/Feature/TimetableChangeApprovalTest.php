@@ -19,6 +19,8 @@ uses(RefreshDatabase::class);
  */
 function approvalSetup(bool $approval = true): array
 {
+    // Semestr boshi (2026-09-01): 2-hafta darslari hali oldinda — o'qituvchi so'rovi faqat ertangi va keyingi kunlarga.
+    test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
     foreach (['kafedra_mudiri', 'registrator_ofisi', 'oqituvchi', 'oquv_bolimi', 'dekan'] as $r) {
         Role::findOrCreate($r, 'web');
     }
@@ -623,4 +625,306 @@ it('birinchi biriktirish boshqa yo\'ldan yuborilgan, shu darsning shu maydonini 
 
     asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $cycle));
     expect($card->fresh()->teacher_id)->toBe($teacher->id);
+});
+
+// ---- O'qituvchi so'rovi: sana (ertadan), ikki bosqich, muddati o'tgan, xabarlar, sikl ----
+
+/** Kartaning shu haftadagi dushanbasi (2-hafta) — sinov soatini shu kunga nisbatan qo'yish uchun. */
+function tpMonday(TimetableCard $card, int $week = 2): \Illuminate\Support\Carbon
+{
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+
+    return \Illuminate\Support\Carbon::parse((new ReflectionMethod($ctl, 'weekStartDate'))->invoke($ctl, $card->board, $card, $week)->toDateString(), 'Asia/Tashkent');
+}
+
+it('o\'qituvchi so\'rovi: bugungi yoki o\'tgan darsga va bugungi yangi sanaga so\'rov yuborib bo\'lmaydi (Asia/Tashkent)', function () {
+    ['teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $monday = tpMonday($card);   // dars: dushanba
+    $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+    test()->travelTo($monday->copy()->setTime(7, 0));
+    $r = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertUnprocessable();
+    expect($r->json('message'))->toContain("Bugungi yoki o'tgan darsning")->and(TimetableChangeRequest::count())->toBe(0);
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $card), $move)->assertUnprocessable();
+    // Dars chorshanbada, bugun seshanba (Toshkentda 00:30, UTC bo'yicha hali dushanba) — yangi kun seshanba bo'lsa rad.
+    $card->update(['day' => 3, 'pair' => 1]);
+    test()->travelTo(\Illuminate\Support\Carbon::parse($monday->copy()->addDay()->toDateString() . ' 00:30', 'Asia/Tashkent'));
+    $r = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), array_merge($move, ['day' => 2]))->assertUnprocessable();
+    expect($r->json('message'))->toContain('kamida ertangi kun');
+    // Ertangi kun — mumkin.
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), array_merge($move, ['day' => 4]))->assertOk();
+});
+
+it('o\'qituvchi so\'rovi: ertangi dars ikki bosqichdan o\'tadi, jadvalga tushadi; o\'qituvchiga har bosqich, talabalarga batafsil xabar', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'board' => $board, 'card' => $card] = approvalSetup(false);
+    $card->update(['auditorium_code' => '215', 'auditorium_name' => '215']);
+    DB::table('students')->where('hemis_id', 9001)->update(['telegram_chat_id' => '777', 'telegram_verified_at' => now()]);
+    config(['services.telegram.bot_token' => 'TOKEN']);
+    \Illuminate\Support\Facades\Http::fake(['api.telegram.org/*' => \Illuminate\Support\Facades\Http::response(['ok' => true])]);
+    $monday = tpMonday($card);
+    test()->travelTo($monday->copy()->subDay()->setTime(10, 0));   // yakshanba: dushanbadagi dars — ertaga
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Konferensiya'])->assertOk()->assertJsonPath('pending_approval', true);
+    $req = TimetableChangeRequest::sole();
+    expect($req->approval_stage)->toBe('department')
+        ->and($req->details['notice']['old'])->toBe('Dushanba, ' . $monday->format('d.m.Y') . ' 08:30–09:50')
+        ->and($req->details['notice']['new'])->toBe('Chorshanba, ' . $monday->copy()->addDays(2)->format('d.m.Y') . ' 10:00–11:20');
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect(TeacherNotification::where('teacher_id', $teacher->id)->pluck('title')->all())->toBe(["Vaqt o'zgarishi: kafedra mudiri tasdiqladi"])
+        ->and(\App\Models\TimetableCardOverride::count())->toBe(0);
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    $req->refresh();
+    expect($req->status)->toBe('approved')
+        ->and(\App\Models\TimetableCardOverride::sole()->only(['week', 'day', 'pair']))->toBe(['week' => 2, 'day' => 3, 'pair' => 3])
+        ->and(array_column($req->details['steps'], 'action'))->toBe([
+            "So'rov yuborildi: " . $req->details['notice']['old'] . ' → ' . $req->details['notice']['new'],
+            'Kafedra mudiri tasdiqladi — registrator ofisiga yuborildi',
+            "Registrator ofisi tasdiqladi — jadvalga qo'llandi"])
+        ->and($req->details['steps'][0]['note'])->toBe('Konferensiya')
+        ->and(TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->value('title'))->toBe('Dars jadvali o\'zgarishi tasdiqlandi');
+    $msg = StudentNotification::where('type', 'timetable_change')->sole();   // faqat F1 fakultetidagi talaba
+    expect($msg->message)->toContain('Fan: Gigiyena')->toContain("O'qituvchi: OQITUVCHI A.")
+        ->toContain('Eski vaqt: Dushanba, ' . $monday->format('d.m.Y') . ' 08:30–09:50')
+        ->toContain('Yangi vaqt: Chorshanba, ' . $monday->copy()->addDays(2)->format('d.m.Y') . ' 10:00–11:20')->toContain('Xona: 215');
+    \Illuminate\Support\Facades\Http::assertSent(fn ($r) => str_contains($r->url(), 'api.telegram.org') && ($r->data()['chat_id'] ?? null) == '777'
+        && str_contains($r->data()['text'] ?? '', 'Yangi vaqt: Chorshanba'));
+    // Tarix oynasi: eski → yangi va qadamlar.
+    asRole($reg, 'registrator_ofisi')->getJson(route('admin.timetable.change-requests.index', $board))->assertOk()
+        ->assertJsonPath('requests.0.notice.room', '215')->assertJsonCount(3, 'requests.0.steps');
+});
+
+it('o\'qituvchi so\'rovi: tasdiq kechiksa (dars sanasi o\'tib ketsa) — "Muddati o\'tgan", jadval o\'zgarmaydi, o\'qituvchiga xabar', function (string $stage) {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $card->update(['day' => 4]);   // payshanba
+    $monday = tpMonday($card);
+    test()->travelTo($monday->copy()->setTime(9, 0));
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card),
+        ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'])->assertOk();
+    $req = TimetableChangeRequest::sole();
+    if ($stage === 'registrar') {
+        asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    }
+    test()->travelTo($monday->copy()->addDays(2)->setTime(8, 0));   // chorshanba — yangi sana bugun
+    $actor = $stage === 'registrar' ? [$reg, 'registrator_ofisi'] : [$head, 'kafedra_mudiri'];
+    $r = asRole(...$actor)->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
+    expect($r->json('error'))->toContain("Muddati o'tgan")
+        ->and($req->fresh()->status)->toBe('expired')
+        ->and(\App\Models\TimetableCardOverride::count())->toBe(0)
+        ->and(TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->value('title'))->toBe("Vaqt o'zgarishi so'rovi muddati o'tgan")
+        ->and(collect($req->fresh()->details['steps'])->last()['action'])->toBe("Muddati o'tgan");
+})->with(['department', 'registrar']);
+
+it('o\'qituvchi so\'rovi: to\'qnashuv (guruh, o\'qituvchi, amaliy blok bo\'linishi) bo\'lsa yuborilmaydi; kafedra mudiri bosqichida paydo bo\'lsa — qo\'llanmaydi', function () {
+    ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+    // Boshqa fanning o'qituvchisi shu o'qituvchi (boshqa guruh) — yangi vaqtda band.
+    $other = $card->replicate(); $other->group_name = 'BOSHQA'; $other->subject_name = 'Boshqa fan'; $other->day = 3; $other->pair = 3; $other->save();
+    $r = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertUnprocessable();
+    expect($r->json('message'))->toContain("O'qituvchi band")->and(TimetableChangeRequest::count())->toBe(0);
+    // Boshqa o'qituvchining boshqa guruh, boshqa xonadagi darsi shu vaqtda — to'siq emas.
+    $other->update(['teacher_id' => $head->id, 'auditorium_code' => '999', 'auditorium_name' => '999']);
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $card), $move)->assertOk();
+    $other->delete();
+    // Bir kunlik amaliy blok (08:30 va 10:00 — ketma-ket) — bittasini yolg'iz ko'chirib bo'lmaydi.
+    $tail = $card->replicate(); $tail->pair = 3; $tail->teacher_id = $head->id; $tail->save();
+    $r = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertUnprocessable();
+    expect($r->json('message'))->toContain('amaliy blokning bir qismi')->toContain("bir kunda bir fandan amaliy soatlar bo'linmaydi");
+    // Yangi kunda shu fandan amaliy bor (yopishmaydi) — ham rad.
+    $tail->update(['day' => 3, 'pair' => 7]);
+    $r = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertUnprocessable();
+    expect($r->json('message'))->toContain('Yangi kunda shu fandan boshqa amaliy dars bor');
+    // Yopishib turadigan joyga (bitta blok bo'ladi) — mumkin.
+    $tail->update(['day' => 3, 'pair' => 5]);
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertOk();
+    // Kafedra mudiri tasdiqlayotganda shu vaqtni boshqa dars egallagan — qayta tekshiruv: qo'llanmaydi, o'qituvchiga xabar.
+    $busy = $card->replicate(); $busy->subject_name = 'Band fan'; $busy->teacher_id = $head->id; $busy->day = 3; $busy->pair = 3; $busy->save();
+    $req = TimetableChangeRequest::sole();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
+    expect($req->fresh()->status)->toBe('failed')->and($req->fresh()->error)->toContain('Guruh band')
+        ->and(TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->value('title'))->toBe("Vaqt o'zgarishi qo'llanmadi");
+});
+
+it('o\'qituvchi so\'rovi: registrator rad etsa jadval o\'zgarmaydi; o\'qituvchi o\'zi kafedra mudiri bo\'lsa — to\'g\'ridan-to\'g\'ri registratorga', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertOk();
+    $req = TimetableChangeRequest::sole();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.reject', $req), ['note' => 'Xona yo\'q'])->assertOk();
+    expect($req->fresh()->status)->toBe('rejected')->and(\App\Models\TimetableCardOverride::count())->toBe(0)
+        ->and(TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->value('title'))->toBe('Dars jadvali o\'zgarishi rad etildi (registrator ofisi)')
+        ->and(collect($req->fresh()->details['steps'])->last())->toMatchArray(['action' => 'Registrator ofisi rad etdi', 'note' => 'Xona yo\'q']);
+
+    // Kafedra mudirining o'z darsi: 1-bosqich bo'lmaydi (o'zini o'zi tasdiqlamaydi).
+    $head->assignRole('oqituvchi');
+    $own = $card->replicate(); $own->teacher_id = $head->id; $own->teacher_name = $head->full_name; $own->group_name = 'MUDIR-GURUH'; $own->save();
+    asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $own), array_merge($move, ['pair' => 5]))
+        ->assertOk()->assertJsonPath('message', fn ($m) => str_contains($m, 'registrator ofisiga'));
+    $mine = TimetableChangeRequest::latest('id')->first();
+    expect($mine->approval_stage)->toBe('registrar')->and($mine->details['head_skipped'])->toBeTrue()
+        ->and(TeacherNotification::where('teacher_id', $reg->id)->where('title', 'like', '%tasdiq kutilmoqda%')->count())->toBeGreaterThan(0);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $mine))->assertForbidden();
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $mine))->assertOk();
+    expect($mine->fresh()->status)->toBe('approved')
+        ->and(\App\Models\TimetableCardOverride::where('card_id', $own->id)->sole()->only(['day', 'pair']))->toBe(['day' => 3, 'pair' => 5]);
+});
+
+/** 5-kurs sikli (Gigiyena, 2 kun): g5-01a — OQITUVCHI A., g5-01b — shu o'qituvchi, smenasi 13:30. */
+function tpCycle(array $s): array
+{
+    $s['board']->update(['bell_schedule' => TimetableBoard::defaultBellSchedule(6)]);   // 6 para — kunda 12 soat qatori
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Gigiyena', 'mode' => 'cycle', 'cycle_days' => 2]);
+    $base = ['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'oqim_label' => '1-oqim',
+        'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'subject_name' => 'Gigiyena', 'training_type' => 'practice', 'kafedra_name' => 'Gigiyena kafedrasi',
+        'teacher_id' => $s['teacher']->id, 'teacher_name' => 'OQITUVCHI A.'];
+    TimetableCard::create($base + ['group_name' => 'g5-01a', 'auditorium_code' => '301', 'auditorium_name' => '301']);
+    $b = TimetableCard::create($base + ['group_name' => 'g5-01b', 'auditorium_code' => '302', 'auditorium_name' => '302']);
+    $pl = \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'start_index' => 7, 'training_type' => 'practice',
+        'lecture_slots' => ['shift_g' => ['g5-01b' => 7]]]);
+    DB::table('students')->insert(['hemis_id' => 9101, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S', 'second_name' => 'S', 'third_name' => 'S',
+        'student_id_number' => '9101', 'group_name' => 'g5-01a', 'student_status_code' => 11, 'department_id' => 77, 'department_name' => 'F1',
+        'created_at' => now(), 'updated_at' => now()]);
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $units = $ctl->cycleProposalUnits($s['board'], ['specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Gigiyena', 'group_name' => 'g5-01a'], null);
+
+    return ['placement' => $pl, 'dates' => $units[0]['dates'], 'prac' => $units[0]['prac'], 'g5b' => $b];
+}
+
+it('o\'qituvchi so\'rovi (sikl): amaliy darsni shu kunga boshqa soatga — ikki bosqich, jadvalda kun rejasi o\'zgaradi; band soat va boshqa o\'qituvchi — rad', function () {
+    $s = approvalSetup();
+    ['placement' => $pl, 'dates' => $dates, 'prac' => $prac, 'g5b' => $g5b] = tpCycle($s);
+    expect(count($dates))->toBe(2)->and($prac[$dates[1]])->toBe([1, 7]);   // 08:30 dan 6 soat
+    test()->travelTo(\Illuminate\Support\Carbon::parse($dates[0] . ' 10:00', 'Asia/Tashkent'));   // 2-kun — ertaga
+    $body = ['specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Gigiyena', 'group_name' => 'g5-01a', 'date' => $dates[1], 'scope' => 'day'];
+    // 13:30 — o'qituvchi shu vaqtda g5-01b da (smena 13:30).
+    $r = asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $body + ['start_hour' => 7])->assertUnprocessable();
+    expect($r->json('message'))->toContain("O'qituvchi band");
+    // Bugungi kun — rad; boshqa o'qituvchi — 403.
+    asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), array_merge($body, ['date' => $dates[0], 'start_hour' => 3]))
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+    $s['head']->assignRole('oqituvchi');
+    asRole($s['head'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $body + ['start_hour' => 3, 'reason' => 'x'])->assertForbidden();
+    // Sig'maydi (6 soat 8-qatordan; kunda 12 qator) — rad.
+    asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $body + ['start_hour' => 8])
+        ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, "sig‘maydi"));
+    // 10:00 dan — bo'sh: so'rov → kafedra mudiri → registrator.
+    // g5-01b boshqa o'qituvchiga o'tdi — 13:30 dan bo'sh: so'rov → kafedra mudiri → registrator.
+    $g5b->update(['teacher_id' => $s['head']->id, 'teacher_name' => $s['head']->full_name]);
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $body + ['start_hour' => 7])
+        ->assertOk()->assertJsonPath('new', \Illuminate\Support\Carbon::parse($dates[1])->format('d.m.Y') . ' (2-kun), 13:30–17:50')
+        ->assertJsonPath('old', \Illuminate\Support\Carbon::parse($dates[1])->format('d.m.Y') . ' (2-kun), 08:30–13:20');
+    asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $body + ['start_hour' => 7, 'reason' => 'Klinika'])->assertOk();
+    $req = TimetableChangeRequest::sole();
+    expect($req->route_name)->toBe('admin.timetable.cycle-practice-starts')->and($req->approval_stage)->toBe('department')
+        ->and($req->payload['units'])->toBe(['g5-01a']);
+    asRole($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($pl->fresh()->lecture_slots)->not->toHaveKey('ps_g');
+    asRole($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($req->fresh()->status)->toBe('approved')
+        ->and($pl->fresh()->lecture_slots['ps_g'])->toBe(['g5-01a' => [1 => 7]])
+        ->and($pl->fresh()->lecture_slots['shift_g'])->toBe(['g5-01b' => 7]);
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    $after = app(\App\Http\Controllers\Admin\TimetableController::class)->cycleProposalUnits($s['board'],
+        ['specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Gigiyena', 'group_name' => 'g5-01a'], null)[0]['prac'];
+    expect($after[$dates[0]])->toBe([1, 7])->and($after[$dates[1]])->toBe([7, 13]);
+    expect(StudentNotification::where('student_id', DB::table('students')->where('hemis_id', 9101)->value('id'))->sole()->message)
+        ->toContain('Fan: Gigiyena')->toContain('Yangi vaqt: ' . \Illuminate\Support\Carbon::parse($dates[1])->format('d.m.Y') . ' (2-kun), 13:30–17:50');
+});
+
+/** Jadvalga yozuv: majburiy (NOT NULL, sukutsiz) ustunlar soxta qiymat bilan. */
+function tpInsert(string $table, array $data): void
+{
+    foreach (DB::select('SHOW COLUMNS FROM `' . $table . '`') as $col) {
+        if ($col->Field === 'id' || array_key_exists($col->Field, $data) || $col->Null === 'YES' || $col->Default !== null) {
+            continue;
+        }
+        $t = strtolower($col->Type);
+        $data[$col->Field] = match (true) {
+            str_contains($t, 'int') || str_contains($t, 'decimal') || str_contains($t, 'double') => 0,
+            str_contains($t, 'datetime') || str_contains($t, 'timestamp') => now(),
+            str_contains($t, 'date') => '2026-01-01',
+            str_contains($t, 'json') => '[]',
+            default => 'x',
+        };
+    }
+    DB::table($table)->insert($data);
+}
+
+/** Haftalik karta shu sanaga tushadigan hafta va kun. */
+function tpWeekOf(TimetableCard $card, string $date): array
+{
+    for ($w = 1; $w <= 10; $w++) {
+        $monday = tpMonday($card, $w);
+        if ($monday->toDateString() <= $date && $date <= $monday->copy()->addDays(6)->toDateString()) {
+            return [$w, \Illuminate\Support\Carbon::parse($date)->dayOfWeekIso];
+        }
+    }
+    throw new RuntimeException('hafta topilmadi');
+}
+
+it('o\'qituvchi so\'rovi: yangi vaqtda o\'qituvchi sikl darsida band bo\'lsa (unit-busy) va vaqt o\'zgarmasa — yuborilmaydi', function () {
+    $s = approvalSetup();
+    ['dates' => $dates] = tpCycle($s);
+    [$week, $day] = tpWeekOf($s['card'], $dates[1]);
+    test()->travelTo(tpMonday($s['card'], $week)->subDay()->setTime(10, 0));   // haftalik dars (dushanba) ham, yangi kun ham oldinda
+    // OQITUVCHI A. shu kuni 08:30–13:20 sikl amaliy darsida (g5-01a) — haftalik darsni 08:30 ga ko'chirib bo'lmaydi.
+    $r = asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $s['card']), ['week' => $week, 'day' => $day, 'pair' => 1])
+        ->assertUnprocessable();
+    expect($r->json('message'))->toContain("O'qituvchi band: g5-01a, Gigiyena");
+    // 13:30 da shu o'qituvchi g5-01b (smena 13:30) sikl darsida — ham band.
+    asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $s['card']), ['week' => $week, 'day' => $day, 'pair' => 7])
+        ->assertUnprocessable();
+    // Hozirgi joyi — "o'zgarmaydi".
+    [$w2] = tpWeekOf($s['card'], $dates[1]);
+    $r = asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $s['card']), ['week' => $w2 + 1, 'day' => 1, 'pair' => 1])
+        ->assertUnprocessable();
+    expect($r->json('message'))->toContain('hozirgisi bilan bir xil');
+});
+
+it('o\'qituvchi so\'rovi (sikl): ma\'ruza vaqti bilan, guruhning haftalik darsi bilan ustma-ust va o\'zgarmas vaqt — rad', function () {
+    $s = approvalSetup();
+    ['dates' => $dates, 'g5b' => $g5b] = tpCycle($s);
+    $g5b->update(['teacher_id' => $s['head']->id, 'teacher_name' => $s['head']->full_name]);
+    // KTR: 1-kun ma'ruza 2 soat + amaliy 4 soat, 2-kun amaliy 6 soat; oqim ma'ruzasi — kafedra mudiri.
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'oqim_label' => '1-oqim',
+        'lang' => 'uz', 'students' => 20, 'len_half' => 2, 'subject_name' => 'Gigiyena', 'training_type' => 'lecture', 'group_name' => null,
+        'group_names' => ['g5-01a', 'g5-01b'], 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => $s['head']->id, 'teacher_name' => $s['head']->full_name,
+        'auditorium_code' => 'L1', 'auditorium_name' => 'L1']);
+    tpInsert('specialties', ['specialty_hemis_id' => 77, 'name' => 'davolash ishi']);
+    tpInsert('curricula', ['curricula_hemis_id' => 260, 'specialty_hemis_id' => 77, 'department_hemis_id' => 1]);
+    tpInsert('semesters', ['curriculum_hemis_id' => 260, 'code' => '19', 'education_year' => '2026', 'level_code' => '15']);
+    tpInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 2, 'curricula_hemis_id' => 260, 'subject_id' => 900, 'subject_name' => 'Gigiyena',
+        'semester_code' => '19', 'semester_name' => '9', 'department_id' => 501, 'department_name' => 'Gigiyena kafedrasi', 'at_semester' => 1,
+        'subject_details' => json_encode([['trainingType' => ['code' => '11', 'name' => "Ma'ruza"], 'academic_load' => 2],
+            ['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 10]])]);
+    DB::table('ktr_plans')->insert(['curriculum_subject_id' => DB::table('curriculum_subjects')->where('subject_id', 900)->value('id'), 'week_count' => 2,
+        'plan_data' => json_encode(['hours' => ['1' => ['11' => 2, '13' => 4], '2' => ['13' => 6]]]), 'created_at' => now(), 'updated_at' => now()]);
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    test()->travelTo(\Illuminate\Support\Carbon::parse($dates[0] . ' 07:00', 'Asia/Tashkent')->subDay());
+    $body = ['specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Gigiyena', 'group_name' => 'g5-01a', 'date' => $dates[0], 'scope' => 'day'];
+    $check = fn (int $h) => asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), $body + ['start_hour' => $h]);
+    // 1-kun: ma'ruza 08:30–09:50, amaliy 10:00–13:20 (4 soat).
+    expect($check(2)->assertUnprocessable()->json('message'))->toContain('Ma’ruza vaqti bilan ustma-ust')->toContain('08:30–09:50');
+    expect($check(3)->assertUnprocessable()->json('message'))->toContain('hozirgisi bilan bir xil');
+    $check(7)->assertOk()->assertJsonPath('old', \Illuminate\Support\Carbon::parse($dates[0])->format('d.m.Y') . ' (1-kun), 10:00–13:20');
+    // Guruhning shu kuni 13:30 da haftalik darsi bor (boshqa fan) — rad.
+    $weekly = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'len_half' => 2, 'subject_name' => 'Tarix', 'training_type' => 'practice',
+        'group_name' => 'g5-01a', 'kafedra_name' => 'Tarix', 'teacher_id' => $s['head']->id, 'teacher_name' => 'X', 'pair' => 7, 'day' => 1]);
+    [, $day] = tpWeekOf($weekly, $dates[0]);
+    $weekly->update(['day' => $day]);
+    expect($check(7)->assertUnprocessable()->json('message'))->toContain('Guruh band: g5-01a, Tarix');
+    // "Shu kundan blok oxirigacha": 2-kun amaliy 6 soat (1-kun 4 soat) — 2-kunning oxirgi soatlariga tushadigan haftalik dars ham.
+    $weekly->delete();
+    $late = $weekly->replicate();
+    $late->subject_name = 'Fizika';
+    $late->pair = 11;
+    [, $day2] = tpWeekOf($late, $dates[1]);
+    $late->day = $day2;
+    $late->save();
+    $check(7)->assertOk();
+    $rest = asRole($s['teacher'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), array_merge($body, ['scope' => 'rest', 'start_hour' => 7]));
+    expect($rest->assertUnprocessable()->json('message'))->toContain('Guruh band: g5-01a, Fizika');
 });

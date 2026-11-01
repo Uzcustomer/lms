@@ -15,10 +15,27 @@ function chip(cards, ids) {
     cards, curWeek: 0, selected: null, cardLen: c => c.len_half,
     curGrid: () => ({ weeks: 15 }), activeWeeksOf: () => [], esc: s => String(s),
     subjStyle: () => '', cardTooltip: () => '', cardLabel: c => c.subject_name,
+    TIMETABLE_ROLE: 'kafedra_mudiri', TIMETABLE_TEACHER_ID: 0, scopeMode: 'all', weeklyLayer: 'internal',
   };
   vm.createContext(ctx);
   vm.runInContext(code + '\nthis.chipHtml = chipHtml;', ctx);
   return ctx.chipHtml(cards.find(c => c.id === ids[0]), ids);
+}
+// O'qituvchi «Faqat meniki» ko'rinishida, aniq haftada — o'z darsida "Vaqtini o'zgartirishni so'rash" tugmasi.
+function teacherChip(card, opts) {
+  const ctx = Object.assign({
+    cards: [card], curWeek: 3, selected: null, cardLen: c => c.len_half, curGrid: () => ({ weeks: 15 }), activeWeeksOf: () => [],
+    esc: s => String(s), subjStyle: () => '', cardTooltip: () => '', cardLabel: c => c.subject_name,
+    TIMETABLE_ROLE: 'oqituvchi', TIMETABLE_TEACHER_ID: 5, scopeMode: 'mine', weeklyLayer: 'internal',
+  }, opts);
+  vm.createContext(ctx);
+  vm.runInContext(code + '\nthis.chipHtml = chipHtml;', ctx);
+  return ctx.chipHtml(card, [card.id]);
+}
+const own = { id: 9, len_half: 2, training_type: 'practice', subject_name: 'Gigiyena', weeks: 15, teacher_id: 5 };
+assert.match(teacherChip(own, {}), /<button type="button" class="tt-ask-time" data-ask-time="9">Vaqtini o'zgartirishni so'rash<\/button>/);
+for (const o of [{ scopeMode: 'all' }, { TIMETABLE_ROLE: 'kafedra_mudiri' }, { TIMETABLE_TEACHER_ID: 6 }, { weeklyLayer: 'external' }, { curWeek: 0 }]) {
+  assert.doesNotMatch(teacherChip(own, o), /data-ask-time/, JSON.stringify(o));
 }
 const badge = html => (/<span class="tt-merge-badge"[^>]*>([^<]*)<\/span>/.exec(html) || [])[1];
 const card = (id, len) => ({ id, len_half: len, training_type: 'practice', subject_name: 'Gigiyena', weeks: 15 });

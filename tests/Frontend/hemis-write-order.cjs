@@ -37,4 +37,11 @@ assert.deepEqual(got, [
     'update 2099-10-28 12:00',
     'create 2099-10-28 08:30',
 ]);
-console.log('HEMIS write order: bookmarklet and Playwright agree, moves follow seq');
+// «Bugungi darslar»: gseq — guruhlararo navbat (boshqa guruhning o'qituvchi bo'shatadigan darsi avval).
+const today = [
+    job('update', '2099-10-28', '12:00', { hemis_id: 6, gseq: 2 }),
+    job('update', '2099-10-28', '08:30', { group: 'p/st26-01b', group_id: 1597, hemis_id: 7, gseq: 1 }),
+    job('update', '2099-10-28', '10:00', { hemis_id: 8, gseq: 3 }),
+];
+assert.deepEqual(today.slice().sort(cmp).map(j => j.hemis_id), [7, 6, 8]);
+console.log('HEMIS write order: bookmarklet and Playwright agree, moves follow seq (today — gseq)');

@@ -54,7 +54,7 @@ class TimetableAssignmentAccess
         if ($user && in_array($activeRole, ['oqituvchi', 'fan_masuli'], true)) {
             // Excelga yuklash faqat klient yuborgan (o'zi ko'rib turgan) panjarani
             // faylga yozadi — yangi ma'lumot ochmaydi, shuning uchun ruxsat.
-            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.boards.conflicts', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check'])) {
+            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.boards.conflicts', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check', 'admin.timetable.cycle-time-proposal', 'admin.timetable.cycle-time-proposal.check'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
@@ -108,6 +108,7 @@ class TimetableAssignmentAccess
                     'admin.timetable.cycle-lecture-slots',
                     // Sikl to'qnashuvlarini guruhcha smenasi bilan avtomatik hal qilish
                     'admin.timetable.cycle-auto-shift',
+                    'admin.timetable.cycle-practice-starts',
                 ]);
             }
 

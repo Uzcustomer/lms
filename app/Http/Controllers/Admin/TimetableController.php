@@ -34,6 +34,9 @@ use Illuminate\Support\Facades\Schema;
  */
 class TimetableController extends Controller
 {
+    /** Metodlarning so'rov davomidagi keshi: [metod => [kalit => qiymat]]. */
+    private array $requestMemo = [];
+
     use Concerns\TimetableHemisSync;
     use Concerns\TimetableProgramCalendars;
     use Concerns\TimetableBlockTickets;
@@ -373,7 +376,10 @@ class TimetableController extends Controller
      */
     private function hemisSubjectRows(TimetableBoard $board)
     {
-        static $cache = [];
+        // Kesh — shu so'rov (kontroller nusxasi) davomida: static kesh PHP jarayoni yashaguncha qolardi — KTR / reja
+        // o'zgarsa ham eski kun rejasi (va testlar orasida boshqa doska ma'lumoti) qaytardi.
+        $cache = &$this->requestMemo[__FUNCTION__];
+        $cache ??= [];
         if (isset($cache[$board->id])) {
             return $cache[$board->id];
         }
@@ -545,7 +551,10 @@ class TimetableController extends Controller
      */
     private function variantStudentCounts(string $subjectName, int $yearStart = 0): array
     {
-        static $cache = [];
+        // Kesh — shu so'rov (kontroller nusxasi) davomida: static kesh PHP jarayoni yashaguncha qolardi — KTR / reja
+        // o'zgarsa ham eski kun rejasi (va testlar orasida boshqa doska ma'lumoti) qaytardi.
+        $cache = &$this->requestMemo[__FUNCTION__];
+        $cache ??= [];
         $key = mb_strtolower(trim($subjectName));
         $cacheKey = $key . '|' . $yearStart;
         if (array_key_exists($cacheKey, $cache)) {
@@ -4433,6 +4442,7 @@ class TimetableController extends Controller
 
                 $blocks[] = [
                     'key' => $subjectKey($g, $placement->subject_name) . '|' . $blockType,
+                    'placement_id' => $placement->id ?? null,
                     'subject' => $placement->subject_name,
                     'type' => $blockType,
                     'pair' => $blockPair,
@@ -5301,7 +5311,10 @@ class TimetableController extends Controller
 
     private function cycleKtrDayPlans(TimetableBoard $board): array
     {
-        static $cache = [];
+        // Kesh — shu so'rov (kontroller nusxasi) davomida: static kesh PHP jarayoni yashaguncha qolardi — KTR / reja
+        // o'zgarsa ham eski kun rejasi (va testlar orasida boshqa doska ma'lumoti) qaytardi.
+        $cache = &$this->requestMemo[__FUNCTION__];
+        $cache ??= [];
         if (isset($cache[$board->id])) {
             return $cache[$board->id];
         }
@@ -5401,9 +5414,13 @@ class TimetableController extends Controller
     {
         $own = $unit !== null ? (array) (((array) ($slots['starts_g'] ?? []))[$unit] ?? []) : [];
         $shift = $unit !== null ? (int) (((array) ($slots['shift_g'] ?? []))[$unit] ?? 0) : 0;
+        // ps_g — guruhchaning shu kungi amaliy boshlanishi (o'qituvchi so'rovi bilan surilgan kun): smenadan ustun.
+        $ownPs = $unit !== null ? (array) (((array) ($slots['ps_g'] ?? []))[$unit] ?? []) : [];
         $practice = [];
-        for ($k = 0; $shift > 0 && $k < max(1, $days); $k++) {
-            if (!isset($own[$k]) && !isset($own[(string) $k])) {
+        for ($k = 0; ($shift > 0 || $ownPs) && $k < max(1, $days); $k++) {
+            if ((int) ($ownPs[$k] ?? $ownPs[(string) $k] ?? 0) > 0) {
+                $practice[$k] = (int) ($ownPs[$k] ?? $ownPs[(string) $k]);
+            } elseif ($shift > 0 && !isset($own[$k]) && !isset($own[(string) $k])) {
                 $practice[$k] = $shift;
             }
         }
@@ -6052,8 +6069,8 @@ class TimetableController extends Controller
                 $placed = [];
                 foreach (array_keys($g['subs']) as $subject) {
                     if ($b = $planBlocks[$rk . '|' . $subject] ?? null) {
-                        $placed[$subject] = (object) ['start_index' => $b['from'], 'lecture_slots' => $b['lecture_slots'], 'training_type' => 'practice',
-                            'subject_name' => $subject];
+                        $placed[$subject] = (object) ['id' => $b['placement_id'] ?? null, 'start_index' => $b['from'], 'lecture_slots' => $b['lecture_slots'],
+                            'training_type' => 'practice', 'subject_name' => $subject, 'board_id' => $board->id];
                     }
                 }
             }
@@ -6539,7 +6556,7 @@ class TimetableController extends Controller
             foreach ((array) ($row['blocks'] ?? []) as $b) {
                 if (($b['type'] ?? 'practice') === 'practice') {
                     $out[(string) $row['row_key'] . '|' . (string) $b['subject']] = ['from' => (int) $b['from'], 'to' => (int) $b['to'],
-                        'lecture_slots' => (array) ($b['lecture_slots'] ?? [])];
+                        'lecture_slots' => (array) ($b['lecture_slots'] ?? []), 'placement_id' => $b['placement_id'] ?? null];
                 }
             }
         }
@@ -6666,7 +6683,7 @@ class TimetableController extends Controller
      * uchun. Xona: "Kafedra mudiri xonasi" va umumiy xonalar band emas; sikl darslari o'zaro — sig'im va talabalar soni ma'lum
      * bo'lsa, sig'imdan oshsagina band; haftalik dars bilan — har qanday kesishish (clashWith kabi). Qaytaradi: ['teachers' => [id => "guruh, fan, 30.10–10.11; ..."], 'rooms' => [kod => matn]].
      */
-    protected function unitBusy(TimetableBoard $board, $unitCards): array
+    protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null): array
     {
         $hits = ['teachers' => [], 'rooms' => []];
         $ids = array_flip($unitCards->pluck('id')->map(fn ($id) => (int) $id)->all());
@@ -6680,6 +6697,10 @@ class TimetableController extends Controller
         $mine = array_merge($this->weeklyOccupancy($board, ['cards' => $this->cardRows($board, fn ($q) => $q->whereIn('id', array_keys($ids))),
             'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($ids)))]),
             $this->cycleOccupancy($board, $units, $calendar, null, $ids));
+        // $onlyDates — faqat shu sanalardagi darslari (o'qituvchi so'rovi: ko'chiriladigan kun).
+        if ($onlyDates !== null) {
+            $mine = array_values(array_filter($mine, fn ($e) => isset($onlyDates[$e['date']])));
+        }
         if (!$mine) {
             return $hits;
         }
@@ -6749,7 +6770,7 @@ class TimetableController extends Controller
      * unitBusy — yordamchi tekshiruv, biriktirishni to'xtatmasligi kerak: xato bo'lsa logga yoziladi va null qaytadi (bandlik
      * tekshiruvi o'tkazib yuboriladi). try/catch ushlamaydigan PHP fatal (xotira/vaqt) ham shutdown orqali logga yoziladi.
      */
-    private function unitBusySafe(Request $request, TimetableBoard $board, $unitCards): ?array
+    private function unitBusySafe(Request $request, TimetableBoard $board, $unitCards, ?array $onlyDates = null): ?array
     {
         $first = $unitCards->first();
         $context = ['board' => $board->id, 'role' => $this->timetableActiveRole($request), 'cards' => $unitCards->count(),
@@ -6767,7 +6788,7 @@ class TimetableController extends Controller
             self::logUnitBusyFailure($context + ['fatal' => true, 'message' => $err['message'], 'at' => $err['file'] . ':' . $err['line']]);
         });
         try {
-            return $this->unitBusy($board, $unitCards);
+            return $this->unitBusy($board, $unitCards, $onlyDates);
         } catch (\Throwable $e) {
             self::logUnitBusyFailure($context + ['message' => $e->getMessage(), 'at' => $e->getFile() . ':' . $e->getLine()]);
 
@@ -8479,8 +8500,432 @@ class TimetableController extends Controller
     }
 
     /** Validate a proposal without writing any schedule data. Repeated on final approval. */
+    /** Bugun (Asia/Tashkent) — o'qituvchi so'rovi: eski va yangi sana kamida ertangi kun. */
+    public static function proposalToday(): string
+    {
+        return now('Asia/Tashkent')->toDateString();
+    }
+
+    /** Haftalik dars shu haftada: [hozirgi sanasi (joylanmagan yoki bekor — null), yangi sanasi]. */
+    public function weeklyProposalDates(TimetableCard $card, array $data): array
+    {
+        $week = (int) $data['week'];
+        $monday = $this->weekStartDate($card->board, $card, $week);
+        $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
+        $oldDay = $ov && $ov->cancelled ? 0 : ($ov && $ov->day && $ov->pair ? (int) $ov->day : ((int) $card->pair ? (int) $card->day : 0));
+
+        return [$oldDay ? $monday->copy()->addDays($oldDay - 1)->toDateString() : null,
+            $monday->copy()->addDays((int) $data['day'] - 1)->toDateString()];
+    }
+
+    /** Dars sanasi (eski yoki yangi) bugun yoki o'tgan bo'lsa — sababi; aks holda null. */
+    public function weeklyProposalExpired(TimetableCard $card, array $data): ?string
+    {
+        [$old, $new] = $this->weeklyProposalDates($card, $data);
+        $today = self::proposalToday();
+        $fmt = fn (string $d) => Carbon::parse($d)->format('d.m.Y');
+        if ($old !== null && $old <= $today) {
+            return "Bugungi yoki o'tgan darsning vaqtini o'zgartirib bo'lmaydi (dars sanasi: {$fmt($old)}).";
+        }
+        if ($new <= $today) {
+            return "Yangi sana kamida ertangi kun bo'lishi kerak (tanlangan: {$fmt($new)}).";
+        }
+
+        return null;
+    }
+
+    /** Yarim-slot oralig'i [boshi, oxiri) soat bilan: "10:00–11:20". */
+    private function halfRangeTime(TimetableBoard $board, array $range): string
+    {
+        $t = $this->hemisSlotTimes($board);
+
+        return ($t[$range[0] + 1][0] ?? ($range[0] + 1) . '-katak') . '–' . ($t[$range[1]][1] ?? $range[1] . '-katak');
+    }
+
+    /**
+     * Bir kunda bir fandan amaliy soatlar bo'linmaydi (haftaning shu kunidagi bitta amaliy blok): shu guruhning shu fandan
+     * (bo'lakli nomi bilan ham) boshqa amaliy kartasi hozir yonma-yon bo'lsa — bu dars blokning bir qismi, yolg'iz ko'chmaydi;
+     * yangi kunda shu fandan amaliy dars bor va yangi joy unga yopishmasa — kun ichida bo'linib qoladi.
+     */
+    private function practiceSplitConflicts(TimetableCard $card, int $week, int $day, int $pair): array
+    {
+        if ($card->training_type === 'lecture') {
+            return [];
+        }
+        $base = fn (TimetableCard $c) => $this->normSubject((string) ($this->cycleSubjectVariantBase((string) $c->subject_name) ?? $c->subject_name));
+        $groups = fn (TimetableCard $c) => collect($c->occupiedGroups())->map(fn ($g) => $this->groupNameKey((string) $g))->sort()->values()->all();
+        $sibs = TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)->where('training_type', '!=', 'lecture')
+            ->where('faculty_name', $card->faculty_name)->where('specialty_name', $card->specialty_name)->where('course', $card->course)->get()
+            ->filter(fn (TimetableCard $o) => $base($o) === $base($card) && $groups($o) === $groups($card));
+        if ($sibs->isEmpty()) {
+            return [];
+        }
+        $ovs = TimetableCardOverride::whereIn('card_id', $sibs->pluck('id')->push($card->id))->where('week', $week)->get()->keyBy('card_id');
+        $place = function (TimetableCard $c) use ($ovs): ?array {
+            $o = $ovs[$c->id] ?? null;
+            if ($o && $o->cancelled) {
+                return null;
+            }
+            [$d, $p, $sh] = $o && $o->day && $o->pair ? [(int) $o->day, (int) $o->pair, (int) $o->start_half] : [(int) $c->day, (int) $c->pair, (int) $c->start_half];
+
+            return $d && $p ? [$d, $this->rangeFor($c, $p, $sh)] : null;
+        };
+        $touch = fn (array $a, array $b) => $a[1] === $b[0] || $b[1] === $a[0];
+        $mine = $place($card);
+        $new = $this->rangeFor($card, $pair, 0);
+        $errors = [];
+        foreach ($sibs as $o) {
+            if (!($op = $place($o))) {
+                continue;
+            }
+            $label = '«' . $o->subject_name . '» ' . $this->halfRangeTime($card->board, $op[1]);
+            if ($mine && $op[0] === $mine[0] && $touch($op[1], $mine[1])) {
+                $errors[] = "Bu dars shu kungi amaliy blokning bir qismi ({$label}) — bir kunda bir fandan amaliy soatlar bo'linmaydi. "
+                    . "Butun blokni ko'chirish uchun kafedra mudiriga murojaat qiling.";
+            } elseif ($op[0] === $day && !$touch($op[1], $new) && !$this->halfOverlap($op[1], $new)) {
+                $errors[] = "Yangi kunda shu fandan boshqa amaliy dars bor ({$label}) — bir kunda bir fandan amaliy soatlar bo'linmaydi.";
+            }
+        }
+
+        return array_values(array_unique($errors));
+    }
+
+    /**
+     * Yangi vaqtda o'qituvchi va xona bandligi — biriktirish ogohlantirishidagidek (unit-busy: haftalik va sikl darslari,
+     * umumiy xona / "Kafedra mudiri xonasi" va sikl xonasi sig'imi qoidalari bilan). Ko'chirish tranzaksiyada sinab ko'riladi.
+     */
+    private function weeklyProposalBusy(TimetableCard $card, int $week, int $day, int $pair, string $date): array
+    {
+        DB::beginTransaction();
+        try {
+            TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $week],
+                ['day' => $day, 'pair' => $pair, 'start_half' => 0, 'cancelled' => false]);
+            $busy = $this->unitBusy($card->board, collect([$card]), [$date => true]);
+            $room = (string) (TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->value('auditorium_code') ?: $card->auditorium_code);
+        } finally {
+            DB::rollBack();
+        }
+
+        // unitBusy shu vaqtda band barcha o'qituvchi/xonalarni beradi (tanlash ro'yxati uchun) — faqat shu darsning o'zinikilari.
+        return $this->ownBusyTexts($busy, [(int) $card->teacher_id], [$room]);
+    }
+
+    // ─── O'qituvchi so'rovlari: haftalik dars-hafta (week-override) va sikl amaliy kuni (cycle-practice-starts) ───
+
+    public const TEACHER_CYCLE_ROUTE = 'admin.timetable.cycle-practice-starts';
+
+    /** So'rov o'qituvchiniki: haftalik — kartaning o'qituvchisi; sikl — har guruhchaning amaliy kartasi o'qituvchisi. */
+    public function teacherProposalOwned(string $route, array $params, array $payload, int $teacherId): bool
+    {
+        if ($route === self::TEACHER_CYCLE_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+            $units = $board ? $this->cycleProposalUnits($board, $payload, null) : [];
+
+            return $units && count($units) === count((array) ($payload['units'] ?? []))
+                && !array_filter($units, fn ($x) => !collect($x['u']['cards'])->contains(fn ($c) => (int) $c->teacher_id === $teacherId));
+        }
+        $card = TimetableCard::find($params['card'] ?? 0);
+
+        return $card && (int) $card->teacher_id === $teacherId;
+    }
+
+    /** Bandlik va qoidalar (sana ham) — ValidationException bilan. */
+    public function teacherProposalValidate(string $route, array $params, array $payload, array $ignoreIds): void
+    {
+        if ($route === self::TEACHER_CYCLE_ROUTE) {
+            $board = TimetableBoard::findOrFail($params['board'] ?? 0);
+            if ($why = $this->teacherProposalExpired($route, $params, $payload)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['date' => $why]);
+            }
+            $this->validateCyclePracticeProposal($board, $payload);
+
+            return;
+        }
+        $this->validateTimeProposal(TimetableCard::findOrFail($params['card'] ?? 0), $payload, $ignoreIds);
+    }
+
+    /** Dars sanasi (eski yoki yangi) bugun yoki o'tgan — sababi (har tasdiq bosqichida tekshiriladi). */
+    public function teacherProposalExpired(string $route, array $params, array $payload): ?string
+    {
+        if ($route === self::TEACHER_CYCLE_ROUTE) {
+            $date = (string) ($payload['date'] ?? '');
+
+            return $date === '' || $date <= self::proposalToday()
+                ? "Bugungi yoki o'tgan darsning vaqtini o'zgartirib bo'lmaydi (dars sanasi: " . ($date !== '' ? Carbon::parse($date)->format('d.m.Y') : '—') . ').'
+                : null;
+        }
+        $card = TimetableCard::find($params['card'] ?? 0);
+
+        return $card ? $this->weeklyProposalExpired($card, $payload) : null;
+    }
+
+    /** Taklif yuborilgandagi holat imzosi: shu orada dars (joyi, o'qituvchi, xona, sikl boshlanishlari) o'zgarsa — qo'llanmaydi. */
+    public function teacherProposalSignature(string $route, array $params, array $payload): string
+    {
+        if ($route === self::TEACHER_CYCLE_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+            $units = $board ? $this->cycleProposalUnits($board, $payload, null) : [];
+
+            return hash('sha256', json_encode(array_map(fn ($x) => [(string) $x['u']['unit'], $x['u']['placement']->id,
+                (int) $x['u']['placement']->start_index, $x['u']['placement']->lecture_slots,
+                collect($x['u']['cards'])->map(fn ($c) => [(int) $c->id, (int) $c->teacher_id, (string) $c->auditorium_code])->all()], $units)));
+        }
+        $card = TimetableCard::find($params['card'] ?? 0);
+
+        return $card ? app(\App\Services\Timetable\TimetableChangeApproval::class)->proposalSignature($card, (int) ($payload['week'] ?? 0)) : '';
+    }
+
+    public function teacherProposalDepartmentMatches(string $route, array $params, array $payload, int $deptId): bool
+    {
+        if ($route === self::TEACHER_CYCLE_ROUTE) {
+            $board = TimetableBoard::find($params['board'] ?? 0);
+            $cards = $board ? collect($this->cycleProposalUnits($board, $payload, null))->flatMap(fn ($x) => $x['u']['cards']) : collect();
+
+            return $cards->isNotEmpty() && $cards->every(fn ($c) => $this->proposalDepartmentMatches(TimetableCard::find($c->id), $deptId));
+        }
+        $card = TimetableCard::find($params['card'] ?? 0);
+
+        return $card && $this->proposalDepartmentMatches($card, $deptId);
+    }
+
+    /**
+     * Sikl so'rovidagi guruhcha(lar): yo'nalish + kurs + fan va guruhcha (yoki oqim — shu oqimdagi guruhchalari) bo'yicha joylangan
+     * amaliy birliklari; $teacherId berilsa — shu o'qituvchi amaliy darsini o'tadiganlari, payload.units bo'lsa — aynan shular.
+     * Har biri: u (birlik), dates [sikl kuni (0..) => sana], prac / lec [sana => [boshi, oxiri) soat qatori].
+     */
+    public function cycleProposalUnits(TimetableBoard $board, array $p, ?int $teacherId): array
+    {
+        [$units, $calendar] = $this->placedCycleUnits($board);
+        [$dates, $workIndices] = $calendar;
+        $lc = fn ($v) => mb_strtolower(trim((string) $v));
+        $want = isset($p['units']) ? array_flip(array_map('strval', (array) $p['units'])) : null;
+        $out = [];
+        foreach ($units as $u) {
+            if ($lc($u['specialty']) !== $lc($p['specialty_name'] ?? '') || (int) $u['course'] !== (int) ($p['course'] ?? 0)
+                || $lc($u['subject']) !== $lc($p['subject_name'] ?? '')) {
+                continue;
+            }
+            if ($want !== null ? !isset($want[(string) $u['unit']])
+                : !in_array($lc($p['group_name'] ?? ''), [$lc($u['group']), $lc($u['unit']), $lc($u['parent'])], true)) {
+                continue;
+            }
+            if ($teacherId !== null && !collect($u['cards'])->contains(fn ($c) => (int) $c->teacher_id === $teacherId)) {
+                continue;
+            }
+            $pos = array_search((int) $u['from'], $workIndices, true);
+            $days = [];
+            for ($k = 0; $pos !== false && $k < (int) $u['days'] && isset($workIndices[$pos + $k], $dates[$workIndices[$pos + $k]]); $k++) {
+                $days[$k] = $dates[$workIndices[$pos + $k]]->toDateString();
+            }
+            $mine = array_flip(array_map(fn ($c) => (int) $c->id, $u['cards']));
+            $prac = $lec = [];
+            foreach ($this->cycleOccupancy($board, [$u], $calendar) as $e) {
+                if (isset($mine[(int) $e['card']])) {
+                    $prac[$e['date']] = [(int) $e['from'], (int) $e['to']];
+                } else {
+                    $lec[$e['date']] = [(int) $e['from'], (int) $e['to']];
+                }
+            }
+            $out[] = ['u' => $u, 'dates' => $days, 'prac' => $prac, 'lec' => $lec];
+        }
+
+        return $out;
+    }
+
+    /** Sikl so'rovi o'zgartiradigan kunlar: [guruhcha => [sikl kuni (0..) => sana]] (kun — shu sana; davomi — shu sanadan blok oxirigacha). */
+    private function cycleProposalDays(array $units, array $p): array
+    {
+        $date = (string) ($p['date'] ?? '');
+        $out = [];
+        foreach ($units as $x) {
+            foreach ($x['dates'] as $k => $d) {
+                if (isset($x['prac'][$d]) && ($d === $date || (($p['scope'] ?? 'day') === 'rest' && $d > $date))) {
+                    $out[(string) $x['u']['unit']][$k] = $d;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /** Soat qatorlari oralig'i [boshi, oxiri) vaqt bilan: "13:30–14:50". */
+    private function cycleHoursTime(TimetableBoard $board, int $from, int $to): string
+    {
+        $t = $this->hemisSlotTimes($board);
+
+        return ($t[$from][0] ?? $from . '-soat') . '–' . ($t[$to - 1][1] ?? ($to - 1) . '-soat');
+    }
+
+    /**
+     * Sikl amaliy darsini shu kunga (yoki shu kundan blok oxirigacha) boshqa boshlanish soatiga surish: kun blokda va amaliy dars
+     * bor, kun oxirigacha sig'adi, ma'ruza vaqti bilan ustma-ust emas, o'zgaradi; so'ng tranzaksiyada sinab — biriktirishdagidek
+     * o'qituvchi va xona bandligi (unit-busy: haftalik va sikl darslari, sikl xonasi sig'imi) va guruhning haftalik darslari.
+     * Sikl kunida amaliy soatlar bitta oraliq — bo'linmaydi.
+     */
+    public function validateCyclePracticeProposal(TimetableBoard $board, array $p): array
+    {
+        $fail = fn (string $m) => throw \Illuminate\Validation\ValidationException::withMessages(['start_hour' => $m]);
+        $units = $this->cycleProposalUnits($board, $p, null);
+        if (!$units) {
+            $fail('Sikl darsi topilmadi (blok joylanmagan yoki guruhcha o‘zgargan).');
+        }
+        $days = $this->cycleProposalDays($units, $p);
+        if (count($days) !== count($units)) {
+            $fail('Tanlangan kuni bu guruhchada amaliy dars yo‘q.');
+        }
+        $h = (int) ($p['start_hour'] ?? 0);
+        $grid = $this->cycleGridHours($board);
+        $changed = false;
+        foreach ($units as $x) {
+            foreach ($days[(string) $x['u']['unit']] as $d) {
+                [$from, $to] = $x['prac'][$d];
+                $len = $to - $from;
+                if ($h < 1 || $h + $len - 1 > $grid) {
+                    $fail('Amaliy dars (' . $len . ' soat) kun oxirigacha sig‘maydi: ' . $h . '-soatdan boshlab bo‘lmaydi.');
+                }
+                if (($l = $x['lec'][$d] ?? null) && $h < $l[1] && $l[0] < $h + $len) {
+                    $fail('Ma’ruza vaqti bilan ustma-ust (' . Carbon::parse($d)->format('d.m') . ', ma’ruza ' . $this->cycleHoursTime($board, $l[0], $l[1]) . ').');
+                }
+                $changed = $changed || $from !== $h;
+            }
+        }
+        if (!$changed) {
+            $fail('Yangi vaqt hozirgisi bilan bir xil.');
+        }
+        $errors = [];
+        DB::beginTransaction();
+        try {
+            $this->writeCyclePracticeStarts($units, $days, $h);
+            $allDates = array_flip(array_merge(...array_values(array_map('array_values', $days))));
+            foreach ($units as $x) {
+                // O'qituvchi va xona: haftalik va sikl darslari bilan (sikl xonasi — sig'im bo'yicha), shu kunlar.
+                $cards = TimetableCard::whereIn('id', array_map(fn ($c) => (int) $c->id, $x['u']['cards']))->get();
+                array_push($errors, ...$this->ownBusyTexts($this->unitBusy($board, $cards, $allDates),
+                    $cards->pluck('teacher_id')->all(), $cards->pluck('auditorium_code')->all()));
+                // Guruhning shu kunlardagi haftalik darslari (4–6-kursda sikl va haftalik darslar birga bo'lishi mumkin).
+                $groupKeys = [];
+                foreach ($x['u']['cards'] as $c) {
+                    foreach ($this->cycleCardGroups($c) as $g) {
+                        $groupKeys[$this->groupScopeKey($c) . '|' . $g] = true;
+                    }
+                }
+                // Har kunning o'z amaliy davomiyligi (KTR: kunlar har xil bo'lishi mumkin).
+                $mineDates = array_values($days[(string) $x['u']['unit']]);
+                $lenOf = array_map(fn ($d) => $x['prac'][$d][1] - $x['prac'][$d][0], array_combine($mineDates, $mineDates));
+                foreach ($this->weeklyOccupancy($board, $this->weeklyStateOn($board, $mineDates, $h + max($lenOf), []), array_flip($mineDates)) as $e) {
+                    if (array_intersect_key(array_flip($e['groups']), $groupKeys) && $e['from'] < $h + $lenOf[$e['date']] && $h < $e['to']) {
+                        $errors[] = 'Guruh band: ' . $e['label'] . ' (' . Carbon::parse($e['date'])->format('d.m') . ', ' . $this->cycleHoursTime($board, $e['from'], $e['to']) . ')';
+                    }
+                }
+            }
+        } finally {
+            DB::rollBack();
+            request()->attributes->remove('timetable.cycle_units.' . $board->id);
+        }
+        if ($errors) {
+            $fail(implode(' · ', array_values(array_unique($errors))));
+        }
+
+        return $units;
+    }
+
+    /** lecture_slots.ps_g[guruhcha][sikl kuni] = boshlanish soati (o'zgargan joylashuvlar saqlanadi). */
+    private function writeCyclePracticeStarts(array $units, array $days, int $h): void
+    {
+        foreach ($units as $x) {
+            $placement = TimetableCyclePlacement::find($x['u']['placement']->id);
+            $slots = (array) ($placement->lecture_slots ?? []);
+            foreach ($days[(string) $x['u']['unit']] ?? [] as $k => $d) {
+                $slots['ps_g'][(string) $x['u']['unit']][$k] = $h;
+            }
+            $placement->update(['lecture_slots' => $slots]);
+        }
+        request()->attributes->remove('timetable.cycle_units.' . ($units[0]['u']['placement']->board_id ?? 0));
+    }
+
+    /** Sikl so'rovi tavsifi: eski va yangi vaqt (birinchi kun bo'yicha), xona — talabalar va tarix uchun. */
+    public function cycleProposalLabels(TimetableBoard $board, array $units, array $p): array
+    {
+        $days = $this->cycleProposalDays($units, $p);
+        $x = $units[0];
+        $mine = $days[(string) $x['u']['unit']] ?? [];
+        $first = reset($mine) ?: (string) ($p['date'] ?? '');
+        [$from, $to] = $x['prac'][$first] ?? [0, 0];
+        $h = (int) ($p['start_hour'] ?? 0);
+        $when = Carbon::parse($first)->format('d.m.Y') . ' (' . ((int) array_key_first($mine) + 1) . '-kun)'
+            . (count($mine) > 1 ? ' va keyingi ' . (count($mine) - 1) . ' kun' : '');
+        $card = $x['u']['cards'][0] ?? null;
+
+        return ['old' => $when . ', ' . $this->cycleHoursTime($board, $from, $to), 'new' => $when . ', ' . $this->cycleHoursTime($board, $h, $h + $to - $from),
+            'room' => (string) ($card->auditorium_name ?? '') ?: (string) ($card->auditorium_code ?? ''), 'teacher' => (string) ($card->teacher_name ?? ''),
+            'subject' => (string) $x['u']['subject'], 'groups' => implode(', ', array_map(fn ($y) => (string) $y['u']['unit'], $units))];
+    }
+
+    /** Haftalik so'rov tavsifi: eski va yangi kun, sana, vaqt; xona. */
+    public function weeklyProposalLabels(TimetableCard $card, array $data): array
+    {
+        [$old, $new] = $this->weeklyProposalDates($card, $data);
+        $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $data['week'])->first();
+        [$d, $pr] = $ov && $ov->day && $ov->pair ? [(int) $ov->day, (int) $ov->pair] : [(int) $card->day, (int) $card->pair];
+        $names = $card->board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
+        $fmt = fn ($day, $date, $pair) => ($names[$day - 1] ?? $day . '-kun') . ', ' . ($date ? Carbon::parse($date)->format('d.m.Y') : '—')
+            . ' ' . $this->halfRangeTime($card->board, $this->rangeFor($card, $pair, 0));
+        $room = $ov && $ov->auditorium_code ? ($ov->auditorium_name ?: $ov->auditorium_code) : ($card->auditorium_name ?: $card->auditorium_code);
+
+        return ['old' => $fmt($d, $old, $pr), 'new' => $fmt((int) $data['day'], $new, (int) $data['pair']), 'room' => (string) $room,
+            'teacher' => (string) $card->teacher_name, 'subject' => (string) $card->subject_name];
+    }
+
+    /**
+     * Kafedra mudiri (yoki tasdiqlangan o'qituvchi so'rovi qayta bajarilganda): sikl guruhchasi amaliy darsini shu kunga / shu
+     * kundan blok oxirigacha boshqa boshlanish soatiga suradi (lecture_slots.ps_g). Bandlik va qoidalar tekshiriladi.
+     */
+    public function cyclePracticeStarts(Request $request, TimetableBoard $board)
+    {
+        abort_unless(Schema::hasTable('timetable_cycle_placements') && Schema::hasColumn('timetable_cycle_placements', 'lecture_slots'), 503);
+        $data = $request->validate([
+            'specialty_name' => 'required|string|max:255',
+            'course'         => 'required|integer|min:1|max:7',
+            'subject_name'   => 'required|string|max:255',
+            'group_name'     => 'required|string|max:255',
+            'units'          => 'required|array|min:1',
+            'units.*'        => 'string|max:255',
+            'date'           => 'required|date_format:Y-m-d',
+            'scope'          => 'nullable|in:day,rest',
+            'start_hour'     => 'required|integer|min:1|max:24',
+        ]);
+        if (!$this->cycleLayerEditable($this->timetableActiveRole($request), 'internal')) {
+            return $this->cycleLayerDenied('internal');
+        }
+        $units = $this->cycleProposalUnits($board, $data, null);
+        if ($denied = $this->denyForeignKafedra($request, collect($units)->flatMap(fn ($x) => $x['u']['cards']))) {
+            return $denied;
+        }
+        $units = $this->validateCyclePracticeProposal($board, $data);
+        $this->writeCyclePracticeStarts($units, $this->cycleProposalDays($units, $data), (int) $data['start_hour']);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** unitBusy natijasidan faqat darsning o'z o'qituvchisi va xonasi: "O'qituvchi band: …", "Xona 215 band: …". */
+    private function ownBusyTexts(array $busy, array $teacherIds, array $rooms): array
+    {
+        $teacherIds = array_flip(array_map('intval', array_filter($teacherIds)));
+        $rooms = array_flip(array_map('strval', array_filter($rooms)));
+
+        return array_merge(array_values(array_map(fn ($t) => "O'qituvchi band: {$t}", array_intersect_key($busy['teachers'], $teacherIds))),
+            array_map(fn ($code) => "Xona {$code} band: {$busy['rooms'][$code]}", array_keys(array_intersect_key($busy['rooms'], $rooms))));
+    }
+
     public function validateTimeProposal(TimetableCard $card, array $data, array $ignorePendingIds = []): void
     {
+        [$oldDate, $newDate] = $this->weeklyProposalDates($card, $data);
+        if ($oldDate === null) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['week' => 'Bu dars shu haftada joylanmagan yoki o‘tilmaydi.']);
+        }
+        if ($expired = $this->weeklyProposalExpired($card, $data)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['day' => $expired]);
+        }
         $grid = $this->cardGrid($card->board, $card);
         if ((int) $data['week'] > $grid['weeks'] || (int) $data['day'] > $grid['days']
             || (int) $data['pair'] + $card->lenHalf() - 1 > $grid['pairs']) {
@@ -8489,8 +8934,20 @@ class TimetableController extends Controller
         if (TimetableCardOverride::where('card_id', $card->id)->where('week', $data['week'])->where('cancelled', true)->exists()) {
             throw \Illuminate\Validation\ValidationException::withMessages(['week' => 'Bu haftada ushbu dars o‘tilmaydi.']);
         }
+        $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $data['week'])->first();
+        [$curDay, $curPair] = $ov && $ov->day && $ov->pair ? [(int) $ov->day, (int) $ov->pair] : [(int) $card->day, (int) $card->pair];
+        if ($curDay === (int) $data['day'] && $curPair === (int) $data['pair']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['day' => 'Yangi vaqt hozirgisi bilan bir xil.']);
+        }
         $conflicts = $this->findWeekConflicts($card, (int) $data['week'], (int) $data['day'], (int) $data['pair']);
         $conflicts = array_merge($conflicts, $this->pendingTimeConflicts($card, $data, $ignorePendingIds));
+        // Guruh / o'qituvchi / xona to'qnashuvi bo'lmasa — amaliy blok qoidasi va sikl darslari bilan bandlik ham.
+        if (!$conflicts) {
+            $conflicts = $this->practiceSplitConflicts($card, (int) $data['week'], (int) $data['day'], (int) $data['pair']);
+        }
+        if (!$conflicts) {
+            $conflicts = $this->weeklyProposalBusy($card, (int) $data['week'], (int) $data['day'], (int) $data['pair'], $newDate);
+        }
         if ($conflicts) {
             throw \Illuminate\Validation\ValidationException::withMessages(['day' => implode(' · ', $conflicts)]);
         }

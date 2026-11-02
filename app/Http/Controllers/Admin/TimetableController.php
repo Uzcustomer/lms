@@ -45,6 +45,7 @@ class TimetableController extends Controller
     use Concerns\TimetableSuggestionApply;
     use Concerns\TimetableRoomRanking;
     use Concerns\TimetableConflictFocus;
+    use Concerns\TimetableCycleShiftAdvice;
 
     public function index(Request $request)
     {
@@ -666,6 +667,44 @@ class TimetableController extends Controller
         $cur = $this->groupCurriculum($groupName, $faculty);
 
         return (int) (($cur !== null ? ($counts[$k][$cur] ?? null) : null) ?? array_sum($counts[$k] ?? []));
+    }
+
+    /** Guruhlar faol talabalari (group_students) yig'indisi; birortasi ham ma'lum bo'lmasa — $fallback (karta talabalari). */
+    private array $groupsStudentsMemo = [];
+
+    private function groupsStudents(array $names, ?string $faculty, int $fallback): int
+    {
+        $sum = 0;
+        foreach (array_unique(array_filter(array_map(fn ($n) => trim((string) $n), $names))) as $n) {
+            $sum += $this->groupsStudentsMemo[$faculty . '|' . $n] ??= $this->activeStudentCountFor($n, $faculty);
+        }
+
+        return $sum > 0 ? $sum : $fallback;
+    }
+
+    /** Karta darsi talabalari: guruh(lar)i ("A + B" — har biri) faol talabalari, bo'lmasa kartadagi son. */
+    private function cardStudents(object $c): int
+    {
+        $names = [];
+        foreach ($this->cardGroupsOf($c) as $g) {
+            $names = array_merge($names, preg_split('/\s*\+\s*/u', (string) $g));
+        }
+
+        return $this->groupsStudents($names, $c->faculty_name ?? null, (int) ($c->students ?? 0));
+    }
+
+    /**
+     * Sikl birligi (guruhcha / "A + B") talabalari — oqim ma'ruzasi yuklamasida har birlik o'z talabalari bilan (oqim jami); bo'lak
+     * ("Fan (a)") — guruhlarning bir qismi, shuning uchun kartadagi son.
+     */
+    private function cycleUnitStudents(array $u): int
+    {
+        $fallback = (int) collect($u['cards'] ?? [])->max('students');
+        if (!empty($u['variant'])) {
+            return $fallback;
+        }
+
+        return $this->groupsStudents(array_column($this->focusUnitGroups($u), 'group'), $u['faculty'] ?? null, $fallback);
     }
 
     /**
@@ -4922,7 +4961,8 @@ class TimetableController extends Controller
                 ]);
                 $items = array_merge($newTeacher && ($teacherChanged || $shiftChanged) ? ($busy['items']['teachers'][(string) $newTeacher] ?? []) : [],
                     $newRoom && ($roomChanged || $shiftChanged) ? ($busy['items']['rooms'][(string) $newRoom] ?? []) : []);
-                if ($warn = $this->busyWarning('Tanlangan o\'qituvchi/xona', $parts ? implode('; ', $parts) : null, $items)) {
+                $cap = $newRoom && ($roomChanged || $shiftChanged) ? ($busy['caps'][$newRoom] ?? null) : null;
+                if ($warn = $this->busyWarning('Tanlangan o\'qituvchi/xona', $parts ? implode('; ', $parts) : null, $items, $cap)) {
                     // Faqat vaqt bo'yicha to'qnashuv bo'lsa (sanalar kesishadi, smena bir xil) — guruhchani boshqa smenaga (1 ⇄ 7)
                     // o'tkazib ko'ramiz; foydalanuvchi smenani o'zi tanlagan bo'lsa — uning tanlovi.
                     $autoShift = !$shiftChanged && $this->cycleShiftable($request, $data)
@@ -6235,7 +6275,8 @@ class TimetableController extends Controller
                     'subject' => (string) $subject, 'type' => 'practice', 'days' => max(1, (int) $days),
                     'row_key' => $rk, 'key' => $rk . '|' . $subject . '|practice', 'parent' => (string) ($g['parents'][$subject] ?? $g['parent']),
                     'unit' => (string) ($g['unit'] ?? $g['name']), 'cards' => array_values($g['cards'][$subject] ?? []),
-                    'placement' => $placed[$subject] ?? null, 'from' => isset($placed[$subject]) ? max(0, (int) $placed[$subject]->start_index) : null];
+                    'placement' => $placed[$subject] ?? null, 'from' => isset($placed[$subject]) ? max(0, (int) $placed[$subject]->start_index) : null,
+                    'variant' => (bool) $g['variant']];
             }
         }
 
@@ -6476,7 +6517,8 @@ class TimetableController extends Controller
             [$starts, $practiceStarts] = $this->cycleStarts($slots, (string) $u['unit'], (int) $u['days']);
             $dayPlan = ($plan !== null || $hrs !== null)
                 ? $this->cycleDayPlan($plan, $hrs, (int) $u['days'], (int) $u['from'], $workIndices, $starts, 6, $gridHours, $practiceStarts) : null;
-            $students = (int) collect($u['cards'])->max('students');
+            // Talabalar: guruh(cha)larning faol talabalari (group_students), bo'lmasa kartadagi son.
+            $students = $this->cycleUnitStudents($u);
             for ($k = 0; $pos !== false && $k < (int) $u['days']; $k++) {
                 $ci = $workIndices[$pos + $k] ?? null;
                 if ($ci === null) {
@@ -6512,7 +6554,7 @@ class TimetableController extends Controller
                     // har guruhcha o'z talabalari bilan.
                     $lecture = $card->training_type === 'lecture';
                     $out[] = ['kind' => 'cycle', 'unit' => $ui, 'lesson' => (int) $card->id, 'card' => (int) $card->id, 'from' => $from, 'to' => $to, 'date' => $date,
-                        'load_key' => $lecture ? 'l' . $card->id . '|' . $ui : 'c' . $card->id, 'load' => $lecture ? $students : (int) $card->students,
+                        'load_key' => $lecture ? 'l' . $card->id . '|' . $ui : 'c' . $card->id, 'load' => $lecture ? $students : $this->cardStudents($card),
                         'students' => $students, 'teacher_id' => $card->teacher_id ? (int) $card->teacher_id : null, 'teacher' => $card->teacher_name,
                         'room' => $card->auditorium_code ?: null, 'room_name' => $roomName ?: (string) $card->auditorium_code,
                         // "Kafedra mudiri xonasi" va umumiy (raqamsiz) xonalar band hisoblanmaydi.
@@ -6585,7 +6627,8 @@ class TimetableController extends Controller
 
         // Juftlik bo'yicha: birlik => "tur|kim|boshqa birlik" => [sanalar, vaqt, boshqa birliklar].
         $hits = [];
-        $add = function (int $ui, string $type, string $who, array $others, string $date, string $time, string $extra = '', array $e = [], ?string $kind = null) use (&$hits) {
+        $add = function (int $ui, string $type, string $who, array $others, string $date, string $time, string $extra = '', array $e = [], ?string $kind = null,
+            ?array $cap = null) use (&$hits) {
             $lecture = isset($e['load_key']) && str_starts_with((string) $e['load_key'], 'l');
             $k = $type . '|' . $who . '|' . implode(',', $others) . '|' . ($lecture ? 'L' . $e['lesson'] : 'P') . '|' . $kind;
             $hits[$ui][$k] ??= ['type' => $type, 'who' => $who, 'others' => $others, 'dates' => [], 'time' => $time, 'extra' => $extra,
@@ -6593,6 +6636,10 @@ class TimetableController extends Controller
                 'card_teacher_id' => $e['teacher_id'] ?? null, 'room' => $type === 'room' ? ($e['room'] ?? null) : null,
                 'lecture' => $lecture, 'lecture_id' => $lecture ? (int) $e['lesson'] : null, 'hour_from' => null, 'hour_to' => null];
             $hits[$ui][$k]['dates'][$date] = true;
+            // Xona sig'imi: sanalar ichida eng katta yuklama (talabalar) ko'rsatiladi.
+            if ($cap !== null && ($cap['students'] > ($hits[$ui][$k]['cap']['students'] ?? -1))) {
+                $hits[$ui][$k]['cap'] = $cap;
+            }
             // "Ko'rsatish" uchun kun soatlari oralig'i (shu birlik darslari bo'yicha).
             if (isset($e['from'], $e['to'])) {
                 $hits[$ui][$k]['hour_from'] = min($hits[$ui][$k]['hour_from'] ?? PHP_INT_MAX, (int) $e['from']);
@@ -6613,7 +6660,8 @@ class TimetableController extends Controller
                     continue;
                 }
                 // Xona: bir vaqtda turgan guruhchalar talabalari sig'imdan oshsa (eng yuqori yuklama — shu dars vaqtidagi har bir
-                // boshlanish nuqtasida); sig'im/talabalar noma'lum — bir vaqtda bittadan ko'p dars.
+                // boshlanish nuqtasida); talabalar soni noma'lum — bir vaqtda bittadan ko'p dars. Sig'imi kiritilmagan xona —
+                // to'qnashuv hisoblanmaydi (sig'imni bilmasdan "sig'maydi" deyilmaydi).
                 $vol = (int) ($rooms[$id] ?? 0);
                 $worst = null;   // [talabalar, guruhchalar, sig'im ma'lum]
                 foreach (array_unique(array_column($over, 'from')) as $t) {
@@ -6623,14 +6671,18 @@ class TimetableController extends Controller
                     $loads = array_column($at, 'load', 'load_key');
                     $known = $vol > 0 && !in_array(0, $loads, true);
                     $sum = array_sum($loads);
-                    if (count($atUnits) > 1 && ($known ? $sum > $vol : count(array_unique(array_column($at, 'lesson'))) > 1)
+                    if ($vol > 0 && count($atUnits) > 1 && ($known ? $sum > $vol : count(array_unique(array_column($at, 'lesson'))) > 1)
                         && ($worst === null || $sum > $worst[0])) {
                         $worst = [$sum, $atUnits, $known];
                     }
                 }
                 if ($worst) {
+                    // Tuzilgan sig'im ma'lumoti (room_capacity): xona kodi/nomi, sig'imi, shu vaqtdagi talabalar va ortiqchasi.
+                    $cap = $worst[2] ? ['room_code' => (string) $id, 'room_name' => (string) $e['room_name'], 'volume' => $vol,
+                        'students' => $worst[0], 'over' => $worst[0] - $vol] : null;
                     $add($e['unit'], 'room', (string) $e['room_name'], array_values(array_diff($worst[1], [$e['unit']])), $date, $time,
-                        $worst[2] ? ' (' . $vol . ' o\'rin, ' . $worst[0] . ' talaba)' : '', $e, $worst[2] ? 'room_capacity' : 'room_busy');
+                        $worst[2] ? ' (' . $vol . ' o\'rin, ' . $worst[0] . ' talaba, +' . ($worst[0] - $vol) . ')' : '', $e,
+                        $worst[2] ? 'room_capacity' : 'room_busy', $cap);
                 }
                 // Bir zalda bir vaqtda ikki xil ma'ruza (bitta oqim emas: fan, o'qituvchi yoki vaqti boshqa) — sig'imdan qat'i nazar.
                 if ($isLec($e)) {
@@ -6724,7 +6776,9 @@ class TimetableController extends Controller
                         'hour_unit' => 'hour',
                         'card_ids' => array_merge(array_map(fn ($c) => $c->id, $u['cards'] ?? []),
                             ...array_map(fn ($o) => array_map(fn ($c) => $c->id, $units[$o]['cards'] ?? []), $h['others'])),
-                        'view' => 'cycle'])];
+                        'view' => 'cycle'])]
+                    // Xona sig'imi (room_capacity): room_code, room_name, volume, students, over — sanalar ichida eng katta yuklama.
+                    + ($h['cap'] ?? []);
             }
             if (!$items) {
                 continue;
@@ -7245,13 +7299,22 @@ class TimetableController extends Controller
                 }
             }
         }
-        $volumes = $hits['rooms'] ? Auditorium::whereIn('code', array_keys($hits['rooms']))->pluck('volume', 'code')->all() : [];
-        $mineStudents = (int) $unitCards->max('students');
+        $roomRows = $hits['rooms'] ? Auditorium::whereIn('code', array_keys($hits['rooms']))->get(['code', 'name', 'volume'])->keyBy('code') : collect();
+        // Joylashtirilmoqchi bo'lgan talabalar: birlik guruh(lar)ining faol talabalari (group_students), bo'lmasa kartadagi son.
+        $mineStudents = (int) $unitCards->map(fn ($c) => $this->cardStudents($c))->max();
+        $caps = [];   // xona => sig'im ma'lumoti (sig'imdan oshgan xonalar)
         foreach (array_keys($hits['rooms']) as $code) {
-            $vol = (int) ($volumes[$code] ?? 0);
-            $over = isset($exclusive[$code]) || $vol <= 0 || $mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol;
+            $vol = (int) ($roomRows[$code]->volume ?? 0);
+            // Haftalik darsli xona — har qanday kesishish; sikl darslari o'zaro — sig'im ma'lum bo'lsa, oshgandagina; sig'imi kiritilmagan
+            // xona to'qnashuv hisoblanmaydi; talabalar soni noma'lum — band.
+            $exclusiveRoom = isset($exclusive[$code]);
+            $over = $exclusiveRoom || ($vol > 0 && ($mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol));
             if (!$over) {
                 unset($hits['rooms'][$code], $acc['rooms'][(string) $code]);
+            } elseif (!$exclusiveRoom && $mineStudents > 0 && empty($unknown[$code])) {
+                $students = ($peak[$code] ?? 0) + $mineStudents;
+                $caps[$code] = ['room_code' => (string) $code, 'room_name' => (string) ($roomRows[$code]->name ?? $code), 'volume' => $vol,
+                    'students' => $students, 'over' => $students - $vol];
             }
         }
         $fmt = fn (string $d) => Carbon::parse($d)->format('d.m');
@@ -7263,13 +7326,16 @@ class TimetableController extends Controller
                     sort($ds);
                     $parts[] = $label . ', ' . $fmt($ds[0]) . (count($ds) > 1 ? '–' . $fmt(end($ds)) : '');
                 }
-                $hits[$type][$id] = implode('; ', $parts);
+                // Sig'imdan oshgan xona: avval aniq raqamlar — "65 o'rin, 98 talaba (+33): ...".
+                $cap = $type === 'rooms' ? ($caps[$id] ?? null) : null;
+                $hits[$type][$id] = ($cap ? $cap['volume'] . " o'rin, " . $cap['students'] . ' talaba (+' . $cap['over'] . '): ' : '') . implode('; ', $parts);
             }
         }
         // Tuzilgan ro'yxat ($withItems — unitBusySafe orqali): biriktirish oynasi va "Baribir biriktirish" ogohlantirishidagi "Ko'rsatish".
         if (!$withItems) {
             return $hits;
         }
+        $hits['caps'] = $caps;
         $hits['items'] = ['teachers' => [], 'rooms' => []];
         foreach ($acc as $type => $byId) {
             foreach ($byId as $id => $byLabel) {
@@ -7360,16 +7426,19 @@ class TimetableController extends Controller
         return response()->json(['teachers' => (object) ($busy['teachers'] ?? []), 'rooms' => (object) ($busy['rooms'] ?? []),
             // "Ko'rsatish" uchun tuzilgan ro'yxat (kim => [{kind, groups, dates, hour_from/to, card_ids, view, week}, ...]).
             'busy_items' => ['teachers' => (object) ($busy['items']['teachers'] ?? []), 'rooms' => (object) ($busy['items']['rooms'] ?? [])],
+            // Sig'imdan oshgan xonalar: kod => {room_code, room_name, volume, students, over} ("65 o'rin, 98 talaba (+33)").
+            'room_caps' => (object) ($busy['caps'] ?? []),
             'room_rank' => $rank ? ['order' => $rank['order'], 'why' => (object) $rank['why']] : null]
             + ($busy === null ? ['warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."] : []));
     }
 
     /** Biriktirishdan oldin: tanlangan o'qituvchi/xona band bo'lsa — ogohlantirish ("Baribir biriktirish" — force=1). */
-    private function busyWarning(?string $what, ?string $busy, array $items = [])
+    private function busyWarning(?string $what, ?string $busy, array $items = [], ?array $cap = null)
     {
-        // conflict_items — matn bilan birga tuzilgan ro'yxat ("Ko'rsatish": guruhlar, sanalar, soatlar; front matnni parse qilmaydi).
+        // conflict_items — matn bilan birga tuzilgan ro'yxat ("Ko'rsatish": guruhlar, sanalar, soatlar; front matnni parse qilmaydi);
+        // conflict_cap — xona sig'imdan oshsa: {room_code, room_name, volume, students, over}.
         return $busy ? response()->json(['error' => $what . ' shu davrda boshqa guruhcha bilan band: ' . $busy, 'needs_confirm' => true,
-            'conflicts' => $busy, 'conflict_items' => array_values($items)], 409) : null;
+            'conflicts' => $busy, 'conflict_items' => array_values($items), 'conflict_cap' => $cap], 409) : null;
     }
 
     /**
@@ -11505,7 +11574,8 @@ class TimetableController extends Controller
         // Xona shu darslar vaqtida (boshqa haftalar, sikl) boshqa guruhcha bilan band — ogohlantirish.
         if ($room && !$request->boolean('force') && $cards->contains(fn ($c) => $c->getOriginal('auditorium_code') !== $room->code)
             && ($busy = $this->unitBusySafe($request, $board, $cards))
-            && ($warn = $this->busyWarning("Xona «{$room->name}»", $busy['rooms'][$room->code] ?? null, $busy['items']['rooms'][(string) $room->code] ?? []))) {
+            && ($warn = $this->busyWarning("Xona «{$room->name}»", $busy['rooms'][$room->code] ?? null, $busy['items']['rooms'][(string) $room->code] ?? [],
+                $busy['caps'][$room->code] ?? null))) {
             return $warn;
         }
 

@@ -1333,6 +1333,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
                 Route::post('/boards/{board}/cycle-auto-shift', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAutoShift'])->name('cycle-auto-shift');
+                // "Smenani almashtiring" maslahati: guruhcha smena variantlari blok sanalarida (faqat o'qiydi).
+                Route::post('/boards/{board}/cycle-shift-advice', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleShiftAdvice'])->name('cycle-shift-advice');
                 Route::post('/boards/{board}/cycle-practice-starts', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePracticeStarts'])->name('cycle-practice-starts');
                 // Haftalik fanlar: kartochka haftalarini KTR'dan belgilash
                 // Haftalik jadval: hozirgi joylashuvni tashqi qatlamga ko'chirish (admin)

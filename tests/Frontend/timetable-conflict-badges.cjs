@@ -26,19 +26,31 @@ assert.equal(ctx.cfLevel([]), null);
 assert.equal(ctx.cfBadgeText([T({ past: true }), R()]), "Xona sig'maydi (1)");   // o'tgani hisoblanmaydi
 
 // Guruhlar qisqartiriladi; qator: kim, guruhlar, sanalar, nima qilish kerak; o'tgan — kulrang.
-assert.equal(ctx.cfGroups(['a', 'b', 'c', 'd', 'e']), 'a, b, c +2 ta');
-const line = ctx.cfLineHtml(T({ groups: ['a', 'b', 'c', 'd'] }));
-assert.match(line, /^<li class="cf-line cf-red"><b>O'qituvchi band<\/b> SHARIPOV K\. — a, b, c \+1 ta, 16\.09–18\.09 <span class="cf-todo">→ boshqa o'qituvchi biriktiring<\/span><\/li>$/);
+assert.equal(ctx.cfGroups(['a', 'b', 'c', 'd', 'e']), 'a, b, c, d … (5 guruh)');
+assert.equal(ctx.cfGroups(['a', 'b', 'c', 'd']), 'a, b, c, d');
+// Umumiy boshi ("d1/d22-") takrorlanmaydi; boshqa boshli guruh — to'liq, keyingilari uning boshidan.
+assert.equal(ctx.cfGroups(['d1/d22-01a', 'd1/d22-01b', 'd1/d22-01c', 'd1/d22-02a', 'd1/d22-02b', 'd1/d22-02c', 'd1/d22-03a', 'd1/d22-03b',
+    'd1/d22-03c', 'd1/d22-04a', 'd1/d22-04b', 'd1/d22-04c']), 'd1/d22-01a, 01b, 01c, 02a … (12 guruh)');
+assert.equal(ctx.cfGroups(['d1/d22-01a', 'pp/2024-01a', 'pp/2024-01b', 'd1/d22-01b']), 'd1/d22-01a, pp/2024-01a, 01b, d1/d22-01b');
+assert.equal(ctx.cfGroups(['A + B', 'C']), 'A + B, C');
+assert.equal(ctx.cfGroups([]), '');
+const line = ctx.cfLineHtml(T({ groups: ['a', 'b', 'c', 'd', 'e'] }));
+assert.match(line, /^<li class="cf-line cf-red"><b>O'qituvchi band:<\/b> SHARIPOV K\. — a, b, c, d … \(5 guruh\), 16\.09–18\.09 <span class="cf-todo">→ boshqa o'qituvchi biriktiring<\/span><\/li>$/);
 assert.match(ctx.cfLineHtml(T({ past: true })), /cf-line cf-past.*o‘tgan/);
 // Haftalik yozuv (who yo'q) — server matni.
 assert.match(ctx.cfLineHtml({ kind: 'group_busy', detail: 'Guruh band: d-01a — Fizika', date_from: '2026-09-15', date_to: '2026-09-15', past: false }),
-  /<b>Guruh band<\/b> d-01a — Fizika, 15\.09 <span class="cf-todo">→ darsni boshqa vaqtga suring/);
+  /<b>Guruh band:<\/b> d-01a — Fizika, 15\.09 <span class="cf-todo">→ darsni boshqa vaqtga suring/);
 
 // room_lectures — o'zbekcha nom (xom kalit emas), ko'rsatma, sariq; qisqa belgida ham sanaladi.
 const RL = T({ kind: 'room_lectures', type: 'room', who: 'Zal', groups: ['d22-06a'], lecture: true, todo: undefined });
-assert.match(ctx.cfLineHtml(RL), /^<li class="cf-line cf-yellow"><b>Ma'ruza zali bitta oqimga<\/b> Zal — d22-06a, 16\.09–18\.09 <span class="cf-todo">→ bitta ma'ruza oqimiga birlashtiring yoki boshqa zal tanlang<\/span><\/li>$/);
+assert.match(ctx.cfLineHtml(RL), /^<li class="cf-line cf-yellow"><b>Zal bir vaqtda ikki ma'ruzaga:<\/b> Zal — d22-06a, 16\.09–18\.09 <span class="cf-todo">→ bitta ma'ruza oqimiga birlashtiring yoki boshqa zal tanlang<\/span><\/li>$/);
 assert.doesNotMatch(ctx.cfLineHtml(RL), /room_lectures/);
-assert.equal(ctx.cfBadgeText([RL, R()]), "Xona sig'maydi (1) · Ma'ruza zali bitta oqimga (1)");
+assert.equal(ctx.cfBadgeText([RL, R()]), "Xona sig'maydi (1) · Zal bir vaqtda ikki ma'ruzaga (1)");
+// Ro'yxatda yo'q tur — umumiy o'zbekcha nom (xom kalit ko'rinmaydi), qisqa belgida oxirida.
+const UK = T({ kind: 'new_server_kind', type: 'room', who: 'Z', todo: 'x' });
+assert.match(ctx.cfLineHtml(UK), /<b>To'qnashuv:<\/b> Z/);
+assert.doesNotMatch(ctx.cfLineHtml(UK) + ctx.cfBadgeText([UK, T()]), /new_server_kind/);
+assert.equal(ctx.cfBadgeText([UK, T()]), "O'qituvchi band (1) · To'qnashuv (1)");
 assert.equal(ctx.cfLevel([RL]), 'yellow');
 // Har bir server turi uchun nom bor (xom kalit ko'rinmaydi).
 ['teacher_busy', 'group_busy', 'lecture_overlap', 'room_capacity', 'room_busy', 'room_lectures'].forEach(k => assert(ctx.CF_LABEL[k], k));
@@ -62,7 +74,7 @@ assert.deepEqual(m1.show.dates, ['2026-09-16', '2026-09-22']);
 assert.deepEqual([m1.show.hour_from, m1.show.hour_to], [1, 9]);
 assert.deepEqual([m1.show.kind, m1.show.room_code, m1.show.view, m1.show.hour_unit], ['room_capacity', 'R305', 'cycle', 'hour']);
 const mline = ctx.cfLineHtml(merged[0]);
-assert.match(mline, /<b>Xona sig'maydi<\/b> 305 — d22-05c, d22-05b, d22-05d \+1 ta, 16\.09–17\.09, 18\.09, 21\.09, 22\.09 /);
+assert.match(mline, /<b>Xona sig'maydi:<\/b> 305 — d22-05c, 05b, 05d, 05e, 16\.09–17\.09, 18\.09, 21\.09, 22\.09 /);
 // Bitta "Ko'rsatish" havolasi — barcha guruhlar bilan (6 ta emas).
 assert.equal((mline.match(/class="cf-show"/g) || []).length, 1);
 assert.match(mline, /title="Jadvalda ko'rsatish: d22-05a, d22-05c, d22-05b, d22-05d, d22-05e">Ko'rsatish<\/a>/);
@@ -77,7 +89,8 @@ assert.equal(ctx.cfMergeItems([]).length, 0);
 // Bitta tomonida "Ko'rsatish" ma'lumoti yo'q — boridan olinadi.
 assert.equal(ctx.cfMergeItems([R(), six[0]])[0].show.room_code, 'R305');
 // Tafsilot oynalari (sikl bloki / panel kartasi va haftalik) jamlangan qatorlarni chizadi.
-assert.match(source, /<ul class="cf-list">' \+ cfMergeItems\(own\)\.map\(cfLineHtml\)\.join\(''\)/);
+assert.match(source, /const own = cfMergeItems\(cfSplit\(key, b\.conflicts, cfOwners\)\.own\);/);
+assert.match(source, /<ul class="cf-list">' \+ own\.map\(cfLineHtml\)\.join\(''\)/);
 assert.match(source, /\(items\.length \? cfMergeItems\(items\)\.map\(cfLineHtml\)\.join\(''\)/);
 
 // Oqim ma'ruzasi to'qnashuvi: birinchi blokda to'liq, boshqasida — havola.
@@ -120,3 +133,23 @@ assert.match(ctx.audVolumeHtml(0), /aud-vol-bad.*kiritilmagan/);
 assert.match(ctx.audVolumeHtml(10), /aud-vol-warn.*10 · shubhali/);
 assert.equal(ctx.audVolumeHtml(30), '30');
 console.log('timetable conflict badges: 8 scenarios passed');
+
+// Xona sig'imi (1.4): aniq raqamlar — sig'im, shu vaqtdagi talabalar, ortiqchasi; jamlashda har sana oralig'idan eng kattasi.
+const Z = (students, from, dates, grp) => R({ who: "Tibbiyot klasteri, podval, 8-ma'ruza zali", lecture: true, todo: "kattaroq ma'ruza zali tanlang",
+    room_code: 'Z8', room_name: "Tibbiyot klasteri, podval, 8-ma'ruza zali", volume: 65, students, over: students - 65, groups: grp, date_from: from, dates });
+const zl = ctx.cfMergeItems([Z(88, '2026-11-13', '13.11', ['d1/d22-01a', 'd1/d22-01b']), Z(98, '2026-11-14', '14.11–16.11',
+    ['d1/d22-01c', 'd1/d22-02a', 'd1/d22-02b', 'd1/d22-02c', 'd1/d22-03a', 'd1/d22-03b', 'd1/d22-03c', 'd1/d22-04a', 'd1/d22-04b', 'd1/d22-04c']),
+    Z(70, '2026-11-17', '17.11', ['d1/d22-01a'])]);
+assert.equal(zl.length, 1);
+assert.deepEqual([zl[0].volume, zl[0].students, zl[0].over], [65, 98, 33]);
+assert.equal(ctx.cfLineHtml(zl[0]).replace(/<[^>]+>/g, ''),
+    "Xona sig'maydi: Tibbiyot klasteri, podval, 8-ma'ruza zali — 65 o'rin, 98 talaba (+33) — d1/d22-01a, 01b, 01c, 02a … (12 guruh), " +
+    "13.11, 14.11–16.11, 17.11 → kattaroq ma'ruza zali tanlang");
+// Raqamsiz yozuv (sig'im noma'lum — server room_busy beradi) — raqam qismi yo'q.
+assert.doesNotMatch(ctx.cfLineHtml(R({ volume: 0, students: 0 })), /o'rin|talaba/);
+assert.doesNotMatch(ctx.cfLineHtml(R({ kind: 'room_busy' })), /talaba/);
+
+// Smena maslahati (1.3): faqat kelgusi amaliy "O'qituvchi band" qatorlari; oyna ochilganda bir marta so'raladi.
+assert.match(source, /loadShiftAdvice\(pop, key, own\);/);
+assert.match(source, /const cfWantsShiftAdvice = i => i\.kind === 'teacher_busy' && !i\.lecture && !i\.past;/);
+assert.equal((source.match(/cycle-shift-advice/g) || []).length, 1);

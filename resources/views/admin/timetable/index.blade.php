@@ -1354,7 +1354,7 @@
         .cf-list { margin: 4px 0 0; padding: 0; list-style: none; max-width: 420px; }
         .cf-line { padding: 3px 0; border-top: 1px dashed #e2e8f0; font-size: 12px; line-height: 1.3; }
         .cf-line.cf-red b { color: #b91c1c; } .cf-line.cf-yellow b { color: #a16207; } .cf-line.cf-past { color: #94a3b8; }
-        .cf-todo { color: #475569; } .cf-past-tag { font-size: 10px; background: #e2e8f0; color: #64748b; border-radius: 4px; padding: 0 4px; }
+        .cf-todo { color: #475569; } .cf-todo.cf-checking { opacity: .6; } .cf-cap { font-weight: 600; color: #a16207; } .cf-past-tag { font-size: 10px; background: #e2e8f0; color: #64748b; border-radius: 4px; padding: 0 4px; }
         /* "Ko'rsatish": to'qnashuvni jadvalda ko'rsatish (lenta, qizil ramka). */
         .cf-show { margin-left: 6px; color: #1d4ed8; text-decoration: underline; font-weight: 600; white-space: nowrap; cursor: pointer; }
         .cf-show:hover { color: #1e40af; }
@@ -1749,6 +1749,7 @@
         #asgRoomModal .rm-row span { color: #64748b; font-size: 12px; }
         #asgRoomModal .rm-row .rm-vol { margin-left: auto; font-variant-numeric: tabular-nums; }
         #asgRoomModal .rm-row .rm-why { color: #047857; font-weight: 600; font-size: 11px; background: #ecfdf5; border-radius: 6px; padding: 1px 6px; }
+        #asgRoomModal .rm-row .rm-cap { color: #b45309; font-weight: 600; font-size: 11px; background: #fffbeb; border-radius: 6px; padding: 1px 6px; }
         .tt-modal-body { min-height: 100%; display: flex; align-items: center; justify-content: center;
             padding: 2.5vh 16px; box-sizing: border-box; }
         .tt-modal-win { width: 100%; max-width: min(1200px, 96vw); background: #eef2f7;
@@ -6199,7 +6200,7 @@
                         (j.teachers || []).map(t => '<option value="' + t.id + '"' + (busyT[t.id] ? ' style="color:#9ca3af" title="Band: ' + esc(busyT[t.id]) + '"' : '') + '>' +
                             esc(t.name) + (busyT[t.id] ? ' — band' : '') + '</option>').join('');
                     $('cycAssignRoom').innerHTML = '<option value="">— Tanlanmagan —</option>' +
-                        (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '')
+                        (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : ' (sig\u2018imi kiritilmagan)')
                             + (r.why ? ' — ' + esc(r.why) : '') + '</option>').join('');   // server tartibi: yaqinlik bo'yicha
 
                     // "A + B" kabi umumiy karta: o'qituvchi/xona boshqa guruhchalarga ham tegadi.
@@ -6832,9 +6833,11 @@
                 ttFocusStart(show);
             }, true);
             // ===== To'qnashuvlar: qisqa belgi, rang, bir qatorli tafsilot (server — tuzilgan ro'yxat, ko'rish qamrovi bo'yicha) =====
-            // room_lectures — bir zalda bir vaqtda ikki xil ma'ruza (bitta oqim emas): zal bitta oqimga mo'ljallangan.
+            // room_lectures — bir zalda bir vaqtda ikki xil ma'ruza (bitta oqim emas). Ro'yxatda yo'q tur — umumiy o'zbekcha nom
+            // (xom kalit hech qayerda ko'rinmaydi).
             const CF_LABEL = { teacher_busy: "O'qituvchi band", group_busy: 'Guruh band', lecture_overlap: "Ma'ruza bilan ustma-ust",
-                room_capacity: "Xona sig'maydi", room_busy: 'Xona band', room_lectures: "Ma'ruza zali bitta oqimga" };
+                room_capacity: "Xona sig'maydi", room_busy: 'Xona band', room_lectures: "Zal bir vaqtda ikki ma'ruzaga" };
+            const cfLabel = kind => CF_LABEL[kind] || "To'qnashuv";
             const CF_TODO = { teacher_busy: "boshqa vaqt yoki o'qituvchi tanlang", group_busy: 'darsni boshqa vaqtga suring',
                 lecture_overlap: "amaliyot vaqtini ma'ruzadan keyinga suring", room_capacity: 'kattaroq xona tanlang', room_busy: 'boshqa xona tanlang',
                 room_lectures: "bitta ma'ruza oqimiga birlashtiring yoki boshqa zal tanlang" };
@@ -6851,11 +6854,28 @@
                 const live = cfLive(items);
                 if (!live.length) return (items || []).length ? 'o\u2018tgan' : '';
                 const n = {};
-                cfMergeItems(live).forEach(i => { n[i.kind] = (n[i.kind] || 0) + 1; });   // tafsilot oynasidagi qatorlar soni bilan bir xil
-                return Object.keys(CF_LABEL).filter(k => n[k]).map(k => CF_LABEL[k] + ' (' + n[k] + ')').join(' · ');
+                cfMergeItems(live).forEach(i => { const l = cfLabel(i.kind); n[l] = (n[l] || 0) + 1; });   // tafsilot oynasidagi qatorlar soni
+                // Tartib — CF_LABEL bo'yicha, noma'lum turlar ("To'qnashuv") oxirida.
+                const order = Object.values(CF_LABEL), at = l => (order.includes(l) ? order.indexOf(l) : order.length);
+                return Object.keys(n).sort((x, y) => at(x) - at(y)).map(l => l + ' (' + n[l] + ')').join(' · ');
             }
-            // Uzun guruh ro'yxati: avval 3 tasi, qolgani "+N ta".
-            const cfGroups = list => { const g = list || []; return g.slice(0, 3).join(', ') + (g.length > 3 ? ' +' + (g.length - 3) + ' ta' : ''); };
+            // Uzun guruh ro'yxati: avval 4 tasi, umumiy boshi ("d1/d22-") takrorlanmaydi; qolgani "… (N guruh)":
+            // "d1/d22-01a, 01b, 01c, 02a … (12 guruh)".
+            function cfGroups(list) {
+                const g = list || [];
+                let prefix = null;
+                const shown = g.slice(0, 4).map(name => {
+                    const s = String(name);
+                    if (prefix !== null && s.startsWith(prefix) && s.length > prefix.length) return s.slice(prefix.length);
+                    const cut = s.lastIndexOf('-');
+                    prefix = cut > 0 ? s.slice(0, cut + 1) : null;
+                    return s;
+                });
+                return shown.join(', ') + (g.length > 4 ? ' … (' + g.length + ' guruh)' : '');
+            }
+            // Xona sig'imi (room_capacity): "65 o'rin, 98 talaba (+33)"; raqamlar yo'q — bo'sh.
+            const cfCapText = i => (+i.volume > 0 && +i.students > 0
+                ? i.volume + " o'rin, " + i.students + ' talaba (+' + (i.over != null ? i.over : i.students - i.volume) + ')' : '');
             const cfDate = d => String(d || '').split('-').reverse().slice(0, 2).join('.');
             const cfWhen = i => i.dates || (i.date_from ? cfDate(i.date_from) + (i.date_to && i.date_to !== i.date_from ? '–' + cfDate(i.date_to) : '') : '');
             // Kim / nima: sikl — who; haftalik — o'qituvchi yoki xona.
@@ -6876,6 +6896,10 @@
                     }
                     (i.groups || []).forEach(g => { if (!m.item.groups.includes(g)) m.item.groups.push(g); });
                     if (when && !m.when.some(w => w[1] === when)) m.when.push([at, when]);
+                    // Xona sig'imi: har sana oralig'ining talabalari — eng kattasi ko'rsatiladi.
+                    if (+i.students > (+m.item.students || 0)) {
+                        Object.assign(m.item, { volume: i.volume, students: i.students, over: i.over, room_name: i.room_name, room_code: i.room_code });
+                    }
                     m.item.show = cfMergeShow(m.item.show, i.show);
                 });
                 return out.map(m => (m.when.length > 1
@@ -6897,10 +6921,12 @@
                 const when = cfWhen(i);
                 // Kim / nima (+ guruhlar 3 ta, "+N ta"); hech biri yo'q — server matni.
                 const who = cfWho(i);
+                const cap = cfCapText(i);
                 const body = (who !== undefined && who !== null) || (i.groups || []).length
-                    ? (who ? ' ' + esc(who) : '') + ((i.groups || []).length ? ' — ' + esc(cfGroups(i.groups)) : '')
+                    ? (who ? ' ' + esc(who) : '') + (cap ? ' — <span class="cf-cap">' + esc(cap) + '</span>' : '') +
+                        ((i.groups || []).length ? ' — ' + esc(cfGroups(i.groups)) : '')
                     : ' ' + esc(String(i.detail || '').replace(/^[^:]*:\s*/, ''));
-                return '<li class="cf-line cf-' + (i.past ? 'past' : cfKindLevel(i.kind)) + '"><b>' + esc(CF_LABEL[i.kind] || i.kind || '') + '</b>' + body +
+                return '<li class="cf-line cf-' + (i.past ? 'past' : cfKindLevel(i.kind)) + '"><b>' + esc(cfLabel(i.kind)) + ':</b>' + body +
                     (when ? ', ' + esc(when) : '') + (i.past ? ' <span class="cf-past-tag">o\u2018tgan</span>'
                         : ' <span class="cf-todo">→ ' + esc(i.todo || CF_TODO[i.kind] || '') + '</span>') + focusLinkHtml(i.show) + '</li>';
             }
@@ -7013,7 +7039,7 @@
             // "To'qnashuvni ko'rish: O'qituvchi X — d1/d22-01a va d1/d22-01b, 13–24.11, 08:30"
             function focusBannerText(show, groups) {
                 const who = show.kind === 'teacher_busy' ? "O'qituvchi " + (show.teacher_name || '')
-                    : (show.kind === 'room_busy' || show.kind === 'room_capacity') ? 'Xona ' + (show.room_code || '') : (CF_LABEL[show.kind] || '');
+                    : (show.kind === 'room_busy' || show.kind === 'room_capacity') ? 'Xona ' + (show.room_code || '') : (CF_LABEL[show.kind] || "To'qnashuv");
                 const names = (groups || []).map(g => g.group);
                 const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' va ' + names[names.length - 1] : (names[0] || '');
                 return "To'qnashuvni ko'rish: " + [who.trim() + (list ? ' — ' + list : ''), focusDatesText(show.dates), focusTimeText(show)]
@@ -7432,16 +7458,36 @@
                 const b = key && (cfBlocks[key] || (pc ? { key: pc.key, subject: pc.subject, group: pc.group, conflicts: pc.conflicts || [] } : null));
                 if (!b) return;
                 closeCycDayPop();
-                const own = cfSplit(key, b.conflicts, cfOwners).own;
+                const own = cfMergeItems(cfSplit(key, b.conflicts, cfOwners).own);
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(b.subject) + '</div><div class="dp-sub">' + esc(b.group) + ' · to\u2018qnashuvlar</div></div>' +
-                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' + cfMergeItems(own).map(cfLineHtml).join('') + '</ul>';
+                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' + own.map(cfLineHtml).join('') + '</ul>';
                 document.body.appendChild(pop);
+                loadShiftAdvice(pop, key, own);
                 const r = el.getBoundingClientRect();
                 pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
                 pop.style.top = Math.max(8, Math.min(window.innerHeight - pop.offsetHeight - 8, r.bottom + 6)) + 'px';
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
+            }
+
+            // "Smenani almashtiring" (o'qituvchi ikki sikl amaliyotida band): guruhchaning smena variantlari blok sanalarida serverda
+            // tekshiriladi — oyna ochilganda bir marta (har chizishda emas); javob kelguncha server ko'rsatmasi turadi.
+            const cfWantsShiftAdvice = i => i.kind === 'teacher_busy' && !i.lecture && !i.past;
+            async function loadShiftAdvice(pop, key, items) {
+                const lis = pop.querySelectorAll('.cf-list > li');
+                const spans = (items || []).map((i, n) => (cfWantsShiftAdvice(i) && lis[n] ? lis[n].querySelector('.cf-todo') : null)).filter(Boolean);
+                if (!spans.length || !key) return;
+                spans.forEach(sp => sp.classList.add('cf-checking'));
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/cycle-shift-advice', 'POST', { key });
+                    const a = j && j.advice;
+                    if (a && a.text) spans.forEach(sp => { sp.textContent = '→ ' + a.text; sp.dataset.advice = a.kind || ''; });
+                } catch (e) {
+                    console.warn('Smena maslahati olinmadi:', e);   // server ko'rsatmasi qoladi
+                } finally {
+                    spans.forEach(sp => sp.classList.remove('cf-checking'));
+                }
             }
 
             // Panel (sikl va haftalik kartalar) to'qnashuv belgisi — barcha rejimlarda (faqat ko'rishda ham) bosiladi: tafsilot oynasi.
@@ -11330,12 +11376,13 @@
             // bo'lsa — yangi reyting/bandlik bilan qayta chiziladi.
             let asgBusyFor = null, asgBusySeq = 0;
             async function loadAsgBusy(u) {
-                if (asgBusyFor !== u) { asgBusy = { teachers: {}, rooms: {}, rank: null }; asgBusyFor = u; }
+                if (asgBusyFor !== u) { asgBusy = { teachers: {}, rooms: {}, rank: null, caps: {} }; asgBusyFor = u; }
                 const seq = ++asgBusySeq;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/unit-busy?' + new URLSearchParams(asgUnitParams(u)));
                     if (asgSel === u && seq === asgBusySeq) {
-                        asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {}, rank: j.room_rank || null, items: j.busy_items || null };
+                        asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {}, rank: j.room_rank || null, items: j.busy_items || null,
+                            caps: j.room_caps || {} };
                         if (!$('asgRoomModal').classList.contains('hidden')) renderAsgRooms();
                     }
                 } catch (e) { console.warn('Bandlik olinmadi:', e); }
@@ -11723,13 +11770,17 @@
                 const why = (asgBusy.rank && asgBusy.rank.why) || {};
                 const list = asgRoomsSorted(asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name]
                     .some(v => String(v || '').toLowerCase().includes(q))));
+                // Sig'imdan oshadigan xona — aniq raqamlar ("Xona sig'maydi: 65 o'rin, 98 talaba (+33)"); sig'imi kiritilmagan — to'qnashuv emas.
+                const caps = asgBusy.caps || {};
+                const capText = c => c.volume + " o'rin, " + c.students + ' talaba (+' + c.over + ')';
                 $('asgRoomList').innerHTML = list.map(room =>
                     '<button type="button" class="rm-row' + (asgSel.auditorium_code === room.code ? ' is-current' : '') + '" data-code="' + esc(room.code) + '"' +
-                    (asgBusy.rooms[room.code] ? ' style="opacity:.55" title="Band: ' + esc(asgBusy.rooms[room.code]) + '"' : '') + '>' +
+                    (asgBusy.rooms[room.code] ? ' style="opacity:.55" title="' + (caps[room.code] ? "Xona sig'maydi: " : 'Band: ') + esc(asgBusy.rooms[room.code]) + '"' : '') + '>' +
                     '<b>' + esc(room.name || room.code) + '</b>' +
                     '<span>' + esc([room.building_name, room.auditorium_type_name].filter(Boolean).join(' · ')) + '</span>' +
                     (why[room.code] && !asgBusy.rooms[room.code] ? '<span class="rm-why">' + esc(why[room.code]) + '</span>' : '') +
-                    '<span class="rm-vol">' + (room.volume ? room.volume + ' o\'rin' : '') + '</span></button>').join('')
+                    (caps[room.code] && asgBusy.rooms[room.code] ? '<span class="rm-cap">Sig\'maydi: ' + esc(capText(caps[room.code])) + '</span>' : '') +
+                    '<span class="rm-vol">' + (room.volume ? room.volume + ' o\'rin' : 'sig\'imi kiritilmagan') + '</span></button>').join('')
                     || '<div class="p-3 text-sm text-slate-400">Xona topilmadi</div>';
             }
             $('asgRoomOpen').onclick = () => openAsgRoomModal();

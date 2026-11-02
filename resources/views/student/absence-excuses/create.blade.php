@@ -81,7 +81,7 @@
         .rc-day.rc-in-range { background: #e0e7ff; color: #3730a3; border-radius: 2px; }
         .rc-day.rc-start.rc-today, .rc-day.rc-end.rc-today { box-shadow: none; }
 
-        /* ======= QAYTA TOPSHIRISH JADVALI (kuniga bitta retake) ======= */
+        /* ======= QAYTA TOPSHIRISH JADVALI (bir fandan kuniga bitta retake) ======= */
         .ae-plan-start { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; }
         .ae-plan-start .ae-input { max-width: 240px; }
         .ae-plan-hint { flex: 1; min-width: 220px; font-size: 13px; color: #64748b; line-height: 1.5; margin: 0; }
@@ -501,7 +501,7 @@
                             </div>
                             <div class="flex-1">
                                 <h3 class="text-lg font-bold text-gray-900">{{ __('O\'tkazib yuborilgan nazoratlar') }}</h3>
-                                <p class="text-sm text-gray-500 mt-0.5">{{ __('Qayta topshirish kunlari avtomatik belgilanadi — kuniga bitta retake') }}</p>
+                                <p class="text-sm text-gray-500 mt-0.5">{{ __('Qayta topshirish kunlari avtomatik belgilanadi — bir fandan kuniga bitta retake') }}</p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-lg font-bold text-indigo-600" x-text="retakeDaysCount"></span>
@@ -516,7 +516,7 @@
                                            :min="noDayLimit ? null : todayStr" class="ae-input">
                                 </div>
                                 <p class="ae-plan-hint">
-                                    {{ __('NB olgan har bir dars kuni uchun bitta kun ajratiladi. OSKI fanning oxirgi retake kuniga, yakuniy test esa bir kun oraliq bilan qo\'yiladi. Yakshanba hisobga olinmaydi.') }}
+                                    {{ __('Har bir fan bo\'yicha NB olgan har bir dars kuni uchun bitta kun ajratiladi: bir kunda bitta fandan bitta retake, turli fanlar esa bir kunda bo\'lishi mumkin. OSKI fanning oxirgi retake kuniga, yakuniy test esa bir kun oraliq bilan qo\'yiladi. Yakshanba hisobga olinmaydi.') }}
                                 </p>
                             </div>
                             <div class="ae-plan-table-wrap" x-show="schedule.length > 0">
@@ -744,7 +744,8 @@
             },
             // Qayta topshirish kunlari: indeks => 'Y-m-d'.
             // App\Services\SababliRetakePlan::assign bilan bir xil — saqlashda serverda qayta hisoblanadi.
-            // Kuniga bitta retake; OSKI fanning oxirgi retake kunida; test bir kun oraliq bilan.
+            // Bir fandan kuniga bitta retake (fanlar parallel, har biri boshlanish kunidan);
+            // OSKI fanning oxirgi retake kunida; test bir kun oraliq bilan.
             get plan() {
                 const out = {};
                 if (!this.retakeStart) return out;
@@ -756,14 +757,9 @@
                     const k = String(a.subject_name || '').trim().toLowerCase();
                     (groups[k] = groups[k] || []).push(i);
                 });
-                const first = {};
-                Object.keys(groups).forEach(k => {
-                    first[k] = groups[k].map(i => String(this.assessments[i].original_date)).sort()[0];
-                });
-                const subjects = Object.keys(groups).sort((x, y) => cmp(first[x], first[y]) || cmp(x, y));
 
-                let day = this._firstDay(this.retakeStart);
-                subjects.forEach(k => {
+                Object.keys(groups).forEach(k => {
+                    let day = this._firstDay(this.retakeStart);
                     const keys = groups[k].slice().sort((x, y) => {
                         const a = this.assessments[x], b = this.assessments[y];
                         return ((TYPE[a.assessment_type] ?? 9) - (TYPE[b.assessment_type] ?? 9))

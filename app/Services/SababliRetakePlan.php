@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\DB;
 /**
  * Sababli ariza bo'yicha qayta topshirish jadvali.
  *
- * Talaba bir kunda faqat bitta retake topshiradi: NB olgan har bir dars kuni
- * (fan bo'yicha) uchun alohida kun ajratiladi. Fanning OSKI si shu fanning oxirgi
- * retake kuniga, yakuniy testi esa bir kun oraliq bilan undan keyin qo'yiladi.
- * Yakshanba ish kuni hisoblanmaydi.
+ * Bir fandan bir kunda faqat bitta retake: fanning NB olgan har bir dars kuni uchun
+ * alohida kun ajratiladi (turli fanlarning retake lari bir kunga tushishi mumkin).
+ * Fanning OSKI si shu fanning oxirgi retake kuniga, yakuniy testi esa bir kun
+ * oraliq bilan undan keyin qo'yiladi. Yakshanba ish kuni hisoblanmaydi.
  *
  * Talaba formasi (create.blade.php, JS) aynan shu tartibda oldindan ko'rsatadi,
  * saqlashda esa sanalar shu yerda qayta hisoblanadi.
@@ -96,7 +96,8 @@ class SababliRetakePlan
 
     /**
      * Topshirilmagan har bir nazoratga qayta topshirish kunini (makeup_date, Y-m-d) belgilaydi.
-     * Fanlar birinchi qoldirilgan sanasi bo'yicha ketma-ket joylashadi.
+     * Har bir fan boshlanish kunidan o'z kunlarini oladi — fanlar bir-biriga bog'liq emas,
+     * bir kunda turli fanlarning retake lari bo'lishi mumkin.
      * MT kun band qilmaydi — muddati fanning oxirgi retake kuni.
      */
     public static function assign(array $items, Carbon $start): array
@@ -109,16 +110,8 @@ class SababliRetakePlan
             }
         }
 
-        $firstDates = array_map(
-            fn ($keys) => min(array_map(fn ($k) => (string) $items[$k]['original_date'], $keys)),
-            $bySubject
-        );
-        $subjects = array_keys($bySubject);
-        usort($subjects, fn ($a, $b) => [$firstDates[$a], $a] <=> [$firstDates[$b], $b]);
-
-        $day = self::firstDay($start->toDateString());
-        foreach ($subjects as $subject) {
-            $keys = $bySubject[$subject];
+        foreach ($bySubject as $keys) {
+            $day = self::firstDay($start->toDateString());
             usort($keys, fn ($a, $b) => [self::TYPE_ORDER[$items[$a]['assessment_type']] ?? 9, (string) $items[$a]['original_date']]
                 <=> [self::TYPE_ORDER[$items[$b]['assessment_type']] ?? 9, (string) $items[$b]['original_date']]);
 

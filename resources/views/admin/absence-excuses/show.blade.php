@@ -361,7 +361,7 @@
             @endif
 
             {{-- ═══════ Baho konflikti ogohlantiruvi ═══════ --}}
-            @if($excuse->isPending() && !empty($gradeConflicts))
+            @if(!empty($gradeConflicts))
                 <div class="mb-6 rounded-lg border-2 border-red-400 bg-red-50 dark:bg-red-900/20 dark:border-red-600 p-4">
                     <div class="flex items-start gap-3">
                         <svg class="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

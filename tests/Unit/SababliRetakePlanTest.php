@@ -44,7 +44,17 @@ it('starts on Monday when the chosen day is Sunday', function () {
     expect(planDates([planItem('Anatomiya', 'jn', '2026-10-19')], '2026-11-08'))->toBe(['2026-11-09']);
 });
 
-it('lays subjects out one after another and skips submitted items', function () {
+it('lets different subjects share a day but never two retakes of one subject', function () {
+    // Bir kunda 3 fandan NB — uchalasi bir kunda; Anatomiyaning 2-NB si keyingi kunga
+    expect(planDates([
+        planItem('Anatomiya', 'jn', '2026-10-19'),
+        planItem('Fiziologiya', 'jn', '2026-10-19'),
+        planItem('Biokimyo', 'jn', '2026-10-19'),
+        planItem('Anatomiya', 'jn', '2026-10-20'),
+    ], '2026-11-09'))->toBe(['2026-11-09', '2026-11-09', '2026-11-09', '2026-11-10']);
+});
+
+it('runs each subject on its own days and skips submitted items', function () {
     $items = [
         planItem('Fiziologiya', 'jn', '2026-10-21'),
         planItem('Anatomiya', 'jn', '2026-10-20'),
@@ -56,12 +66,12 @@ it('lays subjects out one after another and skips submitted items', function () 
     ];
 
     expect(planDates($items, '2026-11-09'))->toBe([
-        '2026-11-13', // Fiziologiya 21-okt — Anatomiya testidan keyin
+        '2026-11-09', // Fiziologiya 21-okt — o'z kunlari boshlanish kunidan
         '2026-11-10', // Anatomiya 20-okt
         '2026-11-12', // Anatomiya testi: 10 + bo'sh 11
-        '2026-11-14', // Fiziologiya 22-okt
+        '2026-11-10', // Fiziologiya 22-okt
         '2026-11-09', // Anatomiya 19-okt
-        '2026-11-14', // MT — fanning oxirgi retake kuni, kun band qilmaydi
+        '2026-11-10', // MT — fanning oxirgi retake kuni, kun band qilmaydi
         null,         // topshirilgan
     ]);
 });

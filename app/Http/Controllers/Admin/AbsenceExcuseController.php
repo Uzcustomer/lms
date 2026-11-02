@@ -60,6 +60,9 @@ class AbsenceExcuseController extends Controller
 
         $excuses = $query->paginate(20)->withQueryString();
 
+        // Ariza kunlarida darsda bo'lib baho olganlar — qatorda qizil ko'rinadi
+        $gradeConflictCounts = AbsenceExcuse::gradeConflictCounts($excuses->getCollection());
+
         $stats = [
             'pending' => AbsenceExcuse::where('status', 'pending')->count(),
             'approved' => AbsenceExcuse::where('status', 'approved')->count(),
@@ -85,7 +88,7 @@ class AbsenceExcuseController extends Controller
 
         $reasons = AbsenceExcuse::reasonLabels();
 
-        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses'));
+        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses', 'gradeConflictCounts'));
     }
 
     public function exportByStatus(string $status)
@@ -117,9 +120,7 @@ class AbsenceExcuseController extends Controller
         // Ariza sana oralig'ida talaba haqiqatan baho olgan kunlar —
         // ma'lumotnoma soxta bo'lishi mumkinligini ko'rsatuvchi konfliktlar
         // (talaba formasi ham shu qoida bilan arizani qabul qilmaydi).
-        $gradeConflicts = $excuse->isPending()
-            ? AbsenceExcuse::gradeConflicts($excuse->student_hemis_id, $excuse->start_date, $excuse->end_date)->all()
-            : [];
+        $gradeConflicts = AbsenceExcuse::gradeConflicts($excuse->student_hemis_id, $excuse->start_date, $excuse->end_date)->all();
 
         return view('admin.absence-excuses.show', compact('excuse', 'daysCount', 'gradeConflicts'));
     }

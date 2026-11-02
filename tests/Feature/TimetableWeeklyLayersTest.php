@@ -1234,3 +1234,48 @@ it('alohida amaliy istisnosi bo\'lakli fan kartasini bo\'lganda biriktirilgan ta
     expect($cards->pluck('group_name')->all())->toBe(['g-02a', 'g-02b'])
         ->and($cards->pluck('students')->all())->toBe([3, 2]);
 });
+
+it('karta yaratish va kartalar ro\'yxatini o\'zgartirish — faqat adminlar: o\'qituvchi, fan mas\'uli, kafedra mudiriga 403; mudir ichki joylashuvni o\'zgartiradi', function () {
+    $s = layersSetup();
+    foreach (['oqituvchi', 'fan_masuli'] as $r) {
+        Role::findOrCreate($r, 'web');
+    }
+    $s['head']->update(['department' => 'Gigiyena kafedrasi']);
+    $t = fmTeacherLayers('OQITUVCHI');
+    $t->syncRoles(['oqituvchi']);
+    $fm = fmTeacherLayers("FAN MAS'ULI");
+    $b = $s['board'];
+    $calls = [
+        ['post', route('admin.timetable.boards.store'), ['name' => 'Yangi', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi']],
+        ['delete', route('admin.timetable.boards.destroy', $b), []],
+        ['post', route('admin.timetable.boards.generate', $b), []],
+        ['post', route('admin.timetable.boards.add-missing-groups', $b), []],
+        ['post', route('admin.timetable.boards.refresh-names', $b), []],
+        ['post', route('admin.timetable.boards.unplace', $b), ['courses' => [2], 'layer' => 'internal']],
+        ['get', route('admin.timetable.snapshots.index', $b), []],
+        ['post', route('admin.timetable.snapshots.store', $b), ['note' => 'x']],
+        ['post', route('admin.timetable.subject-setting.save', $b), ['specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena', 'mode' => 'cycle', 'cycle_days' => 5]],
+        ['post', route('admin.timetable.ktr-weeks', $b), ['courses' => [2]]],
+        ['post', route('admin.timetable.cycle-plan', $b), ['layer' => 'internal', 'clear' => 1]],
+    ];
+    foreach ([[$t, 'oqituvchi'], [$fm, 'fan_masuli'], [$s['head'], 'kafedra_mudiri']] as [$who, $role]) {
+        foreach ($calls as [$m, $url, $body]) {
+            $r = layerAs($who, $role)->{$m . 'Json'}($url, $body);
+            expect([$role, $url, $r->status()])->toBe([$role, $url, 403]);
+        }
+    }
+    expect(TimetableBoard::count())->toBe(1)->and(\App\Models\TimetableSubjectSetting::count())->toBe(0);
+    // Kafedra mudiri: ichki qatlamda o'z kafedrasi kartasini joylaydi; sikl kalendari (bayram) saqlanmaydi.
+    layerAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 2, 'pair' => 3, 'layer' => 'internal'])->assertOk();
+    expect($s['own']->fresh()->only(['day', 'pair']))->toBe(['day' => 2, 'pair' => 3]);
+    layerAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-plan', $b), ['layer' => 'internal', 'holidays' => ['2026-09-21']])->assertOk();
+    expect(($b->fresh()->settings ?? [])['holidays'] ?? [])->toBe([]);
+    // Sahifa: kafedra mudirida joylash bor, bo'shatish va fanlar menejeri yo'q.
+    layerAs($s['head'], 'kafedra_mudiri')->get(route('admin.timetable.index'))->assertOk()
+        ->assertSee('const TIMETABLE_CAN_PLACE = true', false)->assertSee('const TIMETABLE_CAN_UNPLACE = false', false)
+        ->assertSee('const TIMETABLE_CAN_USE_MANAGER = false', false);
+    layerAs($s['oquv'], 'oquv_bolimi')->get(route('admin.timetable.index'))->assertOk()
+        ->assertSee('const TIMETABLE_CAN_UNPLACE = true', false)->assertSee('const TIMETABLE_CAN_USE_MANAGER = true', false);
+    // O'quv bo'limi — tashqi qatlamni bo'shatadi (avvalgidek).
+    layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.boards.unplace', $b), ['courses' => [2], 'layer' => 'external'])->assertOk();
+});

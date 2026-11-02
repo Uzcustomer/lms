@@ -4082,7 +4082,8 @@ class TimetableController extends Controller
         // Semestr sanasi va bayramlarni sozlamaga saqlaymiz (keyingi safar eslab qolish uchun).
         // Faqat sikl jadvalini tahrirlay oladigan rollar: o'qituvchi (faqat ko'rish) va
         // boshqalar butun doska kalendarini o'zgartirib yubormasin.
-        $canSaveCalendar = $this->cycleLayerEditable($cycleRole, 'external') || $this->cycleLayerEditable($cycleRole, 'internal');
+        // Kafedra mudiri (ichki qatlam) kalendarni o'zgartirmaydi — sikl sanasi va bayramlar ("+ qo'shish") faqat adminlar va o'quv bo'limi.
+        $canSaveCalendar = $this->cycleLayerEditable($cycleRole, 'external');
         if ($canSaveCalendar
             && (($set['semester_start'] ?? null) !== $startC->toDateString() || ($set['holidays'] ?? []) !== $holidays)) {
             $set['semester_start'] = $startC->toDateString();

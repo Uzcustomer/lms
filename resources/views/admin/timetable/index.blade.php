@@ -23,9 +23,12 @@
             && \Illuminate\Support\Facades\DB::table('teacher_responsible_subjects')->where('teacher_id', $timetableTeacherId)->exists());
     } catch (\Throwable $e) { /* Biriktirishsiz fan mas'uli uchun ham bo'sh filtr saqlanadi. */ }
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead || $timetableReadOnly;
+    // Joylashtirish (kafedra mudiri — ichki qatlamda o'z kafedrasi kartalari: joyi, o'qituvchisi, xonasi).
     $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
-    // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchiga yopiq.
-    $timetableCanUseManager = $timetableAssignmentOnly && !$timetableReadOnly;
+    // Bo'shatish va sikl kalendari ("+ qo'shish") — kartalar ro'yxati/doska sozlamasini o'zgartiradi: kafedra mudiriga yopiq.
+    $timetableCanUnplace = $timetableAuditoriumAssignmentOnly;
+    // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchi, fan mas'uli va kafedra mudiriga yopiq.
+    $timetableCanUseManager = $timetableAuditoriumAssignmentOnly;
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
@@ -2673,6 +2676,7 @@
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
+            const TIMETABLE_CAN_UNPLACE = @json($timetableCanUnplace);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
             const TIMETABLE_ROLE = @json($timetableActiveRole);
@@ -2814,14 +2818,17 @@
             function applyTimetableAccess() {
                 if (!TIMETABLE_ASSIGNMENT_ONLY) return;
 
+                // Karta yaratish / kartalar ro'yxatini o'zgartirish (kartochkalar, fan nomlari, yangi doska, versiyalar, KTR haftalari,
+                // bo'shatish, sikl bayramlari) — faqat adminlar; server ham 403 qaytaradi.
                 const restrictedIds = [
-                    'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn',
+                    'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn',
                     'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
                     'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
                     'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
                 ];
                 restrictedIds.forEach(id => {
-                    if (TIMETABLE_CAN_PLACE && ['unplaceBtn', 'cycleHolAddBtn', 'cycleRefresh'].includes(id)) return;
+                    if (TIMETABLE_CAN_UNPLACE && ['unplaceBtn', 'cycleHolAddBtn'].includes(id)) return;
+                    if (TIMETABLE_CAN_PLACE && id === 'cycleRefresh') return;
                     if (id === 'managerBtn' && TIMETABLE_CAN_USE_MANAGER) return;
                     const el = $(id);
                     if (!el) return;

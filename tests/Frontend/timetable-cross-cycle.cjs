@@ -162,6 +162,13 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     ctx.renderGridCross('teacher');
     assert.equal((el('grid').innerHTML.match(/<th class="tt-grp/g) || []).length, 1);
     assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
+    // Xona kesimi: o'sha fan, xona va vaqt, lekin boshqa o'qituvchi — bitta dars emas, to'qnashuv (Codex).
+    ctx.renderGridCross('room');
+    assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
+    ctx.weekly[1].teacher_id = 6;
+    ctx.renderGridCross('room');
+    assert.match(el('grid').innerHTML, /data-day="6" data-pair="1" style="outline:2px solid #ef4444/);
+    ctx.weekly[1].teacher_id = 5;
     ctx.weekly[1].auditorium_code = 'Z9';
     ctx.renderGridCross('teacher');
     assert.match(el('grid').innerHTML, /data-day="6" data-pair="1" style="outline:2px solid #ef4444/);

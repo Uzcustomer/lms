@@ -1334,7 +1334,7 @@ trait TimetableHemisSync
         if ($emps || $rooms) {
             $ext = DB::table('schedules')->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
                 ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
-                ->get(['schedule_hemis_id', 'group_name', 'subject_name', 'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time',
+                ->get(['schedule_hemis_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time',
                     'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
             foreach ($ext as $r) {
                 if (isset($handledIds[(int) $r->schedule_hemis_id])) {
@@ -1344,7 +1344,8 @@ trait TimetableHemisSync
                 $start = substr((string) $r->lesson_pair_start_time, 0, 5);
                 $end = substr((string) $r->lesson_pair_end_time, 0, 5);
                 $label = 'HEMIS: ' . $r->group_name . ' · ' . $r->subject_name;
-                $rInfo = ['source' => 'HEMIS', 'group' => $r->group_name, 'subject' => $r->subject_name, 'teacher' => $r->employee_name, 'room' => $r->auditorium_name];
+                $rInfo = ['source' => 'HEMIS', 'group' => $r->group_name, 'subject' => $r->subject_name, 'teacher' => $r->employee_name, 'room' => $r->auditorium_name,
+                    'code' => (string) ($r->training_type_code ?? '')];
                 // Kafedra mudiriga majburan qo'yilgan HEMIS darsi (o'qituvchisi — shu fan kafedrasining mudiri) bandlik emas.
                 $forcedMudir = $r->employee_id && (string) (($mudirFor($r->department_id) ?? [null])[0]) === (string) $r->employee_id;
                 if ($r->employee_id && isset($emps[(string) $r->employee_id]) && !$forcedMudir) {
@@ -1388,7 +1389,7 @@ trait TimetableHemisSync
                     continue;   // bitta dars bir necha guruhga (umumiy karta yoki HEMIS'dagi oqim) — aynan o'sha vaqtda; boshqa vaqt — to'siq
                 }
                 // Boshqa yo'nalishdagi guruhning HEMIS darsi, LMS'da shu ma'ruza oqimida (o'sha fan, LMS o'qituvchisi, xona; aynan shu vaqt).
-                if (($info['source'] ?? '') === 'HEMIS' && (string) ($a['code'] ?? '') === '11' && $emp !== '' && $room !== '' && $oRoom === $room
+                if (($info['source'] ?? '') === 'HEMIS' && (string) ($a['code'] ?? '') === '11' && ($info['code'] ?? '') === '11' && $emp !== '' && $room !== '' && $oRoom === $room
                     && $s === $a['start'] && $e === $a['end'] && isset($unitSubject[$unitKey])
                     && $this->hemisSubjectBase((string) ($info['subject'] ?? '')) === $this->hemisSubjectBase($unitSubject[$unitKey])
                     && isset($flowGroups[$this->hemisSubjectBase($unitSubject[$unitKey]) . '|' . $emp . '|' . $room][$cleanGroup($info['group'] ?? '')])) {
@@ -2257,7 +2258,7 @@ trait TimetableHemisSync
         $day = Carbon::parse($today);
         $ext = DB::table('schedules')->whereNull('deleted_at')->whereBetween('lesson_date', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
             ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
-            ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_name', 'lesson_pair_start_time', 'lesson_pair_end_time',
+            ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_pair_start_time', 'lesson_pair_end_time',
                 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
         $all = collect($hemisRows)->flatten(1)->keyBy('schedule_hemis_id');
         foreach ($ext as $r) {
@@ -2277,7 +2278,8 @@ trait TimetableHemisSync
             $candOf[(int) $out[$i]['hemis_id']] = $i;
         }
         foreach ($all as $id => $r) {
-            $base = ['id' => (int) $id, 'group_id' => (int) $r->group_id, 'group' => $r->group_name, 'subject' => $r->subject_name, 'dept' => $r->department_id];
+            $base = ['id' => (int) $id, 'group_id' => (int) $r->group_id, 'group' => $r->group_name, 'subject' => $r->subject_name, 'dept' => $r->department_id,
+                'code' => (string) ($r->training_type_code ?? '')];
             $x = $mine[(int) $id] ?? null;
             // LMS'da o'qituvchisi biriktirilmagan dars — HEMIS'dagi o'qituvchisi (kafedra mudiri) bandlik hisoblanmaydi.
             $forced = $x ? !$x['teacher_set'] : $isMudir($r->department_id, $r->employee_id);
@@ -2326,7 +2328,7 @@ trait TimetableHemisSync
                         && $this->hemisSubjectKey((string) $o['subject']) === $this->hemisSubjectKey((string) $x['subject'])
                     // Boshqa yo'nalishdagi (qamrovdan tashqari) guruh LMS'da shu ma'ruza oqimida — o'sha fan, LMS o'qituvchisi va xona;
                     // HEMIS'da aynan shu vaqtda shu xonada (o'qituvchisi HEMIS'da boshqa bo'lsa ham).
-                    || !empty($x['flow_card']) && $o['flow'] === null && $o['room'] === $room && $o['s'] === $s && $o['e'] === $e
+                    || !empty($x['flow_card']) && $o['flow'] === null && $o['code'] === '11' && $o['room'] === $room && $o['s'] === $s && $o['e'] === $e
                         && $this->hemisSubjectBase((string) $o['subject']) === explode('|', $x['flow_card'])[0]
                         && isset($flowGroups[$x['flow_card']][$cleanGroup($o['group'])]);
                 $text = null;

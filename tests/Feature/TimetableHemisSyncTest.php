@@ -2319,6 +2319,10 @@ it('bugungi darslar: boshqa yo\'nalishdagi (qamrovdan tashqari) guruh LMS\'da sh
     htFake([1596 => [htItem(1, '2026-09-14', '08:30', '09:50', $lec)]]);
     $row = fn () => collect(htCall($s)->assertOk()->json('rows'))->firstWhere('hemis_id', 1);
     expect($row()['status'])->toBe('update')->and($row()['blocked'])->toBe([]);
+    // HEMIS'da o'sha guruhlarning shu vaqtdagi darsi amaliy bo'lsa — ma'ruza oqimi emas: zal band (Codex).
+    DB::table('schedules')->whereIn('schedule_hemis_id', [700, 701])->update(['training_type_code' => '13', 'training_type_name' => 'Amaliy']);
+    expect($row()['status'])->toBe('blocked');
+    DB::table('schedules')->whereIn('schedule_hemis_id', [700, 701])->update(['training_type_code' => '11', 'training_type_name' => "Ma'ruza"]);
     // Boshqa yo'nalish kartasida boshqa o'qituvchi — bitta oqim emas: zal band.
     $other->update(['teacher_id' => Teacher::where('full_name', 'MUDIR')->value('id'), 'teacher_name' => 'MUDIR']);
     expect($row()['status'])->toBe('blocked')->and($row()['blocked'][0])->toStartWith("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50");
@@ -2351,6 +2355,10 @@ it('HEMIS solishtirish (kelgusi kunlar): boshqa yo\'nalish guruhining HEMIS ma\'
         'lesson_pair_start_time' => '08:30:00', 'lesson_pair_end_time' => '09:50:00', 'employee_id' => 7007, 'employee_name' => 'E7007',
         'auditorium_code' => 'Y1', 'auditorium_name' => 'Y301', 'department_id' => 777]);
     expect($run()->first()['blocked'])->toBe([]);
+    // HEMIS'dagi darsi amaliy — ma'ruza oqimi emas: zal band (Codex).
+    DB::table('schedules')->where('schedule_hemis_id', 800)->update(['training_type_code' => '13', 'training_type_name' => 'Amaliy']);
+    expect(implode('; ', $run()->first()['blocked']))->toContain('xona band');
+    DB::table('schedules')->where('schedule_hemis_id', 800)->update(['training_type_code' => '11', 'training_type_name' => "Ma'ruza"]);
     // LMS kartasida boshqa o'qituvchi — bitta oqim emas: zal band.
     $other->update(['teacher_id' => Teacher::where('full_name', 'USTOZ')->value('id'), 'teacher_name' => 'USTOZ']);
     expect(implode('; ', $run()->first()['blocked']))->toContain('xona band')->toContain('p/p22-02b');

@@ -8223,10 +8223,11 @@
                 if (key.startsWith('T')) return teacherFullNames[key.slice(1)] || (names || []).slice().sort((x, y) => y.length - x.length)[0] || key;
                 return key.startsWith('N:') ? key.slice(2) : key;
             }
-            // Bitta dars: ma'ruza oqimi (fan, xona va aniq vaqt bir xil — turli yo'nalish kartalari ham) — to'qnashuv emas.
+            // Bitta dars: ma'ruza oqimi (fan, o'qituvchi, xona va aniq vaqt bir xil — turli yo'nalish kartalari ham) — to'qnashuv emas.
             const sameCrossLesson = (a, b) => {
                 const x = a.c || a.l, y = b.c || b.l;
                 return x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb
+                    && String(x.teacher_id || '') === String(y.teacher_id || '')
                     && String(x.subject_name || '').trim().toLowerCase() === String(y.subject_name || '').trim().toLowerCase()
                     && String(x.auditorium_code || x.auditorium_name || '') === String(y.auditorium_code || y.auditorium_name || '');
             };

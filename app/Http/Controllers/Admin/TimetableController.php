@@ -4266,6 +4266,15 @@ class TimetableController extends Controller
         // shu oqim tarkibidagi barcha amaliy guruhlarni birga qamrab oladi.
         $byFlow = [];
         $variantFirst = [];   // norm(spec|kurs|asosiy nom) => birinchi bo'lak nomi (soatlar uchun)
+        // "Mas'ul fanlarim": qatorning qamrovdagi kartalari fan nomlari (bo'lak va asosiy nomi, normSubject) — joylashuvlar shu
+        // ro'yxat bo'yicha olinadi. Joylashuv yozuvida kafedra yo'q: responsibleMatch kafedra bilan cheklangan mas'ul fanda uni
+        // rad etardi (fan mas'uli hamma bloklarni "joylanmagan" ko'rardi); karta esa kafedra bo'yicha allaqachon tekshirilgan.
+        $markScopeName = function (string $flowKey, $c) use (&$byFlow): void {
+            $name = (string) $c->subject_name;
+            foreach (array_filter([$name, $this->cycleSubjectVariantBase($name)]) as $n) {
+                $byFlow[$flowKey]['scope_names'][$this->normSubject((string) $n)] = true;
+            }
+        };
         if (!empty($cycleKey)) {
             foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'practice')->whereNotNull('group_name')) as $c) {
                 if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)
@@ -4341,6 +4350,7 @@ class TimetableController extends Controller
                     }
                     if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$rowSubject][(string) $c->training_type] = true;
+                        $markScopeName($flowKey, $c);
                     }
                 }
             }
@@ -4528,11 +4538,8 @@ class TimetableController extends Controller
                     if ($sourceSubjects !== null && !isset($sourceSubjects[mb_strtolower(trim((string) $placement->subject_name))])) {
                         continue;
                     }
-                    // Asosiy nomga yig'ishdan oldin faqat mas'ul bo'lak joylashuvlarini qoldiramiz.
-                    if ($scopeSubjects !== null && !$this->responsibleMatch($scopeSubjects, [
-                        'faculty_name' => $g['faculty'], 'specialty_name' => $g['specialty'],
-                        'course' => $g['course'], 'subject_name' => $placement->subject_name,
-                    ])) {
+                    // Asosiy nomga yig'ishdan oldin faqat mas'ul bo'lak joylashuvlarini qoldiramiz (qatorning qamrovdagi kartalari nomlari).
+                    if ($scopeSubjects !== null && !isset($g['scope_names'][$this->normSubject((string) $placement->subject_name)])) {
                         continue;
                     }
                     // Tashqi jadval: bo'lak joylashuvi asosiy nomli bitta blok bo'lib ko'rinadi.

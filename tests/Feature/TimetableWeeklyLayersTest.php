@@ -889,6 +889,22 @@ it('tashqi siklda boshqa mas’ul bo‘lakning joylashuvi tanlangan bo‘lakni a
         ->and($response->json('rows.0.blocks.0.from'))->toBe(0);
 })->with(['teacher', 'web']);
 
+it('tashqi siklda asosiy nom bilan saqlangan joylashuv mas’ul bo‘lak egasiga ham ko‘rinadi', function (string $guard) {
+    $s = responsibleScopeSetup();
+    DB::table('curriculum_subjects')->where('id', $s['responsible_subject_id'])->update(['semester_code' => '19', 'subject_name' => 'Gigiyena (a)']);
+    $s['own']->update(['course' => 5, 'subject_name' => 'Gigiyena (a)']);
+    $s['foreign']->update(['course' => 5, 'subject_name' => 'Gigiyena (b)']);
+    foreach (['Gigiyena (a)', 'Gigiyena (b)'] as $name) {
+        \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+            'course' => 5, 'subject_name' => $name, 'mode' => 'cycle', 'cycle_days' => 2]);
+    }
+    // Bo'laklarga ajratilishidan oldin — asosiy nom bilan.
+    \App\Models\TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi',
+        'course' => 5, 'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Gigiyena', 'start_index' => 3, 'training_type' => 'practice']);
+    $response = responsibleActor($s, $guard)->postJson(route('admin.timetable.cycle-plan', $s['board']), ['subjects' => 1, 'layer' => 'external'])->assertOk();
+    expect($response->json('rows.0.blocks'))->toHaveCount(1)->and($response->json('rows.0.blocks.0.from'))->toBe(3);
+})->with(['teacher', 'web']);
+
 it('sikl joylashuvi HEMIS fan nomi aynan mos bo‘lmasa aniq xato qaytaradi', function () {
     $s = layersSetup();
     $s['own']->update(['course' => 5, 'subject_name' => 'Вакцинопрофилактика ']);

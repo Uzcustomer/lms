@@ -413,3 +413,44 @@ it('agenda: bitta ma\'ruza kartasi guruhchalarda har xil soatda (xonasiz) — al
         ->toBe([['M', 'd22-05a', 1, false], ['M', 'd22-05b', 7, false]])
         ->and($j['entries'][0]['key'])->not->toBe($j['entries'][1]['key']);
 });
+
+/** Fan mas'uli (profildagi mas'ul fan — kafedrasi bilan). */
+function agResponsible(Teacher $t, string $subject, ?string $kafedra): void
+{
+    if (!DB::table('specialties')->where('specialty_hemis_id', 9101)->exists()) {
+        DB::table('specialties')->insert(['specialty_hemis_id' => 9101, 'name' => 'Davolash ishi', 'code' => '60910200', 'locality_type_code' => '1',
+            'locality_type_name' => 'x', 'education_type_code' => '11', 'education_type_name' => 'B']);
+        DB::table('curricula')->insert(['curricula_hemis_id' => 8101, 'name' => 'R', 'specialty_hemis_id' => 9101, 'department_hemis_id' => 1,
+            'education_year_code' => '2026', 'education_year_name' => '2026-2027', 'current' => 1, 'education_type_code' => '11', 'education_type_name' => 'B',
+            'education_form_code' => '11', 'education_form_name' => 'K', 'marking_system_code' => '11', 'marking_system_name' => 'M',
+            'marking_system_minimum_limit' => 60, 'marking_system_gpa_limit' => 2.4, 'semester_count' => 12, 'education_period' => 6]);
+    }
+    $csId = DB::table('curriculum_subjects')->insertGetId(['curriculum_subject_hemis_id' => random_int(10000, 99999), 'curricula_hemis_id' => 8101,
+        'subject_id' => random_int(100, 999), 'subject_name' => $subject, 'subject_code' => 'K1', 'semester_code' => '19', 'semester_name' => '9-semestr',
+        'at_semester' => 1, 'department_name' => $kafedra]);
+    DB::table('teacher_responsible_subjects')->insert(['teacher_id' => $t->id, 'curriculum_subject_id' => $csId]);
+}
+
+it('fan mas\'uli "Mas\'ul fanlarim" (sikl, ichki): d1/d22-01a Klinik farmakologiya kartasi holati va to\'qnashuvlari adminnikidek', function () {
+    $s = agSetup();
+    // MUXAMMADIYEV SAFAR — fan mas'uli: Klinik farmakologiya (Farmakologiya kafedrasi) — profildagi kafedra bilan cheklangan mas'uliyat.
+    $fm = agTeacher('MUXAMMADIYEV SAFAR', 'fan_masuli');
+    agResponsible($fm, 'Klinik farmakologiya', 'Farmakologiya kafedrasi');
+    $plan = fn (Teacher $t, string $role, array $q) => collect(agAs($t, $role)
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'courses' => [5]] + $q)->assertOk()->json('cycle_cards'));
+    $state = fn ($cards, string $g) => collect($cards->firstWhere('group', $g))
+        ->only(['subject', 'type', 'placed', 'start_index', 'conflict', 'conflict_level'])
+        ->put('conflicts', array_map(fn ($i) => [$i['kind'], $i['line']], $cards->firstWhere('group', $g)['conflicts']))->all();
+    $admin = $plan($s['admin'], 'admin', []);
+    $mine = $plan($fm, 'fan_masuli', ['subjects' => 1]);
+    expect($state($admin, 'd1/d22-01a'))->toMatchArray(['subject' => 'Klinik farmakologiya', 'placed' => true, 'conflict_level' => 'red'])
+        ->and($state($mine, 'd1/d22-01a'))->toBe($state($admin, 'd1/d22-01a'))
+        ->and($state($mine, 'd1/d22-01b'))->toBe($state($admin, 'd1/d22-01b'))
+        // "Sikl bloklari: N/M" — bir xil.
+        ->and($mine->where('placed', true)->count())->toBe($admin->where('placed', true)->count())
+        ->and($mine->count())->toBe($admin->count());
+    // Boshqa kafedra fani — mas'ul emas: kartalar umuman chiqmaydi.
+    $alien = agTeacher('BEGONA', 'fan_masuli');
+    agResponsible($alien, 'Klinik farmakologiya', 'Terapiya kafedrasi');
+    expect($plan($alien, 'fan_masuli', ['subjects' => 1])->all())->toBe([]);
+});

@@ -168,6 +168,11 @@ return [
                 'id' => 7,
                 "name" => "12-shakl (yozgi)"
             ]
-        ]
+        ],
+
+    /*
+    | So'rov xotirasi ogohlantirishi (MB): memory_get_peak_usage shundan oshsa — logga yoziladi (LogPeakMemory). 0 — o'chiq.
+    */
+    'memory_warn_mb' => (int) env('MEMORY_WARN_MB', 100),
 
 ];

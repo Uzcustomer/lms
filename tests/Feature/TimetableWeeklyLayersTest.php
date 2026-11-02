@@ -1288,3 +1288,61 @@ it('/data: teacher_full_names — kartalardagi o\'qituvchilarning to\'liq F.I.Sh
     $res = layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json();
     expect($res['teacher_full_names'])->toBe([(string) $t->id => "MAHMARAIMOV SHAVKAT TO'XTASHOVICH"]);
 });
+
+it('/data: istisnolar ixcham (ov), haftalar filtri — ko\'chirish faqat so\'ralgan haftalarga, bekor qilinganlari hammasi; qamrov va rol doirasi', function () {
+    $s = layersSetup();
+    Role::findOrCreate('oqituvchi', 'web');
+    Role::findOrCreate('fan_masuli', 'web');
+    $t = fmTeacherLayers('OQITUVCHI');
+    $t->syncRoles(['oqituvchi']);
+    $s['own']->update(['teacher_id' => $t->id, 'teacher_name' => 'OQITUVCHI']);
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '101', 'volume' => 24, 'active' => true]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'day' => 2, 'pair' => 3, 'cancelled' => false, 'auditorium_code' => 'R1', 'auditorium_name' => '101']);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 5, 'cancelled' => true]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 4, 'day' => 1, 'pair' => 1, 'cancelled' => false]);
+    $other = TimetableCard::create($s['own']->only(['board_id', 'specialty_name', 'oqim_label', 'lang', 'students', 'training_type', 'len_half', 'weeks', 'kafedra_name'])
+        + ['faculty_name' => 'F2', 'course' => 3, 'subject_name' => 'Fizika', 'group_name' => 'g-03a']);
+    $url = route('admin.timetable.boards.data', $s['board']);
+    $res = layerAs($s['admin'], 'superadmin')->getJson($url)->assertOk()->json();
+    expect($res)->not->toHaveKey('overrides')->and($res['ov_cols'])->toBe(['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code', 'auditorium_name'])
+        ->and($res['ov'])->toBe([[$s['own']->id, 3, 2, 3, 0, 'R1', '101'], [$s['own']->id, 5, null, null, 1, null, null], [$s['foreign']->id, 4, 1, 1, 0, null, null]])
+        ->and($res['room_volumes'])->toMatchArray(['R1' => 24])
+        ->and(collect($res['cards'])->pluck('id')->sort()->values()->all())->toBe([$s['own']->id, $s['foreign']->id, $other->id])
+        ->and($res['filter'])->toBe(['scope' => 'all', 'weeks' => null, 'partial' => false]);
+    // Haftalar: ko'chirish faqat 3-hafta, bekor qilingan 5-hafta qoladi.
+    $res = layerAs($s['admin'], 'superadmin')->getJson($url . '?weeks[]=3')->assertOk()->json();
+    expect($res['ov'])->toBe([[$s['own']->id, 3, 2, 3, 0, 'R1', '101'], [$s['own']->id, 5, null, null, 1, null, null]]);
+    // Qamrov: fakultet / kurs.
+    $res = layerAs($s['admin'], 'superadmin')->getJson($url . '?faculty_names[]=F2&courses[]=3')->assertOk()->json();
+    expect(collect($res['cards'])->pluck('id')->all())->toBe([$other->id])->and($res['ov'])->toBe([])->and($res['filter']['partial'])->toBeTrue();
+    expect(collect(layerAs($s['admin'], 'superadmin')->getJson($url . '?faculty_names[]=F2')->assertOk()->json('cards'))->pluck('id')->all())->toBe([$other->id])
+        ->and(collect(layerAs($s['admin'], 'superadmin')->getJson($url . '?courses[]=2')->assertOk()->json('cards'))->pluck('id')->sort()->values()->all())
+        ->toBe([$s['own']->id, $s['foreign']->id]);
+    // O'qituvchi "Faqat meniki": faqat o'z kartalari va ularning istisnolari; adminga scope=mine ta'sir qilmaydi.
+    $res = layerAs($t, 'oqituvchi')->getJson($url . '?scope=mine')->assertOk()->json();
+    expect(collect($res['cards'])->pluck('id')->all())->toBe([$s['own']->id])->and(collect($res['ov'])->pluck(0)->unique()->values()->all())->toBe([$s['own']->id])
+        ->and($res['filter']['scope'])->toBe('mine');
+    expect(count(layerAs($s['admin'], 'superadmin')->getJson($url . '?scope=mine')->assertOk()->json('cards')))->toBe(3);
+    // Butun doska — o'qituvchiga ham hammasi.
+    expect(count(layerAs($t, 'oqituvchi')->getJson($url)->assertOk()->json('cards')))->toBe(3);
+});
+
+it('xotira monitoringi: so\'rov chegaradan (memory_warn_mb) ko\'p xotira ishlatsa — logga ogohlantirish (marshrut, foydalanuvchi, MB)', function () {
+    $s = layersSetup();
+    $logged = [];
+    \Illuminate\Support\Facades\Event::listen(\Illuminate\Log\Events\MessageLogged::class, function ($e) use (&$logged) {
+        if ($e->level === 'warning' && str_starts_with($e->message, 'Yuqori xotira: ')) {
+            $logged[] = $e->context;
+        }
+    });
+    config(['app.memory_warn_mb' => 1]);
+    layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
+    expect($logged)->toHaveCount(1)
+        ->and($logged[0])->toMatchArray(['route' => 'admin.timetable.boards.data', 'user_id' => $s['admin']->id, 'method' => 'GET', 'status' => 200])
+        ->and($logged[0]['peak_mb'])->toBeGreaterThan(1)->and($logged[0]['response_kb'])->toBeInt();
+    // Chegaradan past — yozilmaydi.
+    $logged = [];
+    config(['app.memory_warn_mb' => 100000]);
+    layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
+    expect($logged)->toBe([]);
+});

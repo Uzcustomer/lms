@@ -48,4 +48,18 @@ assert.match(note.style.cssText, /#fef2f2/);
 c2.sugNote(box, 'Yuborildi', 'ok');   // o'sha joy yangilanadi
 assert.equal(note.innerHTML, 'Yuborildi');
 assert.equal(note.attrs.role, 'status');
-console.log('timetable api form + takliflar note: 3 scenarios passed');
+// /data: istisnolar ixcham massiv (ov) — kartochka|hafta xaritasiga; o'qituvchi / fan mas'uli "Faqat meniki" / "Mas'ul fanlarim" —
+// server faqat shu kartalarni beradi, qamrov almashsa doska qayta yuklanadi.
+{
+    const ld = section("                // Hafta bo'yicha istisnolar: ixcham massiv", '                // Fan rejimi (hafta almashinuvi / sikl)');
+    const c3 = { j: { room_volumes: { R1: 24 }, ov: [[7, 3, 2, 5, 0, 'R1', '101'], [7, 5, null, null, 1, null, null]] }, overrides: null };
+    vm.createContext(c3);
+    vm.runInContext('let overrides; const j = this.j;' + ld + '; this.overrides = overrides;', c3);
+    assert.deepEqual(JSON.parse(JSON.stringify(c3.overrides)), {
+        '7|3': { day: 2, pair: 5, cancelled: false, auditorium_code: 'R1', auditorium_name: '101', auditorium_volume: 24 },
+        '7|5': { day: null, pair: null, cancelled: true, auditorium_code: null, auditorium_name: null, auditorium_volume: null },
+    });
+    assert.match(source, /const dataScope = TIMETABLE_READ_ONLY && \(scopeMode === 'mine' \|\| scopeMode === 'subjects'\) \? '&scope=' \+ scopeMode : '';/);
+    assert.match(source, /if \(TIMETABLE_READ_ONLY && board\) \{\n\s+loadBoard\(board\.id\)/);
+}
+console.log('timetable api form + takliflar note + /data: 4 scenarios passed');

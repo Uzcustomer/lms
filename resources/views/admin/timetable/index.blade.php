@@ -3533,7 +3533,9 @@
                 const switching = !board || String(board.id) !== String(id);
                 // URLga noyob parametr — har qanday kesh (brauzer/proxy) eski kartalarni
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
-                const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
+                // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
+                const dataScope = TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
+                const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now() + dataScope);
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
                 invalidateWeeklyConflicts();
@@ -3548,8 +3550,13 @@
                 loadSubjectColorOverrides();
                 grids = {};
                 (j.grids || []).forEach(g => { grids[gridKey(g.faculty_name, g.specialty_name, g.course, g.curriculum_hemis_id)] = g; });
-                // Hafta bo'yicha istisnolar
+                // Hafta bo'yicha istisnolar: ixcham massiv (ov: [karta, hafta, kun, para, bekor, xona kodi, xona nomi]) yoki eski obyektlar.
                 overrides = {};
+                const roomVol = j.room_volumes || {};
+                (j.ov || []).forEach(o => {
+                    overrides[o[0] + '|' + o[1]] = { day: o[2], pair: o[3], cancelled: !!o[4], auditorium_code: o[5] || null, auditorium_name: o[6] || null,
+                        auditorium_volume: o[5] ? (roomVol[o[5]] ?? null) : null };
+                });
                 (j.overrides || []).forEach(o => {
                     overrides[o.card_id + '|' + o.week] = {
                         day: o.day,
@@ -7307,6 +7314,11 @@
                 mineOnly = mode !== 'all';
                 try { localStorage.setItem(MINE_KEY, mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : mode === 'subjects' ? 'subjects' : '0'); } catch (e) { }
                 renderMineUi();
+                // O'qituvchi / fan mas'uli: doska shu qamrov bilan qayta yuklanadi (server faqat kerakli kartalarni beradi).
+                if (TIMETABLE_READ_ONLY && board) {
+                    loadBoard(board.id).then(() => { if (viewMode === 'cycle') loadCyclePlan(); }).catch(e => alert('Xatolik: ' + e.message));
+                    return;
+                }
                 cards = scopeCards(allCards);
                 if (typeof renderAll === 'function') renderAll();
                 if (viewMode === 'cycle') loadCyclePlan();

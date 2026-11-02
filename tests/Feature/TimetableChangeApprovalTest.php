@@ -120,8 +120,13 @@ it('kafedra mudiri o\'zgarishi so\'rov bo\'ladi, registrator tasdiqlagach qo\'ll
         ->and($req->fresh()->status)->toBe('approved')
         ->and(StudentNotification::where('type', 'timetable_change')->pluck('student_id')->all())
         ->toBe([DB::table('students')->where('hemis_id', 9001)->value('id')])
-        ->and(TeacherNotification::where('teacher_id', $teacher->id)->where('type', 'timetable_change')->count())->toBe(1)
+        // Dars o'qituvchisi (so'rovni boshqa odam — kafedra mudiri yuborgan): har so'rov yaratilganda va yakuniy natijada.
+        ->and(TeacherNotification::where('teacher_id', $teacher->id)->where('type', 'timetable_change')->orderBy('id')->pluck('title')->all())
+        ->toBe(["Kafedra mudiri darsingizga oid o'zgarishni so'radi", "Kafedra mudiri darsingizga oid o'zgarishni so'radi", "Dars jadvali o'zgardi"])
         ->and(TeacherNotification::where('teacher_id', $head->id)->count())->toBe(1);
+    // Talabaga: fan, o'qituvchi va o'zgarish (eski → yangi).
+    expect(StudentNotification::where('type', 'timetable_change')->sole()->message)
+        ->toBe("Fan: Gigiyena\nO'qituvchi: OQITUVCHI A.\nO'zgarish: Dushanba, 1-para → Chorshanba, 5-para");
 });
 
 it('rad etilgan so\'rov jadvalni o\'zgartirmaydi', function () {
@@ -1125,4 +1130,70 @@ it('kafedra id bo\'yicha: bir xil nomli asosiy va o\'rindoshlik yozuvlari bitta 
     $body = array_merge($s['body'], ['start_hour' => 3]);
     asRole($s['fm'], 'fan_masuli')->postJson(route('admin.timetable.cycle-time-proposal', $s['board']), $body + ['reason' => 'x'])
         ->assertUnprocessable()->assertJsonPath('message', 'Fan kafedrasi aniq topilmadi. Registrator ofisiga murojaat qiling.');
+});
+
+
+it('xabarnomalar: so\'rov — kafedra mudiriga (LMS va xabarnomalar sahifasi), mudir tasdiqlasa — registratorga (o\'qituvchi va foydalanuvchi hisobi), tasdiq — jadval va talabalar, rad — yuboruvchiga izoh bilan', function () {
+    ['head' => $head, 'reg' => $reg, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
+    $regUser = \App\Models\User::factory()->create(['name' => 'REG USER']);
+    $regUser->assignRole('registrator_ofisi');
+    $logged = [];
+    \Illuminate\Support\Facades\Event::listen(\Illuminate\Log\Events\MessageLogged::class, function ($e) use (&$logged) {
+        if (str_starts_with($e->message, '[TimetableChange]')) {
+            $logged[] = $e->message;
+        }
+    });
+    $inbox = fn ($who) => \App\Models\Notification::inbox($who->id, get_class($who))->where('type', 'timetable_change')->orderBy('id')->pluck('subject')->all();
+    $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
+
+    // 1) O'qituvchi so'rovi (approval_stage = department) — kafedra mudiriga: TeacherNotification va xabarnomalar sahifasi (Notification).
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertOk();
+    $req = TimetableChangeRequest::sole();
+    expect($req->approval_stage)->toBe('department')
+        ->and(TeacherNotification::where('teacher_id', $head->id)->pluck('title')->all())->toBe(["O'qituvchi vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda"])
+        ->and($inbox($head))->toBe(["O'qituvchi vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda"])
+        ->and($inbox($reg))->toBe([])->and($inbox($regUser))->toBe([])
+        ->and(collect($logged)->contains(fn ($m) => str_contains($m, '#' . $req->id . ' xabar (kafedra mudiri (kafedra 501)): KAFEDRA MUDIRI')))->toBeTrue();
+    // Sahifa ham ko'rsatadi.
+    asRole($head, 'kafedra_mudiri')->get(route('admin.notifications.index'))->assertOk()->assertSee("vaqt o'zgarishini taklif qildi");
+
+    // 2) Kafedra mudiri tasdiqladi — registratorlarga (o'qituvchi hisobi ham, foydalanuvchi hisobi ham).
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($inbox($reg))->toBe(["Dars jadvali o'zgarishi — tasdiq kutilmoqda"])
+        ->and($inbox($regUser))->toBe(["Dars jadvali o'zgarishi — tasdiq kutilmoqda"])
+        ->and(\App\Models\TimetableCardOverride::count())->toBe(0);
+
+    // 3) Registrator tasdiqladi — jadval o'zgaradi, guruh talabalari xabarnoma oladi (fan, o'qituvchi, eski → yangi vaqt).
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    $st = DB::table('students')->where('hemis_id', 9001)->value('id');
+    expect(\App\Models\TimetableCardOverride::sole()->only(['week', 'day', 'pair']))->toBe(['week' => 2, 'day' => 3, 'pair' => 3])
+        ->and(StudentNotification::where('type', 'timetable_change')->pluck('student_id')->all())->toBe([$st])
+        ->and(StudentNotification::sole()->message)->toContain('Fan: Gigiyena')->toContain("O'qituvchi: OQITUVCHI A.")->toContain('Eski vaqt:')->toContain('Yangi vaqt:');
+
+    // 4) Registrator rad etdi — jadval o'zgarmaydi, yuboruvchi izoh bilan xabar oladi.
+    $before = \App\Models\TimetableCardOverride::count();
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), array_merge($move, ['week' => 3]))->assertOk();
+    $req2 = TimetableChangeRequest::where('status', 'pending')->sole();
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req2))->assertOk();
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.reject', $req2), ['note' => 'Zal band'])->assertOk();
+    $last = TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->first();
+    expect($req2->fresh()->status)->toBe('rejected')->and(\App\Models\TimetableCardOverride::count())->toBe($before)
+        ->and($last->title)->toBe("Dars jadvali o'zgarishi rad etildi (registrator ofisi)")->and($last->message)->toContain('Izoh: Zal band')
+        ->and(collect($inbox($teacher))->last())->toBe("Dars jadvali o'zgarishi rad etildi (registrator ofisi)");
+});
+
+it('xabarnomalar: kafedra mudiri topilmasa — logda ogohlantirish (xabar yo\'qolganini aniqlash uchun)', function () {
+    ['reg' => $reg, 'card' => $card] = approvalSetup();
+    $logged = [];
+    \Illuminate\Support\Facades\Event::listen(\Illuminate\Log\Events\MessageLogged::class, function ($e) use (&$logged) {
+        $logged[] = [$e->level, $e->message];
+    });
+    $req = TimetableChangeRequest::create(['board_id' => $card->board_id, 'requester_id' => $reg->id, 'requester_type' => $reg->getMorphClass(),
+        'requester_name' => 'X', 'requester_role' => 'oqituvchi', 'route_name' => 'admin.timetable.cards.time-proposal', 'target_key' => 'k',
+        'params' => [], 'payload' => [], 'kind' => 'place', 'summary' => 'S', 'details' => [], 'status' => 'pending', 'approval_stage' => 'department',
+        'department_hemis_id' => 999]);
+    $m = new ReflectionMethod(\App\Services\Timetable\TimetableChangeApproval::class, 'notifyDepartmentHeads');
+    $m->setAccessible(true);
+    $m->invoke(app(\App\Services\Timetable\TimetableChangeApproval::class), $req);
+    expect($logged)->toContain(['warning', '[TimetableChange] #' . $req->id . ' xabar (kafedra mudiri (kafedra 999)): qabul qiluvchi topilmadi']);
 });

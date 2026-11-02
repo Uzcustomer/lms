@@ -18,6 +18,9 @@ use Illuminate\Support\Carbon;
 trait TimetableCycleShiftAdvice
 {
     private const SHIFT_DOW = [1 => 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba', 'yakshanba'];
+    /** "Qoladi" matnida ko'rsatiladigan sanalar va darslar soni (qolgani "+N ta"). */
+    private const SHIFT_LIST_DATES = 4;
+    private const SHIFT_LIST_WITH = 3;
 
     public function cycleShiftAdvice(Request $request, TimetableBoard $board)
     {
@@ -80,17 +83,26 @@ trait TimetableCycleShiftAdvice
         }
         [$opt, $rem] = $best;
         $time = $this->cycleRowTime($board, (int) $opt['start']);
-        $dates = implode(', ', array_map(fn ($d) => Carbon::parse($d)->format('d.m') . ' (' . self::SHIFT_DOW[Carbon::parse($d)->dayOfWeekIso] . ')',
-            array_keys($rem)));
-        $with = implode('; ', array_values(array_unique(array_merge(...array_values($rem)))));
+        $dates = $this->shiftShortList(array_map(fn ($d) => Carbon::parse($d)->format('d.m') . ' (' . self::SHIFT_DOW[Carbon::parse($d)->dayOfWeekIso] . ')',
+            array_keys($rem)), self::SHIFT_LIST_DATES, ', ');
+        // "Qoladi:" — faqat shu o'qituvchining boshqa amaliy darslari (ma'ruza oqimi guruhlari emas); guruh/xona bandligi — faqat sanasi.
+        $with = $this->shiftShortList(array_values(array_unique(array_merge([], ...array_values($rem)))), self::SHIFT_LIST_WITH, '; ');
 
-        return ['kind' => 'partial', 'text' => "{$time} ga o'tkazilsa faqat {$dates} qoladi: {$with}", 'start' => (int) $opt['start'],
-            'label' => $opt['label'], 'remaining' => array_map(fn ($d) => ['date' => $d, 'with' => $rem[$d]], array_keys($rem))];
+        return ['kind' => 'partial', 'text' => "{$time} ga o'tkazilsa faqat {$dates} qoladi" . ($with !== '' ? ": {$with}" : ''),
+            'start' => (int) $opt['start'], 'label' => $opt['label'], 'remaining' => array_map(fn ($d) => ['date' => $d, 'with' => $rem[$d]], array_keys($rem))];
+    }
+
+    /** Uzun ro'yxat: dastlabki $max tasi va "+N ta". */
+    private function shiftShortList(array $items, int $max, string $sep): string
+    {
+        return count($items) <= $max ? implode($sep, $items) : implode($sep, array_slice($items, 0, $max)) . ' +' . (count($items) - $max) . ' ta';
     }
 
     /**
-     * Birlikning kelgusi to'qnashuvlari qoladigan sanalar: sana => [bilan, ...] (tartiblangan). Sikl darslari bilan — cycleConflicts
-     * (o'qituvchi, guruh, xona); haftalik darslar bilan — amaliy darslari vaqtida o'qituvchi, xona yoki guruh band.
+     * Birlikning kelgusi to'qnashuvlari qoladigan sanalar: sana => [shu o'qituvchining boshqa amaliy darsi ("guruh, fan"), ...]
+     * (tartiblangan). Sana — har qanday to'qnashuv qolsa: sikl darslari bilan — cycleConflicts (o'qituvchi, guruh, xona); haftalik
+     * darslar bilan — amaliy darslari vaqtida o'qituvchi, xona yoki guruh band. Ro'yxatga faqat shu o'qituvchining amaliy darslari
+     * kiradi: ma'ruza (oqim guruhlari) va boshqa o'qituvchilar darslari (guruh/xona bandligi) — faqat sana bo'lib qoladi.
      */
     private function shiftRemaining(TimetableBoard $board, array $units, array $calendar, int $self): array
     {
@@ -102,18 +114,30 @@ trait TimetableCycleShiftAdvice
                 continue;
             }
             foreach ($this->cycleDatesBetween($calendar, $it['date_from'], $it['date_to'], $units[$self]) as $d) {
-                $out[$d][] = (string) $it['with'];
+                $out[$d] ??= [];
             }
         }
-        // Haftalik darslar: shu birlikning amaliy darslari (smena shularga ta'sir qiladi) vaqtida.
-        $mine = array_values(array_filter($this->cycleOccupancy($board, [$u], $calendar),
-            fn ($e) => $e['date'] >= $today && str_starts_with((string) $e['load_key'], 'c')));
+        // Shu birlikning amaliy darslari (smena shularga ta'sir qiladi).
+        $all = $this->cycleOccupancy($board, $units, $calendar);
+        $isPractice = fn (array $e) => str_starts_with((string) $e['load_key'], 'c');
+        $mine = array_values(array_filter($all, fn ($e) => $e['unit'] === $self && $e['date'] >= $today && $isPractice($e)));
+        // Sikl: shu vaqtda o'qituvchining boshqa sikl amaliyoti (boshqa dars — umumiy "A + B" kartaning o'zi emas, cycleConflicts kabi).
+        foreach ($mine as $m) {
+            foreach ($all as $o) {
+                if ($m['teacher_id'] && $o['unit'] !== $self && $o['lesson'] !== $m['lesson'] && $o['date'] === $m['date']
+                    && $o['teacher_id'] === $m['teacher_id'] && $isPractice($o) && $o['from'] < $m['to'] && $m['from'] < $o['to']) {
+                    $out[$m['date']][] = $units[$o['unit']]['group'] . ', ' . $units[$o['unit']]['subject'];
+                }
+            }
+        }
+        // Haftalik darslar: shu birlikning amaliy darslari vaqtida.
         if ($mine) {
             $dates = array_flip(array_column($mine, 'date'));
             $ids = array_flip(array_map(fn ($c) => (int) $c->id, $u['cards']));
             $scope = $u['cards'] ? $this->groupScopeKey($u['cards'][0]) : '';
             $groups = array_flip(array_map(fn ($g) => $scope . '|' . $g['group'], $this->focusUnitGroups($u)));
-            $weekly = $this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), max(array_column($mine, 'to')), $ids), $dates);
+            $state = $this->weeklyStateOn($board, array_keys($dates), max(array_column($mine, 'to')), $ids);
+            $weekly = $this->weeklyOccupancy($board, $state, $dates);
             // Haftalik qator (to'liq parali doskada bir qator = 2 akademik soat) → sikl soati.
             $rh = max(1, $this->cycleRowHours($board));
             foreach ($mine as $m) {
@@ -122,11 +146,15 @@ trait TimetableCycleShiftAdvice
                     if ($o['date'] !== $m['date'] || !($oFrom < $m['to'] && $m['from'] < $oTo)) {
                         continue;
                     }
-                    $clash = ($m['teacher_id'] && $o['teacher_id'] === $m['teacher_id'])
+                    $teacher = $m['teacher_id'] && $o['teacher_id'] === $m['teacher_id'];
+                    $clash = $teacher
                         || ($m['room'] && !$m['free_room'] && $o['room'] === $m['room'] && !$o['free_room'])
                         || array_intersect_key($groups, array_flip((array) ($o['groups'] ?? [])));
                     if ($clash) {
-                        $out[$m['date']][] = (string) $o['label'];
+                        $out[$m['date']] ??= [];
+                        if ($teacher && (string) (($state['cards'][$o['card']] ?? null)?->training_type) !== 'lecture') {
+                            $out[$m['date']][] = (string) $o['label'];
+                        }
                     }
                 }
             }

@@ -15,6 +15,12 @@ const tick = () => new Promise(r => setImmediate(r));
 // qamrov ("Faqat meniki"), bosilsa — oyna va "Vaqtini o'zgartirishni so'rash"; eskirgan javob e'tiborsiz; tashqi qatlamda so'ralmaydi.
 assert.match(source, /if \(viewMode !== DEFAULT_VIEW\) p\.set\('view', viewMode\);/);
 assert.match(source, /const DEFAULT_VIEW = TEACHER_DEFAULTS \? 'teacher' : 'group';/);
+// Qamrov tanlovi har foydalanuvchi va rol uchun alohida saqlanadi (admin "Butun doska" tanlovi o'qituvchiga o'tmaydi).
+assert.match(source, /const MINE_KEY = 'lms:timetable-mine:' \+ TIMETABLE_ROLE \+ ':' \+ \(TIMETABLE_TEACHER_ID \|\| 0\);/);
+assert.match(source, /const saved = localStorage\.getItem\(MINE_KEY\);/);
+assert.match(source, /localStorage\.setItem\(MINE_KEY, mode === 'mine'/);
+assert.doesNotMatch(source, /localStorage\.(get|set)Item\('lms:timetable-mine'/);
+assert.match(source, /teacherFullNames = Object\.assign\(\{\}, j\.teacher_full_names \|\| \{\}\);/);
 assert.match(source, /let scopeMode = TIMETABLE_HAS_SUBJECTS && TIMETABLE_ROLE === 'fan_masuli' \? 'subjects' : \(TEACHER_DEFAULTS \? 'mine' : 'all'\);/);
 
 // URL: sukut kesimi yozilmaydi — o'qilganda ham sukut (o'qituvchiga 'teacher', boshqalarga 'group').
@@ -41,6 +47,7 @@ const ctx = {
     scopeCards: list => ctx.mineOnly ? list.filter(c => +c.teacher_id === 5) : list, typeVisible: () => true,
     weekly: [], visibleSpecCards: () => ctx.weekly, effPlace: c => ({ day: c.day, pair: c.pair }), effectiveCard: c => c,
     cardLen: c => Math.max(1, parseInt(c.len_half) || 2),
+    cardGroups: c => (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []),
     boardSchedule: () => Array.from({ length: 12 }, (_, i) => ({ type: 'pair', no: i + 1, start: String(8 + i).padStart(2, '0') + ':00', end: String(8 + i).padStart(2, '0') + ':40' })),
     boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
     paraGroups: () => ({}), paraSideCells: () => '<td></td>', subjColor: () => ({ bg: '#eee' }),
@@ -73,7 +80,7 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     // 1) O'qituvchi kesimi: birinchi chizishda so'raladi (joriy hafta, ichki qatlam, qamrov bilan).
     ctx.weekly = [{ id: 11, training_type: 'practice', subject_name: 'Farmakologiya', teacher_id: 5, teacher_name: 'MAHMARAIMOV SH. T.', day: 1, pair: 1, len_half: 4 }];
     answers.push({ week: 8, lessons: [
-        lesson({ id: 21 }),
+        lesson({ id: 21, teacher_full_name: "MAHMARAIMOV SHAVKAT TO'XTASHOVICH" }),
         lesson({ id: 22, training_type: 'lecture', group_name: 'd22-05a', group_names: ['d22-05a', 'd22-05b', 'd22-05c', 'd22-05d'], teacher_id: 9,
             teacher_name: 'LEKTOR', day: 2, pair: 1, len_half: 2, ask: true }),   // ma'ruza — ask bo'lsa ham so'rash tugmasi yo'q
     ] });
@@ -87,6 +94,11 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     assert.match(clash[1], /data-chip="11"/);
     assert.match(clash[1], /<div class="tt-chip tt-cyc-chip prc" data-cyc="0"[^>]*><div class="tt-cross-fac"><span class="tt-cyc-badge">sikl<\/span> F1<\/div>/);
     assert.match(clash[1], /\[A\] Klinik farmakologiya/);
+    // Bitta o'qituvchi — bitta ustun (teacher_id): kartada qisqa nom, sikl darsida to'liq — sarlavhada to'liq F.I.Sh.; sabab katakda.
+    assert.match(h, /<th class="tt-grp px-2 py-1">MAHMARAIMOV SHAVKAT TO'XTASHOVICH<\/th>/);
+    assert.doesNotMatch(h, /<th class="tt-grp px-2 py-1">MAHMARAIMOV SH\. T\.<\/th>/);
+    assert.match(clash[0], /title="To'qnashuv — bir vaqtda 2 ta dars: Farmakologiya \(A\) ; sikl: Klinik farmakologiya \(A\) d22-06a"/);
+    assert.match(clash[1], /^<div class="tt-clash-why">⚠ Bir vaqtda 2 ta dars<\/div>/);
     // Ma'ruza — o'z ustunida (LEKTOR), guruhlar: 3 ta + "+1 ta".
     assert.match(h, /<th class="tt-grp px-2 py-1">LEKTOR<\/th>/);
     assert.match(h, /d22-05a, d22-05b, d22-05c \+1 ta/);
@@ -138,6 +150,30 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     assert.match(el('grid').innerHTML, /data-day="5" data-pair="2" style="outline:2px solid #ef4444/);
     ctx.weekly = saveWeekly;
     setLessons(saveLessons);
+
+    // 3c) Bitta ma'ruza oqimi (ikki yo'nalish kartasi: fan, xona, vaqt bir xil) — to'qnashuv emas; boshqa xona — to'qnashuv.
+    // Ism matni farq qilsa ham (qisqa / to'liq) — bitta ustun.
+    const saveW = ctx.weekly, saveL = cycleWeekData();
+    setLessons([]);
+    const lec = o => Object.assign({ training_type: 'lecture', subject_name: 'Klinik farmakologiya', teacher_id: 5, day: 6, pair: 1, len_half: 2,
+        auditorium_code: 'Z8', auditorium_name: 'Zal 8' }, o);
+    ctx.weekly = [lec({ id: 41, teacher_name: 'MAHMARAIMOV SH. T.', group_names: ['p/p22-02b', 'p/p22-02c'] }),
+        lec({ id: 42, teacher_name: "MAHMARAIMOV SHAVKAT TO'XTASHOVICH", group_names: ['d1/d22-06b', 'd1/d22-06c'] })];
+    ctx.renderGridCross('teacher');
+    assert.equal((el('grid').innerHTML.match(/<th class="tt-grp/g) || []).length, 1);
+    assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
+    // Xona kesimi: o'sha fan, xona va vaqt, lekin boshqa o'qituvchi — bitta dars emas, to'qnashuv (Codex).
+    ctx.renderGridCross('room');
+    assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
+    ctx.weekly[1].teacher_id = 6;
+    ctx.renderGridCross('room');
+    assert.match(el('grid').innerHTML, /data-day="6" data-pair="1" style="outline:2px solid #ef4444/);
+    ctx.weekly[1].teacher_id = 5;
+    ctx.weekly[1].auditorium_code = 'Z9';
+    ctx.renderGridCross('teacher');
+    assert.match(el('grid').innerHTML, /data-day="6" data-pair="1" style="outline:2px solid #ef4444/);
+    ctx.weekly = saveW;
+    setLessons(saveL);
 
     // 4) Kesim almashsa — qayta so'ralmaydi (ma'lumot bir xil). Fan kesimi: o'sha fan ustma-ust bo'lsa ham to'qnashuv emas.
     calls.length = 0;

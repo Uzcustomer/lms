@@ -689,14 +689,51 @@ it('mas’ul fanlar filtri biriktirish olib tashlanganda yangilanadi', function 
         ->assertSee('id="weeklyExcel"', false);
 });
 
-it('mas’ul fanlar filtri boshqa fakultetdagi ayni nomli kartani olmaydi', function () {
+it('mas’ul fanlar: fan nomi va kafedra bo\'yicha — boshqa fakultet/kursdagi o\'sha kafedra kartasi ham, boshqa kafedradagi ayni nomli karta emas', function () {
     $s = responsibleScopeSetup();
+    // Profildagi fan — "Gigiyena (a)" (o'zi va umumiy "Gigiyena" kartasi), kafedrasi — Gigiyena kafedrasi; yo'nalish/kurs cheklovi yo'q.
+    DB::table('curriculum_subjects')->where('id', $s['responsible_subject_id'])->update(['department_name' => 'Gigiyena kafedrasi']);
     $other = $s['own']->replicate();
     $other->faculty_name = 'F2';
+    $other->course = 5;
     $other->save();
+    $alien = $s['own']->replicate();
+    $alien->kafedra_name = 'Boshqa kafedra';
+    $alien->save();
     $res = layerAs($s['head'], 'fan_masuli')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
-    expect($res->json('my_subject_card_ids'))->toContain($s['own']->id)->not->toContain($other->id);
+    expect($res->json('my_subject_card_ids'))->toContain($s['own']->id)->toContain($other->id)->not->toContain($alien->id);
 });
+
+it('mas’ul fanlar: HEMIS fan id si bo\'yicha — boshqa o\'quv rejadagi nomi ham; bir fanga ikki mas\'ul', function () {
+    $s = responsibleScopeSetup();
+    // Mas'ul fan (subject_id = 1) boshqa rejada "Umumiy gigiyena" nomi bilan — o'sha fan.
+    DB::table('curriculum_subjects')->insert(['curriculum_subject_hemis_id' => 7002, 'curricula_hemis_id' => 8001, 'subject_id' => 1,
+        'subject_name' => 'Umumiy gigiyena', 'subject_code' => 'G2', 'semester_code' => '15', 'semester_name' => '5', 'at_semester' => 1]);
+    $renamed = $s['own']->replicate();
+    $renamed->subject_name = 'Umumiy gigiyena';
+    $renamed->course = 3;
+    $renamed->save();
+    $second = fmTeacherLayers("IKKINCHI MAS'UL");
+    DB::table('teacher_responsible_subjects')->insert(['teacher_id' => $second->id, 'curriculum_subject_id' => $s['responsible_subject_id']]);
+    foreach ([$s['head'], $second] as $t) {
+        $ids = layerAs($t, 'fan_masuli')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json('my_subject_card_ids');
+        expect($ids)->toContain($s['own']->id)->toContain($renamed->id)->not->toContain($s['foreign']->id);
+    }
+});
+
+function fmTeacherLayers(string $name): \App\Models\Teacher
+{
+    $t = new \App\Models\Teacher();
+    $t->forceFill(['hemis_id' => random_int(100000, 999999), 'full_name' => $name, 'short_name' => $name, 'first_name' => $name, 'second_name' => $name,
+        'employee_id_number' => (string) random_int(100000, 999999), 'birth_date' => '1980-01-01', 'year_of_enter' => 2010,
+        'gender' => 'm', 'department' => 'Boshqa', 'employment_form' => 'x', 'employment_staff' => 'x', 'staff_position' => 'x',
+        'employee_status' => 'x', 'employee_type' => 'x', 'contract_number' => '1', 'decree_number' => '1',
+        'contract_date' => '2020-01-01', 'decree_date' => '2020-01-01',
+        'status' => true, 'login' => 'u' . random_int(100000, 999999), 'password' => bcrypt('x')])->save();
+    $t->assignRole('fan_masuli');
+
+    return $t;
+}
 
 it('mas’ul fanlar filtri siklda ham ishlaydi va bo‘sh biriktirishda jadvalni kengaytirmaydi', function (string $layer) {
     $s = responsibleScopeSetup();
@@ -1196,4 +1233,116 @@ it('alohida amaliy istisnosi bo\'lakli fan kartasini bo\'lganda biriktirilgan ta
     $cards = \App\Models\TimetableCard::where('subject_name', 'IKP (c)')->orderBy('id')->get();
     expect($cards->pluck('group_name')->all())->toBe(['g-02a', 'g-02b'])
         ->and($cards->pluck('students')->all())->toBe([3, 2]);
+});
+
+it('karta yaratish va kartalar ro\'yxatini o\'zgartirish — faqat adminlar: o\'qituvchi, fan mas\'uli, kafedra mudiriga 403; mudir ichki joylashuvni o\'zgartiradi', function () {
+    $s = layersSetup();
+    foreach (['oqituvchi', 'fan_masuli'] as $r) {
+        Role::findOrCreate($r, 'web');
+    }
+    $s['head']->update(['department' => 'Gigiyena kafedrasi']);
+    $t = fmTeacherLayers('OQITUVCHI');
+    $t->syncRoles(['oqituvchi']);
+    $fm = fmTeacherLayers("FAN MAS'ULI");
+    $b = $s['board'];
+    $calls = [
+        ['post', route('admin.timetable.boards.store'), ['name' => 'Yangi', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi']],
+        ['delete', route('admin.timetable.boards.destroy', $b), []],
+        ['post', route('admin.timetable.boards.generate', $b), []],
+        ['post', route('admin.timetable.boards.add-missing-groups', $b), []],
+        ['post', route('admin.timetable.boards.refresh-names', $b), []],
+        ['post', route('admin.timetable.boards.unplace', $b), ['courses' => [2], 'layer' => 'internal']],
+        ['get', route('admin.timetable.snapshots.index', $b), []],
+        ['post', route('admin.timetable.snapshots.store', $b), ['note' => 'x']],
+        ['post', route('admin.timetable.subject-setting.save', $b), ['specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena', 'mode' => 'cycle', 'cycle_days' => 5]],
+        ['post', route('admin.timetable.ktr-weeks', $b), ['courses' => [2]]],
+        ['post', route('admin.timetable.cycle-plan', $b), ['layer' => 'internal', 'clear' => 1]],
+    ];
+    foreach ([[$t, 'oqituvchi'], [$fm, 'fan_masuli'], [$s['head'], 'kafedra_mudiri']] as [$who, $role]) {
+        foreach ($calls as [$m, $url, $body]) {
+            $r = layerAs($who, $role)->{$m . 'Json'}($url, $body);
+            expect([$role, $url, $r->status()])->toBe([$role, $url, 403]);
+        }
+    }
+    expect(TimetableBoard::count())->toBe(1)->and(\App\Models\TimetableSubjectSetting::count())->toBe(0);
+    // Kafedra mudiri: ichki qatlamda o'z kafedrasi kartasini joylaydi; sikl kalendari (bayram) saqlanmaydi.
+    layerAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 2, 'pair' => 3, 'layer' => 'internal'])->assertOk();
+    expect($s['own']->fresh()->only(['day', 'pair']))->toBe(['day' => 2, 'pair' => 3]);
+    layerAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.cycle-plan', $b), ['layer' => 'internal', 'holidays' => ['2026-09-21']])->assertOk();
+    expect(($b->fresh()->settings ?? [])['holidays'] ?? [])->toBe([]);
+    // Sahifa: kafedra mudirida joylash bor, bo'shatish va fanlar menejeri yo'q.
+    layerAs($s['head'], 'kafedra_mudiri')->get(route('admin.timetable.index'))->assertOk()
+        ->assertSee('const TIMETABLE_CAN_PLACE = true', false)->assertSee('const TIMETABLE_CAN_UNPLACE = false', false)
+        ->assertSee('const TIMETABLE_CAN_USE_MANAGER = false', false);
+    layerAs($s['oquv'], 'oquv_bolimi')->get(route('admin.timetable.index'))->assertOk()
+        ->assertSee('const TIMETABLE_CAN_UNPLACE = true', false)->assertSee('const TIMETABLE_CAN_USE_MANAGER = true', false);
+    // O'quv bo'limi — tashqi qatlamni bo'shatadi (avvalgidek).
+    layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.boards.unplace', $b), ['courses' => [2], 'layer' => 'external'])->assertOk();
+});
+
+it('/data: teacher_full_names — kartalardagi o\'qituvchilarning to\'liq F.I.Sh. (o\'qituvchi kesimi ustuni teacher_id bo\'yicha)', function () {
+    $s = layersSetup();
+    Role::findOrCreate('fan_masuli', 'web');
+    $t = fmTeacherLayers("MAHMARAIMOV SHAVKAT TO'XTASHOVICH");
+    $s['own']->update(['teacher_id' => $t->id, 'teacher_name' => 'MAHMARAIMOV SH. T.']);
+    $res = layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json();
+    expect($res['teacher_full_names'])->toBe([(string) $t->id => "MAHMARAIMOV SHAVKAT TO'XTASHOVICH"]);
+});
+
+it('/data: istisnolar ixcham (ov), haftalar filtri — ko\'chirish faqat so\'ralgan haftalarga, bekor qilinganlari hammasi; qamrov va rol doirasi', function () {
+    $s = layersSetup();
+    Role::findOrCreate('oqituvchi', 'web');
+    Role::findOrCreate('fan_masuli', 'web');
+    $t = fmTeacherLayers('OQITUVCHI');
+    $t->syncRoles(['oqituvchi']);
+    $s['own']->update(['teacher_id' => $t->id, 'teacher_name' => 'OQITUVCHI']);
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '101', 'volume' => 24, 'active' => true]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'day' => 2, 'pair' => 3, 'cancelled' => false, 'auditorium_code' => 'R1', 'auditorium_name' => '101']);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 5, 'cancelled' => true]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 4, 'day' => 1, 'pair' => 1, 'cancelled' => false]);
+    $other = TimetableCard::create($s['own']->only(['board_id', 'specialty_name', 'oqim_label', 'lang', 'students', 'training_type', 'len_half', 'weeks', 'kafedra_name'])
+        + ['faculty_name' => 'F2', 'course' => 3, 'subject_name' => 'Fizika', 'group_name' => 'g-03a']);
+    $url = route('admin.timetable.boards.data', $s['board']);
+    $res = layerAs($s['admin'], 'superadmin')->getJson($url)->assertOk()->json();
+    expect($res)->not->toHaveKey('overrides')->and($res['ov_cols'])->toBe(['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code', 'auditorium_name'])
+        ->and($res['ov'])->toBe([[$s['own']->id, 3, 2, 3, 0, 'R1', '101'], [$s['own']->id, 5, null, null, 1, null, null], [$s['foreign']->id, 4, 1, 1, 0, null, null]])
+        ->and($res['room_volumes'])->toMatchArray(['R1' => 24])
+        ->and(collect($res['cards'])->pluck('id')->sort()->values()->all())->toBe([$s['own']->id, $s['foreign']->id, $other->id])
+        ->and($res['filter'])->toBe(['scope' => 'all', 'weeks' => null, 'partial' => false]);
+    // Haftalar: ko'chirish faqat 3-hafta, bekor qilingan 5-hafta qoladi.
+    $res = layerAs($s['admin'], 'superadmin')->getJson($url . '?weeks[]=3')->assertOk()->json();
+    expect($res['ov'])->toBe([[$s['own']->id, 3, 2, 3, 0, 'R1', '101'], [$s['own']->id, 5, null, null, 1, null, null]]);
+    // Qamrov: fakultet / kurs.
+    $res = layerAs($s['admin'], 'superadmin')->getJson($url . '?faculty_names[]=F2&courses[]=3')->assertOk()->json();
+    expect(collect($res['cards'])->pluck('id')->all())->toBe([$other->id])->and($res['ov'])->toBe([])->and($res['filter']['partial'])->toBeTrue();
+    expect(collect(layerAs($s['admin'], 'superadmin')->getJson($url . '?faculty_names[]=F2')->assertOk()->json('cards'))->pluck('id')->all())->toBe([$other->id])
+        ->and(collect(layerAs($s['admin'], 'superadmin')->getJson($url . '?courses[]=2')->assertOk()->json('cards'))->pluck('id')->sort()->values()->all())
+        ->toBe([$s['own']->id, $s['foreign']->id]);
+    // O'qituvchi "Faqat meniki": faqat o'z kartalari va ularning istisnolari; adminga scope=mine ta'sir qilmaydi.
+    $res = layerAs($t, 'oqituvchi')->getJson($url . '?scope=mine')->assertOk()->json();
+    expect(collect($res['cards'])->pluck('id')->all())->toBe([$s['own']->id])->and(collect($res['ov'])->pluck(0)->unique()->values()->all())->toBe([$s['own']->id])
+        ->and($res['filter']['scope'])->toBe('mine');
+    expect(count(layerAs($s['admin'], 'superadmin')->getJson($url . '?scope=mine')->assertOk()->json('cards')))->toBe(3);
+    // Butun doska — o'qituvchiga ham hammasi.
+    expect(count(layerAs($t, 'oqituvchi')->getJson($url)->assertOk()->json('cards')))->toBe(3);
+});
+
+it('xotira monitoringi: so\'rov chegaradan (memory_warn_mb) ko\'p xotira ishlatsa — logga ogohlantirish (marshrut, foydalanuvchi, MB)', function () {
+    $s = layersSetup();
+    $logged = [];
+    \Illuminate\Support\Facades\Event::listen(\Illuminate\Log\Events\MessageLogged::class, function ($e) use (&$logged) {
+        if ($e->level === 'warning' && str_starts_with($e->message, 'Yuqori xotira: ')) {
+            $logged[] = $e->context;
+        }
+    });
+    config(['app.memory_warn_mb' => 1]);
+    layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
+    expect($logged)->toHaveCount(1)
+        ->and($logged[0])->toMatchArray(['route' => 'admin.timetable.boards.data', 'user_id' => $s['admin']->id, 'method' => 'GET', 'status' => 200])
+        ->and($logged[0]['peak_mb'])->toBeGreaterThan(1)->and($logged[0]['response_kb'])->toBeInt();
+    // Chegaradan past — yozilmaydi.
+    $logged = [];
+    config(['app.memory_warn_mb' => 100000]);
+    layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
+    expect($logged)->toBe([]);
 });

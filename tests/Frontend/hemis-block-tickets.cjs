@@ -27,7 +27,7 @@ const ctx = {
 };
 ctx.alert = m => ctx.alerts.push(m);
 vm.createContext(ctx);
-vm.runInContext(section('async function api(url', '// ===== Jadval o\'zgarishlari') + section('async function hsTicketsSend(rep)', 'async function hsTicketsList()')
+vm.runInContext(section('function appendFormValue(fd, key, v) {', '// ===== Jadval o\'zgarishlari') + section('async function hsTicketsSend(rep)', 'async function hsTicketsList()')
     + '; this.hsTicketsSend = hsTicketsSend;', ctx);
 
 ctx.hsTicketsSend({}).then(() => {

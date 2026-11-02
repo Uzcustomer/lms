@@ -2296,3 +2296,70 @@ it('bugungi darslar: bitta LMS ma\'ruza oqimi guruhlari bir zalga birga ko\'chad
     expect(collect(htCall($s)->assertOk()->json('rows'))->filter(fn ($r) => $r['hemis_id'])->pluck('status', 'hemis_id')->sortKeys()->all())
         ->toBe([1 => 'blocked', 2 => 'blocked']);
 });
+
+it('bugungi darslar: boshqa yo\'nalishdagi (qamrovdan tashqari) guruh LMS\'da shu ma\'ruza oqimida — zal to\'siq emas (HEMIS o\'qituvchisi boshqa bo\'lsa ham); boshqa o\'qituvchi — to\'siq', function () {
+    $s = hsSetup();
+    $s['card']->update(['day' => null, 'pair' => null]);
+    $ustoz = Teacher::where('full_name', 'USTOZ')->first();
+    // Qamrov: stomatologiya 1-kurs ma'ruzasi 13:30, L1 zal, USTOZ (5001) — HEMIS'da 08:30.
+    htCard($s, 'Odam anatomiyasi', 7, 'L1', ['training_type' => 'lecture', 'group_name' => null, 'group_names' => ['p/st26-01a (rus)']]);
+    // Boshqa yo'nalish (davolash ishi, qamrovdan tashqari): o'sha fan, o'qituvchi va zal — LMS'da bitta oqim; HEMIS'da allaqachon 13:30, L1,
+    // lekin o'qituvchisi HEMIS'da boshqa (7007).
+    $other = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'davolash ishi', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 30, 'training_type' => 'lecture', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Odam anatomiyasi', 'group_names' => ['d1/d22-06b', 'd1/d22-06c'], 'kafedra_name' => 'Anatomiya',
+        'teacher_id' => $ustoz->id, 'teacher_name' => 'USTOZ', 'auditorium_code' => 'L1', 'auditorium_name' => 'L1', 'day' => 1, 'pair' => 7]);
+    foreach ([[700, 3000, 'd1/d22-06b'], [701, 3001, 'd1/d22-06c']] as [$id, $g, $name]) {
+        hsInsert('schedules', ['schedule_hemis_id' => $id, 'subject_id' => 474, 'subject_name' => 'Odam anatomiyasi', 'semester_code' => '11', 'group_id' => $g,
+            'group_name' => $name, 'training_type_code' => '11', 'training_type_name' => "Ma'ruza", 'lesson_date' => '2026-09-14 00:00:00',
+            'lesson_pair_start_time' => '13:30', 'lesson_pair_end_time' => '14:50', 'employee_id' => 7007, 'employee_name' => 'E7007',
+            'auditorium_code' => 'L1', 'auditorium_name' => 'Tibbiyot klasteri 8 ma\'ruza zali', 'department_id' => 501]);
+    }
+    $lec = ['subject' => 'Odam anatomiyasi', 'code' => '11', 'type' => "Ma'ruza", 'room' => 'L1', 'emp' => 5001];
+    htFake([1596 => [htItem(1, '2026-09-14', '08:30', '09:50', $lec)]]);
+    $row = fn () => collect(htCall($s)->assertOk()->json('rows'))->firstWhere('hemis_id', 1);
+    expect($row()['status'])->toBe('update')->and($row()['blocked'])->toBe([]);
+    // HEMIS'da o'sha guruhlarning shu vaqtdagi darsi amaliy bo'lsa — ma'ruza oqimi emas: zal band (Codex).
+    DB::table('schedules')->whereIn('schedule_hemis_id', [700, 701])->update(['training_type_code' => '13', 'training_type_name' => 'Amaliy']);
+    expect($row()['status'])->toBe('blocked');
+    DB::table('schedules')->whereIn('schedule_hemis_id', [700, 701])->update(['training_type_code' => '11', 'training_type_name' => "Ma'ruza"]);
+    // Boshqa yo'nalish kartasida boshqa o'qituvchi — bitta oqim emas: zal band.
+    $other->update(['teacher_id' => Teacher::where('full_name', 'MUDIR')->value('id'), 'teacher_name' => 'MUDIR']);
+    expect($row()['status'])->toBe('blocked')->and($row()['blocked'][0])->toStartWith("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50");
+    // Kartaga guruh kiritilmagan bo'lsa ham — to'siq (06c bitta qoladi).
+    $other->update(['teacher_id' => $ustoz->id, 'teacher_name' => 'USTOZ', 'group_names' => ['d1/d22-06b']]);
+    expect($row()['status'])->toBe('blocked')->and($row()['blocked'])->toBe(["xona band: L1 — d1/d22-06c · Odam anatomiyasi 13:30–14:50"]);
+});
+
+it('HEMIS solishtirish (kelgusi kunlar): boshqa yo\'nalish guruhining HEMIS ma\'ruzasi LMS\'da shu oqimda — zal to\'siq emas; boshqa o\'qituvchi — to\'siq', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsCycleTwoSubgroups($s);
+    $run = function () use ($s) {
+        $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+            ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [5], 'today' => '2026-09-19', 'until_week' => 0])->assertOk()->json();
+
+        return collect(collect($res['groups'])->firstWhere('group', 'g5-01a')['units'][0]['actions'])->where('code', '11')->values();
+    };
+    $lec = $run()->first();
+    expect($lec['start'])->toBe('08:30')->and($lec['blocked'])->toBe([]);
+    // Boshqa yo'nalish (qamrovdan tashqari): LMS'da shu fan, shu o'qituvchi (MUDIR) va zal (Y1) ma'ruzasi — p/p22-02b; HEMIS'da shu vaqtda
+    // shu zalda, o'qituvchisi HEMIS'da boshqa (7007).
+    $other = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 30, 'training_type' => 'lecture', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Pediatriya', 'group_names' => ['p/p22-02b'], 'kafedra_name' => 'P',
+        'teacher_id' => Teacher::where('full_name', 'MUDIR')->value('id'), 'teacher_name' => 'MUDIR', 'auditorium_code' => 'Y1', 'auditorium_name' => 'Y301']);
+    hsInsert('schedules', ['schedule_hemis_id' => 800, 'subject_id' => 900, 'subject_name' => 'Pediatriya', 'semester_code' => '19', 'group_id' => 4000,
+        'group_name' => 'p/p22-02b', 'training_type_code' => '11', 'training_type_name' => "Ma'ruza", 'lesson_date' => $lec['date'] . ' 00:00:00',
+        'lesson_pair_start_time' => '08:30:00', 'lesson_pair_end_time' => '09:50:00', 'employee_id' => 7007, 'employee_name' => 'E7007',
+        'auditorium_code' => 'Y1', 'auditorium_name' => 'Y301', 'department_id' => 777]);
+    expect($run()->first()['blocked'])->toBe([]);
+    // HEMIS'dagi darsi amaliy — ma'ruza oqimi emas: zal band (Codex).
+    DB::table('schedules')->where('schedule_hemis_id', 800)->update(['training_type_code' => '13', 'training_type_name' => 'Amaliy']);
+    expect(implode('; ', $run()->first()['blocked']))->toContain('xona band');
+    DB::table('schedules')->where('schedule_hemis_id', 800)->update(['training_type_code' => '11', 'training_type_name' => "Ma'ruza"]);
+    // LMS kartasida boshqa o'qituvchi — bitta oqim emas: zal band.
+    $other->update(['teacher_id' => Teacher::where('full_name', 'USTOZ')->value('id'), 'teacher_name' => 'USTOZ']);
+    expect(implode('; ', $run()->first()['blocked']))->toContain('xona band')->toContain('p/p22-02b');
+});

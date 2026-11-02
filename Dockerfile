@@ -65,6 +65,8 @@ RUN chmod 0644 /etc/cron.d/laravel-cron
 RUN crontab /etc/cron.d/laravel-cron
 
 COPY docker/php/www.conf /usr/local/etc/php-fpm.d/www.conf
+# memory_limit = 512M (CLI va PHP-FPM) — docker/php/zz-memory.ini
+COPY docker/php/zz-memory.ini /usr/local/etc/php/conf.d/zz-memory.ini
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

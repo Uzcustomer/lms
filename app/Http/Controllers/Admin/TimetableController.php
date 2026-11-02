@@ -2934,15 +2934,43 @@ class TimetableController extends Controller
     }
 
     /** Doska ma'lumotlari: barcha kartochkalar (konflikt tekshiruvi butun doska bo'ylab). */
-    public function data(TimetableBoard $board)
+    public function data(TimetableBoard $board, ?Request $request = null)
     {
+        $request ??= request();
+        // Javob hajmi (8 600 karta, 77 000 hafta istisnosi — 16 MB, 128M xotira): kartalar 1000 tadan (lazy), istisnolar — ixcham
+        // massiv (cursor). Ixtiyoriy filtrlar: qamrov (faculty_names / specialty_names / courses), haftalar (weeks — ko'chirish va
+        // xonalar faqat shu haftalarga; bekor qilingan haftalar — hammasi), rol doirasi (scope=mine|subjects — o'qituvchi va fan mas'uli).
+        $f = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'weeks'             => 'nullable|array',
+            'weeks.*'           => 'integer|min:1|max:60',
+            'scope'             => 'nullable|in:all,mine,subjects',
+        ]);
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($f);
+        $role = $this->timetableActiveRole($request);
+        $scope = in_array($role, ['oqituvchi', 'fan_masuli'], true) ? ($f['scope'] ?? 'all') : 'all';
+        $mineId = $scope === 'mine' ? $this->timetableTeacherId($request) : null;
+        $subjectKeys = $scope === 'subjects' ? $this->responsibleSubjectKeys($request) : null;
+        $weekSet = !empty($f['weeks']) ? array_flip(array_map('intval', $f['weeks'])) : null;
         // Ma'ruza necha hafta davom etishini reja soatlaridan hisoblaymiz (karta
         // qayta yaratmasdan): specKey|course|normSubject => ma'ruza soati.
         $lecHours = $this->lectureHoursMap($board);
         // Auditoriya sig'imi (kod => hajm) — kartada "xona (sig'im)" ko'rsatish uchun.
         $roomVol = Auditorium::pluck('volume', 'code')->all();
 
-        $cards = TimetableCard::where('board_id', $board->id)->get()->map(fn($c) => [
+        $cardQuery = TimetableCard::where('board_id', $board->id)
+            ->when($facSet !== null, fn ($q) => $q->whereIn('faculty_name', array_keys($facSet)))
+            ->when($specSet !== null, fn ($q) => $q->whereIn('specialty_name', array_keys($specSet)))
+            ->when($courseSet !== null, fn ($q) => $q->whereIn('course', array_keys($courseSet)))
+            ->when($mineId !== null, fn ($q) => $q->where('teacher_id', $mineId));
+        $cards = collect($cardQuery->orderBy('id')->lazy(1000)
+            ->filter(fn ($c) => $subjectKeys === null || $this->responsibleMatch($subjectKeys, $c))
+            ->map(fn($c) => [
             ...$this->calendarProgram($this->cardCurriculumId($c)),
             'id' => $c->id,
             'specialty_name' => $c->specialty_name,
@@ -2980,38 +3008,42 @@ class TimetableController extends Controller
                         $lecHours[$this->specKey($c->specialty_name) . '|' . $c->course . '|' . $this->normSubject((string) $c->subject_name)] ?? 0
                     )
                     : null),
-        ]);
+        ])->values()->all());
+        $cardIds = $cards->pluck('id')->all();
+        $filtered = $facSet !== null || $specSet !== null || $courseSet !== null || $mineId !== null || $subjectKeys !== null;
 
         $grids = TimetableGridSetting::where('board_id', $board->id)
             ->get(array_merge(['faculty_name', 'specialty_name', 'course', 'days', 'pairs_per_day', 'weeks'],
                 Schema::hasColumn('timetable_grid_settings', 'start_date') ? ['start_date'] : [],
                 Schema::hasColumn('timetable_grid_settings', 'curriculum_hemis_id') ? ['curriculum_hemis_id', 'weekly_breaks'] : []));
 
-        // Hafta bo'yicha istisnolar (individual haftalar) — migratsiya kechiksa bo'sh
-        $overrides = collect();
-        if (Schema::hasTable('timetable_card_overrides')) {
+        // Hafta bo'yicha istisnolar (individual haftalar) — migratsiya kechiksa bo'sh. Ixcham: [karta, hafta, kun, para, bekor (0/1),
+        // xona kodi, xona nomi] — 77 000 obyekt o'rniga massivlar (cursor bilan, bitta kolleksiya yig'ilmaydi).
+        $ov = [];
+        if (Schema::hasTable('timetable_card_overrides') && $cardIds) {
             $hasOverrideRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
             $overrideColumns = ['o.card_id', 'o.week', 'o.day', 'o.pair', 'o.cancelled'];
             if ($hasOverrideRoom) {
                 $overrideColumns[] = 'o.auditorium_code';
                 $overrideColumns[] = 'o.auditorium_name';
             }
-            $overrides = DB::table('timetable_card_overrides as o')
+            $wanted = $filtered ? array_flip($cardIds) : null;
+            $q = DB::table('timetable_card_overrides as o')
                 ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
                 ->where('c.board_id', $board->id)
-                ->get($overrideColumns)
-                ->map(fn($o) => [
-                    'card_id'   => (int) $o->card_id,
-                    'week'      => (int) $o->week,
-                    'day'       => $o->day !== null ? (int) $o->day : null,
-                    'pair'      => $o->pair !== null ? (int) $o->pair : null,
-                    'cancelled' => (bool) $o->cancelled,
-                    'auditorium_code' => $hasOverrideRoom ? ($o->auditorium_code ?: null) : null,
-                    'auditorium_name' => $hasOverrideRoom ? ($o->auditorium_name ?: null) : null,
-                    'auditorium_volume' => $hasOverrideRoom && $o->auditorium_code
-                        ? ($roomVol[$o->auditorium_code] ?? null)
-                        : null,
-                ]);
+                ->orderBy('o.id')
+                ->select($overrideColumns);
+            foreach ($q->cursor() as $o) {
+                if ($wanted !== null && !isset($wanted[(int) $o->card_id])) {
+                    continue;
+                }
+                // Haftalar filtri: ko'chirish/xona — faqat so'ralgan haftalarga; bekor qilingan haftalar — hammasi (o'tiladigan haftalar ro'yxati uchun).
+                if ($weekSet !== null && !$o->cancelled && !isset($weekSet[(int) $o->week])) {
+                    continue;
+                }
+                $ov[] = [(int) $o->card_id, (int) $o->week, $o->day !== null ? (int) $o->day : null, $o->pair !== null ? (int) $o->pair : null,
+                    $o->cancelled ? 1 : 0, $hasOverrideRoom ? ($o->auditorium_code ?: null) : null, $hasOverrideRoom ? ($o->auditorium_name ?: null) : null];
+            }
         }
 
         return response()->json([
@@ -3026,7 +3058,10 @@ class TimetableController extends Controller
             ),
             'cards' => $cards,
             'grids' => $grids,
-            'overrides' => $overrides,
+            'ov' => $ov,
+            'ov_cols' => ['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code', 'auditorium_name'],
+            'room_volumes' => (object) array_filter($roomVol, fn ($v) => $v !== null),
+            'filter' => ['scope' => $scope, 'weeks' => $weekSet !== null ? array_map('intval', array_keys($weekSet)) : null, 'partial' => $filtered],
             'subject_settings' => $this->subjectSettingsFor($board),
             // Rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             'missing_groups' => $this->missingGroupSpecs($board),
@@ -3034,6 +3069,9 @@ class TimetableController extends Controller
             'my_kafedras' => $this->departmentHeadKafedraSafe(request()),
             // Fan mas'uli: "Mas'ul fanlarim" filtri uchun shu doskadagi mas'ul fanlari kartalari.
             'my_subject_card_ids' => $this->responsibleCardIds(request(), $cards),
+            // O'qituvchi kesimi: ustun — teacher_id, sarlavha — to'liq F.I.Sh. (kartadagi qisqa / to'liq nom farq qilsa ham bitta ustun).
+            'teacher_full_names' => (object) Teacher::whereIn('id', $cards->pluck('teacher_id')->filter()->unique()->values()->all())
+                ->pluck('full_name', 'id')->all(),
             // Guruh(cha) sarlavhasida faol talabalar soni (sikl jadvalidagi kabi): "fakultet|guruh" => son.
             'group_students' => $this->boardGroupStudentCounts($cards),
         ])
@@ -4082,7 +4120,8 @@ class TimetableController extends Controller
         // Semestr sanasi va bayramlarni sozlamaga saqlaymiz (keyingi safar eslab qolish uchun).
         // Faqat sikl jadvalini tahrirlay oladigan rollar: o'qituvchi (faqat ko'rish) va
         // boshqalar butun doska kalendarini o'zgartirib yubormasin.
-        $canSaveCalendar = $this->cycleLayerEditable($cycleRole, 'external') || $this->cycleLayerEditable($cycleRole, 'internal');
+        // Kafedra mudiri (ichki qatlam) kalendarni o'zgartirmaydi — sikl sanasi va bayramlar ("+ qo'shish") faqat adminlar va o'quv bo'limi.
+        $canSaveCalendar = $this->cycleLayerEditable($cycleRole, 'external');
         if ($canSaveCalendar
             && (($set['semester_start'] ?? null) !== $startC->toDateString() || ($set['holidays'] ?? []) !== $holidays)) {
             $set['semester_start'] = $startC->toDateString();
@@ -6195,6 +6234,8 @@ class TimetableController extends Controller
         $cardInfo = $cardIds ? DB::table('timetable_cards')->whereIn('id', $cardIds)
             ->get(['id', 'training_type', 'kafedra_name', 'subject_name', 'specialty_name', 'course', 'faculty_name', 'teacher_id'])->keyBy('id') : collect();
         $volumes = Auditorium::pluck('volume', 'code')->all();
+        $fullNames = Teacher::whereIn('id', array_values(array_unique(array_filter(array_map(fn ($e) => (int) $e['teacher_id'], $occ)))))
+            ->pluck('full_name', 'id')->all();
         // Sikl kun rejasi akademik soatlarda (to'liq 80–90 daqiqalik parada 1 para = 2 soat, cycleRowHours) — haftalik panjara
         // qatori esa bitta qo'ng'iroq bandi: pair / len_half — panjara qatorlarida, hour / hours — asl soatlar (oyna vaqti uchun).
         $rh = max(1, $this->cycleRowHours($board));
@@ -6222,6 +6263,7 @@ class TimetableController extends Controller
                 'subject_name' => (string) $u['subject'], 'group_name' => (string) $u['group'], 'group_names' => [(string) $u['group']],
                 'flow' => (string) $u['parent'], 'faculty_name' => $u['faculty'], 'specialty_name' => (string) $u['specialty'], 'course' => (int) $u['course'],
                 'kafedra_name' => $card->kafedra_name ?? null, 'teacher_id' => $e['teacher_id'], 'teacher_name' => $e['teacher'],
+                'teacher_full_name' => $e['teacher_id'] ? ($fullNames[(int) $e['teacher_id']] ?? null) : null,
                 'auditorium_code' => $e['room'], 'auditorium_name' => $e['room_name'] ?: null,
                 'auditorium_volume' => $e['room'] !== null ? ($volumes[$e['room']] ?? null) : null,
                 'date' => $e['date'], 'day' => $day, 'pair' => intdiv((int) $e['from'] - 1, $rh) + 1,
@@ -11272,39 +11314,40 @@ class TimetableController extends Controller
         if ($tid <= 0 || !Schema::hasTable('teacher_responsible_subjects')) {
             return [];
         }
-        $rows = DB::table('teacher_responsible_subjects as t')
+        // Profildagi mas'ul fanlar: fan nomi (HEMIS fan id si bo'lsa — shu fanning barcha o'quv rejalaridagi nomlari) va kafedra
+        // bo'yicha — yo'nalish va kurs bilan cheklanmaydi (bir fanga bir nechta mas'ul bo'lishi mumkin). '@names' — [fan nomi => kafedralar].
+        $subjects = DB::table('teacher_responsible_subjects as t')
             ->join('curriculum_subjects as cs', 'cs.id', '=', 't.curriculum_subject_id')
-            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
-            ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->where('t.teacher_id', $tid)
-            ->get(['cs.subject_name', 'cs.semester_code', 'sp.name as specialty_name', 'f.name as faculty_name']);
-        $keys = [];
-        foreach ($rows as $r) {
-            $sem = (int) $r->semester_code - 10;
-            if ($sem < 1) {
-                continue;
+            ->get(['cs.subject_id', 'cs.subject_name', 'cs.department_name']);
+        $names = [];
+        $addName = function (string $name, ?string $kafedra) use (&$names) {
+            foreach (array_filter([$name, $this->cycleSubjectVariantBase($name)]) as $n) {
+                $k = $this->normSubject((string) $n);
+                if ($k === '') {
+                    continue;
+                }
+                $names[$k] ??= [];
+                if (trim((string) $kafedra) !== '') {
+                    $names[$k][trim((string) $kafedra)] = true;
+                } else {
+                    $names[$k]['*'] = true;   // kafedrasi noma'lum — faqat nom bo'yicha
+                }
             }
-            [$facultyAlias, $spec] = $this->curriculumScopeAlias((string) $r->specialty_name);
-            $faculty = trim((string) ($r->faculty_name ?: $facultyAlias));
-            $prefix = ($faculty !== '' ? $this->specKey($faculty) . '|' : '')
-                . $this->specKey($spec) . '|' . (int) ceil($sem / 2) . '|';
-            $keys[$prefix . $this->normSubject((string) $r->subject_name)] = true;
-            $base = $this->cycleSubjectVariantBase((string) $r->subject_name);
-            if ($base !== null) {
-                $keys[$prefix . $this->normSubject($base)] = true;
+        };
+        foreach ($subjects as $r) {
+            $addName((string) $r->subject_name, $r->department_name);
+        }
+        $hemisIds = $subjects->pluck('subject_id')->filter()->unique()->values()->all();
+        if ($hemisIds) {
+            foreach (DB::table('curriculum_subjects')->whereIn('subject_id', $hemisIds)->distinct()->get(['subject_name', 'department_name']) as $r) {
+                $addName((string) $r->subject_name, $r->department_name);
             }
         }
 
-        return $keys;
+        return $names ? ['@names' => array_map(fn ($k) => array_keys($k), $names)] : [];
     }
 
-    private function responsibleCardKey($card): string
-    {
-        $card = (object) (is_array($card) ? $card : ($card instanceof TimetableCard ? $card->getAttributes() : (array) $card));
-
-        return $this->specKey((string) ($card->specialty_name ?? '')) . '|' . (int) ($card->course ?? 0) . '|' . $this->normSubject((string) ($card->subject_name ?? ''));
-    }
 
     /** Doskadagi mas'ul fanlarning aniq bo'laklari va umumiy kartalari id lari. */
     private function responsibleCardIds(Request $request, $cards): array
@@ -11332,11 +11375,16 @@ class TimetableController extends Controller
         if (!$keys) {
             return false;
         }
-        $key = $this->responsibleCardKey($card);
-        $faculty = (string) (is_array($card) ? ($card['faculty_name'] ?? '') : ($card->faculty_name ?? ''));
-        $facultyPrefix = $this->specKey($faculty) . '|';
-        // Asosiy nom kaliti umumiy kartaga tegishli; boshqa bo'lak unga aylantirilmaydi.
-        return isset($keys[$facultyPrefix . $key]) || isset($keys[$key]);
+        // Fan nomi va kafedra bo'yicha (profildagi mas'ul fanlar; yo'nalish/kurs cheklovi yo'q). Asosiy nom kaliti umumiy kartaga
+        // tegishli; boshqa bo'lak unga aylantirilmaydi (kartaning aniq nomi tekshiriladi).
+        $subject = $this->normSubject((string) (is_array($card) ? ($card['subject_name'] ?? '') : ($card->subject_name ?? '')));
+        if (isset($keys['@names'][$subject])) {
+            $kafedras = array_values(array_diff($keys['@names'][$subject], ['*']));
+            $cardKafedra = (string) (is_array($card) ? ($card['kafedra_name'] ?? '') : ($card->kafedra_name ?? ''));
+            return in_array('*', $keys['@names'][$subject], true) || ($kafedras && $this->sameKafedra($cardKafedra, $kafedras));
+        }
+
+        return false;
     }
 
     /** departmentHeadKafedra, lekin kafedra aniqlanmasa so'rovni yiqitmaydi (null). */

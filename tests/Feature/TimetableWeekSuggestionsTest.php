@@ -915,3 +915,84 @@ it('takliflar: yakuniy "reset" — shablonda xona yo\'q bo\'lsa, haftalik yozuvd
     \App\Models\TimetableChangeRequest::where('requester_role', 'oqituvchi')->update(['status' => 'cancelled']);
     sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertOk();
 });
+
+it('takliflar: GET qaytargan har taklif turi FormData ko\'rinishida (satrlar, PHP massivlari) apply va propose\'ga mos — actions.*.op/card_id 422 yo\'q', function () {
+    $s = sugSetup();
+    test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    Role::findOrCreate('registrator_ofisi', 'web');
+    $s['head']->update(['department' => 'Gigiyena kafedrasi']);
+    $busy = sugTeacher('BAND O.');
+    sugTeacher('BOSH O.');
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    $other = TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'training_type', 'len_half', 'weeks', 'kafedra_name']) + ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $other->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+    TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 5, 'cancelled' => true]);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    $card = collect(sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json('cards'))->firstWhere('id', $s['own']->id);
+    expect(collect($card['suggestions'])->pluck('type')->unique()->sort()->values()->all())->toBe(['blocker', 'day', 'slot', 'teacher', 'week'])
+        ->and(collect($card['suggestions'])->contains(fn ($g) => count($g['actions']) > 1))->toBeTrue();
+    sugFormCheck($s, $card, 3, [[$s['admin'], 'superadmin', 'apply'], [$s['head'], 'kafedra_mudiri', 'propose']]);
+});
+
+/** Brauzer FormData'si kabi (hamma qiymat — satr, massivlar PHP ko'rinishida actions[0][op]=...) har taklifni yuboradi — 200, actions.* xatosi yo'q. */
+function sugFormCheck(array $s, array $card, int $week, array $who): void
+{
+    $form = function (array $sug) use ($card, $week) {
+        $body = ['week' => $week, 'card_id' => $card['id'], 'type' => $sug['type'], 'title' => $sug['title'], 'actions' => $sug['actions']];
+        array_walk_recursive($body, function (&$v) { $v = (string) $v; });
+
+        return $body;
+    };
+    foreach ($card['suggestions'] as $sug) {
+        foreach ($who as [$t, $role, $ep]) {
+            \Illuminate\Support\Facades\DB::beginTransaction();
+            $r = sugAs($t, $role)->withHeaders(['Accept' => 'application/json'])
+                ->post(route('admin.timetable.week-suggestions.' . $ep, $s['board']), $form($sug));
+            \Illuminate\Support\Facades\DB::rollBack();
+            expect([$sug['type'], $ep, $r->status(), collect(array_keys((array) $r->json('errors')))->filter(fn ($k) => str_starts_with($k, 'actions.'))->values()->all()])
+                ->toBe([$sug['type'], $ep, 200, []]);
+        }
+    }
+}
+
+it('takliflar: FormData ko\'rinishida — ma\'ruzani surish (lecture) va boshqa xona (room) ham apply va propose\'ga mos', function () {
+    $s = sugSetup();
+    test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    Role::findOrCreate('oqituvchi', 'web');
+    $s['head']->update(['department' => 'Gigiyena kafedrasi']);
+    $busy = sugTeacher('BAND O.');
+    $busy->assignRole('oqituvchi');
+    $lec = $s['own'];
+    $lec->update(['training_type' => 'lecture', 'ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    $other = TimetableCard::create($lec->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'len_half', 'weeks', 'kafedra_name']) + ['training_type' => 'practice', 'subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
+    TimetableCardOverride::create(['card_id' => $other->id, 'week' => 3, 'day' => 2, 'pair' => 3]);
+    TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
+    $card = collect(sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+        ->assertOk()->json('cards'))->firstWhere('id', $lec->id);
+    $card['suggestions'] = collect($card['suggestions'])->whereIn('type', ['lecture', 'blocker'])->values()->all();
+    expect(collect($card['suggestions'])->pluck('type')->unique()->sort()->values()->all())->toBe(['blocker', 'lecture']);
+    // (O'qituvchi ma'ruzani sura olmaydi — qoida, 403; format emas.)
+    sugFormCheck($s, $card, 3, [[$s['admin'], 'superadmin', 'apply'], [$s['head'], 'kafedra_mudiri', 'propose']]);
+
+    // Boshqa xona: bir xonada bir vaqtda ikki dars (7-hafta).
+    \App\Models\Auditorium::create(['code' => 'R215', 'name' => '215', 'volume' => 30, 'active' => true]);
+    \App\Models\Auditorium::create(['code' => 'R216', 'name' => '216', 'volume' => 30, 'active' => true]);
+    $base = ['board_id' => $s['board']->id, 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Gigiyena kafedrasi', 'auditorium_code' => 'R215', 'auditorium_name' => '215',
+        'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'oqim_label' => '6-oqim'];
+    $ustoz = sugTeacher('SOTTOROV B. B.');
+    $ustoz->assignRole('oqituvchi');
+    $a = TimetableCard::create($base + ['group_name' => 'd1/d26-06b', 'teacher_id' => $ustoz->id, 'teacher_name' => 'SOTTOROV B. B.']);
+    $b = TimetableCard::create($base + ['group_name' => 'd1/d26-06c', 'teacher_id' => sugTeacher('USTOZ B.')->id, 'teacher_name' => 'USTOZ B.']);
+    foreach ([$a, $b] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    }
+    $card = collect(sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=7&courses[]=2')
+        ->assertOk()->json('cards'))->firstWhere('id', $a->id);
+    $card['suggestions'] = collect($card['suggestions'])->where('type', 'room')->take(1)->values()->all();
+    expect($card['suggestions'])->toHaveCount(1);
+    sugFormCheck($s, $card, 7, [[$s['admin'], 'superadmin', 'apply'], [$ustoz, 'oqituvchi', 'propose']]);
+});

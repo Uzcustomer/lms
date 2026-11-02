@@ -39,6 +39,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Til sozlamasi middleware
         $middleware->append(\App\Http\Middleware\SetLocale::class);
 
+        // Xotira monitoringi: so'rov 100 MB dan ko'p ishlatsa — logga ogohlantirish (config app.memory_warn_mb).
+        $middleware->append(\App\Http\Middleware\LogPeakMemory::class);
+
         // Server ulanish debug middleware — har bir requestda DB va server holatini tekshiradi
         $middleware->append(\App\Http\Middleware\ConnectionDebugMiddleware::class);
 

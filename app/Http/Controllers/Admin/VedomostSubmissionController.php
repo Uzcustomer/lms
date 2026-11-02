@@ -229,16 +229,17 @@ class VedomostSubmissionController extends Controller
      * Semestr talabalar jadvalidan (VedomostSubmissionService bilan bir xil), o'quv yili —
      * o'sha reja+semestrning semesters yozuvidan (bo'lmasa joriy o'quv yili).
      */
+    private ?array $currentGroupSemestersCache = null;
+
     private function currentGroupSemesters(): array
     {
-        static $result = null;
-        if ($result !== null) {
-            return $result;
+        if ($this->currentGroupSemestersCache !== null) {
+            return $this->currentGroupSemestersCache;
         }
 
         $semByGroup = $this->service->currentSemestersByGroup();
         if ($semByGroup->isEmpty()) {
-            return $result = [];
+            return $this->currentGroupSemestersCache = [];
         }
 
         $groupCurricula = DB::table('groups')
@@ -254,16 +255,52 @@ class VedomostSubmissionController extends Controller
 
         $currentYear = $this->service->currentEducationYear();
         $result = [];
+        $this->staleGroups = [];
         foreach ($semByGroup as $groupId => $sem) {
             $curriculum = $groupCurricula[$groupId] ?? null;
             $year = $curriculum !== null ? ($years[$curriculum . '|' . $sem->code] ?? $currentYear) : $currentYear;
+            // Talabalari o'tgan o'quv yili semestrida qolgan guruh (HEMIS'da yangi semestrga o'tkazilmagan) —
+            // uning «joriy» semestri aslida eskirgan: o'tgan semestr vedomostlari «Joriy semestr»da chiqmasin.
+            // Faqat joriy yildan ESKI bo'lsa (yangi yil hali «current» belgilanmagan bo'lsa ham yashirib yubormaslik uchun).
+            $yearNum = fn ($y) => preg_match('/(\d{4})/', (string) $y, $m) ? (int) $m[1] : null;
+            if ($currentYear && $year && $yearNum($year) !== null && $yearNum($currentYear) !== null
+                && $yearNum($year) < $yearNum($currentYear)) {
+                $this->staleGroups[(string) $groupId] = (string) $year . '|' . $sem->code;
+                continue;
+            }
             if ($year) {
                 $result[$year . '|' . $sem->code][] = (string) $groupId;
             }
         }
         ksort($result);
 
-        return $result;
+        return $this->currentGroupSemestersCache = $result;
+    }
+
+    /** Joriy semestri eskirgan guruhlar: group_hemis_id => «o'quv yili|semestr» (currentGroupSemesters() to'ldiradi). */
+    private array $staleGroups = [];
+
+    /**
+     * Ogohlantirish: talabalari o'tgan o'quv yili semestrida qolgan faol guruhlar — ular «Joriy semestr»
+     * ro'yxatida ko'rinmaydi. Nomlari (ko'pi bilan 15 ta) va jami soni.
+     *
+     * @return array{count: int, names: string[]}
+     */
+    private function staleGroupsInfo(): array
+    {
+        $this->currentGroupSemesters();
+        if (empty($this->staleGroups)) {
+            return ['count' => 0, 'names' => []];
+        }
+        $names = DB::table('groups')
+            ->whereIn('group_hemis_id', array_keys($this->staleGroups))
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name')
+            ->filter()
+            ->values();
+
+        return ['count' => $names->count(), 'names' => $names->take(15)->all()];
     }
 
     /** Filtr yonidagi izoh: joriy o'quv yili(lar) va semestrlar (masalan «2026-2027 · 1, 3, 5, 7, 9, 11-semestr»). */
@@ -406,6 +443,7 @@ class VedomostSubmissionController extends Controller
             && $v->status !== VedomostSubmission::STATUS_APPROVED)->count();
         $stats['total'] = $statsRows->count();
         $currentSemesterHint = $this->currentSemesterHint();
+        $staleGroups = $this->staleGroupsInfo();
 
         $perPage = (int) $request->get('per_page', 50);
         $page = max(1, (int) $request->get('page', 1));
@@ -439,7 +477,8 @@ class VedomostSubmissionController extends Controller
             'canManage',
             'manualOpenGroups',
             'syncProgress',
-            'currentSemesterHint'
+            'currentSemesterHint',
+            'staleGroups'
         ));
     }
 
@@ -796,9 +835,11 @@ class VedomostSubmissionController extends Controller
                 ->all();
         }
 
+        // ai_result (katta JSON) olinmaydi — jamlanma qatorlari oldindan hisoblangan (kesh); keshi
+        // yo'qlari uchun servis to'liq yozuvni o'zi yuklaydi.
         $submissions = VedomostSubmission::whereIn('id', $ids)
             ->where('status', VedomostSubmission::STATUS_APPROVED)
-            ->get()
+            ->get(['id', 'group_name', 'subject_name', 'closing_form', 'form_type', 'status'])
             ->sortBy(fn ($v) => mb_strtolower(($v->subject_name ?? '') . '|' . ($v->group_name ?? '')), SORT_NATURAL)
             ->values();
         if ($submissions->isEmpty()) {

@@ -347,6 +347,11 @@ class VedomostAiReportController extends Controller
                 continue;
             }
             foreach ($cols as $col => $e) {
+                // Test markazi natijasi (OSKE / Test) — alohida: edits['tm'][id][oski|test].
+                if (isset(self::TM_COLS[$col])) {
+                    $this->mergeTmEdit($edits, $changes, $row, $sid, self::TM_COLS[$col], $e);
+                    continue;
+                }
                 if (!isset(VedomostCheckEngine::SYSTEM_EDITABLE[$col])) {
                     continue;
                 }
@@ -382,6 +387,9 @@ class VedomostAiReportController extends Controller
         if (empty($edits['system'])) {
             unset($edits['system']);
         }
+        if (empty($edits['tm'])) {
+            unset($edits['tm']);
+        }
 
         $sections = [
             'header' => [VedomostCheckEngine::HEADER_EDITABLE, $scan['header'] ?? [], 'Sarlavha'],
@@ -416,6 +424,42 @@ class VedomostAiReportController extends Controller
         }
 
         return [$edits, $changes];
+    }
+
+    /** Online jadvaldagi Test markazi ustunlari → test_center turi. */
+    private const TM_COLS = ['TMO' => 'oski', 'TMT' => 'test'];
+
+    /** Test markazi natijasini hisobotda o'zgartirish (sabab majburiy) yoki asl qiymatga qaytarish (null). */
+    private function mergeTmEdit(array &$edits, array &$changes, array $row, string $sid, string $kind, $e): void
+    {
+        $label = ($kind === 'oski' ? 'OSKE' : 'Test') . ' (Test markazi)';
+        $tm = $row['tm'][$kind] ?? [];
+        $orig = array_key_exists('orig', $tm) ? $tm['orig'] : ($tm['tm'] ?? null);
+        $prev = $edits['tm'][$sid][$kind]['v'] ?? $orig;
+        if ($e === null) {
+            unset($edits['tm'][$sid][$kind]);
+            $new = $orig;
+            $why = '';
+        } else {
+            $val = is_array($e) ? ($e['v'] ?? null) : $e;
+            $why = trim((string) (is_array($e) ? ($e['why'] ?? '') : ''));
+            $val = is_string($val) ? str_replace(',', '.', trim($val)) : $val;
+            if (!is_numeric($val)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['system' => "{$row['fio']} — {$label}: son kiriting."]);
+            }
+            if (mb_strlen($why) < 3) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['system' => "{$row['fio']} — {$label}: o'zgartirish sababini yozing."]);
+            }
+            $edits['tm'][$sid][$kind] = ['v' => (float) $val, 'why' => mb_substr($why, 0, 300)];
+            $new = (float) $val;
+        }
+        if ((string) $prev !== (string) $new) {
+            $changes[] = "Test markazi qiymati (faqat hisobotda) {$row['fio']} — {$label}: " . $this->engine->f($prev) . ' → ' . $this->engine->f($new)
+                . ($why !== '' ? " · sabab: {$why}" : ' (asl qiymat)');
+        }
+        if (empty($edits['tm'][$sid])) {
+            unset($edits['tm'][$sid]);
+        }
     }
 
     private function siblings(VedomostSubmission $v)

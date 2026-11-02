@@ -94,3 +94,24 @@ test('joriy semestr: boshqa guruh shu semestrda bo\'lsa ham, o\'tgan semestr ved
     $hint = (new ReflectionMethod($ctrl, 'currentSemesterHint'))->invoke($ctrl);
     expect($hint)->toBe('2026-2027 · 7, 8-semestr');
 });
+
+test('joriy semestr: talabalari o\'tgan o\'quv yili semestrida qolgan guruh chiqmaydi va ogohlantiriladi', function () {
+    Schema::table('groups', fn ($t) => $t->string('name')->nullable());
+    // A — joriy yilda (2026-2027, 17). X — HEMIS'da yangi semestrga o'tkazilmagan: talabalari 2025-2026 ning 18-semestrida.
+    DB::table('groups')->insert([
+        ['group_hemis_id' => 'A', 'curriculum_hemis_id' => 'c1', 'name' => 'd1/22-01'],
+        ['group_hemis_id' => 'X', 'curriculum_hemis_id' => 'c2', 'name' => 'xd/22-01'],
+    ]);
+    DB::table('students')->insert([
+        ['group_id' => 'A', 'semester_code' => '17', 'student_status_code' => 11],
+        ['group_id' => 'X', 'semester_code' => '18', 'student_status_code' => 11],
+    ]);
+    DB::table('semesters')->insert([
+        ['curriculum_hemis_id' => 'c1', 'code' => '17', 'education_year' => '2026-2027', 'current' => true],
+        ['curriculum_hemis_id' => 'c2', 'code' => '18', 'education_year' => '2025-2026', 'current' => false],
+    ]);
+
+    $ctrl = app(VedomostSubmissionController::class);
+    expect((new ReflectionMethod($ctrl, 'currentGroupSemesters'))->invoke($ctrl))->toBe(['2026-2027|17' => ['A']])
+        ->and((new ReflectionMethod($ctrl, 'staleGroupsInfo'))->invoke($ctrl))->toBe(['count' => 1, 'names' => ['xd/22-01']]);
+});

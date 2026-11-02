@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\VedomostSubmission;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -78,22 +80,17 @@ class VedomostJamlanmaExcel
 
         $r = 1;
         $n = 0;
+        $cached = $this->cachedRows($submissions->pluck('id')->filter()->all());
         foreach ($submissions as $sub) {
-            $w = $this->weightsFor($sub);
-            $sysEdits = $sub->ai_result['edits']['system'] ?? [];
-            foreach ($this->studentsOf($sub) as $stu) {
-                if (($stu['status_code'] ?? '') === '60') {
-                    continue;
-                }
-                $stu = $this->engine->applySystemEdits($stu, $sysEdits[VedomostScanReader::digits($stu['student_id'] ?? '')] ?? []);
-                $vt = $this->engine->vtRow($stu, $w, ['level_code' => $stu['meta']['level_code'] ?? '', 'form_type' => (string) ($sub->form_type ?: '12')], ++$n);
-                if (array_key_exists('_yn_orig', $vt)) {
-                    $stu['sys_orig']['V'] = $vt['_yn_orig'];
-                }
+            // Oldindan hisoblangan qatorlar (tasdiqlanganda fonda yoziladi); yo'q bo'lsa — hozir hisoblab saqlaymiz.
+            $rows = $cached[$sub->id] ?? $this->store($this->full($sub));
+            foreach ($rows as $row) {
                 $r++;
+                $vt = $row['vt'];
+                $vt['A'] = ++$n;
                 foreach (array_keys($cols) as $col) {
                     if ($col === self::CLOSING_COL) {
-                        $ws->setCellValue($col . $r, self::CLOSING_LABELS[$sub->closing_form] ?? (string) $sub->closing_form);
+                        $ws->setCellValue($col . $r, $row['closing'] ?? '');
                         continue;
                     }
                     $v = $vt[$col] ?? null;
@@ -103,21 +100,21 @@ class VedomostJamlanmaExcel
                         $ws->setCellValue($col . $r, $v);
                     }
                 }
-                foreach (($stu['sys_edited'] ?? []) as $col => $why) {
+                foreach (($row['edited'] ?? []) as $col => $e) {
                     $ws->getStyle($col . $r)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE9D5FF');
-                    $orig = $stu['sys_orig'][$col] ?? null;
+                    $orig = $e['orig'] ?? null;
                     $ws->getComment($col . $r)->getText()->createText(
-                        'Hisobotda o‘zgartirilgan. Mark: ' . ($orig === null ? '—' : $orig) . ($why !== '' ? "\nSabab: {$why}" : '')
+                        'Hisobotda o‘zgartirilgan. Mark: ' . ($orig === null ? '—' : $orig) . (($e['why'] ?? '') !== '' ? "\nSabab: {$e['why']}" : '')
                     );
                 }
                 // «Vedomost tekshirish» eksportidagi son formatlari.
                 $ws->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
                 $ws->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
-                if ($w['on'] > 0 && !in_array($stu['meta']['level_code'] ?? '', ['14', '15'], true)) {
+                if (!empty($row['on_fmt'])) {
                     $ws->getStyle("K{$r}")->getNumberFormat()->setFormatCode('0.0');
                 }
                 $ws->getStyle("N{$r}")->getNumberFormat()->setFormatCode('0%');
-                if ($w['oski'] > 0 && $w['test'] > 0) {
+                if (!empty($row['exam_fmt'])) {
                     $ws->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.00');
                     $ws->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.00');
                 }
@@ -128,6 +125,94 @@ class VedomostJamlanmaExcel
         $ws->setAutoFilter('A1:' . self::CLOSING_COL . max(1, $r));
 
         return $book;
+    }
+
+    /**
+     * Bitta vedomostning jamlanma qatorlari (raqamlashsiz): Mark qiymatlari + hisobotdagi tuzatishlar.
+     *
+     * @return array<int, array{vt: array, edited: array, on_fmt: bool, exam_fmt: bool, closing: string}>
+     */
+    public function rowsFor(VedomostSubmission $sub): array
+    {
+        $w = $this->weightsFor($sub);
+        $sysEdits = $sub->ai_result['edits']['system'] ?? [];
+        $out = [];
+        foreach ($this->studentsOf($sub) as $stu) {
+            if (($stu['status_code'] ?? '') === '60') {
+                continue;
+            }
+            $stu = $this->engine->applySystemEdits($stu, $sysEdits[VedomostScanReader::digits($stu['student_id'] ?? '')] ?? []);
+            $vt = $this->engine->vtRow($stu, $w, ['level_code' => $stu['meta']['level_code'] ?? '', 'form_type' => (string) ($sub->form_type ?: '12')], 0);
+            if (array_key_exists('_yn_orig', $vt)) {
+                $stu['sys_orig']['V'] = $vt['_yn_orig'];
+                unset($vt['_yn_orig']);
+            }
+            $edited = [];
+            foreach (($stu['sys_edited'] ?? []) as $col => $why) {
+                $edited[$col] = ['orig' => $stu['sys_orig'][$col] ?? null, 'why' => (string) $why];
+            }
+            $out[] = [
+                'vt' => array_intersect_key($vt, array_flip(array_keys(VedomostCheckEngine::VT_HEADERS))),
+                'edited' => $edited,
+                'on_fmt' => $w['on'] > 0 && !in_array($stu['meta']['level_code'] ?? '', ['14', '15'], true),
+                'exam_fmt' => $w['oski'] > 0 && $w['test'] > 0,
+                'closing' => self::CLOSING_LABELS[$sub->closing_form] ?? (string) $sub->closing_form,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Qatorlarni hisoblab jamlanma keshiga yozadi va qaytaradi. */
+    public function store(VedomostSubmission $sub): array
+    {
+        $rows = $this->rowsFor($sub);
+        if (!$sub->exists || !$sub->id) {
+            return $rows; // saqlanmagan yozuv (masalan, sinov) — keshlanmaydi
+        }
+        DB::table('vedomost_jamlanma_rows')->updateOrInsert(
+            ['vedomost_submission_id' => $sub->id],
+            ['rows' => json_encode($rows, JSON_UNESCAPED_UNICODE), 'built_at' => now(), 'updated_at' => now(), 'created_at' => now()]
+        );
+
+        return $rows;
+    }
+
+    /** Ro'yxat yengil ustunlar bilan olingan bo'lsa (ai_result'siz) — hisoblash uchun to'liq yozuv. */
+    private function full(VedomostSubmission $sub): VedomostSubmission
+    {
+        if (!$sub->exists || array_key_exists('ai_result', $sub->getAttributes())) {
+            return $sub;
+        }
+
+        return VedomostSubmission::find($sub->id) ?? $sub;
+    }
+
+    /** Keshni o'chiradi (vedomost tasdiqlanmagan holatga qaytganda yoki natijasi o'zgarganda). */
+    public static function forget(array $submissionIds): void
+    {
+        if ($submissionIds && Schema::hasTable('vedomost_jamlanma_rows')) {
+            DB::table('vedomost_jamlanma_rows')->whereIn('vedomost_submission_id', $submissionIds)->delete();
+        }
+    }
+
+    /** @return array<int, array> vedomost id => qatorlar */
+    private function cachedRows(array $ids): array
+    {
+        if (empty($ids) || !Schema::hasTable('vedomost_jamlanma_rows')) {
+            return [];
+        }
+        $out = [];
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            foreach (DB::table('vedomost_jamlanma_rows')->whereIn('vedomost_submission_id', $chunk)->get(['vedomost_submission_id', 'rows']) as $c) {
+                $rows = json_decode((string) $c->rows, true);
+                if (is_array($rows)) {
+                    $out[(int) $c->vedomost_submission_id] = $rows;
+                }
+            }
+        }
+
+        return $out;
     }
 
     /** 12a/12b umumiy vedomosti — birlikning barcha guruhlari (shu urinish talabalari); boshqalari — o'z guruhi. */

@@ -399,7 +399,7 @@ class VedomostAiChecker
             ->whereIn('student_id', $ids)
             ->where('is_active', 1)
             ->whereIn('quiz_type', array_merge(self::TM_OSKI_TYPES, self::TM_TEST_TYPES))
-            ->select('student_id', 'fan_id', 'fan_name', 'quiz_type', 'shakl', 'attempt_name', 'grade', 'date_finish', 'semester');
+            ->select('id', 'student_id', 'fan_id', 'fan_name', 'quiz_type', 'shakl', 'attempt_name', 'grade', 'date_finish', 'semester');
         if (Schema::hasColumn('hemis_quiz_results', 'not_actual')) {
             $q->where(fn ($w) => $w->where('not_actual', false)->orWhereNull('not_actual'));
         }
@@ -429,7 +429,12 @@ class VedomostAiChecker
             $top[$sid] = max($top[$sid] ?? 0, $score);
         }
 
+        // Jurnalga yuklangan natijalar (student_grades.quiz_result_id) — bir shaklda bir nechta natija
+        // (dublikat) bo'lsa, aynan jurnalga yuborilgani olinadi (Diagnostika «Jurnalga yuklangan» bilan bir xil).
+        $uploaded = $this->uploadedQuizIds(array_map(fn ($x) => $x[0]->id, $rows));
+
         $best = [];
+        $all = []; // [sid][kind][pos] => shu shakldagi barcha natijalar (dublikat ogohlantirishi uchun)
         foreach ($rows as [$r, $score]) {
             $fanOk = $score >= $top[VedomostScanReader::digits($r->student_id)];
             $pos = array_search(self::quizForm((string) $r->shakl), $chain, true);
@@ -448,13 +453,28 @@ class VedomostAiChecker
             }
             $dal = str_contains(mb_strtolower($r->attempt_name . ' ' . $r->shakl), 'dalolat');
             $sid = VedomostScanReader::digits($r->student_id);
+            $isUp = isset($uploaded[(int) $r->id]);
+            $all[$sid][$kind][$pos][] = ['grade' => (float) $r->grade, 'date' => (string) $r->date_finish, 'uploaded' => $isUp];
             $cur = $best[$sid][$kind] ?? null;
-            // Zanjirda oldingi urinish (shu shakl) ustun; keyin dalolatnomasiz, keyin eng so'nggisi (Python check_tm).
-            $rank = [-$pos, $dal ? 0 : 1, (string) $r->date_finish];
+            // Zanjirda oldingi urinish (shu shakl) ustun; keyin jurnalga yuklangani, keyin dalolatnomasiz,
+            // keyin eng so'nggisi (Python check_tm).
+            $rank = [-$pos, $isUp ? 1 : 0, $dal ? 0 : 1, (string) $r->date_finish];
             if ($cur === null || $rank > $cur['_rank']) {
-                $best[$sid][$kind] = ['grade' => (float) $r->grade, 'dalolat' => $dal, 'date' => (string) $r->date_finish, '_rank' => $rank];
+                $best[$sid][$kind] = ['grade' => (float) $r->grade, 'dalolat' => $dal, 'date' => (string) $r->date_finish,
+                    'uploaded' => $isUp, '_rank' => $rank, '_pos' => $pos];
             }
         }
+
+        // Tanlangan shaklda bir nechta natija bo'lsa — hisobot izohida ogohlantirish uchun.
+        foreach ($best as $sid => &$kinds) {
+            foreach ($kinds as $kind => &$rec) {
+                $same = $all[$sid][$kind][$rec['_pos']] ?? [];
+                if (count($same) > 1) {
+                    $rec['duplicates'] = array_map(fn ($x) => ['grade' => $x['grade'], 'date' => $x['date'], 'uploaded' => $x['uploaded']], $same);
+                }
+            }
+        }
+        unset($kinds, $rec);
 
         if ($skippedSem > 0) {
             Progress::log("Test markazi: boshqa yoki ko'rsatilmagan semestrdagi {$skippedSem} ta natija hisobga olinmadi (vedomost: {$semNum}-semestr).");
@@ -462,11 +482,32 @@ class VedomostAiChecker
 
         foreach ($best as &$kinds) {
             foreach ($kinds as &$rec) {
-                unset($rec['_rank']);
+                unset($rec['_rank'], $rec['_pos']);
             }
         }
 
         return $best;
+    }
+
+    /** @return array<int, true> jurnalga (student_grades) yuklangan Test markazi natija ID'lari */
+    private function uploadedQuizIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (empty($ids) || !Schema::hasColumn('student_grades', 'quiz_result_id')) {
+            return [];
+        }
+        $out = [];
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $q = DB::table('student_grades')->whereIn('quiz_result_id', $chunk);
+            if (Schema::hasColumn('student_grades', 'deleted_at')) {
+                $q->whereNull('deleted_at');
+            }
+            foreach ($q->pluck('quiz_result_id') as $id) {
+                $out[(int) $id] = true;
+            }
+        }
+
+        return $out;
     }
 
     /** «9-semestr», «9», «9-sem» → 9; raqam yo'q bo'lsa null (filtrlanmaydi). */

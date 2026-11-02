@@ -267,6 +267,27 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
         assert.match(g, /style="outline:2px solid #f59e0b;outline-offset:-2px;background:#fffbeb" data-room-clash="1" title="Zalda bir vaqtda ikki ma'ruza: d1\/d22-06b/);
         assert.match(g, /<div class="tt-clash-why tt-room-why">⚠ Zalda bir vaqtda ikki ma'ruza<\/div><div class="tt-clash-list"><div>Zalda bir vaqtda ikki ma'ruza: d1\/d22-06b, Klinik farmakologiya \(o'qituvchi BOSHQA\)/);
         assert.doesNotMatch(g, /data-cross-clash/);
+        // Birlashtirilgan chip: zal to'qnashuvi faqat keyingi yarmida — yo'qolmaydi (katakda va oynada; Codex).
+        setLessons([half({ id: 82, training_type: 'lecture', hour: 1, hours: 1, group_name: 'p/p22-02c', group_names: ['p/p22-02c'] }),
+            half({ id: 82, training_type: 'lecture', hour: 2, hours: 1, group_name: 'p/p22-02c', group_names: ['p/p22-02c'], room_clash: 'Zalda bir vaqtda ikki ma\'ruza: KECHKI' })]);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.match(g, /data-room-clash="1" title="Zalda bir vaqtda ikki ma'ruza: KECHKI"/);
+        gridClick({ target: { dataset: { cyc: String(+(g.match(/data-cyc="(\d+)"/) || [])[1]) }, closest() { return this; }, getBoundingClientRect: () => ({ right: 10, top: 10 }) },
+            preventDefault() {}, stopPropagation() {} });
+        assert.match(appended[appended.length - 1].innerHTML, /⚠ Zalda bir vaqtda ikki ma'ruza: KECHKI/);
+        // Ikkala yarmida ham (har xil) — ikkalasi ham.
+        setLessons([half({ id: 82, training_type: 'lecture', hour: 1, hours: 1, group_name: 'p/p22-02c', group_names: ['p/p22-02c'], room_clash: 'ERTAGI' }),
+            half({ id: 82, training_type: 'lecture', hour: 2, hours: 1, group_name: 'p/p22-02c', group_names: ['p/p22-02c'], room_clash: 'KECHKI' })]);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.match(g, /title="ERTAGI · KECHKI"/);
+        gridClick({ target: { dataset: { cyc: String(+(g.match(/data-cyc="(\d+)"/) || [])[1]) }, closest() { return this; }, getBoundingClientRect: () => ({ right: 10, top: 10 }) },
+            preventDefault() {}, stopPropagation() {} });
+        assert.match(appended[appended.length - 1].innerHTML, /⚠ ERTAGI<\/div><div class="dp-note" style="color:#b45309">⚠ KECHKI/);
+        setLessons([half({ id: 81, training_type: 'lecture', hour: 1, hours: 2, len_half: 1, group_name: 'p/p22-02b', group_names: ['p/p22-02b'],
+            room_clash: "Zalda bir vaqtda ikki ma'ruza: d1/d22-06b, Klinik farmakologiya (o'qituvchi BOSHQA) — bloklarni bitta ma'ruza oqimiga birlashtiring" })]);
+        ctx.renderGridCross('teacher');
         // Oynada ham.
         gridClick({ target: { dataset: { cyc: '0' }, closest() { return this; }, getBoundingClientRect: () => ({ right: 10, top: 10 }) }, preventDefault() {}, stopPropagation() {} });
         assert.match(appended[appended.length - 1].innerHTML, /⚠ Zalda bir vaqtda ikki ma'ruza: d1\/d22-06b/);

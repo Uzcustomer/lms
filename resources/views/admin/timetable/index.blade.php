@@ -8370,6 +8370,8 @@
                 const clashing = lessons.filter(ls => hit.has(ls));
                 return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
             }
+            // Sikl darsining zal to'qnashuvlari (birlashtirilgan chipda — barcha yozuvlardan).
+            const cycRoomClashes = l => (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
             // Bitta sikl darsining yozuvlari (karta + sana) — vaqti bo'yicha guruhlanadi: bir xil vaqt — guruhchalari qo'shiladi.
             function mergeCycParts(list) {
                 const by = {}, out = [];
@@ -8524,8 +8526,11 @@
                                     // Vaqtlari har xil bo'lsa — umumiy oraliq, har guruhcha o'z vaqti, kun rejasi va so'rovi bilan (parts; oynada).
                                     const parts = mergeCycParts((first.l.parts || [first.l]).concat([it.l]));
                                     const lo = Math.min(...parts.map(p => +p.hour || 0)), hi = Math.max(...parts.map(p => (+p.hour || 0) + (+p.hours || 0)));
+                                    // Zal to'qnashuvi — barcha yozuvlardan (keyingi yarmida bo'lsa ham yo'qolmasin).
+                                    const clashes = [...new Set([].concat(cycRoomClashes(first.l), cycRoomClashes(it.l)))];
                                     const merged = Object.assign({}, first.l, { group_names: gs, hour: lo, hours: hi - lo,
-                                        parts: parts.length > 1 ? parts : undefined, ask: parts.some(p => p.ask) });
+                                        parts: parts.length > 1 ? parts : undefined, ask: parts.some(p => p.ask),
+                                        room_clash: clashes[0], room_clashes: clashes.length ? clashes : undefined });
                                     crossCycleShown.push(merged);
                                     shown[seenIds[k]] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
                                 });
@@ -8551,7 +8556,7 @@
                             const clashOn = cell.clashing.length > 0;   // kamida ikki turli sessiya kesishgan
                             const why = clashOn ? 'To\'qnashuv — bir vaqtda ' + cell.count + ' ta dars: ' + cell.clashing.map(what).join('; ') : '';
                             // Sikl ma'ruzasi zalida shu vaqtda boshqa ma'ruza (butun doska bo'yicha, server: room_clash) — o'qituvchi kesimida ham.
-                            const roomWhy = [...new Set(shown.filter(it => it.l && it.l.room_clash).map(it => it.l.room_clash))];
+                            const roomWhy = [...new Set([].concat(...shown.filter(it => it.l).map(it => cycRoomClashes(it.l))))];
                             const title = [why].concat(roomWhy).filter(Boolean).join(' · ');
                             const conflict = clashOn ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(title) + '"'
                                 : roomWhy.length ? ' style="outline:2px solid #f59e0b;outline-offset:-2px;background:#fffbeb" data-room-clash="1" title="' + esc(title) + '"' : '';
@@ -8602,7 +8607,7 @@
                     '<div class="dp-sub">Guruh: ' + esc((l.group_names && l.group_names.length ? l.group_names : [l.group_name]).join(', ')) + (l.flow ? ' · ' + esc(l.flow) : '') + '</div>' +
                     '<div class="dp-sub">O\'qituvchi: ' + esc(l.teacher_name || '—') + ' · Xona: ' + esc(l.auditorium_name || '—') + '</div>' +
                     partsHtml +
-                    (l.room_clash ? '<div class="dp-note" style="color:#b45309">⚠ ' + esc(l.room_clash) + '</div>' : '') +
+                    cycRoomClashes(l).map(t => '<div class="dp-note" style="color:#b45309">⚠ ' + esc(t) + '</div>').join('') +
                     '<div class="dp-note">Sikl jadvalidagi dars — bu yerda faqat ko\'rish; joyi "Sikl" kesimida.</div>' +
                     (!parts && l.ask && canAsk
                         ? '<div class="dp-actions"><button type="button" data-cyc-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '');

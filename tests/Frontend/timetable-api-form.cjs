@@ -221,6 +221,8 @@ assert.equal(note.attrs.role, 'status');
         let selectedFaculties = new Set(['F-old']), selectedDirs = new Set(['d-old']), selectedCourses = new Set([4]);
         const TIMETABLE_READ_ONLY = true, BASE = '/b';
         const $ = () => this.el(), toggleAscToolbar = () => {}, syncUrl = () => {};
+        let discards = 0;
+        const ttFocusDiscard = () => { discards++; };   // "Ko'rsatish" fokusi — boshqa doskaga o'tilsa yoki doska yopilsa tashlanadi
         const serverScopeParam = () => TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
         const api = url => new Promise(res => this.pending.push({ url, res }));
         ${head}
@@ -228,16 +230,19 @@ assert.equal(note.attrs.role, 'status');
             }
         this.loadBoard = loadBoard; this.hideBoard = hideBoard; this.setScope = m => { scopeMode = m; };
         this.sel = () => [curSpec, selectedFaculties.size, selectedDirs.size, selectedCourses.size, lastLoadSig];
+        this.discards = () => discards;
         this.setSel = () => { curSpec = { key: 'k' }; selectedFaculties = new Set(['F1']); selectedDirs = new Set(['d']); selectedCourses = new Set([2]); };`, c);
     // Boshqa doskaga o'tishda oldingi doska qamrov tanlovi so'rovdan oldin tozalanadi (Codex).
     const p0 = c.loadBoard(3);
     assert.deepEqual(JSON.parse(JSON.stringify(c.sel().slice(0, 4))), [null, 0, 0, 0]);
+    assert.equal(c.discards(), 1);
     c.pending[0].res({ board: { id: 3 }, tag: 'first' });
     await p0;
     assert.equal(c.sel()[4], '');   // oxirgi yuklangan parametrlar
     c.setSel();
     const pSame = c.loadBoard(3);   // o'sha doska — tanlov saqlanadi
     assert.deepEqual(JSON.parse(JSON.stringify(c.sel().slice(1, 4))), [1, 1, 1]);
+    assert.equal(c.discards(), 1);   // o'sha doska qayta yuklansa — fokus qoladi
     c.pending[1].res({ board: { id: 3 }, tag: 'same' });
     await pSame;
     c.pending.length = 0; c.applied.length = 0;
@@ -254,7 +259,9 @@ assert.equal(note.attrs.role, 'status');
     assert.deepEqual(c.applied, ['all']);
     // Doska yopildi (hideBoard) — yo'lda qolgan yuklash uni qayta ochmaydi.
     const p3 = c.loadBoard(4);
+    const d0 = c.discards();
     c.hideBoard();
+    assert.equal(c.discards(), d0 + 1);   // doska yopilsa — fokus ham
     c.pending[2].res({ board: { id: 4 }, tag: 'late' });
     await p3;
     assert.deepEqual(c.applied, ['all']);

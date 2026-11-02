@@ -57,6 +57,8 @@ const ctx = {
     cycleLayerParams: () => ({ layer: 'internal' }),
     CROSS_MODES: ['teacher', 'subject', 'room'], cycleWeekLessons: () => [],
     ttToast: html => { (ctx.toasts = ctx.toasts || []).push(html); },
+    // "Ko'rsatish" havolalari (alohida testda) — bu yerda faqat 409 javobidagi tuzilgan ro'yxat uzatilishi tekshiriladi.
+    focusLinksHtml: list => ((list || []).length ? ' <a class="cf-show" data-focus="' + list.length + '">Ko\'rsatish</a>' : ''),
 };
 vm.createContext(ctx);
 vm.runInContext(section("            // ===== Ichki (haftalik) jadvaldagi to'qnashuvlar", '            // Joylanmagan kartalar diagnostikasi (unplaced-export)')
@@ -65,7 +67,7 @@ vm.runInContext(section("            // ===== Ichki (haftalik) jadvaldagi to'qna
     + section('            async function saveCycleAssign(force) {', "            $('cycAssignSave').addEventListener")
     + section('            function cycleAutoShiftHtml(j) {', '            async function cycleAutoShift() {')
     + '; this.wc = () => weeklyConflicts; this.wci = () => weeklyConflictItems; this.setBusy = b => { asgBusy = b; };', ctx);
-const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { needs_confirm: true, error: msg } });
+const busyErr = (msg, items) => Object.assign(new Error(msg), { status: 409, data: { needs_confirm: true, error: msg, conflict_items: items } });
 
 (async () => {
     // 1) cardConflict: joriy hafta; shablon ko'rinishida — to'qnashgan haftalar; tashqi qatlam va joylanmagan karta — yo'q.
@@ -160,8 +162,11 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     calls.length = 0;
     const unit = { faculty_name: 'F1', specialty_name: 'davolash ishi', course: 5, subject_name: 'Klinik farmakologiya', training_type: 'practice', group_name: 'd1/d22-05c' };
     vm.runInContext('asgSel = ' + JSON.stringify(unit) + '; renderAsgTable = () => {}; cards = [];', ctx);
-    answers.push(busyErr("O'qituvchi SHARIPOV K. SH. shu davrda boshqa guruhcha bilan band: p/p22-03c, Klinik farmakologiya, 30.10–10.11"));
+    answers.push(busyErr("O'qituvchi SHARIPOV K. SH. shu davrda boshqa guruhcha bilan band: p/p22-03c, Klinik farmakologiya, 30.10–10.11",
+        [{ kind: 'teacher_busy', groups: [{ group: 'd1/d22-05c' }, { group: 'p/p22-03c' }] }]));
     await ctx.applyAsg('5');
+    // Ogohlantirishda — server bergan tuzilgan ro'yxat bo'yicha "Ko'rsatish" (matn parse qilinmaydi).
+    assert.match(el('asgMsg').innerHTML, /30\.10–10\.11 <a class="cf-show" data-focus="1">Ko'rsatish<\/a><\/div>/);
     assert.deepEqual(calls[0], ['POST', '/assign-teacher', Object.assign({}, unit, { oqim_label: '', teacher_id: '5' })]);
     assert.match(el('asgMsg').innerHTML, /⚠ O'qituvchi SHARIPOV K\. SH\. shu davrda boshqa guruhcha bilan band: p\/p22-03c, Klinik farmakologiya, 30\.10–10\.11/);
     assert.match(el('asgMsg').innerHTML, />Baribir biriktirish<\/button>/);

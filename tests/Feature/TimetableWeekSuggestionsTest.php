@@ -388,6 +388,12 @@ it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birin
     $card = $res['cards'][0];
     expect($card['id'])->toBe($a->id)->and($card['conflict'])->toBeTrue()
         ->and($card['reason'])->toBe('Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para');
+    // "Ko'rsatish": ikkala tomon guruhi (boshqa fakultet/yo'nalish/kurs bo'lsa ham — qamrovi bilan), xona, o'sha hafta / juma / V para.
+    expect($card['clashes'])->toBe([['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215',
+        'groups' => [['group' => 'd1/d26-06b', 'faculty' => '1-son davolash', 'specialty' => 'Davolash ishi', 'course' => 1],
+            ['group' => 'p/p25-02b', 'faculty' => 'Pediatriya', 'specialty' => 'Pediatriya', 'course' => 2]],
+        'subject' => 'Odam anatomiyasi', 'dates' => ['2026-10-16', '2026-10-16'], 'hour_from' => 9, 'hour_to' => 11, 'hour_unit' => 'row',
+        'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 7]]);
     // Birinchi — shu vaqtda bo'sh xona (217 sig'imi yetmaydi), keyin ikkinchi tomonning xonasi (boshqa yo'nalish belgisi bilan).
     expect($card['suggestions'][0])->toMatchArray(['type' => 'room', 'title' => 'Xonani almashtirish: 216 (30 o\'rin) — Juma, 5-para',
         'actions' => [['op' => 'move', 'card_id' => $a->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'auditorium_code' => 'R216']]])
@@ -408,6 +414,29 @@ it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birin
     expect($res['total'])->toBe(0)->and($res['conflict_total'])->toBe(0)->and($res['cards'])->toBe([]);
 });
 
+it('takliflar: to\'qnashuv "Ko\'rsatish" — kalendarlar farq qilsa ham hafta kartaning o\'z haftasi, sana — bir xil kun', function () {
+    $s = sugSetup();
+    test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    \App\Models\Auditorium::create(['code' => 'R215', 'name' => '215', 'volume' => 30, 'active' => true]);
+    // Pediatriya 2-kursning semestri bir hafta kech boshlanadi: uning 6-haftasi = davolash 1-kursning 7-haftasi (16.10).
+    TimetableGridSetting::create(['board_id' => $s['board']->id, 'faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+        'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15, 'start_date' => '2026-09-07']);
+    $base = ['board_id' => $s['board']->id, 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Anatomiya kafedrasi', 'auditorium_code' => 'R215', 'auditorium_name' => '215'];
+    $a = TimetableCard::create($base + ['faculty_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi', 'course' => 1,
+        'oqim_label' => '6-oqim', 'group_name' => 'd1/d26-06b', 'teacher_id' => sugTeacher('USTOZ A.')->id, 'teacher_name' => 'USTOZ A.']);
+    $b = TimetableCard::create($base + ['faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+        'oqim_label' => '2-oqim', 'group_name' => 'p/p25-02b', 'teacher_id' => sugTeacher('USTOZ B.')->id, 'teacher_name' => 'USTOZ B.']);
+    TimetableCardOverride::create(['card_id' => $a->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    TimetableCardOverride::create(['card_id' => $b->id, 'week' => 6, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?'
+        . http_build_query(['week' => 7, 'faculty_names' => ['1-son davolash'], 'courses' => [1]]))->assertOk()->json();
+    $card = collect($res['cards'])->firstWhere('id', $a->id);
+    expect($card['conflict'])->toBeTrue()->and($card['clashes'])->toHaveCount(1)
+        ->and($card['clashes'][0])->toMatchArray(['kind' => 'room_busy', 'room_code' => 'R215', 'dates' => ['2026-10-16', '2026-10-16'],
+            'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 7]);
+});
+
 it('takliflar: o\'qituvchi to\'qnashuvida — mavjud qadamlar, o\'qituvchini almashtirish eng oxirida; sabab o\'qituvchi bilan', function () {
     $s = sugSetup();
     $t = sugTeacher('SHARIPOV K.');
@@ -423,6 +452,11 @@ it('takliflar: o\'qituvchi to\'qnashuvida — mavjud qadamlar, o\'qituvchini alm
     $types = collect($card['suggestions'])->pluck('type')->all();
     expect($card['conflict'])->toBeTrue()->and($card['reason'])->toBe('O\'qituvchi SHARIPOV K. band: g-02b · Gigiyena · Seshanba II para')
         ->and($types)->not->toContain('room')->and($types[0])->toBe('slot')->and(end($types))->toBe('teacher');
+    expect($card['clashes'])->toHaveCount(1)->and($card['clashes'][0])->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $t->id,
+        'teacher_name' => 'SHARIPOV K.', 'room_code' => null, 'subject' => 'Gigiyena', 'dates' => ['2026-09-15', '2026-09-15'], 'hour_from' => 3,
+        'hour_to' => 5, 'view' => 'week', 'week' => 3])
+        ->and(array_column($card['clashes'][0]['groups'], 'group'))->toBe(['g-02a', 'g-02b'])
+        ->and($card['clashes'][0]['card_ids'][0])->toBe($x->id)->and($card['clashes'][0]['card_ids'])->toHaveCount(2);
 });
 
 it('takliflar: karta xonada ikki dars bilan to\'qnashsa — bitta tomonning xonasini almashtirish taklif qilinmaydi (to\'qnashuv qolardi)', function () {
@@ -1139,4 +1173,16 @@ it('takliflar: joylanmagan karta — tashqi vaqtida faqat xona band bo\'lsa, bo\
     expect($rooms())->toBe(["K-310 (30 o'rin) (kafedra xonasi)", "214 (30 o'rin) (shu bino)", "312 (30 o'rin) (shu bino)"]);
     \App\Models\Auditorium::where('code', 'K310')->update(['active' => false]);
     expect($rooms())->toBe(["214 (30 o'rin) (shu bino)", "312 (30 o'rin) (shu bino)", "098 (30 o'rin) (shu bino)"]);
+});
+
+it('takliflar: "shu fan xonasi" — shu fan + tur + yo\'nalish/kurs bo\'yicha boshqa guruh xonasi kafedra xonasidan keyin, shu binodan oldin', function () {
+    $s = sugRoomSetup();
+    $base = \Illuminate\Support\Arr::only($s['a']->getAttributes(), ['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang',
+        'students', 'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name']);
+    // Shu fan, amaliy, 1-kurs, boshqa guruh — 103 da (odatdagi xonasi); shu fan ma'ruzasi — 101 da; shu fan 2-kursi — 102 da.
+    TimetableCard::create(['group_name' => 'd1/d26-07a', 'auditorium_code' => 'R103', 'auditorium_name' => '103'] + $base);
+    TimetableCard::create(['group_name' => null, 'training_type' => 'lecture', 'group_names' => ['d1/d26-06b'], 'auditorium_code' => 'R101',
+        'auditorium_name' => '101'] + $base);
+    TimetableCard::create(['group_name' => 'd1/d25-06b', 'course' => 2, 'auditorium_code' => 'R102', 'auditorium_name' => '102'] + $base);
+    expect(($s['titles'])())->toBe(["K-310 (30 o'rin) (kafedra xonasi)", "103 (100 o'rin) (shu fan xonasi)", "214 (30 o'rin) (shu bino)"]);
 });

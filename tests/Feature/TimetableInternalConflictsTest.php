@@ -204,8 +204,17 @@ it('biriktirish: sikl blokiga band o\'qituvchi — ogohlantirish (kim bilan, qac
     // Ro'yxatda: SHARIPOV 05a bilan 16–18.09 da band
     $opts = $as()->postJson(route('admin.timetable.cycle-assign-options', $s['board']), $body)->assertOk()->json();
     expect($opts['busy_teachers'])->toBe([(string) $sharipov->id => 'd22-05a, Klinik farmakologiya, 16.09–18.09']);
+    // "Ko'rsatish" (tanlovdagi band o'qituvchi va 409 ogohlantirishi): shu guruhcha va band qilgan guruhcha, kesishgan sanalar — sikl jadvalida.
+    $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 5];
+    $show = ['kind' => 'teacher_busy', 'teacher_id' => $sharipov->id, 'teacher_name' => 'SHARIPOV K. SH.', 'room_code' => null,
+        'groups' => [$g('d22-05b'), $g('d22-05a')], 'subject' => 'Klinik farmakologiya', 'dates' => ['2026-09-16', '2026-09-18'],
+        'view' => 'cycle', 'week' => null];
+    expect($opts['busy_items']['teachers'][(string) $sharipov->id])->toHaveCount(1)
+        ->and($opts['busy_items']['teachers'][(string) $sharipov->id][0])->toMatchArray($show)
+        ->and($opts['busy_items']['teachers'][(string) $sharipov->id][0]['card_ids'])->toEqualCanonicalizing([$s['cards']['d22-05a']->id, $s['cards']['d22-05b']->id]);
 
     $res = $as()->postJson(route('admin.timetable.cycle-assign', $s['board']), $body + ['teacher_id' => $sharipov->id])->assertStatus(409);
+    expect($res->json('conflict_items'))->toHaveCount(1)->and($res->json('conflict_items.0'))->toMatchArray($show);
     expect($res->json('needs_confirm'))->toBeTrue()
         ->and($res->json('error'))->toContain("O'qituvchi SHARIPOV K. SH.: d22-05a, Klinik farmakologiya, 16.09–18.09")
         ->and($s['cards']['d22-05b']->fresh()->teacher_id)->toBe($other->id)
@@ -234,9 +243,9 @@ it('biriktirish: haftalik — band o\'qituvchi va boshqa haftada band xona uchun
     $room = Auditorium::create(['code' => 'R7', 'name' => '7-xona', 'volume' => 30, 'active' => true]);
     $base = ['board_id' => $board->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'oqim_label' => '1-oqim',
         'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 3, 'kafedra_name' => 'K', 'day' => 2, 'pair' => 3];
-    TimetableCard::create($base + ['subject_name' => 'Anatomiya', 'group_name' => 'd2-01a']);
+    $mine = TimetableCard::create($base + ['subject_name' => 'Anatomiya', 'group_name' => 'd2-01a']);
     // BAND o'qituvchi shu vaqtda boshqa guruhda; 7-xona faqat 2-haftada (ko'chirilgan) boshqa darsda
-    TimetableCard::create($base + ['subject_name' => 'Gistologiya', 'group_name' => 'd2-02a', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND']);
+    $gis = TimetableCard::create($base + ['subject_name' => 'Gistologiya', 'group_name' => 'd2-02a', 'teacher_id' => $busy->id, 'teacher_name' => 'BAND']);
     $moved = TimetableCard::create(array_merge($base, ['subject_name' => 'Biologiya', 'group_name' => 'd2-03a', 'day' => 5, 'pair' => 1,
         'auditorium_code' => 'R7', 'auditorium_name' => '7-xona']));
     \App\Models\TimetableCardOverride::create(['card_id' => $moved->id, 'week' => 2, 'day' => 2, 'pair' => 3, 'start_half' => 0, 'cancelled' => false]);
@@ -245,13 +254,27 @@ it('biriktirish: haftalik — band o\'qituvchi va boshqa haftada band xona uchun
     $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Anatomiya',
         'training_type' => 'practice', 'group_name' => 'd2-01a'];
 
-    expect($as()->getJson(route('admin.timetable.unit-busy', ['board' => $board->id] + $unit))->assertOk()->json())
+    $res = $as()->getJson(route('admin.timetable.unit-busy', ['board' => $board->id] + $unit))->assertOk()->json();
+    expect(\Illuminate\Support\Arr::except($res, 'busy_items'))
         ->toBe(['teachers' => [(string) $busy->id => 'd2-02a, Gistologiya, 15.09–29.09'], 'rooms' => ['R7' => 'd2-03a, Biologiya, 22.09'],
             'room_rank' => ['order' => ['R7'], 'why' => []]]);
+    // "Ko'rsatish" uchun tuzilgan ro'yxat (matnni parse qilmasdan): ikkala guruh qamrovi bilan, sanalar, para, kartalar, hafta.
+    $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 2];
+    $t = $res['busy_items']['teachers'][(string) $busy->id];
+    expect($t)->toHaveCount(1)
+        ->and($t[0])->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $busy->id, 'room_code' => null, 'subject' => 'Gistologiya',
+            'groups' => [$g('d2-01a'), $g('d2-02a')], 'dates' => ['2026-09-15', '2026-09-29'], 'hour_from' => 3, 'hour_to' => 5,
+            'view' => 'week', 'week' => 1])
+        ->and($t[0]['card_ids'])->toEqualCanonicalizing([$mine->id, $gis->id]);
+    expect($res['busy_items']['rooms']['R7'][0])->toMatchArray(['kind' => 'room_busy', 'room_code' => 'R7', 'teacher_id' => null,
+        'groups' => [$g('d2-01a'), $g('d2-03a')], 'dates' => ['2026-09-22', '2026-09-22'], 'view' => 'week', 'week' => 2]);
 
     $as()->postJson(route('admin.timetable.assign-teacher', $board), $unit + ['teacher_id' => $busy->id])->assertStatus(409)
         ->assertJsonPath('needs_confirm', true)
-        ->assertJsonPath('error', "O'qituvchi BAND shu davrda boshqa guruhcha bilan band: d2-02a, Gistologiya, 15.09–29.09");
+        ->assertJsonPath('error', "O'qituvchi BAND shu davrda boshqa guruhcha bilan band: d2-02a, Gistologiya, 15.09–29.09")
+        ->assertJsonPath('conflict_items.0.kind', 'teacher_busy')
+        ->assertJsonPath('conflict_items.0.groups', [$g('d2-01a'), $g('d2-02a')])
+        ->assertJsonPath('conflict_items.0.week', 1);
     $as()->postJson(route('admin.timetable.assign-teacher', $board), $unit + ['teacher_id' => $free->id])->assertOk();
     // "Baribir biriktirish" — band o'qituvchi saqlanadi
     $as()->postJson(route('admin.timetable.assign-teacher', $board), $unit + ['teacher_id' => $busy->id, 'force' => 1])->assertOk();
@@ -401,6 +424,15 @@ it('to\'qnashuvlar: tuzilgan ro\'yxat (kind, teacher_id, groups, sanalar), o\'tg
         ->and($a['items'][0])->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $sharipov->id, 'card_teacher_id' => $sharipov->id,
             'groups' => ['d22-05b'], 'lecture' => false, 'date_from' => '2026-09-16', 'date_to' => '2026-09-18', 'past' => false])
         ->and($a['items'][0]['detail'])->toContain("O'qituvchi SHARIPOV K. SH. band: d22-05b")->toContain("boshqa o'qituvchi biriktiring");
+    // "Ko'rsatish": ikkala guruhcha (qamrovi bilan), kesishgan sanalar, kun soatlari, ikkala karta — sikl jadvalida.
+    $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 5];
+    expect($a['items'][0]['show'])->toBe(['kind' => 'teacher_busy', 'teacher_id' => $sharipov->id, 'teacher_name' => 'SHARIPOV K. SH.',
+        'room_code' => null, 'groups' => [$g('d22-05a'), $g('d22-05b')], 'subject' => 'Klinik farmakologiya', 'dates' => ['2026-09-16', '2026-09-18'],
+        'hour_from' => 1, 'hour_to' => 7, 'hour_unit' => 'hour', 'card_ids' => [$s['cards']['d22-05a']->id, $s['cards']['d22-05b']->id],
+        'view' => 'cycle', 'week' => null])
+        ->and($c['davolash ishi|5|d22-05c|Klinik farmakologiya|practice']['items'][0]['show'])->toMatchArray(['kind' => 'room_capacity',
+            'teacher_id' => null, 'room_code' => 'R305', 'groups' => [$g('d22-05c'), $g('d22-05d')], 'dates' => ['2026-09-21', '2026-09-25'],
+            'card_ids' => [$s['cards']['d22-05c']->id, $s['cards']['d22-05d']->id]]);
     $cc = $c['davolash ishi|5|d22-05c|Klinik farmakologiya|practice'];
     expect($cc['level'])->toBe('yellow')->and($cc['items'][0])->toMatchArray(['kind' => 'room_capacity', 'room' => 'R305', 'groups' => ['d22-05d']]);
 
@@ -562,7 +594,7 @@ it('haftalik: /conflicts?items=1&week=N — shu hafta tuzilgan ro\'yxati (o\'tga
         'subject_name' => 'Anatomiya', 'group_name' => $g, 'kafedra_name' => 'K', 'teacher_id' => $t->id, 'teacher_name' => 'USTOZ',
         'auditorium_code' => $room, 'auditorium_name' => $room, 'day' => 2, 'pair' => 3]);
     $a = $mk('d2-01a', '101');
-    $mk('d2-01b', '102');
+    $b = $mk('d2-01b', '102');
     $admin = icTeacher('ADMIN', 'admin');
     $get = fn (array $q = []) => test()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
         ->getJson(route('admin.timetable.boards.conflicts', $board) . ($q ? '?' . http_build_query($q) : ''))->assertOk()->json();
@@ -575,6 +607,11 @@ it('haftalik: /conflicts?items=1&week=N — shu hafta tuzilgan ro\'yxati (o\'tga
     $w2 = $get(['items' => 1, 'week' => 2])['weekly_items'][$a->id][2][0];
     expect($w2)->toMatchArray(['kind' => 'teacher_busy', 'past' => false, 'date_from' => '2026-09-22', 'date_to' => '2026-09-22'])
         ->and($w2['detail'])->toContain('USTOZ');
+    // "Ko'rsatish": ikkala guruh (qamrovi bilan), shu hafta, kun/para (yarim-slotlar 3–5), ikkala karta — matnni parse qilmasdan.
+    $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 2];
+    expect($w2['show'])->toBe(['kind' => 'teacher_busy', 'teacher_id' => $t->id, 'teacher_name' => 'USTOZ', 'room_code' => null,
+        'groups' => [$g('d2-01a'), $g('d2-01b')], 'subject' => 'Anatomiya', 'dates' => ['2026-09-22', '2026-09-22'], 'hour_from' => 3,
+        'hour_to' => 5, 'hour_unit' => 'row', 'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 2]);
     // Oddiy so'rov: faqat kelgusi haftalar matni.
     expect(array_keys($get()['weekly'][$a->id]))->toBe([2, 3]);
 });

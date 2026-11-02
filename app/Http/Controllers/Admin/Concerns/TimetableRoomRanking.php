@@ -13,17 +13,23 @@ use Illuminate\Support\Facades\Schema;
  * Bo'sh xonalarni karta uchun yaqinlik bo'yicha saralash (Takliflar va biriktirish oynalari). Alifbo emas — ball:
  *   1) shu fan + shu guruh/oqim doskada odatda o'tadigan xona (kartalar va hafta-override'lardagi xona chastotasi);
  *   2) kartaning o'qituvchisiga biriktirilgan xona (auditorium_teacher, umumiy emas);
- *   3) fan kafedrasining xonasi (auditoriums.department_hemis_id / department_name — kafedra nomi bo'yicha, KafedraResolver guruhi);
- *   4) hozirgi xona bilan bir bino (building_id), bino ichida — qavati yaqinrog'i (nomdagi raqamdan);
- *   5) qolganlari — sig'imi talabalar soniga eng yaqin (ortiqcha katta zal oxirida).
- * Har mezon o'zidan pastdagilarning hammasidan ustun (8 / 4 / 2 / 1). Xaritalar so'rov davomida bir marta quriladi.
+ *   3) fan kafedrasining xonasi (auditoriums.department_hemis_id / department_name — kafedra nomi bo'yicha, KafedraResolver guruhi).
+ *      HEMIS xonalar ro'yxatida (import:auditoriums) kafedra yo'q — maydon faqat kafedra mudiri LMS'da qo'shgan xonalarda; bo'sh
+ *      bo'lsa mezon sababsiz o'tkazib yuboriladi;
+ *   4) shu fan + tur + yo'nalish/kurs bo'yicha boshqa guruhlar ishlatgan xona (chastota) — "shu fan xonasi";
+ *   5) hozirgi xona bilan bir bino: nomdagi blok/bo'lim prefiksi (vergulgacha: "Tibbiyot klasteri, 437") bir xili avval, so'ng
+ *      building_id bir xili (faqat hozirgi xona faol bo'lsa — faolsiz eski xonaning binosi bo'yicha keng tavsiya berilmaydi);
+ *      bino ichida qavati yaqinrog'i (nomdagi raqamdan);
+ *   6) qolganlari — sig'imi talabalar soniga eng yaqin (ortiqcha katta zal oxirida).
+ * Har mezon o'zidan pastdagilarning hammasidan ustun (16 / 8 / 4 / 2 / 1). Har daraja ichida xona turi mos kelmagani oxirida
+ * (amaliy darsga "Ma'ruza" turidagi zal, ma'ruzaga — boshqa turdagi xona). Xaritalar so'rov davomida bir marta quriladi.
  */
 trait TimetableRoomRanking
 {
     /** @var array{all: array<string, Auditorium>, active: \Illuminate\Support\Collection, teacher: array}|null */
     private ?array $roomRankBase = null;
 
-    /** @var array<int, array<string, array<string, int>>> doska => odat kaliti => [xona kodi => marta] (Takliflar holatidan) */
+    /** @var array<int, array{g: array, s: array}> doska => odat xaritalari (guruh / fan darajasi) — Takliflar holatidan */
     private array $roomHabitByBoard = [];
 
     /** @var array<string, array<string, true>> kafedra nomi => [xona kodi => true] */
@@ -33,6 +39,7 @@ trait TimetableRoomRanking
         'habit' => 'shu fan odatda shu yerda',
         'teacher' => "o'qituvchiga biriktirilgan",
         'kafedra' => 'kafedra xonasi',
+        'subject' => 'shu fan xonasi',
         'building' => 'shu bino',
     ];
 
@@ -74,26 +81,40 @@ trait TimetableRoomRanking
             ($c->training_type ?? '') === 'lecture' ? 'L' : 'A', $groups ? implode(',', $groups) : 'o:' . $norm($c->oqim_label ?? '')]);
     }
 
+    /** Fan darajasidagi odat kaliti: yo'nalish doirasi + fan + tur (guruhlarsiz — shu fanning boshqa guruhlari ham). */
+    private function roomSubjectKey(object $c): string
+    {
+        $norm = fn ($v) => trim((string) preg_replace('/\s+/u', ' ', mb_strtolower((string) $v)));
+
+        return implode('|', [$norm($c->faculty_name ?? ''), $norm($c->specialty_name ?? ''), (int) ($c->course ?? 0), $norm($c->subject_name ?? ''),
+            ($c->training_type ?? '') === 'lecture' ? 'L' : 'A']);
+    }
+
     /**
-     * Odat xaritasi: kalit => [xona => marta]. Karta xonasi — u o'tadigan haftalar soni (boshqa xonaga ko'chirilgan haftalardan
-     * tashqari), hafta-override xonasi — har biri 1.
+     * Odat xaritalari: 'g' — guruh kaliti => [xona => marta], 's' — fan kaliti (shu fan, tur, yo'nalish/kurs, barcha guruhlar)
+     * => [xona => marta]. Karta xonasi — u o'tadigan haftalar soni (boshqa xonaga ko'chirilgan haftalardan tashqari), hafta-override
+     * xonasi — har biri 1.
      */
     private function roomHabitMap(iterable $cards, array $ov): array
     {
-        $h = [];
+        $h = ['g' => [], 's' => []];
+        $add = function (object $c, string $code, int $n) use (&$h) {
+            foreach (['g' => $this->roomHabitKey($c), 's' => $this->roomSubjectKey($c)] as $lvl => $k) {
+                $h[$lvl][$k][$code] = ($h[$lvl][$k][$code] ?? 0) + $n;
+            }
+        };
         foreach ($cards as $c) {
-            $k = $this->roomHabitKey($c);
             $moved = 0;
             foreach ($ov[(int) $c->id] ?? [] as $o) {
                 $code = (string) ($o->auditorium_code ?? '');
                 if ($code !== '') {
-                    $h[$k][$code] = ($h[$k][$code] ?? 0) + 1;
+                    $add($c, $code, 1);
                     $moved++;
                 }
             }
             $code = (string) ($c->auditorium_code ?? '');
             if ($code !== '') {
-                $h[$k][$code] = ($h[$k][$code] ?? 0) + max(1, (int) ($c->weeks ?? 1) - $moved);
+                $add($c, $code, max(1, (int) ($c->weeks ?? 1) - $moved));
             }
         }
 
@@ -161,6 +182,29 @@ trait TimetableRoomRanking
         return $this->roomKafedraCodes[$key];
     }
 
+    /** Blok/bo'lim prefiksi — nomning birinchi vergulgacha qismi ("Tibbiyot klasteri, 437" → "tibbiyot klasteri"); vergulsiz — null. */
+    private static function roomPrefix(?string $name): ?string
+    {
+        $name = (string) $name;
+        if (!str_contains($name, ',')) {
+            return null;
+        }
+        $p = KafedraResolver::nameKey(explode(',', $name, 2)[0]);
+
+        return $p !== '' ? $p : null;
+    }
+
+    /** Xona turi: 'L' — ma'ruza zali (auditorium_type_name), 'A' — boshqa ma'lum tur, null — tur noma'lum. */
+    private static function roomKind(?string $type): ?string
+    {
+        $t = KafedraResolver::nameKey($type);
+        if ($t === '') {
+            return null;
+        }
+
+        return str_contains($t, "ma'ruza") || str_contains($t, 'maruza') || str_contains($t, 'лекц') || str_contains($t, 'lecture') ? 'L' : 'A';
+    }
+
     /** Qavat — nomdagi birinchi 3+ xonali raqamdan ("423" → 4, "2-215" → 2, "1203" → 12); aniqlanmasa — null. */
     private static function roomFloor(?string $name): ?int
     {
@@ -175,11 +219,15 @@ trait TimetableRoomRanking
     private function rankRooms(object $c, iterable $rooms, ?string $currentCode, array $habit): array
     {
         $base = $this->roomRankBase();
-        $habitHere = $habit[$this->roomHabitKey($c)] ?? [];
+        $habitHere = $habit['g'][$this->roomHabitKey($c)] ?? [];
+        $subjectHere = $habit['s'][$this->roomSubjectKey($c)] ?? [];
         $kafedra = $this->kafedraRoomCodes($c->kafedra_name ?? null);
         $cur = $currentCode !== null && $currentCode !== '' ? ($base['all'][(string) $currentCode] ?? null) : null;
-        $curBuilding = $cur && (string) $cur->building_id !== '' ? (string) $cur->building_id : null;
+        // Bino: nom prefiksi — har doim; building_id (juda keng bo'lishi mumkin) — faqat hozirgi xona faol bo'lsa.
+        $curPrefix = $cur ? self::roomPrefix($cur->name) : null;
+        $curBuilding = $cur && $cur->active && (string) $cur->building_id !== '' ? (string) $cur->building_id : null;
         $curFloor = $cur ? self::roomFloor($cur->name) : null;
+        $lesson = ($c->training_type ?? '') === 'lecture' ? 'L' : 'A';
         $students = (int) ($c->students ?? 0);
         $teacherId = (int) ($c->teacher_id ?? 0);
         $card = $c instanceof TimetableCard ? $c : null;
@@ -188,19 +236,25 @@ trait TimetableRoomRanking
             $code = (string) $r->code;
             $r = $base['all'][$code] ?? $r;   // to'liq yozuv (id, bino, kafedra) — qisqa select bilan berilgan bo'lsa ham
             $asg = $base['teacher'][(string) $r->id] ?? null;
+            $samePrefix = $curPrefix !== null && self::roomPrefix($r->name) === $curPrefix;
             $f = [
                 'habit' => (int) ($habitHere[$code] ?? 0) > 0,
                 'teacher' => $teacherId > 0 && $asg && !$asg['is_general'] && (int) $asg['teacher_id'] === $teacherId,
                 'kafedra' => isset($kafedra[$code]),
-                'building' => $curBuilding !== null && (string) $r->building_id === $curBuilding,
+                'subject' => (int) ($subjectHere[$code] ?? 0) > 0,
+                'building' => $samePrefix || ($curBuilding !== null && (string) $r->building_id === $curBuilding),
             ];
             $vol = (int) $r->volume;
             $fits = !($vol > 0 && $students > 0 && $vol < $students) && (!$card || $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
             $floor = $f['building'] && $curFloor !== null ? self::roomFloor($r->name) : null;
+            $kind = self::roomKind($r->auditorium_type_name ?? null);
             $rows[] = [$r, $f, [
                 $fits ? 0 : 1,
-                -(($f['habit'] ? 8 : 0) + ($f['teacher'] ? 4 : 0) + ($f['kafedra'] ? 2 : 0) + ($f['building'] ? 1 : 0)),
+                -(($f['habit'] ? 16 : 0) + ($f['teacher'] ? 8 : 0) + ($f['kafedra'] ? 4 : 0) + ($f['subject'] ? 2 : 0) + ($f['building'] ? 1 : 0)),
+                $kind !== null && $kind !== $lesson ? 1 : 0,   // shu daraja ichida tur mos kelmasa — oxirida
                 -(int) ($habitHere[$code] ?? 0),
+                -(int) ($subjectHere[$code] ?? 0),
+                $samePrefix ? 0 : 1,
                 $floor !== null ? abs($floor - $curFloor) : PHP_INT_MAX,
                 $vol > 0 && $students > 0 ? ($vol >= $students ? $vol - $students : PHP_INT_MAX) : PHP_INT_MAX - 1,
             ]];

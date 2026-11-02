@@ -52,6 +52,8 @@ const ctx = {
     boardSchedule: () => Array.from({ length: 12 }, (_, i) => ({ type: 'pair', no: i + 1, start: String(8 + i).padStart(2, '0') + ':00', end: String(8 + i).padStart(2, '0') + ':40' })),
     boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
     paraGroups: () => ({}), paraSideCells: () => '<td></td>', subjColor: () => ({ bg: '#eee' }),
+    // "Ko'rsatish" fokusi (alohida testda): bu yerda fokus yo'q — kesim o'zgarmaydi, qizil ramka yo'q.
+    focusCrossItems: (mode, items) => items, focusHighlight() {},
     excelCardText: c => ['F1', 'davolash ishi · 5-kurs', '[A] ' + c.subject_name, 'Oqim: 1-oqim', 'Haftalar'].join('\n'),
     scopeBody: () => ({ faculty_names: ['F1'], specialty_names: ['davolash ishi'], courses: [5] }),
     renderGrid: () => { ctx.renders = (ctx.renders || 0) + 1; ctx.renderGridCross(ctx.viewMode); }, renderStats() {},

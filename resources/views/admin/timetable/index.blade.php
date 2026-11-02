@@ -7006,6 +7006,14 @@
                 return rows.filter(r => focusSplit(r.group).some(n => ttFocus.keys.has(focusGKey({ group: n, faculty: r.faculty,
                     specialty: r.specialty, course: r.course }))));
             }
+            // Aralash to'qnashuv (view: cross): o'qituvchi / xona kesimida faqat shu o'qituvchi yoki xona ustuni (haftalik va sikl darslari).
+            function focusCrossItems(mode, items) {
+                const s = ttFocus && ttFocus.show;
+                if (!s || s.view !== 'cross') return items;
+                if (mode === 'teacher' && s.teacher_id) return items.filter(it => +(it.c || it.l).teacher_id === +s.teacher_id);
+                if (mode === 'room' && s.room_code) return items.filter(it => (it.c || it.l).auditorium_code === s.room_code);
+                return items;
+            }
             // Qizil ramka: haftalik — to'qnashgan darslar (card_ids) kataklari; sikl — fokus qatorlarining to'qnashuv sanalariga
             // tushadigan bloklari va sana sarlavhalari. Birinchisiga bir marta scroll.
             function focusHighlight() {
@@ -7025,13 +7033,18 @@
                     const ths = grid.querySelectorAll('thead th.cyc-dcol');
                     idx.forEach(i => { if (ths[i]) ths[i].classList.add('tt-focus-date'); });
                 } else {
-                    if (viewMode !== 'group') return;
+                    if (s.view === 'cross' ? !CROSS_MODES.includes(viewMode) : viewMode !== 'group') return;
                     const ids = new Set((s.card_ids || []).map(String));
+                    // Kesimdagi sikl darsi (data-cyc): o'sha karta va to'qnashuv sanalari ichida.
+                    const a = (s.dates || [])[0], b = (s.dates || [])[1] || a;
+                    const cycHit = ch => { const l = crossCycleShown[+ch.dataset.cyc];
+                        return !!l && ids.has(String(l.id)) && (!a || (String(l.date) >= a && String(l.date) <= b)); };
                     // Birlashtirilgan blok (data-merge-ids) va bo'laklar sarlavhasi (data-parallel-ids) — ichidagi har bir karta bo'yicha.
                     const chipIds = ch => [ch.dataset.chip, ...String(ch.dataset.mergeIds || '').split(','),
                         ...String(ch.dataset.parallelIds || '').split(',')].filter(Boolean);
-                    document.querySelectorAll('#grid [data-chip]').forEach(ch => {
-                        const td = chipIds(ch).some(x => ids.has(String(x))) && ch.closest ? ch.closest('td') : null;
+                    document.querySelectorAll('#grid [data-chip], #grid [data-cyc]').forEach(ch => {
+                        const hit = ch.dataset.cyc !== undefined ? cycHit(ch) : chipIds(ch).some(x => ids.has(String(x)));
+                        const td = hit && ch.closest ? ch.closest('td') : null;
                         if (td && !hits.includes(td)) hits.push(td);
                     });
                 }
@@ -7084,11 +7097,13 @@
                     if (!sp) return;
                     selectedFaculties.add(sp.faculty); selectedDirs.add(sp.specialty_name); selectedCourses.add(+sp.course);
                 });
-                const view = show.view === 'cycle' ? 'cycle' : 'group';
+                // Aralash (haftalik + sikl) to'qnashuv — haftalik o'qituvchi / xona kesimi: u yerda ikkala turdagi dars ham chiqadi.
+                const crossMode = show.kind === 'teacher_busy' ? 'teacher' : (show.kind === 'room_busy' || show.kind === 'room_capacity') ? 'room' : null;
+                const view = show.view === 'cycle' ? 'cycle' : (show.view === 'cross' && crossMode) ? crossMode : 'group';
                 if (viewMode !== view && [...$('viewMode').options].some(o => o.value === view)) { viewMode = view; $('viewMode').value = view; }
-                if (view === 'group' && +show.week > 0) curWeek = +show.week;
+                if (view !== 'cycle' && +show.week > 0) curWeek = +show.week;
                 // Haftalik to'qnashuvlar ichki (haqiqiy) jadval bo'yicha: tashqi qatlam ochiq bo'lsa — vaqtincha ichki.
-                if (view === 'group' && weeklyLayer !== 'internal' && $('wkLayerInternal')) focusSetLayer('internal');
+                if (view !== 'cycle' && weeklyLayer !== 'internal' && $('wkLayerInternal')) focusSetLayer('internal');
                 // Sikl to'qnashuvlari ham ichki (kafedra) jadval bo'yicha: tashqi qatlam ochiq bo'lsa — vaqtincha ichki (saqlanmaydi).
                 if (view === 'cycle' && cycleLayer !== 'internal' && $('cycLayerInternal')) { cycleLayer = 'internal'; renderCycleLayerUi(null); }
                 renderFocusBar();
@@ -8834,13 +8849,13 @@
                 // Darslar (haftalik karta va sikl darsi) — ustun, kun va [boshlanish, tugash) qatorlari (chizish uchun); fa/fb — akademik
                 // soatlardagi aniq oraliq (to'qnashuv uchun): to'liq parada 1 qator = rh soat, sikl darsi qatori yaxlitlangan bo'lishi mumkin.
                 const rh = Math.max(1, +((cyc[0] || {}).row_hours) || 1);
-                const items = placed.map(c => {
+                const items = focusCrossItems(mode, placed.map(c => {
                     const pl = effPlace(c), to = +pl.pair + cardLen(c);
                     return { col: keyOf(c), day: +pl.day, from: +pl.pair, to: to, fa: (+pl.pair - 1) * rh + 1, fb: (to - 1) * rh + 1, c: c };
                 }).concat(cyc.map((l, i) => {
                     const from = +l.pair, to = from + Math.max(1, +l.len_half || 1), fa = +l.hour || (from - 1) * rh + 1;
                     return { col: keyOf(l), day: +l.day, from: from, to: to, fa: fa, fb: fa + (+l.hours || (to - from) * rh), l: l, i: i };
-                }));
+                })));
                 const namesOf = {};
                 if (mode === 'teacher') items.forEach(it => { const n = (it.c || it.l).teacher_name; if (n) (namesOf[it.col] = namesOf[it.col] || []).push(n); });
                 const colLabel = col => mode === 'teacher' ? teacherColLabel(col, namesOf[col]) : col;
@@ -8978,6 +8993,7 @@
                 h += '</tbody>';
                 $('grid').innerHTML = h;
                 activeCell = null;
+                focusHighlight();
             }
             // Sikl darsi oynasi (kesimlarda): sana, para, guruh(lar), o'qituvchi, xona, kun rejasi; ruxsat bo'lsa — vaqt so'rovi.
             function closeCrossCycPop() { const p = document.getElementById('crossCycPop'); if (p) p.remove(); }

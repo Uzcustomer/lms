@@ -26,7 +26,7 @@ const node = (id, extra = {}) => Object.assign({ id, innerHTML: '', value: '', d
     remove() { this.removed = true; delete docById[this.id]; }, querySelector: () => null, querySelectorAll: () => [] }, extra);
 const docById = {};
 const $ = id => (els[id] = els[id] || node(id));
-els.viewMode = node('viewMode', { options: [{ value: 'group' }, { value: 'teacher' }, { value: 'cycle' }], value: 'teacher' });
+els.viewMode = node('viewMode', { options: [{ value: 'group' }, { value: 'teacher' }, { value: 'room' }, { value: 'cycle' }], value: 'teacher' });
 els.mainArea = node('mainArea', { insertBefore(n) { docById[n.id] = n; n.removed = false; } });
 const docListeners = [];
 let gridChips = [];
@@ -38,7 +38,7 @@ const document = {
         n.querySelector = sel => (sel === '#ttFocusClose' ? btn : null);
         return n;
     },
-    querySelectorAll: sel => (sel === '#grid [data-chip]' ? gridChips : []),
+    querySelectorAll: sel => (sel === '#grid [data-chip], #grid [data-cyc]' ? gridChips : []),
     addEventListener: (t, fn, capture) => docListeners.push([t, fn, capture]),
 };
 const calls = [];
@@ -63,12 +63,14 @@ const ctx = {
     invalidateWeeklyConflicts() {}, renderWeeklyLayerUi() {},
     // Sikl qatlami: tashqi ochiq — sikl to'qnashuvida vaqtincha ichki (loadCyclePlan shu qatlam bilan so'raydi).
     cycleLayer: 'external', cycleLayerUi: 0, renderCycleLayerUi: j => { ctx.cycleLayerUi++; },
+    CROSS_MODES: ['teacher', 'subject', 'room'], crossCycleShown: [],
 };
 els.wkLayerInternal = node('wkLayerInternal');
 els.cycLayerInternal = node('cycLayerInternal');
 vm.createContext(ctx);
 vm.runInContext(code + '\nthis.api = { link: focusLinkHtml, links: focusLinksHtml, dates: focusDatesText, banner: focusBannerText, start: ttFocusStart,'
     + ' close: ttFocusClose, forget: ttFocusForget, discard: ttFocusDiscard, rows: focusCycleRowKeys, highlight: focusHighlight, visible: focusVisibleGroups,'
+    + ' crossItems: focusCrossItems,'
     + ' build: () => { buildGroupRows(); return groupRows; } };', ctx);
 const api = ctx.api;
 const plain = v => JSON.parse(JSON.stringify(v));
@@ -241,6 +243,44 @@ api.discard();   // fokus yo'q — hech narsa
 assert.equal(ctx.viewMode, 'teacher');
 ctx.selectedFaculties = new Set(['F1']); ctx.selectedDirs = new Set(['Davolash ishi']); ctx.selectedCourses = new Set([2]); ctx.curWeek = 0;
 
+// 6c) Aralash (haftalik + sikl) to'qnashuv: haftalik o'qituvchi (yoki xona) kesimi, haftalik tomonning haftasi, ichki qatlam;
+//     kesimda faqat shu o'qituvchi / xona; qizil ramka — haftalik karta va shu kartaning to'qnashuv sanasidagi sikl darsi.
+const mixed = { kind: 'teacher_busy', teacher_id: 15, teacher_name: 'USTOZ B', groups: [weekShow.groups[0],
+    { group: 'd2-05c', faculty: 'F1', specialty: 'Davolash ishi', course: 2 }], dates: ['2026-11-13', '2026-11-13'], hour_from: 1,
+    hour_to: 3, card_ids: [1, 31], view: 'cross', week: 9 };
+click(api.link(mixed));
+assert.equal(ctx.viewMode, 'teacher');
+assert.equal(els.viewMode.value, 'teacher');
+assert.equal(ctx.curWeek, 9);
+assert.equal(ctx.weeklyLayer, 'internal');
+assert.equal(ctx.cycleLayer, 'external');
+const it = (x, isCyc) => (isCyc ? { l: x } : { c: x });
+assert.deepEqual(plain(api.crossItems('teacher', [it({ teacher_id: 15 }), it({ teacher_id: 16 }, true), it({ teacher_id: 15 }, true)])),
+    [{ c: { teacher_id: 15 } }, { l: { teacher_id: 15 } }]);
+assert.equal(api.crossItems('subject', [it({ teacher_id: 16 })]).length, 1);
+ctx.crossCycleShown = [{ id: 31, date: '2026-11-13' }, { id: 31, date: '2026-11-14' }, { id: 32, date: '2026-11-13' }];
+const ctd = [td(1), td(2), td(3), td(4), td(5)];
+gridChips = [{ dataset: { chip: '1' }, closest: () => ctd[0] }, { dataset: { cyc: '0' }, closest: () => ctd[1] },
+    { dataset: { cyc: '1' }, closest: () => ctd[2] }, { dataset: { cyc: '2' }, closest: () => ctd[3] }, { dataset: { chip: '2' }, closest: () => ctd[4] }];
+api.highlight();
+assert.deepEqual(ctd.map(t => t.classList.contains('tt-focus-hit')), [true, true, false, false, false]);
+assert.equal(ctd[0].scrolls, 1);
+docById.ttFocusBar.querySelector('#ttFocusClose').onclick();
+assert.equal(ctx.viewMode, 'teacher');
+assert.equal(ctx.weeklyLayer, 'external');
+assert.equal(ctx.curWeek, 0);
+// Xona aralash to'qnashuvi — xona kesimi, faqat shu xona.
+click(api.link(Object.assign({}, mixed, { kind: 'room_busy', teacher_id: null, room_code: 'R102' })));
+assert.equal(ctx.viewMode, 'room');
+assert.deepEqual(plain(api.crossItems('room', [it({ auditorium_code: 'R102' }), it({ auditorium_code: 'R101' }, true)])), [{ c: { auditorium_code: 'R102' } }]);
+docById.ttFocusBar.querySelector('#ttFocusClose').onclick();
+assert.equal(ctx.viewMode, 'teacher');
+// Oddiy (haftalik) fokusda va fokussiz kesim filtri qo'llanmaydi.
+assert.equal(api.crossItems('teacher', [it({ teacher_id: 16 })]).length, 1);
+click(html);
+assert.equal(api.crossItems('teacher', [it({ teacher_id: 16 })]).length, 1);
+docById.ttFocusBar.querySelector('#ttFocusClose').onclick();
+
 // 7) Huquq: "Faqat meniki" / "Kafedraniki" — faqat yuklangan qamrovdagi guruhlar; qolgani faqat matnda; hech biri yo'q — havola yo'q.
 ctx.scopeMode = 'mine';
 ctx.cards = [card(1, 'F1', 'Davolash ishi', 2, 'd2-01a')];
@@ -279,6 +319,8 @@ assert.match(source, /esc\(c\.reason\) \+ focusLinksHtml\(c\.clashes\) \+ '<\/di
 assert.match(source, /focusLinksHtml\(cycAssignBusy\.items\[id\]\)/);
 assert.match(source, /focusLinksHtml\(\(\(asgBusy\.items \|\| \{\}\)\.teachers \|\| \{\}\)\[id\]\)/);
 assert.match(source, /groupRows = focusWeekColumns\(groupRows\);/);
+assert.match(source, /const items = focusCrossItems\(mode, placed\.map\(c => \{/);
+assert.match(source, /\$\('grid'\)\.innerHTML = h;\n\s+activeCell = null;\n\s+focusHighlight\(\);\n\s+\}\n\s+\/\/ Sikl darsi oynasi \(kesimlarda\)/);
 assert.match(source, /if \(switching\) \{ ttFocusDiscard\(\); curSpec = null;/);
 assert.match(source, /function hideBoard\(\) \{\n[^\n]*\n\s+ttFocusDiscard\(\);/);
 

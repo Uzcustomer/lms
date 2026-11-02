@@ -7200,7 +7200,7 @@ class TimetableController extends Controller
         $acc = ['teachers' => [], 'rooms' => []];
         $note = function (string $type, string $id, array $m, array $o) use (&$acc, $units) {
             $x = &$acc[$type][$id][$o['label']];
-            $x ??= ['groups' => [], 'dates' => [], 'cards' => [], 'from' => PHP_INT_MAX, 'to' => 0, 'weekly' => true, 'week' => null,
+            $x ??= ['groups' => [], 'dates' => [], 'cards' => [], 'from' => PHP_INT_MAX, 'to' => 0, 'kinds' => [], 'week' => null,
                 'teacher' => $o['teacher'] ?? null, 'label' => $o['label']];
             foreach (array_merge($this->focusEntryGroups($m, $units), $this->focusEntryGroups($o, $units)) as $g) {
                 $x['groups'][mb_strtolower($g['faculty'] . '|' . $g['specialty'] . '|' . $g['course'] . '|' . $g['group'])] = $g;
@@ -7210,8 +7210,9 @@ class TimetableController extends Controller
             $x['cards'][$o['card']] = true;
             $x['from'] = min($x['from'], (int) $o['from']);
             $x['to'] = max($x['to'], (int) $o['to']);
-            $x['weekly'] = $x['weekly'] && $m['kind'] === 'weekly' && $o['kind'] === 'weekly';
-            $x['week'] ??= $m['week'] ?? null;
+            $x['kinds'][$m['kind']] = $x['kinds'][$o['kind']] = true;
+            // Hafta — haftalik tomondan (avval shu birlikniki): aralash (haftalik + sikl) to'qnashuv ham o'sha haftada ko'rsatiladi.
+            $x['week'] ??= $m['kind'] === 'weekly' ? ($m['week'] ?? null) : ($o['kind'] === 'weekly' ? ($o['week'] ?? null) : null);
         };
         $peak = [];       // xona => boshqa darslarning bir vaqtdagi eng yuqori yuklamasi (talabalar; bitta karta — bir marta)
         $unknown = [];    // xona => talabalar soni noma'lum dars bor
@@ -7276,7 +7277,10 @@ class TimetableController extends Controller
                         'teacher_name' => $type === 'teachers' ? $x['teacher'] : null, 'room_code' => $type === 'rooms' ? $id : null,
                         'groups' => array_values($x['groups']), 'subject' => explode(', ', (string) $x['label'], 2)[1] ?? $x['label'],
                         'dates' => array_keys($x['dates']), 'hour_from' => $x['from'], 'hour_to' => $x['to'], 'card_ids' => array_keys($x['cards']),
-                        'view' => $x['weekly'] ? 'week' : 'cycle', 'week' => $x['weekly'] ? $x['week'] : null]);
+                        // Ikkalasi haftalik — haftalik jadval; ikkalasi sikl — sikl jadvali; aralash — haftalik o'qituvchi/xona kesimi
+                        // (u yerda haftalik darslar ham, sikl darslari ham chiqadi).
+                        'view' => count($x['kinds']) > 1 ? 'cross' : (isset($x['kinds']['weekly']) ? 'week' : 'cycle'),
+                        'week' => isset($x['kinds']['weekly']) ? $x['week'] : null]);
                 }
             }
         }

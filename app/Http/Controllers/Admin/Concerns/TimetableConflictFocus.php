@@ -7,7 +7,8 @@ namespace App\Http\Controllers\Admin\Concerns;
  *   kind (teacher_busy | room_busy | group_busy | ...), teacher_id, teacher_name, room_code, groups [{group, faculty, specialty,
  *   course}] (to'qnashuvdagi barcha guruh(cha)lar — qamrovi bilan: nomlar fakultet/yo'nalish/kurslar bo'ylab takrorlanadi), subject,
  *   dates [from, to], hour_from / hour_to (haftalik — yarim-slot (para) indekslari, sikl — kun soatlari; to — oxiridan keyingi),
- *   card_ids, view (week — haftalik jadval, cycle — sikl jadvali), week (haftalik).
+ *   card_ids, view (week — haftalik jadval, cycle — sikl jadvali, cross — haftalik o'qituvchi/xona kesimi: haftalik va sikl darsi
+ *   aralash to'qnashganda), week (haftalik va aralash).
  * Qaysi guruhlarni ko'rsatish (rol qamrovi) — frontda: foydalanuvchi yuklay oladigan qamrovdagilar; qolganlari faqat matnda.
  */
 trait TimetableConflictFocus
@@ -87,7 +88,7 @@ trait TimetableConflictFocus
             'hour_from' => isset($x['hour_from']) ? (int) $x['hour_from'] : null,
             'hour_to' => isset($x['hour_to']) ? (int) $x['hour_to'] : null,
             'card_ids' => array_values(array_unique(array_map('intval', array_filter((array) ($x['card_ids'] ?? []))))),
-            'view' => ($x['view'] ?? 'week') === 'cycle' ? 'cycle' : 'week',
+            'view' => in_array($x['view'] ?? 'week', ['cycle', 'cross'], true) ? $x['view'] : 'week',
             'week' => isset($x['week']) ? (int) $x['week'] : null,
         ];
     }

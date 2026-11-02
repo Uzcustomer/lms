@@ -1370,11 +1370,11 @@ trait TimetableHemisSync
                 }
             }
         }
-        $flowGroups = $board ? $this->hemisLectureFlowGroups($board, array_keys($lecRooms)) : [];
-        $cleanGroup = fn ($n) => $this->groupNameKey(trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $n)));
+        $flowIndex = $board ? $this->hemisLectureFlowIndex($board, array_keys($lecRooms)) : ['flow' => [], 'groups' => []];
+        $flowGroups = $flowIndex['flow'];
         // To'qnashuv darsning joriy o'qituvchi/xonasi bilan izlanadi: bir tur almashtirilgach ikkinchisi qayta
         // tekshiriladi — asl qiymat bilan "bitta dars" deb o'tkazilgan sherik dars endi to'qnashishi mumkin.
-        $findHit = function (array $a, string $unitKey, string $type) use (&$idx, $freeRoom, $flowGroups, $cleanGroup, $unitSubject): ?array {
+        $findHit = function (array $a, string $unitKey, string $type) use (&$idx, $freeRoom, $flowGroups, $flowIndex, $unitSubject): ?array {
             $emp = (string) ($a['employee_id'] ?? '');
             $room = (string) ($a['auditorium_code'] ?? '');
             [$id, $flag, $msg] = $type === 'e' ? [$emp, 'mudir', "o'qituvchi band"] : [$room, 'mudir_xonasi', 'xona band'];
@@ -1392,15 +1392,20 @@ trait TimetableHemisSync
                 if (($info['source'] ?? '') === 'HEMIS' && (string) ($a['code'] ?? '') === '11' && ($info['code'] ?? '') === '11' && $emp !== '' && $room !== '' && $oRoom === $room
                     && $s === $a['start'] && $e === $a['end'] && isset($unitSubject[$unitKey])
                     && $this->hemisSubjectBase((string) ($info['subject'] ?? '')) === $this->hemisSubjectBase($unitSubject[$unitKey])
-                    && isset($flowGroups[$this->hemisSubjectBase($unitSubject[$unitKey]) . '|' . $emp . '|' . $room][$cleanGroup($info['group'] ?? '')])) {
+                    && $this->hemisFlowCovers($flowGroups, $this->hemisSubjectBase($unitSubject[$unitKey]) . '|' . $emp . '|' . $room, (string) ($info['group'] ?? ''))) {
                     continue;
                 }
+                // Boshqa guruhning shu fan ma'ruzasi aynan shu vaqtda shu zalda, lekin LMS'da bitta oqim emas — sababi va yechim.
+                $why = $type === 'r' && ($info['source'] ?? '') === 'HEMIS' && (string) ($a['code'] ?? '') === '11' && ($info['code'] ?? '') === '11'
+                    && $emp !== '' && $s === $a['start'] && $e === $a['end'] && isset($unitSubject[$unitKey])
+                    && $this->hemisSubjectBase((string) ($info['subject'] ?? '')) === $this->hemisSubjectBase($unitSubject[$unitKey])
+                    ? $this->hemisFlowWhy($flowIndex, (string) ($info['group'] ?? ''), $unitSubject[$unitKey], $emp, $room) : '';
                 if ($s < $a['end'] && $a['start'] < $e) {
                     // Kim (o'qituvchi) yoki qaysi xona band, qaysi dars bilan, qaysi vaqtda (va u darsning xonasi/o'qituvchisi).
                     $who = $type === 'e' ? (string) ($a['employee_name'] ?? '') : (string) ($a['auditorium_name'] ?? $id);
                     $where = $type === 'e' ? (($info['room'] ?? null) ? ', xona ' . $info['room'] : '')
                         : (($info['teacher'] ?? null) ? ", o'qituvchi " . $info['teacher'] : '');
-                    $text = "{$msg}: " . ($who !== '' ? $who . ' — ' : '') . "{$label} {$s}-{$e}{$where}";
+                    $text = "{$msg}: " . ($who !== '' ? $who . ' — ' : '') . "{$label} {$s}-{$e}{$where}{$why}";
 
                     return ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
                         'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
@@ -2199,30 +2204,111 @@ trait TimetableHemisSync
      * LMS ma'ruza oqimi guruhlari (qamrovdan tashqari yo'nalishlar ham): [fan asosiy nomi|o'qituvchi HEMIS id|xona => [guruh kaliti => true]].
      * Faqat berilgan xonalardagi, o'qituvchisi biriktirilgan ma'ruza kartalari — butun doska yuklanmaydi.
      */
-    private function hemisLectureFlowGroups(TimetableBoard $board, array $rooms): array
+    /**
+     * LMS ma'ruza kartalari (o'qituvchisi bor): 'flow' — [fan asosiy nomi|o'qituvchi HEMIS id|xona => [guruhcha kaliti => true]]
+     * ($rooms xonalarida; bitta oqim tekshiruvi uchun), 'groups' — [guruhcha kaliti => [fan asosiy nomi => [['emp', 'teacher',
+     * 'room', 'room_name'], ...]]] (hamma xonalar; "nega bitta oqim emas" sababi uchun). Guruhchalar "A + B" bo'yicha ham ajratiladi.
+     */
+    private function hemisLectureFlowIndex(TimetableBoard $board, array $rooms): array
     {
-        $rooms = array_values(array_unique(array_filter(array_map('strval', $rooms))));
+        $rooms = array_flip(array_values(array_unique(array_filter(array_map('strval', $rooms)))));
         if (!$rooms) {
-            return [];
+            return ['flow' => [], 'groups' => []];
         }
-        $cards = $this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')->whereNotNull('teacher_id')->whereIn('auditorium_code', $rooms));
+        $cards = $this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture'));
         if (!$cards) {
-            return [];
+            return ['flow' => [], 'groups' => []];
         }
-        $hemis = Teacher::whereIn('id', array_values(array_unique(array_column($cards, 'teacher_id'))))->pluck('hemis_id', 'id')->all();
-        $out = [];
+        $hemis = Teacher::whereIn('id', array_values(array_unique(array_filter(array_column($cards, 'teacher_id')))))->pluck('hemis_id', 'id')->all();
+        $flow = [];
+        $groups = [];
         foreach ($cards as $c) {
-            $emp = (string) ($hemis[$c->teacher_id] ?? '');
-            if ($emp === '') {
-                continue;
-            }
-            $k = $this->hemisSubjectBase((string) $c->subject_name) . '|' . $emp . '|' . $c->auditorium_code;
-            foreach ($this->cardGroupsOf($c) as $raw) {
-                $out[$k][$this->groupNameKey(trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $raw)))] = true;
+            $emp = (string) ($c->teacher_id ? ($hemis[$c->teacher_id] ?? '') : '');
+            $base = $this->hemisSubjectBase((string) $c->subject_name);
+            $room = (string) ($c->auditorium_code ?? '');
+            foreach ($this->cycleCardGroups($c) as $raw) {
+                $gk = $this->groupNameKey(trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $raw)));
+                $groups[$gk][$base][] = ['emp' => $emp, 'teacher' => (string) ($c->teacher_name ?? ''), 'room' => $room,
+                    'room_name' => (string) ($c->auditorium_name ?: $room)];
+                if ($emp !== '' && isset($rooms[$room])) {
+                    $flow[$base . '|' . $emp . '|' . $room][$gk] = true;
+                }
             }
         }
 
+        return ['flow' => $flow, 'groups' => $groups];
+    }
+
+    /**
+     * HEMIS'dagi birlashgan guruh nomi guruhchalarga: "d1/d22-06b/06c" → ["d1/d22-06b", "d1/d22-06c"] (keyingi qisqa bo'lak —
+     * asosiy nomning oxirini almashtiradi); oddiy nom — o'zi. Qo'shimcha "(o'z)" olib tashlanadi.
+     */
+    private function hemisGroupMembers(string $name): array
+    {
+        $n = trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', $name));
+        $parts = explode('/', $n);
+        $i = 0;
+        while ($i < count($parts) && !str_contains($parts[$i], '-')) {
+            $i++;
+        }
+        if ($i >= count($parts) - 1) {
+            return [$n];
+        }
+        $main = implode('/', array_slice($parts, 0, $i + 1));
+        $out = [$main];
+        foreach (array_slice($parts, $i + 1) as $e) {
+            $e = trim($e);
+            if ($e === '' || !preg_match('/^[\p{L}\p{N}]{1,4}$/u', $e) || mb_strlen($e) >= mb_strlen($main)) {
+                return [$n];
+            }
+            $out[] = mb_substr($main, 0, mb_strlen($main) - mb_strlen($e)) . $e;
+        }
+
         return $out;
+    }
+
+    /** HEMIS darsi guruhi (birlashgan nomi ham) to'liq shu LMS ma'ruza oqimidami: barcha guruhchalari oqim kartalarida. */
+    private function hemisFlowCovers(array $flow, string $flowKey, string $hemisGroup): bool
+    {
+        foreach ($this->hemisGroupMembers($hemisGroup) as $m) {
+            if (!isset($flow[$flowKey][$this->groupNameKey($m)])) {
+                return false;
+            }
+        }
+
+        return true;   // hemisGroupMembers kamida bitta nom qaytaradi
+    }
+
+    /**
+     * Nega bitta oqim emas (zal to'sig'i sababiga): LMS'dagi shu guruh(cha)lar ma'ruzasi (fan asosiy nomi bo'yicha) — o'qituvchisi
+     * yoki xonasi boshqa, yoki kartasi yo'q; yechim — bloklarni bitta oqimga birlashtirish yoki boshqa zal tanlash.
+     */
+    private function hemisFlowWhy(array $index, string $hemisGroup, string $subject, string $emp, string $room): string
+    {
+        $base = $this->hemisSubjectBase($subject);
+        $found = [];
+        foreach ($this->hemisGroupMembers($hemisGroup) as $m) {
+            foreach ($index['groups'][$this->groupNameKey($m)][$base] ?? [] as $l) {
+                $found[$l['emp'] . '|' . $l['room']] ??= $l;
+            }
+        }
+        $todo = "bloklarni bitta ma'ruza oqimiga birlashtiring (fan, o'qituvchi, xona va vaqt bir xil) yoki boshqa zal tanlang";
+        if (!$found) {
+            return " (LMS'da bu guruhlarning shu fan ma'ruzasi yo'q — bitta oqim emas; {$todo})";
+        }
+        $diff = [];
+        foreach ($found as $l) {
+            $d = [];
+            if ($l['emp'] !== $emp) {
+                $d[] = "o'qituvchi " . ($l['teacher'] !== '' ? $l['teacher'] : '—');
+            }
+            if ($l['room'] !== $room) {
+                $d[] = 'xona ' . ($l['room_name'] !== '' ? $l['room_name'] : '—');
+            }
+            $diff[] = $d ? implode(', ', $d) : "guruhchalarning bir qismi oqimda yo'q";
+        }
+
+        return " (LMS'da bitta oqim emas: ularning ma'ruzasida " . implode('; ', array_unique($diff)) . " — {$todo})";
     }
 
     private function hemisTodayBlocks(array &$out, $hemisRows, string $today, ?TimetableBoard $board = null): void
@@ -2232,9 +2318,9 @@ trait TimetableHemisSync
             return;
         }
         // Qamrovdan tashqari guruhlarning LMS ma'ruza kartalari (faqat nomzodlar xonalarida): bitta oqim bo'lsa — to'siq emas.
-        $flowGroups = $board ? $this->hemisLectureFlowGroups($board, array_map(fn ($i) => (string) $out[$i]['new_auditorium_code'],
-            array_filter($cand, fn ($i) => !empty($out[$i]['flow_card'])))) : [];
-        $cleanGroup = fn ($n) => $this->groupNameKey(trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', (string) $n)));
+        $flowIndex = $board ? $this->hemisLectureFlowIndex($board, array_map(fn ($i) => (string) $out[$i]['new_auditorium_code'],
+            array_filter($cand, fn ($i) => !empty($out[$i]['flow_card'])))) : ['flow' => [], 'groups' => []];
+        $flowGroups = $flowIndex['flow'];
         $hm = fn ($t) => substr((string) $t, 0, 5);
         $freeRoom = fn ($name) => $this->isSharedRoom($name) || preg_match('/kafedra\s+mudiri/iu', (string) $name) === 1;
         // Bandlik joylari: [boshi, oxiri, hemis id, guruh, fan, o'qituvchi id, o'qituvchi, xona kodi, xona, kafedra, majburiy mudir].
@@ -2330,7 +2416,7 @@ trait TimetableHemisSync
                     // HEMIS'da aynan shu vaqtda shu xonada (o'qituvchisi HEMIS'da boshqa bo'lsa ham).
                     || !empty($x['flow_card']) && $o['flow'] === null && $o['code'] === '11' && $o['room'] === $room && $o['s'] === $s && $o['e'] === $e
                         && $this->hemisSubjectBase((string) $o['subject']) === explode('|', $x['flow_card'])[0]
-                        && isset($flowGroups[$x['flow_card']][$cleanGroup($o['group'])]);
+                        && $this->hemisFlowCovers($flowGroups, $x['flow_card'], (string) $o['group']);
                 $text = null;
                 if ($timeChanged && $o['group_id'] === (int) $x['group_hemis_id']) {
                     $text = "guruhning boshqa darsi bilan ustma-ust: {$o['subject']} {$o['s']}–{$o['e']}";
@@ -2338,6 +2424,11 @@ trait TimetableHemisSync
                     $text = "o'qituvchi band: {$x['new_employee_name']} — {$label}";
                 } elseif ($checkRoom && !$shared && $o['room'] === $room && !$freeRoom($o['room_name'])) {
                     $text = "xona band: {$x['new_auditorium_name']} — {$label}";
+                    // Boshqa guruhning shu fan ma'ruzasi aynan shu vaqtda shu zalda — nega bitta oqim emas va yechim.
+                    if (!empty($x['flow_card']) && $o['flow'] === null && $o['code'] === '11' && $o['s'] === $s && $o['e'] === $e
+                        && $this->hemisSubjectBase((string) $o['subject']) === explode('|', $x['flow_card'])[0]) {
+                        $text .= $this->hemisFlowWhy($flowIndex, (string) $o['group'], (string) $o['subject'], $emp, $room);
+                    }
                 }
                 if ($text === null) {
                     continue;

@@ -173,6 +173,10 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     ctx.weekly[1].auditorium_code = 'Z9';
     ctx.renderGridCross('teacher');
     assert.match(el('grid').innerHTML, /data-day="6" data-pair="1" style="outline:2px solid #ef4444/);
+    // Xonasiz ikki ma'ruza (o'sha fan, o'qituvchi, vaqt) — oqimligi tasdiqlanmaydi: to'qnashuv.
+    ctx.weekly.forEach(w => { w.auditorium_code = null; w.auditorium_name = null; });
+    ctx.renderGridCross('teacher');
+    assert.match(el('grid').innerHTML, /data-day="6" data-pair="1" style="outline:2px solid #ef4444/);
     ctx.weekly = saveW;
     setLessons(saveL);
 
@@ -224,6 +228,18 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
         setLessons([]);
         ctx.renderGridCross('teacher');
         assert.match(el('grid').innerHTML, /⚠ Bir vaqtda 2 ta dars/);
+        // Sikl ma'ruzasi zalida shu vaqtda boshqa ma'ruza (server room_clash) — o'qituvchi kesimida ham: sariq hoshiya, sabab va yechim.
+        ctx.weekly = [];
+        setLessons([half({ id: 81, training_type: 'lecture', hour: 1, hours: 2, len_half: 1, group_name: 'p/p22-02b', group_names: ['p/p22-02b'],
+            room_clash: "Zalda bir vaqtda ikki ma'ruza: d1/d22-06b, Klinik farmakologiya (o'qituvchi BOSHQA) — bloklarni bitta ma'ruza oqimiga birlashtiring" })]);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.match(g, /style="outline:2px solid #f59e0b;outline-offset:-2px;background:#fffbeb" data-room-clash="1" title="Zalda bir vaqtda ikki ma'ruza: d1\/d22-06b/);
+        assert.match(g, /<div class="tt-clash-why tt-room-why">⚠ Zalda bir vaqtda ikki ma'ruza<\/div><div class="tt-clash-list"><div>Zalda bir vaqtda ikki ma'ruza: d1\/d22-06b, Klinik farmakologiya \(o'qituvchi BOSHQA\)/);
+        assert.doesNotMatch(g, /data-cross-clash/);
+        // Oynada ham.
+        gridClick({ target: { dataset: { cyc: '0' }, closest() { return this; }, getBoundingClientRect: () => ({ right: 10, top: 10 }) }, preventDefault() {}, stopPropagation() {} });
+        assert.match(appended[appended.length - 1].innerHTML, /⚠ Zalda bir vaqtda ikki ma'ruza: d1\/d22-06b/);
         ctx.weekly = sW;
         setLessons(sL);
     }

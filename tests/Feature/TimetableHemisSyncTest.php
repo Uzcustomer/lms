@@ -2323,12 +2323,43 @@ it('bugungi darslar: boshqa yo\'nalishdagi (qamrovdan tashqari) guruh LMS\'da sh
     DB::table('schedules')->whereIn('schedule_hemis_id', [700, 701])->update(['training_type_code' => '13', 'training_type_name' => 'Amaliy']);
     expect($row()['status'])->toBe('blocked');
     DB::table('schedules')->whereIn('schedule_hemis_id', [700, 701])->update(['training_type_code' => '11', 'training_type_name' => "Ma'ruza"]);
-    // Boshqa yo'nalish kartasida boshqa o'qituvchi — bitta oqim emas: zal band.
+    $todo = "bloklarni bitta ma'ruza oqimiga birlashtiring (fan, o'qituvchi, xona va vaqt bir xil) yoki boshqa zal tanlang";
+    // Boshqa yo'nalish kartasida boshqa o'qituvchi — bitta oqim emas: zal band; sababi (LMS'dagi ma'ruza o'qituvchisi) va yechim.
     $other->update(['teacher_id' => Teacher::where('full_name', 'MUDIR')->value('id'), 'teacher_name' => 'MUDIR']);
-    expect($row()['status'])->toBe('blocked')->and($row()['blocked'][0])->toStartWith("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50");
-    // Kartaga guruh kiritilmagan bo'lsa ham — to'siq (06c bitta qoladi).
-    $other->update(['teacher_id' => $ustoz->id, 'teacher_name' => 'USTOZ', 'group_names' => ['d1/d22-06b']]);
-    expect($row()['status'])->toBe('blocked')->and($row()['blocked'])->toBe(["xona band: L1 — d1/d22-06c · Odam anatomiyasi 13:30–14:50"]);
+    expect($row()['status'])->toBe('blocked')->and($row()['blocked'][0])
+        ->toBe("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50 (LMS'da bitta oqim emas: ularning ma'ruzasida o'qituvchi MUDIR — {$todo})");
+    // Boshqa zal — sababi: xona.
+    $other->update(['teacher_id' => $ustoz->id, 'teacher_name' => 'USTOZ', 'auditorium_code' => 'L9', 'auditorium_name' => 'Zal 9']);
+    expect($row()['blocked'][0])->toBe("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50 (LMS'da bitta oqim emas: ularning ma'ruzasida xona Zal 9 — {$todo})");
+    // Kartaga guruh kiritilmagan bo'lsa ham — to'siq (06c bitta qoladi): LMS'da ma'ruzasi yo'q.
+    $other->update(['auditorium_code' => 'L1', 'auditorium_name' => 'L1', 'group_names' => ['d1/d22-06b']]);
+    expect($row()['status'])->toBe('blocked')->and($row()['blocked'])
+        ->toBe(["xona band: L1 — d1/d22-06c · Odam anatomiyasi 13:30–14:50 (LMS'da bu guruhlarning shu fan ma'ruzasi yo'q — bitta oqim emas; {$todo})"]);
+    // HEMIS'da birlashgan guruh nomi ("d1/d22-06b/06c" — bitta yozuv, ikki guruhcha): LMS'da ikkala guruhcha shu oqimda — update.
+    $other->update(['group_names' => ['d1/d22-06b', 'd1/d22-06c']]);
+    DB::table('schedules')->where('schedule_hemis_id', 701)->delete();
+    DB::table('schedules')->where('schedule_hemis_id', 700)->update(['group_name' => 'd1/d22-06b/06c']);
+    expect($row()['status'])->toBe('update')->and($row()['blocked'])->toBe([]);
+    // LMS kartasida guruhchalar "A + B" ko'rinishida — ham ajratiladi.
+    $other->update(['group_names' => ['d1/d22-06b + d1/d22-06c']]);
+    expect($row()['status'])->toBe('update');
+    // Guruhchalardan biri LMS oqimida yo'q — to'siq, sababi aniq.
+    $other->update(['group_names' => ['d1/d22-06b']]);
+    expect($row()['status'])->toBe('blocked')->and($row()['blocked'])
+        ->toBe(["xona band: L1 — d1/d22-06b/06c · Odam anatomiyasi 13:30–14:50 (LMS'da bitta oqim emas: ularning ma'ruzasida guruhchalarning bir qismi oqimda yo'q — {$todo})"]);
+});
+
+it('HEMIS birlashgan guruh nomi guruhchalarga ajratiladi', function () {
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $m = new ReflectionMethod($ctl, 'hemisGroupMembers');
+    $m->setAccessible(true);
+    expect($m->invoke($ctl, 'd1/d22-06b/06c'))->toBe(['d1/d22-06b', 'd1/d22-06c'])
+        ->and($m->invoke($ctl, "p/p22-02b/02c/03a (o'z)"))->toBe(['p/p22-02b', 'p/p22-02c', 'p/p22-03a'])
+        ->and($m->invoke($ctl, 'd1/d22-06b/c'))->toBe(['d1/d22-06b', 'd1/d22-06c'])
+        ->and($m->invoke($ctl, 'd1/d22-06b'))->toBe(['d1/d22-06b'])
+        ->and($m->invoke($ctl, "d1/d22-06b (o'z)"))->toBe(['d1/d22-06b'])
+        ->and($m->invoke($ctl, 'x-01'))->toBe(['x-01'])
+        ->and($m->invoke($ctl, 'd1/d22-06b/st22-01a'))->toBe(['d1/d22-06b/st22-01a']);   // boshqa guruh — ajratilmaydi
 });
 
 it('HEMIS solishtirish (kelgusi kunlar): boshqa yo\'nalish guruhining HEMIS ma\'ruzasi LMS\'da shu oqimda — zal to\'siq emas; boshqa o\'qituvchi — to\'siq', function () {
@@ -2359,7 +2390,12 @@ it('HEMIS solishtirish (kelgusi kunlar): boshqa yo\'nalish guruhining HEMIS ma\'
     DB::table('schedules')->where('schedule_hemis_id', 800)->update(['training_type_code' => '13', 'training_type_name' => 'Amaliy']);
     expect(implode('; ', $run()->first()['blocked']))->toContain('xona band');
     DB::table('schedules')->where('schedule_hemis_id', 800)->update(['training_type_code' => '11', 'training_type_name' => "Ma'ruza"]);
-    // LMS kartasida boshqa o'qituvchi — bitta oqim emas: zal band.
+    // HEMIS'da birlashgan guruh nomi (p/p22-02b/02c) — LMS'da ikkala guruhcha shu oqimda: to'siq emas.
+    DB::table('schedules')->where('schedule_hemis_id', 800)->update(['group_name' => 'p/p22-02b/02c']);
+    $other->update(['group_names' => ['p/p22-02b', 'p/p22-02c']]);
+    expect($run()->first()['blocked'])->toBe([]);
+    // LMS kartasida boshqa o'qituvchi — bitta oqim emas: zal band, sababi va yechim.
     $other->update(['teacher_id' => Teacher::where('full_name', 'USTOZ')->value('id'), 'teacher_name' => 'USTOZ']);
-    expect(implode('; ', $run()->first()['blocked']))->toContain('xona band')->toContain('p/p22-02b');
+    expect(implode('; ', $run()->first()['blocked']))->toContain('xona band')->toContain('p/p22-02b')
+        ->toContain("(LMS'da bitta oqim emas: ularning ma'ruzasida o'qituvchi USTOZ — bloklarni bitta ma'ruza oqimiga birlashtiring");
 });

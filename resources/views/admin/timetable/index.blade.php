@@ -1119,6 +1119,7 @@
         .tt-chip.tt-cyc-chip { box-shadow: inset 3px 0 0 #0d9488; cursor: pointer; }
         .tt-clash-why { font-size: 9px; font-weight: 700; color: #b91c1c; padding: 1px 3px; }
         .tt-clash-list { font-size: 9px; color: #b91c1c; padding: 0 3px 2px; line-height: 1.25; }
+        .tt-room-why, .tt-room-why + .tt-clash-list { color: #b45309; }
         .tt-cyc-badge { display: inline-block; padding: 0 4px; border-radius: 4px; background: #0d9488; color: #fff; font-size: 8px; font-weight: 700; letter-spacing: .02em; vertical-align: 1px; }
         #crossCycPop { position: fixed; z-index: 60; width: 290px; max-width: calc(100vw - 16px); background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
             box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 10px 12px; font-size: 12px; }
@@ -8309,12 +8310,14 @@
                 return key.startsWith('N:') ? key.slice(2) : key;
             }
             // Bitta dars: ma'ruza oqimi (fan, o'qituvchi, xona va aniq vaqt bir xil — turli yo'nalish kartalari ham) — to'qnashuv emas.
+            // Xonasiz ma'ruza — oqimligi tasdiqlanmaydi (serverdagi cycleConflicts kabi).
             const sameCrossLesson = (a, b) => {
                 const x = a.c || a.l, y = b.c || b.l;
-                return x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb
+                const room = String(x.auditorium_code || x.auditorium_name || '');
+                return x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb && room !== ''
                     && String(x.teacher_id || '') === String(y.teacher_id || '')
                     && String(x.subject_name || '').trim().toLowerCase() === String(y.subject_name || '').trim().toLowerCase()
-                    && String(x.auditorium_code || x.auditorium_name || '') === String(y.auditorium_code || y.auditorium_name || '');
+                    && room === String(y.auditorium_code || y.auditorium_name || '');
             };
             // Katakdagi darslar → noyob darslar (sessiyalar). Bitta karta (sikl darsida — karta + sana) — bitta dars: bitta paraning
             // yarim soatlari (08:30 va 09:10), "A + B" umumiy karta guruhchalari; bitta ma'ruza oqimi (sameCrossLesson) — bitta dars.
@@ -8512,9 +8515,15 @@
                                 return (it.l ? 'sikl: ' : '') + c.subject_name + ' (' + (ls.lecture ? 'M' : 'A') + ') ' + cfGroupsText(ls.groups); };
                             const clashOn = cell.clashing.length > 0;   // kamida ikki turli sessiya kesishgan
                             const why = clashOn ? 'To\'qnashuv — bir vaqtda ' + cell.count + ' ta dars: ' + cell.clashing.map(what).join('; ') : '';
-                            const conflict = clashOn ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(why) + '"' : '';
-                            const whyHtml = clashOn ? '<div class="tt-clash-why">⚠ Bir vaqtda ' + cell.count + ' ta dars</div>'
-                                + '<div class="tt-clash-list">' + cell.clashing.map(ls => '<div>' + esc(what(ls)) + '</div>').join('') + '</div>' : '';
+                            // Sikl ma'ruzasi zalida shu vaqtda boshqa ma'ruza (butun doska bo'yicha, server: room_clash) — o'qituvchi kesimida ham.
+                            const roomWhy = [...new Set(shown.filter(it => it.l && it.l.room_clash).map(it => it.l.room_clash))];
+                            const title = [why].concat(roomWhy).filter(Boolean).join(' · ');
+                            const conflict = clashOn ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(title) + '"'
+                                : roomWhy.length ? ' style="outline:2px solid #f59e0b;outline-offset:-2px;background:#fffbeb" data-room-clash="1" title="' + esc(title) + '"' : '';
+                            const whyHtml = (clashOn ? '<div class="tt-clash-why">⚠ Bir vaqtda ' + cell.count + ' ta dars</div>'
+                                + '<div class="tt-clash-list">' + cell.clashing.map(ls => '<div>' + esc(what(ls)) + '</div>').join('') + '</div>' : '')
+                                + (roomWhy.length ? '<div class="tt-clash-why tt-room-why">⚠ Zalda bir vaqtda ikki ma\'ruza</div>'
+                                    + '<div class="tt-clash-list">' + roomWhy.map(t => '<div>' + esc(t) + '</div>').join('') + '</div>' : '');
                             h += '<td class="tt-cell' + rowEndCls(p + vs - 1) + '"' + rs + ' data-day="' + d + '" data-pair="' + p + '"' + conflict + '>' + whyHtml + inner + '</td>';
                         });
                         h += '</tr>';
@@ -8549,6 +8558,7 @@
                     '<div class="dp-sub">' + esc((l.faculty_name || '—') + ' · ' + l.specialty_name + ' · ' + l.course + '-kurs') + '</div>' +
                     '<div class="dp-sub">Guruh: ' + esc((l.group_names && l.group_names.length ? l.group_names : [l.group_name]).join(', ')) + (l.flow ? ' · ' + esc(l.flow) : '') + '</div>' +
                     '<div class="dp-sub">O\'qituvchi: ' + esc(l.teacher_name || '—') + ' · Xona: ' + esc(l.auditorium_name || '—') + '</div>' +
+                    (l.room_clash ? '<div class="dp-note" style="color:#b45309">⚠ ' + esc(l.room_clash) + '</div>' : '') +
                     '<div class="dp-note">Sikl jadvalidagi dars — bu yerda faqat ko\'rish; joyi "Sikl" kesimida.</div>' +
                     (l.ask && ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && !isLec
                         ? '<div class="dp-actions"><button type="button" data-cyc-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '');

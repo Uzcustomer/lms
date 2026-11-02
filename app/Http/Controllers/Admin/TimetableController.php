@@ -6336,8 +6336,65 @@ class TimetableController extends Controller
         }
         $lessons = array_values($lessons);
         usort($lessons, fn ($a, $b) => [$a['date'], $a['pair'], $a['subject_name'], $a['group_name']] <=> [$b['date'], $b['pair'], $b['subject_name'], $b['group_name']]);
+        $this->cycleWeekRoomClashes($board, $lessons, $onlyDates);
 
         return response()->json(['week' => $week, 'lessons' => $lessons]);
+    }
+
+    /**
+     * Haftalik kesimlardagi sikl ma'ruzalari: o'sha zalda o'sha vaqtda boshqa ma'ruza bo'lsa (butun doska bo'yicha, bitta oqim emas —
+     * fan, o'qituvchi yoki vaqti boshqa) — room_clash: kim bilan va yechim (o'qituvchi kesimida ham ko'rinsin; cycleConflicts kabi).
+     */
+    private function cycleWeekRoomClashes(TimetableBoard $board, array &$lessons, array $onlyDates): void
+    {
+        $rooms = [];
+        foreach ($lessons as $l) {
+            if ($l['training_type'] === 'lecture' && $l['auditorium_code'] && !$this->isSharedRoom((string) $l['auditorium_name'])
+                && preg_match('/kafedra\s+mudiri/iu', (string) $l['auditorium_name']) !== 1) {
+                $rooms[(string) $l['auditorium_code']] = true;
+            }
+        }
+        if (!$rooms || !$onlyDates) {
+            return;
+        }
+        try {
+            [$units, $calendar] = $this->cycleInternalUnits($board, []);
+            $units = array_values(array_filter($units, fn ($u) => $u['placement'] !== null && $u['cards']));
+            $byRoom = [];
+            foreach ($units ? $this->cycleOccupancy($board, $units, $calendar, $onlyDates) : [] as $e) {
+                if (str_starts_with((string) $e['load_key'], 'l') && $e['room'] && isset($rooms[(string) $e['room']])) {
+                    $byRoom[$e['room'] . '|' . $e['date']][] = $e;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[TimetableCycleWeek] zal bandligi: ' . $e->getMessage());
+
+            return;
+        }
+        $flow = fn (string $subject, $teacher, string $room, int $from, int $to) => $this->normSubject($this->cycleSubjectVariantBase($subject) ?? $subject)
+            . '|' . ($teacher ?: '-') . '|' . $room . '|' . $from . '|' . $to;
+        foreach ($lessons as &$l) {
+            if ($l['training_type'] !== 'lecture' || !isset($rooms[(string) $l['auditorium_code']])) {
+                continue;
+            }
+            $from = (int) $l['hour'];
+            $to = $from + (int) $l['hours'];
+            $mine = $flow((string) $l['subject_name'], $l['teacher_id'], (string) $l['auditorium_code'], $from, $to);
+            $with = [];
+            foreach ($byRoom[$l['auditorium_code'] . '|' . $l['date']] ?? [] as $e) {
+                $u = $units[$e['unit']];
+                if ((int) $e['card'] === (int) $l['id'] || !($e['from'] < $to && $from < $e['to'])
+                    || $flow((string) $u['subject'], $e['teacher_id'], (string) $e['room'], (int) $e['from'], (int) $e['to']) === $mine) {
+                    continue;
+                }
+                $with[$u['group'] . ', ' . $u['subject'] . ($e['teacher'] ? " (o'qituvchi " . $e['teacher'] . ')' : '')] = true;
+            }
+            if ($with) {
+                $l['room_clash'] = "Zalda bir vaqtda ikki ma'ruza: " . implode('; ', array_keys($with))
+                    . " — bloklarni bitta ma'ruza oqimiga birlashtiring (fan, o'qituvchi, xona va vaqt bir xil) yoki boshqa zal tanlang";
+            }
+        }
+        unset($l);
     }
 
     /**
@@ -6489,6 +6546,18 @@ class TimetableController extends Controller
         $rooms = Auditorium::pluck('volume', 'code')->all();
         $occ = [];   // "t|o'qituvchi|sana" / "r|xona|sana" => [yozuv, ...]
         $byGroup = [];   // "guruhcha|sana" => [yozuv, ...] — guruh bir vaqtda ikki joyda
+        $isLec = fn (array $e) => str_starts_with((string) $e['load_key'], 'l');
+        // Bitta dars: karta (oqim ma'ruzasi yoki "A + B" amaliy); ma'ruza oqimi — turli yo'nalish kartalari ham: fan (asosiy nomi),
+        // o'qituvchi, xona va aniq vaqt bir xil (xonasiz ma'ruza — oqimligi tasdiqlanmaydi, alohida dars).
+        $flowOf = function (array $e) use ($units, $isLec): string {
+            if (!$isLec($e) || !$e['room']) {
+                return 'C' . $e['lesson'];
+            }
+            $subject = (string) ($units[$e['unit']]['subject'] ?? '');
+
+            return 'F|' . $this->normSubject($this->cycleSubjectVariantBase($subject) ?? $subject) . '|' . ($e['teacher_id'] ?: '-') . '|'
+                . $e['room'] . '|' . $e['from'] . '|' . $e['to'];
+        };
         foreach ($this->cycleOccupancy($board, $units, $calendar) as $e) {
             // Umumiy "A + B" birligi — har bir guruhcha nomi bo'yicha; guruh nomi fakultet / yo'nalish / kurslar bo'ylab takrorlanadi —
             // kalitda qamrov ham (groupScopeKey dagidek).
@@ -6525,7 +6594,7 @@ class TimetableController extends Controller
                 $time = $e['from'] . '–' . ($e['to'] - 1) . '-soat';
                 if ($type === 't') {
                     $others = array_values(array_unique(array_map(fn ($o) => $o['unit'],
-                        array_filter($over, fn ($o) => $o['lesson'] !== $e['lesson'] && $o['unit'] !== $e['unit']))));
+                        array_filter($over, fn ($o) => $o['lesson'] !== $e['lesson'] && $o['unit'] !== $e['unit'] && $flowOf($o) !== $flowOf($e)))));
                     if ($others) {
                         $add($e['unit'], 'teacher', (string) ($e['teacher'] ?: $id), $others, $date, $time, '', $e);
                     }
@@ -6551,13 +6620,20 @@ class TimetableController extends Controller
                     $add($e['unit'], 'room', (string) $e['room_name'], array_values(array_diff($worst[1], [$e['unit']])), $date, $time,
                         $worst[2] ? ' (' . $vol . ' o\'rin, ' . $worst[0] . ' talaba)' : '', $e, $worst[2] ? 'room_capacity' : 'room_busy');
                 }
+                // Bir zalda bir vaqtda ikki xil ma'ruza (bitta oqim emas: fan, o'qituvchi yoki vaqti boshqa) — sig'imdan qat'i nazar.
+                if ($isLec($e)) {
+                    $lecUnits = array_values(array_unique(array_map(fn ($o) => $o['unit'], array_filter($over, fn ($o) => $isLec($o)
+                        && $o['lesson'] !== $e['lesson'] && $flowOf($o) !== $flowOf($e)))));
+                    if ($lecUnits) {
+                        $add($e['unit'], 'room', (string) $e['room_name'], $lecUnits, $date, $time, '', $e, 'room_lectures');
+                    }
+                }
             }
         }
 
         // Guruh bir vaqtda ikki joyda (boshqa sikl fani bilan kesishgan davr): amaliyot boshqa fan ma'ruzasi bilan — lecture_overlap
         // ("darsingiz ma'ruza bilan ustma-ust", amaliy blokida); qolganlari (amaliy–amaliy, ma'ruza–ma'ruza) — group_busy.
         // Bir birlik ichida amaliy o'z ma'ruzasidan keyin turadi (cycleDayPlan), shuning uchun faqat boshqa birliklar solishtiriladi.
-        $isLec = fn (array $e) => str_starts_with((string) $e['load_key'], 'l');
         foreach ($byGroup as $list) {
             foreach ($list as $e) {
                 $over = array_filter($list, fn ($o) => $o['unit'] !== $e['unit'] && $o['lesson'] !== $e['lesson']
@@ -6600,13 +6676,16 @@ class TimetableController extends Controller
                     'group' => $h['kind'] === 'lecture_overlap'
                         ? "Amaliy dars ma'ruza bilan ustma-ust: {$h['who']} — {$with} ma'ruzasi, {$range($shown)}"
                         : "Guruh {$h['who']} band: {$with}, {$range($shown)}",
-                    default => "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range($shown)}",
+                    default => $h['kind'] === 'room_lectures'
+                        ? "Zalda ({$h['who']}) bir vaqtda ikki ma'ruza: {$with}, {$range($shown)}"
+                        : "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range($shown)}",
                 };
                 $todo = match ($h['kind']) {
                     'lecture_overlap' => "amaliyot vaqtini ma'ruzadan keyinga suring",
                     'group_busy' => 'guruhcha davrini yoki vaqtini boshqa fan bilan kesishmaydigan qilib suring',
                     'teacher_busy' => $h['lecture'] ? "ma'ruza o'qituvchisini yoki vaqtini o'zgartiring" : "boshqa o'qituvchi biriktiring yoki smenani almashtiring",
                     'room_capacity' => $h['lecture'] ? "kattaroq ma'ruza zali tanlang" : 'kattaroq xona tanlang yoki guruhchani boshqa xonaga',
+                    'room_lectures' => "bloklarni bitta ma'ruza oqimiga birlashtiring (fan, o'qituvchi, xona va vaqt bir xil) yoki boshqa zal tanlang",
                     default => 'boshqa xona tanlang yoki smenani almashtiring',
                 };
                 if (!$past) {

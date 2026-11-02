@@ -67,7 +67,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(section("            // ===== Haftalik kesimlarda (o'qituvchi / fan / xona) sikl darslari", "            // Para ustuni (sikl ichki jadvali kabi)")
-    + '; this.renderGridCross = renderGridCross; this.cycleWeekLessons = cycleWeekLessons; this.loadCycleWeek = loadCycleWeek; this.invalidateCycleWeek = invalidateCycleWeek;'
+    + '; this.renderGridCross = renderGridCross; this.cycleWeekLessons = cycleWeekLessons; this.loadCycleWeek = loadCycleWeek; this.invalidateCycleWeek = invalidateCycleWeek; this.crossLessonKey = crossLessonKey;'
     + ' this.cwGet = () => cycleWeek.lessons; this.cwSet = l => { cycleWeek.lessons = l; };', ctx);
 const cycleWeekData = () => ctx.cwGet();
 const setLessons = l => ctx.cwSet(l);
@@ -264,10 +264,27 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
         assert.equal((g.match(/tt-cyc-chip/g) || []).length, 1);
         // Haftalik karta + o'sha guruhning o'sha fani (sikl yozuvi) — bitta dars.
         ctx.weekly = [{ id: 950, training_type: 'practice', subject_name: 'Klinik farmakologiya', teacher_id: 5, teacher_name: 'MAHMARAIMOV SH. T.', day: 1, pair: 1,
-            len_half: 1, group_name: 'd1/d22-06a' }];
+            len_half: 1, group_name: 'd1/d22-06a', faculty_name: 'F1', specialty_name: 'davolash ishi', course: '5' }];
         setLessons([half({ id: 951, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] })]);
         ctx.renderGridCross('teacher');
         assert.doesNotMatch(el('grid').innerHTML, /Bir vaqtda/);
+        // Boshqa fakultet / yo'nalish / kursdagi bir xil nomli guruh — boshqa dars: to'qnashuv (haftalik karta qamrovdan tashqarida ham
+        // ko'rinishi mumkin — bir nechta yo'nalish birga tanlanganda).
+        const w950 = ctx.weekly[0];
+        [{ faculty_name: 'F2' }, { specialty_name: 'pediatriya' }, { course: 4 }].forEach(o => {
+            ctx.weekly = [Object.assign({}, w950, o)];
+            setLessons([half({ id: 951, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] })]);
+            ctx.renderGridCross('teacher');
+            assert.match(el('grid').innerHTML, /⚠ Bir vaqtda 2 ta dars/, JSON.stringify(o));
+        });
+        ctx.weekly = [w950];
+        // Kalit: qamrov (kurs raqam yoki matn — bir xil) + fan + tur + guruh; sikl chiplari ham shu kalit bo'yicha birlashadi.
+        const lk = o => ctx.crossLessonKey({ l: half(Object.assign({ group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }, o)) });
+        assert.equal(lk({ course: '5' }), lk({ course: 5 }));
+        assert.equal(lk({ faculty_name: ' f1 ' }), lk({}));
+        assert.notEqual(lk({ specialty_name: 'pediatriya' }), lk({}));
+        assert.notEqual(lk({ faculty_name: 'F2' }), lk({}));
+        assert.notEqual(lk({ course: 4 }), lk({}));
         // Boshqa fan yoki boshqa tur — boshqa dars: to'qnashuv.
         setLessons([half({ id: 951, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'], subject_name: 'Farmakologiya' })]);
         ctx.renderGridCross('teacher');

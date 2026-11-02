@@ -8396,7 +8396,8 @@
                 const clashing = lessons.filter(ls => hit.has(ls));
                 return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
             }
-            // Dars kaliti: fan + tur + guruh(cha)lar (qo'shimcha "(o'z)" va katta-kichik harfsiz); guruhi yo'q — null (birlashtirilmaydi).
+            // Dars kaliti: fakultet + yo'nalish + kurs (guruh nomlari ular orasida takrorlanadi — cycleConflicts kabi) + fan + tur +
+            // guruh(cha)lar (qo'shimcha "(o'z)" va katta-kichik harfsiz); guruhi yo'q — null (birlashtirilmaydi).
             const crossGroupNorm = g => String(g || '').toLowerCase().replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
             function crossItemGroups(it) {
                 const x = it.c || it.l;
@@ -8407,7 +8408,9 @@
             }
             function crossLessonKey(it) {
                 const x = it.c || it.l, gs = crossItemGroups(it);
-                return gs.length ? 'S' + String(x.subject_name || '').trim().toLowerCase() + '|' + (x.training_type === 'lecture' ? 'L' : 'A') + '|' + gs.join(',') : null;
+                const scope = [x.faculty_name, x.specialty_name, x.course].map(v => String(v == null ? '' : v).trim().toLowerCase()).join('|');
+                return gs.length ? 'S' + scope + '|' + String(x.subject_name || '').trim().toLowerCase() + '|' + (x.training_type === 'lecture' ? 'L' : 'A')
+                    + '|' + gs.join(',') : null;
             }
             // Sikl darsining zal to'qnashuvlari (birlashtirilgan chipda — barcha yozuvlardan).
             const cycRoomClashes = l => (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);

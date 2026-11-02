@@ -257,6 +257,9 @@ assert.equal(ctx.cycleLayer, 'external');
 const it = (x, isCyc) => (isCyc ? { l: x } : { c: x });
 assert.deepEqual(plain(api.crossItems('teacher', [it({ teacher_id: 15 }), it({ teacher_id: 16 }, true), it({ teacher_id: 15 }, true)])),
     [{ c: { teacher_id: 15 } }, { l: { teacher_id: 15 } }]);
+// Biriktirishdan oldin: biriktirilayotgan dars (card_ids) hali o'qituvchisiz yoki boshqa o'qituvchida — u ham ko'rinadi.
+assert.deepEqual(plain(api.crossItems('teacher', [it({ id: 1, teacher_id: null }), it({ id: 31, teacher_id: 16 }, true), it({ id: 7, teacher_id: 16 })])),
+    [{ c: { id: 1, teacher_id: null } }, { l: { id: 31, teacher_id: 16 } }]);
 assert.equal(api.crossItems('subject', [it({ teacher_id: 16 })]).length, 1);
 ctx.crossCycleShown = [{ id: 31, date: '2026-11-13' }, { id: 31, date: '2026-11-14' }, { id: 32, date: '2026-11-13' }];
 const ctd = [td(1), td(2), td(3), td(4), td(5)];
@@ -273,6 +276,8 @@ assert.equal(ctx.curWeek, 0);
 click(api.link(Object.assign({}, mixed, { kind: 'room_busy', teacher_id: null, room_code: 'R102' })));
 assert.equal(ctx.viewMode, 'room');
 assert.deepEqual(plain(api.crossItems('room', [it({ auditorium_code: 'R102' }), it({ auditorium_code: 'R101' }, true)])), [{ c: { auditorium_code: 'R102' } }]);
+assert.deepEqual(plain(api.crossItems('room', [it({ id: 1, auditorium_code: null }), it({ id: 8, auditorium_code: 'R101' })])),
+    [{ c: { id: 1, auditorium_code: null } }]);
 docById.ttFocusBar.querySelector('#ttFocusClose').onclick();
 assert.equal(ctx.viewMode, 'teacher');
 // Oddiy (haftalik) fokusda va fokussiz kesim filtri qo'llanmaydi.

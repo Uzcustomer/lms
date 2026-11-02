@@ -7006,12 +7006,16 @@
                 return rows.filter(r => focusSplit(r.group).some(n => ttFocus.keys.has(focusGKey({ group: n, faculty: r.faculty,
                     specialty: r.specialty, course: r.course }))));
             }
-            // Aralash to'qnashuv (view: cross): o'qituvchi / xona kesimida faqat shu o'qituvchi yoki xona ustuni (haftalik va sikl darslari).
+            // Aralash to'qnashuv (view: cross): o'qituvchi / xona kesimida shu o'qituvchi yoki xona darslari (haftalik va sikl) va
+            // to'qnashuvdagi darslarning o'zi (card_ids) — biriktirishdan oldin ochilganda biriktirilayotgan dars hali boshqa (yoki
+            // biriktirilmagan) ustunda turadi, u ham yonma-yon ko'rinsin.
             function focusCrossItems(mode, items) {
                 const s = ttFocus && ttFocus.show;
                 if (!s || s.view !== 'cross') return items;
-                if (mode === 'teacher' && s.teacher_id) return items.filter(it => +(it.c || it.l).teacher_id === +s.teacher_id);
-                if (mode === 'room' && s.room_code) return items.filter(it => (it.c || it.l).auditorium_code === s.room_code);
+                const ids = new Set((s.card_ids || []).map(String));
+                const own = it => ids.has(String((it.c || it.l).id));
+                if (mode === 'teacher' && s.teacher_id) return items.filter(it => own(it) || +(it.c || it.l).teacher_id === +s.teacher_id);
+                if (mode === 'room' && s.room_code) return items.filter(it => own(it) || (it.c || it.l).auditorium_code === s.room_code);
                 return items;
             }
             // Qizil ramka: haftalik — to'qnashgan darslar (card_ids) kataklari; sikl — fokus qatorlarining to'qnashuv sanalariga

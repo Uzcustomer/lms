@@ -48,9 +48,101 @@ ctx.setState([room('R001', '001')].concat(list), { teachers: {}, rooms: {}, rank
 ctx.renderAsgRooms();
 assert.deepEqual(codes(), ['R101', 'K310', 'R214', 'R102', 'R090', 'R001']);
 
-// Ma'lumot oqimi: unit-busy javobidagi room_rank asgBusy.rank ga tushadi; sikl oynasida sabab variant matnida.
-assert.match(source, /if \(asgSel === u\) asgBusy = \{ teachers: j\.teachers \|\| \{\}, rooms: j\.rooms \|\| \{\}, rank: j\.room_rank \|\| null \};/);
+// Sikl oynasida sabab variant matnida; yorliq uslubi.
 assert.match(source, /\+ \(r\.why \? ' — ' \+ esc\(r\.why\) : ''\) \+ '<\/option>'\)\.join\(''\);/);
 assert.match(source, /#asgRoomModal \.rm-row \.rm-why \{ color: #047857;/);
 
-console.log('timetable asg room rank: 4 scenarios passed');
+// ── Bandlik/reyting yuklanishi (loadAsgBusy) va biriktirishdan keyin yangilanishi (applyAsg, applyAsgRoom) ──
+const cut = (from, to) => { const i = source.indexOf(from), j = source.indexOf(to, i); assert(i > 0 && j > i, from); return source.slice(i, j); };
+const els2 = {};
+const el2 = id => (els2[id] = els2[id] || { id, value: '', innerHTML: '', textContent: '', disabled: false, hidden: true,
+    classList: { contains: c => c === 'hidden' && els2[id].hidden } });
+const calls = [];
+let marks = 0;
+const ctx2 = { $: el2, esc: s => String(s), URLSearchParams, BASE: '/admin', board: { id: 7 }, cards: [], console: { warn() {} },
+    asgSel: null, asgRoomsList: null, asgBusy: { teachers: {}, rooms: {}, rank: null },
+    asgUnitParams: u => ({ group_name: u.group_name }), renderAsgTable() {}, renderAsgRoomCurrent() {},
+    closeAsgRoomModal() { el2('asgRoomModal').hidden = true; }, showBusyConfirm() {}, markAsgBusy: () => { marks++; },
+    api: (url, method, body) => new Promise((res, rej) => calls.push({ url, method, body, res, rej })) };
+vm.createContext(ctx2);
+vm.runInContext(cut('            let asgBusyFor = null, asgBusySeq = 0;', '            function markAsgBusy() {')
+    + cut('            function asgRoomsSorted(list) {', "            $('asgRoomOpen').onclick")
+    + cut('            async function applyAsgRoom(code, force) {', '            function setAsgTeacherPanel(u) {')
+    + cut('            async function applyAsg(teacherId, force) {', '            async function loadAsgAuditoriums() {')
+    + '\nthis.loadAsgBusy = loadAsgBusy; this.renderAsgRooms = renderAsgRooms; this.applyAsg = applyAsg; this.applyAsgRoom = applyAsgRoom;'
+    + ' this.st = (sel, list) => { asgSel = sel; if (list) asgRoomsList = list; }; this.busy = () => asgBusy;', ctx2);
+const tick = () => new Promise(r => setImmediate(r));
+const codes2 = () => [...el2('asgRoomList').innerHTML.matchAll(/data-code="([^"]+)"/g)].map(m => m[1]);
+const unitBusyCalls = () => calls.filter(c => c.url.includes('/unit-busy?'));
+const resp = (order, why = {}) => ({ teachers: {}, rooms: {}, room_rank: { order, why } });
+
+(async () => {
+    // 1) Xona oynasi unit-busy javobidan oldin ochilgan (ro'yxat keshda): avval alifbo, javob kelgach — reyting bo'yicha qayta chiziladi.
+    const u = { group_name: 'g-01a', auditorium_code: null };
+    ctx2.st(u, list);
+    const p1 = ctx2.loadAsgBusy(u);
+    el2('asgRoomModal').hidden = false;
+    ctx2.renderAsgRooms();
+    assert.deepEqual(codes2(), ['R090', 'R101', 'R102', 'R214', 'K310']);
+    unitBusyCalls()[0].res(resp(['K310', 'R214', 'R102', 'R101', 'R090'], { K310: 'kafedra xonasi' }));
+    await p1;
+    assert.deepEqual(codes2(), ['K310', 'R214', 'R102', 'R101', 'R090']);
+    assert.match(el2('asgRoomList').innerHTML, /<span class="rm-why">kafedra xonasi<\/span>/);
+
+    // 2) Oyna yopiq bo'lsa — qayta chizilmaydi (keyin ochilganda chiziladi).
+    el2('asgRoomModal').hidden = true;
+    el2('asgRoomList').innerHTML = '';
+    const p2 = ctx2.loadAsgBusy(u);
+    unitBusyCalls()[1].res(resp(['R101']));
+    await p2;
+    assert.equal(el2('asgRoomList').innerHTML, '');
+
+    // 3) Kech kelgan eski javob yangisini bosmaydi; o'sha birlik qayta yuklanayotganda eski reyting javob kelguncha qoladi.
+    const pa = ctx2.loadAsgBusy(u), pb = ctx2.loadAsgBusy(u);
+    assert.deepEqual(JSON.parse(JSON.stringify(ctx2.busy().rank.order)), ['R101']);
+    const [ca, cb] = unitBusyCalls().slice(-2);
+    cb.res(resp(['R214']));
+    await pb;
+    ca.res(resp(['R090']));
+    await pa;
+    assert.deepEqual(JSON.parse(JSON.stringify(ctx2.busy().rank.order)), ['R214']);
+    // Boshqa birlikka o'tilsa — darhol tozalanadi (avvalgi birlik reytingi ko'rsatilmaydi).
+    const u2 = { group_name: 'g-02a' };
+    ctx2.st(u2);
+    const pc = ctx2.loadAsgBusy(u2);
+    assert.equal(ctx2.busy().rank, null);
+    unitBusyCalls().at(-1).res(resp(['R102']));
+    await pc;
+
+    // 4) O'qituvchi biriktirilgach — bandlik va reyting qayta yuklanadi (unga biriktirilgan xonalar), so'ng o'qituvchilar belgisi.
+    ctx2.st(u);
+    let n = unitBusyCalls().length;
+    const marks0 = marks;
+    const pt = ctx2.applyAsg('15');
+    calls.at(-1).res({ teacher_name: 'USTOZ', affected: 2 });
+    await tick();
+    assert.equal(unitBusyCalls().length, n + 1);
+    assert.equal(unitBusyCalls().at(-1).url, '/admin/boards/7/unit-busy?group_name=g-01a');
+    unitBusyCalls().at(-1).res(resp(['R102', 'K310'], { R102: "o'qituvchiga biriktirilgan" }));
+    await pt; await tick();
+    assert.deepEqual(JSON.parse(JSON.stringify(ctx2.busy().rank.order)), ['R102', 'K310']);
+    assert.equal(marks, marks0 + 1);
+
+    // 5) Xona biriktirilgach ham (hozirgi xona — "shu bino" / odat o'zgaradi).
+    n = unitBusyCalls().length;
+    const pr = ctx2.applyAsgRoom('R214');
+    calls.at(-1).res({ auditorium_code: 'R214', auditorium_name: '214', affected: 2 });
+    await pr; await tick();
+    assert.equal(unitBusyCalls().length, n + 1);
+    assert.equal(u.auditorium_code, 'R214');
+
+    // 6) Biriktirish xato bersa — qayta yuklanmaydi.
+    n = unitBusyCalls().length;
+    const pe = ctx2.applyAsg('16');
+    calls.at(-1).rej(Object.assign(new Error('Ruxsat yo\'q'), { data: {} }));
+    await pe; await tick();
+    assert.equal(unitBusyCalls().length, n);
+    assert.equal(el2('asgMsg').textContent, "Xatolik: Ruxsat yo'q");
+
+    console.log('timetable asg room rank: 10 scenarios passed');
+})().catch(e => { console.error(e); process.exit(1); });

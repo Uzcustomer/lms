@@ -10963,11 +10963,20 @@
             let asgBusy = { teachers: {}, rooms: {}, rank: null };
             const asgUnitParams = u => ({ faculty_name: u.faculty_name || '', specialty_name: u.specialty_name, course: u.course,
                 subject_name: u.subject_name, training_type: u.training_type, oqim_label: u.oqim_label || '', group_name: u.group_name || '' });
+            // Bandlik va xonalar reytingi: birlik tanlanganda va shu birlikka o'qituvchi/xona biriktirilgach (reyting o'qituvchi va hozirgi
+            // xonaga bog'liq) qayta yuklanadi. Boshqa birlikka o'tilsa — darhol tozalanadi; o'sha birlik qayta yuklanayotganda eski ma'lumot
+            // javob kelguncha qoladi. Faqat eng oxirgi so'rov javobi olinadi (kech kelgan eskisi yangisini bosmaydi). Xona oynasi ochiq
+            // bo'lsa — yangi reyting/bandlik bilan qayta chiziladi.
+            let asgBusyFor = null, asgBusySeq = 0;
             async function loadAsgBusy(u) {
-                asgBusy = { teachers: {}, rooms: {}, rank: null };
+                if (asgBusyFor !== u) { asgBusy = { teachers: {}, rooms: {}, rank: null }; asgBusyFor = u; }
+                const seq = ++asgBusySeq;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/unit-busy?' + new URLSearchParams(asgUnitParams(u)));
-                    if (asgSel === u) asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {}, rank: j.room_rank || null };
+                    if (asgSel === u && seq === asgBusySeq) {
+                        asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {}, rank: j.room_rank || null };
+                        if (!$('asgRoomModal').classList.contains('hidden')) renderAsgRooms();
+                    }
                 } catch (e) { console.warn('Bandlik olinmadi:', e); }
             }
             function markAsgBusy() {
@@ -11385,6 +11394,7 @@
                     renderAsgTable();
                     renderAsgRoomCurrent();
                     closeAsgRoomModal();
+                    loadAsgBusy(asgSel).then(markAsgBusy);   // hozirgi xona o'zgardi — reyting (shu bino, odat) yangilanadi
                 } catch (e) {
                     if (e.data && e.data.needs_confirm) {
                         closeAsgRoomModal();
@@ -11457,6 +11467,7 @@
                     $('asgMsg').textContent = (j.teacher_name ? '«' + j.teacher_name + '» biriktirildi' : 'Biriktirish olib tashlandi') +
                         ' · ' + j.affected + ' karta';
                     renderAsgTable();
+                    loadAsgBusy(asgSel).then(markAsgBusy);   // o'qituvchi o'zgardi — unga biriktirilgan xonalar reytingi yangilanadi
                 } catch (e) {
                     if (e.data && e.data.needs_confirm) showBusyConfirm($('asgMsg'), e.message, () => applyAsg(teacherId, true));
                     else $('asgMsg').textContent = 'Xatolik: ' + e.message;

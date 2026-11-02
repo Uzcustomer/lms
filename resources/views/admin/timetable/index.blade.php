@@ -3561,6 +3561,7 @@
             let boardLoadSeq = 0;
             function hideBoard() {
                 boardLoadSeq++;   // yo'lda qolgan yuklash doskani qayta ochmasin
+                ttFocusDiscard();
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
                 $('refreshNamesBtn').classList.add('hidden'); $('reloadBoardBtn').classList.add('hidden');
@@ -3574,7 +3575,7 @@
                 // Boshqa doskaga o'tayotgan bo'lsak — eski doskaga oid holatni tozalaymiz
                 const switching = !board || String(board.id) !== String(id);
                 // Boshqa doska: oldingi doskaning qamrov tanlovi so'rovga qo'shilmasin ("Butun doska" — tanlangan qamrov bo'yicha so'raladi).
-                if (switching) { curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear(); }
+                if (switching) { ttFocusDiscard(); curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear(); }
                 // URLga noyob parametr — har qanday kesh (brauzer/proxy) eski kartalarni
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
@@ -7073,7 +7074,7 @@
                 // Oldingi holat — faqat birinchi fokusda (fokusdan fokusga o'tilsa ham Yopish asl holatga qaytaradi).
                 if (!ttFocus) {
                     ttFocus = { prev: { viewMode, curWeek, fac: [...selectedFaculties], dir: [...selectedDirs], crs: [...selectedCourses],
-                        cycleRowFilters: cycleRowFilters.slice(), typeFilter, weeklyLayer } };
+                        cycleRowFilters: cycleRowFilters.slice(), typeFilter, weeklyLayer, cycleLayer } };
                 }
                 // Dars turi filtri (Ma'ruza / Amaliy) vaqtincha "Hammasi": to'qnashuvning ikkala tomoni ham ko'rinsin.
                 if (typeFilter !== 'all') setTypeFilter('all');
@@ -7088,6 +7089,8 @@
                 if (view === 'group' && +show.week > 0) curWeek = +show.week;
                 // Haftalik to'qnashuvlar ichki (haqiqiy) jadval bo'yicha: tashqi qatlam ochiq bo'lsa — vaqtincha ichki.
                 if (view === 'group' && weeklyLayer !== 'internal' && $('wkLayerInternal')) focusSetLayer('internal');
+                // Sikl to'qnashuvlari ham ichki (kafedra) jadval bo'yicha: tashqi qatlam ochiq bo'lsa — vaqtincha ichki (saqlanmaydi).
+                if (view === 'cycle' && cycleLayer !== 'internal' && $('cycLayerInternal')) { cycleLayer = 'internal'; renderCycleLayerUi(null); }
                 renderFocusBar();
                 focusRefresh();
             }
@@ -7097,6 +7100,17 @@
                 applyWeeklyLayer(allCards);
                 invalidateWeeklyConflicts();
                 renderWeeklyLayerUi();
+            }
+            // Boshqa doska ochildi yoki doska yopildi: fokus o'sha doskaniki — tashlanadi. Doskaga bog'liq bo'lmagan ko'rinish
+            // sozlamalari (kesim, dars turi, qatlamlar) oldingisiga qaytadi; qamrov, hafta va guruh filtri — yangi doskaniki.
+            function ttFocusDiscard() {
+                if (!ttFocus) return;
+                const p = ttFocus.prev;
+                ttFocusForget();
+                if (viewMode !== p.viewMode) { viewMode = p.viewMode; $('viewMode').value = p.viewMode; }
+                if (typeFilter !== p.typeFilter) setTypeFilter(p.typeFilter);
+                if (weeklyLayer !== p.weeklyLayer) { weeklyLayer = p.weeklyLayer; renderWeeklyLayerUi(); }
+                if (cycleLayer !== p.cycleLayer) { cycleLayer = p.cycleLayer; renderCycleLayerUi(null); }
             }
             // Fokusni tiklamasdan unutish (foydalanuvchi filtrni o'zi o'zgartirdi).
             function ttFocusForget() {
@@ -7112,6 +7126,7 @@
                 curWeek = p.curWeek;
                 if (typeFilter !== p.typeFilter) setTypeFilter(p.typeFilter);
                 if (weeklyLayer !== p.weeklyLayer) focusSetLayer(p.weeklyLayer);
+                if (cycleLayer !== p.cycleLayer) { cycleLayer = p.cycleLayer; renderCycleLayerUi(null); }
                 cycleRowFilters = p.cycleRowFilters.slice();
                 cycleRowStoreKey = cycleRowStorageKey();   // tiklangan tanlov saqlangandan qayta o'qilmaydi (saqlash bloklangan bo'lsa ham qoladi)
                 focusRefresh();

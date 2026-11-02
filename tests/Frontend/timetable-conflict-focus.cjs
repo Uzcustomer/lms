@@ -61,11 +61,14 @@ const ctx = {
     weeklyLayer: 'external', allCards: [], layerApplied: [],
     applyWeeklyLayer: list => ctx.layerApplied.push(ctx.weeklyLayer + ':' + (list === ctx.allCards)),
     invalidateWeeklyConflicts() {}, renderWeeklyLayerUi() {},
+    // Sikl qatlami: tashqi ochiq — sikl to'qnashuvida vaqtincha ichki (loadCyclePlan shu qatlam bilan so'raydi).
+    cycleLayer: 'external', cycleLayerUi: 0, renderCycleLayerUi: j => { ctx.cycleLayerUi++; },
 };
 els.wkLayerInternal = node('wkLayerInternal');
+els.cycLayerInternal = node('cycLayerInternal');
 vm.createContext(ctx);
 vm.runInContext(code + '\nthis.api = { link: focusLinkHtml, links: focusLinksHtml, dates: focusDatesText, banner: focusBannerText, start: ttFocusStart,'
-    + ' close: ttFocusClose, forget: ttFocusForget, rows: focusCycleRowKeys, highlight: focusHighlight, visible: focusVisibleGroups,'
+    + ' close: ttFocusClose, forget: ttFocusForget, discard: ttFocusDiscard, rows: focusCycleRowKeys, highlight: focusHighlight, visible: focusVisibleGroups,'
     + ' build: () => { buildGroupRows(); return groupRows; } };', ctx);
 const api = ctx.api;
 const plain = v => JSON.parse(JSON.stringify(v));
@@ -113,6 +116,7 @@ assert.equal(ctx.curWeek, 9);
 assert.equal(ctx.typeFilter, 'all');   // "Ma'ruza" filtri vaqtincha olinadi — amaliy tomoni ham ko'rinsin
 assert.equal(ctx.weeklyLayer, 'internal');
 assert.deepEqual(plain(ctx.layerApplied), ['internal:true']);
+assert.equal(ctx.cycleLayer, 'external');   // haftalik to'qnashuv — sikl qatlamiga tegilmaydi
 assert.deepEqual(calls, ['closeCycDayPop', 'reconcile:false', 'fillSelectors', 'fillGridInputs', 'renderAll', 'ensureScopeLoaded']);
 assert.deepEqual(colGroups(), ['d2-01a', 'p3-01b']);   // d2-02a — yashirin
 const bar = docById.ttFocusBar;
@@ -183,6 +187,8 @@ click(api.link(cycleShow));
 assert.equal(ctx.viewMode, 'cycle');
 assert.equal(ctx.curWeek, 0);
 assert.equal(ctx.weeklyLayer, 'external');   // sikl to'qnashuvi — haftalik qatlamga tegilmaydi
+assert.equal(ctx.cycleLayer, 'internal');    // sikl to'qnashuvi ichki (kafedra) jadval bo'yicha
+assert(ctx.cycleLayerUi > 0);
 assert.match(docById.ttFocusBar.innerHTML, /O'qituvchi SHARIPOV K\. SH\. — d22-05a va d22-05b, 16–18\.09, 08:30/);
 const rows = [
     { row_key: 'r1', group: 'd22-05a', faculty: 'F1', specialty: 'Davolash ishi', course: 2 },
@@ -212,6 +218,28 @@ assert.equal(blocks[0].scrolls, 1);
 docById.ttFocusBar.querySelector('#ttFocusClose').onclick();
 assert.deepEqual(plain(ctx.cycleRowFilters), ['k9']);
 assert.equal(ctx.viewMode, 'teacher');
+assert.equal(ctx.cycleLayer, 'external');
+
+// 6b) Boshqa doska ochilsa / doska yopilsa: fokus tashlanadi (lenta yo'q, filtr qo'llanmaydi); kesim, dars turi va qatlamlar —
+//     oldingisi; qamrov va hafta o'zgartirilmaydi (yangi doskaniki).
+click(api.link(cycleShow));
+assert.equal(ctx.cycleLayer, 'internal');
+ctx.selectedFaculties = new Set(['YANGI']);
+api.discard();
+assert.equal(ctx.ttFocus, null);
+assert.equal(docById.ttFocusBar, undefined);
+assert.equal(ctx.viewMode, 'teacher');
+assert.equal(els.viewMode.value, 'teacher');
+assert.equal(ctx.typeFilter, 'lecture');
+assert.equal(ctx.cycleLayer, 'external');
+assert.deepEqual(plain([...ctx.selectedFaculties]), ['YANGI']);
+click(html);   // haftalik: ichki qatlam — tashlanganda qaytadi
+api.discard();
+assert.equal(ctx.weeklyLayer, 'external');
+assert.deepEqual(colGroups(), ['d2-01a', 'd2-02a', 'p3-01b']);   // guruh filtri endi qo'llanmaydi (qamrovni yangi doska qo'yadi)
+api.discard();   // fokus yo'q — hech narsa
+assert.equal(ctx.viewMode, 'teacher');
+ctx.selectedFaculties = new Set(['F1']); ctx.selectedDirs = new Set(['Davolash ishi']); ctx.selectedCourses = new Set([2]); ctx.curWeek = 0;
 
 // 7) Huquq: "Faqat meniki" / "Kafedraniki" — faqat yuklangan qamrovdagi guruhlar; qolgani faqat matnda; hech biri yo'q — havola yo'q.
 ctx.scopeMode = 'mine';
@@ -251,6 +279,8 @@ assert.match(source, /esc\(c\.reason\) \+ focusLinksHtml\(c\.clashes\) \+ '<\/di
 assert.match(source, /focusLinksHtml\(cycAssignBusy\.items\[id\]\)/);
 assert.match(source, /focusLinksHtml\(\(\(asgBusy\.items \|\| \{\}\)\.teachers \|\| \{\}\)\[id\]\)/);
 assert.match(source, /groupRows = focusWeekColumns\(groupRows\);/);
+assert.match(source, /if \(switching\) \{ ttFocusDiscard\(\); curSpec = null;/);
+assert.match(source, /function hideBoard\(\) \{\n[^\n]*\n\s+ttFocusDiscard\(\);/);
 
 // 11) Sikl jadvali yuklanishi: odatda eski scroll joyi tiklanadi; fokusning birinchi scroll'i qilingan chizishda — tiklanmaydi.
 (async () => {

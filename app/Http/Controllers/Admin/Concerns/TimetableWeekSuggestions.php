@@ -453,7 +453,7 @@ trait TimetableWeekSuggestions
                     $this->clashCandidates($c, $td, ($state['ov'][(int) $c->id][$W] ?? null)?->auditorium_code ?: $c->auditorium_code, $state))] + $state, null);
                 $reason = implode('; ', array_unique(array_merge(...array_map(fn ($x) => $this->clashTexts($x, $dayName), $clashes))))
                     ?: ($conflicts[(int) $c->id][$W]['text'] ?? $reason);
-                $clashShow = array_map(fn ($x) => $this->focusFromClash($c, $x, $board), $clashes);
+                $clashShow = array_map(fn ($x) => $this->focusFromClash($c, $x, $board, $W), $clashes);
                 $roomOnly = $clashes && !array_filter($clashes, fn ($x) => (bool) array_filter($x['errors'], fn ($m) => !str_starts_with($m, 'Auditoriya band')));
                 if ($roomOnly) {
                     foreach ($this->freeRoomsFor($c, $W, $td, $tp, $state, $check, 3) as [$r, $why]) {

@@ -57,7 +57,12 @@ const ctx = {
     ensureScopeLoaded: () => calls.push('ensureScopeLoaded'), closeCycDayPop: () => calls.push('closeCycDayPop'),
     closeCycleAssign: () => calls.push('closeCycleAssign'), alert: m => calls.push('alert:' + m),
     typeFilter: 'lecture', setTypeFilter: t => { ctx.typeFilter = t; },
+    // Haftalik qatlam: tashqi ochiq — haftalik to'qnashuvda vaqtincha ichki (kartalar yuklangan qiymatlaridan, saqlanmaydi).
+    weeklyLayer: 'external', allCards: [], layerApplied: [],
+    applyWeeklyLayer: list => ctx.layerApplied.push(ctx.weeklyLayer + ':' + (list === ctx.allCards)),
+    invalidateWeeklyConflicts() {}, renderWeeklyLayerUi() {},
 };
+els.wkLayerInternal = node('wkLayerInternal');
 vm.createContext(ctx);
 vm.runInContext(code + '\nthis.api = { link: focusLinkHtml, links: focusLinksHtml, dates: focusDatesText, banner: focusBannerText, start: ttFocusStart,'
     + ' close: ttFocusClose, forget: ttFocusForget, rows: focusCycleRowKeys, highlight: focusHighlight, visible: focusVisibleGroups,'
@@ -106,6 +111,8 @@ assert.equal(ctx.viewMode, 'group');
 assert.equal(els.viewMode.value, 'group');
 assert.equal(ctx.curWeek, 9);
 assert.equal(ctx.typeFilter, 'all');   // "Ma'ruza" filtri vaqtincha olinadi — amaliy tomoni ham ko'rinsin
+assert.equal(ctx.weeklyLayer, 'internal');
+assert.deepEqual(plain(ctx.layerApplied), ['internal:true']);
 assert.deepEqual(calls, ['closeCycDayPop', 'reconcile:false', 'fillSelectors', 'fillGridInputs', 'renderAll', 'ensureScopeLoaded']);
 assert.deepEqual(colGroups(), ['d2-01a', 'p3-01b']);   // d2-02a — yashirin
 const bar = docById.ttFocusBar;
@@ -115,11 +122,17 @@ assert.equal(bar.innerHTML, "<span>To'qnashuvni ko'rish: O'qituvchi USTOZ — d2
 
 // 3) Qizil ramka: to'qnashgan darslar (card_ids) kataklari; birinchisiga bir marta scroll.
 const td = n => ({ n, classList: classList(), scrolls: 0, scrollIntoView(o) { this.scrolls++; this.opt = o; } });
-const tds = [td(1), td(2), td(3)];
+const tds = [td(1), td(2), td(3), td(4), td(5)];
 gridChips = [{ dataset: { chip: '1' }, closest: () => tds[0] }, { dataset: { chip: '3' }, closest: () => tds[2] },
-    { dataset: { chip: '2' }, closest: () => tds[1] }, { dataset: { chip: '1' }, closest: () => tds[0] }];
+    { dataset: { chip: '2' }, closest: () => tds[1] }, { dataset: { chip: '1' }, closest: () => tds[0] },
+    // Birlashtirilgan blok: to'qnashgan karta (2) — birinchi emas, data-merge-ids ichida; bo'laklar sarlavhasi — data-parallel-ids.
+    { dataset: { chip: '7', mergeIds: '7,2' }, closest: () => tds[3] }, { dataset: { chip: '8', parallelIds: '8,9' }, closest: () => tds[4] }];
 api.highlight();
-assert.deepEqual(tds.map(t => t.classList.contains('tt-focus-hit')), [true, true, false]);
+assert.deepEqual(tds.map(t => t.classList.contains('tt-focus-hit')), [true, true, false, true, false]);
+gridChips[5].dataset.parallelIds = '8,1';
+ctx.ttFocus.scrolled = true;
+api.highlight();
+assert.equal(tds[4].classList.contains('tt-focus-hit'), true);
 assert.equal(tds[0].scrolls, 1);
 assert.deepEqual(plain(tds[0].opt), { block: 'center', inline: 'center' });
 api.highlight();   // qayta chizilganda ramka qoladi, scroll takrorlanmaydi
@@ -137,6 +150,8 @@ assert.equal(ctx.viewMode, 'teacher');
 assert.equal(els.viewMode.value, 'teacher');
 assert.equal(ctx.curWeek, 0);
 assert.equal(ctx.typeFilter, 'lecture');
+assert.equal(ctx.weeklyLayer, 'external');
+assert.deepEqual(plain(ctx.layerApplied), ['internal:true', 'external:true']);
 assert.deepEqual(plain(ctx.cycleRowFilters), ['k9']);
 assert.equal(ctx.cycleRowStoreKey, 'tt:cycRows:KEY');   // saqlangandan qayta o'qilmaydi
 assert.deepEqual(calls, ['reconcile:false', 'fillSelectors', 'fillGridInputs', 'renderAll', 'ensureScopeLoaded']);
@@ -167,6 +182,7 @@ calls.length = 0;
 click(api.link(cycleShow));
 assert.equal(ctx.viewMode, 'cycle');
 assert.equal(ctx.curWeek, 0);
+assert.equal(ctx.weeklyLayer, 'external');   // sikl to'qnashuvi — haftalik qatlamga tegilmaydi
 assert.match(docById.ttFocusBar.innerHTML, /O'qituvchi SHARIPOV K\. SH\. — d22-05a va d22-05b, 16–18\.09, 08:30/);
 const rows = [
     { row_key: 'r1', group: 'd22-05a', faculty: 'F1', specialty: 'Davolash ishi', course: 2 },

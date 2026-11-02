@@ -41,3 +41,19 @@ it('ko\'rsatish: yagona ko\'rinish — guruhlar va kartalar takrorlanmaydi, sana
         ->and(cfocus('focusShow', ['view' => 'cycle', 'dates' => []])['dates'])->toBe([])
         ->and(cfocus('focusShow', ['view' => 'cycle'])['view'])->toBe('cycle');
 });
+
+it('ko\'rsatish: Takliflar to\'qnashuvi — sana to\'sib turgan darsning o\'z haftasidan, hafta — kartaning o\'z haftasi (kalendarlar farq qilsa ham)', function () {
+    $board = \App\Models\TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 15, 'settings' => ['semester_start' => '2026-09-14']]);
+    $mk = fn (string $fac, string $g) => \App\Models\TimetableCard::create(['board_id' => $board->id, 'faculty_name' => $fac, 'specialty_name' => 'S',
+        'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Fan', 'group_name' => $g, 'teacher_id' => 5, 'teacher_name' => 'USTOZ']);
+    $c = $mk('F1', 'a-01');
+    $o = $mk('F2', 'b-01');
+    // To'sib turgan dars o'z kalendarida 8-hafta (02.11 dushanba) seshanbasi; karta uchun bu — 9-hafta.
+    $show = cfocus('focusFromClash', $c, ['card' => $o, 'week' => 8, 'day' => 2, 'pair' => 5, 'room' => null,
+        'errors' => ["O'qituvchi band: b-01"]], $board, 9);
+    expect($show)->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => 5, 'teacher_name' => 'USTOZ', 'dates' => ['2026-11-03', '2026-11-03'],
+        'hour_from' => 5, 'hour_to' => 7, 'card_ids' => [$c->id, $o->id], 'view' => 'week', 'week' => 9])
+        ->and(array_column($show['groups'], 'group'))->toBe(['a-01', 'b-01']);
+});

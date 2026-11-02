@@ -92,8 +92,12 @@ trait TimetableConflictFocus
         ];
     }
 
-    /** Takliflar (weekClashes yozuvi): karta va to'sib turgan dars, o'sha hafta / kun / para. */
-    private function focusFromClash(\App\Models\TimetableCard $c, array $x, \App\Models\TimetableBoard $board): array
+    /**
+     * Takliflar (weekClashes yozuvi): karta va to'sib turgan dars, o'sha kun / para. Sana — to'sib turgan darsning o'z kalendari
+     * haftasidan ($x['week']); ko'rsatiladigan hafta — kartaning o'z haftasi ($week): kalendarlar (semestr boshi, ta'tillar) farq
+     * qilsa ham jadval kartaning haftasida ochiladi.
+     */
+    private function focusFromClash(\App\Models\TimetableCard $c, array $x, \App\Models\TimetableBoard $board, int $week): array
     {
         $o = $x['card'];
         $errs = (array) ($x['errors'] ?? []);
@@ -105,6 +109,6 @@ trait TimetableConflictFocus
             'teacher_name' => $kind === 'teacher_busy' ? $c->teacher_name : null, 'room_code' => $kind === 'room_busy' ? ($x['room'] ?? null) : null,
             'groups' => array_merge($this->focusCardGroups($c), $this->focusCardGroups($o)), 'subject' => $o->subject_name,
             'dates' => [$date], 'hour_from' => (int) $x['pair'], 'hour_to' => (int) $x['pair'] + $o->lenHalf(),
-            'card_ids' => [$c->id, $o->id], 'view' => 'week', 'week' => (int) $x['week']]);
+            'card_ids' => [$c->id, $o->id], 'view' => 'week', 'week' => $week]);
     }
 }

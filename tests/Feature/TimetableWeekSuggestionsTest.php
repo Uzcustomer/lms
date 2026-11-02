@@ -414,6 +414,29 @@ it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birin
     expect($res['total'])->toBe(0)->and($res['conflict_total'])->toBe(0)->and($res['cards'])->toBe([]);
 });
 
+it('takliflar: to\'qnashuv "Ko\'rsatish" — kalendarlar farq qilsa ham hafta kartaning o\'z haftasi, sana — bir xil kun', function () {
+    $s = sugSetup();
+    test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    \App\Models\Auditorium::create(['code' => 'R215', 'name' => '215', 'volume' => 30, 'active' => true]);
+    // Pediatriya 2-kursning semestri bir hafta kech boshlanadi: uning 6-haftasi = davolash 1-kursning 7-haftasi (16.10).
+    TimetableGridSetting::create(['board_id' => $s['board']->id, 'faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+        'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15, 'start_date' => '2026-09-07']);
+    $base = ['board_id' => $s['board']->id, 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Anatomiya kafedrasi', 'auditorium_code' => 'R215', 'auditorium_name' => '215'];
+    $a = TimetableCard::create($base + ['faculty_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi', 'course' => 1,
+        'oqim_label' => '6-oqim', 'group_name' => 'd1/d26-06b', 'teacher_id' => sugTeacher('USTOZ A.')->id, 'teacher_name' => 'USTOZ A.']);
+    $b = TimetableCard::create($base + ['faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+        'oqim_label' => '2-oqim', 'group_name' => 'p/p25-02b', 'teacher_id' => sugTeacher('USTOZ B.')->id, 'teacher_name' => 'USTOZ B.']);
+    TimetableCardOverride::create(['card_id' => $a->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    TimetableCardOverride::create(['card_id' => $b->id, 'week' => 6, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?'
+        . http_build_query(['week' => 7, 'faculty_names' => ['1-son davolash'], 'courses' => [1]]))->assertOk()->json();
+    $card = collect($res['cards'])->firstWhere('id', $a->id);
+    expect($card['conflict'])->toBeTrue()->and($card['clashes'])->toHaveCount(1)
+        ->and($card['clashes'][0])->toMatchArray(['kind' => 'room_busy', 'room_code' => 'R215', 'dates' => ['2026-10-16', '2026-10-16'],
+            'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 7]);
+});
+
 it('takliflar: o\'qituvchi to\'qnashuvida — mavjud qadamlar, o\'qituvchini almashtirish eng oxirida; sabab o\'qituvchi bilan', function () {
     $s = sugSetup();
     $t = sugTeacher('SHARIPOV K.');

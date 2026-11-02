@@ -7026,8 +7026,11 @@
                 } else {
                     if (viewMode !== 'group') return;
                     const ids = new Set((s.card_ids || []).map(String));
+                    // Birlashtirilgan blok (data-merge-ids) va bo'laklar sarlavhasi (data-parallel-ids) — ichidagi har bir karta bo'yicha.
+                    const chipIds = ch => [ch.dataset.chip, ...String(ch.dataset.mergeIds || '').split(','),
+                        ...String(ch.dataset.parallelIds || '').split(',')].filter(Boolean);
                     document.querySelectorAll('#grid [data-chip]').forEach(ch => {
-                        const td = ids.has(String(ch.dataset.chip)) && ch.closest ? ch.closest('td') : null;
+                        const td = chipIds(ch).some(x => ids.has(String(x))) && ch.closest ? ch.closest('td') : null;
                         if (td && !hits.includes(td)) hits.push(td);
                     });
                 }
@@ -7070,7 +7073,7 @@
                 // Oldingi holat — faqat birinchi fokusda (fokusdan fokusga o'tilsa ham Yopish asl holatga qaytaradi).
                 if (!ttFocus) {
                     ttFocus = { prev: { viewMode, curWeek, fac: [...selectedFaculties], dir: [...selectedDirs], crs: [...selectedCourses],
-                        cycleRowFilters: cycleRowFilters.slice(), typeFilter } };
+                        cycleRowFilters: cycleRowFilters.slice(), typeFilter, weeklyLayer } };
                 }
                 // Dars turi filtri (Ma'ruza / Amaliy) vaqtincha "Hammasi": to'qnashuvning ikkala tomoni ham ko'rinsin.
                 if (typeFilter !== 'all') setTypeFilter('all');
@@ -7083,8 +7086,17 @@
                 const view = show.view === 'cycle' ? 'cycle' : 'group';
                 if (viewMode !== view && [...$('viewMode').options].some(o => o.value === view)) { viewMode = view; $('viewMode').value = view; }
                 if (view === 'group' && +show.week > 0) curWeek = +show.week;
+                // Haftalik to'qnashuvlar ichki (haqiqiy) jadval bo'yicha: tashqi qatlam ochiq bo'lsa — vaqtincha ichki.
+                if (view === 'group' && weeklyLayer !== 'internal' && $('wkLayerInternal')) focusSetLayer('internal');
                 renderFocusBar();
                 focusRefresh();
+            }
+            // Haftalik qatlamni vaqtincha almashtirish (saqlanmaydi; kartalar yuklangan ichki/tashqi qiymatlaridan).
+            function focusSetLayer(l) {
+                weeklyLayer = l;
+                applyWeeklyLayer(allCards);
+                invalidateWeeklyConflicts();
+                renderWeeklyLayerUi();
             }
             // Fokusni tiklamasdan unutish (foydalanuvchi filtrni o'zi o'zgartirdi).
             function ttFocusForget() {
@@ -7099,6 +7111,7 @@
                 if (viewMode !== p.viewMode) { viewMode = p.viewMode; $('viewMode').value = p.viewMode; }
                 curWeek = p.curWeek;
                 if (typeFilter !== p.typeFilter) setTypeFilter(p.typeFilter);
+                if (weeklyLayer !== p.weeklyLayer) focusSetLayer(p.weeklyLayer);
                 cycleRowFilters = p.cycleRowFilters.slice();
                 cycleRowStoreKey = cycleRowStorageKey();   // tiklangan tanlov saqlangandan qayta o'qilmaydi (saqlash bloklangan bo'lsa ham qoladi)
                 focusRefresh();

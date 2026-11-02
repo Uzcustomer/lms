@@ -143,7 +143,7 @@ it('sikl: bitta xonada 3 guruhcha, sig\'imi 1 guruhchaga yetadi — xona to\'qna
 
     expect($conf)->toHaveCount(3)
         ->and($conf['davolash ishi|5|d22-05a|Klinik farmakologiya|practice']['text'])
-        ->toBe("Xona 305 sig'imidan ko'p (12 o'rin, 30 talaba, +18): d22-05b, Klinik farmakologiya; d22-05c, Klinik farmakologiya, 14.09–18.09")
+        ->toBe("Xona sig'maydi: 305 — 12 o'rin, 30 talaba (+18) — d22-05b, Klinik farmakologiya; d22-05c, Klinik farmakologiya, 14.09–18.09")
         ->and($conf['davolash ishi|5|d22-05c|Klinik farmakologiya|practice']['items'][0]['type'])->toBe('room')
         // Tuzilgan sig'im: xona, sig'imi, shu vaqtdagi talabalar va ortiqchasi (front matnni parse qilmaydi).
         ->and($conf['davolash ishi|5|d22-05a|Klinik farmakologiya|practice']['items'][0])->toMatchArray(['kind' => 'room_capacity',
@@ -295,7 +295,7 @@ it('biriktirish: sikl guruhchasiga xona — sig\'imdan oshsa ogohlantirish, yets
         'training_type' => 'practice', 'group_name' => 'd22-05b'];
 
     $as()->postJson(route('admin.timetable.assign-room', $s['board']), $unit + ['auditorium_code' => 'R305'])->assertStatus(409)
-        ->assertJsonPath('error', "Xona «305» shu davrda boshqa guruhcha bilan band: 12 o'rin, 20 talaba (+8): d22-05a, Klinik farmakologiya, 14.09–18.09")
+        ->assertJsonPath('error', "Xona sig'maydi: 305 — 12 o'rin, 20 talaba (+8) — d22-05a, Klinik farmakologiya, 14.09–18.09")
         ->assertJsonPath('conflict_cap', ['room_code' => 'R305', 'room_name' => '305', 'volume' => 12, 'students' => 20, 'over' => 8]);
     expect($s['cards']['d22-05b']->fresh()->auditorium_code)->toBeNull();
     // Sig'im ikkala guruhchaga yetsa — ogohlantirishsiz
@@ -477,7 +477,7 @@ it('to\'qnashuvlar: sikl rejasida bloklarda tuzilgan ro\'yxat; "Faqat meniki" �
         ->and(collect($block($p, 'd22-05b')['conflicts'])->pluck('kind')->all())->toBe(['teacher_busy']);
     // Panel kartasi ham shu (qamrovli) ro'yxat bilan.
     $card = collect($plan($other, 'oqituvchi', ['mine' => 1])['cycle_cards'])->firstWhere('group', 'd22-05c');
-    expect($card['conflict_level'])->toBe('yellow')->and($card['conflict'])->toContain("Xona 305 sig'imidan ko'p");
+    expect($card['conflict_level'])->toBe('yellow')->and($card['conflict'])->toContain("Xona sig'maydi: 305 — ");
 });
 
 /** 1-oqim (05a, 05b) ma'ruzasi (LEKTOR, R-ZAL) va amaliyoti (USTOZ); 2-oqim ma'ruzasi shu vaqtda (LEKTOR) — ma'ruza to'qnashuvi. */
@@ -760,7 +760,7 @@ it('xona sig\'imi: 65 o\'rinli zalda faol talabalar (group_students) bo\'yicha 9
     expect($caps->map($pick)->all())->toBe([
         ['dates' => '14.09', 'room_code' => 'Z8', 'room_name' => "Tibbiyot klasteri, podval, 8-ma'ruza zali", 'volume' => 65, 'students' => 88, 'over' => 23],
         ['dates' => '15.09', 'room_code' => 'Z8', 'room_name' => "Tibbiyot klasteri, podval, 8-ma'ruza zali", 'volume' => 65, 'students' => 98, 'over' => 33],
-    ])->and($caps[1]['line'])->toContain("(65 o'rin, 98 talaba, +33)");
+    ])->and($caps[1]['line'])->toContain("Xona sig'maydi: Tibbiyot klasteri, podval, 8-ma'ruza zali — 65 o'rin, 98 talaba (+33) — ");
     // Sig'imi kiritilmagan zal — "sig'maydi" ham, "band" ham emas (sig'imni bilmasdan to'qnashuv deyilmaydi).
     $hall->update(['volume' => 0]);
     $kinds = collect(icConflicts($s['board'])[$key]['items'] ?? [])->pluck('kind');
@@ -777,7 +777,7 @@ it('xona sig\'imi: 65 o\'rinli zalda faol talabalar (group_students) bo\'yicha 9
         'board' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Klinik farmakologiya',
         'training_type' => 'lecture', 'oqim_label' => '2-oqim']))->assertOk()->json();
     expect($res['room_caps']['Z8'])->toBe(['room_code' => 'Z8', 'room_name' => "Tibbiyot klasteri, podval, 8-ma'ruza zali", 'volume' => 65,
-        'students' => 98, 'over' => 33])->and($res['rooms']['Z8'])->toStartWith("65 o'rin, 98 talaba (+33): ");
+        'students' => 98, 'over' => 33])->and($res['rooms']['Z8'])->toStartWith("Xona sig'maydi: Tibbiyot klasteri, podval, 8-ma'ruza zali — 65 o'rin, 98 talaba (+33) — ");
 });
 
 it('smena maslahati: o\'qituvchi ikki sikl amaliyotida band — bo\'sh smena, qoladigan sanalar yoki boshqa o\'qituvchi', function () {

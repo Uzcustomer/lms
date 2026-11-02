@@ -1220,6 +1220,8 @@
         #grid .tt-chip.tt-shade-a { filter: brightness(1.07) saturate(.95); }
         #grid .tt-chip.tt-shade-b { filter: brightness(.90) saturate(1.1); }
         .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
+        .tt-cap-warn { font-size: 9px; font-weight: 800; color: #a16207; background: #fef3c7; border-radius: 3px; padding: 0 3px; }
+        .cf-list .cf-line.cf-cap-warn { color: #a16207; }
         .tt-room-vol { font-weight: 800; color: #16a34a; opacity: 1; }\n        #grid th.tt-room-head .tt-room-name { display:block; font-size:10px; font-weight:500; color:#64748b; margin-top:2px; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
             font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
@@ -5008,6 +5010,8 @@
                     '</div>' +
                     (c.reason ? '<div style="color:#b91c1c;margin:2px 0 4px">' + esc(c.reason) + focusLinksHtml(c.clashes) +
                         agendaLinksHtml(c.clashes, 'w|' + c.id + '|' + res.week) + '</div>' : '') +
+                    // Xona sig'imi (1.4) — haftalik karta va biriktirish oynasidagi bilan bir xil server matni.
+                    (c.cap_warn ? '<div class="sug-cap-warn" style="color:#a16207;margin:2px 0 4px">⚠ ' + esc(c.cap_warn) + '</div>' : '') +
                     (c.suggestions.length ? c.suggestions.map((s, si) => sugRowHtml(s, ci, si, res.apply_mode)).join('')
                         : '<div style="color:#64748b">Taklif topilmadi — qo\'lda joylash kerak.</div>') +
                     '</div>').join('') + sugFooterHtml(res.apply_mode);
@@ -7815,7 +7819,8 @@
                     esc(c ? cardGroups(c).join(', ') : '') + (curWeek ? ' · ' + curWeek + '-hafta' : '') + ' · to\u2018qnashuvlar</div></div>' +
                     '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' +
                     (items.length ? cfMergeItems(items).map(i => cfLineHtml(i, { move: curWeek ? 'w|' + id + '|' + curWeek : null })).join('')
-                        : '<li class="cf-line">' + esc(cardConflict(c) || '') + '</li>') + '</ul>';
+                        : '<li class="cf-line">' + esc(cardConflict(c) || '') + '</li>') +
+                    (weeklyCapLine(c) ? '<li class="cf-line cf-cap-warn">' + esc(weeklyCapLine(c)) + '</li>' : '') + '</ul>';
                 document.body.appendChild(pop);
                 const r = el.getBoundingClientRect();
                 pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
@@ -8851,6 +8856,9 @@
             // joylanmaganlar panelida sababi bilan chiqadi. Joylashuv/o'qituvchi/xona o'zgarsa — serverdan qayta so'raladi.
             let weeklyConflicts = {};   // karta id => { hafta: sabab } — faqat kelgusi (karta qizil)
             let weeklyConflictItems = {};   // karta id => { hafta: [tuzilgan ro'yxat] } — o'tganlari ham (past)
+            // Xona sig'imi (1.4) — ogohlantirish, to'qnashuv emas (hisoblagichga kirmaydi): tanlangan hafta, karta id => {…, line}.
+            let weeklyCapWarn = { week: 0, map: {} };
+            const weeklyCapLine = c => (c && curWeek && weeklyCapWarn.week === curWeek && weeklyCapWarn.map[c.id] ? weeklyCapWarn.map[c.id].line || '' : '');
             let conflictSig = '';
             let conflictTimer = null;
             let conflictGen = 0;   // so'rov avlodi: kechikkan (eskirgan holat uchun) javob yangisining ustiga yozmasin
@@ -8891,7 +8899,13 @@
                     weeklyConflictItems = {};
                     Object.entries(j.weekly_items || {}).forEach(([id, weeks]) => { weeklyConflictItems[id] = weeks; });
                     weeklyConflictItems.__week = week;
-                    if (viewMode !== 'cycle') renderPanel();
+                    const hadCaps = Object.keys(weeklyCapWarn.map).length > 0;
+                    weeklyCapWarn = { week, map: j.weekly_caps || {} };
+                    if (viewMode !== 'cycle') {
+                        renderPanel();
+                        // Sig'im belgisi katakdagi kartada — jadval ham qayta chiziladi (ogohlantirish bor yoki yo'qoldi).
+                        if ((hadCaps || Object.keys(weeklyCapWarn.map).length) && typeof renderGrid === 'function') renderGrid();
+                    }
                 } catch (e) { /* belgi — matn bilan qoladi */ }
             }
             // Joylashgan kartaning ichki jadvaldagi to'qnashuvi (joriy hafta; shablon ko'rinishida — birorta haftada bo'lsa).
@@ -9762,8 +9776,9 @@
                         ? ' <span class="tt-weeks">(' + c.weeks + ' hafta' + wkNums + ')</span>' : '';
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
                     const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
+                    const capLine = weeklyCapLine(c);
                     const roomTxt = roomNo
-                        ? '<div class="tt-room">№ ' + esc(roomNo) + '</div>'
+                        ? '<div class="tt-room">№ ' + esc(roomNo) + (capLine ? ' <span class="tt-cap-warn" title="' + esc(capLine) + '">⚠ sig\'maydi</span>' : '') + '</div>'
                         : '';
                     // Almashinuvchi karta — har hafta emas, faqat ayrim haftalarda o'tiladi
                     // (ma'ruza va uni almashtiruvchi amaliy). Shablon ("Barcha haftalar")
@@ -9777,7 +9792,7 @@
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
                         esc(cardTooltip(c, (showWks ? 'Haftalar: ' + c.weeks + ' hafta' + wkNums : '')
-                            + (alt ? ' · har hafta emas (almashib keladi)' : ''))) + '">';
+                            + (alt ? ' · har hafta emas (almashib keladi)' : '') + (capLine ? '\n' + capLine : ''))) + '">';
                     // Uchburchakka bo'lingan katakda fan nomi, qaysi haftalarda
                     // o'tilishi va xona raqami ko'rinadi. O'qituvchi tooltipda
                     // qoladi — uchburchakka sig'may, yozuvni buzadi.
@@ -12158,16 +12173,17 @@
                 const why = (asgBusy.rank && asgBusy.rank.why) || {};
                 const list = asgRoomsSorted(asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name]
                     .some(v => String(v || '').toLowerCase().includes(q))));
-                // Sig'imdan oshadigan xona — aniq raqamlar ("Xona sig'maydi: 65 o'rin, 98 talaba (+33)"); sig'imi kiritilmagan — to'qnashuv emas.
+                // Sig'imdan oshadigan xona — aniq raqamlar (1.4, to'qnashuvlar oynasi bilan bitta formatlovchi — cfCapText): server matni
+                // "Xona sig'maydi: 215 — 65 o'rin, 98 talaba (+33) — …"; sig'imi kiritilmagan — to'qnashuv emas.
                 const caps = asgBusy.caps || {};
-                const capText = c => c.volume + " o'rin, " + c.students + ' talaba (+' + c.over + ')';
                 $('asgRoomList').innerHTML = list.map(room =>
                     '<button type="button" class="rm-row' + (asgSel.auditorium_code === room.code ? ' is-current' : '') + '" data-code="' + esc(room.code) + '"' +
-                    (asgBusy.rooms[room.code] ? ' style="opacity:.55" title="' + (caps[room.code] ? "Xona sig'maydi: " : 'Band: ') + esc(asgBusy.rooms[room.code]) + '"' : '') + '>' +
+                    (asgBusy.rooms[room.code] ? ' style="opacity:.55" title="' + (String(asgBusy.rooms[room.code]).startsWith("Xona sig'maydi: ") ? '' : 'Band: ')
+                        + esc(asgBusy.rooms[room.code]) + '"' : '') + '>' +
                     '<b>' + esc(room.name || room.code) + '</b>' +
                     '<span>' + esc([room.building_name, room.auditorium_type_name].filter(Boolean).join(' · ')) + '</span>' +
                     (why[room.code] && !asgBusy.rooms[room.code] ? '<span class="rm-why">' + esc(why[room.code]) + '</span>' : '') +
-                    (caps[room.code] && asgBusy.rooms[room.code] ? '<span class="rm-cap">Sig\'maydi: ' + esc(capText(caps[room.code])) + '</span>' : '') +
+                    (caps[room.code] && asgBusy.rooms[room.code] ? '<span class="rm-cap">Xona sig\'maydi: ' + esc(cfCapText(caps[room.code])) + '</span>' : '') +
                     '<span class="rm-vol">' + (room.volume ? room.volume + ' o\'rin' : 'sig\'imi kiritilmagan') + '</span></button>').join('')
                     || '<div class="p-3 text-sm text-slate-400">Xona topilmadi</div>';
             }

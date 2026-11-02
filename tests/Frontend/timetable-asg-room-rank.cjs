@@ -9,8 +9,10 @@ const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin
 const a = source.indexOf('            function asgRoomsSorted(list) {');
 const b = source.indexOf("            $('asgRoomOpen').onclick", a);
 assert(a > 0 && b > a);
+const cfCapText = (() => { const a = source.indexOf('            const cfCapText = '), b = source.indexOf('\n', source.indexOf('\n', a) + 1);
+    return vm.runInNewContext(source.slice(a, b) + '\ncfCapText'); })();
 const els = {};
-const ctx = { $: id => (els[id] = els[id] || { id, value: '', innerHTML: '' }), esc: s => String(s), asgSel: { auditorium_code: 'R215' },
+const ctx = { $: id => (els[id] = els[id] || { id, value: '', innerHTML: '' }), esc: s => String(s), asgSel: { auditorium_code: 'R215' }, cfCapText,
     asgRoomsList: null, asgBusy: { teachers: {}, rooms: {}, rank: null } };
 vm.createContext(ctx);
 vm.runInContext(source.slice(a, b) + '\nthis.renderAsgRooms = renderAsgRooms;'
@@ -38,6 +40,12 @@ assert.match(html, /data-code="R214"><b>214<\/b><span>Bosh bino<\/span><span cla
 // Band xonada sabab yorlig'i yo'q (kulrang, sababi — kim bilan band), sababsiz xonada ham yo'q.
 assert.match(html, /data-code="R101" style="opacity:\.55" title="Band: d1\/d24-03b, Anatomiya, 07\.09–14\.12"><b>101<\/b><span><\/span><span class="rm-vol">/);
 assert.match(html, /data-code="R102"><b>102<\/b><span><\/span><span class="rm-vol">/);
+// Sig'imdan oshgan xona (1.4): server matni o'zi "Xona sig'maydi: …" — "Band: " qo'shilmaydi; yorliq — umumiy cfCapText bilan.
+ctx.setState(list, { teachers: {}, rooms: { R101: "Xona sig'maydi: 101 — 30 o'rin, 42 talaba (+12) — d22-05a, Klinik farmakologiya, 15.09" },
+    caps: { R101: { room_code: 'R101', room_name: '101', volume: 30, students: 42, over: 12 } }, rank });
+ctx.renderAsgRooms();
+assert.match(els.asgRoomList.innerHTML, /data-code="R101" style="opacity:\.55" title="Xona sig'maydi: 101 — 30 o'rin, 42 talaba \(\+12\) — d22-05a, Klinik farmakologiya, 15\.09">/);
+assert.match(els.asgRoomList.innerHTML, /<span class="rm-cap">Xona sig'maydi: 30 o'rin, 42 talaba \(\+12\)<\/span>/);
 
 // 3) Qidiruv — saralash saqlanadi; reytingda yo'q xona (masalan, keyin qo'shilgan) — reytinglilardan keyin, o'z tartibida.
 els.asgRoomSearch.value = '1';   // "1" — K310, 214, 102 va band 101 (090 yo'q)
@@ -59,7 +67,7 @@ const el2 = id => (els2[id] = els2[id] || { id, value: '', innerHTML: '', textCo
     classList: { contains: c => c === 'hidden' && els2[id].hidden } });
 const calls = [];
 let marks = 0;
-const ctx2 = { $: el2, esc: s => String(s), URLSearchParams, BASE: '/admin', board: { id: 7 }, cards: [], console: { warn() {} },
+const ctx2 = { $: el2, esc: s => String(s), URLSearchParams, BASE: '/admin', board: { id: 7 }, cards: [], console: { warn() {} }, cfCapText,
     asgSel: null, asgRoomsList: null, asgBusy: { teachers: {}, rooms: {}, rank: null },
     asgUnitParams: u => ({ group_name: u.group_name }), renderAsgTable() {}, renderAsgRoomCurrent() {},
     closeAsgRoomModal() { el2('asgRoomModal').hidden = true; }, showBusyConfirm() {}, markAsgBusy: () => { marks++; },

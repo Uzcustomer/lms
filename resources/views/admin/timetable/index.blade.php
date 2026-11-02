@@ -1103,6 +1103,7 @@
         .tt-chip.sel { outline: 2px solid #ef4444; }
         /* Haftalik kesimdagi sikl darsi (faqat ko'rish): chap tomonda yashil chiziq va "sikl" belgisi */
         .tt-chip.tt-cyc-chip { box-shadow: inset 3px 0 0 #0d9488; cursor: pointer; }
+        .tt-clash-why { font-size: 9px; font-weight: 700; color: #b91c1c; padding: 1px 3px; }
         .tt-cyc-badge { display: inline-block; padding: 0 4px; border-radius: 4px; background: #0d9488; color: #fff; font-size: 8px; font-weight: 700; letter-spacing: .02em; vertical-align: 1px; }
         #crossCycPop { position: fixed; z-index: 60; width: 290px; max-width: calc(100vw - 16px); background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
             box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 10px 12px; font-size: 12px; }
@@ -2713,8 +2714,11 @@
             const TEACHER_DEFAULTS = ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && Boolean(TIMETABLE_TEACHER_ID);
             const DEFAULT_VIEW = TEACHER_DEFAULTS ? 'teacher' : 'group';
             let scopeMode = TIMETABLE_HAS_SUBJECTS && TIMETABLE_ROLE === 'fan_masuli' ? 'subjects' : (TEACHER_DEFAULTS ? 'mine' : 'all');
+            // Qamrov tanlovi — har foydalanuvchi va rol uchun alohida (bir brauzerda admin "Butun doska" tanlagan bo'lsa ham
+            // o'qituvchi birinchi kirishda "Faqat meniki" bilan ochiladi).
+            const MINE_KEY = 'lms:timetable-mine:' + TIMETABLE_ROLE + ':' + (TIMETABLE_TEACHER_ID || 0);
             try {
-                const saved = localStorage.getItem('lms:timetable-mine');
+                const saved = localStorage.getItem(MINE_KEY);
                 if (TIMETABLE_TEACHER_ID && saved === '1') scopeMode = 'mine';
                 else if (TIMETABLE_DEPARTMENT_HEAD && saved === 'kafedra') scopeMode = 'kafedra';
                 else if (TIMETABLE_HAS_SUBJECTS && saved === 'subjects') scopeMode = 'subjects';
@@ -3531,6 +3535,7 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
+                teacherFullNames = Object.assign({}, j.teacher_full_names || {});
                 invalidateWeeklyConflicts();
                 invalidateCycleWeek();
                 applyWeeklyLayer(allCards);
@@ -7263,7 +7268,7 @@
                 if (scopeMode === mode) return;
                 scopeMode = mode;
                 mineOnly = mode !== 'all';
-                try { localStorage.setItem('lms:timetable-mine', mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : mode === 'subjects' ? 'subjects' : '0'); } catch (e) { }
+                try { localStorage.setItem(MINE_KEY, mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : mode === 'subjects' ? 'subjects' : '0'); } catch (e) { }
                 renderMineUi();
                 cards = scopeCards(allCards);
                 if (typeof renderAll === 'function') renderAll();
@@ -8162,6 +8167,20 @@
             let cycleWeekGen = 0;   // doska / sikl rejasi qayta yuklansa — kesh eskiradi (yo'ldagi javob ham)
             function invalidateCycleWeek() { cycleWeekGen++; }
             let crossCycleShown = [];   // joriy panjaradagi sikl darslari (data-cyc indeksi)
+            let teacherFullNames = {};  // teacher_id => to'liq F.I.Sh. (/data va cycle-week dan)
+            // O'qituvchi kesimi ustuni — teacher_id bo'yicha (kartada qisqa yoki to'liq nom bo'lsa ham bitta ustun); id yo'q — nom.
+            const teacherColKey = c => c.teacher_id ? 'T' + c.teacher_id : (c.teacher_name ? 'N:' + c.teacher_name : '— (biriktirilmagan)');
+            function teacherColLabel(key, names) {
+                if (key.startsWith('T')) return teacherFullNames[key.slice(1)] || (names || []).slice().sort((x, y) => y.length - x.length)[0] || key;
+                return key.startsWith('N:') ? key.slice(2) : key;
+            }
+            // Bitta dars: ma'ruza oqimi (fan, xona va aniq vaqt bir xil — turli yo'nalish kartalari ham) — to'qnashuv emas.
+            const sameCrossLesson = (a, b) => {
+                const x = a.c || a.l, y = b.c || b.l;
+                return x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb
+                    && String(x.subject_name || '').trim().toLowerCase() === String(y.subject_name || '').trim().toLowerCase()
+                    && String(x.auditorium_code || x.auditorium_name || '') === String(y.auditorium_code || y.auditorium_name || '');
+            };
             function cycleWeekSig() {
                 if (!board || !curWeek || weeklyLayer !== 'internal' || !CROSS_MODES.includes(viewMode)) return '';
                 return [board.id, curWeek, [...selectedFaculties].sort().join(','), [...selectedDirs].sort().join(','),
@@ -8175,6 +8194,7 @@
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-week', 'POST', Object.assign({ week: curWeek, layer: weeklyLayer }, scopeBody()));
                     if (cycleWeekSig() !== sig) return;   // eskirgan javob (hafta / qamrov o'zgardi)
                     cycleWeek = { sig: sig, lessons: Array.isArray(j.lessons) ? j.lessons : [], loading: '' };
+                    cycleWeek.lessons.forEach(l => { if (l.teacher_id && l.teacher_full_name) teacherFullNames[l.teacher_id] = l.teacher_full_name; });
                     if (CROSS_MODES.includes(viewMode)) { renderGrid(); renderStats(); }
                 } catch (e) {
                     console.warn('Sikl darslari olinmadi:', e);
@@ -8207,7 +8227,7 @@
                 const cyc = CROSS_MODES.includes(mode) ? cycleWeekLessons() : [];
                 if (CROSS_MODES.includes(mode)) loadCycleWeek();
                 crossCycleShown = cyc;
-                const keyOf = c => mode === 'teacher' ? (c.teacher_name || '— (biriktirilmagan)')
+                const keyOf = c => mode === 'teacher' ? teacherColKey(c)
                     : mode === 'room' ? (c.auditorium_name || '— (xona yo\'q)')
                     : c.subject_name;
                 // Darslar (haftalik karta va sikl darsi) — ustun, kun va [boshlanish, tugash) qatorlari (chizish uchun); fa/fb — akademik
@@ -8220,7 +8240,10 @@
                     const from = +l.pair, to = from + Math.max(1, +l.len_half || 1), fa = +l.hour || (from - 1) * rh + 1;
                     return { col: keyOf(l), day: +l.day, from: from, to: to, fa: fa, fb: fa + (+l.hours || (to - from) * rh), l: l, i: i };
                 }));
-                const cols = [...new Set(items.map(it => it.col))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                const namesOf = {};
+                if (mode === 'teacher') items.forEach(it => { const n = (it.c || it.l).teacher_name; if (n) (namesOf[it.col] = namesOf[it.col] || []).push(n); });
+                const colLabel = col => mode === 'teacher' ? teacherColLabel(col, namesOf[col]) : col;
+                const cols = [...new Set(items.map(it => it.col))].sort((a, b) => colLabel(a).localeCompare(colLabel(b), undefined, { numeric: true }));
                 let D = board.days;
                 Object.values(grids).forEach(gg => { D = Math.max(D, gg.days); });
                 const sched = boardSchedule().filter(it => it.type === 'pair');
@@ -8261,7 +8284,7 @@
                  });
                  cols.forEach(c => {
                      if (mode !== 'room') {
-                         h += '<th class="tt-grp px-2 py-1">' + esc(c) + '</th>';
+                         h += '<th class="tt-grp px-2 py-1">' + esc(colLabel(c)) + '</th>';
                          return;
                      }
                      const room = roomMeta[c] || { code: '', name: c, volume: null };
@@ -8300,10 +8323,19 @@
                                     '<div class="tt-cross-weeks">' + esc(detailLines[4] || '') + '</div>' +
                                     '</div>';
                             }).join('');
-                            // Bir katakda bir nechta dars (o'qituvchi/xona kesimida; haftalik ham, sikl ham) — to'qnashuv
-                            const clash = !noClash(col) && cl.items.some((a, x) => cl.items.some((b, y) => y > x && a.fa < b.fb && b.fa < a.fb));
-                            const conflict = clash ? ' style="outline:2px solid #ef4444;outline-offset:-2px" data-cross-clash="1" title="To\'qnashuv: bir vaqtda ' + cl.items.length + ' ta dars"' : '';
-                            h += '<td class="tt-cell' + rowEndCls(p + vs - 1) + '"' + rs + ' data-day="' + d + '" data-pair="' + p + '"' + conflict + '>' + inner + '</td>';
+                            // Bir katakda bir nechta dars (o'qituvchi/xona kesimida; haftalik ham, sikl ham) — to'qnashuv; sababi katakda va
+                            // yo'riqda: qaysi darslar bir vaqtda (bitta ma'ruza oqimi — bitta dars).
+                            const pairs = [];
+                            if (!noClash(col)) cl.items.forEach((a, x) => cl.items.forEach((b, y) => {
+                                if (y > x && a.fa < b.fb && b.fa < a.fb && !sameCrossLesson(a, b)) pairs.push([a, b]);
+                            }));
+                            const clashing = [...new Set(pairs.flat())];
+                            const what = it => { const c = it.c || it.l; const g = it.l ? cfGroupsText(it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name])
+                                : cfGroupsText(cardGroups(c)); return (it.l ? 'sikl: ' : '') + c.subject_name + ' (' + (c.training_type === 'lecture' ? 'M' : 'A') + ') ' + g; };
+                            const why = clashing.length ? 'To\'qnashuv — bir vaqtda ' + clashing.length + ' ta dars: ' + clashing.map(what).join('; ') : '';
+                            const conflict = clashing.length ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(why) + '"' : '';
+                            const whyHtml = clashing.length ? '<div class="tt-clash-why">⚠ Bir vaqtda ' + clashing.length + ' ta dars</div>' : '';
+                            h += '<td class="tt-cell' + rowEndCls(p + vs - 1) + '"' + rs + ' data-day="' + d + '" data-pair="' + p + '"' + conflict + '>' + whyHtml + inner + '</td>';
                         });
                         h += '</tr>';
                     }

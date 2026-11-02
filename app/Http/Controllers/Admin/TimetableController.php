@@ -3034,6 +3034,9 @@ class TimetableController extends Controller
             'my_kafedras' => $this->departmentHeadKafedraSafe(request()),
             // Fan mas'uli: "Mas'ul fanlarim" filtri uchun shu doskadagi mas'ul fanlari kartalari.
             'my_subject_card_ids' => $this->responsibleCardIds(request(), $cards),
+            // O'qituvchi kesimi: ustun — teacher_id, sarlavha — to'liq F.I.Sh. (kartadagi qisqa / to'liq nom farq qilsa ham bitta ustun).
+            'teacher_full_names' => (object) Teacher::whereIn('id', $cards->pluck('teacher_id')->filter()->unique()->values()->all())
+                ->pluck('full_name', 'id')->all(),
             // Guruh(cha) sarlavhasida faol talabalar soni (sikl jadvalidagi kabi): "fakultet|guruh" => son.
             'group_students' => $this->boardGroupStudentCounts($cards),
         ])
@@ -6196,6 +6199,8 @@ class TimetableController extends Controller
         $cardInfo = $cardIds ? DB::table('timetable_cards')->whereIn('id', $cardIds)
             ->get(['id', 'training_type', 'kafedra_name', 'subject_name', 'specialty_name', 'course', 'faculty_name', 'teacher_id'])->keyBy('id') : collect();
         $volumes = Auditorium::pluck('volume', 'code')->all();
+        $fullNames = Teacher::whereIn('id', array_values(array_unique(array_filter(array_map(fn ($e) => (int) $e['teacher_id'], $occ)))))
+            ->pluck('full_name', 'id')->all();
         // Sikl kun rejasi akademik soatlarda (to'liq 80–90 daqiqalik parada 1 para = 2 soat, cycleRowHours) — haftalik panjara
         // qatori esa bitta qo'ng'iroq bandi: pair / len_half — panjara qatorlarida, hour / hours — asl soatlar (oyna vaqti uchun).
         $rh = max(1, $this->cycleRowHours($board));
@@ -6223,6 +6228,7 @@ class TimetableController extends Controller
                 'subject_name' => (string) $u['subject'], 'group_name' => (string) $u['group'], 'group_names' => [(string) $u['group']],
                 'flow' => (string) $u['parent'], 'faculty_name' => $u['faculty'], 'specialty_name' => (string) $u['specialty'], 'course' => (int) $u['course'],
                 'kafedra_name' => $card->kafedra_name ?? null, 'teacher_id' => $e['teacher_id'], 'teacher_name' => $e['teacher'],
+                'teacher_full_name' => $e['teacher_id'] ? ($fullNames[(int) $e['teacher_id']] ?? null) : null,
                 'auditorium_code' => $e['room'], 'auditorium_name' => $e['room_name'] ?: null,
                 'auditorium_volume' => $e['room'] !== null ? ($volumes[$e['room']] ?? null) : null,
                 'date' => $e['date'], 'day' => $day, 'pair' => intdiv((int) $e['from'] - 1, $rh) + 1,

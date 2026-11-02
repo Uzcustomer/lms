@@ -115,7 +115,7 @@ const busyErr = msg => Object.assign(new Error(msg), { status: 409, data: { need
     assert.equal(calls.length, 3, 'davomiylik o\'zgarganda to\'qnashuvlar qayta so\'ralmadi');
 
     // 3a) Doska qayta yuklansa (dastur kalendari/ta'til o'zgardi, karta maydonlari esa o'zgarmagan) — baribir qayta so'raladi.
-    assert.match(source, /board = j\.board; allCards = j\.cards \|\| \[\];\n\s*invalidateWeeklyConflicts\(\);/);
+    assert.match(source, /board = j\.board; allCards = j\.cards \|\| \[\];\n[^\n]*\n\s*invalidateWeeklyConflicts\(\);/);
     ctx.refreshWeeklyConflicts();
     await tick();
     assert.equal(calls.length, 3);

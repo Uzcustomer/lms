@@ -1279,3 +1279,12 @@ it('karta yaratish va kartalar ro\'yxatini o\'zgartirish — faqat adminlar: o\'
     // O'quv bo'limi — tashqi qatlamni bo'shatadi (avvalgidek).
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.boards.unplace', $b), ['courses' => [2], 'layer' => 'external'])->assertOk();
 });
+
+it('/data: teacher_full_names — kartalardagi o\'qituvchilarning to\'liq F.I.Sh. (o\'qituvchi kesimi ustuni teacher_id bo\'yicha)', function () {
+    $s = layersSetup();
+    Role::findOrCreate('fan_masuli', 'web');
+    $t = fmTeacherLayers("MAHMARAIMOV SHAVKAT TO'XTASHOVICH");
+    $s['own']->update(['teacher_id' => $t->id, 'teacher_name' => 'MAHMARAIMOV SH. T.']);
+    $res = layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json();
+    expect($res['teacher_full_names'])->toBe([(string) $t->id => "MAHMARAIMOV SHAVKAT TO'XTASHOVICH"]);
+});

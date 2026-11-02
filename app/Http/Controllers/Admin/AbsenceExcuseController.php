@@ -60,9 +60,6 @@ class AbsenceExcuseController extends Controller
 
         $excuses = $query->paginate(20)->withQueryString();
 
-        // Ariza kunlarida darsda bo'lib baho olganlar — qatorda qizil ko'rinadi
-        $gradeConflictCounts = AbsenceExcuse::gradeConflictCounts($excuses->getCollection());
-
         $stats = [
             'pending' => AbsenceExcuse::where('status', 'pending')->count(),
             'approved' => AbsenceExcuse::where('status', 'approved')->count(),
@@ -88,7 +85,7 @@ class AbsenceExcuseController extends Controller
 
         $reasons = AbsenceExcuse::reasonLabels();
 
-        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses', 'gradeConflictCounts'));
+        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses'));
     }
 
     public function exportByStatus(string $status)

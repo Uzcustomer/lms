@@ -170,55 +170,18 @@ class AbsenceExcuse extends Model
      */
     public static function gradeConflicts(string $studentHemisId, $from, $to): Collection
     {
-        return self::attendedGrades([$studentHemisId], $from, $to)
-            ->orderBy('lesson_date')
-            ->get(['lesson_date', 'subject_id', 'subject_name', 'grade', 'lesson_pair_name']);
-    }
-
-    /**
-     * Ro'yxat sahifasi uchun bitta so'rovda: ariza id => ariza kunlarida olingan baholar soni
-     * (bahosi yo'q arizalar natijada bo'lmaydi).
-     */
-    public static function gradeConflictCounts(iterable $excuses): array
-    {
-        $excuses = collect($excuses);
-        if ($excuses->isEmpty()) {
-            return [];
-        }
-
-        $grades = self::attendedGrades(
-            $excuses->pluck('student_hemis_id')->unique()->values()->all(),
-            $excuses->min('start_date'),
-            $excuses->max('end_date')
-        )->get(['student_hemis_id', 'lesson_date'])->groupBy('student_hemis_id');
-
-        $counts = [];
-        foreach ($excuses as $excuse) {
-            $from = $excuse->start_date->toDateString();
-            $to = $excuse->end_date->toDateString();
-            $count = collect($grades->get($excuse->student_hemis_id, []))
-                ->filter(fn ($g) => substr((string) $g->lesson_date, 0, 10) >= $from && substr((string) $g->lesson_date, 0, 10) <= $to)
-                ->count();
-            if ($count > 0) {
-                $counts[$excuse->id] = $count;
-            }
-        }
-
-        return $counts;
-    }
-
-    /** Darsda bo'lib olingan baholar: NB va mustaqil ta'lim (99) emas, o'chirilmagan */
-    private static function attendedGrades(array $studentHemisIds, $from, $to): \Illuminate\Database\Query\Builder
-    {
         return DB::table('student_grades')
-            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('student_hemis_id', $studentHemisId)
             ->whereDate('lesson_date', '>=', $from)
             ->whereDate('lesson_date', '<=', $to)
             ->whereNotNull('grade')
             ->where(fn ($q) => $q->whereNull('reason')->orWhere('reason', '!=', 'absent'))
             ->where(fn ($q) => $q->whereNull('training_type_code')->orWhere('training_type_code', '!=', 99))
-            ->whereNull('deleted_at');
+            ->whereNull('deleted_at')
+            ->orderBy('lesson_date')
+            ->get(['lesson_date', 'subject_id', 'subject_name', 'grade', 'lesson_pair_name']);
     }
+
 
     public static function reasonLabels(): array
     {

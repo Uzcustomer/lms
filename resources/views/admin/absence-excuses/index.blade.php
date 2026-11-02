@@ -380,23 +380,11 @@
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @foreach($excuses as $excuse)
-                                    @php
-                                        $conflictCount = $gradeConflictCounts[$excuse->id] ?? 0;
-                                    @endphp
-                                    {{-- Ariza kunlarida baho olgan — qizil: ma'lumotnoma soxta bo'lishi mumkin --}}
-                                    <tr class="{{ $excuse->isPending() && !$conflictCount ? 'bg-yellow-50 dark:bg-yellow-900/10' : '' }}"
-                                        @if($conflictCount) style="background:rgba(239,68,68,.12);box-shadow:inset 4px 0 0 #dc2626;" @endif>
+                                    <tr class="{{ $excuse->isPending() ? 'bg-yellow-50 dark:bg-yellow-900/10' : '' }}">
                                         <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-medium">{{ $excuses->firstItem() + $loop->index }}</td>
                                         <td class="px-3 py-3 whitespace-nowrap">
                                             <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $excuse->student_full_name }}</div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400">{{ $excuse->student_hemis_id }}</div>
-                                            @if($conflictCount)
-                                                <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
-                                                   title="Talaba ariza kunlarida darsda bo'lib baho olgan — ma'lumotnoma soxta bo'lishi mumkin. Batafsil ariza sahifasida."
-                                                   style="display:inline-block;margin-top:4px;padding:1px 8px;border-radius:9999px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;">
-                                                    &#9888; Ariza kunlarida {{ $conflictCount }} ta baho
-                                                </a>
-                                            @endif
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $excuse->department_name ?? $excuse->student?->department_name ?? '-' }}</td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $excuse->student?->specialty_name ?? '-' }}</td>

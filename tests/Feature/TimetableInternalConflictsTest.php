@@ -865,3 +865,21 @@ it('smena maslahati: yakshanbadan o\'tadigan blok ham "yaqin" — oxiri ish kunl
         ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => $key])->assertOk()->json('advice');
     expect($advice)->toMatchArray(['kind' => 'free', 'start' => 7]);
 });
+
+it('smena maslahati: to\'liq parali doskada haftalik qator soatga o\'tkaziladi (IV para = 7–8-soat)', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10]], ['d22-05a' => 0, 'd22-05b' => 2]);
+    // 6 ta to'liq para (80 daqiqa): bir qator = 2 akademik soat; smena variantlari — 1, 3, 5, 7-soat.
+    $s['board']->update(['bell_schedule' => TimetableBoard::defaultBellSchedule(6), 'pairs_per_day' => 6]);
+    // SHARIPOV payshanba (17.09) IV parada (4-qator = 7–8-soat) haftalik darsda.
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya', 'course' => 2,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 1, 'weeks' => 15,
+        'subject_name' => 'Farmakologiya', 'group_name' => 'pp/2024-01b', 'teacher_id' => $sharipov->id, 'teacher_name' => 'SHARIPOV K. SH.',
+        'day' => 4, 'pair' => 4]);
+    $advice = test()->withoutVite()->actingAs(icTeacher('ADMIN', 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice'])
+        ->assertOk()->json('advice');
+    // 7-soatdan (IV para, 13:30) — 05a bilan kesishmaydi, lekin 17.09 da haftalik dars bilan qoladi ("bo'sh" emas).
+    expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
+        'text' => "13:30 ga o'tkazilsa faqat 17.09 (payshanba) qoladi: pp/2024-01b, Farmakologiya"]);
+});

@@ -44,7 +44,7 @@ const fakeEl = () => ({ setAttribute() {}, addEventListener(t, f) { this['on' + 
 const responses = [];
 const c2 = {
     esc, console, URLSearchParams, Promise, JSON, Object, Date, String, Set,
-    board: { id: 3 }, BASE: '/b', weeklyLayer: 'internal', viewMode: 'week',
+    board: { id: 3 }, BASE: '/b', weeklyLayer: 'internal', cycleLayer: null, viewMode: 'week',
     cfDate: d => String(d || '').split('-').reverse().slice(0, 2).join('.'),
     cfGroups: g => (g || []).join(', '),
     askSugReason: async () => 'sabab',
@@ -150,6 +150,26 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.match(calls[0][0], /range=week/);
     assert.match(mount.innerHTML, /<table class="ag-week"><tr><th><\/th><th>16\.11 \(dushanba\)<\/th><th>19\.11 \(payshanba\)<\/th><\/tr>/);
     assert.match(mount.innerHTML, /data-ag-pick="2026-11-19\|6"[^>]*>→ ko‘chirish<\/button>/);
+    // Qatlam — oyna ochilgan ko'rinishniki: sikl jadvalida sikl qatlami (haftalik qatlam tashqi bo'lsa ham ichki).
+    c2.viewMode = 'cycle'; c2.cycleLayer = null; c2.weeklyLayer = 'external';
+    responses.push(week);
+    calls.length = 0;
+    c2.agendaClick(el('[data-ag]', { dataset: { ag: 'next' } }));
+    await tick(); await tick();
+    assert.match(calls[0][0], /layer=internal/);
+    c2.cycleLayer = 'external';
+    responses.push(week);
+    calls.length = 0;
+    c2.agendaClick(el('[data-ag]', { dataset: { ag: 'prev' } }));
+    await tick(); await tick();
+    assert.match(calls[0][0], /layer=external/);
+    c2.viewMode = 'week'; c2.weeklyLayer = 'external';
+    responses.push(week);
+    calls.length = 0;
+    c2.agendaClick(el('[data-ag]', { dataset: { ag: 'next' } }));
+    await tick(); await tick();
+    assert.match(calls[0][0], /layer=external/);
+    c2.weeklyLayer = 'internal';
     // Yopish.
     c2.agendaClick(el('[data-ag]', { dataset: { ag: 'close' } }));
     assert.equal(c2.getSt(), null);

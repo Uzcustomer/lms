@@ -6893,8 +6893,10 @@
                 const st = ttAgenda;
                 if (!st || !board) return;
                 agendaRender(true);
+                // Qatlam — oyna ochilgan ko'rinishniki: sikl jadvalida — sikl qatlami, haftalikda — haftalik qatlam (ular alohida).
+                const layer = viewMode === 'cycle' ? cycleLayer : weeklyLayer;
                 const q = new URLSearchParams({ teacher_id: st.teacher_id, date: st.date, range: st.range,
-                    layer: weeklyLayer === 'external' ? 'external' : 'internal' });
+                    layer: layer === 'external' ? 'external' : 'internal' });
                 if (st.move) q.set('move', st.move);
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/teacher-agenda?' + q);

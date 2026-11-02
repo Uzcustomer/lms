@@ -114,9 +114,12 @@ trait TimetableCycleShiftAdvice
             $scope = $u['cards'] ? $this->groupScopeKey($u['cards'][0]) : '';
             $groups = array_flip(array_map(fn ($g) => $scope . '|' . $g['group'], $this->focusUnitGroups($u)));
             $weekly = $this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), max(array_column($mine, 'to')), $ids), $dates);
+            // Haftalik qator (to'liq parali doskada bir qator = 2 akademik soat) → sikl soati.
+            $rh = max(1, $this->cycleRowHours($board));
             foreach ($mine as $m) {
                 foreach ($weekly as $o) {
-                    if ($o['date'] !== $m['date'] || !($o['from'] < $m['to'] && $m['from'] < $o['to'])) {
+                    [$oFrom, $oTo] = [($o['from'] - 1) * $rh + 1, ($o['to'] - 1) * $rh + 1];
+                    if ($o['date'] !== $m['date'] || !($oFrom < $m['to'] && $m['from'] < $oTo)) {
                         continue;
                     }
                     $clash = ($m['teacher_id'] && $o['teacher_id'] === $m['teacher_id'])

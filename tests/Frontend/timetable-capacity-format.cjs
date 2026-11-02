@@ -40,12 +40,16 @@ tctx.renderSugCards(body, { week: 10 }, {});
 assert.doesNotMatch(body.innerHTML, /sug-cap-warn/);
 
 // Haftalik karta: server ogohlantirishi faqat o'sha hafta uchun (boshqa hafta yoki "Barcha haftalar" — yo'q).
-const wctx = { curWeek: 10 };
+const wctx = { curWeek: 10, weeklyLayer: 'internal' };
 vm.createContext(wctx);
 vm.runInContext(cut('            let weeklyCapWarn = ', '            let conflictSig = ') + '\nthis.set = v => { weeklyCapWarn = v; }; this.weeklyCapLine = weeklyCapLine;', wctx);
 wctx.set({ week: 10, map: { 7: { line: "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)" } } });
 assert.equal(wctx.weeklyCapLine({ id: 7 }), "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)");
 assert.equal(wctx.weeklyCapLine({ id: 8 }), '');
+// Tashqi qatlam (xonalar biriktirilmaydi) — ichki xona ogohlantirishi ko'rinmaydi.
+wctx.weeklyLayer = 'external';
+assert.equal(wctx.weeklyCapLine({ id: 7 }), '');
+wctx.weeklyLayer = 'internal';
 wctx.curWeek = 11;
 assert.equal(wctx.weeklyCapLine({ id: 7 }), '');
 wctx.curWeek = 0;

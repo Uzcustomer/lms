@@ -8858,7 +8858,9 @@
             let weeklyConflictItems = {};   // karta id => { hafta: [tuzilgan ro'yxat] } — o'tganlari ham (past)
             // Xona sig'imi (1.4) — ogohlantirish, to'qnashuv emas (hisoblagichga kirmaydi): tanlangan hafta, karta id => {…, line}.
             let weeklyCapWarn = { week: 0, map: {} };
-            const weeklyCapLine = c => (c && curWeek && weeklyCapWarn.week === curWeek && weeklyCapWarn.map[c.id] ? weeklyCapWarn.map[c.id].line || '' : '');
+            // Faqat ichki qatlam: tashqi jadvalda xona biriktirilmaydi (applyWeeklyLayer) — ichki xona haqidagi ogohlantirish ko'rinmaydi.
+            const weeklyCapLine = c => (c && curWeek && weeklyLayer === 'internal' && weeklyCapWarn.week === curWeek && weeklyCapWarn.map[c.id]
+                ? weeklyCapWarn.map[c.id].line || '' : '');
             let conflictSig = '';
             let conflictTimer = null;
             let conflictGen = 0;   // so'rov avlodi: kechikkan (eskirgan holat uchun) javob yangisining ustiga yozmasin

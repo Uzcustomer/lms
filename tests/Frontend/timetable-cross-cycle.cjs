@@ -175,6 +175,58 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     ctx.weekly = saveW;
     setLessons(saveL);
 
+    // 3d) Noyob darslar bo'yicha sanash (karta / sikl bloki + guruhcha + sana): bitta paraning ikkala yarmi (08:30 va 09:10 — ikki
+    // birlik kun rejasi farqli) — bitta dars, belgi yo'q, bitta chip (guruhlari qo'shiladi).
+    {
+        const sW = ctx.weekly, sL = cycleWeekData();
+        ctx.weekly = [];
+        const half = o => lesson(Object.assign({ day: 1, pair: 1, len_half: 1, row_hours: 2, hours: 1 }, o));
+        setLessons([half({ id: 51, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }),
+            half({ id: 51, hour: 2, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] })]);
+        ctx.renderGridCross('teacher');
+        let g = el('grid').innerHTML;
+        assert.doesNotMatch(g, /outline:2px solid #ef4444/);
+        assert.doesNotMatch(g, /Bir vaqtda/);
+        assert.equal((g.match(/tt-cyc-chip/g) || []).length, 1);
+        // "A + B" umumiy karta (ikki guruhcha birligida, vaqti farqli) — yolg'iz bo'lsa ham bitta dars, belgi yo'q.
+        setLessons([half({ id: 52, hour: 1, group_name: 'p/p21-01a', group_names: ['p/p21-01a'] }),
+            half({ id: 52, hour: 2, group_name: 'p/p21-01b', group_names: ['p/p21-01b'] })]);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.doesNotMatch(g, /Bir vaqtda/);
+        assert.equal((g.match(/tt-cyc-chip/g) || []).length, 1);
+        assert.match(g, /p\/p21-01a, p\/p21-01b/);   // birlashtirilgan chip — ikkala guruhcha
+        // MAHMARAIMOV, dushanba: bir vaqtda 3 ta guruhda (d1/d22-06a, p/p21-01a, p/p21-01b) — har biri ikki yarim para yozuvi
+        // bilan (12 yozuv): "Bir vaqtda 3 ta dars" va uchala dars ro'yxati.
+        const three = [];
+        [[61, 'd1/d22-06a'], [62, 'p/p21-01a'], [63, 'p/p21-01b']].forEach(([id, gname]) => [1, 2].forEach(hr => [0, 1].forEach(() =>
+            three.push(half({ id, hour: hr, group_name: gname, group_names: [gname] })))));
+        assert.equal(three.length, 12);
+        setLessons(three);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.equal((g.match(/⚠ Bir vaqtda 3 ta dars/g) || []).length, 1);
+        assert.doesNotMatch(g, /Bir vaqtda 12 ta dars/);
+        assert.match(g, /title="To'qnashuv — bir vaqtda 3 ta dars: sikl: Klinik farmakologiya \(A\) d1\/d22-06a; sikl: Klinik farmakologiya \(A\) p\/p21-01a; sikl: Klinik farmakologiya \(A\) p\/p21-01b"/);
+        assert.match(g, /<div class="tt-clash-list"><div>sikl: Klinik farmakologiya \(A\) d1\/d22-06a<\/div><div>[^<]*p\/p21-01a<\/div><div>[^<]*p\/p21-01b<\/div><\/div>/);
+        assert.equal((g.match(/tt-cyc-chip/g) || []).length, 3);
+        // Umumiy "01a + 01b" karta va boshqa guruh darsi — 2 sessiya, lekin 3 ta dars (karta + guruhcha).
+        setLessons([half({ id: 61, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }),
+            half({ id: 64, hour: 1, group_name: 'p/p21-01a + p/p21-01b', group_names: ['p/p21-01a + p/p21-01b'] })]);
+        ctx.renderGridCross('teacher');
+        assert.match(el('grid').innerHTML, /⚠ Bir vaqtda 3 ta dars/);
+        // Ma'ruza oqimi (ikki yo'nalish kartasi) + boshqa amaliy dars — oqim bitta dars: "2 ta dars".
+        const lec2 = o => Object.assign({ training_type: 'lecture', subject_name: 'Klinik farmakologiya', teacher_id: 5, teacher_name: 'MAHMARAIMOV SH. T.',
+            day: 2, pair: 1, len_half: 2, auditorium_code: 'Z8', auditorium_name: 'Zal 8' }, o);
+        ctx.weekly = [lec2({ id: 71, group_names: ['p/p22-02b', 'p/p22-02c'] }), lec2({ id: 72, group_names: ['d1/d22-06b', 'd1/d22-06c'] }),
+            { id: 73, training_type: 'practice', subject_name: 'Farmakologiya', teacher_id: 5, teacher_name: 'MAHMARAIMOV SH. T.', day: 2, pair: 1, len_half: 2, group_name: 'd22-01a' }];
+        setLessons([]);
+        ctx.renderGridCross('teacher');
+        assert.match(el('grid').innerHTML, /⚠ Bir vaqtda 2 ta dars/);
+        ctx.weekly = sW;
+        setLessons(sL);
+    }
+
     // 4) Kesim almashsa — qayta so'ralmaydi (ma'lumot bir xil). Fan kesimi: o'sha fan ustma-ust bo'lsa ham to'qnashuv emas.
     calls.length = 0;
     ctx.viewMode = 'subject';

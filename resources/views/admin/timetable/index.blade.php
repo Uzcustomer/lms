@@ -1104,6 +1104,7 @@
         /* Haftalik kesimdagi sikl darsi (faqat ko'rish): chap tomonda yashil chiziq va "sikl" belgisi */
         .tt-chip.tt-cyc-chip { box-shadow: inset 3px 0 0 #0d9488; cursor: pointer; }
         .tt-clash-why { font-size: 9px; font-weight: 700; color: #b91c1c; padding: 1px 3px; }
+        .tt-clash-list { font-size: 9px; color: #b91c1c; padding: 0 3px 2px; line-height: 1.25; }
         .tt-cyc-badge { display: inline-block; padding: 0 4px; border-radius: 4px; background: #0d9488; color: #fff; font-size: 8px; font-weight: 700; letter-spacing: .02em; vertical-align: 1px; }
         #crossCycPop { position: fixed; z-index: 60; width: 290px; max-width: calc(100vw - 16px); background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
             box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 10px 12px; font-size: 12px; }
@@ -8256,6 +8257,37 @@
                     && String(x.subject_name || '').trim().toLowerCase() === String(y.subject_name || '').trim().toLowerCase()
                     && String(x.auditorium_code || x.auditorium_name || '') === String(y.auditorium_code || y.auditorium_name || '');
             };
+            // Katakdagi darslar → noyob darslar (sessiyalar). Bitta karta (sikl darsida — karta + sana) — bitta dars: bitta paraning
+            // yarim soatlari (08:30 va 09:10), "A + B" umumiy karta guruhchalari; bitta ma'ruza oqimi (sameCrossLesson) — bitta dars.
+            // To'qnashuv — ikki xil sessiya vaqti kesishsa (check); son — turli darslar: sessiya guruhchalari (karta + guruhcha + sana),
+            // ma'ruza oqimi — bitta. Qaytaradi: { lessons: [{ items, groups, lecture }], clashing: [...], count }.
+            function crossCellLessons(list, check) {
+                const par = list.map((_, i) => i);
+                const find = i => par[i] === i ? i : (par[i] = find(par[i]));
+                const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[Math.max(a, b)] = Math.min(a, b); };
+                const seen = {};
+                list.forEach((it, i) => {
+                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
+                    if (k in seen) join(seen[k], i); else seen[k] = i;
+                });
+                list.forEach((a, i) => list.forEach((b, j) => { if (j > i && sameCrossLesson(a, b)) join(i, j); }));
+                const byRoot = {}, lessons = [];
+                list.forEach((it, i) => {
+                    const r = find(i);
+                    if (!byRoot[r]) lessons.push(byRoot[r] = { items: [], groups: [], lecture: false });
+                    const ls = byRoot[r], x = it.c || it.l;
+                    ls.items.push(it);
+                    ls.lecture = ls.lecture || x.training_type === 'lecture';
+                    (it.l ? (it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]) : cardGroups(x))
+                        .forEach(g => String(g || '').split(/\s*\+\s*/).forEach(sg => { sg = sg.trim(); if (sg && !ls.groups.includes(sg)) ls.groups.push(sg); }));
+                });
+                const hit = new Set();
+                if (check) lessons.forEach((a, x) => lessons.forEach((b, y) => {
+                    if (y > x && a.items.some(p => b.items.some(q => p.fa < q.fb && q.fa < p.fb))) { hit.add(a); hit.add(b); }
+                }));
+                const clashing = lessons.filter(ls => hit.has(ls));
+                return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
+            }
             function cycleWeekSig() {
                 if (!board || !curWeek || weeklyLayer !== 'internal' || !CROSS_MODES.includes(viewMode)) return '';
                 return [board.id, curWeek, [...selectedFaculties].sort().join(','), [...selectedDirs].sort().join(','),
@@ -8301,7 +8333,7 @@
                 const placed = visibleSpecCards().filter(c => effPlace(c)).map(effectiveCard);
                 const cyc = CROSS_MODES.includes(mode) ? cycleWeekLessons() : [];
                 if (CROSS_MODES.includes(mode)) loadCycleWeek();
-                crossCycleShown = cyc;
+                crossCycleShown = cyc.slice();   // + birlashtirilgan nusxalar (bitta darsning bir necha yozuvi — bitta chip)
                 const keyOf = c => mode === 'teacher' ? teacherColKey(c)
                     : mode === 'room' ? (c.auditorium_name || '— (xona yo\'q)')
                     : c.subject_name;
@@ -8384,7 +8416,24 @@
                             const vs = Math.max(1, Math.min(cl.to, P + 1) - p);
                             for (let k = 1; k < vs; k++) consumed[col + '|' + d + '|' + (p + k)] = 1;
                             const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                            const inner = cl.items.map(it => {
+                            // Noyob darslar: bitta darsning takror yozuvlari (yarim paralar, guruhchalar) — bitta chip (guruhlari qo'shiladi).
+                            const cell = crossCellLessons(cl.items, !noClash(col));
+                            const shown = [];
+                            cell.lessons.forEach(ls => {
+                                const seenIds = {};
+                                ls.items.forEach(it => {
+                                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
+                                    if (!(k in seenIds)) { seenIds[k] = shown.length; shown.push(it); return; }
+                                    if (!it.l) return;
+                                    const first = shown[seenIds[k]];
+                                    const gs = [...new Set([].concat(first.l.group_names && first.l.group_names.length ? first.l.group_names : [first.l.group_name],
+                                        it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]))];
+                                    const merged = Object.assign({}, first.l, { group_names: gs });
+                                    crossCycleShown.push(merged);
+                                    shown[seenIds[k]] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
+                                });
+                            });
+                            const inner = shown.map(it => {
                                 if (it.l) return cycChipHtml(it.l, it.i, mode);
                                 const c = it.c;
                                 const isLec = c.training_type === 'lecture';
@@ -8398,18 +8447,15 @@
                                     '<div class="tt-cross-weeks">' + esc(detailLines[4] || '') + '</div>' +
                                     '</div>';
                             }).join('');
-                            // Bir katakda bir nechta dars (o'qituvchi/xona kesimida; haftalik ham, sikl ham) — to'qnashuv; sababi katakda va
-                            // yo'riqda: qaysi darslar bir vaqtda (bitta ma'ruza oqimi — bitta dars).
-                            const pairs = [];
-                            if (!noClash(col)) cl.items.forEach((a, x) => cl.items.forEach((b, y) => {
-                                if (y > x && a.fa < b.fb && b.fa < a.fb && !sameCrossLesson(a, b)) pairs.push([a, b]);
-                            }));
-                            const clashing = [...new Set(pairs.flat())];
-                            const what = it => { const c = it.c || it.l; const g = it.l ? cfGroupsText(it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name])
-                                : cfGroupsText(cardGroups(c)); return (it.l ? 'sikl: ' : '') + c.subject_name + ' (' + (c.training_type === 'lecture' ? 'M' : 'A') + ') ' + g; };
-                            const why = clashing.length ? 'To\'qnashuv — bir vaqtda ' + clashing.length + ' ta dars: ' + clashing.map(what).join('; ') : '';
-                            const conflict = clashing.length ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(why) + '"' : '';
-                            const whyHtml = clashing.length ? '<div class="tt-clash-why">⚠ Bir vaqtda ' + clashing.length + ' ta dars</div>' : '';
+                            // Bir katakda vaqti kesishgan turli darslar (o'qituvchi/xona kesimida; haftalik ham, sikl ham) — to'qnashuv (kamida 2 ta
+                            // turli dars); son va ro'yxat — noyob darslar bo'yicha (bitta darsning takror yozuvlari, ma'ruza oqimi — bitta).
+                            const what = ls => { const it = ls.items[0], c = it.c || it.l;
+                                return (it.l ? 'sikl: ' : '') + c.subject_name + ' (' + (ls.lecture ? 'M' : 'A') + ') ' + cfGroupsText(ls.groups); };
+                            const clashOn = cell.clashing.length > 0;   // kamida ikki turli sessiya kesishgan
+                            const why = clashOn ? 'To\'qnashuv — bir vaqtda ' + cell.count + ' ta dars: ' + cell.clashing.map(what).join('; ') : '';
+                            const conflict = clashOn ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(why) + '"' : '';
+                            const whyHtml = clashOn ? '<div class="tt-clash-why">⚠ Bir vaqtda ' + cell.count + ' ta dars</div>'
+                                + '<div class="tt-clash-list">' + cell.clashing.map(ls => '<div>' + esc(what(ls)) + '</div>').join('') + '</div>' : '';
                             h += '<td class="tt-cell' + rowEndCls(p + vs - 1) + '"' + rs + ' data-day="' + d + '" data-pair="' + p + '"' + conflict + '>' + whyHtml + inner + '</td>';
                         });
                         h += '</tr>';

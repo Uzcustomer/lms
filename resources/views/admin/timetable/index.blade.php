@@ -3550,6 +3550,8 @@
             async function loadBoard(id) {
                 // Boshqa doskaga o'tayotgan bo'lsak — eski doskaga oid holatni tozalaymiz
                 const switching = !board || String(board.id) !== String(id);
+                // Boshqa doska: oldingi doskaning qamrov tanlovi so'rovga qo'shilmasin ("Butun doska" — tanlangan qamrov bo'yicha so'raladi).
+                if (switching) { curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear(); }
                 // URLga noyob parametr — har qanday kesh (brauzer/proxy) eski kartalarni
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
@@ -3557,6 +3559,7 @@
                 const seq = ++boardLoadSeq;
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now() + dataScope);
                 if (seq !== boardLoadSeq) return;   // eskirgan javob — undan keyin yangi so'rov yuborilgan
+                lastLoadSig = dataScope;   // shu parametrlar bilan yuklangan — xuddi shu so'rov takrorlanmaydi (scopeNeedsReload)
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
                 invalidateWeeklyConflicts();
@@ -3637,19 +3640,23 @@
             }
             // "Butun doska" (cheklangan rol): to'liq yuklangan yo'nalish+kurslar (null — hammasi yuklangan) va doskadagi barcha
             // yo'nalish+kurslar ro'yxati (qamrov tanlovi uchun); yuklangan haftalar (null — hammasi).
-            let loadedSpecs = null, specIndex = [], loadedWeeks = null, scopeReloadSig = '';
+            // lastLoadSig — oxirgi yuklangan so'rov parametrlari; scopeInflightSig — yo'ldagi avtomatik so'rov (takrorlanmasin).
+            let loadedSpecs = null, specIndex = [], loadedWeeks = null, lastLoadSig = null, scopeInflightSig = '';
             const specTriple = (fac, spec, course) => String(fac || '').trim().toLowerCase() + '|' + String(spec || '').trim().toLowerCase() + '|' + (+course);
-            // Tanlangan qamrovning yuklanmagan yo'nalish+kursi bormi — bo'lsa doska shu qamrov bilan qayta so'raladi (bir marta).
+            // Tanlangan qamrovning yuklanmagan yo'nalish+kursi bormi — bo'lsa doska shu qamrov bilan qayta so'raladi. Xuddi shu
+            // parametrlar bilan oxirgi yuklangan (server bergani shu) yoki yo'ldagi so'rov — takrorlanmaydi (sikl yo'q).
             function scopeNeedsReload() {
                 if (!TIMETABLE_SCOPED_DATA || scopeMode !== 'all' || !loadedSpecs) return false;
                 const missing = specIndex.some(r => selectedFaculties.has(r[0]) && selectedDirs.has(r[1]) && selectedCourses.has(+r[2])
                     && !loadedSpecs.has(specTriple(r[0], r[1], r[2])));
-                return missing && serverScopeParam() !== scopeReloadSig;
+                const sig = serverScopeParam();
+                return missing && sig !== lastLoadSig && sig !== scopeInflightSig;
             }
             function ensureScopeLoaded() {
                 if (!board || !scopeNeedsReload()) return false;
-                scopeReloadSig = serverScopeParam();
-                loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
+                const sig = scopeInflightSig = serverScopeParam();
+                loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message))
+                    .finally(() => { if (scopeInflightSig === sig) scopeInflightSig = ''; });
                 return true;
             }
             // Yuklangan kartalarni (qamrov qo'llangan — cards) ko'rsatadi; bo'sh bo'lsa false.
@@ -3663,7 +3670,11 @@
                     $('boardMsg').textContent = scopeEmpty
                         ? 'Tanlangan qamrovda darslar yo\'q — "Butun doska"ni tanlang.'
                         : 'Kartochkalar hali yaratilmagan — "Kartochkalarni yaratish"ni bosing.';
-                    if (scopeEmpty) renderMineUi();
+                    if (scopeEmpty) {
+                        renderMineUi();
+                        // "Butun doska": tanlov ro'yxati (spec_index) bo'sh javobda ham ko'rinsin; tanlangan qamrov yuklanmagan bo'lsa — so'raladi.
+                        if (specList.length) { fillSpecControls(); ensureScopeLoaded(); }
+                    }
                     syncUrl();
                     return false;
                 }

@@ -146,12 +146,15 @@ assert.equal(note.attrs.role, 'status');
             const scopeBody = () => ({ faculty_names: [...selectedFaculties], specialty_names: [...selectedDirs], courses: [...selectedCourses].sort((a, b) => a - b) });
             const $ = id => this.els[id];
             const calls = this.calls;
-            const scopeCards = l => l, buildSpecList = () => {}, renderMineUi = () => {}, syncUrl = () => {}, fillSpecControls = () => {},
+            const scopeCards = l => l, buildSpecList = () => {}, renderMineUi = () => {}, syncUrl = () => {},
+                fillSpecControls = () => { calls.push('fill'); if (this.seed) { selectedFaculties = new Set(this.seed[0]); selectedDirs = new Set(this.seed[1]); selectedCourses = new Set(this.seed[2]); } },
                 fillGridInputs = () => {}, renderAll = () => {}, loadCyclePlan = () => {};
             const loadBoard = () => { calls.push('load'); return Promise.resolve(); };
             ${fns}
             this.api = { serverScopeParam, ensureScopeLoaded, setSel: (a, b, cc) => { selectedFaculties = new Set(a); selectedDirs = new Set(b); selectedCourses = new Set(cc); },
-                setLoaded: (idx, loaded) => { specIndex = idx; loadedSpecs = loaded ? new Set(loaded.map(r => specTriple(r[0], r[1], r[2]))) : null; } };`, x);
+                setLoaded: (idx, loaded) => { specIndex = idx; loadedSpecs = loaded ? new Set(loaded.map(r => specTriple(r[0], r[1], r[2]))) : null; },
+                setMode: m => { scopeMode = m; }, setLastLoad: v => { lastLoadSig = v; }, setInflight: v => { scopeInflightSig = v; },
+                setSpecList: v => { specList = v; }, showLoadedCards };`, x);
         return x;
     };
     assert.equal(runSel('head', 'all', [['F1'], ['davolash ishi'], [2, 1]]).api.serverScopeParam(),
@@ -165,7 +168,25 @@ assert.equal(note.attrs.role, 'status');
     z.api.setSel(['F2'], ['pediatriya'], [3]);
     assert.equal(z.api.ensureScopeLoaded(), true);
     assert.deepEqual(z.calls, ['load']);
-    assert.equal(z.api.ensureScopeLoaded(), false);   // o'sha so'rov takrorlanmaydi (sikl yo'q)
+    assert.equal(z.api.ensureScopeLoaded(), false);   // yo'ldagi so'rov takrorlanmaydi
+    // Xuddi shu parametrlar bilan yuklangan (server bergani shu) — takrorlanmaydi (sikl yo'q).
+    const sigB = z.api.serverScopeParam();
+    z.api.setInflight('');
+    z.api.setLastLoad(sigB);
+    assert.equal(z.api.ensureScopeLoaded(), false);
+    // Codex: B yuklangan, so'ng "Faqat meniki" (faqat A) yuklandi, yana "Butun doska" va B — qayta so'raladi (oxirgi yuklangan — boshqa).
+    z.api.setLastLoad('&scope=mine');
+    assert.equal(z.api.ensureScopeLoaded(), true);
+    assert.deepEqual(z.calls, ['load', 'load']);
+    // "Butun doska", javob bo'sh (boshqa doska: tanlov tozalangan, rol doirasida darslar yo'q) — tanlov ro'yxati spec_index'dan
+    // to'ldiriladi va tanlangan yo'nalish+kurs so'raladi (Codex).
+    const e = runSel('head', 'all', [[], [], []]);
+    e.seed = [['F2'], ['pediatriya'], [3]];
+    e.api.setLoaded([['F2', 'pediatriya', 3, 5]], []);
+    e.api.setSpecList([{ key: 'F2|pediatriya|3', faculty: 'F2', specialty_name: 'pediatriya', course: 3, idx: true }]);
+    assert.equal(e.api.showLoadedCards(), false);
+    assert.equal(e.els.specBar.hidden(), false);
+    assert.deepEqual(e.calls, ['fill', 'load']);
     // Rol doirasidagi rejimda (Kafedraniki) — qayta so'ralmaydi.
     const k = runSel('head', 'kafedra', [['F2'], ['pediatriya'], [3]]);
     k.api.setLoaded([['F2', 'pediatriya', 3, 5]], null);
@@ -178,7 +199,8 @@ assert.equal(note.attrs.role, 'status');
     const c = { applied: [], pending: [], el };
     vm.createContext(c);
     vm.runInContext(`
-        let board = null, scopeMode = 'all';
+        let board = null, scopeMode = 'all', curSpec = { key: 'old' }, lastLoadSig = null;
+        let selectedFaculties = new Set(['F-old']), selectedDirs = new Set(['d-old']), selectedCourses = new Set([4]);
         const TIMETABLE_READ_ONLY = true, BASE = '/b';
         const $ = () => this.el(), toggleAscToolbar = () => {}, syncUrl = () => {};
         const serverScopeParam = () => TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
@@ -186,7 +208,21 @@ assert.equal(note.attrs.role, 'status');
         ${head}
                 board = j.board; this.applied.push(j.tag);
             }
-        this.loadBoard = loadBoard; this.hideBoard = hideBoard; this.setScope = m => { scopeMode = m; };`, c);
+        this.loadBoard = loadBoard; this.hideBoard = hideBoard; this.setScope = m => { scopeMode = m; };
+        this.sel = () => [curSpec, selectedFaculties.size, selectedDirs.size, selectedCourses.size, lastLoadSig];
+        this.setSel = () => { curSpec = { key: 'k' }; selectedFaculties = new Set(['F1']); selectedDirs = new Set(['d']); selectedCourses = new Set([2]); };`, c);
+    // Boshqa doskaga o'tishda oldingi doska qamrov tanlovi so'rovdan oldin tozalanadi (Codex).
+    const p0 = c.loadBoard(3);
+    assert.deepEqual(JSON.parse(JSON.stringify(c.sel().slice(0, 4))), [null, 0, 0, 0]);
+    c.pending[0].res({ board: { id: 3 }, tag: 'first' });
+    await p0;
+    assert.equal(c.sel()[4], '');   // oxirgi yuklangan parametrlar
+    c.setSel();
+    const pSame = c.loadBoard(3);   // o'sha doska — tanlov saqlanadi
+    assert.deepEqual(JSON.parse(JSON.stringify(c.sel().slice(1, 4))), [1, 1, 1]);
+    c.pending[1].res({ board: { id: 3 }, tag: 'same' });
+    await pSame;
+    c.pending.length = 0; c.applied.length = 0;
     c.setScope('mine');
     const p1 = c.loadBoard(3);              // "Faqat meniki"
     c.setScope('all');

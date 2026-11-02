@@ -35,12 +35,12 @@ const ctx = {
     window: {}, alert: m => { throw new Error('alert: ' + m); }, String,
     ttToast() {}, loadChangeRequests: async () => {}, loadBoard: async () => {}, confirm: () => true,
     document: {
-        getElementById: id => (id === 'ttSugReasonModal' ? (reasonModal && !reasonModal.removed ? reasonModal : null)
+        getElementById: id => (id === 'ttReasonModal' ? (reasonModal && !reasonModal.removed ? reasonModal : null)
             : { querySelector: sel => (sel === '#ttSugBody' ? ctx.body : ctx.title), addEventListener() {} }),
         createElement: () => ({ style: {}, attrs: {}, handlers: {}, removed: false, setAttribute(k, v) { this.attrs[k] = v; },
             addEventListener(t, fn) { this.handlers[t] = fn; }, remove() { this.removed = true; },
-            querySelector(sel) { return sel === '#ttSugReasonText' ? (this.ta = this.ta || { value: '', focus() {} }) : null; } }),
-        body: { appendChild: n => { if (n.id === 'ttSugReasonModal') reasonModal = n; } },
+            querySelector(sel) { return sel === '#ttReasonText' ? (this.ta = this.ta || { value: '', focus() {} }) : null; } }),
+        body: { appendChild: n => { if (n.id === 'ttReasonModal') reasonModal = n; } },
         addEventListener() {}, removeEventListener() {},
     },
     api: async (url, method, body) => {
@@ -95,7 +95,7 @@ const card = (id, partial, sugs) => ({ id, subject: 'S' + id, type: 'practice', 
     const submitReason = text => {
         assert(reasonModal && !reasonModal.removed, 'sabab oynasi ochilmadi');
         reasonModal.ta.value = text;
-        reasonModal.handlers.click({ target: { closest: () => ({ dataset: { sugReason: 'ok' } }) } });
+        reasonModal.handlers.click({ target: { closest: () => ({ dataset: { reason: 'ok' } }) } });
     };
     for (const bulk of [false, true]) {
         posts.length = 0;

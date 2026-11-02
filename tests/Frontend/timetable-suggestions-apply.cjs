@@ -15,7 +15,7 @@ const doc = {
     createElement: tag => {
         const n = { tag, id: '', attrs: {}, style: {}, innerHTML: '', removed: false, handlers: {},
             setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(type, fn) { this.handlers[type] = fn; }, remove() { this.removed = true; },
-            querySelector(sel) { return sel === '#ttSugReasonText' ? (this.ta = this.ta || { value: '', focused: false, focus() { this.focused = true; } }) : null; } };
+            querySelector(sel) { return sel === '#ttReasonText' ? (this.ta = this.ta || { value: '', focused: false, focus() { this.focused = true; } }) : null; } };
         return n;
     },
     getElementById: id => doc.nodes.find(n => n.id === id && !n.removed) || null,
@@ -26,15 +26,15 @@ const doc = {
 const ctx = { esc: s => String(s), SUG_COLOR: {}, SUG_LABEL: { slot: "Bo'sh vaqt", blocker: 'Darsni surish' }, document: doc, String, Promise,
     prompt: () => { throw new Error("native prompt() ishlatilmasin"); } };
 vm.createContext(ctx);
-vm.runInContext(source.slice(a, b) + '\nthis.sugRowHtml = sugRowHtml; this.sugFooterHtml = sugFooterHtml; this.askSugReason = askSugReason;', ctx);
+vm.runInContext(source.slice(a, b) + '\nthis.sugRowHtml = sugRowHtml; this.sugFooterHtml = sugFooterHtml; this.askSugReason = askSugReason; this.askRejectReason = askRejectReason;', ctx);
 
 const PENDING = Symbol('pending');
 // Hal bo'lmagan promise'da Node jim chiqib ketadi — oxirigacha yetganini alohida tekshiramiz.
 let finished = false;
 process.on('exit', code => { if (!finished && code === 0) { console.error('test oxirigacha yetmadi (kutilgan promise hal bo\'lmadi)'); process.exitCode = 1; } });
 const state = p => Promise.race([p, new Promise(r => setImmediate(() => r(PENDING)))]);
-const open = () => { const p = ctx.askSugReason(); return [p, doc.getElementById('ttSugReasonModal')]; };
-const click = (m, kind) => m.handlers.click({ target: kind ? { closest: sel => (sel === '[data-sug-reason]' ? { dataset: { sugReason: kind } } : null) } : m });
+const open = () => { const p = ctx.askSugReason(); return [p, doc.getElementById('ttReasonModal')]; };
+const click = (m, kind) => m.handlers.click({ target: kind ? { closest: sel => (sel === '[data-reason]' ? { dataset: { reason: kind } } : null) } : m });
 const key = o => {
     const ev = Object.assign({ prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } }, o);
     listeners.filter(l => l[0] === 'keydown').forEach(l => l[1](ev));
@@ -47,9 +47,9 @@ const key = o => {
     assert(m, 'oyna ochilmadi');
     assert.equal(m.attrs.role, 'dialog');
     assert.equal(m.attrs['aria-modal'], 'true');
-    assert.match(m.innerHTML, /<textarea id="ttSugReasonText" rows="4" maxlength="1000"/);
-    assert.match(m.innerHTML, /data-sug-reason="cancel"[^>]*>Bekor<\/button>/);
-    assert.match(m.innerHTML, /data-sug-reason="ok"[^>]*>Yuborish<\/button>/);
+    assert.match(m.innerHTML, /<textarea id="ttReasonText" rows="4" maxlength="1000"/);
+    assert.match(m.innerHTML, /data-reason="cancel"[^>]*>Bekor<\/button>/);
+    assert.match(m.innerHTML, /data-reason="ok"[^>]*>Yuborish<\/button>/);
     assert.match(m.innerHTML, /Kafedra mudiri va registrator ofisi ko'radi/);
     assert.equal(m.ta.focused, true);
     assert.deepEqual(listeners.map(l => [l[0], l[2]]), [['keydown', true]]);
@@ -104,7 +104,32 @@ const key = o => {
     assert.match(source, /Object\.assign\(\{ week: res\.week, card_id: c\.id, type: sug\.type, title: sug\.title, actions: sug\.actions \}, sug\.mode === 'direct' \? \{\} : \{ reason \}\)\);/);
     assert.match(source, /const reason = sug\.mode === 'direct' \? '' : await askSugReason\(\);\n\s+if \(reason === null\) \{ sugNote\(body, "So'rov yuborilmadi: sabab kiritilmadi\.", 'err'\); return; \}/);
     assert.match(source, /const reason = list\.some\(x => x\.sug\.mode !== 'direct'\) \? await askSugReason\(\) : '';\n\s+if \(reason === null\) \{ sugNote\(body, "So'rov yuborilmadi: sabab kiritilmadi\.", 'err'\); return; \}/);
-    assert.doesNotMatch(source.slice(source.indexOf('function askSugReason()'), source.indexOf('function sugRowHtml(')), /prompt\(/);
+    assert.doesNotMatch(source.slice(source.indexOf('function askReasonDialog('), source.indexOf('function sugRowHtml(')), /prompt\(/);
+    assert.doesNotMatch(source, /(^|[^.\w]|window\.)prompt\(\s*['"`]/m, "sahifada native prompt() chaqiruvi qolmasin");
+
+    // "Jadval o'zgarishlari" — rad etish sababi: o'sha oyna, o'z sarlavhasi va qizil "Rad etish" tugmasi; bo'sh yoki bekor — null.
+    let [r, rm] = [ctx.askRejectReason(), doc.getElementById('ttReasonModal')];
+    assert.match(rm.innerHTML, /<b id="ttReasonTitle"[^>]*>Rad etish sababi<\/b>/);
+    assert.match(rm.innerHTML, /Taklif yuboruvchiga boradi\./);
+    assert.match(rm.innerHTML, /data-reason="ok" style="[^"]*background:#dc2626;color:#fff">Rad etish<\/button>/);
+    assert.match(rm.innerHTML, /placeholder="Masalan: xona shu vaqtda band"/);
+    rm.ta.value = '  ';
+    click(rm, 'ok');
+    assert.equal(await r, null);
+    [r, rm] = [ctx.askRejectReason(), doc.getElementById('ttReasonModal')];
+    rm.ta.value = ' Xona band ';
+    click(rm, 'ok');
+    assert.equal(await r, 'Xona band');
+    assert.equal(listeners.length, 0);
+    // Oyna "Jadval o'zgarishlari" (#crModal) va Takliflar oynasi ustida, xabarlar (#ttToastBox) ostida — aks holda ko'rinmay qolardi.
+    [r, rm] = [ctx.askSugReason(), doc.getElementById('ttReasonModal')];
+    const z = +rm.style.cssText.match(/z-index:(\d+)/)[1];
+    const cssZ = id => +source.match(new RegExp('#' + id + ' \\{[^}]*z-index: (\\d+)'))[1];
+    assert(z > cssZ('crModal'), 'z-index ' + z + ' <= #crModal ' + cssZ('crModal'));
+    assert(z < cssZ('ttToastBox'), 'z-index ' + z + ' >= #ttToastBox');
+    assert(z > +source.match(/box\.id = 'ttSugModal';\n\s+box\.style\.cssText = '[^']*z-index:(\d+)/)[1]);
+    click(rm, 'cancel');
+    assert.equal(await r, null);
 
 const ok = ctx.sugRowHtml({ type: 'slot', title: 'Seshanba III', can_apply: true, mode: 'department' }, 0, 1, 'request');
 assert.match(ok, /data-sug-pick="0:1"/);
@@ -120,5 +145,5 @@ assert.match(ctx.sugRowHtml({ type: 'slot', title: 'x', can_apply: true, mode: '
 assert.match(ctx.sugFooterHtml('request'), /data-sug-apply-all disabled[^>]*>Tanlanganlarni qo'llash/);
 assert.match(ctx.sugFooterHtml(null), /Faqat ko'rish/);
 finished = true;
-console.log('timetable suggestions apply: 14 scenarios passed');
+console.log('timetable suggestions apply: 17 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

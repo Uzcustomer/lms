@@ -4980,10 +4980,10 @@
                     if (chk.checked) body.querySelectorAll('[data-sug-pick^="' + chk.dataset.sugPick.split(':')[0] + ':"]').forEach(o => { if (o !== chk) o.checked = false; });
                     sync();
                 });
-                const applyOne = async (ci, si) => {
+                const applyOne = async (ci, si, reason) => {
                     const c = window.__ttSug[ci], sug = c.suggestions[si];
                     const r = await api(BASE + '/boards/' + board.id + '/week-suggestions/' + (sug.mode === 'direct' ? 'apply' : 'propose'), 'POST',
-                        { week: res.week, card_id: c.id, type: sug.type, title: sug.title, actions: sug.actions });
+                        Object.assign({ week: res.week, card_id: c.id, type: sug.type, title: sug.title, actions: sug.actions }, sug.mode === 'direct' ? {} : { reason }));
                     return r;
                 };
                 const confirmSug = sug => !((sug.type === 'teacher' && !confirm('O\'qituvchi butun semestr uchun almashadi. Davom etamizmi?'))
@@ -4999,20 +4999,26 @@
                     const [ci, si] = btn.dataset.sug.split(':').map(Number);
                     const sug = window.__ttSug[ci].suggestions[si];
                     if (!sug.can_apply || !confirmSug(sug)) return;
+                    // So'rov (kafedra mudiri / registrator tasdig'i) — sabab majburiy.
+                    const reason = sug.mode === 'direct' ? '' : askSugReason();
+                    if (reason === null) { sugNote(body, "So'rov yuborilmadi: sabab kiritilmadi.", 'err'); return; }
                     btn.disabled = true; btn.textContent = '…';
                     // Yaxlit: server barcha amallarni bitta tranzaksiyada bajaradi (yoki bitta so'rov yaratadi) — qisman bajarilmaydi.
-                    try { const r = await applyOne(ci, si); await finish([r.message || 'Qo\'llandi.']); }
+                    try { const r = await applyOne(ci, si, reason); await finish([r.message || 'Qo\'llandi.']); }
                     catch (e) { sugNote(body, 'Bajarilmadi (jadval o\'zgarmadi): ' + esc(e.message), 'err'); btn.disabled = false; btn.textContent = sugApplyLabel(sug.mode); }
                 });
                 const all = body.querySelector('[data-sug-apply-all]');
                 if (all) all.onclick = async () => {
                     const list = pick();
                     if (!list.length || list.some(([ci, si]) => !confirmSug(window.__ttSug[ci].suggestions[si]))) return;
+                    // So'rovlar bo'lsa — sabab bir marta so'raladi (hammasiga).
+                    const reason = list.some(([ci, si]) => window.__ttSug[ci].suggestions[si].mode !== 'direct') ? askSugReason() : '';
+                    if (reason === null) { sugNote(body, "So'rov yuborilmadi: sabab kiritilmadi.", 'err'); return; }
                     all.disabled = true;
                     const msgs = [], errs = [];
                     for (const [ci, si] of list) {
                         const c = window.__ttSug[ci];
-                        try { const r = await applyOne(ci, si); msgs.push(c.subject + ': ' + (r.message || 'qo\'llandi')); }
+                        try { const r = await applyOne(ci, si, reason); msgs.push(c.subject + ': ' + (r.message || 'qo\'llandi')); }
                         catch (e) { errs.push(c.subject + ': ' + e.message); }
                     }
                     // Har tanlangan taklif — alohida so'rov; bajarilmaganlari oyna ichida (qayta hisoblangan ro'yxat ustida).
@@ -5022,6 +5028,11 @@
             }
             // Taklif qatori: katakcha (qo'llash mumkin bo'lsa), turi, matni, "Qo'llash" (yoki o'chiq — sababi bilan).
             function sugApplyLabel(mode) { return mode === 'direct' ? 'Qo\'llash' : 'So\'rov yuborish'; }
+            // "So'rov yuborish" sababi (kafedra mudiri va registrator ofisi ko'radi): bekor qilinsa yoki bo'sh — null (yuborilmaydi).
+            function askSugReason() {
+                const r = prompt("So'rov sababi (kafedra mudiri va registrator ofisi ko'radi):", '');
+                return r === null || !String(r).trim() ? null : String(r).trim();
+            }
             function sugRowHtml(s, ci, si, applyMode) {
                 const can = Boolean(s.can_apply);
                 return '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;border-top:1px dashed #f1f5f9">' +

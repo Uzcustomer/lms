@@ -228,6 +228,9 @@ class TimetableChangeRequestController extends Controller
         $data['actions'] = array_map(fn ($a) => $a + ['week' => (int) $data['week']], array_values($data['actions']));
         $check = $ctl->suggestionApplyCheck($rights, $board, $data);
         abort_unless($check['mode'] !== null, $check['code'], (string) $check['why']);
+        // Sabab — so'rov yuboruvchi kiritadi (kafedra mudiri va registrator ko'radi; so'rov matniga qo'shiladi). Huquqdan keyin.
+        $userReason = trim((string) $request->validate(['reason' => 'required|string|max:1000'],
+            ['reason.required' => "So'rov sababini kiriting."])['reason']);
         $run = $ctl->suggestionDryRun($board, $data, []);
         $cards = $ctl->suggestionCards($board, $data);
         $primary = $cards->firstWhere('id', (int) $data['card_id']) ?? $cards->first();
@@ -236,7 +239,7 @@ class TimetableChangeRequestController extends Controller
             : ($cards->every(fn ($c) => (int) $c->teacher_id === $tid) ? 'oqituvchi' : 'fan_masuli');
         $payload = ['week' => (int) $data['week'], 'card_id' => (int) $data['card_id'], 'type' => $data['type'] ?? null,
             'title' => $data['title'] ?? null, 'actions' => $data['actions']];
-        $draft = $svc->draft($this->proposalRequest(TimetableController::SUGGESTION_ROUTE, $payload, 'board', $board), $actor, $board, $as);
+        $draft = $svc->draft($this->proposalRequest(TimetableController::SUGGESTION_ROUTE, $payload + ['_change_hint' => $userReason], 'board', $board), $actor, $board, $as);
         $draft['details']['proposer'] = ['as' => $as, 'teacher_id' => $tid];
         $draft['details']['lesson_teacher_ids'] = array_values(array_diff($run['teacher_ids'], [$tid]));
         $draft['details']['notices'] = $run['notices'];
@@ -244,7 +247,7 @@ class TimetableChangeRequestController extends Controller
         $first = $run['notices'][0] ?? ['old' => '—', 'new' => (string) ($data['title'] ?? ''), 'subject' => (string) $primary->subject_name,
             'teacher' => (string) $primary->teacher_name, 'room' => (string) ($primary->auditorium_name ?: $primary->auditorium_code)];
         $notice = ['old' => $first['old'], 'new' => $first['new'], 'subject' => $first['subject'], 'teacher' => $first['teacher'], 'room' => $first['room'] ?? ''];
-        $reason = 'Takliflar: ' . (string) ($data['title'] ?? '');
+        $reason = $userReason;
         if ($as !== 'kafedra_mudiri') {
             $department = $this->proposalDepartment(fn (int $id) => $ctl->proposalDepartmentMatches($primary, $id));
 

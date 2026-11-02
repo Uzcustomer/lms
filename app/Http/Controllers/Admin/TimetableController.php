@@ -9600,11 +9600,32 @@ class TimetableController extends Controller
     /** Match the card's department using the same aliases used for head editing rights. */
     public function proposalDepartmentMatches(TimetableCard $card, int $departmentId): bool
     {
-        $names = DB::table('curriculum_subjects')->where('department_id', $departmentId)
-            ->whereNotNull('department_name')->distinct()->pluck('department_name')->all();
-        $names[] = Department::where('department_hemis_id', $departmentId)->value('name');
+        return $this->sameKafedra($card->kafedra_name, array_values(array_filter($this->kafedraNamesIndex()[$departmentId] ?? [])));
+    }
 
-        return $this->sameKafedra($card->kafedra_name, array_values(array_filter($names)));
+    /** @var array<int, string[]>|null kafedra id => nomlari (bitta so'rovda; so'rov davomida qayta ishlatiladi) */
+    private ?array $kafedraNamesIndexCache = null;
+
+    /**
+     * Kafedra nomlari: department_hemis_id => [curriculum_subjects.department_name ..., departments.name]. Takliflar va vaqt
+     * so'rovlarida fan kafedrasini topish (proposalDepartment) har kafedra uchun 2 so'rov (curriculum_subjects bo'ylab DISTINCT)
+     * qilardi — 150+ kafedrada o'nlab soniya; endi butun indeks ikki so'rovda.
+     */
+    private function kafedraNamesIndex(): array
+    {
+        if ($this->kafedraNamesIndexCache !== null) {
+            return $this->kafedraNamesIndexCache;
+        }
+        $idx = [];
+        foreach (DB::table('curriculum_subjects')->whereNotNull('department_name')->where('department_name', '!=', '')
+            ->select('department_id', 'department_name')->distinct()->cursor() as $r) {
+            $idx[(int) $r->department_id][] = (string) $r->department_name;
+        }
+        foreach (Department::query()->get(['department_hemis_id', 'name']) as $d) {
+            $idx[(int) $d->department_hemis_id][] = (string) $d->name;
+        }
+
+        return $this->kafedraNamesIndexCache = $idx;
     }
 
     public function weekOverride(Request $request, TimetableCard $card)

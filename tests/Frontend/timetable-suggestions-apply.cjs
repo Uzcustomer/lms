@@ -103,7 +103,7 @@ const key = o => {
     // Handlerlar oynani kutadi; bekor yoki bo'sh bo'lsa — avvalgidek oyna ichida xabar, so'rov yuborilmaydi.
     assert.match(source, /Object\.assign\(\{ week: res\.week, card_id: c\.id, type: sug\.type, title: sug\.title, actions: sug\.actions \}, sug\.mode === 'direct' \? \{\} : \{ reason \}\)\);/);
     assert.match(source, /const reason = sug\.mode === 'direct' \? '' : await askSugReason\(\);\n\s+if \(reason === null\) \{ sugNote\(body, "So'rov yuborilmadi: sabab kiritilmadi\.", 'err'\); return; \}/);
-    assert.match(source, /const reason = list\.some\(\(\[ci, si\]\) => window\.__ttSug\[ci\]\.suggestions\[si\]\.mode !== 'direct'\) \? await askSugReason\(\) : '';\n\s+if \(reason === null\) \{ sugNote\(body, "So'rov yuborilmadi: sabab kiritilmadi\.", 'err'\); return; \}/);
+    assert.match(source, /const reason = list\.some\(x => x\.sug\.mode !== 'direct'\) \? await askSugReason\(\) : '';\n\s+if \(reason === null\) \{ sugNote\(body, "So'rov yuborilmadi: sabab kiritilmadi\.", 'err'\); return; \}/);
     assert.doesNotMatch(source.slice(source.indexOf('function askSugReason()'), source.indexOf('function sugRowHtml(')), /prompt\(/);
 
 const ok = ctx.sugRowHtml({ type: 'slot', title: 'Seshanba III', can_apply: true, mode: 'department' }, 0, 1, 'request');

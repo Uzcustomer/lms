@@ -8560,9 +8560,11 @@
                                 const chips = [];   // [{ keys: Set, idx }]
                                 ls.items.forEach(it => {
                                     // Sikl yozuvlari — o'sha karta (+ sana) yoki o'sha dars kaliti (fan + tur + guruh) bo'lsa bitta chip (qismlari
-                                    // parts'da); haftalik karta — o'z chipi.
+                                    // parts'da), o'qituvchi va xonasi ham bir xil bo'lsa: chip bitta o'qituvchi/xonani ko'rsatadi — boshqasi
+                                    // alohida chip (dars sanog'i o'zgarmaydi). Haftalik karta — o'z chipi.
                                     const lk = it.l ? crossLessonKey(it) : null;
-                                    const keys = it.l ? ['C' + it.l.id + '|' + (it.l.date || '')].concat(lk ? [lk + '|' + (it.l.date || '')] : []) : ['W' + it.c.id];
+                                    const asg = it.l ? '|T' + (it.l.teacher_id || it.l.teacher_name || '') + '|R' + (it.l.auditorium_code || it.l.auditorium_name || '') : '';
+                                    const keys = it.l ? ['C' + it.l.id + '|' + (it.l.date || '') + asg].concat(lk ? [lk + '|' + (it.l.date || '') + asg] : []) : ['W' + it.c.id];
                                     const ch = chips.find(x => keys.some(k => x.keys.has(k)));
                                     if (!ch) { chips.push({ keys: new Set(keys), idx: shown.length }); shown.push(it); return; }
                                     keys.forEach(k => ch.keys.add(k));

@@ -278,6 +278,33 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
             assert.match(el('grid').innerHTML, /⚠ Bir vaqtda 2 ta dars/, JSON.stringify(o));
         });
         ctx.weekly = [w950];
+        // Bitta darsning yozuvlari, lekin o'qituvchisi yoki xonasi boshqa — alohida chiplar (har biri o'z o'qituvchisi/xonasi bilan),
+        // sanoqda bitta dars. Fan kesimi: ketma-ket soatlar, ikki o'qituvchi (karta ham har xil, ham bir xil).
+        ctx.weekly = [];
+        [[961, 962], [963, 963]].forEach(([a, b]) => {
+            setLessons([half({ id: a, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }),
+                half({ id: b, hour: 2, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'], teacher_id: 6, teacher_name: 'IKKINCHI' })]);
+            ctx.renderGridCross('subject');
+            g = el('grid').innerHTML;
+            assert.equal((g.match(/tt-cyc-chip/g) || []).length, 2, a + '/' + b);
+            assert.match(g, /O'qituvchi: MAHMARAIMOV SH\. T\./);
+            assert.match(g, /O'qituvchi: IKKINCHI/);
+            assert.doesNotMatch(g, /Bir vaqtda/);
+        });
+        // O'qituvchi kesimi: o'sha dars ikki xonada — ikkala xona ko'rinadi; xonasi ham bir xil bo'lsa — bitta chip.
+        setLessons([half({ id: 964, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }),
+            half({ id: 965, hour: 2, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'], auditorium_code: '102', auditorium_name: '102' })]);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.equal((g.match(/tt-cyc-chip/g) || []).length, 2);
+        assert.match(g, /Xona: 101/);
+        assert.match(g, /Xona: 102/);
+        assert.doesNotMatch(g, /Bir vaqtda/);
+        setLessons([half({ id: 964, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }),
+            half({ id: 965, hour: 2, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] })]);
+        ctx.renderGridCross('teacher');
+        assert.equal((el('grid').innerHTML.match(/tt-cyc-chip/g) || []).length, 1);
+        ctx.weekly = [w950];
         // Kalit: qamrov (kurs raqam yoki matn — bir xil) + fan + tur + guruh; sikl chiplari ham shu kalit bo'yicha birlashadi.
         const lk = o => ctx.crossLessonKey({ l: half(Object.assign({ group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }, o)) });
         assert.equal(lk({ course: '5' }), lk({ course: 5 }));

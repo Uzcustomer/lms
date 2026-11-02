@@ -215,6 +215,11 @@
                     <input type="number" id="m_test" value="30" min="0" max="100" class="mw-input" oninput="checkModalSum()">
                 </div>
             </div>
+            <div class="mw-row" style="margin-top:14px;padding-top:12px;border-top:1px dashed #cbd5e1;">
+                <label class="mw-label" for="m_pass">O'tish bali</label>
+                <input type="number" id="m_pass" value="70" min="1" max="100" class="mw-input" oninput="checkModalSum()">
+            </div>
+            <p style="font-size:11px;color:#64748b;margin-top:4px;">JN, MT, ON, OSKI yoki Test shu baldan past bo'lsa — o'tmagan (0) hisoblanadi</p>
             <div id="modal-sum-display" style="margin-top:12px;font-size:14px;font-weight:700;text-align:center;padding:8px;border-radius:8px;background:#f1f5f9;">
                 Jami: <span id="modal-sum-val" style="color:#16a34a;">100%</span>
             </div>
@@ -237,6 +242,7 @@
         <input type="hidden" name="weight_on"   id="ef_on">
         <input type="hidden" name="weight_oski" id="ef_oski">
         <input type="hidden" name="weight_test" id="ef_test">
+        <input type="hidden" name="pass_score"  id="ef_pass">
     </form>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -650,8 +656,11 @@
             var el=$('#modal-sum-val');
             el.text(sum+'%');
             el.css('color', sum===100?'#16a34a':'#dc2626');
-            $('#modal-download-btn').prop('disabled', sum!==100);
-            return sum===100;
+            var pass=parseInt($('#m_pass').val()||0);
+            var passOk = pass>=1 && pass<=100;
+            $('#m_pass').css('border-color', passOk?'':'#dc2626');
+            $('#modal-download-btn').prop('disabled', sum!==100 || !passOk);
+            return sum===100 && passOk;
         }
 
         function getSelectedRows() {
@@ -706,6 +715,7 @@
             $('#ef_on').val($('#m_on').val());
             $('#ef_oski').val($('#m_oski').val());
             $('#ef_test').val($('#m_test').val());
+            $('#ef_pass').val($('#m_pass').val());
 
             closeWeightModal();
             $('#export-form').submit();

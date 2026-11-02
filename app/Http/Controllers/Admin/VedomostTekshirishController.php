@@ -351,6 +351,7 @@ class VedomostTekshirishController extends Controller
             'weight_on'    => 'nullable|integer|min:0|max:100',
             'weight_oski'  => 'nullable|integer|min:0|max:100',
             'weight_test'  => 'nullable|integer|min:0|max:100',
+            'pass_score'   => 'nullable|integer|min:1|max:100',
         ]);
 
         $exportRows   = $request->input('rows');
@@ -377,6 +378,8 @@ class VedomostTekshirishController extends Controller
         $wOn   = (int) ($request->weight_on   ?? 0);
         $wOski = (int) ($request->weight_oski ?? 0);
         $wTest = (int) ($request->weight_test ?? 30);
+        // O'tish bali — Excel yaratishda so'raladi (sahifada standart 70)
+        $pass  = (int) ($request->pass_score ?? 60);
         $shaklId = (int) ($request->shakl ?? 1);
 
         $shakllar = config('app.shakllar', []);
@@ -447,13 +450,14 @@ class VedomostTekshirishController extends Controller
                 'groupName' => $group->name ?? '', 'totalHours' => $totalHours, 'credit' => (int) ($subject->credit ?? 0),
                 'lectureTeacher' => $lectureTeacher, 'divisor' => $divisor,
                 'weights' => [$wJn, $wMt, $wOn, $wOski, $wTest],
+                'pass' => $pass,
             ];
 
             foreach ($students as $stu) {
                 $hId = $stu->hemis_id;
                 $rowsByForm[YnAttemptStatusService::FORM_12][] = $common + [
                     'student' => $stu,
-                    'calc' => $calcService->compute($rawByStudent[$hId], $wJn, $wMt, $wOn, $wOski, $wTest, $levelCode),
+                    'calc' => $calcService->compute($rawByStudent[$hId], $wJn, $wMt, $wOn, $wOski, $wTest, $levelCode, $pass),
                     'jnCount' => $rawByStudent[$hId]['jnCount'],
                     'shakl' => $formLabels[YnAttemptStatusService::FORM_12],
                     'hemis' => $hemisExamGrades[$hId] ?? collect(),
@@ -479,7 +483,7 @@ class VedomostTekshirishController extends Controller
                     ];
                     $rowsByForm[$form][] = $common + [
                         'student' => $stu,
-                        'calc' => $calcService->compute($raw, $wJn, $wMt, $wOn, $wOski, $wTest, $levelCode),
+                        'calc' => $calcService->compute($raw, $wJn, $wMt, $wOn, $wOski, $wTest, $levelCode, $pass),
                         'jnCount' => $rawByStudent[$hId]['jnCount'] ?? 0,
                         'shakl' => $formLabels[$form],
                         // HEMIS'dagi qayta topshirish YN bahosi bilan taqqoslanmaydi
@@ -576,6 +580,7 @@ class VedomostTekshirishController extends Controller
             'AU' => 'JN+MT izoh',
             'AV' => 'YN tekshiruv',
             'AW' => 'YN izoh',
+            'AX' => 'O\'tish bali',
         ];
 
         $sheet->getRowDimension(1)->setRowHeight(30);
@@ -614,6 +619,7 @@ class VedomostTekshirishController extends Controller
             'AL' => 7, 'AM' => 8,
             'AN' => 8, 'AO' => 8, 'AP' => 8, 'AQ' => 9, 'AR' => 9,
             'AS' => 25, 'AT' => 12, 'AU' => 20, 'AV' => 12, 'AW' => 20,
+            'AX' => 9,
         ];
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
@@ -701,6 +707,7 @@ class VedomostTekshirishController extends Controller
         $sheet->setCellValue("AQ{$r}", $wOski);
         $sheet->setCellValue("AR{$r}", $wTest);
         $sheet->setCellValue("AS{$r}", $zanjir);
+        $sheet->setCellValue("AX{$r}", $d['pass']);
 
         // --- HEMIS bilan taqqoslash ---
         if ($d['hemis'] !== null) {
@@ -751,7 +758,7 @@ class VedomostTekshirishController extends Controller
 
     private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {
-        $range = "A{$row}:AW{$row}";
+        $range = "A{$row}:AX{$row}";
 
         $sheet->getStyle($range)->applyFromArray([
             'font' => ['size' => 9],

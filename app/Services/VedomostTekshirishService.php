@@ -415,8 +415,9 @@ class VedomostTekshirishService
      * Bitta talaba: xom qiymatlar + vaznlar → Excel kataklari.
      *
      * @param  array  $raw  collect()['raw'][hemis_id]
+     * @param  int  $pass  O'tish bali — har bir komponent (JN/MT/ON/OSKI/Test) shundan past bo'lsa 0
      */
-    public function compute(array $raw, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, string $levelCode): array
+    public function compute(array $raw, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, string $levelCode, int $pass = 60): array
     {
         ['jn' => $jn, 'mt' => $mt, 'on' => $on, 'oski' => $oski, 'test' => $test, 'dav' => $dav] = $raw;
 
@@ -432,23 +433,23 @@ class VedomostTekshirishService
         //  15=5-kurs, 16=6-kurs.
         $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
 
-        $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
-        $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
+        $jnBall = $jn >= $pass ? $jn * $wJn / 100 : 0;
+        $mtBall = $mt >= $pass ? $mt * $wMt / 100 : 0;
         if ($roundJnMtToInt) {
-            $onBall = $on >= 60 ? (int) floor($on * $wOn / 100 + 0.5) : 0;
+            $onBall = $on >= $pass ? (int) floor($on * $wOn / 100 + 0.5) : 0;
         } else {
-            $onBall = $on >= 60 ? $on * $wOn / 100 : 0;
+            $onBall = $on >= $pass ? $on * $wOn / 100 : 0;
         }
 
         if ($wOski > 0 && $wTest > 0) {
-            $oskiBall = $oski >= 60 ? $oski * $wOski / 100 : 0;
-            $testBall = $test >= 60 ? $test * $wTest / 100 : 0;
+            $oskiBall = $oski >= $pass ? $oski * $wOski / 100 : 0;
+            $testBall = $test >= $pass ? $test * $wTest / 100 : 0;
         } elseif ($wOski > 0) {
-            $oskiBall = $oski >= 60 ? (int) round($oski * $wOski / 100) : 0;
+            $oskiBall = $oski >= $pass ? (int) round($oski * $wOski / 100) : 0;
             $testBall = 0;
         } elseif ($wTest > 0) {
             $oskiBall = 0;
-            $testBall = $test >= 60 ? (int) round($test * $wTest / 100) : 0;
+            $testBall = $test >= $pass ? (int) round($test * $wTest / 100) : 0;
         } else {
             $oskiBall = 0;
             $testBall = 0;
@@ -456,8 +457,8 @@ class VedomostTekshirishService
 
         // M ustun (JN+MT) — shablon formulasi bilan bir xil:
         // =IF(OR(D<60, G<60), 0, ROUND(E+H, 0.1))
-        // JN yoki MT 60 dan kichik bo'lsa M = 0.
-        $sumBall = ($jn < 60 || $mt < 60)
+        // JN yoki MT o'tish balidan kichik bo'lsa M = 0.
+        $sumBall = ($jn < $pass || $mt < $pass)
             ? 0
             : (int) floor($jnBall + $mtBall + $onBall + 0.5);
         $maxSum  = $wJn + $wMt + $wOn;
@@ -467,7 +468,7 @@ class VedomostTekshirishService
         // imtihon vaznga ega bo'lgan holda V ekran yig'indisi bilan
         // mos kelmaydi).
         $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav,
-            (float) $jnBall, (float) $mtBall, (float) $onBall, (float) $oskiBall, (float) $testBall);
+            (float) $jnBall, (float) $mtBall, (float) $onBall, (float) $oskiBall, (float) $testBall, $pass);
 
         // Yakuniy qiymatni butun songacha half-up yaxlitlaymiz (V ustun
         // butun son chiqishi kerak). Maxsus qiymatlar ('', -2, -1, 0)
@@ -477,13 +478,13 @@ class VedomostTekshirishService
         }
 
         // ECTS
-        $ects = $this->toEcts($yn);
+        $ects = $this->toEcts($yn, $pass);
 
         // Baho
-        $baho = $this->toBaho($yn);
+        $baho = $this->toBaho($yn, $pass);
 
         // Zanjir
-        $zanjir = $this->checkZanjir($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest);
+        $zanjir = $this->checkZanjir($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $pass);
 
         return compact(
             'jn', 'mt', 'on', 'oski', 'test', 'dav', 'jnBall', 'mtBall', 'onBall', 'oskiBall', 'testBall',
@@ -508,7 +509,7 @@ class VedomostTekshirishService
         return $row?->employee_name ?? '';
     }
 
-    public function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav, float $jnBall = 0.0, float $mtBall = 0.0, float $onBall = 0.0, float $oskiBall = 0.0, float $testBall = 0.0): string|int|float
+    public function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav, float $jnBall = 0.0, float $mtBall = 0.0, float $onBall = 0.0, float $oskiBall = 0.0, float $testBall = 0.0, int $pass = 60): string|int|float
     {
         // Bo'sh talaba
         if ($jn === 0 && $mt === 0) return '';
@@ -520,16 +521,16 @@ class VedomostTekshirishService
         $oskiMissing = $wOski > 0 && $oski == 0;
         $testMissing = $wTest > 0 && $test == 0;
         if ($oskiMissing || $testMissing) {
-            // JN+MT >= 60% dan o'tganlar uchun -1
-            $sumBall = ($jn >= 60 ? $jn * $wJn / 100 : 0) + ($mt >= 60 ? $mt * $wMt / 100 : 0) + ($on >= 60 ? $on * $wOn / 100 : 0);
+            // JN+MT >= o'tish bali (%) dan o'tganlar uchun -1
+            $sumBall = ($jn >= $pass ? $jn * $wJn / 100 : 0) + ($mt >= $pass ? $mt * $wMt / 100 : 0) + ($on >= $pass ? $on * $wOn / 100 : 0);
             $maxPre = $wJn + $wMt + $wOn;
-            if ($maxPre > 0 && $sumBall / $maxPre >= 0.6) {
+            if ($maxPre > 0 && $sumBall / $maxPre >= $pass / 100) {
                 return -1;
             }
         }
 
-        // Har qanday komponent < 60 → 0
-        if (($wJn > 0 && $jn < 60) || ($wMt > 0 && $mt < 60) || ($wOn > 0 && $on < 60) || ($wOski > 0 && $oski < 60) || ($wTest > 0 && $test < 60)) {
+        // Har qanday komponent < o'tish bali → 0
+        if (($wJn > 0 && $jn < $pass) || ($wMt > 0 && $mt < $pass) || ($wOn > 0 && $on < $pass) || ($wOski > 0 && $oski < $pass) || ($wTest > 0 && $test < $pass)) {
             return 0;
         }
 
@@ -551,10 +552,11 @@ class VedomostTekshirishService
         return $jbMtOnSum + $examSum;
     }
 
-    public function toEcts(string|int|float $yn): string
+    public function toEcts(string|int|float $yn, int $pass = 60): string
     {
         if (!is_numeric($yn) || $yn < 0) return '';
         $yn = (float) $yn;
+        if ($yn < $pass) return 'F';
         if ($yn >= 90) return 'A';
         if ($yn >= 85) return 'B+';
         if ($yn >= 70) return 'B';
@@ -562,7 +564,7 @@ class VedomostTekshirishService
         return 'F';
     }
 
-    public function toBaho(string|int|float $yn): string
+    public function toBaho(string|int|float $yn, int $pass = 60): string
     {
         if ($yn === '') return '';
         if ($yn === -3) return "davomat \u{2265}25%";
@@ -570,19 +572,20 @@ class VedomostTekshirishService
         if ($yn === -1) return 'kelmadi';
         if (!is_numeric($yn)) return '';
         $yn = (float) $yn;
+        if ($yn < $pass) return 'qon-siz';
         if ($yn >= 90) return "a\u{02BC}lo";
         if ($yn >= 70) return 'yaxshi';
         if ($yn >= 60) return "o\u{02BB}rta";
         return 'qon-siz';
     }
 
-    public function checkZanjir(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest): string
+    public function checkZanjir(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, int $pass = 60): string
     {
         $warnings = [];
-        $jnPass   = $wJn   === 0 || $jn   >= 60;
-        $mtPass   = $wMt   === 0 || $mt   >= 60;
-        $onPass   = $wOn   === 0 || $on   >= 60;
-        $oskiPass = $wOski === 0 || $oski >= 60;
+        $jnPass   = $wJn   === 0 || $jn   >= $pass;
+        $mtPass   = $wMt   === 0 || $mt   >= $pass;
+        $onPass   = $wOn   === 0 || $on   >= $pass;
+        $oskiPass = $wOski === 0 || $oski >= $pass;
 
         if ($oski > 0) {
             if (!$jnPass && $wJn > 0) $warnings[] = 'JN✖→OSKI';

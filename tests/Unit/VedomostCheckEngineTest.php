@@ -228,6 +228,20 @@ test('Test markazi natijasi HEMISdan farq qilsa', function () {
         ->and($r['rows'][0]['status'])->toBe('bad');
 });
 
+test('Test markazida bir shaklda 2 ta natija — jurnalga yuborilgani olinadi, izohda ogohlantirish', function () {
+    $tc = ['oski' => ['grade' => 100.0, 'dalolat' => false, 'uploaded' => true, 'duplicates' => [
+                ['grade' => 80.0, 'date' => '2026-09-28', 'uploaded' => false], ['grade' => 100.0, 'date' => '2026-09-28', 'uploaded' => true]]],
+           'test' => ['grade' => 96.0, 'dalolat' => false]];
+    $r = engine()->build(expectedData([vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)]),
+        scanDoc([pdfRow(5, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]), [], rules(),
+        ctx(['test_center' => ['368221100018' => $tc]]));
+
+    $msgs = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
+    expect($r['rows'][0]['tm']['oski']['status'])->toBe('ok')
+        ->and($msgs)->toContain('Test markazida 2 ta natija')
+        ->and($msgs)->toContain('jurnalga yuborilgani (100) olindi');
+});
+
 test('sarlavha: bosh harf xato o\'qilsa "Tekshiring", imzo yo\'q bo\'lsa XATO', function () {
     $scan = scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())], ['amaliyot' => ['Barakaya I.I']]);
     $scan['signatures']['muhr'] = false;

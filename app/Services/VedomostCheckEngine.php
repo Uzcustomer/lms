@@ -578,6 +578,13 @@ class VedomostCheckEngine
         $hv = $he ?? 0;
         $ok = $this->near($tm, $hv, 0.05);
         $dal = !empty($rec['dalolat']) ? ' (Dalolatnoma)' : '';
+        // Bir semestr, bir fan, bir shaklda Test markazida bir nechta natija — ogohlantirish.
+        if (!empty($rec['duplicates']) && count($rec['duplicates']) > 1) {
+            $list = implode(' / ', array_map(fn ($d) => $this->f($d['grade']) . (!empty($d['uploaded']) ? ' (jurnalda)' : ''), $rec['duplicates']));
+            $flags[] = ['t' => 'info', 'm' => "{$label}: Test markazida " . count($rec['duplicates']) . " ta natija bor ({$list}) — "
+                . (!empty($rec['uploaded']) ? 'jurnalga yuborilgani (' . $this->f($tm) . ') olindi' : "jurnalga yuborilgani yo'q, eng so'nggisi (" . $this->f($tm) . ') olindi')
+                . '. Ortiqchasini Diagnostikada tekshiring.'];
+        }
         if (!$ok) {
             $flags[] = ['t' => 'bad', 'm' => "{$label} (Test markazi{$dal}) " . $this->f($tm) . ' ≠ Mark ' . ($he !== null ? $this->f($he) : 'bo‘sh')];
             $set('bad');

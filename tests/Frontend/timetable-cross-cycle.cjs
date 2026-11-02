@@ -133,12 +133,12 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     const saveWeekly = ctx.weekly, saveLessons = cycleWeekData();
     ctx.weekly = [];
     setLessons([lesson({ id: 31, day: 4, pair: 1, len_half: 2, hour: 1, hours: 3, row_hours: 2 }),
-        lesson({ id: 32, day: 4, pair: 2, len_half: 2, hour: 4, hours: 3, row_hours: 2 })]);
+        lesson({ id: 32, day: 4, pair: 2, len_half: 2, hour: 4, hours: 3, row_hours: 2, group_name: 'd22-06b', group_names: ['d22-06b'] })]);
     ctx.renderGridCross('teacher');
     assert.match(el('grid').innerHTML, /rowspan="3" data-day="4" data-pair="1">/);
     assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
     setLessons([lesson({ id: 31, day: 4, pair: 1, len_half: 2, hour: 1, hours: 4, row_hours: 2 }),
-        lesson({ id: 32, day: 4, pair: 2, len_half: 2, hour: 4, hours: 3, row_hours: 2 })]);
+        lesson({ id: 32, day: 4, pair: 2, len_half: 2, hour: 4, hours: 3, row_hours: 2, group_name: 'd22-06b', group_names: ['d22-06b'] })]);
     ctx.renderGridCross('teacher');
     assert.match(el('grid').innerHTML, /data-day="4" data-pair="1" style="outline:2px solid #ef4444/);
     // Haftalik dars (2-qator = 3–4-soat) va sikl 1–2-soat (1-qator) — kesishmaydi; 4-soatdan — kesishadi.
@@ -245,6 +245,37 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
         assert.match(g, /title="To'qnashuv — bir vaqtda 3 ta dars: sikl: Klinik farmakologiya \(A\) d1\/d22-06a; sikl: Klinik farmakologiya \(A\) p\/p21-01a; sikl: Klinik farmakologiya \(A\) p\/p21-01b"/);
         assert.match(g, /<div class="tt-clash-list"><div>sikl: Klinik farmakologiya \(A\) d1\/d22-06a<\/div><div>[^<]*p\/p21-01a<\/div><div>[^<]*p\/p21-01b<\/div><\/div>/);
         assert.equal((g.match(/tt-cyc-chip/g) || []).length, 3);
+        // Sinov natijasi (9-hafta, Dushanba): har guruhning darsi HAR XIL kartalarda (bo'lingan amaliy qismlari, sikl yozuvlari) —
+        // fan + tur + guruh bo'yicha bitta dars: 12 yozuv → "Bir vaqtda 3 ta dars"; bitta guruhning yozuvlari yolg'iz — belgi yo'q.
+        const parts12 = [];
+        let cid = 900;
+        ['d1/d22-06a', 'p/p21-01a', 'p/p21-01b'].forEach(gname => [1, 2, 1, 2].forEach(hr => parts12.push(half({ id: ++cid, hour: hr,
+            group_name: gname, group_names: [gname] }))));
+        setLessons(parts12);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.equal((g.match(/⚠ Bir vaqtda 3 ta dars/g) || []).length, 1);
+        assert.equal((g.match(/tt-cyc-chip/g) || []).length, 3);
+        setLessons(parts12.filter(l => l.group_name === 'p/p21-01a').map(l => Object.assign({}, l, { id: l.id + 100, group_name: "p/p21-01a (o'z)", group_names: ["P/P21-01A (o'z)"] }))
+            .concat(parts12.filter(l => l.group_name === 'p/p21-01a')));
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        assert.doesNotMatch(g, /Bir vaqtda/);   // 8 yozuv, bitta dars (qo'shimcha va harf farqi hisobga olinmaydi)
+        assert.equal((g.match(/tt-cyc-chip/g) || []).length, 1);
+        // Haftalik karta + o'sha guruhning o'sha fani (sikl yozuvi) — bitta dars.
+        ctx.weekly = [{ id: 950, training_type: 'practice', subject_name: 'Klinik farmakologiya', teacher_id: 5, teacher_name: 'MAHMARAIMOV SH. T.', day: 1, pair: 1,
+            len_half: 1, group_name: 'd1/d22-06a' }];
+        setLessons([half({ id: 951, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] })]);
+        ctx.renderGridCross('teacher');
+        assert.doesNotMatch(el('grid').innerHTML, /Bir vaqtda/);
+        // Boshqa fan yoki boshqa tur — boshqa dars: to'qnashuv.
+        setLessons([half({ id: 951, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'], subject_name: 'Farmakologiya' })]);
+        ctx.renderGridCross('teacher');
+        assert.match(el('grid').innerHTML, /⚠ Bir vaqtda 2 ta dars/);
+        setLessons([half({ id: 951, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'], training_type: 'lecture' })]);
+        ctx.renderGridCross('teacher');
+        assert.match(el('grid').innerHTML, /⚠ Bir vaqtda 2 ta dars/);
+        ctx.weekly = [];
         // Umumiy "01a + 01b" karta va boshqa guruh darsi — 2 sessiya, lekin 3 ta dars (karta + guruhcha).
         setLessons([half({ id: 61, hour: 1, group_name: 'd1/d22-06a', group_names: ['d1/d22-06a'] }),
             half({ id: 64, hour: 1, group_name: 'p/p21-01a + p/p21-01b', group_names: ['p/p21-01a + p/p21-01b'] })]);

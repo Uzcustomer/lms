@@ -8349,8 +8349,12 @@
                 const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[Math.max(a, b)] = Math.min(a, b); };
                 const seen = {};
                 list.forEach((it, i) => {
-                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
-                    if (k in seen) join(seen[k], i); else seen[k] = i;
+                    // Bitta dars: o'sha karta (sikl — karta + sana) yoki o'sha fan + tur + guruh(cha) (bitta katakda: darsning qismlari,
+                    // har xil kartalar — bo'lingan amaliy, sikl kunlari yozuvlari).
+                    [it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id, crossLessonKey(it)].forEach(k => {
+                        if (!k) return;
+                        if (k in seen) join(seen[k], i); else seen[k] = i;
+                    });
                 });
                 list.forEach((a, i) => list.forEach((b, j) => { if (j > i && sameCrossLesson(a, b)) join(i, j); }));
                 const byRoot = {}, lessons = [];
@@ -8369,6 +8373,19 @@
                 }));
                 const clashing = lessons.filter(ls => hit.has(ls));
                 return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
+            }
+            // Dars kaliti: fan + tur + guruh(cha)lar (qo'shimcha "(o'z)" va katta-kichik harfsiz); guruhi yo'q — null (birlashtirilmaydi).
+            const crossGroupNorm = g => String(g || '').toLowerCase().replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+            function crossItemGroups(it) {
+                const x = it.c || it.l;
+                const raw = it.l ? (it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]) : cardGroups(x);
+                const out = [];
+                raw.forEach(g => String(g || '').split(/\s*\+\s*/).forEach(sg => { sg = crossGroupNorm(sg); if (sg && !out.includes(sg)) out.push(sg); }));
+                return out.sort();
+            }
+            function crossLessonKey(it) {
+                const x = it.c || it.l, gs = crossItemGroups(it);
+                return gs.length ? 'S' + String(x.subject_name || '').trim().toLowerCase() + '|' + (x.training_type === 'lecture' ? 'L' : 'A') + '|' + gs.join(',') : null;
             }
             // Sikl darsining zal to'qnashuvlari (birlashtirilgan chipda — barcha yozuvlardan).
             const cycRoomClashes = l => (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
@@ -8515,12 +8532,17 @@
                             const cell = crossCellLessons(cl.items, !noClash(col));
                             const shown = [];
                             cell.lessons.forEach(ls => {
-                                const seenIds = {};
+                                const chips = [];   // [{ keys: Set, idx }]
                                 ls.items.forEach(it => {
-                                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
-                                    if (!(k in seenIds)) { seenIds[k] = shown.length; shown.push(it); return; }
+                                    // Sikl yozuvlari — o'sha karta (+ sana) yoki o'sha dars kaliti (fan + tur + guruh) bo'lsa bitta chip (qismlari
+                                    // parts'da); haftalik karta — o'z chipi.
+                                    const lk = it.l ? crossLessonKey(it) : null;
+                                    const keys = it.l ? ['C' + it.l.id + '|' + (it.l.date || '')].concat(lk ? [lk + '|' + (it.l.date || '')] : []) : ['W' + it.c.id];
+                                    const ch = chips.find(x => keys.some(k => x.keys.has(k)));
+                                    if (!ch) { chips.push({ keys: new Set(keys), idx: shown.length }); shown.push(it); return; }
+                                    keys.forEach(k => ch.keys.add(k));
                                     if (!it.l) return;
-                                    const first = shown[seenIds[k]];
+                                    const first = shown[ch.idx];
                                     const gs = [...new Set([].concat(first.l.group_names && first.l.group_names.length ? first.l.group_names : [first.l.group_name],
                                         it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]))];
                                     // Vaqtlari har xil bo'lsa — umumiy oraliq, har guruhcha o'z vaqti, kun rejasi va so'rovi bilan (parts; oynada).
@@ -8532,7 +8554,7 @@
                                         parts: parts.length > 1 ? parts : undefined, ask: parts.some(p => p.ask),
                                         room_clash: clashes[0], room_clashes: clashes.length ? clashes : undefined });
                                     crossCycleShown.push(merged);
-                                    shown[seenIds[k]] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
+                                    shown[ch.idx] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
                                 });
                             });
                             const inner = shown.map(it => {

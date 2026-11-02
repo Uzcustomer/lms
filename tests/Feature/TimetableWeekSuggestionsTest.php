@@ -388,6 +388,12 @@ it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birin
     $card = $res['cards'][0];
     expect($card['id'])->toBe($a->id)->and($card['conflict'])->toBeTrue()
         ->and($card['reason'])->toBe('Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para');
+    // "Ko'rsatish": ikkala tomon guruhi (boshqa fakultet/yo'nalish/kurs bo'lsa ham — qamrovi bilan), xona, o'sha hafta / juma / V para.
+    expect($card['clashes'])->toBe([['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215',
+        'groups' => [['group' => 'd1/d26-06b', 'faculty' => '1-son davolash', 'specialty' => 'Davolash ishi', 'course' => 1],
+            ['group' => 'p/p25-02b', 'faculty' => 'Pediatriya', 'specialty' => 'Pediatriya', 'course' => 2]],
+        'subject' => 'Odam anatomiyasi', 'dates' => ['2026-10-16', '2026-10-16'], 'hour_from' => 9, 'hour_to' => 11,
+        'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 7]]);
     // Birinchi — shu vaqtda bo'sh xona (217 sig'imi yetmaydi), keyin ikkinchi tomonning xonasi (boshqa yo'nalish belgisi bilan).
     expect($card['suggestions'][0])->toMatchArray(['type' => 'room', 'title' => 'Xonani almashtirish: 216 (30 o\'rin) — Juma, 5-para',
         'actions' => [['op' => 'move', 'card_id' => $a->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'auditorium_code' => 'R216']]])
@@ -423,6 +429,11 @@ it('takliflar: o\'qituvchi to\'qnashuvida — mavjud qadamlar, o\'qituvchini alm
     $types = collect($card['suggestions'])->pluck('type')->all();
     expect($card['conflict'])->toBeTrue()->and($card['reason'])->toBe('O\'qituvchi SHARIPOV K. band: g-02b · Gigiyena · Seshanba II para')
         ->and($types)->not->toContain('room')->and($types[0])->toBe('slot')->and(end($types))->toBe('teacher');
+    expect($card['clashes'])->toHaveCount(1)->and($card['clashes'][0])->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $t->id,
+        'teacher_name' => 'SHARIPOV K.', 'room_code' => null, 'subject' => 'Gigiyena', 'dates' => ['2026-09-15', '2026-09-15'], 'hour_from' => 3,
+        'hour_to' => 5, 'view' => 'week', 'week' => 3])
+        ->and(array_column($card['clashes'][0]['groups'], 'group'))->toBe(['g-02a', 'g-02b'])
+        ->and($card['clashes'][0]['card_ids'][0])->toBe($x->id)->and($card['clashes'][0]['card_ids'])->toHaveCount(2);
 });
 
 it('takliflar: karta xonada ikki dars bilan to\'qnashsa — bitta tomonning xonasini almashtirish taklif qilinmaydi (to\'qnashuv qolardi)', function () {

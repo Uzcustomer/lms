@@ -445,6 +445,7 @@ trait TimetableWeekSuggestions
                 $why0 = $why0 ?: $e;
             }
             $reason = $why0 ? implode('; ', $why0) : '';
+            $clashShow = [];   // to'qnashuvli karta: har to'sib turgan dars — "Ko'rsatish" ma'lumoti (matn bilan birga)
             if ($isConflict) {
                 // Sabab: kim bilan, nima band (xona / o'qituvchi / guruh) va qachon. Xona to'qnashuvi — birinchi bo'lib bo'sh xona:
                 // shu kartaga, so'ng ikkinchi tomonga (uning o'z kalendaridagi haftasi bilan).
@@ -452,6 +453,7 @@ trait TimetableWeekSuggestions
                     $this->clashCandidates($c, $td, ($state['ov'][(int) $c->id][$W] ?? null)?->auditorium_code ?: $c->auditorium_code, $state))] + $state, null);
                 $reason = implode('; ', array_unique(array_merge(...array_map(fn ($x) => $this->clashTexts($x, $dayName), $clashes))))
                     ?: ($conflicts[(int) $c->id][$W]['text'] ?? $reason);
+                $clashShow = array_map(fn ($x) => $this->focusFromClash($c, $x, $board), $clashes);
                 $roomOnly = $clashes && !array_filter($clashes, fn ($x) => (bool) array_filter($x['errors'], fn ($m) => !str_starts_with($m, 'Auditoriya band')));
                 if ($roomOnly) {
                     foreach ($this->freeRoomsFor($c, $W, $td, $tp, $state, $check, 3) as [$r, $why]) {
@@ -549,7 +551,7 @@ trait TimetableWeekSuggestions
                     $sugs[] = $x;
                 }
                 $partialN++;
-                $result[] = $this->suggestionCard($c, $W, $reason, $sugs, true, $isConflict);
+                $result[] = $this->suggestionCard($c, $W, $reason, $sugs, true, $isConflict, $clashShow);
                 continue;
             }
 
@@ -704,7 +706,7 @@ trait TimetableWeekSuggestions
                 }
             }
 
-            $result[] = $this->suggestionCard($c, $W, $reason, $sugs, false, $isConflict);
+            $result[] = $this->suggestionCard($c, $W, $reason, $sugs, false, $isConflict, $clashShow);
         }
 
         // Har taklif: shu foydalanuvchi qo'llay oladimi (qamrov, ma'ruza / o'qituvchi almashtirish, sana, kutilayotgan so'rov) va qanday
@@ -730,7 +732,8 @@ trait TimetableWeekSuggestions
             'partial' => $partialN > 0, 'message' => $partialN ? $partialN . ' ta karta uchun to\'liq takliflar hisoblanmadi' : null]);
     }
 
-    private function suggestionCard(TimetableCard $c, int $week, string $reason, array $sugs, bool $partial = false, bool $conflict = false): array
+    private function suggestionCard(TimetableCard $c, int $week, string $reason, array $sugs, bool $partial = false, bool $conflict = false,
+        array $clashes = []): array
     {
         return [
             // true — vaqt byudjeti tugab, faqat tez qadamlar (1–2) hisoblangan; ?card_id= bilan to'liq olinadi.
@@ -747,6 +750,8 @@ trait TimetableWeekSuggestions
             'course' => (int) $c->course,
             'week' => $week,
             'reason' => $reason,
+            // To'qnashuvli karta: to'sib turgan darslar — tuzilgan ("Ko'rsatish": guruhlar, hafta, kun/para, kartalar).
+            'clashes' => $clashes,
             'suggestions' => $sugs,
         ];
     }

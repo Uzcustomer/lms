@@ -98,7 +98,7 @@ it('kafedra mudiri: unit-busy va assign-room 200 qaytaradi (Patologik anatomiya 
 it('unitBusy xato bersa: logga yoziladi, unit-busy bo\'sh ro\'yxat + warning, biriktirish ogohlantirishsiz bajariladi', function () {
     $s = ubSetup();
     app()->bind(TimetableController::class, fn () => new class extends TimetableController {
-        protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null): array
+        protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false): array
         {
             throw new RuntimeException('sinov xatosi');
         }
@@ -112,7 +112,8 @@ it('unitBusy xato bersa: logga yoziladi, unit-busy bo\'sh ro\'yxat + warning, bi
 
     $res = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
     // Xonalar reytingi bandlikka bog'liq emas — xato bo'lsa ham beriladi (sig'imi talabalar soniga yaqini birinchi).
-    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'room_rank' => ['order' => ['R101', 'R102', 'R103'], 'why' => ['R101' => 'shu fan xonasi']],
+    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'busy_items' => ['teachers' => [], 'rooms' => []],
+        'room_rank' => ['order' => ['R101', 'R102', 'R103'], 'why' => ['R101' => 'shu fan xonasi']],
         'warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."]);
     // Band xona ham — ogohlantirishsiz biriktiriladi; o'qituvchi ham
     ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102'])->assertOk();

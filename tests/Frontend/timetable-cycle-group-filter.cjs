@@ -145,7 +145,7 @@ tick('k1');   // saqlab bo'lmasa ham tanlov ishlaydi
 assert.deepEqual(plain(api.get()), ['k1']);
 
 // 6) Manbada: render — saqlangan tanlovni o'qiydi va jadvalda yo'q qatorlarni chiqaradi; tugma va × yozuvi.
-assert.match(source, /cycleRowFiltersLoad\(\);\n\s+const keep = cycleRowFilters\.filter\(k => allRows\.some\(r => r\.row_key === k\)\);\n\s+if \(keep\.length !== cycleRowFilters\.length\) \{ cycleRowFilters = keep; cycleRowFiltersSave\(\); \}/);
+assert.match(source, /cycleRowFiltersLoad\(\);\n\s+if \(ttFocus && ttFocus\.show\.view === 'cycle'\) \{\n(?:\s+\/\/[^\n]*\n)?\s+cycleRowFilters = focusCycleRowKeys\(allRows\);\n\s+\} else \{\n\s+const keep = cycleRowFilters\.filter\(k => allRows\.some\(r => r\.row_key === k\)\);\n\s+if \(keep\.length !== cycleRowFilters\.length\) \{ cycleRowFilters = keep; cycleRowFiltersSave\(\); \}/);
 assert.match(source, /\+ esc\(cycleRowFilterText\(allRows, rowWord\)\) \+ ' &#9662;<\/button>'/);
 
 console.log('timetable cycle group filter: 6 scenarios passed');

@@ -1355,6 +1355,14 @@
         .cf-line { padding: 3px 0; border-top: 1px dashed #e2e8f0; font-size: 12px; line-height: 1.3; }
         .cf-line.cf-red b { color: #b91c1c; } .cf-line.cf-yellow b { color: #a16207; } .cf-line.cf-past { color: #94a3b8; }
         .cf-todo { color: #475569; } .cf-past-tag { font-size: 10px; background: #e2e8f0; color: #64748b; border-radius: 4px; padding: 0 4px; }
+        /* "Ko'rsatish": to'qnashuvni jadvalda ko'rsatish (lenta, qizil ramka). */
+        .cf-show { margin-left: 6px; color: #1d4ed8; text-decoration: underline; font-weight: 600; white-space: nowrap; cursor: pointer; }
+        .cf-show:hover { color: #1e40af; }
+        #ttFocusBar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 6px; padding: 6px 12px; border: 1px solid #fca5a5;
+            border-radius: 8px; background: #fef2f2; color: #991b1b; font-size: 12px; font-weight: 600; }
+        #ttFocusBar button { border: 1px solid #dc2626; border-radius: 6px; padding: 1px 10px; background: #fff; color: #b91c1c; font-weight: 700; }
+        .tt-focus-hit { outline: 3px solid #dc2626 !important; outline-offset: -3px; box-shadow: inset 0 0 0 3px rgba(220, 38, 38, .25); }
+        #cycleGrid th.tt-focus-date { background: #fee2e2 !important; color: #b91c1c; box-shadow: inset 0 0 0 2px #dc2626; }
         .cf-summary { margin: 0 0 6px; font-size: 11px; color: #334155; }
         .cf-sum-btn, .cf-sum-clear { border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 6px; background: #fff; }
         .cf-sum-btn.on { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
@@ -4958,7 +4966,7 @@
                     (c.conflict ? ' <span class="sug-conflict" style="font-size:10px;font-weight:700;color:#fff;background:#dc2626;border-radius:4px;padding:1px 6px">⚠ To\'qnashuv</span>' : '') +
                     (c.partial ? ' <button type="button" data-full="' + ci + '" style="font-size:11px;border:1px solid #facc15;border-radius:6px;padding:1px 8px;background:#fefce8;color:#854d0e">To\'liq takliflar</button>' : '') +
                     '</div>' +
-                    (c.reason ? '<div style="color:#b91c1c;margin:2px 0 4px">' + esc(c.reason) + '</div>' : '') +
+                    (c.reason ? '<div style="color:#b91c1c;margin:2px 0 4px">' + esc(c.reason) + focusLinksHtml(c.clashes) + '</div>' : '') +
                     (c.suggestions.length ? c.suggestions.map((s, si) => sugRowHtml(s, ci, si, res.apply_mode)).join('')
                         : '<div style="color:#64748b">Taklif topilmadi — qo\'lda joylash kerak.</div>') +
                     '</div>').join('') + sugFooterHtml(res.apply_mode);
@@ -5643,6 +5651,8 @@
             // Tanlov sahifa yangilanganda ham saqlanadi (localStorage: doska + fakultet/yo'nalish/kurs kaliti).
             let cycleRowFilters = [];
             let cycleRowStoreKey = null;   // tanlov qaysi kalitdan o'qilgan (qamrov o'zgarsa — o'sha qamrovniki o'qiladi)
+            // "Ko'rsatish" fokus rejimi: {show, groups, keys, prev, scrolled} — null bo'lsa oddiy ko'rinish (pastda, to'qnashuvlar bo'limida).
+            let ttFocus = null;
             function cycleRowStorageKey() {
                 const sorted = set => [...set].map(String).sort().join(',');
                 return 'tt:cycRows:' + (board ? board.id : 0) + ':' + sorted(selectedFaculties) + '|' + sorted(selectedDirs) + '|' + sorted(selectedCourses);
@@ -5669,6 +5679,8 @@
                     : n === 1 ? (cycleRowLabels(allRows)[cycleRowFilters[0]] || '') : n + ' ta ' + rowWord.toLowerCase();
             }
             function cycleRowFiltersApply() {
+                // Fokus paytida qo'lda tanlansa — fokus tugaydi (lenta yopiladi), tanlov oddiygidek saqlanadi.
+                if (ttFocus && ttFocus.show.view === 'cycle') ttFocusForget();
                 cycleRowFiltersSave();
                 if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
             }
@@ -6143,6 +6155,15 @@
             }
             // ── Sikl blokiga o'qituvchi / vaqt / xona biriktirish ──
             let cycAssignCard = null;
+            let cycAssignBusy = { text: {}, items: {} };   // band o'qituvchilar: id => matn va "Ko'rsatish" ma'lumoti
+            // Band o'qituvchi tanlansa — kim bilan, qachon va "Ko'rsatish" (saqlashdagi "Baribir biriktirish" ogohlantirishi alohida).
+            function cycAssignBusyNote() {
+                const id = $('cycAssignTeacher').value, busy = id ? cycAssignBusy.text[id] : null, el = $('cycAssignWarn');
+                if (!busy) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+                el.innerHTML = '<div style="color:#b45309">⚠ Band: ' + esc(busy) + focusLinksHtml(cycAssignBusy.items[id]) + '</div>';
+                el.classList.remove('hidden');
+            }
+            $('cycAssignTeacher').onchange = cycAssignBusyNote;
 
             async function openCycleAssign(key) {
                 const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
@@ -6156,6 +6177,7 @@
                 $('cycAssignTeacher').innerHTML = '<option value="">Yuklanmoqda...</option>';
                 $('cycAssignRoom').innerHTML = '<option value="">Yuklanmoqda...</option>';
                 $('cycAssignWarn').classList.add('hidden');
+                cycAssignBusy = { text: {}, items: {} };
                 $('cycAssignModal').classList.add('open');
 
                 try {
@@ -6169,6 +6191,7 @@
                     $('cycAssignKafedra').textContent = "O'qituvchi" + (j.kafedra ? ' (' + j.kafedra + ')' : '');
                     // Blok sanalarida boshqa guruhcha bilan band o'qituvchilar — kulrang, sababi title'da.
                     const busyT = j.busy_teachers || {};
+                    cycAssignBusy = { text: busyT, items: (j.busy_items && j.busy_items.teachers) || {} };
                     $('cycAssignTeacher').innerHTML = '<option value="">— Tanlanmagan —</option>' +
                         (j.teachers || []).map(t => '<option value="' + t.id + '"' + (busyT[t.id] ? ' style="color:#9ca3af" title="Band: ' + esc(busyT[t.id]) + '"' : '') + '>' +
                             esc(t.name) + (busyT[t.id] ? ' — band' : '') + '</option>').join('');
@@ -6250,7 +6273,7 @@
                     await loadCyclePlan();
                 } catch (e) {
                     // O'qituvchi/xona blok sanalarida band — kim bilan, qachon; "Baribir biriktirish" bilan saqlanadi.
-                    if (e.data && e.data.needs_confirm) showBusyConfirm($('cycAssignWarn'), e.message, () => saveCycleAssign(true));
+                    if (e.data && e.data.needs_confirm) showBusyConfirm($('cycAssignWarn'), e.message, () => saveCycleAssign(true), e.data.conflict_items);
                     else alert('Saqlab bo\u2018lmadi: ' + e.message);
                 } finally {
                     button.disabled = false;
@@ -6411,8 +6434,13 @@
                 // "Guruh" ustuni sarlavhasidan tanlangan guruhlar/oqimlar (bo'lmasa hammasi): shu qamrov tanlovi o'qiladi, jadvalda
                 // yo'q qatorlar tanlovdan chiqadi.
                 cycleRowFiltersLoad();
-                const keep = cycleRowFilters.filter(k => allRows.some(r => r.row_key === k));
-                if (keep.length !== cycleRowFilters.length) { cycleRowFilters = keep; cycleRowFiltersSave(); }
+                if (ttFocus && ttFocus.show.view === 'cycle') {
+                    // "Ko'rsatish": vaqtincha — to'qnashuvdagi guruhlar qatorlari (saqlanmaydi; Yopish oldingisini tiklaydi).
+                    cycleRowFilters = focusCycleRowKeys(allRows);
+                } else {
+                    const keep = cycleRowFilters.filter(k => allRows.some(r => r.row_key === k));
+                    if (keep.length !== cycleRowFilters.length) { cycleRowFilters = keep; cycleRowFiltersSave(); }
+                }
                 // Guruhcha tanlanganda u qatnashadigan bo'lak qatorlari (Fan (a)/(b)/(c)) ham ko'rinadi.
                 const rows = cycleVisibleRows(allRows);
                 if (!rows.length) {
@@ -6722,6 +6750,7 @@
                 setupCycTitleDrag();
                 clampCycTitles();
                 renderCycleCards(j);
+                focusHighlight();
             }
 
             // ── Sikl jadvali hodisalari (delegatsiya) ──
@@ -6789,6 +6818,16 @@
                 }
             }
 
+            // "Ko'rsatish" havolasi bosilganda (capture — karta/qator tanlash ishlovchilariga o'tmaydi); fokus — ttFocusStart (pastda).
+            document.addEventListener('click', ev => {
+                const a = ev.target && ev.target.closest ? ev.target.closest('[data-focus]') : null;
+                if (!a) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                let show = null;
+                try { show = JSON.parse(a.dataset.focus); } catch (e) { return; }
+                ttFocusStart(show);
+            }, true);
             // ===== To'qnashuvlar: qisqa belgi, rang, bir qatorli tafsilot (server — tuzilgan ro'yxat, ko'rish qamrovi bo'yicha) =====
             const CF_LABEL = { teacher_busy: "O'qituvchi band", group_busy: 'Guruh band', lecture_overlap: "Ma'ruza bilan ustma-ust",
                 room_capacity: "Xona sig'maydi", room_busy: 'Xona band' };
@@ -6823,7 +6862,7 @@
                     : ' ' + esc(String(i.detail || '').replace(/^[^:]*:\s*/, ''));
                 return '<li class="cf-line cf-' + (i.past ? 'past' : cfKindLevel(i.kind)) + '"><b>' + esc(CF_LABEL[i.kind] || i.kind || '') + '</b>' + body +
                     (when ? ', ' + esc(when) : '') + (i.past ? ' <span class="cf-past-tag">o\u2018tgan</span>'
-                        : ' <span class="cf-todo">→ ' + esc(i.todo || CF_TODO[i.kind] || '') + '</span>') + '</li>';
+                        : ' <span class="cf-todo">→ ' + esc(i.todo || CF_TODO[i.kind] || '') + '</span>') + focusLinkHtml(i.show) + '</li>';
             }
             // Oqim ma'ruzasi to'qnashuvi guruhcha kartalarida takrorlanmaydi: birinchi (egasi) blokda to'liq, qolganlarida — havola.
             function cfLectureOwners(rows) {
@@ -6876,6 +6915,187 @@
                 return n;
             }
             const cfMatchesFilter = (card, f) => !f || cfLive(card.conflicts).some(i => (cfKindLevel(i.kind) === 'red' ? 'teacher' : 'room') === f);
+
+            // ===== "Ko'rsatish": to'qnashuvni jadvalda ko'rsatish =====
+            // Server har to'qnashuv matni bilan birga tuzilgan ma'lumot (show) beradi — matn parse qilinmaydi: kind, teacher_id /
+            // room_code, groups [{group, faculty, specialty, course}], subject, dates [from, to], hour_from / hour_to, card_ids,
+            // view (week — haftalik jadval, cycle — sikl jadvali), week. Bosilganda: guruh filtri vaqtincha shu guruhlarga (boshqa
+            // fakultet/yo'nalish/kursda bo'lsa — qamrov ham vaqtincha kengayadi), to'qnashuv kunlari/paralari qizil ramka, birinchisiga
+            // scroll, tepada lenta; "Yopish" oldingi ko'rinish, hafta, qamrov va filtrni tiklaydi.
+            const focusNorm = v => String(v ?? '').trim().toLowerCase();
+            const focusGKey = g => focusNorm(g.faculty) + '|' + focusNorm(g.specialty) + '|' + (+g.course || 0) + '|' + focusNorm(g.group);
+            const focusSplit = name => String(name || '').split(/\s*\+\s*/u).map(x => x.trim()).filter(Boolean);
+            let focusHave = { src: null, set: null };
+            // Ko'rish huquqi: "Butun doska" — barcha guruhlar (cheklangan rolga ham server shu qamrovni beradi); "Faqat meniki" /
+            // "Mas'ul fanlarim" / "Kafedraniki" — faqat yuklangan qamrovdagi (cards) guruhlar. Qolganlari faqat matnda qoladi.
+            function focusVisibleGroups(show) {
+                const groups = (show && show.groups) || [];
+                if (scopeMode === 'all') return groups.slice();
+                if (focusHave.src !== cards) {
+                    const set = new Set();
+                    cards.forEach(c => cardGroups(c).forEach(g => focusSplit(g).forEach(n =>
+                        set.add(focusGKey({ group: n, faculty: c.faculty_name, specialty: c.specialty_name, course: c.course })))));
+                    focusHave = { src: cards, set };
+                }
+                return groups.filter(g => focusHave.set.has(focusGKey(g)));
+            }
+            // Havola: ko'rinadigan guruh bo'lmasa — yo'q (to'qnashuv matni o'zgarmaydi).
+            function focusLinkHtml(show, label) {
+                if (!show || !(show.groups || []).length) return '';
+                const vis = focusVisibleGroups(show);
+                if (!vis.length) return '';
+                return '<a href="#" class="cf-show" data-focus="' + esc(JSON.stringify(show)) + '" title="Jadvalda ko\'rsatish: ' +
+                    esc(vis.map(g => g.group).join(', ')) + '">' + esc(label || 'Ko\'rsatish') + '</a>';
+            }
+            // Bir nechta to'qnashuv (biriktirish ogohlantirishi, Takliflar): har biriga — "Ko'rsatish: guruhlar, sanalar".
+            function focusLinksHtml(list) {
+                const items = (list || []).filter(x => x && (x.groups || []).length);
+                if (items.length < 2) return items.length ? ' ' + focusLinkHtml(items[0]) : '';
+                return ' ' + items.map(x => focusLinkHtml(x, 'Ko\'rsatish: ' + focusVisibleGroups(x).map(g => g.group).join(', ') +
+                    (x.dates && x.dates.length ? ', ' + focusDatesText(x.dates) : ''))).filter(Boolean).join(' ');
+            }
+            // "13–24.11", oylar har xil — "28.10–03.11", bitta kun — "15.09".
+            function focusDatesText(d) {
+                const a = (d || [])[0], b = (d || [])[1] || a;
+                if (!a) return '';
+                const dm = x => String(x).slice(8, 10) + '.' + String(x).slice(5, 7);
+                if (b === a) return dm(a);
+                return String(a).slice(0, 7) === String(b).slice(0, 7) ? String(a).slice(8, 10) + '–' + dm(b) : dm(a) + '–' + dm(b);
+            }
+            // Boshlanish vaqti: hour_from — qo'ng'iroq jadvalidagi qator (yarim-para / akademik soat) raqami.
+            function focusTimeText(show) {
+                const it = boardSchedule().filter(x => x.type === 'pair')[(+show.hour_from || 0) - 1];
+                return it && it.start ? it.start : '';
+            }
+            // "To'qnashuvni ko'rish: O'qituvchi X — d1/d22-01a va d1/d22-01b, 13–24.11, 08:30"
+            function focusBannerText(show, groups) {
+                const who = show.kind === 'teacher_busy' ? "O'qituvchi " + (show.teacher_name || '')
+                    : (show.kind === 'room_busy' || show.kind === 'room_capacity') ? 'Xona ' + (show.room_code || '') : (CF_LABEL[show.kind] || '');
+                const names = (groups || []).map(g => g.group);
+                const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' va ' + names[names.length - 1] : (names[0] || '');
+                return "To'qnashuvni ko'rish: " + [who.trim() + (list ? ' — ' + list : ''), focusDatesText(show.dates), focusTimeText(show)]
+                    .filter(Boolean).join(', ');
+            }
+            function renderFocusBar() {
+                let bar = document.getElementById('ttFocusBar');
+                if (!ttFocus) { if (bar) bar.remove(); return; }
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.id = 'ttFocusBar';
+                    $('mainArea').insertBefore(bar, $('mainArea').firstChild);
+                }
+                bar.innerHTML = '<span>' + esc(focusBannerText(ttFocus.show, ttFocus.groups)) + '</span><span>·</span>' +
+                    '<button type="button" id="ttFocusClose">Yopish</button>';
+                bar.querySelector('#ttFocusClose').onclick = ttFocusClose;
+            }
+            // Sikl jadvali: to'qnashuvdagi guruhlar qatorlari (guruh qatori yoki oqim qatori a'zolari orasida; qamrovi bilan).
+            function focusCycleRowKeys(allRows) {
+                const keys = ttFocus ? ttFocus.keys : new Set();
+                return (allRows || []).filter(r => !r.variant && [r.group, ...(r.subgroups || [])].flatMap(focusSplit)
+                    .some(n => keys.has(focusGKey({ group: n, faculty: r.faculty, specialty: r.specialty, course: r.course }))))
+                    .map(r => r.row_key);
+            }
+            // Haftalik jadval ustunlari (guruhlar): fokusda — faqat to'qnashuvdagi guruhlar.
+            function focusWeekColumns(rows) {
+                if (!ttFocus || ttFocus.show.view === 'cycle') return rows;
+                return rows.filter(r => focusSplit(r.group).some(n => ttFocus.keys.has(focusGKey({ group: n, faculty: r.faculty,
+                    specialty: r.specialty, course: r.course }))));
+            }
+            // Qizil ramka: haftalik — to'qnashgan darslar (card_ids) kataklari; sikl — fokus qatorlarining to'qnashuv sanalariga
+            // tushadigan bloklari va sana sarlavhalari. Birinchisiga bir marta scroll.
+            function focusHighlight() {
+                if (!ttFocus) return;
+                const s = ttFocus.show, hits = [];
+                if (s.view === 'cycle') {
+                    const grid = $('cycleGrid');
+                    if (viewMode !== 'cycle' || !grid || !cyclePlanData) return;
+                    const a = (s.dates || [])[0], b = (s.dates || [])[1] || a, idx = [];
+                    (cyclePlanData.dates || []).forEach((d, i) => { if (a && d.iso >= a && d.iso <= b) idx.push(i); });
+                    if (!idx.length) return;
+                    const rows = new Set(cycleRowFilters), lo = idx[0], hi = idx[idx.length - 1];
+                    grid.querySelectorAll('td.cyc-block[data-cycle-row]').forEach(td => {
+                        const from = +td.dataset.cycleFrom, to = from + Math.max(1, +td.dataset.cycleSpan || 1) - 1;
+                        if (rows.has(td.dataset.cycleRow) && from <= hi && to >= lo) hits.push(td);
+                    });
+                    const ths = grid.querySelectorAll('thead th.cyc-dcol');
+                    idx.forEach(i => { if (ths[i]) ths[i].classList.add('tt-focus-date'); });
+                } else {
+                    if (viewMode !== 'group') return;
+                    const ids = new Set((s.card_ids || []).map(String));
+                    document.querySelectorAll('#grid [data-chip]').forEach(ch => {
+                        const td = ids.has(String(ch.dataset.chip)) && ch.closest ? ch.closest('td') : null;
+                        if (td && !hits.includes(td)) hits.push(td);
+                    });
+                }
+                hits.forEach(el => el.classList.add('tt-focus-hit'));
+                if (!ttFocus.scrolled && hits.length) {
+                    ttFocus.scrolled = true;
+                    hits[0].scrollIntoView({ block: 'center', inline: 'center' });
+                }
+            }
+            // Jadvalni yopib turadigan oyna/popuplar (to'qnashuv tafsiloti, Takliflar, biriktirish oynalari) yopiladi.
+            function focusCloseOverlays() {
+                if (typeof closeCycDayPop === 'function') closeCycDayPop();
+                const sug = document.getElementById('ttSugModal');
+                if (sug) sug.remove();
+                if ($('cycAssignModal') && $('cycAssignModal').classList.contains('open') && typeof closeCycleAssign === 'function') closeCycleAssign();
+                if ($('asgRoomModal')) $('asgRoomModal').classList.add('hidden');
+                if ($('assignModal')) $('assignModal').classList.add('hidden');
+            }
+            // Qamrov (fakultet/yo'nalish/kurs) qiymatlari — tanlov ro'yxatidagi aynan yozilishi bilan (katta-kichik harf farq qilsa ham).
+            function focusSpecOf(g) {
+                return specList.find(x => focusNorm(x.faculty) === focusNorm(g.faculty) && focusNorm(x.specialty_name) === focusNorm(g.specialty)
+                    && +x.course === +g.course) || null;
+            }
+            function focusRefresh() {
+                reconcileSelection(false);
+                fillSelectors();
+                selected = null;
+                fillGridInputs();
+                if (weekNeedsReload()) {
+                    loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
+                    return;
+                }
+                renderAll();
+                ensureScopeLoaded();
+            }
+            function ttFocusStart(show) {
+                const groups = focusVisibleGroups(show);
+                if (!board || !groups.length) return;
+                focusCloseOverlays();
+                // Oldingi holat — faqat birinchi fokusda (fokusdan fokusga o'tilsa ham Yopish asl holatga qaytaradi).
+                if (!ttFocus) {
+                    ttFocus = { prev: { viewMode, curWeek, fac: [...selectedFaculties], dir: [...selectedDirs], crs: [...selectedCourses],
+                        cycleRowFilters: cycleRowFilters.slice() } };
+                }
+                Object.assign(ttFocus, { show, groups, keys: new Set(groups.map(focusGKey)), scrolled: false });
+                groups.forEach(g => {
+                    const sp = focusSpecOf(g);
+                    if (!sp) return;
+                    selectedFaculties.add(sp.faculty); selectedDirs.add(sp.specialty_name); selectedCourses.add(+sp.course);
+                });
+                const view = show.view === 'cycle' ? 'cycle' : 'group';
+                if (viewMode !== view && [...$('viewMode').options].some(o => o.value === view)) { viewMode = view; $('viewMode').value = view; }
+                if (view === 'group' && +show.week > 0) curWeek = +show.week;
+                renderFocusBar();
+                focusRefresh();
+            }
+            // Fokusni tiklamasdan unutish (foydalanuvchi filtrni o'zi o'zgartirdi).
+            function ttFocusForget() {
+                ttFocus = null;
+                renderFocusBar();
+            }
+            function ttFocusClose() {
+                if (!ttFocus) return;
+                const p = ttFocus.prev;
+                ttFocusForget();
+                selectedFaculties = new Set(p.fac); selectedDirs = new Set(p.dir); selectedCourses = new Set(p.crs);
+                if (viewMode !== p.viewMode) { viewMode = p.viewMode; $('viewMode').value = p.viewMode; }
+                curWeek = p.curWeek;
+                cycleRowFilters = p.cycleRowFilters.slice();
+                cycleRowStoreKey = cycleRowStorageKey();   // tiklangan tanlov saqlangandan qayta o'qilmaydi (saqlash bloklangan bo'lsa ham qoladi)
+                focusRefresh();
+            }
             // Xona sig'imi: kiritilmagan (0) yoki shubhali (≤ 10) — ro'yxatda ajratiladi (amaliy xona "10 o'rin" tekshiruvi uchun).
             function audVolumeHtml(v) {
                 const n = +v || 0;
@@ -7874,6 +8094,8 @@
                 // Fakultet → yo'nalish → kurs → oqim → guruh: bir blok ketma-ket tursin.
                 const sk = x => x.faculty + '|' + x.specialty + '|' + x.course + '|' + x.oqim_label + x.group;
                 groupRows.sort((a, b) => sk(a).localeCompare(sk(b), undefined, { numeric: true }));
+                // "Ko'rsatish": vaqtincha — faqat to'qnashuvdagi guruhlar ustunlari.
+                groupRows = focusWeekColumns(groupRows);
             }
 
             // Karta uzunligi yarim-slot birligida (1=0.5 para, 2=1 para ...). Sukut 2.
@@ -9351,6 +9573,7 @@
                 alignBolakDrops();
                 stickGridHead();
                 activeCell = null;   // qayta render — eski faol katak eskirdi
+                focusHighlight();
 
                 // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)
                 document.querySelectorAll('[data-place]').forEach(td => td.onclick = () => {
@@ -11017,7 +11240,7 @@
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/unit-busy?' + new URLSearchParams(asgUnitParams(u)));
                     if (asgSel === u && seq === asgBusySeq) {
-                        asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {}, rank: j.room_rank || null };
+                        asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {}, rank: j.room_rank || null, items: j.busy_items || null };
                         if (!$('asgRoomModal').classList.contains('hidden')) renderAsgRooms();
                     }
                 } catch (e) { console.warn('Bandlik olinmadi:', e); }
@@ -11031,8 +11254,8 @@
                 });
             }
             // Band o'qituvchi/xona ogohlantirishi (kim bilan, qachon) — "Baribir biriktirish" bosilsa force bilan qayta yuboriladi.
-            function showBusyConfirm(el, message, onForce) {
-                el.innerHTML = '<div style="color:#b45309">⚠ ' + esc(message) + '</div>' +
+            function showBusyConfirm(el, message, onForce, items) {
+                el.innerHTML = '<div style="color:#b45309">⚠ ' + esc(message) + focusLinksHtml(items) + '</div>' +
                     '<button type="button" class="busy-force" style="margin-top:4px;padding:2px 8px;border:1px solid #b45309;border-radius:6px;color:#b45309;background:#fff">Baribir biriktirish</button>';
                 el.classList.remove('hidden');
                 el.querySelector('.busy-force').onclick = onForce;
@@ -11042,6 +11265,16 @@
             let asgAudSel = null;
             let asgAudTeacherTimer = null;
             let asgAudDepartmentsLoaded = false;
+            // Band o'qituvchi tanlansa — kim bilan, qachon va "Ko'rsatish" (tuzilgan ro'yxat: unit-busy busy_items).
+            $('asgTeacher').addEventListener('change', () => {
+                const id = $('asgTeacher').value, busy = id ? asgBusy.teachers[id] : null, el = $('asgMsg');
+                if (busy) {
+                    el.innerHTML = '<span class="asg-busy-note" style="color:#b45309">⚠ Band: ' + esc(busy) +
+                        focusLinksHtml(((asgBusy.items || {}).teachers || {})[id]) + '</span>';
+                } else if (el.querySelector('.asg-busy-note')) {
+                    el.innerHTML = '';
+                }
+            });
 
             function newAsgHeaderFilters() {
                 return { subject: '', type: '', scope: '', department: '', cards: '', teacher: '' };
@@ -11441,7 +11674,7 @@
                 } catch (e) {
                     if (e.data && e.data.needs_confirm) {
                         closeAsgRoomModal();
-                        showBusyConfirm($('asgMsg'), e.message, () => applyAsgRoom(code, true));
+                        showBusyConfirm($('asgMsg'), e.message, () => applyAsgRoom(code, true), e.data.conflict_items);
                         $('asgRoomOpen').disabled = $('asgRoomClear').disabled = false;
                         return;
                     }
@@ -11512,7 +11745,7 @@
                     renderAsgTable();
                     loadAsgBusy(asgSel).then(markAsgBusy);   // o'qituvchi o'zgardi — unga biriktirilgan xonalar reytingi yangilanadi
                 } catch (e) {
-                    if (e.data && e.data.needs_confirm) showBusyConfirm($('asgMsg'), e.message, () => applyAsg(teacherId, true));
+                    if (e.data && e.data.needs_confirm) showBusyConfirm($('asgMsg'), e.message, () => applyAsg(teacherId, true), e.data.conflict_items);
                     else $('asgMsg').textContent = 'Xatolik: ' + e.message;
                 }
                 $('asgApply').disabled = $('asgClear').disabled = false;

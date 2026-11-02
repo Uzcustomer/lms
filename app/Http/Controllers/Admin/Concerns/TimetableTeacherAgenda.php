@@ -239,10 +239,15 @@ trait TimetableTeacherAgenda
     private function agendaMove(Request $request, TimetableBoard $board, string $key, array $entries, array $days, array $pairs, array $free,
         string $layer, array $rights): ?array
     {
-        // Kalit — yozuvniki; birlashgan haftalik ma'ruza oqimida istalgan karta kaliti ("w|karta|hafta") ham shu yozuvni topadi.
-        [$kind, $kid] = array_pad(explode('|', $key), 2, '');
+        // Kalit — yozuvniki; birlashgan haftalik ma'ruza oqimida istalgan karta kaliti ("w|karta|hafta") ham shu yozuvni topadi — faqat
+        // shu kartaning shu sanadagi haftasi kalitdagi hafta bo'lsa (boshqa haftaga o'tilganda boshqa hafta darsi tanlanmasin).
+        [$kind, $kid, $kweek] = array_pad(explode('|', $key), 3, '');
         $entry = collect($entries)->first(fn ($e) => $e['key'] === $key)
-            ?? ($kind === 'w' ? collect($entries)->first(fn ($e) => $e['kind'] === 'weekly' && in_array((int) $kid, $e['card_ids'], true)) : null);
+            ?? ($kind === 'w' ? collect($entries)->first(function ($e) use ($board, $kid, $kweek) {
+                $card = $e['kind'] === 'weekly' && in_array((int) $kid, $e['card_ids'], true) ? TimetableCard::find((int) $kid) : null;
+
+                return $card && $this->calendarWeekAt($board, $card, $e['date']) === (int) $kweek;
+            }) : null);
         if (!$entry) {
             return ['key' => $key, 'kind' => null, 'via' => null, 'why' => "Ko'chiriladigan dars bu kunlarda yo'q.", 'options' => (object) [], 'block' => (object) []];
         }

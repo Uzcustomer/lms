@@ -300,12 +300,16 @@ it('agenda: bir nechta kartali haftalik ma\'ruza oqimi — bitta yozuv, istalgan
         'teacher_name' => 'MUXAMMADIYEV S. B.', 'day' => 4, 'pair' => 11, 'auditorium_code' => 'Z1', 'auditorium_name' => '1-zal']);
     $a = $lec('pediatriya', 'pp/2024-01a');
     $b = $lec('stomatologiya', 'st/2024-01a');
+    // Stomatologiya kalendari bir hafta kech boshlanadi — 19.11 uning boshqa hafta raqami.
+    \App\Models\TimetableGridSetting::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'stomatologiya',
+        'course' => 2, 'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15, 'start_date' => '2026-09-21']);
     $j = agGet($s, $s['admin'], 'admin');
     $flow = collect($j['entries'])->firstWhere('type', 'M');
     expect(collect($j['entries'])->where('type', 'M')->count())->toBe(1)
         ->and($flow['groups'])->toBe(['pp/2024-01a', 'st/2024-01a'])->and($flow['card_ids'])->toBe([$a->id, $b->id])
         ->and($flow['conflict'])->toBeFalse();
     $week = (new ReflectionMethod(app(TimetableController::class), 'calendarWeekAt'))->invoke(app(TimetableController::class), $s['board'], $b, '2026-11-19');
+    expect($week)->toBe($s['week'] - 1);
     foreach (['w|' . $a->id . '|' . $s['week'], 'w|' . $b->id . '|' . $week] as $key) {
         $mv = agGet($s, $s['admin'], 'admin', ['move' => $key])['move'];
         expect($mv['kind'])->toBe('weekly')->and($mv['via'])->toBeNull()->and((array) $mv['options'])->toBe([])
@@ -346,4 +350,14 @@ it('agenda: aralash qamrovli ma\'ruza oqimi — faqat qamrovdagi kartaning tafsi
     $own->delete();
     $hidden = collect(agGet($s, $s['head'], 'kafedra_mudiri')['entries'])->firstWhere('start', '16:30');
     expect($hidden)->toMatchArray(['hidden' => true, 'groups' => [], 'card_ids' => [], 'key' => null, 'label' => 'band: boshqa fakultet']);
+});
+
+it('agenda: boshqa haftaga o\'tilganda ko\'chiriladigan dars kaliti o\'sha hafta darsini tanlamaydi', function () {
+    $s = agSetup();
+    $key = 'w|' . $s['ppB']->id . '|' . $s['week'];
+    // Keyingi hafta (26.11): ppB ning boshqa (keyingi) haftadagi darsi — ko'chiriladigan dars emas.
+    $next = agGet($s, $s['admin'], 'admin', ['date' => '2026-11-26', 'range' => 'week', 'move' => $key])['move'];
+    expect($next)->toMatchArray(['kind' => null, 'via' => null, 'why' => "Ko'chiriladigan dars bu kunlarda yo'q."]);
+    // O'z haftasida — topiladi.
+    expect(agGet($s, $s['admin'], 'admin', ['range' => 'week', 'move' => $key])['move'])->toMatchArray(['kind' => 'weekly', 'week' => $s['week']]);
 });

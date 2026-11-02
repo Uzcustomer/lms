@@ -794,8 +794,11 @@
         document.getElementById('f-val').textContent = txt;
     }
     document.addEventListener('click', e => {
+        // Tasdiqlash oynasi va forma elementlari (sabab maydoni, belgi, havola) — katak tanlanmaydi,
+        // aks holda fokus maydondan katakka o'tib, yozib bo'lmasdi.
         const td = e.target.closest('.xl tbody td');
-        if (td && !td.querySelector('input') && !e.target.closest('button')) selectCell(td.classList.contains('rn') ? td.nextElementSibling : td);
+        if (td && !td.querySelector('input') && !e.target.closest('button, textarea, input, select, a, label, .ap-dlg'))
+            selectCell(td.classList.contains('rn') ? td.nextElementSibling : td);
         const go = e.target.closest('[data-goto]');
         if (go) {
             filter = 'all'; setChips(); renderMain(); showTab('main');
@@ -1030,7 +1033,7 @@
         }
     });
     document.addEventListener('dblclick', e => { const td = e.target.closest('td[data-key], td[data-mkey]'); if (td) startEdit(td, 'edit'); });
-    document.addEventListener('focusin', e => { const td = e.target.closest && e.target.closest('.xl td'); if (td) showCell(td); });
+    document.addEventListener('focusin', e => { if (e.target.closest && e.target.closest('.ap-dlg')) return; const td = e.target.closest && e.target.closest('.xl td'); if (td) showCell(td); });
     document.addEventListener('change', e => {
         const h = e.target.closest('[data-hkey]');
         if (h) { const k = h.dataset.hkey; if (h.value.trim() === String(h.dataset.orig).trim()) delete pending.header[k]; else pending.header[k] = h.value.trim(); h.classList.toggle('dirty', k in pending.header); updateSavebar(); return; }

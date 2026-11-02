@@ -5864,6 +5864,7 @@
                     const keep = gw ? { top: gw.scrollTop, left: gw.scrollLeft, page: window.scrollY } : null;
                     // "Ko'rsatish": shu chizishda to'qnashuvga birinchi scroll qilinsa — eski joy tiklanmaydi (scroll bekor bo'lmasin).
                     const focusScroll = !!(ttFocus && !ttFocus.scrolled);
+                    const wkScrolledBefore = cycleWkScrolled;
                     cyclePlanData = j;
                     invalidateCycleWeek();   // sikl joylashuvi / o'qituvchi / xona o'zgargan bo'lishi mumkin — kesimlar qayta so'raydi
                     try { buildSubjectColors(colorScopeCards()); } catch (e) { }
@@ -5875,7 +5876,9 @@
                     renderCycleCards(j);
                     if (typeof renderStats === 'function') renderStats();
                     if (keep && !options.resetScroll && !(focusScroll && ttFocus && ttFocus.scrolled)) {
-                        const restore = () => { gw.scrollTop = keep.top; gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
+                        // Shu chizishda tanlangan haftaga scroll qilingan bo'lsa (birinchi yuklash / boshqa hafta) — gorizontal joy tiklanmaydi.
+                        const wkMoved = cycleWkScrolled !== wkScrolledBefore && !!cycleWkScrolled;
+                        const restore = () => { gw.scrollTop = keep.top; if (!wkMoved) gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
                         restore(); requestAnimationFrame(restore);
                     }
                     $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
@@ -8046,15 +8049,27 @@
                     const inside = on && lo >= 0 && i >= lo && i <= hi;
                     th.classList.toggle('cyc-wk-on', inside);
                     th.classList.toggle('cyc-wk-out', on && !inside);
-                    if (inside && !first) first = th;
+                    // Yashirilgan dam olish ustuni (eni 0) — keyingi ko'rinadigan kun.
+                    if (inside && !first && !th.classList.contains('cyc-col-hidden')) first = th;
                 });
                 grid.querySelectorAll('td.cyc-block[data-cycle-from]').forEach(td => {
                     const from = +td.dataset.cycleFrom, to = from + Math.max(1, +td.dataset.cycleSpan || 1) - 1;
                     td.classList.toggle('cyc-wk-out', on && (lo < 0 || to < lo || from > hi));
                 });
                 const key = on ? wk.from : '';
-                if (on && first && cycleWkScrolled !== key && first.scrollIntoView) first.scrollIntoView({ block: 'nearest', inline: 'center' });
+                if (on && first && cycleWkScrolled !== key) cycleScrollToDay(first);
                 cycleWkScrolled = key;
+            }
+            // Tanlangan haftaning birinchi kuni qotirilgan ustunlardan darhol keyin, ko'rinadigan maydon boshida turadi
+            // (scrollIntoView "center" sticky ustunlarni hisobga olmaydi — hafta o'ng chetdan tashqarida qolardi).
+            function cycleScrollToDay(th) {
+                const wrap = $('cycleGridWrap'), grid = $('cycleGrid');
+                if (!wrap || !grid || !th.getBoundingClientRect) return;
+                // Chapdagi qotirilgan (sticky) "Guruh/Oqim" va "Para" ustunlarining o'ng cheti (ekranda; ular doim chap chetda turadi) —
+                // kun ustuni aynan shu yerga keladi.
+                let edge = wrap.getBoundingClientRect().left;
+                grid.querySelectorAll('thead .cyc-gcol, thead .cyc-mk-side').forEach(c => { edge = Math.max(edge, c.getBoundingClientRect().right); });
+                wrap.scrollLeft = Math.round(wrap.scrollLeft + th.getBoundingClientRect().left - edge);   // brauzer 0..max oralig'iga o'zi cheklaydi
             }
             function renderCycleCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];

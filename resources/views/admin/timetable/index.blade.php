@@ -43,6 +43,14 @@
     // Qamrov rejimi (Butun doska / Kafedraniki / Mas'ul fanlarim / Faqat meniki) — har foydalanuvchi va rol uchun alohida saqlanadi
     // (superadmin bir foydalanuvchidan boshqasiga o'tganda oldingi rejim qolib ketmasin): guard + id.
     $timetableUserKey = ($timetableUser instanceof \App\Models\Teacher ? 't' : 'u') . (int) ($timetableUser?->getAuthIdentifier() ?? 0);
+    // O'qituvchi, fan mas'uli, kafedra mudiri: doska tanlovi bo'sh turmasin — yagona doska, bo'lmasa eng yangi (joriy) Real doska
+    // (kartalari bor). URLda doska berilgan bo'lsa — o'sha.
+    $timetableAutoBoardId = null;
+    if (in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli', 'kafedra_mudiri'], true) && isset($boards) && $boards->count()) {
+        $withCards = fn ($b) => (int) ($b->cards_count ?? 0) > 0;
+        $timetableAutoBoardId = ($boards->count() === 1 ? $boards->first() : null
+            ?? $boards->first(fn ($b) => ($b->kind ?? '') === 'real' && $withCards($b)) ?? $boards->first($withCards) ?? $boards->first())->id;
+    }
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
@@ -2697,6 +2705,7 @@
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_CAN_UNPLACE = @json($timetableCanUnplace);
             const TIMETABLE_FORBIDDEN_IDS = @json($timetableForbiddenIds);
+            const TIMETABLE_AUTO_BOARD_ID = @json($timetableAutoBoardId);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
             const TIMETABLE_ROLE = @json($timetableActiveRole);
@@ -7529,8 +7538,10 @@
                 if (panel) panel.classList.toggle('hidden', condition !== 'lecture_week_distribution');
             }
 
+            // Qoidalar — faqat to'liq huquqli rollarga (server boshqalarga 403): o'qituvchi, fan mas'uli, kafedra mudiri, o'quv bo'limida so'ralmaydi.
+            const TIMETABLE_CAN_RULES = !TIMETABLE_ASSIGNMENT_ONLY;
             async function loadRules() {
-                if (!board) return;
+                if (!board || !TIMETABLE_CAN_RULES) return;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/rules');
                     rulesData = j.rules || [];
@@ -11682,7 +11693,8 @@
             });
 
             // URLdan doska ochish (F5 / havola) — tanlovlar ham URLdan tiklanadi (applyPendingView)
-            const urlBoard = new URLSearchParams(location.search).get('board');
+            // URLda doska bo'lmasa — o'qituvchi / fan mas'uli / kafedra mudiriga yagona yoki joriy Real doska (TIMETABLE_AUTO_BOARD_ID).
+            const urlBoard = new URLSearchParams(location.search).get('board') || (TIMETABLE_AUTO_BOARD_ID ? String(TIMETABLE_AUTO_BOARD_ID) : null);
             const notificationRequest = new URLSearchParams(location.search).get('change_request');
             if (urlBoard) loadBoard(urlBoard).then(() => {
                 if (notificationRequest) openChangeReqModal();

@@ -246,7 +246,8 @@ it('biriktirish: haftalik — band o\'qituvchi va boshqa haftada band xona uchun
         'training_type' => 'practice', 'group_name' => 'd2-01a'];
 
     expect($as()->getJson(route('admin.timetable.unit-busy', ['board' => $board->id] + $unit))->assertOk()->json())
-        ->toBe(['teachers' => [(string) $busy->id => 'd2-02a, Gistologiya, 15.09–29.09'], 'rooms' => ['R7' => 'd2-03a, Biologiya, 22.09']]);
+        ->toBe(['teachers' => [(string) $busy->id => 'd2-02a, Gistologiya, 15.09–29.09'], 'rooms' => ['R7' => 'd2-03a, Biologiya, 22.09'],
+            'room_rank' => ['order' => ['R7'], 'why' => []]]);
 
     $as()->postJson(route('admin.timetable.assign-teacher', $board), $unit + ['teacher_id' => $busy->id])->assertStatus(409)
         ->assertJsonPath('needs_confirm', true)

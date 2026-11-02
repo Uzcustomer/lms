@@ -1028,3 +1028,115 @@ it('takliflar: so\'rov yuborishda fan kafedrasini aniqlash kafedralar soniga bog
     expect($req->summary)->toEndWith(' — Ertalab amaliyot bor')->and($req->details['reason'])->toBe('Ertalab amaliyot bor')
         ->and($req->details['steps'][0]['note'])->toBe('Ertalab amaliyot bor');
 });
+
+/**
+ * Xona to'qnashuvi: 7-hafta juma V para, ikkala karta R215 (B1 binosi, 2-qavat) da. Bo'sh xonalar — alifbo emas, yaqinlik bo'yicha.
+ * Xonalar: K-310 (Anatomiya kafedrasi, B2), 214 / 312 / 098 (B1: 2, 3, 0-qavat — qavat yaqinligi alifbodan farqli), 101 (40 o'rin),
+ * 102 (13), 103 (100) — binosiz.
+ */
+function sugRoomSetup(): array
+{
+    $s = sugSetup();
+    test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    DB::table('departments')->insert(['department_hemis_id' => 701, 'name' => 'Anatomiya kafedrasi', 'code' => 'A1', 'structure_type_code' => 12,
+        'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    $room = fn (string $code, string $name, int $vol, array $x = []) => \App\Models\Auditorium::create(['code' => $code, 'name' => $name,
+        'volume' => $vol, 'active' => true] + $x);
+    $room('R215', '215', 30, ['building_id' => 'B1', 'building_name' => 'Bosh bino']);
+    foreach ([['R101', '101', 40], ['R102', '102', 13], ['R103', '103', 100]] as [$code, $name, $vol]) {
+        $room($code, $name, $vol);
+    }
+    foreach ([['R214', '214'], ['R312', '312'], ['R098', '098'], ['RZB', 'Zal B']] as [$code, $name]) {   // "Zal B" — qavati noma'lum
+        $room($code, $name, 30, ['building_id' => 'B1', 'building_name' => 'Bosh bino']);
+    }
+    $kaf = $room('K310', 'K-310', 30, ['building_id' => 'B2', 'building_name' => 'Morfologiya']);
+    \Illuminate\Support\Facades\DB::table('auditoriums')->where('code', 'K310')->update(['department_hemis_id' => 701]);
+    $base = ['board_id' => $s['board']->id, 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Anatomiya kafedrasi', 'auditorium_code' => 'R215', 'auditorium_name' => '215'];
+    $teacher = sugTeacher('USTOZ A.');
+    $a = TimetableCard::create($base + ['faculty_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi', 'course' => 1,
+        'oqim_label' => '6-oqim', 'group_name' => 'd1/d26-06b', 'teacher_id' => $teacher->id, 'teacher_name' => 'USTOZ A.']);
+    $b = TimetableCard::create($base + ['faculty_name' => 'Pediatriya', 'specialty_name' => 'Pediatriya', 'course' => 2,
+        'oqim_label' => '2-oqim', 'group_name' => 'p/p25-02b', 'teacher_id' => sugTeacher('USTOZ B.')->id, 'teacher_name' => 'USTOZ B.']);
+    foreach ([$a, $b] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    }
+    // Boshqa xonani shu vaqtda band qilish (boshqa guruh va o'qituvchi).
+    $occupy = function (string $code) use ($s, $base) {
+        $o = TimetableCard::create(array_merge($base, ['faculty_name' => 'Stomatologiya', 'specialty_name' => 'Stomatologiya', 'course' => 3,
+            'oqim_label' => '1-oqim', 'group_name' => 'st-' . $code, 'subject_name' => 'Kimyo', 'kafedra_name' => 'Kimyo kafedrasi',
+            'teacher_id' => sugTeacher('BAND ' . $code)->id, 'teacher_name' => 'BAND ' . $code, 'auditorium_code' => $code, 'auditorium_name' => $code]));
+        TimetableCardOverride::create(['card_id' => $o->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'start_half' => 0, 'cancelled' => false]);
+    };
+    $titles = function () use ($s, $a) {
+        $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?'
+            . http_build_query(['week' => 7, 'faculty_names' => ['1-son davolash'], 'courses' => [1]]))->assertOk()->json();
+        $card = collect($res['cards'])->firstWhere('id', $a->id);
+
+        return collect($card['suggestions'] ?? [])->where('type', 'room')->filter(fn ($x) => str_starts_with($x['title'], 'Xonani almashtirish'))
+            ->pluck('title')->map(fn ($t) => str_replace(' — Juma, 5-para', '', str_replace('Xonani almashtirish: ', '', $t)))->values()->all();
+    };
+
+    return $s + compact('a', 'b', 'teacher', 'occupy', 'titles', 'kaf');
+}
+
+it('takliflar: bo\'sh xonalar yaqinlik bo\'yicha — kafedra xonasi birinchi; u band bo\'lsa — shu bino (qavati yaqini); qolganlari sig\'imi yaqini bo\'yicha', function () {
+    $s = sugRoomSetup();
+    // Alifbo bo'yicha 098, 101, 102 bo'lardi — endi kafedra xonasi, so'ng shu binodagilar (214 — 215 bilan bir qavatda).
+    expect(($s['titles'])())->toBe(["K-310 (30 o'rin) (kafedra xonasi)", "214 (30 o'rin) (shu bino)", "312 (30 o'rin) (shu bino)"]);
+
+    // Kafedra xonasi shu vaqtda band — birinchi shu binodagilar, qavati yaqini oldin (312 — 3-qavat, 098 — 0-qavat).
+    ($s['occupy'])('K310');
+    expect(($s['titles'])())->toBe(["214 (30 o'rin) (shu bino)", "312 (30 o'rin) (shu bino)", "098 (30 o'rin) (shu bino)"]);
+
+    // Kafedra va bino xonalari yo'q (band / faol emas) — takliflar yo'qolmaydi: sig'imi talabalar soniga eng yaqini birinchi
+    // (13 o'rin, 12 talaba), katta zal oxirida.
+    \App\Models\Auditorium::whereIn('code', ['R214', 'R312', 'R098'])->update(['active' => false]);
+    // Qavati noma'lum bo'lsa ham shu bino — boshqa xonalardan oldin (sig'imi yaqinroq 102 dan ham).
+    expect(($s['titles'])())->toBe(["Zal B (30 o'rin) (shu bino)", "102 (13 o'rin)", "101 (40 o'rin)"]);
+    \App\Models\Auditorium::where('code', 'RZB')->update(['active' => false]);
+    expect(($s['titles'])())->toBe(["102 (13 o'rin)", "101 (40 o'rin)", "103 (100 o'rin)"]);
+});
+
+it('takliflar: xona reytingi — shu fan + shu guruh odatdagi xonasi, so\'ng o\'qituvchiga biriktirilgani, so\'ng kafedra xonasi', function () {
+    $s = sugRoomSetup();
+    // O'qituvchiga biriktirilgan xona (umumiy emas) — kafedra xonasidan oldin.
+    \App\Models\AuditoriumTeacher::create(['auditorium_id' => \App\Models\Auditorium::where('code', 'R103')->value('id'),
+        'teacher_id' => $s['teacher']->id, 'is_general' => false]);
+    expect(($s['titles'])())->toBe(["103 (100 o'rin) (o'qituvchiga biriktirilgan)", "K-310 (30 o'rin) (kafedra xonasi)", "214 (30 o'rin) (shu bino)"]);
+
+    // Shu fan + shu guruhning boshqa darsi (seshanba) odatda 101-xonada — eng birinchi.
+    TimetableCard::create(\Illuminate\Support\Arr::only($s['a']->getAttributes(), ['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label',
+        'lang', 'students', 'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name', 'group_name', 'teacher_id', 'teacher_name'])
+        + ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R101', 'auditorium_name' => '101']);
+    expect(($s['titles'])())->toBe(["101 (40 o'rin) (shu fan odatda shu yerda)", "103 (100 o'rin) (o'qituvchiga biriktirilgan)", "K-310 (30 o'rin) (kafedra xonasi)"]);
+
+    // Boshqa guruhning shu fan darsi (yoki boshqa fan) odat hisoblanmaydi.
+    TimetableCard::where('auditorium_code', 'R101')->update(['group_name' => 'd1/d26-07a']);
+    expect(($s['titles'])()[0])->toBe("103 (100 o'rin) (o'qituvchiga biriktirilgan)");
+});
+
+it('takliflar: joylanmagan karta — tashqi vaqtida faqat xona band bo\'lsa, bo\'sh xonalar ham yaqinlik bo\'yicha (kafedra, so\'ng shu bino)', function () {
+    $s = sugRoomSetup();
+    $u = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Odam anatomiyasi', 'kafedra_name' => 'Anatomiya kafedrasi', 'group_name' => 'g-05a', 'ext_day' => 2, 'ext_pair' => 3,
+        'teacher_id' => sugTeacher('USTOZ U.')->id, 'teacher_name' => 'USTOZ U.', 'auditorium_code' => 'R215', 'auditorium_name' => '215']);
+    // 3-haftada seshanba 3-yarim-slotda R215 boshqa guruh darsi bilan band.
+    $o = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2,
+        'oqim_label' => '2-oqim', 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Kimyo', 'kafedra_name' => 'Kimyo kafedrasi', 'group_name' => 'g-09a', 'teacher_id' => sugTeacher('BAND K.')->id,
+        'teacher_name' => 'BAND K.', 'auditorium_code' => 'R215', 'auditorium_name' => '215']);
+    TimetableCardOverride::create(['card_id' => $o->id, 'week' => 3, 'day' => 2, 'pair' => 3, 'start_half' => 0, 'cancelled' => false]);
+    $rooms = function () use ($s, $u) {
+        $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
+            ->assertOk()->json();
+        $card = collect($res['cards'])->firstWhere('id', $u->id);
+
+        return collect($card['suggestions'] ?? [])->where('type', 'room')->pluck('title')
+            ->map(fn ($t) => preg_replace('/^Xonani almashtirish: | — .*$/u', '', $t))->values()->all();
+    };
+    expect($rooms())->toBe(["K-310 (30 o'rin) (kafedra xonasi)", "214 (30 o'rin) (shu bino)", "312 (30 o'rin) (shu bino)"]);
+    \App\Models\Auditorium::where('code', 'K310')->update(['active' => false]);
+    expect($rooms())->toBe(["214 (30 o'rin) (shu bino)", "312 (30 o'rin) (shu bino)", "098 (30 o'rin) (shu bino)"]);
+});

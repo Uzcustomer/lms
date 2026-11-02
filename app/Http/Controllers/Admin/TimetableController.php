@@ -43,6 +43,7 @@ class TimetableController extends Controller
     use Concerns\TimetableBoardSnapshotsActions;
     use Concerns\TimetableWeekSuggestions;
     use Concerns\TimetableSuggestionApply;
+    use Concerns\TimetableRoomRanking;
 
     public function index(Request $request)
     {
@@ -4786,12 +4787,11 @@ class TimetableController extends Controller
         $busyRooms = $this->cycleOverlappingRoomCodes($board, $placement, $data)
             + $this->cycleSiblingRoomCodes($board, $placement, $data, $flowCards);
 
-        $rooms = Auditorium::query()
-            ->where('active', true)
-            ->orderBy('name')
-            ->get(['code', 'name', 'volume'])
-            ->filter(fn ($room) => !isset($busyRooms[$room->code]) || $room->code === $currentAud)
-            ->values();
+        // Bo'sh xonalar — alifbo emas, yaqinlik bo'yicha (odat, o'qituvchi, kafedra, shu bino, sig'im), sabab bilan.
+        $this->roomRankReset();
+        $rank = $this->roomRankForUnit($board, $flowCards, $this->roomRankBase()['active']
+            ->filter(fn ($room) => !isset($busyRooms[$room->code]) || $room->code === $currentAud));
+        $rooms = collect($rank['order'])->map(fn ($code) => $this->roomRankBase()['all'][$code])->values();
 
         return response()->json([
             'kafedra' => $kafedra,
@@ -4803,6 +4803,7 @@ class TimetableController extends Controller
                 'code' => $room->code,
                 'name' => $room->name,
                 'volume' => (int) $room->volume,
+                'why' => $rank['why'][(string) $room->code] ?? null,
             ])->values(),
             // Blok sanalarida boshqa guruhcha bilan band o'qituvchilar (ro'yxatda kulrang) — id => kim bilan, qachon.
             'busy_teachers' => (object) ($this->unitBusySafe($request, $board, $flowCards)['teachers'] ?? []),
@@ -7275,9 +7276,19 @@ class TimetableController extends Controller
             'oqim_label'     => 'nullable|string|max:50',
             'group_name'     => 'nullable|string|max:255',
         ]);
-        $busy = $this->unitBusySafe($request, $board, $this->unitCardsQuery($board, $data)->get());
+        $this->roomRankReset();
+        $cards = $this->unitCardsQuery($board, $data)->get();
+        $busy = $this->unitBusySafe($request, $board, $cards);
+        // Xonalar reytingi (oynada bo'sh xonalar shu tartibda, sabab yorlig'i bilan) — yordamchi: xato bo'lsa ro'yxat alifbo bo'yicha qoladi.
+        try {
+            $rank = $this->roomRankForUnit($board, $cards, $this->roomRankBase()['active']);
+        } catch (\Throwable $e) {
+            report($e);
+            $rank = null;
+        }
 
-        return response()->json(['teachers' => (object) ($busy['teachers'] ?? []), 'rooms' => (object) ($busy['rooms'] ?? [])]
+        return response()->json(['teachers' => (object) ($busy['teachers'] ?? []), 'rooms' => (object) ($busy['rooms'] ?? []),
+            'room_rank' => $rank ? ['order' => $rank['order'], 'why' => (object) $rank['why']] : null]
             + ($busy === null ? ['warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."] : []));
     }
 

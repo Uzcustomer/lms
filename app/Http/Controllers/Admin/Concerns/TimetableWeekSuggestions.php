@@ -31,13 +31,9 @@ trait TimetableWeekSuggestions
     /** Tekshiruv uchun: optimizatsiyadan oldingi yo'l (indekssiz findWeekConflicts, keshsiz, 6-qadam har hafta alohida). */
     private bool $weekSuggestionsLegacy = false;
 
-    /** freeRoomsFor: faol xonalar va xona–o'qituvchi xaritasi (so'rov davomida). */
-    private $sugRooms = null;
-
-    private ?array $sugRoomMap = null;
-
     public function weekSuggestions(Request $request, TimetableBoard $board)
     {
+        $this->roomRankReset();
         // Huquq — foydalanuvchining barcha rollaridan eng kengi; oynada faqat qamrovidagi kartalar (server filtrlaydi).
         $rights = $this->suggestionRights($this->timetableActor($request));
         if ($rights['level'] === null && !$rights['view']) {
@@ -346,8 +342,6 @@ trait TimetableWeekSuggestions
             return '«' . $x->subject_name . '» (' . implode(', ', $x->occupiedGroups()) . ($x->teacher_name ? ', ' . $x->teacher_name : '')
                 . ($h > 1 ? ', ' . $h . ' soat' : '') . ')';
         };
-        $rooms = null;
-        $roomMap = null;
         $teachersOf = [];
         // 6-qadam: o'qituvchining barcha haftalardagi darslari (sana => [[boshi, oxiri, karta]]) — o'qituvchi bo'yicha bir marta.
         $byTeacher = null;
@@ -460,20 +454,20 @@ trait TimetableWeekSuggestions
                     ?: ($conflicts[(int) $c->id][$W]['text'] ?? $reason);
                 $roomOnly = $clashes && !array_filter($clashes, fn ($x) => (bool) array_filter($x['errors'], fn ($m) => !str_starts_with($m, 'Auditoriya band')));
                 if ($roomOnly) {
-                    foreach ($this->freeRoomsFor($c, $W, $td, $tp, $state, $check, 3) as $r) {
-                        $add('room', 'Xonani almashtirish: ' . $r->name . ($r->volume ? ' (' . $r->volume . ' o\'rin)' : '') . ' — ' . $slotText($td, $tp, $len),
+                    foreach ($this->freeRoomsFor($c, $W, $td, $tp, $state, $check, 3) as [$r, $why]) {
+                        $add('room', 'Xonani almashtirish: ' . self::sugRoomText($r, $why) . ' — ' . $slotText($td, $tp, $len),
                             [$mv($c, $W, $td, $tp, $r->code)], 'Faqat shu hafta');
                     }
                     foreach ($clashes as $x) {
                         $o = $x['card'];
                         $inScope = in_array((int) $o->id, $scopeIds, true);
-                        foreach ($this->freeRoomsFor($o, (int) $x['week'], $x['day'], $x['pair'], $state, $check, 2) as $r) {
+                        foreach ($this->freeRoomsFor($o, (int) $x['week'], $x['day'], $x['pair'], $state, $check, 2) as [$r, $why]) {
                             // Faqat shu ko'chirishdan keyin karta to'qnashuvsiz bo'lsa (shu xonada boshqa dars ham bo'lsa — yo'q).
                             if ($check($c, $W, $td, $tp, $withMove($state, $o, (int) $x['week'], $x['day'], $x['pair'], false, [$r->code, $r->name]))) {
                                 continue;
                             }
                             $add('room', 'Ikkinchi tomon — «' . $o->subject_name . '» (' . implode(', ', $o->occupiedGroups()) . ') xonasini almashtirish: '
-                                . $r->name . ($r->volume ? ' (' . $r->volume . ' o\'rin)' : '') . ' — ' . $slotText($x['day'], $x['pair'], $o->lenHalf()),
+                                . self::sugRoomText($r, $why) . ' — ' . $slotText($x['day'], $x['pair'], $o->lenHalf()),
                                 [$mv($o, (int) $x['week'], $x['day'], $x['pair'], $r->code)],
                                 'Faqat shu hafta' . ($inScope ? '' : '; boshqa yo\'nalish: ' . trim($o->specialty_name . ', ' . $o->course . '-kurs')));
                         }
@@ -528,21 +522,19 @@ trait TimetableWeekSuggestions
                 if (!$onlyRoom) {
                     continue;
                 }
-                $rooms ??= Schema::hasTable('auditoriums') ? Auditorium::where('active', true)->orderBy('name')->get() : collect();
-                $roomMap ??= $this->auditoriumTeacherMap();
+                // Bo'sh xonalar — alifbo emas, yaqinlik bo'yicha (rankRooms): avval odatdagi / o'qituvchi / kafedra / shu bino xonasi.
+                $roomBase = $this->roomRankBase();
+                $fit = $roomBase['active']->filter(fn ($r) => $r->code !== $c->auditorium_code
+                    && !($r->volume && $c->students && (int) $r->volume < (int) $c->students) && $this->auditoriumAllowedForCard($r, $c, $roomBase['teacher']));
                 $n = 0;
-                foreach ($rooms as $r) {
-                    if ($r->code === $c->auditorium_code || ($r->volume && $c->students && (int) $r->volume < (int) $c->students)
-                        || !$this->auditoriumAllowedForCard($r, $c, $roomMap)) {
-                        continue;
-                    }
+                foreach ($this->rankRooms($c, $fit, $c->auditorium_code, $this->roomHabitFromState((int) $c->board_id, $state)) as [$r, $why]) {
                     $tmp = clone $c;
                     $tmp->auditorium_code = $r->code;
                     $tmp->auditorium_name = $r->name;
                     if ($check($tmp, $W, $d, $p, $state)) {
                         continue;
                     }
-                    $add('room', 'Xonani almashtirish: ' . $r->name . ($r->volume ? ' (' . $r->volume . ' o\'rin)' : '') . ' — ' . $slotText($d, $p, $len),
+                    $add('room', 'Xonani almashtirish: ' . self::sugRoomText($r, $why) . ' — ' . $slotText($d, $p, $len),
                         [$mv($c, $W, $d, $p, $r->code)], 'Faqat shu hafta uchun');
                     if (++$n >= 3) {
                         break;
@@ -761,26 +753,34 @@ trait TimetableWeekSuggestions
 
     /**
      * Shu vaqtda (hafta, kun, para) karta uchun bo'sh boshqa xonalar — faol, sig'imi yetadi, kartaning o'qituvchisiga ruxsat
-     * (auditoriumAllowedForCard); tekshiruv shu haftaga xos xona bilan (week-override auditorium_code). Ko'pi bilan $max ta.
+     * (auditoriumAllowedForCard); tekshiruv shu haftaga xos xona bilan (week-override auditorium_code). Ko'pi bilan $max ta —
+     * alifbo emas, yaqinlik bo'yicha (rankRooms: odat, o'qituvchi, kafedra, bino/qavat, sig'im): [[xona, sabab|null], ...].
+     * Avval arzon filtr va saralash, so'ng bandlik tekshiruvi shu tartibda — $max topilguncha.
      */
     private function freeRoomsFor(TimetableCard $c, int $w, int $d, int $p, array $state, \Closure $check, int $max): array
     {
-        $this->sugRooms ??= Schema::hasTable('auditoriums') ? Auditorium::where('active', true)->orderBy('name')->get() : collect();
-        $this->sugRoomMap ??= $this->auditoriumTeacherMap();
+        $base = $this->roomRankBase();
         $cur = ($state['ov'][(int) $c->id][$w] ?? null)?->auditorium_code ?: $c->auditorium_code;
+        $fit = $base['active']->filter(fn ($r) => $r->code !== $cur && !($r->volume && $c->students && (int) $r->volume < (int) $c->students)
+            && $this->auditoriumAllowedForCard($r, $c, $base['teacher']));
         $out = [];
-        foreach ($this->sugRooms as $r) {
-            if ($r->code === $cur || ($r->volume && $c->students && (int) $r->volume < (int) $c->students)
-                || !$this->auditoriumAllowedForCard($r, $c, $this->sugRoomMap) || $check($c, $w, $d, $p, $state, $r->code)) {
+        foreach ($this->rankRooms($c, $fit, $cur, $this->roomHabitFromState((int) $c->board_id, $state)) as [$r, $why]) {
+            if ($check($c, $w, $d, $p, $state, $r->code)) {
                 continue;
             }
-            $out[] = $r;
+            $out[] = [$r, $why];
             if (count($out) >= $max) {
                 break;
             }
         }
 
         return $out;
+    }
+
+    /** Taklif matnidagi xona: "216 (30 o'rin) (kafedra xonasi)". */
+    private static function sugRoomText(Auditorium $r, ?string $why): string
+    {
+        return $r->name . ($r->volume ? ' (' . $r->volume . ' o\'rin)' : '') . ($why ? ' (' . $why . ')' : '');
     }
 
     /** weekClashes yozuvi — "Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para" (o'qituvchi / guruh ham). */

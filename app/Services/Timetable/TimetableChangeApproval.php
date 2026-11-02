@@ -224,7 +224,7 @@ class TimetableChangeApproval
      * So'rovni dars o'qituvchisining o'zi emas, boshqa odam yuborgan bo'lsa (fan mas'uli, kafedra mudiri, Takliflar): dars
      * o'qituvchi(lari)ga (details.lesson_teacher_ids va o'zgaradigan kartalar o'qituvchilari) — so'rov yaratilganda va yakuniy natijada.
      */
-    private function notifyLessonTeachers(TimetableChangeRequest $req, string $title, ?string $tail = null): void
+    private function notifyLessonTeachers(TimetableChangeRequest $req, string $title, ?string $tail = null, string $lead = ''): void
     {
         $d = $req->details ?? [];
         $ids = array_values(array_unique(array_map('intval', array_merge((array) ($d['lesson_teacher_ids'] ?? []), (array) ($d['teacher_ids'] ?? [])))));
@@ -235,7 +235,7 @@ class TimetableChangeApproval
         if (!$ids) {
             return;
         }
-        $body = ($req->requester_name ? $req->requester_name . ' (' . self::proposerLabel($req) . "):\n" : '') . $req->summary . ($tail ? "\n" . $tail : '');
+        $body = $lead . ($req->requester_name ? $req->requester_name . ' (' . self::proposerLabel($req) . "):\n" : '') . $req->summary . ($tail ? "\n" . $tail : '');
         $this->notifyNow(Teacher::whereIn('id', $ids)->get(), $title, $body, $req, "dars o'qituvchisi");
     }
 
@@ -526,13 +526,15 @@ class TimetableChangeApproval
         if (!$done) {
             return false;
         }
-        // Yuboruvchiga — izoh bilan (o'qituvchi yoki foydalanuvchi hisobi); dars o'qituvchisiga — boshqa odam yuborgan bo'lsa.
+        // Yuboruvchiga — izoh bilan (o'qituvchi yoki foydalanuvchi hisobi); dars o'qituvchisiga — boshqa odam yuborgan bo'lsa. Izoh
+        // (review_note) — matn BOSHIDA: xabarnomalar ro'yxati matnning faqat boshini ko'rsatadi (60 belgi).
         $who = self::isTeacherProposal($done) ? (($done->head_reviewed_at || !empty($done->details['head_skipped'])) ? ' (registrator ofisi)' : ' (kafedra mudiri)') : '';
+        $note = trim((string) ($done->review_note ?? $note ?? ''));
+        $lead = $note !== '' ? 'Izoh: ' . $note . "\n" : '';
         if ($done->requester) {
-            $this->notifyNow([$done->requester], 'Dars jadvali o\'zgarishi rad etildi' . $who,
-                $done->summary . ($note ? "\nIzoh: " . $note : ''), $done, "so'rov yuboruvchi");
+            $this->notifyNow([$done->requester], 'Dars jadvali o\'zgarishi rad etildi' . $who, $lead . $done->summary, $done, "so'rov yuboruvchi");
         }
-        $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi rad etildi" . $who, $note ? 'Izoh: ' . $note : null);
+        $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi rad etildi" . $who, null, $lead);
 
         return true;
     }

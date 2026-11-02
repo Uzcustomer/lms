@@ -1740,6 +1740,7 @@
         #asgRoomModal .rm-row b { min-width: 120px; }
         #asgRoomModal .rm-row span { color: #64748b; font-size: 12px; }
         #asgRoomModal .rm-row .rm-vol { margin-left: auto; font-variant-numeric: tabular-nums; }
+        #asgRoomModal .rm-row .rm-why { color: #047857; font-weight: 600; font-size: 11px; background: #ecfdf5; border-radius: 6px; padding: 1px 6px; }
         .tt-modal-body { min-height: 100%; display: flex; align-items: center; justify-content: center;
             padding: 2.5vh 16px; box-sizing: border-box; }
         .tt-modal-win { width: 100%; max-width: min(1200px, 96vw); background: #eef2f7;
@@ -6132,7 +6133,8 @@
                         (j.teachers || []).map(t => '<option value="' + t.id + '"' + (busyT[t.id] ? ' style="color:#9ca3af" title="Band: ' + esc(busyT[t.id]) + '"' : '') + '>' +
                             esc(t.name) + (busyT[t.id] ? ' — band' : '') + '</option>').join('');
                     $('cycAssignRoom').innerHTML = '<option value="">— Tanlanmagan —</option>' +
-                        (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '') + '</option>').join('');
+                        (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '')
+                            + (r.why ? ' — ' + esc(r.why) : '') + '</option>').join('');   // server tartibi: yaqinlik bo'yicha
 
                     // "A + B" kabi umumiy karta: o'qituvchi/xona boshqa guruhchalarga ham tegadi.
                     if (j.shared_with && j.shared_with.length) {
@@ -10956,15 +10958,16 @@
             let asgUnits = [];        // dars birliklari
             let asgSel = null;        // tanlangan birlik
             let asgTeacherTimer = null;
-            // Tanlangan birlik darslari vaqtida boshqa guruhcha bilan band o'qituvchilar/xonalar — ro'yxatda kulrang.
-            let asgBusy = { teachers: {}, rooms: {} };
+            // Tanlangan birlik darslari vaqtida boshqa guruhcha bilan band o'qituvchilar/xonalar — ro'yxatda kulrang; rank — xonalar
+            // reytingi (server: odat, o'qituvchi, kafedra, shu bino, sig'im) — { order: [kod, ...], why: { kod: sabab } }.
+            let asgBusy = { teachers: {}, rooms: {}, rank: null };
             const asgUnitParams = u => ({ faculty_name: u.faculty_name || '', specialty_name: u.specialty_name, course: u.course,
                 subject_name: u.subject_name, training_type: u.training_type, oqim_label: u.oqim_label || '', group_name: u.group_name || '' });
             async function loadAsgBusy(u) {
-                asgBusy = { teachers: {}, rooms: {} };
+                asgBusy = { teachers: {}, rooms: {}, rank: null };
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/unit-busy?' + new URLSearchParams(asgUnitParams(u)));
-                    if (asgSel === u) asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {} };
+                    if (asgSel === u) asgBusy = { teachers: j.teachers || {}, rooms: j.rooms || {}, rank: j.room_rank || null };
                 } catch (e) { console.warn('Bandlik olinmadi:', e); }
             }
             function markAsgBusy() {
@@ -11324,16 +11327,28 @@
                 $('asgRoomSearch').focus();
             }
             function closeAsgRoomModal() { $('asgRoomModal').classList.add('hidden'); }
+            // Xonalar: bo'shlari yaqinlik bo'yicha (server reytingi — odatdagi, o'qituvchiniki, kafedraniki, shu bino, sig'imi yaqin),
+            // band xonalar oxirida (kulrang); reyting kelmagan bo'lsa — alifbo tartibi saqlanadi. Sabab — yashil yorliq.
+            function asgRoomsSorted(list) {
+                const order = (asgBusy.rank && asgBusy.rank.order) || [];
+                const pos = {};
+                order.forEach((code, i) => { pos[code] = i; });
+                const at = (room, i) => (room.code in pos ? pos[room.code] : order.length + i);
+                return list.map((room, i) => ({ room, i })).sort((a, b) =>
+                    (asgBusy.rooms[a.room.code] ? 1 : 0) - (asgBusy.rooms[b.room.code] ? 1 : 0) || at(a.room, a.i) - at(b.room, b.i)).map(x => x.room);
+            }
             function renderAsgRooms() {
                 if (!asgSel || !asgRoomsList) return;
                 const q = ($('asgRoomSearch').value || '').toLowerCase().trim();
-                const list = asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name]
-                    .some(v => String(v || '').toLowerCase().includes(q)));
+                const why = (asgBusy.rank && asgBusy.rank.why) || {};
+                const list = asgRoomsSorted(asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name]
+                    .some(v => String(v || '').toLowerCase().includes(q))));
                 $('asgRoomList').innerHTML = list.map(room =>
                     '<button type="button" class="rm-row' + (asgSel.auditorium_code === room.code ? ' is-current' : '') + '" data-code="' + esc(room.code) + '"' +
                     (asgBusy.rooms[room.code] ? ' style="opacity:.55" title="Band: ' + esc(asgBusy.rooms[room.code]) + '"' : '') + '>' +
                     '<b>' + esc(room.name || room.code) + '</b>' +
                     '<span>' + esc([room.building_name, room.auditorium_type_name].filter(Boolean).join(' · ')) + '</span>' +
+                    (why[room.code] && !asgBusy.rooms[room.code] ? '<span class="rm-why">' + esc(why[room.code]) + '</span>' : '') +
                     '<span class="rm-vol">' + (room.volume ? room.volume + ' o\'rin' : '') + '</span></button>').join('')
                     || '<div class="p-3 text-sm text-slate-400">Xona topilmadi</div>';
             }

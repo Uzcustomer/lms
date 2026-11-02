@@ -111,7 +111,9 @@ it('unitBusy xato bersa: logga yoziladi, unit-busy bo\'sh ro\'yxat + warning, bi
     });
 
     $res = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
-    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."]);
+    // Xonalar reytingi bandlikka bog'liq emas — xato bo'lsa ham beriladi (sig'imi talabalar soniga yaqini birinchi).
+    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'room_rank' => ['order' => ['R101', 'R102', 'R103'], 'why' => []],
+        'warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."]);
     // Band xona ham — ogohlantirishsiz biriktiriladi; o'qituvchi ham
     ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102'])->assertOk();
     expect($s['unit']->fresh()->auditorium_code)->toBe('R102');
@@ -306,4 +308,73 @@ it('katta doska: "Bugungi darslar (HEMIS)" bitta fakultet uchun < 10 s va < 128 
     expect($res['today'])->toBe($today)->and($res['counts']['updates'])->toBeGreaterThan(0)->and($elapsed)->toBeLessThan(10.0)->and($peakMb)->toBeLessThan(128.0);
     \Illuminate\Support\Facades\Http::assertNotSent(fn ($req) => (int) $req->data()['lesson_date_from'] !== \Illuminate\Support\Carbon::parse($today)->startOfDay()->timestamp
         || (int) $req->data()['_group'] < 10000);
+});
+
+it('biriktirish oynasi: unit-busy xonalar reytingini beradi — o\'qituvchiga biriktirilgan, so\'ng kafedra xonasi, qolganlari sig\'im bo\'yicha; xato bo\'lsa ham oyna ishlaydi', function () {
+    $s = ubSetup();
+    Auditorium::create(['code' => 'R090', 'name' => '090', 'volume' => 200, 'active' => true]);   // alifbo bo'yicha birinchi, lekin katta zal
+    // 12 o'rin (sig'imi aynan) — lekin USTOZ B ga biriktirilgan: dars birligi o'qituvchisi boshqa bo'lsa, ruxsat yo'q — oxirida.
+    $r050 = Auditorium::create(['code' => 'R050', 'name' => '050', 'volume' => 12, 'active' => true]);
+    \App\Models\AuditoriumTeacher::create(['auditorium_id' => $r050->id, 'teacher_id' => $s['b']->id, 'is_general' => false]);
+    DB::table('auditoriums')->where('code', 'R103')->update(['department_hemis_id' => 601]);
+    $get = fn () => ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
+    expect($get()['room_rank'])->toBe(['order' => ['R103', 'R050', 'R101', 'R102', 'R090'], 'why' => ['R103' => 'kafedra xonasi']]);
+
+    // Dars birligi o'qituvchisiga biriktirilgan xona — kafedra xonasidan oldin; band xona (R101) ham ro'yxatda (oynada oxirida, kulrang).
+    $s['unit']->update(['teacher_id' => $s['a']->id, 'teacher_name' => 'USTOZ A']);
+    \App\Models\AuditoriumTeacher::create(['auditorium_id' => Auditorium::where('code', 'R102')->value('id'), 'teacher_id' => $s['a']->id, 'is_general' => false]);
+    $res = $get();
+    expect($res['room_rank'])->toBe(['order' => ['R102', 'R103', 'R101', 'R090', 'R050'],
+        'why' => ['R102' => "o'qituvchiga biriktirilgan", 'R103' => 'kafedra xonasi']])
+        ->and($res['rooms'])->toHaveKey('R101');
+
+    // Dars birligida 25 talabali karta ham bor — sig'im birlikning eng katta kartasi bo'yicha: 20 o'rinli xonalar (o'qituvchiniki ham)
+    // sig'maydi — oxirida; sig'adiganlar oldin.
+    TimetableCard::create($s['unit']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half',
+        'weeks', 'subject_name', 'kafedra_name', 'group_name', 'teacher_id', 'teacher_name']) + ['students' => 25, 'day' => 3, 'pair' => 1]);
+    expect($get()['room_rank']['order'])->toBe(['R103', 'R090', 'R102', 'R050', 'R101']);
+});
+
+it('biriktirish oynasi: xonalar reytingi xato bersa — unit-busy bandlikni beradi, reyting null (ro\'yxat alifbo bo\'yicha qoladi)', function () {
+    $s = ubSetup();
+    // Controller nusxasi birinchi so'rovda route'da saqlanadi — almashtirish so'rovdan oldin.
+    app()->bind(TimetableController::class, fn () => new class extends TimetableController {
+        protected function roomRankForUnit(TimetableBoard $board, $cards, iterable $rooms): array
+        {
+            throw new RuntimeException('reyting xatosi');
+        }
+    });
+    $res = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
+    expect($res['room_rank'])->toBeNull()->and($res['rooms'])->toHaveKey('R101')->and($res)->not->toHaveKey('warning');
+});
+
+it('sikl biriktirish oynasi: bo\'sh xonalar reyting tartibida va sabab bilan — odatdagi (hozirgi) xona, kafedra xonasi, so\'ng sig\'im', function () {
+    $s = ubSetup();
+    Auditorium::create(['code' => 'R090', 'name' => '090', 'volume' => 200, 'active' => true]);
+    // Kafedra id'si yo'q, faqat nomi (qo'lda kiritilgan xona) — kafedra xonasi nom bo'yicha ham aniqlanadi.
+    Auditorium::create(['code' => 'G501', 'name' => 'G-501', 'volume' => 25, 'active' => true, 'department_name' => 'Gistologiya kafedrasi']);
+    $params = ['specialty_name' => 'Davolash ishi', 'course' => 3, 'group_name' => 'd1/d24-03c', 'subject_name' => 'Gistologiya',
+        'training_type' => 'practice', 'view' => 'group'];
+    $as = fn () => test()->withoutVite()->actingAs($s['head'], 'teacher')->withSession(['active_role' => 'admin']);
+    Role::findOrCreate('admin', 'web');
+    $s['head']->assignRole('admin');
+    $rooms = $as()->postJson(route('admin.timetable.cycle-assign-options', $s['board']), $params)->assertOk()->json('rooms');
+    // R101 (20 o'rin) R103 (30) dan oldin — 12 talabaga sig'imi yaqinroq; 200 o'rinli zal oxirida (alifbo bo'yicha birinchi bo'lardi).
+    expect(array_column($rooms, 'code'))->toBe(['R102', 'G501', 'R101', 'R103', 'R090'])
+        ->and(array_column($rooms, 'why'))->toBe(['shu fan odatda shu yerda', 'kafedra xonasi', null, null, null])
+        ->and($rooms[1])->toBe(['code' => 'G501', 'name' => 'G-501', 'volume' => 25, 'why' => 'kafedra xonasi']);
+});
+
+it('biriktirish oynasi: ma\'ruza oqimi — xona sig\'imi oqim guruhlari talabalari yig\'indisi bo\'yicha', function () {
+    $s = ubSetup();
+    foreach (['d1/d24-03a', 'd1/d24-03b'] as $g) {
+        TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => '1-son davolash ishi fakulteti', 'specialty_name' => 'Davolash ishi',
+            'course' => 3, 'oqim_label' => '2-oqim', 'lang' => 'uz', 'students' => 12, 'training_type' => 'lecture', 'len_half' => 2, 'weeks' => 15,
+            'subject_name' => 'Patologik anatomiya', 'kafedra_name' => 'Patologik anatomiya kafedrasi', 'group_name' => $g, 'day' => 4, 'pair' => 1]);
+    }
+    $params = ['faculty_name' => '1-son davolash ishi fakulteti', 'specialty_name' => 'Davolash ishi', 'course' => 3,
+        'subject_name' => 'Patologik anatomiya', 'training_type' => 'lecture', 'oqim_label' => '2-oqim'];
+    // 24 talaba: 30 o'rinli R103 sig'adi, 20 o'rinli R101 / R102 sig'maydi — oxirida.
+    expect(($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $params))->assertOk()->json('room_rank.order'))
+        ->toBe(['R103', 'R101', 'R102']);
 });

@@ -6832,10 +6832,12 @@
                 ttFocusStart(show);
             }, true);
             // ===== To'qnashuvlar: qisqa belgi, rang, bir qatorli tafsilot (server — tuzilgan ro'yxat, ko'rish qamrovi bo'yicha) =====
+            // room_lectures — bir zalda bir vaqtda ikki xil ma'ruza (bitta oqim emas): zal bitta oqimga mo'ljallangan.
             const CF_LABEL = { teacher_busy: "O'qituvchi band", group_busy: 'Guruh band', lecture_overlap: "Ma'ruza bilan ustma-ust",
-                room_capacity: "Xona sig'maydi", room_busy: 'Xona band' };
+                room_capacity: "Xona sig'maydi", room_busy: 'Xona band', room_lectures: "Ma'ruza zali bitta oqimga" };
             const CF_TODO = { teacher_busy: "boshqa vaqt yoki o'qituvchi tanlang", group_busy: 'darsni boshqa vaqtga suring',
-                lecture_overlap: "amaliyot vaqtini ma'ruzadan keyinga suring", room_capacity: 'kattaroq xona tanlang', room_busy: 'boshqa xona tanlang' };
+                lecture_overlap: "amaliyot vaqtini ma'ruzadan keyinga suring", room_capacity: 'kattaroq xona tanlang', room_busy: 'boshqa xona tanlang',
+                room_lectures: "bitta ma'ruza oqimiga birlashtiring yoki boshqa zal tanlang" };
             const cfLive = items => (items || []).filter(i => !i.past);
             const cfKindLevel = kind => (kind === 'teacher_busy' || kind === 'group_busy' || kind === 'lecture_overlap') ? 'red' : 'yellow';
             // Rang: qizil — o'qituvchi yoki guruh ikki joyda; sariq — faqat xona; hammasi o'tgan — kulrang (past); yo'q — null.
@@ -6849,17 +6851,52 @@
                 const live = cfLive(items);
                 if (!live.length) return (items || []).length ? 'o\u2018tgan' : '';
                 const n = {};
-                live.forEach(i => { n[i.kind] = (n[i.kind] || 0) + 1; });
+                cfMergeItems(live).forEach(i => { n[i.kind] = (n[i.kind] || 0) + 1; });   // tafsilot oynasidagi qatorlar soni bilan bir xil
                 return Object.keys(CF_LABEL).filter(k => n[k]).map(k => CF_LABEL[k] + ' (' + n[k] + ')').join(' · ');
             }
             // Uzun guruh ro'yxati: avval 3 tasi, qolgani "+N ta".
             const cfGroups = list => { const g = list || []; return g.slice(0, 3).join(', ') + (g.length > 3 ? ' +' + (g.length - 3) + ' ta' : ''); };
             const cfDate = d => String(d || '').split('-').reverse().slice(0, 2).join('.');
+            const cfWhen = i => i.dates || (i.date_from ? cfDate(i.date_from) + (i.date_to && i.date_to !== i.date_from ? '–' + cfDate(i.date_to) : '') : '');
+            // Kim / nima: sikl — who; haftalik — o'qituvchi yoki xona.
+            const cfWho = i => i.who !== undefined ? i.who : (i.type === 'teacher' ? i.teacher_name : i.type === 'room' ? i.room : (i.teacher_name || i.room));
+            // Bir xil turdagi va bir xil xona / o'qituvchi / guruhdagi yozuvlar (server har sana yoki boshqa guruhcha uchun alohida beradi:
+            // "Xona sig'maydi" 6 marta) — bitta qator: guruhlar va sanalar birlashadi; "Ko'rsatish" — barcha guruhlar, kartalar, to'liq
+            // sana va soat oralig'i. O'tgan va kelgusi alohida (o'tgani kulrang), ma'ruza va amaliy alohida (ko'rsatma har xil).
+            function cfMergeItems(items) {
+                const out = [], byKey = {};
+                (items || []).forEach(i => {
+                    const k = [i.kind, i.type || '', cfWho(i) ?? '', i.lecture ? 'L' : 'P', i.past ? 1 : 0].join('|');
+                    const when = cfWhen(i), at = i.date_from || i.from || '';
+                    const m = byKey[k];
+                    if (!m) {
+                        byKey[k] = { item: Object.assign({}, i, { groups: (i.groups || []).slice() }), when: when ? [[at, when]] : [] };
+                        out.push(byKey[k]);
+                        return;
+                    }
+                    (i.groups || []).forEach(g => { if (!m.item.groups.includes(g)) m.item.groups.push(g); });
+                    if (when && !m.when.some(w => w[1] === when)) m.when.push([at, when]);
+                    m.item.show = cfMergeShow(m.item.show, i.show);
+                });
+                return out.map(m => (m.when.length > 1
+                    ? Object.assign(m.item, { dates: m.when.sort((a, b) => String(a[0]).localeCompare(String(b[0]))).map(w => w[1]).join(', ') })
+                    : m.item));
+            }
+            function cfMergeShow(a, b) {
+                if (!a || !b) return a || b || null;
+                const gk = g => [g.faculty, g.specialty, +g.course, g.group].map(v => String(v ?? '').trim().toLowerCase()).join('|');
+                const seen = new Set((a.groups || []).map(gk));
+                const groups = (a.groups || []).concat((b.groups || []).filter(g => !seen.has(gk(g)) && seen.add(gk(g))));
+                const ds = [...(a.dates || []), ...(b.dates || [])].filter(Boolean).sort();
+                const lo = (x, y) => (x == null ? y : y == null ? x : Math.min(x, y)), hi = (x, y) => (x == null ? y : y == null ? x : Math.max(x, y));
+                return Object.assign({}, a, { groups, card_ids: [...new Set([...(a.card_ids || []), ...(b.card_ids || [])].map(Number))],
+                    dates: ds.length ? [ds[0], ds[ds.length - 1]] : [], hour_from: lo(a.hour_from, b.hour_from), hour_to: hi(a.hour_to, b.hour_to) });
+            }
             // Bir qator: kim/nima to'qnashdi, qaysi sanalarda, nima qilish kerak (o'tgan — kulrang).
             function cfLineHtml(i) {
-                const when = i.dates || (i.date_from ? cfDate(i.date_from) + (i.date_to && i.date_to !== i.date_from ? '–' + cfDate(i.date_to) : '') : '');
-                // Kim / nima: sikl — who; haftalik — o'qituvchi yoki xona (+ guruhlar 3 ta, "+N ta"); hech biri yo'q — server matni.
-                const who = i.who !== undefined ? i.who : (i.type === 'teacher' ? i.teacher_name : i.type === 'room' ? i.room : (i.teacher_name || i.room));
+                const when = cfWhen(i);
+                // Kim / nima (+ guruhlar 3 ta, "+N ta"); hech biri yo'q — server matni.
+                const who = cfWho(i);
                 const body = (who !== undefined && who !== null) || (i.groups || []).length
                     ? (who ? ' ' + esc(who) : '') + ((i.groups || []).length ? ' — ' + esc(cfGroups(i.groups)) : '')
                     : ' ' + esc(String(i.detail || '').replace(/^[^:]*:\s*/, ''));
@@ -7399,7 +7436,7 @@
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(b.subject) + '</div><div class="dp-sub">' + esc(b.group) + ' · to\u2018qnashuvlar</div></div>' +
-                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' + own.map(cfLineHtml).join('') + '</ul>';
+                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' + cfMergeItems(own).map(cfLineHtml).join('') + '</ul>';
                 document.body.appendChild(pop);
                 const r = el.getBoundingClientRect();
                 pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
@@ -7427,7 +7464,7 @@
                 pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(c ? c.subject_name : '') + '</div><div class="dp-sub">' +
                     esc(c ? cardGroups(c).join(', ') : '') + (curWeek ? ' · ' + curWeek + '-hafta' : '') + ' · to\u2018qnashuvlar</div></div>' +
                     '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' +
-                    (items.length ? items.map(cfLineHtml).join('') : '<li class="cf-line">' + esc(cardConflict(c) || '') + '</li>') + '</ul>';
+                    (items.length ? cfMergeItems(items).map(cfLineHtml).join('') : '<li class="cf-line">' + esc(cardConflict(c) || '') + '</li>') + '</ul>';
                 document.body.appendChild(pop);
                 const r = el.getBoundingClientRect();
                 pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)) + 'px';

@@ -90,8 +90,8 @@ assert.equal(ctx.cfMergeItems([]).length, 0);
 assert.equal(ctx.cfMergeItems([R(), six[0]])[0].show.room_code, 'R305');
 // Tafsilot oynalari (sikl bloki / panel kartasi va haftalik) jamlangan qatorlarni chizadi.
 assert.match(source, /const own = cfMergeItems\(cfSplit\(key, b\.conflicts, cfOwners\)\.own\);/);
-assert.match(source, /<ul class="cf-list">' \+ own\.map\(cfLineHtml\)\.join\(''\)/);
-assert.match(source, /\(items\.length \? cfMergeItems\(items\)\.map\(cfLineHtml\)\.join\(''\)/);
+assert.match(source, /own\.map\(i => cfLineHtml\(i, \{ move: !i\.lecture && i\.date_from \? 'c\|' \+ key \+ '\|' \+ i\.date_from : null \}\)\)\.join\(''\)/);
+assert.match(source, /\(items\.length \? cfMergeItems\(items\)\.map\(i => cfLineHtml\(i, \{ move: curWeek \? 'w\|' \+ id \+ '\|' \+ curWeek : null \}\)\)\.join\(''\)/);
 
 // Oqim ma'ruzasi to'qnashuvi: birinchi blokda to'liq, boshqasida — havola.
 const L = T({ lecture: true, lecture_id: 77, who: 'LEKTOR', groups: ['d22-06a'] });

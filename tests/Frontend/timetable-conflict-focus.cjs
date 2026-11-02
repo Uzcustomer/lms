@@ -44,6 +44,7 @@ const document = {
 const calls = [];
 const ctx = {
     $, esc, document, JSON, Set, String, Math, Object, Array,
+    agendaLinkHtml: (a, label) => '<a class="tt-agenda-link" data-agenda="' + a.teacher_id + '|' + a.date + '">' + label + '</a>',
     CF_LABEL: { teacher_busy: "O'qituvchi band", group_busy: 'Guruh band', room_capacity: "Xona sig'maydi", room_busy: 'Xona band' },
     board: { id: 7 }, scopeMode: 'all', cards: [], specList: [], viewMode: 'teacher', curWeek: 0, selected: null,
     selectedFaculties: new Set(), selectedDirs: new Set(), selectedCourses: new Set(), cycleRowFilters: [], cycleRowStoreKey: null,
@@ -125,8 +126,9 @@ assert.deepEqual(calls, ['closeCycDayPop', 'reconcile:false', 'fillSelectors', '
 assert.deepEqual(colGroups(), ['d2-01a', 'p3-01b']);   // d2-02a — yashirin
 const bar = docById.ttFocusBar;
 assert(bar && !bar.removed);
+// O'qituvchi band — lentada shu kun jadvali havolasi (o'qituvchi va to'qnashuv sanasi).
 assert.equal(bar.innerHTML, "<span>To'qnashuvni ko'rish: O'qituvchi USTOZ — d2-01a va p3-01b, 13.11, 10:00</span><span>·</span>"
-    + '<button type="button" id="ttFocusClose">Yopish</button>');
+    + '<a class="tt-agenda-link" data-agenda="15|2026-11-13">O\'qituvchi jadvali</a><span>·</span><button type="button" id="ttFocusClose">Yopish</button>');
 
 // 3) Qizil ramka: to'qnashgan darslar (card_ids) kataklari; birinchisiga bir marta scroll.
 const td = n => ({ n, classList: classList(), scrolls: 0, scrollIntoView(o) { this.scrolls++; this.opt = o; } });
@@ -327,9 +329,9 @@ assert.equal(tb({ hour_from: 9, hour_unit: 'hour' }), "To'qnashuvni ko'rish: Gur
 
 // 10) Havolalar manbada: to'qnashuv qatori, biriktirish ogohlantirishi (409 conflict_items), band o'qituvchi tanlovi, Takliflar.
 assert.match(source, /: ' <span class="cf-todo">→ ' \+ esc\(i\.todo \|\| CF_TODO\[i\.kind\] \|\| ''\) \+ '<\/span>'\) \+ focusLinkHtml\(i\.show\) \+ '<\/li>';/);
-assert.match(source, /'<div style="color:#b45309">⚠ ' \+ esc\(message\) \+ focusLinksHtml\(items\) \+ '<\/div>'/);
+assert.match(source, /'<div style="color:#b45309">⚠ ' \+ esc\(message\) \+ focusLinksHtml\(items\) \+ agendaLinksHtml\(items, null\) \+ '<\/div>'/);
 assert.equal((source.match(/showBusyConfirm\([^\n]*, e\.data\.conflict_items\);/g) || []).length, 3);
-assert.match(source, /esc\(c\.reason\) \+ focusLinksHtml\(c\.clashes\) \+ '<\/div>'/);
+assert.match(source, /esc\(c\.reason\) \+ focusLinksHtml\(c\.clashes\) \+\s+agendaLinksHtml\(c\.clashes, 'w\|' \+ c\.id \+ '\|' \+ res\.week\) \+ '<\/div>'/);
 assert.match(source, /focusLinksHtml\(cycAssignBusy\.items\[id\]\)/);
 assert.match(source, /focusLinksHtml\(\(\(asgBusy\.items \|\| \{\}\)\.teachers \|\| \{\}\)\[id\]\)/);
 assert.match(source, /groupRows = focusWeekColumns\(groupRows\);/);

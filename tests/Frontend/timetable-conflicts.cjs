@@ -58,6 +58,7 @@ const ctx = {
     CROSS_MODES: ['teacher', 'subject', 'room'], cycleWeekLessons: () => [],
     ttToast: html => { (ctx.toasts = ctx.toasts || []).push(html); },
     // "Ko'rsatish" havolalari (alohida testda) — bu yerda faqat 409 javobidagi tuzilgan ro'yxat uzatilishi tekshiriladi.
+    agendaLinksHtml: () => '',
     focusLinksHtml: list => ((list || []).length ? ' <a class="cf-show" data-focus="' + list.length + '">Ko\'rsatish</a>' : ''),
 };
 vm.createContext(ctx);

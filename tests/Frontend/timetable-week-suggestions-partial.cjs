@@ -31,7 +31,7 @@ const ctx = {
     title: { textContent: '' },
     board: { id: 7 }, BASE: '/admin', curWeek: 7, weeklyLayer: 'internal', typeFilter: 'all',
     selectedFaculties: new Set(['F1']), selectedDirs: new Set(), selectedCourses: new Set([1]),
-    SUG_COLOR: {}, SUG_LABEL: {}, esc: s => String(s), focusLinksHtml: () => "", URLSearchParams, Set, Promise, Error,
+    SUG_COLOR: {}, SUG_LABEL: {}, esc: s => String(s), focusLinksHtml: () => "", agendaLinksHtml: () => "", URLSearchParams, Set, Promise, Error,
     window: {}, alert: m => { throw new Error('alert: ' + m); }, String,
     ttToast() {}, loadChangeRequests: async () => {}, loadBoard: async () => {}, confirm: () => true,
     document: {

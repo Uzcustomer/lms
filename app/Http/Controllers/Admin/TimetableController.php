@@ -46,6 +46,7 @@ class TimetableController extends Controller
     use Concerns\TimetableRoomRanking;
     use Concerns\TimetableConflictFocus;
     use Concerns\TimetableCycleShiftAdvice;
+    use Concerns\TimetableTeacherAgenda;
 
     public function index(Request $request)
     {
@@ -9584,6 +9585,10 @@ class TimetableController extends Controller
         $units = $this->cycleProposalUnits($board, $data, null);
         if ($denied = $this->denyForeignKafedra($request, collect($units)->flatMap(fn ($x) => $x['u']['cards']))) {
             return $denied;
+        }
+        // Bugungi va o'tgan darslar ko'chirilmaydi (so'rov tasdig'ida ham shu tekshiruv — teacherProposalExpired).
+        if ($why = $this->teacherProposalExpired(self::TEACHER_CYCLE_ROUTE, ['board' => $board->id], $data)) {
+            return response()->json(['error' => $why], 422);
         }
         $units = $this->validateCyclePracticeProposal($board, $data);
         $this->writeCyclePracticeStarts($units, $this->cycleProposalDays($units, $data), (int) $data['start_hour']);

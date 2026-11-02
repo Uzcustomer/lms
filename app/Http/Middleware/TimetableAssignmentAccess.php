@@ -57,7 +57,9 @@ class TimetableAssignmentAccess
             if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.boards.conflicts', 'admin.timetable.cycle-plan', 'admin.timetable.cycle-week', 'admin.timetable.boards.excel-export', 'admin.timetable.change-requests.index', 'admin.timetable.change-requests.cancel', 'admin.timetable.cards.time-proposal', 'admin.timetable.cards.time-proposal.check', 'admin.timetable.cycle-time-proposal', 'admin.timetable.cycle-time-proposal.check',
                 // Takliflar: o'z qamrovida ko'rish va so'rov yuborish (huquqni controller tekshiradi).
                 // apply — faqat admin huquqi bo'lsa (boshqa roli admin bo'lsa ham): executor o'zi tekshiradi.
-                'admin.timetable.boards.week-suggestions', 'admin.timetable.week-suggestions.propose', 'admin.timetable.week-suggestions.apply'])) {
+                'admin.timetable.boards.week-suggestions', 'admin.timetable.week-suggestions.propose', 'admin.timetable.week-suggestions.apply',
+                // To'qnashuvlar oynasi: smena maslahati va o'qituvchi kun/hafta jadvali (faqat o'qiydi; ko'chirish — so'rov bilan).
+                'admin.timetable.cycle-shift-advice', 'admin.timetable.teacher-agenda'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
@@ -90,6 +92,9 @@ class TimetableAssignmentAccess
                 'admin.timetable.boards.week-suggestions',
                 'admin.timetable.week-suggestions.propose',
                 'admin.timetable.week-suggestions.apply',
+                // To'qnashuvlar oynasi: smena maslahati va o'qituvchi kun/hafta jadvali (faqat o'qiydi).
+                'admin.timetable.cycle-shift-advice',
+                'admin.timetable.teacher-agenda',
             ];
 
             if (in_array($activeRole, $auditoriumAssignmentRoles, true)) {

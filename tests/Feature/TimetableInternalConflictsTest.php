@@ -428,7 +428,8 @@ it('to\'qnashuvlar: tuzilgan ro\'yxat (kind, teacher_id, groups, sanalar), o\'tg
     $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 5];
     expect($a['items'][0]['show'])->toBe(['kind' => 'teacher_busy', 'teacher_id' => $sharipov->id, 'teacher_name' => 'SHARIPOV K. SH.',
         'room_code' => null, 'groups' => [$g('d22-05a'), $g('d22-05b')], 'subject' => 'Klinik farmakologiya', 'dates' => ['2026-09-16', '2026-09-18'],
-        'hour_from' => 1, 'hour_to' => 7, 'card_ids' => [$s['cards']['d22-05a']->id, $s['cards']['d22-05b']->id], 'view' => 'cycle', 'week' => null])
+        'hour_from' => 1, 'hour_to' => 7, 'hour_unit' => 'hour', 'card_ids' => [$s['cards']['d22-05a']->id, $s['cards']['d22-05b']->id],
+        'view' => 'cycle', 'week' => null])
         ->and($c['davolash ishi|5|d22-05c|Klinik farmakologiya|practice']['items'][0]['show'])->toMatchArray(['kind' => 'room_capacity',
             'teacher_id' => null, 'room_code' => 'R305', 'groups' => [$g('d22-05c'), $g('d22-05d')], 'dates' => ['2026-09-21', '2026-09-25'],
             'card_ids' => [$s['cards']['d22-05c']->id, $s['cards']['d22-05d']->id]]);
@@ -610,7 +611,7 @@ it('haftalik: /conflicts?items=1&week=N — shu hafta tuzilgan ro\'yxati (o\'tga
     $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 2];
     expect($w2['show'])->toBe(['kind' => 'teacher_busy', 'teacher_id' => $t->id, 'teacher_name' => 'USTOZ', 'room_code' => null,
         'groups' => [$g('d2-01a'), $g('d2-01b')], 'subject' => 'Anatomiya', 'dates' => ['2026-09-22', '2026-09-22'], 'hour_from' => 3,
-        'hour_to' => 5, 'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 2]);
+        'hour_to' => 5, 'hour_unit' => 'row', 'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 2]);
     // Oddiy so'rov: faqat kelgusi haftalar matni.
     expect(array_keys($get()['weekly'][$a->id]))->toBe([2, 3]);
 });

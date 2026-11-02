@@ -6721,6 +6721,7 @@ class TimetableController extends Controller
                         'teacher_name' => $h['type'] === 'teacher' ? $h['who'] : null, 'room_code' => $h['room'],
                         'groups' => array_merge($this->focusUnitGroups($u), ...array_map(fn ($o) => $this->focusUnitGroups($units[$o]), $h['others'])),
                         'subject' => $u['subject'], 'dates' => [$shown[0], end($shown)], 'hour_from' => $h['hour_from'], 'hour_to' => $h['hour_to'],
+                        'hour_unit' => 'hour',
                         'card_ids' => array_merge(array_map(fn ($c) => $c->id, $u['cards'] ?? []),
                             ...array_map(fn ($o) => array_map(fn ($c) => $c->id, $units[$o]['cards'] ?? []), $h['others'])),
                         'view' => 'cycle'])];
@@ -7200,7 +7201,7 @@ class TimetableController extends Controller
         $acc = ['teachers' => [], 'rooms' => []];
         $note = function (string $type, string $id, array $m, array $o) use (&$acc, $units) {
             $x = &$acc[$type][$id][$o['label']];
-            $x ??= ['groups' => [], 'dates' => [], 'cards' => [], 'from' => PHP_INT_MAX, 'to' => 0, 'kinds' => [], 'week' => null,
+            $x ??= ['groups' => [], 'dates' => [], 'cards' => [], 'span' => [], 'kinds' => [], 'week' => null,
                 'teacher' => $o['teacher'] ?? null, 'label' => $o['label']];
             foreach (array_merge($this->focusEntryGroups($m, $units), $this->focusEntryGroups($o, $units)) as $g) {
                 $x['groups'][mb_strtolower($g['faculty'] . '|' . $g['specialty'] . '|' . $g['course'] . '|' . $g['group'])] = $g;
@@ -7208,8 +7209,9 @@ class TimetableController extends Controller
             $x['dates'][$m['date']] = true;
             $x['cards'][$m['card']] = true;
             $x['cards'][$o['card']] = true;
-            $x['from'] = min($x['from'], (int) $o['from']);
-            $x['to'] = max($x['to'], (int) $o['to']);
+            // Vaqt — band qilgan darsniki: haftalik — qo'ng'iroq jadvali qatori, sikl — akademik soat (birliklar aralashmaydi).
+            $u = $o['kind'] === 'weekly' ? 'row' : 'hour';
+            $x['span'][$u] = [min($x['span'][$u][0] ?? PHP_INT_MAX, (int) $o['from']), max($x['span'][$u][1] ?? 0, (int) $o['to'])];
             $x['kinds'][$m['kind']] = $x['kinds'][$o['kind']] = true;
             // Hafta — haftalik tomondan (avval shu birlikniki): aralash (haftalik + sikl) to'qnashuv ham o'sha haftada ko'rsatiladi.
             $x['week'] ??= $m['kind'] === 'weekly' ? ($m['week'] ?? null) : ($o['kind'] === 'weekly' ? ($o['week'] ?? null) : null);
@@ -7272,11 +7274,13 @@ class TimetableController extends Controller
         foreach ($acc as $type => $byId) {
             foreach ($byId as $id => $byLabel) {
                 foreach ($byLabel as $x) {
+                    $unit = isset($x['span']['row']) ? 'row' : 'hour';
                     $hits['items'][$type][$id][] = $this->focusShow([
                         'kind' => $type === 'teachers' ? 'teacher_busy' : 'room_busy', 'teacher_id' => $type === 'teachers' ? $id : null,
                         'teacher_name' => $type === 'teachers' ? $x['teacher'] : null, 'room_code' => $type === 'rooms' ? $id : null,
                         'groups' => array_values($x['groups']), 'subject' => explode(', ', (string) $x['label'], 2)[1] ?? $x['label'],
-                        'dates' => array_keys($x['dates']), 'hour_from' => $x['from'], 'hour_to' => $x['to'], 'card_ids' => array_keys($x['cards']),
+                        'dates' => array_keys($x['dates']), 'hour_from' => $x['span'][$unit][0], 'hour_to' => $x['span'][$unit][1],
+                        'hour_unit' => $unit, 'card_ids' => array_keys($x['cards']),
                         // Ikkalasi haftalik — haftalik jadval; ikkalasi sikl — sikl jadvali; aralash — haftalik o'qituvchi/xona kesimi
                         // (u yerda haftalik darslar ham, sikl darslari ham chiqadi).
                         'view' => count($x['kinds']) > 1 ? 'cross' : (isset($x['kinds']['weekly']) ? 'week' : 'cycle'),

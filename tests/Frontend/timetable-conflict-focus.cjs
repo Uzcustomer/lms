@@ -64,6 +64,8 @@ const ctx = {
     // Sikl qatlami: tashqi ochiq — sikl to'qnashuvida vaqtincha ichki (loadCyclePlan shu qatlam bilan so'raydi).
     cycleLayer: 'external', cycleLayerUi: 0, renderCycleLayerUi: j => { ctx.cycleLayerUi++; },
     CROSS_MODES: ['teacher', 'subject', 'room'], crossCycleShown: [],
+    // Akademik soatlar (sahifadagi cycHourTimes kabi): to'liq parada bir qatorda ikki soat.
+    cycHourTimes: () => [null, ['08:30', '09:10'], ['09:10', '09:50'], ['10:00', '10:40'], ['10:40', '11:20']],
 };
 els.wkLayerInternal = node('wkLayerInternal');
 els.cycLayerInternal = node('cycLayerInternal');
@@ -315,6 +317,13 @@ assert.equal(api.dates(['2026-10-28', '2026-11-03']), '28.10–03.11');
 assert.equal(api.dates(['2026-09-15', '2026-09-15']), '15.09');
 assert.equal(api.dates(['2026-09-15']), '15.09');
 assert.equal(api.dates([]), '');
+
+// 9b) Lentadagi vaqt: hour_unit "row" — qo'ng'iroq jadvali qatori (tanaffus hisobga olinmaydi), "hour" — akademik soat.
+const tb = x => api.banner(Object.assign({ kind: 'group_busy', dates: ['2026-09-16'] }, x), [{ group: 'g1' }]);
+assert.equal(tb({ hour_from: 3, hour_unit: 'row' }), "To'qnashuvni ko'rish: Guruh band — g1, 16.09, 10:00");
+assert.equal(tb({ hour_from: 4, hour_unit: 'hour' }), "To'qnashuvni ko'rish: Guruh band — g1, 16.09, 10:40");
+assert.equal(tb({ hour_from: 4 }), "To'qnashuvni ko'rish: Guruh band — g1, 16.09");   // qator yo'q — vaqtsiz
+assert.equal(tb({ hour_from: 9, hour_unit: 'hour' }), "To'qnashuvni ko'rish: Guruh band — g1, 16.09");
 
 // 10) Havolalar manbada: to'qnashuv qatori, biriktirish ogohlantirishi (409 conflict_items), band o'qituvchi tanlovi, Takliflar.
 assert.match(source, /: ' <span class="cf-todo">→ ' \+ esc\(i\.todo \|\| CF_TODO\[i\.kind\] \|\| ''\) \+ '<\/span>'\) \+ focusLinkHtml\(i\.show\) \+ '<\/li>';/);

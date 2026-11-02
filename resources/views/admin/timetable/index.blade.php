@@ -6965,9 +6965,12 @@
                 if (b === a) return dm(a);
                 return String(a).slice(0, 7) === String(b).slice(0, 7) ? String(a).slice(8, 10) + '–' + dm(b) : dm(a) + '–' + dm(b);
             }
-            // Boshlanish vaqti: hour_from — qo'ng'iroq jadvalidagi qator (yarim-para / akademik soat) raqami.
+            // Boshlanish vaqti: hour_unit "row" — qo'ng'iroq jadvalidagi qator raqami (haftalik dars); "hour" — kunning akademik
+            // soati (sikl darsi): to'liq (80–90 daqiqalik) parada bir qatorda ikki soat — cycHourTimes() bo'yicha.
             function focusTimeText(show) {
-                const it = boardSchedule().filter(x => x.type === 'pair')[(+show.hour_from || 0) - 1];
+                const h = +show.hour_from || 0;
+                if (show.hour_unit === 'hour') { const t = cycHourTimes()[h]; return t ? t[0] : ''; }
+                const it = boardSchedule().filter(x => x.type === 'pair')[h - 1];
                 return it && it.start ? it.start : '';
             }
             // "To'qnashuvni ko'rish: O'qituvchi X — d1/d22-01a va d1/d22-01b, 13–24.11, 08:30"

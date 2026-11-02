@@ -36,7 +36,7 @@ it('ko\'rsatish: yagona ko\'rinish — guruhlar va kartalar takrorlanmaydi, sana
     expect($show)->toBe(['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215',
         'groups' => [['group' => 'd2-01a', 'faculty' => 'F1', 'specialty' => 'Davolash ishi', 'course' => 2],
             ['group' => 'd2-01a', 'faculty' => 'F1', 'specialty' => 'Davolash ishi', 'course' => 3]],
-        'subject' => null, 'dates' => ['2026-09-16', '2026-09-18'], 'hour_from' => 3, 'hour_to' => null, 'card_ids' => [7, 5],
+        'subject' => null, 'dates' => ['2026-09-16', '2026-09-18'], 'hour_from' => 3, 'hour_to' => null, 'hour_unit' => 'row', 'card_ids' => [7, 5],
         'view' => 'week', 'week' => null])
         ->and(cfocus('focusShow', ['view' => 'cycle', 'dates' => []])['dates'])->toBe([])
         ->and(cfocus('focusShow', ['view' => 'cycle'])['view'])->toBe('cycle');
@@ -54,6 +54,6 @@ it('ko\'rsatish: Takliflar to\'qnashuvi — sana to\'sib turgan darsning o\'z ha
     $show = cfocus('focusFromClash', $c, ['card' => $o, 'week' => 8, 'day' => 2, 'pair' => 5, 'room' => null,
         'errors' => ["O'qituvchi band: b-01"]], $board, 9);
     expect($show)->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => 5, 'teacher_name' => 'USTOZ', 'dates' => ['2026-11-03', '2026-11-03'],
-        'hour_from' => 5, 'hour_to' => 7, 'card_ids' => [$c->id, $o->id], 'view' => 'week', 'week' => 9])
+        'hour_from' => 5, 'hour_to' => 7, 'hour_unit' => 'row', 'card_ids' => [$c->id, $o->id], 'view' => 'week', 'week' => 9])
         ->and(array_column($show['groups'], 'group'))->toBe(['a-01', 'b-01']);
 });

@@ -392,7 +392,7 @@ it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birin
     expect($card['clashes'])->toBe([['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215',
         'groups' => [['group' => 'd1/d26-06b', 'faculty' => '1-son davolash', 'specialty' => 'Davolash ishi', 'course' => 1],
             ['group' => 'p/p25-02b', 'faculty' => 'Pediatriya', 'specialty' => 'Pediatriya', 'course' => 2]],
-        'subject' => 'Odam anatomiyasi', 'dates' => ['2026-10-16', '2026-10-16'], 'hour_from' => 9, 'hour_to' => 11,
+        'subject' => 'Odam anatomiyasi', 'dates' => ['2026-10-16', '2026-10-16'], 'hour_from' => 9, 'hour_to' => 11, 'hour_unit' => 'row',
         'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 7]]);
     // Birinchi — shu vaqtda bo'sh xona (217 sig'imi yetmaydi), keyin ikkinchi tomonning xonasi (boshqa yo'nalish belgisi bilan).
     expect($card['suggestions'][0])->toMatchArray(['type' => 'room', 'title' => 'Xonani almashtirish: 216 (30 o\'rin) — Juma, 5-para',

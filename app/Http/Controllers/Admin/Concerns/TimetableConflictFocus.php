@@ -6,7 +6,8 @@ namespace App\Http\Controllers\Admin\Concerns;
  * To'qnashuvni ko'rsatish ("Ko'rsatish" havolasi) uchun tuzilgan ma'lumot — matn bilan birga qaytadi, front uni parse qilmaydi:
  *   kind (teacher_busy | room_busy | group_busy | ...), teacher_id, teacher_name, room_code, groups [{group, faculty, specialty,
  *   course}] (to'qnashuvdagi barcha guruh(cha)lar — qamrovi bilan: nomlar fakultet/yo'nalish/kurslar bo'ylab takrorlanadi), subject,
- *   dates [from, to], hour_from / hour_to (haftalik — yarim-slot (para) indekslari, sikl — kun soatlari; to — oxiridan keyingi),
+ *   dates [from, to], hour_from / hour_to (to — oxiridan keyingi) va hour_unit: row — qo'ng'iroq jadvali qatori (haftalik dars,
+ *   yarim-slot indeksi), hour — kunning akademik soati (sikl darsi),
  *   card_ids, view (week — haftalik jadval, cycle — sikl jadvali, cross — haftalik o'qituvchi/xona kesimi: haftalik va sikl darsi
  *   aralash to'qnashganda), week (haftalik va aralash).
  * Qaysi guruhlarni ko'rsatish (rol qamrovi) — frontda: foydalanuvchi yuklay oladigan qamrovdagilar; qolganlari faqat matnda.
@@ -87,6 +88,7 @@ trait TimetableConflictFocus
             'dates' => $dates ? [$dates[0], end($dates)] : [],
             'hour_from' => isset($x['hour_from']) ? (int) $x['hour_from'] : null,
             'hour_to' => isset($x['hour_to']) ? (int) $x['hour_to'] : null,
+            'hour_unit' => ($x['hour_unit'] ?? 'row') === 'hour' ? 'hour' : 'row',
             'card_ids' => array_values(array_unique(array_map('intval', array_filter((array) ($x['card_ids'] ?? []))))),
             'view' => in_array($x['view'] ?? 'week', ['cycle', 'cross'], true) ? $x['view'] : 'week',
             'week' => isset($x['week']) ? (int) $x['week'] : null,

@@ -87,16 +87,17 @@ it('kafedra mudiri: unit-busy va assign-room 200 qaytaradi (Patologik anatomiya 
     // o'qituvchi/xona kesimi (ikkala turdagi dars ham ko'rinadi), hafta — haftalik tomondan.
     $weekly = $res['busy_items']['teachers'][(string) $s['a']->id][0];
     $mixed = $res['busy_items']['teachers'][(string) $s['b']->id][0];
-    expect($weekly)->toMatchArray(['kind' => 'teacher_busy', 'view' => 'week', 'week' => 1])
+    // Vaqt birligi — band qilgan darsniki: haftalik — qo'ng'iroq jadvali qatori (row), sikl — akademik soat (hour).
+    expect($weekly)->toMatchArray(['kind' => 'teacher_busy', 'view' => 'week', 'week' => 1, 'hour_from' => 1, 'hour_to' => 3, 'hour_unit' => 'row'])
         ->and($mixed)->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $s['b']->id, 'dates' => ['2026-09-07', '2026-09-07'],
-            'view' => 'cross', 'week' => 1])
+            'view' => 'cross', 'week' => 1, 'hour_unit' => 'hour'])
         ->and(array_column($mixed['groups'], 'group'))->toBe(['d1/d24-03a', 'd1/d24-03c'])
         ->and($res['busy_items']['rooms']['R102'][0])->toMatchArray(['kind' => 'room_busy', 'room_code' => 'R102', 'view' => 'cross', 'week' => 1]);
     // Sikl birligi (d1/d24-03c) tomonidan: haftalik dars bilan aralash — hafta haftalik darsdan.
     $opts = ($s['as'])()->postJson(route('admin.timetable.cycle-assign-options', $s['board']), ['specialty_name' => 'Davolash ishi', 'course' => 3,
         'group_name' => 'd1/d24-03c', 'subject_name' => 'Gistologiya', 'training_type' => 'practice', 'view' => 'group'])->assertOk()->json();
     expect($opts['busy_items']['teachers'][(string) $s['a']->id][0])->toMatchArray(['kind' => 'teacher_busy', 'view' => 'cross', 'week' => 1,
-        'dates' => ['2026-09-07', '2026-09-07']]);
+        'dates' => ['2026-09-07', '2026-09-07'], 'hour_from' => 1, 'hour_to' => 3, 'hour_unit' => 'row']);
 
     // Bo'sh xona — darhol biriktiriladi
     ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R103'])

@@ -191,6 +191,7 @@ class VedomostAiSettingsController extends Controller
         $data['auto_check'] = $request->boolean('auto_check');
         $data['require_ai_before_approve'] = $request->boolean('require_ai_before_approve');
         $data['allow_free_keys'] = $request->boolean('allow_free_keys');
+        $data['strict_row_checks'] = $request->boolean('strict_row_checks');
 
         $this->settings->save($data);
 

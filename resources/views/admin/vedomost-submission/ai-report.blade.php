@@ -98,6 +98,14 @@
         .chip.sysmode[aria-pressed="true"] { border-color: #7c3aed; background: #ede9fe; color: #5b21b6; }
         .why-dlg { border: none; border-radius: 10px; padding: 0; width: min(440px, 92vw); box-shadow: 0 20px 50px rgba(0,0,0,.25); }
         .why-dlg::backdrop { background: rgba(15,23,42,.45); }
+        .ap-dlg { border: none; border-radius: 10px; padding: 0; width: min(1100px, 96vw); max-height: 88vh; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+        .ap-dlg::backdrop { background: rgba(15,23,42,.45); }
+        .ap-dlg form { display: flex; flex-direction: column; max-height: 88vh; }
+        .ap-dlg .ap-head { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--grid); }
+        .ap-dlg .ap-head h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; flex: 1; }
+        .ap-dlg .ap-x { border: none; background: none; font-size: 16px; cursor: pointer; color: var(--muted); }
+        .ap-dlg .ap-body { overflow: auto; padding: 0; }
+        .ap-dlg .ap-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--grid); flex-wrap: wrap; }
         .why-dlg form { padding: 18px; display: flex; flex-direction: column; gap: 10px; }
         .why-dlg h3 { margin: 0; font-size: 15px; }
         .why-dlg p { margin: 0; font-size: 13px; color: var(--muted); }
@@ -225,7 +233,7 @@
     @endif
     <span class="verdict {{ $r['verdict'] }}"><svg class="icon"><use href="#{{ $r['verdict'] === 'ok' ? 'i-check' : 'i-alert' }}"/></svg>{{ $verdictTxt }}</span>
     @if($multi)
-        <button type="button" class="tbtn" data-open-tab="approve"><svg class="icon"><use href="#i-check"/></svg>Tasdiqlash</button>
+        <button type="button" class="tbtn" data-open-approve><svg class="icon"><use href="#i-check"/></svg>Tasdiqlash</button>
     @else
     @if($v->pdf_path)
         <a class="tbtn" href="{{ route('admin.vedomost-submission.file', [$v->id, 'pdf']) }}" target="_blank" rel="noopener"><svg class="icon"><use href="#i-file"/></svg>PDF</a>
@@ -314,50 +322,67 @@
         <div class="pad">
             @if(session('success'))<div class="card" style="padding:10px 14px;background:#dcfce7;color:#166534;white-space:pre-line">{{ session('success') }}</div>@endif
             @if(session('error'))<div class="card" style="padding:10px 14px;background:#fee2e2;color:#991b1b;white-space:pre-line">{{ session('error') }}</div>@endif
-            <form method="POST" action="{{ route('admin.vedomost-submission.ai-review.approve') }}" id="approve-form">
-                @csrf
-                <div class="card">
-                    <h2><svg class="icon"><use href="#i-check"/></svg>Vedomostlar — belgilanganlar tasdiqlanadi
-                        <span style="flex:1"></span>
-                        @if($canApprove)<button type="submit" class="sbtn primary" id="btn-approve" disabled>Belgilanganlarni tasdiqlash (<span id="ap-n">0</span>)</button>@endif
-                    </h2>
-                    <table class="xl" style="width:100%">
-                        <thead><tr class="names"><th class="rn"></th><th class="h">Fan · guruh</th><th class="h">Shakl</th><th class="h">AI natijasi</th><th class="h" style="width:340px">Tasdiqlash</th><th class="h">Havolalar</th></tr></thead>
-                        <tbody>
-                        @foreach($multi as $i => $mv)
-                            @php $can = $canApprove && $mv['approvable'] && !$mv['gate']['blocked']; @endphp
-                            <tr>
-                                <td class="rn">{{ $i + 1 }}</td>
-                                <td class="txt"><b>{{ $mv['label'] }}</b></td>
-                                <td class="txt">{{ $mv['form'] }}</td>
-                                <td class="note {{ $mv['verdict'] === 'ok' ? '' : ($mv['checked'] ? 'y' : 'o') }}" style="max-width:420px;white-space:normal">{{ $mv['summary'] }}</td>
-                                <td class="txt" style="white-space:normal">
-                                    @if($can)
-                                        <label style="display:flex;align-items:center;gap:8px;font-weight:700;color:#166534;cursor:pointer">
-                                            <input type="checkbox" name="approve[]" value="{{ $mv['id'] }}" class="ap-cb" data-vid="{{ $mv['id'] }}" {{ $mv['verdict'] === 'ok' && !$mv['gate']['needs_reason'] ? 'checked' : '' }}> Tasdiqlash
-                                        </label>
-                                        @if($mv['gate']['needs_reason'])
-                                            <textarea name="reasons[{{ $mv['id'] }}]" class="ap-why" data-vid="{{ $mv['id'] }}" placeholder="Sabab (majburiy, kamida 5 belgi)" style="width:100%;margin-top:4px;min-height:34px;border:1px solid #d1d5db;border-radius:4px;padding:5px 7px;font:inherit;font-size:13px"></textarea>
-                                            <div style="font-size:11px;color:#92400e">{{ $mv['gate']['message'] }}</div>
-                                        @endif
-                                    @else
-                                        <span style="color:var(--muted)">{{ !$mv['approvable'] ? (\App\Models\VedomostSubmission::statusLabels()[$mv['status']] ?? $mv['status']) : ($mv['gate']['message'] ?? "Tasdiqlash huquqi yo'q") }}</span>
-                                    @endif
-                                </td>
-                                <td class="txt">
-                                    @if($mv['checked'])<a class="link" href="{{ $mv['report'] }}" target="_blank" rel="noopener">Alohida hisobot</a> · @endif
-                                    @if($mv['pdf'])<a class="link" href="{{ $mv['pdf'] }}" target="_blank" rel="noopener">PDF</a> · @endif
-                                    <a class="link" href="{{ $mv['show'] }}" target="_blank" rel="noopener">Vedomost</a>
-                                </td>
-                            </tr>
-                        @endforeach
-                        </tbody>
-                    </table>
-                    <div style="padding:8px 14px;font-size:12px;color:var(--muted)">Har vedomost odatdagi shart bilan tasdiqlanadi: AI muammo topgan yoki Mark qiymati o'zgartirilgan bo'lsa — shu vedomost uchun sabab majburiy. Saqlanmagan tuzatish bo'lsa, avval saqlang.</div>
-                </div>
-            </form>
+            <div class="card" style="padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <span style="flex:1;min-width:240px;font-size:13px;color:var(--muted)">Ochilgan {{ count($multi) }} ta vedomostdan kerakligini belgilab tasdiqlang. Belgilanganlarning statusi «Tasdiqlandi»ga o'tadi (har birining barcha guruhchalari bilan).</span>
+                <button type="button" class="sbtn primary" data-open-approve>Tasdiqlash oynasini ochish</button>
+            </div>
         </div>
     </section>
+    <dialog class="ap-dlg" id="approve-dlg" aria-labelledby="ap-dlg-title">
+        <form method="POST" action="{{ route('admin.vedomost-submission.ai-review.approve') }}" id="approve-form">
+            @csrf
+            <div class="ap-head">
+                <h3 id="ap-dlg-title"><svg class="icon"><use href="#i-check"/></svg>Tasdiqlash — {{ count($multi) }} ta vedomost</h3>
+                <button type="button" class="ap-x" data-close-approve aria-label="Yopish">✕</button>
+            </div>
+            <div class="ap-body">
+                <table class="xl" style="width:100%">
+                    <thead><tr class="names">
+                        <th class="h" style="width:34px">@if($canApprove)<input type="checkbox" id="ap-all" title="Tasdiqlash mumkin bo'lganlarning hammasini belgilash">@endif</th>
+                        <th class="h">Fan · guruh</th><th class="h">Shakl</th><th class="h">AI natijasi</th><th class="h" style="width:300px">Sabab / holat</th><th class="h">Havolalar</th>
+                    </tr></thead>
+                    <tbody>
+                    @foreach($multi as $i => $mv)
+                        @php $can = $canApprove && $mv['approvable'] && !$mv['gate']['blocked']; @endphp
+                        <tr>
+                            <td class="txt" style="text-align:center">
+                                @if($can)
+                                    <input type="checkbox" name="approve[]" value="{{ $mv['id'] }}" class="ap-cb" data-vid="{{ $mv['id'] }}" aria-label="{{ $mv['label'] }} — tasdiqlash"
+                                        {{ $mv['verdict'] === 'ok' && !$mv['gate']['needs_reason'] ? 'checked' : '' }}>
+                                @endif
+                            </td>
+                            <td class="txt"><b>{{ $mv['label'] }}</b></td>
+                            <td class="txt">{{ $mv['form'] }}</td>
+                            <td class="note {{ $mv['verdict'] === 'ok' ? '' : ($mv['checked'] ? 'y' : 'o') }}" style="max-width:360px;white-space:normal">{{ $mv['summary'] }}</td>
+                            <td class="txt" style="white-space:normal">
+                                @if($can)
+                                    @if($mv['gate']['needs_reason'])
+                                        <textarea name="reasons[{{ $mv['id'] }}]" class="ap-why" data-vid="{{ $mv['id'] }}" placeholder="Sabab (majburiy, kamida 5 belgi)" style="width:100%;min-height:34px;border:1px solid #d1d5db;border-radius:4px;padding:5px 7px;font:inherit;font-size:13px"></textarea>
+                                        <div style="font-size:11px;color:#92400e">{{ $mv['gate']['message'] }}</div>
+                                    @else
+                                        <span style="color:#166534;font-weight:600">Tasdiqlash mumkin</span>
+                                    @endif
+                                @else
+                                    <span style="color:var(--muted)">{{ !$mv['approvable'] ? (\App\Models\VedomostSubmission::statusLabels()[$mv['status']] ?? $mv['status']) : ($mv['gate']['message'] ?? "Tasdiqlash huquqi yo'q") }}</span>
+                                @endif
+                            </td>
+                            <td class="txt">
+                                @if($mv['checked'])<a class="link" href="{{ $mv['report'] }}" target="_blank" rel="noopener">Hisobot</a> · @endif
+                                @if($mv['pdf'])<a class="link" href="{{ $mv['pdf'] }}" target="_blank" rel="noopener">PDF</a> · @endif
+                                <a class="link" href="{{ $mv['show'] }}" target="_blank" rel="noopener">Vedomost</a>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <div class="ap-foot">
+                <span style="flex:1;font-size:12px;color:var(--muted)">AI muammo topgan yoki qiymat qo'lda o'zgartirilgan vedomost uchun sabab majburiy. Saqlanmagan tuzatish bo'lsa, avval saqlang.</span>
+                <button type="button" class="sbtn" data-close-approve>Bekor qilish</button>
+                @if($canApprove)<button type="submit" class="sbtn primary" id="btn-approve" disabled>Belgilanganlarni tasdiqlash (<span id="ap-n">0</span>)</button>@endif
+            </div>
+        </form>
+    </dialog>
     @endif
 </main>
 
@@ -418,6 +443,16 @@
     const SYS = @json(\App\Services\VedomostCheckEngine::SYSTEM_EDITABLE);
     let sysMode = false;
     const sysPending = (id, col) => (pending.system[id] || {})[col];
+    // Test markazi ustunlari (OSKE / Test) — Mark qiymatlari kabi tahrirlanadi (sabab bilan, faqat hisobotda).
+    const TMCOL = { TMO: 'oski', TMT: 'test' };
+    const sysLabel = col => TMCOL[col] ? (TMCOL[col] === 'oski' ? 'OSKE test markazi' : 'TEST test markazi') : VT_HEADERS[col];
+    const sysCur = (row, col) => TMCOL[col] ? ((row.tm || {})[TMCOL[col]] || {}).tm ?? null : row.vt[col];
+    const sysWhy = (row, col) => TMCOL[col] ? ((row.tm || {})[TMCOL[col]] || {}).edited : (row.sys_edited || {})[col];
+    const sysOrig = (row, col) => {
+        if (!TMCOL[col]) return (row.sys_orig || {})[col] ?? row.vt[col];
+        const t = (row.tm || {})[TMCOL[col]] || {};
+        return 'orig' in t ? t.orig : (t.tm ?? null);
+    };
     let filter = (R.counts.bad + R.counts.ocr + R.counts.missing + R.counts.nopdf) > 0 ? 'problems' : 'all';
     let query = '';
     let allCols = false;
@@ -537,8 +572,17 @@
                 }
                 if (!tm) { body += '<td></td><td></td>'; return; }
                 const fill = tm.status === 'bad' ? 'y' : '';
-                const v = tm.tm !== null ? (tm.dal ? tm.tm + ' (Dalolatnoma)' : fmt(tm.tm)) : (tm.nd ? 'nd' : "yo'q");
-                body += `<td class="${fill}">${esc(v)}</td><td class="${fill}">${tm.nd ? 'nd' : esc(fmt(tm.delta))}</td>`;
+                let v = tm.tm !== null ? (tm.dal ? tm.tm + ' (Dalolatnoma)' : fmt(tm.tm)) : (tm.nd ? 'nd' : "yo'q");
+                const tcol = k === 'oski' ? 'TMO' : 'TMT';
+                let tcls = fill, tattrs = '';
+                if (row.id) {
+                    const p = sysPending(MK(row), tcol);
+                    if (p !== undefined) { v = fmt(p === null ? sysOrig(row, tcol) : p.v); tcls += ' sys-dirty'; }
+                    else if (tm.edited !== undefined) tcls += ' sys-edited';
+                    if (sysMode && CAN_EDIT && !row.ro) { tcls += ' sys'; tattrs = ` tabindex="0" data-mkey="${esc(MK(row))}" data-mcol="${tcol}" data-fio="${esc(row.fio)}" data-label="${esc(sysLabel(tcol))}"`; }
+                    if (tm.edited !== undefined) tattrs += ` title="Asl Test markazi qiymati: ${esc(fmt(tm.orig))} · sabab: ${esc(tm.edited)}"`;
+                }
+                body += `<td class="${tcls}"${tattrs}>${esc(v)}</td><td class="${fill}">${tm.nd ? 'nd' : esc(fmt(tm.delta))}</td>`;
             });
             body += `<td class="txt grp">${esc(row.grp || row.group || '')}</td>`;
             body += `<td class="txt ${row.kont_fio === null ? 'y' : ''}">${esc(row.kont_fio ?? "KONTINGENTDA YO'Q")}</td>`;
@@ -829,9 +873,9 @@
         if (td.querySelector('input')) return;
         const id = td.dataset.mkey, col = td.dataset.mcol;
         const row = R.rows.find(r => MK(r) === id);
-        const orig = (row.sys_orig || {})[col] ?? row.vt[col];
+        const orig = sysOrig(row, col);
         const cur = sysPending(id, col);
-        const shown = cur === undefined ? row.vt[col] : (cur === null ? orig : cur.v);
+        const shown = cur === undefined ? sysCur(row, col) : (cur === null ? orig : cur.v);
         const input = document.createElement('input');
         input.className = 'ci';
         input.dataset.mode = mode;
@@ -846,16 +890,16 @@
             if (done) return; done = true;
             const raw = input.value.trim().replace(',', '.');
             if (raw === '' || isNaN(+raw) || +raw === +shown) { finish(move); return; }
-            if (+raw === +orig) {
+            if (orig !== null && orig !== undefined && +raw === +orig) {
                 pending.system[id] = pending.system[id] || {};
-                if ((row.sys_edited || {})[col] !== undefined) pending.system[id][col] = null; else delete pending.system[id][col];
+                if (sysWhy(row, col) !== undefined) pending.system[id][col] = null; else delete pending.system[id][col];
                 if (!Object.keys(pending.system[id]).length) delete pending.system[id];
                 finish(move); return;
             }
             const dlg = document.getElementById('why-dlg');
-            document.getElementById('why-title').textContent = `${row.fio} — ${VT_HEADERS[col]}: ${fmt(orig)} → ${fmt(+raw)}`;
+            document.getElementById('why-title').textContent = `${row.fio} — ${sysLabel(col)}: ${fmt(orig)} → ${fmt(+raw)}`;
             const txt = document.getElementById('why-text');
-            txt.value = (cur && cur.why) || (row.sys_edited || {})[col] || '';
+            txt.value = (cur && cur.why) || sysWhy(row, col) || '';
             dlg.returnValue = '';
             dlg.onclose = () => {
                 const why = txt.value.trim();
@@ -886,7 +930,7 @@
             const row = R.rows.find(r => MK(r) === id);
             pending.system[id] = pending.system[id] || {};
             if (sysPending(id, col) !== undefined) delete pending.system[id][col];
-            else if ((row.sys_edited || {})[col] !== undefined) pending.system[id][col] = null;
+            else if (sysWhy(row, col) !== undefined) pending.system[id][col] = null;
             if (!Object.keys(pending.system[id]).length) delete pending.system[id];
             renderAll();
             const t = document.querySelector(`#sheet-main td[data-mkey="${CSS.escape(id)}"][data-mcol="${col}"]`);
@@ -1059,7 +1103,7 @@
     if (sysBtn) sysBtn.addEventListener('click', () => {
         sysMode = !sysMode;
         sysBtn.setAttribute('aria-pressed', sysMode ? 'true' : 'false');
-        if (sysMode) { filter = 'all'; setChips(); showTab('main'); toast("Mark ustunlari (JN, MT, ON, OSKI, Test, YN) tahrirlanadi — faqat shu hisobotda, sabab bilan"); }
+        if (sysMode) { filter = 'all'; setChips(); showTab('main'); toast("Mark ustunlari (JN, MT, ON, OSKI, Test, YN) va Test markazi natijalari tahrirlanadi — faqat shu hisobotda, sabab bilan"); }
         renderMain();
     });
 
@@ -1076,12 +1120,24 @@
             const btn = document.getElementById('btn-approve');
             if (!btn) return;
             document.getElementById('ap-n').textContent = n;
+            const all = document.getElementById('ap-all');
+            if (all) { const tot = cbs().length; all.checked = tot > 0 && n === tot; all.indeterminate = n > 0 && n < tot; }
             btn.disabled = n === 0 || dirtyCount() > 0;
             btn.title = dirtyCount() > 0 ? 'Avval tuzatishlarni saqlang' : '';
         };
         document.addEventListener('change', e => { if (e.target.classList?.contains('ap-cb')) syncAp(); });
         const _upd = updateSavebar;
         updateSavebar = function () { _upd(); syncAp(); };
+        const dlg = document.getElementById('approve-dlg');
+        document.querySelectorAll('[data-open-approve]').forEach(b => b.addEventListener('click', () => {
+            if (dirtyCount() > 0) toast('Saqlanmagan tuzatishlar bor — avval saqlang, keyin tasdiqlang', true);
+            syncAp(); dlg?.showModal();
+        }));
+        document.querySelectorAll('[data-close-approve]').forEach(b => b.addEventListener('click', () => dlg?.close()));
+        const all = document.getElementById('ap-all');
+        all?.addEventListener('change', () => { cbs().forEach(c => { c.checked = all.checked; }); syncAp(); });
+        // Xato bo'lsa (masalan, sabab yozilmagan) — oyna qayta ochiladi.
+        if (@json((bool) session('error'))) { syncAp(); dlg?.showModal(); }
         form?.addEventListener('submit', e => {
             const missing = cbs().filter(c => c.checked).filter(c => { const w = document.querySelector(`.ap-why[data-vid="${c.value}"]`); return w && w.value.trim().length < 5; });
             if (missing.length) { e.preventDefault(); toast(missing.length + ' ta vedomost uchun sabab yozilmagan (kamida 5 belgi)', true); document.querySelector(`.ap-why[data-vid="${missing[0].value}"]`).focus(); return; }

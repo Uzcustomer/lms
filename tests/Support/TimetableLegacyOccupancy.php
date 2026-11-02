@@ -59,12 +59,18 @@ if (!function_exists('legacyUnitBusy')) {
                 }
             }
             $volumes = $hits['rooms'] ? Auditorium::whereIn('code', array_keys($hits['rooms']))->pluck('volume', 'code')->all() : [];
-            $mineStudents = (int) $unitCards->max('students');
+            // Talabalar — guruhlarning faol talabalari (bo'lmasa kartadagi son); sig'imi kiritilmagan xona — band emas (haftalik
+            // darsli xonadan tashqari); sig'imdan oshsa — matn boshida aniq raqamlar.
+            $mineStudents = (int) $unitCards->map(fn ($c) => $this->cardStudents($c))->max();
+            $prefix = [];
             foreach (array_keys($hits['rooms']) as $code) {
                 $vol = (int) ($volumes[$code] ?? 0);
-                $over = isset($exclusive[$code]) || $vol <= 0 || $mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol;
+                $over = isset($exclusive[$code]) || ($vol > 0 && ($mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol));
                 if (!$over) {
                     unset($hits['rooms'][$code]);
+                } elseif (!isset($exclusive[$code]) && $mineStudents > 0 && empty($unknown[$code])) {
+                    $n = ($peak[$code] ?? 0) + $mineStudents;
+                    $prefix[$code] = $vol . " o'rin, " . $n . ' talaba (+' . ($n - $vol) . '): ';
                 }
             }
             $fmt = fn (string $d) => Carbon::parse($d)->format('d.m');
@@ -76,7 +82,7 @@ if (!function_exists('legacyUnitBusy')) {
                         sort($ds);
                         $parts[] = $label . ', ' . $fmt($ds[0]) . (count($ds) > 1 ? '–' . $fmt(end($ds)) : '');
                     }
-                    $hits[$type][$id] = implode('; ', $parts);
+                    $hits[$type][$id] = ($type === 'rooms' ? ($prefix[$id] ?? '') : '') . implode('; ', $parts);
                 }
             }
 

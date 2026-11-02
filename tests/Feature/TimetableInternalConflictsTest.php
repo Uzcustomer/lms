@@ -143,8 +143,11 @@ it('sikl: bitta xonada 3 guruhcha, sig\'imi 1 guruhchaga yetadi — xona to\'qna
 
     expect($conf)->toHaveCount(3)
         ->and($conf['davolash ishi|5|d22-05a|Klinik farmakologiya|practice']['text'])
-        ->toBe("Xona 305 sig'imidan ko'p (12 o'rin, 30 talaba): d22-05b, Klinik farmakologiya; d22-05c, Klinik farmakologiya, 14.09–18.09")
-        ->and($conf['davolash ishi|5|d22-05c|Klinik farmakologiya|practice']['items'][0]['type'])->toBe('room');
+        ->toBe("Xona 305 sig'imidan ko'p (12 o'rin, 30 talaba, +18): d22-05b, Klinik farmakologiya; d22-05c, Klinik farmakologiya, 14.09–18.09")
+        ->and($conf['davolash ishi|5|d22-05c|Klinik farmakologiya|practice']['items'][0]['type'])->toBe('room')
+        // Tuzilgan sig'im: xona, sig'imi, shu vaqtdagi talabalar va ortiqchasi (front matnni parse qilmaydi).
+        ->and($conf['davolash ishi|5|d22-05a|Klinik farmakologiya|practice']['items'][0])->toMatchArray(['kind' => 'room_capacity',
+            'room_code' => 'R305', 'room_name' => '305', 'volume' => 12, 'students' => 30, 'over' => 18]);
 
     // Sig'im yetarli bo'lsa — to'qnashuv yo'q; "Kafedra mudiri xonasi" va umumiy xona tekshirilmaydi
     $room->update(['volume' => 40]);
@@ -255,7 +258,7 @@ it('biriktirish: haftalik — band o\'qituvchi va boshqa haftada band xona uchun
         'training_type' => 'practice', 'group_name' => 'd2-01a'];
 
     $res = $as()->getJson(route('admin.timetable.unit-busy', ['board' => $board->id] + $unit))->assertOk()->json();
-    expect(\Illuminate\Support\Arr::except($res, 'busy_items'))
+    expect(\Illuminate\Support\Arr::except($res, ['busy_items', 'room_caps']))
         ->toBe(['teachers' => [(string) $busy->id => 'd2-02a, Gistologiya, 15.09–29.09'], 'rooms' => ['R7' => 'd2-03a, Biologiya, 22.09'],
             'room_rank' => ['order' => ['R7'], 'why' => []]]);
     // "Ko'rsatish" uchun tuzilgan ro'yxat (matnni parse qilmasdan): ikkala guruh qamrovi bilan, sanalar, para, kartalar, hafta.
@@ -292,7 +295,8 @@ it('biriktirish: sikl guruhchasiga xona — sig\'imdan oshsa ogohlantirish, yets
         'training_type' => 'practice', 'group_name' => 'd22-05b'];
 
     $as()->postJson(route('admin.timetable.assign-room', $s['board']), $unit + ['auditorium_code' => 'R305'])->assertStatus(409)
-        ->assertJsonPath('error', 'Xona «305» shu davrda boshqa guruhcha bilan band: d22-05a, Klinik farmakologiya, 14.09–18.09');
+        ->assertJsonPath('error', "Xona «305» shu davrda boshqa guruhcha bilan band: 12 o'rin, 20 talaba (+8): d22-05a, Klinik farmakologiya, 14.09–18.09")
+        ->assertJsonPath('conflict_cap', ['room_code' => 'R305', 'room_name' => '305', 'volume' => 12, 'students' => 20, 'over' => 8]);
     expect($s['cards']['d22-05b']->fresh()->auditorium_code)->toBeNull();
     // Sig'im ikkala guruhchaga yetsa — ogohlantirishsiz
     $room->update(['volume' => 25]);
@@ -735,4 +739,147 @@ it('cycle-week: zalda shu vaqtda boshqa ma\'ruza (boshqa o\'qituvchi — bitta o
     // 2-oqim ma'ruzasi 15.09 da 5-soatdan — vaqti kesishmaydi: room_clash yo'q.
     TimetableCyclePlacement::where('group_name', 'F1 / 2-oqim')->update(['lecture_slots' => ['starts' => [0 => 5]]]);
     expect($lec($week(), '2026-09-15'))->not->toHaveKey('room_clash');
+});
+
+it('xona sig\'imi: 65 o\'rinli zalda faol talabalar (group_students) bo\'yicha 98 talaba — "65 o\'rin, 98 talaba (+33)"; sig\'imi kiritilmagan zal — to\'qnashuv emas', function () {
+    $hall = Auditorium::create(['code' => 'Z8', 'name' => "Tibbiyot klasteri, podval, 8-ma'ruza zali", 'volume' => 65, 'active' => true]);
+    $s = icLectureSetup(icTeacher('LEKTOR'), icTeacher('USTOZ'), $hall);
+    // Kartada 10 talaba, haqiqatda (faol talabalar): 05a — 44, 05b — 44; 2-oqim (06a) — kartadagi 10 (faol talabalar yo'q).
+    $n = 0;
+    foreach (['d22-05a' => 44, 'd22-05b' => 44] as $g => $cnt) {
+        for ($i = 0; $i < $cnt; $i++, $n++) {
+            \Illuminate\Support\Facades\DB::table('students')->insert(['hemis_id' => 70000 + $n, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S',
+                'second_name' => 'S', 'third_name' => 'S', 'student_id_number' => (string) (70000 + $n), 'group_name' => $g, 'student_status_code' => 11,
+                'created_at' => now(), 'updated_at' => now()]);
+        }
+    }
+    $key = 'davolash ishi|5|d22-05a|Klinik farmakologiya|practice';
+    $caps = collect(icConflicts($s['board'])[$key]['items'])->where('kind', 'room_capacity')->values();
+    // 14.09 — faqat 1-oqim (44 + 44 = 88); 15.09 — bir vaqtdagi 2-oqim ma'ruzasi ham (+10) — 98. Tuzilgan maydonlar, matnda ham.
+    $pick = fn (array $i) => array_intersect_key($i, array_flip(['dates', 'room_code', 'room_name', 'volume', 'students', 'over']));
+    expect($caps->map($pick)->all())->toBe([
+        ['dates' => '14.09', 'room_code' => 'Z8', 'room_name' => "Tibbiyot klasteri, podval, 8-ma'ruza zali", 'volume' => 65, 'students' => 88, 'over' => 23],
+        ['dates' => '15.09', 'room_code' => 'Z8', 'room_name' => "Tibbiyot klasteri, podval, 8-ma'ruza zali", 'volume' => 65, 'students' => 98, 'over' => 33],
+    ])->and($caps[1]['line'])->toContain("(65 o'rin, 98 talaba, +33)");
+    // Sig'imi kiritilmagan zal — "sig'maydi" ham, "band" ham emas (sig'imni bilmasdan to'qnashuv deyilmaydi).
+    $hall->update(['volume' => 0]);
+    $kinds = collect(icConflicts($s['board'])[$key]['items'] ?? [])->pluck('kind');
+    expect($kinds)->not->toContain('room_capacity')->not->toContain('room_busy');
+    // Biriktirish oynasi (unit-busy) ham: sig'imi kiritilmagan xona band emas.
+    $admin = icTeacher('ADMIN', 'admin');
+    $res = test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])->getJson(route('admin.timetable.unit-busy', [
+        'board' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Klinik farmakologiya',
+        'training_type' => 'lecture', 'oqim_label' => '2-oqim']))->assertOk()->json();
+    expect($res['rooms'])->toBe([])->and($res['room_caps'])->toBe([]);
+    // Sig'im yetmasa — biriktirish oynasida ham aniq raqamlar.
+    $hall->update(['volume' => 65]);
+    $res = test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])->getJson(route('admin.timetable.unit-busy', [
+        'board' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Klinik farmakologiya',
+        'training_type' => 'lecture', 'oqim_label' => '2-oqim']))->assertOk()->json();
+    expect($res['room_caps']['Z8'])->toBe(['room_code' => 'Z8', 'room_name' => "Tibbiyot klasteri, podval, 8-ma'ruza zali", 'volume' => 65,
+        'students' => 98, 'over' => 33])->and($res['rooms']['Z8'])->toStartWith("65 o'rin, 98 talaba (+33): ");
+});
+
+it('smena maslahati: o\'qituvchi ikki sikl amaliyotida band — bo\'sh smena, qoladigan sanalar yoki boshqa o\'qituvchi', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    // 05a: 14.09 dan, 05b: 16.09 dan — 16–18.09 da SHARIPOV ikkalasida I paradan (1–6-soat).
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10]], ['d22-05a' => 0, 'd22-05b' => 2]);
+    $s['board']->update(['bell_schedule' => array_map(fn ($i) => ['type' => 'pair', 'no' => $i + 1, 'name' => ($i + 1) . '-soat',
+        'start' => sprintf('%02d:00', 8 + $i), 'end' => sprintf('%02d:40', 8 + $i)], range(0, 11))]);
+    $admin = icTeacher('ADMIN', 'admin');
+    $advice = fn () => test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice'])
+        ->assertOk()->json('advice');
+    // 1) Bo'sh smena bor: 7-soatdan (14:00) — 05a bilan kesishmaydi.
+    expect($advice())->toMatchArray(['kind' => 'free', 'start' => 7, 'text' => "VII para (14:00) ga o'tkazing — bo'sh", 'remaining' => []]);
+
+    // 2) SHARIPOV payshanba (17.09) 9-soatda haftalik darsda — 14:00 smenasida faqat shu sana qoladi.
+    $weekly = fn (int $day, int $pair = 9) => TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya',
+        'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Farmakologiya', 'group_name' => 'pp/2024-01b', 'teacher_id' => $sharipov->id, 'teacher_name' => 'SHARIPOV K. SH.',
+        'day' => $day, 'pair' => $pair]);
+    $weekly(4);
+    // Juma I parada ham haftalik dars — 14:00 smenasi bilan vaqti kesishmaydi, qolmaydi.
+    $weekly(5, 1);
+    expect($advice())->toMatchArray(['kind' => 'partial', 'start' => 7,
+        'text' => "14:00 ga o'tkazilsa faqat 17.09 (payshanba) qoladi: pp/2024-01b, Farmakologiya",
+        'remaining' => [['date' => '2026-09-17', 'with' => ['pp/2024-01b, Farmakologiya']]]]);
+
+    // 3) Har smenada uchala sanada ham band (16, 17, 18.09 — ertalab 05a, tushdan keyin haftalik dars) — boshqa o'qituvchi.
+    $weekly(3);
+    $weekly(5);
+    expect($advice())->toBe(['kind' => 'none', 'text' => "boshqa o'qituvchi biriktiring", 'start' => null, 'label' => null, 'remaining' => []]);
+
+    // Noma'lum blok — 404.
+    test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'yo\'q'])->assertNotFound();
+});
+
+it('smena maslahati: haftalik darsda guruhcha yoki xona band bo\'lsa ham shu sana qoladi (o\'qituvchi boshqa)', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    $room = Auditorium::create(['code' => 'R12', 'name' => '12-xona', 'volume' => 30, 'active' => true]);
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, $room, 10]], ['d22-05a' => 0, 'd22-05b' => 2]);
+    $s['board']->update(['bell_schedule' => array_map(fn ($i) => ['type' => 'pair', 'no' => $i + 1, 'name' => ($i + 1) . '-soat',
+        'start' => sprintf('%02d:00', 8 + $i), 'end' => sprintf('%02d:40', 8 + $i)], range(0, 11))]);
+    $other = icTeacher('BOSHQA B.');
+    $mk = fn (array $o) => TimetableCard::create($o + ['board_id' => $s['board']->id, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10,
+        'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15, 'teacher_id' => $other->id, 'teacher_name' => 'BOSHQA B.']);
+    // Chorshanba (16.09) 8-soatda d22-05b guruhchasi haftalik darsda; payshanba (17.09) 8-soatda 12-xona boshqa guruhga band.
+    $mk(['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Anatomiya', 'group_name' => 'd22-05b', 'day' => 3, 'pair' => 8]);
+    $mk(['faculty_name' => 'F2', 'specialty_name' => 'pediatriya', 'course' => 2, 'subject_name' => 'Fizika', 'group_name' => 'p-01', 'day' => 4, 'pair' => 8,
+        'auditorium_code' => 'R12', 'auditorium_name' => '12-xona']);
+    // Boshqa yo'nalishdagi bir xil nomli guruh — guruhcha emas (qamrov boshqa).
+    $mk(['faculty_name' => 'F2', 'specialty_name' => 'pediatriya', 'course' => 5, 'subject_name' => 'Kimyo', 'group_name' => 'd22-05b', 'day' => 5, 'pair' => 8]);
+    $advice = test()->withoutVite()->actingAs(icTeacher('ADMIN', 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice'])
+        ->assertOk()->json('advice');
+    expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
+        'text' => "14:00 ga o'tkazilsa faqat 16.09 (chorshanba), 17.09 (payshanba) qoladi: d22-05b, Anatomiya; p-01, Fizika"]);
+});
+
+it('xona sig\'imi: bo\'lak ("Fan (a)") kartasi — guruhlarning bir qismi, talabalar kartadagi (biriktirilgan) son', function () {
+    foreach (range(1, 30) as $n) {
+        \Illuminate\Support\Facades\DB::table('students')->insert(['hemis_id' => 71000 + $n, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S',
+            'second_name' => 'S', 'third_name' => 'S', 'student_id_number' => (string) (71000 + $n), 'group_name' => 'd22-05a', 'student_status_code' => 11,
+            'created_at' => now(), 'updated_at' => now()]);
+    }
+    $ctl = app(TimetableController::class);
+    $students = fn (string $subject, int $card) => (new ReflectionMethod($ctl, 'cardStudents'))->invoke($ctl,
+        (object) ['subject_name' => $subject, 'group_name' => 'd22-05a', 'group_names' => null, 'faculty_name' => 'F1', 'students' => $card]);
+    expect($students('Klinik farmakologiya', 10))->toBe(30)          // guruhning faol talabalari
+        ->and($students('Klinik farmakologiya (a)', 6))->toBe(6)     // bo'lak — kartadagi biriktirilgan son
+        ->and($students('Klinik farmakologiya (b)', 0))->toBe(0);
+});
+
+it('smena maslahati: yakshanbadan o\'tadigan blok ham "yaqin" — oxiri ish kunlari bo\'yicha (from + days emas)', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    // 05a: 17.09 (payshanba) dan 5 ish kuni — 17, 18, 19, 21, 22.09 (20.09 yakshanba); 05b: 22.09 (seshanba) dan — 22.09 da ikkalasi I parada.
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10]], ['d22-05a' => 3, 'd22-05b' => 8]);
+    $s['board']->update(['bell_schedule' => array_map(fn ($i) => ['type' => 'pair', 'no' => $i + 1, 'name' => ($i + 1) . '-soat',
+        'start' => sprintf('%02d:00', 8 + $i), 'end' => sprintf('%02d:40', 8 + $i)], range(0, 11))]);
+    $key = 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice';
+    $items = icConflicts($s['board'])[$key]['items'] ?? [];
+    expect(collect($items)->firstWhere('kind', 'teacher_busy'))->toMatchArray(['date_from' => '2026-09-22', 'date_to' => '2026-09-22']);
+    // Faqat 7-soatdan (14:00) — 05a bilan kesishmaydi; xato hisobda 05a "yaqin" bo'lmay, II para "bo'sh" deyilardi.
+    $advice = test()->withoutVite()->actingAs(icTeacher('ADMIN', 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => $key])->assertOk()->json('advice');
+    expect($advice)->toMatchArray(['kind' => 'free', 'start' => 7]);
+});
+
+it('smena maslahati: to\'liq parali doskada haftalik qator soatga o\'tkaziladi (IV para = 7–8-soat)', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10]], ['d22-05a' => 0, 'd22-05b' => 2]);
+    // 6 ta to'liq para (80 daqiqa): bir qator = 2 akademik soat; smena variantlari — 1, 3, 5, 7-soat.
+    $s['board']->update(['bell_schedule' => TimetableBoard::defaultBellSchedule(6), 'pairs_per_day' => 6]);
+    // SHARIPOV payshanba (17.09) IV parada (4-qator = 7–8-soat) haftalik darsda.
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya', 'course' => 2,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 1, 'weeks' => 15,
+        'subject_name' => 'Farmakologiya', 'group_name' => 'pp/2024-01b', 'teacher_id' => $sharipov->id, 'teacher_name' => 'SHARIPOV K. SH.',
+        'day' => 4, 'pair' => 4]);
+    $advice = test()->withoutVite()->actingAs(icTeacher('ADMIN', 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice'])
+        ->assertOk()->json('advice');
+    // 7-soatdan (IV para, 13:30) — 05a bilan kesishmaydi, lekin 17.09 da haftalik dars bilan qoladi ("bo'sh" emas).
+    expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
+        'text' => "13:30 ga o'tkazilsa faqat 17.09 (payshanba) qoladi: pp/2024-01b, Farmakologiya"]);
 });

@@ -20,7 +20,7 @@ const plain = x => JSON.parse(JSON.stringify(x));
 assert.match(source, /'<td class="cyc-cell cyc-block is-mark' \+ cfBlockClass\(block\.key, block\.conflicts, cfOwners\)/);
 assert.match(source, /cfBadgeHtml\(block\.key, block\.conflicts, cfOwners\) \+/);
 assert.match(source, /#cycleGrid \.cyc-block\.is-conflict \{ box-shadow: inset 0 0 0 3px #dc2626; \}/);
-assert.match(source, /const unplaced = cycleCards\.filter\(card => \(!card\.placed \|\| card\.conflict\) &&/);
+assert.match(source, /const unplaced = scoped\.filter\(card => \(!card\.placed \|\| card\.conflict\) &&/);
 // Panel kartasi: belgi bosiladi (faqat ko'rishda ham) — tafsilot oynasi; oqim ma'ruzasi — faqat egasida, boshqalarida havola.
 assert.match(source, /const split = card\.conflict \? cfSplit\(card\.key, card\.conflicts, cfOwners\) : \{ own: \[\], elsewhere: \[\] \};/);
 assert.match(source, /'<span class="cycle-pn-conflict lvl-' \+ \(lvl \|\| 'red'\) \+ '" role="button" tabindex="0" data-cf-key="' \+ esc\(card\.key\) \+ '" title="Bosing — tafsilot">⚠ ' \+ esc\(ownText \|\| card\.conflict\)/);
@@ -58,6 +58,7 @@ const ctx = {
     CROSS_MODES: ['teacher', 'subject', 'room'], cycleWeekLessons: () => [],
     ttToast: html => { (ctx.toasts = ctx.toasts || []).push(html); },
     // "Ko'rsatish" havolalari (alohida testda) — bu yerda faqat 409 javobidagi tuzilgan ro'yxat uzatilishi tekshiriladi.
+    agendaLinksHtml: () => '',
     focusLinksHtml: list => ((list || []).length ? ' <a class="cf-show" data-focus="' + list.length + '">Ko\'rsatish</a>' : ''),
 };
 vm.createContext(ctx);

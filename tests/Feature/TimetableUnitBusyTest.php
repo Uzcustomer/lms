@@ -127,7 +127,7 @@ it('unitBusy xato bersa: logga yoziladi, unit-busy bo\'sh ro\'yxat + warning, bi
 
     $res = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
     // Xonalar reytingi bandlikka bog'liq emas — xato bo'lsa ham beriladi (sig'imi talabalar soniga yaqini birinchi).
-    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'busy_items' => ['teachers' => [], 'rooms' => []],
+    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'busy_items' => ['teachers' => [], 'rooms' => []], 'room_caps' => [],
         'room_rank' => ['order' => ['R101', 'R102', 'R103'], 'why' => ['R101' => 'shu fan xonasi']],
         'warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."]);
     // Band xona ham — ogohlantirishsiz biriktiriladi; o'qituvchi ham

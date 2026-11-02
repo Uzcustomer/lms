@@ -21,7 +21,14 @@ assert.match(source, /'<td class="cyc-cell cyc-block is-mark' \+ cfBlockClass\(b
 assert.match(source, /cfBadgeHtml\(block\.key, block\.conflicts, cfOwners\) \+/);
 assert.match(source, /#cycleGrid \.cyc-block\.is-conflict \{ box-shadow: inset 0 0 0 3px #dc2626; \}/);
 assert.match(source, /const unplaced = cycleCards\.filter\(card => \(!card\.placed \|\| card\.conflict\) &&/);
-assert.match(source, /\(card\.conflict \? '<span class="cycle-pn-conflict lvl-' \+ \(lvl \|\| 'red'\) \+ '">⚠ ' \+ esc\(cfBadgeText\(card\.conflicts\) \|\| card\.conflict\) \+ '<\/span>' : ''\)/);
+// Panel kartasi: belgi bosiladi (faqat ko'rishda ham) — tafsilot oynasi; oqim ma'ruzasi — faqat egasida, boshqalarida havola.
+assert.match(source, /const split = card\.conflict \? cfSplit\(card\.key, card\.conflicts, cfOwners\) : \{ own: \[\], elsewhere: \[\] \};/);
+assert.match(source, /'<span class="cycle-pn-conflict lvl-' \+ \(lvl \|\| 'red'\) \+ '" role="button" tabindex="0" data-cf-key="' \+ esc\(card\.key\) \+ '" title="Bosing — tafsilot">⚠ ' \+ esc\(ownText \|\| card\.conflict\)/);
+assert.match(source, /split\.elsewhere\.map\(id => '<span class="cf-lecture-link" role="button" tabindex="0" data-cf-lecture="' \+ id/);
+assert.match(source, /if \(\$\('cardPanel'\)\) \$\('cardPanel'\)\.addEventListener\('click', ev => \{[\s\S]{0,300}if \(cf\.dataset\.wcf\) openWeekCfPop\(cf\); else openCfPop\(cf\);\n\s+\}, true\);/);
+assert.match(source, /'<div class="pn-conflict" role="button" tabindex="0" data-wcf="' \+ c\.id \+ '" title="Bosing — tafsilot">/);
+// Uzun eski matn yo'riqda emas.
+assert.doesNotMatch(source, /' · To\\'qnashuv: ' \+ esc\(cfLive\(card\.conflicts\)/);
 
 const els = {};
 const el = id => els[id] || (els[id] = { id, innerHTML: '', textContent: '', value: '', options: [], dataset: {},

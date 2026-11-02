@@ -6586,8 +6586,10 @@
             // Bir qator: kim/nima to'qnashdi, qaysi sanalarda, nima qilish kerak (o'tgan — kulrang).
             function cfLineHtml(i) {
                 const when = i.dates || (i.date_from ? cfDate(i.date_from) + (i.date_to && i.date_to !== i.date_from ? '–' + cfDate(i.date_to) : '') : '');
-                const body = i.who !== undefined
-                    ? (i.who ? ' ' + esc(i.who) : '') + ((i.groups || []).length ? ' — ' + esc(cfGroups(i.groups)) : '')
+                // Kim / nima: sikl — who; haftalik — o'qituvchi yoki xona (+ guruhlar 3 ta, "+N ta"); hech biri yo'q — server matni.
+                const who = i.who !== undefined ? i.who : (i.type === 'teacher' ? i.teacher_name : i.type === 'room' ? i.room : (i.teacher_name || i.room));
+                const body = (who !== undefined && who !== null) || (i.groups || []).length
+                    ? (who ? ' ' + esc(who) : '') + ((i.groups || []).length ? ' — ' + esc(cfGroups(i.groups)) : '')
                     : ' ' + esc(String(i.detail || '').replace(/^[^:]*:\s*/, ''));
                 return '<li class="cf-line cf-' + (i.past ? 'past' : cfKindLevel(i.kind)) + '"><b>' + esc(CF_LABEL[i.kind] || i.kind || '') + '</b>' + body +
                     (when ? ', ' + esc(when) : '') + (i.past ? ' <span class="cf-past-tag">o\u2018tgan</span>'
@@ -6881,7 +6883,9 @@
                     const target = key && document.querySelector('#cycleGrid [data-cf-key="' + CSS.escape(key) + '"]');
                     if (target) { target.scrollIntoView({ block: 'center', inline: 'center' }); el = target; }
                 }
-                const b = key && cfBlocks[key];
+                // Jadvaldagi blok; bo'lmasa (panel kartasi) — sikl kartasining o'z ro'yxati.
+                const pc = key && !cfBlocks[key] ? ((cyclePlanData && cyclePlanData.cycle_cards) || []).find(c => c.key === key) : null;
+                const b = key && (cfBlocks[key] || (pc ? { key: pc.key, subject: pc.subject, group: pc.group, conflicts: pc.conflicts || [] } : null));
                 if (!b) return;
                 closeCycDayPop();
                 const own = cfSplit(key, b.conflicts, cfOwners).own;
@@ -6896,6 +6900,33 @@
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
 
+            // Panel (sikl va haftalik kartalar) to'qnashuv belgisi — barcha rejimlarda (faqat ko'rishda ham) bosiladi: tafsilot oynasi.
+            // Capture bosqichida: karta tanlash/joylash ishlovchisiga o'tmaydi.
+            if ($('cardPanel')) $('cardPanel').addEventListener('click', ev => {
+                const cf = ev.target && ev.target.closest ? ev.target.closest('[data-cf-key],[data-cf-lecture],[data-wcf]') : null;
+                if (!cf) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (cf.dataset.wcf) openWeekCfPop(cf); else openCfPop(cf);
+            }, true);
+            // Haftalik panel kartasining to'qnashuvlari (joriy hafta, /conflicts?items=1&week=N) — har biri alohida qatorda.
+            function openWeekCfPop(el) {
+                const id = +el.dataset.wcf;
+                const c = (allCards || []).find(x => +x.id === id);
+                const items = curWeek && weeklyConflictItems[id] ? (weeklyConflictItems[id][curWeek] || []) : [];
+                closeCycDayPop();
+                const pop = document.createElement('div');
+                pop.id = 'cycDayPop';
+                pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(c ? c.subject_name : '') + '</div><div class="dp-sub">' +
+                    esc(c ? cardGroups(c).join(', ') : '') + (curWeek ? ' · ' + curWeek + '-hafta' : '') + ' · to\u2018qnashuvlar</div></div>' +
+                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' +
+                    (items.length ? items.map(cfLineHtml).join('') : '<li class="cf-line">' + esc(cardConflict(c) || '') + '</li>') + '</ul>';
+                document.body.appendChild(pop);
+                const r = el.getBoundingClientRect();
+                pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
+                pop.style.top = Math.max(8, Math.min(window.innerHeight - pop.offsetHeight - 8, r.bottom + 6)) + 'px';
+                pop.querySelector('.dp-close').onclick = closeCycDayPop;
+            }
             function setupCycleMarking() {
                 const grid = $('cycleGrid');
                 if (!grid || grid.dataset.mkReady) return;
@@ -7123,13 +7154,19 @@
                     const typeChip = (j && j.simple)
                         ? ''
                         : '<span class="cycle-pn-type ' + (card.type || 'practice') + '">' + (card.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '</span>';
-                    const lvl = card.conflict ? cfLevel(card.conflicts) : null;
+                    // Oqim ma'ruzasi to'qnashuvi — faqat ma'ruza egasi kartasida; boshqalarida "ma'ruzada muammo bor ↗" (bosiladi).
+                    const split = card.conflict ? cfSplit(card.key, card.conflicts, cfOwners) : { own: [], elsewhere: [] };
+                    const lvl = card.conflict ? cfLevel(split.own) : null;
+                    const ownText = cfBadgeText(split.own);
                     return '<div class="cycle-pn-card' + (lvl === 'red' ? ' is-conflict' : lvl === 'yellow' ? ' is-conflict-warn' : '') + '" draggable="' + (TIMETABLE_READ_ONLY ? 'false' : 'true') + '" data-cycle-key="' + esc(card.key) +
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
-                        'title="' + esc(card.subject) + ' — ' + esc(card.group) + (card.conflict ? ' · To\'qnashuv: ' + esc(cfLive(card.conflicts).map(i => i.line || i.detail).join('; ') || card.conflict) : '') + '">' +
+                        'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
                         '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + '</span>' +
                         '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span>' +
-                        (card.conflict ? '<span class="cycle-pn-conflict lvl-' + (lvl || 'red') + '">⚠ ' + esc(cfBadgeText(card.conflicts) || card.conflict) + '</span>' : '') + '</div>';
+                        (card.conflict && (ownText || !split.elsewhere.length)
+                            ? '<span class="cycle-pn-conflict lvl-' + (lvl || 'red') + '" role="button" tabindex="0" data-cf-key="' + esc(card.key) + '" title="Bosing — tafsilot">⚠ ' + esc(ownText || card.conflict) + '</span>' : '') +
+                        split.elsewhere.map(id => '<span class="cf-lecture-link" role="button" tabindex="0" data-cf-lecture="' + id + '" title="Oqim ma\'ruzasi to\'qnashuvi — bir marta, ma\'ruza egasi blokida">ma\'ruzada muammo bor ↗</span>').join('') +
+                        '</div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('[data-cf-filter]').forEach(b => b.onclick = () => {
                     cycleCfFilter = cycleCfFilter === b.dataset.cfFilter ? '' : b.dataset.cfFilter;
@@ -8100,14 +8137,14 @@
 
                 const panelCard = (c, skip, conflict = skip ? null : cardConflict(c)) =>
                     '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (conflict ? ' conflict' : '') + (selected && selected.id === c.id ? ' sel' : '') +
-                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '') + (conflict ? ' · To\'qnashuv: ' + conflict : '')) + '">' +
+                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
                     cardLabel(c, true) +
                     '<div class="text-[9px] text-gray-500">' +
                     (c.training_type === 'lecture'
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
-                    '</div>' + (conflict ? '<div class="pn-conflict">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') + '</div>';
+                    '</div>' + (conflict ? '<div class="pn-conflict" role="button" tabindex="0" data-wcf="' + c.id + '" title="Bosing — tafsilot">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') + '</div>';
 
                 $('cardPanel').innerHTML =
                     unShown.map(c => panelCard(c, false)).join('') +

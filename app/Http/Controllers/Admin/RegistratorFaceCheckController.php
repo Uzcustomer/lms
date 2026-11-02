@@ -23,7 +23,8 @@ use Illuminate\Support\Facades\Log;
  *   1. Anti-fraud verify (this controller's verify action):
  *      ArcFace similarity webcam ↔ HEMIS photo AND webcam ↔ approved mark
  *      photo. Per-reference thresholds: HEMIS ≥ 71%, MARK ≥ 82% (HEMIS is
- *      lower because those photos are old/different lighting). Both must
+ *      lower because those photos are old/different lighting) by default;
+ *      admins change them from the ⚙️ modal on the index page. Both must
  *      pass. On success we save a new student_photos row, persist the
  *      descriptor to face_id_descriptors, push the photo to Moodle and
  *      append the descriptor to auth_faceid_descriptors.
@@ -49,6 +50,59 @@ class RegistratorFaceCheckController extends Controller
      */
     private const ANTI_FRAUD_THRESHOLD_HEMIS = 71.0;
     private const ANTI_FRAUD_THRESHOLD_MARK  = 82.0;
+
+    /** settings jadvalidagi kalitlar — sahifadagi ⚙️ oynasidan o'zgartiriladi. */
+    public const SETTING_THRESHOLD_HEMIS = 'face_check_threshold_hemis';
+    public const SETTING_THRESHOLD_MARK  = 'face_check_threshold_mark';
+
+    /** Sozlamani o'zgartira oladigan rollar (registrator chegaralarni ko'rmaydi). */
+    private const SETTINGS_ROLES = ['superadmin', 'admin'];
+
+    /**
+     * Amaldagi chegaralar (%): sozlamadan, bo'lmasa yuqoridagi standart qiymatlar.
+     *
+     * @return array{hemis: float, mark: float}
+     */
+    public static function thresholds(): array
+    {
+        return [
+            'hemis' => (float) \App\Models\Setting::get(self::SETTING_THRESHOLD_HEMIS, self::ANTI_FRAUD_THRESHOLD_HEMIS),
+            'mark'  => (float) \App\Models\Setting::get(self::SETTING_THRESHOLD_MARK, self::ANTI_FRAUD_THRESHOLD_MARK),
+        ];
+    }
+
+    private static function canEditSettings(): bool
+    {
+        $user = auth()->user();
+
+        return $user && method_exists($user, 'hasAnyRole') && $user->hasAnyRole(self::SETTINGS_ROLES);
+    }
+
+    /** ⚙️ oynasidan chegaralarni saqlash. */
+    public function saveSettings(Request $request)
+    {
+        abort_unless(self::canEditSettings(), 403);
+
+        $data = $request->validate([
+            'threshold_hemis' => 'required|numeric|min:50|max:99',
+            'threshold_mark'  => 'required|numeric|min:50|max:99',
+        ], [], [
+            'threshold_hemis' => 'HEMIS chegarasi',
+            'threshold_mark'  => 'Mark chegarasi',
+        ]);
+
+        \App\Models\Setting::set(self::SETTING_THRESHOLD_HEMIS, (string) round((float) $data['threshold_hemis'], 1));
+        \App\Models\Setting::set(self::SETTING_THRESHOLD_MARK, (string) round((float) $data['threshold_mark'], 1));
+
+        Log::info('[RegistratorFaceCheck] thresholds changed', [
+            'hemis' => $data['threshold_hemis'],
+            'mark'  => $data['threshold_mark'],
+            'by'    => auth()->id(),
+        ]);
+
+        return back()->with('face_check_settings_saved', 'Chegaralar saqlandi: HEMIS '
+            . round((float) $data['threshold_hemis'], 1) . '%, Mark ' . round((float) $data['threshold_mark'], 1) . '%.');
+    }
 
     public function index(Request $request)
     {
@@ -78,6 +132,8 @@ class RegistratorFaceCheckController extends Controller
             'students'    => $students,
             'query'       => $query,
             'approvedIds' => $approvedIds,
+            'canEditSettings' => self::canEditSettings(),
+            'thresholds'  => self::thresholds(),
         ]);
     }
 
@@ -203,8 +259,9 @@ class RegistratorFaceCheckController extends Controller
 
             $simHemis = (float) $vsHemis['similarity_percent'];
             $simMark  = (float) $vsMark['similarity_percent'];
-            $passed   = $simHemis >= self::ANTI_FRAUD_THRESHOLD_HEMIS
-                     && $simMark  >= self::ANTI_FRAUD_THRESHOLD_MARK;
+            $thresholds = self::thresholds();
+            $passed   = $simHemis >= $thresholds['hemis']
+                     && $simMark  >= $thresholds['mark'];
 
             // Audit log: keep the actual scores server-side regardless of
             // what we tell the registrator.
@@ -234,8 +291,8 @@ class RegistratorFaceCheckController extends Controller
                 $viewer = auth()->user();
                 if ($viewer && method_exists($viewer, 'hasAnyRole')
                         && $viewer->hasAnyRole(['superadmin', 'admin'])) {
-                    $thresholdHemis = self::ANTI_FRAUD_THRESHOLD_HEMIS;
-                    $thresholdMark  = self::ANTI_FRAUD_THRESHOLD_MARK;
+                    $thresholdHemis = $thresholds['hemis'];
+                    $thresholdMark  = $thresholds['mark'];
                     $hemisPass = $simHemis >= $thresholdHemis;
                     $markPass  = $simMark  >= $thresholdMark;
 

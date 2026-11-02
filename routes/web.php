@@ -903,6 +903,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('registrator.face-check.')
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'index'])->name('index');
+                Route::post('/settings', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'saveSettings'])->name('settings');
                 Route::get('/{studentIdNumber}', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'show'])->name('show');
                 Route::post('/{studentIdNumber}/lookup', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'lookup'])->name('lookup');
                 Route::post('/{studentIdNumber}/verify', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'verify'])->name('verify');

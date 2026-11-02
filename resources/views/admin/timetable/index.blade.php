@@ -3283,10 +3283,13 @@
                 };
                 body.querySelectorAll('[data-cr-approve]').forEach(b => b.onclick = () =>
                     act(b, BASE + '/change-requests/' + b.dataset.crApprove + '/approve', {}, 'Tasdiqlandi — jadvalga qo\'llandi, tegishlilarga xabar yuborilmoqda.'));
-                body.querySelectorAll('[data-cr-reject]').forEach(b => b.onclick = () => {
-                    const note = prompt('Rad etish sababi (taklif yuboruvchiga boradi):', '');
-                    if (note === null) return;
-                    act(b, BASE + '/change-requests/' + b.dataset.crReject + '/reject', { note }, 'Rad etildi.');
+                // Rad etish — sabab sahifa ichidagi oynada (majburiy): bo'sh yoki "Bekor" — rad etilmaydi. So'rov id'si oyna ochilishidan
+                // oldin olinadi (oyna ochiq turganda ro'yxat qayta chizilsa ham).
+                body.querySelectorAll('[data-cr-reject]').forEach(b => b.onclick = async () => {
+                    const id = b.dataset.crReject;
+                    const note = await askRejectReason();
+                    if (note === null) { ttToast('Rad etilmadi: sabab kiritilmadi.', 'warn'); return; }
+                    act(b, BASE + '/change-requests/' + id + '/reject', { note }, 'Rad etildi.');
                 });
                 body.querySelectorAll('[data-cr-cancel]').forEach(b => b.onclick = () => {
                     if (!confirm('So\'rov bekor qilinsinmi?')) return;
@@ -5028,27 +5031,28 @@
             }
             // Taklif qatori: katakcha (qo'llash mumkin bo'lsa), turi, matni, "Qo'llash" (yoki o'chiq — sababi bilan).
             function sugApplyLabel(mode) { return mode === 'direct' ? 'Qo\'llash' : 'So\'rov yuborish'; }
-            // "So'rov yuborish" sababi (kafedra mudiri va registrator ofisi ko'radi) — sahifa ichidagi oyna (Takliflar oynasi ustida):
-            // matn maydoni, "Yuborish" / "Bekor"; Esc — bekor, Ctrl+Enter — yuborish. Orqa fonga bosish yopmaydi (tugmani ikki marta
-            // bosganda ikkinchisi oynani bekor qilib yubormasin). Natija — Promise: kiritilgan (tozalangan) sabab; bekor yoki bo'sh — null.
-            function askSugReason() {
+            // Sabab oynasi (sahifa ichida, native prompt() o'rniga): sarlavha, izoh, matn maydoni (1000 belgi), "Bekor" va tasdiq tugmasi.
+            // Takliflar (z-index 70) va "Jadval o'zgarishlari" (#crModal, 10040) oynalari ustida, xabarlar (#ttToastBox, 10050) ostida.
+            // Esc — bekor (ostidagi oynaga o'tmaydi), Ctrl/Cmd+Enter — tasdiq, oddiy Enter — yangi qator. Orqa fonga bosish yopmaydi (tugmani
+            // ikki marta bosganda ikkinchisi oynani bekor qilib yubormasin). Natija — Promise: kiritilgan (tozalangan) matn; bekor yoki bo'sh — null.
+            function askReasonDialog({ title, hint, placeholder, okLabel, okColor }) {
                 return new Promise(resolve => {
-                    const prev = document.getElementById('ttSugReasonModal');
+                    const prev = document.getElementById('ttReasonModal');
                     if (prev) prev.__close ? prev.__close(null) : prev.remove();   // avvalgisi — bekor (kutayotgani osilib qolmasin)
                     const m = document.createElement('div');
-                    m.id = 'ttSugReasonModal';
+                    m.id = 'ttReasonModal';
                     m.setAttribute('role', 'dialog');
                     m.setAttribute('aria-modal', 'true');
-                    m.setAttribute('aria-labelledby', 'ttSugReasonTitle');
-                    m.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
+                    m.setAttribute('aria-labelledby', 'ttReasonTitle');
+                    m.style.cssText = 'position:fixed;inset:0;z-index:10045;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
                     m.innerHTML = '<div style="background:#fff;border-radius:10px;width:min(460px,100%);padding:14px 16px;box-shadow:0 20px 60px #0005;font-size:12px">' +
-                        '<b id="ttSugReasonTitle" style="display:block;font-size:13px;margin-bottom:2px">So\'rov sababi</b>' +
-                        '<div style="color:#64748b;margin-bottom:8px">Kafedra mudiri va registrator ofisi ko\'radi.</div>' +
-                        '<textarea id="ttSugReasonText" rows="4" maxlength="1000" placeholder="Masalan: ertalab amaliyot bor" ' +
+                        '<b id="ttReasonTitle" style="display:block;font-size:13px;margin-bottom:2px">' + esc(title) + '</b>' +
+                        (hint ? '<div style="color:#64748b;margin-bottom:8px">' + esc(hint) + '</div>' : '') +
+                        '<textarea id="ttReasonText" rows="4" maxlength="1000" placeholder="' + esc(placeholder || '') + '" ' +
                         'style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical"></textarea>' +
                         '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">' +
-                        '<button type="button" data-sug-reason="cancel" style="font-size:12px;border:1px solid #cbd5e1;border-radius:6px;padding:4px 12px;background:#f8fafc">Bekor</button>' +
-                        '<button type="button" data-sug-reason="ok" style="font-size:12px;border-radius:6px;padding:4px 12px;background:#2563eb;color:#fff">Yuborish</button>' +
+                        '<button type="button" data-reason="cancel" style="font-size:12px;border:1px solid #cbd5e1;border-radius:6px;padding:4px 12px;background:#f8fafc">Bekor</button>' +
+                        '<button type="button" data-reason="ok" style="font-size:12px;border-radius:6px;padding:4px 12px;background:' + (okColor || '#2563eb') + ';color:#fff">' + esc(okLabel) + '</button>' +
                         '</div></div>';
                     let done = false;
                     const close = v => {
@@ -5058,22 +5062,31 @@
                         m.remove();
                         resolve(v);
                     };
-                    const submit = () => close(String(m.querySelector('#ttSugReasonText').value || '').trim() || null);
-                    // Esc — faqat shu oynani yopadi (ostidagi Takliflar oynasiga o'tmaydi).
+                    const submit = () => close(String(m.querySelector('#ttReasonText').value || '').trim() || null);
                     const onKey = e => {
                         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
                         else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
                     };
                     m.__close = close;
                     m.addEventListener('click', e => {
-                        const b = e.target.closest ? e.target.closest('[data-sug-reason]') : null;
-                        if (b) b.dataset.sugReason === 'ok' ? submit() : close(null);
+                        const b = e.target.closest ? e.target.closest('[data-reason]') : null;
+                        if (b) b.dataset.reason === 'ok' ? submit() : close(null);
                     });
                     document.addEventListener('keydown', onKey, true);
                     document.body.appendChild(m);
-                    const ta = m.querySelector('#ttSugReasonText');
+                    const ta = m.querySelector('#ttReasonText');
                     if (ta && ta.focus) ta.focus();
                 });
+            }
+            // Takliflar "So'rov yuborish" sababi (kafedra mudiri va registrator ofisi ko'radi).
+            function askSugReason() {
+                return askReasonDialog({ title: "So'rov sababi", hint: "Kafedra mudiri va registrator ofisi ko'radi.",
+                    placeholder: 'Masalan: ertalab amaliyot bor', okLabel: 'Yuborish' });
+            }
+            // "Jadval o'zgarishlari": so'rovni rad etish sababi (taklif yuboruvchiga boradi).
+            function askRejectReason() {
+                return askReasonDialog({ title: 'Rad etish sababi', hint: 'Taklif yuboruvchiga boradi.',
+                    placeholder: 'Masalan: xona shu vaqtda band', okLabel: 'Rad etish', okColor: '#dc2626' });
             }
             function sugRowHtml(s, ci, si, applyMode) {
                 const can = Boolean(s.can_apply);

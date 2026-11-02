@@ -1386,6 +1386,12 @@
         #ttAgendaModal .ag-pick-btns { margin-top: 6px; } #ttAgendaModal .ag-pick-btns button { border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 10px; }
         #ttAgendaModal .ag-pick-btns button[data-ag="submit"] { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
         #ttAgendaModal .ag-pick-btns button[disabled] { opacity: .5; }
+        .cyc-wk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; font-weight: 600; color: #1e3a8a; margin: 0 0 4px; width: 100%; }
+        .cyc-wk-head .cyc-wk-all { font-weight: 400; color: #475569; display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+        .cycle-pn-state { display: block; font-size: 10px; color: #64748b; }
+        .cycle-pn-state.is-placed { color: #b45309; }
+        #cycleGrid th.cyc-wk-on { background: #dbeafe !important; color: #1e3a8a; }
+        #cycleGrid th.cyc-wk-out, #cycleGrid td.cyc-wk-out { opacity: .35; }
         .cf-todo { color: #475569; } .cf-todo.cf-checking { opacity: .6; } .cf-cap { font-weight: 600; color: #a16207; } .cf-past-tag { font-size: 10px; background: #e2e8f0; color: #64748b; border-radius: 4px; padding: 0 4px; }
         /* "Ko'rsatish": to'qnashuvni jadvalda ko'rsatish (lenta, qizil ramka). */
         .cf-show { margin-left: 6px; color: #1d4ed8; text-decoration: underline; font-weight: 600; white-space: nowrap; cursor: pointer; }
@@ -7980,6 +7986,62 @@
                     placeCycleCardAt(card, index, +cell.dataset.cyclePair || 1);
                 });
             }
+            // ── Sikl paneli va hafta tanlovi (weekSel) ──
+            // Hafta tanlangan bo'lsa panel faqat shu haftaga tegishli kartalarni ko'rsatadi ("Butun semestr" — hammasi), hisoblagichlar
+            // ham shu tanlov bo'yicha; jadval shu hafta ustunlariga suriladi, qolgan sanalar xira.
+            let cyclePanelAll = false, cyclePanelWeek = null, cycleWkScrolled = null;
+            const isoOf = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            // Tanlangan hafta: {from, to (dushanba–yakshanba, Y-m-d), label: "8-hafta (02.11–07.11)"}; tanlanmagan — null.
+            function cycleSelWeek() {
+                if (!curWeek) return null;
+                const a = weekMonday(curWeek);
+                if (!a) return null;
+                const b = new Date(a);
+                b.setDate(b.getDate() + 6);
+                return { from: isoOf(a), to: isoOf(b), label: curWeek + '-hafta (' + weekDates(curWeek) + ')' };
+            }
+            // To'qnashuv yozuvi shu haftada (kelgusi sanalar; o'tgan yozuv — butun oralig'i).
+            const cfItemInWeek = (i, wk) => { const a = i.date_from || i.from, b = i.date_to || i.to || a; return Boolean(a && a <= wk.to && b >= wk.from); };
+            // Panel kartasi shu haftaga tegishlimi: joylanmagan — doim; joylangan, lekin to'qnashuvli — to'qnashuv sanasi shu haftada.
+            function cycleCardInWeek(card, wk) {
+                if (!wk || !card.placed) return true;
+                return (card.conflicts || []).some(i => cfItemInWeek(i, wk));
+            }
+            // Panel kartasi holati: "joylanmagan" yoki "joylangan · to'qnashuv 13.11–24.11" (kelgusi sanalar, bo'lmasa — hammasi).
+            function cycleCardStateText(card) {
+                if (!card.placed) return 'joylanmagan';
+                const live = cfLive(card.conflicts), items = live.length ? live : (card.conflicts || []);
+                const a = items.map(i => i.date_from || i.from).filter(Boolean).sort()[0];
+                const b = items.map(i => i.date_to || i.to || i.date_from || i.from).filter(Boolean).sort().pop();
+                return 'joylangan · to\u2018qnashuv' + (a ? ' ' + cfDate(a) + (b && b !== a ? '–' + cfDate(b) : '') : '');
+            }
+            // Panel guruh filtri: jadvaldagi ko'p tanlov (cycleRowFilters — bo'lak qatorlari bilan) va oqim tanlovi.
+            function cycleCardGroupMatch(card, rowKeys) {
+                return (!rowKeys || rowKeys.has(card.row_key)) && (!cycleGroupFilter || card.group === cycleGroupFilter);
+            }
+            // Jadval: tanlangan hafta ustunlari ajratiladi, boshqa sanalar va hafta tashqarisidagi bloklar xira; hafta almashganda — scroll.
+            function cycleWeekHighlight() {
+                const grid = $('cycleGrid');
+                if (!grid || !cyclePlanData || viewMode !== 'cycle') return;
+                const wk = cycleSelWeek(), on = Boolean(wk && !cyclePanelAll);
+                const idx = [];
+                (cyclePlanData.dates || []).forEach((d, i) => { if (on && d.iso >= wk.from && d.iso <= wk.to) idx.push(i); });
+                const lo = idx.length ? idx[0] : -1, hi = idx.length ? idx[idx.length - 1] : -1;
+                let first = null;
+                grid.querySelectorAll('thead .cyc-dcol').forEach((th, i) => {
+                    const inside = on && lo >= 0 && i >= lo && i <= hi;
+                    th.classList.toggle('cyc-wk-on', inside);
+                    th.classList.toggle('cyc-wk-out', on && !inside);
+                    if (inside && !first) first = th;
+                });
+                grid.querySelectorAll('td.cyc-block[data-cycle-from]').forEach(td => {
+                    const from = +td.dataset.cycleFrom, to = from + Math.max(1, +td.dataset.cycleSpan || 1) - 1;
+                    td.classList.toggle('cyc-wk-out', on && (lo < 0 || to < lo || from > hi));
+                });
+                const key = on ? wk.from : '';
+                if (on && first && cycleWkScrolled !== key && first.scrollIntoView) first.scrollIntoView({ block: 'nearest', inline: 'center' });
+                cycleWkScrolled = key;
+            }
             function renderCycleCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];
                 const groups = [...new Set(cycleCards.map(card => card.group).filter(Boolean))]
@@ -8008,18 +8070,27 @@
                     ? 'Blok ichidagi kataklarni bosing yoki sudrang — belgilangan soatlar ma\'ruza bo\'ladi.'
                     : 'Kartani bosing, so‘ng o‘z oqim qatoridagi boshlanish kunini bosing (yoki sudrab tashlang)';
                 $('cardPanelHint').classList.remove('hidden');
+                // Hafta tanlovi: boshqa hafta tanlansa — yana shu hafta bo'yicha ("Butun semestr" o'chadi).
+                if (cyclePanelWeek !== curWeek) { cyclePanelWeek = curWeek; cyclePanelAll = false; }
+                const wk = cycleSelWeek(), wkOn = Boolean(wk && !cyclePanelAll);
+                // Guruh filtri (ko'p tanlov) va hafta: to'qnashuvlar ro'yxati ham shu haftaniki (hisoblagich, filtr).
+                const rowKeys = cycleRowFilters.length ? new Set(cycleVisibleRows((j && j.rows) || []).map(r => r.row_key)) : null;
+                const scoped = cycleCards.filter(card => cycleCardGroupMatch(card, rowKeys) && (!wkOn || cycleCardInWeek(card, wk)))
+                    .map(card => (wkOn && card.placed ? Object.assign({}, card, { conflicts: (card.conflicts || []).filter(i => cfItemInWeek(i, wk)) }) : card));
                 // To'qnashuvli blok (joyida, lekin o'qituvchi yoki xona band) ham joylanmaganlar qatorida — sababi bilan.
-                const unplaced = cycleCards.filter(card => (!card.placed || card.conflict) &&
-                    (!cycleGroupFilter || card.group === cycleGroupFilter) && (!cycleCfFilter || cfMatchesFilter(card, cycleCfFilter))).sort((a, b) =>
+                const unplaced = scoped.filter(card => (!card.placed || card.conflict) && (!cycleCfFilter || cfMatchesFilter(card, cycleCfFilter))).sort((a, b) =>
                     (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
                 $('unplacedCount').textContent = unplaced.length + ' ta';
-                // Yig'indi: kelgusi to'qnashuvlar turlari bo'yicha; bosilsa — shu turdagi kartalar.
-                const cfN = cfSummaryCounts(cycleCards);
+                // Sarlavha: "8-hafta (02.11–07.11): N ta" va "Butun semestr" almashtirgichi.
+                const wkHead = wk ? '<div class="cyc-wk-head"><span>' + esc((wkOn ? wk.label : 'Butun semestr') + ': ' + unplaced.length + ' ta') + '</span>' +
+                    '<label class="cyc-wk-all"><input type="checkbox" data-cyc-all' + (cyclePanelAll ? ' checked' : '') + '> Butun semestr</label></div>' : '';
+                // Yig'indi: kelgusi to'qnashuvlar turlari bo'yicha (tanlov — hafta va guruhlar); bosilsa — shu turdagi kartalar.
+                const cfN = cfSummaryCounts(scoped);
                 const cfBtn = (k, label) => '<button type="button" data-cf-filter="' + k + '" class="cf-sum-btn' + (cycleCfFilter === k ? ' on' : '') + '">' + label + ' — ' + cfN[k] + '</button>';
                 const cfSummary = (cfN.teacher || cfN.room || cycleCfFilter)
                     ? '<div class="cf-summary">Kelgusi to\u2018qnashuvlar: ' + cfBtn('teacher', 'o\u2018qituvchi') + ', ' + cfBtn('room', 'xona') +
                         (cycleCfFilter ? ' <button type="button" data-cf-filter="" class="cf-sum-clear">hammasi</button>' : '') + '</div>' : '';
-                $('cardPanel').innerHTML = cfSummary + unplaced.map(card => {
+                $('cardPanel').innerHTML = wkHead + cfSummary + (unplaced.map(card => {
                     // Panel kartasi jadvaldagi blok bilan bir xil rangda — qaysi fan
                     // qayerga tushishi ko'rinib tursin.
                     const color = subjColor(card.subject);
@@ -8035,15 +8106,21 @@
                         'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
                         '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + '</span>' +
                         '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span>' +
+                        // Holat: "joylanmagan" yoki "joylangan · to'qnashuv 13.11–24.11" (joylanmagan bilan aralashmasin).
+                        '<span class="cycle-pn-state' + (card.placed ? ' is-placed' : '') + '">' + esc(cycleCardStateText(card)) + '</span>' +
                         (card.conflict && (ownText || !split.elsewhere.length)
                             ? '<span class="cycle-pn-conflict lvl-' + (lvl || 'red') + '" role="button" tabindex="0" data-cf-key="' + esc(card.key) + '" title="Bosing — tafsilot">⚠ ' + esc(ownText || card.conflict) + '</span>' : '') +
                         split.elsewhere.map(id => '<span class="cf-lecture-link" role="button" tabindex="0" data-cf-lecture="' + id + '" title="Oqim ma\'ruzasi to\'qnashuvi — bir marta, ma\'ruza egasi blokida">ma\'ruzada muammo bor ↗</span>').join('') +
                         '</div>';
-                }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
+                }).join('') || '<div class="text-xs text-slate-400 p-2">' + (wkOn ? 'Bu haftada joylanmagan yoki to\u2018qnashuvli sikl kartasi yo\u2018q.'
+                    : 'Barcha sikl fan kartalari joylashgan.') + '</div>');
                 $('cardPanel').querySelectorAll('[data-cf-filter]').forEach(b => b.onclick = () => {
                     cycleCfFilter = cycleCfFilter === b.dataset.cfFilter ? '' : b.dataset.cfFilter;
                     renderCycleCards(j);
                 });
+                const allBox = $('cardPanel').querySelector('[data-cyc-all]');
+                if (allBox) allBox.onchange = () => { cyclePanelAll = allBox.checked; renderCycleCards(j); };
+                cycleWeekHighlight();
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     // Faqat ko'rish rejimi: joylash ko'rsatmalari va sudrash yo'q.
                     if (TIMETABLE_READ_ONLY) return;

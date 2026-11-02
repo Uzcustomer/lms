@@ -2668,9 +2668,11 @@
             border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 30px rgba(15,23,42,.18); padding: 6px; }
         #cycRowPop .cyc-rp-q { width: 100%; height: 30px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; font-size: 12px; margin-bottom: 4px; }
         #cycRowPop .cyc-rp-list { overflow-y: auto; display: flex; flex-direction: column; }
-        #cycRowPop .cyc-rp-list button { text-align: left; border: 0; background: transparent; padding: 5px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-        #cycRowPop .cyc-rp-list button:hover { background: #f1f5f9; }
-        #cycRowPop .cyc-rp-list button.is-on { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+        #cycRowPop .cyc-rp-tools { display: flex; gap: 6px; margin-bottom: 4px; }
+        #cycRowPop .cyc-rp-tools button { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; padding: 2px 6px; font-size: 11px; cursor: pointer; }
+        #cycRowPop .cyc-rp-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+        #cycRowPop .cyc-rp-item:hover { background: #f1f5f9; }
+        #cycRowPop .cyc-rp-item.is-on { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
         #cycRowPop .cyc-rp-empty { padding: 6px 8px; color: #94a3b8; font-size: 12px; }
         /* Menyu / panjara / joylashmagan kartalar orasidagi suriladigan chegaralar */
         .tt-resizer { flex: 0 0 auto; height: 7px; margin: 1px 0; cursor: row-resize; border-radius: 4px;
@@ -5636,10 +5638,40 @@
 
             let cyclePlanData = null;
             let cycleViewMode = 'flow';
-            // Sikl jadvalida bitta guruh/oqim bo'yicha filtr ("Guruh" sarlavhasi orqali).
-            // Qiymat — qatorning noyob row_key'i: qamrovda bir xil nomli guruh boshqa
-            // yo'nalish/kursda ham bo'lishi mumkin.
-            let cycleRowFilter = null;
+            // Sikl jadvalida guruh/oqim bo'yicha filtr ("Guruh" sarlavhasi orqali) — bir nechtasi (checkbox). Qiymat — qatorlarning
+            // noyob row_key'lari: qamrovda bir xil nomli guruh boshqa yo'nalish/kursda ham bo'lishi mumkin. Bo'sh — hammasi.
+            // Tanlov sahifa yangilanganda ham saqlanadi (localStorage: doska + fakultet/yo'nalish/kurs kaliti).
+            let cycleRowFilters = [];
+            let cycleRowStoreKey = null;   // tanlov qaysi kalitdan o'qilgan (qamrov o'zgarsa — o'sha qamrovniki o'qiladi)
+            function cycleRowStorageKey() {
+                const sorted = set => [...set].map(String).sort().join(',');
+                return 'tt:cycRows:' + (board ? board.id : 0) + ':' + sorted(selectedFaculties) + '|' + sorted(selectedDirs) + '|' + sorted(selectedCourses);
+            }
+            function cycleRowFiltersLoad() {
+                const key = cycleRowStorageKey();
+                if (key === cycleRowStoreKey) return;
+                cycleRowStoreKey = key;
+                let v = [];
+                try { v = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { v = []; }
+                cycleRowFilters = Array.isArray(v) ? v.map(String) : [];
+            }
+            function cycleRowFiltersSave() {
+                cycleRowStoreKey = cycleRowStorageKey();
+                try {
+                    if (cycleRowFilters.length) localStorage.setItem(cycleRowStoreKey, JSON.stringify(cycleRowFilters));
+                    else localStorage.removeItem(cycleRowStoreKey);
+                } catch (e) { /* xususiy oyna / bloklangan saqlash — tanlov faqat shu sahifada */ }
+            }
+            // Tugma yozuvi: bitta — nomi ("d1/d22-05a"), bir nechta — "3 ta guruh", bo'sh — "Guruh (24)".
+            function cycleRowFilterText(allRows, rowWord) {
+                const n = cycleRowFilters.length;
+                return !n ? rowWord + ' (' + allRows.length + ')'
+                    : n === 1 ? (cycleRowLabels(allRows)[cycleRowFilters[0]] || '') : n + ' ta ' + rowWord.toLowerCase();
+            }
+            function cycleRowFiltersApply() {
+                cycleRowFiltersSave();
+                if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
+            }
             // Qator yorlig'i — guruh nomi; bir xil nomli qatorlarga yo'nalish va kurs qo'shiladi.
             function cycleRowLabels(rows) {
                 const count = {};
@@ -5657,6 +5689,7 @@
                 const pop = document.createElement('div');
                 pop.id = 'cycRowPop';
                 pop.innerHTML = '<input type="text" class="cyc-rp-q" placeholder="Qidirish: masalan 01a" autocomplete="off">'
+                    + '<div class="cyc-rp-tools"><button type="button" data-rp-all>Hammasi</button><button type="button" data-rp-clear>Tozalash</button></div>'
                     + '<div class="cyc-rp-list"></div>';
                 document.body.appendChild(pop);
                 const r = anchor.getBoundingClientRect();
@@ -5664,28 +5697,33 @@
                 pop.style.top = (r.bottom + 4) + 'px';
                 const list = pop.querySelector('.cyc-rp-list');
                 const q = pop.querySelector('.cyc-rp-q');
+                // Belgilash darhol qo'llanadi (oyna ochiq qoladi); tanlov qidiruvdan keyin ham saqlanadi (yashirin qatorlar ham).
+                const hitsNow = () => { const t = q.value.trim().toLowerCase(); return names.filter(n => !t || n.label.toLowerCase().includes(t)); };
                 const draw = () => {
-                    const t = q.value.trim().toLowerCase();
-                    const hits = names.filter(n => !t || n.label.toLowerCase().includes(t));
-                    list.innerHTML = (t ? '' : '<button type="button" data-rp="" class="' + (!cycleRowFilter ? 'is-on' : '') + '">Hammasi (' + names.length + ')</button>')
-                        + hits.map(n => '<button type="button" data-rp="' + esc(n.key) + '" class="' + (n.key === cycleRowFilter ? 'is-on' : '') + '">' + esc(n.label) + '</button>').join('')
+                    const hits = hitsNow(), on = new Set(cycleRowFilters);
+                    list.innerHTML = hits.map(n => '<label class="cyc-rp-item' + (on.has(n.key) ? ' is-on' : '') + '"><input type="checkbox" data-rp="' + esc(n.key) + '"'
+                        + (on.has(n.key) ? ' checked' : '') + '> ' + esc(n.label) + '</label>').join('')
                         + (hits.length ? '' : '<div class="cyc-rp-empty">Topilmadi</div>');
                 };
-                const pick = name => {
-                    cycleRowFilter = name || null;
-                    closeCycRowPop();
-                    if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
-                };
+                const set = keys => { cycleRowFilters = keys; cycleRowFiltersApply(); draw(); };
                 draw();
                 q.addEventListener('input', draw);
                 q.addEventListener('keydown', ev => {
-                    if (ev.key === 'Enter') {
-                        const first = list.querySelector('button[data-rp]:not([data-rp=""])') || list.querySelector('button[data-rp]');
-                        if (first) pick(first.dataset.rp);
+                    if (ev.key === 'Enter') {   // birinchi topilganini belgilash / olib tashlash
+                        const first = hitsNow()[0];
+                        if (first) set(cycleRowFilters.includes(first.key) ? cycleRowFilters.filter(k => k !== first.key) : cycleRowFilters.concat([first.key]));
                     }
                     if (ev.key === 'Escape') closeCycRowPop();
                 });
-                list.addEventListener('click', ev => { const b = ev.target.closest('button[data-rp]'); if (b) pick(b.dataset.rp); });
+                list.addEventListener('change', ev => {
+                    const b = ev.target.closest ? ev.target.closest('input[data-rp]') : null;
+                    if (!b) return;
+                    const k = b.dataset.rp;
+                    set(b.checked ? [...new Set(cycleRowFilters.concat([k]))] : cycleRowFilters.filter(x => x !== k));
+                });
+                // "Hammasi" — topilganlarning hammasi (qidiruv bo'sh bo'lsa — barcha qatorlar), "Tozalash" — tanlov yo'q (hammasi ko'rinadi).
+                pop.querySelector('[data-rp-all]').addEventListener('click', () => set([...new Set(cycleRowFilters.concat(hitsNow().map(n => n.key)))]));
+                pop.querySelector('[data-rp-clear]').addEventListener('click', () => set([]));
                 setTimeout(() => q.focus(), 0);
             }
             document.addEventListener('click', ev => {
@@ -5693,8 +5731,8 @@
                 if (btn) { ev.preventDefault(); if (document.getElementById('cycRowPop')) closeCycRowPop(); else openCycRowPop(btn); return; }
                 const clr = ev.target.closest && ev.target.closest('#cycRowFilterClear');
                 if (clr) {
-                    ev.preventDefault(); cycleRowFilter = null; closeCycRowPop();
-                    if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
+                    ev.preventDefault(); cycleRowFilters = []; closeCycRowPop();
+                    cycleRowFiltersApply();
                     return;
                 }
                 if (!(ev.target.closest && ev.target.closest('#cycRowPop'))) closeCycRowPop();
@@ -5823,9 +5861,11 @@
             }
             // Filtr qo'llangan qatorlar — ekran ham, Excel ham shundan oladi.
             function cycleVisibleRows(allRows) {
-                return cycleRowFilter
-                    ? allRows.filter(r => r.row_key === cycleRowFilter).flatMap(r => [r, ...cycleVariantRowsOf(allRows, r)])
-                    : allRows;
+                if (!cycleRowFilters.length) return allRows;
+                const on = new Set(cycleRowFilters), seen = new Set();
+                // Tanlangan qatorlar (jadval tartibida) va ularning bo'lak qatorlari — har biri bir marta.
+                return allRows.filter(r => on.has(r.row_key)).flatMap(r => [r, ...cycleVariantRowsOf(allRows, r)])
+                    .filter(r => !seen.has(r.row_key) && seen.add(r.row_key));
             }
             function cycleVariantLabelHtml(row) {
                 const letter = (/\((\p{L})\)\s*$/u.exec(row.variant || '') || [])[1] || '?';
@@ -6368,8 +6408,11 @@
                 cfMergeLectureItems(allRows, cfOwners);
                 cfBlocks = {};
                 allRows.forEach(r => (r.blocks || []).forEach(b => { cfBlocks[b.key] = { key: b.key, subject: b.subject, group: r.group, conflicts: b.conflicts || [] }; }));
-                // "Guruh" ustuni sarlavhasidan tanlangan bitta guruh/oqim (bo'lmasa hammasi).
-                if (cycleRowFilter && !allRows.some(r => r.row_key === cycleRowFilter)) cycleRowFilter = null;
+                // "Guruh" ustuni sarlavhasidan tanlangan guruhlar/oqimlar (bo'lmasa hammasi): shu qamrov tanlovi o'qiladi, jadvalda
+                // yo'q qatorlar tanlovdan chiqadi.
+                cycleRowFiltersLoad();
+                const keep = cycleRowFilters.filter(k => allRows.some(r => r.row_key === k));
+                if (keep.length !== cycleRowFilters.length) { cycleRowFilters = keep; cycleRowFiltersSave(); }
                 // Guruhcha tanlanganda u qatnashadigan bo'lak qatorlari (Fan (a)/(b)/(c)) ham ko'rinadi.
                 const rows = cycleVisibleRows(allRows);
                 if (!rows.length) {
@@ -6418,9 +6461,9 @@
                 dates.forEach((d, i) => h += '<col class="cyc-date-col' + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '">');
                 const rowWord = (j.view || cycleViewMode) === 'group' ? 'Guruh' : 'Oqim';
                 h += '</colgroup><thead><tr><th class="cyc-gcol cyc-gfilter-th">'
-                    + '<button type="button" id="cycRowFilterBtn" class="cyc-gfilter-btn' + (cycleRowFilter ? ' is-on' : '') + '" title="' + rowWord + 'ni tanlash yoki qidirish">'
-                    + (cycleRowFilter ? esc(cycleRowLabels(allRows)[cycleRowFilter] || '') : rowWord + ' (' + allRows.length + ')') + ' &#9662;</button>'
-                    + (cycleRowFilter ? '<button type="button" id="cycRowFilterClear" class="cyc-gfilter-x" title="Hammasini ko\'rsatish">&times;</button>' : '')
+                    + '<button type="button" id="cycRowFilterBtn" class="cyc-gfilter-btn' + (cycleRowFilters.length ? ' is-on' : '') + '" title="' + rowWord + 'larni tanlash yoki qidirish">'
+                    + esc(cycleRowFilterText(allRows, rowWord)) + ' &#9662;</button>'
+                    + (cycleRowFilters.length ? '<button type="button" id="cycRowFilterClear" class="cyc-gfilter-x" title="Hammasini ko\'rsatish">&times;</button>' : '')
                     + '</th>'
                     + (markMode ? '<th class="cyc-mk-side">Para</th>' : '')
                     + (simple ? '' : '<th class="cyc-pcol" title="Juftlik">Para</th>');
@@ -7131,8 +7174,8 @@
                     const ghost = ev.target.closest ? ev.target.closest('.cyc-ghost-btn[data-ghost-row]') : null;
                     if (ghost) {
                         ev.preventDefault();
-                        cycleRowFilter = ghost.dataset.ghostRow;
-                        if (cyclePlanData) renderCyclePlan(cyclePlanData);
+                        cycleRowFilters = [ghost.dataset.ghostRow];
+                        cycleRowFiltersApply();
                         return;
                     }
                     const subj = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
@@ -10409,7 +10452,7 @@
                 const internal = Boolean(j.mark_mode);
                 const label = internal ? 'Ichki' : 'Tashqi';
                 const start = j.start_date ? j.start_date.split('-').reverse().join('.') : '';
-                const filterLabel = cycleRowFilter ? (cycleRowLabels(j.rows || [])[cycleRowFilter] || '') : '';
+                const filterLabel = cycleRowFilters.length ? cycleRowFilterText(j.rows || [], (j.view || cycleViewMode) === 'group' ? 'Guruh' : 'Oqim') : '';
                 const title = (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali') +
                     ' · Sikl jadvali (' + label.toLowerCase() + ')' + (filterLabel ? ' · ' + filterLabel : '') +
                     (start ? ' · semestr boshi ' + start : '');

@@ -929,3 +929,19 @@ it('smena maslahati: to\'liq parali doskada haftalik qator soatga o\'tkaziladi (
     expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
         'text' => "13:30 ga o'tkazilsa faqat 17.09 qoladi: pp/2024-01b, Farmakologiya"]);
 });
+
+it('smena maslahati: blok ma\'ruzasining to\'qnashuvi (smenaga bog\'liq emas) "qoladi" sanalariga kirmaydi', function () {
+    // LEKTOR 05a da ham ma'ruzachi, ham amaliy o'qituvchisi: 15.09 — 1-oqim va 2-oqim ma'ruzalari ustma-ust (ma'ruza to'qnashuvi),
+    // 16.09 — 05a amaliyoti 2-oqim bilan (amaliy to'qnashuvi). Smena faqat amaliyotni suradi: II paraga o'tsa amaliy to'qnashuv
+    // yo'qoladi — maslahat "bo'sh" (avval 15.09 dagi ma'ruza sanasi "qoladi" deb chiqardi).
+    $lector = icTeacher('LEKTOR', 'oqituvchi');
+    $s = icLectureSetup($lector, $lector);
+    $as = fn () => test()->withoutVite()->actingAs(icTeacher('ADMIN', 'admin'), 'teacher')->withSession(['active_role' => 'admin']);
+    $key = 'davolash ishi|5|d22-05a|Klinik farmakologiya|practice';
+    $block = collect($as()->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'])->assertOk()->json('rows'))
+        ->flatMap(fn ($r) => $r['blocks'])->firstWhere('key', $key);
+    expect(collect($block['conflicts'])->map(fn ($i) => [$i['kind'], $i['lecture'], $i['date_from']])->all())
+        ->toBe([['teacher_busy', true, '2026-09-15'], ['teacher_busy', false, '2026-09-16']]);
+    expect($as()->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => $key])->assertOk()->json('advice'))
+        ->toMatchArray(['kind' => 'free', 'start' => 3, 'remaining' => []]);
+});

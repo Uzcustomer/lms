@@ -483,6 +483,10 @@ class VedomostAiReportController extends Controller
         if (!auth()->user() || !in_array(session('active_role', ''), $roles, true)) {
             abort(403, "Bu sahifani ko'rish huquqi yo'q.");
         }
+        // AI tekshiruvi natijalari — superadmin yoki u AI sozlamalarida ruxsat bergan foydalanuvchilar.
+        if (!app(\App\Services\VedomostAiAccess::class)->can('check')) {
+            abort(403, "AI tekshiruvi natijalari — faqat superadmin va u ruxsat bergan foydalanuvchilar uchun.");
+        }
     }
 
     private function userName(): string

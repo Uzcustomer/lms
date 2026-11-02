@@ -31,6 +31,9 @@
         if ($canManageKeys) {
             $tabs['keys'] = 'API kalitlar';
         }
+        if ($isSuper) {
+            $tabs['access'] = 'Ruxsatlar';
+        }
         $formTabs = ['settings', 'rules'];
         $errTab = $errors->any() ? (collect(['api_key', 'label', 'rpm'])->contains(fn ($f) => $errors->has($f)) ? 'keys' : 'settings') : null;
     @endphp
@@ -627,8 +630,98 @@
                     </div>
                 </section>
             @endif
+
+            {{-- ───────── Ruxsatlar (faqat superadmin) ───────── --}}
+            @if($isSuper)
+                <section class="panel" id="panel-access" role="tabpanel" aria-labelledby="tab-access">
+                    <div class="note info" style="margin-bottom:14px;"><svg class="icon"><use href="#ai-i-info"/></svg>
+                        <div>AI sozlamalari, AI tekshiruvi (natijalar, yig'ma oyna) va tasdiqlanganlar jamlanmasi — <b>superadmin</b>ga har doim ochiq. Boshqalar faqat shu yerda tanlanganda va belgilangan imkoniyatgagina kira oladi. Foydalanuvchi «Vedomost topshirish» sahifasiga o'z roli bilan kira olishi ham kerak.</div></div>
+                    <form method="POST" action="{{ route('admin.vedomost-submission.ai-settings.access.save') }}" id="access-form" class="card">
+                        @csrf
+                        <div class="card-h"><div><h3>Ruxsat berilgan foydalanuvchilar</h3><p>Ism-familiya bo'yicha qidirib qo'shing va kerakli imkoniyatlarni belgilang.</p></div></div>
+                        <div class="card-b">
+                            <div style="position:relative;max-width:520px;margin-bottom:14px;">
+                                <input type="search" class="in" id="acc-q" placeholder="Ism yoki familiya (kamida 2 harf)…" autocomplete="off" aria-label="Foydalanuvchi qidirish">
+                                <div id="acc-res" hidden style="position:absolute;left:0;right:0;top:42px;z-index:30;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.12);max-height:320px;overflow:auto;"></div>
+                            </div>
+                            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                                <thead><tr style="text-align:left;color:#64748b;font-size:12px;">
+                                    <th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;">F.I.Sh</th>
+                                    @foreach($accessPerms as $pk => $pl)<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:center;">{{ $pl }}</th>@endforeach
+                                    <th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;"></th>
+                                </tr></thead>
+                                <tbody id="acc-rows"></tbody>
+                            </table>
+                            <div id="acc-empty" style="color:#94a3b8;font-size:13px;padding:12px 6px;">Hali hech kimga ruxsat berilmagan — faqat superadmin foydalanadi.</div>
+                            <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+                                <button type="submit" class="btn primary">Ruxsatlarni saqlash</button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+            @endif
         </div>
     </div>
+
+    @if($isSuper)
+    <script>
+        (function () {
+            const PERMS = @json($accessPerms);
+            const rows = document.getElementById('acc-rows');
+            const empty = document.getElementById('acc-empty');
+            const q = document.getElementById('acc-q');
+            const res = document.getElementById('acc-res');
+            const url = @json(route('admin.vedomost-submission.ai-settings.access.search'));
+            const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            let n = 0;
+            const keyOf = e => e.type + ':' + e.id;
+            const has = e => !!rows.querySelector(`tr[data-key="${CSS.escape(keyOf(e))}"]`);
+            function sync() { empty.hidden = rows.children.length > 0; }
+            function add(e, perms) {
+                if (has(e)) return;
+                const i = n++;
+                const tr = document.createElement('tr');
+                tr.dataset.key = keyOf(e);
+                tr.innerHTML = `<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;"><b>${esc(e.name)}</b>${e.hint ? `<div style="font-size:11px;color:#94a3b8">${esc(e.hint)}</div>` : ''}
+                        <input type="hidden" name="entries[${i}][type]" value="${esc(e.type)}"><input type="hidden" name="entries[${i}][id]" value="${esc(e.id)}"></td>`
+                    + Object.keys(PERMS).map(p => `<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                        <input type="hidden" name="entries[${i}][perms][${p}]" value="0">
+                        <input type="checkbox" name="entries[${i}][perms][${p}]" value="1" ${perms[p] ? 'checked' : ''} aria-label="${esc(e.name)} — ${esc(PERMS[p])}"></td>`).join('')
+                    + `<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;"><button type="button" class="btn ghost" style="height:30px;padding:0 10px;" data-del>O'chirish</button></td>`;
+                rows.appendChild(tr);
+                sync();
+            }
+            rows.addEventListener('click', e => { if (e.target.closest('[data-del]')) { e.target.closest('tr').remove(); sync(); } });
+            (@json($access)).forEach(e => add(e, e.perms || {}));
+            sync();
+
+            let t, last = '';
+            q.addEventListener('input', () => {
+                clearTimeout(t);
+                const v = q.value.trim();
+                if (v.length < 2) { res.hidden = true; return; }
+                t = setTimeout(async () => {
+                    last = v;
+                    try {
+                        const r = await fetch(url + '?q=' + encodeURIComponent(v), { headers: { Accept: 'application/json' } });
+                        const list = await r.json();
+                        if (v !== last) return;
+                        res.innerHTML = list.length ? list.map((e, i) => `<button type="button" data-i="${i}" style="display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:#fff;cursor:pointer;border-bottom:1px solid #f1f5f9;" ${has(e) ? 'disabled' : ''}>
+                                <b>${esc(e.name)}</b> <span style="font-size:11px;color:#94a3b8">${esc(e.hint || '')}${has(e) ? ' · qo\'shilgan' : ''}</span></button>`).join('')
+                            : '<div style="padding:10px 12px;color:#94a3b8;font-size:13px;">Topilmadi</div>';
+                        res.hidden = false;
+                        res.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => {
+                            add(list[+b.dataset.i], { check: true });
+                            res.hidden = true; q.value = ''; q.focus();
+                        }));
+                    } catch (err) { res.innerHTML = '<div style="padding:10px 12px;color:#b91c1c;font-size:13px;">Qidirishda xato</div>'; res.hidden = false; }
+                }, 250);
+            });
+            document.addEventListener('click', e => { if (!e.target.closest('#acc-res') && e.target !== q) res.hidden = true; });
+            q.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); if (e.key === 'Escape') res.hidden = true; });
+        })();
+    </script>
+    @endif
 
     <script>
         (function () {

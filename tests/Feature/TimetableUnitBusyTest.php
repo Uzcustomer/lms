@@ -112,7 +112,7 @@ it('unitBusy xato bersa: logga yoziladi, unit-busy bo\'sh ro\'yxat + warning, bi
 
     $res = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
     // Xonalar reytingi bandlikka bog'liq emas — xato bo'lsa ham beriladi (sig'imi talabalar soniga yaqini birinchi).
-    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'room_rank' => ['order' => ['R101', 'R102', 'R103'], 'why' => []],
+    expect($res)->toBe(['teachers' => [], 'rooms' => [], 'room_rank' => ['order' => ['R101', 'R102', 'R103'], 'why' => ['R101' => 'shu fan xonasi']],
         'warning' => "Bandlik tekshiruvi vaqtincha ishlamadi — ro'yxat tekshirilmagan."]);
     // Band xona ham — ogohlantirishsiz biriktiriladi; o'qituvchi ham
     ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102'])->assertOk();
@@ -318,21 +318,23 @@ it('biriktirish oynasi: unit-busy xonalar reytingini beradi — o\'qituvchiga bi
     \App\Models\AuditoriumTeacher::create(['auditorium_id' => $r050->id, 'teacher_id' => $s['b']->id, 'is_general' => false]);
     DB::table('auditoriums')->where('code', 'R103')->update(['department_hemis_id' => 601]);
     $get = fn () => ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
-    expect($get()['room_rank'])->toBe(['order' => ['R103', 'R050', 'R101', 'R102', 'R090'], 'why' => ['R103' => 'kafedra xonasi']]);
+    // R101 — shu fan (Patologik anatomiya, amaliy, 3-kurs) boshqa guruhi (03b) xonasi: kafedra xonasidan keyin, qolganlardan oldin.
+    expect($get()['room_rank'])->toBe(['order' => ['R103', 'R101', 'R050', 'R102', 'R090'],
+        'why' => ['R103' => 'kafedra xonasi', 'R101' => 'shu fan xonasi']]);
 
     // Dars birligi o'qituvchisiga biriktirilgan xona — kafedra xonasidan oldin; band xona (R101) ham ro'yxatda (oynada oxirida, kulrang).
     $s['unit']->update(['teacher_id' => $s['a']->id, 'teacher_name' => 'USTOZ A']);
     \App\Models\AuditoriumTeacher::create(['auditorium_id' => Auditorium::where('code', 'R102')->value('id'), 'teacher_id' => $s['a']->id, 'is_general' => false]);
     $res = $get();
     expect($res['room_rank'])->toBe(['order' => ['R102', 'R103', 'R101', 'R090', 'R050'],
-        'why' => ['R102' => "o'qituvchiga biriktirilgan", 'R103' => 'kafedra xonasi']])
+        'why' => ['R102' => "o'qituvchiga biriktirilgan", 'R103' => 'kafedra xonasi', 'R101' => 'shu fan xonasi']])
         ->and($res['rooms'])->toHaveKey('R101');
 
     // Dars birligida 25 talabali karta ham bor — sig'im birlikning eng katta kartasi bo'yicha: 20 o'rinli xonalar (o'qituvchiniki ham)
     // sig'maydi — oxirida; sig'adiganlar oldin.
     TimetableCard::create($s['unit']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half',
         'weeks', 'subject_name', 'kafedra_name', 'group_name', 'teacher_id', 'teacher_name']) + ['students' => 25, 'day' => 3, 'pair' => 1]);
-    expect($get()['room_rank']['order'])->toBe(['R103', 'R090', 'R102', 'R050', 'R101']);
+    expect($get()['room_rank']['order'])->toBe(['R103', 'R090', 'R102', 'R101', 'R050']);
 });
 
 it('biriktirish oynasi: xonalar reytingi xato bersa — unit-busy bandlikni beradi, reyting null (ro\'yxat alifbo bo\'yicha qoladi)', function () {

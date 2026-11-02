@@ -1140,3 +1140,15 @@ it('takliflar: joylanmagan karta — tashqi vaqtida faqat xona band bo\'lsa, bo\
     \App\Models\Auditorium::where('code', 'K310')->update(['active' => false]);
     expect($rooms())->toBe(["214 (30 o'rin) (shu bino)", "312 (30 o'rin) (shu bino)", "098 (30 o'rin) (shu bino)"]);
 });
+
+it('takliflar: "shu fan xonasi" — shu fan + tur + yo\'nalish/kurs bo\'yicha boshqa guruh xonasi kafedra xonasidan keyin, shu binodan oldin', function () {
+    $s = sugRoomSetup();
+    $base = \Illuminate\Support\Arr::only($s['a']->getAttributes(), ['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang',
+        'students', 'training_type', 'len_half', 'weeks', 'subject_name', 'kafedra_name']);
+    // Shu fan, amaliy, 1-kurs, boshqa guruh — 103 da (odatdagi xonasi); shu fan ma'ruzasi — 101 da; shu fan 2-kursi — 102 da.
+    TimetableCard::create(['group_name' => 'd1/d26-07a', 'auditorium_code' => 'R103', 'auditorium_name' => '103'] + $base);
+    TimetableCard::create(['group_name' => null, 'training_type' => 'lecture', 'group_names' => ['d1/d26-06b'], 'auditorium_code' => 'R101',
+        'auditorium_name' => '101'] + $base);
+    TimetableCard::create(['group_name' => 'd1/d25-06b', 'course' => 2, 'auditorium_code' => 'R102', 'auditorium_name' => '102'] + $base);
+    expect(($s['titles'])())->toBe(["K-310 (30 o'rin) (kafedra xonasi)", "103 (100 o'rin) (shu fan xonasi)", "214 (30 o'rin) (shu bino)"]);
+});

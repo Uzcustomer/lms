@@ -120,6 +120,22 @@ class VedomostSubmission extends Model
                 $v->warned_at = null;
             }
         });
+
+        // Jamlanma keshi: tasdiqlanganda qatorlar fonda oldindan hisoblanadi; tasdiqdan chiqsa yoki
+        // natijasi (ai_result) o'zgarsa — eskirgan kesh o'chiriladi.
+        static::updated(function (VedomostSubmission $v) {
+            if (!$v->wasChanged('status') && !$v->wasChanged('ai_result')) {
+                return;
+            }
+            try {
+                \App\Services\VedomostJamlanmaExcel::forget([$v->id]);
+                if ($v->status === self::STATUS_APPROVED) {
+                    \App\Jobs\BuildVedomostJamlanmaRows::dispatch([$v->id])->delay(now()->addSeconds(5));
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[Jamlanma] kesh: ' . $e->getMessage());
+            }
+        });
     }
 
     public function curriculumSubject()

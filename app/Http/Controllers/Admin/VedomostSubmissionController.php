@@ -835,9 +835,11 @@ class VedomostSubmissionController extends Controller
                 ->all();
         }
 
+        // ai_result (katta JSON) olinmaydi — jamlanma qatorlari oldindan hisoblangan (kesh); keshi
+        // yo'qlari uchun servis to'liq yozuvni o'zi yuklaydi.
         $submissions = VedomostSubmission::whereIn('id', $ids)
             ->where('status', VedomostSubmission::STATUS_APPROVED)
-            ->get()
+            ->get(['id', 'group_name', 'subject_name', 'closing_form', 'form_type', 'status'])
             ->sortBy(fn ($v) => mb_strtolower(($v->subject_name ?? '') . '|' . ($v->group_name ?? '')), SORT_NATURAL)
             ->values();
         if ($submissions->isEmpty()) {

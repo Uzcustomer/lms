@@ -103,6 +103,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Vedomost topshirish muddati ogohlantirishlari (oz qoldi / kechikdi) — har kuni 09:00
         $schedule->command('vedomost:deadline-warnings')->dailyAt('09:00')->withoutOverlapping();
 
+        // Tasdiqlangan vedomostlar jamlanmasi keshi — tasdiqlanganda fonda yoziladi; bu zaxira
+        // (eski tasdiqlanganlar, navbat ishlamay qolgan holatlar) — keshi yo'qlarini to'ldiradi.
+        $schedule->command('vedomost:jamlanma-build --limit=300')->everyThirtyMinutes()->withoutOverlapping(60);
+
         // YN test markazi: har minutda — kompyuter raqamini ochish, "tayyorlaning",
         // "kirsangiz bo'ladi", overflow → zahira, no-show holatlari.
         $schedule->job(new \App\Jobs\ExamScheduleTickJob())->everyMinute()->withoutOverlapping(2);

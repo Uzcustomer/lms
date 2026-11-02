@@ -1257,6 +1257,13 @@ it('karta yaratish va kartalar ro\'yxatini o\'zgartirish — faqat adminlar: o\'
         ['post', route('admin.timetable.subject-setting.save', $b), ['specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena', 'mode' => 'cycle', 'cycle_days' => 5]],
         ['post', route('admin.timetable.ktr-weeks', $b), ['courses' => [2]]],
         ['post', route('admin.timetable.cycle-plan', $b), ['layer' => 'internal', 'clear' => 1]],
+        // Kartalarni qayta yaratish / bo'lish / birlashtirish va karta tahriri.
+        ['post', route('admin.timetable.boards.split-variant-mixed', $b), []],
+        ['post', route('admin.timetable.boards.separate-practice-groups', $b), ['specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena']],
+        ['post', route('admin.timetable.boards.split-long-practice', $b), []],
+        ['post', route('admin.timetable.boards.merge-variant-lectures', $b), []],
+        ['post', route('admin.timetable.cards.update', $s['own']), ['teacher_name' => 'X']],
+        ['post', route('admin.timetable.settings.save', $b), ['days' => 6]],
     ];
     foreach ([[$t, 'oqituvchi'], [$fm, 'fan_masuli'], [$s['head'], 'kafedra_mudiri']] as [$who, $role]) {
         foreach ($calls as [$m, $url, $body]) {
@@ -1278,6 +1285,40 @@ it('karta yaratish va kartalar ro\'yxatini o\'zgartirish — faqat adminlar: o\'
         ->assertSee('const TIMETABLE_CAN_UNPLACE = true', false)->assertSee('const TIMETABLE_CAN_USE_MANAGER = true', false);
     // O'quv bo'limi — tashqi qatlamni bo'shatadi (avvalgidek).
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.boards.unplace', $b), ['courses' => [2], 'layer' => 'external'])->assertOk();
+});
+
+it('taqiqlangan tugmalar o\'qituvchi, fan mas\'uli va kafedra mudirida sahifaga yashirin va o\'chiq chiqadi (tt-forbidden), adminda — oddiy', function () {
+    $s = layersSetup();
+    foreach (['oqituvchi', 'fan_masuli'] as $r) {
+        Role::findOrCreate($r, 'web');
+    }
+    $t = fmTeacherLayers('OQITUVCHI');
+    $t->syncRoles(['oqituvchi']);
+    $fm = fmTeacherLayers("FAN MAS'ULI");
+    $btn = function (string $html, string $id): string {
+        preg_match('/<button type="button" id="' . $id . '"[^>]*>/', $html, $m);
+
+        return $m[0] ?? '';
+    };
+    $forbidden = ['newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'unplaceBtn', 'cycleHolAddBtn'];
+    foreach ([[$t, 'oqituvchi'], [$fm, 'fan_masuli'], [$s['head'], 'kafedra_mudiri']] as [$who, $role]) {
+        $html = layerAs($who, $role)->get(route('admin.timetable.index'))->assertOk()->getContent();
+        foreach ($forbidden as $id) {
+            $tag = $btn($html, $id);
+            expect([$role, $id, str_contains($tag, 'tt-forbidden') && str_contains($tag, ' disabled')])->toBe([$role, $id, true]);
+        }
+        expect($html)->toContain('.toolbar-action.hidden, .tt-forbidden { display: none !important; }');
+    }
+    // Kafedra mudiri: sikl "Yangilash" (joylashtiradi) bor; o'qituvchida — yo'q.
+    expect($btn(layerAs($s['head'], 'kafedra_mudiri')->get(route('admin.timetable.index'))->getContent(), 'cycleRefresh'))->not->toContain('tt-forbidden')
+        ->and($btn(layerAs($t, 'oqituvchi')->get(route('admin.timetable.index'))->getContent(), 'cycleRefresh'))->toContain('tt-forbidden');
+    // O'quv bo'limi: bo'shatish bor, kartochkalar yo'q. Admin: hammasi oddiy (tt-forbidden yo'q).
+    $oquv = layerAs($s['oquv'], 'oquv_bolimi')->get(route('admin.timetable.index'))->getContent();
+    expect($btn($oquv, 'unplaceBtn'))->not->toContain('tt-forbidden')->and($btn($oquv, 'genBtn'))->toContain('tt-forbidden');
+    $admin = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.index'))->assertOk()->getContent();
+    foreach ($forbidden as $id) {
+        expect([$id, $btn($admin, $id) !== '' && !str_contains($btn($admin, $id), 'tt-forbidden') && !str_contains($btn($admin, $id), ' disabled')])->toBe([$id, true]);
+    }
 });
 
 it('/data: teacher_full_names — kartalardagi o\'qituvchilarning to\'liq F.I.Sh. (o\'qituvchi kesimi ustuni teacher_id bo\'yicha)', function () {

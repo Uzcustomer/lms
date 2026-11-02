@@ -29,6 +29,17 @@
     $timetableCanUnplace = $timetableAuditoriumAssignmentOnly;
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchi, fan mas'uli va kafedra mudiriga yopiq.
     $timetableCanUseManager = $timetableAuditoriumAssignmentOnly;
+    // Karta yaratish / kartalar ro'yxatini va doska sozlamasini o'zgartirish tugmalari (kartochkalar, fan nomlari, yangi doska, versiyalar,
+    // KTR haftalari, bo'shatish, sikl bayramlari "+ qo'shish" va h.k.) — faqat adminlar. Cheklangan rollarda (o'qituvchi, fan mas'uli,
+    // kafedra mudiri; o'quv bo'limi — bo'shatish va fanlar menejeridan tashqari) sahifaga yashirin va o'chiq chiqadi: tt-forbidden —
+    // display:none !important (JS 'hidden' ni olib tashlasa ham ko'rinmaydi). Server ham 403 qaytaradi (TimetableAssignmentAccess).
+    $timetableForbiddenIds = $timetableAssignmentOnly ? array_values(array_filter([
+        'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn',
+        'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
+        'unplaceBtn', 'gsSave', 'cycleHolAddBtn', 'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek',
+    ], fn ($id) => !($timetableCanUnplace && in_array($id, ['unplaceBtn', 'cycleHolAddBtn'], true))
+        && !($timetableCanPlace && $id === 'cycleRefresh') && !($timetableCanUseManager && $id === 'managerBtn'))) : [];
+    $ttForbid = fn (string $id) => in_array($id, $timetableForbiddenIds, true) ? ' tt-forbidden' : '';
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
@@ -65,20 +76,20 @@
 
                     <div class="tt-toolbar-actions">
                         <button type="button" id="reloadBoardBtn" class="hidden asc-tool toolbar-action" title="Doska ma'lumotlarini qayta yuklash — sahifadan chiqmasdan, tanlovlar (fakultet, kurs, hafta...) saqlanadi"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-arrow-clockwise"></i></span>Yangilash</button>
-                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
-                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
-                        <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
+                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action{{ $ttForbid('newBoardBtn') }}" @disabled(in_array('newBoardBtn', $timetableForbiddenIds, true))><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
+                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('genBtn') }}" @disabled(in_array('genBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
+                        <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('refreshNamesBtn') }}" @disabled(in_array('refreshNamesBtn', $timetableForbiddenIds, true)) title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
                         @if(in_array($timetableActiveRole, ['admin', 'superadmin'], true))
                             {{-- Doska versiyalari: kunlik va xavfli amallardan oldingi nusxalar, joylashuvni tiklash --}}
-                            <button type="button" id="snapshotsBtn" class="hidden asc-tool toolbar-action" title="Doska versiyalari (nusxalar) va joylashuvni tiklash"><span class="toolbar-icon" aria-hidden="true">🕘</span>Versiyalar</button>
+                            <button type="button" id="snapshotsBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('snapshotsBtn') }}" @disabled(in_array('snapshotsBtn', $timetableForbiddenIds, true)) title="Doska versiyalari (nusxalar) va joylashuvni tiklash"><span class="toolbar-icon" aria-hidden="true">🕘</span>Versiyalar</button>
                         @endif
-                        <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
-                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
-                        <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
+                        <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn{{ $ttForbid('delBoardBtn') }}" @disabled(in_array('delBoardBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
+                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('settingsBtn') }}" @disabled(in_array('settingsBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
+                        <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('managerBtn') }}" @disabled(in_array('managerBtn', $timetableForbiddenIds, true)) data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
 
-                        <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
-                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
-                        <button type="button" id="rulesBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" title="Jadval qoidalari (bir kunda bo'lmasin, ketma-ket kelsin va h.k.)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Qoidalar <span id="rulesBadge" class="hidden"></span></button>
+                        <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('excelViewBtn') }}" @disabled(in_array('excelViewBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
+                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn{{ $ttForbid('checkBtn') }}" @disabled(in_array('checkBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
+                        <button type="button" id="rulesBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('rulesBtn') }}" @disabled(in_array('rulesBtn', $timetableForbiddenIds, true)) title="Jadval qoidalari (bir kunda bo'lmasin, ketma-ket kelsin va h.k.)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Qoidalar <span id="rulesBadge" class="hidden"></span></button>
                         <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
                         @if($timetableUsesChangeRequests)
                         <button type="button" id="changeReqBtn" class="hidden asc-tool toolbar-action" title="Jadval o'zgarishlari: tarix va registrator ofisi tasdig'i"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>O'zgarishlar <span id="changeReqBadge" class="hidden tt-req-badge"></span></button>
@@ -191,7 +202,7 @@
                     </div>
 
                     <div class="tt-main-actions">
-                        <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>Bo'shatish</button>
+                        <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn{{ $ttForbid('unplaceBtn') }}" @disabled(in_array('unplaceBtn', $timetableForbiddenIds, true)) title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>Bo'shatish</button>
                     </div>
                 </div>
 
@@ -224,7 +235,7 @@
                             <button type="button" id="weeklyExcel" class="tt-weekly-excel" title="Ekrandagi haftalik jadvalni (tanlangan hafta, qatlam va ko'rinish qamrovi bilan) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                             @unless($timetableAssignmentOnly)
                             <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni blok bo'lib (bir fanning kartalari ketma-ket, bo'linmasdan) tashqi joyiga yoki o'sha kunning ichidagi eng yaqin bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
-                            <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
+                            <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn{{ $ttForbid('ktrWeeksBtn') }}" @disabled(in_array('ktrWeeksBtn', $timetableForbiddenIds, true)) title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
                             @endunless
                             {{-- Takliflar: admin — darhol; kafedra mudiri, fan mas'uli, o'qituvchi — so'rov; o'quv bo'limi — faqat ko'radi (qamrovni server beradi). --}}
                             <button type="button" id="suggestWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Shu haftada joylanmagan kartalarni sig'dirish takliflari: bo'sh vaqt, boshqa xona, to'sib turgan darsni surish, boshqa kun, boshqa hafta va eng oxirida boshqa o'qituvchi. Hech narsa o'zi yozilmaydi — har bir taklif «Qo'llash» bilan bajariladi.">Takliflar</button>
@@ -260,8 +271,8 @@
                             <input type="date" id="cycleStart" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Bayram/dam olish kunlari — sikl bloklari bu kunlarga tushmaydi">Bayram:
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
-                        <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
-                        <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1{{ $ttForbid('cycleHolAddBtn') }}" @disabled(in_array('cycleHolAddBtn', $timetableForbiddenIds, true))>+ qo'shish</button>
+                        <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1{{ $ttForbid('cycleRefresh') }}" @disabled(in_array('cycleRefresh', $timetableForbiddenIds, true))>Yangilash</button>
                         <button type="button" id="cycleExcel" class="asc-tool text-xs py-1 cyc-excel-btn" title="Ekrandagi sikl jadvalini (tashqi yoki ichki) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Yakshanba va bayram ustunlarini jadvaldan yashiradi (ma'lumot o'zgarmaydi)">
                             <input type="checkbox" id="cycleHideOff" class="rounded border-gray-300"> Dam olish kunlarini yashirish</label>
@@ -450,12 +461,12 @@
                         </div>
                         <div class="flex justify-between gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
                             <div class="flex gap-2">
-                                <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100"><i class="bi bi-arrow-90deg-left" aria-hidden="true"></i> Jadvaldan olish</button>
-                                <button type="button" id="cmResetWeek" class="hidden px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Shablonga qaytarish</button>
+                                <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100{{ $ttForbid('cmUnplace') }}" @disabled(in_array('cmUnplace', $timetableForbiddenIds, true))><i class="bi bi-arrow-90deg-left" aria-hidden="true"></i> Jadvaldan olish</button>
+                                <button type="button" id="cmResetWeek" class="hidden px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100{{ $ttForbid('cmResetWeek') }}" @disabled(in_array('cmResetWeek', $timetableForbiddenIds, true))><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Shablonga qaytarish</button>
                             </div>
                             <div class="flex gap-2">
                                 <button type="button" id="cmCancel" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-700">Yopish</button>
-                                <button type="button" id="cmSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Saqlash</button>
+                                <button type="button" id="cmSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700{{ $ttForbid('cmSave') }}" @disabled(in_array('cmSave', $timetableForbiddenIds, true))>Saqlash</button>
                             </div>
                         </div>
                     </div>
@@ -2431,6 +2442,8 @@
         }
 
         .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
+        /* Yashirin tugma: .toolbar-action (display:inline-flex) .hidden ni bekor qilmasin; taqiqlangan tugma — har doim yashirin. */
+        .toolbar-action.hidden, .tt-forbidden { display: none !important; }
         .toolbar-icon { width: 25px; height: 25px; display: inline-flex; flex: 0 0 25px; align-items: center; justify-content: center; }
         .toolbar-icon svg { width: 100%; height: 100%; }
         .toolbar-icon .bi { font-size: 25px; line-height: 1; }
@@ -2679,6 +2692,7 @@
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_CAN_UNPLACE = @json($timetableCanUnplace);
+            const TIMETABLE_FORBIDDEN_IDS = @json($timetableForbiddenIds);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
             const TIMETABLE_ROLE = @json($timetableActiveRole);
@@ -2824,21 +2838,14 @@
                 if (!TIMETABLE_ASSIGNMENT_ONLY) return;
 
                 // Karta yaratish / kartalar ro'yxatini o'zgartirish (kartochkalar, fan nomlari, yangi doska, versiyalar, KTR haftalari,
-                // bo'shatish, sikl bayramlari) — faqat adminlar; server ham 403 qaytaradi.
-                const restrictedIds = [
-                    'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn',
-                    'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
-                    'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
-                    'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
-                ];
-                restrictedIds.forEach(id => {
-                    if (TIMETABLE_CAN_UNPLACE && ['unplaceBtn', 'cycleHolAddBtn'].includes(id)) return;
-                    if (TIMETABLE_CAN_PLACE && id === 'cycleRefresh') return;
-                    if (id === 'managerBtn' && TIMETABLE_CAN_USE_MANAGER) return;
+                // bo'shatish, sikl bayramlari) — faqat adminlar; ro'yxat serverda ($timetableForbiddenIds), sahifaga ham yashirin chiqadi.
+                // tt-forbidden — display:none !important: boshqa kod 'hidden' ni olib tashlasa ham ko'rinmaydi. Server ham 403 qaytaradi.
+                TIMETABLE_FORBIDDEN_IDS.forEach(id => {
                     const el = $(id);
                     if (!el) return;
                     el.disabled = true;
                     el.classList.add('hidden');
+                    el.classList.add('tt-forbidden');
                     el.title = 'Bu amal faqat jadval administratoriga ochiq';
                 });
 

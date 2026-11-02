@@ -105,6 +105,23 @@ class VedomostCheckEngine
             $tmUsed['oski'] = $tmUsed['oski'] || isset($rec['oski']);
             $tmUsed['test'] = $tmUsed['test'] || isset($rec['test']);
         }
+        foreach ($edits['tm'] ?? [] as $kinds) {
+            $tmUsed['oski'] = $tmUsed['oski'] || isset($kinds['oski']);
+            $tmUsed['test'] = $tmUsed['test'] || isset($kinds['test']);
+        }
+        // Test markazi natijasi — xodim hisobotda (sabab bilan) o'zgartirgan bo'lsa, o'sha qiymat.
+        $tmRec = function (string $sid, string $kind) use ($context, $edits): ?array {
+            $rec = $context['test_center'][$sid][$kind] ?? null;
+            $e = $edits['tm'][$sid][$kind] ?? null;
+            if (!is_array($e) || !array_key_exists('v', $e)) {
+                return $rec;
+            }
+            $orig = $rec !== null ? (float) $rec['grade'] : null;
+            $rec = array_merge($rec ?? [], ['grade' => (float) $e['v'], 'dalolat' => false, 'edited' => (string) ($e['why'] ?? ''), 'orig' => $orig]);
+            unset($rec['duplicates']);
+
+            return $rec;
+        };
 
         $notTaken = [];
         $rows = [];
@@ -215,7 +232,7 @@ class VedomostCheckEngine
             if ($useO && $tmUsed['oski'] && !$kurs6) {
                 $tm['oski'] = $skipAll
                     ? $this->skipTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], $skipAll)
-                    : $this->checkTm($context['test_center'][$sid]['oski'] ?? null, $vt['P'], 'OSKE', $flags, $set);
+                    : $this->checkTm($tmRec((string) $sid, 'oski'), $vt['P'], 'OSKE', $flags, $set);
             }
             if ($useT && $sinov && !$kurs6) {
                 $t = VedomostScanReader::num($vt['S']);
@@ -231,7 +248,7 @@ class VedomostCheckEngine
             } elseif ($useT && $tmUsed['test'] && !$kurs6 && $skipTest) {
                 $tm['test'] = $this->skipTm($context['test_center'][$sid]['test'] ?? null, $vt['S'], $skipTest);
             } elseif ($useT && $tmUsed['test'] && !$kurs6) {
-                $tm['test'] = $this->checkTm($context['test_center'][$sid]['test'] ?? null, $vt['S'], 'Test', $flags, $set);
+                $tm['test'] = $this->checkTm($tmRec((string) $sid, 'test'), $vt['S'], 'Test', $flags, $set);
                 if (($tm['test']['tm'] ?? null) !== null) {
                     $tmTestFound++;
                 }
@@ -374,7 +391,9 @@ class VedomostCheckEngine
         $counts = ['total' => $sysN, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => count(array_filter($extraRows, fn ($e) => !$e['expelled'])),
             'expelled' => count(array_filter($extraRows, fn ($e) => $e['expelled'])),
             'edited' => count(array_filter($rows, fn ($r) => !empty($r['edited']))) + count(array_filter($extraRows, fn ($r) => !empty($r['edited']))),
-            'sys_edited' => array_sum(array_map(fn ($r) => count($r['sys_edited'] ?? []), $rows))];
+            // Mark va Test markazi qiymatlari hisobotda o'zgartirilgani — tasdiqlashda sabab so'raladi.
+            'sys_edited' => array_sum(array_map(fn ($r) => count($r['sys_edited'] ?? [])
+                + count(array_filter($r['tm'] ?? [], fn ($t) => is_array($t) && array_key_exists('edited', $t))), $rows))];
         foreach ($rows as $r) {
             $counts[$r['status']]++;
         }
@@ -591,8 +610,15 @@ class VedomostCheckEngine
         } elseif ($dal) {
             $flags[] = ['t' => 'info', 'm' => "{$label}: Test markazida Dalolatnoma bilan " . $this->f($tm)];
         }
+        $out = ['tm' => $tm, 'hemis' => $he, 'status' => $ok ? 'ok' : 'bad', 'delta' => $he !== null ? round($tm - $hv, 2) : null, 'dal' => !empty($rec['dalolat'])];
+        if (array_key_exists('edited', $rec)) {
+            $out['orig'] = $rec['orig'];
+            $out['edited'] = $rec['edited'];
+            $flags[] = ['t' => 'info', 'm' => "{$label} Test markazi qiymati hisobotda o'zgartirilgan: " . $this->f($rec['orig']) . ' → ' . $this->f($tm)
+                . ($rec['edited'] !== '' ? " · sabab: {$rec['edited']}" : '')];
+        }
 
-        return ['tm' => $tm, 'hemis' => $he, 'status' => $ok ? 'ok' : 'bad', 'delta' => $he !== null ? round($tm - $hv, 2) : null, 'dal' => !empty($rec['dalolat'])];
+        return $out;
     }
 
     /** Python entry_check: JN/MT o'tmagan talabada imtihon bahosi; OSKE < min bo'lsa Test bahosi. */

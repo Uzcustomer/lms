@@ -802,13 +802,13 @@ it('smena maslahati: o\'qituvchi ikki sikl amaliyotida band — bo\'sh smena, qo
     // Juma I parada ham haftalik dars — 14:00 smenasi bilan vaqti kesishmaydi, qolmaydi.
     $weekly(5, 1);
     expect($advice())->toMatchArray(['kind' => 'partial', 'start' => 7,
-        'text' => "14:00 ga o'tkazilsa faqat 17.09 (payshanba) qoladi: pp/2024-01b, Farmakologiya",
+        'text' => "14:00 ga o'tkazilsa faqat 17.09 qoladi: pp/2024-01b, Farmakologiya",
         'remaining' => [['date' => '2026-09-17', 'with' => ['pp/2024-01b, Farmakologiya']]]]);
 
     // 3) Har smenada uchala sanada ham band (16, 17, 18.09 — ertalab 05a, tushdan keyin haftalik dars) — boshqa o'qituvchi.
     $weekly(3);
     $weekly(5);
-    expect($advice())->toBe(['kind' => 'none', 'text' => "boshqa o'qituvchi biriktiring", 'start' => null, 'label' => null, 'remaining' => []]);
+    expect($advice())->toBe(['kind' => 'none', 'text' => "hech qaysi smenada to'qnashuv yo'qolmaydi — boshqa o'qituvchi biriktiring yoki blok sanalarini o'zgartiring", 'start' => null, 'label' => null, 'remaining' => []]);
 
     // Noma'lum blok — 404.
     test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
@@ -835,7 +835,7 @@ it('smena maslahati: haftalik darsda guruhcha yoki xona band bo\'lsa ham shu san
         ->assertOk()->json('advice');
     // Boshqa o'qituvchining darslari (guruhcha / xona bandligi) — "qoladi" ro'yxatiga kirmaydi, faqat sanasi.
     expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
-        'text' => "14:00 ga o'tkazilsa faqat 16.09 (chorshanba), 17.09 (payshanba) qoladi",
+        'text' => "14:00 ga o'tkazilsa faqat 16.09, 17.09 qoladi",
         'remaining' => [['date' => '2026-09-16', 'with' => []], ['date' => '2026-09-17', 'with' => []]]]);
 });
 
@@ -858,7 +858,7 @@ it('smena maslahati: "qoladi" — faqat shu o\'qituvchining amaliy darslari; ma\
         ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice'])
         ->assertOk()->json('advice');
     expect($advice['kind'])->toBe('partial')
-        ->and($advice['text'])->toBe("14:00 ga o'tkazilsa faqat 16.09 (chorshanba), 17.09 (payshanba) qoladi: "
+        ->and($advice['text'])->toBe("14:00 ga o'tkazilsa faqat 16.09, 17.09 qoladi: "
             . 'pp/2024-01a, Farmakologiya; pp/2024-01b, Farmakologiya; pp/2024-02a, Farmakologiya +2 ta')
         ->and($advice['text'])->not->toContain('pp/2024-12a')
         ->and($advice['remaining'][0])->toBe(['date' => '2026-09-16', 'with' => []])
@@ -879,7 +879,7 @@ it('smena maslahati: "qoladi" — shu o\'qituvchining sikl amaliyoti (guruhcha, 
         ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice'])
         ->assertOk()->json('advice');
     expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
-        'text' => "14:00 ga o'tkazilsa faqat 21.09 (dushanba) qoladi: d22-05c, Klinik farmakologiya",
+        'text' => "14:00 ga o'tkazilsa faqat 21.09 qoladi: d22-05c, Klinik farmakologiya",
         'remaining' => [['date' => '2026-09-21', 'with' => ['d22-05c, Klinik farmakologiya']]]]);
 });
 
@@ -899,7 +899,7 @@ it('xona sig\'imi: bo\'lak ("Fan (a)") kartasi — guruhlarning bir qismi, talab
 
 it('smena maslahati: yakshanbadan o\'tadigan blok ham "yaqin" — oxiri ish kunlari bo\'yicha (from + days emas)', function () {
     $sharipov = icTeacher('SHARIPOV K. SH.');
-    // 05a: 17.09 (payshanba) dan 5 ish kuni — 17, 18, 19, 21, 22.09 (20.09 yakshanba); 05b: 22.09 (seshanba) dan — 22.09 da ikkalasi I parada.
+    // 05a: 17.09 dan 5 ish kuni — 17, 18, 19, 21, 22.09 (20.09 yakshanba); 05b: 22.09 dan — 22.09 da ikkalasi I parada.
     $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10]], ['d22-05a' => 3, 'd22-05b' => 8]);
     $s['board']->update(['bell_schedule' => array_map(fn ($i) => ['type' => 'pair', 'no' => $i + 1, 'name' => ($i + 1) . '-soat',
         'start' => sprintf('%02d:00', 8 + $i), 'end' => sprintf('%02d:40', 8 + $i)], range(0, 11))]);
@@ -927,5 +927,5 @@ it('smena maslahati: to\'liq parali doskada haftalik qator soatga o\'tkaziladi (
         ->assertOk()->json('advice');
     // 7-soatdan (IV para, 13:30) — 05a bilan kesishmaydi, lekin 17.09 da haftalik dars bilan qoladi ("bo'sh" emas).
     expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
-        'text' => "13:30 ga o'tkazilsa faqat 17.09 (payshanba) qoladi: pp/2024-01b, Farmakologiya"]);
+        'text' => "13:30 ga o'tkazilsa faqat 17.09 qoladi: pp/2024-01b, Farmakologiya"]);
 });

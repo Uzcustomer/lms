@@ -94,12 +94,18 @@ async function shiftAdviceScenario(advice, fail) {
     assert.equal(pop._lis[0].todo.classList.has('cf-checking'), false);
     assert(todos.slice(1).every(t => !/14:00/.test(String(t))), 'ma\'ruza, o\'tgan va xona qatorlari o\'zgarmaydi');
     assert.equal(pop._lis.length, 4);
-    // Hech biri mos kelmaydi — "boshqa o'qituvchi biriktiring".
-    ({ pop } = await shiftAdviceScenario({ kind: 'none', text: "boshqa o'qituvchi biriktiring" }));
-    assert.equal(pop._lis[0].todo.textContent, "→ boshqa o'qituvchi biriktiring");
+    // Qisman: aniq smena va qoladigan sanalar, faqat shu o'qituvchining amaliy darslari ("+N ta").
+    const partial = "13:30 ga o'tkazilsa faqat 13.11, 14.11 qoladi: pp/2024-01a, Farmakologiya; pp/2024-01b, Farmakologiya; pp/2024-02a, Farmakologiya +2 ta";
+    ({ pop } = await shiftAdviceScenario({ kind: 'partial', text: partial, start: 6 }));
+    assert.equal(pop._lis[0].todo.textContent, '→ ' + partial);
+    assert.equal(pop._lis[0].todo.dataset.advice, 'partial');
+    // Hech qaysi smenada to'qnashuv yo'qolmaydi — umumiy maslahat.
+    const none = "hech qaysi smenada to'qnashuv yo'qolmaydi — boshqa o'qituvchi biriktiring yoki blok sanalarini o'zgartiring";
+    ({ pop } = await shiftAdviceScenario({ kind: 'none', text: none }));
+    assert.equal(pop._lis[0].todo.textContent, '→ ' + none);
     // Server xatosi — asl ko'rsatma qoladi.
     ({ pop } = await shiftAdviceScenario(null, true));
     assert.equal(pop._lis[0].todo.textContent, "→ boshqa o'qituvchi biriktiring yoki smenani almashtiring");
     assert.equal(pop._lis[0].todo.classList.has('cf-checking'), false);
-    console.log('timetable conflict popups: 4 scenarios passed');
+    console.log('timetable conflict popups: 5 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

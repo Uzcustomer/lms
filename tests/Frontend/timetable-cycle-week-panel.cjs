@@ -50,12 +50,13 @@ const ctx = {
     weekDates: n => (n === 8 ? '02.11–07.11' : '09.11–14.11'),
     cycleVisibleRows: rows => rows.filter(r => ctx.cycleRowFilters.includes(r.row_key)),
     subjColor: () => ({ bg: '#fff', border: '#000' }), cycleFlowShort: g => g, highlightCycleRow() {},
+    renderStats: () => { ctx.statRenders = (ctx.statRenders || 0) + 1; },
     Set, Object, Date, String, Boolean, Math,
 };
 vm.createContext(ctx);
 vm.runInContext(cut("            // ===== To'qnashuvlar: qisqa belgi, rang", '            // Ichki jadval: kun ustunini tanlash, kun oynasi va soatni surish.')
     + cut('            // ── Sikl paneli va hafta tanlovi (weekSel) ──', '            // ── Fan ranglari modali ──')
-    + '\nObject.assign(this, { renderCycleCards, cycleCardInWeek, cycleCardStateText, cycleSelWeek, setAll: v => { cyclePanelAll = v; } });', ctx);
+    + '\nObject.assign(this, { renderCycleCards, cycleScopedCards, cycleCardInWeek, cycleCardStateText, cycleSelWeek, setAll: v => { cyclePanelAll = v; } });', ctx);
 
 const render = () => ctx.renderCycleCards({ cycle_cards: cards, rows: ctx.cyclePlanData.rows });
 const keys = () => [...panel.innerHTML.matchAll(/data-cycle-key="([^"]+)"/g)].map(m => m[1]);
@@ -70,6 +71,9 @@ assert.match(panel.innerHTML, /o‘qituvchi — 1<\/button>, <button type="butto
 // (hafta tanlanganda — shu haftadagi to'qnashuv sanalari)
 assert.match(panel.innerHTML, /<span class="cycle-pn-state is-placed">joylangan · to‘qnashuv 04\.11–05\.11<\/span>/);
 assert.match(panel.innerHTML, /<span class="cycle-pn-state">joylanmagan<\/span>/);
+// "Sikl bloklari" hisoblagichi — panel bilan bir xil qamrov (8-hafta: B va C) va har chizishda yangilanadi.
+assert.deepEqual(ctx.cycleScopedCards(ctx.cyclePlanData).scoped.map(c => c.key).sort(), ['B', 'C']);
+assert.ok(ctx.statRenders >= 1, 'panel chizilganda hisoblagich yangilanmadi');
 assert.equal(ctx.cycleCardStateText(cards[0]), 'joylangan · to‘qnashuv 13.11–24.11');
 assert.equal(ctx.cycleCardStateText(cards[1]), 'joylanmagan');
 assert.equal(ctx.cycleCardStateText({ placed: true, conflicts: [T('2026-09-01', '2026-09-03', true)] }), 'joylangan · to‘qnashuv 01.09–03.09');   // hammasi o'tgan
@@ -89,6 +93,7 @@ allBox.checked = true;
 allBox.onchange();
 assert.deepEqual(keys().sort(), ['A', 'B', 'C']);
 assert.equal(els.unplacedCount.textContent, '3 ta');
+assert.deepEqual(ctx.cycleScopedCards(ctx.cyclePlanData).scoped.map(c => c.key).sort(), ['A', 'B', 'C']);   // hisoblagich ham butun semestr
 assert.match(panel.innerHTML, /<span>Butun semestr: 3 ta<\/span><label class="cyc-wk-all"><input type="checkbox" data-cyc-all checked> Butun semestr/);
 assert.match(panel.innerHTML, /o‘qituvchi — 2<\/button>, <button type="button" data-cf-filter="room" class="cf-sum-btn">xona — 1/);
 assert(heads.every(h => !h.classList.has('cyc-wk-on') && !h.classList.has('cyc-wk-out')));

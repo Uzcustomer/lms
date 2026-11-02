@@ -386,12 +386,17 @@ trait TimetableTeacherAgenda
         $fit = $base['active']->filter(fn ($r) => (string) $r->code !== $current && (int) $r->volume > 0 && (int) $r->volume >= $students
             && $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
         $tries = 0;
+        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
         foreach ($this->rankRooms($card, $fit, $current, $this->roomHabitForCard($board, $card)) as [$r, $why]) {
             if (++$tries > 15) {
                 break;
             }
+            // Haftalik darslar bilan (findWeekConflicts) va sikl darslari bilan (weeklyProposalBusy — shu xona bilan sinab).
             $busy = array_filter($this->findWeekConflicts($card, $week, $day, $pair, 0, null, (string) $r->code),
                 fn ($m) => str_starts_with($m, 'Auditoriya band'));
+            if (!$busy) {
+                $busy = array_filter($this->weeklyProposalBusy($card, $week, $day, $pair, $date, $r), fn ($m) => str_starts_with($m, 'Xona '));
+            }
             if (!$busy) {
                 return ['code' => (string) $r->code, 'name' => (string) $r->name, 'volume' => (int) $r->volume, 'why' => $why];
             }

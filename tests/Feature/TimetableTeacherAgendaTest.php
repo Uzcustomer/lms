@@ -252,3 +252,25 @@ it('agenda: sabab matni — "Auditoriya band" va sikl xonasi sig\'imi aniq raqam
         ->and($f('Auditoriya band: 102-xona — p-01 · Fizika'))->toBe('Xona band: 102-xona — p-01 · Fizika')
         ->and($f('Guruh band: p-01 — Fizika'))->toBe('Guruh band: p-01 — Fizika');
 });
+
+it('agenda: muqobil xona sikl darsi bilan band bo\'lsa taklif qilinmaydi (haftalik va sikl bandligi tekshiriladi)', function () {
+    $s = agSetup();
+    // 101-xona 19.11 da 13:30–17:50 sikl amaliyotida (boshqa o'qituvchi, d1/d22-02a, smena 7-soatdan).
+    $other = agTeacher('SIKL O.');
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Klinik farmakologiya', 'group_name' => 'd1/d22-02a', 'kafedra_name' => 'Farmakologiya kafedrasi',
+        'teacher_id' => $other->id, 'teacher_name' => 'SIKL O.', 'auditorium_code' => 'R1', 'auditorium_name' => '101-xona']);
+    $start = TimetableCyclePlacement::where('board_id', $s['board']->id)->where('group_name', 'd1/d22-01b')->value('start_index');
+    TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 5, 'group_name' => 'd1/d22-02a',
+        'subject_name' => 'Klinik farmakologiya', 'start_index' => $start, 'training_type' => 'practice',
+        'lecture_slots' => ['shift_g' => ['d1/d22-02a' => 7]]]);
+    $key = 'w|' . $s['ppB']->id . '|' . $s['week'];
+    // Faqat 101-xona sig'adi — u sikl darsi bilan band: VI para o'chiq.
+    $opt = agGet($s, $s['admin'], 'admin', ['move' => $key])['move']['options']['2026-11-19'][6];
+    expect($opt)->toMatchArray(['ok' => false, 'room' => null, 'why' => "Xona sig'maydi: 10 o'rin, 12 talaba (+2)"]);
+    // Boshqa sig'adigan bo'sh xona bor — u taklif qilinadi (101-xona emas).
+    Auditorium::create(['code' => 'R3', 'name' => '103-xona', 'volume' => 20, 'active' => true]);
+    $opt = agGet($s, $s['admin'], 'admin', ['move' => $key])['move']['options']['2026-11-19'][6];
+    expect($opt['ok'])->toBeTrue()->and($opt['room']['code'])->toBe('R3');
+});

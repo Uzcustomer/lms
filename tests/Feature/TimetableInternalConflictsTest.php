@@ -836,3 +836,32 @@ it('smena maslahati: haftalik darsda guruhcha yoki xona band bo\'lsa ham shu san
     expect($advice)->toMatchArray(['kind' => 'partial', 'start' => 7,
         'text' => "14:00 ga o'tkazilsa faqat 16.09 (chorshanba), 17.09 (payshanba) qoladi: d22-05b, Anatomiya; p-01, Fizika"]);
 });
+
+it('xona sig\'imi: bo\'lak ("Fan (a)") kartasi — guruhlarning bir qismi, talabalar kartadagi (biriktirilgan) son', function () {
+    foreach (range(1, 30) as $n) {
+        \Illuminate\Support\Facades\DB::table('students')->insert(['hemis_id' => 71000 + $n, 'full_name' => 'S', 'short_name' => 'S', 'first_name' => 'S',
+            'second_name' => 'S', 'third_name' => 'S', 'student_id_number' => (string) (71000 + $n), 'group_name' => 'd22-05a', 'student_status_code' => 11,
+            'created_at' => now(), 'updated_at' => now()]);
+    }
+    $ctl = app(TimetableController::class);
+    $students = fn (string $subject, int $card) => (new ReflectionMethod($ctl, 'cardStudents'))->invoke($ctl,
+        (object) ['subject_name' => $subject, 'group_name' => 'd22-05a', 'group_names' => null, 'faculty_name' => 'F1', 'students' => $card]);
+    expect($students('Klinik farmakologiya', 10))->toBe(30)          // guruhning faol talabalari
+        ->and($students('Klinik farmakologiya (a)', 6))->toBe(6)     // bo'lak — kartadagi biriktirilgan son
+        ->and($students('Klinik farmakologiya (b)', 0))->toBe(0);
+});
+
+it('smena maslahati: yakshanbadan o\'tadigan blok ham "yaqin" — oxiri ish kunlari bo\'yicha (from + days emas)', function () {
+    $sharipov = icTeacher('SHARIPOV K. SH.');
+    // 05a: 17.09 (payshanba) dan 5 ish kuni — 17, 18, 19, 21, 22.09 (20.09 yakshanba); 05b: 22.09 (seshanba) dan — 22.09 da ikkalasi I parada.
+    $s = icSetup(['d22-05a' => [$sharipov, null, 10], 'd22-05b' => [$sharipov, null, 10]], ['d22-05a' => 3, 'd22-05b' => 8]);
+    $s['board']->update(['bell_schedule' => array_map(fn ($i) => ['type' => 'pair', 'no' => $i + 1, 'name' => ($i + 1) . '-soat',
+        'start' => sprintf('%02d:00', 8 + $i), 'end' => sprintf('%02d:40', 8 + $i)], range(0, 11))]);
+    $key = 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice';
+    $items = icConflicts($s['board'])[$key]['items'] ?? [];
+    expect(collect($items)->firstWhere('kind', 'teacher_busy'))->toMatchArray(['date_from' => '2026-09-22', 'date_to' => '2026-09-22']);
+    // Faqat 7-soatdan (14:00) — 05a bilan kesishmaydi; xato hisobda 05a "yaqin" bo'lmay, II para "bo'sh" deyilardi.
+    $advice = test()->withoutVite()->actingAs(icTeacher('ADMIN', 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => $key])->assertOk()->json('advice');
+    expect($advice)->toMatchArray(['kind' => 'free', 'start' => 7]);
+});

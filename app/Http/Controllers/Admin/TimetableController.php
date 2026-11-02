@@ -683,9 +683,15 @@ class TimetableController extends Controller
         return $sum > 0 ? $sum : $fallback;
     }
 
-    /** Karta darsi talabalari: guruh(lar)i ("A + B" — har biri) faol talabalari, bo'lmasa kartadagi son. */
+    /**
+     * Karta darsi talabalari: guruh(lar)i ("A + B" — har biri) faol talabalari, bo'lmasa kartadagi son. Bo'lak ("Fan (a)") —
+     * guruhlarning faqat bir qismi (kartadagi son — biriktirilgan talabalar, variantAssignedCount), shuning uchun kartadagi son.
+     */
     private function cardStudents(object $c): int
     {
+        if ($this->cycleSubjectVariantBase((string) ($c->subject_name ?? '')) !== null) {
+            return (int) ($c->students ?? 0);
+        }
         $names = [];
         foreach ($this->cardGroupsOf($c) as $g) {
             $names = array_merge($names, preg_split('/\s*\+\s*/u', (string) $g));
@@ -9220,12 +9226,14 @@ class TimetableController extends Controller
      * Yangi vaqtda o'qituvchi va xona bandligi — biriktirish ogohlantirishidagidek (unit-busy: haftalik va sikl darslari,
      * umumiy xona / "Kafedra mudiri xonasi" va sikl xonasi sig'imi qoidalari bilan). Ko'chirish tranzaksiyada sinab ko'riladi.
      */
-    private function weeklyProposalBusy(TimetableCard $card, int $week, int $day, int $pair, string $date): array
+    private function weeklyProposalBusy(TimetableCard $card, int $week, int $day, int $pair, string $date, ?Auditorium $altRoom = null): array
     {
         DB::beginTransaction();
         try {
+            // $altRoom — boshqa xona bilan sinash (o'qituvchi jadvalidagi muqobil xona taklifi).
             TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $week],
-                ['day' => $day, 'pair' => $pair, 'start_half' => 0, 'cancelled' => false]);
+                ['day' => $day, 'pair' => $pair, 'start_half' => 0, 'cancelled' => false]
+                + ($altRoom ? ['auditorium_code' => $altRoom->code, 'auditorium_name' => $altRoom->name] : []));
             $busy = $this->unitBusy($card->board, collect([$card]), [$date => true]);
             $room = (string) (TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->value('auditorium_code') ?: $card->auditorium_code);
         } finally {

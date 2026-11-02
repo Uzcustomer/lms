@@ -43,10 +43,14 @@ trait TimetableCycleShiftAdvice
         if ($u['placement'] === null) {
             return $none;
         }
-        // Faqat shu blok sanalariga tegadigan birliklar (butun doska emas — har variant uchun cycleConflicts tez).
+        // Faqat shu blok sanalariga tegadigan birliklar (butun doska emas — har variant uchun cycleConflicts tez). Blok oxiri — ish
+        // kunlari bo'yicha (kalendarda yakshanba va bayramlar ham bor: from + days haqiqiy oxiri emas).
+        $span = fn (array $x) => $this->cycleUnitSpan($calendar, $x);
+        [$uFrom, $uTo] = $span($u);
         $near = [];
         foreach ($units as $k => $x) {
-            if ($k === $i || ($x['from'] !== null && $x['from'] < $u['from'] + $u['days'] && $u['from'] < $x['from'] + $x['days'])) {
+            $xs = $k === $i ? null : $span($x);
+            if ($k === $i || ($xs !== null && $uFrom !== null && $xs[0] <= $uTo && $uFrom <= $xs[1])) {
                 $near[] = $x;
             }
         }
@@ -127,6 +131,19 @@ trait TimetableCycleShiftAdvice
         ksort($out);
 
         return array_map(fn ($l) => array_values(array_unique($l)), $out);
+    }
+
+    /** Birlik bloki: [birinchi, oxirgi] kalendar indeksi — ish kunlari (workIndices) bo'yicha; joylanmagan — [null, null]. */
+    private function cycleUnitSpan(array $calendar, array $u): array
+    {
+        [, $workIndices] = $calendar;
+        $pos = $u['from'] !== null ? array_search((int) $u['from'], $workIndices, true) : false;
+        if ($pos === false) {
+            return [null, null];
+        }
+        $last = $workIndices[min(count($workIndices) - 1, $pos + max(1, (int) $u['days']) - 1)];
+
+        return [(int) $u['from'], (int) $last];
     }
 
     /** Kalendar (o'quv kunlari) bo'yicha birlik blokidagi [from, to] oralig'idagi sanalar. */

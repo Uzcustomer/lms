@@ -157,6 +157,8 @@ class VedomostMergeService
             'id' => $rep->id,
             'ids' => $group->pluck('id')->all(),
             'created_at' => $rep->created_at ?? null,
+            // Guruhchalar ichidagi eng so'nggi o'zgarish — ro'yxat «yangi → eski» tartiblanadi.
+            'updated_at' => $group->pluck('updated_at')->filter()->map(fn ($d) => (string) $d)->max(),
             'merge_count' => $group->count(),
             'subgroup_names' => $subgroups->all(),
             'subgroup_label' => $subgroups->implode(', '),

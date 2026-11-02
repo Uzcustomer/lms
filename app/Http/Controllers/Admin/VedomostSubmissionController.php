@@ -74,7 +74,13 @@ class VedomostSubmissionController extends Controller
             return $sorted->values();
         }
 
-        // Default: muddat (bo'shlar oxirida), keyin guruh, fan.
+        // Ustun sarlavhasi bosilmagan bo'lsa — filtrdagi «Tartib»: standart — eng oxirgi o'zgarganlar birinchi.
+        $order = $request->get('order', 'newest');
+        if (in_array($order, ['newest', 'oldest'], true)) {
+            return $rows->sortBy(fn ($r) => (string) ($r->updated_at ?? ''), SORT_STRING, $order === 'newest')->values();
+        }
+
+        // «Muddat bo'yicha»: muddat (bo'shlar oxirida), keyin guruh, fan.
         return $rows->sortBy(fn($r) => [
             $r->deadline === null ? 1 : 0,
             (string) $r->deadline,

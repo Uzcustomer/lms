@@ -201,6 +201,14 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="filter-item" style="min-width:190px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Tartib</label>
+                                <select name="order" class="select2" style="width:100%;">
+                                    @foreach(['newest' => "Oxirgi o'zgarganlar birinchi", 'oldest' => "Eski o'zgarganlar birinchi", 'deadline' => "Muddat bo'yicha"] as $ok => $ol)
+                                        <option value="{{ $ok }}" {{ request('order', 'newest') === $ok ? 'selected' : '' }}>{{ $ol }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <div class="filter-item" style="min-width:90px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                                 <select name="per_page" class="select2" style="width:100%;">
@@ -421,6 +429,9 @@
                                         <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;">{{ $b[0] }}</span>
                                         @if(!empty($v->is_mixed_status))
                                             <div style="font-size:10px;color:#b45309;margin-top:2px;" title="Guruhchalar statusi har xil">aralash holat</div>
+                                        @endif
+                                        @if(!empty($v->updated_at))
+                                            <div style="font-size:10px;color:#94a3b8;margin-top:2px;white-space:nowrap;" title="Oxirgi o'zgarish">{{ \Carbon\Carbon::parse($v->updated_at)->format('d.m.Y H:i') }}</div>
                                         @endif
                                     </td>
                                     <td>

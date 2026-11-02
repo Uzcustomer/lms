@@ -138,6 +138,10 @@ class AbsenceExcuseController extends Controller
 
         return response()->json([
             'assessments' => $missedAssessments->values()->toArray(),
+            // Shu kunlarda baho olingan bo'lsa — ariza yuborib bo'lmaydi
+            'grade_conflicts' => AbsenceExcuse::gradeConflictRows(
+                AbsenceExcuse::gradeConflicts($student->hemis_id, $startDate, $endDate)
+            ),
         ]);
     }
 
@@ -225,6 +229,12 @@ class AbsenceExcuseController extends Controller
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
             'retake_start.after_or_equal' => 'Qayta topshirish bugungi kundan oldin boshlanmasligi kerak',
         ]);
+
+        // Ariza kunlarida darsda bo'lib baho olgan — ma'lumotnoma bilan zid, qabul qilinmaydi
+        $gradeConflicts = AbsenceExcuse::gradeConflicts($student->hemis_id, $request->start_date, $request->end_date);
+        if ($gradeConflicts->isNotEmpty()) {
+            return back()->withErrors(['start_date' => AbsenceExcuse::gradeConflictMessage($gradeConflicts)])->withInput();
+        }
 
         // Qayta topshirish kunlari: kuniga bitta retake, OSKI oxirgi retake kuni,
         // test bir kun oraliq bilan — sanalar mijozdan emas, shu yerda hisoblanadi.

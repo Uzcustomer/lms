@@ -115,27 +115,11 @@ class AbsenceExcuseController extends Controller
         }
 
         // Ariza sana oralig'ida talaba haqiqatan baho olgan kunlar —
-        // ma'lumotnoma soxta bo'lishi mumkinligini ko'rsatuvchi konfliktlar.
-        // Faqat haqiqiy baholar (grade != null va reason='absent' emas) inobatga olinadi.
-        $gradeConflicts = [];
-        if ($excuse->isPending()) {
-            $subjectIds = $excuse->makeups->pluck('subject_id')->filter()->unique()->values();
-            if ($subjectIds->isNotEmpty()) {
-                $gradeConflicts = DB::table('student_grades')
-                    ->where('student_hemis_id', $excuse->student_hemis_id)
-                    ->whereIn('subject_id', $subjectIds)
-                    ->whereDate('lesson_date', '>=', $excuse->start_date)
-                    ->whereDate('lesson_date', '<=', $excuse->end_date)
-                    ->whereNotNull('grade')
-                    ->where(function ($q) {
-                        $q->whereNull('reason')->orWhere('reason', '!=', 'absent');
-                    })
-                    ->whereNull('deleted_at')
-                    ->orderBy('lesson_date')
-                    ->get(['lesson_date', 'subject_name', 'grade', 'lesson_pair_name'])
-                    ->toArray();
-            }
-        }
+        // ma'lumotnoma soxta bo'lishi mumkinligini ko'rsatuvchi konfliktlar
+        // (talaba formasi ham shu qoida bilan arizani qabul qilmaydi).
+        $gradeConflicts = $excuse->isPending()
+            ? AbsenceExcuse::gradeConflicts($excuse->student_hemis_id, $excuse->start_date, $excuse->end_date)->all()
+            : [];
 
         return view('admin.absence-excuses.show', compact('excuse', 'daysCount', 'gradeConflicts'));
     }

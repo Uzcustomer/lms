@@ -128,6 +128,15 @@ class AbsenceExcuseApiController extends Controller
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
         ]);
 
+        // Ariza kunlarida darsda bo'lib baho olgan — ma'lumotnoma bilan zid, qabul qilinmaydi
+        $gradeConflicts = AbsenceExcuse::gradeConflicts($student->hemis_id, $request->start_date, $request->end_date);
+        if ($gradeConflicts->isNotEmpty()) {
+            return response()->json([
+                'message' => AbsenceExcuse::gradeConflictMessage($gradeConflicts),
+                'grade_conflicts' => AbsenceExcuse::gradeConflictRows($gradeConflicts),
+            ], 422);
+        }
+
         $file = $request->file('file');
         $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
 
@@ -318,6 +327,10 @@ class AbsenceExcuseApiController extends Controller
             'data' => array_values(SababliRetakePlan::assign($allAssessments->all(), $retakeStart)),
             'excuse_days' => $excuseDays,
             'retake_start' => $retakeStart->format('Y-m-d'),
+            // Shu kunlarda baho olingan bo'lsa — ariza qabul qilinmaydi
+            'grade_conflicts' => AbsenceExcuse::gradeConflictRows(
+                AbsenceExcuse::gradeConflicts($student->hemis_id, $startDate, $endDate)
+            ),
         ]);
     }
 

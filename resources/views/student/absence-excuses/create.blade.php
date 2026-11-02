@@ -488,8 +488,42 @@
                     </div>
                 </div>
 
+                {{-- Ariza kunlarida olingan baholar — ariza yuborilmaydi --}}
+                <div x-show="gradeConflicts.length > 0" x-cloak class="ae-card mb-5" style="border-color:#fca5a5;">
+                    <div class="ae-card-body">
+                        <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#b91c1c;">
+                            {{ __('Bu sanalarga sababli ariza yuborib bo\'lmaydi') }}
+                        </p>
+                        <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.5;">
+                            {{ __('Siz quyidagi kun(lar)da darsda bo\'lib baho olgansiz. Sababli kunlar oralig\'ini shu kunlarsiz qilib qayta tanlang. Baho xato qo\'yilgan bo\'lsa — fan o\'qituvchisiga murojaat qiling.') }}
+                        </p>
+                        <div class="ae-plan-table-wrap" style="border-color:#fecaca;">
+                            <table class="ae-plan-table">
+                                <thead>
+                                    <tr>
+                                        <th>{{ __('Sana') }}</th>
+                                        <th>{{ __('Fan') }}</th>
+                                        <th>{{ __('Juftlik') }}</th>
+                                        <th style="text-align:right;">{{ __('Baho') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="(row, ci) in gradeConflicts" :key="'gc' + ci">
+                                        <tr>
+                                            <td class="ae-plan-date" x-text="row.date"></td>
+                                            <td x-text="row.subject_name"></td>
+                                            <td x-text="row.pair || '—'"></td>
+                                            <td style="text-align:right;font-weight:700;color:#b91c1c;" x-text="row.grade"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Nazoratlar ro'yxati --}}
-                <div x-show="assessments.length > 0" x-transition x-cloak>
+                <div x-show="assessments.length > 0 && gradeConflicts.length === 0" x-transition x-cloak>
 
                     {{-- Section header --}}
                     <div class="ae-card mb-4">
@@ -670,6 +704,9 @@
             loading: false,
             searched: false,
 
+            // Ariza kunlarida olingan baholar — bo'lsa ariza yuborilmaydi
+            gradeConflicts: [],
+
             // Qayta topshirish boshlanadigan kun (Y-m-d)
             retakeStart: '{{ old("retake_start", "") }}',
 
@@ -736,6 +773,7 @@
             get canSubmit() {
                 if (!this.reason || !this.startDate || !this.endDate) return false;
                 if (this.deadlineExpired) return false;
+                if (this.gradeConflicts.length > 0) return false;
                 if (this.assessments.some(a => this._isPending(a)) && !this.retakeStart) return false;
                 return true;
             },
@@ -891,7 +929,7 @@
                     if (nonSunDays > this.maxDays) {
                         this.endDate = '';
                         this.selecting = 'end';
-                        this.assessments = [];
+                        this.assessments = []; this.gradeConflicts = [];
                         this.searched = false;
                         this.deadlineWarning = '';
                         this.deadlineExpired = false;
@@ -914,7 +952,7 @@
                     this.startDate = dateStr;
                     this.endDate = '';
                     this.selecting = 'end';
-                    this.assessments = [];
+                    this.assessments = []; this.gradeConflicts = [];
                     this.searched = false;
                     this.deadlineWarning = '';
                     this.deadlineExpired = false;
@@ -924,7 +962,7 @@
                         this.startDate = dateStr;
                         this.endDate = '';
                         this.selecting = 'end';
-                        this.assessments = [];
+                        this.assessments = []; this.gradeConflicts = [];
                         this.searched = false;
                         this.deadlineWarning = '';
                         this.deadlineExpired = false;
@@ -944,7 +982,7 @@
                 this.startDate = '';
                 this.endDate = '';
                 this.selecting = 'start';
-                this.assessments = [];
+                this.assessments = []; this.gradeConflicts = [];
                 this.searched = false;
                 this.deadlineWarning = '';
                 this.deadlineExpired = false;
@@ -1016,7 +1054,7 @@
             },
 
             async fetchAssessments() {
-                this.loading = true; this.searched = false; this.assessments = [];
+                this.loading = true; this.searched = false; this.assessments = []; this.gradeConflicts = [];
                 try {
                     const resp = await fetch('{{ route("student.absence-excuses.missed-assessments") }}', {
                         method: 'POST',
@@ -1033,6 +1071,7 @@
                             previous_makeup_date: a.previous_makeup_date || null,
                             jn_submitted: false
                         }));
+                        this.gradeConflicts = data.grade_conflicts || [];
                     }
                 } catch (e) { console.error('Xatolik:', e); }
                 this.loading = false; this.searched = true;

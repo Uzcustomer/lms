@@ -5821,6 +5821,8 @@
                     // Qayta chizishda jadval joyidan siljimasin (o'zgartirilgan joy ko'z oldida qolsin).
                     const gw = $('cycleGridWrap');
                     const keep = gw ? { top: gw.scrollTop, left: gw.scrollLeft, page: window.scrollY } : null;
+                    // "Ko'rsatish": shu chizishda to'qnashuvga birinchi scroll qilinsa — eski joy tiklanmaydi (scroll bekor bo'lmasin).
+                    const focusScroll = !!(ttFocus && !ttFocus.scrolled);
                     cyclePlanData = j;
                     invalidateCycleWeek();   // sikl joylashuvi / o'qituvchi / xona o'zgargan bo'lishi mumkin — kesimlar qayta so'raydi
                     try { buildSubjectColors(colorScopeCards()); } catch (e) { }
@@ -5831,7 +5833,7 @@
                     renderCyclePlan(j);
                     renderCycleCards(j);
                     if (typeof renderStats === 'function') renderStats();
-                    if (keep && !options.resetScroll) {
+                    if (keep && !options.resetScroll && !(focusScroll && ttFocus && ttFocus.scrolled)) {
                         const restore = () => { gw.scrollTop = keep.top; gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
                         restore(); requestAnimationFrame(restore);
                     }
@@ -6988,10 +6990,12 @@
                     '<button type="button" id="ttFocusClose">Yopish</button>';
                 bar.querySelector('#ttFocusClose').onclick = ttFocusClose;
             }
-            // Sikl jadvali: to'qnashuvdagi guruhlar qatorlari (guruh qatori yoki oqim qatori a'zolari orasida; qamrovi bilan).
+            // Sikl jadvali: to'qnashuvdagi guruhlar qatorlari (guruh qatori, oqim qatori yoki bo'lak qatori — "Fan (a)" — a'zolari
+            // orasida; qamrovi bilan). Bo'lak qatorlari ham tanlovda: ularning bloklari ham qizil ramka oladi, faqat bo'lakda
+            // qatnashgan guruh bo'lsa ham filtr bo'sh qolmaydi.
             function focusCycleRowKeys(allRows) {
                 const keys = ttFocus ? ttFocus.keys : new Set();
-                return (allRows || []).filter(r => !r.variant && [r.group, ...(r.subgroups || [])].flatMap(focusSplit)
+                return (allRows || []).filter(r => [r.group, ...(r.subgroups || [])].flatMap(focusSplit)
                     .some(n => keys.has(focusGKey({ group: n, faculty: r.faculty, specialty: r.specialty, course: r.course }))))
                     .map(r => r.row_key);
             }
@@ -7066,8 +7070,10 @@
                 // Oldingi holat — faqat birinchi fokusda (fokusdan fokusga o'tilsa ham Yopish asl holatga qaytaradi).
                 if (!ttFocus) {
                     ttFocus = { prev: { viewMode, curWeek, fac: [...selectedFaculties], dir: [...selectedDirs], crs: [...selectedCourses],
-                        cycleRowFilters: cycleRowFilters.slice() } };
+                        cycleRowFilters: cycleRowFilters.slice(), typeFilter } };
                 }
+                // Dars turi filtri (Ma'ruza / Amaliy) vaqtincha "Hammasi": to'qnashuvning ikkala tomoni ham ko'rinsin.
+                if (typeFilter !== 'all') setTypeFilter('all');
                 Object.assign(ttFocus, { show, groups, keys: new Set(groups.map(focusGKey)), scrolled: false });
                 groups.forEach(g => {
                     const sp = focusSpecOf(g);
@@ -7092,6 +7098,7 @@
                 selectedFaculties = new Set(p.fac); selectedDirs = new Set(p.dir); selectedCourses = new Set(p.crs);
                 if (viewMode !== p.viewMode) { viewMode = p.viewMode; $('viewMode').value = p.viewMode; }
                 curWeek = p.curWeek;
+                if (typeFilter !== p.typeFilter) setTypeFilter(p.typeFilter);
                 cycleRowFilters = p.cycleRowFilters.slice();
                 cycleRowStoreKey = cycleRowStorageKey();   // tiklangan tanlov saqlangandan qayta o'qilmaydi (saqlash bloklangan bo'lsa ham qoladi)
                 focusRefresh();

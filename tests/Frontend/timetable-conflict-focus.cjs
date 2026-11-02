@@ -56,6 +56,7 @@ const ctx = {
     loadBoard: id => { calls.push('loadBoard:' + id); return Promise.resolve(); }, renderAll: () => { calls.push('renderAll'); ctx.api.build(); },
     ensureScopeLoaded: () => calls.push('ensureScopeLoaded'), closeCycDayPop: () => calls.push('closeCycDayPop'),
     closeCycleAssign: () => calls.push('closeCycleAssign'), alert: m => calls.push('alert:' + m),
+    typeFilter: 'lecture', setTypeFilter: t => { ctx.typeFilter = t; },
 };
 vm.createContext(ctx);
 vm.runInContext(code + '\nthis.api = { link: focusLinkHtml, links: focusLinksHtml, dates: focusDatesText, banner: focusBannerText, start: ttFocusStart,'
@@ -104,6 +105,7 @@ assert.deepEqual(plain([...ctx.selectedCourses]), [2, 3]);
 assert.equal(ctx.viewMode, 'group');
 assert.equal(els.viewMode.value, 'group');
 assert.equal(ctx.curWeek, 9);
+assert.equal(ctx.typeFilter, 'all');   // "Ma'ruza" filtri vaqtincha olinadi — amaliy tomoni ham ko'rinsin
 assert.deepEqual(calls, ['closeCycDayPop', 'reconcile:false', 'fillSelectors', 'fillGridInputs', 'renderAll', 'ensureScopeLoaded']);
 assert.deepEqual(colGroups(), ['d2-01a', 'p3-01b']);   // d2-02a — yashirin
 const bar = docById.ttFocusBar;
@@ -134,6 +136,7 @@ assert.deepEqual(plain([...ctx.selectedCourses]), [2]);
 assert.equal(ctx.viewMode, 'teacher');
 assert.equal(els.viewMode.value, 'teacher');
 assert.equal(ctx.curWeek, 0);
+assert.equal(ctx.typeFilter, 'lecture');
 assert.deepEqual(plain(ctx.cycleRowFilters), ['k9']);
 assert.equal(ctx.cycleRowStoreKey, 'tt:cycRows:KEY');   // saqlangandan qayta o'qilmaydi
 assert.deepEqual(calls, ['reconcile:false', 'fillSelectors', 'fillGridInputs', 'renderAll', 'ensureScopeLoaded']);
@@ -156,7 +159,7 @@ assert.deepEqual(plain([...ctx.selectedFaculties]), ['F1']);
 assert.equal(ctx.viewMode, 'teacher');
 assert.equal(ctx.curWeek, 0);
 
-// 6) Sikl: guruh (yoki oqim a'zolari) qatorlari, bo'lak qatori va boshqa yo'nalishdagi bir xil nom — yo'q; sikl kesimi, hafta o'zgarmaydi.
+// 6) Sikl: guruh, oqim va bo'lak ("Fan (a)") qatorlari a'zolari bo'yicha; boshqa yo'nalishdagi bir xil nom — yo'q; sikl kesimi, hafta o'zgarmaydi.
 const cycleShow = { kind: 'teacher_busy', teacher_name: 'SHARIPOV K. SH.', groups: [{ group: 'd22-05a', faculty: 'F1', specialty: 'Davolash ishi', course: 2 },
     { group: 'd22-05b', faculty: 'F1', specialty: 'Davolash ishi', course: 2 }], dates: ['2026-09-16', '2026-09-18'], hour_from: 1, hour_to: 7,
     card_ids: [11, 12], view: 'cycle', week: null };
@@ -172,20 +175,22 @@ const rows = [
     { row_key: 'r4', group: 'd22-05a', faculty: 'F1', specialty: 'Pediatriya', course: 2 },
     { row_key: 'v1', group: 'Fan (a)', variant: 'Fan (a)', subgroups: ['d22-05a'], faculty: 'F1', specialty: 'Davolash ishi', course: 2 },
 ];
-assert.deepEqual(plain(api.rows(rows)), ['r1', 'r2']);
+assert.deepEqual(plain(api.rows(rows)), ['r1', 'r2', 'v1']);
+// Guruh faqat bo'lak qatorida qatnashsa ham — filtr bo'sh qolmaydi (bo'sh filtr butun jadvalni ko'rsatardi).
+assert.deepEqual(plain(api.rows([rows[2], rows[3], Object.assign({}, rows[4], { row_key: 'v2', subgroups: ['d22-05b'] })])), ['v2']);
 // Manbada: render — fokusda saqlangan tanlov o'rniga shu qatorlar (saqlanmaydi); qo'lda tanlansa — fokus tugaydi.
 assert.match(source, /if \(ttFocus && ttFocus\.show\.view === 'cycle'\) \{\n(?:\s+\/\/[^\n]*\n)?\s+cycleRowFilters = focusCycleRowKeys\(allRows\);/);
 assert.match(source, /function cycleRowFiltersApply\(\) \{\n(?:\s+\/\/[^\n]*\n)?\s+if \(ttFocus && ttFocus\.show\.view === 'cycle'\) ttFocusForget\(\);\n\s+cycleRowFiltersSave\(\);/);
 // Sikl qizil ramkasi: fokus qatorlarining to'qnashuv sanalariga tushadigan bloklari va sana sarlavhalari.
-ctx.cycleRowFilters = ['r1', 'r2'];
+ctx.cycleRowFilters = ['r1', 'r2', 'v1'];
 ctx.cyclePlanData = { dates: ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18', '2026-09-19'].map(iso => ({ iso })) };
 const block = (row, from, span) => ({ dataset: { cycleRow: row, cycleFrom: String(from), cycleSpan: String(span) }, classList: classList(),
     scrolls: 0, scrollIntoView() { this.scrolls++; } });
-const blocks = [block('r1', 0, 5), block('r2', 5, 1), block('r3', 2, 3), block('r2', 0, 2)];
+const blocks = [block('r1', 0, 5), block('r2', 5, 1), block('r3', 2, 3), block('r2', 0, 2), block('v1', 3, 2)];
 const ths = ctx.cyclePlanData.dates.map(() => ({ classList: classList() }));
 els.cycleGrid = node('cycleGrid', { querySelectorAll: sel => (sel === 'td.cyc-block[data-cycle-row]' ? blocks : sel === 'thead th.cyc-dcol' ? ths : []) });
 api.highlight();
-assert.deepEqual(blocks.map(b => b.classList.contains('tt-focus-hit')), [true, false, false, false]);
+assert.deepEqual(blocks.map(b => b.classList.contains('tt-focus-hit')), [true, false, false, false, true]);
 assert.deepEqual(ths.map(t => t.classList.contains('tt-focus-date')), [false, false, true, true, true, false]);
 assert.equal(blocks[0].scrolls, 1);
 docById.ttFocusBar.querySelector('#ttFocusClose').onclick();
@@ -231,4 +236,36 @@ assert.match(source, /focusLinksHtml\(cycAssignBusy\.items\[id\]\)/);
 assert.match(source, /focusLinksHtml\(\(\(asgBusy\.items \|\| \{\}\)\.teachers \|\| \{\}\)\[id\]\)/);
 assert.match(source, /groupRows = focusWeekColumns\(groupRows\);/);
 
-console.log('timetable conflict focus: 10 scenarios passed');
+// 11) Sikl jadvali yuklanishi: odatda eski scroll joyi tiklanadi; fokusning birinchi scroll'i qilingan chizishda — tiklanmaydi.
+(async () => {
+    const gw = { scrollTop: 40, scrollLeft: 300 };
+    const raf = [];
+    const els2 = { cycleGridWrap: gw };
+    const el2 = id => (els2[id] = els2[id] || { id, value: '', textContent: '', classList: { add() {}, remove() {} }, removeAttribute() {} });
+    const c2 = { $: el2, esc, BASE: '/admin', board: { id: 7 }, scopeMode: 'all', cycleHolidays: [], cycleViewMode: 'group', ttFocus: null, cyclePlanData: null,
+        loadCycleOverlapUi() {}, scopeBody: () => ({}), cycleLayerParams: () => ({}), invalidateCycleWeek() {}, buildSubjectColors() {},
+        colorScopeCards: () => [], renderCycleLayerUi() {}, renderHolChips() {}, renderCycleCards() {}, renderStats() {},
+        api: async () => ({ rows: [], subjects: [], holidays: [] }), requestAnimationFrame: fn => raf.push(fn),
+        // Haqiqiydagi kabi: chizishda fokus bo'lsa — to'qnashuvga scroll (focusHighlight).
+        renderCyclePlan() { if (c2.ttFocus && !c2.ttFocus.scrolled) { c2.ttFocus.scrolled = true; gw.scrollTop = 900; gw.scrollLeft = 2400; } },
+        window: { scrollX: 0, scrollY: 0, scrollTo() {} } };
+    c2.window.scrollTo = () => {};
+    vm.createContext(c2);
+    vm.runInContext(cut('            async function loadCyclePlan(options = {}) {', '            function cycleMemberParts(name) {')
+        + '\nthis.load = loadCyclePlan;', c2);
+    await c2.load();   // fokus yo'q — joy tiklanadi
+    raf.forEach(fn => fn());
+    assert.deepEqual([gw.scrollTop, gw.scrollLeft], [40, 300]);
+    c2.ttFocus = { scrolled: false };
+    raf.length = 0;
+    await c2.load();   // fokus: to'qnashuvga scroll — bekor qilinmaydi
+    raf.forEach(fn => fn());
+    assert.deepEqual([gw.scrollTop, gw.scrollLeft], [900, 2400]);
+    gw.scrollTop = 50; gw.scrollLeft = 60;
+    raf.length = 0;
+    await c2.load();   // keyingi chizishlar (scroll bir marta bo'lgan) — odatdagidek tiklanadi
+    gw.scrollTop = 1; gw.scrollLeft = 2;
+    raf.forEach(fn => fn());
+    assert.deepEqual([gw.scrollTop, gw.scrollLeft], [50, 60]);
+    console.log('timetable conflict focus: 11 scenarios passed');
+})().catch(e => { console.error(e); process.exit(1); });

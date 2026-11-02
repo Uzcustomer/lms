@@ -170,6 +170,20 @@ const tick = () => new Promise(r => setImmediate(r));
     await tick(); await tick();
     assert.match(calls[0][0], /layer=external/);
     c2.weeklyLayer = 'internal';
+    // Kun/hafta tez almashsa — kechikkan (eski) javob yangisining ustiga yozilmaydi.
+    const pending = [];
+    const realApi = c2.api;
+    c2.api = url => new Promise(res => pending.push([url, res]));
+    c2.agendaClick(el('[data-ag]', { dataset: { ag: 'day' } }));
+    c2.agendaClick(el('[data-ag]', { dataset: { ag: 'week' } }));
+    assert.equal(pending.length, 2);
+    pending[1][1](Object.assign({}, week, { title: 'YANGI' }));
+    await tick();
+    pending[0][1](Object.assign({}, day, { title: 'ESKI' }));
+    await tick(); await tick();
+    assert.equal(c2.getSt().data.title, 'YANGI');
+    assert.match(mount.innerHTML, /<b>YANGI<\/b>/);
+    c2.api = realApi;
     // Yopish.
     c2.agendaClick(el('[data-ag]', { dataset: { ag: 'close' } }));
     assert.equal(c2.getSt(), null);

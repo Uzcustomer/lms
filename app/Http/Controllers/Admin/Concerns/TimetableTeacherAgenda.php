@@ -165,18 +165,31 @@ trait TimetableTeacherAgenda
             }
         }
         // Bitta oqim ma'ruzasi — bitta yozuv (guruhlar birlashadi): bitta ma'ruza kartasi (kalit) yoki turli yo'nalish kartalari — fan,
-        // xona va vaqt bir xil (cycleConflicts dagidek; xonasiz ma'ruza oqimligi tasdiqlanmaydi — alohida dars).
+        // xona va vaqt bir xil (cycleConflicts dagidek; xonasiz ma'ruza oqimligi tasdiqlanmaydi — alohida dars). Qamrov har qism (karta)
+        // bo'yicha: tafsilotlar (fan, guruhlar, kartalar, kalit) — faqat qamrovdagi qismlardan; qolgani faqat bandlikka (vaqt).
+        // flow_size — oqimdagi kartalar soni (qamrovdan qat'i nazar): ko'p kartali haftalik oqim bu oynadan ko'chirilmaydi.
         $merged = [];
         foreach ($raw as $x) {
+            $vis = $x['cards'] && collect($x['cards'])->contains(fn ($c) => $this->suggestionInScope($rights, $c));
             $k = $x['lecture'] && $x['room_code'] ? implode('|', ['L', $x['date'], $x['from'], $x['to'], (string) $x['room_code'],
                 $this->normSubject($this->cycleSubjectVariantBase($x['subject']) ?? $x['subject'])]) : $x['key'];
-            if (!isset($merged[$k])) {
-                $merged[$k] = $x;
-                continue;
+            $m = &$merged[$k];
+            if ($m === null) {
+                $m = ['visible' => false, 'groups' => [], 'card_ids' => [], 'all_ids' => []] + $x;
+                $m['groups'] = [];
+                $m['card_ids'] = [];
             }
-            $merged[$k]['groups'] = array_values(array_unique(array_merge($merged[$k]['groups'], $x['groups'])));
-            $merged[$k]['card_ids'] = array_values(array_unique(array_merge($merged[$k]['card_ids'], $x['card_ids'])));
-            $merged[$k]['cards'] = array_merge($merged[$k]['cards'], $x['cards']);
+            $m['all_ids'] = array_values(array_unique(array_merge($m['all_ids'], $x['card_ids'])));
+            if ($vis) {
+                if (!$m['visible']) {
+                    // Birinchi qamrovdagi qism — yozuv fani, kaliti va boshqa tafsilotlari undan.
+                    $m = array_replace($m, array_intersect_key($x, array_flip(['subject', 'key', 'week', 'unit', 'room', 'room_code', 'lecture'])));
+                }
+                $m['visible'] = true;
+                $m['groups'] = array_values(array_unique(array_merge($m['groups'], $x['groups'])));
+                $m['card_ids'] = array_values(array_unique(array_merge($m['card_ids'], $x['card_ids'])));
+            }
+            unset($m);
         }
         $list = array_values($merged);
         usort($list, fn ($a, $b) => [$a['date'], $a['from'], $a['key']] <=> [$b['date'], $b['from'], $b['key']]);
@@ -190,7 +203,7 @@ trait TimetableTeacherAgenda
                     break;
                 }
             }
-            $visible = $x['cards'] && collect($x['cards'])->contains(fn ($c) => $this->suggestionInScope($rights, $c));
+            $visible = $x['visible'];
             $dow = Carbon::parse($x['date'])->dayOfWeekIso;
             $base = ['date' => $x['date'], 'dow' => $dow, 'from' => $x['from'], 'to' => $x['to'],
                 'start' => $slots[$x['from']][0] ?? null, 'end' => $slots[$x['to'] - 1][1] ?? null,
@@ -198,7 +211,8 @@ trait TimetableTeacherAgenda
             $out[] = $visible
                 ? $base + ['hidden' => false, 'type' => $x['lecture'] ? 'M' : 'A', 'subject' => $x['subject'], 'groups' => $x['groups'],
                     'room' => $x['room'], 'room_code' => $x['room_code'], 'key' => $x['key'], 'card_ids' => $x['card_ids'], 'week' => $x['week'],
-                    'unit' => $x['unit'], 'label' => $x['subject'] . ' (' . ($x['lecture'] ? 'M' : 'A') . ') — ' . implode(', ', $x['groups'])]
+                    'unit' => $x['unit'], 'flow_size' => count($x['all_ids']),
+                'label' => $x['subject'] . ' (' . ($x['lecture'] ? 'M' : 'A') . ') — ' . implode(', ', $x['groups'])]
                 // Qamrovdan tashqari — faqat vaqti.
                 : $base + ['hidden' => true, 'type' => null, 'subject' => null, 'groups' => [], 'room' => null, 'room_code' => null,
                     'key' => null, 'card_ids' => [], 'week' => null, 'unit' => null, 'label' => 'band: boshqa fakultet'];
@@ -241,7 +255,7 @@ trait TimetableTeacherAgenda
             $entry['past'] => "Bugungi va o'tgan darslar ko'chirilmaydi.",
             $entry['kind'] === 'cycle' && $entry['type'] === 'M' => "Sikl ma'ruzasi bu oynadan ko'chirilmaydi (ma'ruza soati — sikl jadvalida).",
             // Bir nechta kartali haftalik ma'ruza oqimi — bitta karta ko'chsa oqim bo'linib qoladi.
-            $entry['kind'] === 'weekly' && count($entry['card_ids']) > 1 => "Bir nechta kartadan iborat ma'ruza oqimi bu oynadan ko'chirilmaydi — oqim bo'linib qolmasin (jadvaldan yoki Takliflar orqali).",
+            $entry['kind'] === 'weekly' && ($entry['flow_size'] ?? count($entry['card_ids'])) > 1 => "Bir nechta kartadan iborat ma'ruza oqimi bu oynadan ko'chirilmaydi — oqim bo'linib qolmasin (jadvaldan yoki Takliflar orqali).",
             default => null,
         };
         if ($why) {

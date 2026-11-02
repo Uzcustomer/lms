@@ -323,3 +323,27 @@ it('agenda: sikl birligida o\'qituvchining ikki amaliy kartasi — bitta yozuv, 
     $mv = agGet($s, $s['admin'], 'admin', ['move' => $entry['key']])['move'];
     expect($mv['via'])->toBe('apply')->and($mv['why'])->toBeNull();
 });
+
+it('agenda: aralash qamrovli ma\'ruza oqimi — faqat qamrovdagi kartaning tafsilotlari (boshqa kafedra guruhi ko\'rinmaydi)', function () {
+    $s = agSetup();
+    Auditorium::create(['code' => 'Z1', 'name' => '1-zal', 'volume' => 200, 'active' => true]);
+    $lec = fn (string $spec, string $g, string $kaf) => TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2',
+        'specialty_name' => $spec, 'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 30, 'training_type' => 'lecture',
+        'len_half' => 2, 'weeks' => 15, 'subject_name' => 'Farmakologiya', 'group_name' => $g, 'kafedra_name' => $kaf,
+        'teacher_id' => $s['mux']->id, 'teacher_name' => 'MUXAMMADIYEV S. B.', 'day' => 4, 'pair' => 11, 'auditorium_code' => 'Z1', 'auditorium_name' => '1-zal']);
+    // Avval qamrovdan tashqari karta (yozuvning birinchi qismi), keyin qamrovdagi.
+    $foreign = $lec('stomatologiya', 'st/2024-01a', 'Boshqa kafedra');
+    $own = $lec('pediatriya', 'pp/2024-01a', 'Farmakologiya kafedrasi');
+    $j = agGet($s, $s['head'], 'kafedra_mudiri');
+    $flow = collect($j['entries'])->firstWhere('type', 'M');
+    expect($flow)->toMatchArray(['hidden' => false, 'groups' => ['pp/2024-01a'], 'card_ids' => [$own->id], 'flow_size' => 2,
+        'key' => 'w|' . $own->id . '|' . $s['week'], 'label' => 'Farmakologiya (M) — pp/2024-01a'])
+        ->and(json_encode($j))->not->toContain('st/2024-01a')
+        ->and(collect($j['entries'])->where('type', 'M')->count())->toBe(1);
+    // Oqim baribir ko'p kartali — ko'chirilmaydi.
+    expect(agGet($s, $s['head'], 'kafedra_mudiri', ['move' => $flow['key']])['move']['why'])->toContain("Bir nechta kartadan iborat ma'ruza oqimi");
+    // Faqat qamrovdan tashqari qism — butunlay yashirin.
+    $own->delete();
+    $hidden = collect(agGet($s, $s['head'], 'kafedra_mudiri')['entries'])->firstWhere('start', '16:30');
+    expect($hidden)->toMatchArray(['hidden' => true, 'groups' => [], 'card_ids' => [], 'key' => null, 'label' => 'band: boshqa fakultet']);
+});

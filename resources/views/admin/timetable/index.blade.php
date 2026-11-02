@@ -6868,6 +6868,7 @@
             // taklifi. Ko'chirish: haftalik — Takliflar bajaruvchisi (admin — darhol, boshqalar — so'rov), sikl — kun boshlanishi yoki
             // blokning kelgusi kunlari (cycle-practice-starts / cycle-time-proposal). Keyin oyna va jadval yangilanadi.
             let ttAgenda = null;   // { teacher_id, teacher_name, date, range, move, data, pick, msg, busy }
+            let agendaSeq = 0;     // so'rov tartibi: kun/hafta tez almashsa — eski (kechikkan) javob yangisining ustiga yozilmaydi
             document.addEventListener('click', ev => {
                 const a = ev.target && ev.target.closest ? ev.target.closest('[data-agenda]') : null;
                 if (!a) return;
@@ -6898,12 +6899,13 @@
                 const q = new URLSearchParams({ teacher_id: st.teacher_id, date: st.date, range: st.range,
                     layer: layer === 'external' ? 'external' : 'internal' });
                 if (st.move) q.set('move', st.move);
+                const seq = ++agendaSeq;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/teacher-agenda?' + q);
-                    if (ttAgenda !== st) return;
+                    if (ttAgenda !== st || seq !== agendaSeq) return;
                     st.data = j;
                 } catch (e) {
-                    if (ttAgenda !== st) return;
+                    if (ttAgenda !== st || seq !== agendaSeq) return;
                     st.msg = { kind: 'err', text: e.message };
                 }
                 agendaRender(false);

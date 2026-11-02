@@ -6899,6 +6899,7 @@
                 const q = new URLSearchParams({ teacher_id: st.teacher_id, date: st.date, range: st.range,
                     layer: layer === 'external' ? 'external' : 'internal' });
                 if (st.move) q.set('move', st.move);
+                if (st.restFor) q.set('rest_for', st.restFor);   // "shu va keyingi haftalar" — tanlangan para tekshiruvi
                 const seq = ++agendaSeq;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/teacher-agenda?' + q);
@@ -7000,8 +7001,10 @@
                 const pair = (j.pairs || []).find(p => p.no === +pk.pair) || {};
                 const one = agendaOpt(mv, pk.date, pk.pair, 'one');
                 const rest = (mv.rest_weeks || []).length;
+                // Keyingi haftalar — server tekshiruvi (rest_for): shu para va xona har haftada; kelguncha — o'chiq.
+                const restOk = mv.rest && mv.rest.date === pk.date && +mv.rest.pair === +pk.pair ? mv.rest : { ok: false, why: 'keyingi haftalar tekshirilmoqda…' };
                 const choices = mv.kind === 'weekly'
-                    ? [['one', 'faqat shu hafta', one], ['rest', 'shu va keyingi haftalar (' + rest + ' ta)', rest > 1 ? one : { ok: false, why: 'keyingi haftalarda dars shu joyda emas' }]]
+                    ? [['one', 'faqat shu hafta', one], ['rest', 'shu va keyingi haftalar (' + rest + ' ta)', rest > 1 ? restOk : { ok: false, why: 'keyingi haftalarda dars shu joyda emas' }]]
                     : [['one', 'faqat shu kun', one], ['block', 'butun blok (' + (mv.block_date ? cfDate(mv.block_date) + ' dan, kelgusi kunlar' : '—') + ')',
                         agendaOpt(mv, pk.date, pk.pair, 'block')]];
                 const cur = agendaOpt(mv, pk.date, pk.pair, pk.choice);
@@ -7031,7 +7034,10 @@
             async function agendaSubmit() {
                 const st = ttAgenda, mv = st && st.data && st.data.move, pk = st && st.pick;
                 const opt = mv && pk ? agendaOpt(mv, pk.date, pk.pair, pk.choice) : null;
-                if (!opt || !opt.ok || st.busy) return;
+                // "Shu va keyingi haftalar" — faqat server keyingi haftalarni ham tasdiqlagan bo'lsa.
+                const restBad = mv && pk && mv.kind === 'weekly' && pk.choice === 'rest'
+                    && !(mv.rest && mv.rest.ok && mv.rest.date === pk.date && +mv.rest.pair === +pk.pair);
+                if (!opt || !opt.ok || restBad || st.busy) return;
                 let reason = '';
                 if (mv.via === 'propose') {
                     reason = await askSugReason();
@@ -7045,6 +7051,7 @@
                     const text = (r && r.message) || (mv.via === 'apply' ? 'Ko‘chirildi.' : 'So‘rov yuborildi.');
                     ttToast(esc(text), 'ok');
                     st.pick = null;
+                    st.restFor = null;
                     st.msg = { kind: 'ok', text };
                     try { await loadChangeRequests(); } catch (e) { /* so'rovlar ro'yxati — ixtiyoriy */ }
                     if (viewMode === 'cycle') await loadCyclePlan(); else await loadBoard(board.id);
@@ -7063,7 +7070,10 @@
                 if (pick && !pick.disabled) {
                     const [date, pair] = pick.dataset.agPick.split('|');
                     st.pick = { date, pair: +pair, choice: 'one' };
-                    agendaRender(false);
+                    const mv = st.data && st.data.move;
+                    // Haftalik dars, keyingi haftalar bor — tanlangan para keyingi haftalarda ham tekshiriladi (server).
+                    if (mv && mv.kind === 'weekly' && (mv.rest_weeks || []).length > 1) { st.restFor = date + '|' + pair; ttAgendaLoad(); }
+                    else agendaRender(false);
                     return;
                 }
                 const ch = t && t.closest('input[name="agChoice"]');
@@ -7072,9 +7082,9 @@
                 if (!b) return;
                 const a = b.dataset.ag;
                 if (a === 'close') ttAgendaClose();
-                else if (a === 'day' || a === 'week') { st.range = a; st.pick = null; ttAgendaLoad(); }
-                else if (a === 'prev' || a === 'next') { st.date = agendaStep(st.date, st.range, a === 'next' ? 1 : -1); st.pick = null; st.msg = null; ttAgendaLoad(); }
-                else if (a === 'unpick') { st.pick = null; agendaRender(false); }
+                else if (a === 'day' || a === 'week') { st.range = a; st.pick = null; st.restFor = null; ttAgendaLoad(); }
+                else if (a === 'prev' || a === 'next') { st.date = agendaStep(st.date, st.range, a === 'next' ? 1 : -1); st.pick = null; st.restFor = null; st.msg = null; ttAgendaLoad(); }
+                else if (a === 'unpick') { st.pick = null; st.restFor = null; agendaRender(false); }
                 else if (a === 'submit') agendaSubmit();
             }
 

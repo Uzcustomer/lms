@@ -41,6 +41,8 @@ trait TimetableTeacherAgenda
             'range' => 'nullable|in:day,week',
             'layer' => 'nullable|in:internal,external',
             'move' => 'nullable|string|max:500',
+            // "Shu va keyingi haftalar" tekshiruvi — tanlangan bo'sh para ("Y-m-d|para"): har hafta alohida tekshiriladi (og'ir).
+            'rest_for' => 'nullable|string|max:40',
         ]);
         $tid = (int) $data['teacher_id'];
         $teacher = Teacher::find($tid);
@@ -64,7 +66,7 @@ trait TimetableTeacherAgenda
                 array_filter($pairs, fn ($p) => !$this->agendaBusyAt($entries, $d, $p['from'], $p['to']))));
         }
         $move = !empty($data['move'])
-            ? $this->agendaMove($request, $board, (string) $data['move'], $entries, $days, $pairs, $free, $layer, $rights) : null;
+            ? $this->agendaMove($request, $board, (string) $data['move'], $entries, $days, $pairs, $free, $layer, $rights, $data['rest_for'] ?? null) : null;
         $name = (string) (TimetableCard::where('board_id', $board->id)->where('teacher_id', $tid)->whereNotNull('teacher_name')->value('teacher_name')
             ?: ($teacher->short_name ?: $teacher->full_name));
 
@@ -157,7 +159,8 @@ trait TimetableTeacherAgenda
                 $raw[] = ['date' => $e['date'], 'from' => (int) $e['from'], 'to' => (int) $e['to'], 'kind' => 'cycle', 'lecture' => $lecture,
                     'subject' => (string) $u['subject'], 'groups' => array_values(array_unique(array_column($this->focusUnitGroups($u), 'group'))),
                     'room' => $e['room_name'] ?: null, 'room_code' => $e['room'],
-                    'key' => $lecture ? 'l|' . $e['lesson'] . '|' . $e['date'] : 'c|' . $u['key'] . '|' . $e['date'],
+                    // Ma'ruza kaliti vaqti bilan: bitta karta guruhchalarda har xil soatda bo'lsa — alohida yozuvlar.
+                    'key' => $lecture ? 'l|' . $e['lesson'] . '|' . $e['date'] . '|' . $e['from'] : 'c|' . $u['key'] . '|' . $e['date'],
                     'card_ids' => [(int) $e['card']], 'week' => null, 'unit' => $lecture ? null : [
                         'key' => $u['key'], 'unit' => (string) $u['unit'], 'specialty_name' => (string) $u['specialty'], 'course' => (int) $u['course'],
                         'subject_name' => (string) $u['subject'], 'group_name' => (string) $u['group']],
@@ -237,7 +240,7 @@ trait TimetableTeacherAgenda
      * sikl — block[sana][para] (butun blokning kelgusi kunlari). via — apply (darhol) | propose (so'rov); why — ko'chirib bo'lmasa.
      */
     private function agendaMove(Request $request, TimetableBoard $board, string $key, array $entries, array $days, array $pairs, array $free,
-        string $layer, array $rights): ?array
+        string $layer, array $rights, ?string $restFor = null): ?array
     {
         // Kalit — yozuvniki; birlashgan haftalik ma'ruza oqimida istalgan karta kaliti ("w|karta|hafta") ham shu yozuvni topadi — faqat
         // shu kartaning shu sanadagi haftasi kalitdagi hafta bo'lsa (boshqa haftaga o'tilganda boshqa hafta darsi tanlanmasin).
@@ -290,6 +293,14 @@ trait TimetableTeacherAgenda
                         $out['options'][$d][$p['no']] = $this->agendaWeeklyOption($board, $card, (int) $entry['week'], $at['day'], $at['pair']) + $at;
                     }
                 }
+            }
+            // "Shu va keyingi haftalar": tanlangan para (va taklif qilingan xona) keyingi har haftada ham tekshiriladi.
+            if ($restFor !== null && count($out['rest_weeks']) > 1) {
+                [$rd, $rp] = array_pad(explode('|', $restFor), 2, '');
+                $opt = $out['options'][$rd][(int) $rp] ?? null;
+                $out['rest'] = ['date' => $rd, 'pair' => (int) $rp] + ($opt && $opt['ok']
+                    ? $this->agendaWeeklyRestCheck($board, $card, $out['rest_weeks'], (int) $entry['week'], $opt)
+                    : ['ok' => false, 'why' => $opt['why'] ?? "Bu vaqtga ko'chirib bo'lmaydi."]);
             }
         } else {
             $u = $entry['unit'];
@@ -362,20 +373,7 @@ trait TimetableTeacherAgenda
         if ($pair + $card->lenHalf() - 1 > (int) $grid['pairs']) {
             return ['ok' => false, 'why' => 'Tanlangan vaqt jadval chegarasidan tashqarida.', 'room' => null];
         }
-        // Barcha tekshiruvlar (bittasi topilsa ham qolganlari): xona muammosida boshqa xona taklif qilinadi — u faqat xonadan
-        // boshqa sabab bo'lmasa to'g'ri (amaliy blok, sikl darslaridagi o'qituvchi bandligi ham hisobga olinadi).
-        $data = ['week' => $week, 'day' => $day, 'pair' => $pair];
-        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
-        $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair), $this->pendingTimeConflicts($card, $data, []),
-            $this->practiceSplitConflicts($card, $week, $day, $pair), $this->weeklyProposalBusy($card, $week, $day, $pair, $date));
-        $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
-        $roomCode = (string) ($ov?->auditorium_code ?: $card->auditorium_code);
-        $room = $roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null;
-        $students = $this->cardStudents($card);
-        if ($room && (int) $room->volume > 0 && $students > (int) $room->volume) {
-            $errors[] = "Xona sig'maydi: " . $room->volume . " o'rin, " . $students . ' talaba (+' . ($students - (int) $room->volume) . ')';
-        }
-        $errors = array_values(array_unique(array_map(fn ($m) => $this->agendaReasonText($m), $errors)));
+        [$errors, $roomCode, $students] = $this->agendaWeekErrors($board, $card, $week, $day, $pair);
         if (!$errors) {
             return ['ok' => true, 'why' => null, 'room' => null];
         }
@@ -385,6 +383,48 @@ trait TimetableTeacherAgenda
         return $alt
             ? ['ok' => true, 'why' => implode(' · ', $errors), 'room' => $alt]
             : ['ok' => false, 'why' => implode(' · ', $errors), 'room' => null];
+    }
+
+    /**
+     * Haftalik darsni shu haftada (kun, para) ga ko'chirish sabablari — barchasi (bittasi topilsa ham qolganlari: xona muammosida boshqa
+     * xona faqat xonadan boshqa sabab bo'lmasa taklif qilinadi): guruh, o'qituvchi, xona (haftalik va sikl), kutilayotgan so'rovlar,
+     * amaliy blok qoidasi, xona sig'imi. $room — boshqa xona bilan. Qaytaradi: [sabablar, xona kodi, talabalar].
+     */
+    private function agendaWeekErrors(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, ?Auditorium $room = null): array
+    {
+        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
+        $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
+        $roomCode = $room ? (string) $room->code : (string) ($ov?->auditorium_code ?: $card->auditorium_code);
+        $data = ['week' => $week, 'day' => $day, 'pair' => $pair] + ($room ? ['auditorium_code' => $roomCode] : []);
+        $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair, 0, null, $room ? $roomCode : null),
+            $this->pendingTimeConflicts($card, $data, []), $this->practiceSplitConflicts($card, $week, $day, $pair),
+            $this->weeklyProposalBusy($card, $week, $day, $pair, $date, $room));
+        $room ??= $roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null;
+        $students = $this->cardStudents($card);
+        if ($room && (int) $room->volume > 0 && $students > (int) $room->volume) {
+            $errors[] = "Xona sig'maydi: " . $room->volume . " o'rin, " . $students . ' talaba (+' . ($students - (int) $room->volume) . ')';
+        }
+
+        return [array_values(array_unique(array_map(fn ($m) => $this->agendaReasonText($m), $errors))), $roomCode, $students];
+    }
+
+    /** "Shu va keyingi haftalar": shu kun/para (va taklif qilingan xona) har keyingi haftada; birinchi to'siq — sababi bilan. */
+    private function agendaWeeklyRestCheck(TimetableBoard $board, TimetableCard $card, array $weeks, int $selected, array $opt): array
+    {
+        $room = !empty($opt['room']['code']) ? Auditorium::where('code', $opt['room']['code'])->first() : null;
+        foreach ($weeks as $w) {
+            if ((int) $w === $selected) {
+                continue;
+            }
+            [$errors] = $this->agendaWeekErrors($board, $card, (int) $w, (int) $opt['day'], (int) $opt['pair'], $room);
+            if ($errors) {
+                $date = $this->weekStartDate($board, $card, (int) $w)->addDays((int) $opt['day'] - 1)->format('d.m');
+
+                return ['ok' => false, 'why' => $w . '-hafta (' . $date . '): ' . implode(' · ', $errors)];
+            }
+        }
+
+        return ['ok' => true, 'why' => null];
     }
 
     /** Sabab matni: "Auditoriya band: X — …" → "Xona band: X — …"; "Xona 215 band: 65 o'rin, 98 talaba (+33): …" → "Xona sig'maydi: …". */

@@ -104,9 +104,27 @@ const tick = () => new Promise(r => setImmediate(r));
 
     // VI para tanlanadi → "shu va keyingi haftalar" → Qo'llash: Takliflar "move" amallari (har hafta, 101-xona bilan), admin — apply.
     const el = (sel, obj) => ({ target: { closest: s => (s === sel ? obj : null) }, currentTarget: mount });
+    // Para tanlanganda keyingi haftalar serverda tekshiriladi (rest_for): avval band javob — "shu va keyingi haftalar" o'chiq.
+    const withRest = rest => Object.assign({}, day, { move: Object.assign({}, day.move, { rest }) });
+    responses.push(withRest({ date: '2026-11-19', pair: 6, ok: false, why: "11-hafta (26.11): Guruh band: pp/2024-01b — Fizika" }));
+    calls.length = 0;
     c2.agendaClick(el('[data-ag-pick]', { disabled: false, dataset: { agPick: '2026-11-19|6' } }));
+    await tick(); await tick();
+    assert.match(calls[0][0], /move=w%7C5%7C10&rest_for=2026-11-19%7C6$/);
     assert.match(mount.innerHTML, /<div class="ag-pick"><div><b>Farmakologiya \(A\) — pp\/2024-01b<\/b> → 19\.11, VI para \(16:30–17:50\), xona: 101-xona<\/div>/);
-    assert.match(mount.innerHTML, /value="rest"> shu va keyingi haftalar \(3 ta\)/);
+    assert.match(mount.innerHTML, /value="rest" disabled> shu va keyingi haftalar \(3 ta\) <span class="ag-why">— 11-hafta \(26\.11\): Guruh band/);
+    // "rest" tanlansa ham yuborilmaydi (server tasdiqlamagan).
+    c2.agendaClick(el('input[name="agChoice"]', { value: 'rest' }));
+    calls.length = 0;
+    c2.agendaClick(el('[data-ag]', { dataset: { ag: 'submit' } }));
+    await tick();
+    assert.equal(calls.length, 0);
+    // Keyingi haftalar bo'sh — tanlov yoqiladi.
+    c2.getSt().pick = null;
+    responses.push(withRest({ date: '2026-11-19', pair: 6, ok: true, why: null }));
+    c2.agendaClick(el('[data-ag-pick]', { disabled: false, dataset: { agPick: '2026-11-19|6' } }));
+    await tick(); await tick();
+    assert.match(mount.innerHTML, /value="rest"> shu va keyingi haftalar \(3 ta\)<\/label>/);
     c2.agendaClick(el('input[name="agChoice"]', { value: 'rest' }));
     assert.equal(c2.getSt().pick.choice, 'rest');
     responses.push({ message: "Taklif qo'llandi." }, day);
@@ -117,6 +135,7 @@ const tick = () => new Promise(r => setImmediate(r));
         actions: [10, 11, 12].map(w => ({ op: 'move', card_id: 5, week: w, day: 4, pair: 11, auditorium_code: 'R1' })) }]);
     assert.deepEqual(calls.slice(1, 4).map(c => c[0]), ['toast', 'loadChangeRequests', 'loadBoard']);
     assert.match(calls[4][0], /teacher-agenda\?/);   // oyna yangilanadi
+    assert.doesNotMatch(calls[4][0], /rest_for/);   // tanlov tozalandi
     assert.equal(c2.getSt().pick, null);
     assert.equal(c2.getSt().msg.kind, 'ok');
 

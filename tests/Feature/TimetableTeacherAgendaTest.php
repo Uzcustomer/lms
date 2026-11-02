@@ -361,3 +361,55 @@ it('agenda: boshqa haftaga o\'tilganda ko\'chiriladigan dars kaliti o\'sha hafta
     // O'z haftasida — topiladi.
     expect(agGet($s, $s['admin'], 'admin', ['range' => 'week', 'move' => $key])['move'])->toMatchArray(['kind' => 'weekly', 'week' => $s['week']]);
 });
+
+it('agenda: "shu va keyingi haftalar" — tanlangan para va taklif qilingan xona har keyingi haftada tekshiriladi', function () {
+    $s = agSetup();
+    $key = 'w|' . $s['ppB']->id . '|' . $s['week'];
+    // rest_for so'ralmasa — tekshiruv yo'q (og'ir).
+    expect(agGet($s, $s['admin'], 'admin', ['move' => $key])['move'])->not->toHaveKey('rest');
+    $ok = agGet($s, $s['admin'], 'admin', ['move' => $key, 'rest_for' => '2026-11-19|6'])['move'];
+    expect($ok['rest_weeks'])->toBe(range($s['week'], 15))
+        ->and($ok['rest'])->toBe(['date' => '2026-11-19', 'pair' => 6, 'ok' => true, 'why' => null]);
+    // Keyingi haftada (payshanba VI para) pp/2024-01b guruhi boshqa darsda — "keyingi haftalar" rad etiladi, sababi bilan.
+    $x = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya', 'course' => 2,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Fizika', 'group_name' => 'pp/2024-01b', 'kafedra_name' => 'Farmakologiya kafedrasi']);
+    \App\Models\TimetableCardOverride::create(['card_id' => $x->id, 'week' => $s['week'] + 1, 'day' => 4, 'pair' => 11]);
+    $bad = agGet($s, $s['admin'], 'admin', ['move' => $key, 'rest_for' => '2026-11-19|6'])['move'];
+    expect($bad['options']['2026-11-19'][6]['ok'])->toBeTrue()   // shu hafta — bo'sh
+        ->and($bad['rest']['ok'])->toBeFalse()
+        ->and($bad['rest']['why'])->toStartWith(($s['week'] + 1) . '-hafta (26.11): ')->toContain('Guruh band: pp/2024-01b');
+    // O'chiq para uchun — o'z sababi.
+    $five = agGet($s, $s['admin'], 'admin', ['move' => $key, 'rest_for' => '2026-11-19|5'])['move'];
+    expect($five['rest'])->toBe(['date' => '2026-11-19', 'pair' => 5, 'ok' => false, 'why' => $five['options']['2026-11-19'][5]['why']]);
+});
+
+it('agenda: bitta ma\'ruza kartasi guruhchalarda har xil soatda (xonasiz) — alohida yozuvlar, vaqt bo\'sh deb ko\'rinmaydi', function () {
+    $this->travelTo(Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    Role::findOrCreate('admin', 'web');
+    $lektor = agTeacher('LEKTOR L.');
+    $admin = agTeacher('ADMIN', 'admin');
+    $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 15, 'settings' => ['semester_start' => '2026-09-14']]);
+    TimetableSubjectSetting::create(['board_id' => $board->id, 'specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Klinik farmakologiya', 'mode' => 'cycle', 'cycle_days' => 5]);
+    $mc = DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'x', 'specialty_name' => 'davolash ishi',
+        'plan_year' => '2022/2023', 'level_code' => '15', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('manual_curriculum_subjects')->insert(['manual_curriculum_id' => $mc, 'subject_name' => 'Klinik farmakologiya',
+        'semester' => 9, 'lecture' => 4, 'practice' => 26, 'created_at' => now(), 'updated_at' => now()]);
+    $base = ['board_id' => $board->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'lang' => 'uz', 'len_half' => 2,
+        'weeks' => 15, 'subject_name' => 'Klinik farmakologiya', 'kafedra_name' => 'Farmakologiya kafedrasi', 'oqim_label' => '1-oqim'];
+    foreach (['d22-05a', 'd22-05b'] as $g) {
+        TimetableCard::create($base + ['students' => 10, 'training_type' => 'practice', 'group_name' => $g]);
+    }
+    TimetableCard::create($base + ['students' => 20, 'training_type' => 'lecture', 'group_names' => ['d22-05a', 'd22-05b'],
+        'teacher_id' => $lektor->id, 'teacher_name' => 'LEKTOR L.']);
+    // 05b ning 1-kungi ma'ruzasi 7-soatdan (05a — 1-soatdan).
+    TimetableCyclePlacement::create(['board_id' => $board->id, 'specialty_name' => 'davolash ishi', 'course' => 5, 'group_name' => 'F1 / 1-oqim',
+        'subject_name' => 'Klinik farmakologiya', 'start_index' => 0, 'training_type' => 'practice',
+        'lecture_slots' => ['starts_g' => ['d22-05b' => [0 => 7]]]]);
+    $j = agAs($admin, 'admin')->getJson(route('admin.timetable.teacher-agenda', $board) . '?teacher_id=' . $lektor->id . '&date=2026-09-14')->assertOk()->json();
+    expect(array_map(fn ($e) => [$e['type'], implode(', ', $e['groups']), $e['from'], $e['conflict']], $j['entries']))
+        ->toBe([['M', 'd22-05a', 1, false], ['M', 'd22-05b', 7, false]])
+        ->and($j['entries'][0]['key'])->not->toBe($j['entries'][1]['key']);
+});

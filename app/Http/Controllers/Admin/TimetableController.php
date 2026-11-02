@@ -2939,7 +2939,7 @@ class TimetableController extends Controller
     private const DATA_ROLE_SCOPES = [
         'oqituvchi'      => ['mine', 'subjects', 'all'],
         'fan_masuli'     => ['subjects', 'mine', 'all'],
-        'kafedra_mudiri' => ['kafedra', 'mine', 'all'],
+        'kafedra_mudiri' => ['kafedra', 'mine', 'subjects', 'all'],   // mas'ul fanlari bo'lsa — "Mas'ul fanlarim" (boshqa kafedradagi ham)
     ];
 
     /** Doska ma'lumotlari: kartochkalar (rol va qamrov doirasida) va hafta istisnolari. */

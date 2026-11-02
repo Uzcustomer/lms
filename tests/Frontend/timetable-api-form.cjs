@@ -87,10 +87,11 @@ assert.equal(note.attrs.role, 'status');
             const scopeCards = l => scopeMode === 'all' ? l : l.filter(x => +x.teacher_id === 9);
             const buildSpecList = () => { specList = cards.map(x => ({ key: String(x.id) })); };
             const renderMineUi = () => calls.push('mineUi'), syncUrl = () => {}, fillSpecControls = () => calls.push('fill'),
-                fillGridInputs = () => {}, renderAll = () => calls.push('render'), loadCyclePlan = () => {};
+                fillGridInputs = () => { if (this.normWeek) curWeek = this.normWeek; }, renderAll = () => calls.push('render'), loadCyclePlan = () => {};
             const loadBoard = () => { calls.push('load'); return Promise.resolve(); };
             ${fns}
             this.api = { showLoadedCards, setScopeMode, serverScopeParam, ensureScopeLoaded, setCards: v => { cards = v; }, get cards() { return cards; },
+                setWeeks: (w, sig) => { loadedWeeks = new Set(w); lastLoadSig = sig; },
                 setLoaded: (idx, loaded) => { specIndex = idx; loadedSpecs = loaded ? new Set(loaded.map(r => specTriple(r[0], r[1], r[2]))) : null; } };`, c);
         return c;
     };
@@ -128,6 +129,23 @@ assert.equal(note.attrs.role, 'status');
     assert.equal(c.api.showLoadedCards(), true);
     assert.equal(c.els.specBar.hidden(), false);
     assert.equal(c.els.mainArea.hidden(), false);
+    // Panjara almashib hafta moslashtirildi (16 → 9): ko'chirishlar 16-hafta uchun yuklangan — 9-hafta bilan qayta so'raladi (Codex);
+    // xuddi shu so'rov takrorlanmaydi; yuklangan hafta — odatdagidek chiziladi.
+    c = run('ro', 'mine', [{ id: 1, teacher_id: 9 }]);
+    c.week = 16; c.normWeek = 9;
+    vm.runInContext('curWeek = 16;', c);
+    c.api.setCards([{ id: 1, teacher_id: 9 }]);
+    c.api.setWeeks([16], '&scope=mine&weeks[]=16');
+    assert.equal(c.api.showLoadedCards(), true);
+    assert.deepEqual(c.calls.filter(x => x !== 'fill'), ['load']);
+    c.calls.length = 0;
+    c.api.setWeeks([16], '&scope=mine&weeks[]=9');   // 9-hafta bilan allaqachon so'ralgan — takrorlanmaydi
+    c.api.showLoadedCards();
+    assert.deepEqual(c.calls.filter(x => x !== 'fill'), ['render']);
+    c.calls.length = 0;
+    c.api.setWeeks([9], '&scope=mine&weeks[]=9');
+    c.api.showLoadedCards();
+    assert.deepEqual(c.calls.filter(x => x !== 'fill'), ['render']);
     // /data parametrlari: cheklangan rol — rejim har doim; "Butun doska" — tanlangan qamrov; o'qituvchi — tanlangan hafta.
     assert.equal(run('kafedra', 'mine', []).api.serverScopeParam(), '');   // admin — butun doska
     assert.equal(run('head', 'kafedra', []).api.serverScopeParam(), '&scope=kafedra');

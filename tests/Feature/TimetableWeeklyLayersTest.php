@@ -1451,3 +1451,13 @@ it('xotira monitoringi: so\'rov chegaradan (memory_warn_mb) ko\'p xotira ishlats
     layerAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk();
     expect($logged)->toBe([]);
 });
+
+it('kafedra mudiri "Mas\'ul fanlarim": /data mas\'ul fanlari kartalarini beradi (boshqa kafedradagi ham) — "Kafedraniki"ga aylantirilmaydi (Codex)', function () {
+    $s = responsibleScopeSetup();
+    $s['foreign']->update(['subject_name' => 'Gigiyena', 'kafedra_name' => 'Boshqa kafedra']);
+    $url = route('admin.timetable.boards.data', $s['board']);
+    $res = layerAs($s['head'], 'kafedra_mudiri')->getJson($url . '?scope=subjects')->assertOk()->json();
+    expect($res['filter']['scope'])->toBe('subjects')->and(collect($res['cards'])->pluck('id')->all())->toContain($s['foreign']->id);
+    // Sukut — kafedrasi: boshqa kafedra kartasi yo'q.
+    expect(collect(layerAs($s['head'], 'kafedra_mudiri')->getJson($url)->assertOk()->json('cards'))->pluck('id')->all())->not->toContain($s['foreign']->id);
+});

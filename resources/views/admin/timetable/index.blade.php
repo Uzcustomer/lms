@@ -3652,6 +3652,11 @@
                 const sig = serverScopeParam();
                 return missing && sig !== lastLoadSig && sig !== scopeInflightSig;
             }
+            // Ko'chirishlar faqat yuklangan haftalar uchun (o'qituvchi / fan mas'uli): ko'rsatilayotgan hafta ular orasida bo'lmasa (hafta
+            // tanlandi yoki panjara almashib hafta moslashtirildi) — shu hafta bilan qayta so'raladi; xuddi shu so'rov takrorlanmaydi.
+            function weekNeedsReload() {
+                return !!(board && loadedWeeks && !(+curWeek > 0 && loadedWeeks.has(+curWeek)) && serverScopeParam() !== lastLoadSig);
+            }
             function ensureScopeLoaded() {
                 if (!board || !scopeNeedsReload()) return false;
                 const sig = scopeInflightSig = serverScopeParam();
@@ -3682,7 +3687,11 @@
                 $('specBar').classList.remove('hidden'); $('mainArea').classList.remove('hidden');
                 if ((!curSpec || !specList.find(s => s.key === curSpec.key)) && specList.length) curSpec = specList.find(s => !s.idx) || specList[0];
                 fillSpecControls();
-                fillGridInputs();
+                fillGridInputs();   // hafta yangi panjaraga moslashtiriladi (fillWeekSel)
+                if (weekNeedsReload()) {
+                    loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
+                    return true;
+                }
                 renderAll();
                 ensureScopeLoaded();
                 return true;
@@ -5052,7 +5061,7 @@
                 showSkipped = false;
                 fillWeekSel();
                 // Ko'chirishlar faqat yuklangan haftalar uchun kelgan (o'qituvchi / fan mas'uli) — boshqa hafta: shu hafta bilan qayta so'raladi.
-                if (board && loadedWeeks && !(curWeek > 0 && loadedWeeks.has(curWeek))) {
+                if (weekNeedsReload()) {
                     loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
                     return;
                 }

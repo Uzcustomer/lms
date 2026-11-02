@@ -2176,6 +2176,70 @@ it('bugungi darslar: boshlangan / o\'tgan darsga va o\'tgan vaqtga ko\'chirish t
     expect($rows[3]['status'])->toBe('update')->and($rows[2]['changes'])->toBe(['vaqt: 12:00–13:20 → 08:30–09:50']);
 });
 
+it('bugungi darslar: hozirgi vaqt va "bugun" Asia/Tashkent bo\'yicha — server vaqt zonasi boshqa bo\'lsa ham', function (string $tz) {
+    $prev = date_default_timezone_get();
+    date_default_timezone_set($tz);
+    config(['app.timezone' => $tz]);
+    try {
+        $s = hsSetup();
+        $s['card']->update(['pair' => 5]);   // HEMIS 10:00 → LMS 12:00
+        $items = fn () => htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20')]]);
+        $call = fn (array $p = []) => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'registrator_ofisi'])
+            ->postJson(route('admin.timetable.hemis-today', $s['board']), $p + ['faculty_names' => ['F1'], 'specialty_names' => ['stomatologiya'],
+                'courses' => [1]])->assertOk()->json();
+
+        // Toshkentda 08:43: 10:00 dagi dars hali boshlanmagan — vaqti o'zgaradi ("vaqt o'tgan" emas).
+        test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-14 08:43', 'Asia/Tashkent'));
+        $items();
+        $res = $call();
+        expect($res['today'])->toBe('2026-09-14')
+            ->and($res['rows'][0])->toMatchArray(['hemis_id' => 1, 'status' => 'update', 'changes' => ['vaqt: 10:00–11:20 → 12:00–13:20']])
+            ->and($res['rows'][0])->not->toHaveKey('note');
+
+        // Toshkentda 10:05: dars boshlangan — vaqti o'zgarmaydi.
+        test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-14 10:05', 'Asia/Tashkent'));
+        $items();
+        expect($call()['rows'][0])->toMatchArray(['status' => 'info', 'reason' => "vaqt o'tgan — faqat o'qituvchi/xona"]);
+
+        // Toshkentda 15-sentabr 01:00 (UTC bo'yicha hali 14-sentabr) — "bugun" 15-sentabr (dushanba emas: LMS'da dars yo'q).
+        test()->travelTo(\Illuminate\Support\Carbon::parse('2026-09-15 01:00', 'Asia/Tashkent'));
+        $items();
+        expect($call()['today'])->toBe('2026-09-15');
+    } finally {
+        date_default_timezone_set($prev);
+        config(['app.timezone' => $prev]);
+    }
+})->with(['UTC' => 'UTC', 'Asia/Tokyo' => 'Asia/Tokyo']);
+
+it('bugungi darslar: juftlashda avval aynan bir xil vaqtdagi dars (bo\'lakli nomi ham) — u o\'z joyida qoladi, ma\'ruza 08:30 → 12:00 update', function () {
+    $s = hsSetup();
+    $s['card']->update(['subject_name' => 'Klinik farmakologiya']);       // LMS amaliy: 10:00 va 15:00
+    $late = htCard($s, 'Klinik farmakologiya', 9, '71');
+    htCard($s, 'Pediatriya', 5, 'L1', ['training_type' => 'lecture']);    // LMS ma'ruza: 12:00
+    $items = [htItem(1, '2026-09-14', '08:30', '09:50', ['subject' => 'Pediatriya', 'subject_id' => 490, 'code' => '11', 'type' => "Ma'ruza", 'room' => 'L1']),
+        // HEMIS'da 10:00 dagi amaliy bo'lakli nom bilan, 12:00 dagisi — LMS'dagi nomi bilan.
+        htItem(2, '2026-09-14', '10:00', '11:20', ['subject' => 'Klinik farmakologiya (b)', 'subject_id' => 480]),
+        htItem(3, '2026-09-14', '12:00', '13:20', ['subject' => 'Klinik farmakologiya', 'subject_id' => 480])];
+    htFake([1596 => $items]);
+    $res = htCall($s)->assertOk()->json();
+    $rows = collect($res['rows'])->keyBy('hemis_id');
+    // 10:00 — o'zgarmaydi (avval 12:00 dagisi 10:00 ga, 10:00 dagisi 15:00 ga surilardi); 12:00 → 15:00 bo'shaydi, ma'ruza o'sha joyga.
+    expect($rows[2]['status'])->toBe('ok')->and($rows[2]['changes'])->toBe([])
+        ->and($rows[3]['status'])->toBe('update')->and($rows[3]['changes'])->toBe(['vaqt: 12:00–13:20 → 15:00–16:20'])
+        ->and($rows[1]['status'])->toBe('update')->and($rows[1]['changes'])->toBe(['vaqt: 08:30–09:50 → 12:00–13:20'])
+        ->and($rows[1]['blocked'])->toBe([]);
+    $actions = collect($res['json']['groups'][0]['units'])->flatMap(fn ($u) => $u['actions'])->sortBy('gseq')->values();
+    expect($actions->map(fn ($a) => $a['hemis_id'] . ' ' . $a['start'])->all())->toBe(['3 15:00', '1 12:00']);
+
+    // LMS'da faqat 10:00 dagi amaliy: 12:00 dagisi 10:00 ga ko'chirilib "ustma-ust" deb to'silmaydi — u ortiqcha, 10:00 dagisi joyida.
+    $late->delete();
+    htFake([1596 => $items]);
+    $rows = collect(htCall($s)->assertOk()->json('rows'))->keyBy('hemis_id');
+    expect($rows[2]['status'])->toBe('ok')
+        ->and($rows[3]['status'])->toBe('info')->and($rows[3]['reason'])->toContain('ortiqcha dars')
+        ->and(collect($rows)->pluck('blocked')->flatten()->filter(fn ($b) => str_contains($b, 'Klinik farmakologiya (b)'))->all())->toBe([]);
+});
+
 it('bugungi darslar: specialty_names (va boshqa ro\'yxatlar) bo\'sh bo\'lsa — fakultetdagi hamma yo\'nalishlar', function () {
     $s = hsSetup();
     TimetableGridSetting::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'pediatriya', 'course' => 1,

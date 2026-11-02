@@ -43,6 +43,14 @@
     // Qamrov rejimi (Butun doska / Kafedraniki / Mas'ul fanlarim / Faqat meniki) — har foydalanuvchi va rol uchun alohida saqlanadi
     // (superadmin bir foydalanuvchidan boshqasiga o'tganda oldingi rejim qolib ketmasin): guard + id.
     $timetableUserKey = ($timetableUser instanceof \App\Models\Teacher ? 't' : 'u') . (int) ($timetableUser?->getAuthIdentifier() ?? 0);
+    // O'qituvchi, fan mas'uli, kafedra mudiri: doska tanlovi bo'sh turmasin — yagona doska, bo'lmasa eng yangi (joriy) Real doska
+    // (kartalari bor). URLda doska berilgan bo'lsa — o'sha.
+    $timetableAutoBoardId = null;
+    if (in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli', 'kafedra_mudiri'], true) && isset($boards) && $boards->count()) {
+        $withCards = fn ($b) => (int) ($b->cards_count ?? 0) > 0;
+        $timetableAutoBoardId = ($boards->count() === 1 ? $boards->first() : null
+            ?? $boards->first(fn ($b) => ($b->kind ?? '') === 'real' && $withCards($b)) ?? $boards->first($withCards) ?? $boards->first())->id;
+    }
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
@@ -2697,6 +2705,7 @@
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_CAN_UNPLACE = @json($timetableCanUnplace);
             const TIMETABLE_FORBIDDEN_IDS = @json($timetableForbiddenIds);
+            const TIMETABLE_AUTO_BOARD_ID = @json($timetableAutoBoardId);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
             const TIMETABLE_ROLE = @json($timetableActiveRole);
@@ -4971,10 +4980,10 @@
                     if (chk.checked) body.querySelectorAll('[data-sug-pick^="' + chk.dataset.sugPick.split(':')[0] + ':"]').forEach(o => { if (o !== chk) o.checked = false; });
                     sync();
                 });
-                const applyOne = async (ci, si) => {
+                const applyOne = async (ci, si, reason) => {
                     const c = window.__ttSug[ci], sug = c.suggestions[si];
                     const r = await api(BASE + '/boards/' + board.id + '/week-suggestions/' + (sug.mode === 'direct' ? 'apply' : 'propose'), 'POST',
-                        { week: res.week, card_id: c.id, type: sug.type, title: sug.title, actions: sug.actions });
+                        Object.assign({ week: res.week, card_id: c.id, type: sug.type, title: sug.title, actions: sug.actions }, sug.mode === 'direct' ? {} : { reason }));
                     return r;
                 };
                 const confirmSug = sug => !((sug.type === 'teacher' && !confirm('O\'qituvchi butun semestr uchun almashadi. Davom etamizmi?'))
@@ -4990,20 +4999,26 @@
                     const [ci, si] = btn.dataset.sug.split(':').map(Number);
                     const sug = window.__ttSug[ci].suggestions[si];
                     if (!sug.can_apply || !confirmSug(sug)) return;
+                    // So'rov (kafedra mudiri / registrator tasdig'i) — sabab majburiy.
+                    const reason = sug.mode === 'direct' ? '' : askSugReason();
+                    if (reason === null) { sugNote(body, "So'rov yuborilmadi: sabab kiritilmadi.", 'err'); return; }
                     btn.disabled = true; btn.textContent = '…';
                     // Yaxlit: server barcha amallarni bitta tranzaksiyada bajaradi (yoki bitta so'rov yaratadi) — qisman bajarilmaydi.
-                    try { const r = await applyOne(ci, si); await finish([r.message || 'Qo\'llandi.']); }
+                    try { const r = await applyOne(ci, si, reason); await finish([r.message || 'Qo\'llandi.']); }
                     catch (e) { sugNote(body, 'Bajarilmadi (jadval o\'zgarmadi): ' + esc(e.message), 'err'); btn.disabled = false; btn.textContent = sugApplyLabel(sug.mode); }
                 });
                 const all = body.querySelector('[data-sug-apply-all]');
                 if (all) all.onclick = async () => {
                     const list = pick();
                     if (!list.length || list.some(([ci, si]) => !confirmSug(window.__ttSug[ci].suggestions[si]))) return;
+                    // So'rovlar bo'lsa — sabab bir marta so'raladi (hammasiga).
+                    const reason = list.some(([ci, si]) => window.__ttSug[ci].suggestions[si].mode !== 'direct') ? askSugReason() : '';
+                    if (reason === null) { sugNote(body, "So'rov yuborilmadi: sabab kiritilmadi.", 'err'); return; }
                     all.disabled = true;
                     const msgs = [], errs = [];
                     for (const [ci, si] of list) {
                         const c = window.__ttSug[ci];
-                        try { const r = await applyOne(ci, si); msgs.push(c.subject + ': ' + (r.message || 'qo\'llandi')); }
+                        try { const r = await applyOne(ci, si, reason); msgs.push(c.subject + ': ' + (r.message || 'qo\'llandi')); }
                         catch (e) { errs.push(c.subject + ': ' + e.message); }
                     }
                     // Har tanlangan taklif — alohida so'rov; bajarilmaganlari oyna ichida (qayta hisoblangan ro'yxat ustida).
@@ -5013,6 +5028,11 @@
             }
             // Taklif qatori: katakcha (qo'llash mumkin bo'lsa), turi, matni, "Qo'llash" (yoki o'chiq — sababi bilan).
             function sugApplyLabel(mode) { return mode === 'direct' ? 'Qo\'llash' : 'So\'rov yuborish'; }
+            // "So'rov yuborish" sababi (kafedra mudiri va registrator ofisi ko'radi): bekor qilinsa yoki bo'sh — null (yuborilmaydi).
+            function askSugReason() {
+                const r = prompt("So'rov sababi (kafedra mudiri va registrator ofisi ko'radi):", '');
+                return r === null || !String(r).trim() ? null : String(r).trim();
+            }
             function sugRowHtml(s, ci, si, applyMode) {
                 const can = Boolean(s.can_apply);
                 return '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;border-top:1px dashed #f1f5f9">' +
@@ -7529,8 +7549,10 @@
                 if (panel) panel.classList.toggle('hidden', condition !== 'lecture_week_distribution');
             }
 
+            // Qoidalar — faqat to'liq huquqli rollarga (server boshqalarga 403): o'qituvchi, fan mas'uli, kafedra mudiri, o'quv bo'limida so'ralmaydi.
+            const TIMETABLE_CAN_RULES = !TIMETABLE_ASSIGNMENT_ONLY;
             async function loadRules() {
-                if (!board) return;
+                if (!board || !TIMETABLE_CAN_RULES) return;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/rules');
                     rulesData = j.rules || [];
@@ -8349,8 +8371,12 @@
                 const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[Math.max(a, b)] = Math.min(a, b); };
                 const seen = {};
                 list.forEach((it, i) => {
-                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
-                    if (k in seen) join(seen[k], i); else seen[k] = i;
+                    // Bitta dars: o'sha karta (sikl — karta + sana) yoki o'sha fan + tur + guruh(cha) (bitta katakda: darsning qismlari,
+                    // har xil kartalar — bo'lingan amaliy, sikl kunlari yozuvlari).
+                    [it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id, crossLessonKey(it)].forEach(k => {
+                        if (!k) return;
+                        if (k in seen) join(seen[k], i); else seen[k] = i;
+                    });
                 });
                 list.forEach((a, i) => list.forEach((b, j) => { if (j > i && sameCrossLesson(a, b)) join(i, j); }));
                 const byRoot = {}, lessons = [];
@@ -8369,6 +8395,22 @@
                 }));
                 const clashing = lessons.filter(ls => hit.has(ls));
                 return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
+            }
+            // Dars kaliti: fakultet + yo'nalish + kurs (guruh nomlari ular orasida takrorlanadi — cycleConflicts kabi) + fan + tur +
+            // guruh(cha)lar (qo'shimcha "(o'z)" va katta-kichik harfsiz); guruhi yo'q — null (birlashtirilmaydi).
+            const crossGroupNorm = g => String(g || '').toLowerCase().replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+            function crossItemGroups(it) {
+                const x = it.c || it.l;
+                const raw = it.l ? (it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]) : cardGroups(x);
+                const out = [];
+                raw.forEach(g => String(g || '').split(/\s*\+\s*/).forEach(sg => { sg = crossGroupNorm(sg); if (sg && !out.includes(sg)) out.push(sg); }));
+                return out.sort();
+            }
+            function crossLessonKey(it) {
+                const x = it.c || it.l, gs = crossItemGroups(it);
+                const scope = [x.faculty_name, x.specialty_name, x.course].map(v => String(v == null ? '' : v).trim().toLowerCase()).join('|');
+                return gs.length ? 'S' + scope + '|' + String(x.subject_name || '').trim().toLowerCase() + '|' + (x.training_type === 'lecture' ? 'L' : 'A')
+                    + '|' + gs.join(',') : null;
             }
             // Sikl darsining zal to'qnashuvlari (birlashtirilgan chipda — barcha yozuvlardan).
             const cycRoomClashes = l => (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
@@ -8515,12 +8557,19 @@
                             const cell = crossCellLessons(cl.items, !noClash(col));
                             const shown = [];
                             cell.lessons.forEach(ls => {
-                                const seenIds = {};
+                                const chips = [];   // [{ keys: Set, idx }]
                                 ls.items.forEach(it => {
-                                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
-                                    if (!(k in seenIds)) { seenIds[k] = shown.length; shown.push(it); return; }
+                                    // Sikl yozuvlari — o'sha karta (+ sana) yoki o'sha dars kaliti (fan + tur + guruh) bo'lsa bitta chip (qismlari
+                                    // parts'da), o'qituvchi va xonasi ham bir xil bo'lsa: chip bitta o'qituvchi/xonani ko'rsatadi — boshqasi
+                                    // alohida chip (dars sanog'i o'zgarmaydi). Haftalik karta — o'z chipi.
+                                    const lk = it.l ? crossLessonKey(it) : null;
+                                    const asg = it.l ? '|T' + (it.l.teacher_id || it.l.teacher_name || '') + '|R' + (it.l.auditorium_code || it.l.auditorium_name || '') : '';
+                                    const keys = it.l ? ['C' + it.l.id + '|' + (it.l.date || '') + asg].concat(lk ? [lk + '|' + (it.l.date || '') + asg] : []) : ['W' + it.c.id];
+                                    const ch = chips.find(x => keys.some(k => x.keys.has(k)));
+                                    if (!ch) { chips.push({ keys: new Set(keys), idx: shown.length }); shown.push(it); return; }
+                                    keys.forEach(k => ch.keys.add(k));
                                     if (!it.l) return;
-                                    const first = shown[seenIds[k]];
+                                    const first = shown[ch.idx];
                                     const gs = [...new Set([].concat(first.l.group_names && first.l.group_names.length ? first.l.group_names : [first.l.group_name],
                                         it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]))];
                                     // Vaqtlari har xil bo'lsa — umumiy oraliq, har guruhcha o'z vaqti, kun rejasi va so'rovi bilan (parts; oynada).
@@ -8532,7 +8581,7 @@
                                         parts: parts.length > 1 ? parts : undefined, ask: parts.some(p => p.ask),
                                         room_clash: clashes[0], room_clashes: clashes.length ? clashes : undefined });
                                     crossCycleShown.push(merged);
-                                    shown[seenIds[k]] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
+                                    shown[ch.idx] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
                                 });
                             });
                             const inner = shown.map(it => {
@@ -11660,7 +11709,8 @@
             });
 
             // URLdan doska ochish (F5 / havola) — tanlovlar ham URLdan tiklanadi (applyPendingView)
-            const urlBoard = new URLSearchParams(location.search).get('board');
+            // URLda doska bo'lmasa — o'qituvchi / fan mas'uli / kafedra mudiriga yagona yoki joriy Real doska (TIMETABLE_AUTO_BOARD_ID).
+            const urlBoard = new URLSearchParams(location.search).get('board') || (TIMETABLE_AUTO_BOARD_ID ? String(TIMETABLE_AUTO_BOARD_ID) : null);
             const notificationRequest = new URLSearchParams(location.search).get('change_request');
             if (urlBoard) loadBoard(urlBoard).then(() => {
                 if (notificationRequest) openChangeReqModal();

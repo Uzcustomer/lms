@@ -1461,3 +1461,31 @@ it('kafedra mudiri "Mas\'ul fanlarim": /data mas\'ul fanlari kartalarini beradi 
     // Sukut — kafedrasi: boshqa kafedra kartasi yo'q.
     expect(collect(layerAs($s['head'], 'kafedra_mudiri')->getJson($url)->assertOk()->json('cards'))->pluck('id')->all())->not->toContain($s['foreign']->id);
 });
+
+it('o\'qituvchi / fan mas\'uli / kafedra mudiri: doska avtomatik tanlanadi (yagona yoki eng yangi Real kartali doska); admin — tanlamaydi', function () {
+    $s = layersSetup();
+    Role::findOrCreate('oqituvchi', 'web');
+    Role::findOrCreate('fan_masuli', 'web');
+    $t = fmTeacherLayers('OQITUVCHI');
+    $t->syncRoles(['oqituvchi']);
+    $page = fn ($who, string $role) => layerAs($who, $role)->get(route('admin.timetable.index'))->assertOk()->getContent();
+    // Yagona doska.
+    expect($page($t, 'oqituvchi'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';')
+        ->and($page($s['head'], 'kafedra_mudiri'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';')
+        ->and($page($s['admin'], 'superadmin'))->toContain('const TIMETABLE_AUTO_BOARD_ID = null;');
+    // Yangiroq, lekin kartasiz doskalar — tanlanmaydi; Real doska bo'lmasa — kartali eng yangi doska.
+    TimetableBoard::create(['name' => 'Bo\'sh', 'academic_year' => '2026-2027', 'semester_parity' => 'bahorgi', 'kind' => 'real', 'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15]);
+    expect($page($t, 'oqituvchi'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';');
+    // Real kartali doska bor — u (yangiroq reja doskasidan ustun).
+    $s['board']->update(['kind' => 'real']);
+    $plan = TimetableBoard::create(['name' => 'Reja', 'academic_year' => '2027-2028', 'semester_parity' => 'kuzgi', 'kind' => 'plan', 'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15]);
+    TimetableCard::create(array_merge($s['foreign']->only(['faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students', 'training_type', 'len_half',
+        'weeks', 'subject_name', 'kafedra_name', 'group_name']), ['board_id' => $plan->id]));
+    expect($page($t, 'oqituvchi'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';');
+    // URLdagi doska ustun; qoidalar faqat to'liq huquqli rollarga so'raladi.
+    $html = $page($t, 'oqituvchi');
+    expect($html)->toContain("const urlBoard = new URLSearchParams(location.search).get('board') || (TIMETABLE_AUTO_BOARD_ID ? String(TIMETABLE_AUTO_BOARD_ID) : null);")
+        ->and($html)->toContain('if (!board || !TIMETABLE_CAN_RULES) return;')->and($html)->toContain('const TIMETABLE_CAN_RULES = !TIMETABLE_ASSIGNMENT_ONLY;');
+    // Server: rules — o'qituvchiga 403 (shuning uchun frontend so'ramaydi).
+    layerAs($t, 'oqituvchi')->getJson(route('admin.timetable.rules', $s['board']))->assertForbidden();
+});

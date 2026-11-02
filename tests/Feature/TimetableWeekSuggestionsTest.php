@@ -484,7 +484,7 @@ function sapGet(Teacher $t, string $role, array $s): array
 
 function sapBody(array $card, array $sug): array
 {
-    return ['week' => 3, 'card_id' => $card['id'], 'type' => $sug['type'], 'title' => $sug['title'], 'actions' => $sug['actions']];
+    return ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $card['id'], 'type' => $sug['type'], 'title' => $sug['title'], 'actions' => $sug['actions'], 'reason' => 'Sinov sababi'];
 }
 
 it('takliflar: o\'quv bo\'limi ko\'radi, qo\'llashda 403; o\'qituvchi faqat o\'z darsini ko\'radi', function () {
@@ -591,7 +591,7 @@ it('takliflar: o\'qituvchi boshqa o\'qituvchining darsini suradigan taklifni va 
     expect($sug['can_apply'])->toBeFalse()->and($sug['why'])->toContain("Boshqa o'qituvchining darsini surish");
     sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertForbidden();
     // O'qituvchini almashtirish ham — faqat kafedra mudiri va adminlar.
-    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['week' => 3, 'card_id' => $s['own']->id,
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id,
         'actions' => [['op' => 'teacher', 'card_id' => $s['own']->id, 'teacher_id' => $b->id]]])
         ->assertForbidden()->assertJsonPath('message', fn ($m) => str_contains($m, "O'qituvchini almashtirish"));
     // Bugungi kunga tegadigan taklif: ko'rinadi, lekin qo'llab bo'lmaydi (admin ham).
@@ -636,13 +636,13 @@ it('takliflar: admin darhol, yaxlit qo\'llaydi — bitta amal o\'tmasa hech biri
     TimetableCardOverride::create(['card_id' => $x->id, 'week' => 3, 'day' => 4, 'pair' => 1]);
     $url = route('admin.timetable.week-suggestions.apply', $s['board']);
     // 1-amal o'tadi, 2-amal (shu guruh band vaqtiga) — o'tmaydi: hech narsa yozilmaydi.
-    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [
         ['op' => 'move', 'card_id' => $x->id, 'week' => 3, 'day' => 5, 'pair' => 1],
         ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 5, 'pair' => 1],
     ]])->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'Guruh band'));
     expect(TimetableCardOverride::where('card_id', $x->id)->where('week', 3)->value('day'))->toBe(4)
         ->and(TimetableCardOverride::where('card_id', $s['own']->id)->exists())->toBeFalse();
-    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [
         ['op' => 'move', 'card_id' => $x->id, 'week' => 3, 'day' => 5, 'pair' => 1],
         ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1],
     ]])->assertOk();
@@ -659,7 +659,7 @@ it('takliflar: o\'qituvchini almashtirish saqlangan biriktiruvga ham yoziladi; b
     $u->assignRole('oqituvchi');
     // Faol rol — o'qituvchi, lekin admin roli ham bor: oynada "darhol", apply ishlaydi.
     expect(sapGet($u, 'oqituvchi', $s)['apply_mode'])->toBe('direct');
-    sugAs($u, 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+    sugAs($u, 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [
         ['op' => 'teacher', 'card_id' => $s['own']->id, 'teacher_id' => $new->id],
         ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 2, 'pair' => 3],
     ]])->assertOk();
@@ -667,7 +667,7 @@ it('takliflar: o\'qituvchini almashtirish saqlangan biriktiruvga ham yoziladi; b
         ->and(DB::table('timetable_unit_assignments')->where('board_id', $s['board']->id)->where('subject_name', 'Gigiyena')->value('teacher_id'))->toBe($new->id);
     // Kafedra mudiri apply'ni to'g'ridan-to'g'ri chaqira olmaydi (doskada tasdiq rejimi yoqilgan bo'lsa ham — umumiy ushlashga tushmaydi).
     $s['board']->update(['settings' => ['approval_required' => true]]);
-    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [
         ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1],
     ]])->assertForbidden();
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0)
@@ -676,7 +676,7 @@ it('takliflar: o\'qituvchini almashtirish saqlangan biriktiruvga ham yoziladi; b
     $hk = sugTeacher('ADMIN-MUDIR', ['department_hemis_id' => 501]);
     $hk->assignRole('superadmin');
     $hk->assignRole('kafedra_mudiri');
-    sugAs($hk, 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+    sugAs($hk, 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [
         ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1],
     ]])->assertOk()->assertJsonMissing(['pending_approval' => true]);
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0)
@@ -688,7 +688,7 @@ it('takliflar: yangi joy dastur to\'ridan tashqarida bo\'lsa — qo\'llanmaydi; 
     $url = route('admin.timetable.week-suggestions.apply', $s['board']);
     // To'r: 6 kun, 12 katak; karta 2 katak — 7-kun ham, 12-katakdan boshlash ham chegaradan tashqarida.
     foreach ([[7, 1], [2, 12]] as [$d, $p]) {
-        sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+        sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [
             ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => $d, 'pair' => $p],
         ]])->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'jadval chegarasidan tashqarida'));
     }
@@ -698,7 +698,7 @@ it('takliflar: yangi joy dastur to\'ridan tashqarida bo\'lsa — qo\'llanmaydi; 
     $sug = collect($card['suggestions'])->first(fn ($x) => $x['actions'][0]['day'] === 2 && $x['actions'][0]['pair'] === 3);
     sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertOk();
     $fz = sugCard($s, ['subject_name' => 'Fizika', 'group_name' => 'g-01a', 'kafedra_name' => 'Gigiyena kafedrasi']);
-    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['week' => 3, 'card_id' => $fz->id,
+    sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $fz->id,
         'actions' => [['op' => 'move', 'card_id' => $fz->id, 'week' => 3, 'day' => 2, 'pair' => 3]]])
         ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan'));
     // Haftalik o'qituvchi so'rovi ham Takliflar bronini ko'radi.
@@ -720,17 +720,17 @@ it('takliflar: sana — boshidagi va yakuniy joy bo\'yicha; blokni qayta qo\'yis
         ['op' => 'move', 'card_id' => $b1->id, 'week' => 3, 'day' => $d, 'pair' => 1], ['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => $d, 'pair' => 3]];
     $url = route('admin.timetable.week-suggestions.apply', $s['board']);
     // Yakuniy joy — o'tgan kun (1-kun): rad.
-    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b1->id, 'actions' => $acts(1)])
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b1->id, 'actions' => $acts(1)])
         ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
     // 4-kundan 5-kunga (ikkalasi kelgusi): o'tadi.
-    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b1->id, 'actions' => $acts(5)])->assertOk();
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b1->id, 'actions' => $acts(5)])->assertOk();
     expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
         ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(5);
     // Faqat "reset" (yakuniy joy — o'tgan shablon kuni) — rad; bugungi darsni (boshidagi joyi bugun) kelgusi kunga ko'chirish — rad.
-    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b1->id, 'actions' => [['op' => 'reset', 'card_id' => $b1->id, 'week' => 3]]])
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b1->id, 'actions' => [['op' => 'reset', 'card_id' => $b1->id, 'week' => 3]]])
         ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
     TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->update(['day' => 2]);
-    sugAs($s['admin'], 'superadmin')->postJson($url, ['week' => 3, 'card_id' => $b2->id, 'actions' => [['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => 6, 'pair' => 3]]])
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b2->id, 'actions' => [['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => 6, 'pair' => 3]]])
         ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
     expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
         ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(2);
@@ -744,7 +744,7 @@ it('takliflar: kutilayotgan so\'rovdagi yangi xona ham bron — boshqa guruh va 
         'teacher_id' => sugTeacher('T ' . $g)->id, 'auditorium_code' => $room, 'auditorium_name' => $room]);
     [$a, $b] = [$mk('g-05a', 'R2'), $mk('g-05b', 'R2')];
     $propose = fn ($c, string $room) => sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']),
-        ['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1, 'auditorium_code' => $room]]]);
+        ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1, 'auditorium_code' => $room]]]);
     // a: 4-kun 1-katak, R1 xonada (hozirgi xonasi R2) — kutilmoqda.
     $propose($a, 'R1')->assertOk();
     // b: shu vaqtda R1 — bron bilan to'qnashadi (a ning hozirgi xonasi R2 bo'lsa ham).
@@ -758,7 +758,7 @@ it('takliflar: kafedra mudiri so\'rovi ham doska qulfi ostida bronlar bilan qayt
     $s = sapSetup();
     $mk = fn (string $g) => sugCard($s, ['subject_name' => 'Fizika ' . $g, 'group_name' => 'g-06', 'kafedra_name' => 'Gigiyena kafedrasi']);
     [$a, $b] = [$mk('a'), $mk('b')];
-    $body = fn ($c) => ['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1]]];
+    $body = fn ($c) => ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1]]];
     sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body($a))->assertOk();
     // b ning so'rovi a dan oldin sinovdan o'tgan deb (parallel) — to'g'ridan-to'g'ri submit: qulf ostida bron bilan rad etiladi.
     $sub = \Illuminate\Http\Request::create('/', 'POST', $body($b));
@@ -781,7 +781,7 @@ it('takliflar: o\'qituvchi almashtirishda boshqa haftalarda faqat yangi o\'qituv
     $x = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-07', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
         'auditorium_code' => 'R9', 'auditorium_name' => 'R9']);
     TimetableCardOverride::create(['card_id' => $x->id, 'week' => 4, 'day' => 1, 'pair' => 5]);
-    $body = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [
+    $body = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [
         ['op' => 'teacher', 'card_id' => $s['own']->id, 'teacher_id' => $n->id],
         ['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 2, 'pair' => 3],
     ]];
@@ -806,21 +806,21 @@ it('takliflar: o\'qituvchi almashtirish bronida yangi o\'qituvchi — shu vaqtga
     $propose = fn (array $body) => sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body);
     // a: o'qituvchi → N, 3-haftada 4-kun 1-katakka; shablonda 1-kun 5-katak (boshqa haftalarda ham N shu vaqtda).
     $a = $mk('g-11', ['day' => 1, 'pair' => 5]);
-    $propose(['week' => 3, 'card_id' => $a->id, 'actions' => [['op' => 'teacher', 'card_id' => $a->id, 'teacher_id' => $n->id],
+    $propose(['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $a->id, 'actions' => [['op' => 'teacher', 'card_id' => $a->id, 'teacher_id' => $n->id],
         ['op' => 'move', 'card_id' => $a->id, 'week' => 3, 'day' => 4, 'pair' => 1]]])->assertOk();
     // b (boshqa guruh, xona): o'qituvchisi N — shu vaqtga so'rov (kutilayotgan almashtirish N ni band qilgan).
     $b = $mk('g-12', ['teacher_id' => $n->id]);
-    $propose(['week' => 3, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 3, 'day' => 4, 'pair' => 1]]])
+    $propose(['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 3, 'day' => 4, 'pair' => 1]]])
         ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan') && str_contains($m, 'o‘qituvchi'));
     // c: o'qituvchi → N va shu vaqtga — ham rad (kiruvchi tomonda ham yangi o'qituvchi).
     $c = $mk('g-13');
-    $propose(['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'teacher', 'card_id' => $c->id, 'teacher_id' => $n->id],
+    $propose(['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'teacher', 'card_id' => $c->id, 'teacher_id' => $n->id],
         ['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1]]])->assertUnprocessable();
     // Boshqa hafta: 5-haftada a shablon joyida (1-kun 5-katak) N bilan — b ni 5-haftada shu vaqtga so'rab bo'lmaydi.
-    $propose(['week' => 5, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 5, 'day' => 1, 'pair' => 5]]])
+    $propose(['reason' => 'Sinov sababi', 'week' => 5, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 5, 'day' => 1, 'pair' => 5]]])
         ->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'o‘qituvchi'));
     // Boshqa vaqt — mumkin.
-    $propose(['week' => 3, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 3, 'day' => 5, 'pair' => 1]]])->assertOk();
+    $propose(['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 3, 'day' => 5, 'pair' => 1]]])->assertOk();
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(2);
 });
 
@@ -830,21 +830,21 @@ it('takliflar: almashtirishning boshqa haftalari — yangi o\'qituvchi bandligi 
     $mk = fn (string $g, array $x = []) => sugCard($s, $x + ['subject_name' => 'Fizika ' . $g, 'group_name' => $g, 'kafedra_name' => 'Gigiyena kafedrasi',
         'teacher_id' => sugTeacher('T ' . $g)->id, 'auditorium_code' => 'X' . $g, 'auditorium_name' => 'X' . $g]);
     $propose = fn (array $body) => sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body);
-    $subst = fn ($c) => ['week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'teacher', 'card_id' => $c->id, 'teacher_id' => $n->id],
+    $subst = fn ($c) => ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $c->id, 'actions' => [['op' => 'teacher', 'card_id' => $c->id, 'teacher_id' => $n->id],
         ['op' => 'move', 'card_id' => $c->id, 'week' => 3, 'day' => 4, 'pair' => 1]]];
     // b (o'qituvchisi N) 5-haftada 1-kun 5-katakka so'ragan (kutilmoqda).
     $b = $mk('g-21', ['teacher_id' => $n->id]);
-    $propose(['week' => 5, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 5, 'day' => 1, 'pair' => 5]]])->assertOk();
+    $propose(['reason' => 'Sinov sababi', 'week' => 5, 'card_id' => $b->id, 'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 5, 'day' => 1, 'pair' => 5]]])->assertOk();
     // c shablonda 1-kun 5-katakda: o'qituvchini N ga almashtirish — 5-haftada N band (bron) — rad.
     $c = $mk('g-22', ['day' => 1, 'pair' => 5]);
     $propose($subst($c))->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'bron qilgan') && str_contains($m, 'o‘qituvchi'));
     // d: shu guruhga (g-23) boshqa dars 6-haftada 2-kun 1-katakka bron qilgan; keyin d o'zi (admin) shu joyga qo'yildi.
     $e = $mk('g-23');
-    $propose(['week' => 6, 'card_id' => $e->id, 'actions' => [['op' => 'move', 'card_id' => $e->id, 'week' => 6, 'day' => 2, 'pair' => 1]]])->assertOk();
+    $propose(['reason' => 'Sinov sababi', 'week' => 6, 'card_id' => $e->id, 'actions' => [['op' => 'move', 'card_id' => $e->id, 'week' => 6, 'day' => 2, 'pair' => 1]]])->assertOk();
     $d = $mk('g-23', ['subject_name' => 'Kimyo g-23']);
     TimetableCardOverride::create(['card_id' => $d->id, 'week' => 6, 'day' => 2, 'pair' => 1]);
     // d ning o'qituvchisini N ga almashtirish: 6-haftadagi guruh broni (e) to'smaydi — faqat o'qituvchi tekshiriladi.
-    $propose(['week' => 3, 'card_id' => $d->id, 'actions' => [['op' => 'teacher', 'card_id' => $d->id, 'teacher_id' => $n->id],
+    $propose(['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $d->id, 'actions' => [['op' => 'teacher', 'card_id' => $d->id, 'teacher_id' => $n->id],
         ['op' => 'move', 'card_id' => $d->id, 'week' => 3, 'day' => 5, 'pair' => 3]]])->assertOk();
 });
 
@@ -856,7 +856,7 @@ it('takliflar: yakuniy "reset" joyi ham to\'qnashuvga tekshiriladi (shablon joyi
     $x = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-01a', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
         'auditorium_code' => 'R7', 'auditorium_name' => 'R7']);
     TimetableCardOverride::create(['card_id' => $x->id, 'week' => 3, 'day' => 1, 'pair' => 5]);
-    $body = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
+    $body = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
     sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), $body)
         ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, 'Guruh band'));
     sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), $body)->assertUnprocessable();
@@ -871,8 +871,8 @@ it('takliflar: yakuniy "reset" joyi ham bron — ikki tomonda (kutilayotgan rese
     TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'cancelled' => true]);
     $x = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-01a', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
         'auditorium_code' => 'R7', 'auditorium_name' => 'R7']);
-    $reset = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
-    $moveX = ['week' => 3, 'card_id' => $x->id, 'actions' => [['op' => 'move', 'card_id' => $x->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
+    $reset = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
+    $moveX = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $x->id, 'actions' => [['op' => 'move', 'card_id' => $x->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
     $url = route('admin.timetable.week-suggestions.propose', $s['board']);
     // Kutilayotgan reset (1-kun 5-katak) — x ni shu vaqtga so'rab bo'lmaydi.
     sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertOk();
@@ -890,8 +890,8 @@ it('takliflar: yakuniy "reset" — bron shablon xonasi bilan (haftalik yozuvdagi
     TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1, 'auditorium_code' => 'R2', 'auditorium_name' => 'R2']);
     $y = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-31', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
         'auditorium_code' => 'R1', 'auditorium_name' => 'R1']);
-    $reset = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
-    $moveY = ['week' => 3, 'card_id' => $y->id, 'actions' => [['op' => 'move', 'card_id' => $y->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
+    $reset = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
+    $moveY = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $y->id, 'actions' => [['op' => 'move', 'card_id' => $y->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
     $url = route('admin.timetable.week-suggestions.propose', $s['board']);
     sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertOk();
     sugAs($s['head'], 'kafedra_mudiri')->postJson($url, $moveY)->assertUnprocessable()->assertJsonPath('message', fn ($m) => str_contains($m, 'auditoriya: R1'));
@@ -906,8 +906,8 @@ it('takliflar: yakuniy "reset" — shablonda xona yo\'q bo\'lsa, haftalik yozuvd
     TimetableCardOverride::create(['card_id' => $s['own']->id, 'week' => 3, 'day' => 4, 'pair' => 1, 'auditorium_code' => 'R2', 'auditorium_name' => 'R2']);
     $y = sugCard($s, ['subject_name' => 'Kimyo', 'group_name' => 'g-32', 'kafedra_name' => 'Gigiyena kafedrasi', 'teacher_id' => sugTeacher('Y')->id,
         'auditorium_code' => 'R2', 'auditorium_name' => 'R2']);
-    $reset = ['week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
-    $moveY = ['week' => 3, 'card_id' => $y->id, 'actions' => [['op' => 'move', 'card_id' => $y->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
+    $reset = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id, 'actions' => [['op' => 'reset', 'card_id' => $s['own']->id, 'week' => 3]]];
+    $moveY = ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $y->id, 'actions' => [['op' => 'move', 'card_id' => $y->id, 'week' => 3, 'day' => 1, 'pair' => 5]]];
     $url = route('admin.timetable.week-suggestions.propose', $s['board']);
     // Kutilayotgan reset R2 ni band qilmaydi — y R2 da shu vaqtga so'ray oladi; teskarisi ham.
     sugAs($s['t'], 'oqituvchi')->postJson($url, $reset)->assertOk();
@@ -940,7 +940,7 @@ it('takliflar: GET qaytargan har taklif turi FormData ko\'rinishida (satrlar, PH
 function sugFormCheck(array $s, array $card, int $week, array $who): void
 {
     $form = function (array $sug) use ($card, $week) {
-        $body = ['week' => $week, 'card_id' => $card['id'], 'type' => $sug['type'], 'title' => $sug['title'], 'actions' => $sug['actions']];
+        $body = ['week' => $week, 'card_id' => $card['id'], 'type' => $sug['type'], 'title' => $sug['title'], 'actions' => $sug['actions'], 'reason' => 'Sinov sababi'];
         array_walk_recursive($body, function (&$v) { $v = (string) $v; });
 
         return $body;
@@ -995,4 +995,36 @@ it('takliflar: FormData ko\'rinishida — ma\'ruzani surish (lecture) va boshqa 
     $card['suggestions'] = collect($card['suggestions'])->where('type', 'room')->take(1)->values()->all();
     expect($card['suggestions'])->toHaveCount(1);
     sugFormCheck($s, $card, 7, [[$s['admin'], 'superadmin', 'apply'], [$ustoz, 'oqituvchi', 'propose']]);
+});
+it('takliflar: so\'rov yuborishda fan kafedrasini aniqlash kafedralar soniga bog\'liq emas (150 kafedra — curriculum_subjects bir marta); sabab majburiy', function () {
+    $s = sapSetup();
+    $rows = [];
+    for ($i = 1; $i <= 150; $i++) {
+        $rows[] = ['department_hemis_id' => 7000 + $i, 'name' => 'Kafedra ' . $i, 'code' => 'K' . $i, 'structure_type_code' => 12, 'structure_type_name' => 'Kafedra',
+            'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1, 'created_at' => now(), 'updated_at' => now()];
+    }
+    DB::table('departments')->insert($rows);
+    $cs = [];
+    for ($i = 0; $i < 3000; $i++) {
+        $cs[] = ['curriculum_subject_hemis_id' => 500000 + $i, 'curricula_hemis_id' => 1, 'subject_id' => $i, 'subject_name' => 'S' . $i, 'subject_code' => 'C',
+            'semester_code' => '11', 'semester_name' => 'x', 'at_semester' => 1, 'department_id' => 7000 + ($i % 150) + 1, 'department_name' => 'Kafedra ' . (($i % 150) + 1)];
+    }
+    foreach (array_chunk($cs, 1000) as $ch) {
+        DB::table('curriculum_subjects')->insert($ch);
+    }
+    $card = collect(sapGet($s['t'], 'oqituvchi', $s)['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->firstWhere('type', 'slot');
+    // Sabab kiritilmasa — 422.
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), array_diff_key(sapBody($card, $sug), ['reason' => 1]))
+        ->assertUnprocessable()->assertJsonValidationErrors(['reason']);
+    $q = [];
+    DB::listen(function ($e) use (&$q) { $q[] = $e->sql; });
+    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['reason' => 'Ertalab amaliyot bor'] + sapBody($card, $sug))->assertOk();
+    expect(count(array_filter($q, fn ($sql) => str_contains($sql, 'from `curriculum_subjects`') && str_contains($sql, 'department_name'))))->toBeLessThanOrEqual(1)
+        ->and(count(array_filter($q, fn ($sql) => str_contains($sql, 'from `departments` where `department_hemis_id`'))))->toBeLessThan(10)
+        ->and(count($q))->toBeLessThan(250);
+    // Sabab so'rov matnida, bosqichlar izohida va details.reason da.
+    $req = \App\Models\TimetableChangeRequest::latest('id')->first();
+    expect($req->summary)->toEndWith(' — Ertalab amaliyot bor')->and($req->details['reason'])->toBe('Ertalab amaliyot bor')
+        ->and($req->details['steps'][0]['note'])->toBe('Ertalab amaliyot bor');
 });

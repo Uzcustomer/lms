@@ -1178,8 +1178,11 @@ it('xabarnomalar: so\'rov — kafedra mudiriga (LMS va xabarnomalar sahifasi), m
     asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.reject', $req2), ['note' => 'Zal band'])->assertOk();
     $last = TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->first();
     expect($req2->fresh()->status)->toBe('rejected')->and(\App\Models\TimetableCardOverride::count())->toBe($before)
-        ->and($last->title)->toBe("Dars jadvali o'zgarishi rad etildi (registrator ofisi)")->and($last->message)->toContain('Izoh: Zal band')
+        ->and($last->title)->toBe("Dars jadvali o'zgarishi rad etildi (registrator ofisi)")->and($last->message)->toStartWith("Izoh: Zal band\n")
         ->and(collect($inbox($teacher))->last())->toBe("Dars jadvali o'zgarishi rad etildi (registrator ofisi)");
+    // Registrator izohi (review_note) — matn boshida: xabarnomalar ro'yxatida (matnning faqat boshi ko'rinadi) ham ko'rinadi.
+    expect(\App\Models\Notification::where('recipient_id', $teacher->id)->latest('id')->value('body'))->toStartWith('Izoh: Zal band');
+    asRole($teacher, 'oqituvchi')->get(route('admin.notifications.index'))->assertOk()->assertSee('Izoh: Zal band');
 });
 
 it('xabarnomalar: kafedra mudiri topilmasa — logda ogohlantirish (xabar yo\'qolganini aniqlash uchun)', function () {

@@ -67,7 +67,7 @@ trait TimetableHemisSync
         ]);
         $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
             ? Carbon::parse($data['today'])->toDateString()
-            : now()->toDateString();
+            : $this->hemisLocalNow()->toDateString();
 
         // Butun doska / semestr oxirigacha: hisobot katta (bir necha MB) — serverning 128M chegarasi yetmaydi.
         @ini_set('memory_limit', '1024M');
@@ -99,7 +99,7 @@ trait TimetableHemisSync
         ]);
         $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
             ? Carbon::parse($data['today'])->toDateString()
-            : now()->toDateString();
+            : $this->hemisLocalNow()->toDateString();
 
         return response()->json($this->hemisUnplacedSummary($board, $data, $today));
     }
@@ -1721,7 +1721,7 @@ trait TimetableHemisSync
         ]);
         $today = !empty($data['today']) && in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true)
             ? Carbon::parse($data['today'])->toDateString()
-            : now()->toDateString();
+            : $this->hemisLocalNow()->toDateString();
         // Bo'sh ro'yxat — filtr yo'q (cycle-plan dagidek: "hamma yo'nalishlar"), "hech biri" emas.
         foreach (['faculty_names', 'specialty_names', 'courses'] as $k) {
             if (isset($data[$k]) && $data[$k] === []) {
@@ -1938,8 +1938,10 @@ trait TimetableHemisSync
         $toMin = fn (string $t) => (int) substr($t, 0, 2) * 60 + (int) substr($t, 3, 2);
         $hm = fn ($t) => substr((string) $t, 0, 5);
         // Hozirgi vaqt: boshlangan / o'tgan darsning vaqti o'zgartirilmaydi (o'tgan kun — hammasi o'tgan, kelgusi — hech biri).
-        $nowDate = now()->toDateString();
-        $nowHm = $today < $nowDate ? '24:00' : ($today > $nowDate ? '' : now()->format('H:i'));
+        // Mahalliy (Asia/Tashkent) soat: serverning APP_TIMEZONE'i (masalan, UTC) boshqa bo'lsa ham.
+        $now = $this->hemisLocalNow();
+        $nowDate = $now->toDateString();
+        $nowHm = $today < $nowDate ? '24:00' : ($today > $nowDate ? '' : $now->format('H:i'));
         $out = [];   // qatorlar
         $hemisOf = [];
         foreach ($groups as $gid => $g) {
@@ -2002,10 +2004,25 @@ trait TimetableHemisSync
                         $usedR[$ri[$a]] = $usedH[$hi[$b]] = true;
                     }
                 };
-                // Avval aynan bir xil nomli (bo'lagi ham) darslar, so'ng qolganlari asosiy nom bo'yicha (bir tomonda bo'lakli nom).
+                // Avval aynan bir xil vaqtdagi (boshi va oxiri) darslar — nomi bir xili ustuvor, so'ng bo'lakli nomlisi ham: ular o'z
+                // joyida qoladi (boshqa vaqtdagi yozuv bilan juftlanib, shu joyni "ustma-ust" qilib qo'ymaydi). So'ng aynan bir xil
+                // nomli (bo'lagi ham) darslar, oxirida qolganlari asosiy nom bo'yicha (bir tomonda bo'lakli nom).
+                foreach ([true, false] as $sameName) {
+                    foreach ($R as $ri => $r) {
+                        foreach ($H as $hi => $h) {
+                            if (!isset($usedR[$ri]) && !isset($usedH[$hi]) && $hm($h->lesson_pair_start_time) === $r['start']
+                                && $hm($h->lesson_pair_end_time) === $r['end']
+                                && (!$sameName || $this->hemisSubjectKey((string) $h->subject_name) === $r['xkey'])) {
+                                $pairs[] = [$ri, $hi];
+                                $usedR[$ri] = $usedH[$hi] = true;
+                            }
+                        }
+                    }
+                }
                 foreach (array_unique(array_column($R, 'xkey')) as $xk) {
-                    $align(array_keys(array_filter($R, fn ($r) => $r['xkey'] === $xk)),
-                        array_keys(array_filter($H, fn ($h) => $this->hemisSubjectKey((string) $h->subject_name) === $xk)));
+                    $align(array_keys(array_filter($R, fn ($r, $i) => !isset($usedR[$i]) && $r['xkey'] === $xk, ARRAY_FILTER_USE_BOTH)),
+                        array_keys(array_filter($H, fn ($h, $i) => !isset($usedH[$i]) && $this->hemisSubjectKey((string) $h->subject_name) === $xk,
+                            ARRAY_FILTER_USE_BOTH)));
                 }
                 $align(array_values(array_diff(array_keys($R), array_keys($usedR))), array_values(array_diff(array_keys($H), array_keys($usedH))));
                 foreach ($pairs as [$ri, $hi]) {
@@ -2184,6 +2201,12 @@ trait TimetableHemisSync
         }
 
         return array_reverse($pairs);
+    }
+
+    /** Hozirgi mahalliy vaqt (universitet — Toshkent): "bugun" va boshlangan/o'tgan dars shu bo'yicha. */
+    private function hemisLocalNow(): Carbon
+    {
+        return Carbon::now('Asia/Tashkent');
     }
 
     /** Qulf tekshiruvi havolasi shu kun oxirigacha amal qiladi (ertasi kun — eskirgan JSON). */

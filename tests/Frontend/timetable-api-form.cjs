@@ -125,4 +125,43 @@ assert.equal(note.attrs.role, 'status');
     assert.equal(c.els.specBar.hidden(), false);
     assert.equal(c.els.mainArea.hidden(), false);
 }
-console.log('timetable api form + takliflar note + /data + bo\'sh qamrov: 5 scenarios passed');
+// Qamrov / doska tez almashtirilsa — kechikkan eski javob (mas. scope=mine) yangisining ustiga yozilmaydi.
+(async () => {
+    const head = section('            let boardLoadSeq = 0;', '                board = j.board; allCards = j.cards || [];');
+    const el = () => ({ classList: { add() {}, remove() {} } });
+    const c = { applied: [], pending: [], el };
+    vm.createContext(c);
+    vm.runInContext(`
+        let board = null, scopeMode = 'all';
+        const TIMETABLE_READ_ONLY = true, BASE = '/b';
+        const $ = () => this.el(), toggleAscToolbar = () => {}, syncUrl = () => {};
+        const serverScopeParam = () => TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
+        const api = url => new Promise(res => this.pending.push({ url, res }));
+        ${head}
+                board = j.board; this.applied.push(j.tag);
+            }
+        this.loadBoard = loadBoard; this.hideBoard = hideBoard; this.setScope = m => { scopeMode = m; };`, c);
+    c.setScope('mine');
+    const p1 = c.loadBoard(3);              // "Faqat meniki"
+    c.setScope('all');
+    const p2 = c.loadBoard(3);              // darrov "Butun doska"
+    assert.match(c.pending[0].url, /scope=mine/);
+    assert.doesNotMatch(c.pending[1].url, /scope=/);
+    c.pending[1].res({ board: { id: 3 }, tag: 'all' });
+    await p2;
+    c.pending[0].res({ board: { id: 3 }, tag: 'mine' });   // eski javob kech keldi
+    await p1;
+    assert.deepEqual(c.applied, ['all']);
+    // Doska yopildi (hideBoard) — yo'lda qolgan yuklash uni qayta ochmaydi.
+    const p3 = c.loadBoard(4);
+    c.hideBoard();
+    c.pending[2].res({ board: { id: 4 }, tag: 'late' });
+    await p3;
+    assert.deepEqual(c.applied, ['all']);
+    // Oddiy (yagona) yuklash qo'llanadi.
+    const p4 = c.loadBoard(5);
+    c.pending[3].res({ board: { id: 5 }, tag: 'one' });
+    await p4;
+    assert.deepEqual(c.applied, ['all', 'one']);
+    console.log('timetable api form + takliflar note + /data + bo\'sh qamrov + eskirgan javob: 6 scenarios passed');
+})().catch(e => { console.error(e); process.exit(1); });

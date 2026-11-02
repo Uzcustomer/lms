@@ -3518,7 +3518,11 @@
                 document.querySelectorAll('.tt-type').forEach(x => x.classList.toggle('active', x.dataset.type === t));
             }
 
+            // So'nggi doska yuklash so'rovi tartib raqami: qamrov/doska tez almashtirilsa kechikkan eski javob
+            // (mas. scope=mine) yangisining ustiga yozilmaydi — faqat oxirgi so'rov qo'llanadi.
+            let boardLoadSeq = 0;
             function hideBoard() {
+                boardLoadSeq++;   // yo'lda qolgan yuklash doskani qayta ochmasin
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
                 $('refreshNamesBtn').classList.add('hidden'); $('reloadBoardBtn').classList.add('hidden');
@@ -3535,7 +3539,9 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
                 const dataScope = serverScopeParam();
+                const seq = ++boardLoadSeq;
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now() + dataScope);
+                if (seq !== boardLoadSeq) return;   // eskirgan javob — undan keyin yangi so'rov yuborilgan
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
                 invalidateWeeklyConflicts();

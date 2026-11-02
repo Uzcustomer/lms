@@ -51,15 +51,30 @@ const split = exportGrid(true).rows[1][0].t;
 assert.match(split,/Gigiyena 12:00–14:00/);
 assert.match(split,/• a 01a 15 SINOV 12:40–14:00 · SINOV A\. · №101/);
 assert.doesNotMatch(split,/DROP LINE MUST NOT EXPORT/);
-function initialScope(saved, unavailable=false) {
-    const ctx = {TIMETABLE_HAS_SUBJECTS:true,TIMETABLE_ROLE:'fan_masuli',TIMETABLE_TEACHER_ID:1,TIMETABLE_DEPARTMENT_HEAD:false,
-        localStorage:{getItem:()=>{if(unavailable)throw Error('Unavailable');return saved;}}};
+// Qamrov rejimi: kalit — foydalanuvchi va rol (lms:timetable-scope:{user}:{rol}); saqlanmagan — rol sukuti.
+function initialScope(saved, unavailable=false, o={}) {
+    const store = {};
+    const ctx = Object.assign({TIMETABLE_HAS_SUBJECTS:true,TIMETABLE_ROLE:'fan_masuli',TIMETABLE_TEACHER_ID:1,TIMETABLE_DEPARTMENT_HEAD:false,TIMETABLE_USER_KEY:'t1',
+        localStorage:{getItem:k=>{if(unavailable)throw Error('Unavailable');ctx.key=k;return saved;}}}, o);
     vm.createContext(ctx);
-    return vm.runInContext(section('let scopeMode =', 'let mineOnly =')+'; scopeMode;',ctx);
+    const mode = vm.runInContext(section('            const TIMETABLE_USER_KEY = ', 'let mineOnly =').replace('const TIMETABLE_USER_KEY = @json($timetableUserKey);', '')+'; scopeMode;',ctx);
+    return o.withKey ? [mode, ctx.key] : mode;
 }
 assert.equal(initialScope(null),'subjects');
 assert.equal(initialScope(null,true),'subjects');
-assert.equal(initialScope('0'),'all');
+assert.equal(initialScope('all'),'all');
+assert.equal(initialScope('0'),'subjects');   // eski qiymat ('0'/'1') — e'tiborsiz, rol sukuti
+assert.deepEqual(initialScope(null,false,{withKey:true,TIMETABLE_USER_KEY:'t77'}), ['subjects','lms:timetable-scope:t77:fan_masuli']);
+// Rol sukutlari: o'qituvchi — "Faqat meniki", kafedra mudiri — "Kafedraniki", admin — "Butun doska".
+assert.equal(initialScope(null,false,{TIMETABLE_ROLE:'oqituvchi',TIMETABLE_HAS_SUBJECTS:true}),'mine');
+assert.equal(initialScope(null,false,{TIMETABLE_ROLE:'kafedra_mudiri',TIMETABLE_DEPARTMENT_HEAD:true}),'kafedra');
+assert.equal(initialScope(null,false,{TIMETABLE_ROLE:'superadmin',TIMETABLE_TEACHER_ID:0,TIMETABLE_HAS_SUBJECTS:false}),'all');
+// Saqlangan qiymat ruxsat etilmagan bo'lsa (o'qituvchida mas'ul fan yo'q, adminda "Faqat meniki") — sukut.
+assert.equal(initialScope('subjects',false,{TIMETABLE_ROLE:'oqituvchi',TIMETABLE_HAS_SUBJECTS:false}),'mine');
+assert.equal(initialScope('mine',false,{TIMETABLE_ROLE:'superadmin',TIMETABLE_TEACHER_ID:0,TIMETABLE_HAS_SUBJECTS:false}),'all');
+assert.equal(initialScope('kafedra',false,{TIMETABLE_ROLE:'oqituvchi'}),'mine');
+// O'qituvchi o'zi "Mas'ul fanlarim"ni tanlagan bo'lsa (mas'ul fani bor) — saqlanadi.
+assert.equal(initialScope('subjects',false,{TIMETABLE_ROLE:'oqituvchi',TIMETABLE_HAS_SUBJECTS:true}),'subjects');
 const scopeContext = {scopeMode:'subjects',mySubjectCardIds:new Set([1]),list:[{id:1},{id:2}]};
 vm.createContext(scopeContext);
 assert.equal(vm.runInContext(section('function scopeCards(list)', 'let allCards =')+'; scopeCards(list);',scopeContext).length,1);

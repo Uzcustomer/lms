@@ -199,13 +199,14 @@ class TimetableChangeApproval
     /** O'qituvchi so'rovi bosqichi natijasi — yuboruvchiga; yakuniy natija (muddati o'tgan, qo'llanmadi) — dars o'qituvchisiga ham. */
     private function notifyTeacherOutcome(TimetableChangeRequest $req, string $outcome): void
     {
-        if ((!self::isTeacherProposal($req) && $req->route_name !== TimetableController::SUGGESTION_ROUTE) || !$req->requester instanceof Teacher) {
-            return;
-        }
+        // Yakuniy natija (muddati o'tgan, qo'llanmadi) — dars o'qituvchisiga, so'rovni kim yuborganidan qat'i nazar.
         if (in_array($outcome, [TimetableChangeRequest::EXPIRED, TimetableChangeRequest::FAILED], true)) {
             $this->notifyLessonTeachers($req, $outcome === TimetableChangeRequest::EXPIRED
                 ? "Darsingiz vaqtini o'zgartirish so'rovi muddati o'tgan" : "Darsingiz vaqtini o'zgartirish so'rovi qo'llanmadi",
                 'Sabab: ' . $req->error);
+        }
+        if ((!self::isTeacherProposal($req) && $req->route_name !== TimetableController::SUGGESTION_ROUTE) || !$req->requester instanceof Teacher) {
+            return;
         }
         [$title, $tail] = match ($outcome) {
             'endorsed' => ["Vaqt o'zgarishi: kafedra mudiri tasdiqladi", "Endi registrator ofisi tasdiqlaydi; jadval hali o'zgarmadi."],
@@ -220,17 +221,22 @@ class TimetableChangeApproval
     }
 
     /**
-     * Fan mas'uli boshqa o'qituvchi darsiga yuborgan so'rov: dars o'qituvchisi(lari)ga (details.lesson_teacher_ids) — so'rov
-     * yaratilganda va yakuniy natijada. O'qituvchining o'z so'rovida bunday qabul qiluvchi yo'q.
+     * So'rovni dars o'qituvchisining o'zi emas, boshqa odam yuborgan bo'lsa (fan mas'uli, kafedra mudiri, Takliflar): dars
+     * o'qituvchi(lari)ga (details.lesson_teacher_ids va o'zgaradigan kartalar o'qituvchilari) — so'rov yaratilganda va yakuniy natijada.
      */
     private function notifyLessonTeachers(TimetableChangeRequest $req, string $title, ?string $tail = null): void
     {
-        $ids = array_values(array_diff(array_map('intval', (array) (($req->details ?? [])['lesson_teacher_ids'] ?? [])), [(int) $req->requester_id]));
-        if (($req->requester_role !== 'fan_masuli' && $req->route_name !== TimetableController::SUGGESTION_ROUTE) || !$ids) {
+        $d = $req->details ?? [];
+        $ids = array_values(array_unique(array_map('intval', array_merge((array) ($d['lesson_teacher_ids'] ?? []), (array) ($d['teacher_ids'] ?? [])))));
+        if ($req->requester_type === (new Teacher())->getMorphClass()) {
+            $ids = array_values(array_diff($ids, [(int) $req->requester_id]));
+        }
+        $ids = array_filter($ids);
+        if (!$ids) {
             return;
         }
         $body = ($req->requester_name ? $req->requester_name . ' (' . self::proposerLabel($req) . "):\n" : '') . $req->summary . ($tail ? "\n" . $tail : '');
-        Teacher::whereIn('id', $ids)->get()->each(fn (Teacher $t) => $this->sendToTeacher($t, $title, $body, $req));
+        $this->notifyNow(Teacher::whereIn('id', $ids)->get(), $title, $body, $req, "dars o'qituvchisi");
     }
 
     public static function proposerLabel(TimetableChangeRequest $req): string
@@ -246,17 +252,22 @@ class TimetableChangeApproval
         return app(KafedraResolver::class)->heads($departmentId);
     }
 
+    /**
+     * Yangi so'rov (approval_stage = department) — kafedra mudiri(lar)iga LMS xabarnomasi (tranzaksiya yakunlangach, darhol —
+     * javobdan keyingi bosqichga qoldirilmaydi) va Telegram (javobdan keyin). Kim xabar olgani — logda.
+     */
     private function notifyDepartmentHeads(TimetableChangeRequest $req): void
     {
         $id = $req->id;
-        dispatch(function () use ($id) {
+        DB::afterCommit(function () use ($id) {
             $fresh = TimetableChangeRequest::find($id);
-            if ($fresh && $fresh->status === TimetableChangeRequest::PENDING && $fresh->approval_stage === 'department') {
-                $who = $fresh->requester_role === 'fan_masuli' ? "Fan mas'uli" : "O'qituvchi";
-                $this->departmentHeads((int) $fresh->department_hemis_id)->each(fn (Teacher $t) =>
-                    $this->sendToTeacher($t, $who . " vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda", $fresh->requester_name . ":\n" . $fresh->summary, $fresh));
+            if (!$fresh || $fresh->status !== TimetableChangeRequest::PENDING || $fresh->approval_stage !== 'department') {
+                return;
             }
-        })->afterResponse();
+            $who = $fresh->requester_role === 'fan_masuli' ? "Fan mas'uli" : "O'qituvchi";
+            $this->notifyNow($this->departmentHeads((int) $fresh->department_hemis_id), $who . " vaqt o'zgarishini taklif qildi — tasdiq kutilmoqda",
+                $fresh->requester_name . ":\n" . $fresh->summary, $fresh, 'kafedra mudiri (kafedra ' . (int) $fresh->department_hemis_id . ')');
+        });
     }
 
     public static function tableReady(): bool
@@ -413,9 +424,11 @@ class TimetableChangeApproval
 
             return $req;
         });
-        // Fan mas'uli boshqa o'qituvchi darsiga: dars o'qituvchisiga — so'rov yaratildi (tranzaksiyadan keyin).
+        // Boshqa odam (fan mas'uli, kafedra mudiri, Takliflar) dars o'qituvchisi darsiga: unga — so'rov yaratildi (tranzaksiyadan keyin).
         $this->notifyLessonTeachers($req, $req->route_name === TimetableController::SUGGESTION_ROUTE
-            ? ucfirst(self::proposerLabel($req)) . " darsingizga oid o'zgarishni so'radi (Takliflar)" : "Fan mas'uli darsingiz vaqtini o'zgartirishni so'radi",
+            ? ucfirst(self::proposerLabel($req)) . " darsingizga oid o'zgarishni so'radi (Takliflar)"
+            : ($req->requester_role === 'fan_masuli' ? "Fan mas'uli darsingiz vaqtini o'zgartirishni so'radi"
+                : ucfirst(self::proposerLabel($req) ?: 'xodim') . " darsingizga oid o'zgarishni so'radi"),
             ($req->approval_stage === 'department' ? 'Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi.' : 'Registrator ofisi tasdiqlaydi.')
             . " Shu vaqtgacha jadval o'zgarmaydi.");
 
@@ -476,13 +489,14 @@ class TimetableChangeApproval
             return ['ok' => false, 'error' => self::ALREADY_REVIEWED, 'stale' => true];
         }
         if ($result['ok']) {
-            $id = $req->id;
-            dispatch(function () use ($id) {
-                $fresh = TimetableChangeRequest::find($id);
-                if ($fresh) {
-                    app(self::class)->notifyApproved($fresh);
+            // LMS xabarnomalari (o'qituvchilar, talabalar) — darhol; Telegram — javobdan keyin (notifyApproved ichida).
+            if ($fresh = TimetableChangeRequest::find($req->id)) {
+                try {
+                    $this->notifyApproved($fresh);
+                } catch (\Throwable $e) {
+                    Log::warning('[TimetableChange] #' . $req->id . ' tasdiq xabarlari: ' . $e->getMessage());
                 }
-            })->afterResponse();
+            }
         } elseif ($fresh = TimetableChangeRequest::find($req->id)) {
             $this->notifyTeacherOutcome($fresh, $fresh->status);
         }
@@ -512,12 +526,13 @@ class TimetableChangeApproval
         if (!$done) {
             return false;
         }
-        if ($done->requester instanceof Teacher) {
-            $who = self::isTeacherProposal($done) ? (($done->head_reviewed_at || !empty($done->details['head_skipped'])) ? ' (registrator ofisi)' : ' (kafedra mudiri)') : '';
-            $this->sendToTeacher($done->requester, 'Dars jadvali o\'zgarishi rad etildi' . $who,
-                $done->summary . ($note ? "\nIzoh: " . $note : ''), $done);
-            $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi rad etildi" . $who, $note ? 'Izoh: ' . $note : null);
+        // Yuboruvchiga — izoh bilan (o'qituvchi yoki foydalanuvchi hisobi); dars o'qituvchisiga — boshqa odam yuborgan bo'lsa.
+        $who = self::isTeacherProposal($done) ? (($done->head_reviewed_at || !empty($done->details['head_skipped'])) ? ' (registrator ofisi)' : ' (kafedra mudiri)') : '';
+        if ($done->requester) {
+            $this->notifyNow([$done->requester], 'Dars jadvali o\'zgarishi rad etildi' . $who,
+                $done->summary . ($note ? "\nIzoh: " . $note : ''), $done, "so'rov yuboruvchi");
         }
+        $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi rad etildi" . $who, $note ? 'Izoh: ' . $note : null);
 
         return true;
     }
@@ -532,7 +547,8 @@ class TimetableChangeApproval
             return $locked;
         });
         if ($done) {
-            $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi bekor qilindi", "Fan mas'uli so'rovni qaytarib oldi; jadval o'zgarmadi.");
+            $this->notifyLessonTeachers($done, "Darsingiz vaqtini o'zgartirish so'rovi bekor qilindi",
+                ucfirst(self::proposerLabel($done) ?: 'yuboruvchi') . " so'rovni qaytarib oldi; jadval o'zgarmadi.");
         }
 
         return (bool) $done;
@@ -836,20 +852,105 @@ class TimetableChangeApproval
 
     // ─── Xabarlar ──────────────────────────────────────────────────
 
+    /**
+     * Registrator ofisiga (so'rov registrator bosqichida: kafedra mudiri tasdiqlagach yoki mudir so'rovi) — o'qituvchi va foydalanuvchi
+     * hisoblaridagi registratorlar: LMS xabarnomasi darhol (tranzaksiya yakunlangach), Telegram — javobdan keyin; logda — kimga.
+     */
     private function notifyRegistrars(TimetableChangeRequest $req): void
     {
         $title = 'Dars jadvali o\'zgarishi — tasdiq kutilmoqda';
         $body = ($req->kafedra_name ? $req->kafedra_name . "\n" : '') . ($req->requester_name ? $req->requester_name . ":\n" : '') . $req->summary;
         $id = $req->id;
-        dispatch(function () use ($title, $body, $id) {
-            $svc = app(self::class);
+        DB::afterCommit(function () use ($title, $body, $id) {
             $req = TimetableChangeRequest::find($id);
             if (!$req || $req->status !== TimetableChangeRequest::PENDING || $req->approval_stage === 'department') {
                 return;
             }
-            $svc->teachersWithRoles([\App\Enums\ProjectRole::REGISTRAR_OFFICE->value])
-                ->each(fn (Teacher $t) => $svc->sendToTeacher($t, $title, $body, $req));
+            $role = [\App\Enums\ProjectRole::REGISTRAR_OFFICE->value];
+            $this->notifyNow($this->teachersWithRoles($role)->concat($this->usersWithRoles($role)), $title, $body, $req, 'registrator ofisi');
+        });
+    }
+
+    /** Faol foydalanuvchilar (users jadvali) shu rollar bo'yicha. */
+    public function usersWithRoles(array $roles)
+    {
+        $existing = \Spatie\Permission\Models\Role::whereIn('name', $roles)->pluck('name')->unique()->values()->all();
+        try {
+            return $existing ? \App\Models\User::role($existing)->get() : collect();
+        } catch (\Throwable $e) {
+            return collect();
+        }
+    }
+
+    /**
+     * Qabul qiluvchilarga (o'qituvchi yoki foydalanuvchi) LMS xabarnomasi darhol, Telegram — javobdan keyin (bitta navbat).
+     * Kim xabar olgani (yoki hech kim topilmagani) logga yoziladi — "xabar kelmadi" holatini tekshirish uchun.
+     */
+    public function notifyNow(iterable $recipients, string $title, string $message, TimetableChangeRequest $req, string $what): void
+    {
+        $queue = [];
+        $names = [];
+        $seen = [];
+        foreach ($recipients as $r) {
+            if (!$r) {
+                continue;
+            }
+            $k = $r->getMorphClass() . '#' . $r->getKey();
+            if (isset($seen[$k])) {
+                continue;
+            }
+            $seen[$k] = true;
+            $this->storeNotification($r, $title, $message, $req);
+            $names[] = ($r->full_name ?? $r->name ?? '') . ' (' . class_basename($r) . ' ' . $r->getKey() . ')';
+            if (!empty($r->telegram_chat_id)) {
+                $queue[] = [(string) $r->telegram_chat_id, '<b>' . e($title) . '</b>' . "\n\n" . e($message)];
+            }
+        }
+        if ($names) {
+            Log::info('[TimetableChange] #' . $req->id . " xabar ({$what}): " . implode(', ', $names));
+        } else {
+            Log::warning('[TimetableChange] #' . $req->id . " xabar ({$what}): qabul qiluvchi topilmadi");
+        }
+        $this->sendTelegramLater($queue);
+    }
+
+    /** Telegram navbati — javob yuborilgach (sekin tarmoq so'rovni kutdirmasin). */
+    private function sendTelegramLater(array $queue): void
+    {
+        if (!$queue) {
+            return;
+        }
+        dispatch(function () use ($queue) {
+            $tg = new TelegramService();
+            foreach ($queue as [$chat, $html]) {
+                try {
+                    $tg->sendToUser($chat, $html);
+                } catch (\Throwable $e) {
+                    Log::warning('[TimetableChange] Telegram: ' . $e->getMessage());
+                }
+            }
         })->afterResponse();
+    }
+
+    /** LMS xabarnomasi: o'qituvchiga — TeacherNotification va Notification, foydalanuvchiga — Notification. */
+    private function storeNotification($recipient, string $title, string $message, TimetableChangeRequest $req): void
+    {
+        $link = Route::has('admin.timetable.index') ? route('admin.timetable.index') . '?board=' . $req->board_id . '&change_request=' . $req->id : null;
+        if ($recipient instanceof Teacher) {
+            try {
+                TeacherNotification::create(['teacher_id' => $recipient->id, 'type' => 'timetable_change', 'title' => $title, 'message' => $message,
+                    'link' => $link, 'data' => ['timetable_change_request_id' => $req->id]]);
+            } catch (\Throwable $e) {
+                Log::warning('[TimetableChange] TeacherNotification: ' . $e->getMessage());
+            }
+        }
+        try {
+            Notification::create(['recipient_id' => $recipient->getKey(), 'recipient_type' => get_class($recipient), 'subject' => $title, 'body' => $message,
+                'type' => 'timetable_change', 'url' => $link, 'data' => ['timetable_change_request_id' => $req->id],
+                'is_read' => false, 'is_draft' => false, 'sent_at' => now()]);
+        } catch (\Throwable $e) {
+            Log::warning('[TimetableChange] Notification: ' . $e->getMessage());
+        }
     }
 
     public function notifyApproved(TimetableChangeRequest $req): void
@@ -896,7 +997,7 @@ class TimetableChangeApproval
         }
 
         $link = Route::has('student.schedule') ? route('student.schedule') : null;
-        $telegram = new TelegramService();
+        $queue = [];   // talabalar Telegram xabarlari — javobdan keyin
         // O'qituvchi so'rovi: fan, o'qituvchi, eski → yangi kun va vaqt, xona.
         $text = fn (array $n) => implode("\n", array_filter([
             'Fan: ' . ($n['subject'] ?? ''), 'O\'qituvchi: ' . ($n['teacher'] ?? ''),
@@ -904,7 +1005,14 @@ class TimetableChangeApproval
             !empty($n['room']) ? 'Xona: ' . $n['room'] : null,
         ]));
         $notice = (array) ($details['notice'] ?? []);
-        $studentText = $notice ? $text($notice) : $req->summary;
+        // Kafedra mudiri so'rovi (joylash, ko'chirish, o'qituvchi/xona): fan, o'qituvchi va o'zgarish (eski → yangi kun, para, xona).
+        $teacherNames = $teacherIds ? Teacher::whereIn('id', $teacherIds)->pluck('full_name')->filter()->implode(', ') : '';
+        $change = str_contains((string) $req->summary, ': ') ? substr((string) $req->summary, strpos((string) $req->summary, ': ') + 2) : (string) $req->summary;
+        $studentText = $notice ? $text($notice) : implode("\n", array_filter([
+            $req->subject_name ? 'Fan: ' . $req->subject_name : null,
+            $teacherNames !== '' ? 'O\'qituvchi: ' . $teacherNames : null,
+            'O\'zgarish: ' . $change,
+        ]));
         // Takliflar: har o'zgargan dars — faqat o'z guruhlari talabalariga (talabaga bir nechta bo'lsa — bitta xabarda).
         $perStudent = [];
         foreach ((array) ($details['notices'] ?? []) as $n) {
@@ -933,10 +1041,11 @@ class TimetableChangeApproval
                 Log::warning('[TimetableChange] StudentNotification: ' . $e->getMessage());
             }
             if (!empty($st->telegram_chat_id) && !empty($st->telegram_verified_at)) {
-                $telegram->sendToUser((string) $st->telegram_chat_id,
-                    '<b>📅 Dars jadvalingiz o\'zgardi</b>' . "\n\n" . e($studentText));
+                $queue[] = [(string) $st->telegram_chat_id, '<b>📅 Dars jadvalingiz o\'zgardi</b>' . "\n\n" . e($studentText)];
             }
         }
+        Log::info('[TimetableChange] #' . $req->id . ' tasdiqlandi: ' . count($notified) . ' xodim, ' . count($students) . ' talabaga xabar');
+        $this->sendTelegramLater($queue);
     }
 
     /** Faol xodimlar shu rollar bo'yicha (bazada yo'q rol xato bermaydi). */
@@ -980,38 +1089,9 @@ class TimetableChangeApproval
 
     public function sendToTeacher(Teacher $teacher, string $title, string $message, TimetableChangeRequest $req): void
     {
-        $link = Route::has('admin.timetable.index') ? route('admin.timetable.index') . '?board=' . $req->board_id . '&change_request=' . $req->id : null;
-        try {
-            TeacherNotification::create([
-                'teacher_id' => $teacher->id,
-                'type' => 'timetable_change',
-                'title' => $title,
-                'message' => $message,
-                'link' => $link,
-                'data' => ['timetable_change_request_id' => $req->id],
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('[TimetableChange] TeacherNotification: ' . $e->getMessage());
-        }
-        try {
-            Notification::create([
-                'recipient_id' => $teacher->id,
-                'recipient_type' => Teacher::class,
-                'subject' => $title,
-                'body' => $message,
-                'type' => 'timetable_change',
-                'url' => $link,
-                'data' => ['timetable_change_request_id' => $req->id],
-                'is_read' => false,
-                'is_draft' => false,
-                'sent_at' => now(),
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('[TimetableChange] Notification: ' . $e->getMessage());
-        }
+        $this->storeNotification($teacher, $title, $message, $req);
         if (!empty($teacher->telegram_chat_id)) {
-            (new TelegramService())->sendToUser((string) $teacher->telegram_chat_id,
-                '<b>' . e($title) . '</b>' . "\n\n" . e($message));
+            $this->sendTelegramLater([[(string) $teacher->telegram_chat_id, '<b>' . e($title) . '</b>' . "\n\n" . e($message)]]);
         }
     }
 }

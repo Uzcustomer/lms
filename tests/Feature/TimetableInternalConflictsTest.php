@@ -499,8 +499,13 @@ it('to\'qnashuvlar: ma\'ruza zali sig\'imi — ma\'ruzachiga ko\'rinadi, amaliy 
     $plan = fn ($who, array $extra = []) => test()->withoutVite()->actingAs($who, 'teacher')->withSession(['active_role' => 'oqituvchi'])
         ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'mine' => 1] + $extra)->assertOk()->json();
     $block = fn (array $p, string $g) => collect($p['rows'])->firstWhere('group', $g)['blocks'][0] ?? null;
-    // 14.09 — 1-oqim o'zi (20 > 15), 15.09 — ikkala oqim (30 > 15): ikkalasi ham zal sig'imi.
-    expect(collect($block($plan($lector), 'd22-05a')['conflicts'])->pluck('kind')->unique()->values()->all())->toBe(['room_capacity'])
+    // 14.09 — 1-oqim o'zi (20 > 15), 15.09 — ikkala oqim (30 > 15): ikkalasi ham zal sig'imi; 15.09 — bir zalda ikki xil ma'ruza
+    // (boshqa o'qituvchi — bitta oqim emas): room_lectures, yechim — bitta oqimga birlashtirish yoki boshqa zal.
+    $lk = collect($block($plan($lector), 'd22-05a')['conflicts']);
+    expect($lk->firstWhere('kind', 'room_lectures'))->toMatchArray(['type' => 'room', 'who' => 'Zal', 'with' => 'd22-06a, Klinik farmakologiya',
+        'line' => "Zalda (Zal) bir vaqtda ikki ma'ruza: d22-06a, Klinik farmakologiya, 15.09",
+        'todo' => "bloklarni bitta ma'ruza oqimiga birlashtiring (fan, o'qituvchi, xona va vaqt bir xil) yoki boshqa zal tanlang", 'lecture' => true]);
+    expect(collect($block($plan($lector), 'd22-05a')['conflicts'])->pluck('kind')->unique()->sort()->values()->all())->toBe(['room_capacity', 'room_lectures'])
         ->and($block($plan($lector), 'd22-05a')['conflict_level'])->toBe('yellow')
         ->and($block($plan($ustoz), 'd22-05a')['conflicts'])->toBe([]);
     // 05a shu davrda boshqa sikl fanida ham (Ichki kasalliklar, AMALIYCHI, soatlarsiz — 1–6-soat amaliy): uning amaliyoti
@@ -654,4 +659,42 @@ it('cycle-week: umumiy "A + B" amaliy kartasi — har guruhcha birligida takrorl
         ->and($res->pluck('date')->all())->toBe(['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'])
         ->and($res->pluck('group_names')->unique()->values()->all())->toBe([['d22-05a', 'd22-05b']])
         ->and($res->pluck('id')->unique()->values()->all())->toBe([$s['cards']['d22-05a + d22-05b']->id]);
+});
+
+it('sikl: bitta ma\'ruza oqimi (turli oqim kartalari: fan, o\'qituvchi, zal va vaqt bir xil) — o\'qituvchi to\'qnashuvi ham, "bir zalda ikki ma\'ruza" ham emas', function () {
+    $hall = Auditorium::create(['code' => 'ZAL', 'name' => 'Zal', 'volume' => 100, 'active' => true]);
+    $lector = icTeacher('LEKTOR', 'oqituvchi');
+    $s = icLectureSetup($lector, icTeacher('USTOZ', 'oqituvchi'), $hall);
+    $kinds = fn () => collect(icConflicts($s['board']))->flatMap(fn ($x) => collect($x['items'])->pluck('kind'))->unique()->values()->all();
+    // 15.09: 1-oqim va 2-oqim ma'ruzasi — LEKTOR, Zal, 1–2-soat: bitta oqim.
+    expect($kinds())->not->toContain('teacher_busy')->not->toContain('room_lectures');
+    // Xonasiz — oqimligi tasdiqlanmaydi: o'qituvchi band.
+    TimetableCard::where('training_type', 'lecture')->update(['auditorium_code' => null, 'auditorium_name' => null]);
+    expect($kinds())->toContain('teacher_busy');
+    // Boshqa zal (o'sha o'qituvchi, vaqt) — bitta oqim emas: o'qituvchi band.
+    TimetableCard::where('training_type', 'lecture')->where('oqim_label', '1-oqim')->update(['auditorium_code' => 'ZAL', 'auditorium_name' => 'Zal']);
+    Auditorium::create(['code' => 'ZAL2', 'name' => 'Zal 2', 'volume' => 100, 'active' => true]);
+    TimetableCard::where('training_type', 'lecture')->where('oqim_label', '2-oqim')->update(['auditorium_code' => 'ZAL2', 'auditorium_name' => 'Zal 2']);
+    expect($kinds())->toContain('teacher_busy')->not->toContain('room_lectures');
+});
+
+it('cycle-week: zalda shu vaqtda boshqa ma\'ruza (boshqa o\'qituvchi — bitta oqim emas) — room_clash (sabab va yechim); bitta oqim — yo\'q', function () {
+    $hall = Auditorium::create(['code' => 'ZAL', 'name' => 'Zal', 'volume' => 100, 'active' => true]);
+    $lector = icTeacher('LEKTOR', 'oqituvchi');
+    $s = icLectureSetup($lector, icTeacher('USTOZ', 'oqituvchi'), $hall);
+    $admin = icTeacher('ADMIN', 'admin');
+    $week = fn () => collect(test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-week', $s['board']), ['week' => 1])->assertOk()->json('lessons'));
+    $lec = fn ($ls, string $date) => $ls->where('training_type', 'lecture')->where('date', $date)->where('id', $s['lecture']->id)->first();
+    // Bitta oqim (LEKTOR, Zal, 1–2-soat) — room_clash yo'q.
+    expect($lec($week(), '2026-09-15'))->not->toHaveKey('room_clash');
+    // 2-oqim ma'ruzasi — boshqa o'qituvchi: 15.09 zalda ikki ma'ruza.
+    TimetableCard::where('oqim_label', '2-oqim')->where('training_type', 'lecture')->update(['teacher_id' => icTeacher('BOSHQA')->id, 'teacher_name' => 'BOSHQA']);
+    $ls = $week();
+    expect($lec($ls, '2026-09-15')['room_clash'])
+        ->toBe("Zalda bir vaqtda ikki ma'ruza: d22-06a, Klinik farmakologiya (o'qituvchi BOSHQA) — bloklarni bitta ma'ruza oqimiga birlashtiring (fan, o'qituvchi, xona va vaqt bir xil) yoki boshqa zal tanlang")
+        ->and($lec($ls, '2026-09-14'))->not->toHaveKey('room_clash');   // 14.09 — 2-oqim ma'ruzasi yo'q
+    // 2-oqim ma'ruzasi 15.09 da 5-soatdan — vaqti kesishmaydi: room_clash yo'q.
+    TimetableCyclePlacement::where('group_name', 'F1 / 2-oqim')->update(['lecture_slots' => ['starts' => [0 => 5]]]);
+    expect($lec($week(), '2026-09-15'))->not->toHaveKey('room_clash');
 });

@@ -7,33 +7,30 @@ const a = source.indexOf('            function applyTimetableAccess() {');
 const b = source.indexOf('            function applyAscRoleAccess() {', a);
 assert(a > 0 && b > a);
 
-// Karta yaratish / kartalar ro'yxatini o'zgartirish tugmalari: o'qituvchi, fan mas'uli, kafedra mudiri — yashirin; o'quv bo'limi — bo'shatish bor.
+// Karta yaratish / kartalar ro'yxatini o'zgartirish tugmalari: ro'yxat serverda ($timetableForbiddenIds — rol bo'yicha, feature testda);
+// JS ularni o'chiradi va tt-forbidden qiladi (display:none !important — .toolbar-action display:inline-flex .hidden ni bekor qilmaydi).
 const IDS = ['newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn', 'managerBtn', 'unplaceBtn', 'cycleHolAddBtn',
     'cycleRefresh', 'assignBtn'];
 function run(flags) {
     const els = {};
     IDS.forEach(id => { els[id] = { id, disabled: false, title: '', cls: new Set(), classList: { add(c) { els[id].cls.add(c); } }, closest: () => null }; });
-    const ctx = Object.assign({ $: id => els[id] || null }, flags);
+    const ctx = Object.assign({ $: id => els[id] || null, TIMETABLE_FORBIDDEN_IDS: [] }, flags);
     vm.createContext(ctx);
     vm.runInContext(source.slice(a, b) + '; applyTimetableAccess();', ctx);
-    return id => els[id].cls.has('hidden');
+    return id => els[id].cls.has('hidden') && els[id].cls.has('tt-forbidden') && els[id].disabled;
 }
-const head = run({ TIMETABLE_ASSIGNMENT_ONLY: true, TIMETABLE_CAN_PLACE: true, TIMETABLE_CAN_UNPLACE: false, TIMETABLE_CAN_USE_MANAGER: false,
+const head = run({ TIMETABLE_ASSIGNMENT_ONLY: true, TIMETABLE_FORBIDDEN_IDS: ['newBoardBtn', 'genBtn', 'refreshNamesBtn', 'unplaceBtn', 'cycleHolAddBtn', 'missingBtn'],
     TIMETABLE_READ_ONLY: false, TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY: false });
-['newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn', 'managerBtn', 'unplaceBtn', 'cycleHolAddBtn']
-    .forEach(id => assert.equal(head(id), true, 'kafedra mudiri: ' + id + ' yashirin bo\'lishi kerak'));
-assert.equal(head('cycleRefresh'), false);
-assert.equal(head('assignBtn'), false);
-const teacher = run({ TIMETABLE_ASSIGNMENT_ONLY: true, TIMETABLE_CAN_PLACE: false, TIMETABLE_CAN_UNPLACE: false, TIMETABLE_CAN_USE_MANAGER: false,
-    TIMETABLE_READ_ONLY: true, TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY: false });
-['genBtn', 'snapshotsBtn', 'ktrWeeksBtn', 'unplaceBtn', 'cycleHolAddBtn', 'cycleRefresh', 'refreshNamesBtn', 'newBoardBtn']
-    .forEach(id => assert.equal(teacher(id), true, "o'qituvchi: " + id));
-const oquv = run({ TIMETABLE_ASSIGNMENT_ONLY: true, TIMETABLE_CAN_PLACE: true, TIMETABLE_CAN_UNPLACE: true, TIMETABLE_CAN_USE_MANAGER: true,
-    TIMETABLE_READ_ONLY: false, TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY: true });
-assert.equal(oquv('unplaceBtn'), false);
-assert.equal(oquv('cycleHolAddBtn'), false);
-assert.equal(oquv('managerBtn'), false);
-assert.equal(oquv('genBtn'), true);
-const admin = run({ TIMETABLE_ASSIGNMENT_ONLY: false });
+['newBoardBtn', 'genBtn', 'refreshNamesBtn', 'unplaceBtn', 'cycleHolAddBtn'].forEach(id => assert.equal(head(id), true, id + ' yashirin va o\'chiq bo\'lishi kerak'));
+['cycleRefresh', 'assignBtn', 'delBoardBtn'].forEach(id => assert.equal(head(id), false, id));
+const admin = run({ TIMETABLE_ASSIGNMENT_ONLY: false, TIMETABLE_FORBIDDEN_IDS: ['genBtn'] });
 IDS.forEach(id => assert.equal(admin(id), false, 'admin: ' + id));
-console.log('timetable admin-only buttons: 4 scenarios passed');
+assert.match(source, /const TIMETABLE_FORBIDDEN_IDS = @json\(\$timetableForbiddenIds\);/);
+assert.match(source, /\.toolbar-action\.hidden, \.tt-forbidden \{ display: none !important; \}/);
+// Sahifaga ham yashirin chiqadi (JS ishlamasa ham): har bir taqiqlanishi mumkin bo'lgan tugmada server klassi va disabled.
+['newBoardBtn', 'genBtn', 'refreshNamesBtn', 'snapshotsBtn', 'delBoardBtn', 'unplaceBtn', 'ktrWeeksBtn', 'cycleHolAddBtn', 'cycleRefresh', 'cmSave'].forEach(id => {
+    const tag = new RegExp('<button type="button" id="' + id + '"[^>]*>').exec(source);
+    assert(tag, id);
+    assert.match(tag[0], new RegExp("\\{\\{ \\$ttForbid\\('" + id + "'\\) \\}\\}\" @disabled\\(in_array\\('" + id + "', \\$timetableForbiddenIds, true\\)\\)"), id);
+});
+console.log('timetable admin-only buttons: 3 scenarios passed');

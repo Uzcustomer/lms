@@ -29,6 +29,20 @@
     $timetableCanUnplace = $timetableAuditoriumAssignmentOnly;
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchi, fan mas'uli va kafedra mudiriga yopiq.
     $timetableCanUseManager = $timetableAuditoriumAssignmentOnly;
+    // Karta yaratish / kartalar ro'yxatini va doska sozlamasini o'zgartirish tugmalari (kartochkalar, fan nomlari, yangi doska, versiyalar,
+    // KTR haftalari, bo'shatish, sikl bayramlari "+ qo'shish" va h.k.) — faqat adminlar. Cheklangan rollarda (o'qituvchi, fan mas'uli,
+    // kafedra mudiri; o'quv bo'limi — bo'shatish va fanlar menejeridan tashqari) sahifaga yashirin va o'chiq chiqadi: tt-forbidden —
+    // display:none !important (JS 'hidden' ni olib tashlasa ham ko'rinmaydi). Server ham 403 qaytaradi (TimetableAssignmentAccess).
+    $timetableForbiddenIds = $timetableAssignmentOnly ? array_values(array_filter([
+        'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn',
+        'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
+        'unplaceBtn', 'gsSave', 'cycleHolAddBtn', 'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek',
+    ], fn ($id) => !($timetableCanUnplace && in_array($id, ['unplaceBtn', 'cycleHolAddBtn'], true))
+        && !($timetableCanPlace && $id === 'cycleRefresh') && !($timetableCanUseManager && $id === 'managerBtn'))) : [];
+    $ttForbid = fn (string $id) => in_array($id, $timetableForbiddenIds, true) ? ' tt-forbidden' : '';
+    // Qamrov rejimi (Butun doska / Kafedraniki / Mas'ul fanlarim / Faqat meniki) — har foydalanuvchi va rol uchun alohida saqlanadi
+    // (superadmin bir foydalanuvchidan boshqasiga o'tganda oldingi rejim qolib ketmasin): guard + id.
+    $timetableUserKey = ($timetableUser instanceof \App\Models\Teacher ? 't' : 'u') . (int) ($timetableUser?->getAuthIdentifier() ?? 0);
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
@@ -65,20 +79,20 @@
 
                     <div class="tt-toolbar-actions">
                         <button type="button" id="reloadBoardBtn" class="hidden asc-tool toolbar-action" title="Doska ma'lumotlarini qayta yuklash — sahifadan chiqmasdan, tanlovlar (fakultet, kurs, hafta...) saqlanadi"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-arrow-clockwise"></i></span>Yangilash</button>
-                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
-                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
-                        <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
+                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action{{ $ttForbid('newBoardBtn') }}" @disabled(in_array('newBoardBtn', $timetableForbiddenIds, true))><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
+                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('genBtn') }}" @disabled(in_array('genBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
+                        <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('refreshNamesBtn') }}" @disabled(in_array('refreshNamesBtn', $timetableForbiddenIds, true)) title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
                         @if(in_array($timetableActiveRole, ['admin', 'superadmin'], true))
                             {{-- Doska versiyalari: kunlik va xavfli amallardan oldingi nusxalar, joylashuvni tiklash --}}
-                            <button type="button" id="snapshotsBtn" class="hidden asc-tool toolbar-action" title="Doska versiyalari (nusxalar) va joylashuvni tiklash"><span class="toolbar-icon" aria-hidden="true">🕘</span>Versiyalar</button>
+                            <button type="button" id="snapshotsBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('snapshotsBtn') }}" @disabled(in_array('snapshotsBtn', $timetableForbiddenIds, true)) title="Doska versiyalari (nusxalar) va joylashuvni tiklash"><span class="toolbar-icon" aria-hidden="true">🕘</span>Versiyalar</button>
                         @endif
-                        <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
-                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
-                        <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
+                        <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn{{ $ttForbid('delBoardBtn') }}" @disabled(in_array('delBoardBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
+                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('settingsBtn') }}" @disabled(in_array('settingsBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
+                        <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('managerBtn') }}" @disabled(in_array('managerBtn', $timetableForbiddenIds, true)) data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
 
-                        <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
-                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
-                        <button type="button" id="rulesBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" title="Jadval qoidalari (bir kunda bo'lmasin, ketma-ket kelsin va h.k.)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Qoidalar <span id="rulesBadge" class="hidden"></span></button>
+                        <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('excelViewBtn') }}" @disabled(in_array('excelViewBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
+                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn{{ $ttForbid('checkBtn') }}" @disabled(in_array('checkBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
+                        <button type="button" id="rulesBtn" data-asc-toolbar class="hidden asc-tool toolbar-action{{ $ttForbid('rulesBtn') }}" @disabled(in_array('rulesBtn', $timetableForbiddenIds, true)) title="Jadval qoidalari (bir kunda bo'lmasin, ketma-ket kelsin va h.k.)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Qoidalar <span id="rulesBadge" class="hidden"></span></button>
                         <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
                         @if($timetableUsesChangeRequests)
                         <button type="button" id="changeReqBtn" class="hidden asc-tool toolbar-action" title="Jadval o'zgarishlari: tarix va registrator ofisi tasdig'i"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>O'zgarishlar <span id="changeReqBadge" class="hidden tt-req-badge"></span></button>
@@ -191,7 +205,7 @@
                     </div>
 
                     <div class="tt-main-actions">
-                        <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>Bo'shatish</button>
+                        <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn{{ $ttForbid('unplaceBtn') }}" @disabled(in_array('unplaceBtn', $timetableForbiddenIds, true)) title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>Bo'shatish</button>
                     </div>
                 </div>
 
@@ -224,7 +238,7 @@
                             <button type="button" id="weeklyExcel" class="tt-weekly-excel" title="Ekrandagi haftalik jadvalni (tanlangan hafta, qatlam va ko'rinish qamrovi bilan) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                             @unless($timetableAssignmentOnly)
                             <button type="button" id="compactWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Ichki jadval: shu haftada o'tilmaydigan dars (masalan ma'ruza) bo'shatgan joyga keyingi darslarni yuqoriga suradi, joylashmagan kartalarni blok bo'lib (bir fanning kartalari ketma-ket, bo'linmasdan) tashqi joyiga yoki o'sha kunning ichidagi eng yaqin bo'sh joyga qo'yadi (o'qituvchi/xona/guruh bandligi server tomonidan tekshiriladi)">Haftani zichlash</button>
-                            <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn" title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
+                            <button type="button" id="ktrWeeksBtn" class="tt-ktr-weeks-btn{{ $ttForbid('ktrWeeksBtn') }}" @disabled(in_array('ktrWeeksBtn', $timetableForbiddenIds, true)) title="Tanlangan fakultet/yo'nalish/kursdagi haftalik fanlar: qaysi hafta ma'ruza va necha soat amaliy bo'lishini KTR'dan belgilaydi">KTR bo'yicha haftalar</button>
                             @endunless
                             {{-- Takliflar: admin — darhol; kafedra mudiri, fan mas'uli, o'qituvchi — so'rov; o'quv bo'limi — faqat ko'radi (qamrovni server beradi). --}}
                             <button type="button" id="suggestWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Shu haftada joylanmagan kartalarni sig'dirish takliflari: bo'sh vaqt, boshqa xona, to'sib turgan darsni surish, boshqa kun, boshqa hafta va eng oxirida boshqa o'qituvchi. Hech narsa o'zi yozilmaydi — har bir taklif «Qo'llash» bilan bajariladi.">Takliflar</button>
@@ -260,8 +274,8 @@
                             <input type="date" id="cycleStart" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Bayram/dam olish kunlari — sikl bloklari bu kunlarga tushmaydi">Bayram:
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
-                        <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
-                        <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1{{ $ttForbid('cycleHolAddBtn') }}" @disabled(in_array('cycleHolAddBtn', $timetableForbiddenIds, true))>+ qo'shish</button>
+                        <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1{{ $ttForbid('cycleRefresh') }}" @disabled(in_array('cycleRefresh', $timetableForbiddenIds, true))>Yangilash</button>
                         <button type="button" id="cycleExcel" class="asc-tool text-xs py-1 cyc-excel-btn" title="Ekrandagi sikl jadvalini (tashqi yoki ichki) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Yakshanba va bayram ustunlarini jadvaldan yashiradi (ma'lumot o'zgarmaydi)">
                             <input type="checkbox" id="cycleHideOff" class="rounded border-gray-300"> Dam olish kunlarini yashirish</label>
@@ -450,12 +464,12 @@
                         </div>
                         <div class="flex justify-between gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
                             <div class="flex gap-2">
-                                <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100"><i class="bi bi-arrow-90deg-left" aria-hidden="true"></i> Jadvaldan olish</button>
-                                <button type="button" id="cmResetWeek" class="hidden px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Shablonga qaytarish</button>
+                                <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100{{ $ttForbid('cmUnplace') }}" @disabled(in_array('cmUnplace', $timetableForbiddenIds, true))><i class="bi bi-arrow-90deg-left" aria-hidden="true"></i> Jadvaldan olish</button>
+                                <button type="button" id="cmResetWeek" class="hidden px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100{{ $ttForbid('cmResetWeek') }}" @disabled(in_array('cmResetWeek', $timetableForbiddenIds, true))><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Shablonga qaytarish</button>
                             </div>
                             <div class="flex gap-2">
                                 <button type="button" id="cmCancel" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-700">Yopish</button>
-                                <button type="button" id="cmSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Saqlash</button>
+                                <button type="button" id="cmSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700{{ $ttForbid('cmSave') }}" @disabled(in_array('cmSave', $timetableForbiddenIds, true))>Saqlash</button>
                             </div>
                         </div>
                     </div>
@@ -1104,6 +1118,8 @@
         /* Haftalik kesimdagi sikl darsi (faqat ko'rish): chap tomonda yashil chiziq va "sikl" belgisi */
         .tt-chip.tt-cyc-chip { box-shadow: inset 3px 0 0 #0d9488; cursor: pointer; }
         .tt-clash-why { font-size: 9px; font-weight: 700; color: #b91c1c; padding: 1px 3px; }
+        .tt-clash-list { font-size: 9px; color: #b91c1c; padding: 0 3px 2px; line-height: 1.25; }
+        .tt-room-why, .tt-room-why + .tt-clash-list { color: #b45309; }
         .tt-cyc-badge { display: inline-block; padding: 0 4px; border-radius: 4px; background: #0d9488; color: #fff; font-size: 8px; font-weight: 700; letter-spacing: .02em; vertical-align: 1px; }
         #crossCycPop { position: fixed; z-index: 60; width: 290px; max-width: calc(100vw - 16px); background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
             box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 10px 12px; font-size: 12px; }
@@ -2430,6 +2446,8 @@
         }
 
         .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
+        /* Yashirin tugma: .toolbar-action (display:inline-flex) .hidden ni bekor qilmasin; taqiqlangan tugma — har doim yashirin. */
+        .toolbar-action.hidden, .tt-forbidden { display: none !important; }
         .toolbar-icon { width: 25px; height: 25px; display: inline-flex; flex: 0 0 25px; align-items: center; justify-content: center; }
         .toolbar-icon svg { width: 100%; height: 100%; }
         .toolbar-icon .bi { font-size: 25px; line-height: 1; }
@@ -2678,6 +2696,7 @@
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_CAN_UNPLACE = @json($timetableCanUnplace);
+            const TIMETABLE_FORBIDDEN_IDS = @json($timetableForbiddenIds);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
             const TIMETABLE_ROLE = @json($timetableActiveRole);
@@ -2713,16 +2732,19 @@
             // o'z darslari bor barcha fakultet, yo'nalish va kurslar.
             const TEACHER_DEFAULTS = ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && Boolean(TIMETABLE_TEACHER_ID);
             const DEFAULT_VIEW = TEACHER_DEFAULTS ? 'teacher' : 'group';
-            let scopeMode = TIMETABLE_HAS_SUBJECTS && TIMETABLE_ROLE === 'fan_masuli' ? 'subjects' : (TEACHER_DEFAULTS ? 'mine' : 'all');
-            // Qamrov tanlovi — har foydalanuvchi va rol uchun alohida (bir brauzerda admin "Butun doska" tanlagan bo'lsa ham
-            // o'qituvchi birinchi kirishda "Faqat meniki" bilan ochiladi).
-            const MINE_KEY = 'lms:timetable-mine:' + TIMETABLE_ROLE + ':' + (TIMETABLE_TEACHER_ID || 0);
+            // Qamrov rejimi: kalit — foydalanuvchi (guard + id) va rol (lms:timetable-scope:{user}:{rol}); saqlangan qiymat bo'lmasa —
+            // rol sukuti: o'qituvchi — "Faqat meniki", fan mas'uli — "Mas'ul fanlarim", kafedra mudiri — "Kafedraniki", adminlar — "Butun doska".
+            const TIMETABLE_USER_KEY = @json($timetableUserKey);
+            const SCOPE_KEY = 'lms:timetable-scope:' + TIMETABLE_USER_KEY + ':' + TIMETABLE_ROLE;
+            // O'qituvchi, fan mas'uli va kafedra mudiri: /data server tomonda rol doirasida (butun doska emas) — rejim almashsa qayta yuklanadi.
+            const TIMETABLE_SCOPED_DATA = ['oqituvchi', 'fan_masuli', 'kafedra_mudiri'].includes(TIMETABLE_ROLE);
+            const scopeAllowed = m => m === 'all' || (m === 'mine' && +TIMETABLE_TEACHER_ID > 0) || (m === 'kafedra' && !!TIMETABLE_DEPARTMENT_HEAD)
+                || (m === 'subjects' && !!TIMETABLE_HAS_SUBJECTS);
+            const ROLE_DEFAULT_SCOPE = { oqituvchi: 'mine', fan_masuli: 'subjects', kafedra_mudiri: 'kafedra' }[TIMETABLE_ROLE] || 'all';
+            let scopeMode = scopeAllowed(ROLE_DEFAULT_SCOPE) ? ROLE_DEFAULT_SCOPE : (TIMETABLE_SCOPED_DATA && scopeAllowed('mine') ? 'mine' : 'all');
             try {
-                const saved = localStorage.getItem(MINE_KEY);
-                if (TIMETABLE_TEACHER_ID && saved === '1') scopeMode = 'mine';
-                else if (TIMETABLE_DEPARTMENT_HEAD && saved === 'kafedra') scopeMode = 'kafedra';
-                else if (TIMETABLE_HAS_SUBJECTS && saved === 'subjects') scopeMode = 'subjects';
-                else if (saved === '0') scopeMode = 'all';
+                const saved = localStorage.getItem(SCOPE_KEY);
+                if (['all', 'mine', 'subjects', 'kafedra'].includes(saved) && scopeAllowed(saved)) scopeMode = saved;
             } catch (e) { }
             let mineOnly = scopeMode !== 'all';
             let myKafedras = [];
@@ -2823,21 +2845,14 @@
                 if (!TIMETABLE_ASSIGNMENT_ONLY) return;
 
                 // Karta yaratish / kartalar ro'yxatini o'zgartirish (kartochkalar, fan nomlari, yangi doska, versiyalar, KTR haftalari,
-                // bo'shatish, sikl bayramlari) — faqat adminlar; server ham 403 qaytaradi.
-                const restrictedIds = [
-                    'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn',
-                    'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
-                    'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
-                    'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
-                ];
-                restrictedIds.forEach(id => {
-                    if (TIMETABLE_CAN_UNPLACE && ['unplaceBtn', 'cycleHolAddBtn'].includes(id)) return;
-                    if (TIMETABLE_CAN_PLACE && id === 'cycleRefresh') return;
-                    if (id === 'managerBtn' && TIMETABLE_CAN_USE_MANAGER) return;
+                // bo'shatish, sikl bayramlari) — faqat adminlar; ro'yxat serverda ($timetableForbiddenIds), sahifaga ham yashirin chiqadi.
+                // tt-forbidden — display:none !important: boshqa kod 'hidden' ni olib tashlasa ham ko'rinmaydi. Server ham 403 qaytaradi.
+                TIMETABLE_FORBIDDEN_IDS.forEach(id => {
                     const el = $(id);
                     if (!el) return;
                     el.disabled = true;
                     el.classList.add('hidden');
+                    el.classList.add('tt-forbidden');
                     el.title = 'Bu amal faqat jadval administratoriga ochiq';
                 });
 
@@ -3535,6 +3550,8 @@
             async function loadBoard(id) {
                 // Boshqa doskaga o'tayotgan bo'lsak — eski doskaga oid holatni tozalaymiz
                 const switching = !board || String(board.id) !== String(id);
+                // Boshqa doska: oldingi doskaning qamrov tanlovi so'rovga qo'shilmasin ("Butun doska" — tanlangan qamrov bo'yicha so'raladi).
+                if (switching) { curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear(); }
                 // URLga noyob parametr — har qanday kesh (brauzer/proxy) eski kartalarni
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
@@ -3542,10 +3559,14 @@
                 const seq = ++boardLoadSeq;
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now() + dataScope);
                 if (seq !== boardLoadSeq) return;   // eskirgan javob — undan keyin yangi so'rov yuborilgan
+                lastLoadSig = dataScope;   // shu parametrlar bilan yuklangan — xuddi shu so'rov takrorlanmaydi (scopeNeedsReload)
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
                 invalidateWeeklyConflicts();
                 invalidateCycleWeek();
+                specIndex = Array.isArray(j.spec_index) ? j.spec_index : [];
+                loadedSpecs = j.filter && Array.isArray(j.filter.loaded_specs) ? new Set(j.filter.loaded_specs.map(r => specTriple(r[0], r[1], r[2]))) : null;
+                loadedWeeks = j.filter && Array.isArray(j.filter.weeks) ? new Set(j.filter.weeks.map(Number)) : null;
                 applyWeeklyLayer(allCards);
                 groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
@@ -3602,9 +3623,46 @@
                 loadRules().catch(() => {});
             }
 
-            // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
+            // O'qituvchi / fan mas'uli / kafedra mudiri: /data rol doirasida — rejim (scope) har doim; "Butun doska" — tanlangan qamrov
+            // (fakultet, yo'nalish, kurs; tanlov bo'sh — server rol doirasidagi yo'nalish+kurslarni beradi). O'qituvchi va fan mas'uli
+            // (faqat ko'radi): hafta tanlangan bo'lsa — ko'chirishlar faqat shu hafta uchun (bekor qilinganlari — hammasi).
             function serverScopeParam() {
-                return TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
+                if (!TIMETABLE_SCOPED_DATA) return '';
+                let q = '&scope=' + encodeURIComponent(scopeMode);
+                if (scopeMode === 'all' && (selectedFaculties.size || selectedDirs.size || selectedCourses.size)) {
+                    const b = scopeBody();
+                    b.faculty_names.forEach(v => { q += '&faculty_names[]=' + encodeURIComponent(v); });
+                    b.specialty_names.forEach(v => { q += '&specialty_names[]=' + encodeURIComponent(v); });
+                    b.courses.forEach(v => { q += '&courses[]=' + encodeURIComponent(v); });
+                }
+                if (TIMETABLE_READ_ONLY && +curWeek > 0) q += '&weeks[]=' + (+curWeek);
+                return q;
+            }
+            // "Butun doska" (cheklangan rol): to'liq yuklangan yo'nalish+kurslar (null — hammasi yuklangan) va doskadagi barcha
+            // yo'nalish+kurslar ro'yxati (qamrov tanlovi uchun); yuklangan haftalar (null — hammasi).
+            // lastLoadSig — oxirgi yuklangan so'rov parametrlari; scopeInflightSig — yo'ldagi avtomatik so'rov (takrorlanmasin).
+            let loadedSpecs = null, specIndex = [], loadedWeeks = null, lastLoadSig = null, scopeInflightSig = '';
+            const specTriple = (fac, spec, course) => String(fac || '').trim().toLowerCase() + '|' + String(spec || '').trim().toLowerCase() + '|' + (+course);
+            // Tanlangan qamrovning yuklanmagan yo'nalish+kursi bormi — bo'lsa doska shu qamrov bilan qayta so'raladi. Xuddi shu
+            // parametrlar bilan oxirgi yuklangan (server bergani shu) yoki yo'ldagi so'rov — takrorlanmaydi (sikl yo'q).
+            function scopeNeedsReload() {
+                if (!TIMETABLE_SCOPED_DATA || scopeMode !== 'all' || !loadedSpecs) return false;
+                const missing = specIndex.some(r => selectedFaculties.has(r[0]) && selectedDirs.has(r[1]) && selectedCourses.has(+r[2])
+                    && !loadedSpecs.has(specTriple(r[0], r[1], r[2])));
+                const sig = serverScopeParam();
+                return missing && sig !== lastLoadSig && sig !== scopeInflightSig;
+            }
+            // Ko'chirishlar faqat yuklangan haftalar uchun (o'qituvchi / fan mas'uli): ko'rsatilayotgan hafta ular orasida bo'lmasa (hafta
+            // tanlandi yoki panjara almashib hafta moslashtirildi) — shu hafta bilan qayta so'raladi; xuddi shu so'rov takrorlanmaydi.
+            function weekNeedsReload() {
+                return !!(board && loadedWeeks && !(+curWeek > 0 && loadedWeeks.has(+curWeek)) && serverScopeParam() !== lastLoadSig);
+            }
+            function ensureScopeLoaded() {
+                if (!board || !scopeNeedsReload()) return false;
+                const sig = scopeInflightSig = serverScopeParam();
+                loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message))
+                    .finally(() => { if (scopeInflightSig === sig) scopeInflightSig = ''; });
+                return true;
             }
             // Yuklangan kartalarni (qamrov qo'llangan — cards) ko'rsatadi; bo'sh bo'lsa false.
             // Qamrov bo'yicha bo'sh (doskada kartalar bor yoki server qamrov bilan bergan) — qamrov tugmalari
@@ -3617,16 +3675,25 @@
                     $('boardMsg').textContent = scopeEmpty
                         ? 'Tanlangan qamrovda darslar yo\'q — "Butun doska"ni tanlang.'
                         : 'Kartochkalar hali yaratilmagan — "Kartochkalarni yaratish"ni bosing.';
-                    if (scopeEmpty) renderMineUi();
+                    if (scopeEmpty) {
+                        renderMineUi();
+                        // "Butun doska": tanlov ro'yxati (spec_index) bo'sh javobda ham ko'rinsin; tanlangan qamrov yuklanmagan bo'lsa — so'raladi.
+                        if (specList.length) { fillSpecControls(); ensureScopeLoaded(); }
+                    }
                     syncUrl();
                     return false;
                 }
                 $('boardMsg').textContent = '';
                 $('specBar').classList.remove('hidden'); $('mainArea').classList.remove('hidden');
-                if ((!curSpec || !specList.find(s => s.key === curSpec.key)) && specList.length) curSpec = specList[0];
+                if ((!curSpec || !specList.find(s => s.key === curSpec.key)) && specList.length) curSpec = specList.find(s => !s.idx) || specList[0];
                 fillSpecControls();
-                fillGridInputs();
+                fillGridInputs();   // hafta yangi panjaraga moslashtiriladi (fillWeekSel)
+                if (weekNeedsReload()) {
+                    loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
+                    return true;
+                }
                 renderAll();
+                ensureScopeLoaded();
                 return true;
             }
 
@@ -3640,6 +3707,11 @@
                     const fac = c.faculty_name || '';
                     const k = fac + '|' + c.specialty_name + '|' + c.course;
                     if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: c.specialty_name, course: c.course, faculty: fac }); }
+                });
+                // "Butun doska" (cheklangan rol): tanlov uchun doskadagi boshqa yo'nalish+kurslar ham (idx — hali yuklanmagan).
+                if (TIMETABLE_SCOPED_DATA && scopeMode === 'all') specIndex.forEach(r => {
+                    const k = (r[0] || '') + '|' + r[1] + '|' + (+r[2]);
+                    if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: r[1], course: +r[2], faculty: r[0] || '', idx: true }); }
                 });
                 specList.sort((a, b) =>
                     (a.faculty + '|' + a.specialty_name + a.course).localeCompare(b.faculty + '|' + b.specialty_name + b.course, 'uz'));
@@ -3673,10 +3745,12 @@
             function reconcileSelection(seed) {
                 const facs = facultiesList();
                 if (seed && TEACHER_DEFAULTS) {
-                    // O'qituvchi: o'z darslari bor hamma fakultet, yo'nalish va kurslar (tanlov bo'sh — birinchi ochilish).
-                    selectedFaculties = new Set(facs);
-                    selectedDirs = new Set(availDirs());
-                    selectedCourses = new Set(availCourses());
+                    // O'qituvchi: o'z darslari bor (yuklangan) hamma fakultet, yo'nalish va kurslar (tanlov bo'sh — birinchi ochilish);
+                    // "Butun doska"da ro'yxatdagi yuklanmagan yo'nalishlar tanlanmaydi (butun doska so'ralmasin).
+                    const own = specList.filter(x => !x.idx);
+                    selectedFaculties = new Set(own.map(x => x.faculty));
+                    selectedDirs = new Set(own.map(x => x.specialty_name));
+                    selectedCourses = new Set(own.map(x => x.course));
                 }
                 if (seed && !TEACHER_DEFAULTS) selectedFaculties = new Set(curSpec && facs.includes(curSpec.faculty) ? [curSpec.faculty] : (facs.length ? [facs[0]] : []));
                 selectedFaculties = new Set([...selectedFaculties].filter(f => facs.includes(f)));
@@ -3738,6 +3812,7 @@
                 reconcileSelection(false);
                 fillSelectors();
                 selected = null; fillGridInputs(); renderAll();
+                ensureScopeLoaded();
             }
             [['fac', 'facMenu'], ['dir', 'dirMenu'], ['crs', 'crsMenu']].forEach(([which, menuId]) => {
                 $(menuId).addEventListener('change', ev => {
@@ -3756,6 +3831,7 @@
                     reconcileSelection(false);
                     fillSelectors();
                     selected = null; fillGridInputs(); renderAll();
+                    ensureScopeLoaded();
                 });
             });
             // Tugmani bosish — menyuni ochish/yopish; tashqariga bosilsa yopiladi.
@@ -4984,6 +5060,11 @@
                 selected = null;
                 showSkipped = false;
                 fillWeekSel();
+                // Ko'chirishlar faqat yuklangan haftalar uchun kelgan (o'qituvchi / fan mas'uli) — boshqa hafta: shu hafta bilan qayta so'raladi.
+                if (weekNeedsReload()) {
+                    loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
+                    return;
+                }
                 renderAll();
             };
             // "Bu haftada o'tilmaydi" kartalarini panelda ko'rsatish/yashirish
@@ -7334,10 +7415,10 @@
                 if (scopeMode === mode) return;
                 scopeMode = mode;
                 mineOnly = mode !== 'all';
-                try { localStorage.setItem(MINE_KEY, mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : mode === 'subjects' ? 'subjects' : '0'); } catch (e) { }
+                try { localStorage.setItem(SCOPE_KEY, mode); } catch (e) { }
                 renderMineUi();
-                // O'qituvchi / fan mas'uli: doska shu qamrov bilan qayta yuklanadi (server faqat kerakli kartalarni beradi).
-                if (TIMETABLE_READ_ONLY && board) {
+                // O'qituvchi / fan mas'uli / kafedra mudiri: doska shu qamrov bilan qayta yuklanadi (server faqat kerakli kartalarni beradi).
+                if (TIMETABLE_SCOPED_DATA && board) {
                     loadBoard(board.id).then(() => { if (viewMode === 'cycle') loadCyclePlan(); }).catch(e => alert('Xatolik: ' + e.message));
                     return;
                 }
@@ -8249,13 +8330,59 @@
                 return key.startsWith('N:') ? key.slice(2) : key;
             }
             // Bitta dars: ma'ruza oqimi (fan, o'qituvchi, xona va aniq vaqt bir xil — turli yo'nalish kartalari ham) — to'qnashuv emas.
+            // Xonasiz ma'ruza — oqimligi tasdiqlanmaydi (serverdagi cycleConflicts kabi).
             const sameCrossLesson = (a, b) => {
                 const x = a.c || a.l, y = b.c || b.l;
-                return x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb
+                const room = String(x.auditorium_code || x.auditorium_name || '');
+                return x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb && room !== ''
                     && String(x.teacher_id || '') === String(y.teacher_id || '')
                     && String(x.subject_name || '').trim().toLowerCase() === String(y.subject_name || '').trim().toLowerCase()
-                    && String(x.auditorium_code || x.auditorium_name || '') === String(y.auditorium_code || y.auditorium_name || '');
+                    && room === String(y.auditorium_code || y.auditorium_name || '');
             };
+            // Katakdagi darslar → noyob darslar (sessiyalar). Bitta karta (sikl darsida — karta + sana) — bitta dars: bitta paraning
+            // yarim soatlari (08:30 va 09:10), "A + B" umumiy karta guruhchalari; bitta ma'ruza oqimi (sameCrossLesson) — bitta dars.
+            // To'qnashuv — ikki xil sessiya vaqti kesishsa (check); son — turli darslar: sessiya guruhchalari (karta + guruhcha + sana),
+            // ma'ruza oqimi — bitta. Qaytaradi: { lessons: [{ items, groups, lecture }], clashing: [...], count }.
+            function crossCellLessons(list, check) {
+                const par = list.map((_, i) => i);
+                const find = i => par[i] === i ? i : (par[i] = find(par[i]));
+                const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[Math.max(a, b)] = Math.min(a, b); };
+                const seen = {};
+                list.forEach((it, i) => {
+                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
+                    if (k in seen) join(seen[k], i); else seen[k] = i;
+                });
+                list.forEach((a, i) => list.forEach((b, j) => { if (j > i && sameCrossLesson(a, b)) join(i, j); }));
+                const byRoot = {}, lessons = [];
+                list.forEach((it, i) => {
+                    const r = find(i);
+                    if (!byRoot[r]) lessons.push(byRoot[r] = { items: [], groups: [], lecture: false });
+                    const ls = byRoot[r], x = it.c || it.l;
+                    ls.items.push(it);
+                    ls.lecture = ls.lecture || x.training_type === 'lecture';
+                    (it.l ? (it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]) : cardGroups(x))
+                        .forEach(g => String(g || '').split(/\s*\+\s*/).forEach(sg => { sg = sg.trim(); if (sg && !ls.groups.includes(sg)) ls.groups.push(sg); }));
+                });
+                const hit = new Set();
+                if (check) lessons.forEach((a, x) => lessons.forEach((b, y) => {
+                    if (y > x && a.items.some(p => b.items.some(q => p.fa < q.fb && q.fa < p.fb))) { hit.add(a); hit.add(b); }
+                }));
+                const clashing = lessons.filter(ls => hit.has(ls));
+                return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
+            }
+            // Sikl darsining zal to'qnashuvlari (birlashtirilgan chipda — barcha yozuvlardan).
+            const cycRoomClashes = l => (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
+            // Bitta sikl darsining yozuvlari (karta + sana) — vaqti bo'yicha guruhlanadi: bir xil vaqt — guruhchalari qo'shiladi.
+            function mergeCycParts(list) {
+                const by = {}, out = [];
+                list.forEach(p => {
+                    const k = (+p.hour || 0) + '|' + (+p.hours || 0);
+                    const gs = p.group_names && p.group_names.length ? p.group_names : [p.group_name];
+                    if (!by[k]) { out.push(by[k] = { hour: p.hour, hours: p.hours, dp: p.dp, ask: p.ask, group_name: p.group_name, group_names: gs.slice() }); return; }
+                    gs.forEach(g => { if (!by[k].group_names.includes(g)) by[k].group_names.push(g); });
+                });
+                return out.sort((a, b) => (+a.hour || 0) - (+b.hour || 0));
+            }
             function cycleWeekSig() {
                 if (!board || !curWeek || weeklyLayer !== 'internal' || !CROSS_MODES.includes(viewMode)) return '';
                 return [board.id, curWeek, [...selectedFaculties].sort().join(','), [...selectedDirs].sort().join(','),
@@ -8301,7 +8428,7 @@
                 const placed = visibleSpecCards().filter(c => effPlace(c)).map(effectiveCard);
                 const cyc = CROSS_MODES.includes(mode) ? cycleWeekLessons() : [];
                 if (CROSS_MODES.includes(mode)) loadCycleWeek();
-                crossCycleShown = cyc;
+                crossCycleShown = cyc.slice();   // + birlashtirilgan nusxalar (bitta darsning bir necha yozuvi — bitta chip)
                 const keyOf = c => mode === 'teacher' ? teacherColKey(c)
                     : mode === 'room' ? (c.auditorium_name || '— (xona yo\'q)')
                     : c.subject_name;
@@ -8384,7 +8511,31 @@
                             const vs = Math.max(1, Math.min(cl.to, P + 1) - p);
                             for (let k = 1; k < vs; k++) consumed[col + '|' + d + '|' + (p + k)] = 1;
                             const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                            const inner = cl.items.map(it => {
+                            // Noyob darslar: bitta darsning takror yozuvlari (yarim paralar, guruhchalar) — bitta chip (guruhlari qo'shiladi).
+                            const cell = crossCellLessons(cl.items, !noClash(col));
+                            const shown = [];
+                            cell.lessons.forEach(ls => {
+                                const seenIds = {};
+                                ls.items.forEach(it => {
+                                    const k = it.l ? 'C' + it.l.id + '|' + (it.l.date || '') : 'W' + it.c.id;
+                                    if (!(k in seenIds)) { seenIds[k] = shown.length; shown.push(it); return; }
+                                    if (!it.l) return;
+                                    const first = shown[seenIds[k]];
+                                    const gs = [...new Set([].concat(first.l.group_names && first.l.group_names.length ? first.l.group_names : [first.l.group_name],
+                                        it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]))];
+                                    // Vaqtlari har xil bo'lsa — umumiy oraliq, har guruhcha o'z vaqti, kun rejasi va so'rovi bilan (parts; oynada).
+                                    const parts = mergeCycParts((first.l.parts || [first.l]).concat([it.l]));
+                                    const lo = Math.min(...parts.map(p => +p.hour || 0)), hi = Math.max(...parts.map(p => (+p.hour || 0) + (+p.hours || 0)));
+                                    // Zal to'qnashuvi — barcha yozuvlardan (keyingi yarmida bo'lsa ham yo'qolmasin).
+                                    const clashes = [...new Set([].concat(cycRoomClashes(first.l), cycRoomClashes(it.l)))];
+                                    const merged = Object.assign({}, first.l, { group_names: gs, hour: lo, hours: hi - lo,
+                                        parts: parts.length > 1 ? parts : undefined, ask: parts.some(p => p.ask),
+                                        room_clash: clashes[0], room_clashes: clashes.length ? clashes : undefined });
+                                    crossCycleShown.push(merged);
+                                    shown[seenIds[k]] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
+                                });
+                            });
+                            const inner = shown.map(it => {
                                 if (it.l) return cycChipHtml(it.l, it.i, mode);
                                 const c = it.c;
                                 const isLec = c.training_type === 'lecture';
@@ -8398,18 +8549,21 @@
                                     '<div class="tt-cross-weeks">' + esc(detailLines[4] || '') + '</div>' +
                                     '</div>';
                             }).join('');
-                            // Bir katakda bir nechta dars (o'qituvchi/xona kesimida; haftalik ham, sikl ham) — to'qnashuv; sababi katakda va
-                            // yo'riqda: qaysi darslar bir vaqtda (bitta ma'ruza oqimi — bitta dars).
-                            const pairs = [];
-                            if (!noClash(col)) cl.items.forEach((a, x) => cl.items.forEach((b, y) => {
-                                if (y > x && a.fa < b.fb && b.fa < a.fb && !sameCrossLesson(a, b)) pairs.push([a, b]);
-                            }));
-                            const clashing = [...new Set(pairs.flat())];
-                            const what = it => { const c = it.c || it.l; const g = it.l ? cfGroupsText(it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name])
-                                : cfGroupsText(cardGroups(c)); return (it.l ? 'sikl: ' : '') + c.subject_name + ' (' + (c.training_type === 'lecture' ? 'M' : 'A') + ') ' + g; };
-                            const why = clashing.length ? 'To\'qnashuv — bir vaqtda ' + clashing.length + ' ta dars: ' + clashing.map(what).join('; ') : '';
-                            const conflict = clashing.length ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(why) + '"' : '';
-                            const whyHtml = clashing.length ? '<div class="tt-clash-why">⚠ Bir vaqtda ' + clashing.length + ' ta dars</div>' : '';
+                            // Bir katakda vaqti kesishgan turli darslar (o'qituvchi/xona kesimida; haftalik ham, sikl ham) — to'qnashuv (kamida 2 ta
+                            // turli dars); son va ro'yxat — noyob darslar bo'yicha (bitta darsning takror yozuvlari, ma'ruza oqimi — bitta).
+                            const what = ls => { const it = ls.items[0], c = it.c || it.l;
+                                return (it.l ? 'sikl: ' : '') + c.subject_name + ' (' + (ls.lecture ? 'M' : 'A') + ') ' + cfGroupsText(ls.groups); };
+                            const clashOn = cell.clashing.length > 0;   // kamida ikki turli sessiya kesishgan
+                            const why = clashOn ? 'To\'qnashuv — bir vaqtda ' + cell.count + ' ta dars: ' + cell.clashing.map(what).join('; ') : '';
+                            // Sikl ma'ruzasi zalida shu vaqtda boshqa ma'ruza (butun doska bo'yicha, server: room_clash) — o'qituvchi kesimida ham.
+                            const roomWhy = [...new Set([].concat(...shown.filter(it => it.l).map(it => cycRoomClashes(it.l))))];
+                            const title = [why].concat(roomWhy).filter(Boolean).join(' · ');
+                            const conflict = clashOn ? ' style="outline:2px solid #ef4444;outline-offset:-2px;background:#fef2f2" data-cross-clash="1" title="' + esc(title) + '"'
+                                : roomWhy.length ? ' style="outline:2px solid #f59e0b;outline-offset:-2px;background:#fffbeb" data-room-clash="1" title="' + esc(title) + '"' : '';
+                            const whyHtml = (clashOn ? '<div class="tt-clash-why">⚠ Bir vaqtda ' + cell.count + ' ta dars</div>'
+                                + '<div class="tt-clash-list">' + cell.clashing.map(ls => '<div>' + esc(what(ls)) + '</div>').join('') + '</div>' : '')
+                                + (roomWhy.length ? '<div class="tt-clash-why tt-room-why">⚠ Zalda bir vaqtda ikki ma\'ruza</div>'
+                                    + '<div class="tt-clash-list">' + roomWhy.map(t => '<div>' + esc(t) + '</div>').join('') + '</div>' : '');
                             h += '<td class="tt-cell' + rowEndCls(p + vs - 1) + '"' + rs + ' data-day="' + d + '" data-pair="' + p + '"' + conflict + '>' + whyHtml + inner + '</td>';
                         });
                         h += '</tr>';
@@ -8433,6 +8587,14 @@
                 const iso = String(l.date || '');
                 const d = iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
                 const isLec = l.training_type === 'lecture';
+                const canAsk = ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && !isLec;
+                // Birlashtirilgan chip (bitta darsning guruhchalari har xil vaqtda): har biri o'z vaqti va so'rovi bilan.
+                const parts = Array.isArray(l.parts) && l.parts.length > 1 ? l.parts : null;
+                const partTime = p => { const a = +p.hour || 0, n = +p.hours || 0; return a && hours[a] && hours[a + n - 1] ? hours[a][0] + '–' + hours[a + n - 1][1] : ''; };
+                const partsHtml = parts ? '<div class="dp-sub"><b>Guruhchalar vaqti:</b></div>' + parts.map((p, k) => '<div class="dp-sub">'
+                    + esc((p.group_names || [p.group_name]).join(', ')) + ': ' + esc(partTime(p)) + ' (' + (+p.hours || 1) + ' s)'
+                    + (canAsk && p.ask ? ' <button type="button" data-cyc-ask-part="' + k + '" class="px-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button>' : '')
+                    + '</div>').join('') : '';
                 const pop = document.createElement('div');
                 pop.id = 'crossCycPop';
                 pop.className = 'tt-cross-cyc-pop';
@@ -8444,8 +8606,10 @@
                     '<div class="dp-sub">' + esc((l.faculty_name || '—') + ' · ' + l.specialty_name + ' · ' + l.course + '-kurs') + '</div>' +
                     '<div class="dp-sub">Guruh: ' + esc((l.group_names && l.group_names.length ? l.group_names : [l.group_name]).join(', ')) + (l.flow ? ' · ' + esc(l.flow) : '') + '</div>' +
                     '<div class="dp-sub">O\'qituvchi: ' + esc(l.teacher_name || '—') + ' · Xona: ' + esc(l.auditorium_name || '—') + '</div>' +
+                    partsHtml +
+                    cycRoomClashes(l).map(t => '<div class="dp-note" style="color:#b45309">⚠ ' + esc(t) + '</div>').join('') +
                     '<div class="dp-note">Sikl jadvalidagi dars — bu yerda faqat ko\'rish; joyi "Sikl" kesimida.</div>' +
-                    (l.ask && ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && !isLec
+                    (!parts && l.ask && canAsk
                         ? '<div class="dp-actions"><button type="button" data-cyc-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '');
                 document.body.appendChild(pop);
                 const r = anchor.getBoundingClientRect();
@@ -8456,6 +8620,14 @@
                 if (ask) ask.onclick = () => {
                     closeCrossCycPop();
                     openCycleTimeProposal({ subject: l.subject_name, group: l.group_name, specialty: l.specialty_name, course: l.course }, dp, { iso: iso, d: d });
+                };
+                // Guruhcha bo'yicha so'rov (birlashtirilgan chip) — o'sha guruhcha va uning kun rejasi bilan.
+                pop.onclick = ev => {
+                    const b = ev && ev.target && ev.target.closest ? ev.target.closest('[data-cyc-ask-part]') : null;
+                    const p = b && parts ? parts[+b.dataset.cycAskPart] : null;
+                    if (!p) return;
+                    closeCrossCycPop();
+                    openCycleTimeProposal({ subject: l.subject_name, group: p.group_name, specialty: l.specialty_name, course: l.course }, p.dp || {}, { iso: iso, d: d });
                 };
             }
             // Sikl darsi bosilganda — oyna (katakka joylash va boshqa ishlovchilarga o'tmaydi).

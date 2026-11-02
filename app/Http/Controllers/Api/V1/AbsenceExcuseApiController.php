@@ -14,6 +14,7 @@ use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Services\SababliRetakePlan;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -117,9 +118,7 @@ class AbsenceExcuseApiController extends Controller
             'makeup_dates.*.assessment_type' => 'required|string|in:jn,mt,oski,test',
             'makeup_dates.*.assessment_type_code' => 'required|string',
             'makeup_dates.*.original_date' => 'required|date',
-            'makeup_dates.*.makeup_date' => 'nullable|date',
-            'makeup_dates.*.makeup_start' => 'nullable|date',
-            'makeup_dates.*.makeup_end' => 'nullable|date',
+            'retake_start' => 'nullable|date',
         ], [
             'reason.required' => 'Sababni tanlang',
             'doc_number.required' => 'Hujjat raqamini kiriting',
@@ -153,15 +152,15 @@ class AbsenceExcuseApiController extends Controller
             $makeupDates = $request->input('makeup_dates', []);
 
             if (!empty($makeupDates)) {
-                foreach ($makeupDates as $makeup) {
-                    $dateToSave = ($makeup['assessment_type'] === 'jn')
-                        ? ($makeup['makeup_start'] ?? $makeup['makeup_date'] ?? null)
-                        : ($makeup['makeup_date'] ?? null);
+                // Web bilan bir xil: kuniga bitta retake — sanalar serverda hisoblanadi
+                $makeupDates = SababliRetakePlan::assign($makeupDates, SababliRetakePlan::firstDay($request->input('retake_start')));
+                uasort($makeupDates, fn ($a, $b) => [$a['makeup_date'] ?? '9999-12-31', $a['original_date']]
+                    <=> [$b['makeup_date'] ?? '9999-12-31', $b['original_date']]);
 
-                    $makeupEndDate = null;
-                    if (($makeup['assessment_type'] ?? '') === 'jn' && !empty($makeup['makeup_end'])) {
-                        $makeupEndDate = $makeup['makeup_end'];
-                    }
+                foreach ($makeupDates as $makeup) {
+                    $isSubmitted = SababliRetakePlan::isSubmitted($makeup);
+                    $dateToSave = $isSubmitted ? $makeup['original_date'] : $makeup['makeup_date'];
+                    $makeupEndDate = !$isSubmitted && $makeup['assessment_type'] === 'jn' ? $dateToSave : null;
 
                     AbsenceExcuseMakeup::create([
                         'absence_excuse_id' => $excuse->id,
@@ -173,7 +172,8 @@ class AbsenceExcuseApiController extends Controller
                         'original_date' => $makeup['original_date'],
                         'makeup_date' => $dateToSave,
                         'makeup_end_date' => $makeupEndDate,
-                        'status' => 'scheduled',
+                        'jn_submitted' => $isSubmitted,
+                        'status' => $isSubmitted ? 'completed' : 'scheduled',
                     ]);
                 }
             } else {
@@ -225,25 +225,13 @@ class AbsenceExcuseApiController extends Controller
 
         $assessments = $this->findMissedAssessments($student->group_id, $startDate, $endDate);
 
-        // Web versiya kabi: dars jadvalida bo'lgan lekin JN topilmagan fanlarga default JN qo'shish
-        $jnSubjects = Schedule::where('group_id', $student->group_id)
-            ->whereDate('lesson_date', '>=', $startDate)
-            ->whereDate('lesson_date', '<=', $endDate)
-            ->select('subject_name', 'subject_id')
-            ->distinct()
-            ->get();
-
-        $existingJnSubjects = $assessments->where('assessment_type', 'jn')->pluck('subject_name')->unique()->toArray();
-
-        foreach ($jnSubjects as $sub) {
-            if (!in_array($sub->subject_name, $existingJnSubjects)) {
-                $assessments->push([
-                    'subject_name' => $sub->subject_name,
-                    'subject_id' => $sub->subject_id,
-                    'assessment_type' => 'jn',
-                    'assessment_type_code' => '100',
-                    'original_date' => $startDate->format('Y-m-d'),
-                ]);
+        // Web versiya kabi: qoldirilgan har bir dars kuni (fan bo'yicha) — alohida JN retake
+        $existingKeys = $assessments->map(fn ($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+        foreach (SababliRetakePlan::lessonDays($student->group_id, $startDate, $endDate) as $day) {
+            $key = $day['subject_name'] . '|jn|' . $day['original_date'];
+            if (!in_array($key, $existingKeys)) {
+                $assessments->push($day);
+                $existingKeys[] = $key;
             }
         }
 
@@ -323,9 +311,13 @@ class AbsenceExcuseApiController extends Controller
             return $a;
         })->merge($futureAssessments)->values();
 
+        // Qayta topshirish kunlari (ertangi kundan) — saqlashda ham shu tartibda hisoblanadi
+        $retakeStart = SababliRetakePlan::firstDay($request->input('retake_start'));
+
         return response()->json([
-            'data' => $allAssessments,
+            'data' => array_values(SababliRetakePlan::assign($allAssessments->all(), $retakeStart)),
             'excuse_days' => $excuseDays,
+            'retake_start' => $retakeStart->format('Y-m-d'),
         ]);
     }
 

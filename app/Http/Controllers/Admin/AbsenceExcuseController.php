@@ -102,7 +102,8 @@ class AbsenceExcuseController extends Controller
     {
         $excuse = AbsenceExcuse::with(['student', 'makeups' => function ($q) {
             $q->orderBy('subject_name')
-              ->orderByRaw("FIELD(assessment_type, 'jn', 'mt', 'oski', 'test')");
+              ->orderByRaw("FIELD(assessment_type, 'jn', 'mt', 'oski', 'test')")
+              ->orderBy('original_date');
         }])->findOrFail($id);
 
         // Yakshanbasiz kunlar soni

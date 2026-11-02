@@ -80,10 +80,13 @@ class DocumentTemplateService
         // Nazoratlar jadvali (cloneRow orqali)
         // Faqat qayta topshirish sanasi tanlangan yozuvlarni chiqaramiz —
         // "Topshirilgan" yoki "O'z vaqtida" tanlangani (jn_submitted=true) PDF'da yo'q
+        // Qayta topshirish kunlari tartibida: har bir kunga bitta retake qatori
         $makeups = $excuse->makeups()
             ->where('jn_submitted', false)
-            ->orderBy('subject_name')
+            ->orderBy('makeup_date')
             ->orderByRaw("FIELD(assessment_type, 'jn', 'mt', 'oski', 'test')")
+            ->orderBy('subject_name')
+            ->orderBy('original_date')
             ->get();
         $makeupCount = $makeups->count();
 
@@ -102,7 +105,7 @@ class DocumentTemplateService
                     $idx = $i + 1;
                     $processor->setValue("m_num#{$idx}", (string) $idx);
                     $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
-                    $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
+                    $processor->setValue("m_type#{$idx}", $this->makeupTypeLabel($makeup, $typeLabels));
                     $processor->setValue("m_date#{$idx}", $this->formatMakeupDateRange($makeup, $excuse));
                 }
             } catch (\Throwable $e) {
@@ -433,7 +436,7 @@ class DocumentTemplateService
                 [
                     (string) $idx,
                     htmlspecialchars($makeup->subject_name ?? '', ENT_XML1),
-                    htmlspecialchars($typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type, ENT_XML1),
+                    htmlspecialchars($this->makeupTypeLabel($makeup, $typeLabels), ENT_XML1),
                     htmlspecialchars($dateStr, ENT_XML1),
                 ],
                 $row
@@ -450,6 +453,22 @@ class DocumentTemplateService
     }
 
     /**
+     * Nazorat turi; bir kunlik JN retake uchun qaysi kungi dars qayta topshirilishi ham:
+     * "Joriy nazorat (12.10.2026 darsi)"
+     */
+    private function makeupTypeLabel($makeup, array $typeLabels): string
+    {
+        $label = $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type;
+
+        if ($makeup->assessment_type === 'jn' && $makeup->original_date && $makeup->makeup_date
+            && $makeup->makeup_end_date && $makeup->makeup_end_date->eq($makeup->makeup_date)) {
+            $label .= ' (' . $makeup->original_date->format('d.m.Y') . ' darsi)';
+        }
+
+        return $label;
+    }
+
+    /**
      * Makeup sana yoki range ni formatlash: "26.02.2026" yoki "26.02.2026 — 02.03.2026"
      */
     private function formatMakeupDateRange($makeup, ?AbsenceExcuse $excuse = null): string
@@ -459,6 +478,10 @@ class DocumentTemplateService
         }
 
         $start = $makeup->makeup_date->format('d.m.Y');
+
+        if ($makeup->makeup_end_date && $makeup->makeup_end_date->eq($makeup->makeup_date)) {
+            return $start;
+        }
 
         if ($makeup->makeup_end_date) {
             return $start . ' — ' . $makeup->makeup_end_date->format('d.m.Y');

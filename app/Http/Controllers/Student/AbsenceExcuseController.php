@@ -17,6 +17,7 @@ use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Services\SababliRetakePlan;
 use App\Services\SubjectMatcherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -61,6 +62,16 @@ class AbsenceExcuseController extends Controller
         // 1. Sababli kunlar oralig'idagi nazoratlar
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate, $student->id);
 
+        // 1.0. Qoldirilgan har bir dars kuni (fan bo'yicha) — alohida JN retake
+        $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+        foreach (SababliRetakePlan::lessonDays($groupId, $startDate, $endDate) as $day) {
+            $key = $day['subject_name'] . '|jn|' . $day['original_date'];
+            if (!in_array($key, $existingKeys)) {
+                $missedAssessments->push($day);
+                $existingKeys[] = $key;
+            }
+        }
+
         // 1.1. Avvalgi tasdiqlangan arizadagi rejalashtirilgan lekin bajarilmagan
         //     retake'lar — agar ularning makeup_date i yangi sababli oraliqqa tushsa.
         //     (Masalan: avval sababli bo'lgan, 6-kunga retake olgan, lekin 6-kuni
@@ -93,8 +104,8 @@ class AbsenceExcuseController extends Controller
             $scheduledSubjects->pluck('subject_name')->unique()->toArray()
         )));
 
-        // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan nazoratlar
-        // Faqat qoldirilgan fanlardagi testlar ko'rsatiladi
+        // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan OSKI va testlar —
+        // retake'lardan keyinga suriladi. Faqat qoldirilgan fanlardagilari ko'rsatiladi
         $totalDays = $this->countNonSundays($startDate, $endDate);
         if ($totalDays > 0) {
             $makeupEnd = $this->addNonSundayDays(Carbon::today()->copy(), $totalDays);
@@ -107,6 +118,9 @@ class AbsenceExcuseController extends Controller
                 $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
 
                 foreach ($makeupAssessments as $ma) {
+                    if (!in_array($ma['assessment_type'], ['oski', 'test'], true)) {
+                        continue;
+                    }
                     $matchById = !empty($ma['subject_id']) && in_array($ma['subject_id'], $missedSubjectIds);
                     $matchByName = in_array(mb_strtolower($ma['subject_name']), $missedSubjectNames);
                     if (!$matchById && !$matchByName) {
@@ -122,20 +136,8 @@ class AbsenceExcuseController extends Controller
             }
         }
 
-        // Shu muddat ichidagi barcha darslardan unique fanlarni olish (JN uchun)
-        $jnSubjects = Schedule::where('group_id', $groupId)
-            ->whereDate('lesson_date', '>=', $startDate)
-            ->whereDate('lesson_date', '<=', $endDate)
-            ->select('subject_name', 'subject_id')
-            ->distinct()
-            ->get()
-            ->map(fn($s) => ['subject_name' => $s->subject_name, 'subject_id' => $s->subject_id])
-            ->values()
-            ->toArray();
-
         return response()->json([
             'assessments' => $missedAssessments->values()->toArray(),
-            'jn_subjects' => $jnSubjects,
         ]);
     }
 
@@ -146,7 +148,6 @@ class AbsenceExcuseController extends Controller
         $reasonKeys = implode(',', array_keys(AbsenceExcuse::REASONS));
 
         $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
-        $makeupDateRule = $noDayLimit ? 'nullable|date' : 'nullable|date|after_or_equal:today';
 
         $request->validate([
             'reason' => "required|in:{$reasonKeys}",
@@ -208,12 +209,10 @@ class AbsenceExcuseController extends Controller
             'makeup_dates' => 'nullable|array',
             'makeup_dates.*.subject_name' => 'required|string',
             'makeup_dates.*.subject_id' => 'nullable|string',
-            'makeup_dates.*.assessment_type' => 'required|string',
+            'makeup_dates.*.assessment_type' => 'required|string|in:jn,mt,oski,test',
             'makeup_dates.*.assessment_type_code' => 'required|string',
             'makeup_dates.*.original_date' => 'required|date',
-            'makeup_dates.*.makeup_date' => $makeupDateRule,
-            'makeup_dates.*.makeup_start' => $makeupDateRule,
-            'makeup_dates.*.makeup_end' => $makeupDateRule,
+            'retake_start' => $noDayLimit ? 'nullable|date' : 'nullable|date|after_or_equal:today',
         ], [
             'reason.required' => 'Sababni tanlang',
             'reason.in' => 'Noto\'g\'ri sabab tanlangan',
@@ -224,37 +223,17 @@ class AbsenceExcuseController extends Controller
             'end_date.after_or_equal' => 'Tugash sanasi boshlanish sanasidan oldin bo\'lmasligi kerak',
             'file.required' => 'Hujjat yuklash majburiy',
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
-            'makeup_dates.*.makeup_date.after_or_equal' => 'Qayta topshirish sanasi bugungi kundan oldin bo\'lmasligi kerak',
-            'makeup_dates.*.makeup_start.after_or_equal' => 'JN boshlanish sanasi bugungi kundan oldin bo\'lmasligi kerak',
-            'makeup_dates.*.makeup_end.after_or_equal' => 'JN tugash sanasi bugungi kundan oldin bo\'lmasligi kerak',
+            'retake_start.after_or_equal' => 'Qayta topshirish bugungi kundan oldin boshlanmasligi kerak',
         ]);
 
-        // Har bir makeup uchun sana mavjudligini tekshirish
-        $makeupDates = $request->input('makeup_dates', []);
-        foreach ($makeupDates as $i => $makeup) {
-            // Topshirilgan bo'lsa (barcha nazorat turlari uchun), sana talab qilinmaydi.
-            // already_submitted — MT fayli allaqachon yuklangan qator.
-            if (
-                (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1')
-                || (!empty($makeup['already_submitted']) && $makeup['already_submitted'] === '1')
-            ) {
-                continue;
-            }
-
-            if (($makeup['assessment_type'] ?? '') === 'jn') {
-                if (empty($makeup['makeup_start']) || empty($makeup['makeup_end'])) {
-                    return back()->withErrors([
-                        "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang yoki "Topshirilgan" tugmasini bosing',
-                    ])->withInput();
-                }
-            } else {
-                if (empty($makeup['makeup_date'])) {
-                    return back()->withErrors([
-                        "makeup_dates.{$i}.makeup_date" => ($makeup['subject_name'] ?? 'Nazorat') . ' uchun qayta topshirish sanasini tanlang yoki "Topshirilgan" tugmasini bosing',
-                    ])->withInput();
-                }
-            }
-        }
+        // Qayta topshirish kunlari: kuniga bitta retake, OSKI oxirgi retake kuni,
+        // test bir kun oraliq bilan — sanalar mijozdan emas, shu yerda hisoblanadi.
+        $makeupDates = SababliRetakePlan::assign(
+            $request->input('makeup_dates', []),
+            SababliRetakePlan::firstDay($request->input('retake_start'))
+        );
+        uasort($makeupDates, fn ($a, $b) => [$a['makeup_date'] ?? '9999-12-31', $a['original_date']]
+            <=> [$b['makeup_date'] ?? '9999-12-31', $b['original_date']]);
 
         $file = $request->file('file');
         $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
@@ -279,32 +258,12 @@ class AbsenceExcuseController extends Controller
 
             // Makeup sanalarni saqlash
             foreach ($makeupDates as $makeup) {
-                $isJn = ($makeup['assessment_type'] ?? '') === 'jn';
-                $isSubmitted = (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1')
-                || (!empty($makeup['already_submitted']) && $makeup['already_submitted'] === '1');
+                $isSubmitted = SababliRetakePlan::isSubmitted($makeup);
 
-                // Topshirilgan bo'lsa, sanasiz saqlaymiz
-                $dateToSave = null;
-                $makeupEndDate = null;
-
-                if ($isSubmitted) {
-                    // Topshirilgan — sana kerak emas, original_date ni saqlaymiz
-                    $dateToSave = $makeup['original_date'];
-                } elseif ($isJn) {
-                    $dateToSave = $makeup['makeup_start'] ?? $makeup['makeup_date'];
-                    if (!empty($makeup['makeup_end'])) {
-                        $makeupEndDate = $makeup['makeup_end'];
-                    }
-                } else {
-                    $dateToSave = $makeup['makeup_date'];
-                }
-
-                if (!$isSubmitted) {
-                    $parsedDate = Carbon::parse($dateToSave);
-                    if ($parsedDate->isSunday()) {
-                        throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
-                    }
-                }
+                // Topshirilgan — qayta topshirish kuni yo'q, original_date saqlanadi.
+                // JN retake bitta kunlik: oralig'i shu kunning o'zi (makeup_end_date = makeup_date).
+                $dateToSave = $isSubmitted ? $makeup['original_date'] : $makeup['makeup_date'];
+                $makeupEndDate = !$isSubmitted && $makeup['assessment_type'] === 'jn' ? $dateToSave : null;
 
                 // student_subjects orqali to'g'ri subject_id ni aniqlash
                 $resolvedSubjectId = $makeup['subject_id'] ?? null;

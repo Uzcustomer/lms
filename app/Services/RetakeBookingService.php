@@ -181,7 +181,8 @@ class RetakeBookingService
 
     /**
      * Dars sanasi tasdiqlangan sababli arizaning davriga tushsa — arizada shu fan
-     * uchun talaba tanlagan JN qayta topshirish oralig'i [Y-m-d dan, Y-m-d gacha].
+     * uchun belgilangan JN qayta topshirish oralig'i [Y-m-d dan, Y-m-d gacha]
+     * (yangi arizalarda shu darsning bir kunlik retake kuni).
      * Bajarilmagan (missed) oraliq keyingi arizada qayta belgilangan bo'lsa
      * (o'sha original_date bilan) — eng so'nggisi amalda.
      *
@@ -203,7 +204,7 @@ class RetakeBookingService
             return null;
         }
 
-        $makeup = $jn()->whereHas('absenceExcuse', $approved)
+        $candidates = $jn()->whereHas('absenceExcuse', $approved)
             ->where('status', '!=', 'missed')
             ->where(function ($q) use ($covering) {
                 foreach ($covering->pluck('original_date')->filter()->unique() as $date) {
@@ -212,14 +213,23 @@ class RetakeBookingService
                 $q->orWhereIn('id', $covering->pluck('id'));
             })
             ->orderByDesc('id')
-            ->first(['makeup_date', 'makeup_end_date']);
-        if (!$makeup) {
+            ->get(['absence_excuse_id', 'original_date', 'makeup_date', 'makeup_end_date']);
+        if ($candidates->isEmpty()) {
             return null;
         }
 
-        $from = Carbon::parse($makeup->makeup_date)->toDateString();
+        // Yangi arizalarda har bir dars kuniga bitta kunlik retake — aynan shu darsniki.
+        // Topilmasa (eski arizalar: fanga bitta oraliq) — eng so'nggi arizaning oralig'i.
+        $day = Carbon::parse($lessonDate)->toDateString();
+        $exact = $candidates->first(fn ($m) => Carbon::parse($m->original_date)->toDateString() === $day);
+        $rows = $exact
+            ? collect([$exact])
+            : $candidates->where('absence_excuse_id', $candidates->first()->absence_excuse_id);
 
-        return [$from, $makeup->makeup_end_date ? Carbon::parse($makeup->makeup_end_date)->toDateString() : $from];
+        return [
+            $rows->map(fn ($m) => Carbon::parse($m->makeup_date)->toDateString())->min(),
+            $rows->map(fn ($m) => Carbon::parse($m->makeup_end_date ?? $m->makeup_date)->toDateString())->max(),
+        ];
     }
 
     /**

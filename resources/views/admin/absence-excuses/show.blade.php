@@ -320,7 +320,10 @@
                                         <td class="px-6 py-4 text-base text-gray-700 dark:text-gray-300">
                                             @if($makeup->makeup_date)
                                                 <span class="font-semibold">{{ $makeup->makeup_date->format('d.m.Y') }}</span>
-                                                @if($makeup->makeup_end_date)
+                                                @if($makeup->makeup_end_date && $makeup->makeup_end_date->eq($makeup->makeup_date))
+                                                    {{-- bir kunlik JN retake --}}
+                                                    <span class="text-xs text-gray-400 ml-1">({{ $makeup->original_date->format('d.m.Y') }} darsi)</span>
+                                                @elseif($makeup->makeup_end_date)
                                                     <span class="text-gray-400 mx-1">&mdash;</span>
                                                     <span class="font-semibold">{{ $makeup->makeup_end_date->format('d.m.Y') }}</span>
                                                 @elseif($makeup->assessment_type === 'jn' && $excuse->end_date)

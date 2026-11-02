@@ -340,6 +340,20 @@ it('uses the rescheduled range when the excuse range was missed', function () {
     expect(RetakeBookingService::excuseWindow(5531, 181, '2026-10-24'))->toBe(['2026-11-03', '2026-11-09']);
 });
 
+it('gives each excused lesson day its own one-day retake', function () {
+    // Yangi tartib: har bir qoldirilgan dars kuniga bitta kunlik retake
+    $id = svcExcuse('approved', '2026-10-22', '2026-10-24', ['makeup_date' => '2026-11-02', 'makeup_end_date' => '2026-11-02']);
+    foreach (['2026-10-23' => '2026-11-03', '2026-10-24' => '2026-11-04'] as $lesson => $retake) {
+        DB::table('absence_excuse_makeups')->insert([
+            'absence_excuse_id' => $id, 'student_id' => 1, 'subject_id' => '181', 'assessment_type' => 'jn',
+            'original_date' => $lesson, 'makeup_date' => $retake, 'makeup_end_date' => $retake,
+        ]);
+    }
+
+    expect(RetakeBookingService::excuseWindow(5531, 181, '2026-10-22'))->toBe(['2026-11-02', '2026-11-02'])
+        ->and(RetakeBookingService::excuseWindow(5531, 181, '2026-10-24'))->toBe(['2026-11-04', '2026-11-04']);
+});
+
 it('opens booking until the excuse deadline even when the settings deadline passed', function () {
     DB::table('deadlines')->insert(['level_code' => '13', 'deadline_days' => 3]);
     svcExcuse('approved', '2026-10-22', '2026-10-25');

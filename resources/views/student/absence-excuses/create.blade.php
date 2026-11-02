@@ -80,24 +80,27 @@
         .rc-day.rc-start.rc-end { border-radius: 6px; }
         .rc-day.rc-in-range { background: #e0e7ff; color: #3730a3; border-radius: 2px; }
         .rc-day.rc-start.rc-today, .rc-day.rc-end.rc-today { box-shadow: none; }
-        .rc-day.rc-picked-single {
-            background: #4f46e5; color: #fff !important; font-weight: 700; border-radius: 6px;
-        }
-        .rc-day.rc-taken { background: #fef3c7; color: #92400e; cursor: not-allowed; }
 
-        /* ======= MINI CALENDAR (assessment cards) ======= */
-        .rc-mini { height: 250px; display: flex; flex-direction: column; }
-        .rc-mini .rc-header { padding: 6px 10px; flex-shrink: 0; }
-        .rc-mini .rc-header-title { font-size: 12px; }
-        .rc-mini .rc-nav { width: 24px; height: 24px; border-radius: 5px; }
-        .rc-mini .rc-weekdays { padding: 4px 6px 3px; flex-shrink: 0; }
-        .rc-mini .rc-weekdays span { font-size: 9px; }
-        .rc-mini .rc-grid { gap: 0; padding: 2px 6px 6px; flex: 1; align-content: start; }
-        .rc-mini .rc-day { font-size: 11px; min-height: 30px; border-radius: 5px; }
-        .rc-mini .rc-day.rc-start { border-radius: 5px 2px 2px 5px; }
-        .rc-mini .rc-day.rc-end { border-radius: 2px 5px 5px 2px; }
-        .rc-mini .rc-day.rc-start.rc-end { border-radius: 5px; }
-        .rc-mini .rc-day.rc-in-range { border-radius: 2px; }
+        /* ======= QAYTA TOPSHIRISH JADVALI (kuniga bitta retake) ======= */
+        .ae-plan-start { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; }
+        .ae-plan-start .ae-input { max-width: 240px; }
+        .ae-plan-hint { flex: 1; min-width: 220px; font-size: 13px; color: #64748b; line-height: 1.5; margin: 0; }
+        .ae-plan-table-wrap { margin-top: 18px; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+        .ae-plan-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .ae-plan-table th {
+            text-align: left; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;
+            letter-spacing: .04em; background: #f8fafc; padding: 8px 12px; border-bottom: 1px solid #e2e8f0;
+        }
+        .ae-plan-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: middle; }
+        .ae-plan-table tr:last-child td { border-bottom: none; }
+        .ae-plan-table td.ae-plan-date { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .ae-plan-wd { font-weight: 500; color: #94a3b8; font-size: 12px; margin-left: 4px; }
+        .ae-plan-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+        .ae-plan-chip {
+            flex: 1; display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 8px;
+            border: 1.5px solid #c7d2fe; background: #eef2ff; color: #3730a3; font-size: 13px; font-weight: 700;
+        }
+        .ae-plan-chip.ae-plan-chip-empty { border-color: #e2e8f0; background: #f8fafc; color: #94a3b8; font-weight: 500; }
 
         /* ======= CARD STYLES ======= */
         .ae-card {
@@ -214,11 +217,10 @@
             .rc-weekdays { padding: 3px 3px 2px; }
             .rc-weekdays span { font-size: 9px; }
 
-            /* Mini calendar */
-            .rc-mini { height: 220px; }
-            .rc-mini .rc-day { font-size: 10px; min-height: 26px; }
-            .rc-mini .rc-header { padding: 5px 8px; }
-            .rc-mini .rc-header-title { font-size: 11px; }
+            /* Qayta topshirish jadvali */
+            .ae-plan-start .ae-input { max-width: none; }
+            .ae-plan-table { font-size: 12px; }
+            .ae-plan-table th, .ae-plan-table td { padding: 6px 8px; }
 
             /* Fan grid mobile */
             .ae-fan-grid { gap: 10px !important; grid-template-columns: 1fr !important; }
@@ -499,11 +501,43 @@
                             </div>
                             <div class="flex-1">
                                 <h3 class="text-lg font-bold text-gray-900">{{ __('O\'tkazib yuborilgan nazoratlar') }}</h3>
-                                <p class="text-sm text-gray-500 mt-0.5">{{ __('Har bir nazorat uchun qayta topshirish sanasini tanlang') }}</p>
+                                <p class="text-sm text-gray-500 mt-0.5">{{ __('Qayta topshirish kunlari avtomatik belgilanadi — kuniga bitta retake') }}</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.already_submitted || a.jn_submitted || (a.assessment_type === 'jn' ? (a.makeup_start && a.makeup_end) : !!a.makeup_date)).length + '/' + assessments.length"></span>
-                                <span class="text-gray-400 text-sm">{{ __('tanlangan') }}</span>
+                                <span class="text-lg font-bold text-indigo-600" x-text="retakeDaysCount"></span>
+                                <span class="text-gray-400 text-sm">{{ __('kun') }}</span>
+                            </div>
+                        </div>
+                        <div class="ae-card-body">
+                            <div class="ae-plan-start">
+                                <div>
+                                    <label for="retake_start" class="ae-label">{{ __('Qayta topshirish boshlanadigan kun') }}</label>
+                                    <input type="date" id="retake_start" name="retake_start" x-model="retakeStart"
+                                           :min="noDayLimit ? null : todayStr" class="ae-input">
+                                </div>
+                                <p class="ae-plan-hint">
+                                    {{ __('Har bir qoldirilgan dars kuni uchun bitta kun ajratiladi. OSKI fanning oxirgi retake kuniga, yakuniy test esa bir kun oraliq bilan qo\'yiladi. Yakshanba hisobga olinmaydi.') }}
+                                </p>
+                            </div>
+                            <div class="ae-plan-table-wrap" x-show="schedule.length > 0">
+                                <table class="ae-plan-table">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ __('Sana') }}</th>
+                                            <th>{{ __('Fan') }}</th>
+                                            <th>{{ __('Nazorat') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="row in schedule" :key="row.key">
+                                            <tr>
+                                                <td class="ae-plan-date"><span x-text="fmtDate(row.date)"></span><span class="ae-plan-wd" x-text="weekdayName(row.date)"></span></td>
+                                                <td x-text="row.subject_name"></td>
+                                                <td><span class="ae-plan-badge" :class="'badge-' + row.type" x-text="row.label"></span></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -559,7 +593,7 @@
                                             {{-- x-if faqat bitta ildiz elementni chizadi: partial esa
                                                  kalendar + yashirin inputlardan iborat, shuning uchun o'raymiz --}}
                                             <div>
-                                                @include('student.absence-excuses._calendar-cell')
+                                                @include('student.absence-excuses._retake-cell')
                                             </div>
                                         </template>
                                     </div>
@@ -636,6 +670,9 @@
             loading: false,
             searched: false,
 
+            // Qayta topshirish boshlanadigan kun (Y-m-d)
+            retakeStart: '{{ old("retake_start", "") }}',
+
             // Submit state (loading modal uchun)
             submitting: false,
 
@@ -696,20 +733,84 @@
                 });
                 return groups;
             },
-            get allDatesSelected() {
-                return this.assessments.length > 0 && this.assessments.every(a => {
-                    // Fayli allaqachon yuklangan MT — sana so'ralmaydi
-                    if (a.already_submitted) return true;
-                    if (a.jn_submitted) return true;
-                    if (a.assessment_type === 'jn') return a.makeup_start && a.makeup_end;
-                    return !!a.makeup_date;
-                });
-            },
             get canSubmit() {
                 if (!this.reason || !this.startDate || !this.endDate) return false;
                 if (this.deadlineExpired) return false;
-                if (this.assessments.length > 0 && !this.allDatesSelected) return false;
+                if (this.assessments.some(a => this._isPending(a)) && !this.retakeStart) return false;
                 return true;
+            },
+            get todayStr() {
+                return this._toStr(new Date());
+            },
+            // Qayta topshirish kunlari: indeks => 'Y-m-d'.
+            // App\Services\SababliRetakePlan::assign bilan bir xil — saqlashda serverda qayta hisoblanadi.
+            // Kuniga bitta retake; OSKI fanning oxirgi retake kunida; test bir kun oraliq bilan.
+            get plan() {
+                const out = {};
+                if (!this.retakeStart) return out;
+                const TYPE = { jn: 0, mt: 1, oski: 2, test: 3 };
+                const cmp = (x, y) => (x < y ? -1 : (x > y ? 1 : 0));
+                const groups = {};
+                this.assessments.forEach((a, i) => {
+                    if (!this._isPending(a)) return;
+                    const k = String(a.subject_name || '').trim().toLowerCase();
+                    (groups[k] = groups[k] || []).push(i);
+                });
+                const first = {};
+                Object.keys(groups).forEach(k => {
+                    first[k] = groups[k].map(i => String(this.assessments[i].original_date)).sort()[0];
+                });
+                const subjects = Object.keys(groups).sort((x, y) => cmp(first[x], first[y]) || cmp(x, y));
+
+                let day = this._firstDay(this.retakeStart);
+                subjects.forEach(k => {
+                    const keys = groups[k].slice().sort((x, y) => {
+                        const a = this.assessments[x], b = this.assessments[y];
+                        return ((TYPE[a.assessment_type] ?? 9) - (TYPE[b.assessment_type] ?? 9))
+                            || cmp(String(a.original_date), String(b.original_date));
+                    });
+                    let lastRetake = null, last = null, oskiShared = false;
+                    keys.forEach(i => {
+                        const type = this.assessments[i].assessment_type;
+                        if (type === 'mt') return;
+                        let date;
+                        if (type === 'jn') {
+                            date = day; lastRetake = date; day = this._nextDay(date);
+                        } else if (type === 'oski' && lastRetake && !oskiShared) {
+                            date = lastRetake; oskiShared = true;
+                        } else if (type === 'test' && last) {
+                            date = this._nextDay(this._nextDay(last)); day = this._nextDay(date);
+                        } else {
+                            date = day; day = this._nextDay(date);
+                        }
+                        last = date;
+                        out[i] = date;
+                    });
+                    keys.forEach(i => {
+                        if (this.assessments[i].assessment_type === 'mt') out[i] = lastRetake || last || day;
+                    });
+                });
+                return out;
+            },
+            // Sana tartibidagi jadval (farmoyishdagi kabi)
+            get schedule() {
+                const plan = this.plan;
+                const order = { jn: 0, oski: 1, mt: 2, test: 3 };
+                return Object.keys(plan).map(i => {
+                    const a = this.assessments[i];
+                    return {
+                        key: 'p' + i,
+                        date: plan[i],
+                        subject_name: a.subject_name,
+                        type: a.assessment_type,
+                        order: order[a.assessment_type] ?? 9,
+                        label: this.getLabel(a.assessment_type)
+                            + (a.assessment_type === 'jn' ? ' — ' + this.fmtDate(a.original_date) + ' darsi' : ''),
+                    };
+                }).sort((x, y) => (x.date < y.date ? -1 : (x.date > y.date ? 1 : x.order - y.order)));
+            },
+            get retakeDaysCount() {
+                return new Set(Object.values(this.plan)).size;
             },
             get monthYearLabel() {
                 if (this.calMonth === null) return '';
@@ -770,6 +871,11 @@
                 } else {
                     this.calMonth = today.getMonth();
                     this.calYear = today.getFullYear();
+                }
+                if (!this.retakeStart) {
+                    // Ertangi kundan (yakshanba bo'lsa — dushanbadan)
+                    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+                    this.retakeStart = this._firstDay(this._toStr(tomorrow));
                 }
                 this.checkDeadline();
                 if (this.startDate && this.endDate) {
@@ -851,6 +957,31 @@
                 if (!this.startDate || !this.endDate) return false;
                 return ds >= this.startDate && ds <= this.endDate;
             },
+            _parse(ds) {
+                const [y, m, d] = String(ds).slice(0, 10).split('-').map(Number);
+                return new Date(y, m - 1, d);
+            },
+            // Yakshanba bo'lsa — keyingi kun
+            _firstDay(ds) {
+                const d = this._parse(ds);
+                if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+                return this._toStr(d);
+            },
+            // Keyingi ish kuni (yakshanbasiz)
+            _nextDay(ds) {
+                const d = this._parse(ds);
+                d.setDate(d.getDate() + 1);
+                if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+                return this._toStr(d);
+            },
+            // Topshirilgan / o'z vaqtida / MT yuklangan — kun ajratilmaydi
+            _isPending(a) {
+                return !a.already_submitted && !a.jn_submitted;
+            },
+            weekdayName(ds) {
+                if (!ds) return '';
+                return ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'][this._parse(ds).getDay()];
+            },
             // Yakshanbasiz kunlar soni
             _countNonSundays(startStr, endStr) {
                 const s = new Date(startStr), e = new Date(endStr);
@@ -886,8 +1017,6 @@
 
             async fetchAssessments() {
                 this.loading = true; this.searched = false; this.assessments = [];
-                const today = new Date();
-                const cm = today.getMonth(), cy = today.getFullYear();
                 try {
                     const resp = await fetch('{{ route("student.absence-excuses.missed-assessments") }}', {
                         method: 'POST',
@@ -896,180 +1025,17 @@
                     });
                     if (resp.ok) {
                         const data = await resp.json();
+                        // JN — har bir qoldirilgan dars kuni alohida qator (server qaytaradi)
                         this.assessments = (data.assessments || []).map(a => ({
-                            ...a, makeup_date: '', makeup_start: '', makeup_end: '',
-                            jn_selecting: 'start', cal_month: cm, cal_year: cy, show_cal: false,
+                            ...a,
                             is_makeup_period: a.is_makeup_period || false,
                             is_previous_makeup: a.is_previous_makeup || false,
                             previous_makeup_date: a.previous_makeup_date || null,
                             jn_submitted: false
                         }));
-                        // Serverdan JN topilmagan fanlar uchun JN card qo'shish
-                        const jnSubjects = data.jn_subjects || [];
-                        const existingJnSubjects = this.assessments
-                            .filter(a => a.assessment_type === 'jn')
-                            .map(a => a.subject_name);
-                        jnSubjects.forEach(sub => {
-                            if (!existingJnSubjects.includes(sub.subject_name)) {
-                                this.assessments.push({
-                                    subject_name: sub.subject_name, subject_id: sub.subject_id || '',
-                                    assessment_type: 'jn', assessment_type_code: '100',
-                                    original_date: this.startDate, makeup_date: '',
-                                    makeup_start: '', makeup_end: '', jn_selecting: 'start',
-                                    cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true,
-                                    jn_submitted: false
-                                });
-                            }
-                        });
                     }
                 } catch (e) { console.error('Xatolik:', e); }
                 this.loading = false; this.searched = true;
-            },
-
-            // ---- Mini calendar methods ----
-            getMiniMonthLabel(index) {
-                const item = this.assessments[index];
-                return item ? MONTHS_UZ[item.cal_month] + ' ' + item.cal_year : '';
-            },
-            miniPrevMonth(index) {
-                const item = this.assessments[index];
-                if (!this.noDayLimit) {
-                    const today = new Date();
-                    const cur = item.cal_year * 12 + item.cal_month;
-                    const min = today.getFullYear() * 12 + today.getMonth();
-                    if (cur <= min) return;
-                }
-                if (item.cal_month === 0) { item.cal_month = 11; item.cal_year--; }
-                else item.cal_month--;
-            },
-            miniNextMonth(index) {
-                const item = this.assessments[index];
-                if (item.cal_month === 11) { item.cal_month = 0; item.cal_year++; }
-                else item.cal_month++;
-            },
-            // Bugundan boshlab totalDays ta yakshanbasiz kun — max sana
-            get miniMaxDateStr() {
-                const allowed = this.totalDays;
-                if (!allowed) return null;
-                const today = new Date(); today.setHours(0,0,0,0);
-                let count = 0;
-                let d = new Date(today);
-                while (count < allowed) {
-                    if (d.getDay() !== 0) count++;
-                    if (count < allowed) d.setDate(d.getDate() + 1);
-                }
-                return this._toStr(d);
-            },
-            getMiniCells(index) {
-                const item = this.assessments[index];
-                if (!item) return [];
-                const cells = [];
-                const first = new Date(item.cal_year, item.cal_month, 1);
-                let startWd = first.getDay();
-                startWd = startWd === 0 ? 6 : startWd - 1;
-                const daysInMonth = new Date(item.cal_year, item.cal_month + 1, 0).getDate();
-                const today = new Date(); today.setHours(0,0,0,0);
-                const todayStr = this._toStr(today);
-                const maxDate = this.miniMaxDateStr;
-                // Shu fan ichidagi JN range ni topish (faqat non-JN lar uchun)
-                let jnStart = '', jnEnd = '';
-                if (item.assessment_type !== 'jn') {
-                    const sameSubjectJn = this.assessments.find(
-                        a => a.assessment_type === 'jn' && a.subject_name === item.subject_name
-                    );
-                    jnStart = sameSubjectJn?.makeup_start || '';
-                    jnEnd = sameSubjectJn?.makeup_end || '';
-                }
-                // Yakuniy test uchun: OSKI tanlangan kunni bloklash
-                let oskiDate = '';
-                if (item.assessment_type === 'test') {
-                    const sameSubjectOski = this.assessments.find(
-                        a => a.assessment_type === 'oski' && a.subject_name === item.subject_name
-                    );
-                    oskiDate = sameSubjectOski?.makeup_date || '';
-                }
-                for (let i = 0; i < startWd; i++) {
-                    cells.push({ key: 'e' + i, date: null, day: '', disabled: true });
-                }
-                for (let d = 1; d <= daysInMonth; d++) {
-                    const dt = new Date(item.cal_year, item.cal_month, d);
-                    const ds = this._toStr(dt);
-                    const isSun = dt.getDay() === 0;
-                    const isPast = this.noDayLimit ? false : (dt < today);
-                    const beyondLimit = (this.noDayLimit || !maxDate) ? false : (ds > maxDate);
-                    // Non-JN: shu fan JN range ichidagi sanalar band
-                    let takenByJn = false;
-                    if (jnStart && jnEnd) {
-                        takenByJn = ds >= jnStart && ds <= jnEnd && !isSun;
-                    }
-                    // Yakuniy test: OSKI tanlangan kun band
-                    let takenByOski = false;
-                    if (oskiDate && ds === oskiDate) {
-                        takenByOski = true;
-                    }
-                    cells.push({
-                        key: ds, date: dt, dateStr: ds, day: d,
-                        isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || beyondLimit || takenByJn || takenByOski,
-                        takenByJn: takenByJn,
-                        takenByOski: takenByOski
-                    });
-                }
-                return cells;
-            },
-            miniPickDate(index, dateStr) {
-                const item = this.assessments[index];
-                if (item.assessment_type === 'jn') {
-                    if (item.jn_selecting === 'start') {
-                        item.makeup_start = dateStr;
-                        item.makeup_end = '';
-                        item.jn_selecting = 'end';
-                    } else {
-                        if (dateStr < item.makeup_start) {
-                            item.makeup_start = dateStr;
-                            item.makeup_end = '';
-                            item.jn_selecting = 'end';
-                            return;
-                        }
-                        item.makeup_end = dateStr;
-                        item.jn_selecting = 'start';
-                        item.show_cal = false;
-                        // Shu fan ichidagi boshqa testlarning JN range ga tushgan sanalarini tozalash
-                        this.assessments.forEach(a => {
-                            if (a.assessment_type !== 'jn' && a.subject_name === item.subject_name && a.makeup_date) {
-                                if (a.makeup_date >= item.makeup_start && a.makeup_date <= item.makeup_end) {
-                                    a.makeup_date = '';
-                                }
-                            }
-                        });
-                    }
-                } else {
-                    item.makeup_date = item.makeup_date === dateStr ? '' : dateStr;
-                    if (item.makeup_date) item.show_cal = false;
-                    // OSKI tanlanganda, shu fan yakuniy test ning o'sha kunini tozalash
-                    if (item.assessment_type === 'oski' && item.makeup_date) {
-                        this.assessments.forEach(a => {
-                            if (a.assessment_type === 'test' && a.subject_name === item.subject_name && a.makeup_date === item.makeup_date) {
-                                a.makeup_date = '';
-                            }
-                        });
-                    }
-                }
-            },
-            miniInRange(index, dateStr) {
-                const item = this.assessments[index];
-                if (item.assessment_type !== 'jn' || !item.makeup_start || !item.makeup_end) return false;
-                return dateStr > item.makeup_start && dateStr < item.makeup_end;
-            },
-            clearMiniDates(index) {
-                const item = this.assessments[index];
-                if (item.assessment_type === 'jn') {
-                    item.makeup_start = '';
-                    item.makeup_end = '';
-                    item.jn_selecting = 'start';
-                } else {
-                    item.makeup_date = '';
-                }
             },
 
             handleDrop(e) {

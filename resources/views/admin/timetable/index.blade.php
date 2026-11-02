@@ -4980,8 +4980,10 @@
                     if (chk.checked) body.querySelectorAll('[data-sug-pick^="' + chk.dataset.sugPick.split(':')[0] + ':"]').forEach(o => { if (o !== chk) o.checked = false; });
                     sync();
                 });
-                const applyOne = async (ci, si, reason) => {
-                    const c = window.__ttSug[ci], sug = c.suggestions[si];
+                // Tanlangan karta va taklif — bosilgan paytdagi nusxa ({ c, sug }): sabab oynasi ochiq turganda "To'liq takliflar"
+                // javobi window.__ttSug[ci] ni almashtirsa ham, foydalanuvchi tasdiqlagan taklif yuboriladi (indeks bo'yicha qayta olinmaydi).
+                const sugAt = (ci, si) => { const c = window.__ttSug[ci]; return { c, sug: c.suggestions[si] }; };
+                const applyOne = async ({ c, sug }, reason) => {
                     const r = await api(BASE + '/boards/' + board.id + '/week-suggestions/' + (sug.mode === 'direct' ? 'apply' : 'propose'), 'POST',
                         Object.assign({ week: res.week, card_id: c.id, type: sug.type, title: sug.title, actions: sug.actions }, sug.mode === 'direct' ? {} : { reason }));
                     return r;
@@ -4996,30 +4998,28 @@
                     openWeekSuggestions(errs.length ? { kind: 'err', html: '<b>Bajarilmaganlar (jadval o\'zgarmadi):</b>' + errs.map(x => '<div>' + esc(x) + '</div>').join('') } : null);
                 };
                 body.querySelectorAll('[data-sug]').forEach(btn => btn.onclick = async () => {
-                    const [ci, si] = btn.dataset.sug.split(':').map(Number);
-                    const sug = window.__ttSug[ci].suggestions[si];
+                    const pickd = sugAt(...btn.dataset.sug.split(':').map(Number)), sug = pickd.sug;
                     if (!sug.can_apply || !confirmSug(sug)) return;
                     // So'rov (kafedra mudiri / registrator tasdig'i) — sabab majburiy.
-                    const reason = sug.mode === 'direct' ? '' : askSugReason();
+                    const reason = sug.mode === 'direct' ? '' : await askSugReason();
                     if (reason === null) { sugNote(body, "So'rov yuborilmadi: sabab kiritilmadi.", 'err'); return; }
                     btn.disabled = true; btn.textContent = '…';
                     // Yaxlit: server barcha amallarni bitta tranzaksiyada bajaradi (yoki bitta so'rov yaratadi) — qisman bajarilmaydi.
-                    try { const r = await applyOne(ci, si, reason); await finish([r.message || 'Qo\'llandi.']); }
+                    try { const r = await applyOne(pickd, reason); await finish([r.message || 'Qo\'llandi.']); }
                     catch (e) { sugNote(body, 'Bajarilmadi (jadval o\'zgarmadi): ' + esc(e.message), 'err'); btn.disabled = false; btn.textContent = sugApplyLabel(sug.mode); }
                 });
                 const all = body.querySelector('[data-sug-apply-all]');
                 if (all) all.onclick = async () => {
-                    const list = pick();
-                    if (!list.length || list.some(([ci, si]) => !confirmSug(window.__ttSug[ci].suggestions[si]))) return;
+                    const list = pick().map(([ci, si]) => sugAt(ci, si));
+                    if (!list.length || list.some(x => !confirmSug(x.sug))) return;
                     // So'rovlar bo'lsa — sabab bir marta so'raladi (hammasiga).
-                    const reason = list.some(([ci, si]) => window.__ttSug[ci].suggestions[si].mode !== 'direct') ? askSugReason() : '';
+                    const reason = list.some(x => x.sug.mode !== 'direct') ? await askSugReason() : '';
                     if (reason === null) { sugNote(body, "So'rov yuborilmadi: sabab kiritilmadi.", 'err'); return; }
                     all.disabled = true;
                     const msgs = [], errs = [];
-                    for (const [ci, si] of list) {
-                        const c = window.__ttSug[ci];
-                        try { const r = await applyOne(ci, si, reason); msgs.push(c.subject + ': ' + (r.message || 'qo\'llandi')); }
-                        catch (e) { errs.push(c.subject + ': ' + e.message); }
+                    for (const x of list) {
+                        try { const r = await applyOne(x, reason); msgs.push(x.c.subject + ': ' + (r.message || 'qo\'llandi')); }
+                        catch (e) { errs.push(x.c.subject + ': ' + e.message); }
                     }
                     // Har tanlangan taklif — alohida so'rov; bajarilmaganlari oyna ichida (qayta hisoblangan ro'yxat ustida).
                     await finish(msgs, errs);
@@ -5028,10 +5028,52 @@
             }
             // Taklif qatori: katakcha (qo'llash mumkin bo'lsa), turi, matni, "Qo'llash" (yoki o'chiq — sababi bilan).
             function sugApplyLabel(mode) { return mode === 'direct' ? 'Qo\'llash' : 'So\'rov yuborish'; }
-            // "So'rov yuborish" sababi (kafedra mudiri va registrator ofisi ko'radi): bekor qilinsa yoki bo'sh — null (yuborilmaydi).
+            // "So'rov yuborish" sababi (kafedra mudiri va registrator ofisi ko'radi) — sahifa ichidagi oyna (Takliflar oynasi ustida):
+            // matn maydoni, "Yuborish" / "Bekor"; Esc — bekor, Ctrl+Enter — yuborish. Orqa fonga bosish yopmaydi (tugmani ikki marta
+            // bosganda ikkinchisi oynani bekor qilib yubormasin). Natija — Promise: kiritilgan (tozalangan) sabab; bekor yoki bo'sh — null.
             function askSugReason() {
-                const r = prompt("So'rov sababi (kafedra mudiri va registrator ofisi ko'radi):", '');
-                return r === null || !String(r).trim() ? null : String(r).trim();
+                return new Promise(resolve => {
+                    const prev = document.getElementById('ttSugReasonModal');
+                    if (prev) prev.__close ? prev.__close(null) : prev.remove();   // avvalgisi — bekor (kutayotgani osilib qolmasin)
+                    const m = document.createElement('div');
+                    m.id = 'ttSugReasonModal';
+                    m.setAttribute('role', 'dialog');
+                    m.setAttribute('aria-modal', 'true');
+                    m.setAttribute('aria-labelledby', 'ttSugReasonTitle');
+                    m.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
+                    m.innerHTML = '<div style="background:#fff;border-radius:10px;width:min(460px,100%);padding:14px 16px;box-shadow:0 20px 60px #0005;font-size:12px">' +
+                        '<b id="ttSugReasonTitle" style="display:block;font-size:13px;margin-bottom:2px">So\'rov sababi</b>' +
+                        '<div style="color:#64748b;margin-bottom:8px">Kafedra mudiri va registrator ofisi ko\'radi.</div>' +
+                        '<textarea id="ttSugReasonText" rows="4" maxlength="1000" placeholder="Masalan: ertalab amaliyot bor" ' +
+                        'style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;resize:vertical"></textarea>' +
+                        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">' +
+                        '<button type="button" data-sug-reason="cancel" style="font-size:12px;border:1px solid #cbd5e1;border-radius:6px;padding:4px 12px;background:#f8fafc">Bekor</button>' +
+                        '<button type="button" data-sug-reason="ok" style="font-size:12px;border-radius:6px;padding:4px 12px;background:#2563eb;color:#fff">Yuborish</button>' +
+                        '</div></div>';
+                    let done = false;
+                    const close = v => {
+                        if (done) return;
+                        done = true;
+                        document.removeEventListener('keydown', onKey, true);
+                        m.remove();
+                        resolve(v);
+                    };
+                    const submit = () => close(String(m.querySelector('#ttSugReasonText').value || '').trim() || null);
+                    // Esc — faqat shu oynani yopadi (ostidagi Takliflar oynasiga o'tmaydi).
+                    const onKey = e => {
+                        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
+                        else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+                    };
+                    m.__close = close;
+                    m.addEventListener('click', e => {
+                        const b = e.target.closest ? e.target.closest('[data-sug-reason]') : null;
+                        if (b) b.dataset.sugReason === 'ok' ? submit() : close(null);
+                    });
+                    document.addEventListener('keydown', onKey, true);
+                    document.body.appendChild(m);
+                    const ta = m.querySelector('#ttSugReasonText');
+                    if (ta && ta.focus) ta.focus();
+                });
             }
             function sugRowHtml(s, ci, si, applyMode) {
                 const can = Boolean(s.can_apply);

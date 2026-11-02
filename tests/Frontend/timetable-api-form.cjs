@@ -59,7 +59,70 @@ assert.equal(note.attrs.role, 'status');
         '7|3': { day: 2, pair: 5, cancelled: false, auditorium_code: 'R1', auditorium_name: '101', auditorium_volume: 24 },
         '7|5': { day: null, pair: null, cancelled: true, auditorium_code: null, auditorium_name: null, auditorium_volume: null },
     });
-    assert.match(source, /const dataScope = TIMETABLE_READ_ONLY && \(scopeMode === 'mine' \|\| scopeMode === 'subjects'\) \? '&scope=' \+ scopeMode : '';/);
+    assert.match(source, /const dataScope = serverScopeParam\(\);/);
+    assert.match(source, /return TIMETABLE_READ_ONLY && \(scopeMode === 'mine' \|\| scopeMode === 'subjects'\) \? '&scope=' \+ scopeMode : '';/);
     assert.match(source, /if \(TIMETABLE_READ_ONLY && board\) \{\n\s+loadBoard\(board\.id\)/);
+    assert.match(source, /toggleAscToolbar\(true\);\n\s+if \(!showLoadedCards\(\)\) return;/);
 }
-console.log('timetable api form + takliflar note + /data: 4 scenarios passed');
+// Qamrov ("Faqat meniki" / "Mas'ul fanlarim" / "Kafedram") bo'yicha bo'sh — qamrov tugmalari (specBar) yashirinmaydi,
+// "Butun doska"ga qaytish mumkin; doska haqiqatan bo'sh — "Kartochkalarni yaratish" (specBar yashirin).
+{
+    const fns = section('            function serverScopeParam() {', "            function buildSpecList() {")
+        + section('            function setScopeMode(mode) {', '            function renderWeeklyLayerUi() {');
+    const mk = () => { const set = new Set(['hidden']); return { classList: { add: c => set.add(c), remove: c => set.delete(c),
+        toggle: (c, on) => on ? set.add(c) : set.delete(c), contains: c => set.has(c) }, textContent: '', hidden: () => set.has('hidden') }; };
+    const run = (role, mode, all) => {
+        const els = { specBar: mk(), mainArea: mk(), boardMsg: mk() };
+        const calls = [];
+        const c = { els, calls, all, role, mode };
+        vm.createContext(c);
+        vm.runInContext(`
+            let scopeMode = this.mode, mineOnly = false, allCards = this.all, cards = [], specList = [], curSpec = null, board = { id: 3 }, viewMode = 'weekly';
+            const TIMETABLE_READ_ONLY = this.role === 'ro', MINE_KEY = 'k', localStorage = { setItem() {} }, TIMETABLE_TEACHER_ID = 9;
+            const $ = id => this.els[id];
+            const calls = this.calls;
+            const scopeCards = l => scopeMode === 'all' ? l : l.filter(x => +x.teacher_id === 9);
+            const buildSpecList = () => { specList = cards.map(x => ({ key: String(x.id) })); };
+            const renderMineUi = () => calls.push('mineUi'), syncUrl = () => {}, fillSpecControls = () => calls.push('fill'),
+                fillGridInputs = () => {}, renderAll = () => calls.push('render'), loadCyclePlan = () => {};
+            const loadBoard = () => { calls.push('load'); return Promise.resolve(); };
+            ${fns}
+            this.api = { showLoadedCards, setScopeMode, setCards: v => { cards = v; }, get cards() { return cards; } };`, c);
+        return c;
+    };
+    // Kafedra mudiri (mijozda filtr): doskada kartalar bor, "Faqat meniki" bo'sh — tugmalar ko'rinadi.
+    let c = run('kafedra', 'mine', [{ id: 1, teacher_id: 5 }]);
+    assert.equal(c.api.showLoadedCards(), false);
+    assert.equal(c.els.specBar.hidden(), false);
+    assert.equal(c.els.mainArea.hidden(), true);
+    assert.match(c.els.boardMsg.textContent, /Tanlangan qamrovda darslar yo'q/);
+    assert.deepEqual(c.calls, ['mineUi']);   // qamrov tugmalari holati yangilanadi
+    // "Butun doska" — ro'yxat qaytadan quriladi va ish maydoni ochiladi (qayta yuklamasdan).
+    c.api.setScopeMode('all');
+    assert.equal(c.els.mainArea.hidden(), false);
+    assert.equal(c.els.boardMsg.textContent, '');
+    assert.deepEqual(c.calls.filter(x => x !== 'mineUi'), ['fill', 'render']);
+    // Yana "Faqat meniki" (bo'sh) — tugmalar ko'rinib qoladi.
+    c.api.setScopeMode('mine');
+    assert.equal(c.els.specBar.hidden(), false);
+    assert.equal(c.els.mainArea.hidden(), true);
+    // O'qituvchi (server qamrov bilan bergan, kartalar bo'sh) — tugmalar ko'rinadi.
+    c = run('ro', 'mine', []);
+    assert.equal(c.api.showLoadedCards(), false);
+    assert.equal(c.els.specBar.hidden(), false);
+    assert.match(c.els.boardMsg.textContent, /Butun doska/);
+    c.api.setScopeMode('all');
+    assert.deepEqual(c.calls.filter(x => x !== 'mineUi'), ['load']);
+    // Doska haqiqatan bo'sh (Butun doska) — "Kartochkalarni yaratish", specBar yashirin.
+    c = run('kafedra', 'all', []);
+    assert.equal(c.api.showLoadedCards(), false);
+    assert.equal(c.els.specBar.hidden(), true);
+    assert.match(c.els.boardMsg.textContent, /Kartochkalar hali yaratilmagan/);
+    // Kartalar bor — odatdagidek.
+    c = run('kafedra', 'mine', [{ id: 1, teacher_id: 9 }]);
+    c.api.setCards([{ id: 1, teacher_id: 9 }]);
+    assert.equal(c.api.showLoadedCards(), true);
+    assert.equal(c.els.specBar.hidden(), false);
+    assert.equal(c.els.mainArea.hidden(), false);
+}
+console.log('timetable api form + takliflar note + /data + bo\'sh qamrov: 5 scenarios passed');

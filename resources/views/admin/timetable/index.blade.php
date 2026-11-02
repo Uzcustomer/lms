@@ -3534,7 +3534,7 @@
                 // URLga noyob parametr — har qanday kesh (brauzer/proxy) eski kartalarni
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
-                const dataScope = TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
+                const dataScope = serverScopeParam();
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now() + dataScope);
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
@@ -3591,12 +3591,29 @@
                 if ($('snapshotsBtn')) $('snapshotsBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
                 toggleAscToolbar(true);
+                if (!showLoadedCards()) return;
+                // Qoidalar sonini (badge) fonda yangilaymiz — doska yuklanishini kutdirmaydi
+                loadRules().catch(() => {});
+            }
+
+            // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
+            function serverScopeParam() {
+                return TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
+            }
+            // Yuklangan kartalarni (qamrov qo'llangan — cards) ko'rsatadi; bo'sh bo'lsa false.
+            // Qamrov bo'yicha bo'sh (doskada kartalar bor yoki server qamrov bilan bergan) — qamrov tugmalari
+            // (specBar ichida) ko'rinib qoladi, "Butun doska"ga qaytish mumkin; doska haqiqatan bo'sh — "Kartochkalarni yaratish".
+            function showLoadedCards() {
                 buildSpecList();
                 if (!cards.length) {
-                    $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
-                    $('boardMsg').textContent = 'Kartochkalar hali yaratilmagan — "Kartochkalarni yaratish"ni bosing.';
+                    const scopeEmpty = allCards.length > 0 || serverScopeParam() !== '';
+                    $('specBar').classList.toggle('hidden', !scopeEmpty); $('mainArea').classList.add('hidden');
+                    $('boardMsg').textContent = scopeEmpty
+                        ? 'Tanlangan qamrovda darslar yo\'q — "Butun doska"ni tanlang.'
+                        : 'Kartochkalar hali yaratilmagan — "Kartochkalarni yaratish"ni bosing.';
+                    if (scopeEmpty) renderMineUi();
                     syncUrl();
-                    return;
+                    return false;
                 }
                 $('boardMsg').textContent = '';
                 $('specBar').classList.remove('hidden'); $('mainArea').classList.remove('hidden');
@@ -3604,8 +3621,7 @@
                 fillSpecControls();
                 fillGridInputs();
                 renderAll();
-                // Qoidalar sonini (badge) fonda yangilaymiz — doska yuklanishini kutdirmaydi
-                loadRules().catch(() => {});
+                return true;
             }
 
             function buildSpecList() {
@@ -7320,7 +7336,10 @@
                     return;
                 }
                 cards = scopeCards(allCards);
-                if (typeof renderAll === 'function') renderAll();
+                // Oldingi qamrov bo'sh edi (ish maydoni yashirin) yoki yangisi bo'sh — ro'yxat/ko'rinish qaytadan
+                // (qamrov tugmalari yashirinib qolmasin).
+                if ($('mainArea').classList.contains('hidden') || !cards.length) showLoadedCards();
+                else if (typeof renderAll === 'function') renderAll();
                 if (viewMode === 'cycle') loadCyclePlan();
             }
             function renderWeeklyLayerUi() {

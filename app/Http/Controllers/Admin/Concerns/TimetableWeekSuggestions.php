@@ -526,8 +526,9 @@ trait TimetableWeekSuggestions
                 }
                 // Bo'sh xonalar — alifbo emas, yaqinlik bo'yicha (rankRooms): avval odatdagi / o'qituvchi / kafedra / shu bino xonasi.
                 $roomBase = $this->roomRankBase();
+                $need = $this->cardStudents($c);
                 $fit = $roomBase['active']->filter(fn ($r) => $r->code !== $c->auditorium_code
-                    && !($r->volume && $c->students && (int) $r->volume < (int) $c->students) && $this->auditoriumAllowedForCard($r, $c, $roomBase['teacher']));
+                    && !($r->volume && $need && (int) $r->volume < $need) && $this->auditoriumAllowedForCard($r, $c, $roomBase['teacher']));
                 $n = 0;
                 foreach ($this->rankRooms($c, $fit, $c->auditorium_code, $this->roomHabitFromState((int) $c->board_id, $state)) as [$r, $why]) {
                     $tmp = clone $c;
@@ -712,9 +713,13 @@ trait TimetableWeekSuggestions
         // Har taklif: shu foydalanuvchi qo'llay oladimi (qamrov, ma'ruza / o'qituvchi almashtirish, sana, kutilayotgan so'rov) va qanday
         // (direct — darhol; registrar — so'rov registratorga; department — kafedra mudiri → registrator).
         $pendingCards = $rights['level'] && $rights['level'] !== 'admin' ? $this->pendingCardRequests($board->id) : [];
+        // Xona sig'imi (1.4, haftalik karta va biriktirish oynasi bilan bir xil matn) — karta xonasi bilan qo'yiladi, shuning uchun
+        // joylanmagan karta uchun ham; ogohlantirish (takliflar o'zgarmaydi).
+        $caps = $result ? $this->weeklyCapacityWarnings($board, $W, array_flip(array_column($result, 'id')), false) : [];
         $cardOf = fn (int $id) => $state['cards'][$id] ?? null;
         $ovOf = fn (int $id, int $w) => $state['ov'][$id][$w] ?? null;
         foreach ($result as &$rc) {
+            $rc['cap_warn'] = $caps[$rc['id']]['line'] ?? null;
             foreach ($rc['suggestions'] as &$sg) {
                 $chk = $this->suggestionApplyCheck($rights, $board, ['week' => $W, 'card_id' => $rc['id'],
                     'actions' => array_map(fn ($a) => $a + ['week' => $W], $sg['actions'])], $cardOf, $ovOf, true, $pendingCards);
@@ -766,7 +771,8 @@ trait TimetableWeekSuggestions
     {
         $base = $this->roomRankBase();
         $cur = ($state['ov'][(int) $c->id][$w] ?? null)?->auditorium_code ?: $c->auditorium_code;
-        $fit = $base['active']->filter(fn ($r) => $r->code !== $cur && !($r->volume && $c->students && (int) $r->volume < (int) $c->students)
+        $need = $this->cardStudents($c);   // sig'im — ogohlantirish (weeklyCapacityWarnings) bilan bir xil talabalar soni
+        $fit = $base['active']->filter(fn ($r) => $r->code !== $cur && !($r->volume && $need && (int) $r->volume < $need)
             && $this->auditoriumAllowedForCard($r, $c, $base['teacher']));
         $out = [];
         foreach ($this->rankRooms($c, $fit, $cur, $this->roomHabitFromState((int) $c->board_id, $state)) as [$r, $why]) {

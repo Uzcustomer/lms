@@ -58,7 +58,8 @@ if (!function_exists('legacyUnitBusy')) {
                     }
                 }
             }
-            $volumes = $hits['rooms'] ? Auditorium::whereIn('code', array_keys($hits['rooms']))->pluck('volume', 'code')->all() : [];
+            $roomRows = $hits['rooms'] ? Auditorium::whereIn('code', array_keys($hits['rooms']))->get(['code', 'name', 'volume'])->keyBy('code') : collect();
+            $volumes = $roomRows->map(fn ($r) => $r->volume)->all();
             // Talabalar — guruhlarning faol talabalari (bo'lmasa kartadagi son); sig'imi kiritilmagan xona — band emas (haftalik
             // darsli xonadan tashqari); sig'imdan oshsa — matn boshida aniq raqamlar.
             $mineStudents = (int) $unitCards->map(fn ($c) => $this->cardStudents($c))->max();
@@ -70,7 +71,8 @@ if (!function_exists('legacyUnitBusy')) {
                     unset($hits['rooms'][$code]);
                 } elseif (!isset($exclusive[$code]) && $mineStudents > 0 && empty($unknown[$code])) {
                     $n = ($peak[$code] ?? 0) + $mineStudents;
-                    $prefix[$code] = $vol . " o'rin, " . $n . ' talaba (+' . ($n - $vol) . '): ';
+                    // Yagona ko'rinish (1.4): "Xona sig'maydi: 215 — 65 o'rin, 98 talaba (+33) — ...".
+                    $prefix[$code] = "Xona sig'maydi: " . (string) ($roomRows[$code]->name ?? $code) . ' — ' . $vol . " o'rin, " . $n . ' talaba (+' . ($n - $vol) . ') — ';
                 }
             }
             $fmt = fn (string $d) => Carbon::parse($d)->format('d.m');

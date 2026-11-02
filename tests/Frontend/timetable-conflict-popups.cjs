@@ -14,6 +14,7 @@ const ctx = {
     esc: s => String(s), window: { innerWidth: 1200, innerHeight: 800 }, curWeek: 9, closeCycDayPop() {},
     allCards: [{ id: 5, subject_name: 'Odam anatomiyasi', group_name: 'd1/d26-06b' }],
     cardGroups: c => c.group_names && c.group_names.length ? c.group_names : [c.group_name], cardConflict: () => 'eski matn',
+    weeklyCapLine: c => (+c.id === 5 ? "Xona sig'maydi: 215 — 20 o'rin, 25 talaba (+5)" : ''),
     weeklyConflictItems: { 5: { 9: [
         { kind: 'teacher_busy', type: 'teacher', teacher_name: 'USTOZ', groups: ['a', 'b', 'c', 'd', 'e'], date_from: '2026-11-04', date_to: '2026-11-04', past: false, detail: 'x' },
         { kind: 'room_capacity', type: 'room', room: '215', groups: ['p/p25-02b'], date_from: '2026-11-04', date_to: '2026-11-04', past: false, detail: 'y' },
@@ -27,7 +28,9 @@ ctx.openWeekCfPop({ dataset: { wcf: '5' }, getBoundingClientRect: () => ({ left:
 const pop = appended[0];
 assert.match(pop.innerHTML, /<div class="dp-title">Odam anatomiyasi<\/div><div class="dp-sub">d1\/d26-06b · 9-hafta · to‘qnashuvlar<\/div>/);
 const lines = pop.innerHTML.match(/<li class="cf-line[^"]*">/g) || [];
-assert.equal(lines.length, 2);
+assert.equal(lines.length, 3);
+// Xona sig'imi (1.4) — server matni (haftalik karta, biriktirish oynasi va Takliflar bilan bir xil), sariq qator.
+assert.match(pop.innerHTML, /<li class="cf-line cf-cap-warn">Xona sig'maydi: 215 — 20 o'rin, 25 talaba \(\+5\)<\/li><\/ul>/);
 assert.match(pop.innerHTML, /a, b, c, d … \(5 guruh\)/);
 assert.doesNotMatch(pop.innerHTML, /eski matn/);
 

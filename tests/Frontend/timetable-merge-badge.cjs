@@ -14,7 +14,7 @@ function chip(cards, ids) {
   const ctx = {
     cards, curWeek: 0, selected: null, cardLen: c => c.len_half,
     curGrid: () => ({ weeks: 15 }), activeWeeksOf: () => [], esc: s => String(s),
-    subjStyle: () => '', cardTooltip: () => '', cardLabel: c => c.subject_name,
+    subjStyle: () => '', cardTooltip: () => '', cardLabel: c => c.subject_name, weeklyCapLine: () => '',
     TIMETABLE_ROLE: 'kafedra_mudiri', TIMETABLE_TEACHER_ID: 0, scopeMode: 'all', weeklyLayer: 'internal',
   };
   vm.createContext(ctx);
@@ -25,7 +25,7 @@ function chip(cards, ids) {
 function teacherChip(card, opts) {
   const ctx = Object.assign({
     cards: [card], curWeek: 3, selected: null, cardLen: c => c.len_half, curGrid: () => ({ weeks: 15 }), activeWeeksOf: () => [],
-    esc: s => String(s), subjStyle: () => '', cardTooltip: () => '', cardLabel: c => c.subject_name,
+    esc: s => String(s), subjStyle: () => '', cardTooltip: (c, extra) => extra, cardLabel: c => c.subject_name, weeklyCapLine: () => '',
     TIMETABLE_ROLE: 'oqituvchi', TIMETABLE_TEACHER_ID: 5, scopeMode: 'mine', weeklyLayer: 'internal',
   }, opts);
   vm.createContext(ctx);
@@ -37,6 +37,12 @@ assert.match(teacherChip(own, {}), /<button type="button" class="tt-ask-time" da
 for (const o of [{ scopeMode: 'all' }, { TIMETABLE_ROLE: 'kafedra_mudiri' }, { TIMETABLE_TEACHER_ID: 6 }, { weeklyLayer: 'external' }, { curWeek: 0 }]) {
   assert.doesNotMatch(teacherChip(own, o), /data-ask-time/, JSON.stringify(o));
 }
+// Xona sig'imi (1.4) — ogohlantirish: xona yonida "⚠ sig'maydi", to'liq server matni sichqoncha ustida va kartaning tooltipida.
+const capLine = "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)";
+const capHtml = teacherChip(Object.assign({}, own, { auditorium_name: '102-xona' }), { weeklyCapLine: () => capLine });
+assert.match(capHtml, /<div class="tt-room">№ 102-xona <span class="tt-cap-warn" title="Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba \(\+2\)">⚠ sig'maydi<\/span><\/div>/);
+assert.match(capHtml, /title="\nXona sig'maydi: 102-xona — 10 o'rin, 12 talaba \(\+2\)"/);
+assert.doesNotMatch(teacherChip(Object.assign({}, own, { auditorium_name: '102-xona' }), {}), /tt-cap-warn/);
 const badge = html => (/<span class="tt-merge-badge"[^>]*>([^<]*)<\/span>/.exec(html) || [])[1];
 const card = (id, len) => ({ id, len_half: len, training_type: 'practice', subject_name: 'Gigiyena', weeks: 15 });
 

@@ -128,14 +128,14 @@ it('agenda: bo\'sh paraga ko\'chirish — guruh band, xona sig\'maydi (sababi bi
         ->and($j['move']['rest_weeks'][0])->toBe($s['week'])
         // V para: guruh band (boshqa o'qituvchida Anatomiya) va xona sig'maydi.
         ->and($opt[5]['ok'])->toBeFalse()
-        ->and($opt[5]['why'])->toContain('Guruh band: pp/2024-01b')->toContain("Xona sig'maydi: 10 o'rin, 12 talaba (+2)")
+        ->and($opt[5]['why'])->toContain('Guruh band: pp/2024-01b')->toContain("Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)")
         // VI para: faqat xona sig'maydi — reyting bo'yicha shu vaqtda bo'sh va sig'adigan xona taklif qilinadi.
-        ->and($opt[6])->toMatchArray(['ok' => true, 'why' => "Xona sig'maydi: 10 o'rin, 12 talaba (+2)"])
+        ->and($opt[6])->toMatchArray(['ok' => true, 'why' => "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)"])
         ->and($opt[6]['room'])->toMatchArray(['code' => 'R1', 'name' => '101-xona', 'volume' => 30]);
     // Sig'adigan bo'sh xona yo'q — VI para ham o'chiq, sababi bilan.
     $s['r1']->update(['volume' => 11]);
     $opt = agGet($s, $s['admin'], 'admin', ['move' => $key])['move']['options']['2026-11-19'];
-    expect($opt[6])->toBe(['ok' => false, 'why' => "Xona sig'maydi: 10 o'rin, 12 talaba (+2)", 'room' => null, 'day' => 4, 'pair' => 11]);
+    expect($opt[6])->toBe(['ok' => false, 'why' => "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)", 'room' => null, 'day' => 4, 'pair' => 11]);
     $s['r1']->update(['volume' => 30]);
 
     // Admin: VI paraga (101-xona bilan) — darhol; endi haftalik darslar to'qnashmaydi.
@@ -246,8 +246,9 @@ it('agenda: sikl ma\'ruzasi — bitta oqim (guruhchalar) bitta yozuv, boshqa oqi
 it('agenda: sabab matni — "Auditoriya band" va sikl xonasi sig\'imi aniq raqamlar bilan', function () {
     $ctl = app(TimetableController::class);
     $f = fn (string $m) => (new ReflectionMethod($ctl, 'agendaReasonText'))->invoke($ctl, $m);
-    expect($f("Xona Z8 band: 65 o'rin, 98 talaba (+33): d22-05a, Klinik farmakologiya, 15.09"))
-        ->toBe("Xona sig'maydi: 65 o'rin, 98 talaba (+33) — d22-05a, Klinik farmakologiya, 15.09")
+    // Sig'im — server o'zi yagona ko'rinishda beradi (unitBusy / ownBusyTexts), o'zgarmaydi.
+    expect($f("Xona sig'maydi: 8-zal — 65 o'rin, 98 talaba (+33) — d22-05a, Klinik farmakologiya, 15.09"))
+        ->toBe("Xona sig'maydi: 8-zal — 65 o'rin, 98 talaba (+33) — d22-05a, Klinik farmakologiya, 15.09")
         ->and($f('Xona R2 band: d22-05a, Fan, 15.09'))->toBe('Xona band: R2 — d22-05a, Fan, 15.09')
         ->and($f('Auditoriya band: 102-xona — p-01 · Fizika'))->toBe('Xona band: 102-xona — p-01 · Fizika')
         ->and($f('Guruh band: p-01 — Fizika'))->toBe('Guruh band: p-01 — Fizika');
@@ -268,7 +269,7 @@ it('agenda: muqobil xona sikl darsi bilan band bo\'lsa taklif qilinmaydi (haftal
     $key = 'w|' . $s['ppB']->id . '|' . $s['week'];
     // Faqat 101-xona sig'adi — u sikl darsi bilan band: VI para o'chiq.
     $opt = agGet($s, $s['admin'], 'admin', ['move' => $key])['move']['options']['2026-11-19'][6];
-    expect($opt)->toMatchArray(['ok' => false, 'room' => null, 'why' => "Xona sig'maydi: 10 o'rin, 12 talaba (+2)"]);
+    expect($opt)->toMatchArray(['ok' => false, 'room' => null, 'why' => "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)"]);
     // Boshqa sig'adigan bo'sh xona bor — u taklif qilinadi (101-xona emas).
     Auditorium::create(['code' => 'R3', 'name' => '103-xona', 'volume' => 20, 'active' => true]);
     $opt = agGet($s, $s['admin'], 'admin', ['move' => $key])['move']['options']['2026-11-19'][6];
@@ -412,4 +413,105 @@ it('agenda: bitta ma\'ruza kartasi guruhchalarda har xil soatda (xonasiz) — al
     expect(array_map(fn ($e) => [$e['type'], implode(', ', $e['groups']), $e['from'], $e['conflict']], $j['entries']))
         ->toBe([['M', 'd22-05a', 1, false], ['M', 'd22-05b', 7, false]])
         ->and($j['entries'][0]['key'])->not->toBe($j['entries'][1]['key']);
+});
+
+/** Fan mas'uli (profildagi mas'ul fan — kafedrasi bilan). */
+function agResponsible(Teacher $t, string $subject, ?string $kafedra): void
+{
+    if (!DB::table('specialties')->where('specialty_hemis_id', 9101)->exists()) {
+        DB::table('specialties')->insert(['specialty_hemis_id' => 9101, 'name' => 'Davolash ishi', 'code' => '60910200', 'locality_type_code' => '1',
+            'locality_type_name' => 'x', 'education_type_code' => '11', 'education_type_name' => 'B']);
+        DB::table('curricula')->insert(['curricula_hemis_id' => 8101, 'name' => 'R', 'specialty_hemis_id' => 9101, 'department_hemis_id' => 1,
+            'education_year_code' => '2026', 'education_year_name' => '2026-2027', 'current' => 1, 'education_type_code' => '11', 'education_type_name' => 'B',
+            'education_form_code' => '11', 'education_form_name' => 'K', 'marking_system_code' => '11', 'marking_system_name' => 'M',
+            'marking_system_minimum_limit' => 60, 'marking_system_gpa_limit' => 2.4, 'semester_count' => 12, 'education_period' => 6]);
+    }
+    $csId = DB::table('curriculum_subjects')->insertGetId(['curriculum_subject_hemis_id' => random_int(10000, 99999), 'curricula_hemis_id' => 8101,
+        'subject_id' => random_int(100, 999), 'subject_name' => $subject, 'subject_code' => 'K1', 'semester_code' => '19', 'semester_name' => '9-semestr',
+        'at_semester' => 1, 'department_name' => $kafedra]);
+    DB::table('teacher_responsible_subjects')->insert(['teacher_id' => $t->id, 'curriculum_subject_id' => $csId]);
+}
+
+it('fan mas\'uli "Mas\'ul fanlarim" (sikl, ichki): d1/d22-01a Klinik farmakologiya kartasi holati va to\'qnashuvlari adminnikidek', function () {
+    $s = agSetup();
+    // MUXAMMADIYEV SAFAR — fan mas'uli: Klinik farmakologiya (Farmakologiya kafedrasi) — profildagi kafedra bilan cheklangan mas'uliyat.
+    $fm = agTeacher('MUXAMMADIYEV SAFAR', 'fan_masuli');
+    agResponsible($fm, 'Klinik farmakologiya', 'Farmakologiya kafedrasi');
+    $plan = fn (Teacher $t, string $role, array $q) => collect(agAs($t, $role)
+        ->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal', 'courses' => [5]] + $q)->assertOk()->json('cycle_cards'));
+    $state = fn ($cards, string $g) => collect($cards->firstWhere('group', $g))
+        ->only(['subject', 'type', 'placed', 'start_index', 'conflict', 'conflict_level'])
+        ->put('conflicts', array_map(fn ($i) => [$i['kind'], $i['line']], $cards->firstWhere('group', $g)['conflicts']))->all();
+    $admin = $plan($s['admin'], 'admin', []);
+    $mine = $plan($fm, 'fan_masuli', ['subjects' => 1]);
+    expect($state($admin, 'd1/d22-01a'))->toMatchArray(['subject' => 'Klinik farmakologiya', 'placed' => true, 'conflict_level' => 'red'])
+        ->and($state($mine, 'd1/d22-01a'))->toBe($state($admin, 'd1/d22-01a'))
+        ->and($state($mine, 'd1/d22-01b'))->toBe($state($admin, 'd1/d22-01b'))
+        // "Sikl bloklari: N/M" — bir xil.
+        ->and($mine->where('placed', true)->count())->toBe($admin->where('placed', true)->count())
+        ->and($mine->count())->toBe($admin->count());
+    // Boshqa kafedra fani — mas'ul emas: kartalar umuman chiqmaydi.
+    $alien = agTeacher('BEGONA', 'fan_masuli');
+    agResponsible($alien, 'Klinik farmakologiya', 'Terapiya kafedrasi');
+    expect($plan($alien, 'fan_masuli', ['subjects' => 1])->all())->toBe([]);
+});
+
+it('qabul (1.4): xona sig\'imi bir xil ko\'rinishda — haftalik karta, o\'qituvchi jadvali, Takliflar, biriktirish oynasi (unit-busy, 409) va sikl to\'qnashuvi', function () {
+    $s = agSetup();
+    $as = fn () => agAs($s['admin'], 'admin');
+    // A) Haftalik dars: pp/2024-01b — 102-xona (10 o'rin), 12 talaba. Ogohlantirish (to'qnashuv emas): haftalik karta, Takliflar, o'qituvchi jadvali.
+    $weekly = TimetableController::capacityLine('102-xona', 10, 12);
+    expect($weekly)->toBe("Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)");
+    $items = $as()->getJson(route('admin.timetable.boards.conflicts', $s['board']) . '?items=1&week=' . $s['week'])->assertOk()->json();
+    expect($items['weekly_caps'][$s['ppB']->id])->toBe(['room_code' => 'R2', 'room_name' => '102-xona', 'volume' => 10, 'students' => 12, 'over' => 2,
+        'line' => $weekly])
+        ->and($items['weekly_caps'])->not->toHaveKey((string) $s['ppA']->id);   // 101-xona (30 o'rin) — sig'adi
+    // Teng (12 o'rin, 12 talaba) — sig'adi; hafta xonasi (week-override) hisobga olinadi.
+    $s['r1']->update(['volume' => 12]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $s['ppB']->id, 'week' => $s['week'], 'day' => 4, 'pair' => 7, 'start_half' => 0,
+        'cancelled' => false, 'auditorium_code' => 'R1', 'auditorium_name' => '101-xona']);
+    expect($as()->getJson(route('admin.timetable.boards.conflicts', $s['board']) . '?items=1&week=' . $s['week'])->json('weekly_caps'))->toBe([]);
+    \App\Models\TimetableCardOverride::where('card_id', $s['ppB']->id)->delete();
+    $s['r1']->update(['volume' => 30]);
+    // Ogohlantirish to'qnashuvlar matniga qo'shilmaydi (hisoblagich, HEMIS solishtiruvi o'zgarmaydi).
+    $plain = $as()->getJson(route('admin.timetable.boards.conflicts', $s['board']))->assertOk()->json('weekly');
+    expect(implode(' ', $plain[$s['ppB']->id] ?? []))->not->toContain("sig'maydi");
+    $sug = collect($as()->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=' . $s['week'])->assertOk()->json('cards'));
+    expect($sug->firstWhere('id', $s['ppB']->id)['cap_warn'])->toBe($weekly)
+        ->and($sug->firstWhere('id', $s['ppA']->id)['cap_warn'] ?? null)->toBeNull();
+    $opt = agGet($s, $s['admin'], 'admin', ['move' => 'w|' . $s['ppB']->id . '|' . $s['week']])['move']['options']['2026-11-19'][6];
+    expect($opt['why'])->toBe($weekly);
+    // Joylanmagan karta (shu xona bilan) — haftalik kartada belgi yo'q (jadvalda emas), Takliflarda bor (xonasi bilan qo'yiladi).
+    $loose = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya', 'course' => 2,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Fiziologiya', 'group_name' => 'pp/2024-02a', 'kafedra_name' => 'Farmakologiya kafedrasi',
+        'auditorium_code' => 'R2', 'auditorium_name' => '102-xona']);
+    expect($as()->getJson(route('admin.timetable.boards.conflicts', $s['board']) . '?items=1&week=' . $s['week'])->json('weekly_caps'))
+        ->not->toHaveKey((string) $loose->id);
+    $sug = collect($as()->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=' . $s['week'])->assertOk()->json('cards'));
+    expect($sug->firstWhere('id', $loose->id)['cap_warn'])->toBe($weekly);
+    $loose->delete();
+
+    // B) Sikl: d1/d22-01b 102-xonada (19.11 dan); d1/d22-01a ga ham 102-xona — 19.11 dan bir vaqtda 20 talaba.
+    $cycle = TimetableController::capacityLine('102-xona', 10, 20);
+    TimetableCard::where('board_id', $s['board']->id)->where('group_name', 'd1/d22-01b')->update(['auditorium_code' => 'R2', 'auditorium_name' => '102-xona']);
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 5, 'subject_name' => 'Klinik farmakologiya',
+        'training_type' => 'practice', 'group_name' => 'd1/d22-01a'];
+    $busy = $as()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $unit))->assertOk()->json();
+    expect($busy['rooms']['R2'])->toStartWith($cycle . ' — ')
+        ->and($busy['room_caps']['R2'])->toBe(['room_code' => 'R2', 'room_name' => '102-xona', 'volume' => 10, 'students' => 20, 'over' => 10]);
+    $err = $as()->postJson(route('admin.timetable.assign-room', $s['board']), $unit + ['auditorium_code' => 'R2'])->assertStatus(409)->json('error');
+    expect($err)->toBe($busy['rooms']['R2']);
+    $as()->postJson(route('admin.timetable.assign-room', $s['board']), $unit + ['auditorium_code' => 'R2', 'force' => 1])->assertOk();
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    $card = collect($as()->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'])->assertOk()->json('cycle_cards'))
+        ->firstWhere('group', 'd1/d22-01a');
+    $cap = collect($card['conflicts'])->firstWhere('kind', 'room_capacity');
+    expect($cap['line'])->toStartWith($cycle . ' — ')
+        ->and([$cap['volume'], $cap['students'], $cap['over']])->toBe([10, 20, 10]);
+    // O'qituvchining sikl vaqti so'rovi (ownBusyTexts): 20.11 (haftalik darsi yo'q kun) 2-soatdan — 01b bilan baribir bir xonada; xuddi shu qator.
+    $why = agAs($s['mux'], 'oqituvchi')->postJson(route('admin.timetable.cycle-time-proposal.check', $s['board']), ['specialty_name' => 'davolash ishi',
+        'course' => 5, 'subject_name' => 'Klinik farmakologiya', 'group_name' => 'd1/d22-01a', 'date' => '2026-11-20', 'scope' => 'day', 'start_hour' => 2])
+        ->assertUnprocessable()->json('message');
+    expect($why)->toContain($cycle . ' — ')->not->toContain('Xona R2 band');
 });

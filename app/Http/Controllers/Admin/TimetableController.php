@@ -4266,6 +4266,15 @@ class TimetableController extends Controller
         // shu oqim tarkibidagi barcha amaliy guruhlarni birga qamrab oladi.
         $byFlow = [];
         $variantFirst = [];   // norm(spec|kurs|asosiy nom) => birinchi bo'lak nomi (soatlar uchun)
+        // "Mas'ul fanlarim": qatorning qamrovdagi kartalari fan nomlari (bo'lak va asosiy nomi, normSubject) — joylashuvlar shu
+        // ro'yxat bo'yicha olinadi. Joylashuv yozuvida kafedra yo'q: responsibleMatch kafedra bilan cheklangan mas'ul fanda uni
+        // rad etardi (fan mas'uli hamma bloklarni "joylanmagan" ko'rardi); karta esa kafedra bo'yicha allaqachon tekshirilgan.
+        $markScopeName = function (string $flowKey, $c) use (&$byFlow): void {
+            $name = (string) $c->subject_name;
+            foreach (array_filter([$name, $this->cycleSubjectVariantBase($name)]) as $n) {
+                $byFlow[$flowKey]['scope_names'][$this->normSubject((string) $n)] = true;
+            }
+        };
         if (!empty($cycleKey)) {
             foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'practice')->whereNotNull('group_name')) as $c) {
                 if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)
@@ -4341,6 +4350,7 @@ class TimetableController extends Controller
                     }
                     if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$rowSubject][(string) $c->training_type] = true;
+                        $markScopeName($flowKey, $c);
                     }
                 }
             }
@@ -4528,11 +4538,8 @@ class TimetableController extends Controller
                     if ($sourceSubjects !== null && !isset($sourceSubjects[mb_strtolower(trim((string) $placement->subject_name))])) {
                         continue;
                     }
-                    // Asosiy nomga yig'ishdan oldin faqat mas'ul bo'lak joylashuvlarini qoldiramiz.
-                    if ($scopeSubjects !== null && !$this->responsibleMatch($scopeSubjects, [
-                        'faculty_name' => $g['faculty'], 'specialty_name' => $g['specialty'],
-                        'course' => $g['course'], 'subject_name' => $placement->subject_name,
-                    ])) {
+                    // Asosiy nomga yig'ishdan oldin faqat mas'ul bo'lak joylashuvlarini qoldiramiz (qatorning qamrovdagi kartalari nomlari).
+                    if ($scopeSubjects !== null && !isset($g['scope_names'][$this->normSubject((string) $placement->subject_name)])) {
                         continue;
                     }
                     // Tashqi jadval: bo'lak joylashuvi asosiy nomli bitta blok bo'lib ko'rinadi.
@@ -4964,7 +4971,7 @@ class TimetableController extends Controller
                 $busy = $this->unitBusySafe($request, $board, $flowCards) ?? ['teachers' => [], 'rooms' => []];
                 $parts = array_filter([
                     $newTeacher && ($teacherChanged || $shiftChanged) && isset($busy['teachers'][$newTeacher]) ? "O'qituvchi {$teacherName}: " . $busy['teachers'][$newTeacher] : null,
-                    $newRoom && ($roomChanged || $shiftChanged) && isset($busy['rooms'][$newRoom]) ? "Xona «{$roomName}»: " . $busy['rooms'][$newRoom] : null,
+                    $newRoom && ($roomChanged || $shiftChanged) && isset($busy['rooms'][$newRoom]) ? self::roomBusyText("Xona «{$roomName}»: ", (string) $busy['rooms'][$newRoom]) : null,
                 ]);
                 $items = array_merge($newTeacher && ($teacherChanged || $shiftChanged) ? ($busy['items']['teachers'][(string) $newTeacher] ?? []) : [],
                     $newRoom && ($roomChanged || $shiftChanged) ? ($busy['items']['rooms'][(string) $newRoom] ?? []) : []);
@@ -6687,8 +6694,7 @@ class TimetableController extends Controller
                     // Tuzilgan sig'im ma'lumoti (room_capacity): xona kodi/nomi, sig'imi, shu vaqtdagi talabalar va ortiqchasi.
                     $cap = $worst[2] ? ['room_code' => (string) $id, 'room_name' => (string) $e['room_name'], 'volume' => $vol,
                         'students' => $worst[0], 'over' => $worst[0] - $vol] : null;
-                    $add($e['unit'], 'room', (string) $e['room_name'], array_values(array_diff($worst[1], [$e['unit']])), $date, $time,
-                        $worst[2] ? ' (' . $vol . ' o\'rin, ' . $worst[0] . ' talaba, +' . ($worst[0] - $vol) . ')' : '', $e,
+                    $add($e['unit'], 'room', (string) $e['room_name'], array_values(array_diff($worst[1], [$e['unit']])), $date, $time, '', $e,
                         $worst[2] ? 'room_capacity' : 'room_busy', $cap);
                 }
                 // Bir zalda bir vaqtda ikki xil ma'ruza (bitta oqim emas: fan, o'qituvchi yoki vaqti boshqa) — sig'imdan qat'i nazar.
@@ -6749,7 +6755,8 @@ class TimetableController extends Controller
                         : "Guruh {$h['who']} band: {$with}, {$range($shown)}",
                     default => $h['kind'] === 'room_lectures'
                         ? "Zalda ({$h['who']}) bir vaqtda ikki ma'ruza: {$with}, {$range($shown)}"
-                        : "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range($shown)}",
+                        : (isset($h['cap']) ? self::capacityLine($h['who'], (int) $h['cap']['volume'], (int) $h['cap']['students']) . " — {$with}, {$range($shown)}"
+                            : "Xona {$h['who']} sig'imidan ko'p{$h['extra']}: {$with}, {$range($shown)}"),
                 };
                 $todo = match ($h['kind']) {
                     'lecture_overlap' => "amaliyot vaqtini ma'ruzadan keyinga suring",
@@ -7333,9 +7340,9 @@ class TimetableController extends Controller
                     sort($ds);
                     $parts[] = $label . ', ' . $fmt($ds[0]) . (count($ds) > 1 ? '–' . $fmt(end($ds)) : '');
                 }
-                // Sig'imdan oshgan xona: avval aniq raqamlar — "65 o'rin, 98 talaba (+33): ...".
+                // Sig'imdan oshgan xona: avval aniq raqamlar — "Xona sig'maydi: 215 — 65 o'rin, 98 talaba (+33) — ...".
                 $cap = $type === 'rooms' ? ($caps[$id] ?? null) : null;
-                $hits[$type][$id] = ($cap ? $cap['volume'] . " o'rin, " . $cap['students'] . ' talaba (+' . $cap['over'] . '): ' : '') . implode('; ', $parts);
+                $hits[$type][$id] = ($cap ? self::capacityLine($cap['room_name'], $cap['volume'], $cap['students']) . ' — ' : '') . implode('; ', $parts);
             }
         }
         // Tuzilgan ro'yxat ($withItems — unitBusySafe orqali): biriktirish oynasi va "Baribir biriktirish" ogohlantirishidagi "Ko'rsatish".
@@ -7440,11 +7447,67 @@ class TimetableController extends Controller
     }
 
     /** Biriktirishdan oldin: tanlangan o'qituvchi/xona band bo'lsa — ogohlantirish ("Baribir biriktirish" — force=1). */
+    /** Xona sig'imi (1.4) — yagona ko'rinish: "65 o'rin, 98 talaba (+33)". */
+    public static function capacityText(int $volume, int $students): string
+    {
+        return $volume . " o'rin, " . $students . ' talaba (+' . ($students - $volume) . ')';
+    }
+
+    /**
+     * "Xona sig'maydi: 8-ma'ruza zali — 65 o'rin, 98 talaba (+33)" — sikl to'qnashuvi, biriktirish oynasi (unit-busy, 409), Takliflar,
+     * haftalik dars vaqti so'rovi va o'qituvchi jadvalida bir xil (front: cfCapText).
+     */
+    public static function capacityLine(string $room, int $volume, int $students): string
+    {
+        return "Xona sig'maydi: " . ($room !== '' ? $room . ' — ' : '') . self::capacityText($volume, $students);
+    }
+
+    /**
+     * Haftalik dars xonasi sig'imi (1.4) — ogohlantirish, to'qnashuv emas (hisoblagichlar va HEMIS solishtiruvi o'zgarmaydi): $week-haftadagi
+     * xonasi (hafta xonasi bilan) sig'imi kiritilgan va talabalar (cardStudents — guruhlarning faol talabalari, bo'lak — kartadagi son) undan
+     * ko'p. $onlyIds — faqat shu kartalar; $placedOnly — faqat shu haftada joylashganlari (Takliflar: joylanmagani ham — xonasi bilan
+     * qo'yiladi). Qaytaradi: karta id => {room_code, room_name, volume, students, over, line ("Xona sig'maydi: …")}.
+     */
+    private function weeklyCapacityWarnings(TimetableBoard $board, int $week, ?array $onlyIds = null, bool $placedOnly = true): array
+    {
+        $rooms = Auditorium::where('volume', '>', 0)->get(['code', 'name', 'volume'])->keyBy('code');
+        if ($rooms->isEmpty() || $onlyIds === []) {
+            return [];
+        }
+        $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
+        $ov = $this->overrideRows($board, fn ($q) => $q->where('o.week', $week));
+        $out = [];
+        foreach ($this->cardRows($board, fn ($q) => $onlyIds !== null ? $q->whereIn('id', array_keys($onlyIds)) : $q) as $id => $c) {
+            $o = $ov[$id][$week] ?? null;
+            if ($isCycle($c) || ($placedOnly && ($o ? ($o->cancelled || !$o->day || !$o->pair) : (!$c->day || !$c->pair)))) {
+                continue;
+            }
+            $code = (string) (($o && !$o->cancelled ? $o->auditorium_code : null) ?: $c->auditorium_code);
+            $r = $code !== '' ? ($rooms[$code] ?? null) : null;
+            $n = $r ? $this->cardStudents($c) : 0;
+            if ($r && $n > (int) $r->volume) {
+                $name = (string) ($r->name ?: $code);
+                $out[(int) $id] = ['room_code' => $code, 'room_name' => $name, 'volume' => (int) $r->volume, 'students' => $n,
+                    'over' => $n - (int) $r->volume, 'line' => self::capacityLine($name, (int) $r->volume, $n)];
+            }
+        }
+
+        return $out;
+    }
+
+    /** unitBusy xona matni: sig'imdan oshgani — o'zi to'liq ("Xona sig'maydi: …"), aks holda $prefix bilan ("Xona «X»: …"). */
+    private static function roomBusyText(string $prefix, string $text): string
+    {
+        return str_starts_with($text, "Xona sig'maydi: ") ? $text : $prefix . $text;
+    }
+
     private function busyWarning(?string $what, ?string $busy, array $items = [], ?array $cap = null)
     {
         // conflict_items — matn bilan birga tuzilgan ro'yxat ("Ko'rsatish": guruhlar, sanalar, soatlar; front matnni parse qilmaydi);
         // conflict_cap — xona sig'imdan oshsa: {room_code, room_name, volume, students, over}.
-        return $busy ? response()->json(['error' => $what . ' shu davrda boshqa guruhcha bilan band: ' . $busy, 'needs_confirm' => true,
+        // Faqat sig'im (xona band emas) — matnning o'zi: "Xona sig'maydi: 215 — 65 o'rin, 98 talaba (+33) — …".
+        return $busy ? response()->json(['error' => str_starts_with($busy, "Xona sig'maydi: ") ? $busy : $what . ' shu davrda boshqa guruhcha bilan band: ' . $busy,
+            'needs_confirm' => true,
             'conflicts' => $busy, 'conflict_items' => array_values($items), 'conflict_cap' => $cap], 409) : null;
     }
 
@@ -8624,7 +8687,9 @@ class TimetableController extends Controller
                 }
             }
 
-            return response()->json(['week' => $week, 'weekly_items' => (object) $items]);
+            // Xona sig'imi (1.4) — ogohlantirish (to'qnashuv emas): karta id => {…, line}.
+            return response()->json(['week' => $week, 'weekly_items' => (object) $items,
+                'weekly_caps' => (object) $this->weeklyCapacityWarnings($board, $week)]);
         }
         // weekly — kelgusi to'qnashuvlar matni (karta qizil; o'tganlari hisoblanmaydi).
         $weekly = [];
@@ -9611,7 +9676,7 @@ class TimetableController extends Controller
         $rooms = array_flip(array_map('strval', array_filter($rooms)));
 
         return array_merge(array_values(array_map(fn ($t) => "O'qituvchi band: {$t}", array_intersect_key($busy['teachers'], $teacherIds))),
-            array_map(fn ($code) => "Xona {$code} band: {$busy['rooms'][$code]}", array_keys(array_intersect_key($busy['rooms'], $rooms))));
+            array_map(fn ($code) => self::roomBusyText("Xona {$code} band: ", (string) $busy['rooms'][$code]), array_keys(array_intersect_key($busy['rooms'], $rooms))));
     }
 
     public function validateTimeProposal(TimetableCard $card, array $data, array $ignorePendingIds = []): void

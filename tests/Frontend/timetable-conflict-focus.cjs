@@ -347,6 +347,7 @@ assert.match(source, /function hideBoard\(\) \{\n[^\n]*\n\s+ttFocusDiscard\(\);/
     const els2 = { cycleGridWrap: gw };
     const el2 = id => (els2[id] = els2[id] || { id, value: '', textContent: '', classList: { add() {}, remove() {} }, removeAttribute() {} });
     const c2 = { $: el2, esc, BASE: '/admin', board: { id: 7 }, scopeMode: 'all', cycleHolidays: [], cycleViewMode: 'group', ttFocus: null, cyclePlanData: null,
+        cycleWkScrolled: null,
         loadCycleOverlapUi() {}, scopeBody: () => ({}), cycleLayerParams: () => ({}), invalidateCycleWeek() {}, buildSubjectColors() {},
         colorScopeCards: () => [], renderCycleLayerUi() {}, renderHolChips() {}, renderCycleCards() {}, renderStats() {},
         api: async () => ({ rows: [], subjects: [], holidays: [] }), requestAnimationFrame: fn => raf.push(fn),
@@ -371,5 +372,19 @@ assert.match(source, /function hideBoard\(\) \{\n[^\n]*\n\s+ttFocusDiscard\(\);/
     gw.scrollTop = 1; gw.scrollLeft = 2;
     raf.forEach(fn => fn());
     assert.deepEqual([gw.scrollTop, gw.scrollLeft], [50, 60]);
-    console.log('timetable conflict focus: 11 scenarios passed');
+    // Shu chizishda tanlangan haftaga scroll qilindi (cycleWeekHighlight: birinchi yuklash yoki boshqa hafta) — gorizontal joy tiklanmaydi,
+    // vertikal — tiklanadi; o'sha hafta qayta chizilsa — odatdagidek tiklanadi.
+    c2.renderCycleCards = () => { if (c2.cycleWkScrolled !== '2026-11-16') { c2.cycleWkScrolled = '2026-11-16'; gw.scrollLeft = 1890; } };
+    gw.scrollTop = 70; gw.scrollLeft = 1161;
+    raf.length = 0;
+    await c2.load();
+    raf.forEach(fn => fn());
+    assert.deepEqual([gw.scrollTop, gw.scrollLeft], [70, 1890]);
+    gw.scrollLeft = 1900;
+    raf.length = 0;
+    await c2.load();
+    gw.scrollLeft = 5;
+    raf.forEach(fn => fn());
+    assert.deepEqual([gw.scrollTop, gw.scrollLeft], [70, 1900]);
+    console.log('timetable conflict focus: 12 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

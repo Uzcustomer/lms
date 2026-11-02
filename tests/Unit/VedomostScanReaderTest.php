@@ -154,3 +154,39 @@ test('vazn nisbati yaxlitlangan ballardan ham aniq (0.505 emas, 0.50) — soxta 
     expect($ratios['jb'])->toBe(0.5)->and($ratios['mt'])->toBe(0.2)
         ->and($reader->rowProblems(['jb_pct' => '94,0', 'jb_ball' => '47,0', 'mt_pct' => '95,0', 'mt_ball' => '19,0'], $ratios))->toBe([]);
 });
+
+test('qattiq tekshiruv (sozlamada): to\'g\'ri qatorlar o\'tadi, qo\'shni qatordan olingan 1–2 ustun ushlanadi', function () {
+    $ratios = ['jb' => 0.5, 'mt' => 0.2, 'on' => null, 'oski' => 0.15, 'test' => 0.15];
+    $f = ['jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'jbmton_ball', 'jbmton_pct', 'oski_pct', 'oski_ball', 'test_pct', 'test_ball', 'yn', 'ects', 'baho'];
+    $row = fn (string $s) => array_combine($f, preg_split('/\s+/', $s));
+    // Sozlama har o'qishda bazadan — har bosqichda yangi reader (sozlamalar keshi eskirmasin).
+    $p = fn (string $s) => array_column(app(\App\Services\VedomostScanReader::class)->rowProblems($row($s), $ratios), 0);
+
+    // Haqiqiy vedomostlardan (Akusherlik d1/d23-06, Pediatriya xd/22-01, Onkologiya 12B).
+    $good = [
+        '81,0 40,5 90,0 18,0 59,0 84 100,0 15,0 70,0 10,5 85 B+ yaxshi',
+        '81,0 40,5 90,0 18,0 59,0 84 90,0 13,5 74,0 11,1 84 B yaxshi',
+        '85,0 43,0 95,0 19,0 62,0 89 60,0 9,0 100,0 15,0 86 B+ yaxshi',
+        '89,0 45,0 100,0 20,0 65,0 93 100,0 15,0 96,0 14,4 94 A a\'lo',
+        '80,0 40,0 88,0 18,0 58,0 83 90,0 13,5 60,0 9,0 81 B yaxshi',
+        '0,0 0,0 90,0 18,0 0,0 0 0,0 0,0 0,0 0,0 -3 FX qo\'yilmadi',
+    ];
+
+    app(VedomostAiSettings::class)->save(['strict_row_checks' => true]);
+    foreach ($good as $s) {
+        expect($p($s))->toBe([]);
+    }
+    // Test juftligi yuqoridagi qatordan (100 / 15,0) — YN 83, formula 88.
+    expect(implode(' ', $p('82,0 41,0 90,0 18,0 59,0 84 90,0 13,5 100,0 15,0 83 B yaxshi')))->toContain('= 88')
+        // 1 ball farq: Test 14,4 o'rniga 15,0 — yumshoq tekshiruv (±1,5) o'tkazib yuborardi.
+        ->and($p('89,0 45,0 100,0 20,0 65,0 93 100,0 15,0 100,0 15,0 94 A a\'lo'))->not->toBe([])
+        // ECTS qo'shni qatordan.
+        ->and(implode(' ', $p('82,0 41,0 90,0 18,0 59,0 84 90,0 13,5 99,0 14,9 87 B yaxshi')))->toContain('ECTS')
+        // JB+MT % qo'shni qatordan.
+        ->and(implode(' ', $p('78,0 39,0 90,0 18,0 57,0 84 100,0 15,0 85,0 12,8 85 B+ yaxshi')))->toContain('JB+MT+ON %');
+
+    // O'chiq bo'lsa — avvalgidek: 1 ball farq va ECTS tekshirilmaydi.
+    app(VedomostAiSettings::class)->save(['strict_row_checks' => false]);
+    expect($p('89,0 45,0 100,0 20,0 65,0 93 100,0 15,0 100,0 15,0 94 A a\'lo'))->toBe([])
+        ->and($p('82,0 41,0 90,0 18,0 59,0 84 90,0 13,5 99,0 14,9 87 B yaxshi'))->toBe([]);
+});

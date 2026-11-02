@@ -23,6 +23,9 @@ class VedomostAiSettings
         'max_retries'    => [2, 'int'],
         'thinking_budget' => [null, 'int?'],
         'bands'          => [1, 'int'],
+        // Qator ichki hisobini qattiq tekshirish: YN aniq formula bilan (1 ball farq ham), JB+MT %,
+        // ECTS va baho so'zi YN dan. Buzilgan qator boshqacha bo'linib qayta o'qiladi.
+        'strict_row_checks' => [false, 'bool'],
         'auto_check'     => [false, 'bool'],
         'require_ai_before_approve' => [true, 'bool'],
         'allow_free_keys' => [true, 'bool'],

@@ -83,7 +83,9 @@ class VedomostScanReader
         $hash = sha1_file($pdfPath);
         // Rejim ham kalitda: pdftoppm keyin o'rnatilsa, butun-PDF rejimidagi eski natija qaytmasin.
         $images = self::rendererAvailable();
-        $cacheFile = $this->cachePath(sha1(implode('|', ['v' . self::PROMPT_VER, $hash, $bands, $model, $images ? 'images' : 'pdf'])));
+        // Qattiq tekshiruv yoqilganda qayta o'qish qarori boshqacha — kesh alohida (o'chiq bo'lsa kalit o'zgarmaydi).
+        $strict = $this->settings->get('strict_row_checks') ? 'strict' : null;
+        $cacheFile = $this->cachePath(sha1(implode('|', array_filter(['v' . self::PROMPT_VER, $hash, $bands, $model, $images ? 'images' : 'pdf', $strict], fn ($x) => $x !== null))));
 
         if (!$fresh && is_file($cacheFile)) {
             $cached = json_decode((string) file_get_contents($cacheFile), true);
@@ -483,7 +485,9 @@ class VedomostScanReader
         }
 
         $yn = self::num($row['yn'] ?? null);
-        if ($yn !== null && $yn > 0 && $jm !== null
+        // Qattiq tekshiruv yoqilgan bo'lsa, YN aniq formula bilan strictProblems() da tekshiriladi.
+        $strict = (bool) $this->settings->get('strict_row_checks');
+        if (!$strict && $yn !== null && $yn > 0 && $jm !== null
             && (self::num($row['oski_pct'] ?? null) !== null || self::num($row['test_pct'] ?? null) !== null)) {
             $exp = $jm;
             foreach (['oski', 'test'] as $key) {
@@ -510,6 +514,106 @@ class VedomostScanReader
         $e = strtoupper(trim((string) ($row['ects'] ?? '')));
         if ($e !== '' && !preg_match('/^(A|B\+?|C\+?|D|E|FX|F)$/', $e)) {
             $p[] = ["ECTS harfi emas — ustunlar siljigan bo'lishi mumkin", ['ects', 'yn']];
+        }
+
+        if ($strict) {
+            array_push($p, ...$this->strictProblems($row, $ratios));
+        }
+
+        return $p;
+    }
+
+    /**
+     * Qattiq tekshiruv (AI sozlamalarida yoqiladi). Vedomost formulalari:
+     *  - YN = yaxlit(JB+MT+ON ball) + yaxlit(OSKE ball + Test ball) — 1 ball farq ham xato
+     *    (yumshoq tekshiruvda ±1,5 gacha o'tib ketardi);
+     *  - JB+MT+ON % = JB+MT+ON ball / (JB+MT+ON vaznlari yig'indisi) × 100;
+     *  - ECTS va baho so'zi YN dan: ≥90 A/a'lo, 85–89 B+/yaxshi, 70–84 B/yaxshi, 60–69 C/o'rta.
+     * AI 1–2 ustunni qo'shni qatordan olsa, odatda shulardan biri buziladi.
+     *
+     * @return array<int, array{0: string, 1: array}>
+     */
+    private function strictProblems(array $row, array $ratios): array
+    {
+        $p = [];
+        $n = fn ($k) => self::num($row[$k] ?? null);
+        $half = fn (float $x) => (int) floor($x + 0.5 + 1e-9);
+        $yn = $n('yn');
+        $jm = $n('jbmton_ball');
+
+        // YN — aniq formula. Biror imtihon 60% dan past (yiqilgan) bo'lsa — tekshirilmaydi: bunday
+        // qatorlarda YN qoidasi boshqa (0 yoki shartli kod).
+        $exam = 0.0;
+        $hasExam = false;
+        $failed = false;
+        foreach (['oski', 'test'] as $key) {
+            [$pf, $bf] = self::PAIRS[$key];
+            $pv = $n($pf);
+            $bv = $n($bf);
+            if ($pv === null && $bv === null) {
+                continue;
+            }
+            if ($pv !== null && $pv < 60) {
+                $failed = true;
+            }
+            if ($bv !== null) {
+                $exam += $bv;
+                $hasExam = true;
+            } elseif ($pv !== null && !empty($ratios[$key])) {
+                $exam += $pv * $ratios[$key];
+                $hasExam = true;
+            }
+        }
+        if ($yn !== null && $yn > 0 && $jm !== null && $jm > 0 && $hasExam && !$failed) {
+            // Ikki xil yaxlitlash ham qabul qilinadi: guruhlab (vedomost shabloni) yoki umumiy.
+            $grouped = $half($jm) + $half($exam);
+            $whole = $half($jm + $exam);
+            if (abs($yn - $grouped) >= 1 && abs($yn - $whole) >= 1) {
+                $p[] = ["O'zlashtirish ko'rsatkichi formulaga mos emas: yaxlit(JB+MT+ON) + yaxlit(OSKE+Test) = {$grouped}", ['yn', 'jbmton_ball', 'oski_ball', 'test_ball']];
+            }
+        }
+
+        // JB+MT+ON % — balldan.
+        $pct = $n('jbmton_pct');
+        $maxSum = (($ratios['jb'] ?? 0) + ($ratios['mt'] ?? 0) + ($ratios['on'] ?? 0)) * 100;
+        if ($pct !== null && $jm !== null && $maxSum >= 10) {
+            $exp = $half($jm / $maxSum * 100);
+            $jb = $n('jb_ball');
+            $mt = $n('mt_ball');
+            $expRaw = $jb !== null && $mt !== null && $jm > 0
+                ? $half(($jb + $mt + ($n('on_ball') ?? 0)) / $maxSum * 100) : $exp;
+            if (abs($pct - $exp) >= 1 && abs($pct - $expRaw) >= 1) {
+                $p[] = ["JB+MT+ON % balldan hisoblanganiga mos emas ({$exp}%)", ['jbmton_pct', 'jbmton_ball']];
+            }
+        }
+
+        // ECTS va baho so'zi — YN dan.
+        if ($yn !== null && $yn >= 0) {
+            $e = strtoupper(trim((string) ($row['ects'] ?? '')));
+            $expE = match (true) {
+                $yn >= 90 => 'A', $yn >= 85 => 'B+', $yn >= 70 => 'B', $yn >= 60 => 'C', default => 'F',
+            };
+            if ($e !== '' && $e !== $expE && !($expE === 'F' && $e === 'FX')) {
+                $p[] = ["ECTS o'zlashtirish ko'rsatkichiga mos emas ({$yn} → {$expE})", ['ects', 'yn']];
+            }
+            $baho = preg_replace('/[^a-z]/', '', mb_strtolower(VedomostNames::latin((string) ($row['baho'] ?? ''))));
+            if ($baho !== '' && $yn > 0) {
+                $expB = match (true) {
+                    $yn >= 90 => ['alo'], $yn >= 70 => ['yaxshi'], $yn >= 60 => ['orta'], default => ['qoniqarsiz', 'qonsiz'],
+                };
+                $has = fn (array $words) => (bool) array_filter($words, fn ($w) => str_contains($baho, $w));
+                $ok = $has($expB);
+                // Faqat taniqli so'z o'qilganda solishtiramiz (imzo/chiziq aralashgan matnda soxta xato bo'lmasin).
+                $known = $has(['alo', 'yaxshi', 'orta', 'qoniqarsiz', 'qonsiz']);
+                if ($known && !$ok) {
+                    $p[] = ["Baho so'zi o'zlashtirish ko'rsatkichiga mos emas ({$yn})", ['baho', 'yn']];
+                }
+            }
+        } elseif ($yn !== null && $yn < 0) {
+            $e = strtoupper(trim((string) ($row['ects'] ?? '')));
+            if ($e !== '' && !in_array($e, ['FX', 'F'], true)) {
+                $p[] = ["Manfiy kod ({$yn}) bilan ECTS FX bo'lishi kerak", ['ects', 'yn']];
+            }
         }
 
         return $p;

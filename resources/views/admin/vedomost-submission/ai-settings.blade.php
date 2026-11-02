@@ -417,6 +417,11 @@
                                 </div>
                                 <div class="h" id="bands-help" style="max-width:640px;"></div>
                             </div>
+                            <label class="toggle" style="margin-top:10px;">
+                                <input type="checkbox" name="strict_row_checks" value="1" @checked(old('strict_row_checks', $s['strict_row_checks']))><span class="knob"></span>
+                                <span><span class="tt">Qator ichki hisobini qattiq tekshirish</span>
+                                <span class="td" style="display:block">O'zlashtirish ko'rsatkichi aniq formula bilan tekshiriladi (1 ball farq ham xato): yaxlit(JB+MT+ON) + yaxlit(OSKE + Test). Shuningdek JB+MT % balldan, ECTS va baho so'zi o'zlashtirish ko'rsatkichidan tekshiriladi. Mos kelmagan qator (masalan, AI 1–2 ustunni qo'shni qatordan olgan bo'lsa) boshqacha bo'linib qayta o'qiladi — Gemini so'rovlari biroz ko'payishi mumkin.</span></span>
+                            </label>
                             @unless($renderer)
                                 <div class="note warn" style="margin-top:12px;"><svg class="icon"><use href="#ai-i-alert"/></svg>
                                     <div>Serverda <b>pdftoppm</b> yo'q — PDF butunligicha yuboriladi, bo'laklash va tushib qolgan qatorni qayta o'qish ishlamaydi.</div></div>

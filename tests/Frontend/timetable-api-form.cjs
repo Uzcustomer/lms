@@ -60,8 +60,7 @@ assert.equal(note.attrs.role, 'status');
         '7|5': { day: null, pair: null, cancelled: true, auditorium_code: null, auditorium_name: null, auditorium_volume: null },
     });
     assert.match(source, /const dataScope = serverScopeParam\(\);/);
-    assert.match(source, /return TIMETABLE_READ_ONLY && \(scopeMode === 'mine' \|\| scopeMode === 'subjects'\) \? '&scope=' \+ scopeMode : '';/);
-    assert.match(source, /if \(TIMETABLE_READ_ONLY && board\) \{\n\s+loadBoard\(board\.id\)/);
+    assert.match(source, /if \(TIMETABLE_SCOPED_DATA && board\) \{\n\s+loadBoard\(board\.id\)/);
     assert.match(source, /toggleAscToolbar\(true\);\n\s+if \(!showLoadedCards\(\)\) return;/);
 }
 // Qamrov ("Faqat meniki" / "Mas'ul fanlarim" / "Kafedram") bo'yicha bo'sh — qamrov tugmalari (specBar) yashirinmaydi,
@@ -78,7 +77,11 @@ assert.equal(note.attrs.role, 'status');
         vm.createContext(c);
         vm.runInContext(`
             let scopeMode = this.mode, mineOnly = false, allCards = this.all, cards = [], specList = [], curSpec = null, board = { id: 3 }, viewMode = 'weekly';
-            const TIMETABLE_READ_ONLY = this.role === 'ro', MINE_KEY = 'k', localStorage = { setItem() {} }, TIMETABLE_TEACHER_ID = 9;
+            let selectedFaculties = new Set(this.sel ? this.sel[0] : []), selectedDirs = new Set(this.sel ? this.sel[1] : []), selectedCourses = new Set(this.sel ? this.sel[2] : []);
+            let curWeek = this.week || 0;
+            const TIMETABLE_READ_ONLY = this.role === 'ro', TIMETABLE_SCOPED_DATA = this.role === 'ro' || this.role === 'head';
+            const SCOPE_KEY = 'k', localStorage = { setItem() {} }, TIMETABLE_TEACHER_ID = 9, alert = () => {};
+            const scopeBody = () => ({ faculty_names: [...selectedFaculties], specialty_names: [...selectedDirs], courses: [...selectedCourses].sort((a, b) => a - b) });
             const $ = id => this.els[id];
             const calls = this.calls;
             const scopeCards = l => scopeMode === 'all' ? l : l.filter(x => +x.teacher_id === 9);
@@ -87,10 +90,11 @@ assert.equal(note.attrs.role, 'status');
                 fillGridInputs = () => {}, renderAll = () => calls.push('render'), loadCyclePlan = () => {};
             const loadBoard = () => { calls.push('load'); return Promise.resolve(); };
             ${fns}
-            this.api = { showLoadedCards, setScopeMode, setCards: v => { cards = v; }, get cards() { return cards; } };`, c);
+            this.api = { showLoadedCards, setScopeMode, serverScopeParam, ensureScopeLoaded, setCards: v => { cards = v; }, get cards() { return cards; },
+                setLoaded: (idx, loaded) => { specIndex = idx; loadedSpecs = loaded ? new Set(loaded.map(r => specTriple(r[0], r[1], r[2]))) : null; } };`, c);
         return c;
     };
-    // Kafedra mudiri (mijozda filtr): doskada kartalar bor, "Faqat meniki" bo'sh — tugmalar ko'rinadi.
+    // Mijozda filtrlanadigan rol (admin "Faqat meniki"): doskada kartalar bor, qamrov bo'sh — tugmalar ko'rinadi.
     let c = run('kafedra', 'mine', [{ id: 1, teacher_id: 5 }]);
     assert.equal(c.api.showLoadedCards(), false);
     assert.equal(c.els.specBar.hidden(), false);
@@ -124,6 +128,48 @@ assert.equal(note.attrs.role, 'status');
     assert.equal(c.api.showLoadedCards(), true);
     assert.equal(c.els.specBar.hidden(), false);
     assert.equal(c.els.mainArea.hidden(), false);
+    // /data parametrlari: cheklangan rol — rejim har doim; "Butun doska" — tanlangan qamrov; o'qituvchi — tanlangan hafta.
+    assert.equal(run('kafedra', 'mine', []).api.serverScopeParam(), '');   // admin — butun doska
+    assert.equal(run('head', 'kafedra', []).api.serverScopeParam(), '&scope=kafedra');
+    assert.equal(run('head', 'all', []).api.serverScopeParam(), '&scope=all');   // tanlov bo'sh — server rol doirasidagi yo'nalishlarni beradi
+    const runSel = (role, mode, sel, week) => {
+        const els = { specBar: mk(), mainArea: mk(), boardMsg: mk() };
+        const calls = [];
+        const x = { role, mode, sel, week, els, calls };
+        vm.createContext(x);
+        vm.runInContext(`
+            let scopeMode = this.mode, mineOnly = false, allCards = [], cards = [], specList = [], curSpec = null, board = { id: 3 }, viewMode = 'weekly';
+            let selectedFaculties = new Set(this.sel[0]), selectedDirs = new Set(this.sel[1]), selectedCourses = new Set(this.sel[2]);
+            let curWeek = this.week || 0;
+            const TIMETABLE_READ_ONLY = this.role === 'ro', TIMETABLE_SCOPED_DATA = this.role === 'ro' || this.role === 'head';
+            const SCOPE_KEY = 'k', localStorage = { setItem() {} }, TIMETABLE_TEACHER_ID = 9, alert = () => {};
+            const scopeBody = () => ({ faculty_names: [...selectedFaculties], specialty_names: [...selectedDirs], courses: [...selectedCourses].sort((a, b) => a - b) });
+            const $ = id => this.els[id];
+            const calls = this.calls;
+            const scopeCards = l => l, buildSpecList = () => {}, renderMineUi = () => {}, syncUrl = () => {}, fillSpecControls = () => {},
+                fillGridInputs = () => {}, renderAll = () => {}, loadCyclePlan = () => {};
+            const loadBoard = () => { calls.push('load'); return Promise.resolve(); };
+            ${fns}
+            this.api = { serverScopeParam, ensureScopeLoaded, setSel: (a, b, cc) => { selectedFaculties = new Set(a); selectedDirs = new Set(b); selectedCourses = new Set(cc); },
+                setLoaded: (idx, loaded) => { specIndex = idx; loadedSpecs = loaded ? new Set(loaded.map(r => specTriple(r[0], r[1], r[2]))) : null; } };`, x);
+        return x;
+    };
+    assert.equal(runSel('head', 'all', [['F1'], ['davolash ishi'], [2, 1]]).api.serverScopeParam(),
+        '&scope=all&faculty_names[]=F1&specialty_names[]=davolash%20ishi&courses[]=1&courses[]=2');
+    assert.equal(runSel('ro', 'mine', [['F1'], ['d'], [2]], 9).api.serverScopeParam(), '&scope=mine&weeks[]=9');   // "Faqat meniki" — qamrovsiz
+    assert.equal(runSel('head', 'kafedra', [[], [], []], 9).api.serverScopeParam(), '&scope=kafedra');   // tahrirlovchi rol — haftasiz
+    // "Butun doska": tanlangan yo'nalish+kurs yuklanmagan — bir marta qayta so'raladi; yuklangan — yo'q.
+    const z = runSel('head', 'all', [['F1'], ['davolash ishi'], [2]]);
+    z.api.setLoaded([['F1', 'davolash ishi', 2, 10], ['F2', 'pediatriya', 3, 5]], [['F1', 'davolash ishi', 2]]);
+    assert.equal(z.api.ensureScopeLoaded(), false);
+    z.api.setSel(['F2'], ['pediatriya'], [3]);
+    assert.equal(z.api.ensureScopeLoaded(), true);
+    assert.deepEqual(z.calls, ['load']);
+    assert.equal(z.api.ensureScopeLoaded(), false);   // o'sha so'rov takrorlanmaydi (sikl yo'q)
+    // Rol doirasidagi rejimda (Kafedraniki) — qayta so'ralmaydi.
+    const k = runSel('head', 'kafedra', [['F2'], ['pediatriya'], [3]]);
+    k.api.setLoaded([['F2', 'pediatriya', 3, 5]], null);
+    assert.equal(k.api.ensureScopeLoaded(), false);
 }
 // Qamrov / doska tez almashtirilsa — kechikkan eski javob (mas. scope=mine) yangisining ustiga yozilmaydi.
 (async () => {
@@ -163,5 +209,5 @@ assert.equal(note.attrs.role, 'status');
     c.pending[3].res({ board: { id: 5 }, tag: 'one' });
     await p4;
     assert.deepEqual(c.applied, ['all', 'one']);
-    console.log('timetable api form + takliflar note + /data + bo\'sh qamrov + eskirgan javob: 6 scenarios passed');
+    console.log('timetable api form + takliflar note + /data + bo\'sh qamrov + rol doirasi + eskirgan javob: 7 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

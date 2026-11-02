@@ -40,6 +40,9 @@
     ], fn ($id) => !($timetableCanUnplace && in_array($id, ['unplaceBtn', 'cycleHolAddBtn'], true))
         && !($timetableCanPlace && $id === 'cycleRefresh') && !($timetableCanUseManager && $id === 'managerBtn'))) : [];
     $ttForbid = fn (string $id) => in_array($id, $timetableForbiddenIds, true) ? ' tt-forbidden' : '';
+    // Qamrov rejimi (Butun doska / Kafedraniki / Mas'ul fanlarim / Faqat meniki) — har foydalanuvchi va rol uchun alohida saqlanadi
+    // (superadmin bir foydalanuvchidan boshqasiga o'tganda oldingi rejim qolib ketmasin): guard + id.
+    $timetableUserKey = ($timetableUser instanceof \App\Models\Teacher ? 't' : 'u') . (int) ($timetableUser?->getAuthIdentifier() ?? 0);
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
@@ -2728,16 +2731,19 @@
             // o'z darslari bor barcha fakultet, yo'nalish va kurslar.
             const TEACHER_DEFAULTS = ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && Boolean(TIMETABLE_TEACHER_ID);
             const DEFAULT_VIEW = TEACHER_DEFAULTS ? 'teacher' : 'group';
-            let scopeMode = TIMETABLE_HAS_SUBJECTS && TIMETABLE_ROLE === 'fan_masuli' ? 'subjects' : (TEACHER_DEFAULTS ? 'mine' : 'all');
-            // Qamrov tanlovi — har foydalanuvchi va rol uchun alohida (bir brauzerda admin "Butun doska" tanlagan bo'lsa ham
-            // o'qituvchi birinchi kirishda "Faqat meniki" bilan ochiladi).
-            const MINE_KEY = 'lms:timetable-mine:' + TIMETABLE_ROLE + ':' + (TIMETABLE_TEACHER_ID || 0);
+            // Qamrov rejimi: kalit — foydalanuvchi (guard + id) va rol (lms:timetable-scope:{user}:{rol}); saqlangan qiymat bo'lmasa —
+            // rol sukuti: o'qituvchi — "Faqat meniki", fan mas'uli — "Mas'ul fanlarim", kafedra mudiri — "Kafedraniki", adminlar — "Butun doska".
+            const TIMETABLE_USER_KEY = @json($timetableUserKey);
+            const SCOPE_KEY = 'lms:timetable-scope:' + TIMETABLE_USER_KEY + ':' + TIMETABLE_ROLE;
+            // O'qituvchi, fan mas'uli va kafedra mudiri: /data server tomonda rol doirasida (butun doska emas) — rejim almashsa qayta yuklanadi.
+            const TIMETABLE_SCOPED_DATA = ['oqituvchi', 'fan_masuli', 'kafedra_mudiri'].includes(TIMETABLE_ROLE);
+            const scopeAllowed = m => m === 'all' || (m === 'mine' && +TIMETABLE_TEACHER_ID > 0) || (m === 'kafedra' && !!TIMETABLE_DEPARTMENT_HEAD)
+                || (m === 'subjects' && !!TIMETABLE_HAS_SUBJECTS);
+            const ROLE_DEFAULT_SCOPE = { oqituvchi: 'mine', fan_masuli: 'subjects', kafedra_mudiri: 'kafedra' }[TIMETABLE_ROLE] || 'all';
+            let scopeMode = scopeAllowed(ROLE_DEFAULT_SCOPE) ? ROLE_DEFAULT_SCOPE : (TIMETABLE_SCOPED_DATA && scopeAllowed('mine') ? 'mine' : 'all');
             try {
-                const saved = localStorage.getItem(MINE_KEY);
-                if (TIMETABLE_TEACHER_ID && saved === '1') scopeMode = 'mine';
-                else if (TIMETABLE_DEPARTMENT_HEAD && saved === 'kafedra') scopeMode = 'kafedra';
-                else if (TIMETABLE_HAS_SUBJECTS && saved === 'subjects') scopeMode = 'subjects';
-                else if (saved === '0') scopeMode = 'all';
+                const saved = localStorage.getItem(SCOPE_KEY);
+                if (['all', 'mine', 'subjects', 'kafedra'].includes(saved) && scopeAllowed(saved)) scopeMode = saved;
             } catch (e) { }
             let mineOnly = scopeMode !== 'all';
             let myKafedras = [];
@@ -3554,6 +3560,9 @@
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
                 invalidateWeeklyConflicts();
                 invalidateCycleWeek();
+                specIndex = Array.isArray(j.spec_index) ? j.spec_index : [];
+                loadedSpecs = j.filter && Array.isArray(j.filter.loaded_specs) ? new Set(j.filter.loaded_specs.map(r => specTriple(r[0], r[1], r[2]))) : null;
+                loadedWeeks = j.filter && Array.isArray(j.filter.weeks) ? new Set(j.filter.weeks.map(Number)) : null;
                 applyWeeklyLayer(allCards);
                 groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
@@ -3610,9 +3619,37 @@
                 loadRules().catch(() => {});
             }
 
-            // O'qituvchi / fan mas'uli: "Faqat meniki" / "Mas'ul fanlarim" — server faqat shu kartalarni beradi (butun doska emas).
+            // O'qituvchi / fan mas'uli / kafedra mudiri: /data rol doirasida — rejim (scope) har doim; "Butun doska" — tanlangan qamrov
+            // (fakultet, yo'nalish, kurs; tanlov bo'sh — server rol doirasidagi yo'nalish+kurslarni beradi). O'qituvchi va fan mas'uli
+            // (faqat ko'radi): hafta tanlangan bo'lsa — ko'chirishlar faqat shu hafta uchun (bekor qilinganlari — hammasi).
             function serverScopeParam() {
-                return TIMETABLE_READ_ONLY && (scopeMode === 'mine' || scopeMode === 'subjects') ? '&scope=' + scopeMode : '';
+                if (!TIMETABLE_SCOPED_DATA) return '';
+                let q = '&scope=' + encodeURIComponent(scopeMode);
+                if (scopeMode === 'all' && (selectedFaculties.size || selectedDirs.size || selectedCourses.size)) {
+                    const b = scopeBody();
+                    b.faculty_names.forEach(v => { q += '&faculty_names[]=' + encodeURIComponent(v); });
+                    b.specialty_names.forEach(v => { q += '&specialty_names[]=' + encodeURIComponent(v); });
+                    b.courses.forEach(v => { q += '&courses[]=' + encodeURIComponent(v); });
+                }
+                if (TIMETABLE_READ_ONLY && +curWeek > 0) q += '&weeks[]=' + (+curWeek);
+                return q;
+            }
+            // "Butun doska" (cheklangan rol): to'liq yuklangan yo'nalish+kurslar (null — hammasi yuklangan) va doskadagi barcha
+            // yo'nalish+kurslar ro'yxati (qamrov tanlovi uchun); yuklangan haftalar (null — hammasi).
+            let loadedSpecs = null, specIndex = [], loadedWeeks = null, scopeReloadSig = '';
+            const specTriple = (fac, spec, course) => String(fac || '').trim().toLowerCase() + '|' + String(spec || '').trim().toLowerCase() + '|' + (+course);
+            // Tanlangan qamrovning yuklanmagan yo'nalish+kursi bormi — bo'lsa doska shu qamrov bilan qayta so'raladi (bir marta).
+            function scopeNeedsReload() {
+                if (!TIMETABLE_SCOPED_DATA || scopeMode !== 'all' || !loadedSpecs) return false;
+                const missing = specIndex.some(r => selectedFaculties.has(r[0]) && selectedDirs.has(r[1]) && selectedCourses.has(+r[2])
+                    && !loadedSpecs.has(specTriple(r[0], r[1], r[2])));
+                return missing && serverScopeParam() !== scopeReloadSig;
+            }
+            function ensureScopeLoaded() {
+                if (!board || !scopeNeedsReload()) return false;
+                scopeReloadSig = serverScopeParam();
+                loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
+                return true;
             }
             // Yuklangan kartalarni (qamrov qo'llangan — cards) ko'rsatadi; bo'sh bo'lsa false.
             // Qamrov bo'yicha bo'sh (doskada kartalar bor yoki server qamrov bilan bergan) — qamrov tugmalari
@@ -3631,10 +3668,11 @@
                 }
                 $('boardMsg').textContent = '';
                 $('specBar').classList.remove('hidden'); $('mainArea').classList.remove('hidden');
-                if ((!curSpec || !specList.find(s => s.key === curSpec.key)) && specList.length) curSpec = specList[0];
+                if ((!curSpec || !specList.find(s => s.key === curSpec.key)) && specList.length) curSpec = specList.find(s => !s.idx) || specList[0];
                 fillSpecControls();
                 fillGridInputs();
                 renderAll();
+                ensureScopeLoaded();
                 return true;
             }
 
@@ -3648,6 +3686,11 @@
                     const fac = c.faculty_name || '';
                     const k = fac + '|' + c.specialty_name + '|' + c.course;
                     if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: c.specialty_name, course: c.course, faculty: fac }); }
+                });
+                // "Butun doska" (cheklangan rol): tanlov uchun doskadagi boshqa yo'nalish+kurslar ham (idx — hali yuklanmagan).
+                if (TIMETABLE_SCOPED_DATA && scopeMode === 'all') specIndex.forEach(r => {
+                    const k = (r[0] || '') + '|' + r[1] + '|' + (+r[2]);
+                    if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: r[1], course: +r[2], faculty: r[0] || '', idx: true }); }
                 });
                 specList.sort((a, b) =>
                     (a.faculty + '|' + a.specialty_name + a.course).localeCompare(b.faculty + '|' + b.specialty_name + b.course, 'uz'));
@@ -3681,10 +3724,12 @@
             function reconcileSelection(seed) {
                 const facs = facultiesList();
                 if (seed && TEACHER_DEFAULTS) {
-                    // O'qituvchi: o'z darslari bor hamma fakultet, yo'nalish va kurslar (tanlov bo'sh — birinchi ochilish).
-                    selectedFaculties = new Set(facs);
-                    selectedDirs = new Set(availDirs());
-                    selectedCourses = new Set(availCourses());
+                    // O'qituvchi: o'z darslari bor (yuklangan) hamma fakultet, yo'nalish va kurslar (tanlov bo'sh — birinchi ochilish);
+                    // "Butun doska"da ro'yxatdagi yuklanmagan yo'nalishlar tanlanmaydi (butun doska so'ralmasin).
+                    const own = specList.filter(x => !x.idx);
+                    selectedFaculties = new Set(own.map(x => x.faculty));
+                    selectedDirs = new Set(own.map(x => x.specialty_name));
+                    selectedCourses = new Set(own.map(x => x.course));
                 }
                 if (seed && !TEACHER_DEFAULTS) selectedFaculties = new Set(curSpec && facs.includes(curSpec.faculty) ? [curSpec.faculty] : (facs.length ? [facs[0]] : []));
                 selectedFaculties = new Set([...selectedFaculties].filter(f => facs.includes(f)));
@@ -3746,6 +3791,7 @@
                 reconcileSelection(false);
                 fillSelectors();
                 selected = null; fillGridInputs(); renderAll();
+                ensureScopeLoaded();
             }
             [['fac', 'facMenu'], ['dir', 'dirMenu'], ['crs', 'crsMenu']].forEach(([which, menuId]) => {
                 $(menuId).addEventListener('change', ev => {
@@ -3764,6 +3810,7 @@
                     reconcileSelection(false);
                     fillSelectors();
                     selected = null; fillGridInputs(); renderAll();
+                    ensureScopeLoaded();
                 });
             });
             // Tugmani bosish — menyuni ochish/yopish; tashqariga bosilsa yopiladi.
@@ -4992,6 +5039,11 @@
                 selected = null;
                 showSkipped = false;
                 fillWeekSel();
+                // Ko'chirishlar faqat yuklangan haftalar uchun kelgan (o'qituvchi / fan mas'uli) — boshqa hafta: shu hafta bilan qayta so'raladi.
+                if (board && loadedWeeks && !(curWeek > 0 && loadedWeeks.has(curWeek))) {
+                    loadBoard(board.id).catch(e => alert('Xatolik: ' + e.message));
+                    return;
+                }
                 renderAll();
             };
             // "Bu haftada o'tilmaydi" kartalarini panelda ko'rsatish/yashirish
@@ -7342,10 +7394,10 @@
                 if (scopeMode === mode) return;
                 scopeMode = mode;
                 mineOnly = mode !== 'all';
-                try { localStorage.setItem(MINE_KEY, mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : mode === 'subjects' ? 'subjects' : '0'); } catch (e) { }
+                try { localStorage.setItem(SCOPE_KEY, mode); } catch (e) { }
                 renderMineUi();
-                // O'qituvchi / fan mas'uli: doska shu qamrov bilan qayta yuklanadi (server faqat kerakli kartalarni beradi).
-                if (TIMETABLE_READ_ONLY && board) {
+                // O'qituvchi / fan mas'uli / kafedra mudiri: doska shu qamrov bilan qayta yuklanadi (server faqat kerakli kartalarni beradi).
+                if (TIMETABLE_SCOPED_DATA && board) {
                     loadBoard(board.id).then(() => { if (viewMode === 'cycle') loadCyclePlan(); }).catch(e => alert('Xatolik: ' + e.message));
                     return;
                 }

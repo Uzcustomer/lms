@@ -16,12 +16,13 @@ const tick = () => new Promise(r => setImmediate(r));
 assert.match(source, /if \(viewMode !== DEFAULT_VIEW\) p\.set\('view', viewMode\);/);
 assert.match(source, /const DEFAULT_VIEW = TEACHER_DEFAULTS \? 'teacher' : 'group';/);
 // Qamrov tanlovi har foydalanuvchi va rol uchun alohida saqlanadi (admin "Butun doska" tanlovi o'qituvchiga o'tmaydi).
-assert.match(source, /const MINE_KEY = 'lms:timetable-mine:' \+ TIMETABLE_ROLE \+ ':' \+ \(TIMETABLE_TEACHER_ID \|\| 0\);/);
-assert.match(source, /const saved = localStorage\.getItem\(MINE_KEY\);/);
-assert.match(source, /localStorage\.setItem\(MINE_KEY, mode === 'mine'/);
-assert.doesNotMatch(source, /localStorage\.(get|set)Item\('lms:timetable-mine'/);
+assert.match(source, /const SCOPE_KEY = 'lms:timetable-scope:' \+ TIMETABLE_USER_KEY \+ ':' \+ TIMETABLE_ROLE;/);
+assert.match(source, /const saved = localStorage\.getItem\(SCOPE_KEY\);/);
+assert.match(source, /localStorage\.setItem\(SCOPE_KEY, mode\);/);
+assert.doesNotMatch(source, /lms:timetable-mine/);
+assert.match(source, /\$timetableUserKey = \(\$timetableUser instanceof \\App\\Models\\Teacher \? 't' : 'u'\) \. \(int\) \(\$timetableUser\?->getAuthIdentifier\(\) \?\? 0\);/);
 assert.match(source, /teacherFullNames = Object\.assign\(\{\}, j\.teacher_full_names \|\| \{\}\);/);
-assert.match(source, /let scopeMode = TIMETABLE_HAS_SUBJECTS && TIMETABLE_ROLE === 'fan_masuli' \? 'subjects' : \(TEACHER_DEFAULTS \? 'mine' : 'all'\);/);
+assert.match(source, /const ROLE_DEFAULT_SCOPE = \{ oqituvchi: 'mine', fan_masuli: 'subjects', kafedra_mudiri: 'kafedra' \}\[TIMETABLE_ROLE\] \|\| 'all';/);
 
 // URL: sukut kesimi yozilmaydi — o'qilganda ham sukut (o'qituvchiga 'teacher', boshqalarga 'group').
 {

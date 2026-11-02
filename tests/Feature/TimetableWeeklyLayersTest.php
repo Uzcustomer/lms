@@ -1349,7 +1349,8 @@ it('/data: istisnolar ixcham (ov), haftalar filtri — ko\'chirish faqat so\'ral
         ->and($res['ov'])->toBe([[$s['own']->id, 3, 2, 3, 0, 'R1', '101'], [$s['own']->id, 5, null, null, 1, null, null], [$s['foreign']->id, 4, 1, 1, 0, null, null]])
         ->and($res['room_volumes'])->toMatchArray(['R1' => 24])
         ->and(collect($res['cards'])->pluck('id')->sort()->values()->all())->toBe([$s['own']->id, $s['foreign']->id, $other->id])
-        ->and($res['filter'])->toBe(['scope' => 'all', 'weeks' => null, 'partial' => false]);
+        ->and($res['filter'])->toBe(['scope' => 'all', 'weeks' => null, 'partial' => false, 'loaded_specs' => null])
+        ->and($res['spec_index'])->toBeNull();
     // Haftalar: ko'chirish faqat 3-hafta, bekor qilingan 5-hafta qoladi.
     $res = layerAs($s['admin'], 'superadmin')->getJson($url . '?weeks[]=3')->assertOk()->json();
     expect($res['ov'])->toBe([[$s['own']->id, 3, 2, 3, 0, 'R1', '101'], [$s['own']->id, 5, null, null, 1, null, null]]);
@@ -1364,8 +1365,71 @@ it('/data: istisnolar ixcham (ov), haftalar filtri — ko\'chirish faqat so\'ral
     expect(collect($res['cards'])->pluck('id')->all())->toBe([$s['own']->id])->and(collect($res['ov'])->pluck(0)->unique()->values()->all())->toBe([$s['own']->id])
         ->and($res['filter']['scope'])->toBe('mine');
     expect(count(layerAs($s['admin'], 'superadmin')->getJson($url . '?scope=mine')->assertOk()->json('cards')))->toBe(3);
-    // Butun doska — o'qituvchiga ham hammasi.
-    expect(count(layerAs($t, 'oqituvchi')->getJson($url)->assertOk()->json('cards')))->toBe(3);
+    // O'qituvchi: scope berilmasa ham — o'z darslari (butun doska emas).
+    expect(collect(layerAs($t, 'oqituvchi')->getJson($url)->assertOk()->json('cards'))->pluck('id')->all())->toBe([$s['own']->id]);
+    // "Butun doska": qamrov berilmasa — o'z darslari bor yo'nalish+kurs (2-kurs) to'liq; F2 / 3-kurs yo'q. Qamrov berilsa — shu qamrov.
+    $res = layerAs($t, 'oqituvchi')->getJson($url . '?scope=all')->assertOk()->json();
+    expect(collect($res['cards'])->pluck('id')->sort()->values()->all())->toBe([$s['own']->id, $s['foreign']->id])
+        ->and($res['filter']['scope'])->toBe('all')
+        ->and($res['filter']['loaded_specs'])->toBe([[(string) $s['own']->faculty_name, (string) $s['own']->specialty_name, (int) $s['own']->course]])
+        ->and(collect($res['spec_index'])->map(fn ($r) => array_slice($r, 0, 3))->all())->toContain(['F2', (string) $other->specialty_name, 3]);
+    $res = layerAs($t, 'oqituvchi')->getJson($url . '?scope=all&faculty_names[]=F2&courses[]=3')->assertOk()->json();
+    expect(collect($res['cards'])->pluck('id')->all())->toBe([$other->id])
+        ->and($res['filter']['loaded_specs'])->toBe([['F2', (string) $other->specialty_name, 3]]);
+});
+
+it('/data rol doirasida: o\'qituvchi — o\'z darslari (javob < 1 MB, 3 000 kartali doskada), fan mas\'uli — mas\'ul fanlari, kafedra mudiri — kafedrasi', function () {
+    $s = layersSetup();
+    Role::findOrCreate('oqituvchi', 'web');
+    Role::findOrCreate('fan_masuli', 'web');
+    $t = fmTeacherLayers('OQITUVCHI');
+    $t->syncRoles(['oqituvchi']);
+    $s['own']->update(['teacher_id' => $t->id, 'teacher_name' => 'OQITUVCHI']);
+    // Katta doska: 3 000 boshqa karta (har biriga 3 ta hafta istisnosi).
+    $base = collect($s['foreign']->getAttributes())->except(['id', 'created_at', 'updated_at'])->all();
+    $rows = [];
+    for ($i = 0; $i < 3000; $i++) {
+        $rows[] = array_merge($base, ['subject_name' => 'Fan ' . ($i % 40), 'group_name' => 'x-' . $i, 'group_names' => json_encode(['x-' . $i]),
+            'kafedra_name' => 'Boshqa kafedra', 'teacher_id' => null, 'created_at' => now(), 'updated_at' => now()]);
+    }
+    foreach (array_chunk($rows, 500) as $chunk) {
+        DB::table('timetable_cards')->insert($chunk);
+    }
+    $ovRows = [];
+    foreach (DB::table('timetable_cards')->where('board_id', $s['board']->id)->where('kafedra_name', 'Boshqa kafedra')->pluck('id') as $id) {
+        foreach ([2, 4, 6] as $w) {
+            $ovRows[] = ['card_id' => $id, 'week' => $w, 'day' => 1, 'pair' => 2, 'cancelled' => false, 'created_at' => now(), 'updated_at' => now()];
+        }
+    }
+    foreach (array_chunk($ovRows, 1000) as $chunk) {
+        DB::table('timetable_card_overrides')->insert($chunk);
+    }
+    $url = route('admin.timetable.boards.data', $s['board']);
+    $admin = layerAs($s['admin'], 'superadmin')->getJson($url)->assertOk();
+    expect(count($admin->json('cards')))->toBe(3002)->and(strlen($admin->getContent()))->toBeGreaterThan(1024 * 1024);
+    $teacher = layerAs($t, 'oqituvchi')->getJson($url)->assertOk();
+    expect(strlen($teacher->getContent()))->toBeLessThan(1024 * 1024)
+        ->and(collect($teacher->json('cards'))->pluck('id')->all())->toBe([$s['own']->id])
+        ->and(collect($teacher->json('ov'))->pluck(0)->unique()->values()->all())->not->toContain($s['foreign']->id);
+    // Kafedra mudiri: sukut — o'z kafedrasi kartalari (Gigiyena kafedrasi), boshqa kafedra yo'q; "Faqat meniki" — o'zi o'qituvchi bo'lgan darslar.
+    $head = layerAs($s['head'], 'kafedra_mudiri')->getJson($url)->assertOk();
+    $kafedras = collect($head->json('cards'))->pluck('kafedra_name')->unique()->values()->all();
+    expect($head->json('filter.scope'))->toBe('kafedra')->and($kafedras)->not->toContain('Boshqa kafedra')
+        ->and(collect($head->json('cards'))->pluck('id')->all())->toContain($s['own']->id)
+        ->and(strlen($head->getContent()))->toBeLessThan(1024 * 1024);
+    // Kafedra mudiri "Butun doska" (qamrovsiz): faqat o'z kafedrasi darslari bor yo'nalish+kurs — boshqa kafedraning F9 / 4-kursi yo'q.
+    TimetableCard::create(array_merge(collect($base)->except(['group_names'])->all(), ['faculty_name' => 'F9', 'course' => 4, 'subject_name' => 'Boshqa',
+        'group_name' => 'z-1', 'group_names' => ['z-1'], 'kafedra_name' => 'Boshqa kafedra']));
+    $all = layerAs($s['head'], 'kafedra_mudiri')->getJson($url . '?scope=all')->assertOk()->json();
+    expect(collect($all['filter']['loaded_specs'])->pluck(0)->all())->not->toContain('F9')
+        ->and(collect($all['cards'])->pluck('faculty_name')->all())->not->toContain('F9')
+        ->and(collect($all['spec_index'])->pluck(0)->all())->toContain('F9');
+    // Fan mas'uli: mas'ul fani bo'lmasa — bo'sh (butun doska emas).
+    $fm = fmTeacherLayers("FAN MAS'ULI");
+    $res = layerAs($fm, 'fan_masuli')->getJson($url)->assertOk()->json();
+    expect($res['filter']['scope'])->toBe('subjects')->and($res['cards'])->toBe([]);
+    // Ruxsat etilmagan scope (o'qituvchiga "kafedra") — sukutga qaytadi.
+    expect(layerAs($t, 'oqituvchi')->getJson($url . '?scope=kafedra')->assertOk()->json('filter.scope'))->toBe('mine');
 });
 
 it('xotira monitoringi: so\'rov chegaradan (memory_warn_mb) ko\'p xotira ishlatsa — logga ogohlantirish (marshrut, foydalanuvchi, MB)', function () {

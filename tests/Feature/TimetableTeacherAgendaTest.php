@@ -274,3 +274,52 @@ it('agenda: muqobil xona sikl darsi bilan band bo\'lsa taklif qilinmaydi (haftal
     $opt = agGet($s, $s['admin'], 'admin', ['move' => $key])['move']['options']['2026-11-19'][6];
     expect($opt['ok'])->toBeTrue()->and($opt['room']['code'])->toBe('R3');
 });
+
+it('agenda: xona band bo\'lsa ham amaliy blok qoidasi tekshiriladi — boshqa xona taklifi blokni bo\'lmaydi', function () {
+    $s = agSetup();
+    // pp/2024-01b Farmakologiya amaliy bloki: IV para (MUXAMMADIYEV) + V para (boshqa o'qituvchi) — yonma-yon.
+    $mk = fn (array $o) => TimetableCard::create($o + ['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya',
+        'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'kafedra_name' => 'Farmakologiya kafedrasi', 'day' => 4]);
+    $other = agTeacher('YORDAMCHI Y.');
+    $mk(['subject_name' => 'Farmakologiya', 'group_name' => 'pp/2024-01b', 'teacher_id' => $other->id, 'teacher_name' => 'YORDAMCHI Y.', 'pair' => 9]);
+    // VI parada 102-xona boshqa guruhga band (xona muammosi) — 101-xona bo'sh.
+    $mk(['subject_name' => 'Fizika', 'group_name' => 'p-09', 'teacher_id' => $other->id, 'teacher_name' => 'YORDAMCHI Y.', 'pair' => 11,
+        'auditorium_code' => 'R2', 'auditorium_name' => '102-xona']);
+    $opt = agGet($s, $s['admin'], 'admin', ['move' => 'w|' . $s['ppB']->id . '|' . $s['week']])['move']['options']['2026-11-19'][6];
+    expect($opt['ok'])->toBeFalse()->and($opt['room'])->toBeNull()
+        ->and($opt['why'])->toContain('Xona band: 102-xona')->toContain("amaliy blokning bir qismi");
+});
+
+it('agenda: bir nechta kartali haftalik ma\'ruza oqimi — bitta yozuv, istalgan karta kaliti bilan topiladi, ko\'chirilmaydi (oqim bo\'linmaydi)', function () {
+    $s = agSetup();
+    $hall = Auditorium::create(['code' => 'Z1', 'name' => '1-zal', 'volume' => 200, 'active' => true]);
+    $lec = fn (string $spec, string $g) => TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => $spec,
+        'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 30, 'training_type' => 'lecture', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Farmakologiya', 'group_name' => $g, 'kafedra_name' => 'Farmakologiya kafedrasi', 'teacher_id' => $s['mux']->id,
+        'teacher_name' => 'MUXAMMADIYEV S. B.', 'day' => 4, 'pair' => 11, 'auditorium_code' => 'Z1', 'auditorium_name' => '1-zal']);
+    $a = $lec('pediatriya', 'pp/2024-01a');
+    $b = $lec('stomatologiya', 'st/2024-01a');
+    $j = agGet($s, $s['admin'], 'admin');
+    $flow = collect($j['entries'])->firstWhere('type', 'M');
+    expect(collect($j['entries'])->where('type', 'M')->count())->toBe(1)
+        ->and($flow['groups'])->toBe(['pp/2024-01a', 'st/2024-01a'])->and($flow['card_ids'])->toBe([$a->id, $b->id])
+        ->and($flow['conflict'])->toBeFalse();
+    $week = (new ReflectionMethod(app(TimetableController::class), 'calendarWeekAt'))->invoke(app(TimetableController::class), $s['board'], $b, '2026-11-19');
+    foreach (['w|' . $a->id . '|' . $s['week'], 'w|' . $b->id . '|' . $week] as $key) {
+        $mv = agGet($s, $s['admin'], 'admin', ['move' => $key])['move'];
+        expect($mv['kind'])->toBe('weekly')->and($mv['via'])->toBeNull()->and((array) $mv['options'])->toBe([])
+            ->and($mv['why'])->toContain("Bir nechta kartadan iborat ma'ruza oqimi");
+    }
+});
+
+it('agenda: sikl birligida o\'qituvchining ikki amaliy kartasi — bitta yozuv, ko\'chirish mumkin (butun birlik ko\'chadi)', function () {
+    $s = agSetup();
+    $first = TimetableCard::where('board_id', $s['board']->id)->where('group_name', 'd1/d22-01b')->first();
+    TimetableCard::create($first->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students', 'training_type',
+        'len_half', 'weeks', 'subject_name', 'group_name', 'kafedra_name', 'teacher_id', 'teacher_name']));
+    $entry = collect(agGet($s, $s['admin'], 'admin')['entries'])->first(fn ($e) => $e['kind'] === 'cycle' && $e['groups'] === ['d1/d22-01b']);
+    expect(count($entry['card_ids']))->toBe(2);
+    $mv = agGet($s, $s['admin'], 'admin', ['move' => $entry['key']])['move'];
+    expect($mv['via'])->toBe('apply')->and($mv['why'])->toBeNull();
+});

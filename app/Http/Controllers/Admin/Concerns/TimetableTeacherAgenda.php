@@ -225,7 +225,10 @@ trait TimetableTeacherAgenda
     private function agendaMove(Request $request, TimetableBoard $board, string $key, array $entries, array $days, array $pairs, array $free,
         string $layer, array $rights): ?array
     {
-        $entry = collect($entries)->first(fn ($e) => $e['key'] === $key);
+        // Kalit — yozuvniki; birlashgan haftalik ma'ruza oqimida istalgan karta kaliti ("w|karta|hafta") ham shu yozuvni topadi.
+        [$kind, $kid] = array_pad(explode('|', $key), 2, '');
+        $entry = collect($entries)->first(fn ($e) => $e['key'] === $key)
+            ?? ($kind === 'w' ? collect($entries)->first(fn ($e) => $e['kind'] === 'weekly' && in_array((int) $kid, $e['card_ids'], true)) : null);
         if (!$entry) {
             return ['key' => $key, 'kind' => null, 'via' => null, 'why' => "Ko'chiriladigan dars bu kunlarda yo'q.", 'options' => (object) [], 'block' => (object) []];
         }
@@ -237,6 +240,8 @@ trait TimetableTeacherAgenda
             $layer === 'external' => "Tashqi qatlam — faqat ko'rish.",
             $entry['past'] => "Bugungi va o'tgan darslar ko'chirilmaydi.",
             $entry['kind'] === 'cycle' && $entry['type'] === 'M' => "Sikl ma'ruzasi bu oynadan ko'chirilmaydi (ma'ruza soati — sikl jadvalida).",
+            // Bir nechta kartali haftalik ma'ruza oqimi — bitta karta ko'chsa oqim bo'linib qoladi.
+            $entry['kind'] === 'weekly' && count($entry['card_ids']) > 1 => "Bir nechta kartadan iborat ma'ruza oqimi bu oynadan ko'chirilmaydi — oqim bo'linib qolmasin (jadvaldan yoki Takliflar orqali).",
             default => null,
         };
         if ($why) {
@@ -338,15 +343,12 @@ trait TimetableTeacherAgenda
         if ($pair + $card->lenHalf() - 1 > (int) $grid['pairs']) {
             return ['ok' => false, 'why' => 'Tanlangan vaqt jadval chegarasidan tashqarida.', 'room' => null];
         }
+        // Barcha tekshiruvlar (bittasi topilsa ham qolganlari): xona muammosida boshqa xona taklif qilinadi — u faqat xonadan
+        // boshqa sabab bo'lmasa to'g'ri (amaliy blok, sikl darslaridagi o'qituvchi bandligi ham hisobga olinadi).
         $data = ['week' => $week, 'day' => $day, 'pair' => $pair];
-        $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair), $this->pendingTimeConflicts($card, $data, []));
-        if (!$errors) {
-            $errors = $this->practiceSplitConflicts($card, $week, $day, $pair);
-        }
-        if (!$errors) {
-            $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
-            $errors = $this->weeklyProposalBusy($card, $week, $day, $pair, $date);
-        }
+        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
+        $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair), $this->pendingTimeConflicts($card, $data, []),
+            $this->practiceSplitConflicts($card, $week, $day, $pair), $this->weeklyProposalBusy($card, $week, $day, $pair, $date));
         $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
         $roomCode = (string) ($ov?->auditorium_code ?: $card->auditorium_code);
         $room = $roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null;
@@ -391,9 +393,11 @@ trait TimetableTeacherAgenda
             if (++$tries > 15) {
                 break;
             }
-            // Haftalik darslar bilan (findWeekConflicts) va sikl darslari bilan (weeklyProposalBusy — shu xona bilan sinab).
-            $busy = array_filter($this->findWeekConflicts($card, $week, $day, $pair, 0, null, (string) $r->code),
-                fn ($m) => str_starts_with($m, 'Auditoriya band'));
+            // Haftalik darslar bilan (findWeekConflicts), kutilayotgan so'rovlardagi xona broni va sikl darslari bilan
+            // (weeklyProposalBusy — shu xona bilan sinab).
+            $busy = array_merge(array_filter($this->findWeekConflicts($card, $week, $day, $pair, 0, null, (string) $r->code),
+                fn ($m) => str_starts_with($m, 'Auditoriya band')),
+                $this->pendingTimeConflicts($card, ['week' => $week, 'day' => $day, 'pair' => $pair, 'auditorium_code' => (string) $r->code], [], ['room']));
             if (!$busy) {
                 $busy = array_filter($this->weeklyProposalBusy($card, $week, $day, $pair, $date, $r), fn ($m) => str_starts_with($m, 'Xona '));
             }

@@ -148,6 +148,12 @@
                                 @if(!empty($currentSemesterHint))
                                     <span class="vs-switch-hint" title="Har guruh o'zi hozir o'qiyotgan semestr bo'yicha (talabalar ma'lumotidan)">{{ $currentSemesterHint }}</span>
                                 @endif
+                                @if(!empty($staleGroups['count']))
+                                    <span class="vs-switch-hint" style="color:#b45309;"
+                                          title="{{ implode(', ', $staleGroups['names']) }}{{ $staleGroups['count'] > count($staleGroups['names']) ? ' …' : '' }}">
+                                        ⚠ {{ $staleGroups['count'] }} ta guruh talabalari o'tgan o'quv yili semestrida qolgan (HEMIS'da yangi semestrga o'tkazilmagan) — ular «Joriy semestr»da ko'rinmaydi
+                                    </span>
+                                @endif
                             </div>
                         </div>
 

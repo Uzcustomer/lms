@@ -193,6 +193,19 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
         assert.doesNotMatch(g, /outline:2px solid #ef4444/);
         assert.doesNotMatch(g, /Bir vaqtda/);
         assert.equal((g.match(/tt-cyc-chip/g) || []).length, 1);
+        // Birlashtirilgan chip oynasi: umumiy oraliq (1–2-soat) va har yozuv o'z vaqti bilan (Codex) — ikkinchi yarim yo'qolmaydi.
+        const mchip = { dataset: { cyc: String(+(g.match(/data-cyc="(\d+)"/) || [])[1]) }, closest() { return this; }, getBoundingClientRect: () => ({ right: 10, top: 10 }) };
+        gridClick({ target: mchip, preventDefault() {}, stopPropagation() {} });
+        let mp = appended[appended.length - 1];
+        assert.match(mp.innerHTML, /08:05–09:45/);
+        assert.match(mp.innerHTML, /Amaliy 2 s/);
+        assert.match(mp.innerHTML, /Guruhchalar vaqti:/);
+        assert.match(mp.innerHTML, /d1\/d22-06a: 08:05–08:45 \(1 s\)/);
+        assert.match(mp.innerHTML, /d1\/d22-06a: 09:05–09:45 \(1 s\)/);
+        assert.doesNotMatch(mp.innerHTML, /data-cyc-ask class/);   // umumiy tugma yo'q — har yozuv o'z tugmasi bilan
+        ctx.proposal = null;
+        mp.onclick({ target: { closest: () => ({ dataset: { cycAskPart: '1' } }) } });
+        assert.deepEqual(JSON.parse(JSON.stringify(ctx.proposal))[0], { subject: 'Klinik farmakologiya', group: 'd1/d22-06a', specialty: 'davolash ishi', course: 5 });
         // "A + B" umumiy karta (ikki guruhcha birligida, vaqti farqli) — yolg'iz bo'lsa ham bitta dars, belgi yo'q.
         setLessons([half({ id: 52, hour: 1, group_name: 'p/p21-01a', group_names: ['p/p21-01a'] }),
             half({ id: 52, hour: 2, group_name: 'p/p21-01b', group_names: ['p/p21-01b'] })]);
@@ -201,6 +214,23 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
         assert.doesNotMatch(g, /Bir vaqtda/);
         assert.equal((g.match(/tt-cyc-chip/g) || []).length, 1);
         assert.match(g, /p\/p21-01a, p\/p21-01b/);   // birlashtirilgan chip — ikkala guruhcha
+        // Har guruhcha o'z vaqti va so'rovi bilan: 01b (2-soat) so'rovi — 01b guruhi bilan.
+        gridClick({ target: { dataset: { cyc: String(+(g.match(/data-cyc="(\d+)"/) || [])[1]) }, closest() { return this; }, getBoundingClientRect: () => ({ right: 10, top: 10 }) },
+            preventDefault() {}, stopPropagation() {} });
+        mp = appended[appended.length - 1];
+        assert.match(mp.innerHTML, /p\/p21-01a: 08:05–08:45/);
+        assert.match(mp.innerHTML, /p\/p21-01b: 09:05–09:45/);
+        mp.onclick({ target: { closest: () => ({ dataset: { cycAskPart: '1' } }) } });
+        assert.equal(JSON.parse(JSON.stringify(ctx.proposal))[0].group, 'p/p21-01b');
+        // Bir xil vaqtdagi yozuvlar — bitta qatorda, guruhchalari qo'shiladi.
+        setLessons([half({ id: 53, hour: 1, group_name: 'x-1a', group_names: ['x-1a'] }), half({ id: 53, hour: 2, group_name: 'x-1c', group_names: ['x-1c'] }),
+            half({ id: 53, hour: 1, group_name: 'x-1b', group_names: ['x-1b'] })]);
+        ctx.renderGridCross('teacher');
+        g = el('grid').innerHTML;
+        gridClick({ target: { dataset: { cyc: String(+(g.match(/data-cyc="(\d+)"/) || [])[1]) }, closest() { return this; }, getBoundingClientRect: () => ({ right: 10, top: 10 }) },
+            preventDefault() {}, stopPropagation() {} });
+        assert.match(appended[appended.length - 1].innerHTML, /x-1a, x-1b: 08:05–08:45/);
+        assert.match(appended[appended.length - 1].innerHTML, /x-1c: 09:05–09:45/);
         // MAHMARAIMOV, dushanba: bir vaqtda 3 ta guruhda (d1/d22-06a, p/p21-01a, p/p21-01b) — har biri ikki yarim para yozuvi
         // bilan (12 yozuv): "Bir vaqtda 3 ta dars" va uchala dars ro'yxati.
         const three = [];

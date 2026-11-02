@@ -8370,6 +8370,17 @@
                 const clashing = lessons.filter(ls => hit.has(ls));
                 return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
             }
+            // Bitta sikl darsining yozuvlari (karta + sana) — vaqti bo'yicha guruhlanadi: bir xil vaqt — guruhchalari qo'shiladi.
+            function mergeCycParts(list) {
+                const by = {}, out = [];
+                list.forEach(p => {
+                    const k = (+p.hour || 0) + '|' + (+p.hours || 0);
+                    const gs = p.group_names && p.group_names.length ? p.group_names : [p.group_name];
+                    if (!by[k]) { out.push(by[k] = { hour: p.hour, hours: p.hours, dp: p.dp, ask: p.ask, group_name: p.group_name, group_names: gs.slice() }); return; }
+                    gs.forEach(g => { if (!by[k].group_names.includes(g)) by[k].group_names.push(g); });
+                });
+                return out.sort((a, b) => (+a.hour || 0) - (+b.hour || 0));
+            }
             function cycleWeekSig() {
                 if (!board || !curWeek || weeklyLayer !== 'internal' || !CROSS_MODES.includes(viewMode)) return '';
                 return [board.id, curWeek, [...selectedFaculties].sort().join(','), [...selectedDirs].sort().join(','),
@@ -8510,7 +8521,11 @@
                                     const first = shown[seenIds[k]];
                                     const gs = [...new Set([].concat(first.l.group_names && first.l.group_names.length ? first.l.group_names : [first.l.group_name],
                                         it.l.group_names && it.l.group_names.length ? it.l.group_names : [it.l.group_name]))];
-                                    const merged = Object.assign({}, first.l, { group_names: gs });
+                                    // Vaqtlari har xil bo'lsa — umumiy oraliq, har guruhcha o'z vaqti, kun rejasi va so'rovi bilan (parts; oynada).
+                                    const parts = mergeCycParts((first.l.parts || [first.l]).concat([it.l]));
+                                    const lo = Math.min(...parts.map(p => +p.hour || 0)), hi = Math.max(...parts.map(p => (+p.hour || 0) + (+p.hours || 0)));
+                                    const merged = Object.assign({}, first.l, { group_names: gs, hour: lo, hours: hi - lo,
+                                        parts: parts.length > 1 ? parts : undefined, ask: parts.some(p => p.ask) });
                                     crossCycleShown.push(merged);
                                     shown[seenIds[k]] = Object.assign({}, first, { l: merged, i: crossCycleShown.length - 1 });
                                 });
@@ -8567,6 +8582,14 @@
                 const iso = String(l.date || '');
                 const d = iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
                 const isLec = l.training_type === 'lecture';
+                const canAsk = ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && !isLec;
+                // Birlashtirilgan chip (bitta darsning guruhchalari har xil vaqtda): har biri o'z vaqti va so'rovi bilan.
+                const parts = Array.isArray(l.parts) && l.parts.length > 1 ? l.parts : null;
+                const partTime = p => { const a = +p.hour || 0, n = +p.hours || 0; return a && hours[a] && hours[a + n - 1] ? hours[a][0] + '–' + hours[a + n - 1][1] : ''; };
+                const partsHtml = parts ? '<div class="dp-sub"><b>Guruhchalar vaqti:</b></div>' + parts.map((p, k) => '<div class="dp-sub">'
+                    + esc((p.group_names || [p.group_name]).join(', ')) + ': ' + esc(partTime(p)) + ' (' + (+p.hours || 1) + ' s)'
+                    + (canAsk && p.ask ? ' <button type="button" data-cyc-ask-part="' + k + '" class="px-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button>' : '')
+                    + '</div>').join('') : '';
                 const pop = document.createElement('div');
                 pop.id = 'crossCycPop';
                 pop.className = 'tt-cross-cyc-pop';
@@ -8578,9 +8601,10 @@
                     '<div class="dp-sub">' + esc((l.faculty_name || '—') + ' · ' + l.specialty_name + ' · ' + l.course + '-kurs') + '</div>' +
                     '<div class="dp-sub">Guruh: ' + esc((l.group_names && l.group_names.length ? l.group_names : [l.group_name]).join(', ')) + (l.flow ? ' · ' + esc(l.flow) : '') + '</div>' +
                     '<div class="dp-sub">O\'qituvchi: ' + esc(l.teacher_name || '—') + ' · Xona: ' + esc(l.auditorium_name || '—') + '</div>' +
+                    partsHtml +
                     (l.room_clash ? '<div class="dp-note" style="color:#b45309">⚠ ' + esc(l.room_clash) + '</div>' : '') +
                     '<div class="dp-note">Sikl jadvalidagi dars — bu yerda faqat ko\'rish; joyi "Sikl" kesimida.</div>' +
-                    (l.ask && ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && !isLec
+                    (!parts && l.ask && canAsk
                         ? '<div class="dp-actions"><button type="button" data-cyc-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '');
                 document.body.appendChild(pop);
                 const r = anchor.getBoundingClientRect();
@@ -8591,6 +8615,14 @@
                 if (ask) ask.onclick = () => {
                     closeCrossCycPop();
                     openCycleTimeProposal({ subject: l.subject_name, group: l.group_name, specialty: l.specialty_name, course: l.course }, dp, { iso: iso, d: d });
+                };
+                // Guruhcha bo'yicha so'rov (birlashtirilgan chip) — o'sha guruhcha va uning kun rejasi bilan.
+                pop.onclick = ev => {
+                    const b = ev && ev.target && ev.target.closest ? ev.target.closest('[data-cyc-ask-part]') : null;
+                    const p = b && parts ? parts[+b.dataset.cycAskPart] : null;
+                    if (!p) return;
+                    closeCrossCycPop();
+                    openCycleTimeProposal({ subject: l.subject_name, group: p.group_name, specialty: l.specialty_name, course: l.course }, p.dp || {}, { iso: iso, d: d });
                 };
             }
             // Sikl darsi bosilganda — oyna (katakka joylash va boshqa ishlovchilarga o'tmaydi).

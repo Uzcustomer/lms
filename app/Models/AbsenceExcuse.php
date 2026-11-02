@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Traits\LogsActivity;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -165,7 +164,8 @@ class AbsenceExcuse extends Model
     }
 
     /**
-     * Talaba sana oralig'ida darsda bo'lib baho olgan kunlar — sababli ma'lumotnoma bilan zid.
+     * Talaba sana oralig'ida darsda bo'lib baho olgan kunlar: adminga ogohlantirish
+     * (ma'lumotnoma bilan zid) va bu kunlarga qayta topshirish ajratilmaydi.
      * NB (reason=absent) va mustaqil ta'lim (99 — darsga kelish emas) hisobga olinmaydi.
      */
     public static function gradeConflicts(string $studentHemisId, $from, $to): Collection
@@ -179,28 +179,7 @@ class AbsenceExcuse extends Model
             ->where(fn ($q) => $q->whereNull('training_type_code')->orWhere('training_type_code', '!=', 99))
             ->whereNull('deleted_at')
             ->orderBy('lesson_date')
-            ->get(['lesson_date', 'subject_name', 'grade', 'lesson_pair_name']);
-    }
-
-    /** Talabaga ko'rsatish uchun: [{date, subject_name, pair, grade}] */
-    public static function gradeConflictRows(Collection $conflicts): array
-    {
-        return $conflicts->map(fn ($c) => [
-            'date' => Carbon::parse($c->lesson_date)->format('d.m.Y'),
-            'subject_name' => $c->subject_name,
-            'pair' => $c->lesson_pair_name,
-            'grade' => rtrim(rtrim(number_format((float) $c->grade, 2, '.', ''), '0'), '.'),
-        ])->values()->all();
-    }
-
-    public static function gradeConflictMessage(Collection $conflicts): string
-    {
-        $days = collect(self::gradeConflictRows($conflicts))
-            ->map(fn ($r) => "{$r['date']} — {$r['subject_name']} ({$r['grade']})")
-            ->implode('; ');
-
-        return "Ariza sanalarida darsda bo'lib baho olgansiz: {$days}. "
-            . "Bu kunlar sababli bo'lishi mumkin emas — sana oralig'ini to'g'rilang.";
+            ->get(['lesson_date', 'subject_id', 'subject_name', 'grade', 'lesson_pair_name']);
     }
 
     public static function reasonLabels(): array

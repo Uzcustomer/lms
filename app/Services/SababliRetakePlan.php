@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\Schedule;
+use App\Models\AbsenceExcuse;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Sababli ariza bo'yicha qayta topshirish jadvali.
  *
- * Talaba bir kunda faqat bitta retake topshiradi: qoldirilgan har bir dars kuni
+ * Talaba bir kunda faqat bitta retake topshiradi: NB olgan har bir dars kuni
  * (fan bo'yicha) uchun alohida kun ajratiladi. Fanning OSKI si shu fanning oxirgi
  * retake kuniga, yakuniy testi esa bir kun oraliq bilan undan keyin qo'yiladi.
  * Yakshanba ish kuni hisoblanmaydi.
@@ -22,15 +23,20 @@ class SababliRetakePlan
     private const TYPE_ORDER = ['jn' => 0, 'mt' => 1, 'oski' => 2, 'test' => 3];
 
     /**
-     * Sababli davrdagi baholanadigan darslar (ma'ruza va nazoratlardan tashqari):
-     * har bir fan + dars kuni — bitta JN retake.
+     * Sababli davrda talaba jurnalda NB olgan darslar (ma'ruza va nazoratlardan tashqari,
+     * otrabotkasi hali qo'yilmagan): har bir fan + kun — bitta JN retake.
+     * Darsda bo'lib baho olgan kunlarga retake ajratilmaydi.
      */
-    public static function lessonDays($groupId, Carbon $from, Carbon $to): Collection
+    public static function nbDays(string $studentHemisId, Carbon $from, Carbon $to): Collection
     {
-        return Schedule::where('group_id', $groupId)
+        return DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
             ->whereDate('lesson_date', '>=', $from)
             ->whereDate('lesson_date', '<=', $to)
+            ->where('reason', 'absent')
+            ->whereNull('retake_grade')
             ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102, 103]))
+            ->whereNull('deleted_at')
             ->get(['subject_id', 'subject_name', 'lesson_date'])
             ->map(fn ($s) => [
                 'subject_name' => $s->subject_name,
@@ -42,6 +48,35 @@ class SababliRetakePlan
             ->unique(fn ($i) => $i['subject_name'] . '|' . $i['original_date'])
             ->sortBy('original_date')
             ->values();
+    }
+
+    /**
+     * Davrdagi JN nazoratlaridan talaba darsda bo'lib baho olganlarini chiqarib tashlaydi —
+     * qayta topshirish faqat NB uchun.
+     */
+    public static function withoutAttended(Collection $items, string $studentHemisId, Carbon $from, Carbon $to): Collection
+    {
+        $graded = [];
+        foreach (AbsenceExcuse::gradeConflicts($studentHemisId, $from, $to) as $g) {
+            $day = Carbon::parse($g->lesson_date)->format('Y-m-d');
+            if ((string) $g->subject_id !== '') {
+                $graded['id:' . $g->subject_id . '|' . $day] = true;
+            }
+            $graded['name:' . mb_strtolower(trim((string) $g->subject_name)) . '|' . $day] = true;
+        }
+        if (!$graded) {
+            return $items;
+        }
+
+        return $items->reject(function ($a) use ($graded) {
+            if ($a['assessment_type'] !== 'jn') {
+                return false;
+            }
+            $id = (string) ($a['subject_id'] ?? '');
+
+            return ($id !== '' && isset($graded['id:' . $id . '|' . $a['original_date']]))
+                || isset($graded['name:' . mb_strtolower(trim((string) $a['subject_name'])) . '|' . $a['original_date']]);
+        })->values();
     }
 
     /** Retake boshlanadigan kun: berilgan sana yoki ertangi kun; yakshanba bo'lsa dushanba */

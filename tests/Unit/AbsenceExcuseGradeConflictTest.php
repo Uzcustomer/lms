@@ -5,7 +5,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Sababli ariza kunlarida darsda bo'lib baho olgan talaba arizani yubora olmaydi.
+ * Sababli ariza kunlarida darsda bo'lib baho olingan kunlar — adminga ogohlantirish,
+ * bu kunlarga qayta topshirish ajratilmaydi.
  */
 
 uses(Tests\TestCase::class);
@@ -17,6 +18,7 @@ beforeEach(function () {
     Schema::create('student_grades', function ($t) {
         $t->id();
         $t->string('student_hemis_id');
+        $t->string('subject_id')->nullable();
         $t->string('subject_name');
         $t->dateTime('lesson_date');
         $t->string('lesson_pair_name')->nullable();
@@ -46,9 +48,8 @@ it('finds the days the student attended and was graded', function () {
 
     $conflicts = AbsenceExcuse::gradeConflicts('5531', '2026-10-19', '2026-10-24');
 
-    expect(AbsenceExcuse::gradeConflictRows($conflicts))->toBe([
-        ['date' => '21.10.2026', 'subject_name' => 'Anatomiya', 'pair' => '1-juftlik', 'grade' => '4.5'],
-    ])->and(AbsenceExcuse::gradeConflictMessage($conflicts))->toContain('21.10.2026 — Anatomiya (4.5)');
+    expect($conflicts->map(fn ($c) => $c->subject_name . ' ' . substr($c->lesson_date, 0, 10) . ' ' . $c->grade)->all())
+        ->toBe(['Anatomiya 2026-10-21 4.5']);
 });
 
 it('has no conflicts when every lesson in the range is NB', function () {

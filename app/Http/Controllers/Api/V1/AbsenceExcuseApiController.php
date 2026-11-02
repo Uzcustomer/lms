@@ -128,15 +128,6 @@ class AbsenceExcuseApiController extends Controller
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
         ]);
 
-        // Ariza kunlarida darsda bo'lib baho olgan — ma'lumotnoma bilan zid, qabul qilinmaydi
-        $gradeConflicts = AbsenceExcuse::gradeConflicts($student->hemis_id, $request->start_date, $request->end_date);
-        if ($gradeConflicts->isNotEmpty()) {
-            return response()->json([
-                'message' => AbsenceExcuse::gradeConflictMessage($gradeConflicts),
-                'grade_conflicts' => AbsenceExcuse::gradeConflictRows($gradeConflicts),
-            ], 422);
-        }
-
         $file = $request->file('file');
         $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
 
@@ -234,9 +225,10 @@ class AbsenceExcuseApiController extends Controller
 
         $assessments = $this->findMissedAssessments($student->group_id, $startDate, $endDate);
 
-        // Web versiya kabi: qoldirilgan har bir dars kuni (fan bo'yicha) — alohida JN retake
+        // Web versiya kabi: NB olgan har bir dars kuni (fan bo'yicha) — alohida JN retake
+        $assessments = SababliRetakePlan::withoutAttended($assessments, $student->hemis_id, $startDate, $endDate);
         $existingKeys = $assessments->map(fn ($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
-        foreach (SababliRetakePlan::lessonDays($student->group_id, $startDate, $endDate) as $day) {
+        foreach (SababliRetakePlan::nbDays($student->hemis_id, $startDate, $endDate) as $day) {
             $key = $day['subject_name'] . '|jn|' . $day['original_date'];
             if (!in_array($key, $existingKeys)) {
                 $assessments->push($day);
@@ -327,10 +319,6 @@ class AbsenceExcuseApiController extends Controller
             'data' => array_values(SababliRetakePlan::assign($allAssessments->all(), $retakeStart)),
             'excuse_days' => $excuseDays,
             'retake_start' => $retakeStart->format('Y-m-d'),
-            // Shu kunlarda baho olingan bo'lsa — ariza qabul qilinmaydi
-            'grade_conflicts' => AbsenceExcuse::gradeConflictRows(
-                AbsenceExcuse::gradeConflicts($student->hemis_id, $startDate, $endDate)
-            ),
         ]);
     }
 

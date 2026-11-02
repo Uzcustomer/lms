@@ -73,31 +73,69 @@ it('places a lone OSKI on the first free day and the test after a gap', function
     ], '2026-11-09'))->toBe(['2026-11-11', '2026-11-09']);
 });
 
-it('collects graded lesson days from the timetable, one per subject and day', function () {
+function planGradesTable(): void
+{
     config()->set('database.default', 'sqlite');
     config()->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
     DB::purge('sqlite');
-    Schema::create('schedules', function ($t) {
+    Schema::create('student_grades', function ($t) {
         $t->id();
-        $t->unsignedBigInteger('group_id');
+        $t->string('student_hemis_id');
         $t->string('subject_id');
         $t->string('subject_name');
         $t->dateTime('lesson_date');
+        $t->string('lesson_pair_name')->nullable();
         $t->integer('training_type_code');
+        $t->double('grade')->nullable();
+        $t->double('retake_grade')->nullable();
+        $t->string('reason')->nullable();
         $t->softDeletes();
     });
-    $row = fn ($date, $type, $subject = 'Anatomiya') => ['group_id' => 7, 'subject_id' => '1', 'subject_name' => $subject, 'lesson_date' => $date, 'training_type_code' => $type];
-    DB::table('schedules')->insert([
-        $row('2026-10-19 08:30:00', 13),
-        $row('2026-10-19 10:10:00', 13), // o'sha kunning ikkinchi juftligi
-        $row('2026-10-20 08:30:00', 11), // ma'ruza — baho yo'q
-        $row('2026-10-21 08:30:00', 101), // OSKI — alohida nazorat
-        $row('2026-10-21 10:10:00', 13, 'Fiziologiya'),
-        $row('2026-10-30 08:30:00', 13), // davrdan tashqarida
+}
+
+function planGrade(string $date, array $extra = []): array
+{
+    return array_merge([
+        'student_hemis_id' => '5531', 'subject_id' => '1', 'subject_name' => 'Anatomiya', 'lesson_date' => $date,
+        'training_type_code' => 13, 'grade' => null, 'retake_grade' => null, 'reason' => 'absent', 'deleted_at' => null,
+    ], $extra);
+}
+
+it('takes retake days only from the NB lessons in the journal', function () {
+    planGradesTable();
+    DB::table('student_grades')->insert([
+        planGrade('2026-10-19 08:30:00'),
+        planGrade('2026-10-19 10:10:00'),                                    // o'sha kunning ikkinchi juftligi
+        planGrade('2026-10-20 08:30:00', ['reason' => null, 'grade' => 4]), // darsda bo'lgan — baho bor
+        planGrade('2026-10-21 08:30:00', ['retake_grade' => 4]),            // otrabotkasi qo'yilgan
+        planGrade('2026-10-21 10:10:00', ['training_type_code' => 11]),     // ma'ruza
+        planGrade('2026-10-22 08:30:00', ['subject_id' => '2', 'subject_name' => 'Fiziologiya']),
+        planGrade('2026-10-23 08:30:00', ['deleted_at' => now()]),
+        planGrade('2026-10-30 08:30:00'),                                    // davrdan tashqarida
+        planGrade('2026-10-22 08:30:00', ['student_hemis_id' => '9999']),
     ]);
 
-    $days = SababliRetakePlan::lessonDays(7, Carbon::parse('2026-10-19'), Carbon::parse('2026-10-24'));
+    $days = SababliRetakePlan::nbDays('5531', Carbon::parse('2026-10-19'), Carbon::parse('2026-10-24'));
 
     expect($days->map(fn ($d) => $d['subject_name'] . ' ' . $d['original_date'])->all())
-        ->toBe(['Anatomiya 2026-10-19', 'Fiziologiya 2026-10-21']);
+        ->toBe(['Anatomiya 2026-10-19', 'Fiziologiya 2026-10-22']);
 });
+
+it('drops JN items on days the student attended and was graded', function () {
+    planGradesTable();
+    DB::table('student_grades')->insert([
+        planGrade('2026-10-20 08:30:00', ['training_type_code' => 100, 'reason' => null, 'grade' => 4]),
+    ]);
+    $items = collect([
+        planItem('Anatomiya', 'jn', '2026-10-20'),                       // baho olgan — chiqariladi
+        planItem('Anatomiya', 'jn', '2026-10-21'),
+        planItem('Anatomiya', 'oski', '2026-10-20'),                     // JN emas — qoladi
+        planItem('Fiziologiya', 'jn', '2026-10-20', ['subject_id' => '2']),
+    ]);
+
+    $kept = SababliRetakePlan::withoutAttended($items, '5531', Carbon::parse('2026-10-19'), Carbon::parse('2026-10-24'));
+
+    expect($kept->map(fn ($i) => $i['subject_name'] . ' ' . $i['assessment_type'] . ' ' . $i['original_date'])->all())
+        ->toBe(['Anatomiya jn 2026-10-21', 'Anatomiya oski 2026-10-20', 'Fiziologiya jn 2026-10-20']);
+});
+

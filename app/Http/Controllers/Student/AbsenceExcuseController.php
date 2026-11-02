@@ -62,9 +62,11 @@ class AbsenceExcuseController extends Controller
         // 1. Sababli kunlar oralig'idagi nazoratlar
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate, $student->id);
 
-        // 1.0. Qoldirilgan har bir dars kuni (fan bo'yicha) — alohida JN retake
+        // 1.0. NB olgan har bir dars kuni (fan bo'yicha) — alohida JN retake;
+        //      darsda bo'lib baho olgan kunlarga retake ajratilmaydi
+        $missedAssessments = SababliRetakePlan::withoutAttended($missedAssessments, $student->hemis_id, $startDate, $endDate);
         $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
-        foreach (SababliRetakePlan::lessonDays($groupId, $startDate, $endDate) as $day) {
+        foreach (SababliRetakePlan::nbDays($student->hemis_id, $startDate, $endDate) as $day) {
             $key = $day['subject_name'] . '|jn|' . $day['original_date'];
             if (!in_array($key, $existingKeys)) {
                 $missedAssessments->push($day);
@@ -138,10 +140,6 @@ class AbsenceExcuseController extends Controller
 
         return response()->json([
             'assessments' => $missedAssessments->values()->toArray(),
-            // Shu kunlarda baho olingan bo'lsa — ariza yuborib bo'lmaydi
-            'grade_conflicts' => AbsenceExcuse::gradeConflictRows(
-                AbsenceExcuse::gradeConflicts($student->hemis_id, $startDate, $endDate)
-            ),
         ]);
     }
 
@@ -229,12 +227,6 @@ class AbsenceExcuseController extends Controller
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
             'retake_start.after_or_equal' => 'Qayta topshirish bugungi kundan oldin boshlanmasligi kerak',
         ]);
-
-        // Ariza kunlarida darsda bo'lib baho olgan — ma'lumotnoma bilan zid, qabul qilinmaydi
-        $gradeConflicts = AbsenceExcuse::gradeConflicts($student->hemis_id, $request->start_date, $request->end_date);
-        if ($gradeConflicts->isNotEmpty()) {
-            return back()->withErrors(['start_date' => AbsenceExcuse::gradeConflictMessage($gradeConflicts)])->withInput();
-        }
 
         // Qayta topshirish kunlari: kuniga bitta retake, OSKI oxirgi retake kuni,
         // test bir kun oraliq bilan — sanalar mijozdan emas, shu yerda hisoblanadi.

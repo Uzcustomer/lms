@@ -1358,6 +1358,7 @@
         .cf-line { padding: 3px 0; border-top: 1px dashed #e2e8f0; font-size: 12px; line-height: 1.3; }
         .cf-line.cf-red b { color: #b91c1c; } .cf-line.cf-yellow b { color: #a16207; } .cf-line.cf-past { color: #94a3b8; }
         .tt-agenda-link { color: #1d4ed8; text-decoration: underline dotted; cursor: pointer; }
+        .pn-card.pn-flash, td.tt-slot-flash { outline: 3px solid #f59e0b !important; outline-offset: -2px; transition: outline-color .3s; }
         #ttAgendaModal { position: fixed; inset: 0; z-index: 10030; background: rgba(15,23,42,.35); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; }
         #ttAgendaModal .ag-box { background: #fff; border-radius: 10px; width: min(980px, 100%); padding: 12px 14px; box-shadow: 0 20px 60px #0005; font-size: 12px; }
         #ttAgendaModal .ag-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -7011,8 +7012,11 @@
                 return d;
             }
             async function ttAgendaOpen(info) {
-                const keep = ttAgenda && ttAgenda.teacher_id === +info.teacher_id ? { range: ttAgenda.range } : {};
-                ttAgenda = Object.assign({ range: 'day', move: null }, keep, info, { teacher_id: +info.teacher_id, data: null, pick: null, msg: null, busy: false });
+                const keep = ttAgenda && !info.range && ttAgenda.teacher_id === (+info.teacher_id || 0) && (ttAgenda.room_code || null) === (info.room_code || null)
+                    ? { range: ttAgenda.range } : {};
+                // Xona bandligi: teacher_id o'rniga room_code — xonaning kun/hafta darslari va bo'sh paralari (ko'chirishsiz).
+                ttAgenda = Object.assign({ range: 'day', move: null, room_code: null }, keep, info,
+                    { teacher_id: +info.teacher_id || 0, data: null, pick: null, msg: null, busy: false });
                 await ttAgendaLoad();
             }
             async function ttAgendaLoad() {
@@ -7021,9 +7025,9 @@
                 agendaRender(true);
                 // Qatlam — oyna ochilgan ko'rinishniki: sikl jadvalida — sikl qatlami, haftalikda — haftalik qatlam (ular alohida).
                 const layer = viewMode === 'cycle' ? cycleLayer : weeklyLayer;
-                const q = new URLSearchParams({ teacher_id: st.teacher_id, date: st.date, range: st.range,
-                    layer: layer === 'external' ? 'external' : 'internal' });
-                if (st.move) q.set('move', st.move);
+                const q = new URLSearchParams(Object.assign(st.room_code ? { room_code: st.room_code } : { teacher_id: st.teacher_id },
+                    { date: st.date, range: st.range, layer: layer === 'external' ? 'external' : 'internal' }));
+                if (st.move && !st.room_code) q.set('move', st.move);
                 if (st.restFor) q.set('rest_for', st.restFor);   // "shu va keyingi haftalar" — tanlangan para tekshiruvi
                 const seq = ++agendaSeq;
                 try {
@@ -7066,7 +7070,7 @@
             }
             function agendaHtml(st, loading) {
                 const j = st.data, mv = j && j.move;
-                const title = j ? j.title : (st.teacher_name || "O'qituvchi") + ' — ' + cfDate(st.date);
+                const title = j ? j.title : (st.room_code ? (st.room_name || 'Xona') : (st.teacher_name || "O'qituvchi")) + ' — ' + cfDate(st.date);
                 return '<div class="ag-box"><div class="ag-head"><b>' + esc(title) + '</b>' +
                     '<span class="ag-tabs"><button type="button" data-ag="day"' + (st.range === 'week' ? '' : ' class="on"') + '>Kun</button>' +
                     '<button type="button" data-ag="week"' + (st.range === 'week' ? ' class="on"' : '') + '>Hafta</button></span>' +
@@ -7146,9 +7150,19 @@
                 if (mv.kind === 'weekly') {
                     const weeks = pick.choice === 'rest' && (mv.rest_weeks || []).length ? mv.rest_weeks : [mv.week];
                     const room = opt.room ? { auditorium_code: opt.room.code } : {};
+                    // Dars yaxlit: ko'p bo'lakli amaliy dars (birlik) — barcha bo'laklari shu vaqtdan ketma-ket (har hafta).
+                    const c0 = (typeof cards !== 'undefined' ? cards : []).find(x => x.id === +mv.card_id);
+                    const pieces = w => {
+                        if (!c0 || c0.training_type === 'lecture') return [[c0 ? c0.id : mv.card_id, 0]];
+                        const list = unitOf(c0, w);
+                        const at = list.indexOf(c0);
+                        let off = -unitLen(list.slice(0, Math.max(0, at)));
+                        return list.map(x => { const r = [x.id, off]; off += cardLen(x); return r; });
+                    };
                     return { path: '/week-suggestions/' + (mv.via === 'apply' ? 'apply' : 'propose'), body: withReason({ week: mv.week, card_id: mv.card_id,
                         type: 'agenda', title: "O'qituvchi jadvalidan ko'chirish",
-                        actions: weeks.map(w => Object.assign({ op: 'move', card_id: mv.card_id, week: w, day: opt.day, pair: opt.pair }, room)) }) };
+                        actions: weeks.flatMap(w => pieces(w).map(([id, off]) =>
+                            Object.assign({ op: 'move', card_id: id, week: w, day: opt.day, pair: opt.pair + off }, room))) }) };
                 }
                 const u = mv.unit || {}, scope = pick.choice === 'block' ? 'rest' : 'day';
                 const body = { specialty_name: u.specialty_name, course: u.course, subject_name: u.subject_name, group_name: u.group_name,
@@ -9289,6 +9303,188 @@
             // Joylashmagan kartalar — pastda gorizontal panel (aSc uslubida): tekis
             // ravishda ketma-ket chiqadi (fan bo'yicha saralangan, guruhlash chizig'i yo'q).
             // Hafta ko'rinishida shu haftada o'tilmaydigan kartalar bu yerga tushmaydi.
+            // ===== "Joylanmagan kartalar" paneli: qisman joylangan birlik belgisi, yaxlit joylash natijasi, karta oynasi =====
+            const unitFixErr = {};   // birlik kaliti → oxirgi "yaxlit joylanmadi" sababi (kartada qizil izoh)
+            const unitEditable = () => weeklyCanEdit() && !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek;
+            // "Qisman: 3 soatdan 2 soati joylangan (Seshanba 10:00); qolgani 1 soat" + shu birlik tugmalari (+ qizil izoh).
+            function partialBadgeHtml(st, err) {
+                const placed = st.placed.slice().sort((a, b) => placeInWeek(a, curWeek).pair - placeInWeek(b, curWeek).pair);
+                const at = placed.length ? placeInWeek(placed[0], curWeek) : null;
+                const placedLen = unitLen(placed);
+                const when = at ? ' (' + ((boardDayNames()[at.day - 1]) || (at.day + '-kun')) + ' ' + slotStart(at.pair) + ')' : '';
+                return '<div class="pn-partial-badge" style="margin-top:3px;font-size:10px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:2px 4px">' +
+                    'Qisman: ' + st.len + ' soatdan ' + placedLen + ' soati joylangan' + esc(when) + '; qolgani ' + (st.len - placedLen) + ' soat' +
+                    (unitEditable() ? '<div style="margin-top:2px"><button type="button" data-unit-fix="complete" data-unit-card="' + st.card.id + '" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">yaxlit joylash</button> ' +
+                        '<button type="button" data-unit-fix="clear" data-unit-card="' + st.card.id + '" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 5px">yaxlit bo\'shatish</button></div>' : '') +
+                    (err ? '<div class="pn-partial-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>' : '') + '</div>';
+            }
+            // unit-fix: faqat berilgan birliklar (card_ids); natija — sahifa ichidagi oynada, sig'maganlari kartada qizil izoh bilan.
+            async function runUnitFix(btn, action, units) {
+                if (!units.length) return;
+                if (action === 'clear' && !(await ttConfirm(units.length === 1
+                    ? '«' + units[0].card.subject_name + '» (' + cardGroups(units[0].card).join(', ') + ') shu haftada butunlay joydan olinsinmi?'
+                    : 'Qisman joylangan ' + units.length + ' ta dars shu haftada butunlay joydan olinsinmi?'))) return;
+                if (btn) btn.disabled = true;
+                let r;
+                try {
+                    r = await api(BASE + '/boards/' + board.id + '/unit-fix', 'POST', { week: curWeek, action, card_ids: units.flatMap(st => st.list.map(x => x.id)) });
+                } catch (e) { if (btn) btn.disabled = false; showUnitFixResult({ error: e.message }, action, units); return; }
+                units.forEach(st => { delete unitFixErr[unitKey(st.card)]; });
+                (r && r.failed || []).forEach(f => {
+                    const st = units.find(u => u.list.some(x => (f.card_ids || []).includes(x.id)));
+                    if (st) unitFixErr[unitKey(st.card)] = f.error;
+                });
+                await loadBoard(board.id);
+                showUnitFixResult(r || {}, action, units);
+            }
+            // Sahifa ichidagi natija oynasi (alert emas): bajarilganlar soni va har sig'magan karta — sababi bilan.
+            function showUnitFixResult(r, action, units) {
+                let m = document.getElementById('ttUnitFixModal');
+                if (m) m.remove();
+                m = document.createElement('div');
+                m.id = 'ttUnitFixModal';
+                m.setAttribute('role', 'dialog');
+                m.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
+                const failed = (r && r.failed) || [];
+                const head = r.error ? 'Xatolik: ' + r.error
+                    : (action === 'clear' ? 'Yaxlit bo\'shatildi: ' : 'Yaxlit joylandi: ') + (r.done || 0) + ' ta' + (failed.length ? ' · joylanmadi: ' + failed.length + ' ta' : '');
+                m.innerHTML = '<div style="background:#fff;border-radius:10px;max-width:560px;width:100%;max-height:80vh;overflow:auto;padding:12px 16px;box-shadow:0 20px 60px #0004;font-size:12px">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>' + esc(head) + '</b>' +
+                    '<button type="button" data-close style="font-size:18px;line-height:1">&times;</button></div>' +
+                    (failed.length ? '<div style="color:#991b1b;margin-bottom:4px">Yaxlit joylanmadi:</div><ul style="margin:0;padding-left:16px">' + failed.map(f =>
+                        '<li><b>' + esc(f.group + ' · ' + f.subject) + '</b> (' + esc(f.day || '') + '): ' + esc(f.error) + '</li>').join('') + '</ul>' : '') + '</div>';
+                m.addEventListener('click', ev => { if (ev.target === m || ev.target.closest('[data-close]')) m.remove(); });
+                document.body.appendChild(m);
+            }
+            // Tasdiq (sahifa ichida emas — oddiy confirm; testlarda almashtiriladi).
+            const ttConfirm = async text => (typeof confirm === 'function' ? confirm(text) : true);
+            // W-haftaning d-kuni sanasi (YYYY-MM-DD); d berilmasa — dushanba.
+            function weekDayIso(W, d) {
+                const m = weekMonday(W);
+                if (!m) return null;
+                const x = new Date(m); x.setDate(x.getDate() + Math.max(0, (d || 1) - 1));
+                return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+            }
+            // Qatorning para nomi: "II para" (qo'ng'iroq jadvali abbr), ikkinchi yarmi — "(2-yarmi)".
+            function slotParaLabel(p) {
+                const sched = boardSchedule().filter(it => it.type === 'pair');
+                const it = sched[p - 1];
+                const ab = it && String(it.abbr || '').trim();
+                if (!ab || ab === '—') return (it && it.name) || (p + '-katak');
+                const second = p > 1 && sched[p - 2] && String(sched[p - 2].abbr || '').trim() === ab;
+                return ab + ' para' + (second ? ' (2-yarmi)' : '');
+            }
+            // Xona sig'imi matni: "Tibbiyot klasteri, 1-qavat, 12-o'quv xona · 10 o'rin · 15 talaba (+5)".
+            function roomCapLine(c) {
+                const e = effectiveCard(c);
+                if (!e.auditorium_code && !e.auditorium_name) return '';
+                const vol = +e.auditorium_volume || +((audCache || []).find(a => a.code === e.auditorium_code) || {}).volume || 0;
+                const st = +c.students || 0;
+                return (e.auditorium_name || e.auditorium_code) + (vol ? " · " + vol + " o'rin" : '') + (st ? ' · ' + st + ' talaba' + (vol && st > vol ? ' (+' + (st - vol) + ')' : '') : '');
+            }
+            // Panel kartasi oynasi: o'qituvchi (to'liq F.I.Sh. → kun/hafta jadvali, shu karta ko'chiriladigan dars), xona (sig'imi →
+            // xona bandligi), tashqi jadval joyi (→ ichki jadvalda shu joy; "Shu joyga joylash"), "Joylash uchun tanlash".
+            // Tahrir huquqi yo'q — faqat ko'rish (havolalar ishlaydi). O'qituvchi roli — vaqt so'rovi tugmasi.
+            function openPanelCardPop(c, el) {
+                closePanelCardPop();
+                const W = curWeek || 0;
+                const list = c.training_type === 'lecture' ? [c] : unitOf(c);
+                const len = unitLen(list);
+                const tName = c.teacher_id ? (teacherFullNames[c.teacher_id] || c.teacher_name || '') : '';
+                const agendaDate = weekDayIso(W || 1, c.ext_day || 1) || new Date().toISOString().slice(0, 10);
+                const tInfo = c.teacher_id ? { teacher_id: +c.teacher_id, teacher_name: c.teacher_name || tName, date: agendaDate, range: 'week',
+                    move: W && weeklyLayer === 'internal' ? 'w|' + c.id + '|' + W : null } : null;
+                const e = effectiveCard(c);
+                const room = roomCapLine(c);
+                const rInfo = e.auditorium_code ? { room_code: e.auditorium_code, room_name: e.auditorium_name || e.auditorium_code, date: agendaDate, range: 'week' } : null;
+                const ext = c.ext_day && c.ext_pair ? { day: +c.ext_day, pair: +c.ext_pair } : null;
+                const extText = ext ? (boardDayNames()[ext.day - 1] || (ext.day + '-kun')) + ', ' + slotParaLabel(ext.pair) + ' (' + slotRangeText(ext.pair, len) + ')' : '';
+                const edit = weeklyCanEdit() && !TIMETABLE_READ_ONLY && TIMETABLE_ROLE !== 'oqituvchi';
+                const pop = document.createElement('div');
+                pop.id = 'pnCardPop';
+                pop.setAttribute('role', 'dialog');
+                pop.style.cssText = 'position:fixed;z-index:75;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px #0003;padding:8px 10px;font-size:12px;width:min(340px,92vw)';
+                const row = (label, body) => '<div style="margin-top:4px"><span style="color:#64748b">' + label + ':</span> ' + body + '</div>';
+                const link = (attr, text) => '<a href="#" class="tt-agenda-link" ' + attr + '>' + esc(text) + '</a>';
+                pop.innerHTML = '<div style="display:flex;justify-content:space-between;gap:6px"><b>' + esc(c.subject_name) + '</b>' +
+                    '<button type="button" data-pop-close aria-label="Yopish" style="font-size:16px;line-height:1">&times;</button></div>' +
+                    '<div style="color:#64748b">' + esc((c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + cardGroups(c).join(', ')) +
+                        (len ? ' · ' + len + ' soat' : '')) + '</div>' +
+                    row("O'qituvchi", tInfo ? link('data-pop-teacher', tName || c.teacher_name || "O'qituvchi") : '<i>biriktirilmagan</i>') +
+                    row('Xona', rInfo ? link('data-pop-room', room) : '<i>biriktirilmagan</i>') +
+                    row('Tashqi jadval', ext ? link('data-pop-ext', extText) : '<i>tashqi jadvalda yo\'q</i>') +
+                    '<div data-pop-msg style="margin-top:4px"></div>' +
+                    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' +
+                    (edit && ext && W && weeklyLayer === 'internal' ? '<button type="button" data-pop-place style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:5px;padding:1px 8px">Shu joyga joylash</button>' : '') +
+                    (edit ? '<button type="button" data-pop-select style="border:1px solid #2563eb;color:#1d4ed8;background:#eff6ff;border-radius:5px;padding:1px 8px">Joylash uchun tanlash</button>' : '') +
+                    (TIMETABLE_ROLE === 'oqituvchi' ? '<button type="button" data-pop-propose style="border:1px solid #7c3aed;color:#6d28d9;background:#f5f3ff;border-radius:5px;padding:1px 8px">Vaqtini o\'zgartirishni so\'rash</button>' : '') +
+                    '</div>';
+                document.body.appendChild(pop);
+                const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { left: 8, right: 8, top: 8 };
+                const left = r.right + 8 + 340 < window.innerWidth ? r.right + 8 : Math.max(8, r.left - 348);
+                pop.style.left = left + 'px';
+                pop.style.top = Math.max(8, Math.min(window.innerHeight - (pop.offsetHeight || 220) - 8, r.top)) + 'px';
+                const msg = (text, bad) => { const m = pop.querySelector('[data-pop-msg]'); if (m) { m.style.color = bad ? '#b91c1c' : '#166534'; m.textContent = text; } };
+                pop.addEventListener('click', async ev => {
+                    const t = ev.target.closest ? ev.target.closest('[data-pop-close],[data-pop-teacher],[data-pop-room],[data-pop-ext],[data-pop-place],[data-pop-select],[data-pop-propose]') : null;
+                    if (!t) return;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    if (t.hasAttribute('data-pop-close')) { closePanelCardPop(); return; }
+                    if (t.hasAttribute('data-pop-teacher')) { closePanelCardPop(); ttAgendaOpen(tInfo); return; }
+                    if (t.hasAttribute('data-pop-room')) { closePanelCardPop(); ttAgendaOpen(rInfo); return; }
+                    if (t.hasAttribute('data-pop-ext')) { gotoGridSlot(c, ext.day, ext.pair); return; }
+                    if (t.hasAttribute('data-pop-propose')) { closePanelCardPop(); openTeacherTimeProposal(c); return; }
+                    if (t.hasAttribute('data-pop-select')) {
+                        closePanelCardPop();
+                        selected = (selected && selected.id === c.id) ? null : c;
+                        renderPanel(); renderGrid();
+                        return;
+                    }
+                    // Shu joyga joylash: oldindan tekshiruv (birlik bilan), keyin server (unit-place) — band bo'lsa sababi oynada.
+                    const plan = dragPlan([list[0].id], ext.day, ext.pair, false);
+                    if (plan && plan.errs.length) {
+                        const why = plan.errs.filter(x => x !== 'kun oxiri');
+                        msg(why.length ? 'Band: ' + why.join('; ') : "Sig'maydi: kun oxirigacha joy yetmaydi", true);
+                        return;
+                    }
+                    t.disabled = true;
+                    try {
+                        await placeUnitAt(list[0], ext.day, ext.pair);
+                        closePanelCardPop();
+                        selected = null;
+                        renderAll();
+                        gotoGridSlot(c, ext.day, ext.pair);
+                    } catch (err) { msg(err.message, true); t.disabled = false; }
+                });
+                setTimeout(() => document.addEventListener('mousedown', panelPopOutside, true), 0);
+                document.addEventListener('keydown', panelPopKey, true);
+            }
+            function panelPopOutside(ev) {
+                const pop = document.getElementById('pnCardPop');
+                if (pop && !pop.contains(ev.target)) closePanelCardPop();
+            }
+            function panelPopKey(ev) { if (ev.key === 'Escape') closePanelCardPop(); }
+            function closePanelCardPop() {
+                const pop = document.getElementById('pnCardPop');
+                if (pop) pop.remove();
+                document.removeEventListener('mousedown', panelPopOutside, true);
+                document.removeEventListener('keydown', panelPopKey, true);
+            }
+            // Ichki jadvalda kun/para katagiga o'tish: kartaning guruh ustunidagi katak (bo'lmasa shu vaqt qatori) — scroll va ajratish.
+            function gotoGridSlot(c, d, p) {
+                const grid = document.getElementById('grid');
+                if (!grid) return null;
+                const gks = cardGKeys(c);
+                const all = [...grid.querySelectorAll('td[data-day="' + d + '"][data-pair="' + p + '"]')];
+                const mine = all.filter(td => gks.includes(td.dataset.g));
+                const targets = mine.length ? mine : all;
+                grid.querySelectorAll('.tt-slot-flash').forEach(x => x.classList.remove('tt-slot-flash'));
+                targets.forEach(td => td.classList.add('tt-slot-flash'));
+                if (targets[0] && targets[0].scrollIntoView) targets[0].scrollIntoView({ block: 'center', inline: 'center' });
+                setTimeout(() => targets.forEach(td => td.classList.remove('tt-slot-flash')), 3000);
+                return targets;
+            }
             function renderPanel() {
                 // Hafta almashdi — shu haftaning to'qnashuvlar ro'yxati (qisqa belgi uchun).
                 if (curWeek && weeklyConflictItems.__week !== curWeek) loadWeekConflictItems();
@@ -9308,13 +9504,21 @@
                 // bilan): sudrash butun darsni joylaydi.
                 const uIdx = buildUnitIndex();
                 const partialUnits = new Map();
+                // Qisman joylangan birlik — bitta karta (birinchi joylanmagan bo'lagi): o'z belgisi ("Qisman: 3 soatdan 2 soati …") va
+                // shu birlik uchun "yaxlit joylash / yaxlit bo'shatish" tugmalari.
                 const un = weekActiveCards().filter(c => {
                     if (effPlace(c)) return !!cardConflict(c);
                     if (c.training_type === 'lecture' || weeklyLayer === 'external') return true;
                     const st = unitState(c, curWeek, uIdx);
-                    if (st.partial) { partialUnits.set(unitKey(c), st); return false; }
+                    if (st.partial) {
+                        if (st.list.find(x => !placeInWeek(x, curWeek)) !== c) return false;
+                        partialUnits.set(unitKey(c), Object.assign({ card: c }, st));
+                        return true;
+                    }
                     return st.list[0] === c;
                 }).sort(bySubject);
+                // Eskirgan "yaxlit joylanmadi" izohlari (birlik endi qisman emas) tozalanadi.
+                Object.keys(unitFixErr).forEach(k => { if (!partialUnits.has(k)) delete unitFixErr[k]; });
                 unitPanelLen = {};
                 un.forEach(c => { if (c.training_type !== 'lecture' && !effPlace(c)) { const l = unitOf(c, curWeek, uIdx); if (l.length > 1) unitPanelLen[c.id] = l.map(cardLen); } });
                 // Shu haftada o'tilmaydigan kartalar — odatda yashirin. Ular joylashgan,
@@ -9351,16 +9555,18 @@
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
-                    (unitPanelLen[c.id] ? '<div class="text-[9px] font-semibold text-indigo-700" title="Dars yaxlit joylanadi: barcha bo\'laklari ketma-ket">jami ' +
+                    (unitPanelLen[c.id] && !partialUnits.has(unitKey(c)) ? '<div class="text-[9px] font-semibold text-indigo-700" title="Dars yaxlit joylanadi: barcha bo\'laklari ketma-ket">jami ' +
                         unitPanelLen[c.id].reduce((a, b) => a + b, 0) + ' soat (' + unitPanelLen[c.id].join(' + ') + ')</div>' : '') +
-                    '</div>' + (conflict ? '<div class="pn-conflict" role="button" tabindex="0" data-wcf="' + c.id + '" title="Bosing — tafsilot">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') + '</div>';
+                    '</div>' + (!skip && partialUnits.has(unitKey(c)) ? partialBadgeHtml(partialUnits.get(unitKey(c)), unitFixErr[unitKey(c)]) : '') + (conflict ? '<div class="pn-conflict" role="button" tabindex="0" data-wcf="' + c.id + '" title="Bosing — tafsilot">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') + '</div>';
 
-                // Qisman joylangan birliklar (ichki jadval, tanlangan hafta): soni va yaxlit joylash / yaxlit bo'shatish.
+                // Qisman joylangan birliklar (ichki jadval, tanlangan hafta): ro'yxat (nomi bosilsa — shu kartaga) va hammasi uchun tugmalar.
                 const partialHead = partialUnits.size && curWeek && weeklyLayer === 'internal'
                     ? '<div class="pn-partial" style="border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
-                        'Qisman joylangan: <b>' + partialUnits.size + ' ta</b>' +
-                        (weeklyCanEdit() && !TIMETABLE_READ_ONLY ? ' <button type="button" data-unit-fix="complete" style="margin-left:4px;border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 6px">yaxlit joylash</button>' +
-                            ' <button type="button" data-unit-fix="clear" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 6px">yaxlit bo\'shatish</button>' : '') + '</div>'
+                        'Qisman joylangan <b>' + partialUnits.size + ' ta</b>: ' + [...partialUnits.values()].map(st =>
+                            '<a href="#" class="pn-partial-go" data-pn-go="' + st.card.id + '" style="text-decoration:underline dotted">' +
+                            esc(cardGroups(st.card).join(', ') + ' · ' + st.card.subject_name) + '</a>').join('; ') +
+                        (unitEditable() ? '<div style="margin-top:3px"><button type="button" data-unit-fix="complete" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 6px">hammasini yaxlit joylash</button>' +
+                            ' <button type="button" data-unit-fix="clear" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 6px">hammasini yaxlit bo\'shatish</button></div>' : '') + '</div>'
                     : '';
                 $('cardPanel').innerHTML = partialHead +
                     unShown.map(c => panelCard(c, false)).join('') +
@@ -9370,26 +9576,27 @@
                         : '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>');
 
                 document.querySelectorAll('.pn-card').forEach(el => {
-                    el.onclick = () => {
+                    // Bosish — kartaning ma'lumot va havolalar oynasi (o'qituvchi, xona, tashqi jadval; "Joylash uchun tanlash").
+                    el.onclick = ev => {
+                        if (ev.target.closest && ev.target.closest('[data-unit-fix],[data-wcf]')) return;
                         const c = cards.find(x => x.id === +el.dataset.id);
-                        if (TIMETABLE_ROLE === 'oqituvchi') { openTeacherTimeProposal(c); return; }
-                        selected = (selected && selected.id === c.id) ? null : c;
-                        renderPanel(); renderGrid();
+                        if (c) openPanelCardPop(c, el);
                     };
                     el.addEventListener('dragstart', ev => startDrag(+el.dataset.id, ev));
                 });
-                document.querySelectorAll('#cardPanel [data-unit-fix]').forEach(btn => btn.onclick = async () => {
-                    const action = btn.dataset.unitFix;
-                    const ids = [...partialUnits.values()].flatMap(st => st.list.map(x => x.id));
-                    if (action === 'clear' && !confirm("Qisman joylangan " + partialUnits.size + " ta dars shu haftada butunlay joydan olinsinmi?")) return;
-                    btn.disabled = true;
-                    try {
-                        const r = await api(BASE + '/boards/' + board.id + '/unit-fix', 'POST', { week: curWeek, action, card_ids: ids });
-                        await loadBoard(board.id);
-                        if (r && r.failed && r.failed.length) {
-                            alert('Yaxlit joylanmadi (' + r.failed.length + ' ta):\n' + r.failed.slice(0, 10).map(f => f.group + ' · ' + f.subject + ' (' + f.day + '): ' + f.error).join('\n'));
-                        }
-                    } catch (e) { alert('Xatolik: ' + e.message); btn.disabled = false; }
+                document.querySelectorAll('#cardPanel [data-pn-go]').forEach(a => a.onclick = ev => {
+                    ev.preventDefault();
+                    const el = document.querySelector('#cardPanel .pn-card[data-id="' + a.dataset.pnGo + '"]');
+                    if (!el) return;
+                    if (el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+                    el.classList.remove('pn-flash'); void el.offsetWidth; el.classList.add('pn-flash');
+                    setTimeout(() => el.classList.remove('pn-flash'), 2400);
+                });
+                // Yaxlit joylash / bo'shatish: kartadagi tugma — faqat shu birlik (card_ids), tepadagi — hammasi.
+                document.querySelectorAll('#cardPanel [data-unit-fix]').forEach(btn => btn.onclick = ev => {
+                    ev.stopPropagation();
+                    const one = btn.dataset.unitCard ? partialUnits.get(unitKey(cards.find(x => x.id === +btn.dataset.unitCard) || {})) : null;
+                    runUnitFix(btn, btn.dataset.unitFix, one ? [one] : [...partialUnits.values()]);
                 });
 
                 // Joylashgan kartani panelga sudrab tashlash — joyidan olib tashlanadi.
@@ -10336,7 +10543,7 @@
                                         if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
                                         else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
                                     }
-                                    h += '<td class="' + cls + '"' + dp + clickable + '></td>';
+                                    h += '<td class="' + cls + '"' + dp + ' data-g="' + esc(grp) + '"' + clickable + '></td>';
                                     gi++;
                                 }
                             }

@@ -347,7 +347,8 @@ trait TimetableWeeklyUnits
             }
             $result = $this->unitCompletePlan($card, $cards, $week);
             if ($result[0]) {
-                $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'], 'error' => implode(' · ', $result[0])];
+                $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'], 'error' => implode(' · ', $result[0]),
+                    'card_ids' => $u['card_ids'], 'unit' => $u['unit']];
                 continue;
             }
             $this->unitWrite($cards, $week, $result[2], $result[1]);

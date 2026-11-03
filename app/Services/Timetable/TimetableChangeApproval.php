@@ -775,7 +775,8 @@ class TimetableChangeApproval
                     . (!empty($p['reason']) ? '; sabab: ' . $p['reason'] : '');
                 break;
             case 'admin.timetable.cards.mudir-placeholder.revert':
-                $text = $head . ': vaqtincha kafedra mudiridan asl o\'qituvchiga qaytarildi';
+                $text = $head . ': vaqtincha kafedra mudiridan ' . (($p['mode'] ?? 'original') === 'here' ? 'shu joyda asl o\'qituvchiga' : 'asl holatga')
+                    . ' qaytarildi' . (!empty($p['week']) ? ' (' . $p['week'] . '-hafta)' : ' (barcha haftalar)');
                 break;
             case 'admin.timetable.cards.unit-place':
                 $to = (!empty($p['day']) && !empty($p['pair'])) ? $slot($p['day'], $p['pair']) : 'jadvaldan olib tashlash';

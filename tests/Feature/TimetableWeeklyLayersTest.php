@@ -1489,6 +1489,13 @@ it('o\'qituvchi / fan mas\'uli / kafedra mudiri: doska avtomatik tanlanadi (yago
     expect($page($t, 'oqituvchi'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';')
         ->and($page($s['head'], 'kafedra_mudiri'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';')
         ->and($page($s['admin'], 'superadmin'))->toContain('const TIMETABLE_AUTO_BOARD_ID = null;');
+    // Registrator ofisi, kichik admin, o'quv bo'limi — ham (Takliflar, Haftani zichlash darrov ko'rinsin).
+    foreach (['registrator_ofisi', 'kichik_admin', 'oquv_bolimi'] as $r) {
+        Role::findOrCreate($r, 'web');
+        $u = fmTeacherLayers(strtoupper($r));
+        $u->syncRoles([$r]);
+        expect($page($u, $r))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';');
+    }
     // Yangiroq, lekin kartasiz doskalar — tanlanmaydi; Real doska bo'lmasa — kartali eng yangi doska.
     TimetableBoard::create(['name' => 'Bo\'sh', 'academic_year' => '2026-2027', 'semester_parity' => 'bahorgi', 'kind' => 'real', 'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15]);
     expect($page($t, 'oqituvchi'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';');
@@ -1500,7 +1507,10 @@ it('o\'qituvchi / fan mas\'uli / kafedra mudiri: doska avtomatik tanlanadi (yago
     expect($page($t, 'oqituvchi'))->toContain('const TIMETABLE_AUTO_BOARD_ID = ' . $s['board']->id . ';');
     // URLdagi doska ustun; qoidalar faqat to'liq huquqli rollarga so'raladi.
     $html = $page($t, 'oqituvchi');
-    expect($html)->toContain("const urlBoard = new URLSearchParams(location.search).get('board') || (TIMETABLE_AUTO_BOARD_ID ? String(TIMETABLE_AUTO_BOARD_ID) : null);")
+    // URLdagi doska ustun; URLsiz — oxirgi ochilgan doska (localStorage, ro'yxatda bo'lsa), bo'lmasa server tanlagani; hafta — joriy.
+    expect($html)->toContain("const explicitBoard = new URLSearchParams(location.search).get('board');")
+        ->and($html)->toContain("const autoBoard = !explicitBoard && TIMETABLE_AUTO_BOARD_ID ? (lastBoardOk ? String(lastBoard) : String(TIMETABLE_AUTO_BOARD_ID)) : null;")
+        ->and($html)->toContain('curWeek = currentWeekNo(')
         ->and($html)->toContain('if (!board || !TIMETABLE_CAN_RULES) return;')->and($html)->toContain('const TIMETABLE_CAN_RULES = !TIMETABLE_ASSIGNMENT_ONLY;');
     // Server: rules — o'qituvchiga 403 (shuning uchun frontend so'ramaydi).
     layerAs($t, 'oqituvchi')->getJson(route('admin.timetable.rules', $s['board']))->assertForbidden();

@@ -188,7 +188,10 @@ trait TimetableMudirPlaceholder
      */
     public function mudirPlaceholderRevert(Request $request, TimetableCard $card)
     {
-        $data = $request->validate(['week' => 'nullable|integer|min:1|max:60']);
+        // mode: original (sukut) — har hafta mudirga yozilishidan OLDINGI holatiga, bandlik tekshirilmaydi; here — shu joyda asl
+        // o'qituvchi va xonaga (bandlik tekshiriladi, band bo'lsa rad etiladi). week berilsa — faqat shu hafta, aks holda barcha haftalar.
+        $data = $request->validate(['week' => 'nullable|integer|min:1|max:60', 'mode' => 'nullable|in:original,here']);
+        $mode = $data['mode'] ?? 'original';
         // Birlik — kartaning o'z (asl) o'qituvchisi bo'yicha: karta asosiy maydonlari o'zgarmagan, shuning uchun turli asl o'qituvchili
         // darslar mudirda birlashib ketmaydi.
         $cards = $this->weeklyUnitCards($card);
@@ -203,6 +206,24 @@ trait TimetableMudirPlaceholder
         if ($rows->isEmpty()) {
             return response()->json(['error' => 'Bu dars vaqtincha kafedra mudirida emas.'], 422);
         }
+        $weeks = $rows->pluck('week')->map(fn ($w) => (int) $w)->unique()->sort()->values();
+        if ($mode === 'original') {
+            DB::transaction(function () use ($rows) {
+                foreach ($rows as $o) {
+                    $ph = $this->ovPlaceholder($o);
+                    if (empty($ph['had_override'])) {
+                        // Oldin shu haftada yozuv yo'q edi — o'chiriladi: karta shablondagi (asl) joyiga yoki "Joylanmagan"ga qaytadi.
+                        $o->delete();
+                        continue;
+                    }
+                    // Oldingi yozuv aynan tiklanadi: kun/para (bo'sh bo'lsa — joylanmagan), shu haftaning xonasi; to'qnashuv bo'lsa ham.
+                    $o->forceFill(['day' => $ph['orig_day'] ?? null, 'pair' => $ph['orig_pair'] ?? null, 'start_half' => 0, 'cancelled' => false,
+                        'auditorium_code' => $ph['orig_room_code'] ?? null, 'auditorium_name' => $ph['orig_room_name'] ?? null, 'mudir_placeholder' => null])->save();
+                }
+            });
+
+            return response()->json(['ok' => true, 'mode' => 'original', 'weeks' => $weeks]);
+        }
         $ignore = array_fill_keys($cards->pluck('id')->map(fn ($id) => (int) $id)->all(), true);
         $byId = $cards->keyBy('id');
         $errors = [];
@@ -210,7 +231,7 @@ trait TimetableMudirPlaceholder
         try {
             foreach ($rows as $o) {
                 $ph = $this->ovPlaceholder($o);
-                // Shu haftaning asl xonasi tiklanadi; joy — mudirga yozilgan joyda qoladi (to'qnashuv hal bo'lgan joy).
+                // Shu joyda: shu haftaning asl xonasi tiklanadi; joy — mudirga yozilgan joyda qoladi (to'qnashuv hal bo'lgan joy).
                 $o->forceFill(['auditorium_code' => $ph['orig_room_code'] ?? null, 'auditorium_name' => $ph['orig_room_name'] ?? null,
                     'mudir_placeholder' => null])->save();
             }
@@ -231,11 +252,12 @@ trait TimetableMudirPlaceholder
         }
         if ($errors) {
             DB::rollBack();
+            $errors = array_values(array_unique($errors));
 
-            return response()->json(['error' => "Asl o'qituvchiga qaytarib bo'lmaydi — band: " . implode(' · ', array_values(array_unique($errors)))], 422);
+            return response()->json(['error' => "Shu joyda asl o'qituvchiga qaytarib bo'lmaydi — band: " . implode(' · ', $errors), 'reasons' => $errors], 422);
         }
         DB::commit();
 
-        return response()->json(['ok' => true, 'weeks' => $rows->pluck('week')->map(fn ($w) => (int) $w)->sort()->values()]);
+        return response()->json(['ok' => true, 'mode' => 'here', 'weeks' => $weeks]);
     }
 }

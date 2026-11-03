@@ -320,12 +320,12 @@ it('vaqtincha kafedra mudiri: to\'qnashuvli karta tashqi joyiga mudir va mudir x
     expect($log)->not->toBeNull()->and($log->payload['reason'])->toBe('428 band');
 
     // Qaytarish: CHORIYEVA shu vaqtda 08a da (428) — band, rad etiladi, hech narsa o'zgarmaydi.
-    $err = wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $a), ['week' => 8])->assertStatus(422)->json('error');
-    expect($err)->toContain("Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta:")->toContain("O'qituvchi band")
+    $err = wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $a), ['week' => 8, 'mode' => 'here'])->assertStatus(422)->json('error');
+    expect($err)->toContain("Shu joyda asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta:")->toContain("O'qituvchi band")
         ->and($ov($a, 8)->mudir_placeholder)->not->toBeNull();
     // 08a boshqa vaqtga — bo'sh: asl xona (shu hafta — kartaniki) tiklanadi.
     TimetableCardOverride::where('card_id', $s['pb']->id)->where('week', 8)->update(['pair' => 7]);
-    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $a), ['week' => 8])->assertOk();
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $a), ['week' => 8, 'mode' => 'here'])->assertOk();
     expect([$ov($a, 8)->mudir_placeholder, $ov($a, 8)->auditorium_code])->toBe([null, null])->and(wuPlace($a))->toBe([3, 3]);
 });
 
@@ -347,7 +347,7 @@ it('Codex: vaqtincha kafedra mudiri faqat tanlangan haftada; haftalik xona qayta
     expect($weeksOf())->toBe([$s['pa']->id => [9], $s['pb']->id => [9]]);
     // Qaytarishda 8-haftaning asl haftalik xonasi (R12) tiklanadi (kartaning R428 emas).
     TimetableCardOverride::where('card_id', $s['pb']->id)->where('week', 8)->update(['pair' => 7]);
-    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8])->assertOk();
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8, 'mode' => 'here'])->assertOk();
     $o8 = TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->first();
     expect([$o8->auditorium_code, $o8->mudir_placeholder])->toBe(['R12', null]);
 
@@ -357,7 +357,7 @@ it('Codex: vaqtincha kafedra mudiri faqat tanlangan haftada; haftalik xona qayta
         'len_half' => 2, 'teacher_id' => $other->id, 'teacher_name' => 'BOSHQA B.', 'ext_day' => 4, 'ext_pair' => 1]));
     wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8])->assertOk();
     wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $c2), ['week' => 8])->assertOk();
-    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8])->assertOk();
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8, 'mode' => 'here'])->assertOk();
     expect(TimetableCardOverride::where('card_id', $c2->id)->where('week', 8)->first()->mudir_placeholder)->not->toBeNull()
         ->and(TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->first()->mudir_placeholder)->toBeNull();
 });
@@ -451,4 +451,62 @@ it('parallel bo\'laklar: to\'plam joylanmagan — "Uchalasini birga joylash" (ta
     $err = wuAs()->postJson(route('admin.timetable.cards.week-override', $s['pc']), ['week' => 8, 'action' => 'move', 'day' => 4, 'pair' => 1])
         ->assertStatus(422)->json('error');
     expect($err)->toContain("O'qituvchi band")->not->toContain('Guruh band');
+});
+
+
+it('vaqtincha kafedra mudiri: "Asl holatga qaytarish" — joylanmagan karta yana joylanmagan; to\'qnashuvli karta aynan avvalgi joy va xonaga, bandliksiz', function () {
+    $s = phSetup();
+    $ov = fn ($c, $w = 8) => TimetableCardOverride::where('card_id', $c->id)->where('week', $w)->first();
+    // 1) Joylanmagan karta (yozuvi yo'q): mudirga yoziladi → asl holatga — yozuv o'chadi, yana joylanmagan, o'qituvchi/xona asl.
+    $u = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-09b (rus)', 'subject_name' => 'Tibbiyotda axborot texnologiyalari',
+        'len_half' => 2, 'auditorium_code' => 'R428', 'auditorium_name' => '428', 'ext_day' => 2, 'ext_pair' => 1]));
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $u), ['week' => 8])->assertOk();
+    expect(wuPlace($u))->toBe([2, 1]);
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $u))->assertOk()->assertJson(['mode' => 'original', 'weeks' => [8]]);
+    $u = $u->fresh();
+    expect($ov($u))->toBeNull()->and(wuPlace($u))->toBe([null, null])
+        ->and([$u->teacher_id, $u->auditorium_code])->toBe([$s['chor']->id, 'R428']);
+
+    // 2) To'qnashuvli karta (07b: chorshanba 10:00, haftalik xona R12): mudirga — juma 08:30 ga; asl holatga — aynan chorshanba 10:00,
+    // R12; 08a bilan to'qnashuv qaytadi (avvalgi holat), lekin rad etilmaydi.
+    \App\Models\Auditorium::create(['code' => 'R12', 'name' => '12-xona', 'volume' => 20, 'active' => true]);
+    TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->update(['auditorium_code' => 'R12', 'auditorium_name' => '12-xona']);
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8, 'day' => 5, 'pair' => 1])->assertOk();
+    expect(wuPlace($s['pa']))->toBe([5, 1])->and($ov($s['pa'])->auditorium_code)->toBe('KM1');
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8])->assertOk();
+    $o = $ov($s['pa']);
+    expect([(int) $o->day, (int) $o->pair, $o->auditorium_code, $o->mudir_placeholder])->toBe([3, 3, 'R12', null])
+        ->and(collect(app(\App\Http\Controllers\Admin\TimetableController::class)->internalConflicts($s['board'])['weekly'])->keys()->all())
+        ->toContain($s['pa']->id);
+    // Jurnal.
+    expect(\App\Models\TimetableChangeRequest::where('route_name', 'admin.timetable.cards.mudir-placeholder.revert')->count())->toBe(2);
+});
+
+it('vaqtincha kafedra mudiri: "shu va keyingi haftalar" — har hafta o\'z asl holatiga (yoki faqat tanlangan hafta)', function () {
+    $s = phSetup();
+    // 9-haftada 07b ning yozuvi yo'q (shablonda joyi yo'q — joylanmagan), 8-haftada chorshanba 10:00.
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8, 'scope' => 'rest', 'day' => 5, 'pair' => 1])->assertOk();
+    $weeks = TimetableCardOverride::where('card_id', $s['pa']->id)->whereNotNull('mudir_placeholder')->pluck('week')->map(fn ($w) => (int) $w)->sort()->values()->all();
+    expect($weeks)->toBe(range(8, 15));
+    // Faqat 9-hafta — u yozuvsiz edi: o'chadi; 8-hafta hali mudirda.
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 9])->assertOk();
+    expect(TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 9)->exists())->toBeFalse()
+        ->and(TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->value('mudir_placeholder'))->not->toBeNull();
+    // Barcha haftalar: 8 — chorshanba 10:00 (428), qolganlari — yozuvsiz.
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']))->assertOk();
+    expect(wuPlace($s['pa']))->toBe([3, 3])
+        ->and(TimetableCardOverride::where('card_id', $s['pa']->id)->pluck('week')->map(fn ($w) => (int) $w)->all())->toBe([8]);
+});
+
+it('Codex: parallel to\'plamdan shu haftada bekor qilingan a\'zo chiqariladi ("birga joylash" uni tiklamaydi)', function () {
+    $s = parSetup();
+    TimetableCardOverride::where('card_id', $s['pa']->id)->delete();
+    foreach (['pa', 'pb', 'pc'] as $k) {
+        $s[$k]->update(['ext_day' => 2, 'ext_pair' => 5]);
+    }
+    TimetableCardOverride::create(['card_id' => $s['pb']->id, 'week' => 8, 'cancelled' => true]);
+    $res = wuAs()->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=8&courses[]=1')->assertOk()->json();
+    $first = collect($res['cards'])->firstWhere('id', $s['pc']->id)['suggestions'][0];
+    expect($first['title'])->toBe('Ikkalasini birga joylash: Seshanba, 3-para (a · c)')
+        ->and(collect($first['actions'])->pluck('card_id')->all())->toBe([$s['pa']->id, $s['pc']->id]);
 });

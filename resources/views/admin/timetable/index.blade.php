@@ -43,10 +43,11 @@
     // Qamrov rejimi (Butun doska / Kafedraniki / Mas'ul fanlarim / Faqat meniki) — har foydalanuvchi va rol uchun alohida saqlanadi
     // (superadmin bir foydalanuvchidan boshqasiga o'tganda oldingi rejim qolib ketmasin): guard + id.
     $timetableUserKey = ($timetableUser instanceof \App\Models\Teacher ? 't' : 'u') . (int) ($timetableUser?->getAuthIdentifier() ?? 0);
-    // O'qituvchi, fan mas'uli, kafedra mudiri: doska tanlovi bo'sh turmasin — yagona doska, bo'lmasa eng yangi (joriy) Real doska
-    // (kartalari bor). URLda doska berilgan bo'lsa — o'sha.
+    // O'qituvchi, fan mas'uli, kafedra mudiri, registrator ofisi, kichik admin, o'quv bo'limi: doska tanlovi bo'sh turmasin — oxirgi
+    // ochilgan doska (brauzerda, JS), bo'lmasa yagona doska, bo'lmasa eng yangi (joriy) Real doska (kartalari bor). URLda berilgan — o'sha.
+    $timetableAutoBoardRoles = ['oqituvchi', 'fan_masuli', 'kafedra_mudiri', 'registrator_ofisi', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
     $timetableAutoBoardId = null;
-    if (in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli', 'kafedra_mudiri'], true) && isset($boards) && $boards->count()) {
+    if (in_array($timetableActiveRole, $timetableAutoBoardRoles, true) && isset($boards) && $boards->count()) {
         $withCards = fn ($b) => (int) ($b->cards_count ?? 0) > 0;
         $timetableAutoBoardId = ($boards->count() === 1 ? $boards->first() : null
             ?? $boards->first(fn ($b) => ($b->kind ?? '') === 'real' && $withCards($b)) ?? $boards->first($withCards) ?? $boards->first())->id;
@@ -2803,6 +2804,8 @@
             // rol sukuti: o'qituvchi — "Faqat meniki", fan mas'uli — "Mas'ul fanlarim", kafedra mudiri — "Kafedraniki", adminlar — "Butun doska".
             const TIMETABLE_USER_KEY = @json($timetableUserKey);
             const SCOPE_KEY = 'lms:timetable-scope:' + TIMETABLE_USER_KEY + ':' + TIMETABLE_ROLE;
+            // Oxirgi ochilgan doska (shu foydalanuvchi va rol) — sahifa URLsiz ochilganda shu doska tanlanadi.
+            const LAST_BOARD_KEY = 'lms:timetable-last-board:' + TIMETABLE_USER_KEY + ':' + TIMETABLE_ROLE;
             // O'qituvchi, fan mas'uli va kafedra mudiri: /data server tomonda rol doirasida (butun doska emas) — rejim almashsa qayta yuklanadi.
             const TIMETABLE_SCOPED_DATA = ['oqituvchi', 'fan_masuli', 'kafedra_mudiri'].includes(TIMETABLE_ROLE);
             const scopeAllowed = m => m === 'all' || (m === 'mine' && +TIMETABLE_TEACHER_ID > 0) || (m === 'kafedra' && !!TIMETABLE_DEPARTMENT_HEAD)
@@ -3630,6 +3633,7 @@
                 const seq = ++boardLoadSeq;
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now() + dataScope);
                 if (seq !== boardLoadSeq) return;   // eskirgan javob — undan keyin yangi so'rov yuborilgan
+                try { localStorage.setItem(LAST_BOARD_KEY, String(id)); } catch (e) { }
                 lastLoadSig = dataScope;   // shu parametrlar bilan yuklangan — xuddi shu so'rov takrorlanmaydi (scopeNeedsReload)
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
@@ -9471,17 +9475,40 @@
                 });
                 return m;
             }
-            async function mudirPhRevert(c, btn) {
+            // Qaytarish: mode 'original' — mudirga yozilishidan oldingi holatiga (bandliksiz; joylanmagan edi — yana panelga), 'here' — shu joyda
+            // asl o'qituvchi va xonaga (bandlik bilan). week — faqat shu hafta, bo'lmasa barcha haftalar.
+            async function mudirPhRevert(c, btn, mode = 'original', week = null) {
                 if (btn) btn.disabled = true;
                 try {
-                    await api(BASE + '/cards/' + c.id + '/mudir-placeholder/revert', 'POST', { week: curWeek });
+                    const body = { mode };
+                    if (week) body.week = week;
+                    await api(BASE + '/cards/' + c.id + '/mudir-placeholder/revert', 'POST', body);
                     delete phRevertErr[unitKey(c)];
                     await loadBoard(board.id);
                 } catch (e) {
-                    phRevertErr[unitKey(c)] = e.message;
+                    phRevertErr[unitKey(c)] = (e.data && e.data.reasons) || [e.message];
                     if (btn) btn.disabled = false;
                     renderPanel();
                 }
+            }
+            // Birlik mudirda qaysi haftalarda (yuklangan haftalik yozuvlardan).
+            function mudirPhWeeks(c) {
+                const ids = new Set(unitOf(c).map(x => x.id).concat([c.id]));
+                const ws = new Set();
+                Object.keys(overrides).forEach(k => {
+                    const [id, w] = k.split('|').map(Number);
+                    if (ids.has(id) && overrides[k] && overrides[k].mudir_placeholder) ws.add(w);
+                });
+                return [...ws].sort((a, b) => a - b);
+            }
+            // Xato — qizil "✖", uzun ro'yxat yig'ilgan: dastlabki 2 ta sabab va "yana N ta".
+            function phErrHtml(err) {
+                const list = (Array.isArray(err) ? err : [err]).filter(Boolean);
+                if (!list.length) return '';
+                const rest = list.slice(2);
+                return '<div class="ph-err" style="color:#b91c1c;font-weight:600">✖ ' + list.slice(0, 2).map(esc).join(' · ') +
+                    (rest.length ? ' <details style="display:inline"><summary style="display:inline;cursor:pointer;text-decoration:underline dotted">yana ' + rest.length + ' ta</summary>' +
+                        rest.map(esc).join(' · ') + '</details>' : '') + '</div>';
             }
             // Panel bo'limi: "Vaqtincha kafedra mudirida: N ta" — har birida "Asl o'qituvchiga qaytarish" (bandlik tekshiriladi).
             function mudirPhSectionHtml(list) {
@@ -9490,10 +9517,17 @@
                     'Vaqtincha kafedra mudirida: <b>' + list.length + ' ta</b>' + list.map(c => {
                         const ph = phOf(c) || {};
                         const err = phRevertErr[unitKey(c)];
+                        const weeks = mudirPhWeeks(c);
+                        const weekSel = weeks.length > 1 ? ' <select data-ph-weeks="' + c.id + '" style="font-size:10px;border:1px solid #fcd34d;border-radius:4px">' +
+                            '<option value="">barcha haftalar (' + weeks.length + ' ta)</option><option value="' + curWeek + '">faqat ' + curWeek + '-hafta</option></select>' : '';
                         return '<div class="pn-mudir-ph-item" data-ph-card="' + c.id + '" style="margin-top:3px;border-top:1px dotted #fde68a;padding-top:3px">' +
                             esc(cardGroups(c).join(', ') + ' · ' + c.subject_name) + ' <span style="color:#a16207">(asl o\'qituvchi: ' + esc(ph.orig_teacher_name || 'biriktirilmagan') + ')</span>' +
-                            (mudirPhAllowed() ? ' <button type="button" data-ph-revert="' + c.id + '" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Asl o\'qituvchiga qaytarish</button>' : '') +
-                            (err ? '<div style="color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>' : '') + '</div>';
+                            (weeks.length > 1 ? ' <span style="color:#a16207">· haftalar: ' + esc(weeks.join(', ')) + '</span>' : '') +
+                            (mudirPhAllowed() ? '<div style="margin-top:2px">' +
+                                '<button type="button" data-ph-revert="' + c.id + '" data-ph-mode="original" title="Mudirga yozilishidan oldingi joy, o\'qituvchi va xona (bandlik tekshirilmaydi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Asl holatga qaytarish</button> ' +
+                                '<button type="button" data-ph-revert="' + c.id + '" data-ph-mode="here" title="Dars shu joyda qoladi — asl o\'qituvchi va xona (bandlik tekshiriladi)" style="border:1px solid #94a3b8;color:#334155;background:#fff;border-radius:4px;padding:0 5px">Shu joyda asl o\'qituvchiga</button>' +
+                                weekSel + '</div>' : '') +
+                            phErrHtml(err) + '</div>';
                     }).join('') + '</div>';
             }
             // ===== "Joylanmagan kartalar" paneli: qisman joylangan birlik belgisi, yaxlit joylash natijasi, karta oynasi =====
@@ -9871,7 +9905,8 @@
                 document.querySelectorAll('#cardPanel [data-ph-revert]').forEach(b => b.onclick = ev => {
                     ev.stopPropagation();
                     const c = cards.find(x => x.id === +b.dataset.phRevert);
-                    if (c) mudirPhRevert(c, b);
+                    const sel = document.querySelector('#cardPanel [data-ph-weeks="' + b.dataset.phRevert + '"]');
+                    if (c) mudirPhRevert(c, b, b.dataset.phMode || 'original', sel && sel.value ? +sel.value : null);
                 });
                 document.querySelectorAll('#cardPanel [data-pn-go]').forEach(a => a.onclick = ev => {
                     ev.preventDefault();
@@ -13391,9 +13426,21 @@
 
             // URLdan doska ochish (F5 / havola) — tanlovlar ham URLdan tiklanadi (applyPendingView)
             // URLda doska bo'lmasa — o'qituvchi / fan mas'uli / kafedra mudiriga yagona yoki joriy Real doska (TIMETABLE_AUTO_BOARD_ID).
-            const urlBoard = new URLSearchParams(location.search).get('board') || (TIMETABLE_AUTO_BOARD_ID ? String(TIMETABLE_AUTO_BOARD_ID) : null);
+            // Avtomatik (URLsiz) ochilishda: oxirgi ochilgan doska (shu foydalanuvchi va rol, ro'yxatda bo'lsa), bo'lmasa server tanlagani;
+            // hafta — joriy hafta.
+            const explicitBoard = new URLSearchParams(location.search).get('board');
+            let lastBoard = null;
+            try { lastBoard = localStorage.getItem(LAST_BOARD_KEY); } catch (e) { }
+            const lastBoardOk = lastBoard && [...$('boardSel').options].some(o => o.value === String(lastBoard));
+            const autoBoard = !explicitBoard && TIMETABLE_AUTO_BOARD_ID ? (lastBoardOk ? String(lastBoard) : String(TIMETABLE_AUTO_BOARD_ID)) : null;
+            const urlBoard = explicitBoard || autoBoard;
             const notificationRequest = new URLSearchParams(location.search).get('change_request');
             if (urlBoard) loadBoard(urlBoard).then(() => {
+                if (autoBoard && !curWeek && board) {
+                    curWeek = currentWeekNo(+curGrid().weeks || +board.weeks || 15);
+                    fillWeekSel();
+                    renderAll();
+                }
                 if (notificationRequest) openChangeReqModal();
             }).catch(e => {
                 hideBoard();

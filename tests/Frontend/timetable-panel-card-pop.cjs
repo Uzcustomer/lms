@@ -61,7 +61,7 @@ const ctx = {
     },
 };
 vm.createContext(ctx);
-vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { openMudirPhConfirm, mudirPhSectionHtml, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
+vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { phRevertErrSet: (c, v) => { phRevertErr[unitKey(c)] = v; }, openMudirPhConfirm, mudirPhSectionHtml, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
 // dragPlan — haqiqiy (bo'sh joy).
 vm.runInContext(source.slice(source.indexOf('            function dragPlan('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig')), ctx);
 
@@ -200,11 +200,19 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     let sec = ctx.mudirPhSectionHtml([phCard]);
     assert.match(sec, /Vaqtincha kafedra mudirida: <b>1 ta<\/b>/);
     assert.match(sec, /\(asl o'qituvchi: ALIYEV SH\. N\.\)/);
-    assert.match(sec, /data-ph-revert="30"[^>]*>Asl o'qituvchiga qaytarish/);
-    ctx.revertFail = "Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta: O'qituvchi band: ALIYEV SH. N. — …";
+    assert.match(sec, /data-ph-revert="30" data-ph-mode="original"[^>]*>Asl holatga qaytarish<\/button>/);
+    assert.match(sec, /data-ph-revert="30" data-ph-mode="here"[^>]*>Shu joyda asl o'qituvchiga<\/button>/);
+    // Asosiy — asl holatga, barcha haftalar (week yuborilmaydi).
     await ctx.mudirPhRevert(phCard, { disabled: false });
-    assert.deepEqual(calls.filter(c => c[0].endsWith('/revert')).pop(), ['/cards/30/mudir-placeholder/revert', { week: 8 }]);
+    assert.deepEqual(calls.filter(c => c[0].endsWith('/revert')).pop(), ['/cards/30/mudir-placeholder/revert', { mode: 'original' }]);
+    // Shu joyda (bandlik bilan) — band: qizil "✖", dastlabki 2 sabab va "yana N ta".
+    ctx.revertFail = "Shu joyda asl o'qituvchiga qaytarib bo'lmaydi — band: …";
+    await ctx.mudirPhRevert(phCard, { disabled: false }, 'here', 8);
+    assert.deepEqual(calls.filter(c => c[0].endsWith('/revert')).pop(), ['/cards/30/mudir-placeholder/revert', { mode: 'here', week: 8 }]);
     sec = ctx.mudirPhSectionHtml([phCard]);
-    assert.match(sec, /✖ Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta: O'qituvchi band/);
+    assert.match(sec, /✖ Shu joyda asl o'qituvchiga qaytarib bo'lmaydi — band: …/);
+    ctx.phRevertErrSet(phCard, ['8-hafta: A', '9-hafta: B', '10-hafta: C', '11-hafta: D']);
+    sec = ctx.mudirPhSectionHtml([phCard]);
+    assert.match(sec, /✖ 8-hafta: A · 9-hafta: B <details[^>]*><summary[^>]*>yana 2 ta<\/summary>10-hafta: C · 11-hafta: D<\/details>/);
     console.log('timetable panel card pop: 8 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

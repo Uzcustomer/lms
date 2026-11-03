@@ -638,7 +638,13 @@ class VedomostSubmissionController extends Controller
             return $cols;
         };
 
-        $sections = [];
+        // Umumiy ko'rsatkichlar — har biri alohida (yig'indisi ma'nosiz, «Jami» ustuni yo'q).
+        $sections = [['key' => 'sum', 'label' => 'Umumiy', 'tint' => '#f8fafc', 'noTotal' => true, 'cols' => [
+            ['key' => 'sum|due', 'label' => 'Topshirilishi kerak edi', 'color' => ['#1a3268', '#eef2ff']],
+            ['key' => 'sum|submitted', 'label' => 'Topshirildi', 'color' => ['#1d4ed8', '#dbeafe']],
+            ['key' => 'sum|approved', 'label' => 'Tasdiqlandi', 'color' => ['#166534', '#dcfce7']],
+            ['key' => 'sum|rejected', 'label' => 'Rad etilgan (kamida 1 marta)', 'color' => ['#b91c1c', '#fee2e2']],
+        ]]];
         if ($byForm) {
             foreach ($forms as $fkey => $flabel) {
                 $sections[] = ['key' => $fkey, 'label' => $flabel, 'cols' => $statusCols($fkey), 'tint' => $formTint[$fkey] ?? '#f8fafc'];
@@ -656,9 +662,20 @@ class VedomostSubmissionController extends Controller
         $contribById = [];
         foreach ($aggregated as $v) {
             $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
+            $logs = $logsById->get($v->id) ?? collect();
             $contrib = [($byForm ? $form : 'all') . "|$v->status" => 1];
-            if ($fate = $this->rejectFate($logsById->get($v->id) ?? collect(), $since, $now)) {
+            if (!empty($v->deadline) && \Carbon\Carbon::parse($v->deadline)->startOfDay() <= $now) {
+                $contrib['sum|due'] = 1;
+            }
+            if ($v->status !== VedomostSubmission::STATUS_PENDING || $logs->contains('action', 'upload')) {
+                $contrib['sum|submitted'] = 1;
+            }
+            if ($v->status === VedomostSubmission::STATUS_APPROVED) {
+                $contrib['sum|approved'] = 1;
+            }
+            if ($fate = $this->rejectFate($logs, $since, $now)) {
                 $contrib["fate|$fate"] = 1;
+                $contrib['sum|rejected'] = 1;
             }
             $contribById[$v->id] = $contrib;
         }

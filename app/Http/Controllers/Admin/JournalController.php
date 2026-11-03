@@ -3971,9 +3971,12 @@ class JournalController extends Controller
      */
     public function deleteMtSubmission(Request $request)
     {
-        $user = auth()->user();
-        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
-            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        // Talaba faylini o'chirish — faqat superadmin va "Superadmin MT fayl yuklash" toggle yoqilganda
+        if (!auth()->user()?->hasRole('superadmin')) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        }
+        if (Setting::get('feature_superadmin_mt_upload_after_deadline', '0') !== '1') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya hozirda o\'chirilgan'], 403);
         }
 
         $request->validate([
@@ -3985,11 +3988,17 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Submission topilmadi'], 404);
         }
 
-        // YN qulflangan bo'lsa — fayl o'chirishga ruxsat berilmaydi
-        $ynLocked = DB::table('student_grades')
+        // YN qulflangan bo'lsa — fayl o'chirishga ruxsat berilmaydi.
+        // independent_submissions da fan/semestr yo'q — topshiriq orqali aniqlanadi
+        // (avval yo'q ustunlar o'qilib, server xatosi chiqardi).
+        $independent = DB::table('independents')->where('id', $submission->independent_id)->first();
+        $subjectId = $independent
+            ? DB::table('curriculum_subjects')->where('curriculum_subject_hemis_id', $independent->subject_hemis_id)->value('subject_id')
+            : null;
+        $ynLocked = $independent && $subjectId && DB::table('student_grades')
             ->where('student_hemis_id', $submission->student_hemis_id)
-            ->where('subject_id', $submission->subject_id)
-            ->where('semester_code', $submission->semester_code)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $independent->semester_code)
             ->where('is_yn_locked', true)
             ->exists();
 
@@ -4006,8 +4015,16 @@ class JournalController extends Controller
             Storage::disk('public')->delete($submission->file_path);
         }
 
-        // Submission yozuvini o'chirish
+        // Submission yozuvini o'chirish — talabada "Yuklanmagan" bo'lib qoladi
         DB::table('independent_submissions')->where('id', $submission->id)->delete();
+
+        Log::info('[Journal] superadmin MT faylni o\'chirdi', [
+            'submission_id'    => $submission->id,
+            'independent_id'   => $submission->independent_id,
+            'student_hemis_id' => $submission->student_hemis_id,
+            'file'             => $submission->file_original_name,
+            'by_user_id'       => auth()->id(),
+        ]);
 
         return response()->json(['success' => true, 'message' => 'Fayl o\'chirildi']);
     }

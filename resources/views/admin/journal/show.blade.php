@@ -3559,7 +3559,8 @@
                                                         @elseif($urgency === 'danger')
                                                             <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $timeAgoText }}!</span>
                                                         @endif
-                                                        @if(auth()->user()?->hasRole('superadmin') && !$isYnSubmittedMt)
+                                                        @if(auth()->user()?->hasRole('superadmin') && !$isYnSubmittedMt
+                                                            && \App\Models\Setting::get('feature_superadmin_mt_upload_after_deadline', '0') === '1')
                                                             <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"
                                                                 class="mt-file-delete-btn"
                                                                 title="Faylni o'chirish">&#10005;</button>

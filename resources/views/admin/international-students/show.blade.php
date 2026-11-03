@@ -121,6 +121,67 @@
 
             @endphp
 
+            {{-- Hujjatlar holati: har bir hujjat to'ldirilganmi, muddati va jarayoni — bir qarashda --}}
+            @php
+                $procLabels = ['passport_accepted' => 'Pasport olindi', 'registering' => 'Rasmiylashtirilmoqda'];
+                $docTiles = [];
+                if ($visaInfo->needsVisa()) {
+                    $docTiles[] = ['name' => 'Viza', 'end' => $visaInfo->visa_end_date, 'days' => $visaInfo->visaDaysLeft(), 't' => $visaT,
+                        'start' => $visaInfo->visa_start_date, 'scan' => $visaInfo->visa_scan_path, 'proc' => $vps,
+                        'req' => ['raqami' => $visaInfo->visa_number, 'boshlanish sanasi' => $visaInfo->visa_start_date, 'tugash sanasi' => $visaInfo->visa_end_date]];
+                }
+                if ($visaInfo->needsRegistration()) {
+                    $docTiles[] = ['name' => 'Registratsiya', 'end' => $visaInfo->registration_end_date, 'days' => $visaInfo->registrationDaysLeft(), 't' => $regT,
+                        'start' => $visaInfo->registration_start_date, 'scan' => $visaInfo->registration_doc_path, 'proc' => $rps,
+                        'req' => ['boshlanish sanasi' => $visaInfo->registration_start_date, 'tugash sanasi' => $visaInfo->registration_end_date]];
+                }
+                if ($visaInfo->hasResidencePermit()) {
+                    $docTiles[] = ['name' => 'Yashash guvohnomasi', 'end' => $visaInfo->residence_permit_expiry_date, 'days' => $visaInfo->residencePermitDaysLeft(), 't' => $permitT,
+                        'start' => $visaInfo->residence_permit_issued_date, 'scan' => $visaInfo->residence_permit_scan_path, 'proc' => 'none',
+                        'req' => ['raqami' => $visaInfo->residence_permit_number, 'amal qilish muddati' => $visaInfo->residence_permit_expiry_date]];
+                }
+                $passportDaysLeft = $visaInfo->passport_expiry_date ? (int) now()->startOfDay()->diffInDays($visaInfo->passport_expiry_date, false) : null;
+                $docTiles[] = ['name' => 'Pasport', 'end' => $visaInfo->passport_expiry_date, 'days' => $passportDaysLeft, 't' => ['danger' => 0, 'warning' => 90, 'info' => 90],
+                    'start' => $visaInfo->passport_issued_date, 'scan' => $visaInfo->passport_scan_path, 'proc' => 'none',
+                    'req' => ['raqami' => $visaInfo->passport_number, 'amal qilish muddati' => $visaInfo->passport_expiry_date]];
+            @endphp
+            <section class="sp-docstat" aria-label="Hujjatlar holati">
+                @foreach($docTiles as $tile)
+                    @php
+                        $missing = array_keys(array_filter($tile['req'], fn ($val) => blank($val)));
+                        $state = $deadline($tile['end'], $tile['days'], $tile['t']);
+                        if (count($missing) === count($tile['req'])) {
+                            [$kind, $word, $sub] = ['none', "To'ldirilmagan", "Talaba ma'lumot kiritmagan"];
+                        } elseif ($missing) {
+                            [$kind, $word, $sub] = ['part', "Qisman to'ldirilgan", 'Yo\'q: ' . implode(', ', $missing)];
+                        } else {
+                            $word = match ($state['tone']) { 'bad' => ($tile['days'] < 0 ? 'Muddati tugagan' : 'Muddati tugayapti'), 'warn' => 'Muddati yaqin', default => 'Amal qilmoqda' };
+                            [$kind, $sub] = [$state['tone'] === 'info' ? 'ok' : $state['tone'], $fmt($tile['end']) . ' gacha · ' . $state['text']];
+                        }
+                    @endphp
+                    <div class="sp-ds sp-ds-{{ $kind }}">
+                        <span class="sp-ds-icon" aria-hidden="true">
+                            @if($kind === 'ok')
+                                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                            @elseif($kind === 'none' || $kind === 'bad')
+                                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            @else
+                                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01"/></svg>
+                            @endif
+                        </span>
+                        <div class="sp-ds-body">
+                            <div class="sp-ds-name">{{ $tile['name'] }}</div>
+                            <div class="sp-ds-word">{{ $word }}</div>
+                            <div class="sp-ds-sub">{{ $sub }}</div>
+                            <div class="sp-ds-tags">
+                                @if(isset($procLabels[$tile['proc']]))<span class="sp-ds-tag sp-ds-tag-proc">Jarayonda: {{ $procLabels[$tile['proc']] }}</span>@endif
+                                @if($kind !== 'none')<span class="sp-ds-tag {{ $tile['scan'] ? '' : 'sp-ds-tag-miss' }}">{{ $tile['scan'] ? 'Skaner yuklangan' : "Skaner yo'q" }}</span>@endif
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </section>
+
             {{-- Amallar paneli: hujjat kartochkalaridan ajralib turishi uchun to'q fonda --}}
             @php $noProcess = $visaInfo->status !== 'pending' && !$visaInfo->needsRegistration() && !$visaInfo->needsVisa(); @endphp
             <section class="sp-toolbar {{ $noProcess ? 'sp-toolbar-inline' : '' }}" aria-label="Amallar" x-data="{ reject: false, firm: @js($visaInfo->firm ?? '') }">
@@ -298,6 +359,23 @@
 
     .sp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
     /* Amallar paneli — och indigo fon va hoshiya: hujjatlar (qog'oz) va oq kartalardan ajralib turadi */
+    /* Hujjatlar holati — rangli plitkalar: yashil amal qilmoqda, sariq yaqin/qisman, qizil tugagan/to'ldirilmagan */
+    .sp-docstat { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    .sp-ds { --c: #15803d; --bg: #f0fdf4; --ln: #86efac; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px;
+             background: var(--bg); border: 1px solid var(--ln); border-left: 5px solid var(--c); min-width: 0; }
+    .sp-ds-warn, .sp-ds-part { --c: #b45309; --bg: #fffbeb; --ln: #fcd34d; }
+    .sp-ds-bad { --c: #b91c1c; --bg: #fef2f2; --ln: #fca5a5; }
+    .sp-ds-none { --c: #b91c1c; --bg: repeating-linear-gradient(135deg, #fff5f5 0 10px, #fee2e2 10px 20px); --ln: #fca5a5; border-style: dashed; border-left-style: solid; }
+    .sp-ds-icon { flex: none; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--c); color: #fff; }
+    .sp-ds-body { min-width: 0; }
+    .sp-ds-name { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #475569; }
+    .sp-ds-word { margin-top: 2px; font-size: 17px; font-weight: 800; line-height: 1.2; color: var(--c); }
+    .sp-ds-sub { margin-top: 2px; font-size: 13px; color: #334155; font-variant-numeric: tabular-nums; }
+    .sp-ds-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .sp-ds-tags:empty { display: none; }
+    .sp-ds-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: #fff; border: 1px solid #cbd5e1; color: #475569; }
+    .sp-ds-tag-proc { background: #eef2ff; border-color: #a5b4fc; color: #3730a3; }
+    .sp-ds-tag-miss { border-style: dashed; color: #94a3b8; }
     .sp-toolbar { background: #eef2ff; color: #1e1b4b; border: 1px solid #c7d2fe; border-radius: 14px; padding: 6px; }
     .sp-tb-segs { display: flex; flex-wrap: wrap; }
     .sp-tb-seg { flex: 1 1 220px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; padding: 10px 14px; border-left: 1px solid #c7d2fe; min-width: 0; }

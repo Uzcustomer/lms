@@ -60,6 +60,8 @@ class TimetableChangeApproval
         // "Vaqtincha kafedra mudiriga yozish" va qaytarish — darhol (tasdiqsiz), lekin tarixga (kim, qachon, karta, sabab).
         'admin.timetable.cards.mudir-placeholder'        => ['mudirPlaceholderApply', 'card', 'teacher'],
         'admin.timetable.cards.mudir-placeholder.revert' => ['mudirPlaceholderRevert', 'card', 'teacher'],
+        'admin.timetable.cycle-mudir-placeholder'        => ['cycleMudirPlaceholder', 'board', 'teacher'],
+        'admin.timetable.cycle-mudir-placeholder.revert' => ['cycleMudirPlaceholderRevert', 'board', 'teacher'],
         'admin.timetable.ktr-weeks'           => ['ktrWeeks', 'board', 'weeks'],   // dry_run emas
         'admin.timetable.weekly-layer-copy'   => ['weeklyLayerCopy', 'board', 'layer'],   // dry_run emas
         'admin.timetable.boards.split-variant-mixed' => ['splitVariantMixed', 'board', 'split'],   // dry_run emas
@@ -775,7 +777,15 @@ class TimetableChangeApproval
                     . (!empty($p['reason']) ? '; sabab: ' . $p['reason'] : '');
                 break;
             case 'admin.timetable.cards.mudir-placeholder.revert':
-                $text = $head . ': vaqtincha kafedra mudiridan asl o\'qituvchiga qaytarildi';
+                $text = $head . ': vaqtincha kafedra mudiridan ' . (($p['mode'] ?? 'original') === 'here' ? 'shu joyda asl o\'qituvchiga' : 'asl holatga')
+                    . ' qaytarildi' . (!empty($p['week']) ? ' (' . $p['week'] . '-hafta)' : ' (barcha haftalar)');
+                break;
+            case 'admin.timetable.cycle-mudir-placeholder':
+                $text = $head . ': sikl bloki vaqtincha kafedra mudiriga yozildi' . (($p['scope'] ?? 'all') === 'conflicts' ? ' (faqat to\'qnashuv sanalari)' : ' (butun blok)')
+                    . (!empty($p['reason']) ? '; sabab: ' . $p['reason'] : '');
+                break;
+            case 'admin.timetable.cycle-mudir-placeholder.revert':
+                $text = $head . ': sikl bloki vaqtincha kafedra mudiridan asl holatga qaytarildi';
                 break;
             case 'admin.timetable.cards.unit-place':
                 $to = (!empty($p['day']) && !empty($p['pair'])) ? $slot($p['day'], $p['pair']) : 'jadvaldan olib tashlash';
@@ -852,7 +862,8 @@ class TimetableChangeApproval
             'admin.timetable.cards.week-override', 'admin.timetable.cards.unit-place' => 'card:' . $card?->id . ':w' . ($p['week'] ?? ''),
             'admin.timetable.boards.unit-fix' => 'w' . ($p['week'] ?? '') . ':' . ($p['action'] ?? ''),
             'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index']),
-            'admin.timetable.cycle-place', 'admin.timetable.cycle-assign' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
+            'admin.timetable.cycle-place', 'admin.timetable.cycle-assign', 'admin.timetable.cycle-mudir-placeholder',
+            'admin.timetable.cycle-mudir-placeholder.revert' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
             'admin.timetable.cycle-practice-starts' => $pick(['specialty_name', 'course', 'subject_name', 'units', 'date']),
             TimetableController::SUGGESTION_ROUTE => 'card:' . ($p['card_id'] ?? '') . ':w' . ($p['week'] ?? ''),
             'admin.timetable.assign-teacher', 'admin.timetable.assign-room' => $pick(['faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'oqim_label', 'group_name']),

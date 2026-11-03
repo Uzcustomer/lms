@@ -470,7 +470,40 @@ trait TimetableWeekSuggestions
         // Takliflar tartibi: tur bo'yicha (1. ikkalasini ketma-ket, 2. shu kun boshqa vaqt, 3. boshqa xona, 4. to'siqni shu kunda
         // surish, 5. boshqa kun, … oxirida to'siqni boshqa kunga); tur ichida — bo'shliq qo'shmaydigan yoki kamaytiradigan, keyin
         // guruh darsiga yopishgan, keyin qo'shiladigan bo'shliq kamroq. Har taklifga 'gap' (yarim-slot) belgisi.
-        $tierOf = ['pair' => 0, 'slot' => 1, 'room' => 2, 'blocker' => 3, 'day' => 4, 'week' => 5, 'lecture' => 6, 'teacher' => 7, 'blocker_day' => 8];
+        // Parallel to'plam: shu kartaning bo'lak qo'shnilari (bolakSiblings — tur, qamrov, oqim, talaba kesishuvi), joyi bilan.
+        $bolakLetter = fn (TimetableCard $x) => preg_match('/\((\p{L})\)\s*$/u', (string) $x->subject_name, $m) ? mb_strtolower($m[1]) : '?';
+        $parSets = [];
+        $parallelSet = function (TimetableCard $c) use (&$parSets, &$state, $baseSubj, $cancelled, $W): array {
+            $k = (int) $c->id;
+            if (!isset($parSets[$k])) {
+                $parSets[$k] = [];
+                foreach ($state['cards'] as $x) {
+                    // Shu haftada ataylab bekor qilingan a'zo — to'plamga (va "birga joylash" amallariga) kirmaydi.
+                    if ((int) $x->id !== $k && !$cancelled($x, $W) && $x->training_type === $c->training_type && $this->groupScopeKey($x) === $this->groupScopeKey($c)
+                        && mb_strtolower($baseSubj($x->subject_name)) === mb_strtolower($baseSubj($c->subject_name)) && $this->bolakSiblings($c, $x)) {
+                        $parSets[$k][] = $x;
+                    }
+                }
+            }
+
+            return $parSets[$k];
+        };
+        // To'plamda eng ko'p uchragan tashqi joy [kun, para] | null.
+        $parallelCommonExt = function (array $list): ?array {
+            $cnt = [];
+            foreach ($list as $x) {
+                if ($x->ext_day && $x->ext_pair) {
+                    $cnt[(int) $x->ext_day . '|' . (int) $x->ext_pair] = ($cnt[(int) $x->ext_day . '|' . (int) $x->ext_pair] ?? 0) + 1;
+                }
+            }
+            if (!$cnt) {
+                return null;
+            }
+            arsort($cnt);
+
+            return array_map('intval', explode('|', (string) array_key_first($cnt)));
+        };
+        $tierOf = ['parallel' => -1, 'pair' => 0, 'slot' => 1, 'room' => 2, 'blocker' => 3, 'day' => 4, 'week' => 5, 'lecture' => 6, 'teacher' => 7, 'blocker_day' => 8];
         $rankSugs = function (array $sugs) use (&$c, $gapEffect, $tierOf): array {
             foreach ($sugs as $i => &$sg) {
                 [$sg['gap'], $sg['touch']] = $gapEffect($sg['actions'], $c);
@@ -532,8 +565,57 @@ trait TimetableWeekSuggestions
             } elseif ($c->ext_day && $c->ext_pair) {
                 $targets = [[(int) $c->ext_day, (int) $c->ext_pair]];
             }
+            // Parallel bo'laklar ("Fan (a)", "(b)", "(c)" — guruhning turli talabalari, bir vaqtda yonma-yon).
+            $par = !$lecture && $isBolak($c) ? $parallelSet($c) : [];
+            if ($par) {
+                // Tashqi joyi yo'q (yoki to'plamda umumiy emas) — to'plamda eng ko'p uchragan tashqi joy.
+                if (!$isConflict && !$sibs && !($c->ext_day && $c->ext_pair) && ($common = $parallelCommonExt(array_merge([$c], $par)))) {
+                    $targets = [$common];
+                }
+                // 0) Bir a'zosi shu haftada joylangan — o'sha vaqtda yonma-yon (eng ko'p uchragan boshlanish).
+                $placedPar = array_values(array_filter(array_map(fn ($x) => ($pl = $eff($x, $W)) ? [$x, $pl] : null, $par)));
+                if ($placedPar && !$isConflict) {
+                    $cnt = [];
+                    foreach ($placedPar as [$x, $pl]) {
+                        $cnt[$pl[0] . '|' . $pl[1]][] = $x;
+                    }
+                    uasort($cnt, fn ($a, $b) => count($b) <=> count($a));
+                    $k = array_key_first($cnt);
+                    [$pd, $pp] = array_map('intval', explode('|', $k));
+                    if (!$check($c, $W, $pd, $pp, $state)) {
+                        $add('parallel', "O'sha vaqtda yonma-yon: " . $slotText($pd, $pp, $len) . ' (' . implode(', ', array_map($bolakLetter, $cnt[$k])) . ' bilan birga)',
+                            [$mv($c, $W, $pd, $pp)], 'Parallel bo\'lak — guruhning boshqa talabalari, guruh to\'qnashuvi emas');
+                    }
+                } elseif (!$placedPar && !$isConflict && ($targets || $parallelCommonExt(array_merge([$c], $par)))) {
+                    // To'plam to'liq joylanmagan — hammasini birga (har biri o'z ustunida, bir xil boshlanish va davomiylik): bitta taklif.
+                    // Joy — to'plamda eng ko'p uchragan tashqi joy (umumiy bo'lmasa ham).
+                    $all = array_merge([$c], $par);
+                    usort($all, fn ($a, $b) => strcmp($bolakLetter($a), $bolakLetter($b)));
+                    [$pd, $pp0] = $parallelCommonExt($all) ?? $targets[0];
+                    $ps = range(1, max(1, $maxPair - $len + 1));
+                    usort($ps, fn ($a, $b) => abs($a - $pp0) <=> abs($b - $pp0) ?: $a <=> $b);
+                    foreach ($ps as $pp) {
+                        $st = $state;
+                        $ok = true;
+                        foreach ($all as $x) {
+                            $st = $withMove($st, $x, $W, $pd, $pp);
+                            if ($check($x, $W, $pd, $pp, $st)) {
+                                $ok = false;
+                                break;
+                            }
+                        }
+                        if ($ok) {
+                            $n = count($all);
+                            $add('parallel', ($n === 2 ? 'Ikkalasini' : ($n === 3 ? 'Uchalasini' : 'Hammasini (' . $n . ' ta)')) . ' birga joylash: '
+                                . $slotText($pd, $pp, $len) . ' (' . implode(' · ', array_map($bolakLetter, $all)) . ')',
+                                array_map(fn ($x) => $mv($x, $W, $pd, $pp), $all), 'Har biri o\'z ustunida, bir xil boshlanish va davomiylik');
+                            break;
+                        }
+                    }
+                }
+            }
             if (!$targets) {
-                $result[] = $this->suggestionCard($c, $W, 'Kartaning tashqi jadvalda joyi yo\'q va shu fanning boshqa qismi ham joylashmagan — qaysi vaqtga qo\'yish noma\'lum.', []);
+                $result[] = $this->suggestionCard($c, $W, 'Kartaning tashqi jadvalda joyi yo\'q va shu fanning boshqa qismi ham joylashmagan — qaysi vaqtga qo\'yish noma\'lum.', $rankSugs($sugs));
                 continue;
             }
             [$td, $tp] = $targets[0];

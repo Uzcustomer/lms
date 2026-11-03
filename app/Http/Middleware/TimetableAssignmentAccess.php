@@ -121,6 +121,8 @@ class TimetableAssignmentAccess
                     'admin.timetable.cards.mudir-placeholder.info',
                     'admin.timetable.cards.mudir-placeholder',
                     'admin.timetable.cards.mudir-placeholder.revert',
+                    'admin.timetable.cycle-mudir-placeholder',
+                    'admin.timetable.cycle-mudir-placeholder.revert',
                     'admin.timetable.boards.unit-fix',
                     'admin.timetable.cycle-plan',
                     'admin.timetable.cycle-place',

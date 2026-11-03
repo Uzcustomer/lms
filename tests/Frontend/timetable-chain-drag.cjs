@@ -11,7 +11,7 @@ assert(start > 0 && end > start);
 async function move(from, to, blocked = false, parallel = true, type = 'lecture') {
     const cards = [{id:1, pair:from, len:2, day:1, training_type:type}, {id:2, pair:from+2, len:1, day:1, training_type:type}];
     const calls = [], alerts = [];
-    const ctx = {cards, selected:null, effPlace:card=>({day:card.day,pair:card.pair}), renderAll:()=>{},
+    const ctx = {cards, phOf: () => null, selected:null, effPlace:card=>({day:card.day,pair:card.pair}), renderAll:()=>{},
         alert:message=>alerts.push(message), weeklyLayer:'internal', effectiveCard:card=>card,
         cardGKeys:()=>['g'], cardLen:card=>card.len, bolakSiblings:()=>false,
         describeCardBrief:()=> 'Test darsi', isSharedRoomName:()=>false, weeksIntersect:()=>true,
@@ -61,7 +61,7 @@ async function move(from, to, blocked = false, parallel = true, type = 'lecture'
     // Codex: shu haftada bekor qilingan amaliy dars sudrab qaytarilsa — unit-place emas, kartaning o'zi tiklanadi (week-override).
     {
         const cards2 = [{ id: 1, pair: 1, len: 2, day: 1, training_type: 'practice', cancelled: true }];
-        const c3 = { cards: cards2, selected: null, effPlace: c => ({ day: c.day, pair: c.pair }), renderAll() {}, alert() {}, weeklyLayer: 'internal',
+        const c3 = { phOf: () => null, cards: cards2, selected: null, effPlace: c => ({ day: c.day, pair: c.pair }), renderAll() {}, alert() {}, weeklyLayer: 'internal',
             effectiveCard: c => c, cardGKeys: () => ['g'], cardLen: c => c.len, bolakSiblings: () => false, describeCardBrief: () => '',
             isSharedRoomName: () => false, weeksIntersect: () => true, activeInWeek: c => !c.cancelled, curWeek: 8, unitCalls: [], placed: [],
             unitOf: () => cards2, unitLen: l => l.reduce((n, x) => n + x.len, 0), placeUnitAt: async (c) => { c3.unitCalls.push(c.id); } };
@@ -75,7 +75,7 @@ async function move(from, to, blocked = false, parallel = true, type = 'lecture'
 
     // Yarim para qadami: 2 qatorli (rowspan) katakning pastki yarmiga tushirilsa — ikkinchi yarim-slot.
     const helpers = source.slice(source.indexOf('            function dropSlotAt('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig'));
-    const hx = { activeInWeek: () => true, curWeek: 8, cards: [{id:1, day:5, pair:5, len:2, training_type:'practice'}, {id:2, day:5, pair:7, len:1, training_type:'practice'},
+    const hx = { phOf: () => null, activeInWeek: () => true, curWeek: 8, cards: [{id:1, day:5, pair:5, len:2, training_type:'practice'}, {id:2, day:5, pair:7, len:1, training_type:'practice'},
         {id:9, day:5, pair:8, len:2, training_type:'practice', teacher_id: 7}], Math, boardSchedule: () => Array.from({length: 12}, () => ({type: 'pair'})) };
     hx.cards[0].teacher_id = hx.cards[1].teacher_id = 7;
     Object.assign(hx, { cardLen: c => c.len, unitOf: c => (c.id === 9 ? [c] : hx.cards.slice(0, 2)), unitLen: l => l.reduce((n, x) => n + x.len, 0),

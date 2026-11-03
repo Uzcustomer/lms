@@ -16,8 +16,9 @@ use Illuminate\Support\Facades\DB;
  *
  * - O'qituvchi — fan kafedrasining mudiri, xona — "Kafedra mudiri xonasi" (HEMIS solishtirishdagi hemisMudirFor /
  *   hemisFallbackRoomFor bilan bir xil manba, fanning kafedrasi ustuvor). Topilmasa — yozib bo'lmaydi (sababi bilan).
- * - Kartaga mudir_placeholder (asl o'qituvchi/xona, sabab, kim/qachon, haftalar) yoziladi; to'qnashuv tekshirilmaydi va bu karta
- *   boshqalarni ham to'qnashuvli qilmaydi (clashWith, weeklyConflicts).
+ * - Faqat tanlangan hafta(lar)ning yozuviga (timetable_card_overrides.mudir_placeholder: mudir, shu haftaning asl xonasi, asl
+ *   o'qituvchi, sabab, kim/qachon) — karta asosiy o'qituvchisi/xonasi boshqa haftalar uchun o'zgarmaydi. Shu haftada to'qnashuv
+ *   tekshirilmaydi va boshqalarni ham to'qnashuvli qilmaydi (weekClashes, weeklyConflicts).
  * - "Asl o'qituvchiga qaytarish" — bandlik tekshiriladi: bo'sh bo'lsa asl o'qituvchi va xona tiklanadi, aks holda sababi.
  * - Huquq: admin — darhol; kafedra mudiri — faqat o'z kafedrasi fanlari (weeklyLayerDenied). Tarix — TimetableChangeApproval::LOGGED.
  */
@@ -101,7 +102,7 @@ trait TimetableMudirPlaceholder
             'slot' => $slot ? ['day' => $slot[0], 'pair' => $slot[1], 'text' => ($days[$slot[0] - 1] ?? ($slot[0] . '-kun')) . ' (' . ($times[$slot[1]][0] ?? '')
                 . '–' . ($times[$slot[1] + $len - 1][1] ?? '') . ')'] : null,
             'len' => $len,
-            'placeholder' => $card->mudir_placeholder,
+            'placeholder' => !empty($data['week']) ? $this->ovPlaceholder(TimetableCardOverride::where('card_id', $card->id)->where('week', (int) $data['week'])->first() ?? (object) []) : null,
         ]);
     }
 
@@ -146,36 +147,39 @@ trait TimetableMudirPlaceholder
         $actor = $this->timetableActor($request);
         $mudir = $t['teacher'];
         [$roomCode, $roomName] = $t['room'];
+        // Faqat tanlangan hafta(lar)ning yozuvi o'zgaradi (karta asosiy o'qituvchisi va xonasi — boshqa haftalar uchun — o'zgarmaydi):
+        // mudir va shu haftaning asl xonasi (override) mudir_placeholder'da saqlanadi — qaytarishda aynan tiklanadi.
         DB::transaction(function () use ($cards, $chain, $weeks, $day, $pair, $mudir, $roomCode, $roomName, $data, $actor) {
             $ovs = $this->unitOverrides($cards);
             foreach ($chain as [$piece, $off]) {
-                $ph = $piece->mudir_placeholder ?: ['teacher_id' => $piece->teacher_id, 'teacher_name' => $piece->teacher_name,
-                    'auditorium_code' => $piece->auditorium_code, 'auditorium_name' => $piece->auditorium_name, 'weeks' => []];
-                $placed = [];
                 foreach ($weeks as $w) {
+                    $prev = $ovs[$piece->id][$w] ?? null;
                     // Shu haftada o'tilmaydigan bo'lak (bekor qilingan) — tegilmaydi.
-                    if (($ovs[$piece->id][$w] ?? null)?->cancelled) {
+                    if ($prev?->cancelled) {
                         continue;
                     }
+                    $old = $prev ? $this->ovPlaceholder($prev) : null;
+                    $ph = [
+                        'teacher_id' => (int) $mudir->id, 'teacher_name' => (string) ($mudir->short_name ?: $mudir->full_name),
+                        'mudir_name' => (string) $mudir->full_name, 'hemis_id' => $mudir->hemis_id ? (int) $mudir->hemis_id : null,
+                        // Asl holat: karta o'qituvchisi va shu haftaning xonasi (haftalik yozuvdagi — bo'lmasa kartaniki).
+                        'orig_teacher_id' => $piece->teacher_id ? (int) $piece->teacher_id : null, 'orig_teacher_name' => $piece->teacher_name,
+                        'orig_room_code' => $old ? ($old['orig_room_code'] ?? null) : ($prev?->auditorium_code ?: null),
+                        'orig_room_name' => $old ? ($old['orig_room_name'] ?? null) : ($prev?->auditorium_name ?: null),
+                        'orig_day' => $old ? ($old['orig_day'] ?? null) : ($prev && $prev->day ? (int) $prev->day : null),
+                        'orig_pair' => $old ? ($old['orig_pair'] ?? null) : ($prev && $prev->pair ? (int) $prev->pair : null),
+                        'had_override' => $old ? (bool) ($old['had_override'] ?? false) : (bool) $prev,
+                        'reason' => trim((string) ($data['reason'] ?? '')) ?: ($old['reason'] ?? null),
+                        'by_id' => $actor?->getKey(), 'by_name' => $actor?->full_name ?? $actor?->name, 'at' => now()->toDateTimeString(),
+                    ];
                     TimetableCardOverride::updateOrCreate(['card_id' => $piece->id, 'week' => $w],
-                        ['day' => $day, 'pair' => $pair + $off, 'start_half' => 0, 'cancelled' => false, 'auditorium_code' => $roomCode, 'auditorium_name' => $roomName]);
-                    $placed[] = $w;
+                        ['day' => $day, 'pair' => $pair + $off, 'start_half' => 0, 'cancelled' => false, 'auditorium_code' => $roomCode,
+                            'auditorium_name' => $roomName, 'mudir_placeholder' => $ph]);
                 }
-                $ph['weeks'] = array_values(array_unique(array_merge($ph['weeks'] ?? [], $placed)));
-                sort($ph['weeks']);
-                $ph += ['reason' => null];
-                $ph['reason'] = trim((string) ($data['reason'] ?? '')) ?: $ph['reason'];
-                $ph['by_id'] = $actor?->getKey();
-                $ph['by_name'] = $actor?->full_name ?? $actor?->name;
-                $ph['at'] = now()->toDateTimeString();
-                $ph['mudir_name'] = $mudir->full_name;
-                $piece->forceFill(['teacher_id' => $mudir->id, 'teacher_name' => $mudir->short_name ?: $mudir->full_name,
-                    'auditorium_code' => $roomCode, 'auditorium_name' => $roomName, 'mudir_placeholder' => $ph])->save();
             }
         });
 
-        return response()->json(['ok' => true, 'weeks' => $weeks, 'unit' => $this->unitPayload($this->weeklyUnitCards($card->fresh()), $W, false),
-            'cards' => TimetableCard::whereIn('id', $cards->pluck('id'))->get(['id', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name', 'mudir_placeholder'])]);
+        return response()->json(['ok' => true, 'weeks' => $weeks, 'unit' => $this->unitPayload($cards, $W, false)]);
     }
 
     /**
@@ -184,41 +188,41 @@ trait TimetableMudirPlaceholder
      */
     public function mudirPlaceholderRevert(Request $request, TimetableCard $card)
     {
-        $cards = $this->weeklyUnitCards($card)->filter(fn ($c) => !empty($c->mudir_placeholder))->values();
-        if ($cards->isEmpty()) {
-            return response()->json(['error' => 'Bu dars vaqtincha kafedra mudirida emas.'], 422);
-        }
+        $data = $request->validate(['week' => 'nullable|integer|min:1|max:60']);
+        // Birlik — kartaning o'z (asl) o'qituvchisi bo'yicha: karta asosiy maydonlari o'zgarmagan, shuning uchun turli asl o'qituvchili
+        // darslar mudirda birlashib ketmaydi.
+        $cards = $this->weeklyUnitCards($card);
         if ($denied = $this->mudirPlaceholderDenied($request, $cards)) {
             return $denied;
         }
-        $ignore = array_fill_keys($this->weeklyUnitCards($card)->pluck('id')->map(fn ($id) => (int) $id)->all(), true);
+        $q = TimetableCardOverride::whereIn('card_id', $cards->pluck('id'))->whereNotNull('mudir_placeholder');
+        if (!empty($data['week'])) {
+            $q->where('week', (int) $data['week']);
+        }
+        $rows = $q->get()->filter(fn ($o) => $this->ovPlaceholder($o));
+        if ($rows->isEmpty()) {
+            return response()->json(['error' => 'Bu dars vaqtincha kafedra mudirida emas.'], 422);
+        }
+        $ignore = array_fill_keys($cards->pluck('id')->map(fn ($id) => (int) $id)->all(), true);
+        $byId = $cards->keyBy('id');
         $errors = [];
-        $weeksOf = $cards->mapWithKeys(fn ($c) => [$c->id => (array) ($c->mudir_placeholder['weeks'] ?? [])])->all();
         DB::beginTransaction();
         try {
-            foreach ($cards as $c) {
-                $ph = $c->mudir_placeholder;
-                foreach ($ph['weeks'] ?? [] as $w) {
-                    $o = TimetableCardOverride::where('card_id', $c->id)->where('week', $w)->first();
-                    if ($o && (string) $o->auditorium_code === (string) $c->auditorium_code) {
-                        $o->forceFill(['auditorium_code' => null, 'auditorium_name' => null])->save();
-                    }
-                }
-                $c->forceFill(['teacher_id' => $ph['teacher_id'] ?? null, 'teacher_name' => $ph['teacher_name'] ?? null,
-                    'auditorium_code' => $ph['auditorium_code'] ?? null, 'auditorium_name' => $ph['auditorium_name'] ?? null, 'mudir_placeholder' => null])->save();
+            foreach ($rows as $o) {
+                $ph = $this->ovPlaceholder($o);
+                // Shu haftaning asl xonasi tiklanadi; joy — mudirga yozilgan joyda qoladi (to'qnashuv hal bo'lgan joy).
+                $o->forceFill(['auditorium_code' => $ph['orig_room_code'] ?? null, 'auditorium_name' => $ph['orig_room_name'] ?? null,
+                    'mudir_placeholder' => null])->save();
             }
-            foreach ($cards as $c) {
-                $c->refresh();
-                foreach ($weeksOf[$c->id] ?? [] as $w) {
-                    $o = TimetableCardOverride::where('card_id', $c->id)->where('week', $w)->first();
-                    if (!$o || $o->cancelled || !$o->day || !$o->pair) {
-                        continue;
-                    }
-                    $state = $this->calendarConflictState($c);
-                    $state['ignore'] = $ignore;
-                    foreach ($this->findWeekConflicts($c, (int) $w, (int) $o->day, (int) $o->pair, 0, $state) as $e) {
-                        $errors[] = $w . '-hafta: ' . $e;
-                    }
+            foreach ($rows as $o) {
+                $c = $byId[$o->card_id] ?? TimetableCard::find($o->card_id);
+                if (!$c || !$o->day || !$o->pair) {
+                    continue;
+                }
+                $state = $this->calendarConflictState($c);
+                $state['ignore'] = $ignore;
+                foreach ($this->findWeekConflicts($c, (int) $o->week, (int) $o->day, (int) $o->pair, 0, $state) as $e) {
+                    $errors[] = $o->week . '-hafta: ' . $e;
                 }
             }
         } catch (\Throwable $e) {
@@ -232,6 +236,6 @@ trait TimetableMudirPlaceholder
         }
         DB::commit();
 
-        return response()->json(['ok' => true, 'cards' => TimetableCard::whereIn('id', $cards->pluck('id'))->get(['id', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name', 'mudir_placeholder'])]);
+        return response()->json(['ok' => true, 'weeks' => $rows->pluck('week')->map(fn ($w) => (int) $w)->sort()->values()]);
     }
 }

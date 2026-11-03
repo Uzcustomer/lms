@@ -3652,7 +3652,7 @@
                 const roomVol = j.room_volumes || {};
                 (j.ov || []).forEach(o => {
                     overrides[o[0] + '|' + o[1]] = { day: o[2], pair: o[3], cancelled: !!o[4], auditorium_code: o[5] || null, auditorium_name: o[6] || null,
-                        auditorium_volume: o[5] ? (roomVol[o[5]] ?? null) : null };
+                        auditorium_volume: o[5] ? (roomVol[o[5]] ?? null) : null, ...(o[7] ? { mudir_placeholder: o[7] } : {}) };
                 });
                 (j.overrides || []).forEach(o => {
                     overrides[o.card_id + '|' + o.week] = {
@@ -5483,6 +5483,8 @@
                 if (ov) return ov.cancelled || !ov.day || !ov.pair ? null : { day: +ov.day, pair: +ov.pair };
                 return c.day && c.pair ? { day: +c.day, pair: +c.pair } : null;
             }
+            // Shu hafta "vaqtincha kafedra mudirida" (haftalik yozuvdagi belgi): {teacher_name (mudir), mudir_name, orig_teacher_name, …} | null.
+            const phOf = (c, W = curWeek) => (c && W && overrides[c.id + '|' + W] && overrides[c.id + '|' + W].mudir_placeholder) || null;
             const activeInWeek = (c, W) => !(W && c.term_weeks && W > +c.term_weeks) && !(W && overrides[c.id + '|' + W] && overrides[c.id + '|' + W].cancelled);
             // Birlik indeksi (kalit → kartalar) — panel/zichlash kabi ko'p chaqiriladigan joylar uchun bir marta quriladi.
             function buildUnitIndex(list = cards) {
@@ -7967,7 +7969,7 @@
                     (items.length ? cfMergeItems(items).map(i => cfLineHtml(i, { move: curWeek ? 'w|' + id + '|' + curWeek : null })).join('')
                         : '<li class="cf-line">' + esc(cardConflict(c) || '') + '</li>') +
                     (weeklyCapLine(c) ? '<li class="cf-line cf-cap-warn">' + esc(weeklyCapLine(c)) + '</li>' : '') + '</ul>' +
-                    (c && mudirPhAllowed() && !c.mudir_placeholder ? '<div style="padding:4px 8px"><button type="button" data-cf-mudir style="border:1px solid #ca8a04;color:#854d0e;background:#fefce8;border-radius:5px;padding:1px 8px">Vaqtincha kafedra mudiriga yozish</button></div>' : '');
+                    (c && mudirPhAllowed() && !phOf(c) ? '<div style="padding:4px 8px"><button type="button" data-cf-mudir style="border:1px solid #ca8a04;color:#854d0e;background:#fefce8;border-radius:5px;padding:1px 8px">Vaqtincha kafedra mudiriga yozish</button></div>' : '');
                 document.body.appendChild(pop);
                 const cfMudir = pop.querySelector('[data-cf-mudir]');
                 if (cfMudir) cfMudir.onclick = () => { closeCycDayPop(); openMudirPhConfirm(c, mudirPhSlot(c)); };
@@ -8825,11 +8827,11 @@
                 const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
                 // Vaqtincha kafedra mudirida — to'qnashuv tekshirilmaydi va boshqalarni ham to'qnashuvli qilmaydi (serverdagi clashWith).
-                if (card.mudir_placeholder) return errs;
+                if (phOf(card)) return errs;
                 const effectiveSource = effectiveCard(card);
                 const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
-                    if (o.id === card.id || ignoredIds.includes(o.id) || o.mudir_placeholder) return;
+                    if (o.id === card.id || ignoredIds.includes(o.id) || phOf(o)) return;
                     const effectiveOther = effectiveCard(o);
                     // Tashqi qatlamda joylash andozaga (barcha haftalar) yoziladi va server bandlikni
                     // andoza bo'yicha tekshiradi — haftaning ko'rinishdagi surilishi/bekori hisobga olinmaydi.
@@ -9396,7 +9398,7 @@
             async function mudirPhRevert(c, btn) {
                 if (btn) btn.disabled = true;
                 try {
-                    await api(BASE + '/cards/' + c.id + '/mudir-placeholder/revert', 'POST', {});
+                    await api(BASE + '/cards/' + c.id + '/mudir-placeholder/revert', 'POST', { week: curWeek });
                     delete phRevertErr[unitKey(c)];
                     await loadBoard(board.id);
                 } catch (e) {
@@ -9410,10 +9412,10 @@
                 if (!list.length) return '';
                 return '<div class="pn-mudir-ph" style="border:1px dashed #ca8a04;background:#fefce8;color:#713f12;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
                     'Vaqtincha kafedra mudirida: <b>' + list.length + ' ta</b>' + list.map(c => {
-                        const ph = c.mudir_placeholder || {};
+                        const ph = phOf(c) || {};
                         const err = phRevertErr[unitKey(c)];
                         return '<div class="pn-mudir-ph-item" data-ph-card="' + c.id + '" style="margin-top:3px;border-top:1px dotted #fde68a;padding-top:3px">' +
-                            esc(cardGroups(c).join(', ') + ' · ' + c.subject_name) + ' <span style="color:#a16207">(asl o\'qituvchi: ' + esc(ph.teacher_name || 'biriktirilmagan') + ')</span>' +
+                            esc(cardGroups(c).join(', ') + ' · ' + c.subject_name) + ' <span style="color:#a16207">(asl o\'qituvchi: ' + esc(ph.orig_teacher_name || 'biriktirilmagan') + ')</span>' +
                             (mudirPhAllowed() ? ' <button type="button" data-ph-revert="' + c.id + '" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Asl o\'qituvchiga qaytarish</button>' : '') +
                             (err ? '<div style="color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>' : '') + '</div>';
                     }).join('') + '</div>';
@@ -9537,7 +9539,7 @@
                     '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' +
                     (edit && ext && W && weeklyLayer === 'internal' ? '<button type="button" data-pop-place style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:5px;padding:1px 8px">Shu joyga joylash</button>' : '') +
                     (edit ? '<button type="button" data-pop-select style="border:1px solid #2563eb;color:#1d4ed8;background:#eff6ff;border-radius:5px;padding:1px 8px">Joylash uchun tanlash</button>' : '') +
-                    (mudirPhAllowed() && !c.mudir_placeholder ? '<button type="button" data-pop-mudir disabled title="tekshirilmoqda…" style="border:1px solid #ca8a04;color:#854d0e;background:#fefce8;border-radius:5px;padding:1px 8px">Vaqtincha kafedra mudiriga yozish</button>' : '') +
+                    (mudirPhAllowed() && !phOf(c) ? '<button type="button" data-pop-mudir disabled title="tekshirilmoqda…" style="border:1px solid #ca8a04;color:#854d0e;background:#fefce8;border-radius:5px;padding:1px 8px">Vaqtincha kafedra mudiriga yozish</button>' : '') +
                     '<div data-pop-mudir-why style="width:100%;color:#a16207;font-size:11px"></div>' +
                     (TIMETABLE_ROLE === 'oqituvchi' ? '<button type="button" data-pop-propose style="border:1px solid #7c3aed;color:#6d28d9;background:#f5f3ff;border-radius:5px;padding:1px 8px">Vaqtini o\'zgartirishni so\'rash</button>' : '') +
                     '</div>';
@@ -9772,7 +9774,7 @@
                         (unitEditable() ? '<div style="margin-top:3px"><button type="button" data-unit-fix="complete" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 6px">hammasini yaxlit joylash</button>' +
                             ' <button type="button" data-unit-fix="clear" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 6px">hammasini yaxlit bo\'shatish</button></div>' : '') + '</div>'
                     : '';
-                const phList = curWeek && weeklyLayer === 'internal' ? [...new Map(weekActiveCards().filter(c => c.mudir_placeholder && effPlace(c))
+                const phList = curWeek && weeklyLayer === 'internal' ? [...new Map(weekActiveCards().filter(c => phOf(c) && effPlace(c))
                     .map(c => [unitKey(c), c])).values()] : [];
                 $('cardPanel').innerHTML = mudirPhSectionHtml(phList) + partialHead +
                     unShown.map(c => panelCard(c, false)).join('') +
@@ -10439,9 +10441,9 @@
                     const altMark = alt ? '<span class="tt-alt-mark" title="Har hafta emas — almashib keladi">⇄</span>' : '';
                     const tri = shade === 0 ? ' tt-shade-a tt-tri-a' : shade === 1 ? ' tt-shade-b tt-tri-b' : '';
                     // Vaqtincha kafedra mudirida — kulrang-sariq ramka, yorliq va tooltip (asl o'qituvchi, sabab, kim/qachon).
-                    const ph = c.mudir_placeholder || null;
-                    const phTip = ph ? '\nVaqtincha: kafedra mudiri' + (ph.mudir_name ? ' (' + ph.mudir_name + ')' : '') + ' · asl o\'qituvchi: ' + (ph.teacher_name || 'biriktirilmagan')
-                        + (ph.auditorium_name ? ', asl xona: ' + ph.auditorium_name : '') + (ph.reason ? '\nSabab: ' + ph.reason : '')
+                    const ph = phOf(c);
+                    const phTip = ph ? '\nVaqtincha: kafedra mudiri' + (ph.mudir_name ? ' (' + ph.mudir_name + ')' : '') + ' · asl o\'qituvchi: ' + (ph.orig_teacher_name || 'biriktirilmagan')
+                        + ', asl xona: ' + (ph.orig_room_name || c.auditorium_name || '—') + (ph.reason ? '\nSabab: ' + ph.reason : '')
                         + (ph.by_name ? '\nYozgan: ' + ph.by_name + (ph.at ? ', ' + ph.at : '') : '') : '';
                     const head = '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
                         (alt ? ' tt-alt' : '') + (ph ? ' tt-mudir-ph' : '') + tri +
@@ -10462,7 +10464,7 @@
                         ? '<button type="button" class="tt-ask-time" data-ask-time="' + c.id + '">Vaqtini o\'zgartirishni so\'rash</button>' : '';
                     return head +
                         altMark + cardLabel(c, true) + wks + badge +
-                        (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
+                        ((ph ? ph.teacher_name : c.teacher_name) ? '<div class="text-[9px] text-gray-600">' + esc(ph ? ph.teacher_name : c.teacher_name) + '</div>' : '') +
                         roomTxt + phTag + askTime +
                         '</div>';
                 };

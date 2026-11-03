@@ -854,11 +854,13 @@ trait TimetableHemisSync
                     // Xona qayerdan: shu haftaning ichki jadvalida alohida berilgan yoki kartochkaning o'zida.
                     'room_from' => ($hasOvRoom && $o && $o->auditorium_code) ? 'week' : 'card', 'card_room_name' => $c->auditorium_name,
                     'part' => $c->training_type === 'lecture' ? 'L' : 'A',
-                    'employee_id' => $c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null,
-                    'employee_name' => $c->teacher_id ? $c->teacher_name : null,
+                    // "Vaqtincha kafedra mudirida" (shu hafta): o'qituvchi — mudir (HEMIS id'si), xona — haftalik yozuvdagi (mudir xonasi);
+                    // placeholder — asl o'qituvchi nomi (rejada bandligi tekshirilmaydi).
+                    'employee_id' => ($ph = $o ? $this->ovPlaceholder($o) : null) ? ($ph['hemis_id'] ?? null)
+                        : ($c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null),
+                    'employee_name' => $ph ? ($ph['teacher_name'] ?? null) : ($c->teacher_id ? $c->teacher_name : null),
                     'auditorium_code' => $room[0] ?: null, 'auditorium_name' => $room[1] ?: null,
-                    // "Vaqtincha kafedra mudirida": asl o'qituvchi nomi (rejada bandligi tekshirilmaydi).
-                    'placeholder' => !empty($c->mudir_placeholder) ? (string) ($c->mudir_placeholder['teacher_name'] ?? '') : null,
+                    'placeholder' => $ph ? (string) ($ph['orig_teacher_name'] ?? '') : null,
                 ];
             }
 
@@ -1913,10 +1915,12 @@ trait TimetableHemisSync
             $state = ['cards' => $weekly, 'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($weekly)))];
             foreach ($this->weeklyOccupancy($board, $state, [$today => true]) as $e) {
                 $c = $weekly[$e['card']];
+                // Shu hafta "vaqtincha kafedra mudirida": o'qituvchi — mudir (HEMIS id'si yozuvda), placeholder — asl o'qituvchi nomi.
+                $ph = ($ovr = $state['ov'][$e['card']][$e['week']] ?? null) ? $this->ovPlaceholder($ovr) : null;
                 $l = $lesson((string) $c->subject_name, $c->training_type === 'lecture' ? 'L' : 'A', (int) $e['from'], (int) $e['to'] - (int) $e['from'],
-                    $c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null, $c->teacher_id ? $c->teacher_name : null,
-                    $e['room'], $e['room_name'], false,
-                    !empty($c->mudir_placeholder) ? (string) ($c->mudir_placeholder['teacher_name'] ?? '') : null);
+                    $ph ? ($ph['hemis_id'] ?? null) : ($c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null),
+                    $ph ? ($ph['teacher_name'] ?? 'kafedra mudiri') : ($c->teacher_id ? $c->teacher_name : null),
+                    $e['room'], $e['room_name'], false, $ph ? (string) ($ph['orig_teacher_name'] ?? '') : null);
                 foreach ($this->cardGroupsOf($c) as $raw) {
                     $lms[$facKey($c->faculty_name) . '|' . $this->groupNameKey(trim((string) $raw))][] = $l;
                 }

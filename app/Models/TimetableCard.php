@@ -10,7 +10,7 @@ class TimetableCard extends Model
         'board_id', 'specialty_name', 'course', 'faculty_name', 'oqim_label', 'lang',
         'training_type', 'group_name', 'group_names', 'subject_name',
         'kafedra_name', 'students', 'teacher_id', 'teacher_name',
-        'auditorium_code', 'auditorium_name', 'day', 'pair', 'ext_day', 'ext_pair', 'start_half', 'len_half', 'mudir_placeholder',
+        'auditorium_code', 'auditorium_name', 'day', 'pair', 'ext_day', 'ext_pair', 'start_half', 'len_half',
         // Karta necha haftada o'tiladi (ma'ruzali haftada amaliy paralar kamayadi)
         'weeks',
         'placement_reason_code', 'placement_reason',
@@ -18,8 +18,6 @@ class TimetableCard extends Model
 
     protected $casts = [
         'group_names' => 'array',
-        // "Vaqtincha kafedra mudirida": asl o'qituvchi/xona, sabab, kim/qachon, haftalar.
-        'mudir_placeholder' => 'array',
     ];
 
     public function board()

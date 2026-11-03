@@ -2508,17 +2508,24 @@ it('bugungi darslar: o\'qituvchisi va xonasi yo\'q LMS kartasi — kafedra mudir
         'reason' => "LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri topilmadi — o'zgarishsiz"]);
 });
 
-/** Kartani "vaqtincha kafedra mudirida" qiladi: MUDIR (9001) va «Kafedra mudiri xonasi» (KM1), asl — USTOZ · 71. */
-function hsPlaceholder(TimetableCard $card): void
+/**
+ * Kartani shu hafta(lar)da "vaqtincha kafedra mudirida" qiladi (haftalik yozuvda): MUDIR va «Kafedra mudiri xonasi» (KM1); karta asosiy
+ * o'qituvchisi (USTOZ · 71) o'zgarmaydi. $hemis — mudirning HEMIS id'si (yozilgan paytdagi).
+ */
+function hsPlaceholder(TimetableCard $card, array $weeks, ?int $hemis = 9001): void
 {
     $mudir = Teacher::where('full_name', 'MUDIR')->first();
-    $card->forceFill(['teacher_id' => $mudir->id, 'teacher_name' => 'MUDIR', 'auditorium_code' => 'KM1', 'auditorium_name' => 'Kafedra mudiri xonasi',
-        'mudir_placeholder' => ['teacher_id' => $card->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '71', 'auditorium_name' => '71', 'weeks' => [1]]])->save();
+    foreach ($weeks as $w) {
+        \App\Models\TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $w], ['day' => (int) $card->day, 'pair' => (int) $card->pair,
+            'cancelled' => false, 'auditorium_code' => 'KM1', 'auditorium_name' => 'Kafedra mudiri xonasi',
+            'mudir_placeholder' => ['teacher_id' => $mudir->id, 'teacher_name' => 'MUDIR', 'mudir_name' => 'MUDIR', 'hemis_id' => $hemis,
+                'orig_teacher_id' => $card->teacher_id, 'orig_teacher_name' => 'USTOZ', 'orig_room_code' => null, 'orig_room_name' => null]]);
+    }
 }
 
 it('bugungi darslar: "vaqtincha — kafedra mudiri" — mudir/mudir xonasi band bo\'lsa ham update (JSON\'da mudir); guruh band — to\'siqli; HEMIS id yo\'q — info', function () {
     $s = hsSetup();
-    hsPlaceholder($s['card']);
+    hsPlaceholder($s['card'], [1]);
     htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['emp' => 5001, 'room' => '71'])]]);
     // MUDIR va KM1 shu vaqtda HEMIS'da boshqa darsda — to'siq emas.
     foreach ([[600, 2000, 9001, 'Z1'], [601, 2001, 7007, 'KM1']] as [$id, $g, $emp, $room]) {
@@ -2542,7 +2549,7 @@ it('bugungi darslar: "vaqtincha — kafedra mudiri" — mudir/mudir xonasi band 
     expect($row['status'])->toBe('blocked')->and($row['blocked'][0])->toStartWith('guruhning boshqa darsi bilan ustma-ust');
 
     // Mudirning HEMIS xodim id'si yo'q — info, JSON'ga tushmaydi.
-    Teacher::where('full_name', 'MUDIR')->update(['hemis_id' => 0]);
+    hsPlaceholder($s['card'], [1], null);
     htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['emp' => 5001, 'room' => '71'])]]);
     $res = htCall($s)->assertOk()->json();
     expect($res['rows'][0])->toMatchArray(['status' => 'info', 'reason' => "kafedra mudirining HEMIS xodim id'si yo'q"])
@@ -2553,7 +2560,7 @@ it('HEMIS solishtirish: "vaqtincha — kafedra mudiri" — mudir boshqa darsda b
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
-    hsPlaceholder($s['card']);
+    hsPlaceholder($s['card'], [2]);   // faqat 2-hafta (21.09)
     // MUDIR 21.09 10:00 da HEMIS'da boshqa guruhda.
     hsInsert('schedules', ['schedule_hemis_id' => 70, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11',
         'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
@@ -2566,4 +2573,8 @@ it('HEMIS solishtirish: "vaqtincha — kafedra mudiri" — mudir boshqa darsda b
     expect($a['employee_id'])->toBe(9001)->and($a['auditorium_code'])->toBe('KM1')->and($a['blocked'])->toBe([])
         ->and($a['flags'])->toContain('vaqtincha')
         ->and($a['reason'])->toContain("vaqtincha — kafedra mudiri (asl o'qituvchi: USTOZ)");
+    // Codex: boshqa haftalar (3-hafta, 28.09) — asl o'qituvchi va xona (USTOZ · 71), "vaqtincha" belgisi yo'q.
+    $others = collect($res['groups'][0]['units'][0]['actions'])->filter(fn ($a) => $a['date'] !== '2026-09-21' && $a['op'] !== 'delete');
+    expect($others->filter(fn ($a) => (int) $a['employee_id'] === 9001 || in_array('vaqtincha', $a['flags'] ?? [], true)
+        || ($a['auditorium_code'] ?? '') === 'KM1')->all())->toBe([]);
 });

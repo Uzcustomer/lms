@@ -491,14 +491,17 @@ class SchedulePlanner
         $best = null;
         $bestD = PHP_INT_MAX;
         foreach ($blocks as $b) {
-            $d = abs(strtotime($b['date']) - strtotime($date)) + ($b['part'] === $part ? 0 : 10 ** 9);
+            // "Vaqtincha kafedra mudirida" — faqat o'sha hafta uchun: boshqa sanaga qo'shiladigan dars uning o'qituvchi/xonasini olmaydi
+            // (boshqa blok bo'lmasa — oladi, lekin belgisiz: mudir bandligi tekshiriladi).
+            $ph = (reset($b['slots'])['ph'] ?? null) !== null;
+            $d = abs(strtotime($b['date']) - strtotime($date)) + ($b['part'] === $part ? 0 : 10 ** 9) + ($ph ? 10 ** 10 : 0);
             if ($d < $bestD) {
                 $bestD = $d;
                 $best = reset($b['slots']);
             }
         }
 
-        return $best;
+        return $best === null ? null : ['ph' => null] + $best;
     }
 
     private function bestPositiveCode(array $u, array $D, string $part): string

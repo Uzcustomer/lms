@@ -194,13 +194,16 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     assert.doesNotMatch(m2.innerHTML, /data-ph-ok/);
 
     // 8) Panel bo'limi: "Vaqtincha kafedra mudirida: N ta", asl o'qituvchi va qaytarish tugmasi; qaytarish band — qizil sabab.
-    const phCard = Object.assign({}, cards[2], { id: 30, mudir_placeholder: { teacher_name: 'ALIYEV SH. N.', reason: 'xona band' } });
+    // Belgi — shu haftaning yozuvida (karta asosiy o'qituvchisi o'zgarmaydi).
+    const phCard = Object.assign({}, cards[2], { id: 30 });
+    ctx.overrides['30|8'] = { day: 3, pair: 3, cancelled: false, mudir_placeholder: { teacher_name: 'XOLMATOV A. B.', orig_teacher_name: 'ALIYEV SH. N.', reason: 'xona band' } };
     let sec = ctx.mudirPhSectionHtml([phCard]);
     assert.match(sec, /Vaqtincha kafedra mudirida: <b>1 ta<\/b>/);
     assert.match(sec, /\(asl o'qituvchi: ALIYEV SH\. N\.\)/);
     assert.match(sec, /data-ph-revert="30"[^>]*>Asl o'qituvchiga qaytarish/);
     ctx.revertFail = "Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta: O'qituvchi band: ALIYEV SH. N. — …";
     await ctx.mudirPhRevert(phCard, { disabled: false });
+    assert.deepEqual(calls.filter(c => c[0].endsWith('/revert')).pop(), ['/cards/30/mudir-placeholder/revert', { week: 8 }]);
     sec = ctx.mudirPhSectionHtml([phCard]);
     assert.match(sec, /✖ Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta: O'qituvchi band/);
     console.log('timetable panel card pop: 8 scenarios passed');

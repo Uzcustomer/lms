@@ -21,25 +21,42 @@ class TimetableActiveRoom
 
     public function handle(Request $request, Closure $next)
     {
-        if ($request->isMethodSafe() || $request->routeIs('admin.timetable.auditoriums*') || !Schema::hasColumn('auditoriums', 'active')) {
+        if ($request->isMethodSafe() || $request->routeIs('admin.timetable.auditoriums*')) {
             return $next($request);
         }
+        if ($bad = self::inactiveIn($request->all())) {
+            return response()->json(['error' => self::message($bad), 'code' => 'room_inactive', 'auditorium_code' => $bad->code], 422);
+        }
+
+        return $next($request);
+    }
+
+    /**
+     * So'rov ma'lumotidagi (auditorium_code, actions.*.auditorium_code) birinchi nofaol xona yoki null. Tasdiqlangan so'rov qayta
+     * bajarilganda ham (TimetableChangeApproval::applyLocked — middleware'siz) chaqiriladi: kutish paytida xona nofaol bo'lib qolishi mumkin.
+     */
+    public static function inactiveIn(array $payload): ?Auditorium
+    {
+        if (!Schema::hasColumn('auditoriums', 'active')) {
+            return null;
+        }
         $codes = [];
-        $one = $request->input('auditorium_code');
+        $one = $payload['auditorium_code'] ?? null;
         if (is_string($one) && trim($one) !== '') {
             $codes[] = trim($one);
         }
-        foreach ((array) $request->input('actions', []) as $a) {
+        foreach ((array) ($payload['actions'] ?? []) as $a) {
             $c = is_array($a) ? ($a['auditorium_code'] ?? null) : null;
             if (is_string($c) && trim($c) !== '') {
                 $codes[] = trim($c);
             }
         }
-        if ($codes && ($bad = Auditorium::whereIn('code', array_unique($codes))->where('active', false)->first(['code', 'name']))) {
-            return response()->json(['error' => self::MESSAGE . ' («' . ($bad->name ?: $bad->code) . '»).', 'code' => 'room_inactive',
-                'auditorium_code' => $bad->code], 422);
-        }
 
-        return $next($request);
+        return $codes ? Auditorium::whereIn('code', array_unique($codes))->where('active', false)->first(['code', 'name']) : null;
+    }
+
+    public static function message(Auditorium $room): string
+    {
+        return self::MESSAGE . ' («' . ($room->name ?: $room->code) . '»).';
     }
 }

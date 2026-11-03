@@ -627,6 +627,11 @@ class TimetableChangeApproval
             // Replay with the endorsing head's real permissions, never by elevating a teacher.
             $requester = $head;
         }
+        // Xona so'rov yuborilgandan keyin nofaol bo'lib qolgan bo'lishi mumkin (auditoriya sinxroni) — qayta bajarishda ham tekshiriladi
+        // (bu yo'l TimetableActiveRoom middleware'idan o'tmaydi).
+        if ($bad = \App\Http\Middleware\TimetableActiveRoom::inactiveIn((array) ($req->payload ?? []))) {
+            return $this->finish($req, $approver, false, \App\Http\Middleware\TimetableActiveRoom::message($bad));
+        }
         $sub = Request::create('/', 'POST', $req->payload ?? []);
         $sub->headers->set('Accept', 'application/json');
         // Tasdiqlangan so'rovni qayta bajarish (to'g'ridan-to'g'ri HTTP chaqiruv emas).

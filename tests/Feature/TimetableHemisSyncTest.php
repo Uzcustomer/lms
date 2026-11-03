@@ -189,13 +189,13 @@ it('guruh HEMIS\'da fakulteti va to\'liq nomi bo\'yicha topiladi', function () {
         ->and($res['groups_not_in_hemis'])->toBe([]);
 });
 
-it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS darslari o\'qituvchi bandligida hisobga olinadi', function () {
+it('zaxira xona — umumiy faol «Kafedra mudiri xonasi» (kafedraga bog\'lanmaydi); boshqa turdagi va boshqa guruhdagi HEMIS darslari o\'qituvchi bandligida hisobga olinadi', function () {
     $s = hsSetup();
     hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
-    \App\Models\Auditorium::where('code', 'KM1')->update(['department_hemis_id' => null]);
-    // Boshqa kafedraning va faol bo'lmagan "Kafedra mudiri xonasi" — tanlanmaydi; fan kafedrasi (501) niki olinadi
+    \App\Models\Auditorium::where('code', 'KM1')->delete();
+    // Xona kafedraga bog'lanmaydi: faol bo'lmagani tanlanmaydi, faollardan birinchisi (KM777 — boshqa kafedraniki bo'lsa ham) olinadi
     \App\Models\Auditorium::forceCreate(['code' => 'KM777', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 777]);
     \App\Models\Auditorium::forceCreate(['code' => 'KM501X', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => false, 'department_hemis_id' => 501]);
     \App\Models\Auditorium::forceCreate(['code' => 'KM501', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 501]);
@@ -225,7 +225,7 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
     }
     // O'qituvchi band — to'siq bartaraf etiladi: kafedra mudiri qo'yiladi, sababi va band qilgan dars saqlanadi.
     $c28 = $byDate['create 2026-09-28'];
-    expect($c28['auditorium_code'])->toBe('KM501')
+    expect($c28['auditorium_code'])->toBe('KM777')
         ->and($c28['blocked'])->toBe([])
         ->and($c28['employee_id'])->toBe(9001)
         ->and($c28['flags'])->toContain('mudir')->toContain("to'siq sababli")

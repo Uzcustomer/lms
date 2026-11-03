@@ -19,8 +19,10 @@
         .cal-trigger.active { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.15); }
         .cal-trigger .cal-trigger-text { font-weight: 600; }
         .cal-trigger .cal-trigger-placeholder { color: #9ca3af; font-weight: 400; }
+        /* Oqimda turadi: ochilganda sahifa cho'ziladi va skroll qilinadi
+           (absolute bo'lsa pastdagi kontent kam bo'lganda kesilib qolardi) */
         .cal-dropdown {
-            position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+            position: relative; margin-top: 4px; z-index: 50; scroll-margin-bottom: 96px;
             background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px;
             box-shadow: 0 10px 40px rgba(0,0,0,.12); overflow: hidden;
         }
@@ -82,10 +84,7 @@
         .rc-day.rc-start.rc-today, .rc-day.rc-end.rc-today { box-shadow: none; }
 
         /* ======= QAYTA TOPSHIRISH JADVALI (bir fandan kuniga bitta retake) ======= */
-        .ae-plan-start { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; }
-        .ae-plan-start .ae-input { max-width: 240px; }
-        .ae-plan-hint { flex: 1; min-width: 220px; font-size: 13px; color: #64748b; line-height: 1.5; margin: 0; }
-        .ae-plan-table-wrap { margin-top: 18px; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+        .ae-plan-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
         .ae-plan-table { width: 100%; border-collapse: collapse; font-size: 14px; }
         .ae-plan-table th {
             text-align: left; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;
@@ -96,11 +95,6 @@
         .ae-plan-table td.ae-plan-date { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
         .ae-plan-wd { font-weight: 500; color: #94a3b8; font-size: 12px; margin-left: 4px; }
         .ae-plan-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
-        .ae-plan-chip {
-            flex: 1; display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 8px;
-            border: 1.5px solid #c7d2fe; background: #eef2ff; color: #3730a3; font-size: 13px; font-weight: 700;
-        }
-        .ae-plan-chip.ae-plan-chip-empty { border-color: #e2e8f0; background: #f8fafc; color: #94a3b8; font-weight: 500; }
 
         /* ======= CARD STYLES ======= */
         .ae-card {
@@ -140,30 +134,6 @@
         .ae-file-zone.has-file { border-color: #34d399; background: #ecfdf5; }
 
         /* ======= FAN CARD GRID ======= */
-        .ae-fan-grid {
-            display: grid; gap: 14px;
-        }
-        .ae-fan-card {
-            background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px;
-            overflow: visible; min-width: 0;
-        }
-        .ae-fan-header {
-            padding: 12px 16px; font-size: 14px; font-weight: 700; color: #1e293b;
-            background: #f8fafc; border-bottom: 1px solid #e2e8f0;
-            border-radius: 14px 14px 0 0; display: flex; align-items: center; gap: 10px;
-            text-transform: uppercase; line-height: 1.3;
-        }
-        .ae-fan-num {
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 26px; height: 26px; border-radius: 8px; font-size: 13px;
-            font-weight: 700; color: #6366f1; background: #eef2ff; flex-shrink: 0;
-        }
-        .ae-fan-name { flex: 1; min-width: 0; }
-        .ae-fan-item {
-            padding: 12px 16px; border-bottom: 1px solid #f1f5f9;
-        }
-        .ae-fan-item:last-child { border-bottom: none; }
-        .ae-fan-item .cal-dropdown { z-index: 100; }
 
         /* ======= SUBMIT BTN ======= */
         .ae-submit {
@@ -218,16 +188,10 @@
             .rc-weekdays span { font-size: 9px; }
 
             /* Qayta topshirish jadvali */
-            .ae-plan-start .ae-input { max-width: none; }
             .ae-plan-table { font-size: 12px; }
             .ae-plan-table th, .ae-plan-table td { padding: 6px 8px; }
 
             /* Fan grid mobile */
-            .ae-fan-grid { gap: 10px !important; grid-template-columns: 1fr !important; }
-            .ae-fan-header { font-size: 12px; padding: 8px 12px; border-radius: 10px 10px 0 0; }
-            .ae-fan-card { border-radius: 10px; }
-            .ae-fan-item { padding: 8px 12px; }
-            .ae-fan-num { width: 20px; height: 20px; font-size: 10px; border-radius: 6px; }
 
             /* Submit */
             .ae-submit { font-size: 15px; padding: 12px 24px; border-radius: 12px; }
@@ -384,7 +348,7 @@
                                     <div>
                                         {{-- Input trigger --}}
                                         <div class="cal-trigger" :class="showMainCal ? 'active' : ''"
-                                             @click="showMainCal = !showMainCal">
+                                             @click="showMainCal = !showMainCal; if (showMainCal) $nextTick(() => $refs.mainCal.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))">
                                             <div>
                                                 <template x-if="startDate && endDate">
                                                     <span class="cal-trigger-text" x-text="fmtDate(startDate) + '  —  ' + fmtDate(endDate) + ' (' + totalDays + ' kun)'"></span>
@@ -406,7 +370,7 @@
                                         </div>
 
                                         {{-- Dropdown calendar --}}
-                                        <div x-show="showMainCal" x-transition.origin.top x-cloak class="cal-dropdown">
+                                        <div x-show="showMainCal" x-ref="mainCal" x-transition.origin.top x-cloak class="cal-dropdown">
                                             {{-- Hint --}}
                                             <div x-show="startDate && !endDate && selecting === 'end'" class="px-3 py-1.5 bg-blue-50 text-xs text-blue-600 font-medium flex items-center gap-1">
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -509,16 +473,6 @@
                             </div>
                         </div>
                         <div class="ae-card-body">
-                            <div class="ae-plan-start">
-                                <div>
-                                    <label for="retake_start" class="ae-label">{{ __('Qayta topshirish boshlanadigan kun') }}</label>
-                                    <input type="date" id="retake_start" name="retake_start" x-model="retakeStart"
-                                           :min="noDayLimit ? null : todayStr" class="ae-input">
-                                </div>
-                                <p class="ae-plan-hint">
-                                    {{ __('Har bir fan bo\'yicha NB olgan har bir dars kuni uchun bitta kun ajratiladi: bir kunda bitta fandan bitta retake, turli fanlar esa bir kunda bo\'lishi mumkin. OSKI fanning oxirgi retake kuniga, yakuniy test esa bir kun oraliq bilan qo\'yiladi. Yakshanba hisobga olinmaydi.') }}
-                                </p>
-                            </div>
                             <div class="ae-plan-table-wrap" x-show="schedule.length > 0">
                                 <table class="ae-plan-table">
                                     <thead>
@@ -542,74 +496,20 @@
                         </div>
                     </div>
 
-                    {{-- ===== GRID: Fan cards ===== --}}
-                    <div class="ae-fan-grid mb-6"
-                         :style="'grid-template-columns: repeat(' + (groupedAssessments.length >= 3 ? 3 : 2) + ', 1fr)'">
-                        <template x-for="(group, gi) in groupedAssessments" :key="gi">
-                            <div class="ae-fan-card">
-                                <div class="ae-fan-header">
-                                    <span class="ae-fan-num" x-text="gi + 1"></span>
-                                    <span class="ae-fan-name" x-text="group.subject_name"></span>
-                                </div>
-                                <template x-for="(item, ri) in group.items" :key="item._idx">
-                                    <div class="ae-fan-item">
-                                        <div style="margin-bottom:6px;" class="flex items-center gap-2 flex-wrap">
-                                            <span class="px-2.5 py-1 text-sm font-bold rounded-lg inline-block"
-                                                  :class="'badge-' + item.assessment_type"
-                                                  x-text="getLabel(item.assessment_type) + (item.attempt && item.attempt > 1 ? ' (' + item.attempt + '-urinish)' : '')"></span>
-                                            <span class="text-xs text-gray-400" x-text="fmtDate(item.original_date)"></span>
-                                            <template x-if="item.is_makeup_period">
-                                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-lg inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                                    Joriy nazoratdan keyingi test kunlari
-                                                </span>
-                                            </template>
-                                            <template x-if="item.is_previous_makeup">
-                                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-lg inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200"
-                                                      :title="'Avvalgi arizada ' + fmtDate(item.previous_makeup_date) + ' kuniga rejalashtirilgan edi'">
-                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                                                    Avvalgi arizadagi bajarilmagan retake
-                                                </span>
-                                            </template>
-                                        </div>
-                                        <template x-if="item.already_submitted">
-                                            {{-- Fayl topshirilgan MT: sana so'ralmaydi, lekin qator
-                                                 arizaga tushishi uchun maydonlari baribir yuboriladi --}}
-                                            <div>
-                                                <div class="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold inline-flex items-center gap-1.5">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                                    MT yuklangan — qayta topshirish talab qilinmaydi
-                                                </div>
-                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][subject_name]'" :value="item.subject_name">
-                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][subject_id]'" :value="item.subject_id || ''">
-                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][assessment_type]'" :value="item.assessment_type">
-                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][assessment_type_code]'" :value="item.assessment_type_code">
-                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][original_date]'" :value="item.original_date">
-                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][jn_submitted]'" value="1">
-                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][already_submitted]'" value="1">
-                                            </div>
-                                        </template>
-                                        <template x-if="!item.already_submitted">
-                                            {{-- x-if faqat bitta ildiz elementni chizadi: partial esa
-                                                 kalendar + yashirin inputlardan iborat, shuning uchun o'raymiz --}}
-                                            <div>
-                                                @include('student.absence-excuses._retake-cell')
-                                            </div>
-                                        </template>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                {{-- ===== IZOH ===== --}}
-                <div class="ae-card mb-6">
-                    <div class="ae-card-body">
-                        <label for="description" class="ae-label">{{ __('Izoh') }} <span class="text-gray-400 font-normal">{{ __('(ixtiyoriy)') }}</span></label>
-                        <textarea name="description" id="description" rows="4" maxlength="1000"
-                                  class="ae-textarea" placeholder="{{ __('Qo\'shimcha ma\'lumot...') }}">{{ old('description') }}</textarea>
-                    </div>
+                    {{-- Har bir nazorat uchun yashirin maydonlar — sana serverda qayta hisoblanadi --}}
+                    <template x-for="(item, i) in assessments" :key="i">
+                        <div>
+                            <input type="hidden" :name="'makeup_dates['+i+'][subject_name]'" :value="item.subject_name">
+                            <input type="hidden" :name="'makeup_dates['+i+'][subject_id]'" :value="item.subject_id || ''">
+                            <input type="hidden" :name="'makeup_dates['+i+'][assessment_type]'" :value="item.assessment_type">
+                            <input type="hidden" :name="'makeup_dates['+i+'][assessment_type_code]'" :value="item.assessment_type_code">
+                            <input type="hidden" :name="'makeup_dates['+i+'][original_date]'" :value="item.original_date">
+                            <input type="hidden" :name="'makeup_dates['+i+'][makeup_date]'" :value="plan[i] || ''">
+                            <input type="hidden" :name="'makeup_dates['+i+'][jn_submitted]'" :value="item.already_submitted ? '1' : '0'">
+                            <input type="hidden" :name="'makeup_dates['+i+'][is_makeup_period]'" :value="item.is_makeup_period ? '1' : '0'">
+                            <input type="hidden" :name="'makeup_dates['+i+'][already_submitted]'" :value="item.already_submitted ? '1' : '0'">
+                        </div>
+                    </template>
                 </div>
 
                 {{-- ===== SUBMIT ===== --}}
@@ -671,7 +571,7 @@
             searched: false,
 
             // Qayta topshirish boshlanadigan kun (Y-m-d)
-            retakeStart: '{{ old("retake_start", "") }}',
+            retakeStart: '',
 
             // Submit state (loading modal uchun)
             submitting: false,
@@ -706,41 +606,10 @@
                 if (!this.startDate || !this.endDate) return 0;
                 return this._countNonSundays(this.startDate, this.endDate);
             },
-            get groupedAssessments() {
-                const typeOrder = { jn: 0, mt: 1, oski: 2, test: 3 };
-                const groups = [];
-                const map = {};
-                this.assessments.forEach((item, idx) => {
-                    item._idx = idx;
-                    const key = item.subject_name;
-                    if (!map[key]) {
-                        map[key] = { subject_name: key, items: [] };
-                        groups.push(map[key]);
-                    }
-                    map[key].items.push(item);
-                });
-                // Har bir fan ichida: JN birinchi, keyin MT, OSKI, Test
-                groups.forEach(g => {
-                    g.items.sort((a, b) => (typeOrder[a.assessment_type] ?? 9) - (typeOrder[b.assessment_type] ?? 9));
-                });
-                // Non-JN testlari bor fanlar birinchi, faqat JN bor fanlar oxirida
-                groups.sort((a, b) => {
-                    const aHasNonJn = a.items.some(i => i.assessment_type !== 'jn');
-                    const bHasNonJn = b.items.some(i => i.assessment_type !== 'jn');
-                    if (aHasNonJn && !bHasNonJn) return -1;
-                    if (!aHasNonJn && bHasNonJn) return 1;
-                    return 0;
-                });
-                return groups;
-            },
             get canSubmit() {
                 if (!this.reason || !this.startDate || !this.endDate) return false;
                 if (this.deadlineExpired) return false;
-                if (this.assessments.some(a => this._isPending(a)) && !this.retakeStart) return false;
                 return true;
-            },
-            get todayStr() {
-                return this._toStr(new Date());
             },
             // Qayta topshirish kunlari: indeks => 'Y-m-d'.
             // App\Services\SababliRetakePlan::assign bilan bir xil — saqlashda serverda qayta hisoblanadi.

@@ -93,7 +93,9 @@ const rep = {
     await el('htExcel').onclick.call(el('htExcel'));
     const kimyo = JSON.parse(JSON.stringify(excel[1].data.rows.find(r => r[1].t === 'Kimyo').map(c => c.t)));
     assert.deepEqual(kimyo, ['p/st26-01a', 'Kimyo', 'Amaliy', '3', '12:00–13:20', '13:30–14:50', 'E5001', 'E5001', '73', '74', 'O\'zgartiriladi',
-        'vaqt: 12:00–13:20 → 13:30–14:50; xona: 73 → 74']);
+        'vaqt: 12:00–13:20 → 13:30–14:50; xona: 73 → 74', '']);
+    // Sarlavhada "Fallback sababi" ustuni (kafedra mudiri / mudir xonasi sababi).
+    assert.equal(excel[1].data.rows[0][12].t, 'Fallback sababi');
     assert.equal(excel[1].data.rows.find(r => r[1].t === 'Biologiya')[0].fc, '#9ca3af');
     assert.match(excel[1].title, /^Bugungi darslar \(HEMIS\) · 14\.09\.2026 · /);
     console.log('HEMIS bugungi darslar oynasi: hisoblar, kulrang qatorlar, guruh filtri, JSON va Excel');

@@ -219,6 +219,12 @@ trait TimetableWeeklyUnits
             return response()->json(['error' => 'Bu dasturda ushbu o‘quv haftasi yo‘q.'], 422);
         }
         $cards = $this->weeklyUnitCards($card);
+        // Birlikning har bo'lagi — foydalanuvchi qamrovida (kafedra mudiri — o'z kafedrasi).
+        foreach ($cards as $x) {
+            if ($denied = $this->weeklyLayerDenied($request, $layer, $x)) {
+                return $denied;
+            }
+        }
         $pieces = $this->unitPieces($cards, $week, $external);
         if (empty($data['day']) || empty($data['pair'])) {
             $plan = [];
@@ -334,6 +340,15 @@ trait TimetableWeeklyUnits
             }
             $cards = TimetableCard::whereIn('id', $u['card_ids'])->orderBy('id')->get();
             $card = $cards->first();
+            // Kafedra mudiri — faqat o'z kafedrasi darslari (unplaceAll kabi): boshqa kafedraniki o'tkazib yuboriladi; aniq so'ralgan
+            // (card_ids) bo'lsa — sababi bilan.
+            if ($cards->contains(fn ($x) => $this->weeklyLayerDenied($request, 'internal', $x) !== null)) {
+                if ($only !== null) {
+                    $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'], 'error' => 'Bu fan sizning kafedrangizga tegishli emas.',
+                        'card_ids' => $u['card_ids'], 'unit' => $u['unit']];
+                }
+                continue;
+            }
             if ($data['action'] === 'clear') {
                 $plan = [];
                 foreach ($this->unitPieces($cards, $week) as $id => $p) {

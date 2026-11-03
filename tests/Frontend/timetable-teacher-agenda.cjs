@@ -90,6 +90,15 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.equal(calls[0][0], '/b/boards/3/teacher-agenda?teacher_id=7&date=2026-11-19&range=day&layer=internal&move=w%7C5%7C10');
     const html = mount.innerHTML;
     assert.match(html, /<b>MUXAMMADIYEV S\. B\. — 19\.11\.2026 \(payshanba\)<\/b>/);
+    assert.doesNotMatch(html, /ag-phone/);   // telefon kelmagan (huquq yo'q yoki kiritilmagan) — ko'rsatilmaydi
+    // To'liq F.I.Sh. va telefon (server bergan bo'lsa) — tel: havola.
+    responses.push(Object.assign({}, day, { title: "ALIYEV SHERZOD NURULLO O'G'LI — 02.11–07.11.2026",
+        teacher: { id: 8, full_name: "ALIYEV SHERZOD NURULLO O'G'LI", phone: '+998 90 123 45 67', phone_tel: '+998901234567' }, move: null }));
+    await c2.ttAgendaOpen({ teacher_id: '8', teacher_name: 'ALIYEV SH. N.', date: '2026-11-19', range: 'week' });
+    assert.match(mount.innerHTML, /<b>ALIYEV SHERZOD NURULLO O'G'LI — 02\.11–07\.11\.2026<\/b> <a class="ag-phone" href="tel:\+998901234567"[^>]*>· \+998 90 123 45 67<\/a>/);
+    responses.push(day);
+    await c2.ttAgendaOpen({ teacher_id: '7', teacher_name: 'MUXAMMADIYEV S. B.', date: '2026-11-19', move: 'w|5|10', range: 'day' });
+    calls.length = 1;
     assert.match(html, /data-ag="day" class="on">Kun<\/button><button type="button" data-ag="week">Hafta/);
     // To'qnashuvdagilar qizil; ko'chiriladigani — ko'k ramka; qamrovdan tashqarisi — faqat "band: boshqa fakultet".
     assert.match(html, /<div class="ag-e ag-conf"><span class="ag-time">08:30–13:20<\/span> Klinik farmakologiya \(A\) — d1\/d22-01a/);

@@ -133,6 +133,8 @@ class SchedulePlanner
                     'code' => null,
                     'emp' => $p['employee_id'] ?? null, 'emp_name' => $p['employee_name'] ?? null,
                     'room' => $p['auditorium_code'] ?? null, 'room_name' => $p['auditorium_name'] ?? null,
+                    // "Vaqtincha kafedra mudirida" (LMS): asl o'qituvchi nomi; bandlik tekshirilmaydi.
+                    'ph' => $p['placeholder'] ?? null,
                 ];
             }
         }
@@ -489,14 +491,17 @@ class SchedulePlanner
         $best = null;
         $bestD = PHP_INT_MAX;
         foreach ($blocks as $b) {
-            $d = abs(strtotime($b['date']) - strtotime($date)) + ($b['part'] === $part ? 0 : 10 ** 9);
+            // "Vaqtincha kafedra mudirida" — faqat o'sha hafta uchun: boshqa sanaga qo'shiladigan dars uning o'qituvchi/xonasini olmaydi
+            // (boshqa blok bo'lmasa — oladi, lekin belgisiz: mudir bandligi tekshiriladi).
+            $ph = (reset($b['slots'])['ph'] ?? null) !== null;
+            $d = abs(strtotime($b['date']) - strtotime($date)) + ($b['part'] === $part ? 0 : 10 ** 9) + ($ph ? 10 ** 10 : 0);
             if ($d < $bestD) {
                 $bestD = $d;
                 $best = reset($b['slots']);
             }
         }
 
-        return $best;
+        return $best === null ? null : ['ph' => null] + $best;
     }
 
     private function bestPositiveCode(array $u, array $D, string $part): string
@@ -719,18 +724,25 @@ class SchedulePlanner
                 $flags = [];
                 $emp = $a['emp'];
                 $empName = $a['emp_name'];
-                if (!$emp) {
+                $ph = $a['ph'] ?? null;
+                if ($ph !== null) {
+                    // Vaqtincha kafedra mudirida: mudir va mudir xonasi bandligi tekshirilmaydi (to'siq emas).
+                    $flags = ['mudir', 'mudir_xonasi', 'vaqtincha'];
+                }
+                if (!$emp && $ph === null) {
                     [$emp, $empName] = $fbEmp ?: [null, null];
                     $flags[] = 'mudir';
                 }
                 $room = $a['room'];
                 $roomName = $a['room_name'];
-                if (!$room) {
+                if (!$room && $ph === null) {
                     [$room, $roomName] = $fbRoom ?: [null, null];
                     $flags[] = 'mudir_xonasi';
                 }
                 $blocked = [];
-                if (!$emp) {
+                if (!$emp && $ph !== null) {
+                    $blocked[] = 'kafedra mudirining HEMIS xodim id\'si yo\'q';
+                } elseif (!$emp) {
                     // Mudir topilgan, lekin HEMIS xodim id'si yo'q — nomini aytamiz.
                     $blocked[] = ($fbEmp && !empty($fbEmp[1]))
                         ? 'kafedra mudiri ' . $fbEmp[1] . ' ning HEMIS xodim id\'si LMS\'da yo\'q'
@@ -744,8 +756,8 @@ class SchedulePlanner
                     'date' => $b['date'], 'start' => $start, 'end' => $end, 'code' => $a['code'],
                     'employee_id' => $emp, 'employee_name' => $empName,
                     'auditorium_code' => $room, 'auditorium_name' => $roomName,
-                    'flags' => $flags, 'blocked' => $blocked,
-                ];
+                    'flags' => array_values(array_unique($flags)), 'blocked' => $blocked,
+                ] + ($ph !== null ? ['ph_orig' => (string) $ph] : []);
             }
         }
 

@@ -11,7 +11,7 @@ assert(a > 0 && b > a);
 const code = source.slice(a, b) + '\n                };';
 
 function chip(cards, ids) {
-  const ctx = {
+  const ctx = { phOf: () => null,
     cards, curWeek: 0, selected: null, cardLen: c => c.len_half,
     curGrid: () => ({ weeks: 15 }), activeWeeksOf: () => [], esc: s => String(s),
     subjStyle: () => '', cardTooltip: () => '', cardLabel: c => c.subject_name, weeklyCapLine: () => '',
@@ -24,7 +24,7 @@ function chip(cards, ids) {
 // O'qituvchi «Faqat meniki» ko'rinishida, aniq haftada — o'z darsida "Vaqtini o'zgartirishni so'rash" tugmasi.
 function teacherChip(card, opts) {
   const ctx = Object.assign({
-    cards: [card], curWeek: 3, selected: null, cardLen: c => c.len_half, curGrid: () => ({ weeks: 15 }), activeWeeksOf: () => [],
+    phOf: () => null, cards: [card], curWeek: 3, selected: null, cardLen: c => c.len_half, curGrid: () => ({ weeks: 15 }), activeWeeksOf: () => [],
     esc: s => String(s), subjStyle: () => '', cardTooltip: (c, extra) => extra, cardLabel: c => c.subject_name, weeklyCapLine: () => '',
     TIMETABLE_ROLE: 'oqituvchi', TIMETABLE_TEACHER_ID: 5, scopeMode: 'mine', weeklyLayer: 'internal',
   }, opts);

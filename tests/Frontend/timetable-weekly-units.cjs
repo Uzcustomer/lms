@@ -23,7 +23,7 @@ const ctx = {
     boardSchedule: () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i] })),
 };
 vm.createContext(ctx);
-vm.runInContext(helpers + '; Object.assign(this, { unitKey, unitOf, unitState, unitLen, gapsOf, groupDayRows, unitGapEffect, slotRangeText, placeInWeek });', ctx);
+vm.runInContext(helpers + '; this.applyUnitPayload = applyUnitPayload; Object.assign(this, { unitKey, unitOf, unitState, unitLen, gapsOf, groupDayRows, unitGapEffect, slotRangeText, placeInWeek });', ctx);
 const plain = x => JSON.parse(JSON.stringify(x));
 
 assert.equal(ctx.unitKey(cards[0]), ctx.unitKey(cards[1]));
@@ -51,4 +51,12 @@ const unit = ctx.unitOf(cards[0], 8);
 assert.deepEqual(plain(ctx.unitGapEffect(unit, 5, 5, rows)), { delta: 0, touch: true });
 assert.deepEqual(plain(ctx.unitGapEffect(unit, 5, 10, rows)), { delta: 0, touch: true });
 assert.deepEqual(plain(ctx.unitGapEffect(unit, 5, 1, rows)), { delta: 4, touch: false });
-console.log('timetable weekly units: 4 scenarios passed');
+// Codex: tashqi qatlamda (shablon) birlik o'zgarishi ko'rinadigan joyni ham yangilaydi (day/pair), saqlangan — ext_*.
+const remembered = [];
+Object.assign(ctx, { weeklyLayer: 'external', rememberLayerPlace: (c, d, p) => { remembered.push([c.id, d, p]); c.ext_day = d; c.ext_pair = p; } });
+vm.runInContext('applyUnitPayload([{ id: 1, active: true, day: 3, pair: 7 }, { id: 2, active: true, day: 3, pair: 9 }], 0)', ctx);
+assert.deepEqual([cards[0].day, cards[0].pair, cards[0].ext_day, cards[0].ext_pair, cards[1].day, cards[1].pair], [3, 7, 3, 7, 3, 9]);
+assert.deepEqual(remembered, [[1, 3, 7], [2, 3, 9]]);
+vm.runInContext('applyUnitPayload([{ id: 1, active: true, day: null, pair: null }], 0)', ctx);
+assert.deepEqual([cards[0].day, cards[0].pair, cards[0].ext_day], [null, null, null]);
+console.log('timetable weekly units: 5 scenarios passed');

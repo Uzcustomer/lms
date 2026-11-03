@@ -1361,7 +1361,7 @@ it('/data: istisnolar ixcham (ov), haftalar filtri — ko\'chirish faqat so\'ral
         + ['faculty_name' => 'F2', 'course' => 3, 'subject_name' => 'Fizika', 'group_name' => 'g-03a']);
     $url = route('admin.timetable.boards.data', $s['board']);
     $res = layerAs($s['admin'], 'superadmin')->getJson($url)->assertOk()->json();
-    expect($res)->not->toHaveKey('overrides')->and($res['ov_cols'])->toBe(['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code', 'auditorium_name'])
+    expect($res)->not->toHaveKey('overrides')->and($res['ov_cols'])->toBe(['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code', 'auditorium_name', 'mudir_placeholder'])
         ->and($res['ov'])->toBe([[$s['own']->id, 3, 2, 3, 0, 'R1', '101'], [$s['own']->id, 5, null, null, 1, null, null], [$s['foreign']->id, 4, 1, 1, 0, null, null]])
         ->and($res['room_volumes'])->toMatchArray(['R1' => 24])
         ->and(collect($res['cards'])->pluck('id')->sort()->values()->all())->toBe([$s['own']->id, $s['foreign']->id, $other->id])

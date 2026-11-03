@@ -248,3 +248,157 @@ it('qisman joylangan: bitta kartaning "yaxlit joylash"i (card_ids) boshqa birlik
         ->and($r['failed'][0]['error'])->toContain("3 soat sig'maydi")
         ->and(wuPlace($c))->toBe([1, 1]);
 });
+
+it('Codex: kafedra mudiri unit-fix / unit-place bilan faqat o\'z kafedrasi darslarini o\'zgartiradi', function () {
+    $s = wuSetup();
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 501, 'name' => 'Gigiyena kafedrasi', 'code' => 'G1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = wuTeacher('MUDIR', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    // Fizika (boshqa kafedra) — qisman; Gigiyena (o'z kafedrasi) — qisman.
+    TimetableCardOverride::where('card_id', $s['b']->id)->where('week', 8)->delete();
+    $g = array_replace($s['base'], ['group_name' => 'd2/d26-05a (rus)', 'subject_name' => 'Gigiyena', 'kafedra_name' => 'Gigiyena kafedrasi',
+        'teacher_id' => null, 'teacher_name' => null]);
+    $g1 = TimetableCard::create($g + ['len_half' => 2]);
+    $g2 = TimetableCard::create(array_replace($g, ['len_half' => 1]));
+    TimetableCardOverride::create(['card_id' => $g1->id, 'week' => 8, 'day' => 1, 'pair' => 1]);
+    $as = fn () => test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri']);
+    $as()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 8, 'action' => 'complete'])->assertOk()->assertJson(['done' => 1]);
+    expect(wuPlace($g2))->toBe([1, 3])->and(wuPlace($s['b']))->toBe([null, null]);
+    // Aniq so'ralgan boshqa kafedra darsi — o'zgarmaydi, sababi bilan.
+    $r = $as()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 8, 'action' => 'clear', 'card_ids' => [$s['a']->id, $s['b']->id]])
+        ->assertOk()->json();
+    expect($r['done'])->toBe(0)->and($r['failed'][0]['error'])->toBe('Bu fan sizning kafedrangizga tegishli emas.')
+        ->and(wuPlace($s['a']))->toBe([5, 5]);
+    $as()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['week' => 8, 'day' => 5, 'pair' => 6])->assertForbidden();
+    expect(wuPlace($s['a']))->toBe([5, 5]);
+});
+
+/** "Vaqtincha kafedra mudiriga yozish": Fizika kafedrasi (601), mudir XOLMATOV (HEMIS 9100), «Kafedra mudiri xonasi» (KM1). */
+function phSetup(): array
+{
+    $s = wuSetup();
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 601, 'name' => 'Fizika kafedrasi', 'code' => 'F1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $mudir = wuTeacher('XOLMATOV A. B.', 'kafedra_mudiri');
+    $mudir->forceFill(['department_hemis_id' => 601, 'hemis_id' => 9100, 'is_active' => true, 'full_name' => 'XOLMATOV AZIZ BAXTIYOROVICH', 'short_name' => 'XOLMATOV A. B.'])->save();
+    \App\Models\Auditorium::create(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true]);
+    \App\Models\Auditorium::create(['code' => 'R428', 'name' => '428', 'volume' => 40, 'active' => true]);
+    // To'qnashuvli karta: 07b, CHORIYEVA, 428, chorshanba (3) 10:00 (3-qator); tashqi joyi — chorshanba 10:00.
+    $mk = fn (string $g) => TimetableCard::create(array_replace($s['base'], ['group_name' => $g, 'subject_name' => 'Tibbiyotda axborot texnologiyalari',
+        'len_half' => 2, 'auditorium_code' => 'R428', 'auditorium_name' => '428', 'ext_day' => 3, 'ext_pair' => 3]));
+    [$a, $b] = [$mk('d2/d26-07b (rus)'), $mk('d2/d26-08a (rus)')];
+    foreach ([$a, $b] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 8, 'day' => 3, 'pair' => 3]);
+    }
+
+    return array_replace($s, ['mudir' => $mudir, 'pa' => $a, 'pb' => $b]);
+}
+
+it('vaqtincha kafedra mudiri: to\'qnashuvli karta tashqi joyiga mudir va mudir xonasi bilan yoziladi — to\'qnashuv yo\'q; qaytarish bandlik bilan', function () {
+    $s = phSetup();
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    expect($ctl->internalConflicts($s['board'])['count'])->toBe(2);
+    $info = wuAs()->getJson(route('admin.timetable.cards.mudir-placeholder.info', $s['pa']) . '?week=8')->assertOk()->json();
+    expect($info)->toMatchArray(['ok' => true, 'why' => null, 'len' => 2])->and($info['mudir']['name'])->toBe('XOLMATOV AZIZ BAXTIYOROVICH')
+        ->and($info['room'])->toBe(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi'])->and($info['slot']['text'])->toBe('Chorshanba (10:00–11:20)');
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8, 'reason' => '428 band'])->assertOk();
+    $a = $s['pa']->fresh();
+    $ov = fn ($c, $w) => TimetableCardOverride::where('card_id', $c->id)->where('week', $w)->first();
+    // Karta asosiy o'qituvchisi/xonasi o'zgarmaydi; belgi — faqat 8-haftaning yozuvida.
+    expect([$a->teacher_id, $a->auditorium_code])->toBe([$s['chor']->id, 'R428'])
+        ->and($ov($a, 8)->auditorium_code)->toBe('KM1')
+        ->and($ov($a, 8)->mudir_placeholder)->toMatchArray(['teacher_id' => $s['mudir']->id, 'mudir_name' => 'XOLMATOV AZIZ BAXTIYOROVICH', 'hemis_id' => 9100,
+            'orig_teacher_name' => 'CHORIYEVA G. Y.', 'orig_room_code' => null, 'reason' => '428 band'])
+        ->and(wuPlace($a))->toBe([3, 3])
+        // Boshqa karta (08a, CHORIYEVA, 428) ham endi to'qnashuvli emas.
+        ->and($ctl->internalConflicts($s['board'])['count'])->toBe(0);
+    // Tarix (jurnal): kim, qachon, qaysi karta, sabab.
+    $log = \App\Models\TimetableChangeRequest::where('route_name', 'admin.timetable.cards.mudir-placeholder')->latest('id')->first();
+    expect($log)->not->toBeNull()->and($log->payload['reason'])->toBe('428 band');
+
+    // Qaytarish: CHORIYEVA shu vaqtda 08a da (428) — band, rad etiladi, hech narsa o'zgarmaydi.
+    $err = wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $a), ['week' => 8])->assertStatus(422)->json('error');
+    expect($err)->toContain("Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta:")->toContain("O'qituvchi band")
+        ->and($ov($a, 8)->mudir_placeholder)->not->toBeNull();
+    // 08a boshqa vaqtga — bo'sh: asl xona (shu hafta — kartaniki) tiklanadi.
+    TimetableCardOverride::where('card_id', $s['pb']->id)->where('week', 8)->update(['pair' => 7]);
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $a), ['week' => 8])->assertOk();
+    expect([$ov($a, 8)->mudir_placeholder, $ov($a, 8)->auditorium_code])->toBe([null, null])->and(wuPlace($a))->toBe([3, 3]);
+});
+
+it('Codex: vaqtincha kafedra mudiri faqat tanlangan haftada; haftalik xona qaytarishda tiklanadi; turli asl o\'qituvchili darslar birlashmaydi', function () {
+    $s = phSetup();
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    // 9-haftada ham 07b va 08a bir vaqtda (to'qnashuv); 07b ning 8-haftadagi xonasi — haftalik R12.
+    foreach ([$s['pa'], $s['pb']] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 9, 'day' => 3, 'pair' => 3]);
+    }
+    \App\Models\Auditorium::create(['code' => 'R12', 'name' => '12-xona', 'volume' => 20, 'active' => true]);
+    TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->update(['auditorium_code' => 'R12', 'auditorium_name' => '12-xona']);
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8, 'scope' => 'one'])->assertOk();
+    // 9-hafta: asl o'qituvchi va xona, to'qnashuv qoladi.
+    $o9 = TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 9)->first();
+    expect($o9->mudir_placeholder)->toBeNull()->and($s['pa']->fresh()->teacher_id)->toBe($s['chor']->id);
+    // 8-hafta — to'qnashuv yo'q; 07b va 08a 9-haftada hali ham to'qnashuvli (8-haftadagi belgi boshqa haftaga tarqalmaydi).
+    $weeksOf = fn () => collect($ctl->internalConflicts($s['board'])['weekly'])->map(fn ($w) => array_keys($w))->all();
+    expect($weeksOf())->toBe([$s['pa']->id => [9], $s['pb']->id => [9]]);
+    // Qaytarishda 8-haftaning asl haftalik xonasi (R12) tiklanadi (kartaning R428 emas).
+    TimetableCardOverride::where('card_id', $s['pb']->id)->where('week', 8)->update(['pair' => 7]);
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8])->assertOk();
+    $o8 = TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->first();
+    expect([$o8->auditorium_code, $o8->mudir_placeholder])->toBe(['R12', null]);
+
+    // Bir guruh, bir fan, turli asl o'qituvchi (CHORIYEVA va BOSHQA) — ikkalasi mudirga yozilsa ham alohida: birini qaytarish ikkinchisiga tegmaydi.
+    $other = wuTeacher('BOSHQA B.');
+    $c2 = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-07b (rus)', 'subject_name' => 'Tibbiyotda axborot texnologiyalari',
+        'len_half' => 2, 'teacher_id' => $other->id, 'teacher_name' => 'BOSHQA B.', 'ext_day' => 4, 'ext_pair' => 1]));
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8])->assertOk();
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $c2), ['week' => 8])->assertOk();
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8])->assertOk();
+    expect(TimetableCardOverride::where('card_id', $c2->id)->where('week', 8)->first()->mudir_placeholder)->not->toBeNull()
+        ->and(TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->first()->mudir_placeholder)->toBeNull();
+});
+
+it('vaqtincha kafedra mudiri: mudir topilmasa tugma o\'chiq (sababi bilan); boshqa kafedra mudiri — 403', function () {
+    $s = phSetup();
+    $s['mudir']->removeRole('kafedra_mudiri');
+    $info = wuAs()->getJson(route('admin.timetable.cards.mudir-placeholder.info', $s['pa']) . '?week=8')->assertOk()->json();
+    expect($info['ok'])->toBeFalse()->and($info['why'])->toStartWith('Kafedra mudiri topilmadi');
+    wuAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8])->assertStatus(422);
+    // Boshqa kafedra mudiri (Gigiyena) — Fizika fani uchun yozolmaydi.
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 502, 'name' => 'Gigiyena kafedrasi', 'code' => 'G2',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $other = wuTeacher('BOSHQA MUDIR', 'kafedra_mudiri');
+    $other->forceFill(['department_hemis_id' => 502, 'department' => 'Gigiyena kafedrasi'])->save();
+    test()->withoutVite()->actingAs($other, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
+        ->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8])->assertForbidden();
+});
+
+it('o\'qituvchi jadvali sarlavhasi: to\'liq F.I.Sh. va telefon (huquq bo\'yicha); xona — nomi, binosi, sig\'imi', function () {
+    $s = wuSetup();
+    $ali = wuTeacher('ALIYEV SH. N.');
+    $ali->forceFill(['full_name' => "ALIYEV SHERZOD NURULLO O'G'LI", 'short_name' => 'ALIYEV SH. N.', 'phone' => '998901234567'])->save();
+    TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-07b (rus)', 'teacher_id' => $ali->id, 'teacher_name' => 'ALIYEV SH. N.', 'len_half' => 2]));
+    $url = fn ($t) => route('admin.timetable.teacher-agenda', $s['board']) . '?teacher_id=' . $t->id . '&date=2026-10-26&range=week&layer=internal';
+    $j = wuAs()->getJson($url($ali))->assertOk()->json();
+    expect($j['title'])->toBe("ALIYEV SHERZOD NURULLO O'G'LI — 26.10–31.10.2026")
+        ->and($j['teacher'])->toMatchArray(['full_name' => "ALIYEV SHERZOD NURULLO O'G'LI", 'short_name' => 'ALIYEV SH. N.',
+            'phone' => '+998 90 123 45 67', 'phone_tel' => '+998901234567']);
+    // Telefoni yo'q o'qituvchi — raqam yo'q.
+    expect(wuAs()->getJson($url($s['chor']))->assertOk()->json('teacher.phone'))->toBeNull();
+    // O'qituvchi rolida — boshqa o'qituvchining raqami ko'rinmaydi, o'ziniki — ko'rinadi.
+    Role::findOrCreate('oqituvchi', 'web');
+    $s['chor']->assignRole('oqituvchi');
+    $asT = fn ($t) => test()->withoutVite()->actingAs($t, 'teacher')->withSession(['active_role' => 'oqituvchi']);
+    expect($asT($s['chor'])->getJson($url($ali))->assertOk()->json('teacher.phone'))->toBeNull();
+    $ali->assignRole('oqituvchi');
+    expect($asT($ali)->getJson($url($ali))->assertOk()->json('teacher.phone'))->toBe('+998 90 123 45 67');
+    // Xona oynasi: to'liq nomi, binosi va sig'imi.
+    \App\Models\Auditorium::create(['code' => 'R12', 'name' => "12-o'quv xona", 'building_name' => 'Tibbiyot klasteri', 'volume' => 10, 'active' => true]);
+    $r = wuAs()->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?room_code=R12&date=2026-10-26&range=week')->assertOk()->json();
+    expect($r['title'])->toStartWith("12-o'quv xona · Tibbiyot klasteri (10 o'rin) — ")->and($r['room']['building'])->toBe('Tibbiyot klasteri');
+});

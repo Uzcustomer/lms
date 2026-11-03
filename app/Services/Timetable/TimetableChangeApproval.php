@@ -57,6 +57,9 @@ class TimetableChangeApproval
     /** Tarixga yoziladigan amallar: tasdiq talab qilinadiganlar + kartani tahrirlash, KTR haftalari (admin). */
     public const LOGGED = self::GATED + [
         'admin.timetable.cards.update'        => ['updateCard', 'card', 'card'],
+        // "Vaqtincha kafedra mudiriga yozish" va qaytarish — darhol (tasdiqsiz), lekin tarixga (kim, qachon, karta, sabab).
+        'admin.timetable.cards.mudir-placeholder'        => ['mudirPlaceholderApply', 'card', 'teacher'],
+        'admin.timetable.cards.mudir-placeholder.revert' => ['mudirPlaceholderRevert', 'card', 'teacher'],
         'admin.timetable.ktr-weeks'           => ['ktrWeeks', 'board', 'weeks'],   // dry_run emas
         'admin.timetable.weekly-layer-copy'   => ['weeklyLayerCopy', 'board', 'layer'],   // dry_run emas
         'admin.timetable.boards.split-variant-mixed' => ['splitVariantMixed', 'board', 'split'],   // dry_run emas
@@ -765,6 +768,14 @@ class TimetableChangeApproval
                 $act = ($p['action'] ?? '') === 'cancel' ? 'dars bekor qilinadi'
                     : (($p['action'] ?? '') === 'reset' ? 'asl joyiga qaytariladi' : 'ko\'chiriladi → ' . $slot($p['day'] ?? null, $p['pair'] ?? null));
                 $text = $head . ': ' . ($p['week'] ?? '?') . '-hafta — ' . $act;
+                break;
+            case 'admin.timetable.cards.mudir-placeholder':
+                $text = $head . ': ' . ($p['week'] ?? '?') . '-hafta' . (($p['scope'] ?? '') === 'rest' ? ' va keyingi haftalar' : '')
+                    . ' — vaqtincha kafedra mudiriga yozildi' . (!empty($p['day']) && !empty($p['pair']) ? ' (' . $slot($p['day'], $p['pair']) . ')' : ' (tashqi jadval joyi)')
+                    . (!empty($p['reason']) ? '; sabab: ' . $p['reason'] : '');
+                break;
+            case 'admin.timetable.cards.mudir-placeholder.revert':
+                $text = $head . ': vaqtincha kafedra mudiridan asl o\'qituvchiga qaytarildi';
                 break;
             case 'admin.timetable.cards.unit-place':
                 $to = (!empty($p['day']) && !empty($p['pair'])) ? $slot($p['day'], $p['pair']) : 'jadvaldan olib tashlash';

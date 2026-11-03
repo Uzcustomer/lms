@@ -11,7 +11,7 @@ function section(from, to) {
 // Faqat ko'rish rejimida ham: panel belgisi bosilsa — tafsilot oynasi (har to'qnashuv alohida qatorda, guruhlar 3 ta + "+N ta").
 const appended = [];
 const ctx = {
-    esc: s => String(s), window: { innerWidth: 1200, innerHeight: 800 }, curWeek: 9, closeCycDayPop() {},
+    esc: s => String(s), window: { innerWidth: 1200, innerHeight: 800 }, curWeek: 9, closeCycDayPop() {}, mudirPhAllowed: () => false,
     allCards: [{ id: 5, subject_name: 'Odam anatomiyasi', group_name: 'd1/d26-06b' }],
     cardGroups: c => c.group_names && c.group_names.length ? c.group_names : [c.group_name], cardConflict: () => 'eski matn',
     weeklyCapLine: c => (+c.id === 5 ? "Xona sig'maydi: 215 — 20 o'rin, 25 talaba (+5)" : ''),

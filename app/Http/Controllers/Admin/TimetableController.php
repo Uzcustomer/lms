@@ -48,6 +48,7 @@ class TimetableController extends Controller
     use Concerns\TimetableCycleShiftAdvice;
     use Concerns\TimetableTeacherAgenda;
     use Concerns\TimetableWeeklyUnits;
+    use Concerns\TimetableMudirPlaceholder;
 
     public function index(Request $request)
     {
@@ -3134,6 +3135,9 @@ class TimetableController extends Controller
                 $overrideColumns[] = 'o.auditorium_code';
                 $overrideColumns[] = 'o.auditorium_name';
             }
+            if ($this->hasMudirPlaceholderColumn()) {
+                $overrideColumns[] = 'o.mudir_placeholder';
+            }
             $wanted = $filtered ? array_flip($cardIds) : null;
             $q = DB::table('timetable_card_overrides as o')
                 ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
@@ -3149,7 +3153,8 @@ class TimetableController extends Controller
                     continue;
                 }
                 $ov[] = [(int) $o->card_id, (int) $o->week, $o->day !== null ? (int) $o->day : null, $o->pair !== null ? (int) $o->pair : null,
-                    $o->cancelled ? 1 : 0, $hasOverrideRoom ? ($o->auditorium_code ?: null) : null, $hasOverrideRoom ? ($o->auditorium_name ?: null) : null];
+                    $o->cancelled ? 1 : 0, $hasOverrideRoom ? ($o->auditorium_code ?: null) : null, $hasOverrideRoom ? ($o->auditorium_name ?: null) : null]
+                    + ($this->ovPlaceholder($o) ? [7 => $this->ovPlaceholder($o)] : []);
             }
         }
 
@@ -3166,7 +3171,7 @@ class TimetableController extends Controller
             'cards' => $cards,
             'grids' => $grids,
             'ov' => $ov,
-            'ov_cols' => ['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code', 'auditorium_name'],
+            'ov_cols' => ['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code', 'auditorium_name', 'mudir_placeholder'],
             'room_volumes' => (object) array_filter($roomVol, fn ($v) => $v !== null),
             'filter' => ['scope' => $scope, 'weeks' => $weekSet !== null ? array_map('intval', array_keys($weekSet)) : null, 'partial' => $filtered,
                 // "Butun doska" (cheklangan rol): qaysi yo'nalish+kurslar to'liq yuklangan — tanlov kengaysa, frontend qayta so'raydi.
@@ -3183,6 +3188,10 @@ class TimetableController extends Controller
             // O'qituvchi kesimi: ustun — teacher_id, sarlavha — to'liq F.I.Sh. (kartadagi qisqa / to'liq nom farq qilsa ham bitta ustun).
             'teacher_full_names' => (object) Teacher::whereIn('id', $cards->pluck('teacher_id')->filter()->unique()->values()->all())
                 ->pluck('full_name', 'id')->all(),
+            // Panel karta oynasi: o'qituvchi telefoni — faqat ko'rishga huquqi borlariga (teacherPhoneVisible).
+            'teacher_phones' => (object) Teacher::whereIn('id', $cards->pluck('teacher_id')->filter()->unique()->values()->all())->whereNotNull('phone')->get()
+                ->filter(fn ($t) => $this->teacherPhoneVisible(request(), $t))
+                ->mapWithKeys(fn ($t) => [$t->id => self::formatUzPhone($t->phone)])->filter()->all(),
             // Guruh(cha) sarlavhasida faol talabalar soni (sikl jadvalidagi kabi): "fakultet|guruh" => son.
             'group_students' => $this->boardGroupStudentCounts($cards),
         ])
@@ -6962,7 +6971,8 @@ class TimetableController extends Controller
                 foreach ($g['ids'] as $id) {
                     $c = $rows[$id];
                     $o = $ov[$id][$w] ?? null;
-                    if ($o && $o->cancelled) {
+                    // "Vaqtincha kafedra mudirida" (shu hafta) — doskada to'qnashuv deb sanalmaydi va boshqalarni ham to'qnashuvli qilmaydi.
+                    if ($o && ($o->cancelled || $this->ovPlaceholder($o))) {
                         continue;
                     }
                     [$d, $p, $sh] = $o && $o->day && $o->pair ? [(int) $o->day, (int) $o->pair, (int) ($o->start_half ?? 0)]
@@ -7147,6 +7157,24 @@ class TimetableController extends Controller
         }
 
         return $out;
+    }
+
+    private ?bool $mudirPhColumn = null;
+
+    private function hasMudirPlaceholderColumn(): bool
+    {
+        return $this->mudirPhColumn ??= Schema::hasTable('timetable_card_overrides') && Schema::hasColumn('timetable_card_overrides', 'mudir_placeholder');
+    }
+
+    /** Haftalik yozuv (model yoki overrideRows qatori) "vaqtincha kafedra mudirida"mi: mudir_placeholder massivi yoki null. */
+    private function ovPlaceholder($o): ?array
+    {
+        $v = $o->mudir_placeholder ?? null;
+        if (is_string($v)) {
+            $v = json_decode($v, true);
+        }
+
+        return is_array($v) && $v ? $v : null;
     }
 
     /** Haftalik istisnolar (o — timetable_card_overrides, c — kartalar) qatorlari: karta => hafta => qator. */
@@ -9960,6 +9988,10 @@ class TimetableController extends Controller
         $myRange ??= $this->rangeFor($card, $pair, $startHalf);
         $myRoomCode ??= $roomCode ?: (($state['ov'][$card->id][$week] ?? null)?->auditorium_code ?: $card->auditorium_code);
         $out = [];
+        // Shu hafta "vaqtincha kafedra mudirida" — to'qnashuv tekshirilmaydi (state ichida — joyida sinab ko'rilgan yozuv).
+        if (($own = $state['ov'][$card->id][$week] ?? null) && $this->ovPlaceholder($own)) {
+            return [];
+        }
         foreach ($state['cards'] as $id => $o) {
             if ((int) $id === (int) $card->id) continue;
             // Birlikning o'z bo'laklari (2 soat + 1 soat — bitta dars) begona dars emas: birga suriladi.
@@ -9970,7 +10002,8 @@ class TimetableController extends Controller
             $otherWeek = $this->calendarWeekAt($board, $o, $date);
             if ($otherWeek === null) continue;
             $ov = $state['ov'][$id][$otherWeek] ?? null;
-            if ($ov?->cancelled) continue;
+            // Boshqasi shu hafta "vaqtincha kafedra mudirida" — bandlik emas.
+            if ($ov?->cancelled || ($ov && $this->ovPlaceholder($ov))) continue;
             $od = $ov ? $ov->day : $o->day;
             $op = $ov ? $ov->pair : $o->pair;
             $osh = (int) ($ov ? ($ov->start_half ?? 0) : ($o->start_half ?? 0));

@@ -243,3 +243,22 @@ test('svodnaya hisobot (sanasiz): standart — shakllarsiz jami + rad etilganlar
         ->and($cF[$a->id])->toMatchArray(['12a|approved' => 1, 'fate|passed' => 1])
         ->and(count($secF))->toBeGreaterThan(2);
 });
+
+test('svodnaya hisobot (davr): reja — muddatida / kechikib / topshirilmagan; «Davri boshiga» bo\'sh bo\'lsa chiqmaydi', function () {
+    [$a, $b, $c] = [reviewSub(31, 'A', null), reviewSub(32, 'B', null), reviewSub(33, 'C', null)];
+    $log = fn ($v, $at) => \App\Models\VedomostSubmissionLog::create(['vedomost_submission_id' => $v->id, 'action' => 'upload', 'to_status' => 'received'])
+        ->forceFill(['created_at' => $at])->save();
+    $log($a, '2026-10-05 15:00');   // muddat 05.10 — muddatida
+    $log($b, '2026-10-09 09:00');   // muddat 05.10 — kechikib
+    $o = fn ($v, $st) => (object) ['id' => $v->id, 'ids' => [$v->id], 'status' => $st, 'created_at' => '2026-10-01', 'deadline' => '2026-10-05'];
+    $agg = collect([$o($a, 'received'), $o($b, 'received'), $o($c, 'pending')]);
+    $m = new ReflectionMethod(VedomostSubmissionController::class, 'reportDateSections');
+    $m->setAccessible(true);
+    [$sec, $contrib] = $m->invoke(app(VedomostSubmissionController::class), $agg, \Carbon\Carbon::parse('2026-09-14'),
+        \Carbon\Carbon::parse('2026-10-31')->endOfDay(), VedomostSubmission::statusLabels(), []);
+
+    expect($contrib[$a->id]['plan|ontime'] ?? null)->toBe(1)
+        ->and($contrib[$b->id]['plan|late'] ?? null)->toBe(1)
+        ->and($contrib[$c->id]['plan|missing'] ?? null)->toBe(1)
+        ->and(array_column($sec, 'key'))->toBe(['plan', 'period', 'close', 'fate']);
+});

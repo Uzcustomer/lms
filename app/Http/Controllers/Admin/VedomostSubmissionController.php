@@ -666,6 +666,32 @@ class VedomostSubmissionController extends Controller
         return [$sections, $contribById];
     }
 
+    /**
+     * Topshirish muddati [from, to] ga tushgan varaq: birinchi yuklash muddat kuni oxirigacha bo'lsa — ontime,
+     * keyin (davr oxirigacha) — late, davr oxirigacha yuklanmagan — missing. Muddati davrda bo'lmasa — null.
+     */
+    private function planStatus(object $v, Collection $logs, \Carbon\Carbon $from, \Carbon\Carbon $to): ?string
+    {
+        if (empty($v->deadline)) {
+            return null;
+        }
+        $deadline = \Carbon\Carbon::parse($v->deadline)->endOfDay();
+        if ($deadline < $from || $deadline->copy()->startOfDay() > $to) {
+            return null;
+        }
+        $up = $logs->first(fn ($l) => $l->action === 'upload');
+        $at = $up ? \Carbon\Carbon::parse($up->created_at) : null;
+        // Jurnalda yuklash yozuvi yo'q, lekin varaq topshirilgan holatda — vaqtini bilmaymiz: muddatida deb olinadi.
+        if ($at === null && ($v->status ?? VedomostSubmission::STATUS_PENDING) !== VedomostSubmission::STATUS_PENDING) {
+            return 'ontime';
+        }
+        if ($at === null || $at > $to) {
+            return 'missing';
+        }
+
+        return $at <= $deadline ? 'ontime' : 'late';
+    }
+
     /** «Rad etilganlar — keyingi topshirish» bo'limi ustunlari. */
     private function fateSection(string $label): array
     {
@@ -748,6 +774,11 @@ class VedomostSubmissionController extends Controller
                 $contrib["fate|$fate"] = 1;
             }
 
+            // Reja: topshirish muddati shu davrga tushgan varaqlar — muddatida / kechikib / topshirilmagan.
+            if ($plan = $this->planStatus($v, $logs, $from, $to)) {
+                $contrib["plan|$plan"] = 1;
+            }
+
             $contribById[$v->id] = $contrib;
         }
 
@@ -769,11 +800,22 @@ class VedomostSubmissionController extends Controller
         }
 
         $sections = [
-            ['key' => 'open',   'label' => 'Davri boshiga',            'cols' => $statusCols('open'),  'tint' => '#eef2ff'],
+            ['key' => 'plan', 'label' => 'Reja — topshirish muddati shu davrda', 'tint' => '#f0fdf4', 'cols' => [
+                ['key' => 'plan|ontime', 'label' => 'Muddatida topshirildi', 'color' => ['#166534', '#dcfce7']],
+                ['key' => 'plan|late', 'label' => 'Kechikib topshirildi', 'color' => ['#b45309', '#fef3c7']],
+                ['key' => 'plan|missing', 'label' => 'Topshirilmagan', 'color' => ['#b91c1c', '#fee2e2']],
+            ]],
+        ];
+        // «Davri boshiga» — faqat davr boshlanishidan oldin yaratilgan varaqlar; birortasi bo'lmasa
+        // (vedomostlar davr ichida yaratilgan) — bo'sh ustunlar ko'rsatilmaydi.
+        if (collect($contribById)->contains(fn ($c) => collect($c)->keys()->contains(fn ($k) => str_starts_with($k, 'open|')))) {
+            $sections[] = ['key' => 'open', 'label' => 'Davri boshiga', 'cols' => $statusCols('open'), 'tint' => '#eef2ff'];
+        }
+        array_push($sections,
             ['key' => 'period', 'label' => 'Davri ichida (harakatlar)', 'cols' => $actionCols,          'tint' => '#ecfeff'],
             ['key' => 'close',  'label' => 'Davri oxiriga',            'cols' => $statusCols('close'), 'tint' => '#fef2f2'],
             $this->fateSection('Davrda rad etilganlar — keyingi topshirish (bugungacha)'),
-        ];
+        );
 
         return [$sections, $contribById];
     }

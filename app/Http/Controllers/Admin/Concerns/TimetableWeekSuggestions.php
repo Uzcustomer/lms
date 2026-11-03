@@ -473,12 +473,13 @@ trait TimetableWeekSuggestions
         // Parallel to'plam: shu kartaning bo'lak qo'shnilari (bolakSiblings — tur, qamrov, oqim, talaba kesishuvi), joyi bilan.
         $bolakLetter = fn (TimetableCard $x) => preg_match('/\((\p{L})\)\s*$/u', (string) $x->subject_name, $m) ? mb_strtolower($m[1]) : '?';
         $parSets = [];
-        $parallelSet = function (TimetableCard $c) use (&$parSets, &$state, $baseSubj): array {
+        $parallelSet = function (TimetableCard $c) use (&$parSets, &$state, $baseSubj, $cancelled, $W): array {
             $k = (int) $c->id;
             if (!isset($parSets[$k])) {
                 $parSets[$k] = [];
                 foreach ($state['cards'] as $x) {
-                    if ((int) $x->id !== $k && $x->training_type === $c->training_type && $this->groupScopeKey($x) === $this->groupScopeKey($c)
+                    // Shu haftada ataylab bekor qilingan a'zo — to'plamga (va "birga joylash" amallariga) kirmaydi.
+                    if ((int) $x->id !== $k && !$cancelled($x, $W) && $x->training_type === $c->training_type && $this->groupScopeKey($x) === $this->groupScopeKey($c)
                         && mb_strtolower($baseSubj($x->subject_name)) === mb_strtolower($baseSubj($c->subject_name)) && $this->bolakSiblings($c, $x)) {
                         $parSets[$k][] = $x;
                     }

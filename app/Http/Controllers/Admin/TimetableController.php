@@ -6721,12 +6721,28 @@ class TimetableController extends Controller
         // Guruh bir vaqtda ikki joyda (boshqa sikl fani bilan kesishgan davr): amaliyot boshqa fan ma'ruzasi bilan — lecture_overlap
         // ("darsingiz ma'ruza bilan ustma-ust", amaliy blokida); qolganlari (amaliy–amaliy, ma'ruza–ma'ruza) — group_busy.
         // Bir birlik ichida amaliy o'z ma'ruzasidan keyin turadi (cycleDayPlan), shuning uchun faqat boshqa birliklar solishtiriladi.
+        // Sikl birliklari parallel bo'laklarmi: haftalikdagi bilan bir xil to'liq shart (bolakSiblings — tur, qamrov, oqim, talaba kesishuvi)
+        // birliklarning kartalari bo'yicha.
+        $parMemo = [];
+        $cycleParallel = function (int $ua, int $ub) use ($units, &$parMemo): bool {
+            $k = min($ua, $ub) . '|' . max($ua, $ub);
+            if (!isset($parMemo[$k])) {
+                // Kartalar — model yoki yengil qator (cardRows): shartlar uchun modelga o'giriladi (saqlanmaydi).
+                $model = fn ($x) => $x instanceof TimetableCard ? $x : ($x ? (new TimetableCard())->forceFill((array) $x) : null);
+                $ca = $model(($units[$ua]['cards'] ?? [])[0] ?? null);
+                $cb = $model(($units[$ub]['cards'] ?? [])[0] ?? null);
+                $parMemo[$k] = $ca && $cb
+                    && self::bolakSubjects((string) ($units[$ua]['subject'] ?? ''), (string) ($units[$ub]['subject'] ?? '')) && $this->bolakSiblings($ca, $cb);
+            }
+
+            return $parMemo[$k];
+        };
         foreach ($byGroup as $list) {
             foreach ($list as $e) {
                 // Parallel bo'laklar ("Fan (a)", "Fan (b)" — bir tur) — guruhning turli talabalari: bir-biriga guruh to'qnashuvi emas.
                 $over = array_filter($list, fn ($o) => $o['unit'] !== $e['unit'] && $o['lesson'] !== $e['lesson']
                     && $o['from'] < $e['to'] && $e['from'] < $o['to']
-                    && !($isLec($o) === $isLec($e) && self::bolakSubjects((string) ($units[$o['unit']]['subject'] ?? ''), (string) ($units[$e['unit']]['subject'] ?? ''))));
+                    && !($isLec($o) === $isLec($e) && $cycleParallel($o['unit'], $e['unit'])));
                 if (!$over) {
                     continue;
                 }

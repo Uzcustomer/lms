@@ -601,3 +601,43 @@ test('Test markazi semestri: HEMIS kodi (17) va nomi (7-sem, 7-semestr) bir xil 
         ->and(\App\Services\VedomostAiChecker::semesterNumber('11-semestr'))->toBe(11)
         ->and(\App\Services\VedomostAiChecker::semesterNumber(''))->toBeNull();
 });
+
+test('6-kurs: Mark va Test markazi bilan solishtirilmaydi, faqat shablon formulasi', function () {
+    // Markda JN 70, OSKE 50 — vedomostda boshqa; 6-kursda bu xato emas (faqat vedomost hisobi tekshiriladi).
+    $stu = [vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 70, 88, 50, 96),
+        vtStu('ALIYEV VALI', '368221100099', 80, 80, 80, 80)];
+    $scan = scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo())]);
+
+    $r = engine()->build(expectedData($stu, ['level_code' => '16']), $scan, [], rules(), ctx());
+    $m = collect($r['rows'][0]['flags'])->pluck('m')->implode(' | ');
+
+    expect($r['rows'])->toHaveCount(1)
+        ->and($r['rows'][0]['status'])->toBe('ok')
+        ->and($m)->not->toContain('Mark')
+        ->and($r['counts']['nopdf'])->toBe(0)
+        ->and(collect($r['issues'])->pluck('m')->implode(' | '))->toContain('6-kurs rejimi')
+        ->and(collect($r['issues'])->pluck('m')->implode(' | '))->toContain('ALIYEV VALI');
+});
+
+test('6-kurs: YN shablon formulasidan farq qilsa xato', function () {
+    $stu = [vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 100, 96)];
+    // 41.5 + 17.6 = 59.1 → 59; OSKE 15 + Test 14.4 = 29.4 → 29; jami 88. Vedomostda 90.
+    $bad = engine()->build(expectedData($stu, ['level_code' => '16']), scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo(['yn' => '90']))]), [], rules(), ctx());
+    // OSKE 50% (<60) → YN 0 bo'lishi kerak.
+    $low = engine()->build(expectedData($stu, ['level_code' => '16']), scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', bobo(['oski_pct' => '50', 'oski_ball' => '0', 'yn' => '0']))]), [], rules(), ctx());
+
+    expect(collect($bad['rows'][0]['flags'])->pluck('m')->implode(' | '))->toContain('6-kurs: umumiy ball')
+        ->and($bad['rows'][0]['status'])->toBe('bad')
+        ->and($low['rows'][0]['status'])->toBe('ok');
+});
+
+test('6-kurs: bitta Test (30) — ROUND va sinov avto-aniqlash', function () {
+    $stu = [vtStu('BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', 83, 88, 0, 83)];
+    // Test 83% × 30 = 24.9 → 25; 59 + 25 = 84. Test = Joriy → sinov.
+    $row = bobo(['oski_pct' => '', 'oski_ball' => '', 'test_pct' => '83', 'test_ball' => '25', 'yn' => '84']);
+    $r = engine()->build(expectedData($stu, ['level_code' => '16', 'yopilish_shakli' => 'test']),
+        array_merge(scanDoc([pdfRow(1, 'BOBOSHEROV SHOHZOD XAYRULLAYEVICH', '368221100018', $row)]), ['weights' => ['jb' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30]]), [], rules(), ctx());
+
+    expect($r['rows'][0]['status'])->toBe('ok')
+        ->and(collect($r['issues'])->pluck('m')->implode(' | '))->toContain('Sinov');
+});

@@ -701,7 +701,7 @@
         const F = ['fio', 'id', 'jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'on_pct', 'on_ball', 'jbmton_ball', 'jbmton_pct', 'oski_pct', 'oski_ball', 'test_pct', 'test_ball', 'yn', 'ects'];
         const entries = [];
         R.rows.forEach(r => { if (r.pdf) entries.push(Object.assign({ matched: true }, r)); });
-        (R.extra || []).forEach(e => entries.push({ matched: false, key: e.key, page: e.page, nr: e.nr, fio: '', id: '', scan_fio: e.fio, scan_id: e.id, pdf: e.pdf, unclear: e.unclear, edited: e.edited, orig: e.orig, note: e.note, expelled: e.expelled, status: 'extra' }));
+        (R.extra || []).forEach(e => entries.push({ matched: false, key: e.key, page: e.page, nr: e.nr, fio: '', id: '', scan_fio: e.fio, scan_id: e.id, pdf: e.pdf, unclear: e.unclear, edited: e.edited, orig: e.orig, note: e.note, expelled: e.expelled || e.info, status: 'extra' }));
         entries.sort((a, b) => ((a.page || 0) - (b.page || 0)) || ((a.nr || 0) - (b.nr || 0)));
         let head = '<tr class="letters"><th class="rn"></th>' + ['Fayl / bet', '№', ...F.map(f => f === 'fio' ? 'FIO (PDF)' : f === 'id' ? 'ID (PDF)' : LABELS[f]), 'FIO (moslashtirilgan)', 'ID (moslashtirilgan)', "Aniq o'qilmagan"].map((_, i) => `<th>${colL(i)}</th>`).join('') + '</tr>';
         head += '<tr class="names"><th class="rn">1</th>' + ['Fayl / bet', '№', ...F.map(f => f === 'fio' ? 'FIO (PDF)' : f === 'id' ? 'ID (PDF)' : LABELS[f]), 'FIO (moslashtirilgan)', 'ID (moslashtirilgan)', "Aniq o'qilmagan"].map(h => `<th class="h">${esc(h)}</th>`).join('') + '</tr>';

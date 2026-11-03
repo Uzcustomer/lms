@@ -47,6 +47,7 @@ class TimetableController extends Controller
     use Concerns\TimetableConflictFocus;
     use Concerns\TimetableCycleShiftAdvice;
     use Concerns\TimetableTeacherAgenda;
+    use Concerns\TimetableWeeklyUnits;
 
     public function index(Request $request)
     {
@@ -9961,6 +9962,8 @@ class TimetableController extends Controller
         $out = [];
         foreach ($state['cards'] as $id => $o) {
             if ((int) $id === (int) $card->id) continue;
+            // Birlikning o'z bo'laklari (2 soat + 1 soat — bitta dars) begona dars emas: birga suriladi.
+            if (isset($state['ignore'][(int) $id])) continue;
             // Haftalik ko'chirishi yo'q karta shablon kunida turadi: boshqa kunda (yoki joysiz) bo'lsa — kalendarni hisoblamasdan o'tamiz.
             if (empty($state['ov'][$id]) && (!$o->day || !$o->pair || (int) $o->day !== $day)) continue;
             // Week numbers are program-local. Compare actual dates, including program holidays.
@@ -10376,10 +10379,10 @@ class TimetableController extends Controller
     }
 
     /** Tashqi qatlamdagi guruh bandligi (ext_day/ext_pair bo'yicha). */
-    private function findExternalConflicts(TimetableCard $card, int $day, int $pair): array
+    private function findExternalConflicts(TimetableCard $card, int $day, int $pair, array $ignoreIds = []): array
     {
         $others = TimetableCard::where('board_id', $card->board_id)
-            ->where('id', '!=', $card->id)
+            ->where('id', '!=', $card->id)->whereNotIn('id', $ignoreIds)
             ->where('ext_day', $day)->whereNotNull('ext_pair')
             ->get();
         $my = [$pair - 1, $pair - 1 + $card->lenHalf()];

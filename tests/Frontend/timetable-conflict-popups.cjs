@@ -84,23 +84,23 @@ async function shiftAdviceScenario(advice, fail) {
     return { calls, pop: made[0] };
 }
 (async () => {
-    const free = { kind: 'free', text: "VII para (14:00) ga o'tkazing — bo'sh", start: 7 };
+    const free = { kind: 'free', text: "14:00 ga o'tkazilsa to'qnashuv yo'qoladi", start: 7 };
     let { calls, pop } = await shiftAdviceScenario(free);
     assert.equal(calls.length, 1);   // bir marta
     assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), ['/b/boards/7/cycle-shift-advice', 'POST', { key: 'K' }]);
     const todos = pop._lis.map(li => li.todo && li.todo.textContent);
-    assert.equal(todos[0], "→ VII para (14:00) ga o'tkazing — bo'sh");
+    assert.equal(todos[0], "→ 14:00 ga o'tkazilsa to'qnashuv yo'qoladi");
     assert.equal(pop._lis[0].todo.dataset.advice, 'free');
     assert.equal(pop._lis[0].todo.classList.has('cf-checking'), false);
     assert(todos.slice(1).every(t => !/14:00/.test(String(t))), 'ma\'ruza, o\'tgan va xona qatorlari o\'zgarmaydi');
     assert.equal(pop._lis.length, 4);
     // Qisman: aniq smena va qoladigan sanalar, faqat shu o'qituvchining amaliy darslari ("+N ta").
-    const partial = "13:30 ga o'tkazilsa faqat 13.11, 14.11 qoladi: pp/2024-01a, Farmakologiya; pp/2024-01b, Farmakologiya; pp/2024-02a, Farmakologiya +2 ta";
+    const partial = "13:30 ga o'tkazilsa faqat 13.11, 14.11, 16.11 (+2) qoladi: pp/2024-01a, Farmakologiya; pp/2024-01b, Farmakologiya; pp/2024-02a, Farmakologiya +2 ta";
     ({ pop } = await shiftAdviceScenario({ kind: 'partial', text: partial, start: 6 }));
     assert.equal(pop._lis[0].todo.textContent, '→ ' + partial);
     assert.equal(pop._lis[0].todo.dataset.advice, 'partial');
-    // Hech qaysi smenada to'qnashuv yo'qolmaydi — umumiy maslahat.
-    const none = "hech qaysi smenada to'qnashuv yo'qolmaydi — boshqa o'qituvchi biriktiring yoki blok sanalarini o'zgartiring";
+    // Hech qaysi smena to'qnashuv sonini kamaytirmaydi — umumiy maslahat.
+    const none = "boshqa o'qituvchi biriktiring yoki smenani almashtiring";
     ({ pop } = await shiftAdviceScenario({ kind: 'none', text: none }));
     assert.equal(pop._lis[0].todo.textContent, '→ ' + none);
     // Server xatosi — asl ko'rsatma qoladi.

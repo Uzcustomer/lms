@@ -79,6 +79,8 @@ class TimetableAssignmentAccess
                 'admin.timetable.boards.data',
                 // Ichki jadvaldagi to'qnashuvlar (hisoblagich va panel uchun, faqat o'qiydi)
                 'admin.timetable.boards.conflicts',
+                // Qisman joylangan darslar ro'yxati (faqat o'qiydi)
+                'admin.timetable.boards.partial-units',
                 // Haftalik kesimlardagi sikl darslari (faqat o'qiydi)
                 'admin.timetable.cycle-week',
                 // O'zgarish so'rovlari: o'z so'rovlarini ko'rish / bekor qilish
@@ -115,6 +117,8 @@ class TimetableAssignmentAccess
                     'admin.timetable.boards.unplace',
                     'admin.timetable.cards.place',
                     'admin.timetable.cards.week-override',
+                    'admin.timetable.cards.unit-place',
+                    'admin.timetable.boards.unit-fix',
                     'admin.timetable.cycle-plan',
                     'admin.timetable.cycle-place',
                     'admin.timetable.cycle-assign-options',

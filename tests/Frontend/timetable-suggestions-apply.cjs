@@ -23,7 +23,7 @@ const doc = {
     addEventListener: (type, fn, cap) => listeners.push([type, fn, cap]),
     removeEventListener: (type, fn, cap) => { const i = listeners.findIndex(l => l[0] === type && l[1] === fn && l[2] === cap); if (i >= 0) listeners.splice(i, 1); },
 };
-const ctx = { esc: s => String(s), SUG_COLOR: {}, SUG_LABEL: { slot: "Bo'sh vaqt", blocker: 'Darsni surish' }, document: doc, String, Promise,
+const ctx = { esc: s => String(s), SUG_COLOR: {}, sugGapBadge: () => '', SUG_LABEL: { slot: "Bo'sh vaqt", blocker: 'Darsni surish' }, document: doc, String, Promise,
     prompt: () => { throw new Error("native prompt() ishlatilmasin"); } };
 vm.createContext(ctx);
 vm.runInContext(source.slice(a, b) + '\nthis.sugRowHtml = sugRowHtml; this.sugFooterHtml = sugFooterHtml; this.askSugReason = askSugReason; this.askRejectReason = askRejectReason;', ctx);

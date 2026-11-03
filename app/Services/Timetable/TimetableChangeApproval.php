@@ -38,6 +38,8 @@ class TimetableChangeApproval
     public const GATED = [
         'admin.timetable.cards.place'         => ['placeCard', 'card', 'move'],
         'admin.timetable.cards.week-override' => ['weekOverride', 'card', 'move'],
+        'admin.timetable.cards.unit-place'    => ['unitPlace', 'card', 'move'],
+        'admin.timetable.boards.unit-fix'     => ['unitFix', 'board', 'move'],
         'admin.timetable.boards.unplace'      => ['unplaceAll', 'board', 'unplace'],
         'admin.timetable.cycle-plan'          => ['cyclePlan', 'board', 'unplace'],   // faqat clear=1
         'admin.timetable.cycle-place'         => ['cyclePlace', 'board', 'cycle'],
@@ -764,6 +766,13 @@ class TimetableChangeApproval
                     : (($p['action'] ?? '') === 'reset' ? 'asl joyiga qaytariladi' : 'ko\'chiriladi → ' . $slot($p['day'] ?? null, $p['pair'] ?? null));
                 $text = $head . ': ' . ($p['week'] ?? '?') . '-hafta — ' . $act;
                 break;
+            case 'admin.timetable.cards.unit-place':
+                $to = (!empty($p['day']) && !empty($p['pair'])) ? $slot($p['day'], $p['pair']) : 'jadvaldan olib tashlash';
+                $text = $head . ': ' . (!empty($p['week']) ? $p['week'] . '-hafta — ' : '') . 'dars yaxlit (barcha bo\'laklari) → ' . $to;
+                break;
+            case 'admin.timetable.boards.unit-fix':
+                $text = ($p['week'] ?? '?') . '-hafta: qisman joylangan darslar ' . (($p['action'] ?? '') === 'clear' ? 'yaxlit bo\'shatiladi' : 'yaxlit joylanadi');
+                break;
             case 'admin.timetable.cycle-lecture-slots':
                 $day = isset($p['day_index']) ? ((int) $p['day_index'] + 1) . '-kun' : 'kunlar';
                 $text = $head . ': ' . $day . (isset($p['start_hour']) ? ' — darslar ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi');
@@ -829,7 +838,8 @@ class TimetableChangeApproval
         $pick = fn (array $keys) => implode('|', array_map(fn ($k) => mb_strtolower(trim((string) (is_array($p[$k] ?? null) ? implode(',', $p[$k]) : ($p[$k] ?? '')))), $keys));
         $short = match ($route) {
             'admin.timetable.cards.place', 'admin.timetable.cards.update' => 'card:' . $card?->id,
-            'admin.timetable.cards.week-override' => 'card:' . $card?->id . ':w' . ($p['week'] ?? ''),
+            'admin.timetable.cards.week-override', 'admin.timetable.cards.unit-place' => 'card:' . $card?->id . ':w' . ($p['week'] ?? ''),
+            'admin.timetable.boards.unit-fix' => 'w' . ($p['week'] ?? '') . ':' . ($p['action'] ?? ''),
             'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index']),
             'admin.timetable.cycle-place', 'admin.timetable.cycle-assign' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
             'admin.timetable.cycle-practice-starts' => $pick(['specialty_name', 'course', 'subject_name', 'units', 'date']),

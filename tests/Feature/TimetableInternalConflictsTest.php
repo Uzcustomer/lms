@@ -791,7 +791,7 @@ it('smena maslahati: o\'qituvchi ikki sikl amaliyotida band — bo\'sh smena, qo
         ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d22-05b|Klinik farmakologiya|practice'])
         ->assertOk()->json('advice');
     // 1) Bo'sh smena bor: 7-soatdan (14:00) — 05a bilan kesishmaydi.
-    expect($advice())->toMatchArray(['kind' => 'free', 'start' => 7, 'text' => "VII para (14:00) ga o'tkazing — bo'sh", 'remaining' => []]);
+    expect($advice())->toMatchArray(['kind' => 'free', 'start' => 7, 'text' => "14:00 ga o'tkazilsa to'qnashuv yo'qoladi", 'remaining' => []]);
 
     // 2) SHARIPOV payshanba (17.09) 9-soatda haftalik darsda — 14:00 smenasida faqat shu sana qoladi.
     $weekly = fn (int $day, int $pair = 9) => TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya',
@@ -808,7 +808,7 @@ it('smena maslahati: o\'qituvchi ikki sikl amaliyotida band — bo\'sh smena, qo
     // 3) Har smenada uchala sanada ham band (16, 17, 18.09 — ertalab 05a, tushdan keyin haftalik dars) — boshqa o'qituvchi.
     $weekly(3);
     $weekly(5);
-    expect($advice())->toBe(['kind' => 'none', 'text' => "hech qaysi smenada to'qnashuv yo'qolmaydi — boshqa o'qituvchi biriktiring yoki blok sanalarini o'zgartiring", 'start' => null, 'label' => null, 'remaining' => []]);
+    expect($advice())->toBe(['kind' => 'none', 'text' => "boshqa o'qituvchi biriktiring yoki smenani almashtiring", 'start' => null, 'label' => null, 'remaining' => []]);
 
     // Noma'lum blok — 404.
     test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
@@ -944,4 +944,47 @@ it('smena maslahati: blok ma\'ruzasining to\'qnashuvi (smenaga bog\'liq emas) "q
         ->toBe([['teacher_busy', true, '2026-09-15'], ['teacher_busy', false, '2026-09-16']]);
     expect($as()->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => $key])->assertOk()->json('advice'))
         ->toMatchArray(['kind' => 'free', 'start' => 3, 'remaining' => []]);
+});
+
+it('smena maslahati (qabul): MUXAMMADIYEV (752), d1/d22-01a Klinik farmakologiya — "13:30 ga o\'tkazilsa faqat 13.11, 14.11 qoladi: …"', function () {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-03 09:00', 'Asia/Tashkent'));
+    $mux = icTeacher('MUXAMMADIYEV S. B.');
+    \Illuminate\Support\Facades\DB::table('teachers')->where('id', $mux->id)->update(['id' => 752]);
+    $mux = Teacher::find(752);
+    // 01a va 01b — 13.11 (juma) dan 5 ish kuni (13, 14, 16, 17, 18.11), ikkalasida MUXAMMADIYEV I paradan: 5 sanada o'qituvchi band.
+    $s = icSetup(['d1/d22-01a' => [$mux, null, 10], 'd1/d22-01b' => [$mux, null, 10]], ['d1/d22-01a' => 60, 'd1/d22-01b' => 60]);
+    $s['board']->update(['bell_schedule' => TimetableBoard::defaultBellSchedule(6), 'pairs_per_day' => 6]);
+    $weekly = fn (int $day, array $o) => TimetableCard::create($o + ['board_id' => $s['board']->id, 'faculty_name' => 'F2',
+        'specialty_name' => 'pediatriya', 'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice',
+        'len_half' => 1, 'weeks' => 15, 'subject_name' => 'Farmakologiya', 'teacher_id' => 752, 'teacher_name' => 'MUXAMMADIYEV S. B.',
+        'day' => $day, 'pair' => 4]);
+    // Juma va shanba IV parada (13:30) — haftalik amaliy darslar va 12 guruhli oqim ma'ruzasi (ro'yxatga kirmaydi).
+    $weekly(5, ['group_name' => 'pp/2024-01a']);
+    $weekly(5, ['group_name' => 'pp/2024-01b']);
+    $weekly(5, ['training_type' => 'lecture', 'group_name' => null, 'students' => 120,
+        'group_names' => array_map(fn ($n) => sprintf('pp/2024-%02da', $n), range(1, 12))]);
+    $weekly(6, ['group_name' => 'pp/2024-02a']);
+    $weekly(6, ['group_name' => 'pp/2024-02b']);
+    $advice = fn () => test()->withoutVite()->actingAs(icTeacher('ADMIN', 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cycle-shift-advice', $s['board']), ['key' => 'davolash ishi|5|d1/d22-01a|Klinik farmakologiya|practice'])
+        ->assertOk()->json('advice');
+    $as = fn () => test()->withoutVite()->actingAs(icTeacher('ADMIN2', 'admin'), 'teacher')->withSession(['active_role' => 'admin']);
+    $item = collect($as()->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'])->assertOk()->json('rows'))
+        ->flatMap(fn ($r) => $r['blocks'])->firstWhere('key', 'davolash ishi|5|d1/d22-01a|Klinik farmakologiya|practice')['conflicts'][0];
+    expect($item)->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => 752, 'lecture' => false, 'date_from' => '2026-11-13', 'date_to' => '2026-11-18']);
+    // II va III para — 01b bilan hali 5 sanada kesishadi; IV para (13:30) — faqat juma va shanba qoladi.
+    $a = $advice();
+    expect($a)->toMatchArray(['kind' => 'partial', 'start' => 7,
+        'text' => "13:30 ga o'tkazilsa faqat 13.11, 14.11 qoladi: pp/2024-01a, Farmakologiya; pp/2024-01b, Farmakologiya; pp/2024-02a, Farmakologiya +1 ta"])
+        ->and($a['text'])->not->toContain('pp/2024-12a')
+        ->and(array_column($a['remaining'], 'date'))->toBe(['2026-11-13', '2026-11-14']);
+
+    // Dushanba va seshanba ham IV parada band — 4 sana: dastlabki 3 tasi va "(+1)".
+    $weekly(1, ['group_name' => 'pp/2024-03a']);
+    $weekly(2, ['group_name' => 'pp/2024-03b']);
+    expect($advice()['text'])->toStartWith("13:30 ga o'tkazilsa faqat 13.11, 14.11, 16.11 (+1) qoladi: ");
+
+    // Chorshanba ham — har smenada 5 sana qoladi (kamaymaydi): umumiy maslahat.
+    $weekly(3, ['group_name' => 'pp/2024-04a']);
+    expect($advice())->toMatchArray(['kind' => 'none', 'text' => "boshqa o'qituvchi biriktiring yoki smenani almashtiring"]);
 });

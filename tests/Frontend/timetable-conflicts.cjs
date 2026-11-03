@@ -109,6 +109,14 @@ const busyErr = (msg, items) => Object.assign(new Error(msg), { status: 409, dat
     ctx.cyclePlanData = { cycle_cards: [{ placed: true }, { placed: false }] };
     ctx.renderStats();
     assert.match(el('statChips').innerHTML, /Sikl bloklari: <b>1\/2<\/b><\/span>/);
+    // Sikl paneli soni va eksport tugmasi (renderCycleCards) haftalik ma'lumot bilan bosilmaydi (panel "2 ta", haftalik — boshqa son).
+    el('unplacedCount').textContent = '2 ta';
+    el('unplacedExportBtn').classList.add('hidden');
+    ctx.cards = [];
+    ctx.renderStats();
+    assert.equal(el('unplacedCount').textContent, '2 ta');
+    assert.equal(el('unplacedExportBtn').classList.contains('hidden'), true);
+    ctx.cards = [a, b, u];
     ctx.viewMode = 'week';
 
     // 3) Ma'lumot o'zgarmasa — qayta so'ralmaydi; o'qituvchi almashsa — so'raladi va belgi yo'qoladi.

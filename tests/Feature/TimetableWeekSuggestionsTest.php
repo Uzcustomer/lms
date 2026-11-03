@@ -86,8 +86,13 @@ it('takliflar: joylanmagan karta uchun boshqa kun, boshqa hafta va oxirida boshq
     expect($card)->not->toBeNull()
         ->and($card['reason'])->toContain("O'qituvchi band");
     $types = collect($card['suggestions'])->pluck('type')->all();
-    expect($types)->toContain('blocker')->toContain('slot')->toContain('day')->toContain('week')->toContain('teacher')
-        ->and(end($types))->toBe('teacher');
+    // Tartib: ikkalasini ketma-ket (bitta o'qituvchi shu kunda), shu kun boshqa vaqt, to'siqni shu kunda surish, boshqa kun, …,
+    // o'qituvchi, eng oxirida — to'siqni boshqa kunga.
+    expect($types)->toContain('pair')->toContain('blocker')->toContain('slot')->toContain('day')->toContain('week')->toContain('teacher')
+        ->and($types[0])->toBe('pair')->and(end($types))->toBe('blocker_day')
+        ->and(array_search('teacher', $types))->toBeLessThan(array_search('blocker_day', $types))
+        ->and(array_search('slot', $types))->toBeLessThan(array_search('blocker', $types))
+        ->and(array_search('blocker', $types))->toBeLessThan(array_search('day', $types));
     $teacher = collect($card['suggestions'])->firstWhere('type', 'teacher');
     expect($teacher['title'])->toContain('BOSH O.')
         ->and($teacher['actions'][0])->toMatchArray(['op' => 'teacher', 'teacher_id' => $free->id]);
@@ -264,7 +269,7 @@ it('takliflar: shablonda joylashgan blokni surish taklifi qo\'llanganda ham ishl
     expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('pair'))->toBe(3);
 });
 
-it('takliflar: shu kunning boshqa vaqti uchun ikki variant beriladi', function () {
+it('takliflar: shu kunning boshqa vaqti uchun bir necha variant beriladi', function () {
     $s = sugSetup();
     $busy = sugTeacher('BAND O.');
     $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_id' => $busy->id, 'teacher_name' => 'BAND O.']);
@@ -275,8 +280,8 @@ it('takliflar: shu kunning boshqa vaqti uchun ikki variant beriladi', function (
     $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
         ->assertOk()->json();
     $slots = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->where('type', 'slot')->values();
-    expect($slots)->toHaveCount(2)
-        ->and($slots[0]['actions'][0]['pair'])->not->toBe($slots[1]['actions'][0]['pair']);
+    expect($slots)->toHaveCount(3)
+        ->and($slots->map(fn ($x) => $x['actions'][0]['pair'])->unique())->toHaveCount(3);
 });
 
 it('takliflar: shu kundagi shu fanning alohida darsi blokka qo\'shilmaydi', function () {
@@ -341,8 +346,10 @@ it('takliflar: to\'sib turgan dars ham shu fanning darsi bor kunga surilmaydi', 
 
     $res = sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
         ->assertOk()->json();
-    $blk = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions'])->firstWhere('type', 'blocker');
-    expect($blk)->not->toBeNull()
+    // Shu kunda joy yo'q — to'siq boshqa kunga ("To'siqni boshqa kunga", oxirida): shu fanning darsi bor 1-kunga emas, 3-kunga.
+    $sugs = collect(collect($res['cards'])->firstWhere('id', $s['own']->id)['suggestions']);
+    $blk = $sugs->firstWhere('type', 'blocker_day');
+    expect($blk)->not->toBeNull()->and($sugs->firstWhere('type', 'blocker'))->toBeNull()
         ->and(collect($blk['actions'])->firstWhere('card_id', $bio->id)['day'])->toBe(3);
 });
 
@@ -394,17 +401,21 @@ it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birin
             ['group' => 'p/p25-02b', 'faculty' => 'Pediatriya', 'specialty' => 'Pediatriya', 'course' => 2]],
         'subject' => 'Odam anatomiyasi', 'dates' => ['2026-10-16', '2026-10-16'], 'hour_from' => 9, 'hour_to' => 11, 'hour_unit' => 'row',
         'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 7]]);
-    // Birinchi — shu vaqtda bo'sh xona (217 sig'imi yetmaydi), keyin ikkinchi tomonning xonasi (boshqa yo'nalish belgisi bilan).
-    expect($card['suggestions'][0])->toMatchArray(['type' => 'room', 'title' => 'Xonani almashtirish: 216 (30 o\'rin) — Juma, 5-para',
+    // Tartib: bitta xonaning ikki darsi shu kunda bir-birini to'sadi — birinchi "ikkalasini shu kunda ketma-ket", keyin shu kun boshqa
+    // vaqt, so'ng boshqa xona: shu vaqtda bo'sh xona (217 sig'imi yetmaydi), keyin ikkinchi tomonning xonasi (boshqa yo'nalish belgisi bilan).
+    $types = collect($card['suggestions'])->pluck('type')->all();
+    expect($types[0])->toBe('pair')->and(array_search('slot', $types))->toBeLessThan(array_search('room', $types));
+    $rooms = collect($card['suggestions'])->where('type', 'room')->values()->all();
+    expect($rooms[0])->toMatchArray(['type' => 'room', 'title' => 'Xonani almashtirish: 216 (30 o\'rin) — Juma, 5-para',
         'actions' => [['op' => 'move', 'card_id' => $a->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'auditorium_code' => 'R216']]])
-        ->and($card['suggestions'][1])->toMatchArray(['type' => 'room',
+        ->and($rooms[1])->toMatchArray(['type' => 'room',
             'title' => 'Ikkinchi tomon — «Odam anatomiyasi» (p/p25-02b) xonasini almashtirish: 216 (30 o\'rin) — Juma, 5-para',
             'actions' => [['op' => 'move', 'card_id' => $b->id, 'week' => 7, 'day' => 5, 'pair' => 9, 'auditorium_code' => 'R216']],
             'note' => 'Faqat shu hafta; boshqa yo\'nalish: Pediatriya, 2-kurs'])
         ->and(collect($card['suggestions'])->pluck('type')->all())->not->toContain('teacher');
 
     // Qo'llash (sahifadagi kabi week-override) — to'qnashuv yo'qoladi, takliflar bo'sh.
-    $act = $card['suggestions'][0]['actions'][0];
+    $act = $rooms[0]['actions'][0];
     sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.week-override', $a),
         ['week' => $act['week'], 'action' => 'move', 'day' => $act['day'], 'pair' => $act['pair'], 'layer' => 'internal', 'auditorium_code' => $act['auditorium_code']])
         ->assertOk();
@@ -451,7 +462,8 @@ it('takliflar: o\'qituvchi to\'qnashuvida — mavjud qadamlar, o\'qituvchini alm
     $card = collect($res['cards'])->firstWhere('id', $x->id);
     $types = collect($card['suggestions'])->pluck('type')->all();
     expect($card['conflict'])->toBeTrue()->and($card['reason'])->toBe('O\'qituvchi SHARIPOV K. band: g-02b · Gigiyena · Seshanba II para')
-        ->and($types)->not->toContain('room')->and($types[0])->toBe('slot')->and(end($types))->toBe('teacher');
+        ->and($types)->not->toContain('room')->and($types[0])->toBe('pair')->and($types[1])->toBe('slot')
+        ->and(collect($types)->reject(fn ($t) => $t === 'blocker_day')->last())->toBe('teacher');
     expect($card['clashes'])->toHaveCount(1)->and($card['clashes'][0])->toMatchArray(['kind' => 'teacher_busy', 'teacher_id' => $t->id,
         'teacher_name' => 'SHARIPOV K.', 'room_code' => null, 'subject' => 'Gigiyena', 'dates' => ['2026-09-15', '2026-09-15'], 'hour_from' => 3,
         'hour_to' => 5, 'view' => 'week', 'week' => 3])
@@ -481,7 +493,7 @@ it('takliflar: karta xonada ikki dars bilan to\'qnashsa — bitta tomonning xona
     $card = $res['cards'][0];
     expect($card['id'])->toBe($a->id)
         ->and($card['reason'])->toBe('Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para; Xona 215 band: p/p25-02c · Odam anatomiyasi · Juma V para')
-        ->and($card['suggestions'][0]['actions'][0])->toMatchArray(['card_id' => $a->id, 'auditorium_code' => 'R216'])
+        ->and(collect($card['suggestions'])->firstWhere('type', 'room')['actions'][0])->toMatchArray(['card_id' => $a->id, 'auditorium_code' => 'R216'])
         ->and(collect($card['suggestions'])->filter(fn ($x) => str_starts_with($x['title'], 'Ikkinchi tomon'))->all())->toBe([]);
 });
 
@@ -965,7 +977,7 @@ it('takliflar: GET qaytargan har taklif turi FormData ko\'rinishida (satrlar, PH
     TimetableCardOverride::create(['card_id' => $s['foreign']->id, 'week' => 3, 'cancelled' => true]);
     $card = collect(sugAs($s['admin'], 'superadmin')->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=3&courses[]=2')
         ->assertOk()->json('cards'))->firstWhere('id', $s['own']->id);
-    expect(collect($card['suggestions'])->pluck('type')->unique()->sort()->values()->all())->toBe(['blocker', 'day', 'slot', 'teacher', 'week'])
+    expect(collect($card['suggestions'])->pluck('type')->unique()->sort()->values()->all())->toBe(['blocker', 'blocker_day', 'day', 'pair', 'slot', 'teacher', 'week'])
         ->and(collect($card['suggestions'])->contains(fn ($g) => count($g['actions']) > 1))->toBeTrue();
     sugFormCheck($s, $card, 3, [[$s['admin'], 'superadmin', 'apply'], [$s['head'], 'kafedra_mudiri', 'propose']]);
 });

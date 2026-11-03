@@ -100,11 +100,15 @@ const busyErr = (msg, items) => Object.assign(new Error(msg), { status: 409, dat
     ctx.renderStats();
     assert.match(el('statChips').innerHTML, /Joylashgan: <b>1\/3<\/b>/);
     assert.equal(el('unplacedCount').textContent, '2 ta');
-    // Sikl: "Sikl bloklari" — joylashgan va to'qnashuvsiz bloklar.
+    // Sikl: "Sikl bloklari" — panel qamrovi (cycleScopedCards) va panel mezoni: to'qnashuvli blok ham joylangan (alohida soni bilan).
     ctx.viewMode = 'cycle';
-    ctx.cyclePlanData = { cycle_cards: [{ placed: true }, { placed: true, conflict: "O'qituvchi X band" }, { placed: false }] };
+    ctx.cyclePlanData = { cycle_cards: [{ placed: true }, { placed: true, conflict: "O'qituvchi X band" }, { placed: false }, { placed: true, out: true }] };
+    ctx.cycleScopedCards = d => ({ scoped: d.cycle_cards.filter(c => !c.out) });
     ctx.renderStats();
-    assert.match(el('statChips').innerHTML, /Sikl bloklari: <b>1\/3<\/b>/);
+    assert.match(el('statChips').innerHTML, /Sikl bloklari: <b>2\/3<\/b> · to\u2018qnashuvli: <b>1<\/b>/);
+    ctx.cyclePlanData = { cycle_cards: [{ placed: true }, { placed: false }] };
+    ctx.renderStats();
+    assert.match(el('statChips').innerHTML, /Sikl bloklari: <b>1\/2<\/b><\/span>/);
     ctx.viewMode = 'week';
 
     // 3) Ma'lumot o'zgarmasa — qayta so'ralmaydi; o'qituvchi almashsa — so'raladi va belgi yo'qoladi.

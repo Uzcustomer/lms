@@ -11,16 +11,18 @@ use Illuminate\Support\Carbon;
  * har bir smena varianti (cycleShiftOptions) blok sanalarida xotirada sinab ko'riladi — boshqa sikl darslari bilan (cycleConflicts:
  * o'qituvchi, guruh, xona) va haftalik darslar bilan (o'qituvchi, guruh, xona). Natija:
  *   free    — "IV para (13:30) ga o'tkazing — bo'sh";
- *   partial — eng kam to'qnashuvlisi: "13:30 ga o'tkazilsa faqat 19.11 (payshanba) qoladi: pp/2024-01b, Farmakologiya";
- *   none    — hech biri yaxshilamaydi: "boshqa o'qituvchi biriktiring".
+ *   partial — eng kam to'qnashuvlisi: "13:30 ga o'tkazilsa faqat 13.11, 14.11 qoladi: pp/2024-01b, Farmakologiya" (ro'yxatda faqat
+ *             shu o'qituvchining amaliy darslari, 3 tadan ortig'i "+N ta");
+ *   none    — hech biri yaxshilamaydi: umumiy maslahat (SHIFT_NONE_TEXT).
  * Faqat o'qiydi; oynada bir marta (ochilganda) so'raladi.
  */
 trait TimetableCycleShiftAdvice
 {
-    private const SHIFT_DOW = [1 => 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba', 'yakshanba'];
     /** "Qoladi" matnida ko'rsatiladigan sanalar va darslar soni (qolgani "+N ta"). */
     private const SHIFT_LIST_DATES = 4;
     private const SHIFT_LIST_WITH = 3;
+    /** Hech qaysi smena to'qnashuv sanalarini kamaytirmaydi — umumiy maslahat. */
+    private const SHIFT_NONE_TEXT = "hech qaysi smenada to'qnashuv yo'qolmaydi — boshqa o'qituvchi biriktiring yoki blok sanalarini o'zgartiring";
 
     public function cycleShiftAdvice(Request $request, TimetableBoard $board)
     {
@@ -42,7 +44,7 @@ trait TimetableCycleShiftAdvice
     private function shiftAdviceFor(TimetableBoard $board, array $units, array $calendar, int $i): array
     {
         $u = $units[$i];
-        $none = ['kind' => 'none', 'text' => "boshqa o'qituvchi biriktiring", 'start' => null, 'label' => null, 'remaining' => []];
+        $none = ['kind' => 'none', 'text' => self::SHIFT_NONE_TEXT, 'start' => null, 'label' => null, 'remaining' => []];
         if ($u['placement'] === null) {
             return $none;
         }
@@ -83,8 +85,8 @@ trait TimetableCycleShiftAdvice
         }
         [$opt, $rem] = $best;
         $time = $this->cycleRowTime($board, (int) $opt['start']);
-        $dates = $this->shiftShortList(array_map(fn ($d) => Carbon::parse($d)->format('d.m') . ' (' . self::SHIFT_DOW[Carbon::parse($d)->dayOfWeekIso] . ')',
-            array_keys($rem)), self::SHIFT_LIST_DATES, ', ');
+        // "13:30 ga o'tkazilsa faqat 13.11, 14.11 qoladi" — sanalar qisqa (dd.mm).
+        $dates = $this->shiftShortList(array_map(fn ($d) => Carbon::parse($d)->format('d.m'), array_keys($rem)), self::SHIFT_LIST_DATES, ', ');
         // "Qoladi:" — faqat shu o'qituvchining boshqa amaliy darslari (ma'ruza oqimi guruhlari emas); guruh/xona bandligi — faqat sanasi.
         $with = $this->shiftShortList(array_values(array_unique(array_merge([], ...array_values($rem)))), self::SHIFT_LIST_WITH, '; ');
 
@@ -110,7 +112,9 @@ trait TimetableCycleShiftAdvice
         $u = $units[$self];
         $out = [];
         foreach ($this->cycleConflicts($board, $units, $calendar)[$u['key']]['items'] ?? [] as $it) {
-            if (!empty($it['past']) || $it['date_from'] === null) {
+            // Birlik ma'ruzasining to'qnashuvlari smenaga bog'liq emas (smena — faqat amaliy darslar): ular "qoladi" sanalariga kirmaydi,
+            // aks holda to'qnashuvni yo'qotadigan smena ham "qisman" yoki "hech biri" bo'lib qolardi.
+            if (!empty($it['past']) || $it['date_from'] === null || !empty($it['lecture'])) {
                 continue;
             }
             foreach ($this->cycleDatesBetween($calendar, $it['date_from'], $it['date_to'], $units[$self]) as $d) {

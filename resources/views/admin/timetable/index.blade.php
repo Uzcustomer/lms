@@ -5885,8 +5885,6 @@
                         const restore = () => { gw.scrollTop = keep.top; if (!wkMoved) gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
                         restore(); requestAnimationFrame(restore);
                     }
-                    $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
-                        ((j.cycle_cards || []).filter(card => card.placed && !card.conflict).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
                     $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ((j.view || cycleViewMode) === 'group' ? ' guruh · ' : ' oqim · ') + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
                         (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
 
@@ -8076,6 +8074,16 @@
                 grid.querySelectorAll('thead .cyc-gcol, thead .cyc-mk-side').forEach(c => { edge = Math.max(edge, c.getBoundingClientRect().right); });
                 wrap.scrollLeft = Math.round(wrap.scrollLeft + th.getBoundingClientRect().left - edge);   // brauzer 0..max oralig'iga o'zi cheklaydi
             }
+            // Panel qamrovi (guruh filtri va tanlangan hafta; "Butun semestr" — butun semestr): panel ro'yxati ham, "Sikl bloklari"
+            // hisoblagichi ham shu to'plamdan. Hafta bo'yicha — to'qnashuvlar ro'yxati ham shu haftaniki.
+            function cycleScopedCards(j) {
+                const cycleCards = (j && j.cycle_cards) || [];
+                const wk = cycleSelWeek(), wkOn = Boolean(wk && !(cyclePanelWeek === curWeek && cyclePanelAll));
+                const rowKeys = cycleRowFilters.length ? new Set(cycleVisibleRows((j && j.rows) || []).map(r => r.row_key)) : null;
+                const scoped = cycleCards.filter(card => cycleCardGroupMatch(card, rowKeys) && (!wkOn || cycleCardInWeek(card, wk)))
+                    .map(card => (wkOn && card.placed ? Object.assign({}, card, { conflicts: (card.conflicts || []).filter(i => cfItemInWeek(i, wk)) }) : card));
+                return { wk, wkOn, scoped };
+            }
             function renderCycleCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];
                 const groups = [...new Set(cycleCards.map(card => card.group).filter(Boolean))]
@@ -8106,11 +8114,7 @@
                 $('cardPanelHint').classList.remove('hidden');
                 // Hafta tanlovi: boshqa hafta tanlansa — yana shu hafta bo'yicha ("Butun semestr" o'chadi).
                 if (cyclePanelWeek !== curWeek) { cyclePanelWeek = curWeek; cyclePanelAll = false; }
-                const wk = cycleSelWeek(), wkOn = Boolean(wk && !cyclePanelAll);
-                // Guruh filtri (ko'p tanlov) va hafta: to'qnashuvlar ro'yxati ham shu haftaniki (hisoblagich, filtr).
-                const rowKeys = cycleRowFilters.length ? new Set(cycleVisibleRows((j && j.rows) || []).map(r => r.row_key)) : null;
-                const scoped = cycleCards.filter(card => cycleCardGroupMatch(card, rowKeys) && (!wkOn || cycleCardInWeek(card, wk)))
-                    .map(card => (wkOn && card.placed ? Object.assign({}, card, { conflicts: (card.conflicts || []).filter(i => cfItemInWeek(i, wk)) }) : card));
+                const { wk, wkOn, scoped } = cycleScopedCards(j);
                 // To'qnashuvli blok (joyida, lekin o'qituvchi yoki xona band) ham joylanmaganlar qatorida — sababi bilan.
                 const unplaced = scoped.filter(card => (!card.placed || card.conflict) && (!cycleCfFilter || cfMatchesFilter(card, cycleCfFilter))).sort((a, b) =>
                     (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
@@ -8155,6 +8159,7 @@
                 const allBox = $('cardPanel').querySelector('[data-cyc-all]');
                 if (allBox) allBox.onchange = () => { cyclePanelAll = allBox.checked; renderCycleCards(j); };
                 cycleWeekHighlight();
+                if (typeof renderStats === 'function') renderStats();   // "Sikl bloklari" — shu qamrov bo'yicha (guruh, hafta, "Butun semestr")
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     // Faqat ko'rish rejimi: joylash ko'rsatmalari va sudrash yo'q.
                     if (TIMETABLE_READ_ONLY) return;
@@ -8931,10 +8936,13 @@
                 const totPlaced = boardCards.filter(c => effPlace(c)).length;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
                 const weekLbl = curWeek ? ' · ' + curWeek + '-hafta' : '';
-                const cyc = (viewMode === 'cycle' && cyclePlanData && Array.isArray(cyclePlanData.cycle_cards)) ? cyclePlanData.cycle_cards : null;
+                // Sikl bloklari — panel bilan bir xil qamrov (cycleScopedCards) va bir xil "joylangan" mezoni (card.placed; to'qnashuvli
+                // blok ham joyida turibdi — panelda "joylangan · to'qnashuv"). To'qnashuvlilar alohida soni bilan.
+                const cyc = (viewMode === 'cycle' && cyclePlanData && Array.isArray(cyclePlanData.cycle_cards)) ? cycleScopedCards(cyclePlanData).scoped : null;
+                const cycCf = cyc ? cyc.filter(c => c.placed && c.conflict).length : 0;
                 const first = cyc
-                    ? '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700" title="Tanlangan qamrovdagi sikl bloklari (fan × oqim/guruh × mashg\'ulot turi)">Sikl bloklari: <b>' +
-                        cyc.filter(c => c.placed && !c.conflict).length + '/' + cyc.length + '</b></span>'
+                    ? '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700" data-cycle-count title="Panel qamrovidagi sikl bloklari (fan × oqim/guruh × mashg\'ulot turi): joylangan / jami">Sikl bloklari: <b>' +
+                        cyc.filter(c => c.placed).length + '/' + cyc.length + '</b>' + (cycCf ? ' · to\u2018qnashuvli: <b>' + cycCf + '</b>' : '') + '</span>'
                     : '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>';
                 // O'qituvchi / fan / xona kesimida: shu haftada ko'rinayotgan haftalik va sikl darslari soni.
                 const crossCount = CROSS_MODES.includes(viewMode) && curWeek

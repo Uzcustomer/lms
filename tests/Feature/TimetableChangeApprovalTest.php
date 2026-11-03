@@ -1200,3 +1200,21 @@ it('xabarnomalar: kafedra mudiri topilmasa — logda ogohlantirish (xabar yo\'qo
     $m->invoke(app(\App\Services\Timetable\TimetableChangeApproval::class), $req);
     expect($logged)->toContain(['warning', '[TimetableChange] #' . $req->id . ' xabar (kafedra mudiri (kafedra 999)): qabul qiluvchi topilmadi']);
 });
+
+it('kutilayotgan xona so\'rovi: tasdiqlashgacha xona nofaol bo\'lib qolsa — qayta bajarishda ham rad etiladi, karta o\'zgarmaydi', function () {
+    ['head' => $head, 'reg' => $reg, 'card' => $card] = approvalSetup();
+    \App\Models\Auditorium::create(['code' => 'R1', 'name' => '1-xona', 'active' => true, 'volume' => 30]);
+    \App\Models\Auditorium::create(['code' => 'R2', 'name' => '2-xona', 'active' => true, 'volume' => 30]);
+    $card->update(['auditorium_code' => 'R1', 'auditorium_name' => '1-xona']);
+    $unit = ['faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena',
+        'training_type' => 'practice', 'group_name' => $card->group_name];
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.assign-room', $card->board_id), $unit + ['auditorium_code' => 'R2'])
+        ->assertOk()->assertJson(['pending_approval' => true]);
+    $req = TimetableChangeRequest::where('route_name', 'admin.timetable.assign-room')->sole();
+    // Auditoriya sinxroni: R2 nofaol bo'ldi.
+    \App\Models\Auditorium::where('code', 'R2')->update(['active' => false]);
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req));
+    expect($req->fresh()->status)->toBe('failed')
+        ->and((string) $req->fresh()->error)->toBe('Xona nofaol — boshqa xona tanlang («2-xona»).')
+        ->and($card->fresh()->auditorium_code)->toBe('R1');
+});

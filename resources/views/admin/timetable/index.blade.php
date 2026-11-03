@@ -9114,15 +9114,52 @@
                 const scope = x => [x.faculty_name || '', x.specialty_name || '', +x.course].join('|').toLowerCase();
                 if (a.specialty_name !== undefined && b.specialty_name !== undefined && scope(a) !== scope(b)) return false;
                 if (a.oqim_label && b.oqim_label && String(a.oqim_label).trim().toLowerCase() !== String(b.oqim_label).trim().toLowerCase()) return false;
+                return !bolakSetOverlap(a, b, ma[1].trim().toLowerCase());
+            }
+            // Talaba kesishuvi — to'plam bo'yicha (serverdagi bolakStudentsOverlap): a va b ga umumiy guruhlar orqali bog'langan parallel
+            // bo'laklar (bir fan, tur, qamrov, oqim) talabalari yig'indisi to'plam guruhlari faol talabalari yig'indisidan ko'p bo'lsagina.
+            // Juftlik bo'yicha o'rtacha ulush (11 / 2 = 5,5) ishlatilmaydi. Bir bo'lakning bir xil guruhlar uchun bir nechta kartasi — bir
+            // marta (eng ko'p talabasi). Karta yoki guruh talabalari noma'lum (0) — kesishmaydi.
+            function bolakSetOverlap(a, b, base) {
                 const ga = cardGroupsSafe(a), gb = cardGroupsSafe(b);
-                const sa = +a.students > 0 ? +a.students / Math.max(1, ga.length) : 0, sb = +b.students > 0 ? +b.students / Math.max(1, gb.length) : 0;
-                if (sa > 0 && sb > 0 && typeof groupStudents !== 'undefined') {
-                    for (const g of ga.filter(x => gb.includes(x))) {
-                        const n = +groupStudents[(a.faculty_name || '') + '|' + g] || 0;
-                        if (n > 0 && sa + sb > n + 0.01) return false;
-                    }
+                if (!ga.some(x => gb.includes(x)) || typeof groupStudents === 'undefined') return false;
+                const scope = x => [x.faculty_name || '', x.specialty_name || '', +x.course].join('|').toLowerCase();
+                const oq = x => String(x.oqim_label || '').trim().toLowerCase();
+                const src = typeof allCards !== 'undefined' && Array.isArray(allCards) && allCards.length ? allCards
+                    : (typeof cards !== 'undefined' && Array.isArray(cards) ? cards : []);
+                const pool = src.filter(c => {
+                    const m = BOLAK_RX.exec(String(c.subject_name || '').trim());
+                    return m && m[1].trim().toLowerCase() === base && (c.training_type || '') === (a.training_type || '') && scope(c) === scope(a)
+                        && (!a.oqim_label || !c.oqim_label || oq(c) === oq(a));
+                }).concat([a, b]);
+                const groups = new Set(ga.concat(gb));
+                const members = new Map();
+                let grew = true;
+                while (grew) {
+                    grew = false;
+                    pool.forEach(c => {
+                        const key = c.id !== undefined ? c.id : c;
+                        if (!members.has(key) && cardGroupsSafe(c).some(g => groups.has(g))) {
+                            members.set(key, c);
+                            cardGroupsSafe(c).forEach(g => groups.add(g));
+                            grew = true;
+                        }
+                    });
                 }
-                return true;
+                const parts = {};
+                for (const c of members.values()) {
+                    if (!(+c.students > 0)) return false;
+                    const m = BOLAK_RX.exec(String(c.subject_name || '').trim());
+                    const k = (m ? m[2].toLowerCase() : '') + '|' + cardGroupsSafe(c).slice().sort().join('+');
+                    parts[k] = Math.max(parts[k] || 0, +c.students);
+                }
+                let capacity = 0;
+                for (const g of groups) {
+                    const n = +groupStudents[(a.faculty_name || '') + '|' + g] || 0;
+                    if (!(n > 0)) return false;
+                    capacity += n;
+                }
+                return Object.values(parts).reduce((x, y) => x + y, 0) > capacity;
             }
             const cardGroupsSafe = c => (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []);
             // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).

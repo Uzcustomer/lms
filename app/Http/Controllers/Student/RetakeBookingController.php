@@ -25,11 +25,16 @@ class RetakeBookingController extends Controller
         'missed' => 'Tanlangan vaqtda kelinmagan',
         'noquiz' => 'Test hali yuklanmagan',
         'continue' => 'Urinish davom etmoqda',
-        'done' => 'Topshirilgan',
+        'done' => 'Yakunlangan',
         'expired' => "Muddati o'tgan",
+        'nobooking' => 'Vaqt tanlanmagan',
+        'nextday' => 'Bugun urinish ishlatilgan',
+        'wait' => 'Sababli oraliq hali boshlanmagan',
     ];
 
     private const MOODLE_DOWN = "Moodle bilan bog'lanib bo'lmadi. Birozdan keyin qayta urinib ko'ring.";
+
+    private const LOCKED = "Tanlangan vaqtni o'zgartirib yoki bekor qilib bo'lmaydi. Shu vaqtda kelmasangiz, urinish kuyadi.";
 
     public function __construct(private RetakeBookingService $service)
     {
@@ -115,6 +120,11 @@ class RetakeBookingController extends Controller
         if (empty($debt['can_book'])) {
             return redirect($back)->with('booking_flash', ['type' => 'error', 'message' => 'Bu mavzu uchun hozir vaqt tanlab bo\'lmaydi.']);
         }
+        // Saqlangan vaqt o'zgartirilmaydi va bekor qilinmaydi — kelinmasa urinish kuyadi
+        $active = RetakeBookingService::activeBooking($hemisId, (int) $data['subject_id'], $data['lesson_date']);
+        if ($active && $active->slot_end->greaterThan(now())) {
+            return redirect($back)->with('booking_flash', ['type' => 'error', 'message' => self::LOCKED]);
+        }
 
         [$startTime, $endTime] = $slots[$data['slot']];
         $start = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $startTime);
@@ -128,6 +138,12 @@ class RetakeBookingController extends Controller
             if ($start->greaterThanOrEqualTo($end)) {
                 return redirect($back)->withInput()->withErrors(['slot' => "Bu vaqt oralig'i tugayapti — keyingisini tanlang."]);
             }
+        }
+        // Oddiy NB: bugun urinish ishlatilgan yoki bronga kelinmagan — keyingisi ertadan (Moodle ham tekshiradi)
+        $minDate = $this->minDate($hemisId, $debt);
+        if ($start->toDateString() < $minDate->toDateString()) {
+            return redirect($back)->withInput()->withErrors(['slot' => 'Bugun bu mavzudan urinish ishlatilgan — vaqtni '
+                . $minDate->format('d.m.Y') . ' dan boshlab tanlang.']);
         }
         if ($error = RetakeBookingService::validateSlot($start, $end, $debt['deadline'] ?? null, $debt['book_from'] ?? null)) {
             return redirect($back)->withInput()->withErrors(['slot' => $error]);
@@ -145,19 +161,39 @@ class RetakeBookingController extends Controller
             ->with('booking_flash', ['type' => $result['type'], 'message' => $result['message']]);
     }
 
+    /** Talaba saqlangan vaqtni bekor qila olmaydi (eski havola yoki forma yuborilsa ham) */
     public function cancel(RetakeBooking $booking)
     {
         $hemisId = (int) $this->student()->hemis_id;
         abort_unless((int) $booking->student_hemis_id === $hemisId, 404);
 
-        $back = $this->debtUrl($booking->subject_id, $booking->lesson_date->format('Y-m-d'));
-        if ($booking->status !== RetakeBooking::STATUS_BOOKED) {
-            return redirect($back)->with('booking_flash', ['type' => 'warning', 'message' => 'Bu bron allaqachon amalda emas.']);
+        return redirect($this->debtUrl($booking->subject_id, $booking->lesson_date->format('Y-m-d')))
+            ->with('booking_flash', ['type' => 'error', 'message' => self::LOCKED]);
+    }
+
+    /**
+     * Kun tanlashning eng erta sanasi: sababli arizada oraliq boshi; oddiy NB'da bugun
+     * urinish ishlatilgan (Moodle "nextday") yoki bugungi bronga kelinmagan bo'lsa — ertaga
+     * (bir kunda bitta urinish), aks holda bugun.
+     */
+    private function minDate(int $hemisId, array $debt): Carbon
+    {
+        $min = now()->startOfDay();
+        if (!empty($debt['book_from']) && Carbon::parse($debt['book_from'])->greaterThan($min)) {
+            $min = Carbon::parse($debt['book_from'])->startOfDay();
+        }
+        if (empty($debt['excused'])) {
+            $state = (string) ($debt['state'] ?? '');
+            $missedToday = $state === 'missed' && RetakeBooking::forDebt($hemisId, (int) $debt['subject_id'], (string) $debt['lesson_date'])
+                ->where('status', RetakeBooking::STATUS_MISSED)
+                ->whereDate('slot_start', now()->toDateString())
+                ->exists();
+            if ($state === 'nextday' || $missedToday) {
+                $min = $min->max(now()->addDay()->startOfDay());
+            }
         }
 
-        $result = $this->service->cancel($booking);
-
-        return redirect($back)->with('booking_flash', ['type' => $result['type'], 'message' => $result['message']]);
+        return $min;
     }
 
     /** Moodle qarzi + LMS'dagi bron va baholar — sahifa uchun */
@@ -177,10 +213,17 @@ class RetakeBookingController extends Controller
         $slotEnd = !empty($debt['slot_end']) ? Carbon::parse($debt['slot_end']) : $local?->slot_end;
         // LMS'da amaldagi bron bo'lsa ham "tanlangan" — Moodle'ga hali yetib bormagan yoki
         // vaqt oralig'i boshlanib Moodle holatni boshqacha qaytarsa ham talaba bekor qila olsin
+        // O'tib ketgan bron (kelib topshirilgan) hisobga olinmaydi — keyingi urinishga yangi vaqt tanlanadi
+        if ($local && $local->slot_end->lessThanOrEqualTo(now())) {
+            $local = null;
+        }
         $isBooked = $state === 'booked' || ($local && !in_array($state, ['done', 'missed'], true));
 
         $bookFrom = !empty($debt['book_from']) ? Carbon::parse($debt['book_from']) : null;
         $deadline = !empty($debt['deadline']) ? Carbon::parse($debt['deadline']) : null;
+        $minDate = $this->minDate($hemisId, $debt);
+        // Keyingi urinish ertadan, muddat esa bugun tugaydi — vaqt tanlab bo'lmaydi
+        $noTimeLeft = $deadline && $minDate->toDateString() > $deadline->toDateString();
 
         return [
             'subject_id' => $subjectId,
@@ -198,7 +241,10 @@ class RetakeBookingController extends Controller
             'tries_left' => $debt['tries_left'] ?? null,
             'state' => $isBooked ? 'booked' : $state,
             'state_label' => self::STATE_LABELS[$isBooked ? 'booked' : $state] ?? $state,
-            'can_book' => !empty($debt['can_book']),
+            // Saqlangan vaqt o'zgartirilmaydi: tanlangan bo'lsa forma ko'rsatilmaydi
+            'can_book' => !empty($debt['can_book']) && !$isBooked && !$noTimeLeft,
+            'min_date' => $minDate,
+            'no_time_left' => $noTimeLeft && !$isBooked && !empty($debt['can_book']),
             'quiz_uploaded' => !empty($debt['quiz_uploaded']),
             'is_booked' => $isBooked,
             'slot_start' => $isBooked ? $slotStart : null,

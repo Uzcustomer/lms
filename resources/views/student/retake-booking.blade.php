@@ -81,7 +81,8 @@
                 $dateText = $debt['lesson_date']?->format('d.m.Y');
                 $deadlineText = $debt['deadline']?->format('d.m.Y');
                 // Sababli ariza: oraliq boshi bugundan keyin bo'lishi mumkin
-                $minDate = $debt['book_from'] && $debt['book_from']->isFuture() ? $debt['book_from'] : now();
+                // Sababli ariza oralig'i boshi; oddiy NB'da bugun urinish ishlatilgan bo'lsa — ertadan
+                $minDate = $debt['min_date'];
                 $showForm = $debt['can_book'];
                 $retakeDay = $debt['retake_day'];
                 $weekdays = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
@@ -89,8 +90,6 @@
                 // Sababli NB: bitta urinish, kelmasa kuymaydi — shu kuni ish vaqti oxirigacha boshqa vaqt tanlaydi
                 $dayEnd = (string) config('services.moodle.retake_slot_to', '17:00');
                 $triesLeft = $debt['tries_left'];
-                // Vaqt tanlangan bo'lsa forma "O'zgartirish" bosilgandagina ochiladi (xato bo'lsa ochiq qoladi)
-                $formOpen = !$debt['is_booked'] || $errors->any() || ($flash['type'] ?? '') === 'error';
             @endphp
 
             <div class="rb-hero">
@@ -123,8 +122,16 @@
                     @elseif($triesLeft !== null && (int) $triesLeft <= 0)
                         Tanlangan vaqtda kelmadingiz — urinish kuydi. Qayta topshirish urinishlari tugadi.
                     @else
-                        Tanlangan vaqtda kelmadingiz — urinish kuydi. Keyingi urinish uchun yangi kun va vaqtni tanlang.
+                        Tanlangan vaqtda kelmadingiz — urinish kuydi. Keyingi urinish uchun yangi kun va vaqtni tanlang
+                        ({{ $minDate->format('d.m.Y') }} dan, muddat ichida).
                     @endif
+                </div>
+            @endif
+
+            @if($debt['no_time_left'])
+                <div class="rb-alert warning">
+                    Bir kunda bitta urinish: keyingi urinish {{ $minDate->format('d.m.Y') }} dan bo'lishi mumkin, qayta topshirish muddati esa
+                    {{ $deadlineText }} kuni tugaydi — vaqt tanlab bo'lmaydi.
                 </div>
             @endif
 
@@ -155,6 +162,7 @@
                     </div>
                     <p class="rb-hint" style="margin:8px 0 0;">
                         Shu vaqt oralig'ida test markazida Moodle'ga kirsangiz, qayta topshirish oynasi avtomatik ochiladi.
+                        Tanlangan vaqtni o'zgartirib yoki bekor qilib bo'lmaydi.
                         @if($debt['excused'])
                             Vaqtida kelolmasangiz, urinish kuymaydi: shu kuni {{ $dayEnd }} gacha boshqa vaqtni tanlashingiz mumkin.
                         @else
@@ -162,23 +170,12 @@
                         @endif
                         @if($debt['sync_pending']) <br><strong>Moodle bilan sinxronlash kutilmoqda.</strong> @endif
                     </p>
-                    <div class="rb-actions">
-                        @if($showForm)
-                            <button type="button" class="rb-btn ghost" id="rb-change" @if($formOpen) hidden @endif>O'zgartirish</button>
-                        @endif
-                        @if($debt['booking'])
-                            <form method="POST" action="{{ route('student.retake-booking.cancel', $debt['booking']->id) }}" onsubmit="return confirm('Tanlangan vaqt bekor qilinsinmi?');">
-                                @csrf
-                                <button type="submit" class="rb-btn danger">Bekor qilish</button>
-                            </form>
-                        @endif
-                    </div>
                 </section>
             @endif
 
             @if($showForm)
-                <section class="rb-card" id="rb-form-card" @unless($formOpen) hidden @endunless>
-                    <h2>{{ $debt['is_booked'] ? 'Yangi vaqtni tanlang' : ($retakeDay ? 'Vaqtni tanlang' : 'Kun va vaqtni tanlang') }}</h2>
+                <section class="rb-card" id="rb-form-card">
+                    <h2>{{ $retakeDay ? 'Vaqtni tanlang' : 'Kun va vaqtni tanlang' }}</h2>
                     <form method="POST" action="{{ route('student.retake-booking.store') }}" class="rb-form" id="rb-form"
                           data-deadline="{{ $debt['deadline']?->format('Y-m-d') }}" data-from="{{ $minDate->format('Y-m-d') }}"
                           data-busy="{{ json_encode($busy ?? []) }}">
@@ -226,7 +223,7 @@
             @elseif(!$debt['is_booked'])
                 <div class="rb-alert info">
                     @switch($debt['state'])
-                        @case('done') Bu mavzu topshirilgan — qayta topshirish shart emas. @break
+                        @case('done') Bu mavzu bo'yicha qayta topshirish yakunlangan — boshqa urinish yo'q. @break
                         @case('expired') Qayta topshirish muddati o'tgan. @break
                         @case('continue') Bu mavzu bo'yicha urinishingiz davom etmoqda. @break
                         @default Bu mavzu uchun hozir vaqt tanlab bo'lmaydi.
@@ -250,16 +247,7 @@
                 <script>
                     (function () {
                         var form = document.getElementById('rb-form');
-                        var card = document.getElementById('rb-form-card');
-                        var change = document.getElementById('rb-change');
                         var errorBox = document.getElementById('rb-client-error');
-                        if (change) {
-                            change.addEventListener('click', function () {
-                                card.hidden = false;
-                                change.hidden = true;
-                                document.getElementById('rb-date').focus();
-                            });
-                        }
                         function fail(message) {
                             errorBox.textContent = message;
                             errorBox.hidden = false;
@@ -297,7 +285,7 @@
                             if (!date) {
                                 ok = fail("Kunni tanlang.");
                             } else if (form.dataset.from && date < form.dataset.from) {
-                                ok = fail("Qayta topshirish oralig'i " + form.dataset.from.split('-').reverse().join('.') + " dan boshlanadi.");
+                                ok = fail("Vaqtni " + form.dataset.from.split('-').reverse().join('.') + " dan boshlab tanlang.");
                             } else if (deadline && date > deadline) {
                                 ok = fail("Sana qayta topshirish muddatidan kech bo'lmasligi kerak.");
                             } else if (!picked) {

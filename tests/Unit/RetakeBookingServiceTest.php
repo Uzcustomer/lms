@@ -135,6 +135,20 @@ it('reuses the same id when the time is changed', function () {
     Http::assertSentCount(2);
 });
 
+it('does not overwrite a past booking — the next attempt gets a new id', function () {
+    Http::fake([SVC_WS => Http::response(['ok' => true, 'code' => 'saved', 'message' => 'ok'])]);
+
+    $first = svcBook('2026-10-29 09:00', '2026-10-29 09:30')['booking'];
+    Carbon::setTestNow('2026-10-29 11:00:00');
+    $second = svcBook('2026-10-30 09:00', '2026-10-30 10:00')['booking']->fresh();
+
+    expect($second->id)->not->toBe($first->id)
+        // O'tgan bron Moodle'da urinish tarixi — bekor qilinmaydi va o'zgarmaydi
+        ->and($first->fresh()->status)->toBe('booked')
+        ->and($first->fresh()->slot_start->format('Y-m-d H:i'))->toBe('2026-10-29 09:00')
+        ->and($second->slot_start->format('Y-m-d H:i'))->toBe('2026-10-30 09:00');
+});
+
 it('keeps the booking with moodle_sync=failed on a network error', function () {
     Http::fake(fn () => throw new ConnectionException('timeout'));
 

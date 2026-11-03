@@ -95,7 +95,7 @@ class NotifyRetakeBooking extends Command
             if (($d['state'] ?? '') === 'booked' && !empty($d['slot_start'])) {
                 $lines[] = 'Tanlangan vaqt: ' . Carbon::parse($d['slot_start'])->format('d.m.Y H:i')
                     . '–' . Carbon::parse($d['slot_end'])->format('H:i');
-                $lines[] = '<a href="' . e($url) . '">Vaqtni o\'zgartirish yoki bekor qilish</a>';
+                $lines[] = '<a href="' . e($url) . '">Batafsil</a> (tanlangan vaqtni o\'zgartirib yoki bekor qilib bo\'lmaydi)';
             } else {
                 $lines[] = '<a href="' . e($url) . '">Qayta topshirish vaqtini tanlash</a>';
             }

@@ -340,8 +340,11 @@ class RetakeBookingService
         $gradeId = self::gradeRows($studentHemisId, $subjectId, $lessonDate)->first()?->id;
 
         [$booking, $previous] = DB::transaction(function () use ($studentHemisId, $subjectId, $lessonDate, $debt, $start, $end, $gradeId) {
+            // Faqat hali o'tmagan bron qayta ishlatiladi: o'tib ketgani (kelib topshirilgan yoki
+            // kelinmagan) Moodle'da urinish tarixi — ustidan yozilmaydi va bekor qilinmaydi
             $booked = RetakeBooking::forDebt($studentHemisId, $subjectId, $lessonDate)
                 ->where('status', RetakeBooking::STATUS_BOOKED)
+                ->where('slot_end', '>', now())
                 ->orderByDesc('id')
                 ->lockForUpdate()
                 ->get();

@@ -129,6 +129,25 @@
             };
         }
 
+        // Dars jadvali: nofaol xonaga biriktirilgan kartalar — doskalar bo'yicha soni va Excel ro'yxati.
+        function showInactiveRoomCards(res) {
+            var box = document.getElementById('inactive-room-cards');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'inactive-room-cards';
+                box.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:8px;font-size:13px';
+                var anchor = document.getElementById('btn-sync').closest('.filter-item') || document.getElementById('btn-sync').parentNode;
+                anchor.parentNode.insertBefore(box, anchor.nextSibling);
+            }
+            var list = (res && res.inactive_room_cards) || [];
+            var esc = function (t) { return $('<div>').text(t == null ? '' : String(t)).html(); };
+            if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+            box.style.display = '';
+            box.innerHTML = '<b>Dars jadvali: ' + esc(res.inactive_room_cards_total) + ' ta karta nofaol xonada</b>' + list.map(function (r) {
+                return '<div>' + esc(r.board_name) + ': ' + esc(r.count) + ' ta karta — <a href="' + esc(r.excel_url) + '" style="color:#1d4ed8;text-decoration:underline">Excelga yuklash</a></div>';
+            }).join('');
+        }
+
         function syncAuditoriums() {
             var btn = document.getElementById('btn-sync');
             btn.disabled = true;
@@ -147,6 +166,7 @@
                     btn.innerHTML = origText;
                     loadFilters();
                     loadReport(1);
+                    showInactiveRoomCards(res);
                     alert(res.message || 'Sinxronlashtirildi');
                 },
                 error: function(xhr) {

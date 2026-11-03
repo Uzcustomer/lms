@@ -2578,3 +2578,32 @@ it('HEMIS solishtirish: "vaqtincha — kafedra mudiri" — mudir boshqa darsda b
     expect($others->filter(fn ($a) => (int) $a['employee_id'] === 9001 || in_array('vaqtincha', $a['flags'] ?? [], true)
         || ($a['auditorium_code'] ?? '') === 'KM1')->all())->toBe([]);
 });
+
+it('nofaol xona: LMS\'da xona bo\'sh va HEMIS\'dagi xona nofaol — qoldirilmaydi (to\'siq); LMS kartasida nofaol xona — to\'siq', function () {
+    $s = hsSetup();
+    \App\Models\Auditorium::forceCreate(['code' => '71', 'name' => '71', 'volume' => 30, 'active' => false]);
+    // «Kafedra mudiri xonasi» yo'q, LMS'da xona bo'sh, HEMIS'da nofaol 71 — avval HEMIS xonasi qolardi, endi qoldirilmaydi.
+    \App\Models\Auditorium::where('code', 'KM1')->update(['active' => false]);
+    $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20')]]);
+    $row = htCall($s)->assertOk()->json('rows.0');
+    expect($row['status'])->toBe('blocked')
+        ->and($row['new_auditorium_code'])->toBeNull()
+        ->and(implode(' | ', $row['blocked']))->toContain("HEMIS'dagi xona nofaol («71») — qoldirilmaydi");
+    // HEMIS xonasi faol bo'lsa — avvalgidek qoldiriladi (o'zgarishsiz).
+    \App\Models\Auditorium::where('code', '71')->update(['active' => true]);
+    $row = htCall($s)->assertOk()->json('rows.0');
+    expect($row['status'])->not->toBe('blocked')->and($row['blocked'])->toBe([]);
+
+    // LMS kartasida nofaol xona — to'siq ("LMS'dagi xona nofaol"), bugungi darslarda ham, HEMIS solishtirishda ham.
+    \App\Models\Auditorium::forceCreate(['code' => 'R404', 'name' => '404', 'volume' => 30, 'active' => false]);
+    $s['card']->update(['auditorium_code' => 'R404', 'auditorium_name' => '404']);
+    $row = htCall($s)->assertOk()->json('rows.0');
+    expect($row['status'])->toBe('blocked')->and($row['blocked'])->toContain("LMS'dagi xona nofaol («404») — xonani almashtiring");
+    hsSchedule(991, '2026-09-21', '10:00:00', '11:20:00');
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])->assertOk()->json();
+    $acts = collect($res['groups'][0]['units'][0]['actions'])->filter(fn ($a) => $a['op'] !== 'delete');
+    expect($acts)->not->toBeEmpty()
+        ->and($acts->every(fn ($a) => in_array("LMS'dagi xona nofaol («404») — xonani almashtiring", $a['blocked'], true)))->toBeTrue();
+});

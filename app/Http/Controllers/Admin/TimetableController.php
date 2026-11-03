@@ -3194,6 +3194,8 @@ class TimetableController extends Controller
                 ->mapWithKeys(fn ($t) => [$t->id => self::formatUzPhone($t->phone)])->filter()->all(),
             // Guruh(cha) sarlavhasida faol talabalar soni (sikl jadvalidagi kabi): "fakultet|guruh" => son.
             'group_students' => $this->boardGroupStudentCounts($cards),
+            // Kartalarda (va haftalik yozuvlarda) turgan nofaol xonalar: kod => nomi — "(nofaol)" belgisi va "Xona nofaol — almashtiring".
+            'inactive_rooms' => (object) $this->inactiveRoomsAmong(array_merge($cards->pluck('auditorium_code')->all(), array_column($ov, 5))),
         ])
             // Doska ma'lumoti tez-tez o'zgaradi (kartalar qayta yaratiladi, joylashadi).
             // Brauzer eski GET javobini keshdan bermasin — aks holda yangi kartalar
@@ -4895,6 +4897,9 @@ class TimetableController extends Controller
                 'teacher_id' => $currentTeacherId,
                 'lesson_time' => $placement->lesson_time,
                 'auditorium_code' => $currentAud,
+                // Hozirgi xona nofaol bo'lsa — oynada "(nofaol)" belgisi (tanlab bo'lmaydi) va ogohlantirish.
+                'auditorium_name' => $currentAud ? ($this->roomRankBase()['all'][(string) $currentAud]->name ?? $currentAud) : null,
+                'auditorium_active' => $currentAud ? (bool) ($this->roomRankBase()['all'][(string) $currentAud]->active ?? true) : null,
             ],
             // Guruhcha qatorida "A + B" kabi umumiy karta: biriktirish boshqa guruhchalarga ham tegadi.
             'shared_with' => ($data['view'] ?? 'flow') === 'group'
@@ -7200,6 +7205,29 @@ class TimetableController extends Controller
             'pair', 'start_half', 'len_half']) as $r) {
             $r->group_names = is_string($r->group_names) ? (json_decode($r->group_names, true) ?: null) : $r->group_names;
             $out[(int) $r->id] = $r;
+        }
+
+        return $out;
+    }
+
+    /** Doskadagi nofaol xonaga biriktirilgan kartalar ro'yxati — Excel (auditoriya sinxroni hisobotidan). */
+    public function inactiveRoomCardsExcel(TimetableBoard $board)
+    {
+        $path = \App\Services\Timetable\InactiveRoomCards::xlsx($board);
+
+        return response()->download($path, 'nofaol-xonadagi-kartalar-' . $board->id . '.xlsx')->deleteFileAfterSend(true);
+    }
+
+    /** Berilgan kodlar ichidagi nofaol xonalar (auditoriums.active = false): kod => nomi. */
+    private function inactiveRoomsAmong(array $codes): array
+    {
+        $codes = array_values(array_unique(array_filter(array_map(fn ($c) => is_string($c) ? trim($c) : '', $codes))));
+        if (!$codes || !Schema::hasColumn('auditoriums', 'active')) {
+            return [];
+        }
+        $out = [];
+        foreach (array_chunk($codes, 1000) as $chunk) {
+            $out += Auditorium::whereIn('code', $chunk)->where('active', false)->pluck('name', 'code')->all();
         }
 
         return $out;

@@ -784,6 +784,7 @@ trait TimetableHemisSync
     {
         $this->hemisMudirMemo = [];
         $this->hemisMudirRoomsMemo = null;
+        $this->hemisInactiveRoomsMemo = null;
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
         $q = TimetableCard::where('board_id', $board->id);
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -917,7 +918,8 @@ trait TimetableHemisSync
         $weeksOut = [];
         $currentWeekOut = 0;
         $mudirFor = fn ($deptId) => $this->hemisMudirFor($deptId);
-        $planner = new SchedulePlanner($slotTimes, $today, array_fill_keys(array_keys(self::HEMIS_PAIRS), true));
+        // Nofaol xona LMS kartasida — yozuv to'siq ("LMS'dagi xona nofaol").
+        $planner = new SchedulePlanner($slotTimes, $today, array_fill_keys(array_keys(self::HEMIS_PAIRS), true), $this->hemisInactiveRooms());
 
         $groupsOut = [];
         $explain = null;
@@ -1735,6 +1737,14 @@ trait TimetableHemisSync
     }
 
     private $hemisMudirRoomsMemo = null;
+    private ?array $hemisInactiveRoomsMemo = null;
+
+    /** Nofaol xonalar (auditoriums.active = false): kod => nomi — so'rovda bir marta. */
+    private function hemisInactiveRooms(): array
+    {
+        return $this->hemisInactiveRoomsMemo ??= Schema::hasColumn('auditoriums', 'active')
+            ? Auditorium::where('active', false)->pluck('name', 'code')->all() : [];
+    }
     private array $hemisMudirMemo = [];
 
     /**
@@ -1878,6 +1888,7 @@ trait TimetableHemisSync
     {
         $this->hemisMudirMemo = [];
         $this->hemisMudirRoomsMemo = null;
+        $this->hemisInactiveRoomsMemo = null;
         $t0 = microtime(true);
         $hemisMs = 0;   // HEMIS'ni kutish (jadval importi + davomat/baho) — "≤ 10 s" tekshiruvi uchun javobda
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
@@ -2077,6 +2088,14 @@ trait TimetableHemisSync
                     $noTeacher = $r['emp_name'] === null && $ph === null;
                     $mudir = $noTeacher ? $this->hemisMudirFor($h->department_id) : null;
                     $fbRoom = !$r['room'] ? $this->hemisFallbackRoomFor($h->department_id) : null;
+                    // Nofaol xona: LMS kartasida — to'siq; LMS'da bo'sh va "Kafedra mudiri xonasi" topilmasa — HEMIS'dagi nofaol xona
+                    // qoldirilmaydi (to'siq, sababi bilan).
+                    $inactive = $this->hemisInactiveRooms();
+                    $hemisRoomOff = !$r['room'] && !$fbRoom && $h->auditorium_code && isset($inactive[(string) $h->auditorium_code]);
+                    $roomBlock = $r['room'] && isset($inactive[(string) $r['room']])
+                        ? "LMS'dagi xona nofaol («" . ($r['room_name'] ?: $r['room']) . '») — xonani almashtiring'
+                        : ($hemisRoomOff ? "LMS kartochkasida xona biriktirilmagan, HEMIS'dagi xona nofaol («" . ($h->auditorium_name ?: $h->auditorium_code)
+                            . "») — qoldirilmaydi; «Kafedra mudiri xonasi» topilmadi" : null);
                     $fallback = [];
                     if ($noTeacher && $mudir && $mudir[0]) {
                         $fallback[] = "LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri qo'yiladi";
@@ -2090,8 +2109,8 @@ trait TimetableHemisSync
                         'auditorium_name' => $h->auditorium_name, 'new_start' => $r['start'], 'new_end' => $r['end'],
                         'new_employee_id' => $r['emp'] ?: ($mudir && $mudir[0] ? $mudir[0] : $h->employee_id),
                         'new_employee_name' => $r['emp'] ? $r['emp_name'] : ($mudir && $mudir[0] ? $mudir[1] : $h->employee_name),
-                        'new_auditorium_code' => $r['room'] ?: ($fbRoom[0] ?? $h->auditorium_code),
-                        'new_auditorium_name' => $r['room'] ? $r['room_name'] : ($fbRoom[1] ?? $h->auditorium_name),
+                        'new_auditorium_code' => $r['room'] ?: ($fbRoom[0] ?? ($hemisRoomOff ? null : $h->auditorium_code)),
+                        'new_auditorium_name' => $r['room'] ? $r['room_name'] : ($fbRoom[1] ?? ($hemisRoomOff ? null : $h->auditorium_name)),
                         // Mudir qo'yilsa — bandligi tekshiriladi (o'qituvchi biriktirilgandek).
                         'teacher_set' => !$noTeacher || ($mudir && $mudir[0]), 'changes' => [], 'blocked' => [], 'status' => 'ok', 'reason' => null,
                         'code' => (string) $h->training_type_code, 'subject_id' => (int) $h->subject_id, 'cycle' => $r['cycle'],
@@ -2152,6 +2171,10 @@ trait TimetableHemisSync
                     }
                     if ($x['changes']) {
                         $x['status'] = 'update';
+                    }
+                    if ($roomBlock !== null && $ph === null) {
+                        $x['status'] = 'blocked';
+                        $x['blocked'][] = $roomBlock;
                     }
                     $out[] = $x;
                 }

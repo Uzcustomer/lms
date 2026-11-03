@@ -1272,7 +1272,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // HEMIS to'siqlari bo'yicha so'rovlar (registrator → o'qituvchi / kafedra mudiri, Telegram). Ruxsat kontrollerda.
         Route::prefix('dars-jadvali-tuzish')->name('timetable.')
-            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|kafedra_mudiri|oqituvchi'])
+            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|kafedra_mudiri|oqituvchi', \App\Http\Middleware\TimetableActiveRoom::class])
             ->group(function () {
                 Route::post('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsSend'])->name('block-tickets.send');
                 Route::get('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsIndex'])->name('block-tickets.index');
@@ -1288,7 +1288,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // Dars jadvali tuzish (aSc Timetables uslubida)
         Route::prefix('dars-jadvali-tuzish')->name('timetable.')
-            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|kafedra_mudiri|oqituvchi|fan_masuli', \App\Http\Middleware\TimetableAssignmentAccess::class])
+            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|kafedra_mudiri|oqituvchi|fan_masuli', \App\Http\Middleware\TimetableActiveRoom::class, \App\Http\Middleware\TimetableAssignmentAccess::class])
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\TimetableController::class, 'index'])->name('index');
                 Route::post('/boards', [\App\Http\Controllers\Admin\TimetableController::class, 'storeBoard'])->name('boards.store');
@@ -1344,6 +1344,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
                 Route::post('/boards/{board}/cycle-auto-shift', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAutoShift'])->name('cycle-auto-shift');
                 // "Smenani almashtiring" maslahati: guruhcha smena variantlari blok sanalarida (faqat o'qiydi).
+                Route::get('/boards/{board}/inactive-room-cards', [\App\Http\Controllers\Admin\TimetableController::class, 'inactiveRoomCardsExcel'])->name('boards.inactive-room-cards');
                 Route::post('/boards/{board}/cycle-mudir-placeholder', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleMudirPlaceholder'])->name('cycle-mudir-placeholder');
                 Route::post('/boards/{board}/cycle-mudir-placeholder/revert', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleMudirPlaceholderRevert'])->name('cycle-mudir-placeholder.revert');
                 Route::post('/boards/{board}/cycle-shift-advice', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleShiftAdvice'])->name('cycle-shift-advice');

@@ -342,3 +342,28 @@ it('vaqtincha kafedra mudiri: mudir topilmasa tugma o\'chiq (sababi bilan); bosh
     test()->withoutVite()->actingAs($other, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
         ->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8])->assertForbidden();
 });
+
+it('o\'qituvchi jadvali sarlavhasi: to\'liq F.I.Sh. va telefon (huquq bo\'yicha); xona — nomi, binosi, sig\'imi', function () {
+    $s = wuSetup();
+    $ali = wuTeacher('ALIYEV SH. N.');
+    $ali->forceFill(['full_name' => "ALIYEV SHERZOD NURULLO O'G'LI", 'short_name' => 'ALIYEV SH. N.', 'phone' => '998901234567'])->save();
+    TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-07b (rus)', 'teacher_id' => $ali->id, 'teacher_name' => 'ALIYEV SH. N.', 'len_half' => 2]));
+    $url = fn ($t) => route('admin.timetable.teacher-agenda', $s['board']) . '?teacher_id=' . $t->id . '&date=2026-10-26&range=week&layer=internal';
+    $j = wuAs()->getJson($url($ali))->assertOk()->json();
+    expect($j['title'])->toBe("ALIYEV SHERZOD NURULLO O'G'LI — 26.10–31.10.2026")
+        ->and($j['teacher'])->toMatchArray(['full_name' => "ALIYEV SHERZOD NURULLO O'G'LI", 'short_name' => 'ALIYEV SH. N.',
+            'phone' => '+998 90 123 45 67', 'phone_tel' => '+998901234567']);
+    // Telefoni yo'q o'qituvchi — raqam yo'q.
+    expect(wuAs()->getJson($url($s['chor']))->assertOk()->json('teacher.phone'))->toBeNull();
+    // O'qituvchi rolida — boshqa o'qituvchining raqami ko'rinmaydi, o'ziniki — ko'rinadi.
+    Role::findOrCreate('oqituvchi', 'web');
+    $s['chor']->assignRole('oqituvchi');
+    $asT = fn ($t) => test()->withoutVite()->actingAs($t, 'teacher')->withSession(['active_role' => 'oqituvchi']);
+    expect($asT($s['chor'])->getJson($url($ali))->assertOk()->json('teacher.phone'))->toBeNull();
+    $ali->assignRole('oqituvchi');
+    expect($asT($ali)->getJson($url($ali))->assertOk()->json('teacher.phone'))->toBe('+998 90 123 45 67');
+    // Xona oynasi: to'liq nomi, binosi va sig'imi.
+    \App\Models\Auditorium::create(['code' => 'R12', 'name' => "12-o'quv xona", 'building_name' => 'Tibbiyot klasteri', 'volume' => 10, 'active' => true]);
+    $r = wuAs()->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?room_code=R12&date=2026-10-26&range=week')->assertOk()->json();
+    expect($r['title'])->toStartWith("12-o'quv xona · Tibbiyot klasteri (10 o'rin) — ")->and($r['room']['building'])->toBe('Tibbiyot klasteri');
+});

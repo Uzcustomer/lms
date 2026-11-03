@@ -3631,6 +3631,7 @@
                 lastLoadSig = dataScope;   // shu parametrlar bilan yuklangan — xuddi shu so'rov takrorlanmaydi (scopeNeedsReload)
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
+                teacherPhones = Object.assign({}, j.teacher_phones || {});   // {id: {text, tel}} — faqat ko'rishga huquq bo'lsa
                 invalidateWeeklyConflicts();
                 invalidateCycleWeek();
                 specIndex = Array.isArray(j.spec_index) ? j.spec_index : [];
@@ -7081,7 +7082,10 @@
             function agendaHtml(st, loading) {
                 const j = st.data, mv = j && j.move;
                 const title = j ? j.title : (st.room_code ? (st.room_name || 'Xona') : (st.teacher_name || "O'qituvchi")) + ' — ' + cfDate(st.date);
-                return '<div class="ag-box"><div class="ag-head"><b>' + esc(title) + '</b>' +
+                // To'liq F.I.Sh. yonida telefon (tel: havola) — server huquq bo'yicha beradi; bo'lmasa ko'rsatilmaydi.
+                const tel = j && j.teacher && j.teacher.phone
+                    ? ' <a class="ag-phone" href="tel:' + esc(j.teacher.phone_tel || j.teacher.phone) + '" title="Qo\'ng\'iroq qilish">· ' + esc(j.teacher.phone) + '</a>' : '';
+                return '<div class="ag-box"><div class="ag-head"><b>' + esc(title) + '</b>' + tel +
                     '<span class="ag-tabs"><button type="button" data-ag="day"' + (st.range === 'week' ? '' : ' class="on"') + '>Kun</button>' +
                     '<button type="button" data-ag="week"' + (st.range === 'week' ? ' class="on"' : '') + '>Hafta</button></span>' +
                     '<button type="button" data-ag="prev" aria-label="Oldingi">◀</button><button type="button" data-ag="next" aria-label="Keyingi">▶</button>' +
@@ -9523,7 +9527,10 @@
                     '<button type="button" data-pop-close aria-label="Yopish" style="font-size:16px;line-height:1">&times;</button></div>' +
                     '<div style="color:#64748b">' + esc((c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + cardGroups(c).join(', ')) +
                         (len ? ' · ' + len + ' soat' : '')) + '</div>' +
-                    row("O'qituvchi", tInfo ? link('data-pop-teacher', tName || c.teacher_name || "O'qituvchi") : '<i>biriktirilmagan</i>') +
+                    row("O'qituvchi", tInfo ? link('data-pop-teacher title="' + esc((tName || '') + (teacherPhones[c.teacher_id] ? ' · ' + teacherPhones[c.teacher_id].text : '')) + '"',
+                        tName || c.teacher_name || "O'qituvchi") + (teacherPhones[c.teacher_id]
+                        ? ' <a href="tel:' + esc(teacherPhones[c.teacher_id].tel) + '" style="color:#475569">· ' + esc(teacherPhones[c.teacher_id].text) + '</a>' : '')
+                        : '<i>biriktirilmagan</i>') +
                     row('Xona', rInfo ? link('data-pop-room', room) : '<i>biriktirilmagan</i>') +
                     row('Tashqi jadval', ext ? link('data-pop-ext', extText) : '<i>tashqi jadvalda yo\'q</i>') +
                     '<div data-pop-msg style="margin-top:4px"></div>' +
@@ -9852,6 +9859,7 @@
             function invalidateCycleWeek() { cycleWeekGen++; }
             let crossCycleShown = [];   // joriy panjaradagi sikl darslari (data-cyc indeksi)
             let teacherFullNames = {};  // teacher_id => to'liq F.I.Sh. (/data va cycle-week dan)
+            let teacherPhones = {};     // teacher_id => {text: "+998 90 123 45 67", tel: "+998901234567"} (huquq bo'yicha, /data)
             // O'qituvchi kesimi ustuni — teacher_id bo'yicha (kartada qisqa yoki to'liq nom bo'lsa ham bitta ustun); id yo'q — nom.
             const teacherColKey = c => c.teacher_id ? 'T' + c.teacher_id : (c.teacher_name ? 'N:' + c.teacher_name : '— (biriktirilmagan)');
             function teacherColLabel(key, names) {

@@ -71,14 +71,20 @@ trait TimetableTeacherAgenda
         }
         $move = !empty($data['move']) && $roomCode === null
             ? $this->agendaMove($request, $board, (string) $data['move'], $entries, $days, $pairs, $free, $layer, $rights, $data['rest_for'] ?? null, $tid) : null;
+        // Sarlavha: o'qituvchi — to'liq F.I.Sh. (bo'sh bo'lsa qisqa nomi); xona — to'liq nomi, binosi va sig'imi.
+        $short = (string) (TimetableCard::where('board_id', $board->id)->where('teacher_id', $tid)->whereNotNull('teacher_name')->value('teacher_name')
+            ?: ($teacher?->short_name ?: $teacher?->full_name));
         $name = $roomCode !== null
-            ? trim((string) ($roomObj->name ?: $roomObj->code)) . ($roomObj->volume ? ' (' . (int) $roomObj->volume . " o'rin)" : '')
-            : (string) (TimetableCard::where('board_id', $board->id)->where('teacher_id', $tid)->whereNotNull('teacher_name')->value('teacher_name')
-                ?: ($teacher->short_name ?: $teacher->full_name));
+            ? trim((string) ($roomObj->name ?: $roomObj->code)) . ($roomObj->building_name ? ' · ' . $roomObj->building_name : '')
+                . ($roomObj->volume ? ' (' . (int) $roomObj->volume . " o'rin)" : '')
+            : (trim((string) $teacher->full_name) ?: $short);
+        $phone = $teacher && $this->teacherPhoneVisible($request, $teacher) ? self::formatUzPhone($teacher->phone) : null;
 
         return response()->json([
-            'teacher' => $roomCode === null ? ['id' => $tid, 'name' => $name] : null,
-            'room' => $roomCode !== null ? ['code' => $roomObj->code, 'name' => $roomObj->name, 'volume' => (int) $roomObj->volume] : null,
+            'teacher' => $roomCode === null ? ['id' => $tid, 'name' => $short, 'full_name' => trim((string) $teacher->full_name) ?: $short,
+                'short_name' => (string) ($teacher->short_name ?: $short), 'phone' => $phone['text'] ?? null, 'phone_tel' => $phone['tel'] ?? null] : null,
+            'room' => $roomCode !== null ? ['code' => $roomObj->code, 'name' => $roomObj->name, 'volume' => (int) $roomObj->volume,
+                'building' => $roomObj->building_name] : null,
             'date' => $day->toDateString(), 'range' => $range, 'layer' => $layer, 'today' => self::proposalToday(),
             'title' => $name . ' — ' . ($range === 'week'
                 ? Carbon::parse($days[0])->format('d.m') . '–' . Carbon::parse(end($days))->format('d.m.Y')
@@ -90,6 +96,54 @@ trait TimetableTeacherAgenda
             'free' => $free,
             'move' => $move,
         ]);
+    }
+
+    /**
+     * O'qituvchi telefoni kimga ko'rinadi: admin, registrator ofisi, fan mas'uli — hammasi; kafedra mudiri — o'z kafedrasi
+     * o'qituvchilari; boshqa rollar (o'qituvchi) — faqat o'ziniki.
+     */
+    private function teacherPhoneVisible(Request $request, Teacher $teacher): bool
+    {
+        $actor = $this->timetableActor($request);
+        if (!$actor) {
+            return true;   // ichki chaqiruv (konsol/test)
+        }
+        $role = $this->timetableActiveRole($request);
+        if (in_array($role, ['admin', 'superadmin', 'registrator_ofisi', 'fan_masuli'], true)) {
+            return true;
+        }
+        if ($role === 'kafedra_mudiri') {
+            $own = $this->departmentHeadKafedraSafe($request);
+            $depts = array_filter(array_merge([(string) $teacher->department],
+                \Illuminate\Support\Facades\Schema::hasTable('teacher_employments')
+                    ? DB::table('teacher_employments')->where('teacher_id', $teacher->id)->pluck('department_name')->all() : []));
+            foreach ($depts as $d) {
+                if ($own && $this->sameKafedra($d, $own)) {
+                    return true;
+                }
+            }
+
+            return (int) $actor->getKey() === (int) $teacher->id;
+        }
+
+        return (int) $actor->getKey() === (int) $teacher->id;
+    }
+
+    /** "+998 90 123 45 67" (ko'rinish) va "+998901234567" (tel:); raqam bo'lmasa — null. */
+    public static function formatUzPhone(?string $raw): ?array
+    {
+        $d = preg_replace('/\D+/', '', (string) $raw);
+        if ($d === '') {
+            return null;
+        }
+        if (strlen($d) === 9) {
+            $d = '998' . $d;
+        }
+        if (strlen($d) === 12 && str_starts_with($d, '998')) {
+            return ['text' => '+998 ' . substr($d, 3, 2) . ' ' . substr($d, 5, 3) . ' ' . substr($d, 8, 2) . ' ' . substr($d, 10, 2), 'tel' => '+' . $d];
+        }
+
+        return ['text' => trim((string) $raw), 'tel' => '+' . ltrim($d, '+')];
     }
 
     /** Paralar (08:30 … 17:50): ikki akademik soat — bitta para; [no, from, to (soat, [from, to)), start, end, label]. */

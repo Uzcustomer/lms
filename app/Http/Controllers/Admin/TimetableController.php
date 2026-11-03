@@ -3185,6 +3185,10 @@ class TimetableController extends Controller
             // O'qituvchi kesimi: ustun — teacher_id, sarlavha — to'liq F.I.Sh. (kartadagi qisqa / to'liq nom farq qilsa ham bitta ustun).
             'teacher_full_names' => (object) Teacher::whereIn('id', $cards->pluck('teacher_id')->filter()->unique()->values()->all())
                 ->pluck('full_name', 'id')->all(),
+            // Panel karta oynasi: o'qituvchi telefoni — faqat ko'rishga huquqi borlariga (teacherPhoneVisible).
+            'teacher_phones' => (object) Teacher::whereIn('id', $cards->pluck('teacher_id')->filter()->unique()->values()->all())->whereNotNull('phone')->get()
+                ->filter(fn ($t) => $this->teacherPhoneVisible(request(), $t))
+                ->mapWithKeys(fn ($t) => [$t->id => self::formatUzPhone($t->phone)])->filter()->all(),
             // Guruh(cha) sarlavhasida faol talabalar soni (sikl jadvalidagi kabi): "fakultet|guruh" => son.
             'group_students' => $this->boardGroupStudentCounts($cards),
         ])

@@ -360,12 +360,12 @@ trait TimetableWeekSuggestions
 
             return $weekDates[$k][$d - 1] ?? null;
         };
-        $occOf = function (int $tid) use (&$byTeacher, &$teacherOcc, &$state, $effIn, $gridOf, $dateOf): array {
+        $occOf = function (int $tid) use (&$byTeacher, &$teacherOcc, &$state, $effIn, $gridOf, $dateOf, $board): array {
             if (!isset($teacherOcc[$tid])) {
                 if ($byTeacher === null) {
                     $byTeacher = [];
                     foreach ($state['cards'] as $o) {
-                        if ($o->teacher_id) {
+                        if ($o->teacher_id && !$this->isInfoOnly($o, $board)) {
                             $byTeacher[(int) $o->teacher_id][] = $o;
                         }
                     }
@@ -401,10 +401,11 @@ trait TimetableWeekSuggestions
             return $rows ? max(array_keys($rows)) - min(array_keys($rows)) + 1 - count($rows) : 0;
         };
         // Taklif amallaridan keyin: [bo'shliq o'zgarishi (yarim-slot), karta guruhning mavjud darsiga yopishganmi].
-        $gapEffect = function (array $actions, TimetableCard $main) use (&$gIdx, &$state, $W, $effIn, $gKeys, $gapsOf): array {
+        $gapEffect = function (array $actions, TimetableCard $main) use (&$gIdx, &$state, $W, $effIn, $gKeys, $gapsOf, $board): array {
             if ($gIdx === null) {
                 $gIdx = [];
                 foreach ($state['cards'] as $x) {
+                    if ($this->isInfoOnly($x, $board)) continue;
                     if ($pl = $effIn($x, $W, $state)) {
                         foreach ($gKeys($x) as $gk) {
                             $gIdx[$gk][$pl[0]][(int) $x->id] = [$pl[1], $pl[1] + $x->lenHalf()];
@@ -756,7 +757,7 @@ trait TimetableWeekSuggestions
                 $roomBase = $this->roomRankBase();
                 $need = $this->cardStudents($c);
                 $fit = $roomBase['active']->filter(fn ($r) => $r->code !== $c->auditorium_code
-                    && !($r->volume && $need && (int) $r->volume < $need) && $this->auditoriumAllowedForCard($r, $c, $roomBase['teacher']));
+                    && ($this->isInfoOnly($c, $c->board) || !($r->volume && $need && (int) $r->volume < $need)) && $this->auditoriumAllowedForCard($r, $c, $roomBase['teacher']));
                 $n = 0;
                 foreach ($this->rankRooms($c, $fit, $c->auditorium_code, $this->roomHabitFromState((int) $c->board_id, $state)) as [$r, $why]) {
                     $tmp = clone $c;
@@ -1011,7 +1012,7 @@ trait TimetableWeekSuggestions
         $base = $this->roomRankBase();
         $cur = ($state['ov'][(int) $c->id][$w] ?? null)?->auditorium_code ?: $c->auditorium_code;
         $need = $this->cardStudents($c);   // sig'im — ogohlantirish (weeklyCapacityWarnings) bilan bir xil talabalar soni
-        $fit = $base['active']->filter(fn ($r) => $r->code !== $cur && !($r->volume && $need && (int) $r->volume < $need)
+        $fit = $base['active']->filter(fn ($r) => $r->code !== $cur && ($this->isInfoOnly($c, $c->board) || !($r->volume && $need && (int) $r->volume < $need))
             && $this->auditoriumAllowedForCard($r, $c, $base['teacher']));
         $out = [];
         foreach ($this->rankRooms($c, $fit, $cur, $this->roomHabitFromState((int) $c->board_id, $state)) as [$r, $why]) {

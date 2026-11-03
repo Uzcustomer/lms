@@ -20,6 +20,7 @@ async function move(from, to, blocked = false, parallel = true, type = 'lecture'
         placeUnitAt: async (c, d, p) => { ctx.unitCalls.push([c.id, d, p]); if (blocked) throw new Error("3 soat sig'maydi: 09:10 dan keyin bo'sh joy yo'q"); }};
     if (blocked) cards.push({id:3,day:1,pair:to,len:1});
     vm.createContext(ctx);
+    require('./helpers/timetable-info-only.cjs')(ctx);
     vm.runInContext(source.slice(conflictStart,conflictEnd),ctx);
     ctx.placeOneCard = async (card,day,pair) => {
         if (ctx.conflictsAt(card,day,pair).length) throw new Error('Band');
@@ -66,6 +67,7 @@ async function move(from, to, blocked = false, parallel = true, type = 'lecture'
             isSharedRoomName: () => false, weeksIntersect: () => true, activeInWeek: c => !c.cancelled, curWeek: 8, unitCalls: [], placed: [],
             unitOf: () => cards2, unitLen: l => l.reduce((n, x) => n + x.len, 0), placeUnitAt: async (c) => { c3.unitCalls.push(c.id); } };
         vm.createContext(c3);
+        require('./helpers/timetable-info-only.cjs')(c3);
         vm.runInContext(source.slice(conflictStart, conflictEnd), c3);
         c3.placeOneCard = async (card, d, p) => { c3.placed.push([card.id, d, p]); };
         await vm.runInContext(source.slice(start, end) + '; placeBlockAt([1], 2, 5, false, null);', c3);
@@ -82,6 +84,7 @@ async function move(from, to, blocked = false, parallel = true, type = 'lecture'
         conflictsAt: (c, d, p, ign) => hx.cards.filter(o => o.id !== c.id && !ign.includes(o.id) && o.day === d && o.teacher_id === c.teacher_id
             && p < o.pair + o.len && o.pair < p + c.len).map(o => "O'qituvchi band: #" + o.id) });
     vm.createContext(hx);
+    require('./helpers/timetable-info-only.cjs')(hx);
     vm.runInContext(helpers + '; this.dropSlotAt = dropSlotAt; this.dragPlan = dragPlan;', hx);
     const td = { dataset: { pair: '5' }, rowSpan: 2, getBoundingClientRect: () => ({ top: 100, height: 40 }) };
     assert.equal(hx.dropSlotAt(td, { clientY: 110 }), 5);

@@ -16,6 +16,7 @@ const ctx = {
         { code: 'R500', name: '500', volume: 40, active: false }],
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(cut('            let inactiveRooms = {};', "            // O'qituvchi kesimi ustuni").replace('let inactiveRooms = {};', 'var inactiveRooms = { R404: "404" };')
     + cut('            async function loadAuds() {', '            let tSearchTimer = null;') + '; this.loadAuds = loadAuds; this.roomInactive = roomInactive;', ctx);
 (async () => {

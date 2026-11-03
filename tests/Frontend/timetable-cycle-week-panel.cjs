@@ -54,6 +54,7 @@ const ctx = {
     Set, Object, Date, String, Boolean, Math,
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(cut("            // ===== To'qnashuvlar: qisqa belgi, rang", '            // Ichki jadval: kun ustunini tanlash, kun oynasi va soatni surish.')
     + cut('            // ── Sikl paneli va hafta tanlovi (weekSel) ──', '            // ── Fan ranglari modali ──')
     + '\nObject.assign(this, { renderCycleCards, cycleScopedCards, cycleCardInWeek, cycleCardStateText, cycleSelWeek, setAll: v => { cyclePanelAll = v; } });', ctx);

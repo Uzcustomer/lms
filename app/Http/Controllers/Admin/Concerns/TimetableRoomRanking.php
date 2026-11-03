@@ -229,6 +229,10 @@ trait TimetableRoomRanking
         $curFloor = $cur ? self::roomFloor($cur->name) : null;
         $lesson = ($c->training_type ?? '') === 'lecture' ? 'L' : 'A';
         $students = (int) ($c->students ?? 0);
+        $cardBoard = null;
+        if ($c instanceof TimetableCard) $cardBoard = $c->board;
+        elseif (!empty($c->board_id)) $cardBoard = TimetableBoard::find($c->board_id);
+        $infoOnly = $cardBoard && $this->isInfoOnly($c, $cardBoard);
         $teacherId = (int) ($c->teacher_id ?? 0);
         $card = $c instanceof TimetableCard ? $c : null;
         $rows = [];
@@ -245,7 +249,7 @@ trait TimetableRoomRanking
                 'building' => $samePrefix || ($curBuilding !== null && (string) $r->building_id === $curBuilding),
             ];
             $vol = (int) $r->volume;
-            $fits = !($vol > 0 && $students > 0 && $vol < $students) && (!$card || $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
+            $fits = ($infoOnly || !($vol > 0 && $students > 0 && $vol < $students)) && (!$card || $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
             $floor = $f['building'] && $curFloor !== null ? self::roomFloor($r->name) : null;
             $kind = self::roomKind($r->auditorium_type_name ?? null);
             $rows[] = [$r, $f, [

@@ -26,6 +26,12 @@ trait TimetableHemisSync
         '13:30-14:10' => 18, '14:10-14:50' => 24, '15:00-15:40' => 21, '15:40-16:20' => 23, '16:30-17:10' => 19,
     ];
 
+    private function withoutInfoOnlyHemis($query, ?TimetableBoard $board)
+    {
+        $codes = \App\Services\Timetable\InfoOnlyCourses::semesterCodes($board ?? new TimetableBoard());
+        return $query->where(fn ($q) => $q->whereNull('semester_code')->orWhereNotIn('semester_code', $codes));
+    }
+
     public function hemisSyncCompare(Request $request, TimetableBoard $board)
     {
         if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
@@ -117,7 +123,7 @@ trait TimetableHemisSync
     private function hemisUnplacedSummary(TimetableBoard $board, array $scope, string $today): array
     {
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
-        $q = TimetableCard::where('board_id', $board->id);
+        $q = TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board));
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
         $cards = $q->get();
         $cycleKeys = [];
@@ -353,7 +359,7 @@ trait TimetableHemisSync
      */
     private function hemisMoveExplainer(TimetableBoard $board, array $slotTimes, callable $isCycle): callable
     {
-        $all = TimetableCard::where('board_id', $board->id)->get()->reject($isCycle)->keyBy('id');
+        $all = TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board))->get()->reject($isCycle)->keyBy('id');
         $ov = Schema::hasTable('timetable_card_overrides')
             ? DB::table('timetable_card_overrides')->whereIn('card_id', $all->keys())->get()->groupBy('card_id')->map(fn ($x) => $x->keyBy('week'))
             : collect();
@@ -708,6 +714,7 @@ trait TimetableHemisSync
 
         $out = [];
         foreach ((array) ($plan['rows'] ?? []) as $row) {
+            if ($this->isInfoOnly($row, $board)) continue;
             foreach ((array) ($row['blocks'] ?? []) as $b) {
                 $subject = (string) ($b['subject'] ?? '');
                 $from = (int) ($b['from'] ?? 0);
@@ -786,7 +793,7 @@ trait TimetableHemisSync
         $this->hemisMudirRoomsMemo = null;
         $this->hemisInactiveRoomsMemo = null;
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
-        $q = TimetableCard::where('board_id', $board->id);
+        $q = TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board));
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
         $cards = $q->get();
 
@@ -1277,6 +1284,7 @@ trait TimetableHemisSync
 
         return [
             'today' => $today,
+            'info_only_notice' => \App\Services\Timetable\InfoOnlyCourses::hemisNotice($board),
             'board_id' => $board->id,
             'fallback_room' => $fallbackRoom ? ['code' => $fallbackRoom->code, 'name' => $fallbackRoom->name] : null,
             'hemis_pairs' => self::HEMIS_PAIRS,
@@ -1326,7 +1334,7 @@ trait TimetableHemisSync
             }
         }
         if ($emps || $rooms) {
-            $ext = DB::table('schedules')->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
+            $ext = $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
                 ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
                 ->get(['schedule_hemis_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time',
                     'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
@@ -1799,7 +1807,7 @@ trait TimetableHemisSync
         if (!$ids) {
             return response()->json(['error' => "ids berilmagan — tekshiriladigan darslarning HEMIS id'lari kerak (masalan &ids=123,456)."], 422, $cors);
         }
-        $rows = $ids ? DB::table('schedules')->whereIn('schedule_hemis_id', $ids)->get(['schedule_hemis_id', 'group_id', 'lesson_date']) : collect();
+        $rows = $ids ? $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereIn('schedule_hemis_id', $ids)->get(['schedule_hemis_id', 'group_id', 'lesson_date']) : collect();
         $byGroup = [];
         $failed = [];
         foreach ($ids as $id) {
@@ -1892,7 +1900,8 @@ trait TimetableHemisSync
         $t0 = microtime(true);
         $hemisMs = 0;   // HEMIS'ni kutish (jadval importi + davomat/baho) — "≤ 10 s" tekshiruvi uchun javobda
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
-        $cards = $this->cardRows($board, fn ($q) => $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet));
+        $cards = array_filter($this->cardRows($board, fn ($q) => $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet)),
+            fn ($c) => !$this->isInfoOnly($c, $board));
         $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
         $weekly = array_filter($cards, fn ($c) => !$isCycle($c));
         $cycleIds = array_keys(array_diff_key($cards, $weekly));
@@ -1982,7 +1991,7 @@ trait TimetableHemisSync
         $import = $groups ? app(\App\Services\ScheduleImportService::class)->importGroupsOnDate(array_keys($groups), $date) : ['failed' => []];
         $hemisMs += (int) round((microtime(true) - $t) * 1000);
         $importFailed = array_flip($import['failed']);
-        $hemisRows = $groups ? DB::table('schedules')->whereIn('group_id', array_keys($groups))->whereNull('deleted_at')
+        $hemisRows = $groups ? $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereIn('group_id', array_keys($groups))->whereNull('deleted_at')
             ->whereBetween('lesson_date', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
             ->orderBy('lesson_pair_start_time')->orderBy('schedule_hemis_id')
             ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_id', 'subject_name', 'training_type_code', 'training_type_name',
@@ -2260,6 +2269,7 @@ trait TimetableHemisSync
 
         return [
             'today' => $today,
+            'info_only_notice' => \App\Services\Timetable\InfoOnlyCourses::hemisNotice($board),
             'counts' => ['lessons' => count($out), 'updates' => $count('update'), 'locked' => $count('locked'), 'blocked' => $count('blocked'),
                 'info' => $count('info'), 'ok' => $count('ok')],
             'rows' => $rows,
@@ -2341,7 +2351,7 @@ trait TimetableHemisSync
         if (!$rooms) {
             return ['flow' => [], 'groups' => []];
         }
-        $cards = $this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture'));
+        $cards = $this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board)));
         if (!$cards) {
             return ['flow' => [], 'groups' => []];
         }
@@ -2468,7 +2478,7 @@ trait TimetableHemisSync
             }
         }
         $day = Carbon::parse($today);
-        $ext = DB::table('schedules')->whereNull('deleted_at')->whereBetween('lesson_date', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
+        $ext = $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereNull('deleted_at')->whereBetween('lesson_date', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
             ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
             ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_pair_start_time', 'lesson_pair_end_time',
                 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);

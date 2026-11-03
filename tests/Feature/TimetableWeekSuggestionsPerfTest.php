@@ -135,6 +135,8 @@ it('findWeekConflictsIndexed — eski findWeekConflicts bilan 200 ta tasodifiy (
 });
 
 it('takliflar: optimizatsiya natijani o\'zgartirmaydi (eski yo\'l bilan aynan bir xil)', function () {
+    // Compare complete plans; the following test covers the runtime cutoff separately.
+    config(['timetable.week_suggestions_budget' => 60]);
     $s = sugPerfBoard();
     // Xonalar noyob — faqat o'qituvchi band bo'lgan joylar ko'payadi va 6-qadam (o'qituvchini almashtirish) ham tekshiriladi
     TimetableCard::where('board_id', $s['board']->id)->update(['auditorium_code' => DB::raw("CONCAT('U', id)")]);

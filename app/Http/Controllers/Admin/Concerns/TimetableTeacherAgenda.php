@@ -161,7 +161,7 @@ trait TimetableTeacherAgenda
     private function agendaBusyAt(array $entries, string $date, int $from, int $to): bool
     {
         foreach ($entries as $e) {
-            if ($e['date'] === $date && $e['from'] < $to && $from < $e['to']) {
+            if (empty($e['info_only']) && $e['date'] === $date && $e['from'] < $to && $from < $e['to']) {
                 return true;
             }
         }
@@ -197,7 +197,7 @@ trait TimetableTeacherAgenda
                 }
                 $ov = [];
             }
-            foreach ($this->weeklyOccupancy($board, ['cards' => $rows, 'ov' => $ov], $dates) as $e) {
+            foreach ($this->weeklyOccupancy($board, ['cards' => $rows, 'ov' => $ov], $dates, true) as $e) {
                 if ($room !== null && (string) $e['room'] !== $room) {
                     continue;
                 }
@@ -208,7 +208,7 @@ trait TimetableTeacherAgenda
                 $raw[] = ['date' => $e['date'], 'from' => $from, 'to' => $to, 'kind' => 'weekly', 'lecture' => $c->training_type === 'lecture',
                     'subject' => (string) $c->subject_name, 'groups' => $this->cardGroupsOf($c), 'room' => $e['room_name'] ?: null, 'room_code' => $e['room'],
                     'key' => 'w|' . $e['card'] . '|' . $e['week'], 'card_ids' => [(int) $e['card']], 'week' => (int) $e['week'], 'unit' => null,
-                    'layer' => $layer, 'cards' => [$c]];
+                    'layer' => $layer, 'cards' => [$c], 'course' => (int) $c->course, 'info_only' => $this->isInfoOnly($c, $board)];
             }
         }
         // Sikl: o'qituvchi darslari bo'lgan joylangan birliklar (amaliyot va oqim ma'ruzasi).
@@ -217,7 +217,7 @@ trait TimetableTeacherAgenda
             || collect($this->cycleUnitLectureCards($board, $u))->contains(fn ($c) => (int) $c->teacher_id === $tid)));
         if ($mineUnits) {
             $lecCards = [];
-            foreach ($this->cycleOccupancy($board, $mineUnits, $calendar) as $e) {
+            foreach ($this->cycleOccupancy($board, $mineUnits, $calendar, null, null, false, true) as $e) {
                 if (($room !== null ? (string) $e['room'] !== $room : (int) $e['teacher_id'] !== $tid) || !isset($dates[$e['date']])) {
                     continue;
                 }
@@ -233,7 +233,7 @@ trait TimetableTeacherAgenda
                     'card_ids' => [(int) $e['card']], 'week' => null, 'unit' => $lecture ? null : [
                         'key' => $u['key'], 'unit' => (string) $u['unit'], 'specialty_name' => (string) $u['specialty'], 'course' => (int) $u['course'],
                         'subject_name' => (string) $u['subject'], 'group_name' => (string) $u['group']],
-                    'layer' => 'internal', 'cards' => $card ? [$card] : []];
+                    'layer' => 'internal', 'cards' => $card ? [$card] : [], 'course' => (int) $u['course'], 'info_only' => $this->isInfoOnly($u, $board)];
             }
         }
         // Bitta oqim ma'ruzasi — bitta yozuv (guruhlar birlashadi): bitta ma'ruza kartasi (kalit) yoki turli yo'nalish kartalari — fan,
@@ -245,6 +245,7 @@ trait TimetableTeacherAgenda
             $vis = $x['cards'] && collect($x['cards'])->contains(fn ($c) => $this->suggestionInScope($rights, $c));
             $k = $x['lecture'] && $x['room_code'] ? implode('|', ['L', $x['date'], $x['from'], $x['to'], (string) $x['room_code'],
                 $this->normSubject($this->cycleSubjectVariantBase($x['subject']) ?? $x['subject'])]) : $x['key'];
+            $k = (!empty($x['info_only']) ? 'info|' : '') . $k;
             $m = &$merged[$k];
             if ($m === null) {
                 $m = ['visible' => false, 'groups' => [], 'card_ids' => [], 'all_ids' => []] + $x;
@@ -270,7 +271,7 @@ trait TimetableTeacherAgenda
         foreach ($list as $i => $x) {
             $conflict = false;
             foreach ($list as $j => $y) {
-                if ($i !== $j && $y['date'] === $x['date'] && $y['from'] < $x['to'] && $x['from'] < $y['to']) {
+                if (empty($x['info_only']) && empty($y['info_only']) && $i !== $j && $y['date'] === $x['date'] && $y['from'] < $x['to'] && $x['from'] < $y['to']) {
                     $conflict = true;
                     break;
                 }
@@ -279,7 +280,7 @@ trait TimetableTeacherAgenda
             $dow = Carbon::parse($x['date'])->dayOfWeekIso;
             $base = ['date' => $x['date'], 'dow' => $dow, 'from' => $x['from'], 'to' => $x['to'],
                 'start' => $slots[$x['from']][0] ?? null, 'end' => $slots[$x['to'] - 1][1] ?? null,
-                'kind' => $x['kind'], 'layer' => $x['layer'], 'conflict' => $conflict, 'past' => $x['date'] <= $today];
+                'kind' => $x['kind'], 'layer' => $x['layer'], 'info_only' => (bool) $x['info_only'], 'course' => $x['course'], 'conflict' => $conflict, 'past' => $x['date'] <= $today];
             $out[] = $visible
                 ? $base + ['hidden' => false, 'type' => $x['lecture'] ? 'M' : 'A', 'subject' => $x['subject'], 'groups' => $x['groups'],
                     'room' => $x['room'], 'room_code' => $x['room_code'], 'key' => $x['key'], 'card_ids' => $x['card_ids'], 'week' => $x['week'],
@@ -482,7 +483,7 @@ trait TimetableTeacherAgenda
             $this->weeklyProposalBusy($card, $week, $day, $pair, $date, $room));
         $room ??= $roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null;
         $students = $this->cardStudents($card);
-        if ($room && (int) $room->volume > 0 && $students > (int) $room->volume) {
+        if (!$this->isInfoOnly($card, $board) && $room && (int) $room->volume > 0 && $students > (int) $room->volume) {
             $errors[] = self::capacityLine((string) ($room->name ?: $room->code), (int) $room->volume, $students);
         }
 
@@ -522,7 +523,7 @@ trait TimetableTeacherAgenda
     private function agendaFreeRoom(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, int $students, string $current): ?array
     {
         $base = $this->roomRankBase();
-        $fit = $base['active']->filter(fn ($r) => (string) $r->code !== $current && (int) $r->volume > 0 && (int) $r->volume >= $students
+        $fit = $base['active']->filter(fn ($r) => (string) $r->code !== $current && (int) $r->volume > 0 && ($this->isInfoOnly($card, $board) || (int) $r->volume >= $students)
             && $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
         $tries = 0;
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();

@@ -17,6 +17,7 @@ const ctx = {
     document: { querySelectorAll: () => [], createElement: () => ({}), body: { appendChild() {} }, addEventListener() {} }, scopeLabelText: () => 'Hammasi', HS_WRITER_URL: '/js/hemis-writer.js',
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(section('let hemisSyncFilter', 'async function hemisSyncRun()')
     + '; this.render = hemisSyncRender; this.filter = () => hemisSyncFilter;', ctx);
 

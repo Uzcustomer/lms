@@ -655,6 +655,14 @@
                                     <label class="flex items-center gap-2 text-sm text-gray-600">
                                         <input id="stShowNum" type="checkbox" class="rounded border-gray-300"> Kun nomi o'rniga raqamini ko'rsatish
                                     </label>
+                                    <fieldset class="mt-3"><legend class="text-sm font-medium">Faqat ma'lumot uchun kurslar</legend>
+                                        <div class="flex flex-wrap gap-3 mt-1">
+                                        @for($infoCourse = 1; $infoCourse <= 6; $infoCourse++)
+                                            <label class="text-sm"><input type="checkbox" data-info-only-course="{{ $infoCourse }}" class="rounded border-gray-300"> {{ $infoCourse }}-kurs</label>
+                                        @endfor
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-1">Onlayn topshiriqlar: jadvalda ko'rinadi, o'qituvchi va xonani band qilmaydi.</p>
+                                    </fieldset>
                                     <label class="flex items-center gap-2 text-sm text-gray-600" title="O'chiq (sukut): LMS'dagi o'qituvchi yoki xona shu vaqtda band bo'lsa, HEMIS amali to'siq bo'ladi va JSON'ga kirmaydi. Yoqilsa — band o'qituvchi o'rniga kafedra mudiri, band xona o'rniga «Kafedra mudiri xonasi» qo'yiladi.">
                                         <input id="stHemisMudir" type="checkbox" class="rounded border-gray-300"> HEMIS solishtirish: to'qnashuvda kafedra mudiri / mudir xonasini qo'yish
                                     </label>
@@ -2766,6 +2774,12 @@
         .tt-report-bar.is-error { background: #ef4444; }
 </style>
 
+    <style>
+        .tt-info-only { opacity: .68; background-image: repeating-linear-gradient(135deg, transparent, transparent 7px, rgba(100,116,139,.12) 7px, rgba(100,116,139,.12) 9px) !important; }
+        .tt-info-only-overlap { color: #854d0e; background: #fef9c3; font-size: 10px; padding: 2px 4px; }
+        .tt-info-only-badge { display: inline-block; font-size: 9px; line-height: 1.25; color: #475569; background: #f1f5f9; border-radius: 3px; padding: 1px 3px; margin: 1px 2px; }
+        #ttAgendaModal .ag-e.tt-info-only { background-color: #f1f5f9; color: #64748b; }
+    </style>
     <script>
         (function () {
             const BOARDS_STORE = @json(route('admin.timetable.boards.store'));
@@ -2793,6 +2807,32 @@
             let weeklyLayer = WEEKLY_OQUV ? 'external' : 'internal';
             try { const v = localStorage.getItem('lms:timetable-weekly-layer'); if (v === 'external' || v === 'internal') weeklyLayer = v; } catch (e) { }
             const weeklyCanEdit = () => !TIMETABLE_READ_ONLY && (WEEKLY_ADMIN || (weeklyLayer === 'external' ? WEEKLY_OQUV : TIMETABLE_ROLE === 'kafedra_mudiri'));
+            // Kurs bo'yicha yagona ma'lumot rejimi (serverdagi InfoOnlyCourses sozlamasi).
+            function isInfoOnly(card) {
+                if (!card) return false;
+                const configured = board && board.settings && board.settings.info_only_courses;
+                const courses = Array.isArray(configured) ? configured : [6];
+                return courses.map(Number).includes(+card.course);
+            }
+            function infoOnlyBadgeHtml(card) {
+                return isInfoOnly(card) ? '<span class="tt-info-only-badge">' + (+card.course) + '-kurs · ma’lumot (onlayn)</span>' : '';
+            }
+            function infoOnlyClass(card) { return isInfoOnly(card) ? ' tt-info-only' : ''; }
+            function infoOnlyGroupOverlapHtml(list) {
+                const online = list.filter(isInfoOnly);
+                const overlaps = online.some((a, i) => online.some((b, j) => j > i && a.id !== b.id
+                    && !bolakSiblings(a, b) && (curWeek || weeksIntersect(a, b))));
+                return overlaps ? '<div class="tt-info-only-overlap">Ma’lumot: guruhning onlayn darslari ustma-ust</div>' : '';
+            }
+            function cycleInfoOverlapHtml(row, block) {
+                if (!isInfoOnly(row)) return '';
+                return '<div class="tt-info-only-overlap">Ma’lumot: guruhning onlayn darslari ustma-ust — '
+                    + '<button type="button" data-cycle-gear="' + esc(block.key) + '">' + esc(block.subject) + '</button> '
+                    + infoOnlyBadgeHtml(row) + '</div>';
+            }
+            function hemisInfoNoticeHtml(rep) {
+                return rep.info_only_notice ? '<div class="text-xs text-gray-500 my-2">' + esc(rep.info_only_notice) + '</div>' : '';
+            }
             // Kartani tanlangan qatlamga moslaydi: tashqida joylashuv ext_day/ext_pair, o'qituvchi va xona yashiriladi.
             function applyWeeklyLayer(list) {
                 list.forEach(c => {
@@ -4339,7 +4379,7 @@
                     (tot.finishedHidden ? ' · ' + tot.finishedHidden + ' ta tugagan fan (yashirildi)' : '') + '.' +
                     (rep.fallback_room ? '' : ' <b class="text-red-600">"Kafedra mudiri xonasi" auditoriyasi topilmadi — HEMIS\'da ochib, auditoriyalarni import qiling.</b>') +
                     (rep.groups_not_in_hemis.length ? '<div class="text-red-600">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.groups_not_in_hemis.join(', ')) + '</div>' : '') + '</div>';
-                hemisSyncModal(head + body);
+                hemisSyncModal(head + hemisInfoNoticeHtml(rep) + body);
                 $('hsClose').onclick = () => $('hemisSyncModal').remove();
                 if ($('hsUnplacedToggle')) $('hsUnplacedToggle').onclick = () => {
                     hsUnplacedOpen = !hsUnplacedOpen;
@@ -4613,7 +4653,7 @@
                         (r.fallback_reason && r.fallback_reason !== why ? '<div class="text-violet-700">' + hsEsc(r.fallback_reason) + '</div>' : '') +
                         (r.note ? '<div class="text-amber-700">' + hsEsc(r.note) + '</div>' : '') + '</td></tr>';
                 }).join('');
-                return head + (body ? '<div class="max-h-[70vh] overflow-auto"><table class="w-full border text-[11px]"><thead class="bg-gray-50 sticky top-0"><tr>' +
+                return head + hemisInfoNoticeHtml(rep) + (body ? '<div class="max-h-[70vh] overflow-auto"><table class="w-full border text-[11px]"><thead class="bg-gray-50 sticky top-0"><tr>' +
                     ['Guruh', 'Fan', 'Vaqt', 'O\'qituvchi', 'Xona', 'Holat'].map(h => '<th class="border px-1">' + h + '</th>').join('') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
                     : '<div class="text-gray-500">Bugun qamrovda dars yo\'q.</div>');
             }
@@ -6795,7 +6835,19 @@
                             const lanes = Math.min(rect.lanes, pairs - lp + 1);
                             const to = Math.min(rect.to, cols - 1);
                             if (lanes < 1 || to < rect.from || rect.from < 0) return;
-                            if (!free(lp, lanes, rect.from, to)) return; // ustma-ust yozuv jadvalni buzmasin
+                            if (!free(lp, lanes, rect.from, to)) {
+                                // Online blocks remain visible together in the occupied cell, with an informational notice.
+                                if (rect.main && isInfoOnly(row)) {
+                                    for (let lane = 1; lane < lp + lanes; lane++) {
+                                        const owner = Object.entries(cellAt[lane] || {}).find(([from, cell]) => lane + (cell.lanes || 1) > lp && +from <= to && cell.next > rect.from);
+                                        if (owner) {
+                                            owner[1].html = owner[1].html.replace('</td>', cycleInfoOverlapHtml(row, block) + '</td>');
+                                            break;
+                                        }
+                                    }
+                                }
+                                return;
+                            }
                             const spanCols = to - rect.from + 1;
                             const joinStyle = twoRects ? (rect.main ? 'border-right:0;' : 'border-left:0;') : '';
                             let cellHtml;
@@ -6877,7 +6929,10 @@
                             } else {
                                 cellHtml = '<td class="cyc-cell cyc-block cyc-cont" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + '"></td>';
                             }
-                            cellAt[lp][rect.from] = { html: cellHtml, next: to + 1 };
+                            if (isInfoOnly(row)) {
+                                cellHtml = cellHtml.replace('cyc-block', 'cyc-block tt-info-only').replace('</td>', infoOnlyBadgeHtml(row) + '</td>');
+                            }
+                            cellAt[lp][rect.from] = { html: cellHtml, next: to + 1, lanes };
                             mark(lp, lanes, rect.from, to);
                         });
                     });
@@ -7140,15 +7195,15 @@
             // Dars: vaqt, fan (M/A), guruhlar, xona; qamrovdan tashqari — faqat "band: boshqa fakultet"; davomi (keyingi para) — "↳".
             function agendaEntryHtml(e, moveKey, cont, compact) {
                 const moving = !!(e.key && e.key === moveKey);
-                const cls = 'ag-e' + (e.conflict ? ' ag-conf' : '') + (moving ? ' ag-moving' : '') + (e.hidden ? ' ag-hidden' : '') + (cont ? ' ag-cont' : '');
+                const cls = 'ag-e' + (e.info_only ? ' tt-info-only' : '') + (e.conflict ? ' ag-conf' : '') + (moving ? ' ag-moving' : '') + (e.hidden ? ' ag-hidden' : '') + (cont ? ' ag-cont' : '');
                 if (cont) return '<div class="' + cls + '">↳ ' + esc(e.hidden ? e.label : e.subject + ' (' + e.type + ')') + '</div>';
                 const text = e.hidden ? e.label : e.subject + ' (' + e.type + ') — ' + (compact ? cfGroups(e.groups) : (e.groups || []).join(', ')) +
-                    (e.room && !compact ? ' · ' + e.room : '');
+                    (e.room && !compact ? ' · ' + e.room : '') + (e.info_only ? ' · ' + e.course + '-kurs · ma’lumot (onlayn)' : '');
                 return '<div class="' + cls + '"><span class="ag-time">' + esc((e.start || '') + '–' + (e.end || '')) + '</span> ' + esc(text) +
                     (e.conflict ? ' <span class="ag-tag">to‘qnashuv</span>' : '') + (moving ? ' <span class="ag-tag ag-tag-mv">ko‘chiriladi</span>' : '') + '</div>';
             }
             // Bo'sh para: "bo'sh" va (ko'chiriladigan dars bo'lsa) "Shu vaqtga ko'chirish" — o'chiq bo'lsa sababi bilan; xona taklifi.
-            function agendaFreeHtml(j, date, no, compact) {
+            function agendaFreeHtml(j, date, no, compact, infoCourses = []) {
                 const opt = agendaOpt(j.move, date, no, 'one');
                 let btn = '';
                 if (opt) {
@@ -7160,11 +7215,13 @@
                         : ' <button type="button" class="ag-mv" disabled title="' + esc(opt.why || '') + '">' + esc(label) + '</button>' +
                             (!compact ? '<div class="ag-why">' + esc(opt.why || '') + '</div>' : '');
                 }
-                return '<div class="ag-free">bo‘sh' + btn + '</div>';
+                return '<div class="ag-free">bo‘sh' + (infoCourses.length ? ' · ' + infoCourses.join(', ') + '-kurs onlayn' : '') + btn + '</div>';
             }
             function agendaCellHtml(j, st, date, p, compact) {
                 const here = (j.entries || []).filter(e => e.date === date && e.from < p.to && p.from < e.to);
-                return here.length ? here.map(e => agendaEntryHtml(e, st.move, e.from < p.from, compact)).join('') : agendaFreeHtml(j, date, p.no, compact);
+                const shown = here.map(e => agendaEntryHtml(e, st.move, e.from < p.from, compact)).join('');
+                const infoCourses = [...new Set(here.filter(e => e.info_only).map(e => +e.course))];
+                return shown + (!here.some(e => !e.info_only) ? agendaFreeHtml(j, date, p.no, compact, infoCourses) : '');
             }
             function agendaDayHtml(j, st) {
                 const d = ((j.dates || [])[0] || {}).date;
@@ -8590,10 +8647,10 @@
                     const split = card.conflict ? cfSplit(card.key, card.conflicts, cfOwners) : { own: [], elsewhere: [] };
                     const lvl = card.conflict ? cfLevel(split.own) : null;
                     const ownText = cfBadgeText(split.own);
-                    return '<div class="cycle-pn-card' + (lvl === 'red' ? ' is-conflict' : lvl === 'yellow' ? ' is-conflict-warn' : '') + '" draggable="' + (TIMETABLE_READ_ONLY ? 'false' : 'true') + '" data-cycle-key="' + esc(card.key) +
+                    return '<div class="cycle-pn-card' + infoOnlyClass(card) + (lvl === 'red' ? ' is-conflict' : lvl === 'yellow' ? ' is-conflict-warn' : '') + '" draggable="' + (TIMETABLE_READ_ONLY ? 'false' : 'true') + '" data-cycle-key="' + esc(card.key) +
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
                         'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
-                        '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + '</span>' +
+                        '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + infoOnlyBadgeHtml(card) + '</span>' +
                         '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span>' +
                         // Holat: "joylanmagan" yoki "joylangan · to'qnashuv 13.11–24.11" (joylanmagan bilan aralashmasin).
                         '<span class="cycle-pn-state' + (card.placed ? ' is-placed' : '') + '">' + esc(cycleCardStateText(card)) + '</span>' +
@@ -9183,6 +9240,7 @@
                     + (gText ? ' · ' + gText : '') + ' · ' + o.subject_name + ' (' + (o.training_type === 'lecture' ? "ma'ruza" : 'amaliy') + ')';
             }
             function conflictsAt(card, day, pair, ignoredIds = []) {
+                if (isInfoOnly(card)) return [];
                 const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
                 // Vaqtincha kafedra mudirida — to'qnashuv tekshirilmaydi va boshqalarni ham to'qnashuvli qilmaydi (serverdagi clashWith).
@@ -9190,7 +9248,7 @@
                 const effectiveSource = effectiveCard(card);
                 const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
-                    if (o.id === card.id || ignoredIds.includes(o.id) || phOf(o)) return;
+                    if (o.id === card.id || ignoredIds.includes(o.id) || phOf(o) || isInfoOnly(o)) return;
                     const effectiveOther = effectiveCard(o);
                     // Tashqi qatlamda joylash andozaga (barcha haftalar) yoziladi va server bandlikni
                     // andoza bo'yicha tekshiradi — haftaning ko'rinishdagi surilishi/bekori hisobga olinmaydi.
@@ -9548,6 +9606,7 @@
             }
             // Joylashgan kartaning ichki jadvaldagi to'qnashuvi (joriy hafta; shablon ko'rinishida — birorta haftada bo'lsa).
             function cardConflict(c) {
+                if (isInfoOnly(c)) return null;
                 if (weeklyLayer === 'external' || !effPlace(c)) return null;
                 const byWeek = weeklyConflicts[c.id];
                 if (!byWeek) return null;
@@ -9721,10 +9780,10 @@
                         if (parts.length > 1) baseName = parts[parts.length - 1];
                         if (baseName.length > 20) baseName = baseName.slice(0, 20) + '…';
                     }
-                    return '<b>[' + t + ']</b> ' + esc(baseName) + ' <b class="tt-bolak-tag">(' + esc(bm[2]) + ')</b>';
+                    return infoOnlyBadgeHtml(c) + '<b>[' + t + ']</b> ' + esc(baseName) + ' <b class="tt-bolak-tag">(' + esc(bm[2]) + ')</b>';
                 }
                 const name = short && c.subject_name.length > 26 ? c.subject_name.slice(0, 26) + '…' : c.subject_name;
-                return '<b>[' + t + ']</b> ' + esc(name);
+                return infoOnlyBadgeHtml(c) + '<b>[' + t + ']</b> ' + esc(name);
             }
             // Karta ustiga kursor olib borilganda chiqadigan to'liq ma'lumot (sikldagi kabi).
             function cardTooltip(c, extra) {
@@ -9950,6 +10009,7 @@
             }
             // Xona sig'imi matni: "Tibbiyot klasteri, 1-qavat, 12-o'quv xona · 10 o'rin · 15 talaba (+5)".
             function roomCapLine(c) {
+                if (isInfoOnly(c)) return "Ma’lumot (onlayn): xona sig‘imi tekshirilmaydi";
                 const e = effectiveCard(c);
                 if (!e.auditorium_code && !e.auditorium_name) return '';
                 const vol = +e.auditorium_volume || +((audCache || []).find(a => a.code === e.auditorium_code) || {}).volume || 0;
@@ -10216,7 +10276,7 @@
                 $('pnFilterCount').textContent = 'Filtrda: ' + unShown.length + ' / ' + un.length + ' ta';
 
                 const panelCard = (c, skip, conflict = skip ? null : cardConflict(c)) =>
-                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (conflict ? ' conflict' : '') + (selected && selected.id === c.id ? ' sel' : '') +
+                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + infoOnlyClass(c) + (skip ? ' skip' : '') + (conflict ? ' conflict' : '') + (selected && selected.id === c.id ? ' sel' : '') +
                     ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
                     cardLabel(c, true) +
                     '<div class="text-[9px] text-gray-500">' +
@@ -10344,7 +10404,7 @@
             const sameCrossLesson = (a, b) => {
                 const x = a.c || a.l, y = b.c || b.l;
                 const room = String(x.auditorium_code || x.auditorium_name || '');
-                return x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb && room !== ''
+                return isInfoOnly(x) === isInfoOnly(y) && x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb && room !== ''
                     && String(x.teacher_id || '') === String(y.teacher_id || '')
                     && String(x.subject_name || '').trim().toLowerCase() === String(y.subject_name || '').trim().toLowerCase()
                     && room === String(y.auditorium_code || y.auditorium_name || '');
@@ -10379,7 +10439,7 @@
                 });
                 const hit = new Set();
                 if (check) lessons.forEach((a, x) => lessons.forEach((b, y) => {
-                    if (y > x && a.items.some(p => b.items.some(q => p.fa < q.fb && q.fa < p.fb))) { hit.add(a); hit.add(b); }
+                    if (y > x && a.items.some(p => b.items.some(q => !isInfoOnly(p.c || p.l) && !isInfoOnly(q.c || q.l) && p.fa < q.fb && q.fa < p.fb))) { hit.add(a); hit.add(b); }
                 }));
                 const clashing = lessons.filter(ls => hit.has(ls));
                 return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
@@ -10401,7 +10461,7 @@
                     + '|' + gs.join(',') : null;
             }
             // Sikl darsining zal to'qnashuvlari (birlashtirilgan chipda — barcha yozuvlardan).
-            const cycRoomClashes = l => (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
+            const cycRoomClashes = l => isInfoOnly(l) ? [] : (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
             // Bitta sikl darsining yozuvlari (karta + sana) — vaqti bo'yicha guruhlanadi: bir xil vaqt — guruhchalari qo'shiladi.
             function mergeCycParts(list) {
                 const by = {}, out = [];
@@ -10447,10 +10507,10 @@
                 const dp = l.dp || {};
                 const who = mode === 'teacher' ? (l.auditorium_name ? 'Xona: ' + l.auditorium_name : '')
                     : (l.teacher_name ? "O'qituvchi: " + l.teacher_name : '');
-                return '<div class="tt-chip tt-cyc-chip ' + (isLec ? 'lec' : 'prc') + '" data-cyc="' + i + '" style="' + st + '" title="Sikl darsi (faqat ko\'rish) — bosing: tafsilot">' +
+                return '<div class="tt-chip tt-cyc-chip ' + (isLec ? 'lec' : 'prc') + infoOnlyClass(l) + '" data-cyc="' + i + '" style="' + st + '" title="Sikl darsi (faqat ko\'rish) — bosing: tafsilot">' +
                     '<div class="tt-cross-fac"><span class="tt-cyc-badge">sikl</span> ' + esc(l.faculty_name || '—') + '</div>' +
                     '<div class="tt-cross-dir">' + esc((l.specialty_name || '—') + ' · ' + l.course + '-kurs') + '</div>' +
-                    '<div class="tt-cross-subject">' + esc('[' + (isLec ? 'M' : 'A') + '] ' + l.subject_name) + '</div>' +
+                    '<div class="tt-cross-subject">' + esc('[' + (isLec ? 'M' : 'A') + '] ' + l.subject_name) + infoOnlyBadgeHtml(l) + '</div>' +
                     '<div class="tt-cross-flow">' + esc(cfGroupsText(l.group_names && l.group_names.length ? l.group_names : [l.group_name])) + '</div>' +
                     '<div class="tt-cross-weeks">' + esc((who ? who + ' · ' : '') + (dp.k ? dp.k + '-kun' : '')) + '</div></div>';
             }
@@ -10578,7 +10638,7 @@
                                 const isLec = c.training_type === 'lecture';
                                 const st = isLec ? 'background:#fde68a;' : ('background-color:' + subjColor(c.subject_name).bg + ';');
                                 const detailLines = excelCardText(c).split('\n');
-                                return '<div class="tt-chip ' + (isLec ? 'lec' : 'prc') + '" data-chip="' + c.id + '" style="' + st + '">' +
+                                return '<div class="tt-chip ' + (isLec ? 'lec' : 'prc') + infoOnlyClass(c) + '" data-chip="' + c.id + '" style="' + st + '">' +
                                     '<div class="tt-cross-fac">' + esc(detailLines[0] || '') + '</div>' +
                                     '<div class="tt-cross-dir">' + esc(detailLines[1] || '') + '</div>' +
                                     '<div class="tt-cross-subject">' + esc(detailLines[2] || '') + '</div>' +
@@ -10918,7 +10978,7 @@
                     const phTip = ph ? '\nVaqtincha: kafedra mudiri' + (ph.mudir_name ? ' (' + ph.mudir_name + ')' : '') + ' · asl o\'qituvchi: ' + (ph.orig_teacher_name || 'biriktirilmagan')
                         + ', asl xona: ' + (ph.orig_room_name || c.auditorium_name || '—') + (ph.reason ? '\nSabab: ' + ph.reason : '')
                         + (ph.by_name ? '\nYozgan: ' + ph.by_name + (ph.at ? ', ' + ph.at : '') : '') : '';
-                    const head = '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
+                    const head = '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + infoOnlyClass(c) +
                         (alt ? ' tt-alt' : '') + (ph ? ' tt-mudir-ph' : '') + tri +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
@@ -11108,7 +11168,7 @@
                     const paraOf = q => { let a = q; while (a > 1 && pGroups[a] && pGroups[a].span === 0) a--; return a; };
                     const headTime = !varied && paraOf(end - 1) !== paraOf(p) ? ' <span class="tt-bolak-time">' + esc(tStart(p) + '–' + tEnd(end - 1)) + '</span>' : '';
                     const head = '<div class="tt-bolak-head" data-chip="' + first.id + '" data-parallel-ids="' + ids + '" data-parallel-offs="' + offs + '" title="' +
-                        esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi; bitta bo'lakni katak ichidagi chiziqqa sudrab boshlanish vaqtini o'zgartiring)") + '"><b>[A]</b> ' + esc(shortB) + headTime + '</div>';
+                        esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi; bitta bo'lakni katak ichidagi chiziqqa sudrab boshlanish vaqtini o'zgartiring)") + '"><b>[A]</b> ' + esc(shortB) + headTime + infoOnlyBadgeHtml(first) + '</div>';
                     const rows = chains.map(ch => {
                         const x = ch.x, sx = ch.s, late = sx > p;
                         const tm = tStart(sx) + '–' + tEnd(ch.e - 1);
@@ -11131,7 +11191,7 @@
                     }
                     const cs = span > 1 ? ' colspan="' + span + '"' : '';
                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                    return { span, html: '<td class="tt-cell tt-bolak-cell' + courseCls(o.course) + colBorder(oi, gi, o.groups) + rowEndCls(p + vs - 1) + '"' + cs + rs +
+                    return { span, html: '<td class="tt-cell tt-bolak-cell' + infoOnlyClass(first) + courseCls(o.course) + colBorder(oi, gi, o.groups) + rowEndCls(p + vs - 1) + '"' + cs + rs +
                         ' data-day="' + d + '" data-pair="' + p + '" style="' + subjStyle(first) + '">' + drops + head + '<div class="tt-bolak-list">' + rows + '</div></td>' };
                 };
 
@@ -11204,7 +11264,7 @@
                                     // Bir katakda bir necha almashinuvchi fan — diagonal ajratgich
                                     const lecSplit = lecEx.length ? ' tt-split' : '';
                                     const lecExtras = lecEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
-                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(o.groups[gi], d, p, ids)]) + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
@@ -11227,7 +11287,7 @@
                                     const prcSplit = prcEx.length ? ' tt-split' : '';
                                     const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
                                     const cs = span > 1 ? ' colspan="' + span + '"' : '';
-                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
+                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(grp, d, p, ids)]) + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
                                     gi += span;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
@@ -11519,7 +11579,7 @@
                         esc((cur && cur.name) || modalCard.auditorium_name || modalCard.auditorium_code) + ' (nofaol)</option>' : '') +
                     audCache.filter(a => a.active !== false).map(a =>
                     '<option value="' + esc(a.code) + '"' + (modalCard.auditorium_code === a.code ? ' selected' : '') +
-                    ((a.volume && a.volume < modalCard.students) ? ' style="color:#dc2626"' : '') + '>' +
+                    ((!isInfoOnly(modalCard) && a.volume && a.volume < modalCard.students) ? ' style="color:#dc2626"' : '') + '>' +
                     esc(a.name) + (a.volume ? ' (' + a.volume + ')' : '') + (a.building_name ? ' · ' + esc(a.building_name) : '') + '</option>').join('');
             }
             let tSearchTimer = null;
@@ -12623,6 +12683,9 @@
                     $('stDayOff').value = (set.days_off || []).join(', ');
                     $('stAllowZero').checked = !!set.allow_zero;
                     $('stShowNum').checked = !!set.show_day_number;
+                    document.querySelectorAll('[data-info-only-course]').forEach(el => {
+                        el.checked = (Array.isArray(set.info_only_courses) ? set.info_only_courses : [6]).map(Number).includes(+el.dataset.infoOnlyCourse);
+                    });
                     $('stHemisMudir').checked = !!+(set.hemis_mudir_fallback || 0);
                     const br = (set.weekly_breaks || [])[0] || {};
                     $('stBreakFrom').value = br.from || '';
@@ -12923,6 +12986,9 @@
                 dayOff.forEach((d, i) => fd.append('settings[days_off][' + i + ']', d));
                 fd.append('settings[allow_zero]', $('stAllowZero').checked ? 1 : 0);
                 fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
+                fd.append('info_only_courses_present', 1);
+                document.querySelectorAll('[data-info-only-course]:checked').forEach((el, i) =>
+                    fd.append('settings[info_only_courses][' + i + ']', el.dataset.infoOnlyCourse));
                 fd.append('settings[hemis_mudir_fallback]', $('stHemisMudir').checked ? 1 : 0);
                 if ($('stBreakFrom').value && $('stBreakTo').value) {
                     fd.append('settings[weekly_breaks][0][from]', $('stBreakFrom').value);

@@ -593,3 +593,11 @@ test('ID 1 raqamga farq, ism va guruh mos (Python match_entries) — ma\'lumot, 
     $r2 = engine()->build(expectedData([$stu]), scanDoc([pdfRow(1, 'ABSALOMOVA KOMILA ABDURAHMONOVNA 21-05a', '368221100549', bobo())]), [], rules(), ctx());
     expect($r2['rows'][0]['status'])->toBe('ocr');
 });
+
+test('Test markazi semestri: HEMIS kodi (17) va nomi (7-sem, 7-semestr) bir xil semestr', function () {
+    expect(\App\Services\VedomostAiChecker::semesterNumber('17'))->toBe(7)
+        ->and(\App\Services\VedomostAiChecker::semesterNumber('7-sem'))->toBe(7)
+        ->and(\App\Services\VedomostAiChecker::semesterNumber('7-semestr'))->toBe(7)
+        ->and(\App\Services\VedomostAiChecker::semesterNumber('11-semestr'))->toBe(11)
+        ->and(\App\Services\VedomostAiChecker::semesterNumber(''))->toBeNull();
+});

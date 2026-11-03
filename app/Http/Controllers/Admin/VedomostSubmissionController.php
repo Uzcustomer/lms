@@ -450,6 +450,7 @@ class VedomostSubmissionController extends Controller
         $stats['total'] = $statsRows->count();
         $currentSemesterHint = $this->currentSemesterHint();
         $staleGroups = $this->staleGroupsInfo();
+        $aiAccess = $this->aiAccessFlags();
 
         $perPage = (int) $request->get('per_page', 50);
         $page = max(1, (int) $request->get('page', 1));
@@ -484,7 +485,8 @@ class VedomostSubmissionController extends Controller
             'manualOpenGroups',
             'syncProgress',
             'currentSemesterHint',
-            'staleGroups'
+            'staleGroups',
+            'aiAccess'
         ));
     }
 
@@ -827,6 +829,7 @@ class VedomostSubmissionController extends Controller
     public function jamlanma(Request $request, \App\Services\VedomostJamlanmaExcel $excel)
     {
         $this->checkViewAccess();
+        $this->requireAi('jamlanma');
         @set_time_limit(900);
         @ini_set('memory_limit', '1024M');
 
@@ -1016,7 +1019,9 @@ class VedomostSubmissionController extends Controller
             $this->rejectionInbox->markRead($submission, auth()->user());
         }
 
-        return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured', 'merged', 'approvalGate'));
+        $aiAllowed = $this->aiAccess()->can('check');
+
+        return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured', 'merged', 'approvalGate', 'aiAllowed'));
     }
 
     /**
@@ -1026,6 +1031,7 @@ class VedomostSubmissionController extends Controller
     public function aiCheck($id)
     {
         $this->checkAccess();
+        $this->requireAi('check');
         $v = VedomostSubmission::findOrFail($id);
         app(\App\Services\VedomostAiDispatcher::class)->recoverStuck($v);
 
@@ -1051,6 +1057,7 @@ class VedomostSubmissionController extends Controller
     public function aiStatus($id)
     {
         $this->checkViewAccess();
+        $this->requireAi('check');
         $v = VedomostSubmission::findOrFail($id);
         app(\App\Services\VedomostAiDispatcher::class)->recoverStuck($v);
 
@@ -1199,6 +1206,7 @@ class VedomostSubmissionController extends Controller
     public function bulkApprove(Request $request)
     {
         $this->checkAccess();
+        $this->requireAi('check');
         $ids = collect((array) $request->input('approve', []))->map(fn ($v) => (int) $v)->filter()->unique();
         $reasons = (array) $request->input('reasons', []);
         if ($ids->isEmpty()) {
@@ -1340,6 +1348,27 @@ class VedomostSubmissionController extends Controller
         abort_unless($path && Storage::disk('public')->exists($path), 404, 'Fayl topilmadi.');
 
         return Storage::disk('public')->download($path);
+    }
+
+    private function aiAccess(): \App\Services\VedomostAiAccess
+    {
+        return app(\App\Services\VedomostAiAccess::class);
+    }
+
+    /** AI imkoniyati (sozlamalar / tekshiruv / jamlanma) — superadmin yoki u ruxsat bergan foydalanuvchi. */
+    private function requireAi(string $perm): void
+    {
+        if (!$this->aiAccess()->can($perm)) {
+            abort(403, \App\Services\VedomostAiAccess::PERMS[$perm] . " — faqat superadmin va u ruxsat bergan foydalanuvchilar uchun.");
+        }
+    }
+
+    /** @return array<string, bool> */
+    private function aiAccessFlags(): array
+    {
+        $a = $this->aiAccess();
+
+        return array_map(fn ($p) => $a->can($p), array_combine(array_keys(\App\Services\VedomostAiAccess::PERMS), array_keys(\App\Services\VedomostAiAccess::PERMS)));
     }
 
     private function userName(): string

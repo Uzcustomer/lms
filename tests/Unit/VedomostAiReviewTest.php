@@ -38,8 +38,23 @@ beforeEach(function () {
     (include database_path('migrations/2026_10_29_100000_create_vedomost_ai_tables.php'))->up();
     VedomostAiKey::create(['api_key' => 'paid-key-xxxxxxxxxxxxxxxxxxxxxx', 'key_hint' => '…xxxx', 'is_paid' => true, 'enabled' => true]);
 
-    auth()->setUser(new GenericUser(['id' => 1, 'name' => 'Registrator']));
+    // AI imkoniyatlari (tekshiruv natijalari, yig'ma oyna) — superadmin yoki u ruxsat berganlar.
+    auth()->setUser(new GenericUser(['id' => 1, 'name' => 'Superadmin']));
+    session(['active_role' => 'superadmin']);
+});
+
+test('AI natijalari: superadmin ruxsat bermagan registrator kira olmaydi (403)', function () {
+    $v = reviewSub(1, 'Xirurgiya', 'ok');
     session(['active_role' => 'registrator_ofisi']);
+
+    expect(fn () => app(VedomostAiReportController::class)->review(Request::create('/', 'GET', ['ids' => [$v->id]])))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect(app(\App\Services\VedomostAiAccess::class)->can('check'))->toBeFalse();
+
+    session(['active_role' => 'superadmin']);
+    expect(app(\App\Services\VedomostAiAccess::class)->can('check'))->toBeTrue()
+        ->and(app(\App\Services\VedomostAiAccess::class)->can('settings'))->toBeTrue()
+        ->and(app(\App\Services\VedomostAiAccess::class)->can('jamlanma'))->toBeTrue();
 });
 
 function reviewSub(int $group, string $subject, ?string $verdict, array $rows = []): VedomostSubmission

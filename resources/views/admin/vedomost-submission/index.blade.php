@@ -276,6 +276,7 @@
                                 <svg viewBox="0 0 24 24"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>Excel
                             </a>
                         </div>
+                        @if(!empty($aiAccess['jamlanma']))
                         <div class="vd-group is-teal" role="group" aria-label="Tasdiqlanganlar jamlanmasi">
                             <span class="vd-group-label">Jamlanma</span>
                             <a class="vd-btn" href="{{ route('admin.vedomost-submission.jamlanma', request()->query()) }}"
@@ -283,11 +284,14 @@
                             <button type="submit" form="jam-form" id="jam-selected" class="vd-btn" disabled
                                     title="Jadvalda belgilangan tasdiqlangan vedomostlar jamlanmasi">Tanlanganlar <span class="vd-badge" id="jam-count">0</span></button>
                         </div>
+                        @endif
+                        @if(!empty($aiAccess['check']))
                         <button type="button" id="ai-review-btn" class="vd-btn is-review" disabled
                                 data-url="{{ route('admin.vedomost-submission.ai-review') }}"
                                 title="Belgilangan AI tekshirgan vedomostlarni bitta oynada ko'rish va tasdiqlash">🧾 Yig'ma tekshiruv <span class="vd-badge is-indigo" id="ai-review-count">0</span></button>
+                        @endif
                         @if(!empty($canManage))
-                            <a class="vd-btn is-ghost" href="{{ route('admin.vedomost-submission.ai-settings') }}">🤖 AI sozlamalari</a>
+                            @if(!empty($aiAccess['settings']))<a class="vd-btn is-ghost" href="{{ route('admin.vedomost-submission.ai-settings') }}">🤖 AI sozlamalari</a>@endif
                             <button type="button" id="manual-open-trigger" class="vd-btn is-ghost">+ Pullik uchun shakl</button>
                         @endif
                         <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
@@ -471,13 +475,12 @@
                 const checked = cbs().filter(c => c.checked);
                 const nJam = checked.filter(c => c.dataset.approved === '1').length;
                 const nAi = checked.filter(c => c.dataset.ai === '1').length;
-                document.getElementById('jam-count').textContent = nJam;
-                btn.disabled = nJam === 0;
-                document.getElementById('ai-review-count').textContent = nAi;
-                reviewBtn.disabled = nAi === 0;
+                // Tugmalar ruxsatga qarab yashirilgan bo'lishi mumkin (jamlanma / AI tekshiruvi).
+                if (btn) { document.getElementById('jam-count').textContent = nJam; btn.disabled = nJam === 0; }
+                if (reviewBtn) { document.getElementById('ai-review-count').textContent = nAi; reviewBtn.disabled = nAi === 0; }
                 if (all) all.checked = checked.length > 0 && checked.length === cbs().length;
             };
-            reviewBtn.addEventListener('click', () => {
+            reviewBtn?.addEventListener('click', () => {
                 const q = new URLSearchParams();
                 cbs().filter(c => c.checked && c.dataset.ai === '1').forEach(c => q.append('ids[]', c.value));
                 window.open(reviewBtn.dataset.url + '?' + q.toString(), '_blank', 'noopener');

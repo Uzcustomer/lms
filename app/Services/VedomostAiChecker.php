@@ -102,6 +102,34 @@ class VedomostAiChecker
             + ['checked_model' => $aiResult['model'] ?? null];
     }
 
+    /**
+     * Test markazi natijalarini bazadan qayta oladi (PDF qayta o'qilmaydi, AI chaqirilmaydi).
+     * Natija AI tekshiruvi paytida saqlanadi — tekshiruvdan keyin Test markazidan kelgan baholar
+     * hisobotda «natija yo'q» bo'lib qolardi. O'zgarish bo'lmasa — null.
+     */
+    public function refreshTestCenter(array $aiResult): ?array
+    {
+        if (($aiResult['version'] ?? 1) < VedomostCheckEngine::VERSION || empty($aiResult['scan']) || empty($aiResult['expected'])) {
+            return null;
+        }
+        $expected = $aiResult['expected'];
+        $sysIds = array_values(array_filter(array_map(
+            fn ($t) => VedomostScanReader::digits($t['student_id'] ?? ''),
+            $expected['talabalar'] ?? []
+        )));
+        $tc = $this->testCenter($sysIds, $expected, (string) ($expected['form_type'] ?? VedomostSubmission::FORM_12),
+            (string) ($expected['talabalar'][0]['meta']['semester'] ?? ''));
+        if ($tc == ($aiResult['context']['test_center'] ?? [])) {
+            return null;
+        }
+        $context = array_merge($aiResult['context'] ?? [], ['test_center' => $tc]);
+
+        return array_merge($aiResult, $this->assemble($expected, $aiResult['scan'], $context, $aiResult['edits'] ?? []), [
+            'model' => $aiResult['model'] ?? null,
+            'tm_refreshed_at' => now()->toDateTimeString(),
+        ]);
+    }
+
     private function assemble(array $expected, array $scan, array $context, array $edits): array
     {
         $report = $this->engine->build($expected, $scan, $edits, $this->settings->all(), $context);
@@ -513,6 +541,13 @@ class VedomostAiChecker
     /** «9-semestr», «9», «9-sem» → 9; raqam yo'q bo'lsa null (filtrlanmaydi). */
     public static function semesterNumber(string $s): ?int
     {
+        // Faqat raqam — HEMIS semestr kodi (11 = 1-semestr … 22 = 12-semestr); nom bo'lsa — undagi raqam.
+        if (preg_match('/^\s*(\d+)\s*$/', $s, $m)) {
+            $n = (int) $m[1];
+
+            return $n > 10 ? $n - 10 : $n;
+        }
+
         return preg_match('/(\d+)/', $s, $m) ? (int) $m[1] : null;
     }
 

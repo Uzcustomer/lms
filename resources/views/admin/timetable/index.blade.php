@@ -2818,6 +2818,12 @@
                 return isInfoOnly(card) ? '<span class="tt-info-only-badge">' + (+card.course) + '-kurs · ma’lumot (onlayn)</span>' : '';
             }
             function infoOnlyClass(card) { return isInfoOnly(card) ? ' tt-info-only' : ''; }
+            function infoOnlyGroupOverlapHtml(list) {
+                const online = list.filter(isInfoOnly);
+                const overlaps = online.some((a, i) => online.some((b, j) => j > i && a.id !== b.id
+                    && !bolakSiblings(a, b) && (curWeek || weeksIntersect(a, b))));
+                return overlaps ? '<div class="tt-info-only-overlap">Ma’lumot: guruhning onlayn darslari ustma-ust</div>' : '';
+            }
             function cycleInfoOverlapHtml(row, block) {
                 if (!isInfoOnly(row)) return '';
                 return '<div class="tt-info-only-overlap">Ma’lumot: guruhning onlayn darslari ustma-ust — '
@@ -11258,7 +11264,7 @@
                                     // Bir katakda bir necha almashinuvchi fan — diagonal ajratgich
                                     const lecSplit = lecEx.length ? ' tt-split' : '';
                                     const lecExtras = lecEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
-                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(o.groups[gi], d, p, ids)]) + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
@@ -11281,7 +11287,7 @@
                                     const prcSplit = prcEx.length ? ' tt-split' : '';
                                     const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
                                     const cs = span > 1 ? ' colspan="' + span + '"' : '';
-                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
+                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(grp, d, p, ids)]) + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
                                     gi += span;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin

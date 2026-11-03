@@ -44,6 +44,13 @@ assert.equal(ctx.conflictsAt(ordinary, 1, 1).length, 2);
 assert.equal(ctx.conflictsAt(card, 1, 1).length, 0);
 const flow = course => ({ c: { ...card, id: course, course, training_type: 'lecture', auditorium_code: '101', teacher_id: 1 }, fa: 1, fb: 3 });
 assert.equal(ctx.crossCellLessons([flow(5), flow(6)], true).lessons.length, 2, 'online and ordinary lectures retain their separate labels');
+Object.assign(ctx, { curWeek: 1, bolakSiblings: () => false });
+assert.match(ctx.infoOnlyGroupOverlapHtml([card, { ...card, id: 3 }]), /tt-info-only-overlap/);
+assert.equal(ctx.infoOnlyGroupOverlapHtml([ordinary, { ...ordinary, id: 3 }]), '');
+ctx.bolakSiblings = () => true;
+assert.equal(ctx.infoOnlyGroupOverlapHtml([card, { ...card, id: 3 }]), '');
+Object.assign(ctx, { curWeek: 0, bolakSiblings: () => false, weeksIntersect: () => false });
+assert.equal(ctx.infoOnlyGroupOverlapHtml([card, { ...card, id: 3 }]), '');
 const date = '2026-09-14';
 const j = { entries: [{ date, from: 1, to: 3, key: 'online', info_only: true, course: 6, subject: card.subject_name,
     type: 'A', groups: ['p/p21-01a'], conflict: false, start: '08:30', end: '09:50' }],
@@ -83,6 +90,6 @@ assert.doesNotMatch(grid.innerHTML, /is-conflict|data-cf-key/);
         assert.equal(await page.getByRole('button', { name: 'Shu vaqtga ko‘chirish', exact: true }).isEnabled(), true);
         assert.equal(await page.locator('.tt-info-only-overlap button').textContent(), 'Ikkinchi fan');
         await page.close();
-        console.log('timetable info only: 10 scenarios passed (including Chromium display and enabled move)');
+        console.log('timetable info only: 11 scenarios passed (including Chromium display and enabled move)');
     } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

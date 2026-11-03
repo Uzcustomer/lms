@@ -449,6 +449,7 @@
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
                                     <label class="block text-xs font-medium text-gray-600 mb-1">Dars uzunligi</label>
+                                    <div id="cmUnitLen" class="hidden w-full rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm" title="Dars yaxlit: barcha bo'laklari ketma-ket turadi va birga suriladi"></div>
                                     <select id="cmLen" class="w-full rounded-md border-gray-300 text-sm">
                                         <option value="1">0.5 para (1 soat)</option>
                                         <option value="2">1 para (2 soat)</option>
@@ -8862,6 +8863,16 @@
             // Birlashtirilgan (ketma-ket) blok — kartalarni ketma-ket paralarga joylaymiz
             // parallel — bo'lakli fan bo'laklari: hammasi bitta katakka (ketma-ket emas).
             async function placeBlockAt(ids, d, p, parallel, offs) {
+                // Amaliy dars — birlik bilan (barcha bo'laklari, ketma-ket): p — sudralgan bo'lak qo'yiladigan joy, birlik boshi undan
+                // oldingi bo'laklar uzunligicha yuqorida. Sig'masa — server sababi, hech narsa o'zgarmaydi.
+                const first = !parallel ? cards.find(x => x.id === ids[0]) : null;
+                if (first && first.training_type !== 'lecture') {
+                    const list = unitOf(first);
+                    const start = p - unitLen(list.slice(0, Math.max(0, list.indexOf(first))));
+                    try { await placeUnitAt(first, d, start); selected = null; renderAll(); }
+                    catch (e) { alert(e.message); renderAll(); }
+                    return;
+                }
                 // Bo'laklar o'z siljishini saqlab ko'chadi ((a) 12:40 da bo'lsa, yangi joyda ham yarim para keyin)
                 // Ketma-ket blok: har karta oldingilarining uzunligi (yarim-slot) qadar keyin turadi
                 // (2 soat + 1 soat → p va p+2; avval k qo'shilardi va kartalar ustma-ust tushardi).
@@ -8893,6 +8904,52 @@
                     selected = null; renderAll();
                 } catch (e) { alert('Konflikt: ' + e.message); }
             }
+            // Sudrash: katak (bir necha yarim-slotli — rowspan) ichida sichqoncha qaysi yarim-slotda — har para katagi ikkita
+            // yarim para nishoni (08:30 / 09:10, 12:00 / 12:40 …).
+            function dropSlotAt(td, ev) {
+                const base = +td.dataset.pair, rs = td.rowSpan || 1;
+                if (rs <= 1 || !ev || !td.getBoundingClientRect) return base;
+                const r = td.getBoundingClientRect();
+                const k = Math.floor((ev.clientY - r.top) / ((r.height || 1) / rs));
+                return base + Math.max(0, Math.min(rs - 1, k));
+            }
+            // Sudralayotgan dars d kuni p ga tushsa: birlik boshi, uzunligi va to'qnashuvlar (birlikning o'z bo'laklari hisobga olinmaydi).
+            function dragPlan(ids, d, p, parallel) {
+                const first = cards.find(x => x.id === ids[0]);
+                if (!first) return null;
+                if (!parallel && first.training_type !== 'lecture') {
+                    const list = unitOf(first);
+                    const start = p - unitLen(list.slice(0, Math.max(0, list.indexOf(first))));
+                    const mine = list.map(x => x.id);
+                    let at = start;
+                    const errs = [];
+                    list.forEach(x => { errs.push(...conflictsAt(x, d, at, mine)); at += cardLen(x); });
+                    const maxRow = boardSchedule().filter(it => it.type === 'pair').length || 12;
+                    if (start < 1 || start + unitLen(list) - 1 > maxRow) errs.push('kun oxiri');
+                    return { start, len: unitLen(list), errs };
+                }
+                const len = parallel ? Math.max(...ids.map(id => { const x = cards.find(c => c.id === id); return x ? cardLen(x) : 1; }))
+                    : ids.reduce((n, id) => { const x = cards.find(c => c.id === id); return n + (x ? cardLen(x) : 1); }, 0);
+                return { start: p, len, errs: conflictsAt(first, d, p, ids) };
+            }
+            // Sudrash paytida tushadigan vaqt oralig'i ("12:40–15:00") — sichqoncha yonida.
+            function dragTip(ev, plan) {
+                let tip = document.getElementById('ttDragTip');
+                if (!plan) { if (tip) tip.remove(); return; }
+                if (!tip) {
+                    tip = document.createElement('div');
+                    tip.id = 'ttDragTip';
+                    tip.style.cssText = 'position:fixed;z-index:90;pointer-events:none;font:600 11px/1.2 system-ui,sans-serif;padding:3px 7px;border-radius:6px;box-shadow:0 2px 8px #0003';
+                    document.body.appendChild(tip);
+                }
+                const bad = plan.errs.length > 0;
+                tip.textContent = (slotRangeText(plan.start, plan.len) || '') + (bad ? ' — band' : '');
+                tip.style.background = bad ? '#fee2e2' : '#dcfce7';
+                tip.style.color = bad ? '#991b1b' : '#166534';
+                tip.style.left = (ev.clientX + 14) + 'px';
+                tip.style.top = (ev.clientY + 12) + 'px';
+            }
+            let unitPanelLen = {};   // panel kartasi id → birlik bo'laklari uzunligi (jami soat yozuvi uchun)
             // ===== Drag-and-drop holati (blok = bir yoki bir necha ketma-ket karta) =====
             let dragCardIds = null;
             let dragParallel = false;
@@ -8919,6 +8976,7 @@
                 document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
                 const panel = document.getElementById('cardPanel');
                 if (panel) panel.classList.remove('pn-drop');
+                dragTip(null, null);
             });
 
             // ===== Faol katak: sichqoncha ustidan o'tganda belgilash + strelkalar bilan yurish =====
@@ -9233,7 +9291,20 @@
                 $('cardPanelHint').classList.add('hidden');
                 const bySubject = (a, b) => a.subject_name.localeCompare(b.subject_name, 'uz');
                 // To'qnashuvli (joylashgan, lekin o'qituvchi/xona/guruh band) kartalar ham — sababi bilan.
-                const un = weekActiveCards().filter(c => !effPlace(c) || cardConflict(c)).sort(bySubject);
+                // Dars yaxlit (birlik): qisman joylangan birlikning qolgan bo'lagi panelda ko'rinmaydi (tepada "qisman joylangan: N ta"
+                // va yaxlit joylash / bo'shatish); butunlay joylanmagan ko'p bo'lakli birlik — bitta karta (birinchi bo'lagi, jami soati
+                // bilan): sudrash butun darsni joylaydi.
+                const uIdx = buildUnitIndex();
+                const partialUnits = new Map();
+                const un = weekActiveCards().filter(c => {
+                    if (effPlace(c)) return !!cardConflict(c);
+                    if (c.training_type === 'lecture' || weeklyLayer === 'external') return true;
+                    const st = unitState(c, curWeek, uIdx);
+                    if (st.partial) { partialUnits.set(unitKey(c), st); return false; }
+                    return st.list[0] === c;
+                }).sort(bySubject);
+                unitPanelLen = {};
+                un.forEach(c => { if (c.training_type !== 'lecture' && !effPlace(c)) { const l = unitOf(c, curWeek, uIdx); if (l.length > 1) unitPanelLen[c.id] = l.map(cardLen); } });
                 // Shu haftada o'tilmaydigan kartalar — odatda yashirin. Ular joylashgan,
                 // shunchaki bu haftaga tegishli emas; qo'lda bekor qilinganini qaytarish
                 // uchun "ko'rsatish" tugmasi orqali chiqariladi.
@@ -9268,9 +9339,18 @@
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
+                    (unitPanelLen[c.id] ? '<div class="text-[9px] font-semibold text-indigo-700" title="Dars yaxlit joylanadi: barcha bo\'laklari ketma-ket">jami ' +
+                        unitPanelLen[c.id].reduce((a, b) => a + b, 0) + ' soat (' + unitPanelLen[c.id].join(' + ') + ')</div>' : '') +
                     '</div>' + (conflict ? '<div class="pn-conflict" role="button" tabindex="0" data-wcf="' + c.id + '" title="Bosing — tafsilot">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') + '</div>';
 
-                $('cardPanel').innerHTML =
+                // Qisman joylangan birliklar (ichki jadval, tanlangan hafta): soni va yaxlit joylash / yaxlit bo'shatish.
+                const partialHead = partialUnits.size && curWeek && weeklyLayer === 'internal'
+                    ? '<div class="pn-partial" style="border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
+                        'Qisman joylangan: <b>' + partialUnits.size + ' ta</b>' +
+                        (weeklyCanEdit() && !TIMETABLE_READ_ONLY ? ' <button type="button" data-unit-fix="complete" style="margin-left:4px;border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 6px">yaxlit joylash</button>' +
+                            ' <button type="button" data-unit-fix="clear" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 6px">yaxlit bo\'shatish</button>' : '') + '</div>'
+                    : '';
+                $('cardPanel').innerHTML = partialHead +
                     unShown.map(c => panelCard(c, false)).join('') +
                     (showSkipped ? skippedShown.map(c => panelCard(c, true)).join('') : '')
                     || (filtering && un.length
@@ -9285,6 +9365,19 @@
                         renderPanel(); renderGrid();
                     };
                     el.addEventListener('dragstart', ev => startDrag(+el.dataset.id, ev));
+                });
+                document.querySelectorAll('#cardPanel [data-unit-fix]').forEach(btn => btn.onclick = async () => {
+                    const action = btn.dataset.unitFix;
+                    const ids = [...partialUnits.values()].flatMap(st => st.list.map(x => x.id));
+                    if (action === 'clear' && !confirm("Qisman joylangan " + partialUnits.size + " ta dars shu haftada butunlay joydan olinsinmi?")) return;
+                    btn.disabled = true;
+                    try {
+                        const r = await api(BASE + '/boards/' + board.id + '/unit-fix', 'POST', { week: curWeek, action, card_ids: ids });
+                        await loadBoard(board.id);
+                        if (r && r.failed && r.failed.length) {
+                            alert('Yaxlit joylanmadi (' + r.failed.length + ' ta):\n' + r.failed.slice(0, 10).map(f => f.group + ' · ' + f.subject + ' (' + f.day + '): ' + f.error).join('\n'));
+                        }
+                    } catch (e) { alert('Xatolik: ' + e.message); btn.disabled = false; }
                 });
 
                 // Joylashgan kartani panelga sudrab tashlash — joyidan olib tashlanadi.
@@ -9310,7 +9403,14 @@
                     dragCardIds = null;
                     if (!toUnplace.length) return;
                     try {
-                        for (const c of toUnplace) await unplaceOneCard(c);
+                        // Amaliy dars — birlik bilan (barcha bo'laklari birga olinadi).
+                        const doneUnits = new Set();
+                        for (const c of toUnplace) {
+                            if (c.training_type === 'lecture') { await unplaceOneCard(c); continue; }
+                            if (doneUnits.has(unitKey(c))) continue;
+                            doneUnits.add(unitKey(c));
+                            await placeUnitAt(c, null, null);
+                        }
                     } catch (e) {
                         alert('Xatolik: ' + e.message);
                     }
@@ -10281,17 +10381,21 @@
                         if (!dragCardIds) return;
                         ev.preventDefault();
                         ev.dataTransfer.dropEffect = 'move';
-                        const card = cards.find(x => x.id === dragCardIds[0]);
-                        const d = +td.dataset.day, p = +td.dataset.pair;
-                        td.classList.add(card && conflictsAt(card, d, p, dragCardIds).length ? 'drag-bad' : 'drag-ok');
+                        // Yarim para qadami: bir necha qatorli katakda sichqoncha turgan yarim-slot; bandlik — shu yarim-slot bo'yicha.
+                        const d = +td.dataset.day, p = dropSlotAt(td, ev);
+                        const plan = dragPlan(dragCardIds, d, p, dragParallel);
+                        td.classList.remove('drag-ok', 'drag-bad');
+                        td.classList.add(plan && plan.errs.length ? 'drag-bad' : 'drag-ok');
+                        dragTip(ev, plan);
                     });
-                    td.addEventListener('dragleave', () => td.classList.remove('drag-ok', 'drag-bad'));
+                    td.addEventListener('dragleave', () => { td.classList.remove('drag-ok', 'drag-bad'); dragTip(null, null); });
                     td.addEventListener('drop', ev => {
                         ev.preventDefault();
                         td.classList.remove('drag-ok', 'drag-bad');
+                        dragTip(null, null);
                         if (!dragCardIds) return;
                         const ids = dragCardIds, parallel = dragParallel, offs = dragOffsets;
-                        const d = +td.dataset.day, p = +td.dataset.pair;
+                        const d = +td.dataset.day, p = dropSlotAt(td, ev);
                         dragCardIds = null;
                         dragParallel = false;
                         dragOffsets = null;
@@ -10398,6 +10502,12 @@
                 // Hafta rejimida: "olib tashlash" shu haftada bekor qilish; override bo'lsa shablonga qaytarish
                 $('cmUnplace').textContent = curWeek ? '✖ Shu haftada bekor qilish' : '↩ Jadvaldan olish';
                 $('cmResetWeek').classList.toggle('hidden', !(curWeek && hasWeekOverride(c)));
+                // Dars uzunligi: ko'p bo'lakli dars (birlik, masalan 2 + 1 soat) — to'liq uzunligi (bo'lak uzunligi tanlanmaydi).
+                const unitList = c.training_type === 'lecture' ? [c] : unitOf(c);
+                modalUnit = unitList.length > 1 ? unitList : null;
+                $('cmUnitLen').classList.toggle('hidden', !modalUnit);
+                $('cmLen').classList.toggle('hidden', !!modalUnit);
+                $('cmUnitLen').textContent = modalUnit ? unitLen(modalUnit) + ' soat (' + modalUnit.map(cardLen).join(' + ') + ' soatlik bo\'laklar)' : '';
                 // Dars uzunligi va boshlanish yarmi
                 $('cmLen').value = String(c.len_half || 2);
                 $('cmStartHalf').value = String(c.start_half || 0);
@@ -10408,12 +10518,26 @@
                 $('cardModal').classList.remove('hidden');
                 await Promise.all([loadTeachers(''), loadAuds()]);
             }
-            // Modal: boshlanish vaqti — dars turgan para ichidagi yarim-slotlar (masalan 12:00 / 12:40).
-            // Tanlangan (hafta yoki shablon) joylashuv bo'yicha; o'zgarsa karta shu yarim-slotga ko'chadi.
+            let modalUnit = null;   // ochiq oynadagi darsning bo'laklari (ko'p bo'lakli bo'lsa)
+            // Ochiq oynadagi dars boshi: ko'p bo'lakli darsda — birinchi bo'lagi joyi.
+            const modalStartPlace = c => effPlace(modalUnit ? modalUnit[0] : c);
+            // Modal: boshlanish vaqti — kunning har yarim-slotidan (yarim para qadami: 08:30, 09:10, 10:00 …), dars to'liq sig'adigan
+            // joygacha. Ko'p bo'lakli dars — butun dars (barcha bo'laklari) shu vaqtdan ketma-ket suriladi.
             function fillCmStartSlot(c) {
                 const sel = $('cmStartSlot');
-                const pl = effPlace(c);
+                const pl = modalStartPlace(c);
                 if (!pl) { sel.innerHTML = '<option value="">— joylashtirilmagan —</option>'; sel.disabled = true; return; }
+                if (modalUnit) {
+                    const sched = boardSchedule().filter(it => it.type === 'pair');
+                    const len = unitLen(modalUnit);
+                    let o = '';
+                    for (let q = 1; q + len - 1 <= sched.length; q++) {
+                        o += '<option value="' + q + '"' + (q === +pl.pair ? ' selected' : '') + '>' + esc(slotRangeText(q, len) || ('slot ' + q)) + '</option>';
+                    }
+                    sel.innerHTML = o;
+                    sel.disabled = false;
+                    return;
+                }
                 const sched = boardSchedule().filter(it => it.type === 'pair');
                 const pt = {};
                 sched.forEach((it, i) => { pt[i + 1] = { name: it.name || '', abbr: it.abbr || '', start: it.start || '', end: it.end || '' }; });
@@ -10435,17 +10559,17 @@
                 const el = $('cmTimeHint');
                 if (!modalCard || !effPlace(modalCard)) { el.textContent = 'Joylashtirilmagan — uzunlik saqlanadi.'; return; }
                 const sched = boardSchedule().filter(it => it.type === 'pair');
-                const len = +$('cmLen').value;
+                const len = modalUnit ? unitLen(modalUnit) : +$('cmLen').value;
                 // Bu modelda `pair` — yarim-slot indeksi; har qo'ng'iroq elementi bitta
                 // yarim-slot (o'z start/end vaqti bilan). Dars pair'dan boshlab len ta
                 // yarim-slotni egallaydi.
-                const pl = effPlace(modalCard) || modalCard;
+                const pl = modalStartPlace(modalCard) || modalCard;
                 const sp = +$('cmStartSlot').value || +pl.pair;
                 const startEntry = sched[sp - 1];
                 const endEntry = sched[sp - 1 + len - 1] || startEntry;
                 const startT = startEntry ? (startEntry.start || '') : '';
                 const endT = endEntry ? (endEntry.end || '') : '';
-                const label = { 1: '0.5 para', 2: '1 para', 3: '1.5 para', 4: '2 para' }[len] || len;
+                const label = modalUnit ? len + ' soat' : ({ 1: '0.5 para', 2: '1 para', 3: '1.5 para', 4: '2 para' }[len] || len);
                 el.textContent = '⏱ ' + label + (startT && endT ? ' · ' + startT + '–' + endT : '');
             }
             // Ikki vaqt oralig'ining o'rtasi (HH:MM)
@@ -10495,12 +10619,17 @@
                     modalCard.len_half = +$('cmLen').value;
                     if (modalCard.day && modalCard.pair) modalCard.start_half = +$('cmStartHalf').value;
                     // Boshlanish vaqti o'zgargan bo'lsa — shu kunda yangi yarim-slotga ko'chirish
-                    const pl = effPlace(modalCard);
+                    const pl = modalStartPlace(modalCard);
                     const slot = +$('cmStartSlot').value;
                     if (pl && slot && slot !== +pl.pair) {
-                        const errs = conflictsAt(modalCard, +pl.day, slot);
-                        if (errs.length) throw new Error('Konflikt: ' + errs.join('; '));
-                        await placeOneCard(modalCard, +pl.day, slot);
+                        if (modalCard.training_type !== 'lecture') {
+                            // Amaliy — birlik bilan: barcha bo'laklari ketma-ket, o'z bo'laklari bilan "to'qnashuv" yo'q (server tekshiradi).
+                            await placeUnitAt(modalUnit ? modalUnit[0] : modalCard, +pl.day, slot);
+                        } else {
+                            const errs = conflictsAt(modalCard, +pl.day, slot);
+                            if (errs.length) throw new Error('Konflikt: ' + errs.join('; '));
+                            await placeOneCard(modalCard, +pl.day, slot);
+                        }
                     }
                     $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                     renderAll();
@@ -10514,7 +10643,9 @@
             $('cmUnplace').onclick = async () => {
                 if (!modalCard) return;
                 try {
-                    await unplaceOneCard(modalCard);
+                    // Amaliy — butun dars (barcha bo'laklari) olinadi.
+                    if (modalCard.training_type !== 'lecture') await placeUnitAt(modalCard, null, null);
+                    else await unplaceOneCard(modalCard);
                 } catch (e) { alert('Xatolik: ' + e.message); return; }
                 $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                 renderAll();

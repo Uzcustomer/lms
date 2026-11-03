@@ -248,3 +248,29 @@ it('qisman joylangan: bitta kartaning "yaxlit joylash"i (card_ids) boshqa birlik
         ->and($r['failed'][0]['error'])->toContain("3 soat sig'maydi")
         ->and(wuPlace($c))->toBe([1, 1]);
 });
+
+it('Codex: kafedra mudiri unit-fix / unit-place bilan faqat o\'z kafedrasi darslarini o\'zgartiradi', function () {
+    $s = wuSetup();
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 501, 'name' => 'Gigiyena kafedrasi', 'code' => 'G1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = wuTeacher('MUDIR', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 501, 'department' => 'Gigiyena kafedrasi'])->save();
+    // Fizika (boshqa kafedra) — qisman; Gigiyena (o'z kafedrasi) — qisman.
+    TimetableCardOverride::where('card_id', $s['b']->id)->where('week', 8)->delete();
+    $g = array_replace($s['base'], ['group_name' => 'd2/d26-05a (rus)', 'subject_name' => 'Gigiyena', 'kafedra_name' => 'Gigiyena kafedrasi',
+        'teacher_id' => null, 'teacher_name' => null]);
+    $g1 = TimetableCard::create($g + ['len_half' => 2]);
+    $g2 = TimetableCard::create(array_replace($g, ['len_half' => 1]));
+    TimetableCardOverride::create(['card_id' => $g1->id, 'week' => 8, 'day' => 1, 'pair' => 1]);
+    $as = fn () => test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri']);
+    $as()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 8, 'action' => 'complete'])->assertOk()->assertJson(['done' => 1]);
+    expect(wuPlace($g2))->toBe([1, 3])->and(wuPlace($s['b']))->toBe([null, null]);
+    // Aniq so'ralgan boshqa kafedra darsi — o'zgarmaydi, sababi bilan.
+    $r = $as()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 8, 'action' => 'clear', 'card_ids' => [$s['a']->id, $s['b']->id]])
+        ->assertOk()->json();
+    expect($r['done'])->toBe(0)->and($r['failed'][0]['error'])->toBe('Bu fan sizning kafedrangizga tegishli emas.')
+        ->and(wuPlace($s['a']))->toBe([5, 5]);
+    $as()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['week' => 8, 'day' => 5, 'pair' => 6])->assertForbidden();
+    expect(wuPlace($s['a']))->toBe([5, 5]);
+});

@@ -5508,8 +5508,10 @@
                     const c = cards.find(x => x.id === +u.id);
                     if (!c) return;
                     if (!W) {
+                        // Ko'rinadigan joy (day/pair) — ikkala qatlamda ham (tashqida applyWeeklyLayer ext_* ni day/pair ga ko'chiradi);
+                        // saqlangan qatlam maydoni — rememberLayerPlace (tashqi: ext_*, ichki: _int).
                         if (weeklyLayer === 'external') { c.ext_day = u.day; c.ext_pair = u.pair; }
-                        else { c.day = u.day; c.pair = u.pair; }
+                        c.day = u.day; c.pair = u.pair;
                         rememberLayerPlace(c, u.day, u.pair);
                         return;
                     }
@@ -8892,7 +8894,9 @@
                 // Amaliy dars — birlik bilan (barcha bo'laklari, ketma-ket): p — sudralgan bo'lak qo'yiladigan joy, birlik boshi undan
                 // oldingi bo'laklar uzunligicha yuqorida. Sig'masa — server sababi, hech narsa o'zgarmaydi.
                 const first = !parallel ? cards.find(x => x.id === ids[0]) : null;
-                if (first && first.training_type !== 'lecture') {
+                // Shu haftada bekor qilingan dars ("Ko'rsatish" bilan panelda) sudrab qaytarilsa — avvalgidek shu kartaning o'zi tiklanadi
+                // (week-override move); birlik faqat o'tiladigan bo'laklardan.
+                if (first && first.training_type !== 'lecture' && activeInWeek(first, curWeek)) {
                     const list = unitOf(first);
                     const start = p - unitLen(list.slice(0, Math.max(0, list.indexOf(first))));
                     try { await placeUnitAt(first, d, start); selected = null; renderAll(); }
@@ -8943,7 +8947,7 @@
             function dragPlan(ids, d, p, parallel) {
                 const first = cards.find(x => x.id === ids[0]);
                 if (!first) return null;
-                if (!parallel && first.training_type !== 'lecture') {
+                if (!parallel && first.training_type !== 'lecture' && activeInWeek(first, curWeek)) {
                     const list = unitOf(first);
                     const start = p - unitLen(list.slice(0, Math.max(0, list.indexOf(first))));
                     const mine = list.map(x => x.id);

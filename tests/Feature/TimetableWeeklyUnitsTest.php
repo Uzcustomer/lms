@@ -532,3 +532,40 @@ it('parallel to\'plam ichidagi guruh to\'qnashuvi tuzatilgach: Terapiya (b)/(c) 
     $c->update(['subject_name' => 'Terapiya (c)']);
     expect($weekly())->toBe([]);
 });
+
+it('parallel to\'plam talaba kesishuvi — to\'plam bo\'yicha: Bolalar xirurgiyasi (a) 03a 10, (b) 03b 10, (c) 03a+03b 11, guruhlarda 16 va 15 — guruh to\'qnashuvi yo\'q; yig\'indi ko\'p — "Guruh band"', function () {
+    $s = wuSetup();
+    // Faol talabalar: 03a — 16, 03b — 15 (o'rtacha ulush bilan (b) 10 + (c) 11/2 = 15,5 > 15 deb xato kesishuv chiqardi).
+    foreach (['d1/d26-03a' => 16, 'd1/d26-03b' => 15] as $g => $n) {
+        for ($i = 0; $i < $n; $i++) {
+            \Illuminate\Support\Facades\DB::table('students')->insert(['hemis_id' => random_int(1000000, 9999999), 'full_name' => 'T', 'short_name' => 'T',
+                'first_name' => 'T', 'second_name' => 'T', 'third_name' => 'X', 'student_id_number' => (string) random_int(1000000, 9999999),
+                'group_name' => $g, 'student_status_code' => 11, 'department_id' => 77, 'department_name' => '2-son davolash',
+                'created_at' => now(), 'updated_at' => now()]);
+        }
+    }
+    $mk = fn (string $l, array $o) => TimetableCard::create(array_replace($s['base'], ['subject_name' => 'Bolalar xirurgiyasi (' . $l . ')', 'len_half' => 2,
+        'kafedra_name' => 'Xirurgiya kafedrasi', 'teacher_id' => wuTeacher('XIRURG ' . strtoupper($l))->id, 'teacher_name' => 'XIRURG ' . strtoupper($l)], $o));
+    $a = $mk('a', ['group_name' => 'd1/d26-03a', 'students' => 10]);
+    $b = $mk('b', ['group_name' => 'd1/d26-03b', 'students' => 10]);
+    $c = $mk('c', ['group_name' => null, 'group_names' => ['d1/d26-03a', 'd1/d26-03b'], 'students' => 11]);
+    foreach ([$a, $b, $c] as $x) {
+        TimetableCardOverride::create(['card_id' => $x->id, 'week' => 8, 'day' => 2, 'pair' => 1]);
+    }
+    $ids = [$a->id, $b->id, $c->id];
+    $weekly = function () use ($s, $ids) {
+        $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);   // yangi hisob (so'rov keshlari yangilanadi)
+
+        return array_intersect_key($ctl->internalConflicts($s['board'])['weekly'] ?? [], array_flip($ids));
+    };
+    // To'plam: 10 + 10 + 11 = 31 ≤ 16 + 15 = 31 — parallel, guruh to'qnashuvi yo'q (panelda ham chiqmaydi).
+    expect($weekly())->toBe([]);
+    // (a) 9 talaba — ham.
+    $a->update(['students' => 9]);
+    expect($weekly())->toBe([]);
+    // Haqiqiy kesishuv: (b) 13 talaba — 9 + 13 + 11 = 33 > 31: kimdir ikki bo'lakda — "Guruh band" qoladi.
+    $b->update(['students' => 13]);
+    $w = $weekly();
+    expect(array_keys($w))->toContain($b->id)->toContain($c->id)
+        ->and(collect($w[$b->id])->first()['text'] ?? '')->toContain('Guruh');
+});

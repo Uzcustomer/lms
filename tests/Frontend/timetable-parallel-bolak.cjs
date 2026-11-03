@@ -26,14 +26,30 @@ vm.runInContext(source.slice(a0, source.indexOf('\n', a0)) + '\n' + source.slice
     + '; Object.assign(this, { bolakSiblings, parallelSet, parallelBadgeHtml });', ctx);
 
 assert.equal(ctx.bolakSiblings(cards[0], cards[1]), true);
-assert.equal(ctx.bolakSiblings(cards[0], cards[2]), true);   // 01a: 5 + 10/2 = 10 ≤ 10 talaba — kesishmaydi
+assert.equal(ctx.bolakSiblings(cards[0], cards[2]), true);   // to'plam (a, b, c): 5 + 5 + 10 = 20 ≤ 01a + 01b = 20 — kesishmaydi
 assert.equal(ctx.bolakSiblings(cards[0], cards[3]), false);  // boshqa tur
 assert.equal(ctx.bolakSiblings(cards[0], cards[4]), false);  // boshqa oqim
-// Guruhda 8 talaba: (a) 5 + (c) 5 > 8 — haqiqiy kesishuv, parallel emas.
+// 01a da 8 talaba: to'plam 20 > 8 + 10 = 18 — haqiqiy kesishuv, parallel emas.
 ctx.groupStudents['F|01a'] = 8;
 assert.equal(ctx.bolakSiblings(cards[0], cards[2]), false);
 ctx.groupStudents['F|01a'] = 10;
+// Bolalar xirurgiyasi: (a) 03a 10, (b) 03b 10, (c) 03a+03b 11 (6 + 5), guruhlar 16 va 15 — o'rtacha ulush (11 / 2 = 5,5) bilan
+// 10 + 5,5 > 15 deb xato kesishuv chiqardi; to'plam: 31 ≤ 31 — parallel. Yig'indi guruhlardan ko'p (03b da 14) — kesishadi.
+const X = 'Bolalar xirurgiyasi';
+const xa = Object.assign({ id: 21, subject_name: X + ' (a)', group_name: '03a' }, base, { students: 10 });
+const xb = Object.assign({ id: 22, subject_name: X + ' (b)', group_name: '03b' }, base, { students: 10 });
+const xc = Object.assign({ id: 23, subject_name: X + ' (c)', group_names: ['03a', '03b'] }, base, { students: 11 });
+cards.push(xa, xb, xc);
+Object.assign(ctx.groupStudents, { 'F|03a': 16, 'F|03b': 15 });
+assert.equal(ctx.bolakSiblings(xb, xc), true);
+assert.equal(ctx.bolakSiblings(xa, xc), true);
+ctx.groupStudents['F|03b'] = 14;
+assert.equal(ctx.bolakSiblings(xb, xc), false);
+// Faol talabalar noma'lum — kesishmaydi.
+delete ctx.groupStudents['F|03b'];
+assert.equal(ctx.bolakSiblings(xb, xc), true);
+cards.splice(-3, 3);
 assert.deepEqual(ctx.parallelSet(cards[0]).map(c => c.id), [2, 3]);
 assert.match(ctx.parallelBadgeHtml(cards[1]), /data-par-ids="2,1,3"[^>]*>parallel: a · <b>b<\/b> · c<\/div>/);
 assert.equal(ctx.parallelBadgeHtml(Object.assign({}, cards[0], { id: 9, subject_name: 'Anatomiya' })), '');
-console.log('timetable parallel bolak: 3 scenarios passed');
+console.log('timetable parallel bolak: 4 scenarios passed');

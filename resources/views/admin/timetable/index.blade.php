@@ -1624,6 +1624,9 @@
         #cycDayPop .dp-actions button { border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; padding: 3px 9px;
             font-weight: 800; cursor: pointer; }
         #cycDayPop .dp-actions button:disabled { opacity: .4; cursor: not-allowed; }
+        /* "Vaqtini o'zgartirishni so'rash" — ko'k (umumiy oq-kulrang tugma qoidasi Tailwind bg-blue-600 ni bosib ketmasin; ↑ ↓ — odatdagidek). */
+        #cycDayPop .dp-actions button.dp-ask, #crossCycPop button.dp-ask { background: #2563eb; color: #fff; border: 1px solid #2563eb; }
+        #cycDayPop .dp-actions button.dp-ask:hover, #crossCycPop button.dp-ask:hover { background: #1d4ed8; border-color: #1d4ed8; }
         /* Har 2-soatdan keyin (para chegarasi) to'qroq chiziq */
         #cycleGrid .cyc-mk-cell.is-pair-end { border-bottom-color: rgba(15, 39, 72, .36); }
 
@@ -7768,7 +7771,7 @@
                     (pendingAsk ? '<div class="dp-pending">&#9203; So\'rov: amaliy <b>' + (+pendingAsk.payload.start_hour) + '-soatdan</b> — ' + crStageText(pendingAsk) + '</div>' : '') +
                     // O'qituvchi / fan mas'uli: o'z amaliy darsi yoki mas'ul fanidagi dars (ertangi va keyingi kunlar) — vaqt o'zgarishi so'rovi.
                     (cycCanAsk(dayCard, dp, date, cycLocalToday())
-                        ? '<div class="dp-actions"><button type="button" data-dp-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '') +
+                        ? '<div class="dp-actions"><button type="button" data-dp-ask class="dp-ask px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '') +
                     (canEdit && total > 0
                         ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (Math.min(baseSt, baseSt + psOff) <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
                           '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (Math.max(baseSt + (+dp.lec || 0), baseSt + psOff + (+dp.prc || 0)) - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
@@ -10553,7 +10556,7 @@
                 const partTime = p => { const a = +p.hour || 0, n = +p.hours || 0; return a && hours[a] && hours[a + n - 1] ? hours[a][0] + '–' + hours[a + n - 1][1] : ''; };
                 const partsHtml = parts ? '<div class="dp-sub"><b>Guruhchalar vaqti:</b></div>' + parts.map((p, k) => '<div class="dp-sub">'
                     + esc((p.group_names || [p.group_name]).join(', ')) + ': ' + esc(partTime(p)) + ' (' + (+p.hours || 1) + ' s)'
-                    + (canAsk && p.ask ? ' <button type="button" data-cyc-ask-part="' + k + '" class="px-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button>' : '')
+                    + (canAsk && p.ask ? ' <button type="button" data-cyc-ask-part="' + k + '" class="dp-ask px-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button>' : '')
                     + '</div>').join('') : '';
                 const pop = document.createElement('div');
                 pop.id = 'crossCycPop';
@@ -10570,7 +10573,7 @@
                     cycRoomClashes(l).map(t => '<div class="dp-note" style="color:#b45309">⚠ ' + esc(t) + '</div>').join('') +
                     '<div class="dp-note">Sikl jadvalidagi dars — bu yerda faqat ko\'rish; joyi "Sikl" kesimida.</div>' +
                     (!parts && l.ask && canAsk
-                        ? '<div class="dp-actions"><button type="button" data-cyc-ask class="px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '');
+                        ? '<div class="dp-actions"><button type="button" data-cyc-ask class="dp-ask px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '');
                 document.body.appendChild(pop);
                 const r = anchor.getBoundingClientRect();
                 pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.right + 8)) + 'px';

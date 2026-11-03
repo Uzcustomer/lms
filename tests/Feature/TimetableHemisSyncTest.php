@@ -2507,3 +2507,63 @@ it('bugungi darslar: o\'qituvchisi va xonasi yo\'q LMS kartasi — kafedra mudir
     expect($row)->toMatchArray(['status' => 'info', 'changes' => [], 'new_employee_name' => 'E6006', 'new_auditorium_code' => '73',
         'reason' => "LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri topilmadi — o'zgarishsiz"]);
 });
+
+/** Kartani "vaqtincha kafedra mudirida" qiladi: MUDIR (9001) va «Kafedra mudiri xonasi» (KM1), asl — USTOZ · 71. */
+function hsPlaceholder(TimetableCard $card): void
+{
+    $mudir = Teacher::where('full_name', 'MUDIR')->first();
+    $card->forceFill(['teacher_id' => $mudir->id, 'teacher_name' => 'MUDIR', 'auditorium_code' => 'KM1', 'auditorium_name' => 'Kafedra mudiri xonasi',
+        'mudir_placeholder' => ['teacher_id' => $card->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '71', 'auditorium_name' => '71', 'weeks' => [1]]])->save();
+}
+
+it('bugungi darslar: "vaqtincha — kafedra mudiri" — mudir/mudir xonasi band bo\'lsa ham update (JSON\'da mudir); guruh band — to\'siqli; HEMIS id yo\'q — info', function () {
+    $s = hsSetup();
+    hsPlaceholder($s['card']);
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['emp' => 5001, 'room' => '71'])]]);
+    // MUDIR va KM1 shu vaqtda HEMIS'da boshqa darsda — to'siq emas.
+    foreach ([[600, 2000, 9001, 'Z1'], [601, 2001, 7007, 'KM1']] as [$id, $g, $emp, $room]) {
+        hsInsert('schedules', ['schedule_hemis_id' => $id, 'subject_id' => 1, 'subject_name' => 'Boshqa', 'semester_code' => '11', 'group_id' => $g,
+            'group_name' => 'x' . $g, 'training_type_code' => '13', 'training_type_name' => 'Amaliy', 'lesson_date' => '2026-09-14 00:00:00',
+            'lesson_pair_start_time' => '10:00', 'lesson_pair_end_time' => '11:20', 'employee_id' => $emp, 'employee_name' => 'E' . $emp,
+            'auditorium_code' => $room, 'auditorium_name' => $room === 'KM1' ? 'Kafedra mudiri xonasi' : $room, 'department_id' => 777]);
+    }
+    $res = htCall($s)->assertOk()->json();
+    $row = $res['rows'][0];
+    expect($row)->toMatchArray(['status' => 'update', 'blocked' => [], 'placeholder' => true,
+        'fallback_reason' => "vaqtincha — kafedra mudiri (asl o'qituvchi: USTOZ)"])
+        ->and($row['changes'])->toBe(["o'qituvchi: E5001 → MUDIR", 'xona: 71 → Kafedra mudiri xonasi']);
+    $act = $res['json']['groups'][0]['units'][0]['actions'][0];
+    expect($act)->toMatchArray(['employee_id' => 9001, 'auditorium_code' => 'KM1', 'reason' => "vaqtincha — kafedra mudiri (asl o'qituvchi: USTOZ)"]);
+
+    // Vaqt o'zgaradi (LMS 10:00, HEMIS 08:30) va guruhning shu vaqtda boshqa darsi bor — guruh bandligi qoladi: to'siqli.
+    htFake([1596 => [htItem(1, '2026-09-14', '08:30', '09:50', ['emp' => 5001, 'room' => '71']),
+        htItem(2, '2026-09-14', '10:00', '11:20', ['subject_id' => 475, 'subject' => 'Biologiya', 'emp' => 6006, 'room' => '72'])]]);
+    $row = collect(htCall($s)->assertOk()->json('rows'))->firstWhere('hemis_id', 1);
+    expect($row['status'])->toBe('blocked')->and($row['blocked'][0])->toStartWith('guruhning boshqa darsi bilan ustma-ust');
+
+    // Mudirning HEMIS xodim id'si yo'q — info, JSON'ga tushmaydi.
+    Teacher::where('full_name', 'MUDIR')->update(['hemis_id' => 0]);
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['emp' => 5001, 'room' => '71'])]]);
+    $res = htCall($s)->assertOk()->json();
+    expect($res['rows'][0])->toMatchArray(['status' => 'info', 'reason' => "kafedra mudirining HEMIS xodim id'si yo'q"])
+        ->and($res['json']['groups'])->toBe([]);
+});
+
+it('HEMIS solishtirish: "vaqtincha — kafedra mudiri" — mudir boshqa darsda band bo\'lsa ham to\'siq emas; sabab ustunida asl o\'qituvchi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsPlaceholder($s['card']);
+    // MUDIR 21.09 10:00 da HEMIS'da boshqa guruhda.
+    hsInsert('schedules', ['schedule_hemis_id' => 70, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11',
+        'group_id' => 4444, 'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy',
+        'lesson_date' => '2026-09-21 00:00:00', 'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00',
+        'employee_id' => 9001, 'employee_name' => 'MUDIR', 'auditorium_code' => '98', 'auditorium_name' => '98', 'department_id' => 777]);
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $a = collect($res['groups'][0]['units'][0]['actions'])->first(fn ($a) => $a['date'] === '2026-09-21' && $a['start'] === '10:00');
+    expect($a['employee_id'])->toBe(9001)->and($a['auditorium_code'])->toBe('KM1')->and($a['blocked'])->toBe([])
+        ->and($a['flags'])->toContain('vaqtincha')
+        ->and($a['reason'])->toContain("vaqtincha — kafedra mudiri (asl o'qituvchi: USTOZ)");
+});

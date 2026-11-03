@@ -857,6 +857,8 @@ trait TimetableHemisSync
                     'employee_id' => $c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null,
                     'employee_name' => $c->teacher_id ? $c->teacher_name : null,
                     'auditorium_code' => $room[0] ?: null, 'auditorium_name' => $room[1] ?: null,
+                    // "Vaqtincha kafedra mudirida": asl o'qituvchi nomi (rejada bandligi tekshirilmaydi).
+                    'placeholder' => !empty($c->mudir_placeholder) ? (string) ($c->mudir_placeholder['teacher_name'] ?? '') : null,
                 ];
             }
 
@@ -1213,10 +1215,12 @@ trait TimetableHemisSync
                             ? 'LMS ichki sikl jadvali bo\'yicha (' . $lesson['week'] . '-sikl kuni).'
                             : ($lesson ? $explain($lesson) : 'KTR balansi uchun qo\'shilgan dars (tuzatish takliflariga qarang).');
                     }
-                    if (in_array('mudir', $a['flags'] ?? [], true)) {
+                    if (in_array('vaqtincha', $a['flags'] ?? [], true)) {
+                        $why[] = 'vaqtincha — kafedra mudiri (asl o\'qituvchi: ' . (($a['ph_orig'] ?? '') !== '' ? $a['ph_orig'] : 'biriktirilmagan') . ').';
+                    } elseif (in_array('mudir', $a['flags'] ?? [], true)) {
                         $why[] = 'LMS kartochkasida o\'qituvchi biriktirilmagan — kafedra mudiri qo\'yiladi.';
                     }
-                    if (in_array('mudir_xonasi', $a['flags'] ?? [], true)) {
+                    if (in_array('mudir_xonasi', $a['flags'] ?? [], true) && !in_array('vaqtincha', $a['flags'] ?? [], true)) {
                         $why[] = 'LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo\'yiladi.';
                     }
                     // Xona yoki o'qituvchi LMS'da boshqa — qayerda biriktirilgani.
@@ -1900,9 +1904,10 @@ trait TimetableHemisSync
 
         // LMS'dagi bugungi darslar: guruh kaliti => [dars, ...] (slot va len — yarim-para).
         $lms = [];
-        $lesson = fn (string $subject, string $part, int $slot, int $len, $emp, $empName, $room, $roomName, bool $cycle) => [
+        $lesson = fn (string $subject, string $part, int $slot, int $len, $emp, $empName, $room, $roomName, bool $cycle, ?string $ph = null) => [
             'subject' => $subject, 'key' => $this->hemisSubjectKey($subject), 'part' => $part, 'slot' => $slot, 'len' => max(1, $len),
             'emp' => $emp ?: null, 'emp_name' => $empName ?: null, 'room' => $room ?: null, 'room_name' => $roomName ?: null, 'cycle' => $cycle,
+            'ph' => $ph,
         ];
         if ($weekly) {
             $state = ['cards' => $weekly, 'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($weekly)))];
@@ -1910,7 +1915,8 @@ trait TimetableHemisSync
                 $c = $weekly[$e['card']];
                 $l = $lesson((string) $c->subject_name, $c->training_type === 'lecture' ? 'L' : 'A', (int) $e['from'], (int) $e['to'] - (int) $e['from'],
                     $c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null, $c->teacher_id ? $c->teacher_name : null,
-                    $e['room'], $e['room_name'], false);
+                    $e['room'], $e['room_name'], false,
+                    !empty($c->mudir_placeholder) ? (string) ($c->mudir_placeholder['teacher_name'] ?? '') : null);
                 foreach ($this->cardGroupsOf($c) as $raw) {
                     $lms[$facKey($c->faculty_name) . '|' . $this->groupNameKey(trim((string) $raw))][] = $l;
                 }
@@ -2057,7 +2063,8 @@ trait TimetableHemisSync
                     $h = $H[$hi];
                     // "HEMIS solishtirish" bilan bir xil fallback: LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri (fanning
                     // kafedrasi — HEMIS yozuvidagi department_id), xona biriktirilmagan — "Kafedra mudiri xonasi". HEMIS'dagisi qoldirilmaydi.
-                    $noTeacher = $r['emp_name'] === null;
+                    $ph = $r['ph'] ?? null;   // "vaqtincha kafedra mudirida" — asl o'qituvchi nomi
+                    $noTeacher = $r['emp_name'] === null && $ph === null;
                     $mudir = $noTeacher ? $this->hemisMudirFor($h->department_id) : null;
                     $fbRoom = !$r['room'] ? $this->hemisFallbackRoomFor($h->department_id) : null;
                     $fallback = [];
@@ -2078,8 +2085,18 @@ trait TimetableHemisSync
                         // Mudir qo'yilsa — bandligi tekshiriladi (o'qituvchi biriktirilgandek).
                         'teacher_set' => !$noTeacher || ($mudir && $mudir[0]), 'changes' => [], 'blocked' => [], 'status' => 'ok', 'reason' => null,
                         'code' => (string) $h->training_type_code, 'subject_id' => (int) $h->subject_id, 'cycle' => $r['cycle'],
-                        'fallback_teacher' => $noTeacher && $mudir && $mudir[0], 'fallback_room' => (bool) $fbRoom,
-                        'fallback_reason' => $fallback ? implode('; ', $fallback) : null];
+                        'fallback_teacher' => $noTeacher && $mudir && $mudir[0], 'fallback_room' => (bool) $fbRoom && $ph === null,
+                        'fallback_reason' => $ph !== null ? "vaqtincha — kafedra mudiri (asl o'qituvchi: " . ($ph !== '' ? $ph : 'biriktirilmagan') . ')'
+                            : ($fallback ? implode('; ', $fallback) : null),
+                        'placeholder' => $ph !== null];
+                    // Vaqtincha kafedra mudirida, lekin mudirning HEMIS xodim id'si yo'q — ma'lumot, JSON'ga tushmaydi.
+                    if ($ph !== null && !$r['emp']) {
+                        $why = "kafedra mudirining HEMIS xodim id'si yo'q";
+                        $out[] = array_replace($x, ['new_start' => $x['start'], 'new_end' => $x['end'], 'new_employee_id' => $x['employee_id'],
+                            'new_employee_name' => $x['employee_name'], 'new_auditorium_code' => $x['auditorium_code'], 'new_auditorium_name' => $x['auditorium_name'],
+                            'status' => 'info', 'reason' => $why, 'flow' => null, 'flow_card' => null]);
+                        continue;
+                    }
                     // Mudir topilmadi (yoki HEMIS xodim id'si yo'q) — o'zgarishsiz, ma'lumot (sababi bilan).
                     if ($noTeacher && !($mudir && $mudir[0])) {
                         $why = "LMS kartochkasida o'qituvchi biriktirilmagan — " . ($mudir
@@ -2112,7 +2129,7 @@ trait TimetableHemisSync
                     if ((string) $x['new_auditorium_code'] !== (string) $x['auditorium_code']) {
                         $x['changes'][] = 'xona: ' . ($x['auditorium_name'] ?: '—') . ' → ' . $x['new_auditorium_name'];
                     }
-                    if ($r['emp_name'] !== null && !$r['emp']) {
+                    if ($r['emp_name'] !== null && !$r['emp'] && $ph === null) {
                         $x['note'] = "LMS o'qituvchisi {$r['emp_name']} ning HEMIS xodim id'si yo'q — o'qituvchi solishtirilmadi";
                     }
                     if ($timePassed) {
@@ -2447,11 +2464,13 @@ trait TimetableHemisSync
             $forced = $x ? !$x['teacher_set'] : $isMudir($r->department_id, $r->employee_id);
             // moving — hozirgi joy, lekin dars o'zgartiriladi (shu nomzod indeksi): u ko'chgach bo'shaydi.
             // flow — LMS oqim kaliti: o'zgarmaydigan (ok) darsning hozirgi joyi LMS'dagisi bilan bir xil; o'zgaradiganniki — yangi joyida.
-            $spots[] = $base + ['s' => $hm($r->lesson_pair_start_time), 'e' => $hm($r->lesson_pair_end_time), 'emp' => (string) $r->employee_id,
+            // Vaqtincha kafedra mudirida (LMS) — mudir va mudir xonasi boshqalar uchun bandlik emas.
+            $forced = $forced || !empty($x['placeholder']);
+            $spots[] = $base + ['ph' => !empty($x['placeholder']), 's' => $hm($r->lesson_pair_start_time), 'e' => $hm($r->lesson_pair_end_time), 'emp' => (string) $r->employee_id,
                 'emp_name' => $r->employee_name, 'room' => (string) $r->auditorium_code, 'room_name' => $r->auditorium_name, 'forced' => $forced,
                 'moving' => $candOf[(int) $id] ?? null, 'flow' => $x && $x['status'] === 'ok' ? ($x['flow'] ?? null) : null];
             if ($x && $x['status'] === 'update') {
-                $spots[] = $base + ['s' => $x['new_start'], 'e' => $x['new_end'], 'emp' => (string) $x['new_employee_id'], 'emp_name' => $x['new_employee_name'],
+                $spots[] = $base + ['ph' => !empty($x['placeholder']), 's' => $x['new_start'], 'e' => $x['new_end'], 'emp' => (string) $x['new_employee_id'], 'emp_name' => $x['new_employee_name'],
                     'room' => (string) $x['new_auditorium_code'], 'room_name' => $x['new_auditorium_name'], 'forced' => $forced, 'moving' => null,
                     'flow' => $x['flow'] ?? null];
             }
@@ -2479,8 +2498,9 @@ trait TimetableHemisSync
             // boshqa hollarda umumiy hisoblanadi, bu yerda — yo'q; mudirning boshqa "biriktirilmagan" darslari ham band hisoblanadi).
             $fbEmp = !empty($x['fallback_teacher']);
             $fbRoom = !empty($x['fallback_room']);
-            $checkEmp = $emp !== '' && $x['teacher_set'] && ($timeChanged || $emp !== (string) $x['employee_id']);
-            $checkRoom = $room !== '' && ($fbRoom || !$freeRoom($x['new_auditorium_name'])) && ($timeChanged || $room !== (string) $x['auditorium_code']);
+            $isPh = !empty($x['placeholder']);   // vaqtincha kafedra mudirida — o'qituvchi va xona bandligi tekshirilmaydi (guruh — tekshiriladi)
+            $checkEmp = !$isPh && $emp !== '' && $x['teacher_set'] && ($timeChanged || $emp !== (string) $x['employee_id']);
+            $checkRoom = !$isPh && $room !== '' && ($fbRoom || !$freeRoom($x['new_auditorium_name'])) && ($timeChanged || $room !== (string) $x['auditorium_code']);
             $seen = [];
             foreach ($spots as $o) {
                 if ($o['id'] === $x['hemis_id'] || !($o['s'] < $e && $s < $o['e'])) {
@@ -2503,7 +2523,7 @@ trait TimetableHemisSync
                     $text = "guruhning boshqa darsi bilan ustma-ust: {$o['subject']} {$o['s']}–{$o['e']}";
                 } elseif ($checkEmp && !$shared && ($fbEmp || !$o['forced']) && $o['emp'] === $emp) {
                     $text = ($fbEmp ? 'kafedra mudiri band: ' : "o'qituvchi band: ") . "{$x['new_employee_name']} — {$label}";
-                } elseif ($checkRoom && !$shared && $o['room'] === $room && ($fbRoom || !$freeRoom($o['room_name']))) {
+                } elseif ($checkRoom && !$shared && empty($o['ph']) && $o['room'] === $room && ($fbRoom || !$freeRoom($o['room_name']))) {
                     $text = ($fbRoom ? 'kafedra mudiri xonasi band: ' : 'xona band: ') . "{$x['new_auditorium_name']} — {$label}";
                     // Boshqa guruhning shu fan ma'ruzasi aynan shu vaqtda shu zalda — nega bitta oqim emas va yechim.
                     if (!empty($x['flow_card']) && $o['flow'] === null && $o['code'] === '11' && $o['s'] === $s && $o['e'] === $e

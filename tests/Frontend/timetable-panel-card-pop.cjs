@@ -6,7 +6,7 @@ const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin
 
 // "Joylanmagan kartalar" paneli: karta oynasi (o'qituvchi, xona, tashqi jadval, havolalar), qisman joylangan belgisi va tugmalari,
 // bitta birlikning "yaxlit joylash"i (card_ids), natija oynasi (alert emas).
-const a = source.indexOf('            // ===== "Joylanmagan kartalar" paneli:');
+const a = source.indexOf('            // ===== "Vaqtincha kafedra mudiriga yozish"');
 const b = source.indexOf('            function renderPanel() {', a);
 assert(a > 0 && b > a);
 const helpers = source.slice(source.indexOf('            // ===== Birlik: dars yaxlit joylanadi ====='),
@@ -19,7 +19,7 @@ function el(tag) {
     const e = { tag, children: [], style: {}, attrs: {}, classList: { s: new Set(), add(c) { this.s.add(c); }, remove(c) { this.s.delete(c); }, contains(c) { return this.s.has(c); } },
         listeners: {}, innerHTML: '', offsetHeight: 200,
         setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; doc.body.children = doc.body.children.filter(x => x !== this); },
-        contains(x) { return x === this; }, querySelector() { return null; }, getBoundingClientRect: () => ({ left: 10, right: 200, top: 50 }) };
+        contains(x) { return x === this; }, qs: doc.nextQs || null, querySelector(sel) { return this.qs ? this.qs(sel) : null; }, getBoundingClientRect: () => ({ left: 10, right: 200, top: 50 }) };
     return e;
 }
 const doc = { body: { children: [], appendChild(x) { this.children.push(x); } }, createElement: el,
@@ -40,9 +40,9 @@ const cards = [
 ];
 const calls = [], agenda = [], proposals = [];
 const ctx = {
-    document: doc, window: { innerWidth: 1400, innerHeight: 900, ev: {}, addEventListener(t, f) { this.ev[t] = f; }, removeEventListener(t) { delete this.ev[t]; } }, setTimeout: () => 0, Date, Math, Object, String, JSON, Set, Map, Promise,
+    document: doc, window: { innerWidth: 1400, innerHeight: 900, ev: {}, addEventListener(t, f) { this.ev[t] = f; }, removeEventListener(t) { delete this.ev[t]; } }, setTimeout: () => 0, URLSearchParams, Date, Math, Object, String, JSON, Set, Map, Promise,
     cards, overrides: { '3|8': { day: 2, pair: 3, cancelled: false } }, curWeek: 8, weeklyLayer: 'internal', BASE: '', board: { id: 7 },
-    TIMETABLE_READ_ONLY: false, TIMETABLE_ROLE: 'kafedra_mudiri', teacherFullNames: { 5: 'CHORIYEVA GULNORA YUSUPOVNA' }, audCache: null,
+    TIMETABLE_READ_ONLY: false, TIMETABLE_ROLE: 'kafedra_mudiri', WEEKLY_ADMIN: false, effPlace: c => vm.runInContext('placeInWeek', ctx)(c, 8), $: () => null, teacherFullNames: { 5: 'CHORIYEVA GULNORA YUSUPOVNA' }, audCache: null,
     esc: s => String(s), cardLen: c => c.len_half, cardGKeys: c => ['F|S|1|' + c.group_name], cardGroups: c => [c.group_name], isCycleCardAny: () => false,
     effectiveCard: c => c, weeklyCanEdit: () => true, boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
     boardSchedule: () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i], abbr: ab[i] })),
@@ -52,13 +52,16 @@ const ctx = {
     loadBoard: async () => {}, confirm: () => true,
     api: async (url, method, body) => {
         calls.push([url, body && JSON.parse(JSON.stringify(body))]);
+        if (url.includes('/mudir-placeholder?')) return ctx.phInfo;
+        if (url.endsWith('/mudir-placeholder/revert')) { if (ctx.revertFail) throw new Error(ctx.revertFail); return { ok: true }; }
+        if (url.endsWith('/mudir-placeholder')) return { ok: true };
         if (url.endsWith('/unit-fix')) return { done: 0, failed: [{ group: 'd2/d26-07b (rus)', subject: 'Tibbiyotda axborot texnologiyalari', day: 'Seshanba',
             error: "3 soat sig'maydi: 10:00 dan keyin 2 soat bo'sh", card_ids: [3, 4] }] };
         return { unit: [{ id: 1, active: true, day: 2, pair: 3 }, { id: 2, active: true, day: 2, pair: 5 }] };
     },
 };
 vm.createContext(ctx);
-vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
+vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { openMudirPhConfirm, mudirPhSectionHtml, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
 // dragPlan — haqiqiy (bo'sh joy).
 vm.runInContext(source.slice(source.indexOf('            function dragPlan('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig')), ctx);
 
@@ -159,5 +162,46 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     assert.match(html6, /<li>C<\/li><\/ul><ul data-pop-rest hidden[^>]*><li>D<\/li><li>E<\/li><\/ul><a href="#" data-pop-more data-label="yana 2 ta ▾"/);
     assert.deepEqual(JSON.parse(JSON.stringify(ctx.panelPopSplitError("4 soat sig'maydi: 13:30 dan keyin 2 soat bo'sh — Guruh band: x — y · O'qituvchi band: z"))),
         { title: "4 soat sig'maydi: 13:30 dan keyin 2 soat bo'sh", items: ['Guruh band: x — y', "O'qituvchi band: z"] });
-    console.log('timetable panel card pop: 6 scenarios passed');
+    // 7) "Vaqtincha kafedra mudiriga yozish": tugma (kech kelgan holat), sahifa ichidagi tasdiq matni, so'rov; mudir topilmasa — o'chiq.
+    const tick = () => new Promise(r => setImmediate(r));
+    ctx.phInfo = { ok: false, why: "Kafedra mudiri topilmadi (shu kafedraga «kafedra_mudiri» roli berilgan xodim yo'q).", mudir: null, room: null, slot: { day: 2, pair: 3 } };
+    const btnEl = { disabled: true, title: '' }, whyEl = { textContent: '' };
+    doc.nextQs = sel => (sel === '[data-pop-mudir]' ? btnEl : sel === '[data-pop-mudir-why]' ? whyEl : null);
+    ctx.openPanelCardPop(cards[0], el());
+    doc.nextQs = null;
+    let pm = doc.getElementById('pnCardPop');
+    assert.match(pm.innerHTML, /<button type="button" data-pop-mudir disabled title="tekshirilmoqda…"[^>]*>Vaqtincha kafedra mudiriga yozish<\/button>/);
+    await tick(); await tick();
+    assert.equal(btnEl.disabled, true);
+    assert.match(whyEl.textContent, /Kafedra mudiri topilmadi/);
+    assert.deepEqual(calls.filter(c => c[0].includes('/mudir-placeholder?')).pop(), ['/cards/1/mudir-placeholder?week=8&day=2&pair=3', undefined]);
+    ctx.closePanelCardPop();
+    // Mudir bor — tasdiq oynasi (sahifa ichida) va yozish so'rovi.
+    ctx.phInfo = { ok: true, mudir: { id: 9, name: 'XOLMATOV A. B.' }, room: { code: 'KM1', name: 'Kafedra mudiri xonasi' }, slot: { day: 2, pair: 3 }, len: 3 };
+    const modal = await ctx.openMudirPhConfirm(cards[0], { day: 2, pair: 3 });
+    assert.match(modal.innerHTML, /d2\/d26-01b \(rus\) · Tibbiy va biologik fizika — Seshanba, II para \(10:00–12:40\) ga kafedra mudiri XOLMATOV A\. B\. nomiga, «Kafedra mudiri xonasi»da yoziladi\. To'qnashuv tekshirilmaydi\./);
+    assert.match(modal.innerHTML, /data-ph-reason/);
+    assert.match(modal.innerHTML, /value="rest"> shu va keyingi haftalar/);
+    const okBtn = { disabled: false };
+    modal.querySelector = sel => (sel === 'input[name="phScope"]:checked' ? { value: 'rest' } : sel === '[data-ph-reason]' ? { value: 'xona band' } : null);
+    await modal.listeners.click({ target: { closest: sel => (sel === '[data-ph-ok]' ? okBtn : null) } });
+    assert.deepEqual(calls.filter(c => c[0] === '/cards/1/mudir-placeholder').pop(), ['/cards/1/mudir-placeholder',
+        { week: 8, scope: 'rest', day: 2, pair: 3, reason: 'xona band' }]);
+    // Mudir topilmagan — tasdiq oynasida faqat sabab, "Yozish" tugmasi yo'q.
+    ctx.phInfo = { ok: false, why: 'Kafedra mudiri topilmadi.' };
+    const m2 = await ctx.openMudirPhConfirm(cards[0], { day: 2, pair: 3 });
+    assert.match(m2.innerHTML, /data-ph-why[^>]*>Kafedra mudiri topilmadi\./);
+    assert.doesNotMatch(m2.innerHTML, /data-ph-ok/);
+
+    // 8) Panel bo'limi: "Vaqtincha kafedra mudirida: N ta", asl o'qituvchi va qaytarish tugmasi; qaytarish band — qizil sabab.
+    const phCard = Object.assign({}, cards[2], { id: 30, mudir_placeholder: { teacher_name: 'ALIYEV SH. N.', reason: 'xona band' } });
+    let sec = ctx.mudirPhSectionHtml([phCard]);
+    assert.match(sec, /Vaqtincha kafedra mudirida: <b>1 ta<\/b>/);
+    assert.match(sec, /\(asl o'qituvchi: ALIYEV SH\. N\.\)/);
+    assert.match(sec, /data-ph-revert="30"[^>]*>Asl o'qituvchiga qaytarish/);
+    ctx.revertFail = "Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta: O'qituvchi band: ALIYEV SH. N. — …";
+    await ctx.mudirPhRevert(phCard, { disabled: false });
+    sec = ctx.mudirPhSectionHtml([phCard]);
+    assert.match(sec, /✖ Asl o'qituvchiga qaytarib bo'lmaydi — band: 8-hafta: O'qituvchi band/);
+    console.log('timetable panel card pop: 8 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

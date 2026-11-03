@@ -48,6 +48,7 @@ class TimetableController extends Controller
     use Concerns\TimetableCycleShiftAdvice;
     use Concerns\TimetableTeacherAgenda;
     use Concerns\TimetableWeeklyUnits;
+    use Concerns\TimetableMudirPlaceholder;
 
     public function index(Request $request)
     {
@@ -3100,6 +3101,7 @@ class TimetableController extends Controller
             'auditorium_name' => $c->auditorium_name,
             // Biriktirilgan auditoriya sig'imi (kartada "xona (sig'im)" uchun)
             'auditorium_volume' => $c->auditorium_code ? ($roomVol[$c->auditorium_code] ?? null) : null,
+            'mudir_placeholder' => $c->mudir_placeholder ?? null,
             'day' => $c->day,
             'pair' => $c->pair,
             'start_half' => (int) ($c->start_half ?? 0),
@@ -6920,7 +6922,8 @@ class TimetableController extends Controller
         $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
         $grids = [];     // kalendar (panjara) => ['mon' => [dushanba => hafta], 'ids' => [karta, ...]]
         foreach ($rows as $id => $c) {
-            if ($isCycle($c)) {
+            // "Vaqtincha kafedra mudirida" — doskada to'qnashuv deb sanalmaydi va boshqalarni ham to'qnashuvli qilmaydi.
+            if ($isCycle($c) || !empty($c->mudir_placeholder)) {
                 continue;
             }
             $gk = $c->faculty_name . '|' . $c->specialty_name . '|' . (int) $c->course . '|' . $this->cardCurriculumId($c);
@@ -7141,12 +7144,20 @@ class TimetableController extends Controller
         $out = [];
         foreach ($q->orderBy('id')->get(['id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'group_name',
             'group_names', 'subject_name', 'kafedra_name', 'students', 'teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name', 'day',
-            'pair', 'start_half', 'len_half']) as $r) {
+            'pair', 'start_half', 'len_half', ...($this->hasMudirPlaceholderColumn() ? ['mudir_placeholder'] : [])]) as $r) {
             $r->group_names = is_string($r->group_names) ? (json_decode($r->group_names, true) ?: null) : $r->group_names;
+            $r->mudir_placeholder = is_string($r->mudir_placeholder ?? null) ? (json_decode($r->mudir_placeholder, true) ?: null) : ($r->mudir_placeholder ?? null);
             $out[(int) $r->id] = $r;
         }
 
         return $out;
+    }
+
+    private ?bool $mudirPhColumn = null;
+
+    private function hasMudirPlaceholderColumn(): bool
+    {
+        return $this->mudirPhColumn ??= Schema::hasColumn('timetable_cards', 'mudir_placeholder');
     }
 
     /** Haftalik istisnolar (o — timetable_card_overrides, c — kartalar) qatorlari: karta => hafta => qator. */
@@ -10550,6 +10561,10 @@ class TimetableController extends Controller
     /** Ikki dars bir vaqtda: guruh (bir yo'nalish+kurs ichida, bo'lak qo'shnilaridan tashqari), o'qituvchi va xona bandligi. */
     private function clashWith(TimetableCard $card, ?string $myRoom, TimetableCard $o, ?string $oRoom, ?string $oRoomName): array
     {
+        // "Vaqtincha kafedra mudirida" — to'qnashuv tekshirilmaydi va boshqa kartalarni ham to'qnashuvli qilmaydi.
+        if (!empty($card->mudir_placeholder) || !empty($o->mudir_placeholder)) {
+            return [];
+        }
         $errors = [];
         // Guruh konflikti — bir yo'nalish+kurs ichida
         if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {

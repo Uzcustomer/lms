@@ -9412,10 +9412,12 @@
                 const pop = document.createElement('div');
                 pop.id = 'pnCardPop';
                 pop.setAttribute('role', 'dialog');
-                pop.style.cssText = 'position:fixed;z-index:75;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px #0003;padding:8px 10px;font-size:12px;width:min(340px,92vw)';
+                // Balandligi ekrandan oshmaydi (ichida scroll), sarlavha (fan nomi, ×) yuqorida yopishib turadi.
+                pop.style.cssText = 'position:fixed;z-index:75;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px #0003;padding:0 10px 8px;font-size:12px;'
+                    + 'width:min(340px,92vw);max-height:calc(100vh - 16px);overflow-y:auto;box-sizing:border-box';
                 const row = (label, body) => '<div style="margin-top:4px"><span style="color:#64748b">' + label + ':</span> ' + body + '</div>';
                 const link = (attr, text) => '<a href="#" class="tt-agenda-link" ' + attr + '>' + esc(text) + '</a>';
-                pop.innerHTML = '<div style="display:flex;justify-content:space-between;gap:6px"><b>' + esc(c.subject_name) + '</b>' +
+                pop.innerHTML = '<div class="pn-pop-head" style="position:sticky;top:0;z-index:1;background:#fff;display:flex;justify-content:space-between;gap:6px;padding-top:8px;padding-bottom:2px"><b>' + esc(c.subject_name) + '</b>' +
                     '<button type="button" data-pop-close aria-label="Yopish" style="font-size:16px;line-height:1">&times;</button></div>' +
                     '<div style="color:#64748b">' + esc((c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + cardGroups(c).join(', ')) +
                         (len ? ' · ' + len + ' soat' : '')) + '</div>' +
@@ -9429,11 +9431,29 @@
                     (TIMETABLE_ROLE === 'oqituvchi' ? '<button type="button" data-pop-propose style="border:1px solid #7c3aed;color:#6d28d9;background:#f5f3ff;border-radius:5px;padding:1px 8px">Vaqtini o\'zgartirishni so\'rash</button>' : '') +
                     '</div>';
                 document.body.appendChild(pop);
-                const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { left: 8, right: 8, top: 8 };
-                const left = r.right + 8 + 340 < window.innerWidth ? r.right + 8 : Math.max(8, r.left - 348);
-                pop.style.left = left + 'px';
-                pop.style.top = Math.max(8, Math.min(window.innerHeight - (pop.offsetHeight || 220) - 8, r.top)) + 'px';
-                const msg = (text, bad) => { const m = pop.querySelector('[data-pop-msg]'); if (m) { m.style.color = bad ? '#b91c1c' : '#166534'; m.textContent = text; } };
+                // Joylashuv — har kontent o'zgarishida (kech kelgan "Band: …", yana N ta), oyna o'lchami va scroll'da qayta hisoblanadi.
+                const reposition = () => panelPopPlace(pop, el);
+                panelPopState = { pop, reposition, ro: null };
+                if (typeof ResizeObserver === 'function') { panelPopState.ro = new ResizeObserver(reposition); panelPopState.ro.observe(pop); }
+                window.addEventListener('resize', reposition);
+                window.addEventListener('scroll', reposition, true);
+                reposition();
+                // Xabar: sarlavha va ro'yxat (takrorlar olib tashlanadi, dastlabki 3 tasi, qolgani "yana N ta ▾" bilan).
+                const msg = (text, bad, items) => {
+                    const m = pop.querySelector('[data-pop-msg]');
+                    if (!m) return;
+                    m.style.color = bad ? '#b91c1c' : '#166534';
+                    m.innerHTML = panelPopMsgHtml(text, items || []);
+                    const more = m.querySelector('[data-pop-more]');
+                    if (more) more.onclick = ev => {
+                        ev.preventDefault(); ev.stopPropagation();
+                        const open = m.querySelector('[data-pop-rest]').hidden;
+                        m.querySelector('[data-pop-rest]').hidden = !open;
+                        more.textContent = open ? 'yig\'ish ▴' : more.dataset.label;
+                        reposition();
+                    };
+                    reposition();
+                };
                 pop.addEventListener('click', async ev => {
                     const t = ev.target.closest ? ev.target.closest('[data-pop-close],[data-pop-teacher],[data-pop-room],[data-pop-ext],[data-pop-place],[data-pop-select],[data-pop-propose]') : null;
                     if (!t) return;
@@ -9454,7 +9474,8 @@
                     const plan = dragPlan([list[0].id], ext.day, ext.pair, false);
                     if (plan && plan.errs.length) {
                         const why = plan.errs.filter(x => x !== 'kun oxiri');
-                        msg(why.length ? 'Band: ' + why.join('; ') : "Sig'maydi: kun oxirigacha joy yetmaydi", true);
+                        if (why.length) msg('Band:', true, why);
+                        else msg("Sig'maydi: kun oxirigacha joy yetmaydi", true);
                         return;
                     }
                     t.disabled = true;
@@ -9464,10 +9485,43 @@
                         selected = null;
                         renderAll();
                         gotoGridSlot(c, ext.day, ext.pair);
-                    } catch (err) { msg(err.message, true); t.disabled = false; }
+                    } catch (err) { const pe = panelPopSplitError(err.message); msg(pe.title, true, pe.items); t.disabled = false; }
                 });
                 setTimeout(() => document.addEventListener('mousedown', panelPopOutside, true), 0);
                 document.addEventListener('keydown', panelPopKey, true);
+            }
+            let panelPopState = null;   // { pop, reposition, ro } — ochiq oyna (yopilganda tinglovchilar olinadi)
+            // Oyna joyi: kartaning o'ng tomoni (sig'masa — chap, yana sig'masa — ekran ichiga siqiladi); vertikal — karta tepasidan pastga,
+            // pastda joy yetmasa — kartaning ustiga (pastki cheti karta pastida), so'ng ekran ichiga: clamp(8, top, innerHeight − h − 8).
+            function panelPopPlace(pop, el) {
+                if (!pop || !pop.style) return;
+                const W = window.innerWidth || 1024, H = window.innerHeight || 768;
+                const w = pop.offsetWidth || 340, h = Math.min(pop.offsetHeight || 220, H - 16);
+                const r = el && el.getBoundingClientRect && el.isConnected !== false ? el.getBoundingClientRect() : panelPopPlace.last || { left: 8, right: 8, top: 8, bottom: 8 };
+                panelPopPlace.last = r;
+                const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+                let left = r.right + 8;
+                if (left + w > W - 8) left = r.left - w - 8 >= 8 ? r.left - w - 8 : clamp(r.left, 8, W - w - 8);
+                let top = r.top;
+                if (top + h > H - 8) top = (r.bottom || r.top) - h;   // pastda joy yo'q — yuqoriga ochiladi
+                pop.style.left = Math.round(clamp(left, 8, Math.max(8, W - w - 8))) + 'px';
+                pop.style.top = Math.round(clamp(top, 8, Math.max(8, H - h - 8))) + 'px';
+            }
+            // Server xatosi ("4 soat sig'maydi: 13:30 dan keyin 2 soat bo'sh — A · B · …") → sarlavha va sabablar ro'yxati.
+            function panelPopSplitError(text) {
+                const parts = String(text || '').split(' · ');
+                let title = 'Band:';
+                const m = /^(.*?sig'maydi:[^—]*?) — (.*)$/.exec(parts[0]);
+                if (m) { title = m[1]; parts[0] = m[2]; } else if (parts.length === 1 && !/band/i.test(parts[0])) return { title: parts[0], items: [] };
+                return { title, items: parts };
+            }
+            function panelPopMsgHtml(title, items) {
+                const uniq = [...new Set((items || []).map(x => String(x).trim()).filter(Boolean))];
+                const li = x => '<li>' + esc(x) + '</li>';
+                const rest = uniq.slice(3);
+                return '<div>' + esc(title) + '</div>' + (uniq.length ? '<ul style="margin:2px 0 0;padding-left:16px">' + uniq.slice(0, 3).map(li).join('') + '</ul>' : '') +
+                    (rest.length ? '<ul data-pop-rest hidden style="margin:0;padding-left:16px">' + rest.map(li).join('') + '</ul>' +
+                        '<a href="#" data-pop-more data-label="yana ' + rest.length + ' ta ▾" style="text-decoration:underline dotted">yana ' + rest.length + ' ta ▾</a>' : '');
             }
             function panelPopOutside(ev) {
                 const pop = document.getElementById('pnCardPop');
@@ -9477,6 +9531,12 @@
             function closePanelCardPop() {
                 const pop = document.getElementById('pnCardPop');
                 if (pop) pop.remove();
+                if (panelPopState) {
+                    window.removeEventListener('resize', panelPopState.reposition);
+                    window.removeEventListener('scroll', panelPopState.reposition, true);
+                    if (panelPopState.ro) panelPopState.ro.disconnect();
+                    panelPopState = null;
+                }
                 document.removeEventListener('mousedown', panelPopOutside, true);
                 document.removeEventListener('keydown', panelPopKey, true);
             }

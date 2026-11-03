@@ -40,7 +40,7 @@ const cards = [
 ];
 const calls = [], agenda = [], proposals = [];
 const ctx = {
-    document: doc, window: { innerWidth: 1400, innerHeight: 900 }, setTimeout: () => 0, Date, Math, Object, String, JSON, Set, Map, Promise,
+    document: doc, window: { innerWidth: 1400, innerHeight: 900, ev: {}, addEventListener(t, f) { this.ev[t] = f; }, removeEventListener(t) { delete this.ev[t]; } }, setTimeout: () => 0, Date, Math, Object, String, JSON, Set, Map, Promise,
     cards, overrides: { '3|8': { day: 2, pair: 3, cancelled: false } }, curWeek: 8, weeklyLayer: 'internal', BASE: '', board: { id: 7 },
     TIMETABLE_READ_ONLY: false, TIMETABLE_ROLE: 'kafedra_mudiri', teacherFullNames: { 5: 'CHORIYEVA GULNORA YUSUPOVNA' }, audCache: null,
     esc: s => String(s), cardLen: c => c.len_half, cardGKeys: c => ['F|S|1|' + c.group_name], cardGroups: c => [c.group_name], isCycleCardAny: () => false,
@@ -58,7 +58,7 @@ const ctx = {
     },
 };
 vm.createContext(ctx);
-vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
+vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
 // dragPlan — haqiqiy (bo'sh joy).
 vm.runInContext(source.slice(source.indexOf('            function dragPlan('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig')), ctx);
 
@@ -124,5 +124,40 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     assert.match(res.innerHTML, /Yaxlit joylandi: 0 ta · joylanmadi: 1 ta/);
     assert.match(res.innerHTML, /<b>d2\/d26-07b \(rus\) · Tibbiyotda axborot texnologiyalari<\/b> \(Seshanba\): 3 soat sig'maydi/);
     assert.doesNotMatch(source.slice(a, b), /\balert\(/);
-    console.log('timetable panel card pop: 4 scenarios passed');
+    // 5) Joylashuv (768px balandlik): ekran pastidagi karta — oyna kartaning ustiga ochiladi; kech kelgan "Band" yozuvidan keyin ham
+    // ekrandan chiqmaydi; juda baland — yuqoridan 8px (ichida scroll: max-height calc(100vh − 16px), sarlavha sticky).
+    ctx.window.innerHeight = 768; ctx.window.innerWidth = 1024;
+    const card = Object.assign(el(), { isConnected: true, getBoundingClientRect: () => ({ left: 40, right: 260, top: 700, bottom: 740 }) });
+    ctx.openPanelCardPop(cards[0], card);
+    const pp = doc.getElementById('pnCardPop');
+    assert.match(pp.style.cssText, /max-height:calc\(100vh - 16px\);overflow-y:auto/);
+    assert.match(pp.innerHTML, /class="pn-pop-head" style="position:sticky;top:0/);
+    pp.offsetWidth = 340; pp.offsetHeight = 300;
+    ctx.panelPopPlace(pp, card);
+    assert.deepEqual([pp.style.left, pp.style.top], ['268px', '440px']);   // o'ngda, karta ustiga (740 − 300)
+    pp.offsetHeight = 520;   // kech kelgan "Band: …" — cho'zildi
+    ctx.window.ev.scroll();   // scroll / resize / ResizeObserver — reposition
+    assert.equal(pp.style.top, '220px');
+    assert.ok(220 + 520 <= 768 - 8);
+    pp.offsetHeight = 900;   // ekrandan baland — yuqoridan 8px, ichida scroll
+    ctx.panelPopPlace(pp, card);
+    assert.equal(pp.style.top, '8px');
+    // O'ngda joy yo'q — chapga; chapda ham yo'q — ekran ichiga siqiladi.
+    const right = Object.assign(el(), { isConnected: true, getBoundingClientRect: () => ({ left: 700, right: 1000, top: 100, bottom: 140 }) });
+    pp.offsetHeight = 200;
+    ctx.panelPopPlace(pp, right);
+    assert.deepEqual([pp.style.left, pp.style.top], ['352px', '100px']);
+    const wide = Object.assign(el(), { isConnected: true, getBoundingClientRect: () => ({ left: 100, right: 900, top: 100, bottom: 140 }) });
+    ctx.panelPopPlace(pp, wide);
+    assert.equal(pp.style.left, '100px');
+    ctx.closePanelCardPop();
+    assert.equal(ctx.window.ev.scroll, undefined);
+
+    // 6) "Band: …": takrorlar olib tashlanadi, dastlabki 3 tasi, qolgani "yana N ta ▾"; server xatosi sarlavha va ro'yxatga.
+    const html6 = ctx.panelPopMsgHtml('Band:', ['Auditoriya band: 428 — A', 'Auditoriya band: 428 — A', 'B', 'C', 'D', 'E']);
+    assert.equal((html6.match(/Auditoriya band: 428/g) || []).length, 1);
+    assert.match(html6, /<li>C<\/li><\/ul><ul data-pop-rest hidden[^>]*><li>D<\/li><li>E<\/li><\/ul><a href="#" data-pop-more data-label="yana 2 ta ▾"/);
+    assert.deepEqual(JSON.parse(JSON.stringify(ctx.panelPopSplitError("4 soat sig'maydi: 13:30 dan keyin 2 soat bo'sh — Guruh band: x — y · O'qituvchi band: z"))),
+        { title: "4 soat sig'maydi: 13:30 dan keyin 2 soat bo'sh", items: ['Guruh band: x — y', "O'qituvchi band: z"] });
+    console.log('timetable panel card pop: 6 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

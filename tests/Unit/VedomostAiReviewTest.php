@@ -230,7 +230,8 @@ test('svodnaya hisobot (sanasiz): standart — shakllarsiz jami + rad etilganlar
     $a = reviewSub(21, 'Xirurgiya', null);
     \App\Models\VedomostSubmissionLog::create(['vedomost_submission_id' => $a->id, 'action' => 'reject', 'to_status' => 'rejected']);
     \App\Models\VedomostSubmissionLog::create(['vedomost_submission_id' => $a->id, 'action' => 'approve', 'to_status' => 'approved']);
-    $agg = collect([(object) ['id' => $a->id, 'ids' => [$a->id], 'status' => 'approved', 'form_type' => '12a']]);
+    $agg = collect([(object) ['id' => $a->id, 'ids' => [$a->id], 'status' => 'approved', 'form_type' => '12a'],
+        (object) ['id' => 999, 'ids' => [999], 'status' => 'pending', 'form_type' => '12', 'deadline' => '2026-01-10']]);
     $m = new ReflectionMethod(VedomostSubmissionController::class, 'reportFormSections');
     $m->setAccessible(true);
     $ctl = app(VedomostSubmissionController::class);
@@ -238,10 +239,12 @@ test('svodnaya hisobot (sanasiz): standart — shakllarsiz jami + rad etilganlar
     [$sec, $c] = $m->invoke($ctl, $agg, VedomostSubmission::statusLabels(), [], false);
     [$secF, $cF] = $m->invoke($ctl, $agg, VedomostSubmission::statusLabels(), [], true);
 
-    expect(array_column($sec, 'key'))->toBe(['all', 'fate'])
-        ->and($c[$a->id])->toBe(['all|approved' => 1, 'fate|passed' => 1])
+    expect(array_column($sec, 'key'))->toBe(['sum', 'all', 'fate'])
+        ->and($sec[0]['noTotal'])->toBeTrue()
+        ->and($c[$a->id])->toBe(['all|approved' => 1, 'sum|submitted' => 1, 'sum|approved' => 1, 'fate|passed' => 1, 'sum|rejected' => 1])
         ->and($cF[$a->id])->toMatchArray(['12a|approved' => 1, 'fate|passed' => 1])
-        ->and(count($secF))->toBeGreaterThan(2);
+        ->and($c[999])->toBe(['all|pending' => 1, 'sum|due' => 1])
+        ->and(count($secF))->toBeGreaterThan(3);
 });
 
 test('svodnaya hisobot (davr): reja — muddatida / kechikib / topshirilmagan; «Davri boshiga» bo\'sh bo\'lsa chiqmaydi', function () {

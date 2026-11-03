@@ -1314,6 +1314,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'saveGrid'])->name('boards.grid');
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
                 Route::post('/cards/{card}/week-override', [\App\Http\Controllers\Admin\TimetableController::class, 'weekOverride'])->name('cards.week-override');
+                // Darsning yaxlit joylanishi (birlik: 2 soat + 1 soat bo'laklari birga), qisman joylanganlar ro'yxati va tuzatish.
+                Route::post('/cards/{card}/unit-place', [\App\Http\Controllers\Admin\TimetableController::class, 'unitPlace'])->name('cards.unit-place');
+                Route::get('/boards/{board}/partial-units', [\App\Http\Controllers\Admin\TimetableController::class, 'partialUnits'])->name('boards.partial-units');
+                Route::post('/boards/{board}/unit-fix', [\App\Http\Controllers\Admin\TimetableController::class, 'unitFix'])->name('boards.unit-fix');
                 Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
                 Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');
                 Route::get('/teachers/departments', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherDepartments'])->name('teachers.departments');

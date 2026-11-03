@@ -3632,8 +3632,8 @@
                 board = j.board; allCards = j.cards || [];
                 teacherFullNames = Object.assign({}, j.teacher_full_names || {});
                 invalidateWeeklyConflicts();
-                teacherPhones = Object.assign({}, j.teacher_phones || {});   // {id: {text, tel}} — faqat ko'rishga huquq bo'lsa
                 invalidateCycleWeek();
+                teacherPhones = Object.assign({}, j.teacher_phones || {});   // {id: {text, tel}} — faqat ko'rishga huquq bo'lsa
                 specIndex = Array.isArray(j.spec_index) ? j.spec_index : [];
                 loadedSpecs = j.filter && Array.isArray(j.filter.loaded_specs) ? new Set(j.filter.loaded_specs.map(r => specTriple(r[0], r[1], r[2]))) : null;
                 loadedWeeks = j.filter && Array.isArray(j.filter.weeks) ? new Set(j.filter.weeks.map(Number)) : null;

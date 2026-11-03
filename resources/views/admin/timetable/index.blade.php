@@ -2856,7 +2856,8 @@
                     + infoOnlyBadgeHtml(card) + '</div>';
             }
             function hemisInfoNoticeHtml(rep) {
-                return rep.info_only_notice ? '<div class="text-xs text-gray-500 my-2">' + esc(rep.info_only_notice) + '</div>' : '';
+                return (rep.info_only_notice ? '<div class="text-xs text-gray-500 my-2">' + hsEsc(rep.info_only_notice) + '</div>' : '')
+                    + (rep.warnings || []).map(w => '<div class="text-xs text-amber-700 my-2">' + hsEsc(w) + '</div>').join('');
             }
             // Kartani tanlangan qatlamga moslaydi: tashqida joylashuv ext_day/ext_pair, o'qituvchi va xona yashiriladi.
             function applyWeeklyLayer(list) {
@@ -4120,7 +4121,7 @@
             let hemisSyncLast = null;
             let hemisSyncUntil = null;
             let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
-            let hemisSyncFilter = { onlyDiff: true, periodMatch: true, finished: false, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null, groups: null };   // subjects / groups: null — barcha fanlar / guruhlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncFilter = { missingRoomOnly: false, onlyDiff: true, periodMatch: true, finished: false, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null, groups: null };   // subjects / groups: null — barcha fanlar / guruhlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -4252,7 +4253,8 @@
                         : '<b>' + hsEsc(b.teacher || 'O\'qituvchi') + '</b> ' + hsEsc(b.time) + ' da boshqa darsda')
                     + ': ' + hsEsc(b.source || '') + ' · ' + hsEsc(b.group || '') + ' · «' + hsEsc(b.subject || '') + '»'
                     + (b.type === 'room' && b.teacher ? ' · o\'qituvchi: ' + hsEsc(b.teacher) : '')
-                    + (b.type === 'teacher' && b.room ? ' · xona: ' + hsEsc(b.room) : '') + '</div>').join('')
+                    + (b.type === 'teacher' && b.room ? ' · xona: ' + hsEsc(b.room) : '')
+                    + (b.other_groups ? ' · yana ' + (+b.other_groups) + ' ta guruh' : '') + '</div>').join('')
                     + (other.length ? '<div class="ml-3 mt-0.5 text-red-700">' + hsEsc(other.join('; ')) + '</div>' : '');
                 const flags = (a.flags && a.flags.length) ? ' <span class="text-indigo-600 text-[10px]">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '';
                 const reason = a.reason ? '<div class="ml-3 text-gray-500 italic text-[10px]">Sabab: ' + hsEsc(a.reason) + flags + '</div>' : (flags ? '<div class="ml-3">' + flags + '</div>' : '');
@@ -4264,9 +4266,9 @@
                 if (!k.size || (a.blocked || []).length > (a.blocks || []).length) k.add('other');
                 return [...k];
             };
-            const hsOpOk = a => (a.blocked && a.blocked.length)
+            const hsOpOk = a => (!hemisSyncFilter.missingRoomOnly || a.missing_room) && ((a.blocked && a.blocked.length)
                 ? hemisSyncFilter.ops.blocked && hsBlockKinds(a).some(k => hemisSyncFilter.blk[k])
-                : !!hemisSyncFilter.ops[a.op];
+                : !!hemisSyncFilter.ops[a.op]);
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
                 let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0, opHidden: 0, periodHidden: 0, finishedHidden: 0 };
@@ -4274,10 +4276,11 @@
                 const opsNarrowed = !(F.ops.create && F.ops.update && F.ops.delete && F.ops.blocked && F.blk.room && F.blk.teacher && F.blk.other);
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;
+                const missingRoomCount = rep.groups.filter(hsGroupOk).reduce((n, g) => n + g.units.filter(hsSubjOk).reduce((m, u) => m + (u.missing_room_lessons || []).length, 0), 0);
                 for (const g of rep.groups) {
                     if (!hsGroupOk(g)) continue;
                     // Fan filtrida tanlanmaganlar "mos" emas — yashirilgan mos fanlar soniga qo'shilmaydi.
-                    const picked = g.units.filter(hsSubjOk);
+                    const picked = g.units.filter(hsSubjOk).filter(u => !F.missingRoomOnly || (u.missing_room_lessons || []).length || (u.actions || []).some(a => a.missing_room));
                     const shown = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
                     tot.hidden += picked.length - shown.length;
                     // Faqat ko'rinish: bu fanlarning tanlangan davrda amali yo'q — Excel / JSON / to'siq xabarlari o'zgarmaydi.
@@ -4292,9 +4295,9 @@
                     const skippedPicked = opsNarrowed ? [] : g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name));
                     // Darslari tugagan fanlar (bugun va o'tgan kunlar HEMIS'da tahrirlanmaydi — qiladigan ish yo'q) sukutda yashirin;
                     // "joylanmagan" va "kartochka yo'q" — haqiqiy muammo, doim ko'rinadi.
-                    const skippedShown = F.finished ? skippedPicked : skippedPicked.filter(x => x.kind !== 'finished');
+                    const skippedShown = F.missingRoomOnly ? [] : (F.finished ? skippedPicked : skippedPicked.filter(x => x.kind !== 'finished'));
                     tot.finishedHidden += skippedPicked.length - skippedShown.length;
-                    const noSubjCards = opsNarrowed ? [] : (g.cards_without_subject || []);
+                    const noSubjCards = opsNarrowed || F.missingRoomOnly ? [] : (g.cards_without_subject || []);
                     if (!units.length && !skippedShown.length && !noSubjCards.length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
@@ -4337,6 +4340,9 @@
                         tot.later += u.actions_later || 0;
                         acts.forEach(a => { if (a.blocked && a.blocked.length) tot.blocked++; else { cnt[a.op]++; tot[a.op]++; } });
                         const list = acts.map(a => hsActionHtml(a, u)).join('');
+                        const missingList = F.missingRoomOnly && (u.missing_room_lessons || []).length
+                            ? '<details class="text-violet-700"><summary>Xonasi bo‘sh: ' + u.missing_room_lessons.length + ' ta dars</summary>'
+                                + u.missing_room_lessons.map(l => '<div>' + hsEsc(l.date + ' ' + l.start + '–' + l.end + ' · ' + (l.employee_name || '—') + ' · ' + (l.auditorium_name || 'xona bog‘lanmagan')) + '</div>').join('') + '</details>' : '';
                         const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
                         body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name)
                             + (u.cycle ? ' <span class="px-1 rounded bg-sky-100 text-sky-700 text-[10px]" title="Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma\'lumot)">sikl</span>' : '') + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
@@ -4348,7 +4354,7 @@
                                 : (u.actions.length ? '<span class="text-gray-400">filtrda yashirin</span>'
                                     // Tanlangan haftagacha amal yo'q, lekin keyingi haftalarda bor — "mos" emas (filtrda ham yashirilmaydi).
                                     : u.actions_later ? '<span class="text-emerald-600">bu davrda mos</span><div class="text-amber-700">keyingi haftalarda ' + u.actions_later + ' ta amal</div>'
-                                    : '<span class="text-emerald-600">mos</span>')) + '</td></tr>';
+                                    : '<span class="text-emerald-600">mos</span>')) + missingList + '</td></tr>';
                     }
                     // Fan filtri tanlangan bo'lsa — o'tkazilgan fanlar ham faqat tanlanganlari.
                     for (const sk of skippedShown) {
@@ -4372,6 +4378,7 @@
                     ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Keyin HEMIS sahifasida (kirib turgan holda) shu xatcho\\\'pni bosing va yuklab olingan JSON faylni tanlang.\'); return false;"' +
                     ' title="Sichqoncha bilan xatcho\'plar paneliga torting, so\'ng HEMIS sahifasida bosing" class="px-2 py-1 rounded border border-indigo-400 bg-indigo-50 text-indigo-700 cursor-move">⭐ HEMIS\'ga yozish (xatcho\'p)</a>' +
                     '<button type="button" id="hsClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
+                    '<div class="text-violet-700 mb-1">Xonasi bo‘sh: ' + missingRoomCount + ' ta dars (mudir xonasi qo‘yiladi)</div>' +
                     hsUnplacedBanner(rep) +
                     '<div class="flex flex-wrap items-center gap-3 mb-2 p-2 bg-gray-50 rounded border">' +
                     '<label class="text-gray-700">Hisob davri: <select id="hsPFrom" class="border rounded px-1 py-0.5 text-[12px]">' + wkOpt(pf, w => w.week + '-hafta (' + hsEsc(w.from) + ')') + '</select>' +
@@ -4379,7 +4386,7 @@
                     '<label class="text-gray-700">HEMIS\'ga yozish: <select id="hsUntil" class="border rounded px-1 py-0.5 text-[12px]">' +
                     wkOpt(rep.until_week, w => w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')') +
                     '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
-                    '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
+                    '<span class="text-gray-700">' + chk('hsMissingRooms', F.missingRoomOnly, 'Faqat xonasi bo‘sh') + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
                     chk('hsPeriodMatch', F.periodMatch, '<span title="Tanlangan davrgacha amali yo\'q, keyingi haftalarda amali bor fanlar">Bu davrda moslar</span>') +
                     chk('hsFinished', F.finished, '<span title="LMS ichki jadvalida ertadan keyin darsi yo\'q fanlar — bugun va o\'tgan kunlar HEMIS\'da tahrirlanmaydi">Tugagan fanlar</span>') +
                     chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') +
@@ -4423,13 +4430,16 @@
                 $('hsPTo').onchange = perChange;
                 const reFilter = () => {
                     F.onlyDiff = $('hsOnlyDiff').checked;
+                    const missingRoomOnly = $('hsMissingRooms').checked;
+                    if (missingRoomOnly && !F.missingRoomOnly) F.onlyDiff = false;
+                    F.missingRoomOnly = missingRoomOnly;
                     F.periodMatch = $('hsPeriodMatch').checked;
                     F.finished = $('hsFinished').checked;
                     F.ops = { create: $('hsOpC').checked, update: $('hsOpU').checked, delete: $('hsOpD').checked, blocked: $('hsOpB').checked };
                     F.blk = { room: $('hsBlkRoom').checked, teacher: $('hsBlkTeacher').checked, other: $('hsBlkOther').checked };
                     hemisSyncRender(rep);
                 };
-                ['hsOnlyDiff', 'hsPeriodMatch', 'hsFinished', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
+                ['hsMissingRooms', 'hsOnlyDiff', 'hsPeriodMatch', 'hsFinished', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
                 $('hsOnlyBlocked').onclick = () => {
                     F.ops = { create: false, update: false, delete: false, blocked: true };
                     hemisSyncRender(rep);
@@ -4470,6 +4480,7 @@
                     if (hemisSyncUntil !== null) add('until_week', hemisSyncUntil);
                     if (hemisSyncPeriod) { add('period_from', hemisSyncPeriod.from); add('period_to', hemisSyncPeriod.to); }
                     add('only_diff', F.onlyDiff ? 1 : 0);
+                    add('missing_room_only', F.missingRoomOnly ? 1 : 0);
                     add('ops_filter', 1);   // hech biri tanlanmasa ham — Excel'da amal bo'lmaydi
                     Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));
                     Object.keys(F.blk).filter(k => F.blk[k]).forEach(k => add('blk[]', k));
@@ -4635,7 +4646,8 @@
             };
             let hemisTodayLast = null;
             let hemisTodayGroup = '';   // oynadagi guruh filtri ('' — hammasi): ko'rinish, JSON va Excel
-            const htRows = (rep, group) => (rep.rows || []).filter(r => !group || r.group === group);
+            let hemisTodayMissingRooms = false;
+            const htRows = (rep, group) => (rep.rows || []).filter(r => (!group || r.group === group) && (!hemisTodayMissingRooms || r.missing_room));
             const htDate = d => String(d || '').split('-').reverse().join('.');
             function hemisTodayHtml(rep, group) {
                 const rows = htRows(rep, group);
@@ -4643,6 +4655,8 @@
                 const groups = [...new Set((rep.rows || []).map(r => r.group))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
                 const head = '<div class="flex flex-wrap items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">Bugun (' + hsEsc(htDate(rep.today)) + '): ' +
                     rows.length + ' ta dars · ' + n('update') + ' ta o\'zgartiriladi · ' + n('locked') + ' ta davomat/baho bor — tegilmaydi · ' + n('blocked') + ' ta to\'siqli</h3>' +
+                    '<span class="text-violet-700">Xonasi bo‘sh: ' + (rep.rows || []).filter(r => (!group || r.group === group) && r.missing_room).length + ' ta dars (mudir xonasi qo‘yiladi)</span>' +
+                    '<label><input id="htMissingRooms" type="checkbox"' + (hemisTodayMissingRooms ? ' checked' : '') + '> Faqat xonasi bo‘sh</label>' +
                     '<select id="htGroup" class="border rounded px-1 py-0.5"><option value="">Barcha guruhlar</option>' +
                     groups.map(g => '<option value="' + hsEsc(g) + '"' + (g === group ? ' selected' : '') + '>' + hsEsc(g) + '</option>').join('') + '</select>' +
                     '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
@@ -4685,8 +4699,9 @@
             // Xatcho'p uchun JSON: faqat to'siqsiz o'zgartirishlar (server tayyorlagan, today: true), tanlangan guruh bo'yicha.
             function hemisTodayJson(rep, group) {
                 const out = JSON.parse(JSON.stringify(rep.json || {}));
+                const ids = new Set(htRows(rep, group).filter(r => r.status === 'update').map(r => +r.hemis_id));
                 out.groups = (out.groups || []).filter(g => !group || g.group === group)
-                    .map(g => Object.assign(g, { units: g.units.map(u => Object.assign(u, { actions: u.actions.filter(a => a.op === 'update' && a.today === true) })) }));
+                    .map(g => Object.assign(g, { units: g.units.map(u => Object.assign(u, { actions: u.actions.filter(a => a.op === 'update' && a.today === true && (!hemisTodayMissingRooms || ids.has(+a.hemis_id))) })) }));
                 return out;
             }
             function hemisTodayExcel(rep, group) {
@@ -4704,6 +4719,7 @@
             }
             function hemisTodayRender(rep) {
                 const m = hemisSyncModal(hemisTodayHtml(rep, hemisTodayGroup));
+                $('htMissingRooms').onchange = e => { hemisTodayMissingRooms = e.target.checked; hemisTodayRender(rep); };
                 $('htGroup').onchange = e => { hemisTodayGroup = e.target.value; hemisTodayRender(rep); };
                 $('htClose').onclick = () => m.remove();
                 $('htJson').onclick = () => {
@@ -4723,6 +4739,7 @@
                 try {
                     hemisTodayLast = await api(BASE + '/boards/' + board.id + '/hemis-today', 'POST', scopeBody());
                     hemisTodayGroup = '';
+                    hemisTodayMissingRooms = false;
                     hemisTodayRender(hemisTodayLast);
                 } catch (e) {
                     hemisSyncModal('<div class="p-4 text-red-600">' + hsEsc(hsErrText(e)) + '</div>' + HS_CLOSE);

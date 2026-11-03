@@ -792,6 +792,9 @@ trait TimetableHemisSync
         $this->hemisMudirMemo = [];
         $this->hemisMudirRoomsMemo = null;
         $this->hemisInactiveRoomsMemo = null;
+        $this->hemisRoomDepartmentNames = [];
+        $roomWarnings = [];
+        $missingRoomCount = 0;
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
         $q = TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board));
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
@@ -1205,7 +1208,17 @@ trait TimetableHemisSync
                 if (!empty($r['other_type_rows'])) {
                     $r['notes'][] = "HEMIS'da rejaga kirmagan turdagi {$r['other_type_rows']} ta kelajak dars bor — o'zgartirilmaydi, vaqti band hisoblanadi.";
                 }
+                $r['missing_room_lessons'] = [];
                 foreach ($r['records'] as $rec) {
+                    $isMissingRoom = in_array('mudir_xonasi', $rec['flags'] ?? [], true) && !in_array('vaqtincha', $rec['flags'] ?? [], true);
+                    if ($isMissingRoom && ($until === null || $rec['date'] <= $until)) {
+                        $r['missing_room_lessons'][] = array_intersect_key($rec, array_flip(['date', 'start', 'end', 'code', 'employee_name', 'auditorium_code', 'auditorium_name', 'blocked']));
+                        $missingRoomCount++;
+                        if (empty($unitByKey[$r['key']]['fallback_room'])) {
+                            $warning = $this->hemisMissingRoomWarning(null, (string) ($r['kafedra'] ?? ''));
+                            $roomWarnings[$warning] = true;
+                        }
+                    }
                     $finals[] = ['key' => $r['key'], 'label' => $gname . ' · ' . $r['subject_name']] + $rec;
                 }
                 unset($r['records']);
@@ -1233,6 +1246,7 @@ trait TimetableHemisSync
                         $a['card_id'] = $lesson['card_id'] ?? null;
                         $a['week'] = $lesson['week'] ?? null;
                     }
+                    $a['missing_room'] = in_array('mudir_xonasi', $a['flags'] ?? [], true) && !in_array('vaqtincha', $a['flags'] ?? [], true);
                     $why = [];
                     $timeChanged = $a['op'] === 'create' || (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, 'vaqt'));
                     if ($timeChanged) {
@@ -1246,7 +1260,8 @@ trait TimetableHemisSync
                         $why[] = 'LMS kartochkasida o\'qituvchi biriktirilmagan — kafedra mudiri qo\'yiladi.';
                     }
                     if (in_array('mudir_xonasi', $a['flags'] ?? [], true) && !in_array('vaqtincha', $a['flags'] ?? [], true)) {
-                        $why[] = 'LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo\'yiladi.';
+                        $why[] = !empty($a['auditorium_code']) ? 'LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo\'yiladi.'
+                            : $this->hemisMissingRoomWarning(null, (string) ($r['kafedra'] ?? ''));
                     }
                     // Xona yoki o'qituvchi LMS'da boshqa — qayerda biriktirilgani.
                     $changed = fn (string $p) => (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, $p));
@@ -1294,6 +1309,8 @@ trait TimetableHemisSync
             'today' => $today,
             'info_only_notice' => \App\Services\Timetable\InfoOnlyCourses::hemisNotice($board),
             'board_id' => $board->id,
+            'missing_room_count' => $missingRoomCount,
+            'warnings' => array_keys($roomWarnings),
             'fallback_room' => $fallbackRoom ? ['code' => $fallbackRoom->code, 'name' => $fallbackRoom->name] : null,
             'hemis_pairs' => self::HEMIS_PAIRS,
             'until_week' => $untilWeek ?? $currentWeekOut,
@@ -1400,6 +1417,8 @@ trait TimetableHemisSync
             if ($id === '' || in_array($flag, $a['flags'] ?? [], true) || ($type === 'r' && $freeRoom($a))) {
                 return null;
             }
+            $found = null;
+            $groups = [];
             foreach ($idx[$type . '|' . $id . '|' . $a['date']] ?? [] as [$s, $e, $k, $label, $oEmp, $oRoom, $info]) {
                 if ($k === $unitKey && $s === $a['start']) {
                     continue;   // shu yozuvning o'zi
@@ -1426,13 +1445,19 @@ trait TimetableHemisSync
                         : (($info['teacher'] ?? null) ? ", o'qituvchi " . $info['teacher'] : '');
                     $text = "{$msg}: " . ($who !== '' ? $who . ' — ' : '') . "{$label} {$s}-{$e}{$where}{$why}";
 
-                    return ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
+                    $found ??= ['type' => $type === 'r' ? 'room' : 'teacher', 'time' => $s . '–' . $e, 'text' => $text,
                         'room' => $type === 'r' ? ($a['auditorium_name'] ?? $id) : ($info['room'] ?? null),
                         'teacher' => $type === 'e' ? ($a['employee_name'] ?? null) : ($info['teacher'] ?? null)] + $info;
+                    if (!empty($info['group'])) $groups[(string) $info['group']] = true;
                 }
             }
 
-            return null;
+            if ($found && count($groups) > 1) {
+                $found['other_groups'] = count($groups) - 1;
+                $found['groups'] = array_keys($groups);
+                $found['text'] .= ' · yana ' . $found['other_groups'] . ' ta guruh';
+            }
+            return $found;
         };
         // Umumiy dars: bir vaqtda, bitta o'qituvchi bitta xonada bir necha guruhga (oqim ma'ruzasi, birlashgan amaliy).
         // Har guruhda alohida yozuv — lekin to'qnashuvda bitta birlik: bo'linib ketmasin.
@@ -1590,6 +1615,7 @@ trait TimetableHemisSync
         $resp = $this->hemisSyncCompare($request, $board);
         $rep = $resp->getData(true);
         $onlyDiff = $request->boolean('only_diff');
+        $missingRoomOnly = $request->boolean('missing_room_only');
         $ops = $request->boolean('ops_filter') ? (array) $request->input('ops', []) : null;
         $subjects = $request->boolean('subjects_filter') ? (array) $request->input('subjects', []) : null;
         $groups = $request->boolean('groups_filter') ? (array) $request->input('filter_groups', []) : null;
@@ -1603,7 +1629,8 @@ trait TimetableHemisSync
 
             return $k;
         };
-        $opOk = function (array $a) use ($ops, $blk, $blockKinds): bool {
+        $opOk = function (array $a) use ($ops, $blk, $blockKinds, $missingRoomOnly): bool {
+            if ($missingRoomOnly && empty($a['missing_room'])) return false;
             if (!empty($a['blocked'])) {
                 return ($ops === null || in_array('blocked', $ops, true))
                     && ($blk === null || (bool) array_intersect($blockKinds($a), $blk));
@@ -1641,6 +1668,7 @@ trait TimetableHemisSync
                 continue;
             }
             foreach ($g['units'] as $u) {
+                if ($missingRoomOnly && empty($u['missing_room_lessons'])) continue;
                 if ($onlyDiff && $this->hemisUnitMatches($u)) {
                     continue;
                 }
@@ -1730,15 +1758,12 @@ trait TimetableHemisSync
     }
 
     /**
-     * Biriktirilmagan xona o'rniga: avval fanning o'z kafedrasining "Kafedra mudiri xonasi" (auditoriums.department_hemis_id), so'ng
-     * kafedrasiz umumiy xona, bo'lmasa — istalgan shunday xona. [kod, nomi] | null.
+     * Biriktirilmagan xona o'rniga faqat fanning o'z kafedrasiga bog'langan mudir xonasi. [kod, nomi] | null.
      */
     private function hemisFallbackRoomFor($deptId): ?array
     {
         $rooms = $this->hemisMudirRooms();
-        $room = ($deptId ? $rooms->first(fn ($a) => (string) $a->department_hemis_id === (string) $deptId) : null)
-            ?? $rooms->first(fn ($a) => !$a->department_hemis_id)
-            ?? $rooms->first();
+        $room = $deptId ? $rooms->first(fn ($a) => (string) $a->department_hemis_id === (string) $deptId) : null;
 
         return $room ? [$room->code, $room->name] : null;
     }
@@ -1760,6 +1785,17 @@ trait TimetableHemisSync
         }
 
         return $this->hemisMudirMemo[(string) $deptId];
+    }
+
+    private array $hemisRoomDepartmentNames = [];
+
+    private function hemisMissingRoomWarning($deptId, ?string $name = null): string
+    {
+        if (!trim((string) $name) || ctype_digit((string) $name)) {
+            $name = $this->hemisRoomDepartmentNames[(string) $deptId] ??= (string) (DB::table('departments')
+                ->where('department_hemis_id', $deptId)->value('name') ?: ($name ?: 'kafedra aniqlanmagan'));
+        }
+        return "Kafedra mudiri xonasi kafedraga bog'lanmagan (HEMIS): " . $name;
     }
 
     private $hemisMudirRoomsMemo = null;
@@ -1915,6 +1951,8 @@ trait TimetableHemisSync
         $this->hemisMudirMemo = [];
         $this->hemisMudirRoomsMemo = null;
         $this->hemisInactiveRoomsMemo = null;
+        $this->hemisRoomDepartmentNames = [];
+        $roomWarnings = [];
         $t0 = microtime(true);
         $hemisMs = 0;   // HEMIS'ni kutish (jadval importi + davomat/baho) — "≤ 10 s" tekshiruvi uchun javobda
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
@@ -2014,7 +2052,7 @@ trait TimetableHemisSync
             ->orderBy('lesson_pair_start_time')->orderBy('schedule_hemis_id')
             ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_id', 'subject_name', 'training_type_code', 'training_type_name',
                 'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name',
-                'department_id', 'semester_code', 'education_year_code'])->groupBy('group_id') : collect();
+                'department_id', 'department_name', 'semester_code', 'education_year_code'])->groupBy('group_id') : collect();
 
         $toMin = fn (string $t) => (int) substr($t, 0, 2) * 60 + (int) substr($t, 3, 2);
         $hm = fn ($t) => substr((string) $t, 0, 5);
@@ -2124,9 +2162,13 @@ trait TimetableHemisSync
                         : ($hemisRoomOff ? "LMS kartochkasida xona biriktirilmagan, HEMIS'dagi xona nofaol («" . ($h->auditorium_name ?: $h->auditorium_code)
                             . "») — qoldirilmaydi; «Kafedra mudiri xonasi» topilmadi" : null);
                     $fallback = [];
+                    $missingRoomWarning = !$r['room'] && !$fbRoom && $ph === null
+                        ? $this->hemisMissingRoomWarning($h->department_id, $h->department_name) : null;
+                    if ($missingRoomWarning) $roomWarnings[$missingRoomWarning] = true;
                     if ($noTeacher && $mudir && $mudir[0]) {
                         $fallback[] = "LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri qo'yiladi";
                     }
+                    if ($missingRoomWarning) $fallback[] = $missingRoomWarning;
                     if ($fbRoom) {
                         $fallback[] = "LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo'yiladi";
                     }
@@ -2141,6 +2183,8 @@ trait TimetableHemisSync
                         // Mudir qo'yilsa — bandligi tekshiriladi (o'qituvchi biriktirilgandek).
                         'teacher_set' => !$noTeacher || ($mudir && $mudir[0]), 'changes' => [], 'blocked' => [], 'status' => 'ok', 'reason' => null,
                         'code' => (string) $h->training_type_code, 'subject_id' => (int) $h->subject_id, 'cycle' => $r['cycle'],
+                        'missing_room' => !$r['room'] && $ph === null,
+                        'flags' => $fbRoom && $ph === null ? ['mudir_xonasi'] : [],
                         'fallback_teacher' => $noTeacher && $mudir && $mudir[0], 'fallback_room' => (bool) $fbRoom && $ph === null,
                         'fallback_reason' => $ph !== null ? "vaqtincha — kafedra mudiri (asl o'qituvchi: " . ($ph !== '' ? $ph : 'biriktirilmagan') . ')'
                             : ($fallback ? implode('; ', $fallback) : null),
@@ -2199,6 +2243,7 @@ trait TimetableHemisSync
                     if ($x['changes']) {
                         $x['status'] = 'update';
                     }
+                    $x['reason'] ??= $x['fallback_reason'];
                     if ($roomBlock !== null && $ph === null) {
                         $x['status'] = 'blocked';
                         $x['blocked'][] = $roomBlock;
@@ -2209,6 +2254,7 @@ trait TimetableHemisSync
                     if (!isset($usedR[$ri])) {
                         $out[] = ['group' => $gname, 'group_hemis_id' => $gid, 'subject' => $r['subject'], 'type' => $r['part'] === 'L' ? 'Ma\'ruza' : 'Amaliy',
                             'hemis_id' => null, 'start' => $r['start'], 'end' => $r['end'], 'employee_name' => $r['emp_name'], 'auditorium_name' => $r['room_name'],
+                            'missing_room' => !$r['room'] && ($r['ph'] ?? null) === null,
                             'status' => 'info', 'changes' => [], 'blocked' => [], 'reason' => 'yangi dars kerak — bugun qo\'shilmaydi', 'cycle' => $r['cycle']];
                     }
                 }
@@ -2271,6 +2317,7 @@ trait TimetableHemisSync
                 'start' => $x['new_start'], 'end' => $x['new_end'], 'code' => $x['code'],
                 'employee_id' => $x['new_employee_id'], 'employee_name' => $x['new_employee_name'],
                 'auditorium_code' => $x['new_auditorium_code'], 'auditorium_name' => $x['new_auditorium_name'], 'changes' => $x['changes'], 'blocked' => [],
+                'missing_room' => (bool) ($x['missing_room'] ?? false), 'flags' => $x['flags'] ?? [],
                 'reason' => $x['fallback_reason'] ?? null];
         }
         foreach ($jsonGroups as &$jg) {
@@ -2288,6 +2335,8 @@ trait TimetableHemisSync
         return [
             'today' => $today,
             'info_only_notice' => \App\Services\Timetable\InfoOnlyCourses::hemisNotice($board),
+            'warnings' => array_keys($roomWarnings),
+            'missing_room_count' => count(array_filter($out, fn ($x) => !empty($x['missing_room']))),
             'counts' => ['lessons' => count($out), 'updates' => $count('update'), 'locked' => $count('locked'), 'blocked' => $count('blocked'),
                 'info' => $count('info'), 'ok' => $count('ok')],
             'rows' => $rows,
@@ -2532,10 +2581,12 @@ trait TimetableHemisSync
             $forced = $forced || !empty($x['placeholder']);
             $spots[] = $base + ['ph' => !empty($x['placeholder']), 's' => $hm($r->lesson_pair_start_time), 'e' => $hm($r->lesson_pair_end_time), 'emp' => (string) $r->employee_id,
                 'emp_name' => $r->employee_name, 'room' => (string) $r->auditorium_code, 'room_name' => $r->auditorium_name, 'forced' => $forced,
+                'room_placeholder' => !empty($x['fallback_room']) && (string) $r->auditorium_code === (string) $x['new_auditorium_code'],
                 'moving' => $candOf[(int) $id] ?? null, 'flow' => $x && $x['status'] === 'ok' ? ($x['flow'] ?? null) : null];
             if ($x && $x['status'] === 'update') {
                 $spots[] = $base + ['ph' => !empty($x['placeholder']), 's' => $x['new_start'], 'e' => $x['new_end'], 'emp' => (string) $x['new_employee_id'], 'emp_name' => $x['new_employee_name'],
-                    'room' => (string) $x['new_auditorium_code'], 'room_name' => $x['new_auditorium_name'], 'forced' => $forced, 'moving' => null,
+                    'room' => (string) $x['new_auditorium_code'], 'room_name' => $x['new_auditorium_name'], 'forced' => $forced,
+                    'room_placeholder' => !empty($x['fallback_room']), 'moving' => null,
                     'flow' => $x['flow'] ?? null];
             }
         }
@@ -2558,14 +2609,14 @@ trait TimetableHemisSync
             if ($room === '') {
                 $blocked[] = "xona yo'q (LMS'da biriktirilmagan, HEMIS'da ham yo'q)";
             }
-            // Fallback (LMS'da biriktirilmagan): kafedra mudiri va "Kafedra mudiri xonasi" — shu vaqtda band bo'lsa to'siq (mudir xonasi
-            // boshqa hollarda umumiy hisoblanadi, bu yerda — yo'q; mudirning boshqa "biriktirilmagan" darslari ham band hisoblanadi).
+            // Biriktirilmagan xona uchun mudir xonasi — vaqtinchalik belgi. O'qituvchining bandlik qoidalari saqlanadi.
             $fbEmp = !empty($x['fallback_teacher']);
             $fbRoom = !empty($x['fallback_room']);
             $isPh = !empty($x['placeholder']);   // vaqtincha kafedra mudirida — o'qituvchi va xona bandligi tekshirilmaydi (guruh — tekshiriladi)
             $checkEmp = !$isPh && $emp !== '' && $x['teacher_set'] && ($timeChanged || $emp !== (string) $x['employee_id']);
-            $checkRoom = !$isPh && $room !== '' && ($fbRoom || !$freeRoom($x['new_auditorium_name'])) && ($timeChanged || $room !== (string) $x['auditorium_code']);
+            $checkRoom = !$fbRoom && !$isPh && $room !== '' && !$freeRoom($x['new_auditorium_name']) && ($timeChanged || $room !== (string) $x['auditorium_code']);
             $seen = [];
+            $resourceBlocks = [];
             foreach ($this->isNonBlocking($x, $policyBoard) ? [] : $spots as $o) {
                 if ($o['id'] === $x['hemis_id'] || !($o['s'] < $e && $s < $o['e'])) {
                     continue;
@@ -2583,13 +2634,16 @@ trait TimetableHemisSync
                         && $this->hemisSubjectBase((string) $o['subject']) === explode('|', $x['flow_card'])[0]
                         && $this->hemisFlowCovers($flowGroups, $x['flow_card'], (string) $o['group']);
                 $text = null;
+                $resourceKey = null;
                 // Parallel bo'laklar ("Fan (a)" / "Fan (b)", bir tur) — guruhning turli talabalari, yonma-yon tura oladi.
                 if ($timeChanged && $o['group_id'] === (int) $x['group_hemis_id']
                     && !((string) $o['code'] === (string) ($x['code'] ?? '') && self::bolakSubjects((string) $o['subject'], (string) $x['subject']))) {
                     $text = "guruhning boshqa darsi bilan ustma-ust: {$o['subject']} {$o['s']}–{$o['e']}";
                 } elseif ($checkEmp && !$shared && ($fbEmp || !$o['forced']) && $o['emp'] === $emp) {
+                    $resourceKey = 'teacher|' . $emp;
                     $text = ($fbEmp ? 'kafedra mudiri band: ' : "o'qituvchi band: ") . "{$x['new_employee_name']} — {$label}";
-                } elseif ($checkRoom && !$shared && empty($o['ph']) && $o['room'] === $room && ($fbRoom || !$freeRoom($o['room_name']))) {
+                } elseif ($checkRoom && !$shared && empty($o['ph']) && empty($o['room_placeholder']) && $o['room'] === $room && !$freeRoom($o['room_name'])) {
+                    $resourceKey = 'room|' . $room;
                     $text = ($fbRoom ? 'kafedra mudiri xonasi band: ' : 'xona band: ') . "{$x['new_auditorium_name']} — {$label}";
                     // Boshqa guruhning shu fan ma'ruzasi aynan shu vaqtda shu zalda — nega bitta oqim emas va yechim.
                     if (!empty($x['flow_card']) && $o['flow'] === null && $o['code'] === '11' && $o['s'] === $s && $o['e'] === $e
@@ -2604,8 +2658,15 @@ trait TimetableHemisSync
                     $deps[$i][$o['moving']] ??= $text;   // hozirgi joyi — u ko'chgach bo'shaydi
                 } elseif (!isset($seen[$text])) {
                     $seen[$text] = true;
-                    $blocked[] = $text;
+                    if ($resourceKey !== null) {
+                        $resourceBlocks[$resourceKey] ??= ['text' => $text, 'groups' => []];
+                        $resourceBlocks[$resourceKey]['groups'][(string) $o['group']] = true;
+                    } else $blocked[] = $text;
                 }
+            }
+            foreach ($resourceBlocks as $block) {
+                $extra = max(0, count($block['groups']) - 1);
+                $blocked[] = $block['text'] . ($extra ? ' · yana ' . $extra . ' ta guruh' : '');
             }
             if ($blocked) {
                 $blockedBy[$i] = $blocked;

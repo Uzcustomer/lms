@@ -14,7 +14,7 @@ function section(from, to) {
 const els = {};
 let blob = null;
 const ctx = {
-    $: id => els[id] || (els[id] = { id, value: '1', checked: true }),
+    $: id => els[id] || (els[id] = { id, value: '1', checked: id !== 'hsMissingRooms' }),
     document: { querySelectorAll: () => [], createElement: () => ({ click() {}, remove() {} }), body: { appendChild() {} }, addEventListener() {} },
     scopeLabelText: () => 'Hammasi', HS_WRITER_URL: '/js/hemis-writer.js',
     Blob, URL: { createObjectURL: b => { blob = b; return 'blob:test'; } },

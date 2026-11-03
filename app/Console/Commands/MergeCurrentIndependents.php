@@ -169,7 +169,7 @@ class MergeCurrentIndependents extends Command
             }
         }
         if (!$force) {
-            $this->comment("Bu faqat hisobot. Birlashtirish uchun: php artisan independents:merge-current --force");
+            $this->comment("Bu faqat hisobot. Birlashtirish uchun: php artisan independents:merge-current --force" . ($latestFile ? ' --latest-file' : ''));
         }
 
         return self::SUCCESS;

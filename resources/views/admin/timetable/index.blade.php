@@ -8950,8 +8950,11 @@
                         sc.filter(c => effPlace(c)).length + '</b> · Sikl: <b>' + cycleWeekLessons().length + '</b> dars</span>' : '';
                 $('statChips').innerHTML = first + crossCount +
                     '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600" title="Haftalik jadval kartalari (sikl fanlari bundan tashqari — ular sikl kalendarida)">Doska bo\'yicha (haftalik): <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
-                $('unplacedCount').textContent = (sc.length - placed) + ' ta';
-                $('unplacedExportBtn').classList.toggle('hidden', !sc.some(c => !effPlace(c) || cardConflict(c)));
+                // Sikl rejimida panel soni va eksport tugmasi — renderCycleCards niki (panel qamrovi); haftalik ma'lumot ularni bosmaydi.
+                if (!cyc) {
+                    $('unplacedCount').textContent = (sc.length - placed) + ' ta';
+                    $('unplacedExportBtn').classList.toggle('hidden', !sc.some(c => !effPlace(c) || cardConflict(c)));
+                }
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
 

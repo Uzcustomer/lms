@@ -140,6 +140,8 @@ class AbsenceExcuseController extends Controller
 
         return response()->json([
             'assessments' => $missedAssessments->values()->toArray(),
+            // Sanalar boshqa arizaga tushsa — forma darhol ko'rsatadi, yuborish o'chiriladi
+            'overlap' => AbsenceExcuse::overlapMessage((string) $student->hemis_id, $startDate, $endDate),
         ]);
     }
 
@@ -159,6 +161,13 @@ class AbsenceExcuseController extends Controller
                 'required',
                 'date',
                 'after_or_equal:start_date',
+                // Bir kun ikkita arizaga tushmasin (kutilayotgan yoki tasdiqlangan ariza bilan)
+                function ($attribute, $value, $fail) use ($request, $student) {
+                    if ($request->start_date && $value
+                        && ($message = AbsenceExcuse::overlapMessage((string) $student->hemis_id, $request->start_date, $value))) {
+                        $fail($message);
+                    }
+                },
                 function ($attribute, $value, $fail) use ($request) {
                     if ($request->reason && $request->start_date && $value) {
                         $reasonData = AbsenceExcuse::REASONS[$request->reason] ?? null;

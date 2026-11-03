@@ -57,3 +57,25 @@ it('has no conflicts when every lesson in the range is NB', function () {
 
     expect(AbsenceExcuse::gradeConflicts('5531', '2026-10-19', '2026-10-24'))->toBeEmpty();
 });
+
+it('does not let a new excuse share a day with a pending or approved one', function () {
+    Schema::create('absence_excuses', function ($t) {
+        $t->id();
+        $t->string('student_hemis_id');
+        $t->date('start_date');
+        $t->date('end_date');
+        $t->string('status');
+        $t->timestamps();
+    });
+    DB::table('absence_excuses')->insert([
+        ['student_hemis_id' => '5531', 'start_date' => '2026-10-24', 'end_date' => '2026-10-30', 'status' => 'approved'],
+        ['student_hemis_id' => '5531', 'start_date' => '2026-11-10', 'end_date' => '2026-11-12', 'status' => 'rejected'],
+        ['student_hemis_id' => '9999', 'start_date' => '2026-11-02', 'end_date' => '2026-11-05', 'status' => 'pending'],
+    ]);
+
+    expect(AbsenceExcuse::overlapMessage('5531', '2026-10-30', '2026-11-03'))
+        ->toContain('24.10.2026 — 30.10.2026 (tasdiqlangan)')
+        ->and(AbsenceExcuse::overlapMessage('5531', '2026-10-20', '2026-10-24'))->not->toBeNull()
+        ->and(AbsenceExcuse::overlapMessage('5531', '2026-10-31', '2026-11-05'))->toBeNull()  // keyingi kundan — mumkin
+        ->and(AbsenceExcuse::overlapMessage('5531', '2026-11-11', '2026-11-11'))->toBeNull(); // rad etilgan hisobga olinmaydi
+});

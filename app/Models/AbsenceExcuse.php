@@ -182,6 +182,33 @@ class AbsenceExcuse extends Model
             ->get(['lesson_date', 'subject_id', 'subject_name', 'grade', 'lesson_pair_name']);
     }
 
+    /**
+     * Talabaning shu sanalar bilan kesishadigan arizasi (kutilayotgan yoki tasdiqlangan):
+     * bir kun ikkita arizaga tushmasligi kerak. Rad etilgan ariza hisobga olinmaydi.
+     */
+    public static function overlapping(string $studentHemisId, $from, $to): ?self
+    {
+        return self::where('student_hemis_id', $studentHemisId)
+            ->whereIn('status', ['pending', 'approved'])
+            ->whereDate('start_date', '<=', $to)
+            ->whereDate('end_date', '>=', $from)
+            ->orderBy('start_date')
+            ->first();
+    }
+
+    /** Ariza sanalari boshqa arizaga tushsa — talabaga xato matni, aks holda null */
+    public static function overlapMessage(string $studentHemisId, $from, $to): ?string
+    {
+        $other = self::overlapping($studentHemisId, $from, $to);
+        if (!$other) {
+            return null;
+        }
+
+        return 'Bu sanalarning bir qismi uchun sizda allaqachon ariza bor: '
+            . $other->start_date->format('d.m.Y') . ' — ' . $other->end_date->format('d.m.Y')
+            . ' (' . mb_strtolower($other->status_label) . '). Bir kun uchun ikkita ariza topshirib bo\'lmaydi — '
+            . 'shu kunlardan keyingi sanalarni tanlang.';
+    }
 
     public static function reasonLabels(): array
     {

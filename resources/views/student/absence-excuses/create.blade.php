@@ -439,6 +439,12 @@
                     </div>
                 </div>
 
+                {{-- Sanalar boshqa arizaga tushsa — yuborib bo'lmaydi --}}
+                <div x-show="overlapError" x-cloak class="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4" role="alert">
+                    <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <p class="text-sm font-semibold text-red-700" x-text="overlapError"></p>
+                </div>
+
                 {{-- ===== CARD 3: O'TKAZIB YUBORILGAN NAZORATLAR ===== --}}
 
                 {{-- Loading --}}
@@ -563,6 +569,8 @@
             // Deadline
             deadlineWarning: '',
             deadlineExpired: false,
+            // Sanalar boshqa (kutilayotgan/tasdiqlangan) arizaga tushsa — server matni
+            overlapError: '',
             noDayLimit: @js($noDayLimit ?? false),
 
             // Assessments
@@ -609,6 +617,7 @@
             get canSubmit() {
                 if (!this.reason || !this.startDate || !this.endDate) return false;
                 if (this.deadlineExpired) return false;
+                if (this.overlapError) return false;
                 return true;
             },
             // Qayta topshirish kunlari: indeks => 'Y-m-d'.
@@ -757,6 +766,7 @@
                         this.endDate = '';
                         this.selecting = 'end';
                         this.assessments = [];
+                        this.overlapError = '';
                         this.searched = false;
                         this.deadlineWarning = '';
                         this.deadlineExpired = false;
@@ -780,6 +790,7 @@
                     this.endDate = '';
                     this.selecting = 'end';
                     this.assessments = [];
+                    this.overlapError = '';
                     this.searched = false;
                     this.deadlineWarning = '';
                     this.deadlineExpired = false;
@@ -790,6 +801,7 @@
                         this.endDate = '';
                         this.selecting = 'end';
                         this.assessments = [];
+                        this.overlapError = '';
                         this.searched = false;
                         this.deadlineWarning = '';
                         this.deadlineExpired = false;
@@ -810,6 +822,7 @@
                 this.endDate = '';
                 this.selecting = 'start';
                 this.assessments = [];
+                this.overlapError = '';
                 this.searched = false;
                 this.deadlineWarning = '';
                 this.deadlineExpired = false;
@@ -881,7 +894,7 @@
             },
 
             async fetchAssessments() {
-                this.loading = true; this.searched = false; this.assessments = [];
+                this.loading = true; this.searched = false; this.assessments = []; this.overlapError = '';
                 try {
                     const resp = await fetch('{{ route("student.absence-excuses.missed-assessments") }}', {
                         method: 'POST',
@@ -890,6 +903,7 @@
                     });
                     if (resp.ok) {
                         const data = await resp.json();
+                        this.overlapError = data.overlap || '';
                         // JN — NB olingan har bir dars kuni alohida qator (server qaytaradi)
                         this.assessments = (data.assessments || []).map(a => ({
                             ...a,

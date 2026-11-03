@@ -194,3 +194,57 @@ it('takliflar (qabul): bo\'shliqsiz joylash — birinchi taklif guruhning mavjud
         ->and($slots->slice(1)->every(fn ($sg) => $sg['gap'] > 0))->toBeTrue()
         ->and($slots->slice(1)->pluck('gap')->values()->all())->toBe($slots->slice(1)->pluck('gap')->sort()->values()->all());
 });
+
+it('panel oynasi: xona bandligi (teacher-agenda?room_code) — xonaning shu hafta darslari va bo\'sh paralari', function () {
+    $s = wuSetup();
+    \App\Models\Auditorium::create(['code' => 'R12', 'name' => "Tibbiyot klasteri, 1-qavat, 12-o'quv xona", 'volume' => 10, 'active' => true]);
+    // 1-bo'lak shu haftada R12 da (haftalik xona), boshqa guruh darsi — kartaning o'z xonasi R12.
+    TimetableCardOverride::where('card_id', $s['a']->id)->where('week', 8)->update(['auditorium_code' => 'R12', 'auditorium_name' => "12-o'quv xona"]);
+    $o = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-02a (rus)', 'len_half' => 2, 'teacher_id' => null, 'teacher_name' => null,
+        'auditorium_code' => 'R12', 'auditorium_name' => "12-o'quv xona"]));
+    TimetableCardOverride::create(['card_id' => $o->id, 'week' => 8, 'day' => 2, 'pair' => 3]);
+    $j = wuAs()->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?room_code=R12&date=2026-10-26&range=week&layer=internal')->assertOk()->json();
+    expect($j['room'])->toMatchArray(['code' => 'R12', 'volume' => 10])->and($j['teacher'])->toBeNull()
+        ->and($j['title'])->toStartWith("Tibbiyot klasteri, 1-qavat, 12-o'quv xona (10 o'rin) — ")
+        ->and(collect($j['entries'])->map(fn ($e) => [$e['date'], $e['start'], $e['groups']])->all())->toBe([
+            ['2026-10-27', '10:00', ['d2/d26-02a (rus)']],
+            ['2026-10-30', '12:00', ['d2/d26-01b (rus)']],
+        ])
+        // 1 soatlik bo'lak (13:30) boshqa xonada — kirmaydi; juma II para bo'sh.
+        ->and($j['free']['2026-10-30'])->toContain(2)->not->toContain(3)
+        ->and($j['move'])->toBeNull();
+});
+
+it('panel oynasi: joylanmagan karta o\'qituvchi jadvalida "ko\'chiriladigan dars" — bo\'sh paralarga joylash variantlari', function () {
+    $s = wuSetup();
+    $c = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-03a (rus)', 'len_half' => 2]));
+    $j = wuAs()->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?' . http_build_query(['teacher_id' => $s['chor']->id,
+        'date' => '2026-10-26', 'range' => 'week', 'layer' => 'internal', 'move' => 'w|' . $c->id . '|8']))->assertOk()->json();
+    $mv = $j['move'];
+    expect($mv)->toMatchArray(['kind' => 'weekly', 'via' => 'apply', 'why' => null, 'card_id' => $c->id, 'week' => 8])
+        ->and($mv['label'])->toContain('joylanmagan')
+        // Juma III para (12:00) — CHORIYEVA band (o'z darsi): variant yo'q; dushanba I para — bo'sh.
+        ->and($mv['options']['2026-10-26'][1]['ok'])->toBeTrue()
+        ->and(isset($mv['options']['2026-10-30'][3]))->toBeFalse();
+});
+
+it('qisman joylangan: bitta kartaning "yaxlit joylash"i (card_ids) boshqa birlikka tegmaydi; sig\'maganida sabab va card_ids', function () {
+    $s = wuSetup();
+    TimetableCardOverride::where('card_id', $s['b']->id)->where('week', 8)->delete();   // 01b: 2 soat joylangan, 1 soat qolgan
+    $c = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-04a (rus)', 'len_half' => 2]));
+    $d = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-04a (rus)', 'len_half' => 1]));
+    TimetableCardOverride::create(['card_id' => $c->id, 'week' => 8, 'day' => 1, 'pair' => 1]);   // 04a: 2 soat joylangan, 1 soat qolgan
+    wuAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 8, 'action' => 'complete', 'card_ids' => [$s['a']->id, $s['b']->id]])
+        ->assertOk()->assertJson(['done' => 1, 'failed' => []]);
+    expect(wuPlace($s['b']))->toBe([5, 7])->and(wuPlace($d))->toBe([null, null]);
+    $left = wuAs()->getJson(route('admin.timetable.boards.partial-units', $s['board']) . '?week=8')->json('items');
+    expect(array_column($left, 'group'))->toBe(['d2/d26-04a (rus)']);
+    // 04a ning ketida joy yo'q (CHORIYEVA dushanba 09:50 dan band) — sabab va kartalari.
+    $x = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-09a (rus)', 'len_half' => 2]));
+    TimetableCardOverride::create(['card_id' => $x->id, 'week' => 8, 'day' => 1, 'pair' => 3]);
+    $r = wuAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 8, 'action' => 'complete', 'card_ids' => [$c->id, $d->id]])
+        ->assertOk()->json();
+    expect($r['done'])->toBe(0)->and($r['failed'][0]['card_ids'])->toBe([$c->id, $d->id])
+        ->and($r['failed'][0]['error'])->toContain("3 soat sig'maydi")
+        ->and(wuPlace($c))->toBe([1, 1]);
+});

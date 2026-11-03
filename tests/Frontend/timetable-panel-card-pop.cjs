@@ -1,0 +1,128 @@
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin/timetable/index.blade.php'), 'utf8');
+
+// "Joylanmagan kartalar" paneli: karta oynasi (o'qituvchi, xona, tashqi jadval, havolalar), qisman joylangan belgisi va tugmalari,
+// bitta birlikning "yaxlit joylash"i (card_ids), natija oynasi (alert emas).
+const a = source.indexOf('            // ===== "Joylanmagan kartalar" paneli:');
+const b = source.indexOf('            function renderPanel() {', a);
+assert(a > 0 && b > a);
+const helpers = source.slice(source.indexOf('            // ===== Birlik: dars yaxlit joylanadi ====='),
+    source.indexOf("            // Dars turi filtri (Hammasi / Ma'ruza / Amaliy)"));
+const times = ['08:30', '09:10', '10:00', '10:40', '12:00', '12:40', '13:30', '14:10', '15:00', '15:40', '16:30', '17:10'];
+const ends = ['09:10', '09:50', '10:40', '11:20', '12:40', '13:20', '14:10', '14:50', '15:40', '16:20', '17:10', '17:50'];
+const ab = ['I', 'I', 'II', 'II', 'III', 'III', 'IV', 'IV', 'V', 'V', 'VI', 'VI'];
+
+function el(tag) {
+    const e = { tag, children: [], style: {}, attrs: {}, classList: { s: new Set(), add(c) { this.s.add(c); }, remove(c) { this.s.delete(c); }, contains(c) { return this.s.has(c); } },
+        listeners: {}, innerHTML: '', offsetHeight: 200,
+        setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this.listeners[t] = f; }, remove() { this.removed = true; doc.body.children = doc.body.children.filter(x => x !== this); },
+        contains(x) { return x === this; }, querySelector() { return null; }, getBoundingClientRect: () => ({ left: 10, right: 200, top: 50 }) };
+    return e;
+}
+const doc = { body: { children: [], appendChild(x) { this.children.push(x); } }, createElement: el,
+    getElementById: id => doc.body.children.find(x => x.id === id && !x.removed) || (id === 'grid' ? grid : null),
+    addEventListener() {}, removeEventListener() {} };
+// Jadval: 01b guruhi ustunida (data-g) va boshqa guruh ustunida seshanba II para kataklari.
+const tdMine = { dataset: { day: '2', pair: '3', g: 'F|S|1|d2/d26-01b (rus)' }, classList: el().classList, scrollIntoView() { this.scrolled = true; } };
+const tdOther = { dataset: { day: '2', pair: '3', g: 'F|S|1|d2/d26-02a (rus)' }, classList: el().classList, scrollIntoView() {} };
+const grid = { querySelectorAll: sel => (sel === '.tt-slot-flash' ? [] : sel.includes('[data-day="2"][data-pair="3"]') ? [tdOther, tdMine] : []) };
+
+const base = { faculty_name: 'F', specialty_name: 'S', course: 1, group_name: 'd2/d26-01b (rus)', subject_name: 'Tibbiy va biologik fizika',
+    training_type: 'practice', teacher_id: 5, teacher_name: 'CHORIYEVA G. Y.', students: 15 };
+const cards = [
+    Object.assign({ id: 1, len_half: 2, auditorium_code: 'R12', auditorium_name: "Tibbiyot klasteri, 1-qavat, 12-o'quv xona", auditorium_volume: 10, ext_day: 2, ext_pair: 3 }, base),
+    Object.assign({ id: 2, len_half: 1 }, base),
+    Object.assign({ id: 3, len_half: 2 }, base, { group_name: 'd2/d26-07b (rus)', subject_name: 'Tibbiyotda axborot texnologiyalari', teacher_id: 0, teacher_name: null }),
+    Object.assign({ id: 4, len_half: 1 }, base, { group_name: 'd2/d26-07b (rus)', subject_name: 'Tibbiyotda axborot texnologiyalari', teacher_id: 0, teacher_name: null }),
+];
+const calls = [], agenda = [], proposals = [];
+const ctx = {
+    document: doc, window: { innerWidth: 1400, innerHeight: 900 }, setTimeout: () => 0, Date, Math, Object, String, JSON, Set, Map, Promise,
+    cards, overrides: { '3|8': { day: 2, pair: 3, cancelled: false } }, curWeek: 8, weeklyLayer: 'internal', BASE: '', board: { id: 7 },
+    TIMETABLE_READ_ONLY: false, TIMETABLE_ROLE: 'kafedra_mudiri', teacherFullNames: { 5: 'CHORIYEVA GULNORA YUSUPOVNA' }, audCache: null,
+    esc: s => String(s), cardLen: c => c.len_half, cardGKeys: c => ['F|S|1|' + c.group_name], cardGroups: c => [c.group_name], isCycleCardAny: () => false,
+    effectiveCard: c => c, weeklyCanEdit: () => true, boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
+    boardSchedule: () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i], abbr: ab[i] })),
+    weekMonday: () => new Date(2026, 9, 26), weeklyEditGuard() {}, rememberLayerPlace() {},
+    conflictsAt: () => [], renderAll() {}, renderPanel() {}, renderGrid() {}, selected: null,
+    ttAgendaOpen: info => agenda.push(JSON.parse(JSON.stringify(info))), openTeacherTimeProposal: c => proposals.push(c.id),
+    loadBoard: async () => {}, confirm: () => true,
+    api: async (url, method, body) => {
+        calls.push([url, body && JSON.parse(JSON.stringify(body))]);
+        if (url.endsWith('/unit-fix')) return { done: 0, failed: [{ group: 'd2/d26-07b (rus)', subject: 'Tibbiyotda axborot texnologiyalari', day: 'Seshanba',
+            error: "3 soat sig'maydi: 10:00 dan keyin 2 soat bo'sh", card_ids: [3, 4] }] };
+        return { unit: [{ id: 1, active: true, day: 2, pair: 3 }, { id: 2, active: true, day: 2, pair: 5 }] };
+    },
+};
+vm.createContext(ctx);
+vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
+// dragPlan — haqiqiy (bo'sh joy).
+vm.runInContext(source.slice(source.indexOf('            function dragPlan('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig')), ctx);
+
+(async () => {
+    // 1) Oyna: o'qituvchi to'liq F.I.Sh., xona va sig'im (talabalar ortig'i), tashqi jadval joyi, tugmalar.
+    ctx.openPanelCardPop(cards[0], el());
+    const pop = doc.getElementById('pnCardPop');
+    assert.ok(pop);
+    assert.match(pop.innerHTML, /O'qituvchi:<\/span> <a href="#" class="tt-agenda-link" data-pop-teacher>CHORIYEVA GULNORA YUSUPOVNA<\/a>/);
+    assert.match(pop.innerHTML, /data-pop-room>Tibbiyot klasteri, 1-qavat, 12-o'quv xona · 10 o'rin · 15 talaba \(\+5\)<\/a>/);
+    assert.match(pop.innerHTML, /data-pop-ext>Seshanba, II para \(10:00–12:40\)<\/a>/);   // 3 soatlik dars (2 + 1)
+    assert.match(pop.innerHTML, /data-pop-place/);
+    assert.match(pop.innerHTML, /Joylash uchun tanlash/);
+    const click = async attr => pop.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === attr, disabled: false }) }, preventDefault() {}, stopPropagation() {} });
+    // Havolalar: o'qituvchi jadvali (shu hafta, shu karta ko'chiriladigan dars), xona bandligi, tashqi joy katagi.
+    await click('data-pop-teacher');
+    assert.deepEqual(agenda[0], { teacher_id: 5, teacher_name: 'CHORIYEVA G. Y.', date: '2026-10-27', range: 'week', move: 'w|1|8' });
+    ctx.openPanelCardPop(cards[0], el());
+    let p2 = doc.getElementById('pnCardPop');
+    await p2.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === 'data-pop-room' }) }, preventDefault() {}, stopPropagation() {} });
+    assert.deepEqual(agenda[agenda.length - 1], { room_code: 'R12', room_name: "Tibbiyot klasteri, 1-qavat, 12-o'quv xona", date: '2026-10-27', range: 'week' });
+    ctx.openPanelCardPop(cards[0], el());
+    p2 = doc.getElementById('pnCardPop');
+    await p2.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === 'data-pop-ext' }) }, preventDefault() {}, stopPropagation() {} });
+    assert.ok(tdMine.classList.contains('tt-slot-flash') && tdMine.scrolled && !tdOther.classList.contains('tt-slot-flash'));
+    // "Shu joyga joylash" — birlik bilan (unit-place, tashqi joy).
+    await p2.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === 'data-pop-place' }) }, preventDefault() {}, stopPropagation() {} });
+    assert.deepEqual(calls[calls.length - 1], ['/cards/1/unit-place', { layer: 'internal', week: 8, day: 2, pair: 3 }]);
+
+    // 2) Biriktirilmagan o'qituvchi/xona, tashqi jadvalda yo'q; ko'rish huquqi — joylash tugmalari yo'q.
+    ctx.weeklyCanEdit = () => false;
+    ctx.openPanelCardPop(cards[3], el());
+    p2 = doc.getElementById('pnCardPop');
+    assert.match(p2.innerHTML, /O'qituvchi:<\/span> <i>biriktirilmagan<\/i>/);
+    assert.match(p2.innerHTML, /Xona:<\/span> <i>biriktirilmagan<\/i>/);
+    assert.match(p2.innerHTML, /tashqi jadvalda yo'q/);
+    assert.doesNotMatch(p2.innerHTML, /data-pop-place|data-pop-select/);
+    // O'qituvchi roli — vaqt so'rovi tugmasi.
+    ctx.TIMETABLE_ROLE = 'oqituvchi';
+    ctx.openPanelCardPop(cards[0], el());
+    p2 = doc.getElementById('pnCardPop');
+    assert.match(p2.innerHTML, /data-pop-propose/);
+    await p2.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === 'data-pop-propose' }) }, preventDefault() {}, stopPropagation() {} });
+    assert.deepEqual(proposals, [1]);
+    ctx.TIMETABLE_ROLE = 'kafedra_mudiri';
+    ctx.weeklyCanEdit = () => true;
+
+    // 3) Qisman joylangan belgi: 07b — 3 soatdan 2 soati (Seshanba 10:00), qolgani 1 soat; shu birlik tugmalari.
+    const st = Object.assign({ card: cards[3] }, ctx.unitState(cards[3], 8));
+    const html = ctx.partialBadgeHtml(st, null);
+    assert.match(html, /Qisman: 3 soatdan 2 soati joylangan \(Seshanba 10:00\); qolgani 1 soat/);
+    assert.match(html, /data-unit-fix="complete" data-unit-card="4"/);
+    assert.match(html, /data-unit-fix="clear" data-unit-card="4"/);
+
+    // 4) Bitta birlikning "yaxlit joylash"i — faqat shu birlik kartalari; sig'magani — kartada qizil izoh va sahifa ichidagi oyna.
+    calls.length = 0;
+    await ctx.runUnitFix(null, 'complete', [st]);
+    assert.deepEqual(calls, [['/boards/7/unit-fix', { week: 8, action: 'complete', card_ids: [3, 4] }]]);
+    assert.equal(ctx.unitFixErr[vm.runInContext('unitKey', ctx)(cards[3])], "3 soat sig'maydi: 10:00 dan keyin 2 soat bo'sh");
+    assert.match(ctx.partialBadgeHtml(st, ctx.unitFixErr[vm.runInContext('unitKey', ctx)(cards[3])]), /pn-partial-err[^>]*>✖ 3 soat sig'maydi/);
+    const res = doc.getElementById('ttUnitFixModal');
+    assert.ok(res);
+    assert.match(res.innerHTML, /Yaxlit joylandi: 0 ta · joylanmadi: 1 ta/);
+    assert.match(res.innerHTML, /<b>d2\/d26-07b \(rus\) · Tibbiyotda axborot texnologiyalari<\/b> \(Seshanba\): 3 soat sig'maydi/);
+    assert.doesNotMatch(source.slice(a, b), /\balert\(/);
+    console.log('timetable panel card pop: 4 scenarios passed');
+})().catch(e => { console.error(e); process.exit(1); });

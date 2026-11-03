@@ -19,8 +19,10 @@
         .cal-trigger.active { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.15); }
         .cal-trigger .cal-trigger-text { font-weight: 600; }
         .cal-trigger .cal-trigger-placeholder { color: #9ca3af; font-weight: 400; }
+        /* Oqimda turadi: ochilganda sahifa cho'ziladi va skroll qilinadi
+           (absolute bo'lsa pastdagi kontent kam bo'lganda kesilib qolardi) */
         .cal-dropdown {
-            position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+            position: relative; margin-top: 4px; z-index: 50; scroll-margin-bottom: 96px;
             background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px;
             box-shadow: 0 10px 40px rgba(0,0,0,.12); overflow: hidden;
         }
@@ -346,7 +348,7 @@
                                     <div>
                                         {{-- Input trigger --}}
                                         <div class="cal-trigger" :class="showMainCal ? 'active' : ''"
-                                             @click="showMainCal = !showMainCal">
+                                             @click="showMainCal = !showMainCal; if (showMainCal) $nextTick(() => $refs.mainCal.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))">
                                             <div>
                                                 <template x-if="startDate && endDate">
                                                     <span class="cal-trigger-text" x-text="fmtDate(startDate) + '  —  ' + fmtDate(endDate) + ' (' + totalDays + ' kun)'"></span>
@@ -368,7 +370,7 @@
                                         </div>
 
                                         {{-- Dropdown calendar --}}
-                                        <div x-show="showMainCal" x-transition.origin.top x-cloak class="cal-dropdown">
+                                        <div x-show="showMainCal" x-ref="mainCal" x-transition.origin.top x-cloak class="cal-dropdown">
                                             {{-- Hint --}}
                                             <div x-show="startDate && !endDate && selecting === 'end'" class="px-3 py-1.5 bg-blue-50 text-xs text-blue-600 font-medium flex items-center gap-1">
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>

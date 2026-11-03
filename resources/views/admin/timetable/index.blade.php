@@ -1223,6 +1223,7 @@
         #grid .tt-chip.tt-shade-b { filter: brightness(.90) saturate(1.1); }
         .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
         .tt-cap-warn { font-size: 9px; font-weight: 800; color: #a16207; background: #fef3c7; border-radius: 3px; padding: 0 3px; }
+        .tt-room-off { font-size: 9px; font-weight: 800; color: #b91c1c; background: #fee2e2; border-radius: 3px; padding: 0 3px; }
         .cf-list .cf-line.cf-cap-warn { color: #a16207; }
         .tt-room-vol { font-weight: 800; color: #16a34a; opacity: 1; }\n        #grid th.tt-room-head .tt-room-name { display:block; font-size:10px; font-weight:500; color:#64748b; margin-top:2px; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
@@ -3656,6 +3657,7 @@
                 invalidateWeeklyConflicts();
                 invalidateCycleWeek();
                 teacherPhones = Object.assign({}, j.teacher_phones || {});   // {id: {text, tel}} — faqat ko'rishga huquq bo'lsa
+                inactiveRooms = Object.assign({}, j.inactive_rooms || {});
                 specIndex = Array.isArray(j.spec_index) ? j.spec_index : [];
                 loadedSpecs = j.filter && Array.isArray(j.filter.loaded_specs) ? new Set(j.filter.loaded_specs.map(r => specTriple(r[0], r[1], r[2]))) : null;
                 loadedWeeks = j.filter && Array.isArray(j.filter.weeks) ? new Set(j.filter.weeks.map(Number)) : null;
@@ -6410,6 +6412,13 @@
                     }
                     const current = j.current || {};
                     if (current.teacher_id) $('cycAssignTeacher').value = String(current.teacher_id);
+                    // Hozirgi xona nofaol — "(nofaol)" belgisi bilan ko'rinadi, tanlab (saqlab) bo'lmaydi; ogohlantirish.
+                    if (current.auditorium_code && current.auditorium_active === false) {
+                        $('cycAssignRoom').insertAdjacentHTML('afterbegin', '<option value="' + esc(current.auditorium_code) + '" disabled data-room-off="1" style="color:#b91c1c">'
+                            + esc(current.auditorium_name || current.auditorium_code) + ' (nofaol)</option>');
+                        $('cycAssignWarn').innerHTML = '<span style="color:#b91c1c">⚠ ' + esc(ROOM_OFF_TEXT) + ' («' + esc(current.auditorium_name || current.auditorium_code) + '»)</span>';
+                        $('cycAssignWarn').classList.remove('hidden');
+                    }
                     if (current.auditorium_code) $('cycAssignRoom').value = current.auditorium_code;
                     // Guruhcha smenasi (ichki jadval): butun blok shu paradan — masalan, IV para (13:30).
                     const shiftOpts = j.shift_options || [];
@@ -6459,6 +6468,12 @@
 
             async function saveCycleAssign(force) {
                 if (!cycAssignCard) return;
+                const roomOpt = $('cycAssignRoom').selectedOptions && $('cycAssignRoom').selectedOptions[0];
+                if (roomOpt && roomOpt.dataset && roomOpt.dataset.roomOff) {
+                    $('cycAssignWarn').innerHTML = '<span style="color:#b91c1c">⚠ Xona nofaol — boshqa xona tanlang</span>';
+                    $('cycAssignWarn').classList.remove('hidden');
+                    return;
+                }
                 const button = $('cycAssignSave');
                 button.disabled = true;
                 try {
@@ -9684,6 +9699,7 @@
                     "O'qituvchi: " + (c.teacher_name || 'biriktirilmagan'),
                     'Xona: ' + (c.auditorium_name ? c.auditorium_name + (c.auditorium_volume ? " (sig'im " + c.auditorium_volume + ')' : '') : 'biriktirilmagan'),
                     c.kafedra_name ? 'Kafedra: ' + c.kafedra_name : '',
+                    roomInactive(c.auditorium_code) ? '⚠ ' + ROOM_OFF_TEXT : '',
                     extra || '',
                 ].filter(Boolean).join('\n');
             }
@@ -9938,7 +9954,8 @@
                         tName || c.teacher_name || "O'qituvchi") + (teacherPhones[c.teacher_id]
                         ? ' <a href="tel:' + esc(teacherPhones[c.teacher_id].tel) + '" style="color:#475569">· ' + esc(teacherPhones[c.teacher_id].text) + '</a>' : '')
                         : '<i>biriktirilmagan</i>') +
-                    row('Xona', rInfo ? link('data-pop-room', room) : '<i>biriktirilmagan</i>') +
+                    row('Xona', rInfo ? link('data-pop-room', room) + (roomInactive(e.auditorium_code)
+                        ? ' <span data-pop-room-off style="color:#b91c1c;font-weight:600">(nofaol) — ' + esc(ROOM_OFF_TEXT) + '</span>' : '') : '<i>biriktirilmagan</i>') +
                     (placed ? row('Joyi', '<b data-pop-placed>' + esc(placedSlotText(c)) + '</b> <span style="color:#b45309">· to\'qnashuv</span>') : '') +
                     row('Tashqi jadval', ext ? link('data-pop-ext', extText) : '<i>tashqi jadvalda yo\'q</i>') +
                     '<div data-pop-msg style="margin-top:4px"></div>' +
@@ -10275,6 +10292,10 @@
             let crossCycleShown = [];   // joriy panjaradagi sikl darslari (data-cyc indeksi)
             let teacherFullNames = {};  // teacher_id => to'liq F.I.Sh. (/data va cycle-week dan)
             let teacherPhones = {};     // teacher_id => {text: "+998 90 123 45 67", tel: "+998901234567"} (huquq bo'yicha, /data)
+            // Nofaol xonalar (auditoriums.active = false) — kartalarda turganlari, kod => nomi (/data): tanlab bo'lmaydi, kartada ogohlantirish.
+            let inactiveRooms = {};
+            const ROOM_OFF_TEXT = 'Xona nofaol — almashtiring';
+            function roomInactive(code) { return !!code && Object.prototype.hasOwnProperty.call(inactiveRooms, code); }
             // O'qituvchi kesimi ustuni — teacher_id bo'yicha (kartada qisqa yoki to'liq nom bo'lsa ham bitta ustun); id yo'q — nom.
             const teacherColKey = c => c.teacher_id ? 'T' + c.teacher_id : (c.teacher_name ? 'N:' + c.teacher_name : '— (biriktirilmagan)');
             function teacherColLabel(key, names) {
@@ -10843,8 +10864,10 @@
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
                     const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
                     const capLine = weeklyCapLine(c);
+                    const roomOff = roomInactive(c.auditorium_code);
                     const roomTxt = roomNo
-                        ? '<div class="tt-room">№ ' + esc(roomNo) + (capLine ? ' <span class="tt-cap-warn" title="' + esc(capLine) + '">⚠ sig\'maydi</span>' : '') + '</div>'
+                        ? '<div class="tt-room">№ ' + esc(roomNo) + (capLine ? ' <span class="tt-cap-warn" title="' + esc(capLine) + '">⚠ sig\'maydi</span>' : '')
+                            + (roomOff ? ' <span class="tt-room-off" title="' + esc(ROOM_OFF_TEXT) + '">⚠ nofaol</span>' : '') + '</div>'
                         : '';
                     // Almashinuvchi karta — har hafta emas, faqat ayrim haftalarda o'tiladi
                     // (ma'ruza va uni almashtiruvchi amaliy). Shablon ("Barcha haftalar")
@@ -11451,7 +11474,13 @@
             }
             async function loadAuds() {
                 if (!audCache) audCache = await api(AUDS_URL);
-                $('cmAud').innerHTML = '<option value="">— tanlanmagan —</option>' + audCache.map(a =>
+                // Faqat faol xonalar; kartadagi hozirgi xona nofaol bo'lsa — "(nofaol)" belgisi bilan ko'rinadi, lekin tanlab bo'lmaydi.
+                const cur = modalCard.auditorium_code ? audCache.find(a => a.code === modalCard.auditorium_code) : null;
+                const curOff = !!modalCard.auditorium_code && ((cur && cur.active === false) || roomInactive(modalCard.auditorium_code));
+                $('cmAud').innerHTML = '<option value="">— tanlanmagan —</option>' + (curOff
+                    ? '<option value="' + esc(modalCard.auditorium_code) + '" disabled selected data-room-off="1" style="color:#b91c1c">' +
+                        esc((cur && cur.name) || modalCard.auditorium_name || modalCard.auditorium_code) + ' (nofaol)</option>' : '') +
+                    audCache.filter(a => a.active !== false).map(a =>
                     '<option value="' + esc(a.code) + '"' + (modalCard.auditorium_code === a.code ? ' selected' : '') +
                     ((a.volume && a.volume < modalCard.students) ? ' style="color:#dc2626"' : '') + '>' +
                     esc(a.name) + (a.volume ? ' (' + a.volume + ')' : '') + (a.building_name ? ' · ' + esc(a.building_name) : '') + '</option>').join('');
@@ -11468,7 +11497,8 @@
                 try {
                     const j = await api(BASE + '/cards/' + modalCard.id + '/update', 'POST', {
                         teacher_id: $('cmTeacher').value || '',
-                        auditorium_code: $('cmAud').value || '',
+                        // Hozirgi nofaol xona (o'zgartirilmagan) — yuborilmaydi: qayta saqlanmaydi, karta xonasi o'zgarmaydi.
+                        ...(($('cmAud').selectedOptions[0] || {}).dataset && $('cmAud').selectedOptions[0].dataset.roomOff ? {} : { auditorium_code: $('cmAud').value || '' }),
                         len_half: $('cmLen').value,
                         start_half: $('cmStartHalf').value,
                     });
@@ -13245,7 +13275,8 @@
                 if (!asgSel) { $('asgRoomCurrent').textContent = '—'; return; }
                 $('asgRoomCurrent').innerHTML = asgSel.room_mixed
                     ? '<span class="text-amber-600">⚠ kartalarda turlicha</span>'
-                    : (asgSel.auditorium_name ? '<b class="text-slate-700">' + esc(asgSel.auditorium_name) + '</b>' : '<span class="text-slate-400">biriktirilmagan</span>');
+                    : (asgSel.auditorium_name ? '<b class="text-slate-700">' + esc(asgSel.auditorium_name) + '</b>' + (roomInactive(asgSel.auditorium_code)
+                        ? ' <span class="text-red-600 font-semibold" data-asg-room-off>(nofaol) — ' + esc(ROOM_OFF_TEXT) + '</span>' : '') : '<span class="text-slate-400">biriktirilmagan</span>');
             }
             async function openAsgRoomModal() {
                 if (!asgSel) return;

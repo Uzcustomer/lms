@@ -3518,10 +3518,22 @@ class ReportController extends Controller
                 $page++;
             } while ($page <= $totalPages);
 
+            // Dars jadvali: nofaol xonaga biriktirilgan kartalar (doskalar bo'yicha) — "N ta karta nofaol xonada" va Excel ro'yxati.
+            $inactive = [];
+            try {
+                $inactive = array_map(fn ($r) => $r + ['excel_url' => route('admin.timetable.boards.inactive-room-cards', $r['board_id'])],
+                    \App\Services\Timetable\InactiveRoomCards::summary());
+            } catch (\Throwable $e) {
+                \Log::warning('Nofaol xonadagi kartalar hisoboti: ' . $e->getMessage());
+            }
+            $n = array_sum(array_column($inactive, 'count'));
+
             return response()->json([
                 'success' => true,
-                'message' => "Jami {$totalImported} ta auditoriya sinxronlashtirildi",
+                'message' => "Jami {$totalImported} ta auditoriya sinxronlashtirildi" . ($n ? ". Dars jadvali: {$n} ta karta nofaol xonada" : ''),
                 'total' => $totalImported,
+                'inactive_room_cards' => $inactive,
+                'inactive_room_cards_total' => $n,
             ]);
         } catch (\Throwable $e) {
             \Log::error('Auditorium sync error: ' . $e->getMessage());

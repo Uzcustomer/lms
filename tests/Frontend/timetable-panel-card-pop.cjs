@@ -44,6 +44,7 @@ const ctx = {
     cards, overrides: { '3|8': { day: 2, pair: 3, cancelled: false } }, curWeek: 8, weeklyLayer: 'internal', BASE: '', board: { id: 7 },
     TIMETABLE_READ_ONLY: false, TIMETABLE_ROLE: 'kafedra_mudiri', WEEKLY_ADMIN: false, effPlace: c => vm.runInContext('placeInWeek', ctx)(c, 8), $: () => null, teacherFullNames: { 5: 'CHORIYEVA GULNORA YUSUPOVNA' }, teacherPhones: { 5: { text: '+998 90 123 45 67', tel: '+998901234567' } }, audCache: null,
     esc: s => String(s), cardLen: c => c.len_half, cardGKeys: c => ['F|S|1|' + c.group_name], cardGroups: c => [c.group_name], isCycleCardAny: () => false,
+    inactiveRooms: { R404: '404' }, roomInactive: code => !!code && code in ctx.inactiveRooms, ROOM_OFF_TEXT: 'Xona nofaol — almashtiring',
     effectiveCard: c => c, weeklyCanEdit: () => true, boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
     boardSchedule: () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i], abbr: ab[i] })),
     weekMonday: () => new Date(2026, 9, 26), weeklyEditGuard() {}, rememberLayerPlace() {},
@@ -236,5 +237,14 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     assert.ok(tdWed.scrolled && flashed.includes('tt-slot-flash'));
     assert.ok(!doc.getElementById('pnCardPop'), 'oyna yopiladi');
     ctx.closePanelCardPop();
-    console.log('timetable panel card pop: 9 scenarios passed');
+
+    // 10) Kartadagi xona nofaol — oynada "(nofaol) — Xona nofaol — almashtiring".
+    const offCard = Object.assign({}, cards[0], { id: 50, auditorium_code: 'R404', auditorium_name: '404' });
+    ctx.openPanelCardPop(offCard, el());
+    assert.match(doc.getElementById('pnCardPop').innerHTML, /data-pop-room-off[^>]*>\(nofaol\) — Xona nofaol — almashtiring<\/span>/);
+    ctx.closePanelCardPop();
+    ctx.openPanelCardPop(cards[0], el());
+    assert.doesNotMatch(doc.getElementById('pnCardPop').innerHTML, /data-pop-room-off/);
+    ctx.closePanelCardPop();
+    console.log('timetable panel card pop: 10 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

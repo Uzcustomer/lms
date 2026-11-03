@@ -33,7 +33,7 @@ class SchedulePlanner
      * @param string $today     'Y-m-d' — shu kun va undan oldingisi o'zgartirilmaydi
      * @param array  $hemisPairs HEMIS'da mavjud para vaqtlari: ['HH:MM-HH:MM' => true]; bo'sh — tekshirilmaydi
      */
-    public function __construct(private array $slotTimes, private string $today, private array $hemisPairs = [])
+    public function __construct(private array $slotTimes, private string $today, private array $hemisPairs = [], private array $inactiveRooms = [])
     {
         $this->maxSlot = min(11, max(1, (int) max(array_keys($slotTimes ?: [11 => 0]))));
     }
@@ -749,6 +749,10 @@ class SchedulePlanner
                         : 'o\'qituvchi ham, kafedra mudiri ham topilmadi (mark\'da shu kafedraga «Kafedra mudiri» roli berilgan xodim yo\'q)';
                 }
                 if (!$room) $blocked[] = '"Kafedra mudiri xonasi" auditoriyasi topilmadi';
+                // LMS kartasidagi xona nofaol (auditoriums.active = false) — HEMIS'ga yozilmaydi, avval xonani almashtirish kerak.
+                if ($room && isset($this->inactiveRooms[(string) $room])) {
+                    $blocked[] = "LMS'dagi xona nofaol" . ($roomName ? ' («' . $roomName . '»)' : '') . ' — xonani almashtiring';
+                }
                 if ($this->hemisPairs && !isset($this->hemisPairs[$start . '-' . $end])) {
                     $blocked[] = "HEMIS'da {$start}-{$end} para vaqti yo'q";
                 }

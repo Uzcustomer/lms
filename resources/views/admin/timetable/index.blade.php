@@ -4568,17 +4568,21 @@
                     (rep.missing_groups && rep.missing_groups.length ? '<div class="text-amber-700 mb-1">HEMIS\'da topilmagan guruhlar: ' + hsEsc(rep.missing_groups.join(', ')) + '</div>' : '') +
                     (rep.import_failed ? '<div class="text-red-700 mb-1">' + rep.import_failed + ' ta guruh jadvali HEMIS\'dan yangilanmadi (javob bermadi) — ularning o\'zgartirishlari to\'siqli.</div>' : '');
                 const who = (a, b) => hsEsc(a || '—') + (b && b !== a ? ' → <b>' + hsEsc(b) + '</b>' : '');
+                // LMS'da biriktirilmagan — kafedra mudiri / "Kafedra mudiri xonasi" qo'yiladi (HEMIS solishtirish bilan bir xil): belgi.
+                const fbTag = text => ' <span class="ht-fb" style="font-size:10px;font-weight:600;border-radius:4px;padding:0 4px;background:#ede9fe;color:#5b21b6">' + text + '</span>';
                 const body = rows.map(r => {
                     const st = HT_STATUS[r.status] || [r.status, ''];
                     const grey = r.status === 'locked' ? ' bg-gray-100 text-gray-400' : '';
+                    const fb = r.fallback_teacher || r.fallback_room;
                     const time = hsEsc(r.start + '–' + r.end) + (r.new_start && (r.new_start !== r.start || r.new_end !== r.end) ? ' → <b>' + hsEsc(r.new_start + '–' + r.new_end) + '</b>' : '');
                     const why = r.status === 'blocked' ? (r.blocked || []).join('; ') : (r.reason || (r.status === 'ok' ? 'mos' : ''));
-                    return '<tr class="align-top' + grey + '" data-status="' + r.status + '"><td class="border px-1">' + hsEsc(r.group) + '</td>' +
+                    return '<tr class="align-top' + grey + (fb && !grey ? ' bg-violet-50' : '') + '" data-status="' + r.status + '"' + (fb ? ' data-fallback="1"' : '') + '><td class="border px-1">' + hsEsc(r.group) + '</td>' +
                         '<td class="border px-1">' + hsEsc(r.subject) + '<div class="text-gray-400">' + hsEsc(r.type) + (r.hemis_id ? ' · #' + r.hemis_id : '') + '</div></td>' +
                         '<td class="border px-1 whitespace-nowrap">' + time + '</td>' +
-                        '<td class="border px-1">' + who(r.employee_name, r.new_employee_name) + '</td>' +
-                        '<td class="border px-1">' + who(r.auditorium_name, r.new_auditorium_name) + '</td>' +
+                        '<td class="border px-1">' + who(r.employee_name, r.new_employee_name) + (r.fallback_teacher ? fbTag('kafedra mudiri') : '') + '</td>' +
+                        '<td class="border px-1">' + who(r.auditorium_name, r.new_auditorium_name) + (r.fallback_room ? fbTag('mudir xonasi') : '') + '</td>' +
                         '<td class="border px-1"><span class="font-semibold ' + (grey ? '' : st[1]) + '">' + st[0] + '</span>' + (why ? '<div>' + hsEsc(why) + '</div>' : '') +
+                        (r.fallback_reason && r.fallback_reason !== why ? '<div class="text-violet-700">' + hsEsc(r.fallback_reason) + '</div>' : '') +
                         (r.note ? '<div class="text-amber-700">' + hsEsc(r.note) + '</div>' : '') + '</td></tr>';
                 }).join('');
                 return head + (body ? '<div class="max-h-[70vh] overflow-auto"><table class="w-full border text-[11px]"><thead class="bg-gray-50 sticky top-0"><tr>' +
@@ -4594,13 +4598,14 @@
             }
             function hemisTodayExcel(rep, group) {
                 const cell = (t, o) => Object.assign({ t: String(t == null ? '' : t) }, o || {});
-                const rows = [['Guruh', 'Fan', 'Dars turi', 'HEMIS id', 'Vaqt (HEMIS)', 'Yangi vaqt', 'O\'qituvchi (HEMIS)', 'Yangi o\'qituvchi', 'Xona (HEMIS)', 'Yangi xona', 'Holat', 'Sabab / o\'zgarish']
+                const rows = [['Guruh', 'Fan', 'Dars turi', 'HEMIS id', 'Vaqt (HEMIS)', 'Yangi vaqt', 'O\'qituvchi (HEMIS)', 'Yangi o\'qituvchi', 'Xona (HEMIS)', 'Yangi xona', 'Holat', 'Sabab / o\'zgarish', 'Fallback sababi']
                     .map(h => cell(h, { b: 1, bg: '#f3f4f6' }))];
                 htRows(rep, group).forEach(r => {
                     const grey = r.status === 'locked' ? { fc: '#9ca3af' } : null;
                     rows.push([r.group, r.subject, r.type, r.hemis_id || '', r.start + '–' + r.end, r.new_start ? r.new_start + '–' + r.new_end : '',
                         r.employee_name, r.new_employee_name || '', r.auditorium_name, r.new_auditorium_name || '', (HT_STATUS[r.status] || [r.status])[0],
-                        [r.status === 'blocked' ? (r.blocked || []).join('; ') : r.reason, (r.changes || []).join('; '), r.note].filter(Boolean).join(' · ')].map(v => cell(v, grey)));
+                        [r.status === 'blocked' ? (r.blocked || []).join('; ') : r.reason, (r.changes || []).join('; '), r.note].filter(Boolean).join(' · '),
+                        r.fallback_reason || ''].map(v => cell(v, grey || (r.fallback_teacher || r.fallback_room ? { bg: '#f5f3ff' } : null))));
                 });
                 return { rows, sheet_title: 'Bugungi darslar', freeze_rows: 1 };
             }

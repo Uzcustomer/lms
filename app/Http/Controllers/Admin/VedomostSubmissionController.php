@@ -573,11 +573,25 @@ class VedomostSubmissionController extends Controller
         $this->sortReportNodes($tree, $sortCol, $sortDir, $sectionKeys);
 
         $rows = [];
-        $this->flattenReportTree($tree, 0, $rows);
+        $this->flattenReportTree($tree, 0, [], $rows);
+
+        // Katakni bosganda — o'sha son ortidagi vedomostlar ro'yxati (sahifada, so'rovsiz).
+        $label = fn ($v, $f) => trim((string) ($v->{$f} ?? '')) ?: '— (aniqlanmagan)';
+        $forms = VedomostSubmission::formLabels();
+        $drill = collect($aggregated)->filter(fn ($v) => !empty($contribById[$v->id]))->map(fn ($v) => [
+            'u' => route('admin.vedomost-submission.show', $v->id),
+            'p' => array_map(fn ($f) => $label($v, $f), $dimFields),
+            'k' => array_keys($contribById[$v->id]),
+            'f' => $v->faculty_name ?? '',
+            'g' => $v->group_name ?? '',
+            's' => $v->subject_name ?? '',
+            't' => $forms[$v->form_type] ?? $v->form_type,
+            'st' => $statuses[$v->status] ?? $v->status,
+        ])->values();
 
         return view('admin.vedomost-submission.report', compact(
             'rows', 'dimensions', 'selectedDims', 'availableDims',
-            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to'
+            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to', 'drill'
         ));
     }
 
@@ -640,12 +654,24 @@ class VedomostSubmissionController extends Controller
     private function reportDateSections(iterable $aggregated, \Carbon\Carbon $from, \Carbon\Carbon $to, array $statuses, array $statusColor): array
     {
         $aggregated = collect($aggregated);
-        $repIds = $aggregated->pluck('id')->all();
-
-        $logsById = VedomostSubmissionLog::whereIn('vedomost_submission_id', $repIds)
-            ->orderBy('created_at')->orderBy('id')
-            ->get(['vedomost_submission_id', 'action', 'from_status', 'to_status', 'created_at'])
-            ->groupBy('vedomost_submission_id');
+        // Amal guruhcha/variantlardan biriga yoziladi (bosilgan yozuvga) — jamlangan qatorning barcha
+        // yozuvlari loglari olinadi; bir amal bir necha yozuvga yozilgan bo'lsa — bir marta sanaladi.
+        $repOf = [];
+        foreach ($aggregated as $v) {
+            foreach (($v->ids ?? [$v->id]) as $sid) {
+                $repOf[$sid] = $v->id;
+            }
+        }
+        $logsById = collect();
+        foreach (array_chunk(array_keys($repOf), 1000) as $chunk) {
+            $logsById = $logsById->concat(VedomostSubmissionLog::whereIn('vedomost_submission_id', $chunk)
+                ->get(['vedomost_submission_id', 'action', 'from_status', 'to_status', 'created_at', 'id']));
+        }
+        $logsById = $logsById
+            ->sortBy(fn ($l) => sprintf('%s|%010d', $l->created_at, $l->id))
+            ->groupBy(fn ($l) => $repOf[$l->vedomost_submission_id])
+            ->map(fn ($g) => $g->unique(fn ($l) => $l->action . '|' . $l->to_status . '|' . substr((string) $l->created_at, 0, 16))->values());
+        $now = now();
 
         $contribById = [];
         foreach ($aggregated as $v) {
@@ -672,8 +698,14 @@ class VedomostSubmissionController extends Controller
 
             // Davri oxiriga — davr oxiridagi holat (varaq o'shanda mavjud bo'lsa).
             if ($created === null || $created <= $to) {
-                $st = $this->statusAt($logs, $to, true, $initial);
+                // Davr bugun yoki kelajakda tugasa — haqiqiy joriy holat (jurnalda yozilmagan o'zgarishlar ham).
+                $st = $to >= $now ? (string) $v->status : $this->statusAt($logs, $to, true, $initial);
                 $contrib["close|$st"] = ($contrib["close|$st"] ?? 0) + 1;
+            }
+
+            // Rad etilganlar: davrda rad etilgan varaq keyingi topshirishda o'tdimi (bugungacha).
+            if ($fate = $this->rejectFate($logs, $from, $to)) {
+                $contrib["fate|$fate"] = 1;
             }
 
             $contribById[$v->id] = $contrib;
@@ -700,9 +732,49 @@ class VedomostSubmissionController extends Controller
             ['key' => 'open',   'label' => 'Davri boshiga',            'cols' => $statusCols('open'),  'tint' => '#eef2ff'],
             ['key' => 'period', 'label' => 'Davri ichida (harakatlar)', 'cols' => $actionCols,          'tint' => '#ecfeff'],
             ['key' => 'close',  'label' => 'Davri oxiriga',            'cols' => $statusCols('close'), 'tint' => '#fef2f2'],
+            ['key' => 'fate',   'label' => 'Davrda rad etilganlar — keyingi topshirish (bugungacha)', 'tint' => '#fff7ed', 'cols' => [
+                ['key' => 'fate|passed', 'label' => "O'tdi (tasdiqlandi)", 'color' => ['#166534', '#dcfce7']],
+                ['key' => 'fate|failed', 'label' => "O'tmadi (yana rad)", 'color' => ['#b91c1c', '#fee2e2']],
+                ['key' => 'fate|pending', 'label' => 'Tekshiruvda', 'color' => ['#b45309', '#fef3c7']],
+                ['key' => 'fate|none', 'label' => 'Qayta topshirilmagan', 'color' => ['#475569', '#f1f5f9']],
+            ]],
         ];
 
         return [$sections, $contribById];
+    }
+
+    /**
+     * Davrda rad etilgan varaqning keyingi taqdiri: birinchi rad etishdan keyingi birinchi qaror —
+     * tasdiqlandi (passed) / yana rad etildi (failed); qaror yo'q, lekin qayta yuklangan — pending;
+     * umuman qayta topshirilmagan — none. Davrda rad etilmagan bo'lsa — null.
+     */
+    private function rejectFate(Collection $logs, \Carbon\Carbon $from, \Carbon\Carbon $to): ?string
+    {
+        $after = null;
+        foreach ($logs as $i => $l) {
+            $at = \Carbon\Carbon::parse($l->created_at);
+            if ($l->action === 'reject' && $at >= $from && $at <= $to) {
+                $after = $i;
+                break;
+            }
+        }
+        if ($after === null) {
+            return null;
+        }
+        $uploaded = false;
+        foreach ($logs->slice($after + 1) as $l) {
+            if ($l->action === 'approve') {
+                return 'passed';
+            }
+            if ($l->action === 'reject') {
+                return 'failed';
+            }
+            if ($l->action === 'upload') {
+                $uploaded = true;
+            }
+        }
+
+        return $uploaded ? 'pending' : 'none';
     }
 
     /**
@@ -808,16 +880,17 @@ class VedomostSubmissionController extends Controller
     /**
      * Daraxtni depth bilan tekis qatorlar massiviga yoyadi.
      */
-    private function flattenReportTree(array $nodes, int $depth, array &$out): void
+    private function flattenReportTree(array $nodes, int $depth, array $path, array &$out): void
     {
         foreach ($nodes as $node) {
             $out[] = [
                 'label'        => $node['label'],
+                'path'         => [...$path, $node['label']],
                 'depth'        => $depth,
                 'metrics'      => $node['metrics'],
                 'has_children' => !empty($node['children']),
             ];
-            $this->flattenReportTree($node['children'], $depth + 1, $out);
+            $this->flattenReportTree($node['children'], $depth + 1, [...$path, $node['label']], $out);
         }
     }
 

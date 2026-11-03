@@ -193,3 +193,35 @@ test('jamlanma: keshi yo\'qlari vaqt chegarasidan oshsa fonga qo\'yiladi (timeou
     expect($left)->toBe([$b->id])->and($again)->toBe([$b->id]);
     \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\BuildVedomostJamlanmaRows::class, 1);
 });
+
+test('svodnaya hisobot: guruhcha loglari ham olinadi, rad etilganlarning keyingi taqdiri', function () {
+    $mk = fn (int $g) => reviewSub($g, 'Xirurgiya', null);
+    [$a1, $a2] = [$mk(11), $mk(12)];           // bitta jamlangan qator (guruhchalar)
+    $b = $mk(13);
+    $c = $mk(14);
+    $log = fn ($v, $act, $to, $at) => \App\Models\VedomostSubmissionLog::create(['vedomost_submission_id' => $v->id, 'action' => $act, 'from_status' => null, 'to_status' => $to])
+        ->forceFill(['created_at' => $at])->save();
+    // A: rad — qayta yuklangan (guruhcha yozuviga) — tasdiqlandi
+    $log($a1, 'upload', 'received', '2026-10-01 10:00');
+    $log($a1, 'reject', 'rejected', '2026-10-02 10:00');
+    $log($a2, 'upload', 'received', '2026-10-05 10:00');
+    $log($a2, 'approve', 'approved', '2026-10-06 10:00');
+    // B: rad — yana rad;  C: rad — qayta topshirilmagan
+    $log($b, 'reject', 'rejected', '2026-10-02 11:00');
+    $log($b, 'reject', 'rejected', '2026-10-09 11:00');
+    $log($c, 'reject', 'rejected', '2026-10-03 11:00');
+
+    $agg = collect([
+        (object) ['id' => $a1->id, 'ids' => [$a1->id, $a2->id], 'status' => 'approved', 'created_at' => '2026-09-01'],
+        (object) ['id' => $b->id, 'ids' => [$b->id], 'status' => 'rejected', 'created_at' => '2026-09-01'],
+        (object) ['id' => $c->id, 'ids' => [$c->id], 'status' => 'rejected', 'created_at' => '2026-09-01'],
+    ]);
+    $m = new ReflectionMethod(VedomostSubmissionController::class, 'reportDateSections');
+    $m->setAccessible(true);
+    [, $contrib] = $m->invoke(app(VedomostSubmissionController::class), $agg, \Carbon\Carbon::parse('2026-09-14'), \Carbon\Carbon::parse('2026-10-31')->endOfDay(),
+        VedomostSubmission::statusLabels(), []);
+
+    expect($contrib[$a1->id])->toMatchArray(['fate|passed' => 1, 'period|upload' => 2, 'period|approve' => 1, 'close|approved' => 1])
+        ->and($contrib[$b->id])->toMatchArray(['fate|failed' => 1])
+        ->and($contrib[$c->id])->toMatchArray(['fate|none' => 1]);
+});

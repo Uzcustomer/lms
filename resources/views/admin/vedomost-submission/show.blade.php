@@ -131,6 +131,7 @@
                     'wrong_document' => ["Noto'g'ri fayl", '#991b1b', '#fee2e2'],
                 ][$v->ai_verdict ?? ''] ?? ['Nomuvofiqlik bor', '#713f12', '#fef08a'];
             @endphp
+            @if($aiAllowed)
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="padding:18px;margin-top:14px;" id="ai-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
                     <h3 style="font-size:16px;font-weight:700;color:#1e293b;display:flex;align-items:center;gap:8px;">
@@ -354,6 +355,7 @@
                     </script>
                 @endif
             </div>
+            @endif
 
             {{-- Amallar --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="padding:18px;margin-top:14px;">
@@ -434,7 +436,7 @@
                         @csrf
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                             <label for="rejection_reason" style="font-size:12px;color:#64748b;">Rad etish sababi (xatolarni yozing)</label>
-                            @if(!empty($aiRejectText))
+                            @if(!empty($aiRejectText) && $aiAllowed)
                                 <button type="button" onclick="document.getElementById('rejection_reason').value = @js($aiRejectText);"
                                         style="background:none;border:none;color:#1e40af;font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline;">AI topgan xatolarni qo'shish</button>
                             @endif

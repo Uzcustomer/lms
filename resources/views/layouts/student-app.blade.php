@@ -682,6 +682,7 @@
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Fan mavzulari') }}</span>
                 </a>
+                @if(auth()->guard('student')->user()?->hasOtrabotka())
                 <a href="{{ route('student.otrabotka') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.otrabotka') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
                     {{-- Qayta topshirish (Otrabotka): NB / past baholar va muddati (rang inline) --}}
                     <div class="rounded-xl flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;background:#ffedd5;">
@@ -691,6 +692,7 @@
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Qayta topshirish (Otrabotka)') }}</span>
                 </a>
+                @endif
                 @php $mobileStudent = auth()->guard('student')->user(); @endphp
                 @if($mobileStudent && (str_starts_with(strtolower($mobileStudent->group_name ?? ''), 'xd') || str_contains(strtolower($mobileStudent->citizenship_name ?? ''), 'orijiy')))
                 <a href="{{ route('student.visa-info.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.visa-info.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">

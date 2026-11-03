@@ -38,8 +38,23 @@ beforeEach(function () {
     (include database_path('migrations/2026_10_29_100000_create_vedomost_ai_tables.php'))->up();
     VedomostAiKey::create(['api_key' => 'paid-key-xxxxxxxxxxxxxxxxxxxxxx', 'key_hint' => '…xxxx', 'is_paid' => true, 'enabled' => true]);
 
-    auth()->setUser(new GenericUser(['id' => 1, 'name' => 'Registrator']));
+    // AI imkoniyatlari (tekshiruv natijalari, yig'ma oyna) — superadmin yoki u ruxsat berganlar.
+    auth()->setUser(new GenericUser(['id' => 1, 'name' => 'Superadmin']));
+    session(['active_role' => 'superadmin']);
+});
+
+test('AI natijalari: superadmin ruxsat bermagan registrator kira olmaydi (403)', function () {
+    $v = reviewSub(1, 'Xirurgiya', 'ok');
     session(['active_role' => 'registrator_ofisi']);
+
+    expect(fn () => app(VedomostAiReportController::class)->review(Request::create('/', 'GET', ['ids' => [$v->id]])))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect(app(\App\Services\VedomostAiAccess::class)->can('check'))->toBeFalse();
+
+    session(['active_role' => 'superadmin']);
+    expect(app(\App\Services\VedomostAiAccess::class)->can('check'))->toBeTrue()
+        ->and(app(\App\Services\VedomostAiAccess::class)->can('settings'))->toBeTrue()
+        ->and(app(\App\Services\VedomostAiAccess::class)->can('jamlanma'))->toBeTrue();
 });
 
 function reviewSub(int $group, string $subject, ?string $verdict, array $rows = []): VedomostSubmission
@@ -160,4 +175,21 @@ test('jonli kuzatuv: ishlayotgan vedomost (oxirgi qadam, kalit), navbat va oxirg
         ->and($d['jobs']['pending'])->toBe(1)
         ->and($d['worker_warning'])->toBeTrue()
         ->and($d['requests'][0]['error_type'])->toBe('rate_limit');
+});
+
+test('jamlanma: keshi yo\'qlari vaqt chegarasidan oshsa fonga qo\'yiladi (timeout bo\'lmaydi), qayta bosilganda takror navbat yo\'q', function () {
+    foreach (glob(database_path('migrations/*vedomost_jamlanma_rows*')) as $f) {
+        (include $f)->up();
+    }
+    \Illuminate\Support\Facades\Queue::fake();
+    $a = reviewSub(1, 'Xirurgiya', 'ok');
+    $b = reviewSub(2, 'Terapiya', 'ok');
+    DB::table('vedomost_jamlanma_rows')->insert(['vedomost_submission_id' => $a->id, 'rows' => '[]', 'built_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+
+    $excel = app(\App\Services\VedomostJamlanmaExcel::class);
+    $left = $excel->warm(collect([$a, $b]), 0);
+    $again = $excel->warm(collect([$a, $b]), 0);
+
+    expect($left)->toBe([$b->id])->and($again)->toBe([$b->id]);
+    \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\BuildVedomostJamlanmaRows::class, 1);
 });

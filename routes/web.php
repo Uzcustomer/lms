@@ -904,6 +904,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'index'])->name('index');
                 Route::post('/settings', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'saveSettings'])->name('settings');
+                // Face ID yo'q talabalar ro'yxati ({studentIdNumber} dan oldin turishi kerak)
+                Route::get('/missing', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'missing'])->name('missing');
                 Route::get('/{studentIdNumber}', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'show'])->name('show');
                 Route::post('/{studentIdNumber}/lookup', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'lookup'])->name('lookup');
                 Route::post('/{studentIdNumber}/verify', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'verify'])->name('verify');
@@ -1019,6 +1021,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/ai-settings', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'save'])->name('ai-settings.save');
             Route::post('/ai-settings/models', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'refreshModels'])->name('ai-settings.models');
             Route::post('/ai-settings/queue-pending', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'queuePending'])->name('ai-settings.queue-pending');
+            Route::get('/ai-settings/access/search', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'accessSearch'])->name('ai-settings.access.search');
+            Route::post('/ai-settings/access', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'accessSave'])->name('ai-settings.access.save');
             Route::post('/ai-settings/keys', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'storeKey'])->name('ai-settings.keys.store');
             Route::post('/ai-settings/keys/{key}', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'updateKey'])->whereNumber('key')->name('ai-settings.keys.update');
             Route::post('/ai-settings/keys/{key}/delete', [\App\Http\Controllers\Admin\VedomostAiSettingsController::class, 'destroyKey'])->whereNumber('key')->name('ai-settings.keys.destroy');

@@ -7,6 +7,7 @@ use App\Models\MarkingSystemScore;
 use App\Models\VedomostAiKey;
 use App\Models\VedomostAiRequest;
 use App\Models\VedomostSubmission;
+use App\Services\VedomostAiAccess;
 use App\Services\VedomostAiDispatcher;
 use App\Services\VedomostAiSettings;
 use App\Services\VedomostGeminiClient;
@@ -22,10 +23,6 @@ use Illuminate\Support\Facades\DB;
  */
 class VedomostAiSettingsController extends Controller
 {
-    private const VIEW_ROLES = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
-
-    private const KEY_ROLES = ['superadmin', 'admin', 'kichik_admin'];
-
     public function __construct(
         private VedomostAiSettings $settings,
         private VedomostGeminiClient $gemini,
@@ -52,6 +49,9 @@ class VedomostAiSettingsController extends Controller
             'renderer' => \App\Services\VedomostScanReader::rendererAvailable(),
             'systemPass' => MarkingSystemScore::YN_JN_MT_LIMIT,
             'systemPassIntl' => MarkingSystemScore::INTERNATIONAL_VEDOMOST_PASS,
+            'isSuper' => VedomostAiAccess::isSuperadmin(),
+            'access' => VedomostAiAccess::isSuperadmin() ? app(VedomostAiAccess::class)->all() : [],
+            'accessPerms' => VedomostAiAccess::PERMS,
         ]);
     }
 
@@ -436,9 +436,40 @@ class VedomostAiSettingsController extends Controller
 
     private function checkAccess(): void
     {
-        if (!auth()->user() || !in_array(session('active_role', ''), self::VIEW_ROLES, true)) {
-            abort(403, "AI sozlamalarini faqat admin va registrator ofisi ko'ra oladi.");
+        // Superadmin yoki u «Ruxsatlar» bo'limida AI sozlamalariga ruxsat bergan foydalanuvchi.
+        if (!auth()->user() || !app(VedomostAiAccess::class)->can('settings')) {
+            abort(403, "AI sozlamalari — faqat superadmin va u ruxsat bergan foydalanuvchilar uchun.");
         }
+    }
+
+    private function checkSuperadmin(): void
+    {
+        if (!auth()->user() || !VedomostAiAccess::isSuperadmin()) {
+            abort(403, "Ruxsatlarni faqat superadmin boshqaradi.");
+        }
+    }
+
+    /** Ism-familiya bo'yicha foydalanuvchi qidirish (ruxsat berish uchun). */
+    public function accessSearch(Request $request)
+    {
+        $this->checkSuperadmin();
+
+        return response()->json(app(VedomostAiAccess::class)->search((string) $request->get('q', '')));
+    }
+
+    /** Ruxsatlar ro'yxatini saqlash: [{type, id, perms: {settings, check, jamlanma}}]. */
+    public function accessSave(Request $request)
+    {
+        $this->checkSuperadmin();
+        $data = $request->validate([
+            'entries' => 'nullable|array',
+            'entries.*.type' => 'required|string|max:120',
+            'entries.*.id' => 'required|integer|min:1',
+            'entries.*.perms' => 'nullable|array',
+        ]);
+        app(VedomostAiAccess::class)->save($data['entries'] ?? []);
+
+        return redirect()->to(route('admin.vedomost-submission.ai-settings') . '#access')->with('success', 'AI ruxsatlari saqlandi.');
     }
 
     private function checkKeyAccess(): void
@@ -451,6 +482,7 @@ class VedomostAiSettingsController extends Controller
 
     private function canManageKeys(): bool
     {
-        return in_array(session('active_role', ''), self::KEY_ROLES, true);
+        // AI sozlamalariga kira olgan har kim (superadmin yoki u ruxsat bergan) kalitlarni ham boshqaradi.
+        return app(VedomostAiAccess::class)->can('settings');
     }
 }

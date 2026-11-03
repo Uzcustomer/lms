@@ -169,7 +169,8 @@ class YnQaydnomaDataService
             'amaliyot_oqituvchilari' => $practiceTeacher ?: '',
             'umumiy_soat' => $subject->total_acload,
             'kredit' => $subject->credit,
-            'yn_sanasi' => optional($submission?->exam_date)->format('d.m.Y'),
+            'yn_sanasi' => $this->ynDate($group->group_hemis_id, $subject, (string) $semesterCode)
+                ?? optional($submission?->exam_date)->format('d.m.Y'),
             // Kurs/semestr — inson o'qiydigan nom (level_name="3-kurs", name="6-semestr"),
             // ichki kod (13/16) emas — aks holda AI "13 vs 3-kurs" deb noto'g'ri belgilaydi.
             'kurs' => $semester->level_name ?? $semester->level_code ?? null,
@@ -226,5 +227,28 @@ class YnQaydnomaDataService
         }
 
         return $year;
+    }
+
+    /**
+     * YN o'tkazilgan sana — talabalar 12-shakl imtihonini topshirgan kun (jurnaldagi «OSKI va Test
+     * natijalari» bilan bir xil manba: exam_schedules, guruh sathidagi yozuv). Test bilan yopiladigan
+     * fanda — Test sanasi (Test bo'lmasa/N/A — OSKI), faqat OSKI — OSKI sanasi. Topilmasa null.
+     */
+    private function ynDate(string $groupHemisId, CurriculumSubject $subject, string $semesterCode): ?string
+    {
+        $keys = array_values(array_filter([$subject->subject_id, $subject->curriculum_subject_hemis_id ?? null]));
+        $exam = \App\Models\ExamSchedule::whereNull('student_hemis_id')
+            ->where('group_hemis_id', $groupHemisId)
+            ->whereIn('subject_id', $keys)
+            ->where('semester_code', $semesterCode)
+            ->first();
+        if (!$exam) {
+            return null;
+        }
+        $oski = !$exam->oski_na && $exam->oski_date ? $exam->oski_date : null;
+        $test = !$exam->test_na && $exam->test_date ? $exam->test_date : null;
+        $date = $subject->closing_form === 'oski' ? ($oski ?? $test) : ($test ?? $oski);
+
+        return $date ? $date->format('d.m.Y') : null;
     }
 }

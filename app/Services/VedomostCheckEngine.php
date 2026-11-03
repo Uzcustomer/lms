@@ -123,6 +123,10 @@ class VedomostCheckEngine
             return $rec;
         };
 
+        // 6-kurs: Mark va Test markazisiz — faqat vedomostning o'z hisobi (rasmiy shablon formulasi).
+        $k6 = $kurs6 ? $this->kurs6Mode($closing, $w, $scanRows) : null;
+        $k6Absent = [];
+
         $notTaken = [];
         $rows = [];
         $tmTestFound = 0;
@@ -153,6 +157,11 @@ class VedomostCheckEngine
                 $notTaken[] = $stu['fish'] ?? '';
                 continue;
             }
+            // 6-kurs: Mark ro'yxati bilan solishtirilmaydi — vedomostda yo'q talaba faqat ma'lumot.
+            if ($kurs6 && $s === null && !$expelled) {
+                $k6Absent[] = $stu['fish'] ?? '';
+                continue;
+            }
 
             if ($s !== null) {
                 foreach ($matchFlags as [$t, $m]) {
@@ -177,7 +186,7 @@ class VedomostCheckEngine
                     array_push($unclear, 'jb_pct', 'mt_ball');
                 }
                 foreach (self::COMPARE as $key => [$label, $pf, $col]) {
-                    if (($key === 'oski' && !$useO) || ($key === 'test' && !$useT)) {
+                    if ($kurs6 || ($key === 'oski' && !$useO) || ($key === 'test' && !$useT)) {
                         $cells[$key] = ['status' => 'skip'];
                         continue;
                     }
@@ -198,7 +207,7 @@ class VedomostCheckEngine
                     $set('ocr');
                 }
                 if ($kurs6) {
-                    foreach ($this->kurs6Checks($s, $w) as $m) {
+                    foreach ($this->kurs6Checks($s, $w, $k6) as $m) {
                         $flags[] = ['t' => 'bad', 'm' => '6-kurs: ' . $m];
                         $set('bad');
                     }
@@ -263,7 +272,7 @@ class VedomostCheckEngine
                 }
             }
 
-            foreach ($this->entryCheck($vt, $w, $settings) as $p) {
+            foreach ($kurs6 ? [] : $this->entryCheck($vt, $w, $settings) as $p) {
                 $flags[] = ['t' => 'bad', 'm' => 'Qoida: ' . $p];
                 $set('bad');
             }
@@ -333,6 +342,8 @@ class VedomostCheckEngine
                 // Kontingentda topilgan (haqiqiy talaba, faqat Mark ro'yxatiga kirmagan) — «noto'g'ri fayl» hisobida
                 // izohlangan qator sifatida olinadi.
                 'known' => $k !== null,
+                // 6-kurs: faqat kontingent tekshiriladi — kontingentda bor talaba xato emas.
+                'info' => $kurs6 && $k !== null && !$expelled,
                 'note' => ($idOwner ? 'Vedomost PDFdagi ID boshqa talabaga tegishli (' . ($idOwner['fio'] ?? '') . ') — ID xato o\'qilgan bo\'lishi mumkin. ' : '') . match (true) {
                     $expelled => "O'qishdan chetlashtirilgan talaba (" . ($k['group'] ?? '?') . ') — Mark ro\'yxatida yo\'q, ma\'lumot uchun',
                     $k !== null && !empty($k['reason']) => $k['reason'],
@@ -352,7 +363,14 @@ class VedomostCheckEngine
         if ($useT && !$sinov && $tmUsed['test'] === false && !$kurs6) {
             $issues[] = ['t' => 'info', 'm' => "Test markazida bu fan bo‘yicha birorta ham Test natijasi topilmadi. Agar bu sinov fan bo‘lsa, yopilish shakli \"sinov\" bo‘lishi kerak (Test % Joriy % bilan solishtiriladi)."];
         }
-        if ($sinov) {
+        if ($kurs6) {
+            $issues[] = ['t' => 'info', 'm' => '6-kurs rejimi: Mark va Test markazi bilan solishtirilmadi — faqat vedomostning o‘z hisobi rasmiy shablon formulasi bo‘yicha tekshirildi ('
+                . $k6['label'] . '; JN ' . $w['jb'] . ' / MT ' . $w['mt'] . ($k6['wO'] ? ' / OSKE ' . $k6['wO'] : '') . ($k6['wT'] ? ' / Test ' . $k6['wT'] : '') . ').'];
+            if (!empty($k6Absent)) {
+                $issues[] = ['t' => 'info', 'm' => count($k6Absent) . " ta talaba Markda bor, lekin vedomostda yo'q (6-kurs — ma'lumot uchun): "
+                    . implode(', ', array_slice($k6Absent, 0, 12)) . (count($k6Absent) > 12 ? ' …' : '')];
+            }
+        } elseif ($sinov) {
             $issues[] = ['t' => 'info', 'm' => 'Sinov fan rejimi: Test % Joriy % bilan solishtirildi, Test markazi Test fayli ishlatilmadi.'];
         }
         foreach ($this->weightIssues($w, $closing, $weights) as $wi) {
@@ -388,7 +406,7 @@ class VedomostCheckEngine
             $wrong[] = "talabalar: tizimdagi {$sysN} talabadan faqat {$matchedN} tasi skanerda topildi";
         }
 
-        $counts = ['total' => $sysN, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => count(array_filter($extraRows, fn ($e) => !$e['expelled'])),
+        $counts = ['total' => $sysN, 'ok' => 0, 'bad' => 0, 'ocr' => 0, 'missing' => 0, 'nopdf' => 0, 'extra' => count(array_filter($extraRows, fn ($e) => !$e['expelled'] && !$e['info'])),
             'expelled' => count(array_filter($extraRows, fn ($e) => $e['expelled'])),
             'edited' => count(array_filter($rows, fn ($r) => !empty($r['edited']))) + count(array_filter($extraRows, fn ($r) => !empty($r['edited']))),
             // Mark va Test markazi qiymatlari hisobotda o'zgartirilgani — tasdiqlashda sabab so'raladi.
@@ -412,7 +430,9 @@ class VedomostCheckEngine
             $summary = "Farq topilmadi, lekin {$counts['ocr']} ta qatorni vedomost PDFdan ko'z bilan tekshirish kerak.";
         } else {
             $verdict = 'ok';
-            $summary = "Vedomost tizim ma'lumotiga to'liq mos keladi ({$sysN} talaba).";
+            $summary = $kurs6
+                ? "Vedomost hisobi rasmiy shablon formulasiga to'liq mos keladi ({$sysN} talaba, 6-kurs)."
+                : "Vedomost tizim ma'lumotiga to'liq mos keladi ({$sysN} talaba).";
         }
         if ($counts['expelled'] > 0 && $verdict !== 'wrong_document') {
             $summary .= " Vedomostda {$counts['expelled']} ta chetlashtirilgan talaba bor (ma'lumot uchun).";
@@ -699,28 +719,137 @@ class VedomostCheckEngine
         return ($jn !== null && $jn < $pass) || ($mt !== null && $mt < $pass);
     }
 
-    /** 6-kurs: PDFdagi ballar rasmiy shablon formulasiga mosmi (Python kurs6). */
-    private function kurs6Checks(array $s, array $w): array
+    /**
+     * 6-kurs rejimi (Python K6_DEF + avto-sinov): qaysi nazorat bor va uning vazni.
+     * Yopilish shakli bo'lmasa — vedomost vaznlaridan; Test bor, OSKE yo'q va qatorlarning ≥80% ida
+     * Test% = Joriy% bo'lsa — sinov.
+     */
+    private function kurs6Mode(string $closing, array $w, array $scanRows): array
     {
-        $n = fn ($k) => VedomostScanReader::num($s[$k] ?? null);
-        $jn = $n('jb_pct');
-        $mt = $n('mt_pct');
-        if ($jn === null || $mt === null) {
-            return [];
+        $n = fn ($r, $k) => VedomostScanReader::num($r[$k] ?? null);
+        $auto = !in_array($closing, ['oski', 'test', 'oski_test', 'sinov', 'normativ'], true);
+        $needO = $auto ? $w['oski'] > 0 : in_array($closing, ['oski', 'oski_test'], true);
+        $needT = $auto ? $w['test'] > 0 : in_array($closing, ['test', 'oski_test', 'sinov', 'normativ'], true);
+        $sin = $closing === 'sinov';
+        if (!$sin && $needT && !$needO) {
+            $tr = array_filter($scanRows, fn ($r) => ($n($r, 'test_pct') ?? 0) > 0);
+            $eq = array_filter($tr, fn ($r) => $n($r, 'test_pct') == $n($r, 'jb_pct'));
+            $noO = !array_filter($scanRows, fn ($r) => ($n($r, 'oski_pct') ?? 0) > 0);
+            $sin = $tr && count($eq) / count($tr) >= 0.8 && $noO;
         }
+        $dual = $needO && $needT;
+        $wO = $needO ? ($w['oski'] > 0 ? $w['oski'] : ($dual ? 15 : 30)) : 0;
+        $wT = $needT ? ($w['test'] > 0 ? $w['test'] : ($dual ? 15 : 30)) : 0;
+        $label = $dual ? 'OSKE + Test' : ($needO ? 'OSKE' : ($needT ? ($sin ? 'Sinov (Test = Joriy)' : 'Test') : 'imtihonsiz'));
+
+        return compact('needO', 'needT', 'sin', 'dual', 'wO', 'wT', 'label');
+    }
+
+    /**
+     * 6-kurs: vedomost qatori rasmiy shablon formulasiga mosmi (Python kurs6, Test markazisiz).
+     *  JB ball = JB%×wj/100 (JB<60 → 0), MT ball = MT%×wm/100 (MT<60 → 0), yaxlitlanmaydi; JN+MT = ROUND(JB+MT) (JB yoki MT<60 → 0)
+     *  30 lik nazorat: ROUND(%×30/100) (<60% bo'lib 18 chiqsa → 17); 15/15: ball = %×15/100 (<60 → 0), YN = JN+MT + ROUND(OSKE+Test)
+     *  JN+MT/70 < 60% → -2; nazorat 0 → -1; nazorat <60 → 0
+     */
+    private function kurs6Checks(array $s, array $w, array $k): array
+    {
+        $n = fn ($f) => VedomostScanReader::num($s[$f] ?? null);
+        $f2 = fn ($x) => $this->f(round((float) $x, 2));
+        $src = 'vedomost PDFda';
         $out = [];
-        $jbE = $jn >= 60 ? $jn * $w['jb'] / 100 : 0;
-        $mbE = $mt >= 60 ? $mt * $w['mt'] / 100 : 0;
-        $jnmtE = ($jn < 60 || $mt < 60) ? 0 : $this->floorRound($jbE + $mbE);
-        foreach ([['Joriy', $jn, 'jb_ball', $jbE], ["Mustaqil ta’lim", $mt, 'mt_ball', $mbE]] as [$lbl, $pct, $bf, $e]) {
-            $b = $n($bf);
-            if ($b !== null && abs($b - $e) > 0.051) {
-                $out[] = "{$lbl} " . $this->f($pct) . '% → ' . $this->f(round($e, 2)) . ' ball bo‘lishi kerak, vedomost PDFda ' . $this->f($b);
+        [$jn, $jb, $mt, $mb, $o, $ob, $t, $tb, $sum, $yn] = array_map($n, ['jb_pct', 'jb_ball', 'mt_pct', 'mt_ball', 'oski_pct', 'oski_ball', 'test_pct', 'test_ball', 'jbmton_ball', 'yn']);
+        ['needO' => $needO, 'needT' => $needT, 'sin' => $sin, 'dual' => $dual, 'wO' => $wO, 'wT' => $wT] = $k;
+
+        if (!$needO && $o !== null && $o != 0) {
+            $out[] = 'OSKE ' . $this->f($o) . '% qo‘yilgan, lekin bu fan OSKE bilan yopilmaydi';
+        }
+        if (!$needT && $t !== null && $t != 0) {
+            $out[] = 'Test ' . $this->f($t) . '% qo‘yilgan, lekin bu fan Test bilan yopilmaydi';
+        }
+        $ctl = function (?float $pct, int $wt) use ($dual): ?float {
+            if ($pct === null) {
+                return null;
+            }
+            if ($dual) {
+                return $pct >= 60 ? $pct * $wt / 100 : 0.0;
+            }
+            $r = $this->floorRound($pct * $wt / 100);
+
+            return (float) (($r == $wt * 0.6 && $pct < 60) ? $r - 1 : $r);
+        };
+        $jbE = $jn === null ? null : ($jn >= 60 ? $jn * $w['jb'] / 100 : 0.0);
+        $mbE = $mt === null ? null : ($mt >= 60 ? $mt * $w['mt'] / 100 : 0.0);
+        $jnmtE = ($jn === null || $mt === null) ? null : (($jn < 60 || $mt < 60) ? 0 : $this->floorRound($jbE + $mbE));
+        $oE = $needO ? $ctl($o, $wO) : null;
+        $tE = $needT ? $ctl($t, $wT) : null;
+
+        $exp = null;
+        $why = '';
+        if ($jnmtE !== null) {
+            $nn = ($w['jb'] + $w['mt']) ? $jnmtE / ($w['jb'] + $w['mt']) : 1;
+            $base = 'JN+MT ' . $f2($jbE) . ' + ' . $f2($mbE) . ' = ' . $f2($jbE + $mbE) . " → {$jnmtE}";
+            if ($nn < 0.6) {
+                [$exp, $why] = [-2, "JN+MT {$jnmtE} (" . round($nn * 100) . '%) < 60% → qo‘yilmadi'];
+            } elseif ($dual) {
+                if (!$o || !$t) {
+                    [$exp, $why] = [-1, (!$o ? 'OSKE' : 'Test') . ' 0 → kelmadi'];
+                } elseif ($o < 60 || $t < 60) {
+                    [$exp, $why] = [0, ($o < 60 ? 'OSKE ' . $this->f($o) : 'Test ' . $this->f($t)) . '% < 60 → 0'];
+                } else {
+                    $ct = $this->floorRound($oE + $tE);
+                    $exp = $jnmtE + $ct;
+                    $why = "{$base}; OSKE " . $f2($oE) . ' + Test ' . $f2($tE) . ' = ' . $f2($oE + $tE) . " → {$ct}; jami {$exp}";
+                }
+            } elseif ($needO || $needT) {
+                [$lbl, $p, $cb, $wx] = $needO ? ['OSKE', $o, $oE, $wO] : ['Test', $t, $tE, $wT];
+                if ($sin && $p !== null && $p == $jn && $p >= 60) {
+                    $exp = $jnmtE + $cb;
+                    $why = "JN+MT {$jnmtE}; {$lbl} (sinov) " . $this->f($p) . "% × {$wx} → " . $this->f($cb) . "; jami " . $this->f($exp);
+                } elseif (!$p) {
+                    [$exp, $why] = [-1, "{$lbl} 0 → kelmadi"];
+                } elseif ($p < 60) {
+                    [$exp, $why] = [0, "{$lbl} " . $this->f($p) . '% < 60 → 0'];
+                } else {
+                    $exp = $jnmtE + $cb;
+                    $why = "{$base}; {$lbl} " . $this->f($p) . "% × {$wx}/100 = " . $f2($p * $wx / 100) . ' → ' . $this->f($cb) . '; jami ' . $this->f($exp);
+                }
             }
         }
-        $s6 = $n('jbmton_ball');
-        if ($s6 !== null && $s6 != $jnmtE) {
-            $out[] = 'JN+MT ' . $this->f(round($jbE, 2)) . ' + ' . $this->f(round($mbE, 2)) . " → {$jnmtE} bo‘lishi kerak, vedomost PDFda " . $this->f($s6);
+
+        if ($yn === null || $yn >= 0 || $exp !== null) {
+            $chk = function (string $lbl, ?float $pct, ?float $ball, ?float $e, float $tol, bool $zeroOk) use (&$out, $f2, $src) {
+                if ($pct === null || $e === null) {
+                    return;
+                }
+                if ($ball === null) {
+                    $out[] = "{$lbl} bali bo‘sh (kerak " . $f2($e) . ')';
+
+                    return;
+                }
+                if (abs($ball - $e) > $tol && !($zeroOk && $ball == 0)) {
+                    $out[] = "{$lbl} " . $this->f($pct) . '% → ' . $f2($e) . " ball bo‘lishi kerak, {$src} " . $this->f($ball);
+                }
+            };
+            $chk('Joriy', $jn, $jb, $jbE, 0.051, false);
+            $chk("Mustaqil ta’lim", $mt, $mb, $mbE, 0.051, false);
+            if ($needO) {
+                $o === null ? $out[] = 'OSKE bahosi bo‘sh' : $chk('OSKE', $o, $ob, $oE, $dual ? 0.051 : 0.01, $o < 60);
+            }
+            if ($needT) {
+                $t === null ? $out[] = 'Test bahosi bo‘sh' : $chk('Test', $t, $tb, $tE, $dual ? 0.051 : 0.01, $t < 60 && !$sin);
+            }
+            if ($sin && $t !== null && $jn !== null && $t != $jn) {
+                $out[] = 'sinov: Test ' . $this->f($t) . '% ≠ Joriy ' . $this->f($jn) . '% (joriy baho testga ko‘chirilmagan)';
+            }
+            if ($jnmtE !== null && $sum !== null && $sum != $jnmtE) {
+                $out[] = 'JN+MT ' . $f2($jbE) . ' + ' . $f2($mbE) . " → {$jnmtE} bo‘lishi kerak, {$src} " . $this->f($sum);
+            }
+            if ($exp !== null) {
+                $okNeg = $exp < 0 && ($yn === null || $yn == $exp || $yn == 0);
+                if (!($yn == $exp && $yn !== null) && !$okNeg) {
+                    $out[] = "umumiy ball: {$why}" . ($exp == -1 ? ' (YN -1/bo‘sh)' : ($exp == -2 ? ' (YN -2/bo‘sh)' : '')) . ", {$src} YN " . ($yn !== null ? $this->f($yn) : 'bo‘sh');
+                }
+            }
         }
 
         return $out;

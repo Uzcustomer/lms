@@ -170,10 +170,18 @@ class VedomostJamlanmaExcel
         if (!$sub->exists || !$sub->id) {
             return $rows; // saqlanmagan yozuv (masalan, sinov) — keshlanmaydi
         }
-        DB::table('vedomost_jamlanma_rows')->updateOrInsert(
-            ['vedomost_submission_id' => $sub->id],
-            ['rows' => json_encode($rows, JSON_UNESCAPED_UNICODE), 'built_at' => now(), 'updated_at' => now(), 'created_at' => now()]
-        );
+        // Kesh — faqat tezlashtirish: jadval yo'q (migratsiya qilinmagan) yoki yozishda xato bo'lsa ham
+        // jamlanma yuklanaveradi.
+        try {
+            if (Schema::hasTable('vedomost_jamlanma_rows')) {
+                DB::table('vedomost_jamlanma_rows')->updateOrInsert(
+                    ['vedomost_submission_id' => $sub->id],
+                    ['rows' => json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE), 'built_at' => now(), 'updated_at' => now(), 'created_at' => now()]
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("[Jamlanma] kesh yozilmadi #{$sub->id}: " . $e->getMessage());
+        }
 
         return $rows;
     }

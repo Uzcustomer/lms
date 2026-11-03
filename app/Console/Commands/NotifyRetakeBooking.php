@@ -102,8 +102,12 @@ class NotifyRetakeBooking extends Command
         }
 
         $lines[] = '';
-        $lines[] = 'Vaqt tanlash majburiy emas: tanlamasangiz, muddat tugaguncha istalgan vaqtda topshirishingiz mumkin. '
-            . 'Vaqt tanlasangiz, faqat shu vaqtda topshira olasiz; kelmasangiz, bron bekor bo\'ladi.';
+        $lines[] = 'Qayta topshirish faqat tanlangan kun va vaqtda — vaqt tanlash majburiy. '
+            . 'Tanlangan vaqtda kelmasangiz, urinish kuyadi va keyingi urinish uchun yangi vaqt tanlaysiz.';
+        if (collect($debts)->contains(fn ($d) => !empty($d['excused']))) {
+            $lines[] = 'Sababli NB bo\'yicha bitta urinish: kun arizada belgilangan, faqat vaqtni tanlaysiz; kelolmasangiz, '
+                . 'urinish kuymaydi — shu kuni ' . config('services.moodle.retake_slot_to', '17:00') . ' gacha boshqa vaqt tanlashingiz mumkin.';
+        }
 
         return implode("\n", $lines);
     }

@@ -86,6 +86,9 @@
                 $retakeDay = $debt['retake_day'];
                 $weekdays = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
                 $retakeDayText = $retakeDay ? $retakeDay->format('d.m.Y') . ', ' . $weekdays[$retakeDay->dayOfWeek] : null;
+                // Sababli NB: bitta urinish, kelmasa kuymaydi — shu kuni ish vaqti oxirigacha boshqa vaqt tanlaydi
+                $dayEnd = (string) config('services.moodle.retake_slot_to', '17:00');
+                $triesLeft = $debt['tries_left'];
                 // Vaqt tanlangan bo'lsa forma "O'zgartirish" bosilgandagina ochiladi (xato bo'lsa ochiq qoladi)
                 $formOpen = !$debt['is_booked'] || $errors->any() || ($flash['type'] ?? '') === 'error';
             @endphp
@@ -113,7 +116,16 @@
             @endif
 
             @if(($debt['state'] ?? '') === 'missed')
-                <div class="rb-alert error">Tanlangan vaqtda kelmadingiz, arizangiz bekor qilindi — qaytadan tanlang.</div>
+                <div class="rb-alert error">
+                    @if($debt['excused'])
+                        Tanlangan vaqtda kelmadingiz. Sababli NB bo'yicha urinishingiz kuymadi —
+                        {{ $retakeDay ? $retakeDay->format('d.m.Y') . ' kuni' : 'muddat ichida' }} {{ $dayEnd }} gacha boshqa vaqtni tanlab kelishingiz mumkin.
+                    @elseif($triesLeft !== null && (int) $triesLeft <= 0)
+                        Tanlangan vaqtda kelmadingiz — urinish kuydi. Qayta topshirish urinishlari tugadi.
+                    @else
+                        Tanlangan vaqtda kelmadingiz — urinish kuydi. Keyingi urinish uchun yangi kun va vaqtni tanlang.
+                    @endif
+                </div>
             @endif
 
             @if($showForm && !$debt['quiz_uploaded'])
@@ -130,7 +142,7 @@
                     @else
                         <div><dt>Muddat</dt><dd>{{ $deadlineText ? $deadlineText . ' gacha' : '—' }}@if($debt['excused']) <small>(sababli ariza)</small>@endif</dd></div>
                     @endif
-                    <div><dt>Qolgan urinishlar</dt><dd>{{ $debt['tries_left'] ?? '—' }}</dd></div>
+                    <div><dt>Qolgan urinishlar</dt><dd>{{ $triesLeft ?? '—' }}@if($debt['excused']) <small>(sababli — bitta urinish)</small>@endif</dd></div>
                     <div><dt>Holat</dt><dd><span class="rb-chip {{ $debt['state'] }}">{{ $debt['state_label'] }}</span></dd></div>
                 </dl>
             </section>
@@ -142,7 +154,12 @@
                         {{ $debt['slot_start']->format('d.m.Y') }}, {{ $debt['slot_start']->format('H:i') }}–{{ $debt['slot_end']?->format('H:i') }}
                     </div>
                     <p class="rb-hint" style="margin:8px 0 0;">
-                        Shu vaqt oralig'ida test markazida Moodle'ga kirsangiz, qayta topshirish oynasi avtomatik ochiladi. Vaqtida kelmasangiz, bron bekor bo'ladi.
+                        Shu vaqt oralig'ida test markazida Moodle'ga kirsangiz, qayta topshirish oynasi avtomatik ochiladi.
+                        @if($debt['excused'])
+                            Vaqtida kelolmasangiz, urinish kuymaydi: shu kuni {{ $dayEnd }} gacha boshqa vaqtni tanlashingiz mumkin.
+                        @else
+                            Vaqtida kelmasangiz, urinish kuyadi va keyingi urinish uchun yangi kun va vaqt tanlaysiz.
+                        @endif
                         @if($debt['sync_pending']) <br><strong>Moodle bilan sinxronlash kutilmoqda.</strong> @endif
                     </p>
                     <div class="rb-actions">
@@ -218,12 +235,13 @@
             @endif
 
             <div class="rb-alert info">
-                @if($retakeDay)
-                    Vaqt tanlash majburiy emas: tanlamasangiz, {{ $retakeDay->format('d.m.Y') }} kuni istalgan vaqtda topshirishingiz mumkin.
+                @if($debt['excused'])
+                    Sababli NB: bitta urinish. Kun arizada belgilangan — siz faqat vaqtni tanlaysiz va shu vaqt oralig'ida topshirasiz.
+                    Tanlangan vaqtda kelolmasangiz, urinish kuymaydi: shu kuni {{ $dayEnd }} gacha boshqa vaqtni tanlab kelishingiz mumkin.
                 @else
-                    Vaqt tanlash majburiy emas: tanlamasangiz, muddat tugaguncha istalgan vaqtda topshirishingiz mumkin.
+                    Qayta topshirish faqat tanlangan kun va vaqt oralig'ida — vaqt tanlash majburiy.
+                    Tanlangan vaqtda kelmasangiz, urinish kuyadi va keyingi urinish uchun yangi kun va vaqt tanlaysiz.
                 @endif
-                Vaqt tanlasangiz, faqat shu vaqt oralig'ida topshira olasiz.
             </div>
 
             <a class="rb-back" href="{{ route('student.retake-booking.index') }}">← Barcha qarzlarim</a>

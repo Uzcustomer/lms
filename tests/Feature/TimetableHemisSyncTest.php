@@ -267,11 +267,11 @@ it('zaxira xona — umumiy faol «Kafedra mudiri xonasi» (kafedraga bog\'lanmay
     expect($amallar(['teacher']))->toBeGreaterThan(0)->and($amallar(['room']))->toBe(0);
 });
 
-it('boshqa kafedra xonasi avtomatik tanlanmaydi; aniq biriktirilgan mudir xonasi bandlik yaratmaydi', function () {
+it('mudir xonasi kafedraga bog\'lanmaydi — umumiy faol xona tanlanadi; mudir xonasi bandlik yaratmaydi', function () {
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
-    // Fan kafedrasining (501) xonasi yo'q — boshqa kafedraniki avtomatik tanlanmaydi.
+    // Fan kafedrasining (501) xonasi yo'q — umumiy faol "Kafedra mudiri xonasi" (birinchisi, KM777) olinadi.
     \App\Models\Auditorium::where('code', 'KM1')->delete();
     \App\Models\Auditorium::forceCreate(['code' => 'KM777', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 777]);
     \App\Models\Auditorium::forceCreate(['code' => 'KM888', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 888]);
@@ -295,8 +295,8 @@ it('boshqa kafedra xonasi avtomatik tanlanmaydi; aniq biriktirilgan mudir xonasi
     // Xona biriktirilmagan — o'rinbosar sifatida
     $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
     $a = $create();
-    expect($a['auditorium_code'])->toBeNull()->and($a['flags'])->toBe(['mudir_xonasi'])->and($a['blocked'])->not->toBeEmpty()
-        ->and($a['reason'])->toContain("Kafedra mudiri xonasi kafedraga bog'lanmagan (HEMIS): Anatomiya");
+    // Shu vaqtda HEMIS'da boshqa guruh ham shu xonada — mudir xonasi to'siq emas.
+    expect($a['auditorium_code'])->toBe('KM777')->and($a['flags'])->toBe(['mudir_xonasi'])->and($a['blocked'])->toBe([]);
 
     // Kartaning o'zida shu xona qo'yilgan (o'rinbosar belgisisiz) — baribir to'siq emas
     $s['card']->update(['auditorium_code' => 'KM777', 'auditorium_name' => 'Kafedra mudiri xonasi']);
@@ -2780,7 +2780,7 @@ it('updates ten simultaneous missing-room lessons to department placeholders wit
     expect($res['counts']['ok'])->toBe(10)->and($res['counts']['updates'])->toBe(0)->and($res['missing_room_count'])->toBe(10);
 });
 
-it('warns about unlinked department rooms and never selects a shared or foreign fallback', function () {
+it('mudir xonasi kafedraga bog\'lanmaydi: kafedrasiz yoki boshqa kafedraning faol xonasi ham tanlanadi, ogohlantirish yo\'q', function () {
     $s = hsSetup();
     $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
     \App\Models\Auditorium::where('code', 'KM1')->update(['department_hemis_id' => null]);
@@ -2789,15 +2789,14 @@ it('warns about unlinked department rooms and never selects a shared or foreign 
     $item['department']['name'] = 'Anatomiya';
     htFake([1596 => [$item]]);
     $res = htCall($s)->assertOk()->json();
-    $warning = "Kafedra mudiri xonasi kafedraga bog'lanmagan (HEMIS): Anatomiya";
-    expect($res['warnings'])->toBe([$warning])->and($res['rows'][0]['new_auditorium_code'])->toBe('EXISTING')
-        ->and($res['rows'][0]['fallback_room'])->toBeFalse()->and($res['missing_room_count'])->toBe(1);
+    expect($res['warnings'])->toBe([])->and($res['rows'][0]['new_auditorium_code'])->toBe('KM1')
+        ->and($res['rows'][0]['fallback_room'])->toBeTrue()->and($res['missing_room_count'])->toBe(1);
     $full = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
         ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
         ->assertOk()->json();
-    expect($full['warnings'])->toBe([$warning]);
+    expect($full['warnings'])->toBe([]);
     foreach ($full['groups'][0]['units'][0]['actions'] as $a) {
-        expect($a['auditorium_code'])->toBeNull()->and($a['blocked'])->not->toBeEmpty()->and($a['reason'])->toContain($warning);
+        expect($a['auditorium_code'])->toBe('KM1')->and($a['blocked'])->toBe([]);
     }
 });
 

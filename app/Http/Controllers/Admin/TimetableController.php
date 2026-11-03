@@ -6778,7 +6778,7 @@ class TimetableController extends Controller
         // Guruh bir vaqtda ikki joyda (boshqa sikl fani bilan kesishgan davr): amaliyot boshqa fan ma'ruzasi bilan — lecture_overlap
         // ("darsingiz ma'ruza bilan ustma-ust", amaliy blokida); qolganlari (amaliy–amaliy, ma'ruza–ma'ruza) — group_busy.
         // Bir birlik ichida amaliy o'z ma'ruzasidan keyin turadi (cycleDayPlan), shuning uchun faqat boshqa birliklar solishtiriladi.
-        // Sikl birliklari parallel bo'laklarmi: haftalikdagi bilan bir xil to'liq shart (bolakSiblings — tur, qamrov, oqim, talaba kesishuvi)
+        // Sikl birliklari parallel bo'laklarmi: haftalikdagi bilan bir xil to'liq shart (bolakSiblings — tur, qamrov, oqim)
         // birliklarning kartalari bo'yicha.
         $parMemo = [];
         $cycleParallel = function (int $ua, int $ub) use ($units, &$parMemo): bool {
@@ -10296,7 +10296,9 @@ class TimetableController extends Controller
     /**
      * Bitta fanning turli bo'laklari ("Fan (a)" va "Fan (b)"): guruhning turli talabalari —
      * bir vaqtda parallel o'tadi, guruh bandligi bo'yicha bir-biriga to'sqinlik qilmaydi
-     * (o'qituvchi va xona bandligi baribir tekshiriladi).
+     * (o'qituvchi va xona bandligi baribir tekshiriladi). Shartlar: asosiy nom bir xil, harf har xil;
+     * bir mashg'ulot turi; bir qamrov (fakultet, yo'nalish, kurs); bir oqim (ikkalasida ham bo'lsa).
+     * Talabalar soni hisobga olinmaydi — bo'laklarga teng bo'linmaydi, kartadagi son faol talabalarga mos kelmaydi.
      */
     private function bolakSiblings(TimetableCard $a, TimetableCard $b): bool
     {
@@ -10309,7 +10311,7 @@ class TimetableController extends Controller
             return false;
         }
 
-        return !$this->bolakStudentsOverlap($a, $b);
+        return true;
     }
 
     /** "Fan (a)" va "Fan (b)": asosiy nomi bir xil (katta-kichik harfsiz), bo'lak harfi har xil. */
@@ -10321,78 +10323,6 @@ class TimetableController extends Controller
         }
 
         return mb_strtolower(trim($ma[1])) === mb_strtolower(trim($mb[1])) && mb_strtolower($ma[2]) !== mb_strtolower($mb[2]);
-    }
-
-    /** Parallel to'plam kartalari (qamrov + tur bo'yicha) — so'rov davomida bir marta: "doska|qamrov|tur" => [karta, ...]. */
-    private array $bolakPoolMemo = [];
-
-    /**
-     * Bo'laklarda haqiqiy talaba kesishuvi — to'plam bo'yicha: a va b ga bog'langan parallel to'plamdagi barcha bo'laklar (bir fan
-     * asosiy nomi, tur, qamrov, oqim; umumiy guruhlar orqali bog'langan — (a) 03a, (b) 03b, (c) 03a+03b) talabalari yig'indisi to'plam
-     * qamragan guruhlar faol talabalari yig'indisidan ko'p bo'lsagina kesishadi. Juftlik bo'yicha o'rtacha ulush (11 / 2 = 5,5)
-     * ishlatilmaydi — u (c) ning 6 + 5 bo'linishini bilmaydi va 10 + 5,5 > 15 deb xato kesishuv chiqarardi. Bir bo'lakning bir xil
-     * guruhlar uchun bir nechta kartasi (haftada ikki dars) — bir marta (eng ko'p talabasi). Karta talabalari yoki guruh faol
-     * talabalari noma'lum (0) bo'lsa — kesishmaydi.
-     */
-    private function bolakStudentsOverlap(TimetableCard $a, TimetableCard $b): bool
-    {
-        if (!array_intersect($a->occupiedGroups(), $b->occupiedGroups())) {
-            return false;
-        }
-        $poolKey = $a->board_id . '|' . $this->groupScopeKey($a) . '|' . $a->training_type;
-        $this->bolakPoolMemo[$poolKey] ??= TimetableCard::where('board_id', $a->board_id)->where('training_type', $a->training_type)
-            ->where('specialty_name', $a->specialty_name)->where('course', $a->course)->get()
-            ->filter(fn ($c) => $this->groupScopeKey($c) === $this->groupScopeKey($a) && preg_match('/\(\p{L}\)\s*$/u', trim((string) $c->subject_name)))
-            ->values()->all();
-        $rx = '/^(.*?)\s*\((\p{L})\)\s*$/u';
-        preg_match($rx, trim((string) $a->subject_name), $ma);
-        $base = mb_strtolower(trim($ma[1] ?? ''));
-        $oqim = fn ($c) => mb_strtolower(trim((string) $c->oqim_label));
-        $cands = array_filter($this->bolakPoolMemo[$poolKey], function ($c) use ($rx, $base, $a, $oqim) {
-            return preg_match($rx, trim((string) $c->subject_name), $m) && mb_strtolower(trim($m[1])) === $base
-                && (!$a->oqim_label || !$c->oqim_label || $oqim($c) === $oqim($a));
-        });
-        $cands[] = $a;
-        $cands[] = $b;
-        // To'plam: a va b guruhlaridan boshlab umumiy guruh orqali bog'langan bo'laklar.
-        $groups = array_flip(array_merge($a->occupiedGroups(), $b->occupiedGroups()));
-        $members = [];
-        do {
-            $grew = false;
-            foreach ($cands as $c) {
-                if (!isset($members[$c->id ?? spl_object_id($c)]) && array_intersect_key(array_flip($c->occupiedGroups()), $groups)) {
-                    $members[$c->id ?? spl_object_id($c)] = $c;
-                    $groups += array_flip($c->occupiedGroups());
-                    $grew = true;
-                }
-            }
-        } while ($grew);
-        // Bo'lak (harf) + guruhlari bo'yicha bir marta — eng ko'p talabasi.
-        $parts = [];
-        foreach ($members as $c) {
-            if ((int) $c->students <= 0) {
-                return false;
-            }
-            preg_match($rx, trim((string) $c->subject_name), $m);
-            $g = $c->occupiedGroups();
-            sort($g);
-            $k = mb_strtolower($m[2] ?? '') . '|' . implode('+', $g);
-            $parts[$k] = max($parts[$k] ?? 0, (int) $c->students);
-        }
-        $capacity = 0;
-        foreach (array_keys($groups) as $g) {
-            try {
-                $n = (int) $this->activeStudentCountFor((string) $g, $a->faculty_name);
-            } catch (\Throwable $e) {
-                $n = 0;
-            }
-            if ($n <= 0) {
-                return false;
-            }
-            $capacity += $n;
-        }
-
-        return array_sum($parts) > $capacity;
     }
 
     /**

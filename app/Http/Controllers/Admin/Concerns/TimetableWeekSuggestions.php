@@ -471,7 +471,7 @@ trait TimetableWeekSuggestions
         // Takliflar tartibi: tur bo'yicha (1. ikkalasini ketma-ket, 2. shu kun boshqa vaqt, 3. boshqa xona, 4. to'siqni shu kunda
         // surish, 5. boshqa kun, … oxirida to'siqni boshqa kunga); tur ichida — bo'shliq qo'shmaydigan yoki kamaytiradigan, keyin
         // guruh darsiga yopishgan, keyin qo'shiladigan bo'shliq kamroq. Har taklifga 'gap' (yarim-slot) belgisi.
-        // Parallel to'plam: shu kartaning bo'lak qo'shnilari (bolakSiblings — tur, qamrov, oqim, talaba kesishuvi), joyi bilan.
+        // Parallel to'plam: shu kartaning bo'lak qo'shnilari (bolakSiblings — tur, qamrov, oqim), joyi bilan.
         $bolakLetter = fn (TimetableCard $x) => preg_match('/\((\p{L})\)\s*$/u', (string) $x->subject_name, $m) ? mb_strtolower($m[1]) : '?';
         $parSets = [];
         $parallelSet = function (TimetableCard $c) use (&$parSets, &$state, $baseSubj, $cancelled, $W): array {

@@ -533,9 +533,9 @@ it('parallel to\'plam ichidagi guruh to\'qnashuvi tuzatilgach: Terapiya (b)/(c) 
     expect($weekly())->toBe([]);
 });
 
-it('parallel to\'plam talaba kesishuvi — to\'plam bo\'yicha: Bolalar xirurgiyasi (a) 03a 10, (b) 03b 10, (c) 03a+03b 11, guruhlarda 16 va 15 — guruh to\'qnashuvi yo\'q; yig\'indi ko\'p — "Guruh band"', function () {
+it('parallel to\'plam: Bolalar xirurgiyasi (a) 03a, (b) 03b, (c) 03a+03b — talaba sonidan qat\'i nazar guruh to\'qnashuvi yo\'q', function () {
     $s = wuSetup();
-    // Faol talabalar: 03a — 16, 03b — 15 (o'rtacha ulush bilan (b) 10 + (c) 11/2 = 15,5 > 15 deb xato kesishuv chiqardi).
+    // Faol talabalar: 03a — 16, 03b — 15.
     foreach (['d1/d26-03a' => 16, 'd1/d26-03b' => 15] as $g => $n) {
         for ($i = 0; $i < $n; $i++) {
             \Illuminate\Support\Facades\DB::table('students')->insert(['hemis_id' => random_int(1000000, 9999999), 'full_name' => 'T', 'short_name' => 'T',
@@ -558,14 +558,9 @@ it('parallel to\'plam talaba kesishuvi — to\'plam bo\'yicha: Bolalar xirurgiya
 
         return array_intersect_key($ctl->internalConflicts($s['board'])['weekly'] ?? [], array_flip($ids));
     };
-    // To'plam: 10 + 10 + 11 = 31 ≤ 16 + 15 = 31 — parallel, guruh to'qnashuvi yo'q (panelda ham chiqmaydi).
+    // Parallel — guruh to'qnashuvi yo'q (panelda ham chiqmaydi).
     expect($weekly())->toBe([]);
-    // (a) 9 talaba — ham.
-    $a->update(['students' => 9]);
-    expect($weekly())->toBe([]);
-    // Haqiqiy kesishuv: (b) 13 talaba — 9 + 13 + 11 = 33 > 31: kimdir ikki bo'lakda — "Guruh band" qoladi.
+    // Yig'indi faol talabalardan ko'p (10 + 13 + 11 = 34 > 31) — talaba soni hisobga olinmaydi, baribir parallel.
     $b->update(['students' => 13]);
-    $w = $weekly();
-    expect(array_keys($w))->toContain($b->id)->toContain($c->id)
-        ->and(collect($w[$b->id])->first()['text'] ?? '')->toContain('Guruh');
+    expect($weekly())->toBe([]);
 });

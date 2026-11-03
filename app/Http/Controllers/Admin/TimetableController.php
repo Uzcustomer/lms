@@ -6723,8 +6723,10 @@ class TimetableController extends Controller
         // Bir birlik ichida amaliy o'z ma'ruzasidan keyin turadi (cycleDayPlan), shuning uchun faqat boshqa birliklar solishtiriladi.
         foreach ($byGroup as $list) {
             foreach ($list as $e) {
+                // Parallel bo'laklar ("Fan (a)", "Fan (b)" — bir tur) — guruhning turli talabalari: bir-biriga guruh to'qnashuvi emas.
                 $over = array_filter($list, fn ($o) => $o['unit'] !== $e['unit'] && $o['lesson'] !== $e['lesson']
-                    && $o['from'] < $e['to'] && $e['from'] < $o['to']);
+                    && $o['from'] < $e['to'] && $e['from'] < $o['to']
+                    && !($isLec($o) === $isLec($e) && self::bolakSubjects((string) ($units[$o['unit']]['subject'] ?? ''), (string) ($units[$e['unit']]['subject'] ?? ''))));
                 if (!$over) {
                     continue;
                 }
@@ -10179,12 +10181,54 @@ class TimetableController extends Controller
      */
     private function bolakSiblings(TimetableCard $a, TimetableCard $b): bool
     {
+        if (!self::bolakSubjects((string) $a->subject_name, (string) $b->subject_name)) {
+            return false;
+        }
+        // Parallel to'plam: bir mashg'ulot turi, bir qamrov (fakultet, yo'nalish, kurs) va bir oqim.
+        if ((string) $a->training_type !== (string) $b->training_type || $this->groupScopeKey($a) !== $this->groupScopeKey($b)
+            || ($a->oqim_label && $b->oqim_label && mb_strtolower(trim((string) $a->oqim_label)) !== mb_strtolower(trim((string) $b->oqim_label)))) {
+            return false;
+        }
+
+        return !$this->bolakStudentsOverlap($a, $b);
+    }
+
+    /** "Fan (a)" va "Fan (b)": asosiy nomi bir xil (katta-kichik harfsiz), bo'lak harfi har xil. */
+    public static function bolakSubjects(string $a, string $b): bool
+    {
         $rx = '/^(.*?)\s*\((\p{L})\)\s*$/u';
-        if (!preg_match($rx, trim((string) $a->subject_name), $ma) || !preg_match($rx, trim((string) $b->subject_name), $mb)) {
+        if (!preg_match($rx, trim($a), $ma) || !preg_match($rx, trim($b), $mb)) {
             return false;
         }
 
         return mb_strtolower(trim($ma[1])) === mb_strtolower(trim($mb[1])) && mb_strtolower($ma[2]) !== mb_strtolower($mb[2]);
+    }
+
+    /**
+     * Bo'laklarda haqiqiy talaba kesishuvi (ma'lum bo'lsa): umumiy guruhda ikkala bo'lak ulushi (karta talabalari / guruhlar soni)
+     * yig'indisi guruhdagi faol talabalardan ko'p — demak bir talaba ikkalasida; parallel emas. Noma'lum bo'lsa — kesishmaydi.
+     */
+    private function bolakStudentsOverlap(TimetableCard $a, TimetableCard $b): bool
+    {
+        $ga = $a->occupiedGroups();
+        $gb = $b->occupiedGroups();
+        $sa = (int) $a->students > 0 ? (int) $a->students / max(1, count($ga)) : 0;
+        $sb = (int) $b->students > 0 ? (int) $b->students / max(1, count($gb)) : 0;
+        if ($sa <= 0 || $sb <= 0) {
+            return false;
+        }
+        foreach (array_intersect($ga, $gb) as $g) {
+            try {
+                $n = (int) $this->activeStudentCountFor((string) $g, $a->faculty_name);
+            } catch (\Throwable $e) {
+                $n = 0;
+            }
+            if ($n > 0 && $sa + $sb > $n + 0.01) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -402,3 +402,53 @@ it('o\'qituvchi jadvali sarlavhasi: to\'liq F.I.Sh. va telefon (huquq bo\'yicha)
     $r = wuAs()->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?room_code=R12&date=2026-10-26&range=week')->assertOk()->json();
     expect($r['title'])->toStartWith("12-o'quv xona · Tibbiyot klasteri (10 o'rin) — ")->and($r['room']['building'])->toBe('Tibbiyot klasteri');
 });
+
+/** Parallel bo'laklar: Preklinik restavratsion stomatologiya (a) — 01a qismi, (b) — 01b qismi, (c) — 01a+01b qolganlari. */
+function parSetup(): array
+{
+    $s = wuSetup();
+    $mk = fn (string $l, array $o) => TimetableCard::create(array_replace($s['base'], ['subject_name' => 'Preklinik restavratsion stomatologiya (' . $l . ')',
+        'teacher_id' => wuTeacher('USTOZ ' . strtoupper($l))->id, 'teacher_name' => 'USTOZ ' . strtoupper($l), 'len_half' => 2, 'students' => 5,
+        'kafedra_name' => 'Stomatologiya kafedrasi'], $o));
+    $a = $mk('a', ['group_name' => 'p/st26-01a (rus)']);
+    $b = $mk('b', ['group_name' => 'p/st26-01b (rus)']);
+    $c = $mk('c', ['group_name' => 'p/st26-01a (rus) + p/st26-01b (rus)', 'group_names' => ['p/st26-01a (rus)', 'p/st26-01b (rus)'], 'students' => 10]);
+    // (a) — 8-hafta, payshanba (4) I para.
+    TimetableCardOverride::create(['card_id' => $a->id, 'week' => 8, 'day' => 4, 'pair' => 1]);
+
+    return array_replace($s, ['pa' => $a, 'pb' => $b, 'pc' => $c]);
+}
+
+it('parallel bo\'laklar: (a) payshanba I parada — (b) uchun birinchi taklif o\'sha vaqt; (c) ham shu vaqtga, guruh to\'qnashuvi yo\'q', function () {
+    $s = parSetup();
+    $res = wuAs()->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=8&courses[]=1')->assertOk()->json();
+    $first = collect($res['cards'])->firstWhere('id', $s['pb']->id)['suggestions'][0];
+    expect($first['type'])->toBe('parallel')->and($first['title'])->toStartWith("O'sha vaqtda yonma-yon: Payshanba, 1-para")->toContain('(a bilan birga)')
+        ->and($first['actions'])->toBe([['op' => 'move', 'card_id' => $s['pb']->id, 'week' => 8, 'day' => 4, 'pair' => 1]]);
+    // (b) va (c) shu vaqtga — guruh to'qnashuvi yo'q, doskada to'qnashuv belgisi chiqmaydi.
+    foreach (['pb', 'pc'] as $k) {
+        wuAs()->postJson(route('admin.timetable.cards.week-override', $s[$k]), ['week' => 8, 'action' => 'move', 'day' => 4, 'pair' => 1])->assertOk();
+    }
+    expect(app(\App\Http\Controllers\Admin\TimetableController::class)->internalConflicts($s['board'])['count'])->toBe(0);
+});
+
+it('parallel bo\'laklar: to\'plam joylanmagan — "Uchalasini birga joylash" (tashqi joyi — eng ko\'p uchragani); bir xil o\'qituvchi — to\'qnashuv', function () {
+    $s = parSetup();
+    TimetableCardOverride::where('card_id', $s['pa']->id)->delete();
+    // Tashqi joylar har xil: (a), (b) — seshanba III para (5), (c) — juma I para: eng ko'p uchragani — seshanba 12:00.
+    $s['pa']->update(['ext_day' => 2, 'ext_pair' => 5]);
+    $s['pb']->update(['ext_day' => 2, 'ext_pair' => 5]);
+    $s['pc']->update(['ext_day' => 5, 'ext_pair' => 1]);
+    $res = wuAs()->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=8&courses[]=1')->assertOk()->json();
+    $first = collect($res['cards'])->firstWhere('id', $s['pc']->id)['suggestions'][0];
+    expect($first['type'])->toBe('parallel')->and($first['title'])->toBe('Uchalasini birga joylash: Seshanba, 3-para (a · b · c)')
+        ->and(collect($first['actions'])->map(fn ($a) => [$a['card_id'], $a['day'], $a['pair']])->all())
+        ->toBe([[$s['pa']->id, 2, 5], [$s['pb']->id, 2, 5], [$s['pc']->id, 2, 5]]);
+
+    // (a) va (c) da bir xil o'qituvchi — o'qituvchi to'qnashuvi odatdagidek.
+    $s['pc']->update(['teacher_id' => $s['pa']->teacher_id, 'teacher_name' => $s['pa']->teacher_name]);
+    wuAs()->postJson(route('admin.timetable.cards.week-override', $s['pa']), ['week' => 8, 'action' => 'move', 'day' => 4, 'pair' => 1])->assertOk();
+    $err = wuAs()->postJson(route('admin.timetable.cards.week-override', $s['pc']), ['week' => 8, 'action' => 'move', 'day' => 4, 'pair' => 1])
+        ->assertStatus(422)->json('error');
+    expect($err)->toContain("O'qituvchi band")->not->toContain('Guruh band');
+});

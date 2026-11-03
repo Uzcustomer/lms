@@ -2523,7 +2523,9 @@ trait TimetableHemisSync
                         && $this->hemisSubjectBase((string) $o['subject']) === explode('|', $x['flow_card'])[0]
                         && $this->hemisFlowCovers($flowGroups, $x['flow_card'], (string) $o['group']);
                 $text = null;
-                if ($timeChanged && $o['group_id'] === (int) $x['group_hemis_id']) {
+                // Parallel bo'laklar ("Fan (a)" / "Fan (b)", bir tur) — guruhning turli talabalari, yonma-yon tura oladi.
+                if ($timeChanged && $o['group_id'] === (int) $x['group_hemis_id']
+                    && !((string) $o['code'] === (string) ($x['code'] ?? '') && self::bolakSubjects((string) $o['subject'], (string) $x['subject']))) {
                     $text = "guruhning boshqa darsi bilan ustma-ust: {$o['subject']} {$o['s']}–{$o['e']}";
                 } elseif ($checkEmp && !$shared && ($fbEmp || !$o['forced']) && $o['emp'] === $emp) {
                     $text = ($fbEmp ? 'kafedra mudiri band: ' : "o'qituvchi band: ") . "{$x['new_employee_name']} — {$label}";

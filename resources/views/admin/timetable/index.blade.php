@@ -1358,6 +1358,8 @@
         .cf-line { padding: 3px 0; border-top: 1px dashed #e2e8f0; font-size: 12px; line-height: 1.3; }
         .cf-line.cf-red b { color: #b91c1c; } .cf-line.cf-yellow b { color: #a16207; } .cf-line.cf-past { color: #94a3b8; }
         .tt-agenda-link { color: #1d4ed8; text-decoration: underline dotted; cursor: pointer; }
+        .tt-par-badge { font-size: 9px; color: #4338ca; background: #eef2ff; border-radius: 3px; padding: 0 3px; display: inline-block; cursor: help; }
+        .tt-par-hl { outline: 3px solid #6366f1 !important; outline-offset: -2px; }
         .tt-chip.tt-mudir-ph { outline: 2px dashed #ca8a04; outline-offset: -2px; background-image: linear-gradient(135deg, rgba(234,179,8,.18), rgba(148,163,184,.18)) !important; }
         .tt-mudir-ph-tag { font-size: 9px; font-weight: 700; color: #854d0e; background: #fef9c3; border-radius: 3px; padding: 0 3px; display: inline-block; }
         .pn-card.pn-flash, td.tt-slot-flash { outline: 3px solid #f59e0b !important; outline-offset: -2px; transition: outline-color .3s; }
@@ -4958,9 +4960,9 @@
             // ===== Takliflar: joylanmagan kartalarni sig'dirish yo'llari (server hisoblaydi, foydalanuvchi tanlaydi) =====
             // Tartib (server): ikkalasini ketma-ket, shu kun boshqa vaqt, boshqa xona, darsni (to'siqni) shu kunda surish, boshqa kun, …,
             // to'siqni boshqa kunga. "Darsni surish" — faqat kun o'zgarmaydigan siljish.
-            const SUG_LABEL = { pair: 'Ikkalasini ketma-ket', slot: 'Shu kun, boshqa vaqt', room: 'Boshqa xona', blocker: 'Darsni surish', day: 'Boshqa kun',
+            const SUG_LABEL = { parallel: 'Yonma-yon (parallel)', pair: 'Ikkalasini ketma-ket', slot: 'Shu kun, boshqa vaqt', room: 'Boshqa xona', blocker: 'Darsni surish', day: 'Boshqa kun',
                 week: 'Boshqa hafta', lecture: 'Ma\'ruzani surish', teacher: 'Boshqa o\'qituvchi', blocker_day: 'To\'siqni boshqa kunga' };
-            const SUG_COLOR = { pair: '#0f766e', slot: '#059669', room: '#0284c7', blocker: '#7c3aed', day: '#d97706', week: '#b45309', lecture: '#a16207',
+            const SUG_COLOR = { parallel: '#4f46e5', pair: '#0f766e', slot: '#059669', room: '#0284c7', blocker: '#7c3aed', day: '#d97706', week: '#b45309', lecture: '#a16207',
                 teacher: '#dc2626', blocker_day: '#9a3412' };
             // Bo'shliq belgisi (yumshoq mezon, taklif yashirilmaydi): "bo'shliqsiz" — yashil, "+½ para bo'shliq" / "+1 para bo'shliq" — sariq.
             function sugGapBadge(gap) {
@@ -8799,10 +8801,26 @@
             // Bitta fanning turli bo'laklari ("Fan (a)" va "Fan (b)") — guruhning turli talabalari,
             // bir vaqtda parallel o'tadi: guruh bandligi hisoblanmaydi (serverdagi bolakSiblings).
             const BOLAK_RX = /^(.*?)\s*\((\p{L})\)\s*$/u;
+            // Parallel to'plam (serverdagi bolakSiblings): asosiy nom bir xil, harf har xil; bir tur, bir qamrov (fakultet, yo'nalish,
+            // kurs) va bir oqim; guruhda talaba kesishuvi bo'lmasa (ikkala bo'lak ulushi guruh talabalaridan ko'p emas; noma'lum — kesishmaydi).
             function bolakSiblings(a, b) {
                 const ma = BOLAK_RX.exec(String(a.subject_name || '').trim()), mb = BOLAK_RX.exec(String(b.subject_name || '').trim());
-                return !!(ma && mb && ma[1].trim().toLowerCase() === mb[1].trim().toLowerCase() && ma[2].toLowerCase() !== mb[2].toLowerCase());
+                if (!(ma && mb && ma[1].trim().toLowerCase() === mb[1].trim().toLowerCase() && ma[2].toLowerCase() !== mb[2].toLowerCase())) return false;
+                if ((a.training_type || '') !== (b.training_type || '')) return false;
+                const scope = x => [x.faculty_name || '', x.specialty_name || '', +x.course].join('|').toLowerCase();
+                if (a.specialty_name !== undefined && b.specialty_name !== undefined && scope(a) !== scope(b)) return false;
+                if (a.oqim_label && b.oqim_label && String(a.oqim_label).trim().toLowerCase() !== String(b.oqim_label).trim().toLowerCase()) return false;
+                const ga = cardGroupsSafe(a), gb = cardGroupsSafe(b);
+                const sa = +a.students > 0 ? +a.students / Math.max(1, ga.length) : 0, sb = +b.students > 0 ? +b.students / Math.max(1, gb.length) : 0;
+                if (sa > 0 && sb > 0 && typeof groupStudents !== 'undefined') {
+                    for (const g of ga.filter(x => gb.includes(x))) {
+                        const n = +groupStudents[(a.faculty_name || '') + '|' + g] || 0;
+                        if (n > 0 && sa + sb > n + 0.01) return false;
+                    }
+                }
+                return true;
             }
+            const cardGroupsSafe = c => (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []);
             // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).
             function weeksIntersect(a, b) {
                 const total = Math.min(+a.term_weeks || +curGrid().weeks || +board.weeks || 15, +b.term_weeks || +curGrid().weeks || +board.weeks || 15);
@@ -8907,6 +8925,55 @@
                 try { await placeOneCard(card, d, p); selected = null; renderAll(); }
                 catch (e) { alert('Konflikt: ' + e.message); }
             }
+            // ===== Parallel bo'laklar ("Fan (a)", "(b)", "(c)" — guruhning turli talabalari, bir vaqtda yonma-yon) =====
+            const bolakLetter = c => { const m = BOLAK_RX.exec(String(c.subject_name || '').trim()); return m ? m[2].toLowerCase() : ''; };
+            const parallelSet = c => (c && c.training_type !== 'lecture' && BOLAK_RX.test(String(c.subject_name || '').trim())
+                ? cards.filter(x => x.id !== c.id && !isCycleCardAny(x) && bolakSiblings(c, x)) : []);
+            // "parallel: a · b · c" belgisi (sichqoncha olib borilsa — qolganlari ajratiladi: data-par-ids).
+            function parallelBadgeHtml(c) {
+                const set = parallelSet(c);
+                if (!set.length) return '';
+                const letters = [...new Set([c, ...set].map(bolakLetter).filter(Boolean))].sort();
+                return '<div class="tt-par-badge" data-par-ids="' + [c.id, ...set.map(x => x.id)].join(',') + '" title="Parallel bo\'laklar — guruhning turli talabalari, bir vaqtda yonma-yon">parallel: ' +
+                    letters.map(l => l === bolakLetter(c) ? '<b>' + esc(l) + '</b>' : esc(l)).join(' · ') + '</div>';
+            }
+            // Sichqoncha belgida — to'plamning qolgan kartalari (panel va jadval) ajratiladi.
+            document.addEventListener('mouseover', ev => {
+                const b = ev.target && ev.target.closest ? ev.target.closest('[data-par-ids]') : null;
+                document.querySelectorAll('.tt-par-hl').forEach(x => x.classList.remove('tt-par-hl'));
+                if (!b) return;
+                b.dataset.parIds.split(',').forEach(id => document.querySelectorAll('.pn-card[data-id="' + id + '"], #grid [data-chip="' + id + '"]')
+                    .forEach(x => x.classList.add('tt-par-hl')));
+            });
+            // Bittasi ko'chirilgach — qolganlarini ham shu vaqtga ko'chirish taklifi (sahifa ichida; o'zi ko'chirilmaydi).
+            function parallelMoveOffer(moved, others, d, p) {
+                let box = document.getElementById('ttParOffer');
+                if (box) box.remove();
+                if (!others.length) return null;
+                box = document.createElement('div');
+                box.id = 'ttParOffer';
+                box.setAttribute('role', 'status');
+                box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:80;background:#eef2ff;border:1px solid #6366f1;color:#312e81;border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 8px 24px #0002;max-width:360px';
+                const when = (boardDayNames()[d - 1] || (d + '-kun')) + ', ' + slotParaLabel(p);
+                box.innerHTML = '«' + esc(moved.subject_name) + '» ' + esc(when) + ' ga ko\'chdi. Parallel bo\'laklar (' + esc(others.map(bolakLetter).join(', ')) + ') ham shu vaqtga ko\'chirilsinmi?' +
+                    '<div style="margin-top:6px;display:flex;gap:6px"><button type="button" data-par-yes style="background:#4f46e5;color:#fff;border-radius:5px;padding:1px 8px">Ha, ko\'chirish</button>' +
+                    '<button type="button" data-par-no style="border:1px solid #a5b4fc;border-radius:5px;padding:1px 8px">Yo\'q</button></div><div data-par-msg style="color:#b91c1c;margin-top:4px"></div>';
+                document.body.appendChild(box);
+                box.addEventListener('click', async ev => {
+                    if (ev.target.closest('[data-par-no]')) { box.remove(); return; }
+                    const yes = ev.target.closest('[data-par-yes]');
+                    if (!yes) return;
+                    yes.disabled = true;
+                    const errs = [];
+                    for (const x of others) {
+                        try { await placeUnitAt(x, d, p); } catch (e) { errs.push(bolakLetter(x) + ': ' + e.message); }
+                    }
+                    renderAll();
+                    if (errs.length) { box.querySelector('[data-par-msg]').textContent = errs.join(' · '); yes.disabled = false; }
+                    else box.remove();
+                });
+                return box;
+            }
             // Birlashtirilgan (ketma-ket) blok — kartalarni ketma-ket paralarga joylaymiz
             // parallel — bo'lakli fan bo'laklari: hammasi bitta katakka (ketma-ket emas).
             async function placeBlockAt(ids, d, p, parallel, offs) {
@@ -8918,7 +8985,16 @@
                 if (first && first.training_type !== 'lecture' && activeInWeek(first, curWeek)) {
                     const list = unitOf(first);
                     const start = p - unitLen(list.slice(0, Math.max(0, list.indexOf(first))));
-                    try { await placeUnitAt(first, d, start); selected = null; renderAll(); }
+                    // Parallel bo'laklar: avval shu joyda turganlari (yoki hammasi joylanmagan bo'lsa — joylanmaganlari) — ko'chirish taklifi uchun.
+                    const oldPl = effPlace(first);
+                    const mates = parallelSet(first).filter(x => {
+                        const pl = effPlace(x);
+                        return oldPl ? !!(pl && +pl.day === +oldPl.day && +pl.pair === +oldPl.pair) : !pl;
+                    });
+                    try {
+                        await placeUnitAt(first, d, start); selected = null; renderAll();
+                        parallelMoveOffer(first, mates, d, start);
+                    }
                     catch (e) { alert(e.message); renderAll(); }
                     return;
                 }
@@ -9763,7 +9839,7 @@
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
                     (unitPanelLen[c.id] && !partialUnits.has(unitKey(c)) ? '<div class="text-[9px] font-semibold text-indigo-700" title="Dars yaxlit joylanadi: barcha bo\'laklari ketma-ket">jami ' +
                         unitPanelLen[c.id].reduce((a, b) => a + b, 0) + ' soat (' + unitPanelLen[c.id].join(' + ') + ')</div>' : '') +
-                    '</div>' + (!skip && partialUnits.has(unitKey(c)) ? partialBadgeHtml(partialUnits.get(unitKey(c)), unitFixErr[unitKey(c)]) : '') + (conflict ? '<div class="pn-conflict" role="button" tabindex="0" data-wcf="' + c.id + '" title="Bosing — tafsilot">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') + '</div>';
+                    '</div>' + parallelBadgeHtml(c) + (!skip && partialUnits.has(unitKey(c)) ? partialBadgeHtml(partialUnits.get(unitKey(c)), unitFixErr[unitKey(c)]) : '') + (conflict ? '<div class="pn-conflict" role="button" tabindex="0" data-wcf="' + c.id + '" title="Bosing — tafsilot">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') + '</div>';
 
                 // Qisman joylangan birliklar (ichki jadval, tanlangan hafta): ro'yxat (nomi bosilsa — shu kartaga) va hammasi uchun tugmalar.
                 const partialHead = partialUnits.size && curWeek && weeklyLayer === 'internal'
@@ -10465,7 +10541,7 @@
                     return head +
                         altMark + cardLabel(c, true) + wks + badge +
                         ((ph ? ph.teacher_name : c.teacher_name) ? '<div class="text-[9px] text-gray-600">' + esc(ph ? ph.teacher_name : c.teacher_name) + '</div>' : '') +
-                        roomTxt + phTag + askTime +
+                        roomTxt + phTag + parallelBadgeHtml(c) + askTime +
                         '</div>';
                 };
 

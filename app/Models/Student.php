@@ -333,6 +333,17 @@ class Student extends Authenticatable
         return $this->hasOne(\App\Models\StudentDisabilityInfo::class);
     }
 
+    /**
+     * Qayta topshirish (otrabotka) xizmati faqat 1–3-kurslarga. level_code: 11 = 1-kurs … 16 = 6-kurs.
+     */
+    public function hasOtrabotka(): bool
+    {
+        $level = (int) $this->level_code;
+        $course = $level >= 11 ? $level - 10 : $level;
+
+        return $course >= 1 && $course <= 3;
+    }
+
     public function isDisabled(): bool
     {
         return !empty($this->social_category_name)

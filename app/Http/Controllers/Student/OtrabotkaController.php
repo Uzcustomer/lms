@@ -25,6 +25,8 @@ class OtrabotkaController extends Controller
     public function index()
     {
         $student = Auth::user();
+        // Xizmat faqat 1–3-kurslarga
+        abort_unless($student->hasOtrabotka(), 404);
 
         $subjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
             ->where('semester_code', $student->semester_code)

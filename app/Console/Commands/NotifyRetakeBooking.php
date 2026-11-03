@@ -31,6 +31,11 @@ class NotifyRetakeBooking extends Command
 
             return self::FAILURE;
         }
+        if (!$student->hasOtrabotka()) {
+            $this->warn("{$student->full_name}: qayta topshirish xizmati faqat 1–3-kurslarga — xabar yuborilmadi.");
+
+            return self::SUCCESS;
+        }
 
         try {
             $debts = $service->withLmsDeadline($service->debts((int) $student->hemis_id), $student);

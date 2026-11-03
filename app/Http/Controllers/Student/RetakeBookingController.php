@@ -37,7 +37,7 @@ class RetakeBookingController extends Controller
 
     public function index(Request $request)
     {
-        $student = Auth::guard('student')->user();
+        $student = $this->student();
         $hemisId = (int) $student->hemis_id;
         $subjectId = (int) $request->query('subject_id');
         $lessonDate = $this->dateParam($request->query('lesson_date'));
@@ -93,7 +93,7 @@ class RetakeBookingController extends Controller
             'slot.in' => "Vaqt oralig'ini ro'yxatdan tanlang.",
         ]);
 
-        $student = Auth::guard('student')->user();
+        $student = $this->student();
         $hemisId = (int) $student->hemis_id;
         $back = $this->debtUrl((int) $data['subject_id'], $data['lesson_date']);
 
@@ -147,7 +147,7 @@ class RetakeBookingController extends Controller
 
     public function cancel(RetakeBooking $booking)
     {
-        $hemisId = (int) Auth::guard('student')->user()->hemis_id;
+        $hemisId = (int) $this->student()->hemis_id;
         abort_unless((int) $booking->student_hemis_id === $hemisId, 404);
 
         $back = $this->debtUrl($booking->subject_id, $booking->lesson_date->format('Y-m-d'));
@@ -207,6 +207,15 @@ class RetakeBookingController extends Controller
             'sync_pending' => $local && $local->moodle_sync !== RetakeBooking::SYNC_OK,
             'url' => $this->debtUrl($subjectId, $lessonDate),
         ];
+    }
+
+    /** Xizmat faqat 1–3-kurslarga: 4–6-kurslar havolani ochsa ham sahifa yo'q */
+    private function student()
+    {
+        $student = Auth::guard('student')->user();
+        abort_unless($student && $student->hasOtrabotka(), 404);
+
+        return $student;
     }
 
     private function debtUrl(int $subjectId, string $lessonDate): string

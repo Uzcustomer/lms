@@ -801,7 +801,9 @@ class TimetableChangeApproval
                 break;
             case 'admin.timetable.cycle-lecture-slots':
                 $day = isset($p['day_index']) ? ((int) $p['day_index'] + 1) . '-kun' : 'kunlar';
-                $text = $head . ': ' . $day . (isset($p['start_hour']) ? ' — darslar ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi');
+                // Rejim: faqat ma'ruza / faqat amaliy (berilmasa — ikkalasi birga).
+                $what = ['lecture' => 'ma\'ruza', 'practice' => 'amaliy'][$p['mode'] ?? ''] ?? 'darslar';
+                $text = $head . ': ' . $day . (isset($p['start_hour']) ? ' — ' . $what . ' ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi');
                 break;
             case 'admin.timetable.cycle-place':
                 $act = $p['action'] ?? 'place';
@@ -866,7 +868,7 @@ class TimetableChangeApproval
             'admin.timetable.cards.place', 'admin.timetable.cards.update' => 'card:' . $card?->id,
             'admin.timetable.cards.week-override', 'admin.timetable.cards.unit-place' => 'card:' . $card?->id . ':w' . ($p['week'] ?? ''),
             'admin.timetable.boards.unit-fix' => 'w' . ($p['week'] ?? '') . ':' . ($p['action'] ?? ''),
-            'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index']),
+            'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index', 'mode']),
             'admin.timetable.cycle-place', 'admin.timetable.cycle-assign', 'admin.timetable.cycle-mudir-placeholder',
             'admin.timetable.cycle-mudir-placeholder.revert' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
             'admin.timetable.cycle-practice-starts' => $pick(['specialty_name', 'course', 'subject_name', 'units', 'date']),

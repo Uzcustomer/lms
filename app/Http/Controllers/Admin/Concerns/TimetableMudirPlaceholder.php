@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\DB;
  * joylanadi (tashqi jadval joyida yoki tanlangan katakda; tanlangan hafta yoki shu va keyingi haftalar).
  *
  * - O'qituvchi — fan kafedrasining mudiri, xona — "Kafedra mudiri xonasi" (HEMIS solishtirishdagi hemisMudirFor /
- *   hemisFallbackRoomFor bilan bir xil manba, fanning kafedrasi ustuvor). Topilmasa — yozib bo'lmaydi (sababi bilan).
+ *   hemisFallbackRoomFor bilan bir xil manba). Xona kafedraga bog'lanmaydi — bitta umumiy vaqtinchalik xona, dars xonasi
+ *   aniqlashtirilguncha. Topilmasa — yozib bo'lmaydi (sababi bilan).
  * - Faqat tanlangan hafta(lar)ning yozuviga (timetable_card_overrides.mudir_placeholder: mudir, shu haftaning asl xonasi, asl
  *   o'qituvchi, sabab, kim/qachon) — karta asosiy o'qituvchisi/xonasi boshqa haftalar uchun o'zgarmaydi. Shu haftada to'qnashuv
  *   tekshirilmaydi va boshqalarni ham to'qnashuvli qilmaydi (weekClashes, weeklyConflicts).
@@ -53,10 +54,10 @@ trait TimetableMudirPlaceholder
     {
         $dept = $this->cardDepartmentId($card);
         $teacher = $this->kafedraMudirTeacher($dept);
-        $room = $this->hemisFallbackRoomFor($dept);
+        $room = $this->hemisFallbackRoomFor();
         $why = !$dept ? 'Fanning kafedrasi aniqlanmadi («' . trim((string) $card->kafedra_name) . '»).'
             : (!$teacher ? 'Kafedra mudiri topilmadi (shu kafedraga «kafedra_mudiri» roli berilgan xodim yo\'q).'
-                : (!$room ? '«Kafedra mudiri xonasi» auditoriyasi topilmadi.' : null));
+                : (!$room ? $this->hemisMissingRoomWarning() : null));
 
         return ['teacher' => $teacher, 'room' => $room, 'why' => $why];
     }

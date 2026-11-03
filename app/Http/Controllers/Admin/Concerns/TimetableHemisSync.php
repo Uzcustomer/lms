@@ -792,7 +792,6 @@ trait TimetableHemisSync
         $this->hemisMudirMemo = [];
         $this->hemisMudirRoomsMemo = null;
         $this->hemisInactiveRoomsMemo = null;
-        $this->hemisRoomDepartmentNames = [];
         $roomWarnings = [];
         $missingRoomCount = 0;
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
@@ -916,13 +915,13 @@ trait TimetableHemisSync
         $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
 
         $kuzgi = $board->semester_parity !== 'bahorgi';
-        // "Kafedra mudiri xonasi" (faqat faollari; aynan shu nomlisi ustuvor): avval fanning o'z kafedrasiniki
-        // (auditoriums.department_hemis_id), so'ng kafedrasiz umumiy xona, bo'lmasa — istalgan shunday xona.
+        // "Kafedra mudiri xonasi" (faqat faollari; aynan shu nomlisi ustuvor) — bitta umumiy vaqtinchalik xona, kafedraga
+        // bog'lanmaydi (xonalar kafedralarga tegishli emas).
         // Biriktirilmagan darslar uchun vaqtinchalik chora: HEMIS'da xona ustma-ust tushishiga ruxsat yoqilgan,
         // shuning uchun bu xona hech qachon to'siq emas.
         $mudirRooms = $this->hemisMudirRooms();
         $fallbackRoom = $mudirRooms->first();
-        $fallbackRoomFor = fn ($deptId): ?array => $this->hemisFallbackRoomFor($deptId);
+        $fallbackRoomFor = fn (): ?array => $this->hemisFallbackRoomFor();
         // until_week yuborilmasa — joriy hafta oxirigacha; 0 — semestr oxirigacha.
         $untilWeek = array_key_exists('until_week', $scope) && $scope['until_week'] !== null ? (int) $scope['until_week'] : null;
         $weeksOut = [];
@@ -1049,7 +1048,7 @@ trait TimetableHemisSync
                         ])->values()->all(),
                         'plan' => $cyc,
                         'fallback_employee' => $mudir,
-                        'fallback_room' => $fallbackRoomFor($cs->department_id),
+                        'fallback_room' => $fallbackRoomFor(),
                     ];
                     $otherTypes = $hemisRows->filter(fn ($r) => substr((string) $r->lesson_date, 0, 10) > $today && !isset($codes[(string) $r->training_type_code]))->count();
                     $unitMeta[$gk . '|' . $cs->id] = ['kafedra' => $cs->department_name, 'cs_id' => $cs->id, 'mudir' => $mudir[1] ?? null,
@@ -1119,7 +1118,7 @@ trait TimetableHemisSync
                     ])->values()->all(),
                     'plan' => $plan,
                     'fallback_employee' => $mudir,
-                    'fallback_room' => $fallbackRoomFor($cs->department_id),
+                    'fallback_room' => $fallbackRoomFor(),
                 ];
                 $otherTypes = $hemisRows->filter(fn ($r) => substr((string) $r->lesson_date, 0, 10) > $today && !isset($codes[(string) $r->training_type_code]))->count();
                 $unitMeta[$gk . '|' . $cs->id] = ['kafedra' => $cs->department_name, 'cs_id' => $cs->id, 'mudir' => $mudir[1] ?? null,
@@ -1215,7 +1214,7 @@ trait TimetableHemisSync
                         $r['missing_room_lessons'][] = array_intersect_key($rec, array_flip(['date', 'start', 'end', 'code', 'employee_name', 'auditorium_code', 'auditorium_name', 'blocked']));
                         $missingRoomCount++;
                         if (empty($unitByKey[$r['key']]['fallback_room'])) {
-                            $warning = $this->hemisMissingRoomWarning(null, (string) ($r['kafedra'] ?? ''));
+                            $warning = $this->hemisMissingRoomWarning();
                             $roomWarnings[$warning] = true;
                         }
                     }
@@ -1261,7 +1260,7 @@ trait TimetableHemisSync
                     }
                     if (in_array('mudir_xonasi', $a['flags'] ?? [], true) && !in_array('vaqtincha', $a['flags'] ?? [], true)) {
                         $why[] = !empty($a['auditorium_code']) ? 'LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo\'yiladi.'
-                            : $this->hemisMissingRoomWarning(null, (string) ($r['kafedra'] ?? ''));
+                            : $this->hemisMissingRoomWarning();
                     }
                     // Xona yoki o'qituvchi LMS'da boshqa — qayerda biriktirilgani.
                     $changed = fn (string $p) => (bool) array_filter($a['changes'] ?? [], fn ($x) => str_starts_with($x, $p));
@@ -1758,12 +1757,12 @@ trait TimetableHemisSync
     }
 
     /**
-     * Biriktirilmagan xona o'rniga faqat fanning o'z kafedrasiga bog'langan mudir xonasi. [kod, nomi] | null.
+     * Biriktirilmagan xona o'rniga — umumiy vaqtinchalik "Kafedra mudiri xonasi" (faol; aynan shu nomlisi ustuvor). Kafedraga
+     * bog'lanmaydi: dars xonasi aniqlashtirilguncha shu xona qo'yiladi. [kod, nomi] | null (bazada faol shunday xona yo'q).
      */
-    private function hemisFallbackRoomFor($deptId): ?array
+    private function hemisFallbackRoomFor(): ?array
     {
-        $rooms = $this->hemisMudirRooms();
-        $room = $deptId ? $rooms->first(fn ($a) => (string) $a->department_hemis_id === (string) $deptId) : null;
+        $room = $this->hemisMudirRooms()->first();
 
         return $room ? [$room->code, $room->name] : null;
     }
@@ -1787,15 +1786,10 @@ trait TimetableHemisSync
         return $this->hemisMudirMemo[(string) $deptId];
     }
 
-    private array $hemisRoomDepartmentNames = [];
-
-    private function hemisMissingRoomWarning($deptId, ?string $name = null): string
+    /** Umumiy "Kafedra mudiri xonasi" topilmadi — ogohlantirish (vaqtincha kafedra mudiriga yozishdagi xato matni bilan bir xil). */
+    private function hemisMissingRoomWarning(): string
     {
-        if (!trim((string) $name) || ctype_digit((string) $name)) {
-            $name = $this->hemisRoomDepartmentNames[(string) $deptId] ??= (string) (DB::table('departments')
-                ->where('department_hemis_id', $deptId)->value('name') ?: ($name ?: 'kafedra aniqlanmagan'));
-        }
-        return "Kafedra mudiri xonasi kafedraga bog'lanmagan (HEMIS): " . $name;
+        return '«Kafedra mudiri xonasi» auditoriyasi topilmadi (faol, nomida «kafedra mudiri» bo\'lgan xona yo\'q).';
     }
 
     private $hemisMudirRoomsMemo = null;
@@ -1951,7 +1945,6 @@ trait TimetableHemisSync
         $this->hemisMudirMemo = [];
         $this->hemisMudirRoomsMemo = null;
         $this->hemisInactiveRoomsMemo = null;
-        $this->hemisRoomDepartmentNames = [];
         $roomWarnings = [];
         $t0 = microtime(true);
         $hemisMs = 0;   // HEMIS'ni kutish (jadval importi + davomat/baho) — "≤ 10 s" tekshiruvi uchun javobda
@@ -2152,7 +2145,7 @@ trait TimetableHemisSync
                     $ph = $r['ph'] ?? null;   // "vaqtincha kafedra mudirida" — asl o'qituvchi nomi
                     $noTeacher = $r['emp_name'] === null && $ph === null;
                     $mudir = $noTeacher ? $this->hemisMudirFor($h->department_id) : null;
-                    $fbRoom = !$r['room'] ? $this->hemisFallbackRoomFor($h->department_id) : null;
+                    $fbRoom = !$r['room'] ? $this->hemisFallbackRoomFor() : null;
                     // Nofaol xona: LMS kartasida — to'siq; LMS'da bo'sh va "Kafedra mudiri xonasi" topilmasa — HEMIS'dagi nofaol xona
                     // qoldirilmaydi (to'siq, sababi bilan).
                     $inactive = $this->hemisInactiveRooms();
@@ -2163,7 +2156,7 @@ trait TimetableHemisSync
                             . "») — qoldirilmaydi; «Kafedra mudiri xonasi» topilmadi" : null);
                     $fallback = [];
                     $missingRoomWarning = !$r['room'] && !$fbRoom && $ph === null
-                        ? $this->hemisMissingRoomWarning($h->department_id, $h->department_name) : null;
+                        ? $this->hemisMissingRoomWarning() : null;
                     if ($missingRoomWarning) $roomWarnings[$missingRoomWarning] = true;
                     if ($noTeacher && $mudir && $mudir[0]) {
                         $fallback[] = "LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri qo'yiladi";

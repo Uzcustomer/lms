@@ -34,9 +34,14 @@ use Illuminate\Support\Facades\Schema;
  */
 class TimetableController extends Controller
 {
-    private function isInfoOnly($card, TimetableBoard $board): bool
+    private function isNonBlocking($card, TimetableBoard $board): bool
     {
-        return \App\Services\Timetable\InfoOnlyCourses::isInfoOnly($card, $board);
+        return \App\Services\Timetable\InfoOnlyCourses::isNonBlocking($card, $board);
+    }
+
+    private function isHemisExcluded($card, TimetableBoard $board): bool
+    {
+        return \App\Services\Timetable\InfoOnlyCourses::isHemisExcluded($card, $board);
     }
 
     /** Metodlarning so'rov davomidagi keshi: [metod => [kalit => qiymat]]. */
@@ -5286,7 +5291,7 @@ class TimetableController extends Controller
      */
     private function cycleSiblingRoomCodes(TimetableBoard $board, TimetableCyclePlacement $placement, array $data, $flowCards): array
     {
-        if ($this->isInfoOnly(['course' => $placement->course], $board)) return [];
+        if ($this->isNonBlocking($placement, $board)) return [];
         if (mb_strtolower(trim((string) $placement->group_name)) === mb_strtolower(trim((string) $data['group_name']))) {
             return [];
         }
@@ -5892,7 +5897,7 @@ class TimetableController extends Controller
      */
     private function cycleOverlappingRoomCodes(TimetableBoard $board, TimetableCyclePlacement $placement, array $data): array
     {
-        if ($this->isInfoOnly(['course' => $placement->course], $board)) return [];
+        if ($this->isNonBlocking($placement, $board)) return [];
         $set = (array) ($board->settings ?? []);
         $start = $data['start_date'] ?? ($set['semester_start'] ?? null);
         if (!$start) {
@@ -5946,6 +5951,7 @@ class TimetableController extends Controller
         // subguruh — fakultet nomda yo'q, shuning uchun kartalardan olinadi.
         $facultyByRow = [];
         foreach (TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board))->where('training_type', 'practice')->get() as $card) {
+            if ($this->isNonBlocking($card, $board)) continue;
             if (!$card->faculty_name) {
                 continue;
             }
@@ -5967,6 +5973,7 @@ class TimetableController extends Controller
         // Har oqim+fan uchun xona — kartalardan (bir marta yig'iladi).
         $roomByKey = [];
         foreach (TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board))->whereNotNull('auditorium_code')->get() as $card) {
+            if ($this->isNonBlocking($card, $board)) continue;
             $subjectLower = mb_strtolower(trim((string) $card->subject_name));
             $base = mb_strtolower(trim((string) $card->specialty_name)) . '|' . (int) $card->course . '|' . $subjectLower . '|';
 
@@ -6539,14 +6546,14 @@ class TimetableController extends Controller
         // Oqim ma'ruzasi: oqim nomi + fan bo'yicha ma'ruza kartalari.
         $lectures = [];
         foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')) as $c) {
-            if (!$includeInfoOnly && $this->isInfoOnly($c, $board)) continue;
+            if (!$includeInfoOnly && $this->isNonBlocking($c, $board)) continue;
             $lectures[mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($this->cycleFlowName($c))
                 . '|' . mb_strtolower(trim((string) $c->subject_name))][] = $c;
         }
         $roomNames = Auditorium::pluck('name', 'code')->all();
         $out = [];
         foreach ($units as $ui => $u) {
-            if (!$includeInfoOnly && $this->isInfoOnly($u, $board)) continue;
+            if (!$includeInfoOnly && $this->isNonBlocking($u, $board)) continue;
             $lecCards = $lectures[mb_strtolower(trim((string) $u['specialty'])) . '|' . (int) $u['course'] . '|' . mb_strtolower($u['parent'])
                 . '|' . mb_strtolower(trim((string) $u['subject']))] ?? [];
             // Filtrlar (unitBusy): faqat berilgan kartalar darslari va/yoki faqat berilgan sanalar — keraksiz birlik hisoblanmaydi.
@@ -6632,7 +6639,7 @@ class TimetableController extends Controller
         if ($includeInfoOnly) {
             foreach ($out as &$entry) {
                 $entry['course'] = (int) $units[$entry['unit']]['course'];
-                $entry['info_only'] = $this->isInfoOnly($units[$entry['unit']], $board);
+                $entry['info_only'] = $this->isNonBlocking($units[$entry['unit']], $board);
             }
             unset($entry);
         }
@@ -6934,7 +6941,7 @@ class TimetableController extends Controller
         $days = [];      // grid|hafta => [kun => sana]
         $out = [];
         foreach ($state['cards'] as $id => $c) {
-            if (!$includeInfoOnly && $this->isInfoOnly($c, $board)) continue;
+            if (!$includeInfoOnly && $this->isNonBlocking($c, $board)) continue;
             if ($c instanceof TimetableCard) {
                 $c->setRelation('board', $board);
             }
@@ -6978,7 +6985,7 @@ class TimetableController extends Controller
         if ($includeInfoOnly) {
             foreach ($out as &$entry) {
                 $entry['course'] = (int) $state['cards'][$entry['card']]->course;
-                $entry['info_only'] = $this->isInfoOnly($state['cards'][$entry['card']], $board);
+                $entry['info_only'] = $this->isNonBlocking($state['cards'][$entry['card']], $board);
             }
             unset($entry);
         }
@@ -7353,6 +7360,7 @@ class TimetableController extends Controller
             ->where(fn ($w) => $w->where(fn ($t) => $t->whereIn('day', $dows)->whereNotNull('pair')->where('pair', '<', $maxTo))
                 ->orWhereIn('id', array_keys($moved))));
 
+        $cards = array_filter($cards, fn ($c) => !$this->isNonBlocking($c, $board));
         return ['cards' => $cards, 'ov' => array_intersect_key($ov, $cards)];
     }
 
@@ -7364,7 +7372,7 @@ class TimetableController extends Controller
      */
     protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false): array
     {
-        $unitCards = $unitCards->reject(fn ($c) => $this->isInfoOnly($c, $board));
+        $unitCards = $unitCards->reject(fn ($c) => $this->isNonBlocking($c, $board));
         $hits = ['teachers' => [], 'rooms' => []];
         $ids = array_flip($unitCards->pluck('id')->map(fn ($id) => (int) $id)->all());
         if (!$ids) {
@@ -7609,7 +7617,7 @@ class TimetableController extends Controller
         $out = [];
         foreach ($this->cardRows($board, fn ($q) => $onlyIds !== null ? $q->whereIn('id', array_keys($onlyIds)) : $q) as $id => $c) {
             $o = $ov[$id][$week] ?? null;
-            if ($this->isInfoOnly($c, $board) || $isCycle($c) || ($placedOnly && ($o ? ($o->cancelled || !$o->day || !$o->pair) : (!$c->day || !$c->pair)))) {
+            if ($this->isNonBlocking($c, $board) || $isCycle($c) || ($placedOnly && ($o ? ($o->cancelled || !$o->day || !$o->pair) : (!$c->day || !$c->pair)))) {
                 continue;
             }
             $code = (string) (($o && !$o->cancelled ? $o->auditorium_code : null) ?: $c->auditorium_code);
@@ -8011,7 +8019,7 @@ class TimetableController extends Controller
         $hasFlowSubjectConflict = function (string $subject, string $flow, int $from, int $days) use (
             $allCyclePlacements, $activeFlows, $data, $board, $norm, $endIndexFor, $workIndices, $allowedOverlapDays
         ): bool {
-            if ($this->isInfoOnly($data, $board)) return false;
+            if ($this->isNonBlocking($data, $board)) return false;
             $to = $endIndexFor($from, $days);
             if ($to === null) {
                 return true;
@@ -8299,7 +8307,7 @@ class TimetableController extends Controller
         }
         $endPosition = $startPosition + $requiredDays - 1;
         foreach ($others->sortBy('start_index') as $other) {
-            if ($this->isInfoOnly($data, $board) || $this->isInfoOnly($other, $board)) continue;
+            if ($this->isNonBlocking($data, $board) || $this->isNonBlocking($other, $board)) continue;
             // Lane (para) oralig'i kesishmagan blok xalaqit bermaydi.
             $otherSpanSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
             $otherSpan = $this->cycleLaneSpan(
@@ -9378,7 +9386,7 @@ class TimetableController extends Controller
      */
     private function practiceSplitConflicts(TimetableCard $card, int $week, int $day, int $pair): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         if ($card->training_type === 'lecture') {
             return [];
         }
@@ -9426,7 +9434,7 @@ class TimetableController extends Controller
      */
     private function weeklyProposalBusy(TimetableCard $card, int $week, int $day, int $pair, string $date, ?Auditorium $altRoom = null): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         DB::beginTransaction();
         try {
             // $altRoom — boshqa xona bilan sinash (o'qituvchi jadvalidagi muqobil xona taklifi).
@@ -9675,7 +9683,7 @@ class TimetableController extends Controller
                 if ($h < 1 || $h + $len - 1 > $grid) {
                     $fail('Amaliy dars (' . $len . ' soat) kun oxirigacha sig‘maydi: ' . $h . '-soatdan boshlab bo‘lmaydi.');
                 }
-                if (!$this->isInfoOnly($x['u'], $board) && ($l = $x['lec'][$d] ?? null) && $h < $l[1] && $l[0] < $h + $len) {
+                if (!$this->isNonBlocking($x['u'], $board) && ($l = $x['lec'][$d] ?? null) && $h < $l[1] && $l[0] < $h + $len) {
                     $fail('Ma’ruza vaqti bilan ustma-ust (' . Carbon::parse($d)->format('d.m') . ', ma’ruza ' . $this->cycleHoursTime($board, $l[0], $l[1]) . ').');
                 }
                 $changed = $changed || $from !== $h;
@@ -9705,7 +9713,7 @@ class TimetableController extends Controller
                 $mineDates = array_values($days[(string) $x['u']['unit']]);
                 $lenOf = array_map(fn ($d) => $x['prac'][$d][1] - $x['prac'][$d][0], array_combine($mineDates, $mineDates));
                 foreach ($this->weeklyOccupancy($board, $this->weeklyStateOn($board, $mineDates, $h + max($lenOf), []), array_flip($mineDates)) as $e) {
-                    if (!$this->isInfoOnly($x['u'], $board) && array_intersect_key(array_flip($e['groups']), $groupKeys) && $e['from'] < $h + $lenOf[$e['date']] && $h < $e['to']) {
+                    if (!$this->isNonBlocking($x['u'], $board) && array_intersect_key(array_flip($e['groups']), $groupKeys) && $e['from'] < $h + $lenOf[$e['date']] && $h < $e['to']) {
                         $errors[] = 'Guruh band: ' . $e['label'] . ' (' . Carbon::parse($e['date'])->format('d.m') . ', ' . $this->cycleHoursTime($board, $e['from'], $e['to']) . ')';
                     }
                 }
@@ -9868,7 +9876,7 @@ class TimetableController extends Controller
     /** $only — faqat shu bron turlari ('teacher', 'group', 'room', 'same'); null — hammasi. */
     private function pendingTimeConflicts(TimetableCard $card, array $data, array $ignoreIds, ?array $only = null): array
     {
-        $infoOnly = $this->isInfoOnly($card, $card->board);
+        $infoOnly = $this->isNonBlocking($card, $card->board);
         if (!\App\Services\Timetable\TimetableChangeApproval::tableReady()) return [];
         $pending = \App\Models\TimetableChangeRequest::where('board_id', $card->board_id)
             ->where('status', \App\Models\TimetableChangeRequest::PENDING)
@@ -9924,7 +9932,7 @@ class TimetableController extends Controller
                 && (($p['action'] ?? '') !== 'move' || (int) ($p['week'] ?? 0) !== $week)) continue;
             $other = TimetableCard::find($otherId);
             if (!$other || ((int) $other->id !== (int) $card->id
-                && ($infoOnly || $this->isInfoOnly($other, $card->board)))) continue;
+                && ($infoOnly || $this->isNonBlocking($other, $card->board)))) continue;
             if ($otherTeacher) {
                 $other->teacher_id = $otherTeacher;   // saqlanmaydi — faqat bron solishtiruvi uchun
             }
@@ -10071,7 +10079,7 @@ class TimetableController extends Controller
     /** $roomCode — shu hafta uchun beriladigan xona (berilmasa — haftalik yozuvdagi yoki kartaning xonasi). */
     private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0, ?array $state = null, ?string $roomCode = null): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         $board = $card->board;
         if ($week > $this->cardGrid($board, $card)['weeks']) return [];
         $state ??= $this->calendarConflictState($card, $roomCode);
@@ -10093,7 +10101,7 @@ class TimetableController extends Controller
     private function weekClashes(TimetableCard $card, int $week, int $day, int $pair, int $startHalf, array $state, ?string $roomCode,
         ?string $date = null, ?string $myRoomCode = null, ?array $myRange = null): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         $board = $card->board;
         $date ??= $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
         $myRange ??= $this->rangeFor($card, $pair, $startHalf);
@@ -10104,7 +10112,7 @@ class TimetableController extends Controller
             return [];
         }
         foreach ($state['cards'] as $id => $o) {
-            if ($this->isInfoOnly($o, $board)) continue;
+            if ($this->isNonBlocking($o, $board)) continue;
             if ((int) $id === (int) $card->id) continue;
             // Birlikning o'z bo'laklari (2 soat + 1 soat — bitta dars) begona dars emas: birga suriladi.
             if (isset($state['ignore'][(int) $id])) continue;
@@ -10138,7 +10146,7 @@ class TimetableController extends Controller
      */
     private function findWeekConflictsIndexed(TimetableCard $card, int $week, int $day, int $pair, int $startHalf, array $state, ?string $roomCode = null): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         $myRoom = $roomCode ?: ((($state['ov'][$card->id][$week] ?? null)?->auditorium_code) ?: $card->auditorium_code);
 
         return $this->findWeekConflicts($card, $week, $day, $pair, $startHalf,
@@ -10433,6 +10441,7 @@ class TimetableController extends Controller
         $req = [];
         $facultyByRow = [];
         foreach (TimetableCard::where('board_id', $board->id)->where('course', '>=', 4)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board))->get() as $card) {
+            if ($this->isNonBlocking($card, $board)) continue;
             $base = mb_strtolower(trim((string) $card->specialty_name)) . '|' . (int) $card->course . '|';
             $type = $card->training_type === 'lecture' ? 'lecture' : 'practice';
             $rows = $type === 'practice'
@@ -10564,7 +10573,7 @@ class TimetableController extends Controller
     /** Haftalik dars (hafta, kun, yarim-para) sikl darsi bilan o'qituvchi/xona bo'yicha ustma-ust tushsa — ogohlantirishlar. */
     private function weeklyCycleWarnings(TimetableCard $card, int $week, int $day, int $pair, ?string $roomCode = null): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         if ((int) $card->course >= 4) {
             return [];
         }
@@ -10615,7 +10624,7 @@ class TimetableController extends Controller
     /** Tashqi qatlamdagi guruh bandligi (ext_day/ext_pair bo'yicha). */
     private function findExternalConflicts(TimetableCard $card, int $day, int $pair, array $ignoreIds = []): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         $others = TimetableCard::where('board_id', $card->board_id)
             ->where('id', '!=', $card->id)->whereNotIn('id', $ignoreIds)
             ->where('ext_day', $day)->whereNotNull('ext_pair')
@@ -10738,7 +10747,7 @@ class TimetableController extends Controller
      */
     private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board)) return [];
         $state ??= $this->calendarConflictState($card);
         $weeksOf = [];   // to'qnashuv matni => haftalar
         $checked = 0;
@@ -10786,7 +10795,7 @@ class TimetableController extends Controller
     /** Ikki dars bir vaqtda: guruh (bir yo'nalish+kurs ichida, bo'lak qo'shnilaridan tashqari), o'qituvchi va xona bandligi. */
     private function clashWith(TimetableCard $card, ?string $myRoom, TimetableCard $o, ?string $oRoom, ?string $oRoomName): array
     {
-        if ($this->isInfoOnly($card, $card->board) || $this->isInfoOnly($o, $card->board)) return [];
+        if ($this->isNonBlocking($card, $card->board) || $this->isNonBlocking($o, $card->board)) return [];
         $errors = [];
         // Guruh konflikti — bir yo'nalish+kurs ichida
         if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
@@ -10869,7 +10878,7 @@ class TimetableController extends Controller
         }
         if (isset($state['board'])) $c->setRelation('board', $state['board']);
         $state['cards'][$id] = $c;
-        if ($this->isInfoOnly($c, $state['board'] ?? $c->board)) return;
+        if ($this->isNonBlocking($c, $state['board'] ?? $c->board)) return;
         if ($c->day && $c->pair) {
             $state['tplByDay'][(int) $c->day][$id] = $id;
             $state['tplDayOf'][$id] = (int) $c->day;
@@ -10909,7 +10918,7 @@ class TimetableController extends Controller
             return;
         }
         $state['ov'][$cardId][$week] = $o;
-        if (isset($state['cards'][$cardId]) && $this->isInfoOnly($state['cards'][$cardId], $state['board'] ?? $state['cards'][$cardId]->board)) return;
+        if (isset($state['cards'][$cardId]) && $this->isNonBlocking($state['cards'][$cardId], $state['board'] ?? $state['cards'][$cardId]->board)) return;
         if (!$o->cancelled && $o->day && $o->pair) {
             $state['movedByDay'][(int) $o->day][$cardId . '|' . $week] = [$cardId, $week, $o];
         }
@@ -12246,7 +12255,8 @@ class TimetableController extends Controller
             'weeks'            => (int) $board->weeks,
             'day_names'        => $board->day_names ?: array_slice(TimetableBoard::DEFAULT_DAY_NAMES, 0, (int) $board->days),
             'bell_schedule'    => $board->bell_schedule ?: TimetableBoard::defaultBellSchedule((int) $board->pairs_per_day),
-            'settings'         => ['info_only_courses' => \App\Services\Timetable\InfoOnlyCourses::courses($board)]
+            'settings'         => ['info_only_courses' => \App\Services\Timetable\InfoOnlyCourses::courses($board),
+                'info_only_subjects' => \App\Services\Timetable\InfoOnlyCourses::subjects($board)]
                 + ($board->settings ?: ['days_off' => ['Yakshanba'], 'allow_zero' => false, 'show_day_number' => false]),
         ]);
     }
@@ -12289,6 +12299,7 @@ class TimetableController extends Controller
     {
         $data = $request->validate([
             'info_only_courses_present' => 'nullable|boolean',
+            'info_only_subjects_present' => 'nullable|boolean',
             'institution_name'      => 'nullable|string|max:255',
             'days'                  => 'required|integer|min:1|max:7',
             'day_names'             => 'nullable|array',
@@ -12303,6 +12314,8 @@ class TimetableController extends Controller
             'settings'              => 'nullable|array',
             'settings.info_only_courses' => 'sometimes|array',
             'settings.info_only_courses.*' => 'integer|between:1,6|distinct',
+            'settings.info_only_subjects' => 'sometimes|array|max:50',
+            'settings.info_only_subjects.*' => 'required|string|min:1|max:255',
         ]);
 
         // Keep existing JSON options: nested validation otherwise drops unrelated settings.
@@ -12310,6 +12323,13 @@ class TimetableController extends Controller
 
         if ($request->boolean('info_only_courses_present')) {
             $data['settings']['info_only_courses'] = array_map('intval', $data['settings']['info_only_courses'] ?? []);
+        }
+
+        if ($request->boolean('info_only_subjects_present')) {
+            $data['settings']['info_only_subjects'] ??= [];
+        }
+        if (array_key_exists('info_only_subjects', $data['settings'] ?? [])) {
+            $data['settings']['info_only_subjects'] = \App\Services\Timetable\InfoOnlyCourses::normalizeSubjects($data['settings']['info_only_subjects']);
         }
 
         // Juftliklarni qayta raqamlaymiz; para soni = "pair" elementlar soni

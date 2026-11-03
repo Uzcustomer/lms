@@ -26,7 +26,7 @@ trait TimetableHemisSync
         '13:30-14:10' => 18, '14:10-14:50' => 24, '15:00-15:40' => 21, '15:40-16:20' => 23, '16:30-17:10' => 19,
     ];
 
-    private function withoutInfoOnlyHemis($query, ?TimetableBoard $board)
+    private function withoutHemisExcluded($query, ?TimetableBoard $board)
     {
         $codes = \App\Services\Timetable\InfoOnlyCourses::semesterCodes($board ?? new TimetableBoard());
         return $query->where(fn ($q) => $q->whereNull('semester_code')->orWhereNotIn('semester_code', $codes));
@@ -359,7 +359,7 @@ trait TimetableHemisSync
      */
     private function hemisMoveExplainer(TimetableBoard $board, array $slotTimes, callable $isCycle): callable
     {
-        $all = TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board))->get()->reject($isCycle)->keyBy('id');
+        $all = TimetableCard::where('board_id', $board->id)->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board))->get()->reject($isCycle)->reject(fn ($c) => $this->isNonBlocking($c, $board))->keyBy('id');
         $ov = Schema::hasTable('timetable_card_overrides')
             ? DB::table('timetable_card_overrides')->whereIn('card_id', $all->keys())->get()->groupBy('card_id')->map(fn ($x) => $x->keyBy('week'))
             : collect();
@@ -714,7 +714,7 @@ trait TimetableHemisSync
 
         $out = [];
         foreach ((array) ($plan['rows'] ?? []) as $row) {
-            if ($this->isInfoOnly($row, $board)) continue;
+            if ($this->isHemisExcluded($row, $board)) continue;
             foreach ((array) ($row['blocks'] ?? []) as $b) {
                 $subject = (string) ($b['subject'] ?? '');
                 $from = (int) ($b['from'] ?? 0);
@@ -1127,7 +1127,7 @@ trait TimetableHemisSync
             $busy = [];
             foreach ($hemisAll as $r) {
                 $d = substr((string) $r->lesson_date, 0, 10);
-                if ($d <= $today || isset($handledSubjects[(int) $r->subject_id][(string) $r->training_type_code])) {
+                if ($this->isNonBlocking($r, $board) || $d <= $today || isset($handledSubjects[(int) $r->subject_id][(string) $r->training_type_code])) {
                     continue;
                 }
                 foreach ($toSlots((string) $r->lesson_pair_start_time, (string) $r->lesson_pair_end_time) as $s) {
@@ -1140,6 +1140,7 @@ trait TimetableHemisSync
                     continue;
                 }
                 $unmatchedCards[$c->subject_name] = true;
+                if ($this->isNonBlocking($c, $board)) continue;
                 foreach ($cardLessons($c) as $l) {
                     for ($i = 0; $i < $l['len']; $i++) {
                         $busy[$l['date']][$l['slot'] + $i] = true;
@@ -1175,7 +1176,14 @@ trait TimetableHemisSync
             if ($uw > 0) {
                 $until = Carbon::parse($weekMonday($sample, min($uw, $g['weeks'])))->addDays(6)->toDateString();
             }
-            $results = $units ? $planner->planGroup($units, $busy, $workDates) : [];
+            // Control subjects remain exportable and plan independently of group occupancy.
+            $blockingUnits = array_values(array_filter($units, fn ($u) => !$this->isNonBlocking($u, $board)));
+            $results = $blockingUnits ? $planner->planGroup($blockingUnits, $busy, $workDates) : [];
+            foreach ($units as $unit) {
+                if ($this->isNonBlocking($unit, $board)) array_push($results, ...$planner->planGroup([$unit], [], $workDates));
+            }
+            $resultByKey = array_column($results, null, 'key');
+            $results = array_values(array_map(fn ($u) => $resultByKey[$u['key']], $units));
             // Hisob davri: haftalar oralig'i (sukut 1 — joriy hafta).
             $pFrom = max(1, (int) ($scope['period_from'] ?? 1));
             $pTo = max($pFrom, min($g['weeks'], (int) ($scope['period_to'] ?? max(1, $gCurrent))));
@@ -1312,6 +1320,13 @@ trait TimetableHemisSync
      */
     private function hemisCrossCheck(array &$groupsOut, array $finals, array $handledIds, string $today, callable $mudirFor, bool $mudirFallback = false, ?TimetableBoard $board = null): void
     {
+        $policyBoard = $board ?? new TimetableBoard();
+        $nonBlockingUnits = [];
+        foreach ($groupsOut as $group) {
+            foreach ($group['units'] as $unit) {
+                if ($this->isNonBlocking($unit, $policyBoard)) $nonBlockingUnits[(string) $unit['key']] = true;
+            }
+        }
         $idx = [];   // "e|xodim|sana" / "r|xona|sana" => [[boshlanish, tugash, birlik, matn, xodim, xona], ...]
         $emps = [];
         $rooms = [];
@@ -1322,6 +1337,7 @@ trait TimetableHemisSync
             $idx[$type . '|' . $id . '|' . $date][] = [$start, $end, $unitKey, $label, (string) $emp, (string) $room, $info];
         };
         foreach ($finals as $f) {
+            if (isset($nonBlockingUnits[(string) $f['key']])) continue;
             [$fGroup, $fSubj] = array_pad(explode(' · ', (string) $f['label'], 2), 2, '');
             $fInfo = ['source' => 'LMS', 'group' => $fGroup, 'subject' => $fSubj, 'teacher' => $f['employee_name'] ?? null, 'room' => $f['auditorium_name'] ?? null];
             if ($f['employee_id'] && !in_array('mudir', $f['flags'] ?? [], true)) {
@@ -1334,11 +1350,12 @@ trait TimetableHemisSync
             }
         }
         if ($emps || $rooms) {
-            $ext = $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
+            $ext = $this->withoutHemisExcluded(DB::table('schedules'), $board)->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
                 ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
                 ->get(['schedule_hemis_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time',
                     'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
             foreach ($ext as $r) {
+                if ($this->isNonBlocking($r, $policyBoard)) continue;
                 if (isset($handledIds[(int) $r->schedule_hemis_id])) {
                     continue;
                 }
@@ -1423,6 +1440,7 @@ trait TimetableHemisSync
             ? $r['date'] . '|' . $r['start'] . '|' . $r['end'] . '|' . $r['employee_id'] . '|' . $r['auditorium_code'] : null;
         $shareSize = [];   // umumiy dars kaliti => guruhlar soni (HEMIS'da o'zgarmaydiganlari ham)
         foreach ($finals as $f) {
+            if (isset($nonBlockingUnits[(string) $f['key']])) continue;
             if ($k = $shareKey($f)) {
                 $shareSize[$k] = ($shareSize[$k] ?? 0) + 1;
             }
@@ -1439,9 +1457,9 @@ trait TimetableHemisSync
                 foreach ($u['actions'] as $ai => $a) {
                     if (in_array($a['op'], ['create', 'update'], true)) {
                         // emp0/room0 — indeksdagi shu darsning o'z yozuvlari kaliti (asl qiymatlar).
-                        $st[] = ['gi' => $gi, 'ui' => $ui, 'ai' => $ai, 'key' => $u['key'], 'share' => $shareKey($a),
+                        $st[] = ['gi' => $gi, 'ui' => $ui, 'ai' => $ai, 'key' => $u['key'], 'share' => isset($nonBlockingUnits[(string) $u['key']]) ? null : $shareKey($a),
                             'emp0' => (string) ($a['employee_id'] ?? ''), 'room0' => (string) ($a['auditorium_code'] ?? ''),
-                            'queue' => ['e', 'r'], 'resolved' => [], 'unresolved' => []];
+                            'queue' => isset($nonBlockingUnits[(string) $u['key']]) ? [] : ['e', 'r'], 'resolved' => [], 'unresolved' => []];
                     }
                 }
             }
@@ -1807,7 +1825,7 @@ trait TimetableHemisSync
         if (!$ids) {
             return response()->json(['error' => "ids berilmagan — tekshiriladigan darslarning HEMIS id'lari kerak (masalan &ids=123,456)."], 422, $cors);
         }
-        $rows = $ids ? $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereIn('schedule_hemis_id', $ids)->get(['schedule_hemis_id', 'group_id', 'lesson_date']) : collect();
+        $rows = $ids ? $this->withoutHemisExcluded(DB::table('schedules'), $board)->whereIn('schedule_hemis_id', $ids)->get(['schedule_hemis_id', 'group_id', 'lesson_date']) : collect();
         $byGroup = [];
         $failed = [];
         foreach ($ids as $id) {
@@ -1901,7 +1919,7 @@ trait TimetableHemisSync
         $hemisMs = 0;   // HEMIS'ni kutish (jadval importi + davomat/baho) — "≤ 10 s" tekshiruvi uchun javobda
         [$facSet, $specSet, $courseSet] = $this->scopeSets($scope);
         $cards = array_filter($this->cardRows($board, fn ($q) => $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet)),
-            fn ($c) => !$this->isInfoOnly($c, $board));
+            fn ($c) => !$this->isHemisExcluded($c, $board));
         $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
         $weekly = array_filter($cards, fn ($c) => !$isCycle($c));
         $cycleIds = array_keys(array_diff_key($cards, $weekly));
@@ -1939,7 +1957,7 @@ trait TimetableHemisSync
         ];
         if ($weekly) {
             $state = ['cards' => $weekly, 'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($weekly)))];
-            foreach ($this->weeklyOccupancy($board, $state, [$today => true]) as $e) {
+            foreach ($this->weeklyOccupancy($board, $state, [$today => true], true) as $e) {
                 $c = $weekly[$e['card']];
                 // Shu hafta "vaqtincha kafedra mudirida": o'qituvchi — mudir (HEMIS id'si yozuvda), placeholder — asl o'qituvchi nomi.
                 $ph = ($ovr = $state['ov'][$e['card']][$e['week']] ?? null) ? $this->ovPlaceholder($ovr) : null;
@@ -1991,7 +2009,7 @@ trait TimetableHemisSync
         $import = $groups ? app(\App\Services\ScheduleImportService::class)->importGroupsOnDate(array_keys($groups), $date) : ['failed' => []];
         $hemisMs += (int) round((microtime(true) - $t) * 1000);
         $importFailed = array_flip($import['failed']);
-        $hemisRows = $groups ? $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereIn('group_id', array_keys($groups))->whereNull('deleted_at')
+        $hemisRows = $groups ? $this->withoutHemisExcluded(DB::table('schedules'), $board)->whereIn('group_id', array_keys($groups))->whereNull('deleted_at')
             ->whereBetween('lesson_date', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
             ->orderBy('lesson_pair_start_time')->orderBy('schedule_hemis_id')
             ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_id', 'subject_name', 'training_type_code', 'training_type_name',
@@ -2351,7 +2369,8 @@ trait TimetableHemisSync
         if (!$rooms) {
             return ['flow' => [], 'groups' => []];
         }
-        $cards = $this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board)));
+        $cards = array_filter($this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($board))),
+            fn ($c) => !$this->isNonBlocking($c, $board));
         if (!$cards) {
             return ['flow' => [], 'groups' => []];
         }
@@ -2449,6 +2468,7 @@ trait TimetableHemisSync
 
     private function hemisTodayBlocks(array &$out, $hemisRows, string $today, ?TimetableBoard $board = null): void
     {
+        $policyBoard = $board ?? new TimetableBoard();
         $cand = array_keys(array_filter($out, fn ($x) => $x['status'] === 'update'));
         if (!$cand) {
             return;
@@ -2478,7 +2498,7 @@ trait TimetableHemisSync
             }
         }
         $day = Carbon::parse($today);
-        $ext = $this->withoutInfoOnlyHemis(DB::table('schedules'), $board)->whereNull('deleted_at')->whereBetween('lesson_date', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
+        $ext = $this->withoutHemisExcluded(DB::table('schedules'), $board)->whereNull('deleted_at')->whereBetween('lesson_date', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
             ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
             ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_pair_start_time', 'lesson_pair_end_time',
                 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
@@ -2503,6 +2523,7 @@ trait TimetableHemisSync
             $base = ['id' => (int) $id, 'group_id' => (int) $r->group_id, 'group' => $r->group_name, 'subject' => $r->subject_name, 'dept' => $r->department_id,
                 'code' => (string) ($r->training_type_code ?? '')];
             $x = $mine[(int) $id] ?? null;
+            if ($this->isNonBlocking($r, $policyBoard) || ($x && $this->isNonBlocking($x, $policyBoard))) continue;
             // LMS'da o'qituvchisi biriktirilmagan dars — HEMIS'dagi o'qituvchisi (kafedra mudiri) bandlik hisoblanmaydi.
             $forced = $x ? !$x['teacher_set'] : $isMudir($r->department_id, $r->employee_id);
             // moving — hozirgi joy, lekin dars o'zgartiriladi (shu nomzod indeksi): u ko'chgach bo'shaydi.
@@ -2545,7 +2566,7 @@ trait TimetableHemisSync
             $checkEmp = !$isPh && $emp !== '' && $x['teacher_set'] && ($timeChanged || $emp !== (string) $x['employee_id']);
             $checkRoom = !$isPh && $room !== '' && ($fbRoom || !$freeRoom($x['new_auditorium_name'])) && ($timeChanged || $room !== (string) $x['auditorium_code']);
             $seen = [];
-            foreach ($spots as $o) {
+            foreach ($this->isNonBlocking($x, $policyBoard) ? [] : $spots as $o) {
                 if ($o['id'] === $x['hemis_id'] || !($o['s'] < $e && $s < $o['e'])) {
                     continue;
                 }

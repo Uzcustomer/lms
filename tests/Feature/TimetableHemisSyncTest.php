@@ -2649,3 +2649,79 @@ it('ignores external HEMIS informational semesters for teacher and room blocking
     expect($today['rows'][0]['blocked'])->toBe([])
         ->and(DB::table('schedules')->where('schedule_hemis_id', 82)->exists())->toBeTrue();
 });
+
+it('exports educational practice in full and today HEMIS reports while ignoring occupancy against it', function () {
+    $s = hsSetup();
+    $subject = "O'quv amaliyoti";
+    $s['card']->update(['subject_name' => $subject]);
+    DB::table('curriculum_subjects')->where('id', $s['csId'])->update(['subject_name' => $subject]);
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(91, '2026-09-21', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 91)->update(['group_id' => 8888, 'group_name' => 'ordinary-busy']);
+    $full = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    expect($full['groups'][0]['units'][0]['subject_name'])->toBe($subject);
+    $action = collect($full['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($action)->not->toBeNull()->and($action['op'])->toBe('create')->and($action['blocked'])->toBe([]);
+    hsSchedule(92, '2026-09-14', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 92)->update(['group_id' => 8888, 'group_name' => 'ordinary-busy']);
+    htFake([1596 => [htItem(1, '2026-09-14', '08:30', '09:50', ['subject' => $subject])]]);
+    $today = htCall($s)->assertOk()->json();
+    expect($today['rows'][0]['subject'])->toBe($subject)
+        ->and($today['rows'][0]['status'])->toBe('update')
+        ->and($today['rows'][0]['blocked'])->toBe([])
+        ->and($today['json']['groups'][0]['units'][0]['subject_name'])->toBe($subject)
+        ->and($today['json']['groups'][0]['units'][0]['actions'])->not->toBeEmpty();
+});
+
+it('does not let educational-practice HEMIS records block ordinary lessons in either report', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(93, '2026-09-21', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 93)->update(['group_id' => 8888, 'group_name' => 'control-group', 'subject_name' => 'Kasbiy O`QUV AMALIYOTI']);
+    $run = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $action = fn ($rep) => collect($rep['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($action($run())['blocked'])->toBe([]);
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'info_only_subjects' => []]]);
+    expect($action($run())['blocked'])->not->toBeEmpty();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14']]);
+    hsSchedule(94, '2026-09-14', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 94)->update(['group_id' => 8888, 'group_name' => 'control-group', 'subject_name' => 'Oʻquv amaliyoti']);
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['room' => 'other'])]]);
+    $today = htCall($s)->assertOk()->json();
+    expect($today['rows'][0]['status'])->toBe('update')->and($today['rows'][0]['blocked'])->toBe([])
+        ->and($today['json']['groups'][0]['units'][0]['actions'])->not->toBeEmpty();
+});
+
+it('keeps ordinary and educational-practice exports at the same group slot', function () {
+    $s = hsSetup();
+    $subject = "O'quv amaliyoti";
+    $control = $s['card']->replicate();
+    $control->subject_name = $subject;
+    $control->save();
+    hsInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 987, 'curricula_hemis_id' => 250, 'subject_id' => 987,
+        'subject_name' => $subject, 'semester_code' => '11', 'semester_name' => '1', 'department_id' => 501, 'department_name' => 'Anatomiya',
+        'subject_details' => json_encode([['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 8]]), 'at_semester' => 1]);
+    $id = DB::table('curriculum_subjects')->where('subject_id', 987)->value('id');
+    DB::table('ktr_plans')->insert(['curriculum_subject_id' => $id, 'week_count' => 4,
+        'plan_data' => json_encode(['hours' => ['1' => ['13' => 2], '2' => ['13' => 2], '3' => ['13' => 2], '4' => ['13' => 2]]]),
+        'created_at' => now(), 'updated_at' => now()]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-14', '10:00:00', '11:20:00');
+    DB::table('schedules')->where('schedule_hemis_id', 2)->update(['subject_id' => 987, 'subject_name' => $subject]);
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    expect($res['groups'][0]['units'])->toHaveCount(2);
+    foreach ($res['groups'][0]['units'] as $unit) {
+        $act = collect($unit['actions'])->firstWhere('date', '2026-09-21');
+        expect($act)->not->toBeNull()->and($act['start'])->toBe('10:00')->and($act['blocked'])->toBe([]);
+    }
+});

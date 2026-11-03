@@ -208,7 +208,7 @@ trait TimetableTeacherAgenda
                 $raw[] = ['date' => $e['date'], 'from' => $from, 'to' => $to, 'kind' => 'weekly', 'lecture' => $c->training_type === 'lecture',
                     'subject' => (string) $c->subject_name, 'groups' => $this->cardGroupsOf($c), 'room' => $e['room_name'] ?: null, 'room_code' => $e['room'],
                     'key' => 'w|' . $e['card'] . '|' . $e['week'], 'card_ids' => [(int) $e['card']], 'week' => (int) $e['week'], 'unit' => null,
-                    'layer' => $layer, 'cards' => [$c], 'course' => (int) $c->course, 'info_only' => $this->isInfoOnly($c, $board)];
+                    'layer' => $layer, 'cards' => [$c], 'course' => (int) $c->course, 'info_only' => $this->isNonBlocking($c, $board)];
             }
         }
         // Sikl: o'qituvchi darslari bo'lgan joylangan birliklar (amaliyot va oqim ma'ruzasi).
@@ -233,7 +233,7 @@ trait TimetableTeacherAgenda
                     'card_ids' => [(int) $e['card']], 'week' => null, 'unit' => $lecture ? null : [
                         'key' => $u['key'], 'unit' => (string) $u['unit'], 'specialty_name' => (string) $u['specialty'], 'course' => (int) $u['course'],
                         'subject_name' => (string) $u['subject'], 'group_name' => (string) $u['group']],
-                    'layer' => 'internal', 'cards' => $card ? [$card] : [], 'course' => (int) $u['course'], 'info_only' => $this->isInfoOnly($u, $board)];
+                    'layer' => 'internal', 'cards' => $card ? [$card] : [], 'course' => (int) $u['course'], 'info_only' => $this->isNonBlocking($u, $board)];
             }
         }
         // Bitta oqim ma'ruzasi — bitta yozuv (guruhlar birlashadi): bitta ma'ruza kartasi (kalit) yoki turli yo'nalish kartalari — fan,
@@ -483,7 +483,7 @@ trait TimetableTeacherAgenda
             $this->weeklyProposalBusy($card, $week, $day, $pair, $date, $room));
         $room ??= $roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null;
         $students = $this->cardStudents($card);
-        if (!$this->isInfoOnly($card, $board) && $room && (int) $room->volume > 0 && $students > (int) $room->volume) {
+        if (!$this->isNonBlocking($card, $board) && $room && (int) $room->volume > 0 && $students > (int) $room->volume) {
             $errors[] = self::capacityLine((string) ($room->name ?: $room->code), (int) $room->volume, $students);
         }
 
@@ -523,7 +523,7 @@ trait TimetableTeacherAgenda
     private function agendaFreeRoom(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, int $students, string $current): ?array
     {
         $base = $this->roomRankBase();
-        $fit = $base['active']->filter(fn ($r) => (string) $r->code !== $current && (int) $r->volume > 0 && ($this->isInfoOnly($card, $board) || (int) $r->volume >= $students)
+        $fit = $base['active']->filter(fn ($r) => (string) $r->code !== $current && (int) $r->volume > 0 && ($this->isNonBlocking($card, $board) || (int) $r->volume >= $students)
             && $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
         $tries = 0;
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();

@@ -3346,12 +3346,13 @@
                     ' <button type="button" data-cr-open>Ko\'rish</button>';
                 bar.querySelector('[data-cr-open]').onclick = openChangeReqModal;
             }
-            // Sikl kun oynasi: shu kun bo'yicha kutilayotgan soat so'rovi (bo'lsa).
-            function pendingDaySlot(card, dayIndex) {
+            // Sikl kun oynasi: shu kun bo'yicha kutilayotgan soat so'rovi (bo'lsa); mode berilsa — faqat shu surish rejimidagisi.
+            function pendingDaySlot(card, dayIndex, mode) {
                 if (!card) return null;
                 return pendingReqs().find(r => r.route === 'admin.timetable.cycle-lecture-slots' && r.payload
                     && r.payload.subject_name === card.subject && r.payload.group_name === card.group
-                    && String(r.payload.day_index) === String(dayIndex) && r.payload.start_hour) || null;
+                    && String(r.payload.day_index) === String(dayIndex) && r.payload.start_hour
+                    && (!mode || (r.payload.mode || 'both') === mode)) || null;
             }
             function openChangeReqModal() {
                 let m = document.getElementById('crModal');
@@ -7928,10 +7929,14 @@
                 const bothKeyLabel = typeof cycBothKeyLabel === 'function' ? cycBothKeyLabel() : 'Shift';
                 const isSubRow = dayCard && dayCard.placement_group && dayCard.placement_group !== dayCard.group;
                 const modeLabels = { both: 'Birga', lecture: 'Faqat ma\'ruza', practice: 'Faqat amaliy' };
-                // ↑/↓ chegaralari — tanlangan rejim bo'yicha (birga — kutilayotgan o'z so'rovi soatidan).
-                const shapeAt = d => typeof cycDayShape === 'function' ? cycDayShape(dp, curMode, d, curMode === 'both' ? baseSt : null) : null;
+                // ↑/↓ chegaralari va qadam — tanlangan rejim bo'yicha, shu rejimdagi kutilayotgan o'z so'rovi soatidan (bo'lsa):
+                // tasdiq kutilayotganda keyingi bosish so'ralgan soatdan davom etadi.
+                const savedBase = curMode !== 'both' && typeof cycDayShape === 'function' ? cycDayShape(dp, curMode, 0, null).base : null;
+                const modePending = curMode !== 'both' && savedBase != null ? pendingDaySlot(dayCard, dp.k - 1, curMode) : null;
+                const pendOff = modePending && modePending.mine ? +modePending.payload.start_hour - savedBase : 0;
+                const shapeAt = d => typeof cycDayShape === 'function' ? cycDayShape(dp, curMode, d + pendOff, curMode === 'both' ? baseSt : null) : null;
                 const canStep = d => { const sh = shapeAt(d); return sh ? !cycDayShapeError(sh, dayHours) : true; };
-                const stepBase = curMode === 'both' ? baseSt : (shapeAt(0) ? shapeAt(0).base : baseSt);
+                const stepBase = curMode === 'both' ? baseSt : (savedBase != null ? savedBase + pendOff : baseSt);
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML =

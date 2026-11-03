@@ -42,6 +42,7 @@ class VedomostAiReportController extends Controller
                 ->with('error', "Bu vedomost uchun yangi formatdagi AI natijasi yo'q — avval \"AI tekshirish\"ni bosing.");
         }
 
+        $result = $this->refreshTm($v, $result);
         $merged = $this->merge->aggregate($this->merge->siblingsOf($v))->first();
         $history = VedomostSubmissionLog::where('vedomost_submission_id', $v->id)
             ->where('action', 'ai_edit')
@@ -87,6 +88,9 @@ class VedomostAiReportController extends Controller
             $merged = $this->merge->aggregate($siblings)->first();
             $result = $v->ai_result ?? [];
             $checked = $v->ai_check_status === 'done' && ($result['version'] ?? 1) >= VedomostCheckEngine::VERSION;
+            if ($checked) {
+                $result = $this->refreshTm($v, $result);
+            }
             $report = $checked ? $result['report'] : null;
             $items[] = [
                 'v' => $v,
@@ -460,6 +464,33 @@ class VedomostAiReportController extends Controller
         if (empty($edits['tm'][$sid])) {
             unset($edits['tm'][$sid]);
         }
+    }
+
+    /**
+     * Hisobot ochilganda Test markazi natijalarini yangilaydi (tekshiruvdan keyin kelgan baholar).
+     * Tasdiqlangan vedomost o'zgartirilmaydi. Xato bo'lsa — saqlangan natija ko'rsatiladi.
+     */
+    private function refreshTm(VedomostSubmission $v, array $result): array
+    {
+        if ($v->status === VedomostSubmission::STATUS_APPROVED) {
+            return $result;
+        }
+        try {
+            $new = $this->checker->refreshTestCenter($result);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("[VedomostAiReport] Test markazi yangilanmadi #{$v->id}: " . $e->getMessage());
+
+            return $result;
+        }
+        if ($new === null) {
+            return $result;
+        }
+        foreach ($this->siblings($v) as $sib) {
+            $sib->update(['ai_result' => $new, 'ai_verdict' => $new['verdict'], 'ai_summary' => $new['summary']]);
+        }
+        $v->refresh();
+
+        return $new;
     }
 
     private function siblings(VedomostSubmission $v)

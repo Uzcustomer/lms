@@ -32,7 +32,7 @@
             return $s;
         };
 
-        $colCount = 1 + collect($sections)->sum(fn($s) => count($s['cols']) + 1) + ($showGrand ? 1 : 0);
+        $colCount = 1 + collect($sections)->sum(fn($s) => count($s['cols']) + (empty($s['noTotal']) ? 1 : 0)) + ($showGrand ? 1 : 0);
     @endphp
 
     <div style="padding:16px 24px;">
@@ -110,6 +110,29 @@
                 </div>
             </div>
 
+            @if(!$dateMode && isset($totalMetrics['sum|due']))
+                @php
+                    $due = $totalMetrics['sum|due'] ?? 0;
+                    $pct = fn ($n) => $due ? ' · ' . round($n / $due * 100) . '%' : '';
+                    $kpi = [
+                        ['sum|due', 'Topshirilishi kerak edi', $due, '', '#1a3268', '#eef2ff'],
+                        ['sum|submitted', 'Topshirildi', $totalMetrics['sum|submitted'] ?? 0, $pct($totalMetrics['sum|submitted'] ?? 0), '#1d4ed8', '#dbeafe'],
+                        ['sum|approved', 'Tasdiqlandi', $totalMetrics['sum|approved'] ?? 0, $pct($totalMetrics['sum|approved'] ?? 0), '#166534', '#dcfce7'],
+                        ['sum|rejected', 'Rad etilgan (kamida 1 marta)', $totalMetrics['sum|rejected'] ?? 0, '', '#b91c1c', '#fee2e2'],
+                        ['fate|passed', '…shundan qayta topshirib o‘tdi', $totalMetrics['fate|passed'] ?? 0, '', '#166534', '#f0fdf4'],
+                        ['fate|failed', '…shundan o‘tmadi (yana rad)', $totalMetrics['fate|failed'] ?? 0, '', '#b91c1c', '#fef2f2'],
+                    ];
+                @endphp
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;">
+                    @foreach($kpi as [$k, $lbl, $n, $extra, $fg, $bg])
+                        <div class="{{ $n ? 'dl' : '' }}" data-path="[]" data-key="{{ $k }}" style="background:{{ $bg }};border-radius:12px;padding:10px 12px;{{ $n ? 'cursor:pointer;' : '' }}">
+                            <div style="font-size:11.5px;color:#475569;font-weight:600;">{{ $lbl }}</div>
+                            <div style="font-size:22px;font-weight:800;color:{{ $fg }};line-height:1.3;">{{ $n }}<span style="font-size:12px;font-weight:600;color:#64748b;">{{ $extra }}</span></div>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+
             <div style="overflow-x:auto;">
                 <table style="border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;">
                     <thead>
@@ -118,7 +141,7 @@
                                 <a href="{{ $sortUrl('label') }}" style="{{ $thLink }}">{{ collect($selectedDims)->map(fn($d)=>$dimensions[$d]['label'])->implode(' › ') }}{!! $arrow('label') !!}</a>
                             </th>
                             @foreach($sections as $sec)
-                                <th colspan="{{ count($sec['cols']) + 1 }}"
+                                <th colspan="{{ count($sec['cols']) + (empty($sec['noTotal']) ? 1 : 0) }}"
                                     style="border:1px solid #e2e8f0;padding:6px 8px;text-align:center;background:{{ $sec['tint'] }};font-weight:700;">
                                     {{ $sec['label'] }}
                                 </th>
@@ -138,9 +161,11 @@
                                     </th>
                                 @endforeach
                                 @php $tk = $sec['key'].'|__total'; @endphp
+                                @if(empty($sec['noTotal']))
                                 <th style="border:1px solid #e2e8f0;padding:5px 7px;text-align:center;background:{{ $sec['tint'] }};font-weight:700;">
                                     <a href="{{ $sortUrl($tk) }}" style="{{ $thLink }}">Jami{!! $arrow($tk) !!}</a>
                                 </th>
+                                @endif
                             @endforeach
                         </tr>
                     </thead>
@@ -151,7 +176,7 @@
                                 $indent = 12 + $row['depth'] * 20;
                                 $rowBg = $row['depth'] === 0 ? '#ffffff' : '#fbfdff';
                                 // «Rad etilganlar» bo'limi varaqlarni qayta sanaydi — umumiy «Jami»ga kirmaydi.
-                                $grand = collect($row['metrics'])->reject(fn ($v, $k) => str_starts_with($k, 'fate|'))->sum();
+                                $grand = collect($row['metrics'])->reject(fn ($v, $k) => str_starts_with($k, 'fate|') || str_starts_with($k, 'sum|'))->sum();
                             @endphp
                             <tr style="background:{{ $rowBg }};">
                                 <td style="position:sticky;left:0;background:{{ $rowBg }};border:1px solid #e2e8f0;padding:7px 12px 7px {{ $indent }}px;text-align:left;font-weight:{{ $isParent ? 700 : 500 }};color:{{ $isParent ? '#0f172a' : '#475569' }};z-index:1;">
@@ -163,7 +188,9 @@
                                         <td class="{{ $val ? 'dl' : '' }}" data-path="{{ json_encode($row['path'], JSON_UNESCAPED_UNICODE) }}" data-key="{{ $c['key'] }}" style="border:1px solid #e2e8f0;padding:6px 8px;text-align:center;color:{{ $val ? '#0f172a' : '#cbd5e1' }};">{{ $val ?: '·' }}</td>
                                     @endforeach
                                     @php $st = $sectionSum($row['metrics'], $sec['key']); @endphp
+                                    @if(empty($sec['noTotal']))
                                     <td class="{{ $st ? 'dl' : '' }}" data-path="{{ json_encode($row['path'], JSON_UNESCAPED_UNICODE) }}" data-key="{{ $sec['key'] }}|" style="border:1px solid #e2e8f0;padding:6px 8px;text-align:center;font-weight:700;background:{{ $sec['tint'] }};">{{ $st ?: '·' }}</td>
+                                    @endif
                                 @endforeach
                                 @if($showGrand)
                                     <td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;font-weight:700;background:#eef2ff;color:#1a3268;">{{ $grand }}</td>
@@ -183,10 +210,12 @@
                                         <td class="{{ $val ? 'dl' : '' }}" data-path="[]" data-key="{{ $c['key'] }}" style="border:1px solid #e2e8f0;padding:7px 8px;text-align:center;background:#f8fafc;color:{{ $val ? '#0f172a' : '#cbd5e1' }};">{{ $val ?: '·' }}</td>
                                     @endforeach
                                     @php $st = $sectionSum($totalMetrics, $sec['key']); @endphp
+                                    @if(empty($sec['noTotal']))
                                     <td class="{{ $st ? 'dl' : '' }}" data-path="[]" data-key="{{ $sec['key'] }}|" style="border:1px solid #e2e8f0;padding:7px 8px;text-align:center;background:{{ $sec['tint'] }};">{{ $st ?: '·' }}</td>
+                                    @endif
                                 @endforeach
                                 @if($showGrand)
-                                    <td style="border:1px solid #e2e8f0;padding:7px 10px;text-align:center;background:#1a3268;color:#fff;">{{ collect($totalMetrics)->reject(fn ($v, $k) => str_starts_with($k, 'fate|'))->sum() }}</td>
+                                    <td style="border:1px solid #e2e8f0;padding:7px 10px;text-align:center;background:#1a3268;color:#fff;">{{ collect($totalMetrics)->reject(fn ($v, $k) => str_starts_with($k, 'fate|') || str_starts_with($k, 'sum|'))->sum() }}</td>
                                 @endif
                             </tr>
                         </tfoot>
@@ -198,7 +227,7 @@
                 @if($from && $to)
                     «Davri boshiga» va «Davri oxiriga» — o'sha sanadagi holat (audit jurnalidan tiklangan; davr bugun tugasa — joriy holat). «Davri boshiga» faqat davr boshlanishidan oldin yaratilgan varaqlarni ko'rsatadi (vedomost yozuvlari asos sana kelganda yaratiladi; davr semestr boshidan bo'lsa bu bo'lim chiqmaydi). «Reja» — topshirish muddati shu davrga tushgan varaqlar (Jami = topshirilishi kerak edi): muddatida / kechikib (davr oxirigacha) / topshirilmagan. «Davri ichida» — oraliqda qilingan harakatlar soni; bir varaq davrda bir necha harakatga ega bo'lishi mumkin. «Rad etilganlar» — davrda rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi.
                 @else
-                    Har bir katak — jamlangan vedomost varaqlari soni (guruhchalar/fan variantlari birlashtirilgan). «Shakllar bo'yicha» — har shakl (12/12a/12b…) alohida. «Rad etilganlar» — hech bo'lmasa bir marta rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror (bugungacha); umumiy «Jami»ga kirmaydi. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi. Sana oralig'ini kiritsangiz hisobot «davri boshiga / ichida / oxiriga» ko'rinishiga o'tadi.
+                    «Umumiy»: topshirilishi kerak edi — muddati bugungacha kelgan varaqlar; topshirildi — kamida bir marta yuklangan; tasdiqlandi — hozir tasdiqlangan; rad etilgan — kamida bir marta rad etilgan. Har bir katak — jamlangan vedomost varaqlari soni (guruhchalar/fan variantlari birlashtirilgan). «Shakllar bo'yicha» — har shakl (12/12a/12b…) alohida. «Rad etilganlar» — hech bo'lmasa bir marta rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror (bugungacha); umumiy «Jami»ga kirmaydi. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi. Sana oralig'ini kiritsangiz hisobot «davri boshiga / ichida / oxiriga» ko'rinishiga o'tadi.
                 @endif
                 Ota qatorlar avlodlari yig'indisini ko'rsatadi. Ustun nomiga bosib saralash mumkin. Ro'yxatdagi filtrlar shu hisobotga ham qo'llaniladi.
             </div>
@@ -250,7 +279,7 @@
                     + '</tbody></table>' : '<p style="color:#94a3b8;padding:20px;text-align:center;">Topilmadi.</p>';
             }
             document.addEventListener('click', e => {
-                const td = e.target.closest('td.dl');
+                const td = e.target.closest('.dl');
                 if (!td) return;
                 const path = JSON.parse(td.dataset.path || '[]'), key = td.dataset.key, sec = key.endsWith('|');
                 list = ITEMS.filter(i => path.every((p, n) => i.p[n] === p) && i.k.some(k => sec ? k.startsWith(key) : k === key));

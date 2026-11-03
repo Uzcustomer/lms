@@ -265,3 +265,16 @@ test('svodnaya hisobot (davr): reja — muddatida / kechikib / topshirilmagan; �
         ->and($contrib[$c->id]['plan|missing'] ?? null)->toBe(1)
         ->and(array_column($sec, 'key'))->toBe(['plan', 'period', 'close', 'fate']);
 });
+
+test('svodnaya hisobot (davr): muddati kelmagan kutilayotgan varaq «Davri oxiriga»ga kirmaydi', function () {
+    [$a, $b, $c] = [reviewSub(41, 'A', null), reviewSub(42, 'B', null), reviewSub(43, 'C', null)];
+    $o = fn ($v, $dl) => (object) ['id' => $v->id, 'ids' => [$v->id], 'status' => 'pending', 'created_at' => '2026-10-01', 'deadline' => $dl];
+    $m = new ReflectionMethod(VedomostSubmissionController::class, 'reportDateSections');
+    $m->setAccessible(true);
+    [, $c2] = $m->invoke(app(VedomostSubmissionController::class), collect([$o($a, '2026-10-20'), $o($b, '2026-12-01'), $o($c, null)]),
+        \Carbon\Carbon::parse('2026-09-14'), \Carbon\Carbon::parse('2026-10-31')->endOfDay(), VedomostSubmission::statusLabels(), []);
+
+    expect($c2[$a->id]['close|pending'] ?? null)->toBe(1)
+        ->and($c2[$b->id] ?? [])->not->toHaveKey('close|pending')
+        ->and($c2[$c->id] ?? [])->not->toHaveKey('close|pending');
+});

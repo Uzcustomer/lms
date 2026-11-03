@@ -783,7 +783,12 @@ class VedomostSubmissionController extends Controller
             if ($created === null || $created <= $to) {
                 // Davr bugun yoki kelajakda tugasa — haqiqiy joriy holat (jurnalda yozilmagan o'zgarishlar ham).
                 $st = $to >= $now ? (string) $v->status : $this->statusAt($logs, $to, true, $initial);
-                $contrib["close|$st"] = ($contrib["close|$st"] ?? 0) + 1;
+                // Hali kutilayotgan va topshirish muddati davr oxirigacha kelmagan (yoki imtihon sanasi
+                // hali yo'q) varaq — bu davrning qarzi emas, «Davri oxiriga»ga kirmaydi.
+                $due = !empty($v->deadline) && \Carbon\Carbon::parse($v->deadline)->startOfDay() <= $to;
+                if ($st !== VedomostSubmission::STATUS_PENDING || $due) {
+                    $contrib["close|$st"] = ($contrib["close|$st"] ?? 0) + 1;
+                }
             }
 
             // Rad etilganlar: davrda rad etilgan varaq keyingi topshirishda o'tdimi (bugungacha).

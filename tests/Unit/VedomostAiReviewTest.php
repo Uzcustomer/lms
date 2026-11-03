@@ -225,3 +225,21 @@ test('svodnaya hisobot: guruhcha loglari ham olinadi, rad etilganlarning keyingi
         ->and($contrib[$b->id])->toMatchArray(['fate|failed' => 1])
         ->and($contrib[$c->id])->toMatchArray(['fate|none' => 1]);
 });
+
+test('svodnaya hisobot (sanasiz): standart — shakllarsiz jami + rad etilganlar natijasi', function () {
+    $a = reviewSub(21, 'Xirurgiya', null);
+    \App\Models\VedomostSubmissionLog::create(['vedomost_submission_id' => $a->id, 'action' => 'reject', 'to_status' => 'rejected']);
+    \App\Models\VedomostSubmissionLog::create(['vedomost_submission_id' => $a->id, 'action' => 'approve', 'to_status' => 'approved']);
+    $agg = collect([(object) ['id' => $a->id, 'ids' => [$a->id], 'status' => 'approved', 'form_type' => '12a']]);
+    $m = new ReflectionMethod(VedomostSubmissionController::class, 'reportFormSections');
+    $m->setAccessible(true);
+    $ctl = app(VedomostSubmissionController::class);
+
+    [$sec, $c] = $m->invoke($ctl, $agg, VedomostSubmission::statusLabels(), [], false);
+    [$secF, $cF] = $m->invoke($ctl, $agg, VedomostSubmission::statusLabels(), [], true);
+
+    expect(array_column($sec, 'key'))->toBe(['all', 'fate'])
+        ->and($c[$a->id])->toBe(['all|approved' => 1, 'fate|passed' => 1])
+        ->and($cF[$a->id])->toMatchArray(['12a|approved' => 1, 'fate|passed' => 1])
+        ->and(count($secF))->toBeGreaterThan(2);
+});

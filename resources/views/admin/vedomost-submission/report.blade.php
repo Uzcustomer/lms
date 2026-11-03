@@ -98,7 +98,12 @@
                             Davr: {{ $from->format('d.m.Y') }} — {{ $to->format('d.m.Y') }} (qoldiq–harakat–qoldiq)
                         </div>
                     @endif
-                    <div style="margin-top:8px;">
+                    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                        @unless($dateMode)
+                            @php $byForm = request()->boolean('forms'); @endphp
+                            <a href="{{ route('admin.vedomost-submission.report', array_merge(collect(request()->query())->except(['forms', 'rsort', 'rdir'])->all(), $byForm ? [] : ['forms' => 1])) }}"
+                               style="background:#eef2ff;color:#1a3268;padding:7px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;">{{ $byForm ? 'Shakllarsiz (jami)' : 'Shakllar bo‘yicha' }}</a>
+                        @endunless
                         <a href="{{ route('admin.vedomost-submission.index', $baseQuery) }}"
                            style="background:#f1f5f9;color:#334155;padding:7px 14px;border-radius:8px;text-decoration:none;font-size:13px;">← Ro'yxatga qaytish</a>
                     </div>
@@ -145,7 +150,8 @@
                                 $isParent = $row['has_children'];
                                 $indent = 12 + $row['depth'] * 20;
                                 $rowBg = $row['depth'] === 0 ? '#ffffff' : '#fbfdff';
-                                $grand = array_sum($row['metrics']);
+                                // «Rad etilganlar» bo'limi varaqlarni qayta sanaydi — umumiy «Jami»ga kirmaydi.
+                                $grand = collect($row['metrics'])->reject(fn ($v, $k) => str_starts_with($k, 'fate|'))->sum();
                             @endphp
                             <tr style="background:{{ $rowBg }};">
                                 <td style="position:sticky;left:0;background:{{ $rowBg }};border:1px solid #e2e8f0;padding:7px 12px 7px {{ $indent }}px;text-align:left;font-weight:{{ $isParent ? 700 : 500 }};color:{{ $isParent ? '#0f172a' : '#475569' }};z-index:1;">
@@ -180,7 +186,7 @@
                                     <td class="{{ $st ? 'dl' : '' }}" data-path="[]" data-key="{{ $sec['key'] }}|" style="border:1px solid #e2e8f0;padding:7px 8px;text-align:center;background:{{ $sec['tint'] }};">{{ $st ?: '·' }}</td>
                                 @endforeach
                                 @if($showGrand)
-                                    <td style="border:1px solid #e2e8f0;padding:7px 10px;text-align:center;background:#1a3268;color:#fff;">{{ array_sum($totalMetrics) }}</td>
+                                    <td style="border:1px solid #e2e8f0;padding:7px 10px;text-align:center;background:#1a3268;color:#fff;">{{ collect($totalMetrics)->reject(fn ($v, $k) => str_starts_with($k, 'fate|'))->sum() }}</td>
                                 @endif
                             </tr>
                         </tfoot>
@@ -192,7 +198,7 @@
                 @if($from && $to)
                     «Davri boshiga» va «Davri oxiriga» — o'sha sanadagi holat (audit jurnalidan tiklangan; davr bugun tugasa — joriy holat). «Davri boshiga» faqat davr boshlanishidan oldin yaratilgan varaqlarni ko'rsatadi. «Davri ichida» — oraliqda qilingan harakatlar soni; bir varaq davrda bir necha harakatga ega bo'lishi mumkin. «Rad etilganlar» — davrda rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi.
                 @else
-                    Har bir katak — jamlangan vedomost varaqlari soni (guruhchalar/fan variantlari birlashtirilgan). Sana oralig'ini kiritsangiz hisobot «davri boshiga / ichida / oxiriga» ko'rinishiga o'tadi.
+                    Har bir katak — jamlangan vedomost varaqlari soni (guruhchalar/fan variantlari birlashtirilgan). «Shakllar bo'yicha» — har shakl (12/12a/12b…) alohida. «Rad etilganlar» — hech bo'lmasa bir marta rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror (bugungacha); umumiy «Jami»ga kirmaydi. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi. Sana oralig'ini kiritsangiz hisobot «davri boshiga / ichida / oxiriga» ko'rinishiga o'tadi.
                 @endif
                 Ota qatorlar avlodlari yig'indisini ko'rsatadi. Ustun nomiga bosib saralash mumkin. Ro'yxatdagi filtrlar shu hisobotga ham qo'llaniladi.
             </div>

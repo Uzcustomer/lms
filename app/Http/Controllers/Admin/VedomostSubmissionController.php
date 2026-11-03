@@ -551,8 +551,10 @@ class VedomostSubmissionController extends Controller
             [$sections, $contribById] = $this->reportDateSections($aggregated, $from, $to, $statuses, $statusColor);
             $showGrand = false;
         } else {
-            [$sections, $contribById] = $this->reportFormSections($aggregated, $statuses, $statusColor);
-            $showGrand = true;
+            // Standart — shakllarsiz (jami); «forms=1» — har shakl (12/12a/12b…) alohida.
+            $byForm = $request->boolean('forms');
+            [$sections, $contribById] = $this->reportFormSections($aggregated, $statuses, $statusColor, $byForm);
+            $showGrand = $byForm;
         }
 
         // Ierarxik daraxt + har bir ustun bo'yicha umumiy "Jami" (tfoot).
@@ -591,7 +593,7 @@ class VedomostSubmissionController extends Controller
 
         return view('admin.vedomost-submission.report', compact(
             'rows', 'dimensions', 'selectedDims', 'availableDims',
-            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to', 'drill'
+            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to', 'drill', 'dateMode'
         ));
     }
 
@@ -619,7 +621,7 @@ class VedomostSubmissionController extends Controller
      * Sana oralig'isiz rejim — shakl (12/12a/12b) × status bo'limlari.
      * @return array{0: array, 1: array}  [$sections, $contribById]
      */
-    private function reportFormSections(iterable $aggregated, array $statuses, array $statusColor): array
+    private function reportFormSections(iterable $aggregated, array $statuses, array $statusColor, bool $byForm = false): array
     {
         $forms = VedomostSubmission::formLabels();
         $formTint = [
@@ -627,23 +629,77 @@ class VedomostSubmissionController extends Controller
             '12a' => '#ecfeff', '12aq' => '#fef3c7', '12ag' => '#fde68a',
             '12b' => '#fef2f2', '12bq' => '#fae8ff', '12bg' => '#fed7aa',
         ];
-
-        $sections = [];
-        foreach ($forms as $fkey => $flabel) {
+        $statusCols = function (string $prefix) use ($statuses, $statusColor) {
             $cols = [];
             foreach ($statuses as $st => $slabel) {
-                $cols[] = ['key' => "$fkey|$st", 'label' => $slabel, 'color' => $statusColor[$st] ?? null];
+                $cols[] = ['key' => "$prefix|$st", 'label' => $slabel, 'color' => $statusColor[$st] ?? null];
             }
-            $sections[] = ['key' => $fkey, 'label' => $flabel, 'cols' => $cols, 'tint' => $formTint[$fkey] ?? '#f8fafc'];
+
+            return $cols;
+        };
+
+        $sections = [];
+        if ($byForm) {
+            foreach ($forms as $fkey => $flabel) {
+                $sections[] = ['key' => $fkey, 'label' => $flabel, 'cols' => $statusCols($fkey), 'tint' => $formTint[$fkey] ?? '#f8fafc'];
+            }
+        } else {
+            $sections[] = ['key' => 'all', 'label' => 'Holat (barcha shakllar)', 'cols' => $statusCols('all'), 'tint' => '#eef2ff'];
         }
+        $sections[] = $this->fateSection('Rad etilganlar — qayta topshirish natijasi (bugungacha)');
+
+        $aggregated = collect($aggregated);
+        $logsById = $this->reportLogs($aggregated);
+        $since = \Carbon\Carbon::create(2000, 1, 1);
+        $now = now();
 
         $contribById = [];
         foreach ($aggregated as $v) {
             $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
-            $contribById[$v->id] = ["$form|$v->status" => 1];
+            $contrib = [($byForm ? $form : 'all') . "|$v->status" => 1];
+            if ($fate = $this->rejectFate($logsById->get($v->id) ?? collect(), $since, $now)) {
+                $contrib["fate|$fate"] = 1;
+            }
+            $contribById[$v->id] = $contrib;
         }
 
         return [$sections, $contribById];
+    }
+
+    /** «Rad etilganlar — keyingi topshirish» bo'limi ustunlari. */
+    private function fateSection(string $label): array
+    {
+        return ['key' => 'fate', 'label' => $label, 'tint' => '#fff7ed', 'cols' => [
+            ['key' => 'fate|passed', 'label' => "O'tdi (tasdiqlandi)", 'color' => ['#166534', '#dcfce7']],
+            ['key' => 'fate|failed', 'label' => "O'tmadi (yana rad)", 'color' => ['#b91c1c', '#fee2e2']],
+            ['key' => 'fate|pending', 'label' => 'Tekshiruvda', 'color' => ['#b45309', '#fef3c7']],
+            ['key' => 'fate|none', 'label' => 'Qayta topshirilmagan', 'color' => ['#475569', '#f1f5f9']],
+        ]];
+    }
+
+    /**
+     * Jamlangan qatorlar loglari (vakil id => saralangan loglar). Amal guruhcha/variantlardan biriga
+     * yoziladi (bosilgan yozuvga) — qatorning barcha yozuvlari loglari olinadi; bir amal bir necha
+     * yozuvga yozilgan bo'lsa — bir marta sanaladi.
+     */
+    private function reportLogs(Collection $aggregated): Collection
+    {
+        $repOf = [];
+        foreach ($aggregated as $v) {
+            foreach (($v->ids ?? [$v->id]) as $sid) {
+                $repOf[$sid] = $v->id;
+            }
+        }
+        $logs = collect();
+        foreach (array_chunk(array_keys($repOf), 1000) as $chunk) {
+            $logs = $logs->concat(VedomostSubmissionLog::whereIn('vedomost_submission_id', $chunk)
+                ->get(['vedomost_submission_id', 'action', 'from_status', 'to_status', 'created_at', 'id']));
+        }
+
+        return $logs
+            ->sortBy(fn ($l) => sprintf('%s|%010d', $l->created_at, $l->id))
+            ->groupBy(fn ($l) => $repOf[$l->vedomost_submission_id])
+            ->map(fn ($g) => $g->unique(fn ($l) => $l->action . '|' . $l->to_status . '|' . substr((string) $l->created_at, 0, 16))->values());
     }
 
     /**
@@ -654,23 +710,7 @@ class VedomostSubmissionController extends Controller
     private function reportDateSections(iterable $aggregated, \Carbon\Carbon $from, \Carbon\Carbon $to, array $statuses, array $statusColor): array
     {
         $aggregated = collect($aggregated);
-        // Amal guruhcha/variantlardan biriga yoziladi (bosilgan yozuvga) — jamlangan qatorning barcha
-        // yozuvlari loglari olinadi; bir amal bir necha yozuvga yozilgan bo'lsa — bir marta sanaladi.
-        $repOf = [];
-        foreach ($aggregated as $v) {
-            foreach (($v->ids ?? [$v->id]) as $sid) {
-                $repOf[$sid] = $v->id;
-            }
-        }
-        $logsById = collect();
-        foreach (array_chunk(array_keys($repOf), 1000) as $chunk) {
-            $logsById = $logsById->concat(VedomostSubmissionLog::whereIn('vedomost_submission_id', $chunk)
-                ->get(['vedomost_submission_id', 'action', 'from_status', 'to_status', 'created_at', 'id']));
-        }
-        $logsById = $logsById
-            ->sortBy(fn ($l) => sprintf('%s|%010d', $l->created_at, $l->id))
-            ->groupBy(fn ($l) => $repOf[$l->vedomost_submission_id])
-            ->map(fn ($g) => $g->unique(fn ($l) => $l->action . '|' . $l->to_status . '|' . substr((string) $l->created_at, 0, 16))->values());
+        $logsById = $this->reportLogs($aggregated);
         $now = now();
 
         $contribById = [];
@@ -732,12 +772,7 @@ class VedomostSubmissionController extends Controller
             ['key' => 'open',   'label' => 'Davri boshiga',            'cols' => $statusCols('open'),  'tint' => '#eef2ff'],
             ['key' => 'period', 'label' => 'Davri ichida (harakatlar)', 'cols' => $actionCols,          'tint' => '#ecfeff'],
             ['key' => 'close',  'label' => 'Davri oxiriga',            'cols' => $statusCols('close'), 'tint' => '#fef2f2'],
-            ['key' => 'fate',   'label' => 'Davrda rad etilganlar — keyingi topshirish (bugungacha)', 'tint' => '#fff7ed', 'cols' => [
-                ['key' => 'fate|passed', 'label' => "O'tdi (tasdiqlandi)", 'color' => ['#166534', '#dcfce7']],
-                ['key' => 'fate|failed', 'label' => "O'tmadi (yana rad)", 'color' => ['#b91c1c', '#fee2e2']],
-                ['key' => 'fate|pending', 'label' => 'Tekshiruvda', 'color' => ['#b45309', '#fef3c7']],
-                ['key' => 'fate|none', 'label' => 'Qayta topshirilmagan', 'color' => ['#475569', '#f1f5f9']],
-            ]],
+            $this->fateSection('Davrda rad etilganlar — keyingi topshirish (bugungacha)'),
         ];
 
         return [$sections, $contribById];

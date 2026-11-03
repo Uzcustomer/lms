@@ -9868,7 +9868,7 @@ class TimetableController extends Controller
     /** $only — faqat shu bron turlari ('teacher', 'group', 'room', 'same'); null — hammasi. */
     private function pendingTimeConflicts(TimetableCard $card, array $data, array $ignoreIds, ?array $only = null): array
     {
-        if ($this->isInfoOnly($card, $card->board)) return [];
+        $infoOnly = $this->isInfoOnly($card, $card->board);
         if (!\App\Services\Timetable\TimetableChangeApproval::tableReady()) return [];
         $pending = \App\Models\TimetableChangeRequest::where('board_id', $card->board_id)
             ->where('status', \App\Models\TimetableChangeRequest::PENDING)
@@ -9923,7 +9923,8 @@ class TimetableController extends Controller
             if ($req->route_name !== 'admin.timetable.cards.place'
                 && (($p['action'] ?? '') !== 'move' || (int) ($p['week'] ?? 0) !== $week)) continue;
             $other = TimetableCard::find($otherId);
-            if (!$other || $this->isInfoOnly($other, $card->board)) continue;
+            if (!$other || ((int) $other->id !== (int) $card->id
+                && ($infoOnly || $this->isInfoOnly($other, $card->board)))) continue;
             if ($otherTeacher) {
                 $other->teacher_id = $otherTeacher;   // saqlanmaydi — faqat bron solishtiruvi uchun
             }
@@ -9949,6 +9950,8 @@ class TimetableController extends Controller
             if ($room && $room === $otherRoom && !$this->isSharedRoom($otherRoomName)) $resources[] = 'auditoriya: ' . $room;
             // Faqat o'qituvchi broni (almashtirishning boshqa haftalari) — qolgan turlar hisobga olinmaydi.
             $types = array_values(array_intersect((array) ($only ?? ['teacher', 'group', 'room', 'same']), (array) ($holdOnly ?? ['teacher', 'group', 'room', 'same'])));
+            // Online lessons still keep the existing protection against competing requests for the same lesson.
+            if ($infoOnly) $types = array_intersect($types, ['same']);
             $resources = array_values(array_filter($resources, fn ($x) => in_array(match (true) {
                 $x === 'shu dars' => 'same', $x === 'o‘qituvchi' => 'teacher', str_starts_with($x, 'guruh') => 'group', default => 'room',
             }, $types, true)));

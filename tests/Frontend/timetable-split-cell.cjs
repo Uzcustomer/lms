@@ -22,6 +22,7 @@ function render(cards) {
     selected:null, esc:String, cardTooltip:x=>x.subject_name, cardGroups:()=>['01a'], shortGroup:x=>x,
     courseCls:()=>'',colBorder:()=>'',rowEndCls:()=>'',subjStyle:()=>''};
   vm.createContext(ctx);
+  require('./helpers/timetable-info-only.cjs')(ctx);
   return vm.runInContext(source.slice(start,end)+'; bolakCell({groups:["g"],course:2},0,0,1,1)',ctx);
 }
 const a={id:1,subject_name:'Gigiyena (a)',pair:1,len_half:2,training_type:'practice'};

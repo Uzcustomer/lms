@@ -24,6 +24,7 @@ const ctx = {
     confirm: msg => { asked.push(msg); return answer; },
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(section('let hemisSyncFilter', 'async function hemisSyncRun()')
     + '; this.render = hemisSyncRender; this.filter = () => hemisSyncFilter;', ctx);
 

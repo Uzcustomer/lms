@@ -30,6 +30,7 @@ assert.match(source, /const ROLE_DEFAULT_SCOPE = \{ oqituvchi: 'mine', fan_masul
     for (const [def, search, want] of [['teacher', '?board=7&week=3', 'teacher'], ['group', '?board=7', 'group'], ['teacher', '?board=7&view=group', 'group']]) {
         const c = { DEFAULT_VIEW: def, location: { search }, URLSearchParams, Number };
         vm.createContext(c);
+        require('./helpers/timetable-info-only.cjs')(c);
         vm.runInContext(fn + '; this.v = parseViewFromUrl();', c);
         assert.equal(c.v.view, want, search + ' (' + def + ')');
     }
@@ -68,6 +69,7 @@ const ctx = {
     Array, Object, Set, Math, String, JSON, Promise,
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(section("            // ===== Haftalik kesimlarda (o'qituvchi / fan / xona) sikl darslari", "            // Para ustuni (sikl ichki jadvali kabi)")
     + '; this.renderGridCross = renderGridCross; this.cycleWeekLessons = cycleWeekLessons; this.loadCycleWeek = loadCycleWeek; this.invalidateCycleWeek = invalidateCycleWeek; this.crossLessonKey = crossLessonKey;'
     + ' this.cwGet = () => cycleWeek.lessons; this.cwSet = l => { cycleWeek.lessons = l; };', ctx);
@@ -434,6 +436,18 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     assert.equal(calls.length, before);
     assert.equal(ctx.cycleWeekLessons().length, 0);
 
-    console.log('timetable cross cycle: 5 scenarios passed');
+    // 6) Online sixth-course cycle lessons stay visible and do not create teacher/room clashes.
+    ctx.weeklyLayer = 'internal';
+    ctx.viewMode = 'teacher';
+    ctx.selectedCourses.add(6);
+    ctx.weekly = [{ ...saveWeekly[0], day: 1, pair: 1 }];
+    ctx.api = async () => ({ lessons: [lesson({ id: 91, course: 6, day: 1, pair: 1, hour: 1, hours: 4, len_half: 4 })] });
+    ctx.invalidateCycleWeek();
+    ctx.renderGridCross('teacher');
+    await tick(); await tick();
+    assert.match(el('grid').innerHTML, /tt-cyc-chip prc tt-info-only/);
+    assert.match(el('grid').innerHTML, /6-kurs · ma’lumot \(onlayn\)/);
+    assert.doesNotMatch(el('grid').innerHTML, /outline:2px solid #ef4444/);
+    console.log('timetable cross cycle: 6 scenarios passed');
     process.exitCode = 0;
 })().catch(e => { console.error(e); process.exit(1); });

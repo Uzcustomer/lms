@@ -31,6 +31,7 @@ const ctx = {
     document: { createElement: () => ({ click() {}, remove() {} }), body: { appendChild() {} } },
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(section('            // ===== "Bugungi darslar (HEMIS)"', "            // ===== HEMIS to'siqlari bo'yicha so'rovlar"), ctx);
 
 const row = o => Object.assign({ group: 'p/st26-01a', type: 'Amaliy', changes: [], blocked: [], reason: null }, o);

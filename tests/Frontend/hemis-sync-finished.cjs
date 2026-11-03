@@ -20,6 +20,7 @@ const ctx = {
     Blob, URL: { createObjectURL: b => { blob = b; return 'blob:test'; } },
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(section('let hemisSyncFilter', 'async function hemisSyncRun()')
     + '; this.render = hemisSyncRender; this.filter = () => hemisSyncFilter;', ctx);
 

@@ -2607,3 +2607,45 @@ it('nofaol xona: LMS\'da xona bo\'sh va HEMIS\'dagi xona nofaol — qoldirilmayd
     expect($acts)->not->toBeEmpty()
         ->and($acts->every(fn ($a) => in_array("LMS'dagi xona nofaol («404») — xonani almashtiring", $a['blocked'], true)))->toBeTrue();
 });
+
+it('excludes informational courses from full and today HEMIS reports and JSON', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    htCard($s, 'Online sixth-course subject', 1, '71', ['course' => 6, 'group_name' => 'online-only-group']);
+    $sync = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1, 6], 'today' => '2026-09-01'])
+        ->assertOk();
+    expect($sync->json('groups'))->toHaveCount(1)
+        ->and($sync->json('info_only_notice'))->toBe('6-kurs — HEMISga yozilmaydi')
+        ->and($sync->getContent())->not->toContain('online-only-group', 'Online sixth-course subject');
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20')]]);
+    $today = htCall($s, ['courses' => [1, 6]])->assertOk();
+    expect($today->json('rows'))->not->toBeEmpty()
+        ->and($today->json('info_only_notice'))->toBe('6-kurs — HEMISga yozilmaydi')
+        ->and($today->getContent())->not->toContain('online-only-group', 'Online sixth-course subject');
+});
+
+it('ignores external HEMIS informational semesters for teacher and room blocking', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(81, '2026-09-21', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 81)->update(['semester_code' => '21', 'group_id' => 8888, 'group_name' => 'online-sixth']);
+    $run = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $actions = fn ($report) => collect($report['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($actions($run())['blocked'])->toBe([]);
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'info_only_courses' => []]]);
+    expect($actions($run())['blocked'])->not->toBeEmpty();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14']]);
+    hsSchedule(82, '2026-09-14', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 82)->update(['semester_code' => '21', 'group_id' => 8888, 'group_name' => 'online-sixth']);
+    $external = htItem(82, '2026-09-14', '10:40', '12:00', ['group' => 8888, 'group_name' => 'online-sixth']);
+    $external['semester'] = ['code' => '21', 'name' => '11'];
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['room' => 'other'])], 8888 => [$external]]);
+    $today = htCall($s)->assertOk()->json();
+    expect($today['rows'][0]['blocked'])->toBe([])
+        ->and(DB::table('schedules')->where('schedule_hemis_id', 82)->exists())->toBeTrue();
+});

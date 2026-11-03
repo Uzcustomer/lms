@@ -18,6 +18,7 @@ function chip(cards, ids) {
     TIMETABLE_ROLE: 'kafedra_mudiri', TIMETABLE_TEACHER_ID: 0, scopeMode: 'all', weeklyLayer: 'internal',
   };
   vm.createContext(ctx);
+  require('./helpers/timetable-info-only.cjs')(ctx);
   vm.runInContext(code + '\nthis.chipHtml = chipHtml;', ctx);
   return ctx.chipHtml(cards.find(c => c.id === ids[0]), ids);
 }
@@ -29,6 +30,7 @@ function teacherChip(card, opts) {
     TIMETABLE_ROLE: 'oqituvchi', TIMETABLE_TEACHER_ID: 5, scopeMode: 'mine', weeklyLayer: 'internal',
   }, opts);
   vm.createContext(ctx);
+  require('./helpers/timetable-info-only.cjs')(ctx);
   vm.runInContext(code + '\nthis.chipHtml = chipHtml;', ctx);
   return ctx.chipHtml(card, [card.id]);
 }

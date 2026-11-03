@@ -62,6 +62,7 @@ const ctx = {
     focusLinksHtml: list => ((list || []).length ? ' <a class="cf-show" data-focus="' + list.length + '">Ko\'rsatish</a>' : ''),
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(section("            // ===== Ichki (haftalik) jadvaldagi to'qnashuvlar", '            // Joylanmagan kartalar diagnostikasi (unplaced-export)')
     + section("            // Tanlangan birlik darslari vaqtida boshqa guruhcha bilan band", '            let asgAudSel = null;')
     + section('            async function applyAsg(teacherId, force) {', '            async function loadAsgAuditoriums() {')
@@ -238,6 +239,7 @@ const busyErr = (msg, items) => Object.assign(new Error(msg), { status: 409, dat
     const actx = { CSRF: 't', FormData: class { append() {} }, onPendingApproval() {}, ttToast() {}, esc: x => x, Object, Array, Error,
         fetch: async () => ({ ok: false, status: 409, json: async () => ({ error: 'Band', needs_confirm: true }) }) };
     vm.createContext(actx);
+    require('./helpers/timetable-info-only.cjs')(actx);
     vm.runInContext(section('            function appendFormValue(fd, key, v) {', '            async function api(url, method')
         + section("            async function api(url, method = 'GET', body = null) {", '\n            }\n') + '\n            }; this.api = api;', actx);
     const err = await actx.api('/x', 'POST', { a: 1 }).then(() => null, e => e);

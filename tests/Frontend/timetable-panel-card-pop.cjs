@@ -62,6 +62,7 @@ const ctx = {
     },
 };
 vm.createContext(ctx);
+require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { phRevertErrSet: (c, v) => { phRevertErr[unitKey(c)] = v; }, openMudirPhConfirm, mudirPhSectionHtml, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop, placedSlotText });', ctx);
 // dragPlan — haqiqiy (bo'sh joy).
 vm.runInContext(source.slice(source.indexOf('            function dragPlan('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig')), ctx);

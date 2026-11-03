@@ -116,7 +116,7 @@ trait TimetableProgramCalendars
                 if ($overrideIds) {
                     $q->orWhereIn('id', $overrideIds);
                 }
-            })->get()->filter(fn ($o) => (int) $o->id === (int) $card->id
+            })->get()->reject(fn ($o) => $this->isNonBlocking($o, $card->board))->filter(fn ($o) => (int) $o->id === (int) $card->id
                 || ($card->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id)
                 || in_array($o->auditorium_code, $rooms, true) || in_array($o->id, $overrideIds)
                 || ($this->groupScopeKey($o) === $this->groupScopeKey($card) && array_intersect($o->occupiedGroups(), $card->occupiedGroups())));

@@ -53,7 +53,7 @@ function hsSetup(): array
     $reg = $mk('REG', 'registrator_ofisi');
     $mudir = $mk('MUDIR', 'kafedra_mudiri', ['department_hemis_id' => 501, 'hemis_id' => 9001]);
     $teacher = $mk('USTOZ', 'kafedra_mudiri', ['department_hemis_id' => 777, 'hemis_id' => 5001]);
-    \App\Models\Auditorium::create(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true]);
+    \App\Models\Auditorium::create(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 501, 'department_name' => 'Anatomiya']);
 
     $board = TimetableBoard::create(['name' => 'T', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6, 'pairs_per_day' => 12, 'weeks' => 4,
         'settings' => ['semester_start' => '2026-09-14']]);
@@ -194,6 +194,7 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
     hsMudirFallback($s);   // to'qnashuvda kafedra mudiriga almashtirish — doska sozlamasi bilan
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
+    \App\Models\Auditorium::where('code', 'KM1')->update(['department_hemis_id' => null]);
     // Boshqa kafedraning va faol bo'lmagan "Kafedra mudiri xonasi" — tanlanmaydi; fan kafedrasi (501) niki olinadi
     \App\Models\Auditorium::forceCreate(['code' => 'KM777', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 777]);
     \App\Models\Auditorium::forceCreate(['code' => 'KM501X', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => false, 'department_hemis_id' => 501]);
@@ -266,11 +267,11 @@ it('zaxira xona fanning kafedrasidan; boshqa turdagi va boshqa guruhdagi HEMIS d
     expect($amallar(['teacher']))->toBeGreaterThan(0)->and($amallar(['room']))->toBe(0);
 });
 
-it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq bo\'lmaydi', function () {
+it('boshqa kafedra xonasi avtomatik tanlanmaydi; aniq biriktirilgan mudir xonasi bandlik yaratmaydi', function () {
     $s = hsSetup();
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
-    // Fan kafedrasining (501) va kafedrasiz xona yo'q — boshqa kafedraniki baribir qo'yiladi
+    // Fan kafedrasining (501) xonasi yo'q — boshqa kafedraniki avtomatik tanlanmaydi.
     \App\Models\Auditorium::where('code', 'KM1')->delete();
     \App\Models\Auditorium::forceCreate(['code' => 'KM777', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 777]);
     \App\Models\Auditorium::forceCreate(['code' => 'KM888', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 888]);
@@ -294,7 +295,8 @@ it('"Kafedra mudiri xonasi" har doim qo\'yiladi va ustma-ust tushsa ham to\'siq 
     // Xona biriktirilmagan — o'rinbosar sifatida
     $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
     $a = $create();
-    expect($a['auditorium_code'])->toBe('KM777')->and($a['flags'])->toBe(['mudir_xonasi'])->and($a['blocked'])->toBe([]);
+    expect($a['auditorium_code'])->toBeNull()->and($a['flags'])->toBe(['mudir_xonasi'])->and($a['blocked'])->not->toBeEmpty()
+        ->and($a['reason'])->toContain("Kafedra mudiri xonasi kafedraga bog'lanmagan (HEMIS): Anatomiya");
 
     // Kartaning o'zida shu xona qo'yilgan (o'rinbosar belgisisiz) — baribir to'siq emas
     $s['card']->update(['auditorium_code' => 'KM777', 'auditorium_name' => 'Kafedra mudiri xonasi']);
@@ -378,8 +380,8 @@ it('"Kafedra mudiri xonasi" — aynan shu nomli auditoriya ustuvor', function ()
     Role::findOrCreate('admin', 'web');
     $s['reg']->assignRole('admin');
     \App\Models\Auditorium::where('code', 'KM1')->delete();
-    \App\Models\Auditorium::forceCreate(['code' => 'KMX', 'name' => 'Kafedra mudiri xonasi (eski bino)', 'volume' => 1, 'active' => true]);
-    \App\Models\Auditorium::forceCreate(['code' => 'KME', 'name' => ' Kafedra mudiri xonasi ', 'volume' => 1, 'active' => true]);
+    \App\Models\Auditorium::forceCreate(['code' => 'KMX', 'name' => 'Kafedra mudiri xonasi (eski bino)', 'volume' => 1, 'active' => true, 'department_hemis_id' => 501]);
+    \App\Models\Auditorium::forceCreate(['code' => 'KME', 'name' => ' Kafedra mudiri xonasi ', 'volume' => 1, 'active' => true, 'department_hemis_id' => 501]);
     hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
     $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
 
@@ -2399,10 +2401,10 @@ it('bugungi darslar: boshqa yo\'nalishdagi (qamrovdan tashqari) guruh LMS\'da sh
     // Boshqa yo'nalish kartasida boshqa o'qituvchi — bitta oqim emas: zal band; sababi (LMS'dagi ma'ruza o'qituvchisi) va yechim.
     $other->update(['teacher_id' => Teacher::where('full_name', 'MUDIR')->value('id'), 'teacher_name' => 'MUDIR']);
     expect($row()['status'])->toBe('blocked')->and($row()['blocked'][0])
-        ->toBe("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50 (LMS'da bitta oqim emas: ularning ma'ruzasida o'qituvchi MUDIR — {$todo})");
+        ->toBe("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50 (LMS'da bitta oqim emas: ularning ma'ruzasida o'qituvchi MUDIR — {$todo}) · yana 1 ta guruh");
     // Boshqa zal — sababi: xona.
     $other->update(['teacher_id' => $ustoz->id, 'teacher_name' => 'USTOZ', 'auditorium_code' => 'L9', 'auditorium_name' => 'Zal 9']);
-    expect($row()['blocked'][0])->toBe("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50 (LMS'da bitta oqim emas: ularning ma'ruzasida xona Zal 9 — {$todo})");
+    expect($row()['blocked'][0])->toBe("xona band: L1 — d1/d22-06b · Odam anatomiyasi 13:30–14:50 (LMS'da bitta oqim emas: ularning ma'ruzasida xona Zal 9 — {$todo}) · yana 1 ta guruh");
     // Kartaga guruh kiritilmagan bo'lsa ham — to'siq (06c bitta qoladi): LMS'da ma'ruzasi yo'q.
     $other->update(['auditorium_code' => 'L1', 'auditorium_name' => 'L1', 'group_names' => ['d1/d22-06b']]);
     expect($row()['status'])->toBe('blocked')->and($row()['blocked'])
@@ -2487,7 +2489,7 @@ it('bugungi darslar: o\'qituvchisi va xonasi yo\'q LMS kartasi — kafedra mudir
     $act = $res['json']['groups'][0]['units'][0]['actions'][0];
     expect($act)->toMatchArray(['employee_id' => 9001, 'auditorium_code' => 'KM1'])->and($act['reason'])->toBe($row['fallback_reason']);
 
-    // Shu vaqtda mudir boshqa darsda va mudir xonasi band — to'siqli (sabablari bilan), JSON'ga tushmaydi.
+    // Haqiqiy mudir bandligi to'siq; xona fallback bo'lgani uchun uning bandligi tekshirilmaydi.
     foreach ([[600, 2000, 9001, 'Z1'], [601, 2001, 7007, 'KM1']] as [$id, $g, $emp, $room]) {
         hsInsert('schedules', ['schedule_hemis_id' => $id, 'subject_id' => 1, 'subject_name' => 'Boshqa', 'semester_code' => '11', 'group_id' => $g,
             'group_name' => 'x' . $g, 'training_type_code' => '13', 'training_type_name' => 'Amaliy', 'lesson_date' => '2026-09-14 00:00:00',
@@ -2496,8 +2498,7 @@ it('bugungi darslar: o\'qituvchisi va xonasi yo\'q LMS kartasi — kafedra mudir
     }
     $res = htCall($s)->assertOk()->json();
     expect($res['rows'][0]['status'])->toBe('blocked')
-        ->and($res['rows'][0]['blocked'])->toBe(['kafedra mudiri band: MUDIR — x2000 · Boshqa 10:00–11:20',
-            'kafedra mudiri xonasi band: Kafedra mudiri xonasi — x2001 · Boshqa 10:00–11:20'])
+        ->and($res['rows'][0]['blocked'])->toBe(['kafedra mudiri band: MUDIR — x2000 · Boshqa 10:00–11:20'])
         ->and($res['json']['groups'])->toBe([]);
 
     // Mudir topilmadi — o'zgarishsiz, ma'lumot (sababi bilan).
@@ -2648,4 +2649,194 @@ it('ignores external HEMIS informational semesters for teacher and room blocking
     $today = htCall($s)->assertOk()->json();
     expect($today['rows'][0]['blocked'])->toBe([])
         ->and(DB::table('schedules')->where('schedule_hemis_id', 82)->exists())->toBeTrue();
+});
+
+it('exports educational practice in full and today HEMIS reports while ignoring occupancy against it', function () {
+    $s = hsSetup();
+    $subject = "O'quv amaliyoti";
+    $s['card']->update(['subject_name' => $subject]);
+    DB::table('curriculum_subjects')->where('id', $s['csId'])->update(['subject_name' => $subject]);
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(91, '2026-09-21', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 91)->update(['group_id' => 8888, 'group_name' => 'ordinary-busy']);
+    $full = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    expect($full['groups'][0]['units'][0]['subject_name'])->toBe($subject);
+    $action = collect($full['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($action)->not->toBeNull()->and($action['op'])->toBe('create')->and($action['blocked'])->toBe([]);
+    hsSchedule(92, '2026-09-14', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 92)->update(['group_id' => 8888, 'group_name' => 'ordinary-busy']);
+    htFake([1596 => [htItem(1, '2026-09-14', '08:30', '09:50', ['subject' => $subject])]]);
+    $today = htCall($s)->assertOk()->json();
+    expect($today['rows'][0]['subject'])->toBe($subject)
+        ->and($today['rows'][0]['status'])->toBe('update')
+        ->and($today['rows'][0]['blocked'])->toBe([])
+        ->and($today['json']['groups'][0]['units'][0]['subject_name'])->toBe($subject)
+        ->and($today['json']['groups'][0]['units'][0]['actions'])->not->toBeEmpty();
+});
+
+it('does not let educational-practice HEMIS records block ordinary lessons in either report', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    hsSchedule(93, '2026-09-21', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 93)->update(['group_id' => 8888, 'group_name' => 'control-group', 'subject_name' => 'Kasbiy O`QUV AMALIYOTI']);
+    $run = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $action = fn ($rep) => collect($rep['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($action($run())['blocked'])->toBe([]);
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'info_only_subjects' => []]]);
+    expect($action($run())['blocked'])->not->toBeEmpty();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14']]);
+    hsSchedule(94, '2026-09-14', '10:40:00', '12:00:00');
+    DB::table('schedules')->where('schedule_hemis_id', 94)->update(['group_id' => 8888, 'group_name' => 'control-group', 'subject_name' => 'Oʻquv amaliyoti']);
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['room' => 'other'])]]);
+    $today = htCall($s)->assertOk()->json();
+    expect($today['rows'][0]['status'])->toBe('update')->and($today['rows'][0]['blocked'])->toBe([])
+        ->and($today['json']['groups'][0]['units'][0]['actions'])->not->toBeEmpty();
+});
+
+it('keeps ordinary and educational-practice exports at the same group slot', function () {
+    $s = hsSetup();
+    $subject = "O'quv amaliyoti";
+    $control = $s['card']->replicate();
+    $control->subject_name = $subject;
+    $control->save();
+    hsInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 987, 'curricula_hemis_id' => 250, 'subject_id' => 987,
+        'subject_name' => $subject, 'semester_code' => '11', 'semester_name' => '1', 'department_id' => 501, 'department_name' => 'Anatomiya',
+        'subject_details' => json_encode([['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 8]]), 'at_semester' => 1]);
+    $id = DB::table('curriculum_subjects')->where('subject_id', 987)->value('id');
+    DB::table('ktr_plans')->insert(['curriculum_subject_id' => $id, 'week_count' => 4,
+        'plan_data' => json_encode(['hours' => ['1' => ['13' => 2], '2' => ['13' => 2], '3' => ['13' => 2], '4' => ['13' => 2]]]),
+        'created_at' => now(), 'updated_at' => now()]);
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-14', '10:00:00', '11:20:00');
+    DB::table('schedules')->where('schedule_hemis_id', 2)->update(['subject_id' => 987, 'subject_name' => $subject]);
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    expect($res['groups'][0]['units'])->toHaveCount(2);
+    foreach ($res['groups'][0]['units'] as $unit) {
+        $act = collect($unit['actions'])->firstWhere('date', '2026-09-21');
+        expect($act)->not->toBeNull()->and($act['start'])->toBe('10:00')->and($act['blocked'])->toBe([]);
+    }
+});
+
+/** Multiple groups with missing LMS rooms and valid, distinct existing HEMIS records. */
+function hrMissingGroups(array $s, int $count): array
+{
+    $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
+    $schedule = [];
+    for ($i = 0; $i < $count; $i++) {
+        $gid = 1596 + $i;
+        $name = sprintf('p/st26-%02da', 1 + $i);
+        if ($i) {
+            hsInsert('groups', ['group_hemis_id' => $gid, 'name' => $name, 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+            $card = $s['card']->replicate();
+            $card->group_name = $name . ' (rus)';
+            $card->save();
+        }
+        $schedule[$gid] = [htItem(100 + $i, '2026-09-14', '10:00', '11:20', ['group' => $gid, 'group_name' => $name, 'room' => 'OLD' . $i])];
+    }
+    return $schedule;
+}
+
+it('updates ten simultaneous missing-room lessons to department placeholders without room blockers', function () {
+    $s = hsSetup();
+    $schedule = hrMissingGroups($s, 10);
+    // Existing HEMIS records in the placeholder room must not block the updates.
+    for ($i = 0; $i < 30; $i++) {
+        hsSchedule(200 + $i, '2026-09-14', '10:00:00', '11:20:00', 7000 + $i, 'KM1');
+        DB::table('schedules')->where('schedule_hemis_id', 200 + $i)->update(['group_id' => 8000 + $i, 'group_name' => 'busy-' . $i]);
+    }
+    htFake($schedule);
+    $res = htCall($s)->assertOk()->json();
+    expect($res['counts']['updates'])->toBe(10)->and($res['counts']['blocked'])->toBe(0)
+        ->and($res['missing_room_count'])->toBe(10)->and($res['warnings'])->toBe([]);
+    foreach ($res['rows'] as $row) {
+        expect($row)->toMatchArray(['status' => 'update', 'missing_room' => true, 'fallback_room' => true, 'new_auditorium_code' => 'KM1', 'blocked' => []])
+            ->and($row['flags'])->toContain('mudir_xonasi')
+            ->and($row['reason'])->toBe("LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo'yiladi");
+    }
+    expect($res['json']['groups'])->toHaveCount(10);
+    $full = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json();
+    expect($full['missing_room_count'])->toBe(10)->and($full['warnings'])->toBe([]);
+    foreach ($full['groups'] as $group) {
+        expect($group['units'][0]['missing_room_lessons'])->toHaveCount(1);
+        foreach ($group['units'][0]['actions'] as $action) expect($action['blocked'])->toBe([])->and($action['auditorium_code'])->toBe('KM1');
+    }
+    // Already matching placeholders remain ok and still belong to the missing-room list.
+    foreach ($schedule as &$list) $list[0]['auditorium'] = array_replace($list[0]['auditorium'], ['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi']);
+    unset($list);
+    htFake($schedule);
+    $res = htCall($s)->assertOk()->json();
+    expect($res['counts']['ok'])->toBe(10)->and($res['counts']['updates'])->toBe(0)->and($res['missing_room_count'])->toBe(10);
+});
+
+it('warns about unlinked department rooms and never selects a shared or foreign fallback', function () {
+    $s = hsSetup();
+    $s['card']->update(['auditorium_code' => null, 'auditorium_name' => null]);
+    \App\Models\Auditorium::where('code', 'KM1')->update(['department_hemis_id' => null]);
+    \App\Models\Auditorium::create(['code' => 'FOREIGN', 'name' => 'Kafedra mudiri xonasi', 'active' => true, 'department_hemis_id' => 777]);
+    $item = htItem(1, '2026-09-14', '10:00', '11:20', ['room' => 'EXISTING']);
+    $item['department']['name'] = 'Anatomiya';
+    htFake([1596 => [$item]]);
+    $res = htCall($s)->assertOk()->json();
+    $warning = "Kafedra mudiri xonasi kafedraga bog'lanmagan (HEMIS): Anatomiya";
+    expect($res['warnings'])->toBe([$warning])->and($res['rows'][0]['new_auditorium_code'])->toBe('EXISTING')
+        ->and($res['rows'][0]['fallback_room'])->toBeFalse()->and($res['missing_room_count'])->toBe(1);
+    $full = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 2])
+        ->assertOk()->json();
+    expect($full['warnings'])->toBe([$warning]);
+    foreach ($full['groups'][0]['units'][0]['actions'] as $a) {
+        expect($a['auditorium_code'])->toBeNull()->and($a['blocked'])->not->toBeEmpty()->and($a['reason'])->toContain($warning);
+    }
+});
+
+it('retains real resource blockers and combines thirty groups into one reason', function (string $resource) {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    for ($i = 0; $i < 30; $i++) {
+        hsSchedule(300 + $i, '2026-09-21', '10:40:00', '12:00:00', $resource === 'teacher' ? 5001 : 7000 + $i, $resource === 'room' ? '71' : 'OTHER' . $i);
+        DB::table('schedules')->where('schedule_hemis_id', 300 + $i)->update(['group_id' => 9000 + $i, 'group_name' => 'busy-' . $i]);
+    }
+    $full = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 0])
+        ->assertOk()->json();
+    $a = collect($full['groups'][0]['units'][0]['actions'])->firstWhere('date', '2026-09-21');
+    expect($a['blocked'])->toHaveCount(1)->and($a['blocked'][0])->toContain('yana 29 ta guruh')
+        ->and($a['blocks'][0]['groups'])->toHaveCount(30);
+    DB::table('schedules')->where('schedule_hemis_id', '>=', 300)->update(['lesson_date' => '2026-09-14 00:00:00']);
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20', ['emp' => 6006, 'room' => 'OLD'])]]);
+    $res = htCall($s)->assertOk()->json();
+    expect($res['rows'][0]['status'])->toBe('blocked')->and($res['rows'][0]['blocked'])->toHaveCount(1)
+        ->and($res['rows'][0]['blocked'][0])->toContain('yana 29 ta guruh')->and($res['json']['groups'])->toBe([]);
+})->with(['room', 'teacher']);
+
+it('limits HEMIS Excel export to the missing-room filter', function () {
+    $s = hsSetup();
+    htFake(hrMissingGroups($s, 2));
+    $other = TimetableCard::where('board_id', $s['board']->id)->where('id', '!=', $s['card']->id)->sole();
+    $other->update(['auditorium_code' => 'REAL', 'auditorium_name' => 'Real xona',
+        'teacher_id' => Teacher::where('full_name', 'MUDIR')->value('id'), 'teacher_name' => 'MUDIR']);
+    htCall($s)->assertOk();
+    $res = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'today' => '2026-09-19',
+            'until_week' => 2, 'missing_room_only' => 1, 'only_diff' => 0])->assertOk();
+    $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($res->baseResponse->getFile()->getPathname());
+    foreach (['Balans', 'Amallar'] as $name) {
+        $rows = $book->getSheetByName($name)->toArray();
+        expect($rows)->toHaveCount(2)->and($rows[1][0])->toBe('p/st26-01a');
+    }
+    expect(implode(' ', array_filter($book->getSheetByName('Amallar')->toArray()[1])))->toContain('mudir_xonasi');
+    $book->disconnectWorksheets();
 });

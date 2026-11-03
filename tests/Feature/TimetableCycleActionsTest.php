@@ -51,7 +51,7 @@ function caSetup(): array
         'created_at' => now(), 'updated_at' => now()]);
     $mudir = caTeacher('XOLMATOV A. B.', 'kafedra_mudiri', ['department_hemis_id' => 701, 'hemis_id' => 9100, 'is_active' => true]);
     $mudir->forceFill(['full_name' => 'XOLMATOV AZIZ BAXTIYOROVICH'])->save();
-    Auditorium::create(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true]);
+    Auditorium::create(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 701]);
     Auditorium::create(['code' => 'R305', 'name' => '305', 'volume' => 30, 'active' => true]);
     // O'quv rejasi: 30 soat amaliy (kuniga 6 soat) — kun rejasi (HEMIS darslari) shundan.
     $mc = \Illuminate\Support\Facades\DB::table('manual_curricula')->insertGetId(['type' => 'ishchi', 'name' => 'x', 'specialty_name' => 'davolash ishi',

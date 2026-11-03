@@ -284,7 +284,7 @@ function phSetup(): array
         'created_at' => now(), 'updated_at' => now()]);
     $mudir = wuTeacher('XOLMATOV A. B.', 'kafedra_mudiri');
     $mudir->forceFill(['department_hemis_id' => 601, 'hemis_id' => 9100, 'is_active' => true, 'full_name' => 'XOLMATOV AZIZ BAXTIYOROVICH', 'short_name' => 'XOLMATOV A. B.'])->save();
-    \App\Models\Auditorium::create(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true]);
+    \App\Models\Auditorium::create(['code' => 'KM1', 'name' => 'Kafedra mudiri xonasi', 'volume' => 1, 'active' => true, 'department_hemis_id' => 601]);
     \App\Models\Auditorium::create(['code' => 'R428', 'name' => '428', 'volume' => 40, 'active' => true]);
     // To'qnashuvli karta: 07b, CHORIYEVA, 428, chorshanba (3) 10:00 (3-qator); tashqi joyi — chorshanba 10:00.
     $mk = fn (string $g) => TimetableCard::create(array_replace($s['base'], ['group_name' => $g, 'subject_name' => 'Tibbiyotda axborot texnologiyalari',

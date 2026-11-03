@@ -177,3 +177,84 @@ it('preserves competing-request protection for one online lesson without reservi
     $same = ioCall('pendingTimeConflicts', $online, $move, []);
     expect($same)->toHaveCount(1)->and($same[0])->toContain('shu dars')->not->toContain('guruh:', 'auditoriya:', 'o‘qituvchi');
 });
+
+function ioControlSetup(): array
+{
+    $s = ioSetup();
+    TimetableSubjectSetting::where('board_id', $s['board']->id)->delete();
+    TimetableCyclePlacement::where('board_id', $s['board']->id)->delete();
+    $s['teacher']->update(['full_name' => 'XAYITOV A. A.', 'short_name' => 'XAYITOV A. A.']);
+    $s['cards'][0]->update(['course' => 3, 'subject_name' => 'Farmakologiya', 'group_name' => 'd1/d24-01b', 'day' => 1, 'pair' => 1]);
+    $s['cards'][1]->update(['course' => 3, 'faculty_name' => 'F2', 'specialty_name' => 'Pediatriya',
+        'subject_name' => 'O`QUV AMALIYOTI', 'group_name' => 'p/f24-02a', 'day' => 1, 'pair' => 1, 'students' => 1000]);
+    $s['cards'][2]->update(['teacher_id' => null, 'auditorium_code' => null]);
+    return $s;
+}
+
+it('allows Xayitov to teach pharmacology while educational practice has the same teacher and room', function () {
+    $s = ioControlSetup();
+    expect(ioCall('findWeekConflicts', $s['cards'][0], 1, 1, 1))->toBe([])
+        ->and(ioCall('unitBusy', $s['board'], collect([$s['cards'][0]]))['teachers'])->toBe([])
+        ->and(ioCall('unitBusy', $s['board'], collect([$s['cards'][0]]))['rooms'])->toBe([])
+        ->and(ioCall('weeklyCapacityWarnings', $s['board'], 1, [$s['cards'][1]->id => true]))->toBe([]);
+    $s['cards'][0]->update(['day' => null, 'pair' => null]);
+    ioAs($s['teacher'])->postJson(route('admin.timetable.cards.place', $s['cards'][0]), ['day' => 1, 'pair' => 1, 'layer' => 'internal'])->assertOk();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'info_only_subjects' => []]]);
+    $errors = implode(' ', ioCall('findWeekConflicts', $s['cards'][0]->fresh(), 1, 1, 1));
+    expect($errors)->toContain("O'qituvchi band", 'Auditoriya band');
+});
+
+it('ignores Amonova educational practice but retains the ordinary 02c group collision', function () {
+    $s = ioControlSetup();
+    $s['teacher']->update(['full_name' => 'AMONOVA', 'short_name' => 'AMONOVA']);
+    $s['cards'][0]->update(['faculty_name' => 'F3', 'specialty_name' => 'Stomatologiya', 'group_name' => 'p/st24-02c', 'subject_name' => 'Farmakologiya (a)']);
+    $s['cards'][1]->update(['group_name' => 'p/f24-02b']);
+    $s['cards'][2]->update(['course' => 3, 'faculty_name' => 'F3', 'specialty_name' => 'Stomatologiya',
+        'group_name' => 'p/st24-02c', 'subject_name' => 'Anatomiya', 'day' => 1, 'pair' => 1]);
+    $errors = implode(' ', ioCall('findWeekConflicts', $s['cards'][0], 1, 1, 1));
+    expect($errors)->toContain('Guruh band: p/st24-02c')->not->toContain("O'qituvchi band");
+    $s['cards'][2]->update(['day' => null, 'pair' => null]);
+    expect(ioCall('findWeekConflicts', $s['cards'][0]->fresh(), 1, 1, 1))->toBe([]);
+});
+
+it('keeps educational practice visible and the teacher agenda slot free', function () {
+    $s = ioControlSetup();
+    $s['cards'][0]->update(['teacher_id' => null, 'auditorium_code' => null]);
+    $res = ioAs($s['teacher'])->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?' . http_build_query([
+        'teacher_id' => $s['teacher']->id, 'date' => '2026-09-14', 'range' => 'day', 'layer' => 'internal',
+    ]))->assertOk();
+    expect($res->json('entries'))->toHaveCount(1)
+        ->and($res->json('entries.0.info_only'))->toBeTrue()
+        ->and($res->json('entries.0.conflict'))->toBeFalse()
+        ->and($res->json('free.2026-09-14'))->toContain(1);
+});
+
+it('applies subject exemptions to cycle units in every course', function () {
+    $s = ioSetup();
+    TimetableCard::where('board_id', $s['board']->id)->where('course', 6)->update(['course' => 3, 'subject_name' => 'Oʻquv amaliyoti']);
+    TimetableSubjectSetting::where('board_id', $s['board']->id)->where('course', 6)->update(['course' => 3, 'subject_name' => 'Oʻquv amaliyoti']);
+    TimetableCyclePlacement::where('board_id', $s['board']->id)->where('course', 6)->update(['course' => 3, 'subject_name' => 'Oʻquv amaliyoti']);
+    expect(ioCall('cycleConflicts', $s['board']))->toBe([])
+        ->and(ioCall('unitBusy', $s['board'], collect([$s['cards'][0]]))['teachers'])->toBe([]);
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'info_only_subjects' => []]]);
+    expect(ioCall('cycleConflicts', $s['board']))->not->toBeEmpty();
+});
+
+it('saves normalized subject tags and clears them through the settings form', function () {
+    $s = ioSetup();
+    ioAs($s['teacher'])->getJson(route('admin.timetable.settings', $s['board']))->assertOk()
+        ->assertJsonPath('settings.info_only_subjects', ["O'quv amaliyoti"]);
+    $url = route('admin.timetable.settings.save', $s['board']);
+    $body = ['days' => 6, 'bell_schedule' => [['type' => 'pair', 'start' => '08:30', 'end' => '09:50']],
+        'settings' => ['info_only_subjects' => ['O‘quv amaliyoti', "O'QUV amaliyoti", 'Nazorat']]];
+    ioAs($s['teacher'])->postJson($url, $body)->assertOk();
+    expect($s['board']->fresh()->settings['info_only_subjects'])->toBe(['O‘quv amaliyoti', 'Nazorat']);
+    $invalid = $body;
+    $invalid['settings']['info_only_subjects'] = [''];
+    ioAs($s['teacher'])->postJson($url, $invalid)->assertUnprocessable();
+    unset($body['settings']['info_only_subjects']);
+    $body['info_only_subjects_present'] = 1;
+    ioAs($s['teacher'])->post($url, $body)->assertOk();
+    expect($s['board']->fresh()->settings['info_only_subjects'])->toBe([])
+        ->and(\App\Services\Timetable\InfoOnlyCourses::isHemisExcluded(['course' => 6], $s['board']->fresh()))->toBeTrue();
+});

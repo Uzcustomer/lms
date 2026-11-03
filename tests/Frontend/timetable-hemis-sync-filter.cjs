@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin
 const a = source.indexOf("            // ===== Registrator: HEMIS bilan solishtirish");
 const b = source.indexOf('            async function hsTicketsSend(rep) {', a);
 assert(a > 0 && b > a);
-const code = source.slice(source.indexOf('            function isInfoOnly(card)'), source.indexOf('            function applyWeeklyLayer(list)')) + source.slice(a, b);
+const code = source.slice(source.indexOf('            function isHemisExcluded(card)'), source.indexOf('            function applyWeeklyLayer(list)')) + source.slice(a, b);
 const stubs = "const $ = id => document.getElementById(id); const BASE = ''; const CSRF = 't'; const HS_WRITER_URL = 'w.js';"
   + " let board = { id: 1 }; const scopeLabelText = () => 'Qamrov'; const scopeBody = () => ({}); const api = async () => ({});";
 

@@ -19,15 +19,15 @@ vm.runInContext(cut('            function agendaOpt(', '            function age
     + cut('            function cardLabel(', '            // Karta ustiga kursor')
     + cut('            function describeCardBrief(', '            // ===== Joylash (bosish'), ctx);
 const card = { id: 1, course: 6, subject_name: 'Klinik farmakologiya', training_type: 'practice', group_name: 'p/p21-01a' };
-assert(ctx.isInfoOnly(card));
+assert(ctx.isNonBlocking(card));
 assert.match(ctx.cardLabel(card, false), /6-kurs · ma’lumot \(onlayn\)/);
 assert.equal(ctx.infoOnlyClass(card), ' tt-info-only');
 ctx.board.settings = { info_only_courses: [] };
-assert.equal(ctx.isInfoOnly(card), false);
+assert.equal(ctx.isNonBlocking(card), false);
 assert.equal(ctx.infoOnlyBadgeHtml(card), '');
 ctx.board.settings.info_only_courses = [3];
-assert(ctx.isInfoOnly({ course: 3 }));
-assert.equal(ctx.isInfoOnly(card), false);
+assert(ctx.isNonBlocking({ course: 3 }));
+assert.equal(ctx.isNonBlocking(card), false);
 delete ctx.board.settings;
 const item = (id, course, fa, fb) => ({ c: { ...card, id, course, group_name: 'group-' + id }, fa, fb });
 assert.equal(ctx.crossCellLessons([item(1, 5, 1, 3), item(2, 6, 1, 5)], true).clashing.length, 0);
@@ -78,6 +78,20 @@ assert.match(grid.innerHTML, /cyc-block tt-info-only/);
 assert.match(grid.innerHTML, /Birinchi fan/);
 assert.match(grid.innerHTML, /tt-info-only-overlap.*Ikkinchi fan/);
 assert.doesNotMatch(grid.innerHTML, /is-conflict|data-cf-key/);
+const control = { ...card, id: 70, course: 3, subject_name: 'Kasbiy O`QUV AMALIYOTI (nazorat)' };
+assert.equal(ctx.isNonBlocking(control), true);
+assert.equal(ctx.isHemisExcluded(control), false);
+assert.match(ctx.cardLabel(control, false), /O'quv amaliyoti · nazorat/);
+assert.equal(ctx.crossCellLessons([{ c: ordinary, fa: 1, fb: 3 }, { c: control, fa: 1, fb: 3 }], true).clashing.length, 0);
+const controlAgenda = ctx.agendaCellHtml({ ...j, entries: [{ ...j.entries[0], course: 3, subject: control.subject_name }] },
+    { move: 'ordinary' }, date, { no: 1, from: 1, to: 3 }, false);
+assert.match(controlAgenda, /bo‘sh · O'quv amaliyoti/);
+assert.doesNotMatch(controlAgenda, /3-kurs.*onlayn|ag-conf/);
+ctx.board.settings = { info_only_subjects: [] };
+assert.equal(ctx.isNonBlocking(control), false);
+assert.equal(ctx.isHemisExcluded(control), false);
+assert.equal(ctx.isHemisExcluded(card), true);
+delete ctx.board.settings;
 (async () => {
     const browser = await chromium.launch();
     try {
@@ -89,7 +103,33 @@ assert.doesNotMatch(grid.innerHTML, /is-conflict|data-cf-key/);
         assert.match(await page.locator('.ag-e').evaluate(el => getComputedStyle(el).backgroundImage), /repeating-linear-gradient/);
         assert.equal(await page.getByRole('button', { name: 'Shu vaqtga ko‘chirish', exact: true }).isEnabled(), true);
         assert.equal(await page.locator('.tt-info-only-overlap button').textContent(), 'Ikkinchi fan');
+        // Subject-based blocks receive their own label even inside an ordinary-course row.
+        ctx.renderCyclePlan({ simple: true, view: 'group', dates: [{ d: '14.09' }, { d: '15.09' }], rows: [{
+            row_key: 'control-row', group: 'p/f24-02a', course: 3, blocks: [
+                { key: 'control', subject: control.subject_name, type: 'practice', from: 0, to: 0, days: 1 },
+                { key: 'ordinary', subject: 'Farmakologiya', type: 'practice', from: 1, to: 1, days: 1 },
+            ] }] });
+        await page.setContent('<style>' + css + '</style><div id="ttAgendaModal">' + controlAgenda + '</div><table>' + grid.innerHTML + '</table>'
+            + '<div id="stInfoSubjectTags"></div><input id="stInfoSubjectInput"><button id="stInfoSubjectAdd">Qo‘shish</button><div id="setMsg"></div>');
+        assert.equal(await page.locator('[data-cycle-key="control"]').evaluate(el => el.classList.contains('tt-info-only')), true);
+        assert.equal(await page.locator('[data-cycle-key="ordinary"]').evaluate(el => el.classList.contains('tt-info-only')), false);
+        assert.match(await page.locator('[data-cycle-key="control"]').textContent(), /O'quv amaliyoti · nazorat/);
+        assert.equal(await page.getByRole('button', { name: 'Shu vaqtga ko‘chirish', exact: true }).isEnabled(), true);
+        await page.addScriptTag({ content: 'const board = {}; const $ = id => document.getElementById(id); const esc = ' + esc.toString() + ';'
+            + cut('            function isHemisExcluded(card)', '            function applyWeeklyLayer(list)')
+            + cut('            let infoSubjectDraft = [];', "            $('settingsBtn').onclick") });
+        await page.fill('#stInfoSubjectInput', 'O‘quv amaliyoti');
+        await page.click('#stInfoSubjectAdd');
+        await page.fill('#stInfoSubjectInput', 'O`QUV AMALIYOTI');
+        await page.press('#stInfoSubjectInput', 'Enter');
+        assert.equal(await page.locator('#stInfoSubjectTags button').count(), 1, 'apostrophe variants deduplicate');
+        await page.fill('#stInfoSubjectInput', 'Nazorat');
+        const out = await page.evaluate(() => { const fd = new FormData(); appendInfoSubjectSettings(fd); return [...fd.entries()]; });
+        assert.deepEqual(out, [['info_only_subjects_present', '1'], ['settings[info_only_subjects][0]', 'O‘quv amaliyoti'], ['settings[info_only_subjects][1]', 'Nazorat']]);
+        await page.locator('#stInfoSubjectTags button').first().click();
+        await page.locator('#stInfoSubjectTags button').first().click();
+        assert.deepEqual(await page.evaluate(() => { const fd = new FormData(); appendInfoSubjectSettings(fd); return [...fd.entries()]; }), [['info_only_subjects_present', '1']]);
         await page.close();
-        console.log('timetable info only: 11 scenarios passed (including Chromium display and enabled move)');
+        console.log('timetable info only: 15 scenarios passed (including Chromium display and enabled move)');
     } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

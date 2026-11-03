@@ -663,6 +663,14 @@
                                         </div>
                                         <p class="text-xs text-gray-500 mt-1">Onlayn topshiriqlar: jadvalda ko'rinadi, o'qituvchi va xonani band qilmaydi.</p>
                                     </fieldset>
+                                    <fieldset class="mt-3"><legend class="text-sm font-medium">Faqat ma'lumot fanlar</legend>
+                                        <div id="stInfoSubjectTags" class="flex flex-wrap gap-2 my-2"></div>
+                                        <div class="flex gap-2">
+                                            <input id="stInfoSubjectInput" type="text" maxlength="255" class="rounded border-gray-300 text-sm" placeholder="Fan nomi bo'lagi">
+                                            <button id="stInfoSubjectAdd" type="button" class="rounded border px-2 text-sm">Qo'shish</button>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-1">Nomida shu matn bor darslar bandlik yaratmaydi. HEMISga yoziladi.</p>
+                                    </fieldset>
                                     <label class="flex items-center gap-2 text-sm text-gray-600" title="O'chiq (sukut): LMS'dagi o'qituvchi yoki xona shu vaqtda band bo'lsa, HEMIS amali to'siq bo'ladi va JSON'ga kirmaydi. Yoqilsa — band o'qituvchi o'rniga kafedra mudiri, band xona o'rniga «Kafedra mudiri xonasi» qo'yiladi.">
                                         <input id="stHemisMudir" type="checkbox" class="rounded border-gray-300"> HEMIS solishtirish: to'qnashuvda kafedra mudiri / mudir xonasini qo'yish
                                     </label>
@@ -2807,31 +2815,49 @@
             let weeklyLayer = WEEKLY_OQUV ? 'external' : 'internal';
             try { const v = localStorage.getItem('lms:timetable-weekly-layer'); if (v === 'external' || v === 'internal') weeklyLayer = v; } catch (e) { }
             const weeklyCanEdit = () => !TIMETABLE_READ_ONLY && (WEEKLY_ADMIN || (weeklyLayer === 'external' ? WEEKLY_OQUV : TIMETABLE_ROLE === 'kafedra_mudiri'));
-            // Kurs bo'yicha yagona ma'lumot rejimi (serverdagi InfoOnlyCourses sozlamasi).
-            function isInfoOnly(card) {
+            // Kurs va fan bo'yicha ma'lumot rejimi (serverdagi InfoOnlyCourses sozlamasi).
+            function isHemisExcluded(card) {
                 if (!card) return false;
                 const configured = board && board.settings && board.settings.info_only_courses;
-                const courses = Array.isArray(configured) ? configured : [6];
-                return courses.map(Number).includes(+card.course);
+                return (Array.isArray(configured) ? configured : [6]).map(Number).includes(+card.course);
+            }
+            function normalizeInfoSubject(name) {
+                return String(name || '').replace(/[’‘ʻʼ`´‛＇]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+            }
+            function infoSubjectMatch(card) {
+                const configured = board && board.settings && board.settings.info_only_subjects;
+                const name = normalizeInfoSubject(card && (card.subject_name || card.subject));
+                return (Array.isArray(configured) ? configured : ["O'quv amaliyoti"])
+                    .find(label => normalizeInfoSubject(label) && name.includes(normalizeInfoSubject(label))) || '';
+            }
+            function isNonBlocking(card) { return !!card && (isHemisExcluded(card) || !!infoSubjectMatch(card)); }
+            function infoOnlyText(card) {
+                if (isHemisExcluded(card)) return (+card.course) + '-kurs · ma’lumot (onlayn)';
+                const subject = infoSubjectMatch(card);
+                return subject ? subject + ' · nazorat' : '';
             }
             function infoOnlyBadgeHtml(card) {
-                return isInfoOnly(card) ? '<span class="tt-info-only-badge">' + (+card.course) + '-kurs · ma’lumot (onlayn)</span>' : '';
+                const text = infoOnlyText(card);
+                return text ? '<span class="tt-info-only-badge">' + esc(text) + '</span>' : '';
             }
-            function infoOnlyClass(card) { return isInfoOnly(card) ? ' tt-info-only' : ''; }
+            function infoOnlyClass(card) { return isNonBlocking(card) ? ' tt-info-only' : ''; }
+            function cycleInfoCard(row, block) { return { course: row.course, subject_name: block.subject }; }
             function infoOnlyGroupOverlapHtml(list) {
-                const online = list.filter(isInfoOnly);
+                const online = list.filter(isNonBlocking);
                 const overlaps = online.some((a, i) => online.some((b, j) => j > i && a.id !== b.id
                     && !bolakSiblings(a, b) && (curWeek || weeksIntersect(a, b))));
-                return overlaps ? '<div class="tt-info-only-overlap">Ma’lumot: guruhning onlayn darslari ustma-ust</div>' : '';
+                return overlaps ? '<div class="tt-info-only-overlap">Ma’lumot: guruhning ma’lumot darslari ustma-ust</div>' : '';
             }
             function cycleInfoOverlapHtml(row, block) {
-                if (!isInfoOnly(row)) return '';
-                return '<div class="tt-info-only-overlap">Ma’lumot: guruhning onlayn darslari ustma-ust — '
+                const card = cycleInfoCard(row, block);
+                if (!isNonBlocking(card)) return '';
+                return '<div class="tt-info-only-overlap">Ma’lumot: guruhning ma’lumot darslari ustma-ust — '
                     + '<button type="button" data-cycle-gear="' + esc(block.key) + '">' + esc(block.subject) + '</button> '
-                    + infoOnlyBadgeHtml(row) + '</div>';
+                    + infoOnlyBadgeHtml(card) + '</div>';
             }
             function hemisInfoNoticeHtml(rep) {
-                return rep.info_only_notice ? '<div class="text-xs text-gray-500 my-2">' + esc(rep.info_only_notice) + '</div>' : '';
+                return (rep.info_only_notice ? '<div class="text-xs text-gray-500 my-2">' + hsEsc(rep.info_only_notice) + '</div>' : '')
+                    + (rep.warnings || []).map(w => '<div class="text-xs text-amber-700 my-2">' + hsEsc(w) + '</div>').join('');
             }
             // Kartani tanlangan qatlamga moslaydi: tashqida joylashuv ext_day/ext_pair, o'qituvchi va xona yashiriladi.
             function applyWeeklyLayer(list) {
@@ -4095,7 +4121,7 @@
             let hemisSyncLast = null;
             let hemisSyncUntil = null;
             let hemisSyncPeriod = null;  // {from, to} — hisob davri (haftalar); null — 1-hafta…joriy hafta
-            let hemisSyncFilter = { onlyDiff: true, periodMatch: true, finished: false, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null, groups: null };   // subjects / groups: null — barcha fanlar / guruhlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
+            let hemisSyncFilter = { missingRoomOnly: false, onlyDiff: true, periodMatch: true, finished: false, ops: { create: true, update: true, delete: true, blocked: true }, blk: { room: true, teacher: true, other: true }, subjects: null, groups: null };   // subjects / groups: null — barcha fanlar / guruhlar   // null — joriy hafta oxirigacha (sukut), 0 — semestr oxirigacha
             function hemisSyncModal(html) {
                 let m = $('hemisSyncModal');
                 if (!m) {
@@ -4227,7 +4253,8 @@
                         : '<b>' + hsEsc(b.teacher || 'O\'qituvchi') + '</b> ' + hsEsc(b.time) + ' da boshqa darsda')
                     + ': ' + hsEsc(b.source || '') + ' · ' + hsEsc(b.group || '') + ' · «' + hsEsc(b.subject || '') + '»'
                     + (b.type === 'room' && b.teacher ? ' · o\'qituvchi: ' + hsEsc(b.teacher) : '')
-                    + (b.type === 'teacher' && b.room ? ' · xona: ' + hsEsc(b.room) : '') + '</div>').join('')
+                    + (b.type === 'teacher' && b.room ? ' · xona: ' + hsEsc(b.room) : '')
+                    + (b.other_groups ? ' · yana ' + (+b.other_groups) + ' ta guruh' : '') + '</div>').join('')
                     + (other.length ? '<div class="ml-3 mt-0.5 text-red-700">' + hsEsc(other.join('; ')) + '</div>' : '');
                 const flags = (a.flags && a.flags.length) ? ' <span class="text-indigo-600 text-[10px]">[' + hsEsc(a.flags.join(', ')) + ']</span>' : '';
                 const reason = a.reason ? '<div class="ml-3 text-gray-500 italic text-[10px]">Sabab: ' + hsEsc(a.reason) + flags + '</div>' : (flags ? '<div class="ml-3">' + flags + '</div>' : '');
@@ -4239,9 +4266,9 @@
                 if (!k.size || (a.blocked || []).length > (a.blocks || []).length) k.add('other');
                 return [...k];
             };
-            const hsOpOk = a => (a.blocked && a.blocked.length)
+            const hsOpOk = a => (!hemisSyncFilter.missingRoomOnly || a.missing_room) && ((a.blocked && a.blocked.length)
                 ? hemisSyncFilter.ops.blocked && hsBlockKinds(a).some(k => hemisSyncFilter.blk[k])
-                : !!hemisSyncFilter.ops[a.op];
+                : !!hemisSyncFilter.ops[a.op]);
             function hemisSyncRender(rep) {
                 const F = hemisSyncFilter;
                 let tot = { create: 0, update: 0, delete: 0, blocked: 0, later: 0, hidden: 0, opHidden: 0, periodHidden: 0, finishedHidden: 0 };
@@ -4249,10 +4276,11 @@
                 const opsNarrowed = !(F.ops.create && F.ops.update && F.ops.delete && F.ops.blocked && F.blk.room && F.blk.teacher && F.blk.other);
                 let body = '';
                 const pf = rep.period_from, pt = rep.period_to;
+                const missingRoomCount = rep.groups.filter(hsGroupOk).reduce((n, g) => n + g.units.filter(hsSubjOk).reduce((m, u) => m + (u.missing_room_lessons || []).length, 0), 0);
                 for (const g of rep.groups) {
                     if (!hsGroupOk(g)) continue;
                     // Fan filtrida tanlanmaganlar "mos" emas — yashirilgan mos fanlar soniga qo'shilmaydi.
-                    const picked = g.units.filter(hsSubjOk);
+                    const picked = g.units.filter(hsSubjOk).filter(u => !F.missingRoomOnly || (u.missing_room_lessons || []).length || (u.actions || []).some(a => a.missing_room));
                     const shown = picked.filter(u => !(F.onlyDiff && hsUnitMatches(u)));
                     tot.hidden += picked.length - shown.length;
                     // Faqat ko'rinish: bu fanlarning tanlangan davrda amali yo'q — Excel / JSON / to'siq xabarlari o'zgarmaydi.
@@ -4267,9 +4295,9 @@
                     const skippedPicked = opsNarrowed ? [] : g.skipped.filter(x => !hemisSyncFilter.subjects || hemisSyncFilter.subjects.includes(x.subject_name));
                     // Darslari tugagan fanlar (bugun va o'tgan kunlar HEMIS'da tahrirlanmaydi — qiladigan ish yo'q) sukutda yashirin;
                     // "joylanmagan" va "kartochka yo'q" — haqiqiy muammo, doim ko'rinadi.
-                    const skippedShown = F.finished ? skippedPicked : skippedPicked.filter(x => x.kind !== 'finished');
+                    const skippedShown = F.missingRoomOnly ? [] : (F.finished ? skippedPicked : skippedPicked.filter(x => x.kind !== 'finished'));
                     tot.finishedHidden += skippedPicked.length - skippedShown.length;
-                    const noSubjCards = opsNarrowed ? [] : (g.cards_without_subject || []);
+                    const noSubjCards = opsNarrowed || F.missingRoomOnly ? [] : (g.cards_without_subject || []);
                     if (!units.length && !skippedShown.length && !noSubjCards.length) continue;
                     body += '<h4 class="mt-4 mb-1 font-semibold text-[13px]">' + hsEsc(g.group) +
                         ' <span class="text-gray-400 font-normal">· HEMIS import: ' + hsEsc(g.imported_at || '—') + '</span></h4>';
@@ -4312,6 +4340,9 @@
                         tot.later += u.actions_later || 0;
                         acts.forEach(a => { if (a.blocked && a.blocked.length) tot.blocked++; else { cnt[a.op]++; tot[a.op]++; } });
                         const list = acts.map(a => hsActionHtml(a, u)).join('');
+                        const missingList = F.missingRoomOnly && (u.missing_room_lessons || []).length
+                            ? '<details class="text-violet-700"><summary>Xonasi bo‘sh: ' + u.missing_room_lessons.length + ' ta dars</summary>'
+                                + u.missing_room_lessons.map(l => '<div>' + hsEsc(l.date + ' ' + l.start + '–' + l.end + ' · ' + (l.employee_name || '—') + ' · ' + (l.auditorium_name || 'xona bog‘lanmagan')) + '</div>').join('') + '</details>' : '';
                         const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
                         body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name)
                             + (u.cycle ? ' <span class="px-1 rounded bg-sky-100 text-sky-700 text-[10px]" title="Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma\'lumot)">sikl</span>' : '') + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div></td>' +
@@ -4323,7 +4354,7 @@
                                 : (u.actions.length ? '<span class="text-gray-400">filtrda yashirin</span>'
                                     // Tanlangan haftagacha amal yo'q, lekin keyingi haftalarda bor — "mos" emas (filtrda ham yashirilmaydi).
                                     : u.actions_later ? '<span class="text-emerald-600">bu davrda mos</span><div class="text-amber-700">keyingi haftalarda ' + u.actions_later + ' ta amal</div>'
-                                    : '<span class="text-emerald-600">mos</span>')) + '</td></tr>';
+                                    : '<span class="text-emerald-600">mos</span>')) + missingList + '</td></tr>';
                     }
                     // Fan filtri tanlangan bo'lsa — o'tkazilgan fanlar ham faqat tanlanganlari.
                     for (const sk of skippedShown) {
@@ -4347,6 +4378,7 @@
                     ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Keyin HEMIS sahifasida (kirib turgan holda) shu xatcho\\\'pni bosing va yuklab olingan JSON faylni tanlang.\'); return false;"' +
                     ' title="Sichqoncha bilan xatcho\'plar paneliga torting, so\'ng HEMIS sahifasida bosing" class="px-2 py-1 rounded border border-indigo-400 bg-indigo-50 text-indigo-700 cursor-move">⭐ HEMIS\'ga yozish (xatcho\'p)</a>' +
                     '<button type="button" id="hsClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
+                    '<div class="text-violet-700 mb-1">Xonasi bo‘sh: ' + missingRoomCount + ' ta dars (mudir xonasi qo‘yiladi)</div>' +
                     hsUnplacedBanner(rep) +
                     '<div class="flex flex-wrap items-center gap-3 mb-2 p-2 bg-gray-50 rounded border">' +
                     '<label class="text-gray-700">Hisob davri: <select id="hsPFrom" class="border rounded px-1 py-0.5 text-[12px]">' + wkOpt(pf, w => w.week + '-hafta (' + hsEsc(w.from) + ')') + '</select>' +
@@ -4354,7 +4386,7 @@
                     '<label class="text-gray-700">HEMIS\'ga yozish: <select id="hsUntil" class="border rounded px-1 py-0.5 text-[12px]">' +
                     wkOpt(rep.until_week, w => w.week + '-hafta oxirigacha (' + hsEsc(w.to) + ')') +
                     '<option value="0"' + (!rep.until_week ? ' selected' : '') + '>Semestr oxirigacha</option></select></label>' +
-                    '<span class="text-gray-700">' + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
+                    '<span class="text-gray-700">' + chk('hsMissingRooms', F.missingRoomOnly, 'Faqat xonasi bo‘sh') + chk('hsOnlyDiff', F.onlyDiff, 'Faqat farqi borlar') +
                     chk('hsPeriodMatch', F.periodMatch, '<span title="Tanlangan davrgacha amali yo\'q, keyingi haftalarda amali bor fanlar">Bu davrda moslar</span>') +
                     chk('hsFinished', F.finished, '<span title="LMS ichki jadvalida ertadan keyin darsi yo\'q fanlar — bugun va o\'tgan kunlar HEMIS\'da tahrirlanmaydi">Tugagan fanlar</span>') +
                     chk('hsOpC', F.ops.create, 'Qo\'shish') + chk('hsOpU', F.ops.update, 'O\'zgartirish') + chk('hsOpD', F.ops.delete, 'O\'chirish') + chk('hsOpB', F.ops.blocked, 'To\'siqli') +
@@ -4398,13 +4430,16 @@
                 $('hsPTo').onchange = perChange;
                 const reFilter = () => {
                     F.onlyDiff = $('hsOnlyDiff').checked;
+                    const missingRoomOnly = $('hsMissingRooms').checked;
+                    if (missingRoomOnly && !F.missingRoomOnly) F.onlyDiff = false;
+                    F.missingRoomOnly = missingRoomOnly;
                     F.periodMatch = $('hsPeriodMatch').checked;
                     F.finished = $('hsFinished').checked;
                     F.ops = { create: $('hsOpC').checked, update: $('hsOpU').checked, delete: $('hsOpD').checked, blocked: $('hsOpB').checked };
                     F.blk = { room: $('hsBlkRoom').checked, teacher: $('hsBlkTeacher').checked, other: $('hsBlkOther').checked };
                     hemisSyncRender(rep);
                 };
-                ['hsOnlyDiff', 'hsPeriodMatch', 'hsFinished', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
+                ['hsMissingRooms', 'hsOnlyDiff', 'hsPeriodMatch', 'hsFinished', 'hsOpC', 'hsOpU', 'hsOpD', 'hsOpB', 'hsBlkRoom', 'hsBlkTeacher', 'hsBlkOther'].forEach(id => { $(id).onchange = reFilter; });
                 $('hsOnlyBlocked').onclick = () => {
                     F.ops = { create: false, update: false, delete: false, blocked: true };
                     hemisSyncRender(rep);
@@ -4445,6 +4480,7 @@
                     if (hemisSyncUntil !== null) add('until_week', hemisSyncUntil);
                     if (hemisSyncPeriod) { add('period_from', hemisSyncPeriod.from); add('period_to', hemisSyncPeriod.to); }
                     add('only_diff', F.onlyDiff ? 1 : 0);
+                    add('missing_room_only', F.missingRoomOnly ? 1 : 0);
                     add('ops_filter', 1);   // hech biri tanlanmasa ham — Excel'da amal bo'lmaydi
                     Object.keys(F.ops).filter(k => F.ops[k]).forEach(k => add('ops[]', k));
                     Object.keys(F.blk).filter(k => F.blk[k]).forEach(k => add('blk[]', k));
@@ -4610,7 +4646,8 @@
             };
             let hemisTodayLast = null;
             let hemisTodayGroup = '';   // oynadagi guruh filtri ('' — hammasi): ko'rinish, JSON va Excel
-            const htRows = (rep, group) => (rep.rows || []).filter(r => !group || r.group === group);
+            let hemisTodayMissingRooms = false;
+            const htRows = (rep, group) => (rep.rows || []).filter(r => (!group || r.group === group) && (!hemisTodayMissingRooms || r.missing_room));
             const htDate = d => String(d || '').split('-').reverse().join('.');
             function hemisTodayHtml(rep, group) {
                 const rows = htRows(rep, group);
@@ -4618,6 +4655,8 @@
                 const groups = [...new Set((rep.rows || []).map(r => r.group))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
                 const head = '<div class="flex flex-wrap items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">Bugun (' + hsEsc(htDate(rep.today)) + '): ' +
                     rows.length + ' ta dars · ' + n('update') + ' ta o\'zgartiriladi · ' + n('locked') + ' ta davomat/baho bor — tegilmaydi · ' + n('blocked') + ' ta to\'siqli</h3>' +
+                    '<span class="text-violet-700">Xonasi bo‘sh: ' + (rep.rows || []).filter(r => (!group || r.group === group) && r.missing_room).length + ' ta dars (mudir xonasi qo‘yiladi)</span>' +
+                    '<label><input id="htMissingRooms" type="checkbox"' + (hemisTodayMissingRooms ? ' checked' : '') + '> Faqat xonasi bo‘sh</label>' +
                     '<select id="htGroup" class="border rounded px-1 py-0.5"><option value="">Barcha guruhlar</option>' +
                     groups.map(g => '<option value="' + hsEsc(g) + '"' + (g === group ? ' selected' : '') + '>' + hsEsc(g) + '</option>').join('') + '</select>' +
                     '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
@@ -4660,8 +4699,9 @@
             // Xatcho'p uchun JSON: faqat to'siqsiz o'zgartirishlar (server tayyorlagan, today: true), tanlangan guruh bo'yicha.
             function hemisTodayJson(rep, group) {
                 const out = JSON.parse(JSON.stringify(rep.json || {}));
+                const ids = new Set(htRows(rep, group).filter(r => r.status === 'update').map(r => +r.hemis_id));
                 out.groups = (out.groups || []).filter(g => !group || g.group === group)
-                    .map(g => Object.assign(g, { units: g.units.map(u => Object.assign(u, { actions: u.actions.filter(a => a.op === 'update' && a.today === true) })) }));
+                    .map(g => Object.assign(g, { units: g.units.map(u => Object.assign(u, { actions: u.actions.filter(a => a.op === 'update' && a.today === true && (!hemisTodayMissingRooms || ids.has(+a.hemis_id))) })) }));
                 return out;
             }
             function hemisTodayExcel(rep, group) {
@@ -4679,6 +4719,7 @@
             }
             function hemisTodayRender(rep) {
                 const m = hemisSyncModal(hemisTodayHtml(rep, hemisTodayGroup));
+                $('htMissingRooms').onchange = e => { hemisTodayMissingRooms = e.target.checked; hemisTodayRender(rep); };
                 $('htGroup').onchange = e => { hemisTodayGroup = e.target.value; hemisTodayRender(rep); };
                 $('htClose').onclick = () => m.remove();
                 $('htJson').onclick = () => {
@@ -4698,6 +4739,7 @@
                 try {
                     hemisTodayLast = await api(BASE + '/boards/' + board.id + '/hemis-today', 'POST', scopeBody());
                     hemisTodayGroup = '';
+                    hemisTodayMissingRooms = false;
                     hemisTodayRender(hemisTodayLast);
                 } catch (e) {
                     hemisSyncModal('<div class="p-4 text-red-600">' + hsEsc(hsErrText(e)) + '</div>' + HS_CLOSE);
@@ -6837,7 +6879,7 @@
                             if (lanes < 1 || to < rect.from || rect.from < 0) return;
                             if (!free(lp, lanes, rect.from, to)) {
                                 // Online blocks remain visible together in the occupied cell, with an informational notice.
-                                if (rect.main && isInfoOnly(row)) {
+                                if (rect.main && isNonBlocking(cycleInfoCard(row, block))) {
                                     for (let lane = 1; lane < lp + lanes; lane++) {
                                         const owner = Object.entries(cellAt[lane] || {}).find(([from, cell]) => lane + (cell.lanes || 1) > lp && +from <= to && cell.next > rect.from);
                                         if (owner) {
@@ -6929,8 +6971,8 @@
                             } else {
                                 cellHtml = '<td class="cyc-cell cyc-block cyc-cont" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + '"></td>';
                             }
-                            if (isInfoOnly(row)) {
-                                cellHtml = cellHtml.replace('cyc-block', 'cyc-block tt-info-only').replace('</td>', infoOnlyBadgeHtml(row) + '</td>');
+                            if (isNonBlocking(cycleInfoCard(row, block))) {
+                                cellHtml = cellHtml.replace('cyc-block', 'cyc-block tt-info-only').replace('</td>', infoOnlyBadgeHtml(cycleInfoCard(row, block)) + '</td>');
                             }
                             cellAt[lp][rect.from] = { html: cellHtml, next: to + 1, lanes };
                             mark(lp, lanes, rect.from, to);
@@ -7198,12 +7240,12 @@
                 const cls = 'ag-e' + (e.info_only ? ' tt-info-only' : '') + (e.conflict ? ' ag-conf' : '') + (moving ? ' ag-moving' : '') + (e.hidden ? ' ag-hidden' : '') + (cont ? ' ag-cont' : '');
                 if (cont) return '<div class="' + cls + '">↳ ' + esc(e.hidden ? e.label : e.subject + ' (' + e.type + ')') + '</div>';
                 const text = e.hidden ? e.label : e.subject + ' (' + e.type + ') — ' + (compact ? cfGroups(e.groups) : (e.groups || []).join(', ')) +
-                    (e.room && !compact ? ' · ' + e.room : '') + (e.info_only ? ' · ' + e.course + '-kurs · ma’lumot (onlayn)' : '');
+                    (e.room && !compact ? ' · ' + e.room : '') + (e.info_only && infoOnlyText(e) ? ' · ' + infoOnlyText(e) : '');
                 return '<div class="' + cls + '"><span class="ag-time">' + esc((e.start || '') + '–' + (e.end || '')) + '</span> ' + esc(text) +
                     (e.conflict ? ' <span class="ag-tag">to‘qnashuv</span>' : '') + (moving ? ' <span class="ag-tag ag-tag-mv">ko‘chiriladi</span>' : '') + '</div>';
             }
             // Bo'sh para: "bo'sh" va (ko'chiriladigan dars bo'lsa) "Shu vaqtga ko'chirish" — o'chiq bo'lsa sababi bilan; xona taklifi.
-            function agendaFreeHtml(j, date, no, compact, infoCourses = []) {
+            function agendaFreeHtml(j, date, no, compact, infoLabels = []) {
                 const opt = agendaOpt(j.move, date, no, 'one');
                 let btn = '';
                 if (opt) {
@@ -7215,13 +7257,13 @@
                         : ' <button type="button" class="ag-mv" disabled title="' + esc(opt.why || '') + '">' + esc(label) + '</button>' +
                             (!compact ? '<div class="ag-why">' + esc(opt.why || '') + '</div>' : '');
                 }
-                return '<div class="ag-free">bo‘sh' + (infoCourses.length ? ' · ' + infoCourses.join(', ') + '-kurs onlayn' : '') + btn + '</div>';
+                return '<div class="ag-free">bo‘sh' + (infoLabels.length ? ' · ' + infoLabels.map(esc).join(', ') : '') + btn + '</div>';
             }
             function agendaCellHtml(j, st, date, p, compact) {
                 const here = (j.entries || []).filter(e => e.date === date && e.from < p.to && p.from < e.to);
                 const shown = here.map(e => agendaEntryHtml(e, st.move, e.from < p.from, compact)).join('');
-                const infoCourses = [...new Set(here.filter(e => e.info_only).map(e => +e.course))];
-                return shown + (!here.some(e => !e.info_only) ? agendaFreeHtml(j, date, p.no, compact, infoCourses) : '');
+                const infoLabels = [...new Set(here.filter(e => e.info_only).map(e => isHemisExcluded(e) ? e.course + '-kurs onlayn' : infoSubjectMatch(e) || 'ma’lumot'))];
+                return shown + (!here.some(e => !e.info_only) ? agendaFreeHtml(j, date, p.no, compact, infoLabels) : '');
             }
             function agendaDayHtml(j, st) {
                 const d = ((j.dates || [])[0] || {}).date;
@@ -9240,7 +9282,7 @@
                     + (gText ? ' · ' + gText : '') + ' · ' + o.subject_name + ' (' + (o.training_type === 'lecture' ? "ma'ruza" : 'amaliy') + ')';
             }
             function conflictsAt(card, day, pair, ignoredIds = []) {
-                if (isInfoOnly(card)) return [];
+                if (isNonBlocking(card)) return [];
                 const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
                 // Vaqtincha kafedra mudirida — to'qnashuv tekshirilmaydi va boshqalarni ham to'qnashuvli qilmaydi (serverdagi clashWith).
@@ -9248,7 +9290,7 @@
                 const effectiveSource = effectiveCard(card);
                 const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
-                    if (o.id === card.id || ignoredIds.includes(o.id) || phOf(o) || isInfoOnly(o)) return;
+                    if (o.id === card.id || ignoredIds.includes(o.id) || phOf(o) || isNonBlocking(o)) return;
                     const effectiveOther = effectiveCard(o);
                     // Tashqi qatlamda joylash andozaga (barcha haftalar) yoziladi va server bandlikni
                     // andoza bo'yicha tekshiradi — haftaning ko'rinishdagi surilishi/bekori hisobga olinmaydi.
@@ -9606,7 +9648,7 @@
             }
             // Joylashgan kartaning ichki jadvaldagi to'qnashuvi (joriy hafta; shablon ko'rinishida — birorta haftada bo'lsa).
             function cardConflict(c) {
-                if (isInfoOnly(c)) return null;
+                if (isNonBlocking(c)) return null;
                 if (weeklyLayer === 'external' || !effPlace(c)) return null;
                 const byWeek = weeklyConflicts[c.id];
                 if (!byWeek) return null;
@@ -10009,7 +10051,7 @@
             }
             // Xona sig'imi matni: "Tibbiyot klasteri, 1-qavat, 12-o'quv xona · 10 o'rin · 15 talaba (+5)".
             function roomCapLine(c) {
-                if (isInfoOnly(c)) return "Ma’lumot (onlayn): xona sig‘imi tekshirilmaydi";
+                if (isNonBlocking(c)) return infoOnlyText(c) + ": xona sig‘imi tekshirilmaydi";
                 const e = effectiveCard(c);
                 if (!e.auditorium_code && !e.auditorium_name) return '';
                 const vol = +e.auditorium_volume || +((audCache || []).find(a => a.code === e.auditorium_code) || {}).volume || 0;
@@ -10404,7 +10446,7 @@
             const sameCrossLesson = (a, b) => {
                 const x = a.c || a.l, y = b.c || b.l;
                 const room = String(x.auditorium_code || x.auditorium_name || '');
-                return isInfoOnly(x) === isInfoOnly(y) && x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb && room !== ''
+                return isNonBlocking(x) === isNonBlocking(y) && isHemisExcluded(x) === isHemisExcluded(y) && x.training_type === 'lecture' && y.training_type === 'lecture' && a.fa === b.fa && a.fb === b.fb && room !== ''
                     && String(x.teacher_id || '') === String(y.teacher_id || '')
                     && String(x.subject_name || '').trim().toLowerCase() === String(y.subject_name || '').trim().toLowerCase()
                     && room === String(y.auditorium_code || y.auditorium_name || '');
@@ -10439,7 +10481,7 @@
                 });
                 const hit = new Set();
                 if (check) lessons.forEach((a, x) => lessons.forEach((b, y) => {
-                    if (y > x && a.items.some(p => b.items.some(q => !isInfoOnly(p.c || p.l) && !isInfoOnly(q.c || q.l) && p.fa < q.fb && q.fa < p.fb))) { hit.add(a); hit.add(b); }
+                    if (y > x && a.items.some(p => b.items.some(q => !isNonBlocking(p.c || p.l) && !isNonBlocking(q.c || q.l) && p.fa < q.fb && q.fa < p.fb))) { hit.add(a); hit.add(b); }
                 }));
                 const clashing = lessons.filter(ls => hit.has(ls));
                 return { lessons, clashing, count: clashing.reduce((n, ls) => n + (ls.lecture ? 1 : Math.max(1, ls.groups.length)), 0) };
@@ -10461,7 +10503,7 @@
                     + '|' + gs.join(',') : null;
             }
             // Sikl darsining zal to'qnashuvlari (birlashtirilgan chipda — barcha yozuvlardan).
-            const cycRoomClashes = l => isInfoOnly(l) ? [] : (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
+            const cycRoomClashes = l => isNonBlocking(l) ? [] : (l && l.room_clashes) || (l && l.room_clash ? [l.room_clash] : []);
             // Bitta sikl darsining yozuvlari (karta + sana) — vaqti bo'yicha guruhlanadi: bir xil vaqt — guruhchalari qo'shiladi.
             function mergeCycParts(list) {
                 const by = {}, out = [];
@@ -11579,7 +11621,7 @@
                         esc((cur && cur.name) || modalCard.auditorium_name || modalCard.auditorium_code) + ' (nofaol)</option>' : '') +
                     audCache.filter(a => a.active !== false).map(a =>
                     '<option value="' + esc(a.code) + '"' + (modalCard.auditorium_code === a.code ? ' selected' : '') +
-                    ((!isInfoOnly(modalCard) && a.volume && a.volume < modalCard.students) ? ' style="color:#dc2626"' : '') + '>' +
+                    ((!isNonBlocking(modalCard) && a.volume && a.volume < modalCard.students) ? ' style="color:#dc2626"' : '') + '>' +
                     esc(a.name) + (a.volume ? ' (' + a.volume + ')' : '') + (a.building_name ? ' · ' + esc(a.building_name) : '') + '</option>').join('');
             }
             let tSearchTimer = null;
@@ -12667,6 +12709,35 @@
 
             const SETTINGS_URL = id => BASE + '/boards/' + id + '/settings';
 
+            let infoSubjectDraft = [];
+            function renderInfoSubjectTags() {
+                $('stInfoSubjectTags').innerHTML = infoSubjectDraft.map((name, i) =>
+                    '<span class="rounded bg-gray-100 px-2 py-1 text-sm">' + esc(name)
+                    + ' <button type="button" data-info-subject-remove="' + i + '" aria-label="' + esc(name + 'ni olib tashlash') + '">×</button></span>').join('');
+            }
+            function addInfoSubjectTag() {
+                const input = $('stInfoSubjectInput'), name = input.value.trim();
+                if (!name) return;
+                if (infoSubjectDraft.length >= 50) { $('setMsg').textContent = 'Ko‘pi bilan 50 ta nom kiritish mumkin.'; return; }
+                if (!infoSubjectDraft.some(n => normalizeInfoSubject(n) === normalizeInfoSubject(name))) infoSubjectDraft.push(name);
+                input.value = '';
+                renderInfoSubjectTags();
+            }
+            function appendInfoSubjectSettings(fd) {
+                // Include the last typed tag even when the user clicks Save directly.
+                addInfoSubjectTag();
+                fd.append('info_only_subjects_present', 1);
+                infoSubjectDraft.forEach((name, i) => fd.append('settings[info_only_subjects][' + i + ']', name));
+            }
+            $('stInfoSubjectAdd').onclick = addInfoSubjectTag;
+            $('stInfoSubjectInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addInfoSubjectTag(); } };
+            $('stInfoSubjectTags').onclick = e => {
+                const button = e.target.closest('[data-info-subject-remove]');
+                if (!button) return;
+                infoSubjectDraft.splice(+button.dataset.infoSubjectRemove, 1);
+                renderInfoSubjectTags();
+            };
+
             $('settingsBtn').onclick = async () => {
                 if (!board) return;
                 $('setMsg').textContent = '';
@@ -12686,6 +12757,9 @@
                     document.querySelectorAll('[data-info-only-course]').forEach(el => {
                         el.checked = (Array.isArray(set.info_only_courses) ? set.info_only_courses : [6]).map(Number).includes(+el.dataset.infoOnlyCourse);
                     });
+                    infoSubjectDraft = (Array.isArray(set.info_only_subjects) ? set.info_only_subjects : ["O'quv amaliyoti"]).slice();
+                    $('stInfoSubjectInput').value = '';
+                    renderInfoSubjectTags();
                     $('stHemisMudir').checked = !!+(set.hemis_mudir_fallback || 0);
                     const br = (set.weekly_breaks || [])[0] || {};
                     $('stBreakFrom').value = br.from || '';
@@ -12986,6 +13060,7 @@
                 dayOff.forEach((d, i) => fd.append('settings[days_off][' + i + ']', d));
                 fd.append('settings[allow_zero]', $('stAllowZero').checked ? 1 : 0);
                 fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
+                appendInfoSubjectSettings(fd);
                 fd.append('info_only_courses_present', 1);
                 document.querySelectorAll('[data-info-only-course]:checked').forEach((el, i) =>
                     fd.append('settings[info_only_courses][' + i + ']', el.dataset.infoOnlyCourse));

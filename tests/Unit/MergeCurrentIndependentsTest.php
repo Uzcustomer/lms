@@ -18,7 +18,9 @@ beforeEach(function () {
     Schema::create('independents', fn ($t) => [$t->id(), $t->unsignedBigInteger('user_id')->default(0), $t->string('group_hemis_id'),
         $t->string('group_name')->nullable(), $t->string('subject_hemis_id'), $t->string('subject_name')->nullable(),
         $t->string('semester_code'), $t->string('teacher_name')->nullable()]);
-    Schema::create('independent_submissions', fn ($t) => [$t->id(), $t->unsignedBigInteger('independent_id'), $t->unsignedBigInteger('student_id')]);
+    Schema::create('independent_submissions', fn ($t) => [$t->id(), $t->unsignedBigInteger('independent_id'), $t->unsignedBigInteger('student_id'),
+        $t->string('student_hemis_id')->nullable(), $t->string('file_path')->nullable(), $t->string('file_original_name')->nullable(),
+        $t->dateTime('submitted_at')->nullable()]);
     Schema::create('independent_grade_history', fn ($t) => [$t->id(), $t->unsignedBigInteger('independent_id'), $t->unsignedBigInteger('student_id')]);
     Schema::create('student_grades', fn ($t) => [$t->id(), $t->unsignedBigInteger('independent_id')->nullable(), $t->unsignedBigInteger('student_id')]);
 
@@ -77,4 +79,27 @@ it('keeps an assignment where the student has a second, separate file', function
 
     expect(DB::table('independents')->pluck('id')->all())->toBe([$a, $b])
         ->and(DB::table('independent_submissions')->where('independent_id', $b)->count())->toBe(1);
+});
+
+it('with --latest-file keeps only the newest file of each student and logs the rest', function () {
+    $a = mergeInd('800', 'S', '13');
+    $b = mergeInd('800', 'S', '13');
+    $c = mergeInd('800', 'S', '13');
+    DB::table('independent_submissions')->insert([
+        ['independent_id' => $a, 'student_id' => 1, 'file_original_name' => 'eski.zip', 'submitted_at' => '2026-10-20 10:00:00'],
+        ['independent_id' => $a, 'student_id' => 2, 'file_original_name' => 'b2.zip', 'submitted_at' => '2026-10-21 10:00:00'],
+        ['independent_id' => $b, 'student_id' => 1, 'file_original_name' => 'yangi.zip', 'submitted_at' => '2026-11-01 10:00:00'],
+        ['independent_id' => $c, 'student_id' => 1, 'file_original_name' => 'orta.zip', 'submitted_at' => '2026-10-25 10:00:00'],
+    ]);
+
+    $this->artisan('independents:merge-current', ['--force' => true, '--latest-file' => true])->assertSuccessful();
+
+    expect(DB::table('independents')->pluck('id')->all())->toBe([$a])
+        ->and(DB::table('independent_submissions')->orderBy('student_id')->get(['independent_id', 'student_id', 'file_original_name'])
+            ->map(fn ($r) => $r->independent_id . ':' . $r->student_id . ':' . $r->file_original_name)->all())
+        ->toBe([$a . ':1:yangi.zip', $a . ':2:b2.zip']);
+
+    $csv = collect(glob(storage_path('app/mt-merge-*.csv')))->last();
+    expect(file_get_contents($csv))->toContain('eski.zip')->toContain('orta.zip')->not->toContain(',yangi.zip,');
+    @unlink($csv);
 });

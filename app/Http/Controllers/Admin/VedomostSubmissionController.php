@@ -855,6 +855,14 @@ class VedomostSubmissionController extends Controller
             return back()->with('error', "Tanlangan/filtrdagi vedomostlar orasida tasdiqlangani yo'q.");
         }
 
+        // Keshi yo'qlari: ~25 soniya shu yerda hisoblanadi, qolgani fonda — veb-server vaqt chegarasidan
+        // (timeout) oshmasligi uchun. Hammasi tayyor bo'lgach jamlanma bir zumda yuklanadi.
+        $left = $excel->warm($submissions, 25);
+        if ($left) {
+            return back()->with('error', count($left) . ' ta tasdiqlangan vedomostning jamlanma qatorlari hali tayyor emas — fonda hisoblanmoqda ('
+                . ($submissions->count() - count($left)) . '/' . $submissions->count() . ' tayyor). 1–3 daqiqadan keyin «Jamlanma»ni qayta bosing.');
+        }
+
         return $excel->download($submissions, 'Tasdiqlangan_vedomostlar_jamlanma_' . now()->format('Y-m-d_H-i') . '.xlsx');
     }
 

@@ -204,6 +204,49 @@ class VedomostJamlanmaExcel
         }
     }
 
+    /**
+     * Keshi yo'q vedomostlarni vaqt chegarasi ichida hisoblab keshga yozadi. Ulgurmaganlari
+     * fon navbatiga qo'yiladi va ularning id'lari qaytariladi — so'rov vaqt tugashiga (timeout) yetmasin.
+     *
+     * @return int[] hali tayyor bo'lmagan vedomostlar
+     */
+    public function warm(Collection $submissions, float $budgetSeconds): array
+    {
+        $ids = $submissions->pluck('id')->filter()->all();
+        if (empty($ids) || !Schema::hasTable('vedomost_jamlanma_rows')) {
+            return [];
+        }
+        $have = [];
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            $have += array_flip(DB::table('vedomost_jamlanma_rows')->whereIn('vedomost_submission_id', $chunk)->pluck('vedomost_submission_id')->map(fn ($v) => (int) $v)->all());
+        }
+        $start = microtime(true);
+        $left = [];
+        foreach ($submissions as $sub) {
+            if (isset($have[$sub->id])) {
+                continue;
+            }
+            if (microtime(true) - $start >= $budgetSeconds) {
+                $left[] = (int) $sub->id;
+                continue;
+            }
+            try {
+                $this->store($this->full($sub));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("[Jamlanma] vedomost #{$sub->id} qatorlari hisoblanmadi: " . $e->getMessage());
+                $left[] = (int) $sub->id;
+            }
+        }
+        // Bitta ishda bir nechtadan — bittasi uzoq ishlasa (12a/12b umumiy) qolganlari kutib qolmasin.
+        // Qayta bosilganda bir xil ish navbatga ikkinchi marta qo'yilmaydi (10 daqiqa).
+        $queue = array_values(array_filter($left, fn ($id) => \Illuminate\Support\Facades\Cache::add("vedomost-jamlanma-build:{$id}", 1, 600)));
+        foreach (array_chunk($queue, 5) as $chunk) {
+            \App\Jobs\BuildVedomostJamlanmaRows::dispatch($chunk);
+        }
+
+        return $left;
+    }
+
     /** @return array<int, array> vedomost id => qatorlar */
     private function cachedRows(array $ids): array
     {

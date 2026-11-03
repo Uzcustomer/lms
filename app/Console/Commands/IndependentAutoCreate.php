@@ -56,15 +56,18 @@ class IndependentAutoCreate extends Command
     }
 
     /**
-     * Phase 1: Create Independent records for each (group, subject, lesson_date) combination
+     * Phase 1: har bir (guruh, fan, semestr) uchun BITTA mustaqil ta'lim topshirig'i.
+     * Avval har bir dars kuniga alohida yozuv ochilardi (schedule_id bo'yicha) — talabaga
+     * bitta fandan o'nlab topshiriq chiqardi; MT esa fan bo'yicha bitta (Fanlar sahifasi,
+     * mt_grade_history ham shunday).
      */
     private function createIndependents(): void
     {
-        $schedules = Schedule::select('group_id', 'lesson_date', DB::raw('MAX(id) as id'))
+        $schedules = Schedule::select('group_id', 'subject_id', 'semester_code', DB::raw('MIN(lesson_date) as first_date'), DB::raw('MAX(id) as id'))
             ->whereNotIn('training_type_code', $this->excludedTrainingTypes)
             ->where('lesson_date', '>', '2025-02-01')
             ->whereNotIn('group_id', $this->excludedGroups)
-            ->groupBy(['group_id', 'subject_id', 'lesson_date'])
+            ->groupBy(['group_id', 'subject_id', 'semester_code'])
             ->get();
 
         $this->info("Creating/updating {$schedules->count()} independent assignments...");
@@ -76,7 +79,7 @@ class IndependentAutoCreate extends Command
 
                 $deadline = Deadline::where('level_code', $schedule->semester->level_code)->first();
 
-                $start_date = $schedule->lesson_date;
+                $start_date = Carbon::parse($sche->first_date)->toDateString();
                 $end_date = date('Y-m-d', strtotime($start_date . ' +' . ($deadline->deadline_days ?? 1) . ' days'));
 
                 $group = Group::where('group_hemis_id', $schedule->group_id)->first();
@@ -96,23 +99,26 @@ class IndependentAutoCreate extends Command
                 $deportment = Department::where('department_hemis_id', $schedule->faculty_id)->first();
                 if (!$deportment) continue;
 
+                // Avtomatik yozuv (user_id = 0) fan bo'yicha bitta; o'qituvchi qo'lda
+                // yaratgan topshiriqlarga tegilmaydi. schedule_id — fanning eng so'nggi darsi
+                // (Phase 2 muddatni shu orqali yangilaydi).
                 Independent::updateOrCreate([
-                    'schedule_id' => $schedule->id
-                ], [
                     'group_hemis_id' => $schedule->group_id,
+                    'subject_hemis_id' => $subject->curriculum_subject_hemis_id,
+                    'semester_code' => $semester->code,
+                    'user_id' => 0,
+                ], [
+                    'schedule_id' => $schedule->id,
                     'group_name' => $schedule->group->name,
                     'teacher_hemis_id' => $schedule->employee_id,
                     'teacher_name' => $schedule->employee->full_name,
                     'teacher_short_name' => $schedule->employee->short_name,
                     'department_hemis_id' => $deportment->department_hemis_id,
                     'deportment_name' => $deportment->name,
-                    'start_date' => $schedule->lesson_date,
+                    'start_date' => $start_date,
                     'semester_hemis_id' => $semester->semester_hemis_id,
                     'semester_name' => $semester->name,
-                    'semester_code' => $semester->code,
-                    'subject_hemis_id' => $subject->curriculum_subject_hemis_id,
                     'subject_name' => $schedule->subject_name,
-                    'user_id' => 0,
                     'deadline' => $end_date,
                 ]);
             } catch (\Exception $e) {

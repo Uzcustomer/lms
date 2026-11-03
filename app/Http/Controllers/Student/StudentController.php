@@ -1368,7 +1368,7 @@ class StudentController extends Controller
                     'id' => $independent->id,
                     'subject_hemis_id' => $independent->subject_hemis_id,
                     'subject_name' => $independent->subject_name,
-                    'teacher_name' => $independent->teacher_short_name ?? $independent->teacher_name,
+                    'teacher_name' => $independent->teacher_short_name ?: $independent->teacher_name,
                     'start_date' => $independent->start_date,
                     'deadline' => $independent->deadline,
                     'is_overdue' => $isOverdue,

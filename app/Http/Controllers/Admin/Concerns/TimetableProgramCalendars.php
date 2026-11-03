@@ -103,6 +103,7 @@ trait TimetableProgramCalendars
         $overrideIds = $rooms && Schema::hasColumn('timetable_card_overrides', 'auditorium_code')
             ? \App\Models\TimetableCardOverride::whereIn('auditorium_code', $rooms)->pluck('card_id')->all() : [];
         $candidates = \App\Models\TimetableCard::where('board_id', $card->board_id)
+            ->whereNotIn('course', \App\Services\Timetable\InfoOnlyCourses::courses($card->board))
             ->where(function ($q) use ($card, $rooms, $overrideIds) {
                 $q->where('id', $card->id)->orWhere(fn ($g) => $g->where('faculty_name', $card->faculty_name)
                     ->where('specialty_name', $card->specialty_name)->where('course', $card->course));

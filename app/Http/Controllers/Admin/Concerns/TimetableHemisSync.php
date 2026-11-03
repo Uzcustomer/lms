@@ -727,8 +727,14 @@ trait TimetableHemisSync
                             $out[$gk][$sk][] = $base + ['slot' => $start, 'len' => (int) $d['lec'], 'part' => 'L'] + $lec;
                         }
                         if ((int) ($d['prc'] ?? 0) > 0) {
-                            // Amaliy — kun rejasidagi boshlanishi (guruhcha smenasi, masalan 13:30, bilan).
-                            $out[$gk][$sk][] = $base + ['slot' => max(1, (int) ($d['ps'] ?? $start + (int) ($d['lec'] ?? 0))), 'len' => (int) $d['prc'], 'part' => 'A'] + $prc;
+                            // Amaliy — kun rejasidagi boshlanishi (guruhcha smenasi, masalan 13:30, bilan). "Vaqtincha kafedra mudirida"
+                            // (shu sana): o'qituvchi — mudir (HEMIS id'si), xona — mudir xonasi; placeholder — asl o'qituvchi nomi.
+                            $ph = $b['mudir_ph'] ?? null;
+                            $phOn = is_array($ph) && $ph && self::cyclePhOn($ph, $date);
+                            $out[$gk][$sk][] = $base + ['slot' => max(1, (int) ($d['ps'] ?? $start + (int) ($d['lec'] ?? 0))), 'len' => (int) $d['prc'], 'part' => 'A']
+                                + ($phOn ? ['employee_id' => $ph['hemis_id'] ?? null, 'employee_name' => $ph['teacher_name'] ?? null,
+                                    'auditorium_code' => $ph['room_code'] ?? null, 'auditorium_name' => $ph['room_name'] ?? null,
+                                    'placeholder' => (string) ($ph['orig_teacher_name'] ?? '')] : $prc);
                         }
                     }
                 }
@@ -1937,7 +1943,7 @@ trait TimetableHemisSync
                     foreach ($list as $x) {
                         if ($x['date'] === $today) {
                             $lms[$gk][] = $lesson($names[$sk] ?? $sk, $x['part'], (int) $x['slot'], (int) $x['len'], $x['employee_id'], $x['employee_name'],
-                                $x['auditorium_code'], $x['auditorium_name'], true);
+                                $x['auditorium_code'], $x['auditorium_name'], true, $x['placeholder'] ?? null);
                         }
                     }
                 }

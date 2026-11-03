@@ -1342,6 +1342,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
                 Route::post('/boards/{board}/cycle-auto-shift', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAutoShift'])->name('cycle-auto-shift');
                 // "Smenani almashtiring" maslahati: guruhcha smena variantlari blok sanalarida (faqat o'qiydi).
+                Route::post('/boards/{board}/cycle-mudir-placeholder', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleMudirPlaceholder'])->name('cycle-mudir-placeholder');
+                Route::post('/boards/{board}/cycle-mudir-placeholder/revert', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleMudirPlaceholderRevert'])->name('cycle-mudir-placeholder.revert');
                 Route::post('/boards/{board}/cycle-shift-advice', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleShiftAdvice'])->name('cycle-shift-advice');
                 // O'qituvchi kun/hafta jadvali: barcha darslari, bo'sh paralar va bo'sh paraga ko'chirish variantlari (faqat o'qiydi).
                 Route::get('/boards/{board}/teacher-agenda', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherAgenda'])->name('teacher-agenda');

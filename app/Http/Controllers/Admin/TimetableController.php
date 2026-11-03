@@ -4355,6 +4355,13 @@ class TimetableController extends Controller
                     if ($c->auditorium_name || $c->auditorium_code) {
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
+                    // Panel/to'qnashuv oynasidagi havolalar (o'qituvchi va xona jadvali) uchun: birinchi o'qituvchi id'si va xona kodi.
+                    if ($c->teacher_id) {
+                        $byFlow[$flowKey]['req'][$reqKey]['tid'] ??= ['id' => (int) $c->teacher_id, 'name' => (string) $c->teacher_name];
+                    }
+                    if ($c->auditorium_code) {
+                        $byFlow[$flowKey]['req'][$reqKey]['room'] ??= ['code' => (string) $c->auditorium_code, 'name' => (string) ($c->auditorium_name ?: $c->auditorium_code)];
+                    }
                     if ($canAsk($c)) {
                         $byFlow[$flowKey]['req'][$reqKey]['ask'] = true;
                     }
@@ -4644,6 +4651,8 @@ class TimetableController extends Controller
                         : null,
                     'lesson_time' => $placement->lesson_time ?? null,
                     'lecture_slots' => $hasLectureSlots ? (array) ($placement->lecture_slots ?? []) : [],
+                    // Vaqtincha kafedra mudirida (amaliy blok; butun blok yoki sanalar).
+                    'mudir_ph' => $hasLectureSlots && $blockType === 'practice' ? $this->cycleMudirPhFor($placement, (string) ($g['unit'] ?? $g['name'])) : null,
                     'lecture_hours' => $hrs === null ? null : $fmtHours((float) $hrs['lecture']),
                     'practice_hours' => $hrs === null ? null : $fmtHours((float) $hrs['practice']),
                     'day_plan' => $cycleMark
@@ -4715,10 +4724,13 @@ class TimetableController extends Controller
                         'conflict' => $block['conflict'] ?? null,
                         'conflicts' => $block['conflicts'] ?? [],
                         'conflict_level' => $block['conflict_level'] ?? null,
+                        'mudir_ph' => $block['mudir_ph'] ?? null,
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
                         // Vaqt so'rovi tugmasi (o'qituvchi: o'z darsi; fan mas'uli: mas'ul fani).
                         'ask' => $cardType === 'practice' && !empty($g['req'][$subject . '|practice']['ask']),
+                        'teacher' => $cardType === 'practice' ? ($g['req'][$subject . '|practice']['tid'] ?? null) : null,
+                        'room' => $cardType === 'practice' ? ($g['req'][$subject . '|practice']['room'] ?? null) : null,
                     ];
                 }
             }
@@ -6119,7 +6131,8 @@ class TimetableController extends Controller
 
         // Guruhcha smenasi (shift_g — "O'qituvchi biriktirish" oynasidan) ma'ruza belgilari bilan o'chmasin.
         $shifts = ((array) ($placement->lecture_slots ?? []))['shift_g'] ?? null;
-        $placement->update(['lecture_slots' => $shifts ? $slots + ['shift_g' => $shifts] : $slots]);
+        $ph = ((array) ($placement->lecture_slots ?? []))['mudir_ph'] ?? null;   // vaqtincha kafedra mudirida belgisi ham
+        $placement->update(['lecture_slots' => $slots + array_filter(['shift_g' => $shifts, 'mudir_ph' => $ph])]);
 
         return response()->json(['ok' => true, 'slots' => $slots]);
     }
@@ -6543,6 +6556,8 @@ class TimetableController extends Controller
                 ? $this->cycleDayPlan($plan, $hrs, (int) $u['days'], (int) $u['from'], $workIndices, $starts, 6, $gridHours, $practiceStarts) : null;
             // Talabalar: guruh(cha)larning faol talabalari (group_students), bo'lmasa kartadagi son.
             $students = $this->cycleUnitStudents($u);
+            // "Vaqtincha kafedra mudirida" (butun blok yoki sanalar): shu sanalardagi amaliy — mudir va mudir xonasida, to'qnashuvsiz.
+            $ph = $this->cycleMudirPhFor($u['placement'] ?? null, (string) $u['unit']);
             for ($k = 0; $pos !== false && $k < (int) $u['days']; $k++) {
                 $ci = $workIndices[$pos + $k] ?? null;
                 if ($ci === null) {
@@ -6577,6 +6592,15 @@ class TimetableController extends Controller
                     // Xona yuklamasi: amaliy karta (umumiy "A + B" ham) — bitta dars, talabalari bir marta; oqim ma'ruzasi —
                     // har guruhcha o'z talabalari bilan.
                     $lecture = $card->training_type === 'lecture';
+                    if (!$lecture && self::cyclePhOn($ph, $date)) {
+                        $out[] = ['kind' => 'cycle', 'unit' => $ui, 'lesson' => (int) $card->id, 'card' => (int) $card->id, 'from' => $from, 'to' => $to,
+                            'date' => $date, 'load_key' => 'c' . $card->id, 'load' => $this->cardStudents($card), 'students' => $students,
+                            'teacher_id' => (int) $ph['teacher_id'], 'teacher' => (string) $ph['teacher_name'], 'room' => $ph['room_code'] ?: null,
+                            'room_name' => (string) ($ph['room_name'] ?: $ph['room_code']), 'free_room' => true, 'ph' => true,
+                            'ph_orig' => (string) ($ph['orig_teacher_name'] ?? $card->teacher_name), 'label' => $u['group'] . ', ' . $u['subject']]
+                            + ($withPlan ? ['dp' => $d !== null ? array_intersect_key($d, array_flip(['k', 'lec', 'prc', 'start', 'ps', 'tl', 'tp', 'ktr'])) : null] : []);
+                        continue;
+                    }
                     $out[] = ['kind' => 'cycle', 'unit' => $ui, 'lesson' => (int) $card->id, 'card' => (int) $card->id, 'from' => $from, 'to' => $to, 'date' => $date,
                         'load_key' => $lecture ? 'l' . $card->id . '|' . $ui : 'c' . $card->id, 'load' => $lecture ? $students : $this->cardStudents($card),
                         'students' => $students, 'teacher_id' => $card->teacher_id ? (int) $card->teacher_id : null, 'teacher' => $card->teacher_name,
@@ -6634,6 +6658,10 @@ class TimetableController extends Controller
         foreach ($this->cycleOccupancy($board, $units, $calendar) as $e) {
             // Umumiy "A + B" birligi — har bir guruhcha nomi bo'yicha; guruh nomi fakultet / yo'nalish / kurslar bo'ylab takrorlanadi —
             // kalitda qamrov ham (groupScopeKey dagidek).
+            // Vaqtincha kafedra mudirida — to'qnashuv tekshirilmaydi va boshqalarni ham to'qnashuvli qilmaydi.
+            if (!empty($e['ph'])) {
+                continue;
+            }
             $gu = $units[$e['unit']] ?? [];
             $scope = mb_strtolower(trim((string) ($gu['faculty'] ?? ''))) . '|' . mb_strtolower(trim((string) ($gu['specialty'] ?? ''))) . '|' . (int) ($gu['course'] ?? 0);
             foreach (preg_split('/\s*\+\s*/u', mb_strtolower(trim((string) ($gu['group'] ?? '')))) as $g) {
@@ -7294,7 +7322,7 @@ class TimetableController extends Controller
         [$units, $calendar] = $this->placedCycleUnits($board);
         $mine = array_merge($this->weeklyOccupancy($board, ['cards' => $this->cardRows($board, fn ($q) => $q->whereIn('id', array_keys($ids))),
             'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($ids)))]),
-            $this->cycleOccupancy($board, $units, $calendar, null, $ids));
+            array_values(array_filter($this->cycleOccupancy($board, $units, $calendar, null, $ids), fn ($e) => empty($e['ph']))));
         // $onlyDates — faqat shu sanalardagi darslari (o'qituvchi so'rovi: ko'chiriladigan kun).
         if ($onlyDates !== null) {
             $mine = array_values(array_filter($mine, fn ($e) => isset($onlyDates[$e['date']])));
@@ -7307,7 +7335,8 @@ class TimetableController extends Controller
         foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), max(array_column($mine, 'to')), $ids), $dates),
             $this->cycleOccupancy($board, $units, $calendar, $dates)] as $entries) {
             foreach ($entries as $e) {
-                if (!isset($ids[$e['card']])) {
+                // Vaqtincha kafedra mudirida darslar hech kimni band qilmaydi.
+                if (!isset($ids[$e['card']]) && empty($e['ph'])) {
                     $others[$e['date']][] = $e;
                 }
             }

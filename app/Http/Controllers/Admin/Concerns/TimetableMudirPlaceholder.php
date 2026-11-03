@@ -260,4 +260,126 @@ trait TimetableMudirPlaceholder
 
         return response()->json(['ok' => true, 'mode' => 'here', 'weeks' => $weeks]);
     }
+
+    // ===== Sikl: "Vaqtincha kafedra mudiriga yozish" (butun blok yoki faqat to'qnashuv sanalari) =====
+    // Belgi joylashuvda: lecture_slots.mudir_ph[guruhcha] = {dates: null (butun blok) | [Y-m-d, ...], teacher_id, teacher_name, mudir_name,
+    // hemis_id, room_code, room_name, orig_teacher_name, reason, by_*, at}. Karta o'qituvchisi/xonasi va smena o'zgarmaydi — qaytarish
+    // belgini olib tashlaydi (aynan oldingi holat). Shu sanalardagi amaliy darslar mudir va mudir xonasida (cycleOccupancy), to'qnashuv
+    // sanalmaydi (cycleConflicts), HEMIS'ga mudir nomiga (hemisCycleLessons).
+
+    /** Guruhcha (shift_g kaliti) uchun belgi. */
+    private function cycleMudirPhFor($placement, string $unit): ?array
+    {
+        $ph = ((array) (((array) ($placement?->lecture_slots ?? []))['mudir_ph'] ?? []))[$unit] ?? null;
+
+        return is_array($ph) && $ph ? $ph : null;
+    }
+
+    /** Belgi shu sanaga tegishlimi (dates bo'sh — butun blok). */
+    private static function cyclePhOn(?array $ph, string $date): bool
+    {
+        return $ph !== null && (empty($ph['dates']) || in_array($date, (array) $ph['dates'], true));
+    }
+
+    /** Sikl birligi (key bo'yicha) va huquq: admin/registrator/kichik admin; kafedra mudiri — o'z kafedrasi. [birliklar, kalendar, indeks] | javob. */
+    private function cycleMudirUnit(Request $request, $board, string $key)
+    {
+        $role = $this->timetableActiveRole($request);
+        if ($this->timetableActor($request) && !in_array($role, ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin', 'kafedra_mudiri'], true)) {
+            return response()->json(['error' => "Vaqtincha kafedra mudiriga yozish — admin, registrator va kafedra mudiri uchun."], 403);
+        }
+        [$units, $calendar] = $this->placedCycleUnits($board);
+        $i = null;
+        foreach ($units as $k => $u) {
+            if ($u['key'] === $key) {
+                $i = $k;
+                break;
+            }
+        }
+        if ($i === null || empty($units[$i]['cards'])) {
+            return response()->json(['error' => 'Sikl bloki topilmadi (yoki joylanmagan).'], 404);
+        }
+        $cards = collect($units[$i]['cards'])->map(fn ($c) => $c instanceof TimetableCard ? $c : (new TimetableCard())->forceFill((array) $c));
+        if ($denied = $this->denyForeignKafedra($request, $cards)) {
+            return $denied;
+        }
+
+        return [$units, $calendar, $i, $cards];
+    }
+
+    /** POST boards/{board}/cycle-mudir-placeholder {key, scope: all|conflicts, reason?}. */
+    public function cycleMudirPlaceholder(Request $request, \App\Models\TimetableBoard $board)
+    {
+        $data = $request->validate(['key' => 'required|string|max:500', 'scope' => 'nullable|in:all,conflicts', 'reason' => 'nullable|string|max:500']);
+        $r = $this->cycleMudirUnit($request, $board, $data['key']);
+        if (!is_array($r)) {
+            return $r;
+        }
+        [$units, $calendar, $i, $cards] = $r;
+        $u = $units[$i];
+        $t = $this->mudirPlaceholderTarget($cards->first());
+        if ($t['why']) {
+            return response()->json(['error' => $t['why']], 422);
+        }
+        $dates = null;
+        if (($data['scope'] ?? 'all') === 'conflicts') {
+            $today = self::proposalToday();
+            $dates = [];
+            foreach ($this->cycleConflicts($board, $units, $calendar)[$u['key']]['items'] ?? [] as $it) {
+                if (!empty($it['past']) || empty($it['date_from']) || !empty($it['lecture'])) {
+                    continue;
+                }
+                foreach ($this->cycleDatesBetween($calendar, $it['date_from'], $it['date_to'], $u) as $d) {
+                    if ($d >= $today) {
+                        $dates[$d] = true;
+                    }
+                }
+            }
+            $dates = array_keys($dates);
+            sort($dates);
+            if (!$dates) {
+                return response()->json(['error' => "Kelgusi to'qnashuv sanasi yo'q."], 422);
+            }
+        }
+        $actor = $this->timetableActor($request);
+        $mudir = $t['teacher'];
+        $first = $cards->first();
+        $placement = \App\Models\TimetableCyclePlacement::find($u['placement']->id);
+        $slots = (array) ($placement->lecture_slots ?? []);
+        $slots['mudir_ph'] = (array) ($slots['mudir_ph'] ?? []);
+        $slots['mudir_ph'][(string) $u['unit']] = [
+            'dates' => $dates, 'teacher_id' => (int) $mudir->id, 'teacher_name' => (string) ($mudir->short_name ?: $mudir->full_name),
+            'mudir_name' => (string) $mudir->full_name, 'hemis_id' => $mudir->hemis_id ? (int) $mudir->hemis_id : null,
+            'room_code' => $t['room'][0], 'room_name' => $t['room'][1], 'orig_teacher_name' => $first->teacher_name,
+            'orig_room_name' => $first->auditorium_name, 'reason' => trim((string) ($data['reason'] ?? '')) ?: null,
+            'by_id' => $actor?->getKey(), 'by_name' => $actor?->full_name ?? $actor?->name, 'at' => now()->toDateTimeString(),
+        ];
+        $placement->update(['lecture_slots' => $slots]);
+
+        return response()->json(['ok' => true, 'dates' => $dates]);
+    }
+
+    /** POST boards/{board}/cycle-mudir-placeholder/revert {key}: belgi olib tashlanadi — oldingi holat (bandlik tekshirilmaydi). */
+    public function cycleMudirPlaceholderRevert(Request $request, \App\Models\TimetableBoard $board)
+    {
+        $data = $request->validate(['key' => 'required|string|max:500']);
+        $r = $this->cycleMudirUnit($request, $board, $data['key']);
+        if (!is_array($r)) {
+            return $r;
+        }
+        [$units, , $i] = $r;
+        $u = $units[$i];
+        $placement = \App\Models\TimetableCyclePlacement::find($u['placement']->id);
+        $slots = (array) ($placement->lecture_slots ?? []);
+        if (!isset(((array) ($slots['mudir_ph'] ?? []))[(string) $u['unit']])) {
+            return response()->json(['error' => 'Bu blok vaqtincha kafedra mudirida emas.'], 422);
+        }
+        unset($slots['mudir_ph'][(string) $u['unit']]);
+        if (!$slots['mudir_ph']) {
+            unset($slots['mudir_ph']);
+        }
+        $placement->update(['lecture_slots' => $slots]);
+
+        return response()->json(['ok' => true]);
+    }
 }

@@ -1595,7 +1595,20 @@
         #cycleGrid .cyc-mk-cell.is-day-sel.is-day-top { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b, inset 0 2px 0 #f59e0b; }
         #cycleGrid .cyc-mk-cell.is-day-sel.is-day-bottom { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b, inset 0 -2px 0 #f59e0b; }
         #cycDayPop { position: fixed; z-index: 60; width: 280px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 10px 12px; font-size: 12px; color: #1e293b; }
+            box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 10px 12px; font-size: 12px; color: #1e293b;
+            max-height: calc(100vh - 16px); overflow-y: auto; box-sizing: border-box; }
+        #cycDayPop .cyc-links { margin-top: 6px; }
+        #cycDayPop .cyc-ph, .cyc-ph-sec .cyc-ph-item { margin-top: 6px; padding: 5px 7px; border-radius: 6px; background: #fefce8; border: 1px solid #fde68a; color: #713f12; }
+        #cycDayPop .cyc-msg { margin-top: 4px; font-size: 11px; }
+        #cycDayPop .cyc-acts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+        #cycDayPop .cyc-acts button, #cycDayPop .cyc-confirm button, #cycDayPop .cyc-ph button, .cyc-ph-sec button { border: 1px solid #cbd5e1; border-radius: 6px;
+            background: #f8fafc; padding: 2px 8px; font-weight: 600; cursor: pointer; }
+        #cycDayPop .cyc-acts button[data-cyc-mudir], #cycDayPop .cyc-ph button, .cyc-ph-sec button { border-color: #ca8a04; color: #854d0e; background: #fefce8; }
+        #cycDayPop .cyc-acts button:disabled { opacity: .45; cursor: not-allowed; }
+        #cycDayPop .cyc-confirm { margin-top: 6px; padding: 6px; border: 1px dashed #cbd5e1; border-radius: 6px; }
+        #cycDayPop .cyc-confirm ul { margin: 2px 0 4px 16px; list-style: disc; }
+        .cyc-ph-sec { margin-top: 8px; font-size: 11px; }
+        .cyc-ph-sec > b { display: block; color: #854d0e; }
         #cycDayPop .dp-head { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
         #cycDayPop .dp-title { font-weight: 800; line-height: 1.25; }
         #cycDayPop .dp-sub { color: #64748b; font-size: 11px; font-weight: 600; }
@@ -7692,6 +7705,7 @@
             function closeCycDayPop() {
                 const pop = document.getElementById('cycDayPop');
                 if (pop) pop.remove();
+                cycPopUnwatch();
                 document.querySelectorAll('#cycleGrid .cyc-mk-cell.is-day-sel')
                     .forEach(c => c.classList.remove('is-day-sel', 'is-day-top', 'is-day-bottom'));
                 cycDaySel = null;
@@ -7924,12 +7938,14 @@
                 pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(b.subject) + '</div><div class="dp-sub">' + esc(b.group) + ' · to\u2018qnashuvlar</div></div>' +
                     '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' +
                     // O'qituvchi jadvali: ko'chiriladigan dars — shu blokning to'qnashuv sanasidagi amaliyoti (ma'ruza — yo'q).
-                    own.map(i => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null })).join('') + '</ul>';
+                    own.map(i => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null })).join('') + '</ul>' +
+                    // Amallar: bo'sh smenaga o'tkazish, boshqa o'qituvchi, vaqtincha kafedra mudiri; o'qituvchi / xona havolalari.
+                    cycActionsHtml(cycCardOf(key), own);
                 document.body.appendChild(pop);
+                // Joy: pastda sig'masa — yuqoriga; kontent (maslahat, forma) o'zgarsa qayta hisoblanadi.
+                const reposition = cycPopWatch(pop, el);
+                cycActionsBind(pop, cycCardOf(key), own, reposition);
                 loadShiftAdvice(pop, key, own);
-                const r = el.getBoundingClientRect();
-                pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
-                pop.style.top = Math.max(8, Math.min(window.innerHeight - pop.offsetHeight - 8, r.bottom + 6)) + 'px';
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
 
@@ -7945,11 +7961,257 @@
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-shift-advice', 'POST', { key });
                     const a = j && j.advice;
                     if (a && a.text) spans.forEach(sp => { sp.textContent = '→ ' + a.text; sp.dataset.advice = a.kind || ''; });
+                    if (pop._onAdvice) pop._onAdvice(a || null);   // "Bo'sh smenaga o'tkazish" tugmasi
                 } catch (e) {
                     console.warn('Smena maslahati olinmadi:', e);   // server ko'rsatmasi qoladi
+                    if (pop._onAdvice) pop._onAdvice(null);
                 } finally {
                     spans.forEach(sp => sp.classList.remove('cf-checking'));
                 }
+            }
+
+            // ===== Sikl amallari (to'qnashuv oynasi va "Sikl fan kartalari" kartasi) =====
+            // "Bo'sh smenaga o'tkazish" (smena maslahati bo'yicha; o'qituvchi, xona va vaqt saqlanadi), "Boshqa o'qituvchi" (biriktirish
+            // oynasi), "Vaqtincha kafedra mudiriga yozish" (butun blok yoki faqat to'qnashuv sanalari) va "Asl holatga qaytarish";
+            // joylanmagan kartaga — "Joylash uchun tanlash" va "Tashqi jadvaldagi joyiga joylash"; o'qituvchi / xona — jadval havolasi.
+            // Huquq (haftalikdagidek): admin / registrator — darhol; kafedra mudiri — o'z kafedrasi (server tekshiradi); o'qituvchi va
+            // fan mas'uli — tugmalar yo'q (kun oynasida "Vaqtini o'zgartirishni so'rash"). Faqat ichki jadval.
+            let cycPopState = null;   // { pop, el, reposition, ro, outside } — ochiq oyna (yopilganda tinglovchilar olinadi)
+            let cycExtCache = null;   // { data: cyclePlanData, p: Promise<tashqi qatlam rejasi> }
+            function cycCardOf(key) {
+                const list = (typeof cyclePlanData !== 'undefined' && cyclePlanData && cyclePlanData.cycle_cards) || [];
+                return list.find(c => c.key === key) || null;
+            }
+            function cycActAllowed() {
+                return typeof TIMETABLE_READ_ONLY !== 'undefined' && !TIMETABLE_READ_ONLY && !!cyclePlanData && cyclePlanData.layer === 'internal'
+                    && ((typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN) || TIMETABLE_ROLE === 'kafedra_mudiri');
+            }
+            function cycCardBody(card) {
+                return { specialty_name: card.specialty, course: card.course, group_name: card.group, subject_name: card.subject,
+                    training_type: card.type || 'practice', view: cycleEffView(), placement_group: card.placement_group || undefined, layer: 'internal' };
+            }
+            // Joy: element ostida; pastda sig'masa — yuqoriga (pastki cheti element tepasida); so'ng ekran ichiga siqiladi. Balandligi
+            // ekrandan oshmaydi (CSS max-height, ichida scroll). Kontent o'zgarsa (maslahat, xabar, forma), oyna o'lchami va scroll'da qayta.
+            function cycPopPlace(pop, el) {
+                if (!pop || !pop.style) return;
+                const W = window.innerWidth || 1024, H = window.innerHeight || 768;
+                const w = pop.offsetWidth || 280, h = Math.min(pop.offsetHeight || 120, H - 16);
+                const r = el && el.getBoundingClientRect && el.isConnected !== false ? el.getBoundingClientRect() : (cycPopPlace.last || { left: 8, top: 8, bottom: 8 });
+                cycPopPlace.last = r;
+                const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+                let top = (r.bottom || 0) + 6;
+                if (top + h > H - 8) top = (r.top !== undefined ? r.top : (r.bottom || 0)) - h - 6;   // pastda joy yo'q — yuqoriga
+                pop.style.left = Math.round(clamp(r.left || 0, 8, Math.max(8, W - w - 8))) + 'px';
+                pop.style.top = Math.round(clamp(top, 8, Math.max(8, H - h - 8))) + 'px';
+            }
+            function cycPopWatch(pop, el) {
+                cycPopUnwatch();
+                const reposition = () => cycPopPlace(pop, el);
+                const outside = ev => { if (!pop.contains || pop.contains(ev.target) || (el && el.contains && el.contains(ev.target))) return; if (!cycDaySel) closeCycDayPop(); };
+                cycPopState = { pop, reposition, ro: null, outside };
+                if (typeof ResizeObserver === 'function') { cycPopState.ro = new ResizeObserver(reposition); cycPopState.ro.observe(pop); }
+                if (window.addEventListener) { window.addEventListener('resize', reposition); window.addEventListener('scroll', reposition, true); }
+                if (document.addEventListener) setTimeout(() => { if (cycPopState && cycPopState.pop === pop) document.addEventListener('mousedown', outside, true); }, 0);
+                reposition();
+                return reposition;
+            }
+            function cycPopUnwatch() {
+                if (!cycPopState) return;
+                if (window.removeEventListener) { window.removeEventListener('resize', cycPopState.reposition); window.removeEventListener('scroll', cycPopState.reposition, true); }
+                if (document.removeEventListener) document.removeEventListener('mousedown', cycPopState.outside, true);
+                if (cycPopState.ro) cycPopState.ro.disconnect();
+                cycPopState = null;
+            }
+            // Jadval sanasi: kelgusi to'qnashuv sanasi, bo'lmasa blok boshi, bo'lmasa bugun.
+            function cycCardDate(card, own) {
+                const it = (own || []).find(i => !i.past && i.date_from);
+                const d = cyclePlanData && cyclePlanData.dates && card.start_index !== null && card.start_index !== undefined ? cyclePlanData.dates[card.start_index] : null;
+                return (it && it.date_from) || (d && d.iso) || new Date().toISOString().slice(0, 10);
+            }
+            function cycPhHtml(card) {
+                const ph = card && card.mudir_ph;
+                if (!ph) return '';
+                const ds = ph.dates && ph.dates.length ? ph.dates.map(cfDate).join(', ') : 'butun blok';
+                return '<div class="cyc-ph" data-cyc-ph><b>Vaqtincha kafedra mudirida:</b> ' + esc(ph.mudir_name || ph.teacher_name || '') +
+                    (ph.room_name ? ' · ' + esc(ph.room_name) : '') + '<div>Asl o‘qituvchi: ' + esc(ph.orig_teacher_name || '—') + '; sanalar: ' + esc(ds) + '</div>' +
+                    (ph.reason ? '<div>Sabab: ' + esc(ph.reason) + '</div>' : '') +
+                    (ph.by_name || ph.at ? '<div class="dp-sub">' + esc([ph.by_name, String(ph.at || '').slice(0, 16)].filter(Boolean).join(', ')) + '</div>' : '') +
+                    (cycActAllowed() ? '<button type="button" data-cyc-ph-revert>Asl holatga qaytarish</button>' : '') + '</div>';
+            }
+            function cycActionsHtml(card, own) {
+                if (!card) return '';
+                const t = card.teacher, r = card.room;
+                const edit = typeof TIMETABLE_READ_ONLY !== 'undefined' && !TIMETABLE_READ_ONLY;
+                let btns = '';
+                if (!card.placed) {
+                    if (edit) btns += '<button type="button" data-cyc-select>Joylash uchun tanlash</button><button type="button" data-cyc-ext hidden>Tashqi jadvaldagi joyiga joylash</button>';
+                } else if (cycActAllowed() && card.type !== 'lecture') {
+                    if ((own || []).some(cfWantsShiftAdvice)) btns += '<button type="button" data-cyc-shift disabled title="tekshirilmoqda…">Bo‘sh smenaga o‘tkazish</button>';
+                    btns += '<button type="button" data-cyc-teacher>Boshqa o‘qituvchi</button>';
+                    if (!card.mudir_ph && (own || []).some(i => !i.past)) btns += '<button type="button" data-cyc-mudir>Vaqtincha kafedra mudiriga yozish</button>';
+                }
+                return '<div class="cyc-links"><div><span class="dp-sub">O‘qituvchi:</span> ' +
+                    (t && t.id ? '<a href="#" class="tt-agenda-link" data-cyc-agenda="t">' + esc(t.name) + '</a>' : '<i>biriktirilmagan</i>') + '</div>' +
+                    '<div><span class="dp-sub">Xona:</span> ' + (r && r.code ? '<a href="#" class="tt-agenda-link" data-cyc-agenda="r">' + esc(r.name) + '</a>' : '<i>biriktirilmagan</i>') + '</div></div>' +
+                    cycPhHtml(card) + '<div data-cyc-msg class="cyc-msg"></div>' + (btns ? '<div class="cyc-acts">' + btns + '</div>' : '') + '<div data-cyc-form></div>';
+            }
+            // Tashqi qatlamdagi joyi (o'quv bo'limi jadvali): shu oqim qatori va fan bloki boshi — kalendar indeksi yoki null.
+            async function cycExtPlace(card) {
+                if (!cycExtCache || cycExtCache.data !== cyclePlanData) {
+                    const body = Object.assign(scopeBody(), { layer: 'external', holidays: cycleHolidays, view: 'flow' });
+                    if ($('cycleStart').value) body.start_date = $('cycleStart').value;
+                    cycExtCache = { data: cyclePlanData, p: api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body) };
+                }
+                const j = await cycExtCache.p;
+                const base = s => String(s || '').replace(/\s*\([a-z]\)\s*$/i, '').trim().toLowerCase();
+                for (const row of (j && j.rows) || []) {
+                    if (row.group !== card.placement_group && !(row.subgroups || []).includes(card.group)) continue;
+                    const b = (row.blocks || []).find(x => base(x.subject) === base(card.subject));
+                    if (b && b.from !== undefined && b.from !== null) return +b.from;
+                }
+                return null;
+            }
+            function cycSelectForPlace(key) {
+                cycleDragKey = key;
+                $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(o => o.classList.toggle('cycle-pn-selected', o.dataset.cycleKey === key));
+                highlightCycleRow(key);
+                $('cycleMsg').textContent = 'Endi shu oqim qatoridagi boshlanish kunini bosing.';
+            }
+            async function cycPhRevert(card, btn) {
+                if (btn) btn.disabled = true;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-mudir-placeholder/revert', 'POST', Object.assign(cycCardBody(card), { key: card.key }));
+                    closeCycDayPop();
+                    ttToast('<b>Asl holatga qaytarildi</b><div>' + esc(card.group + ' · ' + card.subject) + ' — asl o‘qituvchi va xona</div>', 'ok');
+                    await loadCyclePlan();
+                } catch (e) {
+                    if (btn) btn.disabled = false;
+                    alert('Qaytarib bo‘lmadi: ' + e.message);
+                }
+            }
+            function cycActionsBind(pop, card, own, reposition) {
+                if (!pop || !pop.addEventListener || !card) return;
+                const msg = (html, bad) => {
+                    const m = pop.querySelector('[data-cyc-msg]');
+                    if (m) { m.style.color = bad ? '#b91c1c' : '#166534'; m.innerHTML = html; }
+                    reposition();
+                };
+                const form = html => { const f = pop.querySelector('[data-cyc-form]'); if (f) f.innerHTML = html || ''; reposition(); };
+                // Smena maslahati (loadShiftAdvice) — tugma holati: bo'sh / qisman bo'lsa faol, smena nomi bilan.
+                pop._onAdvice = a => {
+                    pop._advice = a;
+                    const b = pop.querySelector('[data-cyc-shift]');
+                    if (!b) return;
+                    const ok = !!(a && (a.kind === 'free' || a.kind === 'partial') && +a.start > 0);
+                    b.disabled = !ok;
+                    b.title = a && a.text ? a.text : 'maslahat olinmadi';
+                    if (ok && a.label) b.textContent = 'Bo‘sh smenaga o‘tkazish — ' + a.label;
+                    reposition();
+                };
+                const futureDates = () => {
+                    const ds = new Set();
+                    (own || []).filter(i => !i.past && !i.lecture && i.date_from).forEach(i => ds.add(i.date_from + (i.date_to && i.date_to !== i.date_from ? '–' + i.date_to : '')));
+                    return [...ds].map(x => x.split('–').map(cfDate).join('–')).join(', ');
+                };
+                async function doShift(force) {
+                    const a = pop._advice;
+                    if (!a) return;
+                    form('');
+                    msg('Saqlanmoqda…');
+                    try {
+                        const o = await api(BASE + '/boards/' + board.id + '/cycle-assign-options', 'POST',
+                            Object.assign(cycCardBody(card), { start_date: $('cycleStart').value, holidays: cycleHolidays }));
+                        const cur = (o && o.current) || {};
+                        const res = await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', Object.assign(cycCardBody(card), {
+                            teacher_id: cur.teacher_id ? +cur.teacher_id : null, auditorium_code: cur.auditorium_code || null, lesson_time: cur.lesson_time || null,
+                            shift_start: +a.start, start_date: $('cycleStart').value, holidays: cycleHolidays, force: force ? 1 : undefined }));
+                        const rest = (a.remaining || []).map(r => cfDate(r.date));
+                        msg(res && res.pending_approval ? 'So‘rov yuborildi — tasdiq kutilmoqda.'
+                            : '✓ ' + esc(a.label || '') + ' ga o‘tkazildi' + (rest.length ? '; to‘qnashuv faqat ' + esc(rest.join(', ')) + ' da qoldi' : ' — to‘qnashuv yo‘q'));
+                        const b = pop.querySelector('[data-cyc-shift]');
+                        if (b) b.remove();
+                        await loadCyclePlan();
+                    } catch (e) {
+                        if (e.data && e.data.needs_confirm) {
+                            msg('');
+                            form('<div class="cyc-confirm"><div>' + esc(e.message) + '</div><button type="button" data-cyc-confirm="shift">Baribir o‘tkazish</button> <button type="button" data-cyc-cancel>Bekor</button></div>');
+                        } else msg(esc(e.message), true);
+                    }
+                }
+                pop.addEventListener('click', async ev => {
+                    const t = ev.target && ev.target.closest ? ev.target.closest('[data-cyc-agenda],[data-cyc-select],[data-cyc-ext],[data-cyc-shift],[data-cyc-teacher],[data-cyc-mudir],[data-cyc-mudir-save],[data-cyc-ph-revert],[data-cyc-confirm],[data-cyc-cancel]') : null;
+                    if (!t || t.disabled) return;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const date = cycCardDate(card, own);
+                    if (t.dataset.cycAgenda === 't') { closeCycDayPop(); ttAgendaOpen({ teacher_id: +card.teacher.id, teacher_name: card.teacher.name, date, range: 'day' }); return; }
+                    if (t.dataset.cycAgenda === 'r') { closeCycDayPop(); ttAgendaOpen({ room_code: card.room.code, room_name: card.room.name, date, range: 'week' }); return; }
+                    if (t.hasAttribute('data-cyc-select')) { closeCycDayPop(); cycSelectForPlace(card.key); return; }
+                    if (t.hasAttribute('data-cyc-ext')) { closeCycDayPop(); placeCycleCardAt(card, +t.dataset.from, 1); return; }
+                    if (t.hasAttribute('data-cyc-teacher')) { closeCycDayPop(); openCycleAssign(card.key); return; }
+                    if (t.hasAttribute('data-cyc-ph-revert')) { cycPhRevert(card, t); return; }
+                    if (t.hasAttribute('data-cyc-cancel')) { form(''); return; }
+                    if (t.dataset.cycConfirm === 'shift') { doShift(true); return; }
+                    if (t.hasAttribute('data-cyc-shift')) {
+                        const a = pop._advice;
+                        if (a && a.kind === 'partial') {
+                            // Qisman: qoladigan sanalar (va kim bilan) — tasdiqdan keyin o'tkaziladi.
+                            form('<div class="cyc-confirm"><div><b>' + esc(a.label || '') + ' ga o‘tkazilsa</b> to‘qnashuv faqat shu sanalarda qoladi:</div><ul data-cyc-remaining>' +
+                                (a.remaining || []).map(r => '<li>' + esc(cfDate(r.date)) + ((r.with || []).length ? ' — ' + esc(r.with.slice(0, 3).join('; ')) + (r.with.length > 3 ? ' +' + (r.with.length - 3) + ' ta' : '') : '') + '</li>').join('') +
+                                '</ul><button type="button" data-cyc-confirm="shift">O‘tkazish</button> <button type="button" data-cyc-cancel>Bekor</button></div>');
+                        } else doShift(false);
+                        return;
+                    }
+                    if (t.hasAttribute('data-cyc-mudir')) {
+                        const fd = futureDates();
+                        form('<div class="cyc-confirm"><div><b>Vaqtincha kafedra mudiriga yozish</b> — fan kafedrasi mudiri, «Kafedra mudiri xonasi»; asl o‘qituvchi, xona va smena saqlanadi.</div>' +
+                            '<label><input type="radio" name="cycPhScope" value="conflicts" checked> Faqat to‘qnashuv sanalari' + (fd ? ' (' + esc(fd) + ')' : '') + '</label><br>' +
+                            '<label><input type="radio" name="cycPhScope" value="all"> Butun blok</label>' +
+                            '<input type="text" data-cyc-reason maxlength="500" placeholder="Sabab (ixtiyoriy)" style="width:100%;margin-top:4px">' +
+                            '<div style="margin-top:4px"><button type="button" data-cyc-mudir-save>Yozish</button> <button type="button" data-cyc-cancel>Bekor</button></div></div>');
+                        return;
+                    }
+                    if (t.hasAttribute('data-cyc-mudir-save')) {
+                        const scope = (pop.querySelector('input[name="cycPhScope"]:checked') || {}).value || 'conflicts';
+                        const reason = (pop.querySelector('[data-cyc-reason]') || {}).value || '';
+                        t.disabled = true;
+                        try {
+                            await api(BASE + '/boards/' + board.id + '/cycle-mudir-placeholder', 'POST', Object.assign(cycCardBody(card), { key: card.key, scope, reason }));
+                            closeCycDayPop();
+                            ttToast('<b>Vaqtincha kafedra mudiriga yozildi</b><div>' + esc(card.group + ' · ' + card.subject) + (scope === 'all' ? ' — butun blok' : ' — to‘qnashuv sanalari') + '</div>', 'ok');
+                            await loadCyclePlan();
+                        } catch (e) { t.disabled = false; msg(esc(e.message), true); }
+                    }
+                });
+                // Joylanmagan karta: tashqi jadvaldagi joyi bo'lsa — "Tashqi jadvaldagi joyiga joylash (sana)".
+                const extBtn = pop.querySelector('[data-cyc-ext]');
+                if (extBtn && extBtn.setAttribute) cycExtPlace(card).then(from => {
+                    if (from === null || !pop.isConnected) return;
+                    const d = cyclePlanData && cyclePlanData.dates ? cyclePlanData.dates[from] : null;
+                    extBtn.dataset.from = String(from);
+                    extBtn.hidden = false;
+                    if (d && d.iso) extBtn.textContent = 'Tashqi jadvaldagi joyiga joylash (' + cfDate(d.iso) + ' dan)';
+                    reposition();
+                }).catch(e => console.warn('Tashqi joy olinmadi:', e));
+            }
+            // Panel kartasi oynasi: to'qnashuvlar (bo'lsa), havolalar va amallar.
+            function openCycCardPop(key, el) {
+                const card = cycCardOf(key);
+                if (!card) return;
+                closeCycDayPop();
+                const split = card.conflict ? cfSplit(key, card.conflicts, cfOwners) : { own: [] };
+                const own = cfMergeItems(split.own);
+                const pop = document.createElement('div');
+                pop.id = 'cycDayPop';
+                pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(card.subject) + '</div><div class="dp-sub">' + esc(card.group) + ' · ' +
+                    esc(cycleCardStateText(card)) + '</div></div><button type="button" class="dp-close" aria-label="Yopish">&times;</button></div>' +
+                    (own.length ? '<ul class="cf-list">' + own.map(i => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null })).join('') + '</ul>' : '') +
+                    cycActionsHtml(card, own);
+                document.body.appendChild(pop);
+                const reposition = cycPopWatch(pop, el);
+                cycActionsBind(pop, card, own, reposition);
+                if (own.length) loadShiftAdvice(pop, key, own);
+                pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
 
             // Panel (sikl va haftalik kartalar) to'qnashuv belgisi — barcha rejimlarda (faqat ko'rishda ham) bosiladi: tafsilot oynasi.
@@ -8243,6 +8505,18 @@
                     .map(card => (wkOn && card.placed ? Object.assign({}, card, { conflicts: (card.conflicts || []).filter(i => cfItemInWeek(i, wk)) }) : card));
                 return { wk, wkOn, scoped };
             }
+            // "Vaqtincha kafedra mudirida" bo'limi (panel ostida): qamrovdagi belgili bloklar — mudir, sanalar, sabab va "Asl holatga qaytarish".
+            function cycPhSectionHtml(cards) {
+                const list = (cards || []).filter(c => c.mudir_ph).sort((a, b) => (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
+                if (!list.length) return '';
+                return '<div class="cyc-ph-sec" data-cyc-ph-sec><b>Vaqtincha kafedra mudirida — ' + list.length + ' ta</b>' + list.map(c => {
+                    const ph = c.mudir_ph;
+                    const ds = ph.dates && ph.dates.length ? ph.dates.map(cfDate).join(', ') : 'butun blok';
+                    return '<div class="cyc-ph-item"><div><b>' + esc(c.group) + '</b> · ' + esc(c.subject) + '</div><div>' + esc(ph.mudir_name || ph.teacher_name || '') +
+                        ' (asl: ' + esc(ph.orig_teacher_name || '—') + '); ' + esc(ds) + (ph.reason ? '; sabab: ' + esc(ph.reason) : '') + '</div>' +
+                        (cycActAllowed() ? '<button type="button" data-cyc-ph-revert-key="' + esc(c.key) + '">Asl holatga qaytarish</button>' : '') + '</div>';
+                }).join('') + '</div>';
+            }
             function renderCycleCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];
                 const groups = [...new Set(cycleCards.map(card => card.group).filter(Boolean))]
@@ -8310,10 +8584,15 @@
                         split.elsewhere.map(id => '<span class="cf-lecture-link" role="button" tabindex="0" data-cf-lecture="' + id + '" title="Oqim ma\'ruzasi to\'qnashuvi — bir marta, ma\'ruza egasi blokida">ma\'ruzada muammo bor ↗</span>').join('') +
                         '</div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">' + (wkOn ? 'Bu haftada joylanmagan yoki to\u2018qnashuvli sikl kartasi yo\u2018q.'
-                    : 'Barcha sikl fan kartalari joylashgan.') + '</div>');
+                    : 'Barcha sikl fan kartalari joylashgan.') + '</div>') + cycPhSectionHtml(scoped);
                 $('cardPanel').querySelectorAll('[data-cf-filter]').forEach(b => b.onclick = () => {
                     cycleCfFilter = cycleCfFilter === b.dataset.cfFilter ? '' : b.dataset.cfFilter;
                     renderCycleCards(j);
+                });
+                $('cardPanel').querySelectorAll('[data-cyc-ph-revert-key]').forEach(b => b.onclick = ev => {
+                    ev.stopPropagation();
+                    const c = cycleCards.find(x => x.key === b.dataset.cycPhRevertKey);
+                    if (c) cycPhRevert(c, b);
                 });
                 const allBox = $('cardPanel').querySelector('[data-cyc-all]');
                 if (allBox) allBox.onchange = () => { cyclePanelAll = allBox.checked; renderCycleCards(j); };
@@ -8325,15 +8604,18 @@
                     // Bosib tanlash: sudrash ishlamagan holatlarda ham karta
                     // joylanadi — tanlangan karta belgilanib turadi, keyin
                     // jadvaldan boshlanish kuni bosiladi.
+                    // Bosilsa — karta oynasi (haftalikdagidek): o'qituvchi / xona jadvali, "Joylash uchun tanlash", "Tashqi jadvaldagi
+                    // joyiga joylash", to'qnashuvli blokka — smena, boshqa o'qituvchi, vaqtincha kafedra mudiri. Tanlangan karta qayta
+                    // bosilsa — tanlov bekor qilinadi.
                     card.addEventListener('click', () => {
-                        const already = cycleDragKey === card.dataset.cycleKey;
-                        $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(other =>
-                            other.classList.remove('cycle-pn-selected'));
-                        cycleDragKey = already ? null : card.dataset.cycleKey;
-                        card.classList.toggle('cycle-pn-selected', !already);
-                        highlightCycleRow(already ? null : card.dataset.cycleKey);
-                        $('cycleMsg').textContent = already ? ''
-                            : 'Endi shu oqim qatoridagi boshlanish kunini bosing.';
+                        if (cycleDragKey === card.dataset.cycleKey) {
+                            cycleDragKey = null;
+                            card.classList.remove('cycle-pn-selected');
+                            highlightCycleRow(null);
+                            $('cycleMsg').textContent = '';
+                            return;
+                        }
+                        openCycCardPop(card.dataset.cycleKey, card);
                     });
                     card.addEventListener('dragstart', ev => {
                         cycleDragKey = card.dataset.cycleKey;

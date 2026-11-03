@@ -124,7 +124,7 @@ trait TimetableCycleShiftAdvice
             }
         }
         // Shu birlikning amaliy darslari (smena shularga ta'sir qiladi).
-        $all = $this->cycleOccupancy($board, $units, $calendar);
+        $all = array_values(array_filter($this->cycleOccupancy($board, $units, $calendar), fn ($e) => empty($e['ph'])));
         $isPractice = fn (array $e) => str_starts_with((string) $e['load_key'], 'c');
         $mine = array_values(array_filter($all, fn ($e) => $e['unit'] === $self && $e['date'] >= $today && $isPractice($e)));
         // Sikl: shu vaqtda o'qituvchining boshqa sikl amaliyoti (boshqa dars — umumiy "A + B" kartaning o'zi emas, cycleConflicts kabi).

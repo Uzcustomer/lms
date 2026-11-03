@@ -176,3 +176,20 @@ test('jonli kuzatuv: ishlayotgan vedomost (oxirgi qadam, kalit), navbat va oxirg
         ->and($d['worker_warning'])->toBeTrue()
         ->and($d['requests'][0]['error_type'])->toBe('rate_limit');
 });
+
+test('jamlanma: keshi yo\'qlari vaqt chegarasidan oshsa fonga qo\'yiladi (timeout bo\'lmaydi), qayta bosilganda takror navbat yo\'q', function () {
+    foreach (glob(database_path('migrations/*vedomost_jamlanma_rows*')) as $f) {
+        (include $f)->up();
+    }
+    \Illuminate\Support\Facades\Queue::fake();
+    $a = reviewSub(1, 'Xirurgiya', 'ok');
+    $b = reviewSub(2, 'Terapiya', 'ok');
+    DB::table('vedomost_jamlanma_rows')->insert(['vedomost_submission_id' => $a->id, 'rows' => '[]', 'built_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+
+    $excel = app(\App\Services\VedomostJamlanmaExcel::class);
+    $left = $excel->warm(collect([$a, $b]), 0);
+    $again = $excel->warm(collect([$a, $b]), 0);
+
+    expect($left)->toBe([$b->id])->and($again)->toBe([$b->id]);
+    \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\BuildVedomostJamlanmaRows::class, 1);
+});

@@ -510,3 +510,25 @@ it('Codex: parallel to\'plamdan shu haftada bekor qilingan a\'zo chiqariladi ("b
     expect($first['title'])->toBe('Ikkalasini birga joylash: Seshanba, 3-para (a · c)')
         ->and(collect($first['actions'])->pluck('card_id')->all())->toBe([$s['pa']->id, $s['pc']->id]);
 });
+
+it('parallel to\'plam ichidagi guruh to\'qnashuvi tuzatilgach: Terapiya (b)/(c) d2/d26-01a/01b to\'qnashuvsiz — "Joylanmagan kartalar"dan yo\'qoladi', function () {
+    $s = wuSetup();
+    // (b) va (c) — 01a va 01b guruhlarining turli talabalari (aralash bo'laklar), har biri o'z o'qituvchisi bilan, 8-hafta chorshanba I para.
+    $mk = fn (string $l) => TimetableCard::create(array_replace($s['base'], ['subject_name' => 'Terapiya (' . $l . ')', 'group_name' => null,
+        'group_names' => ['d2/d26-01a (rus)', 'd2/d26-01b (rus)'], 'students' => 10, 'len_half' => 2, 'kafedra_name' => 'Terapiya kafedrasi',
+        'teacher_id' => wuTeacher('TERAPEVT ' . strtoupper($l))->id, 'teacher_name' => 'TERAPEVT ' . strtoupper($l)]));
+    [$b, $c] = [$mk('b'), $mk('c')];
+    foreach ([$b, $c] as $x) {
+        TimetableCardOverride::create(['card_id' => $x->id, 'week' => 8, 'day' => 3, 'pair' => 1]);
+    }
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $weekly = fn () => array_intersect_key($ctl->internalConflicts($s['board'])['weekly'] ?? [], array_flip([$b->id, $c->id]));
+    // Panel (renderPanel) joylangan kartani faqat to'qnashuv bo'lsa ko'rsatadi: to'qnashuv yo'q — kartalar panelda yo'q.
+    expect($weekly())->toBe([]);
+    // Bo'lak emas (oddiy "Terapiya") — o'sha guruhlar bir vaqtda ikki joyda: to'qnashuv, ikkala karta panelda.
+    $c->update(['subject_name' => 'Terapiya']);
+    expect(array_keys($weekly()))->toEqualCanonicalizing([$b->id, $c->id]);
+    // Tuzatildi — (c) yana parallel bo'lak: to'qnashuv belgisi va panel kartalari yo'qoladi.
+    $c->update(['subject_name' => 'Terapiya (c)']);
+    expect($weekly())->toBe([]);
+});

@@ -61,7 +61,7 @@ const ctx = {
     },
 };
 vm.createContext(ctx);
-vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { phRevertErrSet: (c, v) => { phRevertErr[unitKey(c)] = v; }, openMudirPhConfirm, mudirPhSectionHtml, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop });', ctx);
+vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { phRevertErrSet: (c, v) => { phRevertErr[unitKey(c)] = v; }, openMudirPhConfirm, mudirPhSectionHtml, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop, placedSlotText });', ctx);
 // dragPlan — haqiqiy (bo'sh joy).
 vm.runInContext(source.slice(source.indexOf('            function dragPlan('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig')), ctx);
 
@@ -214,5 +214,27 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     ctx.phRevertErrSet(phCard, ['8-hafta: A', '9-hafta: B', '10-hafta: C', '11-hafta: D']);
     sec = ctx.mudirPhSectionHtml([phCard]);
     assert.match(sec, /✖ 8-hafta: A · 9-hafta: B <details[^>]*><summary[^>]*>yana 2 ta<\/summary>10-hafta: C · 11-hafta: D<\/details>/);
-    console.log('timetable panel card pop: 8 scenarios passed');
+
+    // 9) Joylangan, lekin to'qnashuvli karta (panelda to'qnashuv sababi bilan): oynada joyi ("Chorshanba I–II para") va
+    //    "Shu joyga joylash" o'rniga "Jadvalda ko'rsatish" — o'sha katakka o'tadi.
+    ctx.closePanelCardPop();
+    const placedCard = Object.assign({}, cards[2], { id: 40, len_half: 4, ext_day: 2, ext_pair: 3 });
+    ctx.overrides['40|8'] = { day: 3, pair: 1, cancelled: false };
+    assert.equal(ctx.placedSlotText(placedCard), 'Chorshanba I–II para');
+    assert.equal(ctx.placedSlotText(cards[2]), 'Seshanba II para');   // 2 qator — bitta para
+    ctx.openPanelCardPop(placedCard, el());
+    const pq = doc.getElementById('pnCardPop');
+    assert.match(pq.innerHTML, /Joyi:<\/span> <b data-pop-placed>Chorshanba I–II para<\/b> <span[^>]*>· to'qnashuv<\/span>/);
+    assert.match(pq.innerHTML, /data-pop-show[^>]*>Jadvalda ko'rsatish<\/button>/);
+    assert.doesNotMatch(pq.innerHTML, /data-pop-place[ >]/);
+    const flashed = [];
+    const tdWed = { dataset: { day: '3', pair: '1', g: 'F|S|1|d2/d26-07b (rus)' }, classList: { add: c => flashed.push(c), remove() {} }, scrollIntoView() { this.scrolled = true; } };
+    const oldQsa = grid.querySelectorAll;
+    grid.querySelectorAll = sel => (sel === '.tt-slot-flash' ? [] : sel.includes('[data-day="3"][data-pair="1"]') ? [tdWed] : []);
+    await pq.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === 'data-pop-show', disabled: false }) }, preventDefault() {}, stopPropagation() {} });
+    grid.querySelectorAll = oldQsa;
+    assert.ok(tdWed.scrolled && flashed.includes('tt-slot-flash'));
+    assert.ok(!doc.getElementById('pnCardPop'), 'oyna yopiladi');
+    ctx.closePanelCardPop();
+    console.log('timetable panel card pop: 9 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

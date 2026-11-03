@@ -4946,8 +4946,20 @@
             }
 
             // ===== Takliflar: joylanmagan kartalarni sig'dirish yo'llari (server hisoblaydi, foydalanuvchi tanlaydi) =====
-            const SUG_LABEL = { slot: 'Bo\'sh vaqt', room: 'Boshqa xona', blocker: 'Darsni surish', day: 'Boshqa kun', week: 'Boshqa hafta', lecture: 'Ma\'ruzani surish', teacher: 'Boshqa o\'qituvchi' };
-            const SUG_COLOR = { slot: '#059669', room: '#0284c7', blocker: '#7c3aed', day: '#d97706', week: '#b45309', lecture: '#a16207', teacher: '#dc2626' };
+            // Tartib (server): ikkalasini ketma-ket, shu kun boshqa vaqt, boshqa xona, darsni (to'siqni) shu kunda surish, boshqa kun, …,
+            // to'siqni boshqa kunga. "Darsni surish" — faqat kun o'zgarmaydigan siljish.
+            const SUG_LABEL = { pair: 'Ikkalasini ketma-ket', slot: 'Shu kun, boshqa vaqt', room: 'Boshqa xona', blocker: 'Darsni surish', day: 'Boshqa kun',
+                week: 'Boshqa hafta', lecture: 'Ma\'ruzani surish', teacher: 'Boshqa o\'qituvchi', blocker_day: 'To\'siqni boshqa kunga' };
+            const SUG_COLOR = { pair: '#0f766e', slot: '#059669', room: '#0284c7', blocker: '#7c3aed', day: '#d97706', week: '#b45309', lecture: '#a16207',
+                teacher: '#dc2626', blocker_day: '#9a3412' };
+            // Bo'shliq belgisi (yumshoq mezon, taklif yashirilmaydi): "bo'shliqsiz" — yashil, "+½ para bo'shliq" / "+1 para bo'shliq" — sariq.
+            function sugGapBadge(gap) {
+                if (gap === undefined || gap === null) return '';
+                const n = +gap;
+                const txt = n <= 0 ? 'bo\'shliqsiz' : '+' + (n === 1 ? '½' : (n % 2 ? (Math.floor(n / 2) + '½') : String(n / 2))) + ' para bo\'shliq';
+                return ' <span class="sug-gap" style="font-size:10px;font-weight:600;border-radius:4px;padding:0 5px;' +
+                    (n <= 0 ? 'background:#dcfce7;color:#166534' : 'background:#fef9c3;color:#854d0e') + '">' + txt + '</span>';
+            }
             // Takliflar oynasi ichidagi xabar (alert sahifani to'sib qo'yadi): kind — 'err' | 'ok'.
             function sugNote(body, html, kind) {
                 if (!body) return;
@@ -5149,7 +5161,7 @@
                 return '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0;border-top:1px dashed #f1f5f9">' +
                     (applyMode && can ? '<input type="checkbox" data-sug-pick="' + ci + ':' + si + '" style="margin-top:2px">' : '') +
                     '<span style="flex:0 0 auto;font-size:10px;font-weight:700;color:#fff;border-radius:4px;padding:1px 6px;background:' + (SUG_COLOR[s.type] || '#475569') + '">' + (SUG_LABEL[s.type] || s.type) + '</span>' +
-                    '<span style="flex:1 1 auto">' + esc(s.title) + (s.note ? ' <i style="color:#64748b">(' + esc(s.note) + ')</i>' : '') +
+                    '<span style="flex:1 1 auto">' + esc(s.title) + sugGapBadge(s.gap) + (s.note ? ' <i style="color:#64748b">(' + esc(s.note) + ')</i>' : '') +
                     (!can && s.why && applyMode ? '<div class="sug-why" style="color:#b45309;font-size:11px">' + esc(s.why) + '</div>' : '') + '</span>' +
                     (applyMode ? '<button type="button" data-sug="' + ci + ':' + si + '"' + (can ? '' : ' disabled title="' + esc(s.why || '') + '"') +
                         ' style="flex:0 0 auto;font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:1px 8px;background:#f8fafc' + (can ? '' : ';opacity:.5;cursor:not-allowed') + '">' + sugApplyLabel(s.mode) + '</button>' : '') +

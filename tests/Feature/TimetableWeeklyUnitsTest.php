@@ -146,3 +146,51 @@ it('qisman joylangan birliklar: ro\'yxat (endpoint va artisan), yaxlit joylash v
     wuAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 8, 'action' => 'clear'])->assertOk()->assertJson(['done' => 1]);
     expect([wuPlace($s['a']), wuPlace($s['b'])])->toBe([[null, null], [null, null]]);
 });
+
+it('takliflar (qabul): ALIYEV SH. N., d2/d26-07b va 08a, chorshanba, 428-xona — birinchi taklif chorshanba ichida; kun o\'zgarsa "Darsni surish" emas', function () {
+    $s = wuSetup();
+    \App\Models\Auditorium::create(['code' => 'R428', 'name' => '428', 'volume' => 40, 'active' => true]);
+    $ali = wuTeacher('ALIYEV SH. N.');
+    $mk = fn (string $g) => TimetableCard::create(array_replace($s['base'], ['group_name' => $g, 'subject_name' => 'Odam anatomiyasi', 'len_half' => 2,
+        'teacher_id' => $ali->id, 'teacher_name' => 'ALIYEV SH. N.', 'auditorium_code' => 'R428', 'auditorium_name' => '428']));
+    [$a, $b] = [$mk('d2/d26-07b (rus)'), $mk('d2/d26-08a (rus)')];
+    // Chorshanba (3), 6-para (11–12-qator): ikkalasi bir vaqtda — o'qituvchi va xona to'qnashuvi.
+    foreach ([$a, $b] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 8, 'day' => 3, 'pair' => 11]);
+    }
+    $res = wuAs()->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=8&courses[]=1')->assertOk()->json();
+    $card = collect($res['cards'])->firstWhere('id', $a->id);
+    $sugs = collect($card['suggestions']);
+    $days = fn (array $sg) => collect($sg['actions'])->where('op', 'move')->pluck('day')->unique()->values()->all();
+    expect($card['conflict'])->toBeTrue()
+        // Birinchi — ikkalasini chorshanba kuni ketma-ket (bir-birini to'sgan ikki dars), kun o'zgarmaydi.
+        ->and($sugs[0]['type'])->toBe('pair')->and($days($sugs[0]))->toBe([3])
+        ->and($sugs[0]['title'])->toContain('Ikkalasini shu kunda ketma-ket')
+        // "Shu kun, boshqa vaqt" — keyin; "Darsni surish" (blocker) — faqat kun o'zgarmaydigan siljish.
+        ->and($sugs->where('type', 'slot')->every(fn ($sg) => $days($sg) === [3]))->toBeTrue()
+        ->and($sugs->where('type', 'blocker')->every(fn ($sg) => $days($sg) === [3]))->toBeTrue()
+        ->and($sugs->filter(fn ($sg) => $days($sg) !== [3] && $days($sg) !== [])->every(fn ($sg) => $sg['type'] !== 'blocker'))->toBeTrue();
+    $types = $sugs->pluck('type')->values()->all();
+    expect(array_search('slot', $types))->toBeLessThan(array_search('day', $types));
+    if (in_array('blocker_day', $types, true)) {
+        expect(end($types))->toBe('blocker_day');
+    }
+});
+
+it('takliflar (qabul): bo\'shliqsiz joylash — birinchi taklif guruhning mavjud darsiga yopishgan vaqt; bo\'shliqli taklif pastda, belgisi bilan', function () {
+    $s = wuSetup();
+    // 01b guruhi seshanba 08:30–09:50 (1–2) da Anatomiyada; joylanmagan 2 soatlik Biologiya (CHORIYEVA) — tashqi joyi seshanba 13:30 (7),
+    // lekin CHORIYEVA 13:30 da boshqa guruhda — shu kunning boshqa vaqti takliflari.
+    $an = TimetableCard::create(array_replace($s['base'], ['subject_name' => 'Anatomiya', 'teacher_id' => null, 'teacher_name' => null, 'len_half' => 2]));
+    TimetableCardOverride::create(['card_id' => $an->id, 'week' => 8, 'day' => 2, 'pair' => 1]);
+    $bio = TimetableCard::create(array_replace($s['base'], ['subject_name' => 'Biologiya', 'len_half' => 2, 'ext_day' => 2, 'ext_pair' => 7]));
+    $x = TimetableCard::create(array_replace($s['base'], ['group_name' => 'd2/d26-05a (rus)', 'subject_name' => 'Kimyo', 'len_half' => 2]));
+    TimetableCardOverride::create(['card_id' => $x->id, 'week' => 8, 'day' => 2, 'pair' => 7]);
+    $res = wuAs()->getJson(route('admin.timetable.boards.week-suggestions', $s['board']) . '?week=8&courses[]=1')->assertOk()->json();
+    $slots = collect(collect($res['cards'])->firstWhere('id', $bio->id)['suggestions'])->where('type', 'slot')->values();
+    // Birinchi — Anatomiyaga yopishgan 10:00 (3–4), bo'shliqsiz; keyingilari (13:30 atrofida) — bo'shliq qo'shadi, kamroq qo'shadigani oldin.
+    expect($slots->count())->toBeGreaterThan(1)
+        ->and($slots[0])->toMatchArray(['gap' => 0, 'touch' => true])->and($slots[0]['actions'][0])->toMatchArray(['day' => 2, 'pair' => 3])
+        ->and($slots->slice(1)->every(fn ($sg) => $sg['gap'] > 0))->toBeTrue()
+        ->and($slots->slice(1)->pluck('gap')->values()->all())->toBe($slots->slice(1)->pluck('gap')->sort()->values()->all());
+});

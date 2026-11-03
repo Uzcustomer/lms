@@ -82,7 +82,9 @@ class NotifyRetakeBooking extends Command
 
             $lines[] = '';
             $lines[] = '📌 <b>' . e($d['subject_name'] ?? '') . '</b> — ' . $date . ', ' . $what;
-            if (!empty($d['deadline'])) {
+            if (!empty($d['excused']) && !empty($d['book_from']) && ($d['book_from'] === ($d['deadline'] ?? null))) {
+                $lines[] = 'Qayta topshirish kuni (sababli ariza): ' . Carbon::parse($d['book_from'])->format('d.m.Y');
+            } elseif (!empty($d['deadline'])) {
                 $lines[] = 'Muddat: ' . Carbon::parse($d['deadline'])->format('d.m.Y') . ' gacha';
             }
             if (($d['state'] ?? '') === 'booked' && !empty($d['slot_start'])) {

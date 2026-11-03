@@ -405,3 +405,38 @@ it('gives Moodle the LMS deadlines over the X-SYNC-SECRET API', function () {
             ['student_hemis_id' => 999, 'subject_id' => 181, 'lesson_date' => '2026-10-24', 'found' => false, 'deadline' => null, 'book_from' => null, 'excused' => false],
         ]]);
 });
+
+it('refuses a slot that overlaps another subject booked on the same day', function () {
+    RetakeBooking::create(['student_hemis_id' => 5531, 'subject_id' => 200, 'lesson_date' => '2026-10-24', 'subject_name' => 'Anatomiya',
+        'slot_start' => '2026-11-02 10:00', 'slot_end' => '2026-11-02 11:00', 'status' => 'booked']);
+    RetakeBooking::create(['student_hemis_id' => 5531, 'subject_id' => 300, 'lesson_date' => '2026-10-24',
+        'slot_start' => '2026-11-02 12:00', 'slot_end' => '2026-11-02 13:00', 'status' => 'cancelled']);
+
+    $at = fn (string $from, string $to) => RetakeBookingService::overlappingBooking(5531, 181, '2026-10-24', Carbon::parse($from), Carbon::parse($to));
+
+    expect($at('2026-11-02 10:00', '2026-11-02 11:00')?->subject_name)->toBe('Anatomiya')
+        ->and($at('2026-11-02 10:30', '2026-11-02 11:30'))->not->toBeNull()
+        ->and($at('2026-11-02 11:00', '2026-11-02 12:00'))->toBeNull()   // ketma-ket — mumkin
+        ->and($at('2026-11-02 12:00', '2026-11-02 13:00'))->toBeNull()   // bekor qilingan hisobga olinmaydi
+        // O'sha mavzuning o'z broni vaqtni o'zgartirishga xalaqit bermaydi
+        ->and(RetakeBookingService::overlappingBooking(5531, 200, '2026-10-24', Carbon::parse('2026-11-02 10:00'), Carbon::parse('2026-11-02 11:00')))->toBeNull();
+});
+
+it('cancels bookings that do not fall on the approved excuse retake day', function () {
+    $id = svcExcuse('approved', '2026-10-22', '2026-10-24', ['original_date' => '2026-10-23', 'makeup_date' => '2026-11-03', 'makeup_end_date' => '2026-11-03']);
+    DB::table('absence_excuse_makeups')->insert([
+        'absence_excuse_id' => $id, 'student_id' => 1, 'subject_id' => '181', 'assessment_type' => 'jn',
+        'original_date' => '2026-10-24', 'makeup_date' => '2026-11-04', 'makeup_end_date' => '2026-11-04',
+    ]);
+    $outside = RetakeBooking::create(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-23',
+        'slot_start' => '2026-10-30 10:00', 'slot_end' => '2026-10-30 11:00', 'status' => 'booked', 'moodle_sync' => 'ok']);
+    $inside = RetakeBooking::create(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24',
+        'slot_start' => '2026-11-04 10:00', 'slot_end' => '2026-11-04 11:00', 'status' => 'booked', 'moodle_sync' => 'ok']);
+
+    $cancelled = RetakeBookingService::cancelOutsideExcuse(App\Models\AbsenceExcuse::find($id));
+
+    expect($cancelled->map(fn ($c) => [$c['booking']->id, $c['from'], $c['to']])->all())->toBe([[$outside->id, '2026-11-03', '2026-11-03']])
+        ->and($outside->fresh()->status)->toBe('cancelled')
+        ->and($outside->fresh()->moodle_sync)->toBe('pending') // Moodle'ga cron yuboradi
+        ->and($inside->fresh()->status)->toBe('booked');
+});

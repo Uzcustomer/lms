@@ -12,7 +12,10 @@ use App\Models\ExcuseGradeOpening;
 use App\Models\StudentNotification;
 use App\Models\Setting;
 use App\Services\DocumentTemplateService;
+use App\Services\RetakeBookingService;
+use App\Services\SababliRetakePlan;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -136,6 +139,10 @@ class AbsenceExcuseController extends Controller
         try {
             // Tasdiqlash uchun ma'lumotlarni oldindan o'rnatish
             if ($excuse->isPending()) {
+                // Kechikib tasdiqlansa, o'tib ketgan retake kunlari ertangi kundan qayta
+                // taqsimlanadi (farmoyish va Moodle broni yangi kunlar bo'yicha)
+                SababliRetakePlan::rescheduleIfLate($excuse, SababliRetakePlan::firstDay());
+
                 $excuse->forceFill([
                     'status' => 'approved',
                     'reviewed_by_name' => $reviewerName,
@@ -245,6 +252,30 @@ class AbsenceExcuseController extends Controller
                     'has_pdf' => true,
                 ],
             ]);
+
+            // Ariza ko'rib chiqilguncha oddiy muddat bo'yicha tanlangan qayta topshirish
+            // vaqtlari arizadagi kunga to'g'ri kelmasa bekor qilinadi — talabaga xabar
+            try {
+                foreach (RetakeBookingService::cancelOutsideExcuse($excuse) as $cancelled) {
+                    $booking = $cancelled['booking'];
+                    $day = Carbon::parse($cancelled['from'])->format('d.m.Y')
+                        . ($cancelled['to'] !== $cancelled['from'] ? ' — ' . Carbon::parse($cancelled['to'])->format('d.m.Y') : '');
+                    StudentNotification::create([
+                        'student_id' => $excuse->student_id,
+                        'type' => 'absence_excuse',
+                        'title' => 'Qayta topshirish vaqtingiz bekor qilindi',
+                        'message' => "{$booking->subject_name} fanidan {$booking->lesson_date->format('d.m.Y')} darsi uchun tanlagan vaqtingiz "
+                            . "({$booking->slot_start->format('d.m.Y H:i')}) bekor qilindi: sababli ariza bo'yicha qayta topshirish kuni — {$day}. "
+                            . 'Shu kun uchun yangi vaqt tanlang.',
+                        'link' => route('student.retake-booking.index', [
+                            'subject_id' => $booking->subject_id,
+                            'lesson_date' => $booking->lesson_date->format('Y-m-d'),
+                        ], false),
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Sababli ariza: qayta topshirish bronlarini bekor qilishda xatolik: ' . $e->getMessage(), ['excuse_id' => $excuse->id]);
+            }
 
             // Sababli ariza uchun baho ochish: ariza sana oralig'idagi baholar uchun
             $openingsCreated = 0;

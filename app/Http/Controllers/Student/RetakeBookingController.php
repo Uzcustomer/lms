@@ -57,6 +57,13 @@ class RetakeBookingController extends Controller
                 return view('student.retake-booking', [
                     'debt' => $this->present($hemisId, $debt), 'debts' => collect(), 'loadError' => null, 'notFound' => false,
                     'slots' => RetakeBookingService::slotOptions(),
+                    // Boshqa fanlar bo'yicha tanlangan vaqtlar — shu oraliqlar band ko'rsatiladi
+                    'busy' => RetakeBookingService::otherBookings($hemisId, $subjectId, $lessonDate)
+                        ->map(fn (RetakeBooking $b) => [
+                            'start' => $b->slot_start->format('Y-m-d\TH:i'),
+                            'end' => $b->slot_end->format('Y-m-d\TH:i'),
+                            'name' => (string) $b->subject_name,
+                        ])->values(),
                 ]);
             }
             $notFound = true;
@@ -125,6 +132,11 @@ class RetakeBookingController extends Controller
         if ($error = RetakeBookingService::validateSlot($start, $end, $debt['deadline'] ?? null, $debt['book_from'] ?? null)) {
             return redirect($back)->withInput()->withErrors(['slot' => $error]);
         }
+        if ($busy = RetakeBookingService::overlappingBooking($hemisId, (int) $data['subject_id'], $data['lesson_date'], $start, $end)) {
+            return redirect($back)->withInput()->withErrors(['slot' => 'Bu vaqtda sizda ' . ($busy->subject_name ?: 'boshqa fan')
+                . ' fanidan qayta topshirish bor (' . $busy->slot_start->format('H:i') . '–' . $busy->slot_end->format('H:i')
+                . '). Boshqa vaqt oralig\'ini tanlang.']);
+        }
 
         $result = $this->service->book($hemisId, $debt, $start, $end);
 
@@ -167,6 +179,9 @@ class RetakeBookingController extends Controller
         // vaqt oralig'i boshlanib Moodle holatni boshqacha qaytarsa ham talaba bekor qila olsin
         $isBooked = $state === 'booked' || ($local && !in_array($state, ['done', 'missed'], true));
 
+        $bookFrom = !empty($debt['book_from']) ? Carbon::parse($debt['book_from']) : null;
+        $deadline = !empty($debt['deadline']) ? Carbon::parse($debt['deadline']) : null;
+
         return [
             'subject_id' => $subjectId,
             'subject_name' => (string) ($debt['subject_name'] ?? ''),
@@ -175,9 +190,11 @@ class RetakeBookingController extends Controller
             'lesson_date_raw' => $lessonDate,
             'is_nb' => $isNb,
             'mark' => $isNb ? 'NB' : ($grades->isNotEmpty() ? $grades->implode(' / ') : 'past baho'),
-            'deadline' => !empty($debt['deadline']) ? Carbon::parse($debt['deadline']) : null,
-            'book_from' => !empty($debt['book_from']) ? Carbon::parse($debt['book_from']) : null,
+            'deadline' => $deadline,
+            'book_from' => $bookFrom,
             'excused' => !empty($debt['excused']),
+            // Yangi sababli arizalarda har bir dars kuniga bitta kunlik retake — kun tanlanmaydi
+            'retake_day' => !empty($debt['excused']) && $bookFrom && $deadline && $bookFrom->isSameDay($deadline) ? $bookFrom : null,
             'tries_left' => $debt['tries_left'] ?? null,
             'state' => $isBooked ? 'booked' : $state,
             'state_label' => self::STATE_LABELS[$isBooked ? 'booked' : $state] ?? $state,

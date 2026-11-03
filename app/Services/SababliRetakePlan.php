@@ -151,6 +151,39 @@ class SababliRetakePlan
         return $items;
     }
 
+    /**
+     * Ariza kechikib tasdiqlansa rejadagi retake kunlari o'tib ketgan bo'ladi (talaba
+     * Moodle'da bron qila olmaydi): bajarilmagan retake'lar shu qoida bo'yicha $start
+     * dan qayta taqsimlanadi. Birinchi retake kuni hali kelmagan bo'lsa — o'zgarmaydi.
+     */
+    public static function rescheduleIfLate(AbsenceExcuse $excuse, Carbon $start): bool
+    {
+        $makeups = $excuse->makeups()->get();
+        $pending = $makeups->filter(fn ($m) => $m->status === 'scheduled' && !$m->jn_submitted && $m->makeup_date);
+        if ($pending->isEmpty() || $pending->min('makeup_date')->gte($start)) {
+            return false;
+        }
+
+        $pendingIds = $pending->pluck('id')->all();
+        $items = $makeups->mapWithKeys(fn ($m) => [$m->id => [
+            'subject_name' => $m->subject_name,
+            'assessment_type' => $m->assessment_type,
+            'original_date' => $m->original_date?->toDateString(),
+            'jn_submitted' => !in_array($m->id, $pendingIds, true),
+        ]])->all();
+
+        $planned = self::assign($items, $start);
+        foreach ($pending as $makeup) {
+            $date = $planned[$makeup->id]['makeup_date'];
+            $makeup->update([
+                'makeup_date' => $date,
+                'makeup_end_date' => $makeup->assessment_type === 'jn' ? $date : null,
+            ]);
+        }
+
+        return true;
+    }
+
     private static function nextDay(Carbon $day): Carbon
     {
         $next = $day->copy()->addDay();

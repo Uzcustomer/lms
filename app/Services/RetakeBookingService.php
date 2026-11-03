@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AbsenceExcuse;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\Deadline;
 use App\Models\RetakeBooking;
@@ -249,6 +250,73 @@ class RetakeBookingService
             'book_from' => null,
             'excused' => false,
         ];
+    }
+
+    /**
+     * Talabaning boshqa mavzular bo'yicha amaldagi bronlari (bugundan boshlab):
+     * sababli arizada bir kunga bir nechta fan retake'i tushadi — bir vaqtda
+     * ikkita fanni topshirib bo'lmaydi.
+     */
+    public static function otherBookings(int $studentHemisId, int $subjectId, string $lessonDate): Collection
+    {
+        return RetakeBooking::where('student_hemis_id', $studentHemisId)
+            ->where('status', RetakeBooking::STATUS_BOOKED)
+            ->where('slot_end', '>', now())
+            ->where(fn ($q) => $q->where('subject_id', '!=', $subjectId)->orWhereDate('lesson_date', '!=', $lessonDate))
+            ->orderBy('slot_start')
+            ->get();
+    }
+
+    /** Tanlangan vaqt boshqa mavzu broni bilan ustma-ust tushsa — o'sha bron */
+    public static function overlappingBooking(int $studentHemisId, int $subjectId, string $lessonDate, Carbon $start, Carbon $end): ?RetakeBooking
+    {
+        return self::otherBookings($studentHemisId, $subjectId, $lessonDate)
+            ->first(fn (RetakeBooking $b) => $b->slot_start->lt($end) && $b->slot_end->gt($start));
+    }
+
+    /**
+     * Sababli ariza tasdiqlanganda: arizadagi qayta topshirish kuniga to'g'ri kelmaydigan
+     * bronlar (ariza ko'rib chiqilguncha oddiy muddat bo'yicha tanlangan) bekor qilinadi.
+     * Moodle'ga bekor qilish cron (retake-bookings:sync) orqali boradi.
+     *
+     * @return Collection<int, array{booking: RetakeBooking, from: string, to: string}>
+     */
+    public static function cancelOutsideExcuse(AbsenceExcuse $excuse): Collection
+    {
+        $cancelled = collect();
+        $makeups = $excuse->makeups()
+            ->where('assessment_type', 'jn')
+            ->where('jn_submitted', false)
+            ->where('status', 'scheduled')
+            ->whereNotNull('makeup_date')
+            ->whereNotNull('original_date')
+            ->get();
+
+        foreach ($makeups as $makeup) {
+            if (!ctype_digit((string) $makeup->subject_id)) {
+                continue;
+            }
+            $from = $makeup->makeup_date->toDateString();
+            $to = ($makeup->makeup_end_date ?? $makeup->makeup_date)->toDateString();
+            $booking = self::activeBooking((int) $excuse->student_hemis_id, (int) $makeup->subject_id, $makeup->original_date->toDateString());
+            if (!$booking) {
+                continue;
+            }
+            $day = $booking->slot_start->toDateString();
+            if ($day >= $from && $day <= $to) {
+                continue;
+            }
+
+            $booking->update([
+                'status' => RetakeBooking::STATUS_CANCELLED,
+                'cancelled_at' => now(),
+                'moodle_sync' => RetakeBooking::SYNC_PENDING,
+                'sync_attempts' => 0,
+            ]);
+            $cancelled->push(['booking' => $booking, 'from' => $from, 'to' => $to]);
+        }
+
+        return $cancelled;
     }
 
     /** Talabaning shu mavzu bo'yicha amaldagi broni */

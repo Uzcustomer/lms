@@ -149,3 +149,68 @@ it('drops JN items on days the student attended and was graded', function () {
         ->toBe(['Anatomiya jn 2026-10-21', 'Anatomiya oski 2026-10-20', 'Fiziologiya jn 2026-10-20']);
 });
 
+
+function planExcuseTables(): void
+{
+    planGradesTable();
+    Schema::create('absence_excuses', function ($t) {
+        $t->id();
+        $t->string('student_hemis_id');
+        $t->string('status');
+        $t->timestamps();
+    });
+    Schema::create('absence_excuse_makeups', function ($t) {
+        $t->id();
+        $t->unsignedBigInteger('absence_excuse_id');
+        $t->string('subject_name');
+        $t->string('assessment_type');
+        $t->date('original_date')->nullable();
+        $t->date('makeup_date')->nullable();
+        $t->date('makeup_end_date')->nullable();
+        $t->boolean('jn_submitted')->default(false);
+        $t->string('status')->default('scheduled');
+        $t->timestamps();
+    });
+}
+
+function planMakeup(int $excuseId, string $subject, string $type, string $original, ?string $retake, array $extra = []): void
+{
+    DB::table('absence_excuse_makeups')->insert(array_merge([
+        'absence_excuse_id' => $excuseId, 'subject_name' => $subject, 'assessment_type' => $type,
+        'original_date' => $original, 'makeup_date' => $retake, 'makeup_end_date' => $type === 'jn' ? $retake : null,
+        'jn_submitted' => false, 'status' => 'scheduled',
+    ], $extra));
+}
+
+function planMakeupDates(): array
+{
+    return DB::table('absence_excuse_makeups')->orderBy('id')->get()
+        ->map(fn ($m) => $m->subject_name . ' ' . $m->assessment_type . ' ' . substr((string) $m->makeup_date, 0, 10)
+            . ($m->makeup_end_date ? '/' . substr((string) $m->makeup_end_date, 0, 10) : ''))
+        ->all();
+}
+
+it('moves the retake days after a late approval and keeps them when approved in time', function () {
+    planExcuseTables();
+    $id = DB::table('absence_excuses')->insertGetId(['student_hemis_id' => '5531', 'status' => 'pending']);
+    // Ariza 02.11 da yuborilgan: retake 03.11 dan
+    planMakeup($id, 'Anatomiya', 'jn', '2026-10-20', '2026-11-03');
+    planMakeup($id, 'Anatomiya', 'jn', '2026-10-21', '2026-11-04');
+    planMakeup($id, 'Anatomiya', 'oski', '2026-10-24', '2026-11-04');
+    planMakeup($id, 'Fiziologiya', 'jn', '2026-10-20', '2026-11-03');
+    planMakeup($id, 'Fiziologiya', 'jn', '2026-10-22', '2026-10-22', ['jn_submitted' => true, 'status' => 'completed']);
+    $excuse = App\Models\AbsenceExcuse::find($id);
+
+    // 02.11 da tasdiqlandi — birinchi retake (03.11) hali kelmagan, o'zgarmaydi
+    expect(SababliRetakePlan::rescheduleIfLate($excuse, Carbon::parse('2026-11-03')))->toBeFalse();
+
+    // 06.11 (juma) da tasdiqlandi — 07.11 (shanba) dan qayta; yakshanba o'tkaziladi
+    expect(SababliRetakePlan::rescheduleIfLate($excuse, Carbon::parse('2026-11-07')))->toBeTrue()
+        ->and(planMakeupDates())->toBe([
+            'Anatomiya jn 2026-11-07/2026-11-07',
+            'Anatomiya jn 2026-11-09/2026-11-09',
+            'Anatomiya oski 2026-11-09',
+            'Fiziologiya jn 2026-11-07/2026-11-07',
+            'Fiziologiya jn 2026-10-22/2026-10-22', // topshirilgan — tegilmaydi
+        ]);
+});

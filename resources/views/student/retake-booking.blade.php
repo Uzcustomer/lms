@@ -54,6 +54,10 @@
         .rb-slot-opt input:focus-visible + span { outline: 2px solid #4338ca; outline-offset: 2px; }
         .rb-slot-opt input:disabled + span { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; text-decoration: line-through; cursor: not-allowed; }
         .rb-hint { font-size: 12px; color: #64748b; line-height: 1.45; }
+        .rb-field-label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; color: #475569; }
+        .rb-day-fixed { border: 1px solid #c7d2fe; background: #eef2ff; border-radius: 12px; padding: 10px 12px; font-size: 16px; font-weight: 700; color: #1e3a8a; }
+        .rb-slot-opt .rb-busy { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rb-slot-opt .rb-busy[hidden] { display: none; }
         .rb-error { font-size: 13px; color: #b91c1c; font-weight: 600; }
         .rb-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: #fff; border: 1px solid #e5eaf2;
             box-shadow: 0 2px 8px rgba(15, 39, 72, .05); text-decoration: none; color: inherit; }
@@ -79,6 +83,9 @@
                 // Sababli ariza: oraliq boshi bugundan keyin bo'lishi mumkin
                 $minDate = $debt['book_from'] && $debt['book_from']->isFuture() ? $debt['book_from'] : now();
                 $showForm = $debt['can_book'];
+                $retakeDay = $debt['retake_day'];
+                $weekdays = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
+                $retakeDayText = $retakeDay ? $retakeDay->format('d.m.Y') . ', ' . $weekdays[$retakeDay->dayOfWeek] : null;
                 // Vaqt tanlangan bo'lsa forma "O'zgartirish" bosilgandagina ochiladi (xato bo'lsa ochiq qoladi)
                 $formOpen = !$debt['is_booked'] || $errors->any() || ($flash['type'] ?? '') === 'error';
             @endphp
@@ -89,13 +96,15 @@
                 <p>
                     Sizda {{ $debt['subject_name'] }} fanidan {{ $dateText }} sanada
                     {{ $debt['is_nb'] ? 'NB' : 'past baho (' . $debt['mark'] . ')' }} bor.
-                    @if($debt['excused'] && $deadlineText)
+                    @if($retakeDayText)
+                        Sababli ariza bo'yicha qayta topshirish kuningiz: <strong>{{ $retakeDayText }}</strong>.
+                    @elseif($debt['excused'] && $deadlineText)
                         Sababli ariza bo'yicha qayta topshirish oralig'i:
                         <strong>{{ $debt['book_from']?->format('d.m.Y') }} — {{ $deadlineText }}</strong>.
                     @elseif($deadlineText)
                         Qayta topshirish muddati: <strong>{{ $deadlineText }}</strong> gacha.
                     @endif
-                    @if($showForm && !$debt['is_booked']) Qayta topshirish kuningiz va vaqt oralig'ini tanlang. @endif
+                    @if($showForm && !$debt['is_booked']) {{ $retakeDay ? "Shu kun uchun vaqt oralig'ini tanlang." : "Qayta topshirish kuningiz va vaqt oralig'ini tanlang." }} @endif
                 </p>
             </div>
 
@@ -116,7 +125,11 @@
                     <div><dt>Mavzu</dt><dd>{{ $debt['mavzu'] ? $debt['mavzu'] . '-mavzu' : '—' }}</dd></div>
                     <div><dt>Dars sanasi</dt><dd>{{ $dateText }}</dd></div>
                     <div><dt>{{ $debt['is_nb'] ? 'Sabab' : 'Baho' }}</dt><dd>{{ $debt['mark'] }}</dd></div>
-                    <div><dt>Muddat</dt><dd>{{ $deadlineText ? $deadlineText . ' gacha' : '—' }}@if($debt['excused']) <small>(sababli ariza)</small>@endif</dd></div>
+                    @if($retakeDayText)
+                        <div><dt>Qayta topshirish kuni</dt><dd>{{ $retakeDayText }} <small>(sababli ariza)</small></dd></div>
+                    @else
+                        <div><dt>Muddat</dt><dd>{{ $deadlineText ? $deadlineText . ' gacha' : '—' }}@if($debt['excused']) <small>(sababli ariza)</small>@endif</dd></div>
+                    @endif
                     <div><dt>Qolgan urinishlar</dt><dd>{{ $debt['tries_left'] ?? '—' }}</dd></div>
                     <div><dt>Holat</dt><dd><span class="rb-chip {{ $debt['state'] }}">{{ $debt['state_label'] }}</span></dd></div>
                 </dl>
@@ -148,18 +161,28 @@
 
             @if($showForm)
                 <section class="rb-card" id="rb-form-card" @unless($formOpen) hidden @endunless>
-                    <h2>{{ $debt['is_booked'] ? 'Yangi vaqtni tanlang' : 'Kun va vaqtni tanlang' }}</h2>
+                    <h2>{{ $debt['is_booked'] ? 'Yangi vaqtni tanlang' : ($retakeDay ? 'Vaqtni tanlang' : 'Kun va vaqtni tanlang') }}</h2>
                     <form method="POST" action="{{ route('student.retake-booking.store') }}" class="rb-form" id="rb-form"
-                          data-deadline="{{ $debt['deadline']?->format('Y-m-d') }}" data-from="{{ $minDate->format('Y-m-d') }}">
+                          data-deadline="{{ $debt['deadline']?->format('Y-m-d') }}" data-from="{{ $minDate->format('Y-m-d') }}"
+                          data-busy="{{ json_encode($busy ?? []) }}">
                         @csrf
                         <input type="hidden" name="subject_id" value="{{ $debt['subject_id'] }}">
                         <input type="hidden" name="lesson_date" value="{{ $debt['lesson_date_raw'] }}">
-                        <div class="rb-field">
-                            <label for="rb-date">Kun</label>
-                            <input type="date" id="rb-date" name="date" required
-                                   min="{{ $minDate->format('Y-m-d') }}" @if($debt['deadline']) max="{{ $debt['deadline']->format('Y-m-d') }}" @endif
-                                   value="{{ old('date', $debt['is_booked'] ? $debt['slot_start']?->format('Y-m-d') : '') }}">
-                        </div>
+                        @if($retakeDay)
+                            {{-- Sababli ariza: kun arizada belgilangan, faqat vaqt tanlanadi --}}
+                            <div class="rb-field">
+                                <span class="rb-field-label">Kun</span>
+                                <div class="rb-day-fixed">{{ $retakeDayText }}</div>
+                                <input type="hidden" id="rb-date" name="date" value="{{ $retakeDay->format('Y-m-d') }}">
+                            </div>
+                        @else
+                            <div class="rb-field">
+                                <label for="rb-date">Kun</label>
+                                <input type="date" id="rb-date" name="date" required
+                                       min="{{ $minDate->format('Y-m-d') }}" @if($debt['deadline']) max="{{ $debt['deadline']->format('Y-m-d') }}" @endif
+                                       value="{{ old('date', $debt['is_booked'] ? $debt['slot_start']?->format('Y-m-d') : '') }}">
+                            </div>
+                        @endif
                         @php
                             $currentSlot = old('slot', $debt['is_booked'] && $debt['slot_start'] && $debt['slot_end']
                                 ? $debt['slot_start']->format('H:i') . '-' . $debt['slot_end']->format('H:i') : '');
@@ -171,11 +194,11 @@
                                 @foreach($slots as $key => [$from, $to])
                                     <label class="rb-slot-opt">
                                         <input type="radio" name="slot" value="{{ $key }}" data-start="{{ $from }}" data-end="{{ $to }}" @checked($currentSlot === $key)>
-                                        <span>{{ $from }}–{{ $to }}</span>
+                                        <span>{{ $from }}–{{ $to }}<small class="rb-busy" hidden></small></span>
                                     </label>
                                 @endforeach
                             </div>
-                            <p class="rb-hint" id="rb-no-slots" hidden>Bugun uchun bo'sh vaqt oralig'i qolmadi — boshqa kunni tanlang.</p>
+                            <p class="rb-hint" id="rb-no-slots" hidden>{{ $retakeDay ? "Bu kun uchun bo'sh vaqt oralig'i qolmadi." : "Bu kun uchun bo'sh vaqt oralig'i qolmadi — boshqa kunni tanlang." }}</p>
                         </fieldset>
                         <div class="rb-error" id="rb-client-error" role="alert" @unless($errors->any()) hidden @endunless>
                             {{ $errors->first('slot') ?: $errors->first() }}
@@ -195,7 +218,11 @@
             @endif
 
             <div class="rb-alert info">
-                Vaqt tanlash majburiy emas: tanlamasangiz, muddat tugaguncha istalgan vaqtda topshirishingiz mumkin.
+                @if($retakeDay)
+                    Vaqt tanlash majburiy emas: tanlamasangiz, {{ $retakeDay->format('d.m.Y') }} kuni istalgan vaqtda topshirishingiz mumkin.
+                @else
+                    Vaqt tanlash majburiy emas: tanlamasangiz, muddat tugaguncha istalgan vaqtda topshirishingiz mumkin.
+                @endif
                 Vaqt tanlasangiz, faqat shu vaqt oralig'ida topshira olasiz.
             </div>
 
@@ -222,14 +249,24 @@
                         }
                         var radios = Array.prototype.slice.call(form.querySelectorAll('input[name="slot"]'));
                         var noSlots = document.getElementById('rb-no-slots');
+                        var busy = JSON.parse(form.dataset.busy || '[]');
+                        // Shu oraliqda boshqa fan bo'yicha tanlangan vaqt (sababli: bir kunda bir nechta fan)
+                        function busyAt(date, r) {
+                            var s = date + 'T' + r.dataset.start, e = date + 'T' + r.dataset.end;
+                            return busy.filter(function (b) { return b.start < e && b.end > s; })[0] || null;
+                        }
                         // Tanlangan kun bugun bo'lsa, tugab bo'lgan oraliqlar tanlanmaydi (davom etayotgani ochiq)
                         function refreshSlots() {
                             var date = form.date.value, now = new Date(), free = 0;
                             radios.forEach(function (r) {
                                 var past = !!date && new Date(date + 'T' + r.dataset.end) <= now;
-                                r.disabled = past;
-                                if (past && r.checked) { r.checked = false; }
-                                if (!past) { free++; }
+                                var taken = date ? busyAt(date, r) : null;
+                                var note = r.parentNode.querySelector('.rb-busy');
+                                note.textContent = taken ? (taken.name || 'band') : '';
+                                note.hidden = !taken;
+                                r.disabled = past || !!taken;
+                                if (r.disabled && r.checked) { r.checked = false; }
+                                if (!r.disabled) { free++; }
                             });
                             noSlots.hidden = !date || free > 0;
                         }
@@ -279,7 +316,8 @@
                         <span class="rb-name">{{ $item['subject_name'] }}</span>
                         <span class="rb-meta">
                             <span>{{ $item['lesson_date']?->format('d.m.Y') }}</span>
-                            @if($item['deadline'])<span>· muddat {{ $item['deadline']->format('d.m.Y') }}</span>@endif
+                            @if($item['retake_day'])<span>· qayta topshirish {{ $item['retake_day']->format('d.m.Y') }}</span>
+                            @elseif($item['deadline'])<span>· muddat {{ $item['deadline']->format('d.m.Y') }}</span>@endif
                             <span class="rb-chip {{ $item['state'] }}">{{ $item['state_label'] }}</span>
                         </span>
                         @if($item['is_booked'] && $item['slot_start'])

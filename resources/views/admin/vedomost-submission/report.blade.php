@@ -133,6 +133,12 @@
                 </div>
             @endif
 
+            @if($ignoredStatus)
+                <div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:8px 12px;font-size:12.5px;margin-bottom:12px;">
+                    Ro'yxatdagi «Holat» filtri hisobotda qo'llanilmadi — hisobot barcha holatlarni o'zi bo'lib ko'rsatadi. Boshqa filtrlar (ta'lim turi, semestr, fakultet…) qo'llanildi.
+                </div>
+            @endif
+
             <div style="overflow-x:auto;">
                 <table style="border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;">
                     <thead>
@@ -225,7 +231,7 @@
 
             <div style="margin-top:10px;font-size:12px;color:#94a3b8;">
                 @if($from && $to)
-                    «Davri boshiga» va «Davri oxiriga» — o'sha sanadagi holat (audit jurnalidan tiklangan; davr bugun tugasa — joriy holat). «Davri boshiga» faqat davr boshlanishidan oldin yaratilgan varaqlarni ko'rsatadi (vedomost yozuvlari asos sana kelganda yaratiladi; davr semestr boshidan bo'lsa bu bo'lim chiqmaydi). «Reja» — topshirish muddati shu davrga tushgan varaqlar (Jami = topshirilishi kerak edi): muddatida / kechikib (davr oxirigacha) / topshirilmagan. «Davri ichida» — oraliqda qilingan harakatlar soni; bir varaq davrda bir necha harakatga ega bo'lishi mumkin. «Rad etilganlar» — davrda rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi.
+                    «Davri boshiga» va «Davri oxiriga» — o'sha sanadagi holat (audit jurnalidan tiklangan; davr bugun tugasa — joriy holat). «Davri oxiriga»ga hali kutilayotgan, lekin topshirish muddati davr oxirigacha kelmagan (yoki imtihon sanasi hali belgilanmagan) varaqlar kirmaydi. «Davri boshiga» faqat davr boshlanishidan oldin yaratilgan varaqlarni ko'rsatadi (vedomost yozuvlari asos sana kelganda yaratiladi; davr semestr boshidan bo'lsa bu bo'lim chiqmaydi). «Reja» — topshirish muddati shu davrga tushgan varaqlar (Jami = topshirilishi kerak edi): muddatida / kechikib (davr oxirigacha) / topshirilmagan. «Davri ichida» — oraliqda qilingan harakatlar soni; bir varaq davrda bir necha harakatga ega bo'lishi mumkin. «Rad etilganlar» — davrda rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi.
                 @else
                     «Umumiy»: topshirilishi kerak edi — muddati bugungacha kelgan varaqlar; topshirildi — kamida bir marta yuklangan; tasdiqlandi — hozir tasdiqlangan; rad etilgan — kamida bir marta rad etilgan. Har bir katak — jamlangan vedomost varaqlari soni (guruhchalar/fan variantlari birlashtirilgan). «Shakllar bo'yicha» — har shakl (12/12a/12b…) alohida. «Rad etilganlar» — hech bo'lmasa bir marta rad etilgan har varaq bir marta: birinchi rad etilishidan keyingi birinchi qaror (bugungacha); umumiy «Jami»ga kirmaydi. Har bir songa bosing — ortidagi vedomostlar ro'yxati ochiladi. Sana oralig'ini kiritsangiz hisobot «davri boshiga / ichida / oxiriga» ko'rinishiga o'tadi.
                 @endif

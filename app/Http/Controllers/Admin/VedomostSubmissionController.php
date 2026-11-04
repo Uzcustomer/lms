@@ -509,7 +509,10 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkViewAccess();
 
-        [$query] = $this->filteredQuery($request);
+        // Holat (status / muddati o'tgan) — hisobotning o'zi shu bo'yicha bo'linadi; ro'yxatdagi holat
+        // filtri qo'llansa (masalan «Tekshirilmoqda»), hisobot faqat o'sha holatdagilarni ko'rsatib chalg'itadi.
+        $ignoredStatus = $request->filled('status') || $request->boolean('overdue');
+        [$query] = $this->filteredQuery($request->duplicate(\Illuminate\Support\Arr::except($request->query(), ['status', 'overdue', 'page'])));
 
         // Mavjud kesimlar: yorliq + jamlangan qatordagi maydon nomi.
         $dimensions = [
@@ -593,7 +596,7 @@ class VedomostSubmissionController extends Controller
 
         return view('admin.vedomost-submission.report', compact(
             'rows', 'dimensions', 'selectedDims', 'availableDims',
-            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to', 'drill', 'dateMode'
+            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to', 'drill', 'dateMode', 'ignoredStatus'
         ));
     }
 
@@ -783,7 +786,12 @@ class VedomostSubmissionController extends Controller
             if ($created === null || $created <= $to) {
                 // Davr bugun yoki kelajakda tugasa — haqiqiy joriy holat (jurnalda yozilmagan o'zgarishlar ham).
                 $st = $to >= $now ? (string) $v->status : $this->statusAt($logs, $to, true, $initial);
-                $contrib["close|$st"] = ($contrib["close|$st"] ?? 0) + 1;
+                // Hali kutilayotgan va topshirish muddati davr oxirigacha kelmagan (yoki imtihon sanasi
+                // hali yo'q) varaq — bu davrning qarzi emas, «Davri oxiriga»ga kirmaydi.
+                $due = !empty($v->deadline) && \Carbon\Carbon::parse($v->deadline)->startOfDay() <= $to;
+                if ($st !== VedomostSubmission::STATUS_PENDING || $due) {
+                    $contrib["close|$st"] = ($contrib["close|$st"] ?? 0) + 1;
+                }
             }
 
             // Rad etilganlar: davrda rad etilgan varaq keyingi topshirishda o'tdimi (bugungacha).

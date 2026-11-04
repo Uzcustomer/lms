@@ -40,6 +40,8 @@ class TimetableRule extends Model
         'reserve_slot'            => "Tanlangan fanlar uchun joy zaxiralash",
         'first_or_last'           => "Bu fan darslari birinchi yoki oxirgi bo'lsin",
         'afternoon_allowed'       => "Tanlangan fanlar tushdan keyin ham bo'lishi mumkin",
+        // Qoida fanlari amaliysi bir guruhning guruhchalari bilan birga (01a + 01b) — kartalarni birlashtiradi (qo'llash/ajratish).
+        'joint_groups'            => "Guruhchalar birga o'tadi (bitta o'qituvchi, bir vaqtda)",
     ];
 
     public const WEIGHTS = ['majburiy', 'normal', 'yengil'];
@@ -64,6 +66,13 @@ class TimetableRule extends Model
 
             return (self::CONDITIONS[$this->condition] ?? $this->condition)
                 . ': ' . ($labels[$mode] ?? $mode);
+        }
+
+        if ($this->condition === 'joint_groups') {
+            // "Guruhchalar birga o'tadi: guruh bo'yicha (+2 qo'lda juftlik)".
+            $pairs = count((array) (($this->params ?: [])['pairs'] ?? []));
+
+            return "Guruhchalar birga o'tadi: guruh bo'yicha" . ($pairs ? ' (+' . $pairs . " qo'lda juftlik)" : '');
         }
 
         return self::CONDITIONS[$this->condition] ?? $this->condition;

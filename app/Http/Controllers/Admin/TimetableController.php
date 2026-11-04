@@ -57,6 +57,7 @@ class TimetableController extends Controller
     use Concerns\TimetableConflictFocus;
     use Concerns\TimetableCycleShiftAdvice;
     use Concerns\TimetableTeacherAgenda;
+    use Concerns\TimetableJointGroups;
     use Concerns\TimetableWeeklyUnits;
     use Concerns\TimetableMudirPlaceholder;
 
@@ -994,6 +995,9 @@ class TimetableController extends Controller
             return null;
         }
         $cycleKeys = $this->cycleSubjectKeys($board);
+        // "Guruhchalar birga o'tadi" (joint_groups) — qoida fanlari amaliysi guruh / qo'lda juftlik bo'yicha birlashgan holda yaratiladi.
+        $jointRules = $this->jointRules($board);
+        $this->jointGenerated = [];
         $separatePractice = array_flip((array) (($board->settings ?? [])['separate_practice'] ?? []));
         // KTR (har hafta soati) bo'lsa — kartalar soati KTR bo'yicha (ishchi reja soati emas).
         $ktrPlans = $this->cycleKtrDayPlans($board);
@@ -1328,7 +1332,9 @@ class TimetableController extends Controller
                                 }
 
                                 $practiceRows = array_values($practiceRowsByName);
-                                $practiceBundles = $this->practiceBundles($practiceRows, (bool) $variantUnits, $pairPracticeGroups, $separateHere);
+                                $jointRule = !$variantUnits ? $this->jointRuleForRow($jointRules, $cycleKeys, (string) $specName, (int) $course, (string) $s->subject_name) : null;
+                                $practiceBundles = $jointRule ? $this->jointBundles($jointRule, $practiceRows)
+                                    : $this->practiceBundles($practiceRows, (bool) $variantUnits, $pairPracticeGroups, $separateHere);
 
                                 foreach ($practiceBundles as $bundle) {
                                     $names = [];
@@ -1345,6 +1351,9 @@ class TimetableController extends Controller
                                         continue;
                                     }
                                     $groupLabel = implode(' + ', $names);
+                                    if ($jointRule && count($names) > 1) {
+                                        $this->jointGenerated[] = [$blockFac, $specName, $course, (string) $s->subject_name, $names];
+                                    }
                                     // Bu guruhga shu fan bo'yicha kartalar allaqachon yaratilganmi?
                                     $prcKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|' . $groupLabel . '|' . $subjKey;
                                     if (isset($madePractice[$prcKey])) {
@@ -1516,6 +1525,9 @@ class TimetableController extends Controller
         }
         $this->snapshotBefore($request, $board, 'before_generate');
         $rows = $this->stripUnsupportedColumns($rows);
+        // "Guruhchalar birga o'tadi": birlashib yaratiladigan guruhchalarning avvalgi o'qituvchilari (har xil bo'lsa — ogohlantirish).
+        $jointBefore = $this->jointGenerated ? $this->jointTeachersBefore($board) : [];
+        $jointWarn = fn () => $this->jointGenerated ? ['joint_warnings' => $this->jointTeacherWarnings($jointBefore)] : [];
 
         // Sinxronlash (sukut): mavjud kartalar joyida qoladi, faqat endi kerak bo'lmaganlari
         // o'chiriladi va yangilari qo'shiladi. "full" — hammasini qaytadan yaratish (eski xatti-harakat).
@@ -1530,7 +1542,7 @@ class TimetableController extends Controller
                 $res['kept_placement_conflicts'] = $kept['conflicts'];
             }
 
-            return response()->json($res);
+            return response()->json($res + $jointWarn());
         }
 
         // O'qituvchi/xona biriktirishlari dars birligi bo'yicha saqlab qolinadi
@@ -1560,7 +1572,7 @@ class TimetableController extends Controller
         // Fakultet nomi to'ldirilgandan keyin — birlik kaliti unga bog'liq
         $restored = $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $kept);
 
-        return response()->json(['ok' => true, 'created' => count($rows)] + $restored);
+        return response()->json(['ok' => true, 'created' => count($rows)] + $restored + $jointWarn());
     }
 
     /**
@@ -3346,6 +3358,10 @@ class TimetableController extends Controller
             'scopes.*'    => 'string|max:255',
             'params'                 => 'nullable|array',
             'params.distribution'    => 'nullable|in:auto,spread,odd,even',
+            'params.mode'            => 'nullable|in:guruh',
+            'params.pairs'           => 'nullable|array|max:200',
+            'params.pairs.*'         => 'array|min:2|max:6',
+            'params.pairs.*.*'       => 'string|max:255',
             'weight'                 => 'nullable|string|max:20',
             'active'      => 'nullable|boolean',
             'note'        => 'nullable|string|max:255',
@@ -3367,9 +3383,12 @@ class TimetableController extends Controller
             'condition' => $data['condition'],
             'subjects'  => array_values($data['subjects'] ?? []),
             'scopes'    => array_values($data['scopes'] ?? []),
-            'params'    => $data['condition'] === 'lecture_week_distribution'
-                ? ['distribution' => $distribution]
-                : ($data['params'] ?? []),
+            'params'    => match ($data['condition']) {
+                'lecture_week_distribution' => ['distribution' => $distribution],
+                // Guruhchalar birga o'tadi: rejim (guruh bo'yicha) va qo'lda juftliklar (bir guruhcha — bitta juftlikda).
+                'joint_groups' => ['mode' => 'guruh', 'pairs' => $this->jointPairsClean((array) ($data['params']['pairs'] ?? []))],
+                default => $data['params'] ?? [],
+            },
             'weight'    => $weight,
             'active'    => (bool) ($data['active'] ?? true),
             'note'      => $data['note'] ?? null,

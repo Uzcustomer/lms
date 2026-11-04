@@ -822,6 +822,9 @@
                             <button type="button" id="ruleToggleBtn" class="asc-tool text-xs">Faol / nofaol</button>
                             <button type="button" id="ruleUpBtn" class="asc-tool text-xs" title="Yuqoriga">↑</button>
                             <button type="button" id="ruleDownBtn" class="asc-tool text-xs" title="Pastga">↓</button>
+                            <span class="h-5 w-px bg-gray-300 mx-1"></span>
+                            <button type="button" id="ruleJointApplyBtn" class="asc-tool text-xs" disabled title="«Guruhchalar birga o'tadi» qoidasi bo'yicha kartalarni birlashtirish">Qo'llash</button>
+                            <button type="button" id="ruleJointSplitBtn" class="asc-tool text-xs" disabled title="Qoida qamrovidagi birlashgan kartalarni guruhchalarga ajratish">Ajratish</button>
                             <span id="rulesMsg" class="text-[11px] text-gray-500 ml-1"></span>
                             <button type="button" id="rulesOkBtn" class="asc-tool text-xs ml-auto">OK</button>
                         </div>
@@ -891,6 +894,29 @@
                                             toq va juft haftalarga beriladi; yarim yoki ko'p bo'lsa 1-haftadan ketma-ket joylashadi.
                                             Fan tanlanmasa — barcha fanlarga umumiy qoida. Fan tanlansa — shu fan uchun istisno.
                                             Qo'llash uchun kartochkalarni qayta yarating.
+                                        </div>
+                                    </div>
+                                    {{-- "Guruhchalar birga o'tadi": qo'lda juftlash (ortib qolgan / talabasi kam guruhcha) --}}
+                                    <div id="ruleJointOptions" class="hidden mt-2 rounded border border-sky-200 bg-sky-50 p-3">
+                                        <label class="block text-xs font-bold text-sky-800 mb-1">Guruhchalar birga o'tadi</label>
+                                        <div class="text-[11px] leading-4 text-sky-800 mb-2">
+                                            Tanlangan fanlarning amaliy darsi bir guruhning guruhchalari bilan birga (01a + 01b; uchta bo'lsa 01a + 01b + 01c) —
+                                            bitta kartada, bitta o'qituvchi, bir vaqtda. Masalan Psixologiya: o'quv rejada amaliy, lekin seminar kabi birga o'tiladi.
+                                            Ma'ruza, bo'lakli fanlar ((a)/(b)/(c)) va sikl fanlari kirmaydi.
+                                        </div>
+                                        <label class="block text-[11px] font-semibold text-sky-800">Qo'lda juftlash (ixtiyoriy) — ortib qolgan yoki talabasi kam guruhchani boshqasiga qo'shish</label>
+                                        <div class="flex flex-wrap gap-1 items-center mt-1">
+                                            <select id="ruleJointA" class="rounded border-sky-300 bg-white text-xs py-0.5"></select>
+                                            <span class="text-xs">+</span>
+                                            <select id="ruleJointB" class="rounded border-sky-300 bg-white text-xs py-0.5"></select>
+                                            <span class="text-xs">+</span>
+                                            <select id="ruleJointC" class="rounded border-sky-300 bg-white text-xs py-0.5"></select>
+                                            <button type="button" id="ruleJointAdd" class="asc-tool text-xs">Juftlik qo'shish</button>
+                                        </div>
+                                        <div id="ruleJointPairs" class="mt-1 text-xs"></div>
+                                        <div class="mt-2 text-[11px] leading-4 text-sky-700">
+                                            Juftlikdagi guruhchalar guruh bo'yicha birlashmaydi — faqat shu juftlikda. Saqlangach ro'yxatdagi
+                                            <b>Qo'llash</b> tugmasi kartalarni birlashtiradi (avval natija ko'rsatiladi). Kartochkalar qayta yaratilganda ham qoida hisobga olinadi.
                                         </div>
                                     </div>
                                 </div>
@@ -9157,7 +9183,94 @@
             function toggleRuleParams(condition) {
                 const panel = $('ruleLectureWeekOptions');
                 if (panel) panel.classList.toggle('hidden', condition !== 'lecture_week_distribution');
+                const joint = $('ruleJointOptions');
+                if (joint) joint.classList.toggle('hidden', condition !== 'joint_groups');
+                if (condition === 'joint_groups') renderJointPairs();
             }
+            // ===== "Guruhchalar birga o'tadi": qo'lda juftliklar (muharrirda) =====
+            let ruleJointPairs = [];   // [["p/st26-03c", "p/st26-04c"], ...]
+            // Qamrovdagi (tanlangan yo'nalish · kurs; tanlanmasa — barchasi) amaliy guruhchalari.
+            function jointScopeGroups() {
+                const picked = $('ruleAllScopes') && $('ruleAllScopes').checked ? null
+                    : new Set([...document.querySelectorAll('#ruleScopeList .rule-scope:checked')].map(c => c.value));
+                const out = new Set();
+                (typeof cards !== 'undefined' ? cards : []).forEach(c => {
+                    if (c.training_type === 'lecture' || (picked && picked.size && !picked.has(c.specialty_name + ' · ' + c.course))) return;
+                    cardGroups(c).forEach(g => out.add(g));
+                });
+                return [...out].sort((a, b) => a.localeCompare(b, 'uz', { numeric: true }));
+            }
+            function renderJointPairs() {
+                if (!$('ruleJointPairs')) return;
+                const used = new Set(ruleJointPairs.flat());
+                const opts = jointScopeGroups().filter(g => !used.has(g));
+                const optHtml = first => (first ? '<option value="">— ixtiyoriy —</option>' : '<option value="">— guruhcha —</option>')
+                    + opts.map(g => '<option value="' + esc(g) + '">' + esc(g) + '</option>').join('');
+                $('ruleJointA').innerHTML = optHtml(false);
+                $('ruleJointB').innerHTML = optHtml(false);
+                $('ruleJointC').innerHTML = optHtml(true);
+                $('ruleJointPairs').innerHTML = ruleJointPairs.length ? ruleJointPairs.map((p, i) =>
+                    '<div class="flex items-center gap-2 py-0.5"><span>' + esc(p.join(' + ')) + '</span>'
+                    + '<button type="button" class="text-red-600 hover:underline" data-joint-del="' + i + '">o‘chirish</button></div>').join('')
+                    : '<div class="text-[11px] text-sky-700">Qo‘lda juftlik yo‘q — hamma guruhchalar guruh bo‘yicha birlashadi.</div>';
+                $('ruleJointPairs').querySelectorAll('[data-joint-del]').forEach(b => b.onclick = () => {
+                    ruleJointPairs.splice(+b.dataset.jointDel, 1);
+                    renderJointPairs();
+                });
+            }
+            if ($('ruleJointAdd')) $('ruleJointAdd').onclick = () => {
+                const pick = [$('ruleJointA').value, $('ruleJointB').value, $('ruleJointC').value].filter(Boolean);
+                if (new Set(pick).size < 2) { $('ruleEditMsg').textContent = 'Juftlik uchun kamida ikki xil guruhcha tanlang.'; return; }
+                $('ruleEditMsg').textContent = '';
+                ruleJointPairs.push([...new Set(pick)]);
+                renderJointPairs();
+            };
+            if ($('ruleScopeList')) $('ruleScopeList').addEventListener('change', () => {
+                if ($('ruleJointOptions') && !$('ruleJointOptions').classList.contains('hidden')) renderJointPairs();
+            });
+            if ($('ruleAllScopes')) $('ruleAllScopes').addEventListener('change', () => {
+                if ($('ruleJointOptions') && !$('ruleJointOptions').classList.contains('hidden')) renderJointPairs();
+            });
+            // Qo'llash / ajratish: avval sinov (dry_run) natijasi oynada, "Tasdiqlash" — haqiqiy bajarish va doska qayta yuklanadi.
+            async function jointRun(rule, kind, after) {
+                const url = BASE + '/boards/' + board.id + '/rules/' + rule.id + '/' + (kind === 'split' ? 'split-joint' : 'apply-joint');
+                let dry;
+                try { dry = await api(url, 'POST', { dry_run: 1 }); } catch (e) { $('rulesMsg').textContent = 'Xatolik: ' + e.message; return; }
+                const prior = document.getElementById('jointRunModal');
+                if (prior) prior.remove();
+                const placed = p => p ? ((boardDayName ? boardDayName(p.day) : p.day + '-kun') + ', ' + p.pair + '-para') : 'panelda';
+                const resText = r => kind === 'split' ? esc(r.card_to || '') :
+                    (Array.isArray(r.card_to) && r.card_to.length ? r.cards_from.length + ' karta → ' + r.card_to.length + ' (' + r.placed_at.map(placed).join('; ') + ')' : '—');
+                const rows = (dry.list || []);
+                const m = document.createElement('div');
+                m.id = 'jointRunModal';
+                m.className = 'cr-proposal-overlay';
+                m.innerHTML = '<div class="cr-proposal-form" style="width:min(900px,96vw);max-height:86vh;overflow:auto">'
+                    + '<h3 class="font-bold text-lg">' + (kind === 'split' ? 'Guruhchalarga ajratish' : 'Guruhchalarni birlashtirish') + ' — sinov natijasi</h3>'
+                    + '<p class="text-sm">' + esc(rule.description || '') + '</p>'
+                    + (rows.length ? '<table class="w-full text-xs border-collapse tt-rules-table" style="margin-top:6px"><thead><tr><th>Fan</th><th>Guruhchalar</th><th>Natija</th><th>Ogohlantirish</th></tr></thead><tbody>'
+                        + rows.map(r => '<tr><td>' + esc(r.subject) + '</td><td>' + esc(r.groups) + '</td><td>' + resText(r) + '</td>'
+                            + '<td class="' + (r.warning ? 'text-amber-700' : '') + '">' + esc(r.warning || '') + '</td></tr>').join('') + '</tbody></table>'
+                        : '<p class="text-sm text-gray-500" style="margin-top:6px">' + (kind === 'split' ? 'Ajratiladigan birlashgan karta yo‘q.' : 'Birlashtiriladigan karta yo‘q.') + '</p>')
+                    + '<p role="alert" class="text-red-600"></p><div class="flex justify-end gap-3" style="margin-top:8px"><button type="button" data-close>Bekor</button>'
+                    + ((kind === 'split' ? dry.cards : dry.merged) ? '<button type="button" data-ok class="px-3 py-2 bg-blue-600 text-white rounded">Tasdiqlash</button>' : '')
+                    + '</div></div>';
+                document.body.appendChild(m);
+                m.querySelector('[data-close]').onclick = () => m.remove();
+                const ok = m.querySelector('[data-ok]');
+                if (ok) ok.onclick = async () => {
+                    ok.disabled = true;
+                    try {
+                        const r = await api(url, 'POST', {});
+                        m.remove();
+                        $('rulesMsg').textContent = kind === 'split' ? ('Ajratildi: ' + (r.cards || 0) + ' karta → +' + (r.created || 0))
+                            : ('Birlashtirildi: ' + (r.merged || 0) + ' to‘plam, o‘chirilgan kartalar: ' + (r.removed || 0));
+                        if (after) await after();
+                        await loadBoard(board.id);
+                    } catch (e) { ok.disabled = false; m.querySelector('[role="alert"]').textContent = e.message; }
+                };
+            }
+            const boardDayName = d => ((board && board.day_names) || ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'])[d - 1] || (d + '-kun');
 
             // Qoidalar — faqat to'liq huquqli rollarga (server boshqalarga 403): o'qituvchi, fan mas'uli, kafedra mudiri, o'quv bo'limida so'ralmaydi.
             const TIMETABLE_CAN_RULES = !TIMETABLE_ASSIGNMENT_ONLY;
@@ -9199,6 +9312,9 @@
                     '<td>' + esc(r.description || r.condition) + '</td>' +
                     '<td><span class="tt-rule-w ' + esc(r.weight) + '">' + esc(WEIGHT_LABEL[r.weight] || r.weight) + '</span></td>' +
                     '<td>' + esc(r.note || '') + '</td></tr>').join('');
+                // "Qo'llash" / "Ajratish" — faqat tanlangan "Guruhchalar birga o'tadi" qoidasi uchun.
+                const selJ = rulesData.find(x => x.id === ruleSelId);
+                ['ruleJointApplyBtn', 'ruleJointSplitBtn'].forEach(id => { if ($(id)) $(id).disabled = !(selJ && selJ.condition === 'joint_groups'); });
                 $('rulesBody').querySelectorAll('tr').forEach(tr => {
                     tr.onclick = () => { ruleSelId = +tr.dataset.id; renderRulesTable(); };
                     tr.ondblclick = () => { ruleSelId = +tr.dataset.id; openRuleEditor(rulesData.find(x => x.id === ruleSelId)); };
@@ -9227,6 +9343,8 @@
                 $('ruleSubjSearch').value = '';
                 $('ruleLectureWeekMode').value = rule && rule.params && rule.params.distribution
                     ? rule.params.distribution : 'auto';
+                ruleJointPairs = rule && rule.condition === 'joint_groups' && rule.params && Array.isArray(rule.params.pairs)
+                    ? rule.params.pairs.map(p => [...p]) : [];
 
                 // Shartlar ro'yxati (radio)
                 const cur = rule ? rule.condition : '';
@@ -9259,6 +9377,7 @@
                     (selScopes.has(s) ? ' checked' : '') + '>' + esc(s) + '</label>').join('') ||
                     '<div class="text-[11px] text-gray-400 p-1">Yo\'nalish yo\'q</div>';
 
+                if (cur === 'joint_groups') renderJointPairs();   // qamrov ro'yxati endi tayyor
                 $('ruleEditModal').classList.remove('hidden');
             }
             // "Barchasi" belgilansa — alohida tanlovlar tozalanadi
@@ -9302,6 +9421,9 @@
                 if (cond.value === 'lecture_week_distribution') {
                     body.params = { distribution: $('ruleLectureWeekMode').value };
                 }
+                if (cond.value === 'joint_groups') {
+                    body.params = { mode: 'guruh', pairs: ruleJointPairs };
+                }
                 if (ruleEditing) body.id = ruleEditing.id;
                 this.disabled = true;
                 try {
@@ -9310,6 +9432,9 @@
                     await loadRules();
                     if (cond.value === 'lecture_week_distribution') {
                         $('rulesMsg').textContent = 'Qoida saqlandi. Qo\'llash uchun Kartochkalarni qayta yarating.';
+                    }
+                    if (cond.value === 'joint_groups') {
+                        $('rulesMsg').textContent = 'Qoida saqlandi. Kartalarni birlashtirish uchun qoidani tanlab «Qo\'llash» ni bosing.';
                     }
                 } catch (e) { $('ruleEditMsg').textContent = 'Xatolik: ' + e.message; }
                 this.disabled = false;
@@ -9327,6 +9452,16 @@
                 const r = selRule();
                 if (!r) { $('rulesMsg').textContent = 'Avval qoidani tanlang.'; return; }
                 if (!confirm('Qoida o\'chirilsinmi?\n\n' + (r.description || r.condition))) return;
+                const doDelete = async () => {
+                    await api(BASE + '/boards/' + board.id + '/rules/' + r.id, 'POST', { _method: 'DELETE' });
+                    ruleSelId = null;
+                    await loadRules();
+                };
+                // "Guruhchalar birga o'tadi": birlashtirilgan kartalarni avval guruhchalarga ajratish taklifi (tasdiqlansa — keyin o'chiriladi).
+                if (r.condition === 'joint_groups' && confirm('Bu qoida bo\'yicha birlashtirilgan kartalar guruhchalarga ajratilsinmi?\n(Bekor — kartalar shundayligicha qoladi, faqat qoida o\'chadi.)')) {
+                    await jointRun(r, 'split', doDelete);
+                    return;
+                }
                 try {
                     // POST + _method spoofing — fayldagi boshqa o'chirishlar bilan bir xil uslub
                     await api(BASE + '/boards/' + board.id + '/rules/' + r.id, 'POST', { _method: 'DELETE' });
@@ -9344,7 +9479,17 @@
                     $('rulesMsg').textContent = '';
                 } catch (e) { $('rulesMsg').textContent = 'Xatolik: ' + e.message; }
             }
-            if ($('ruleToggleBtn')) $('ruleToggleBtn').onclick = () => ruleState(r => ({ active: r.active ? 0 : 1 }));
+            if ($('ruleToggleBtn')) $('ruleToggleBtn').onclick = async () => {
+                const r = selRule();
+                await ruleState(x => ({ active: x.active ? 0 : 1 }));
+                // Nofaol qilingan "Guruhchalar birga o'tadi" — birlashgan kartalarni ajratish taklifi.
+                if (r && r.condition === 'joint_groups' && r.active
+                    && confirm('Qoida nofaol qilindi. Bu qoida bo\'yicha birlashtirilgan kartalar guruhchalarga ajratilsinmi?')) {
+                    await jointRun(r, 'split');
+                }
+            };
+            if ($('ruleJointApplyBtn')) $('ruleJointApplyBtn').onclick = () => { const r = selRule(); if (r && r.condition === 'joint_groups') jointRun(r, 'apply'); };
+            if ($('ruleJointSplitBtn')) $('ruleJointSplitBtn').onclick = () => { const r = selRule(); if (r && r.condition === 'joint_groups') jointRun(r, 'split'); };
             if ($('ruleUpBtn')) $('ruleUpBtn').onclick = () => ruleState(() => ({ move: 'up' }));
             if ($('ruleDownBtn')) $('ruleDownBtn').onclick = () => ruleState(() => ({ move: 'down' }));
 

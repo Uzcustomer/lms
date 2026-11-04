@@ -1301,6 +1301,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/separate-practice-groups', [\App\Http\Controllers\Admin\TimetableController::class, 'separatePracticeGroups'])->name('boards.separate-practice-groups');
                 Route::post('/boards/{board}/split-long-practice', [\App\Http\Controllers\Admin\TimetableController::class, 'splitLongPractice'])->name('boards.split-long-practice');
                 Route::post('/boards/{board}/merge-variant-lectures', [\App\Http\Controllers\Admin\TimetableController::class, 'mergeVariantLectures'])->name('boards.merge-variant-lectures');
+                // Bo'lak qismlari — bitta mashg'ulot: guruhchalardagi (a)/(b) qismlari birlashgan kartaga (dry_run bilan).
+                Route::post('/boards/{board}/merge-bolak-parts', [\App\Http\Controllers\Admin\TimetableController::class, 'mergeBolakParts'])->name('boards.merge-bolak-parts');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::get('/boards/{board}/week-suggestions', [\App\Http\Controllers\Admin\TimetableController::class, 'weekSuggestions'])->name('boards.week-suggestions');

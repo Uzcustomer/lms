@@ -34,7 +34,7 @@
     // kafedra mudiri; o'quv bo'limi — bo'shatish va fanlar menejeridan tashqari) sahifaga yashirin va o'chiq chiqadi: tt-forbidden —
     // display:none !important (JS 'hidden' ni olib tashlasa ham ko'rinmaydi). Server ham 403 qaytaradi (TimetableAssignmentAccess).
     $timetableForbiddenIds = $timetableAssignmentOnly ? array_values(array_filter([
-        'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn',
+        'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'mergeBolakBtn', 'delBoardBtn', 'snapshotsBtn', 'ktrWeeksBtn',
         'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
         'unplaceBtn', 'gsSave', 'cycleHolAddBtn', 'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek',
     ], fn ($id) => !($timetableCanUnplace && in_array($id, ['unplaceBtn', 'cycleHolAddBtn'], true))
@@ -91,6 +91,8 @@
                         <button type="button" id="newBoardBtn" class="asc-tool toolbar-action{{ $ttForbid('newBoardBtn') }}" @disabled(in_array('newBoardBtn', $timetableForbiddenIds, true))><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
                         <button type="button" id="genBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('genBtn') }}" @disabled(in_array('genBtn', $timetableForbiddenIds, true))><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
                         <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('refreshNamesBtn') }}" @disabled(in_array('refreshNamesBtn', $timetableForbiddenIds, true)) title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
+                        {{-- Bo'lak qismlari — bitta mashg'ulot: guruhchalardagi (a)/(b) qismlarini birlashtirish (avval sinov natijasi) --}}
+                        <button type="button" id="mergeBolakBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('mergeBolakBtn') }}" @disabled(in_array('mergeBolakBtn', $timetableForbiddenIds, true)) title="Bo'lakli fanning ((a)/(b)) bir guruhdagi qismlarini (masalan 02a + 02c) bitta kartaga birlashtiradi — bir vaqtda, bitta xona va o'qituvchi"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-intersect"></i></span>Bo'laklar</button>
                         @if(in_array($timetableActiveRole, ['admin', 'superadmin'], true))
                             {{-- Doska versiyalari: kunlik va xavfli amallardan oldingi nusxalar, joylashuvni tiklash --}}
                             <button type="button" id="snapshotsBtn" class="hidden asc-tool toolbar-action{{ $ttForbid('snapshotsBtn') }}" @disabled(in_array('snapshotsBtn', $timetableForbiddenIds, true)) title="Doska versiyalari (nusxalar) va joylashuvni tiklash"><span class="toolbar-icon" aria-hidden="true">🕘</span>Versiyalar</button>
@@ -3578,6 +3580,11 @@
                     } else parts.push((j.created || 0) + ' ta kartochka yaratildi');
                     if (j.restored_units) parts.push(j.restored_units + ' ta dars birligining o\'qituvchi/xona biriktirishi tiklandi');
                     if (j.lost_units) parts.push(j.lost_units + ' ta birlik endi rejada yo\'q');
+                    // Birlashib yaratilgan kartalar (bo'lak qismlari, "Guruhchalar birga o'tadi"): guruhchalarda o'qituvchilar har xil edi.
+                    if ((j.joint_warnings || []).length) {
+                        parts.push((j.joint_warnings.length) + ' ta birlashgan kartada o\'qituvchilar har xil edi');
+                        alert('Birlashib yaratilgan kartalar — tekshiring:\n\n' + j.joint_warnings.slice(0, 30).join('\n'));
+                    }
                     const summary = parts.join(' · ');
                     setCardSyncProgressText('Doska yangi kartochkalar bilan qayta yuklanmoqda…');
                     await loadBoard(board.id);
@@ -3644,6 +3651,51 @@
                 render('');
             };
             // Fan nomlarini ishchi rejadagi joriy nomga yangilash (qayta yaratmasdan)
+            // Birlashgan bo'lak kartasi ("Fan (a)", guruhchalar 02a + 02c): qisqa yorliq "02a + 02c"; boshqa kartalar — ''.
+            function bolakPartsLabel(c) {
+                if (!c || c.training_type === 'lecture' || !/\(\s*[a-zа-яё]\s*\)\s*$/i.test(String(c.subject_name || '')) || (c.group_names || []).length < 2) return '';
+                return c.group_names.map(g => { const m = /(\d+[^\d\s(]*)\s*(\(.*\))?\s*$/.exec(String(g)); return m ? m[1] : g; }).join(' + ');
+            }
+            // "Bo'laklar": joriy qamrovda bo'lak qismlarini birlashtirish — avval sinov (dry_run) natijasi, "Tasdiqlash" — bajarish.
+            if ($('mergeBolakBtn')) $('mergeBolakBtn').onclick = async function () {
+                if (!board) return;
+                const url = BASE + '/boards/' + board.id + '/merge-bolak-parts';
+                let dry;
+                this.disabled = true;
+                try { dry = await api(url, 'POST', Object.assign(scopeBody(), { dry_run: 1 })); }
+                catch (e) { alert('Xatolik: ' + e.message); this.disabled = false; return; }
+                this.disabled = false;
+                const prior = document.getElementById('bolakMergeModal');
+                if (prior) prior.remove();
+                const days = (board.day_names && board.day_names.length) ? board.day_names : ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+                const placed = p => p ? ((days[p.day - 1] || p.day + '-kun') + ', ' + p.pair + '-para') : 'panelda';
+                const rows = dry.list || [];
+                const m = document.createElement('div');
+                m.id = 'bolakMergeModal';
+                m.className = 'cr-proposal-overlay';
+                m.innerHTML = '<div class="cr-proposal-form" style="width:min(900px,96vw);max-height:86vh;overflow:auto">'
+                    + '<h3 class="font-bold text-lg">Bo‘lak qismlarini birlashtirish — sinov natijasi</h3>'
+                    + '<p class="text-sm">' + esc(scopeLabelText()) + '. Bitta bo‘lakning guruhchalardagi qismlari (masalan 02a + 02c) bitta mashg‘ulot: bir vaqtda, bitta xona va o‘qituvchi.</p>'
+                    + (rows.length ? '<table class="w-full text-xs border-collapse tt-rules-table" style="margin-top:6px"><thead><tr><th>Fan</th><th>Guruhchalar</th><th>Natija</th><th>Ogohlantirish</th></tr></thead><tbody>'
+                        + rows.map(r => '<tr><td>' + esc(r.subject) + '</td><td>' + esc(r.groups) + '</td><td>'
+                            + (r.card_to && r.card_to.length ? r.cards_from.length + ' karta → ' + r.card_to.length + ' (' + r.placed_at.map(placed).join('; ') + ')' : '—') + '</td>'
+                            + '<td class="' + (r.warning ? 'text-amber-700' : '') + '">' + esc(r.warning || '') + '</td></tr>').join('') + '</tbody></table>'
+                        : '<p class="text-sm text-gray-500" style="margin-top:6px">Birlashtiriladigan bo‘lak qismlari yo‘q.</p>')
+                    + '<p role="alert" class="text-red-600"></p><div class="flex justify-end gap-3" style="margin-top:8px"><button type="button" data-close>Bekor</button>'
+                    + (dry.merged ? '<button type="button" data-ok class="px-3 py-2 bg-blue-600 text-white rounded">Tasdiqlash</button>' : '') + '</div></div>';
+                document.body.appendChild(m);
+                m.querySelector('[data-close]').onclick = () => m.remove();
+                const ok = m.querySelector('[data-ok]');
+                if (ok) ok.onclick = async () => {
+                    ok.disabled = true;
+                    try {
+                        const r = await api(url, 'POST', scopeBody());
+                        m.remove();
+                        await loadBoard(board.id);
+                        $('boardMsg').textContent = 'Bo‘lak qismlari birlashtirildi: ' + (r.merged || 0) + ' ta, o‘chirilgan kartalar: ' + (r.removed || 0);
+                    } catch (e) { ok.disabled = false; m.querySelector('[role="alert"]').textContent = e.message; }
+                };
+            };
             $('refreshNamesBtn').onclick = async function () {
                 if (!board) return;
                 this.disabled = true; $('boardMsg').textContent = 'Fan nomlari yangilanmoqda...';
@@ -3757,6 +3809,7 @@
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
                 $('refreshNamesBtn').classList.add('hidden'); $('reloadBoardBtn').classList.add('hidden');
+                if ($('mergeBolakBtn')) $('mergeBolakBtn').classList.add('hidden');
                 if ($('snapshotsBtn')) $('snapshotsBtn').classList.add('hidden');
                 toggleAscToolbar(false);
                 $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
@@ -3833,6 +3886,7 @@
                 $('genBtn').classList.remove('hidden');
                 if ($('changeReqBtn')) { $('changeReqBtn').classList.remove('hidden'); loadChangeRequests(); }
                 $('refreshNamesBtn').classList.remove('hidden');
+                if ($('mergeBolakBtn')) $('mergeBolakBtn').classList.remove('hidden');
                 $('reloadBoardBtn').classList.remove('hidden');
                 if ($('snapshotsBtn')) $('snapshotsBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
@@ -10689,12 +10743,12 @@
 
                 const panelCard = (c, skip, conflict = skip ? null : cardConflict(c)) =>
                     '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + infoOnlyClass(c) + (skip ? ' skip' : '') + (conflict ? ' conflict' : '') + (selected && selected.id === c.id ? ' sel' : '') +
-                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
+                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (bolakPartsLabel(c) ? ' · qismlar: ' + (c.group_names || []).join(', ') + ' — bitta mashg\'ulot' : '') + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
                     cardLabel(c, true) +
                     '<div class="text-[9px] text-gray-500">' +
                     (c.training_type === 'lecture'
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
-                        : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
+                        : esc(bolakPartsLabel(c) || c.group_name || '') + ' · ' + c.students + ' t.') +
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
                     (unitPanelLen[c.id] && !partialUnits.has(unitKey(c)) ? '<div class="text-[9px] font-semibold text-indigo-700" title="Dars yaxlit joylanadi: barcha bo\'laklari ketma-ket">jami ' +
                         unitPanelLen[c.id].reduce((a, b) => a + b, 0) + ' soat (' + unitPanelLen[c.id].join(' + ') + ')</div>' : '') +

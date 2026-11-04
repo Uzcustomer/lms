@@ -426,12 +426,9 @@ trait TimetableJointGroups
         return mb_strtolower(trim($fac)) . '|' . $this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject) . '|' . $this->groupNameKey($group);
     }
 
-    /** Yaratishdan oldingi amaliy kartalar o'qituvchilari (jointTeacherWarnings uchun) — faqat faol qoida bo'lsa. */
+    /** Yaratishdan oldingi amaliy kartalar o'qituvchilari (jointTeacherWarnings uchun) — birlashib yaratiladigan to'plam bo'lsa chaqiriladi. */
     private function jointTeachersBefore(TimetableBoard $board): array
     {
-        if ($this->jointRules($board)->isEmpty()) {
-            return [];
-        }
         $out = [];
         foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->whereNotNull('teacher_id')
             ->get(['faculty_name', 'specialty_name', 'course', 'subject_name', 'group_name', 'group_names', 'teacher_id', 'teacher_name']) as $c) {

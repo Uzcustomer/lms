@@ -58,6 +58,7 @@ class TimetableController extends Controller
     use Concerns\TimetableCycleShiftAdvice;
     use Concerns\TimetableTeacherAgenda;
     use Concerns\TimetableJointGroups;
+    use Concerns\TimetableBolakParts;
     use Concerns\TimetableWeeklyUnits;
     use Concerns\TimetableMudirPlaceholder;
 
@@ -1382,7 +1383,8 @@ class TimetableController extends Controller
                                         continue;
                                     }
                                     $groupLabel = implode(' + ', $names);
-                                    if ($jointRule && count($names) > 1) {
+                                    // Qoida yoki bo'lak qismlari bo'yicha birlashgan to'plam — guruhchalar biriktiruvi va o'qituvchi tekshiruvi uchun.
+                                    if (($jointRule || $variantUnits) && count($names) > 1) {
                                         $this->jointGenerated[] = [$blockFac, $specName, $course, (string) $s->subject_name, $names];
                                     }
                                     // Bu guruhga shu fan bo'yicha kartalar allaqachon yaratilganmi?
@@ -2636,17 +2638,15 @@ class TimetableController extends Controller
         if (!$variantUnits) {
             return array_chunk($practiceRows, 2);
         }
-        $bundles = array_map(static fn ($gr) => [$gr], array_values(array_filter($practiceRows, fn ($gr) => empty($gr['partial']))));
-        // Kichik qismlar asos guruh bo'yicha: "02a dan 5 + 02b dan 5" — bitta (c) guruhi; butun oqimning qoldiqlari
-        // bitta katta guruhga qo'shilmaydi.
-        $partByBase = [];
+        // Bo'lak qismlari — bitta mashg'ulot: bir asos guruhdagi barcha qismlar (to'liq va kichik) bitta to'plam, masalan (a) =
+        // 02a hammasi + 02c yarmi → "02a + 02c" (bir vaqtda, bitta xona va o'qituvchi). Turli asos guruhlar birlashmaydi —
+        // butun oqimning qoldiqlari bitta katta guruhga qo'shilmaydi.
+        $byBase = [];
         foreach ($practiceRows as $gr) {
-            if (!empty($gr['partial'])) {
-                $partByBase[$this->baseGroupKey((string) ($gr['name'] ?? ''))][] = $gr;
-            }
+            $byBase[$this->baseGroupKey((string) ($gr['name'] ?? ''))][] = $gr;
         }
 
-        return array_merge($bundles, array_values($partByBase));
+        return array_values($byBase);
     }
 
     /** Istisno kaliti: fakultet ('' — barcha fakultetlar) + yo'nalish + kurs + fan (amaliy guruhlari juftlanmaydi). */

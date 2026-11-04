@@ -825,7 +825,7 @@ class VedomostSubmissionController extends Controller
         }
 
         $sections = [
-            ['key' => 'plan', 'label' => 'Reja — topshirish muddati shu davrda', 'tint' => '#f0fdf4', 'cols' => [
+            ['key' => 'plan', 'label' => 'Reja — topshirish muddati shu davrda', 'tint' => '#f0fdf4', 'totalLabel' => 'Topshirilishi kerak edi', 'cols' => [
                 ['key' => 'plan|ontime', 'label' => 'Muddatida topshirildi', 'color' => ['#166534', '#dcfce7']],
                 ['key' => 'plan|late', 'label' => 'Kechikib topshirildi', 'color' => ['#b45309', '#fef3c7']],
                 ['key' => 'plan|missing', 'label' => 'Topshirilmagan', 'color' => ['#b91c1c', '#fee2e2']],

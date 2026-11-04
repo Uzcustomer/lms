@@ -103,6 +103,11 @@
 
                 {{-- Filtrlar (yopilish shakli sahifasi uslubida) --}}
                 <form id="filter-form" method="GET" action="{{ route('admin.vedomost-submission.index') }}">
+                    @php
+                        $advKeys = ['specialty', 'closing_form_filter', 'form_type', 'status', 'overdue'];
+                        $advCount = collect($advKeys)->filter(fn ($k) => request()->filled($k) && !($k === 'overdue' && !request()->boolean('overdue')))->count()
+                            + (request('order', 'newest') !== 'newest' ? 1 : 0);
+                    @endphp
                     <div class="filter-container">
                         <div class="filter-row">
                             <div class="filter-item" style="min-width:160px;">
@@ -125,15 +130,31 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="flex:1;min-width:220px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
-                                <select name="specialty" id="specialty" class="select2" style="width:100%;">
+                            <div class="filter-item" style="min-width:120px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                                <select name="level_code" id="level_code" class="select2" style="width:100%;">
                                     <option value="">Barchasi</option>
-                                    @foreach($specialties as $sp)
-                                        <option value="{{ $sp }}" {{ request('specialty') === $sp ? 'selected' : '' }}>{{ $sp }}</option>
-                                    @endforeach
                                 </select>
                             </div>
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
+                                <select name="semester_code" id="semester_code" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+                            <div class="filter-item" style="flex:1;min-width:180px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ea580c;"></span> Fan</label>
+                                <input type="text" name="subject_name" id="subject_name" value="{{ request('subject_name') }}" placeholder="Fan nomi bo'yicha qidirish…" autocomplete="off" class="filter-input">
+                            </div>
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <button type="submit" class="btn-search">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                    Qidirish
+                                </button>
+                            </div>
+                        </div>
+                        <div class="filter-row vd-filter-sub">
                             <div class="filter-item vs-switch-item" style="min-width:170px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> Davr</label>
                                 {{-- Standart yoqilgan: o'chirilganda yashirin "0" yuboriladi --}}
@@ -155,26 +176,23 @@
                                     </span>
                                 @endif
                             </div>
-                        </div>
-
-                        <div class="filter-row">
-                            <div class="filter-item" style="min-width:120px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
-                                <select name="level_code" id="level_code" class="select2" style="width:100%;">
+                            <details class="vd-more" {{ $advCount ? 'open' : '' }}>
+                                <summary>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+                                    Qo'shimcha filtrlar
+                                    @if($advCount)<span class="vd-badge is-indigo">{{ $advCount }}</span>@endif
+                                </summary>
+                                <div class="filter-row vd-more-body">
+                                    <div class="filter-item" style="flex:1;min-width:220px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
+                                <select name="specialty" id="specialty" class="select2" style="width:100%;">
                                     <option value="">Barchasi</option>
+                                    @foreach($specialties as $sp)
+                                        <option value="{{ $sp }}" {{ request('specialty') === $sp ? 'selected' : '' }}>{{ $sp }}</option>
+                                    @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:130px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
-                                <select name="semester_code" id="semester_code" class="select2" style="width:100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-                            <div class="filter-item" style="flex:1;min-width:180px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#ea580c;"></span> Fan</label>
-                                <input type="text" name="subject_name" id="subject_name" value="{{ request('subject_name') }}" placeholder="Fan nomini kiriting..." class="filter-input">
-                            </div>
-                            <div class="filter-item" style="min-width:160px;">
+                                    <div class="filter-item" style="min-width:160px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#059669;"></span> Yopilish shakli</label>
                                 <select name="closing_form_filter" id="closing_form_filter" class="select2" style="width:100%;">
                                     <option value="">Barchasi</option>
@@ -183,7 +201,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:130px;">
+                                    <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#6366f1;"></span> Shakl</label>
                                 <select name="form_type" id="form_type" class="select2" style="width:100%;">
                                     <option value="">Barchasi</option>
@@ -192,7 +210,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:150px;">
+                                    <div class="filter-item" style="min-width:150px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#64748b;"></span> Status</label>
                                 <select name="status" id="status" class="select2" style="width:100%;">
                                     <option value="">Barchasi</option>
@@ -201,7 +219,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:190px;">
+                                    <div class="filter-item" style="min-width:190px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Tartib</label>
                                 <select name="order" class="select2" style="width:100%;">
                                     @foreach(['newest' => "Oxirgi o'zgarganlar birinchi", 'oldest' => "Eski o'zgarganlar birinchi", 'deadline' => "Muddat bo'yicha"] as $ok => $ol)
@@ -209,7 +227,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:90px;">
+                                    <div class="filter-item" style="min-width:90px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                                 <select name="per_page" class="select2" style="width:100%;">
                                     @foreach([25, 50, 100, 200] as $pageSize)
@@ -217,20 +235,15 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:150px;">
+                                    <div class="filter-item" style="min-width:150px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;height:36px;">
                                     <input type="checkbox" name="overdue" value="1" {{ request('overdue') ? 'checked' : '' }}>
                                     Faqat kechikkanlar
                                 </label>
                             </div>
-                            <div class="filter-item" style="min-width:130px;">
-                                <label class="filter-label">&nbsp;</label>
-                                <button type="submit" class="btn-search">
-                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                    Qidirish
-                                </button>
-                            </div>
+                                </div>
+                            </details>
                         </div>
                     </div>
                 </form>
@@ -288,10 +301,10 @@
                         @if(!empty($aiAccess['check']))
                         <button type="button" id="ai-review-btn" class="vd-btn is-review" disabled
                                 data-url="{{ route('admin.vedomost-submission.ai-review') }}"
-                                title="Belgilangan AI tekshirgan vedomostlarni bitta oynada ko'rish va tasdiqlash">🧾 Yig'ma tekshiruv <span class="vd-badge is-indigo" id="ai-review-count">0</span></button>
+                                title="Belgilangan AI tekshirgan vedomostlarni bitta oynada ko'rish va tasdiqlash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h9"/></svg>Yig'ma tekshiruv <span class="vd-badge is-indigo" id="ai-review-count">0</span></button>
                         @endif
                         @if(!empty($canManage))
-                            @if(!empty($aiAccess['settings']))<a class="vd-btn is-ghost" href="{{ route('admin.vedomost-submission.ai-settings') }}">🤖 AI sozlamalari</a>@endif
+                            @if(!empty($aiAccess['settings']))<a class="vd-btn is-ghost" href="{{ route('admin.vedomost-submission.ai-settings') }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>AI sozlamalari</a>@endif
                             <button type="button" id="manual-open-trigger" class="vd-btn is-ghost">+ Pullik uchun shakl</button>
                         @endif
                         <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
@@ -369,82 +382,110 @@
                     <table class="vd-table">
                         <thead>
                             <tr>
-                                <th style="width:28px;"><input type="checkbox" id="jam-all" title="Sahifadagi barchasini belgilash"></th>
-                                <th>#</th>
+                                <th style="width:28px;"><input type="checkbox" id="jam-all" aria-label="Sahifadagi barchasini belgilash" title="Sahifadagi barchasini belgilash"></th>
+                                <th style="width:36px;">#</th>
                                 <th><a href="{{ $sortUrl('group') }}">Guruh {!! $arrow('group') !!}</a></th>
-                                <th>Shakl</th>
-                                <th>Fakultet</th>
-                                <th>Yo'nalish</th>
-                                <th><a href="{{ $sortUrl('subject') }}">Fan {!! $arrow('subject') !!}</a></th>
-                                <th><a href="{{ $sortUrl('department') }}">Kafedra {!! $arrow('department') !!}</a></th>
-                                <th><a href="{{ $sortUrl('teacher') }}">O'qituvchi {!! $arrow('teacher') !!}</a></th>
-                                <th>Fan mas'uli</th>
-                                <th>Kafedra mudiri</th>
-                                <th><a href="{{ $sortUrl('closing_form') }}">Yopilish {!! $arrow('closing_form') !!}</a></th>
-                                <th><a href="{{ $sortUrl('base_date') }}">Asos sana {!! $arrow('base_date') !!}</a></th>
-                                <th><a href="{{ $sortUrl('deadline') }}">Muddat {!! $arrow('deadline') !!}</a></th>
-                                <th><a href="{{ $sortUrl('status') }}">Status {!! $arrow('status') !!}</a></th>
-                                <th>Amal</th>
+                                <th>
+                                    <a href="{{ $sortUrl('subject') }}">Fan {!! $arrow('subject') !!}</a>
+                                    <a class="vd-th-sub" href="{{ $sortUrl('department') }}">kafedra {!! $arrow('department') !!}</a>
+                                </th>
+                                <th><a href="{{ $sortUrl('teacher') }}">Mas'ullar {!! $arrow('teacher') !!}</a></th>
+                                <th>
+                                    <a href="{{ $sortUrl('deadline') }}">Muddat {!! $arrow('deadline') !!}</a>
+                                    <a class="vd-th-sub" href="{{ $sortUrl('base_date') }}">asos {!! $arrow('base_date') !!}</a>
+                                </th>
+                                <th><a href="{{ $sortUrl('status') }}">Holat {!! $arrow('status') !!}</a></th>
+                                <th style="width:1%;"><span class="sr-only">Amal</span></th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($submissions as $i => $v)
-                                @php $overdue = $v->deadline && \Carbon\Carbon::parse($v->deadline)->isPast() && !\Carbon\Carbon::parse($v->deadline)->isToday() && $v->status !== 'approved'; @endphp
-                                <tr class="{{ $overdue ? 'is-overdue' : '' }} {{ $v->status === 'approved' ? 'is-approved' : '' }}">
+                                @php
+                                    $dl = $v->deadline ? \Carbon\Carbon::parse($v->deadline)->startOfDay() : null;
+                                    $daysLeft = $dl ? (int) now()->startOfDay()->diffInDays($dl, false) : null;
+                                    $overdue = $dl && $daysLeft < 0 && $v->status !== 'approved';
+                                    $aiDone = ($v->ai_check_status ?? null) === 'done';
+                                    $fb = $formBadge[$v->form_type ?? '12'] ?? ['#475569','#f1f5f9'];
+                                    $b = $statusBadge[$v->status] ?? ['—','#475569','#f1f5f9'];
+                                    $people = [
+                                        ["O'qituvchi", $v->teacher_name, $v->teacher_phone],
+                                        ["Fan mas'uli", $v->fan_masuli_name, $v->fan_masuli_phone],
+                                        ['Kafedra mudiri', $v->kafedra_mudiri_name, $v->kafedra_mudiri_phone],
+                                    ];
+                                @endphp
+                                <tr class="vd-row {{ $overdue ? 'is-overdue' : '' }} {{ $v->status === 'approved' ? 'is-approved' : '' }}" data-href="{{ route('admin.vedomost-submission.show', $v->id) }}">
                                     <td>
-                                        @php $aiDone = ($v->ai_check_status ?? null) === 'done'; @endphp
                                         @if($v->status === 'approved' || !empty($v->is_mixed_status) || $aiDone)
                                             <input type="checkbox" class="jam-cb" name="ids[]" form="jam-form" value="{{ implode(',', $v->ids ?? [$v->id]) }}"
                                                    data-approved="{{ $v->status === 'approved' || !empty($v->is_mixed_status) ? 1 : 0 }}" data-ai="{{ $aiDone ? 1 : 0 }}"
+                                                   aria-label="Belgilash: {{ $v->group_name }} — {{ $v->subject_name }}"
                                                    title="Belgilash: tasdiqlanganlar — jamlanmaga, AI tekshirganlar — yig'ma tekshiruvga">
                                         @endif
                                     </td>
-                                    <td style="color:#94a3b8;">{{ $submissions->firstItem() + $i }}</td>
-                                    <td style="font-weight:600;">
-                                        {{ $v->group_name }}
-                                        @if(($v->merge_count ?? 1) > 1 && ($v->form_type ?? '12') === '12')
-                                            <span class="vd-merge" title="Guruhchalar: {{ $v->subgroup_label }}">{{ $v->merge_count }} guruhcha</span>
+                                    <td class="vd-num">{{ $submissions->firstItem() + $i }}</td>
+                                    <td>
+                                        <div class="vd-main">
+                                            {{ $v->group_name }}
+                                            <span class="vd-pill" style="background:{{ $fb[1] }};color:{{ $fb[0] }};">{{ \App\Models\VedomostSubmission::formLabel($v->form_type ?? '12') }}</span>
+                                            @if(($v->merge_count ?? 1) > 1 && ($v->form_type ?? '12') === '12')
+                                                <span class="vd-merge" title="Guruhchalar: {{ $v->subgroup_label }}">{{ $v->merge_count }} guruhcha</span>
+                                            @endif
+                                        </div>
+                                        <div class="vd-sub">{{ $v->faculty_name ?? '—' }}@if($v->specialty_name) · {{ $v->specialty_name }}@endif</div>
+                                    </td>
+                                    <td style="min-width:220px;">
+                                        <div class="vd-main">{{ $v->subject_name }}</div>
+                                        <div class="vd-sub">{{ $v->department_name ?: '—' }}</div>
+                                        @if($v->closing_form)<span class="vd-tag">{{ $closingFormLabels[$v->closing_form] ?? $v->closing_form }}</span>@endif
+                                    </td>
+                                    <td class="vd-people">
+                                        @foreach($people as [$role, $name, $phone])
+                                            @if($name)
+                                                <div><span class="vd-role">{{ $role }}</span> {{ $name }}
+                                                    @if($phone)<a class="vd-tel" href="tel:{{ preg_replace('/[^0-9+]/', '', $phone) }}" title="{{ $phone }}" aria-label="Qo'ng'iroq: {{ $name }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z"/></svg></a>@endif
+                                                </div>
+                                            @endif
+                                        @endforeach
+                                    </td>
+                                    <td style="white-space:nowrap;">
+                                        @if($dl)
+                                            <div class="vd-main" style="{{ $overdue ? 'color:#b91c1c;' : '' }}">{{ $dl->format('d.m.Y') }}</div>
+                                            @if($v->status !== 'approved')
+                                                @if($daysLeft < 0)
+                                                    <span class="vd-due is-late">{{ abs($daysLeft) }} kun kechikdi</span>
+                                                @elseif($daysLeft === 0)
+                                                    <span class="vd-due is-today">bugun</span>
+                                                @else
+                                                    <span class="vd-due {{ $daysLeft <= 1 ? 'is-today' : '' }}">{{ $daysLeft }} kun qoldi</span>
+                                                @endif
+                                            @endif
+                                        @else
+                                            <span class="vd-sub">muddat yo'q</span>
+                                        @endif
+                                        @if($v->base_date)
+                                            <div class="vd-sub" title="Asos sana">{{ $v->base_type === 'lesson' ? 'Oxirgi dars' : ($v->base_type === 'exam' ? 'YN' : 'Asos') }}: {{ \Carbon\Carbon::parse($v->base_date)->format('d.m.Y') }}</div>
                                         @endif
                                     </td>
-                                    <td>
-                                        @php $fb = $formBadge[$v->form_type ?? '12'] ?? ['#475569','#f1f5f9']; @endphp
-                                        <span style="background:{{ $fb[1] }};color:{{ $fb[0] }};padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;">{{ \App\Models\VedomostSubmission::formLabel($v->form_type ?? '12') }}</span>
-                                    </td>
-                                    <td style="color:#64748b;">{{ $v->faculty_name ?? '—' }}</td>
-                                    <td style="color:#64748b;">{{ $v->specialty_name }}</td>
-                                    <td>{{ $v->subject_name }}</td>
-                                    <td style="color:#64748b;">{{ $v->department_name }}</td>
-                                    <td class="vd-person" title="Tel: {{ $v->teacher_phone ?: '—' }}">{{ $v->teacher_name ?? '—' }}</td>
-                                    <td class="vd-person" title="Tel: {{ $v->fan_masuli_phone ?: '—' }}">{{ $v->fan_masuli_name ?? '—' }}</td>
-                                    <td class="vd-person" title="Tel: {{ $v->kafedra_mudiri_phone ?: '—' }}">{{ $v->kafedra_mudiri_name ?? '—' }}</td>
-                                    <td>{{ $closingFormLabels[$v->closing_form] ?? $v->closing_form }}</td>
-                                    <td>
-                                        {{ $v->base_date ? \Carbon\Carbon::parse($v->base_date)->format('d.m.Y') : '—' }}
-                                        <div style="font-size:10px;color:#94a3b8;">{{ $v->base_type === 'lesson' ? 'oxirgi dars' : ($v->base_type === 'exam' ? 'YN sanasi' : '') }}</div>
-                                    </td>
-                                    <td>
-                                        @if($v->deadline)
-                                            <span style="{{ $overdue ? 'color:#b91c1c;font-weight:700;' : 'color:#334155;' }}">{{ \Carbon\Carbon::parse($v->deadline)->format('d.m.Y') }}</span>
-                                            @if($overdue)<div style="font-size:10px;color:#b91c1c;">kechikkan</div>@endif
-                                        @else — @endif
-                                    </td>
-                                    <td>
-                                        @php $b = $statusBadge[$v->status] ?? ['—','#475569','#f1f5f9']; @endphp
-                                        <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;">{{ $b[0] }}</span>
+                                    <td style="white-space:nowrap;">
+                                        <span class="vd-status" style="background:{{ $b[2] }};color:{{ $b[1] }};"><span class="vd-dot" style="background:{{ $b[1] }};"></span>{{ $b[0] }}</span>
                                         @if(!empty($v->is_mixed_status))
-                                            <div style="font-size:10px;color:#b45309;margin-top:2px;" title="Guruhchalar statusi har xil">aralash holat</div>
+                                            <div class="vd-sub" style="color:#b45309;" title="Guruhchalar statusi har xil">aralash holat</div>
+                                        @endif
+                                        @if($aiDone)
+                                            <div class="vd-sub" style="color:#4338ca;">AI tekshirgan</div>
                                         @endif
                                         @if(!empty($v->updated_at))
-                                            <div style="font-size:10px;color:#94a3b8;margin-top:2px;white-space:nowrap;" title="Oxirgi o'zgarish">{{ \Carbon\Carbon::parse($v->updated_at)->format('d.m.Y H:i') }}</div>
+                                            <div class="vd-sub" title="Oxirgi o'zgarish">{{ \Carbon\Carbon::parse($v->updated_at)->format('d.m.Y H:i') }}</div>
                                         @endif
                                     </td>
                                     <td>
-                                        <a href="{{ route('admin.vedomost-submission.show', $v->id) }}"
-                                           style="color:#1a3268;font-weight:600;text-decoration:none;white-space:nowrap;">Batafsil →</a>
+                                        <a class="vd-open" href="{{ route('admin.vedomost-submission.show', $v->id) }}" aria-label="Batafsil: {{ $v->group_name }} — {{ $v->subject_name }}">
+                                            Ochish <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+                                        </a>
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="16" class="vd-empty">
+                                <tr><td colspan="8" class="vd-empty">
                                     <div class="vd-empty-title">Vedomost topilmadi</div>
                                     @if(!empty($activeFilters))
                                         Tanlangan filtrlarga mos yozuv yo'q — filtrlarni o'zgartiring yoki tozalang.
@@ -486,6 +527,16 @@
                 window.open(reviewBtn.dataset.url + '?' + q.toString(), '_blank', 'noopener');
             });
             all?.addEventListener('change', () => { cbs().forEach(c => c.checked = all.checked); sync(); });
+            // Qatorning istalgan joyini bosish — vedomostni ochadi (belgilash, havola va tugmalardan tashqari;
+            // matn belgilanayotgan bo'lsa — ochmaydi). Ctrl/⌘ yoki o'rta tugma — yangi oynada.
+            document.querySelectorAll('tr.vd-row[data-href]').forEach(tr => {
+                tr.addEventListener('click', e => {
+                    if (e.target.closest('a, button, input, label') || String(window.getSelection())) return;
+                    if (e.ctrlKey || e.metaKey) { window.open(tr.dataset.href, '_blank', 'noopener'); return; }
+                    window.location = tr.dataset.href;
+                });
+                tr.addEventListener('auxclick', e => { if (e.button === 1 && !e.target.closest('a')) window.open(tr.dataset.href, '_blank', 'noopener'); });
+            });
             document.addEventListener('change', e => { if (e.target.classList?.contains('jam-cb')) sync(); });
         })();
     </script>
@@ -768,8 +819,40 @@
         .vd-table thead th { background: #f1f5f9; text-align: left; padding: 9px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #475569; white-space: nowrap; }
         .vd-table thead th a { color: #475569; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
         .vd-table thead th a:hover { color: #1a3268; }
-        .vd-table tbody td { padding: 8px 10px; border-top: 1px solid #f1f5f9; vertical-align: top; }
-        .vd-table tbody tr:hover { background: #f8fafc; }
+        .vd-table tbody td { padding: 10px 10px; border-top: 1px solid #eef2f7; vertical-align: top; }
+        .vd-table tbody tr:hover { background: #f5f8ff; }
+        .vd-row { cursor: pointer; }
+        .vd-th-sub { display: inline-flex !important; margin-left: 6px; font-size: 10px; font-weight: 600; color: #94a3b8 !important; text-transform: lowercase; }
+        .vd-num { color: #94a3b8; font-variant-numeric: tabular-nums; }
+        .vd-main { font-weight: 600; color: #0f172a; line-height: 1.35; }
+        .vd-sub { font-size: 11.5px; color: #64748b; line-height: 1.4; margin-top: 2px; }
+        .vd-pill { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; white-space: nowrap; vertical-align: 1px; }
+        .vd-tag { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 10.5px; font-weight: 600; }
+        .vd-people { font-size: 12px; color: #334155; min-width: 220px; }
+        .vd-people > div { display: flex; align-items: center; gap: 4px; line-height: 1.5; }
+        .vd-role { flex: none; width: 92px; font-size: 10.5px; color: #94a3b8; font-weight: 600; }
+        .vd-tel { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; color: #2563eb; }
+        .vd-tel:hover, .vd-tel:focus-visible { background: #eff6ff; }
+        .vd-tel svg, .vd-open svg, .vd-more summary svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .vd-due { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; }
+        .vd-due.is-today { background: #fef3c7; color: #92400e; }
+        .vd-due.is-late { background: #fee2e2; color: #b91c1c; }
+        .vd-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+        .vd-dot { width: 7px; height: 7px; border-radius: 50%; }
+        .vd-open { display: inline-flex; align-items: center; gap: 2px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7d2fe; color: #1a3268; font-weight: 700; font-size: 12.5px; text-decoration: none; white-space: nowrap; }
+        .vd-open:hover, .vd-open:focus-visible { background: #1a3268; color: #fff; border-color: #1a3268; }
+        .vd-table a:focus-visible, .vd-table input:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        /* Qo'shimcha filtrlar (yig'iladigan) */
+        .vd-filter-sub { align-items: flex-start; margin-bottom: 0; }
+        .vd-filter-sub .vs-switch-item { padding-bottom: 14px; }
+        .vd-more { flex: 1; min-width: 260px; }
+        .vd-more summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px dashed #94a3b8; background: #fff; color: #334155; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; }
+        .vd-more summary::-webkit-details-marker { display: none; }
+        .vd-more[open] summary { border-style: solid; border-color: #1a3268; color: #1a3268; }
+        .vd-more summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .vd-more-body { margin-top: 10px; padding: 12px; background: rgba(255,255,255,.65); border-radius: 10px; border: 1px solid #dbe4ef; }
+        @media (prefers-reduced-motion: reduce) { .vd-stat, .vd-btn, .vs-switch-track, .vs-switch-thumb { transition: none !important; } .vd-stat:hover { transform: none; } }
         .vd-person { cursor: help; }
         .vd-merge { display:inline-block; margin-left:6px; background:#eef2ff; color:#4338ca; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; cursor:help; white-space:nowrap; }
 

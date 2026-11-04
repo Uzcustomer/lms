@@ -3585,6 +3585,11 @@
                         parts.push((j.joint_warnings.length) + ' ta birlashgan kartada o\'qituvchilar har xil edi');
                         alert('Birlashib yaratilgan kartalar — tekshiring:\n\n' + j.joint_warnings.slice(0, 30).join('\n'));
                     }
+                    // Semestri topilmagan guruhlar (o'quv reja sanalari shu davrga kesishmaydi — HEMIS'da tekshirish kerak).
+                    if ((j.semester_warnings || []).length) {
+                        parts.push(j.semester_warnings.length + ' ta guruhda shu davrda semestr yo\'q');
+                        alert('Semestri topilmagan guruhlar — HEMIS\'da semestr sanalarini tekshiring:\n\n' + j.semester_warnings.slice(0, 40).join('\n'));
+                    }
                     const summary = parts.join(' · ');
                     setCardSyncProgressText('Doska yangi kartochkalar bilan qayta yuklanmoqda…');
                     await loadBoard(board.id);

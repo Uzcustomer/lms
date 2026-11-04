@@ -4786,19 +4786,29 @@
             };
             let hemisTodayLast = null;
             let hemisTodayGroup = '';   // oynadagi guruh filtri ('' — hammasi): ko'rinish, JSON va Excel
+            let hemisTodaySubject = '';   // oynadagi fan filtri ('' — hammasi): ko'rinish, JSON va Excel
             let hemisTodayMissingRooms = false;
-            const htRows = (rep, group) => (rep.rows || []).filter(r => (!group || r.group === group) && (!hemisTodayMissingRooms || r.missing_room));
+            const htRows = (rep, group, subject) => (rep.rows || []).filter(r => (!group || r.group === group) && (!subject || r.subject === subject)
+                && (!hemisTodayMissingRooms || r.missing_room));
+            const htSort = list => [...new Set(list)].filter(v => v != null && v !== '').sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+            // Bog'liq ro'yxatlar: guruhlar — tanlangan fan qatorlaridan, fanlar — tanlangan guruh qatorlaridan.
+            const htGroups = (rep, subject) => htSort((rep.rows || []).filter(r => !subject || r.subject === subject).map(r => r.group));
+            const htSubjects = (rep, group) => htSort((rep.rows || []).filter(r => !group || r.group === group).map(r => r.subject));
             const htDate = d => String(d || '').split('-').reverse().join('.');
-            function hemisTodayHtml(rep, group) {
-                const rows = htRows(rep, group);
+            function hemisTodayHtml(rep, group, subject) {
+                const rows = htRows(rep, group, subject);
                 const n = s => rows.filter(r => r.status === s).length;
-                const groups = [...new Set((rep.rows || []).map(r => r.group))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                const groups = htGroups(rep, subject);
+                const subjects = htSubjects(rep, group);
                 const head = '<div class="flex flex-wrap items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">Bugun (' + hsEsc(htDate(rep.today)) + '): ' +
                     rows.length + ' ta dars · ' + n('update') + ' ta o\'zgartiriladi · ' + n('locked') + ' ta davomat/baho bor — tegilmaydi · ' + n('blocked') + ' ta to\'siqli</h3>' +
-                    '<span class="text-violet-700">Xonasi bo‘sh: ' + (rep.rows || []).filter(r => (!group || r.group === group) && r.missing_room).length + ' ta dars (mudir xonasi qo‘yiladi)</span>' +
+                    '<span class="text-violet-700">Xonasi bo‘sh: ' + (rep.rows || []).filter(r => (!group || r.group === group) && (!subject || r.subject === subject) && r.missing_room).length
+                        + ' ta dars (mudir xonasi qo‘yiladi)</span>' +
                     '<label><input id="htMissingRooms" type="checkbox"' + (hemisTodayMissingRooms ? ' checked' : '') + '> Faqat xonasi bo‘sh</label>' +
                     '<select id="htGroup" class="border rounded px-1 py-0.5"><option value="">Barcha guruhlar</option>' +
                     groups.map(g => '<option value="' + hsEsc(g) + '"' + (g === group ? ' selected' : '') + '>' + hsEsc(g) + '</option>').join('') + '</select>' +
+                    '<select id="htSubject" class="border rounded px-1 py-0.5"><option value="">Barcha fanlar</option>' +
+                    subjects.map(x => '<option value="' + hsEsc(x) + '"' + (x === subject ? ' selected' : '') + '>' + hsEsc(x) + '</option>').join('') + '</select>' +
                     '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
                     // Xatcho'p: HEMIS sahifasida bosiladi, yuklangan JSON'dagi faqat bugungi to'siqsiz o'zgartirishlarni yozadi (har biridan oldin
                     // davomat/baho jonli tekshiriladi, boshida "N ta dars o'zgartiriladi" tasdig'i, natija har dars bo'yicha).
@@ -4836,19 +4846,24 @@
                     ['Guruh', 'Fan', 'Vaqt', 'O\'qituvchi', 'Xona', 'Holat'].map(h => '<th class="border px-1">' + h + '</th>').join('') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
                     : '<div class="text-gray-500">Bugun qamrovda dars yo\'q.</div>');
             }
-            // Xatcho'p uchun JSON: faqat to'siqsiz o'zgartirishlar (server tayyorlagan, today: true), tanlangan guruh bo'yicha.
-            function hemisTodayJson(rep, group) {
+            // Xatcho'p uchun JSON: faqat to'siqsiz o'zgartirishlar (server tayyorlagan, today: true), tanlangan guruh va fan bo'yicha.
+            // Filtr (fan yoki "faqat xonasi bo'sh") bo'lsa — aynan jadvalda ko'ringan qatorlar (htRows hemis_id lari); amali qolmagan
+            // birlik va guruh tushib qoladi.
+            function hemisTodayJson(rep, group, subject) {
                 const out = JSON.parse(JSON.stringify(rep.json || {}));
-                const ids = new Set(htRows(rep, group).filter(r => r.status === 'update').map(r => +r.hemis_id));
+                const ids = new Set(htRows(rep, group, subject).filter(r => r.status === 'update').map(r => +r.hemis_id));
+                const byRows = Boolean(subject) || hemisTodayMissingRooms;
                 out.groups = (out.groups || []).filter(g => !group || g.group === group)
-                    .map(g => Object.assign(g, { units: g.units.map(u => Object.assign(u, { actions: u.actions.filter(a => a.op === 'update' && a.today === true && (!hemisTodayMissingRooms || ids.has(+a.hemis_id))) })) }));
+                    .map(g => Object.assign(g, { units: (g.units || []).map(u => Object.assign(u, { actions: (u.actions || []).filter(a => a.op === 'update' && a.today === true
+                        && (!byRows || ids.has(+a.hemis_id))) })).filter(u => u.actions.length) }))
+                    .filter(g => g.units.length);
                 return out;
             }
-            function hemisTodayExcel(rep, group) {
+            function hemisTodayExcel(rep, group, subject) {
                 const cell = (t, o) => Object.assign({ t: String(t == null ? '' : t) }, o || {});
                 const rows = [['Guruh', 'Fan', 'Dars turi', 'HEMIS id', 'Vaqt (HEMIS)', 'Yangi vaqt', 'O\'qituvchi (HEMIS)', 'Yangi o\'qituvchi', 'Xona (HEMIS)', 'Yangi xona', 'Holat', 'Sabab / o\'zgarish', 'Fallback sababi']
                     .map(h => cell(h, { b: 1, bg: '#f3f4f6' }))];
-                htRows(rep, group).forEach(r => {
+                htRows(rep, group, subject).forEach(r => {
                     const grey = r.status === 'locked' ? { fc: '#9ca3af' } : null;
                     rows.push([r.group, r.subject, r.type, r.hemis_id || '', r.start + '–' + r.end, r.new_start ? r.new_start + '–' + r.new_end : '',
                         r.employee_name, r.new_employee_name || '', r.auditorium_name, r.new_auditorium_name || '', (HT_STATUS[r.status] || [r.status])[0],
@@ -4858,18 +4873,24 @@
                 return { rows, sheet_title: 'Bugungi darslar', freeze_rows: 1 };
             }
             function hemisTodayRender(rep) {
-                const m = hemisSyncModal(hemisTodayHtml(rep, hemisTodayGroup));
+                // Tanlangan guruh / fan bog'liq ro'yxatdan chiqib qolsa — "hammasi" ga tushadi (chizishdan oldin: jadval, son, JSON, Excel bir xil).
+                if (hemisTodaySubject && !htSubjects(rep, hemisTodayGroup).includes(hemisTodaySubject)) hemisTodaySubject = '';
+                if (hemisTodayGroup && !htGroups(rep, hemisTodaySubject).includes(hemisTodayGroup)) hemisTodayGroup = '';
+                const m = hemisSyncModal(hemisTodayHtml(rep, hemisTodayGroup, hemisTodaySubject));
                 $('htMissingRooms').onchange = e => { hemisTodayMissingRooms = e.target.checked; hemisTodayRender(rep); };
                 $('htGroup').onchange = e => { hemisTodayGroup = e.target.value; hemisTodayRender(rep); };
+                $('htSubject').onchange = e => { hemisTodaySubject = e.target.value; hemisTodayRender(rep); };
                 $('htClose').onclick = () => m.remove();
                 $('htJson').onclick = () => {
-                    const blob = new Blob([JSON.stringify(hemisTodayJson(rep, hemisTodayGroup), null, 1)], { type: 'application/json' });
+                    const blob = new Blob([JSON.stringify(hemisTodayJson(rep, hemisTodayGroup, hemisTodaySubject), null, 1)], { type: 'application/json' });
                     const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob); a.download = 'hemis_bugun_' + rep.today + (hemisTodayGroup ? '_' + hemisTodayGroup.replace(/[^\w\-]+/g, '_') : '') + '.json';
+                    const safe = v => String(v).replace(/[^\w\-]+/g, '_');
+                    a.href = URL.createObjectURL(blob); a.download = 'hemis_bugun_' + rep.today + (hemisTodayGroup ? '_' + safe(hemisTodayGroup) : '')
+                        + (hemisTodaySubject ? '_' + safe(hemisTodaySubject) : '') + '.json';
                     document.body.appendChild(a); a.click(); a.remove();
                 };
                 $('htExcel').onclick = function () {
-                    return sendExcelExport(hemisTodayExcel(rep, hemisTodayGroup), 'Bugungi darslar (HEMIS) · ' + htDate(rep.today) + ' · ' + scopeLabelText(),
+                    return sendExcelExport(hemisTodayExcel(rep, hemisTodayGroup, hemisTodaySubject), 'Bugungi darslar (HEMIS) · ' + htDate(rep.today) + ' · ' + scopeLabelText(),
                         'hemis_bugun_' + rep.today, this);
                 };
             }
@@ -4879,6 +4900,7 @@
                 try {
                     hemisTodayLast = await api(BASE + '/boards/' + board.id + '/hemis-today', 'POST', scopeBody());
                     hemisTodayGroup = '';
+                    hemisTodaySubject = '';
                     hemisTodayMissingRooms = false;
                     hemisTodayRender(hemisTodayLast);
                 } catch (e) {

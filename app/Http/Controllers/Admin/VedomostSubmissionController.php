@@ -509,7 +509,10 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkViewAccess();
 
-        [$query] = $this->filteredQuery($request);
+        // Holat (status / muddati o'tgan) — hisobotning o'zi shu bo'yicha bo'linadi; ro'yxatdagi holat
+        // filtri qo'llansa (masalan «Tekshirilmoqda»), hisobot faqat o'sha holatdagilarni ko'rsatib chalg'itadi.
+        $ignoredStatus = $request->filled('status') || $request->boolean('overdue');
+        [$query] = $this->filteredQuery($request->duplicate(\Illuminate\Support\Arr::except($request->query(), ['status', 'overdue', 'page'])));
 
         // Mavjud kesimlar: yorliq + jamlangan qatordagi maydon nomi.
         $dimensions = [
@@ -593,7 +596,7 @@ class VedomostSubmissionController extends Controller
 
         return view('admin.vedomost-submission.report', compact(
             'rows', 'dimensions', 'selectedDims', 'availableDims',
-            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to', 'drill', 'dateMode'
+            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to', 'drill', 'dateMode', 'ignoredStatus'
         ));
     }
 

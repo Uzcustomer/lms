@@ -133,6 +133,12 @@
                 </div>
             @endif
 
+            @if($ignoredStatus)
+                <div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:8px 12px;font-size:12.5px;margin-bottom:12px;">
+                    Ro'yxatdagi «Holat» filtri hisobotda qo'llanilmadi — hisobot barcha holatlarni o'zi bo'lib ko'rsatadi. Boshqa filtrlar (ta'lim turi, semestr, fakultet…) qo'llanildi.
+                </div>
+            @endif
+
             <div style="overflow-x:auto;">
                 <table style="border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;">
                     <thead>

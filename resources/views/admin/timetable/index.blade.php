@@ -4356,7 +4356,12 @@
                                 ? '<div class="text-gray-400">• ' + hsEsc(f.text) + ' <i>(' + (wk ? wk.week + '-hafta' : 'keyingi hafta') + ' — hozir yozilmaydi)</i></div>'
                                 : '<div>• ' + hsEsc(f.text) + '</div>';
                         }).join('') +
-                            u.notes.map(n => '<div class="text-red-600">⚠ ' + hsEsc(n) + '</div>').join('');
+                            // Sikl fani: blokka sig'magan kamomad — qizil belgi, qisqartirib bo'lmagan ortiqcha — sariq.
+                            u.notes.map(n => /^Sikl bloki oxirigacha sig'madi/.test(n)
+                                ? '<div class="text-red-700"><span class="inline-block px-1 mr-1 rounded bg-red-600 text-white text-[10px] font-bold">SIKL</span>⚠ ' + hsEsc(n) + '</div>'
+                                : /^Sikl blokida ortiqcha/.test(n)
+                                    ? '<div class="text-amber-700"><span class="inline-block px-1 mr-1 rounded bg-amber-400 text-amber-950 text-[10px] font-bold">SIKL</span>⚠ ' + hsEsc(n) + '</div>'
+                                    : '<div class="text-red-600">⚠ ' + hsEsc(n) + '</div>').join('');
                         const acts = u.actions.filter(hsOpOk);
                         const cnt = { create: 0, update: 0, delete: 0 };
                         tot.later += u.actions_later || 0;

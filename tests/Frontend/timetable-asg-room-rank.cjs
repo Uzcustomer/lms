@@ -11,8 +11,10 @@ const b = source.indexOf("            $('asgRoomOpen').onclick", a);
 assert(a > 0 && b > a);
 const cfCapText = (() => { const a = source.indexOf('            const cfCapText = '), b = source.indexOf('\n', source.indexOf('\n', a) + 1);
     return vm.runInNewContext(source.slice(a, b) + '\ncfCapText'); })();
+const roomMatches = (() => { const a = source.indexOf('            const UZ_CYR_LAT = '), b = source.indexOf("            // Ma'ruza yorlig'i:", a);
+    return vm.runInNewContext(source.slice(a, b) + '\nroomMatches'); })();
 const els = {};
-const ctx = { $: id => (els[id] = els[id] || { id, value: '', innerHTML: '' }), esc: s => String(s), asgSel: { auditorium_code: 'R215' }, cfCapText,
+const ctx = { roomMatches, $: id => (els[id] = els[id] || { id, value: '', innerHTML: '' }), esc: s => String(s), asgSel: { auditorium_code: 'R215' }, cfCapText,
     asgRoomsList: null, asgBusy: { teachers: {}, rooms: {}, rank: null } };
 vm.createContext(ctx);
 vm.runInContext(source.slice(a, b) + '\nthis.renderAsgRooms = renderAsgRooms;'
@@ -67,7 +69,7 @@ const el2 = id => (els2[id] = els2[id] || { id, value: '', innerHTML: '', textCo
     classList: { contains: c => c === 'hidden' && els2[id].hidden } });
 const calls = [];
 let marks = 0;
-const ctx2 = { $: el2, esc: s => String(s), URLSearchParams, BASE: '/admin', board: { id: 7 }, cards: [], console: { warn() {} }, cfCapText,
+const ctx2 = { roomMatches, $: el2, esc: s => String(s), URLSearchParams, BASE: '/admin', board: { id: 7 }, cards: [], console: { warn() {} }, cfCapText,
     asgSel: null, asgRoomsList: null, asgBusy: { teachers: {}, rooms: {}, rank: null },
     asgUnitParams: u => ({ group_name: u.group_name }), renderAsgTable() {}, renderAsgRoomCurrent() {},
     closeAsgRoomModal() { el2('asgRoomModal').hidden = true; }, showBusyConfirm() {}, markAsgBusy: () => { marks++; },

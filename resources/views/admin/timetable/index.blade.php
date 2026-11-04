@@ -1839,6 +1839,14 @@
         .cr-proposal-overlay { position: fixed; inset: 0; z-index: 10000; background: #0f172a99; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .cr-proposal-form { width: min(100%, 520px); max-height: 90vh; overflow: auto; background: white; color: #0f172a; border-radius: 12px; padding: 24px; display: grid; gap: 14px; box-shadow: 0 20px 60px #0004; }
         .cr-proposal-form label { display: grid; gap: 5px; }
+        .cr-proposal-form [role="alert"] { white-space: pre-line; }
+        .cr-days { display: grid; gap: 2px; max-height: 180px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+        .cr-proposal-form .cr-days label { display: flex; gap: 6px; align-items: center; }
+        .cr-days .cr-day-bad { color: #b91c1c; }
+        #cycleGrid .cyc-mk-cell.is-multi-sel { box-shadow: inset 0 0 0 2px #2563eb; }
+        .cr-day-list { margin: 2px 0 0 14px; font-size: 11px; color: #475569; list-style: disc; }
+        .ag-weeks { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 4px 18px; font-size: 12px; }
+        .ag-weeks .ag-bad { color: #b91c1c; }
         .tt-ask-time { display: block; margin-top: 2px; font-size: 9px; line-height: 1.2; padding: 1px 4px; border-radius: 4px; background: #2563eb; color: #fff; border: 0; cursor: pointer; }
         .cr-steps { margin-top: 4px; font-size: 11px; color: #475569; }
         .cr-steps li { margin-left: 14px; list-style: disc; }
@@ -3329,18 +3337,24 @@
             // Kutilayotgan so'rov bosqichi: o'qituvchi / fan mas'uli so'rovi avval kafedra mudirida, keyin (va kafedra mudiri so'rovi) — registratorda.
             function crStageText(r) { return r && r.approval_stage === 'department' ? 'Kafedra mudiri tasdig‘ida' : 'Registrator ofisi tasdig‘ida'; }
             // Sikl kun oynasi: shu guruhcha va sanadagi amaliy darsga kutilayotgan vaqt so'rovi (cycle-practice-starts).
+            // Ko'p kunli so'rov (payload.dates) — aynan shu sanalar; ma'ruza so'rovi (training_type = lecture) — oqimdagi barcha guruhchalar.
             function pendingPracticeAsk(card, iso) {
                 if (!card || !iso) return null;
                 return pendingReqs().find(r => r.route === 'admin.timetable.cycle-practice-starts' && r.payload
                     && r.payload.subject_name === card.subject
                     && (r.payload.group_name === card.group || (r.payload.units || []).includes(card.group))
-                    && (r.payload.date === iso || (r.payload.scope === 'rest' && iso > r.payload.date))) || null;
+                    && ((r.payload.dates || []).length ? r.payload.dates.includes(iso)
+                        : (r.payload.date === iso || (r.payload.scope === 'rest' && iso > r.payload.date)))) || null;
             }
-            // "Vaqtini o'zgartirishni so'rash": o'qituvchi yoki fan mas'uli, server ruxsat bergan (o'z darsi / mas'ul fani) amaliy dars, ertadan.
-            function cycCanAsk(card, dp, date, today) {
-                return ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && Boolean(card && card.ask && card.type === 'practice')
-                    && +(dp && dp.prc) > 0 && Boolean(date && date.iso > today);
+            // "Vaqtini o'zgartirishni so'rash": o'qituvchi yoki fan mas'uli, server ruxsat bergan (o'z darsi / mas'ul fani), ertadan.
+            // kind: practice — amaliy (shu guruhcha), lecture — ma'ruza (butun oqim).
+            function cycCanAsk(card, dp, date, today, kind = 'practice') {
+                const lec = kind === 'lecture';
+                return ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && Boolean(card && (lec ? card.ask_lec : card.ask && card.type === 'practice'))
+                    && +(dp && (lec ? dp.lec : dp.prc)) > 0 && Boolean(date && date.iso > today);
             }
+            const CR_DOW = ['yakshanba', 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba'];
+            const crDow = iso => CR_DOW[new Date(iso + 'T00:00:00Z').getUTCDay()] || '';
             async function loadChangeRequests() {
                 if (!board || !$('changeReqBtn')) return;
                 try { changeReqs = await api(BASE + '/boards/' + board.id + '/change-requests?status=pending&_=' + Date.now()); }
@@ -3415,7 +3429,10 @@
                 const n = r.notice;
                 const steps = (r.steps || []).map(st => '<li>' + esc(st.at || '') + ' · ' + esc(st.by || '—') + ': ' + esc(st.action || '') +
                     (st.note ? ' <i>(' + esc(st.note) + ')</i>' : '') + '</li>').join('');
-                return (n ? '<div class="cr-sub">' + esc(n.old || '') + ' → <b>' + esc(n.new || '') + '</b>' + (n.room ? ' · xona ' + esc(n.room) : '') + '</div>' : '') +
+                // Ko'p kunli so'rov: har kun (sana, hozirgi → yangi vaqt) — ochiladigan ro'yxat.
+                const days = n && (n.days || []).length ? '<details class="cr-sub"><summary>Kunlar (' + n.days.length + ')</summary><ul class="cr-day-list">'
+                    + n.days.map(d => '<li>' + esc(d.date) + (d.k ? ' (' + d.k + '-kun)' : '') + ': ' + esc(d.old) + ' → <b>' + esc(d.new) + '</b></li>').join('') + '</ul></details>' : '';
+                return (n ? '<div class="cr-sub">' + esc(n.old || '') + ' → <b>' + esc(n.new || '') + '</b>' + (n.room ? ' · xona ' + esc(n.room) : '') + '</div>' : '') + days +
                     (steps ? '<ul class="cr-steps">' + steps + '</ul>' : '');
             }
             function renderChangeReqModal() {
@@ -5692,6 +5709,37 @@
                 selectedCourses.has(c.course) &&
                 !isCycleCardAny(c));
             const cardGroups = c => (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []);
+            // Xona qidiruvi uchun normallashtirish: kichik harf, tutuq belgilari (ʼ ʻ ' ‘ ’ `) bitta "'", o'zbek kirill → lotin
+            // (ш→sh, ч→ch, ў→o', қ→q, ғ→g', ҳ→h, ё→yo, ю→yu, я→ya …) — kirill so'rov lotin nomni, lotin so'rov kirill nomni topadi.
+            const UZ_CYR_LAT = { 'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y',
+                'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'x', 'ц': 'ts',
+                'ч': 'ch', 'ш': 'sh', 'щ': 'sh', 'ъ': "'", 'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'ў': "o'", 'қ': 'q', 'ғ': "g'", 'ҳ': 'h' };
+            function searchNorm(v) {
+                return String(v == null ? '' : v).toLowerCase().replace(/[ʼʻ‘’`´]/g, "'").replace(/[а-яёўқғҳ]/g, ch => UZ_CYR_LAT[ch] ?? ch);
+            }
+            // Xona so'z bo'yicha: so'rov so'zlarga bo'linadi, har so'z kod, nom, bino yoki xona turidan birida bo'lishi kerak (tartib muhim emas).
+            function roomMatches(room, q) {
+                const words = searchNorm(q).split(/\s+/).filter(Boolean);
+                if (!words.length) return true;
+                const fields = [room.code, room.name, room.building_name, room.auditorium_type_name].map(searchNorm);
+                return words.every(w => fields.some(f => f.includes(w)));
+            }
+            // Ma'ruza yorlig'i: "Ma'ruza · 1-oqim (02a, 02b, 03a …)" — guruhchalar umumiy prefiksisiz ("p/st24-"), 8 tadan ko'p
+            // bo'lsa "… +N"; to'liq ro'yxat — title (sichqoncha ustida).
+            function lectureLabel(oqim, groups) {
+                const list = [...new Set((groups || []).map(g => String(g || '').trim()).filter(Boolean))]
+                    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+                const head = "Ma'ruza · " + (oqim || 'oqim');
+                if (!list.length) return { text: head, title: '' };
+                let pre = list[0];
+                list.forEach(g => { while (pre && !g.startsWith(pre)) pre = pre.slice(0, -1); });
+                // Prefiks ajratgichgacha (-, /, bo'shliq) qisqartiriladi: "p/st24-0" → "p/st24-".
+                const cut = Math.max(pre.lastIndexOf('-'), pre.lastIndexOf('/'), pre.lastIndexOf(' '));
+                pre = cut >= 0 ? pre.slice(0, cut + 1) : '';
+                const short = list.map(g => g.slice(pre.length) || g);
+                const shown = short.length > 8 ? short.slice(0, 8).join(', ') + ' … +' + (short.length - 8) : short.join(', ');
+                return { text: head + ' (' + shown + ')', title: list.join(', ') };
+            }
             // Guruh identifikatori. Guruh NOMI fakultetlar bo'ylab takrorlanishi mumkin
             // (mas. 1-kurs "1K-01a (o'z)" ham 1-son, ham 2-son davolashda bor), shuning
             // uchun panjara/konflikt kaliti nom emas — fakultet+yo'nalish+kurs+nom.
@@ -7303,6 +7351,7 @@
                     { date: st.date, range: st.range, layer: layer === 'external' ? 'external' : 'internal' }));
                 if (st.move && !st.room_code) q.set('move', st.move);
                 if (st.restFor) q.set('rest_for', st.restFor);   // "shu va keyingi haftalar" — tanlangan para tekshiruvi
+                if (st.selFor) q.set('sel', st.selFor);   // "bir nechta hafta / kun" — tanlanganlar tekshiruvi
                 const seq = ++agendaSeq;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/teacher-agenda?' + q);
@@ -7338,9 +7387,25 @@
                 m.innerHTML = agendaHtml(ttAgenda, loading);
             }
             // Tanlangan bo'sh para uchun natija: haftalik — options; sikl — "butun blok" bo'lsa block, aks holda options.
-            function agendaOpt(mv, date, pair, choice) {
+            // "weeks" / "days" (bir nechta hafta / kun): joy — "shu hafta/kun" varianti, natija — server tekshiruvi (mv.sel) tanlanganlar bo'yicha.
+            function agendaOpt(mv, date, pair, choice, items) {
+                if (choice === 'weeks' || choice === 'days') {
+                    const one = agendaOpt(mv, date, pair, 'one');
+                    if (!one) return null;
+                    const sel = mv.sel, want = (items || []).map(String).join(',');
+                    const same = sel && sel.date === date && +sel.pair === +pair && (sel.items || []).map(String).join(',') === want;
+                    if (!want) return Object.assign({}, one, { ok: false, why: 'kamida bittasini tanlang' });
+                    return Object.assign({}, one, same ? { ok: !!sel.ok, why: sel.why || null, bad: sel.bad || [] } : { ok: false, why: 'tekshirilmoqda…' });
+                }
                 const src = mv && mv.kind === 'cycle' && choice === 'block' ? mv.block : mv && mv.options;
                 return src && src[date] ? src[date][pair] || null : null;
+            }
+            // Tanlanganlarni server tekshiruviga yuboradi (sel) — oyna qayta yuklanadi.
+            function agendaSelCheck(st) {
+                const pk = st.pick;
+                st.selFor = pk && (pk.choice === 'weeks' || pk.choice === 'days') && (pk.items || []).length
+                    ? pk.date + '|' + pk.pair + '|' + pk.items.join(',') : null;
+                if (st.selFor) ttAgendaLoad(); else agendaRender(false);
             }
             function agendaHtml(st, loading) {
                 const j = st.data, mv = j && j.move;
@@ -7411,15 +7476,29 @@
                 const rest = (mv.rest_weeks || []).length;
                 // Keyingi haftalar — server tekshiruvi (rest_for): shu para va xona har haftada; kelguncha — o'chiq.
                 const restOk = mv.rest && mv.rest.date === pk.date && +mv.rest.pair === +pk.pair ? mv.rest : { ok: false, why: 'keyingi haftalar tekshirilmoqda…' };
-                const choices = mv.kind === 'weekly'
+                const multi = mv.kind === 'weekly' ? 'weeks' : 'days';
+                const multiItems = mv.kind === 'weekly' ? (mv.rest_weeks || []) : (mv.block_days || []).map(x => x.date);
+                const multiOpt = agendaOpt(mv, pk.date, pk.pair, multi, pk.choice === multi ? pk.items : [mv.kind === 'weekly' ? mv.week : pk.date]);
+                const choices = (mv.kind === 'weekly'
                     ? [['one', 'faqat shu hafta', one], ['rest', 'shu va keyingi haftalar (' + rest + ' ta)', rest > 1 ? restOk : { ok: false, why: 'keyingi haftalarda dars shu joyda emas' }]]
                     : [['one', 'faqat shu kun', one], ['block', 'butun blok (' + (mv.block_date ? cfDate(mv.block_date) + ' dan, kelgusi kunlar' : '—') + ')',
-                        agendaOpt(mv, pk.date, pk.pair, 'block')]];
-                const cur = agendaOpt(mv, pk.date, pk.pair, pk.choice);
+                        agendaOpt(mv, pk.date, pk.pair, 'block')]])
+                    .concat(multiItems.length > 1 && one ? [[multi, mv.kind === 'weekly' ? 'bir nechta haftani tanlash' : 'bir nechta kunni tanlash',
+                        one.ok ? Object.assign({}, multiOpt || {}, { ok: true, why: null }) : one]] : []);
+                const cur = agendaOpt(mv, pk.date, pk.pair, pk.choice, pk.items);
+                // Tanlash ro'yxati: haftalik — dars shu joyda turgan haftalar; sikl — blokning kelgusi amaliy kunlari (sana, kun, hozirgi vaqt).
+                const bad = new Set(((cur && cur.bad) || []).map(String));
+                const listHtml = pk.choice === multi ? '<div class="ag-weeks">' + (mv.kind === 'weekly'
+                    ? multiItems.map(w => '<label' + (bad.has(String(w)) ? ' class="ag-bad"' : '') + '><input type="checkbox" data-ag-item="' + w + '"' + ((pk.items || []).map(Number).includes(+w) ? ' checked' : '') + '> ' + w + '-hafta</label>')
+                    : (mv.block_days || []).map(x => '<label><input type="checkbox" data-ag-item="' + esc(x.date) + '"' + ((pk.items || []).includes(x.date) ? ' checked' : '') + '> '
+                        + esc(cfDate(x.date) + ' · ' + crDow(x.date) + (x.k ? ' · ' + x.k + '-kun' : '') + ' · hozir ' + x.time) + '</label>')).join('')
+                    + '</div>' + (cur && !cur.ok && cur.why ? '<div class="ag-why" style="white-space:pre-line">' + esc(cur.why)
+                        + (bad.size || /\d{2}\.\d{2}:/.test(cur.why) ? '\nMuammoli hafta/kunni olib tashlab, qayta tekshiring.' : '') + '</div>' : '') : '';
                 return '<div class="ag-pick"><div><b>' + esc(mv.label || '') + '</b> → ' + esc(cfDate(pk.date) + ', ' + (pair.label || '') +
                     ' (' + (pair.start || '') + '–' + (pair.end || '') + ')') + (one && one.room ? ', xona: ' + esc(one.room.name) : '') + '</div>' +
                     choices.map(([v, label, o]) => '<label class="ag-ch"><input type="radio" name="agChoice" value="' + v + '"' + (pk.choice === v ? ' checked' : '') +
                         (o && o.ok ? '' : ' disabled') + '> ' + esc(label) + (o && !o.ok && o.why ? ' <span class="ag-why">— ' + esc(o.why) + '</span>' : '') + '</label>').join('') +
+                    listHtml +
                     '<div class="ag-pick-btns"><button type="button" data-ag="submit"' + (cur && cur.ok && !st.busy ? '' : ' disabled') + '>' +
                     (mv.via === 'apply' ? 'Qo‘llash' : 'So‘rov yuborish') + '</button> <button type="button" data-ag="unpick">Bekor</button></div></div>';
             }
@@ -7427,7 +7506,8 @@
             function agendaApplyRequest(mv, opt, pick, reason) {
                 const withReason = b => (mv.via === 'propose' ? Object.assign(b, { reason }) : b);
                 if (mv.kind === 'weekly') {
-                    const weeks = pick.choice === 'rest' && (mv.rest_weeks || []).length ? mv.rest_weeks : [mv.week];
+                    const weeks = pick.choice === 'weeks' && (pick.items || []).length ? pick.items.map(Number)
+                        : pick.choice === 'rest' && (mv.rest_weeks || []).length ? mv.rest_weeks : [mv.week];
                     const room = opt.room ? { auditorium_code: opt.room.code } : {};
                     // Dars yaxlit: ko'p bo'lakli amaliy dars (birlik) — barcha bo'laklari shu vaqtdan ketma-ket (har hafta).
                     const c0 = (typeof cards !== 'undefined' ? cards : []).find(x => x.id === +mv.card_id);
@@ -7446,12 +7526,14 @@
                 const u = mv.unit || {}, scope = pick.choice === 'block' ? 'rest' : 'day';
                 const body = { specialty_name: u.specialty_name, course: u.course, subject_name: u.subject_name, group_name: u.group_name,
                     date: scope === 'rest' ? mv.block_date : pick.date, scope, start_hour: opt.start_hour };
+                // Bir nechta kun: bitta yangi soat barcha tanlangan kunlarga (bitta so'rov; tasdiqda hammasi birga).
+                if (pick.choice === 'days' && (pick.items || []).length) Object.assign(body, { dates: pick.items.slice().sort(), date: pick.items.slice().sort()[0], scope: 'day' });
                 return mv.via === 'apply' ? { path: '/cycle-practice-starts', body: Object.assign(body, { units: [u.unit] }) }
                     : { path: '/cycle-time-proposal', body: withReason(body) };
             }
             async function agendaSubmit() {
                 const st = ttAgenda, mv = st && st.data && st.data.move, pk = st && st.pick;
-                const opt = mv && pk ? agendaOpt(mv, pk.date, pk.pair, pk.choice) : null;
+                const opt = mv && pk ? agendaOpt(mv, pk.date, pk.pair, pk.choice, pk.items) : null;
                 // "Shu va keyingi haftalar" — faqat server keyingi haftalarni ham tasdiqlagan bo'lsa.
                 const restBad = mv && pk && mv.kind === 'weekly' && pk.choice === 'rest'
                     && !(mv.rest && mv.rest.ok && mv.rest.date === pk.date && +mv.rest.pair === +pk.pair);
@@ -7470,6 +7552,7 @@
                     ttToast(esc(text), 'ok');
                     st.pick = null;
                     st.restFor = null;
+                    st.selFor = null;
                     st.msg = { kind: 'ok', text };
                     try { await loadChangeRequests(); } catch (e) { /* so'rovlar ro'yxati — ixtiyoriy */ }
                     if (viewMode === 'cycle') await loadCyclePlan(); else await loadBoard(board.id);
@@ -7488,6 +7571,7 @@
                 if (pick && !pick.disabled) {
                     const [date, pair] = pick.dataset.agPick.split('|');
                     st.pick = { date, pair: +pair, choice: 'one' };
+                    st.selFor = null;
                     const mv = st.data && st.data.move;
                     // Haftalik dars, keyingi haftalar bor — tanlangan para keyingi haftalarda ham tekshiriladi (server).
                     if (mv && mv.kind === 'weekly' && (mv.rest_weeks || []).length > 1) { st.restFor = date + '|' + pair; ttAgendaLoad(); }
@@ -7495,14 +7579,33 @@
                     return;
                 }
                 const ch = t && t.closest('input[name="agChoice"]');
-                if (ch && st.pick) { st.pick.choice = ch.value; agendaRender(false); return; }
+                if (ch && st.pick) {
+                    st.pick.choice = ch.value;
+                    const mv = st.data && st.data.move;
+                    // Bir nechta hafta / kun: boshlang'ich tanlov — shu hafta / shu kun.
+                    if (ch.value === 'weeks' || ch.value === 'days') {
+                        st.pick.items = st.pick.items && st.pick.items.length ? st.pick.items
+                            : [ch.value === 'weeks' ? mv.week : ((mv.block_days || []).some(x => x.date === st.pick.date) ? st.pick.date : ((mv.block_days || [])[0] || {}).date)].filter(Boolean);
+                        agendaSelCheck(st);
+                    } else agendaRender(false);
+                    return;
+                }
+                const it = t && t.closest('input[data-ag-item]');
+                if (it && st.pick) {
+                    const v = st.pick.choice === 'weeks' ? +it.dataset.agItem : it.dataset.agItem;
+                    const set = new Set(st.pick.items || []);
+                    if (it.checked) set.add(v); else set.delete(v);
+                    st.pick.items = [...set].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+                    agendaSelCheck(st);
+                    return;
+                }
                 const b = t && t.closest('[data-ag]');
                 if (!b) return;
                 const a = b.dataset.ag;
                 if (a === 'close') ttAgendaClose();
-                else if (a === 'day' || a === 'week') { st.range = a; st.pick = null; st.restFor = null; ttAgendaLoad(); }
-                else if (a === 'prev' || a === 'next') { st.date = agendaStep(st.date, st.range, a === 'next' ? 1 : -1); st.pick = null; st.restFor = null; st.msg = null; ttAgendaLoad(); }
-                else if (a === 'unpick') { st.pick = null; st.restFor = null; agendaRender(false); }
+                else if (a === 'day' || a === 'week') { st.range = a; st.pick = null; st.restFor = null; st.selFor = null; ttAgendaLoad(); }
+                else if (a === 'prev' || a === 'next') { st.date = agendaStep(st.date, st.range, a === 'next' ? 1 : -1); st.pick = null; st.restFor = null; st.selFor = null; st.msg = null; ttAgendaLoad(); }
+                else if (a === 'unpick') { st.pick = null; st.restFor = null; st.selFor = null; agendaRender(false); }
                 else if (a === 'submit') agendaSubmit();
             }
 
@@ -7946,10 +8049,34 @@
             function cycBlockByKey(key) {
                 return (cyclePlanData && cyclePlanData.rows || []).flatMap(row => row.blocks || []).find(b => b.key === key) || null;
             }
+            // Ctrl+bosish bilan tanlangan kunlar (bir nechta kunli so'rov): { key, offsets: Set }.
+            let cycMultiSel = null;
+            function cycMultiPaint() {
+                document.querySelectorAll('#cycleGrid .cyc-mk-cell.is-multi-sel').forEach(c => c.classList.remove('is-multi-sel'));
+                if (!cycMultiSel) return;
+                cycMultiSel.offsets.forEach(o => document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(cycMultiSel.key) + '"][data-mk-day="' + o + '"]')
+                    .forEach(c => c.classList.add('is-multi-sel')));
+            }
+            // So'rov uchun blokning kelgusi kunlari (shu turdagi darsi bor): sana, hafta kuni, sikl kuni, hozirgi vaqt.
+            function cycAskDays(block, kind) {
+                const dates = cyclePlanData.dates || [], times = cycHourTimes(), today = cycLocalToday();
+                const lbl = (h, n) => (times[h] ? times[h][0] : h + '-soat') + '–' + (times[h + n - 1] ? times[h + n - 1][1] : '');
+                return Object.keys(block && block.day_plan || {}).map(o => {
+                    const dp = block.day_plan[o], dt = dates[block.from + (+o)];
+                    const n = kind === 'lecture' ? +dp.lec || 0 : +dp.prc || 0;
+                    if (!dt || dt.iso <= today || n <= 0) return null;
+                    const st = kind === 'lecture' ? (+dp.start || 1) : (dp.ps != null ? +dp.ps : (+dp.start || 1) + (+dp.lec || 0));
+                    return { offset: +o, iso: dt.iso, d: dt.d, k: dp.k, time: lbl(st, n), dow: crDow(dt.iso) };
+                }).filter(Boolean).sort((a, b) => a.iso < b.iso ? -1 : 1);
+            }
+            // So'rov formasi uchun kun rejasi: ma'ruza — davomiyligi lec, boshi start (ps — e'tiborsiz).
+            const cycAskDp = (dp, kind) => kind === 'lecture' ? Object.assign({}, dp, { prc: +dp.lec || 1, ps: +dp.start || 1, lec: 0, start: +dp.start || 1 }) : dp;
             function closeCycDayPop() {
                 const pop = document.getElementById('cycDayPop');
                 if (pop) pop.remove();
                 cycPopUnwatch();
+                cycMultiSel = null;
+                cycMultiPaint();
                 document.querySelectorAll('#cycleGrid .cyc-mk-cell.is-day-sel')
                     .forEach(c => c.classList.remove('is-day-sel', 'is-day-top', 'is-day-bottom'));
                 cycDaySel = null;
@@ -7988,8 +8115,11 @@
                 if (shape.lec && shape.prc && shape.lec[0] < shape.prc[1] && shape.prc[0] < shape.lec[1]) return 'Ma\'ruza va amaliy ustma-ust';
                 return '';
             }
-            function openCycDayPop(key, offset, anchor) {
+            function openCycDayPop(key, offset, anchor, keepMulti = false) {
+                const multi = keepMulti ? cycMultiSel : null;
                 closeCycDayPop();
+                cycMultiSel = multi;
+                cycMultiPaint();
                 const block = cycBlockByKey(key);
                 const dp = block && block.day_plan ? block.day_plan[offset] : null;
                 if (!block || !dp) return;
@@ -8025,6 +8155,9 @@
                 const dayCard = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
                 const pendingSlot = pendingDaySlot(dayCard, dp.k - 1);
                 const pendingAsk = pendingPracticeAsk(dayCard, date && date.iso);
+                // Bosilgan katak: M — ma'ruza so'rovi, A — amaliy so'rovi (ikkalasi ruxsat etilgan bo'lsa — bosilgani birinchi).
+                const askKinds = ['lecture', 'practice'].filter(kd => cycCanAsk(dayCard, dp, date, cycLocalToday(), kd))
+                    .sort((a, b) => (anchor && anchor.classList && anchor.classList.contains('is-lecture') ? (a === 'lecture' ? -1 : 1) : (a === 'practice' ? -1 : 1)));
                 // Tasdiq kutilayotgan bo'lsa, keyingi ↑/↓ shu so'ralgan soatdan hisoblanadi.
                 // Faqat o'z so'rovi: registrator/o'quv bo'limi boshqaning so'rovidan emas, joriy soatdan siljitadi.
                 const baseSt = pendingSlot && pendingSlot.mine && (pendingSlot.payload.mode || 'both') === 'both' ? +pendingSlot.payload.start_hour : st;
@@ -8057,10 +8190,17 @@
                     (total === 0 ? '<div class="dp-sub">Bu kuni KTR bo\'yicha dars yo\'q.</div>' : '') +
                     (dp.ktr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
                     (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: ' + ({ lecture: 'ma\'ruza', practice: 'amaliy' }[pendingSlot.payload.mode] || 'darslar') + ' <b>' + (+pendingSlot.payload.start_hour) + '-soatdan</b> — ' + crStageText(pendingSlot) + '</div>' : '') +
-                    (pendingAsk ? '<div class="dp-pending">&#9203; So\'rov: amaliy <b>' + (+pendingAsk.payload.start_hour) + '-soatdan</b> — ' + crStageText(pendingAsk) + '</div>' : '') +
-                    // O'qituvchi / fan mas'uli: o'z amaliy darsi yoki mas'ul fanidagi dars (ertangi va keyingi kunlar) — vaqt o'zgarishi so'rovi.
-                    (cycCanAsk(dayCard, dp, date, cycLocalToday())
-                        ? '<div class="dp-actions"><button type="button" data-dp-ask class="dp-ask px-2 py-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button></div>' : '') +
+                    (pendingAsk ? '<div class="dp-pending">&#9203; So\'rov: ' + (pendingAsk.payload.training_type === 'lecture' ? 'ma\'ruza (oqim)' : 'amaliy') + ' <b>'
+                        + (+pendingAsk.payload.start_hour) + '-soatdan</b>' + ((pendingAsk.payload.dates || []).length > 1 ? ' · ' + pendingAsk.payload.dates.length + ' kun' : '')
+                        + ' — ' + crStageText(pendingAsk) + '</div>' : '') +
+                    // O'qituvchi / fan mas'uli: o'z darsi yoki mas'ul fanidagi dars (ertangi va keyingi kunlar) — vaqt o'zgarishi so'rovi:
+                    // M katagi — ma'ruza (butun oqim), A katagi — amaliy (shu guruhcha); Ctrl+bosish — bir nechta kun.
+                    (askKinds.length
+                        ? '<div class="dp-actions">' + askKinds.map(kd => '<button type="button" data-dp-ask="' + kd + '" class="dp-ask px-2 py-1 rounded bg-blue-600 text-white">'
+                            + (askKinds.length > 1 ? (kd === 'lecture' ? 'Ma\'ruza vaqtini so\'rash' : 'Amaliy vaqtini so\'rash') : 'Vaqtini o\'zgartirishni so\'rash') + '</button>').join(' ')
+                            + '</div>' + (cycMultiSel && cycMultiSel.key === key && cycMultiSel.offsets.size > 1
+                                ? '<div class="dp-sub">Tanlangan kunlar: ' + cycMultiSel.offsets.size + ' (Ctrl+bosish bilan qo\'shiladi / olinadi)</div>'
+                                : '<div class="dp-hint">Ctrl+bosish — bir nechta kunni tanlash.</div>') : '') +
                     (canEdit && total > 0
                         ? (modes.length > 1 ? '<div class="dp-modes" role="radiogroup" aria-label="Surish rejimi">' + modes.map(m => '<label><input type="radio" name="dpMode" value="' + m + '"' +
                             (m === curMode ? ' checked' : '') + '> ' + modeLabels[m] + '</label>').join('') + '</div>' : '') +
@@ -8079,8 +8219,14 @@
                 pop.style.left = Math.max(8, left) + 'px';
                 pop.style.top = top + 'px';
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
-                const askBtn = pop.querySelector('[data-dp-ask]');
-                if (askBtn) askBtn.onclick = () => { closeCycDayPop(); openCycleTimeProposal(dayCard, dp, date); };
+                pop.querySelectorAll('[data-dp-ask]').forEach(askBtn => askBtn.onclick = () => {
+                    const kd = askBtn.dataset.dpAsk;
+                    const sel = cycMultiSel && cycMultiSel.key === key ? [...cycMultiSel.offsets] : [+offset];
+                    const days = cycAskDays(block, kd);
+                    closeCycDayPop();
+                    openCycleTimeProposal(Object.assign({}, dayCard, { type: kd }), cycAskDp(dp, kd), date,
+                        { kind: kd, days: days, preselect: days.filter(x => sel.includes(x.offset)).map(x => x.iso) });
+                });
                 pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => moveCycDay(key, +offset, stepBase + (+btn.dataset.dpMove),
                     (date ? date.d + ' (' + dp.k + '-kun)' : dp.k + '-kun') + (curMode !== 'both' ? ', ' + modeLabels[curMode].toLowerCase() : '') + ': '
                         + stepBase + '-soatdan → ' + (stepBase + (+btn.dataset.dpMove)) + '-soatdan', curMode));
@@ -8132,24 +8278,35 @@
                 });
                 return out;
             }
-            // Sikl amaliy darsini shu kunga (yoki shu kundan blok oxirigacha) boshqa soatga ko'chirish so'rovi: kafedra mudiri, so'ng
-            // registrator ofisi tasdiqlagach jadvalga tushadi. Kun o'zgarmaydi (sikl kunlari ketma-ket), faqat boshlanish soati.
-            function openCycleTimeProposal(card, dp, date) {
+            // Sikl darsini boshqa soatga ko'chirish so'rovi: kafedra mudiri, so'ng registrator ofisi tasdiqlagach jadvalga tushadi. Kun
+            // o'zgarmaydi (sikl kunlari ketma-ket), faqat boshlanish soati. Amaliy — shu guruhcha (shu kun / blok oxirigacha / tanlangan
+            // kunlar); ma'ruza — butun oqim (shu kun / tanlangan kunlar). opts: { kind, days: [{iso, d, k, time, dow}], preselect: [iso] }.
+            function openCycleTimeProposal(card, dp, date, opts = {}) {
                 const prior = document.getElementById('teacherTimeProposal');
                 if (prior) prior.remove();
+                const lecture = (opts.kind || card.type) === 'lecture';
                 const times = cycHourTimes();
                 const prc = +dp.prc || 1, cur = dp.ps != null ? +dp.ps : (+dp.start || 1) + (+dp.lec || 0);
                 const maxStart = Math.max(1, Math.min(+(cyclePlanData && cyclePlanData.day_hours) || times.length - 1, times.length - 1) - prc + 1);
                 const label = h => (times[h] ? times[h][0] : h + '-soat') + '–' + (times[h + prc - 1] ? times[h + prc - 1][1] : '');
+                const days = (opts.days || []).filter(x => x && x.iso);
+                const pre = new Set((opts.preselect || []).length ? opts.preselect : [date.iso]);
+                const multiStart = pre.size > 1;
                 const m = document.createElement('div');
                 m.id = 'teacherTimeProposal'; m.className = 'cr-proposal-overlay';
                 m.innerHTML = '<form class="cr-proposal-form"><h3 class="font-bold text-lg">Vaqtini o‘zgartirishni so‘rash</h3>' +
-                    '<p>' + esc(card.subject) + ' · ' + esc(card.group) + ' · amaliy (sikl)</p>' +
+                    '<p>' + esc(card.subject) + ' · ' + esc(card.group) + ' · ' + (lecture ? 'ma’ruza' : 'amaliy') + ' (sikl)</p>' +
+                    (lecture ? '<p class="text-sm font-semibold text-amber-700" data-flow>Ma’ruza butun oqim uchun o‘zgaradi.</p>' : '') +
                     '<p class="text-sm">' + esc(date.d) + ' (' + dp.k + '-kun) · hozir: ' + esc(label(cur)) + '</p>' +
                     '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Kun, guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
                     '<label>Yangi boshlanish vaqti<select name="start_hour" required>' + Array.from({ length: maxStart }, (_, i) => i + 1)
                         .map(h => '<option value="' + h + '"' + (h === cur ? ' selected' : '') + '>' + esc(label(h)) + '</option>').join('') + '</select></label>' +
-                    '<label>Qaysi kunlar<select name="scope"><option value="day">Faqat shu kun</option><option value="rest">Shu kundan blok oxirigacha</option></select></label>' +
+                    '<label>Qaysi kunlar<select name="scope"><option value="day"' + (multiStart ? '' : ' selected') + '>Faqat shu kun</option>' +
+                        (lecture ? '' : '<option value="rest">Shu kundan blok oxirigacha</option>') +
+                        (days.length > 1 ? '<option value="multi"' + (multiStart ? ' selected' : '') + '>Bir nechta kunni tanlash</option>' : '') + '</select></label>' +
+                    (days.length > 1 ? '<div class="cr-days" data-days' + (multiStart ? '' : ' hidden') + '>' + days.map(x => '<label data-day="' + esc(x.iso) + '"><input type="checkbox" value="'
+                        + esc(x.iso) + '"' + (pre.has(x.iso) ? ' checked' : '') + '> ' + esc(x.d + ' · ' + x.dow + (x.k ? ' · ' + x.k + '-kun' : '') + ' · hozir ' + x.time) + '</label>').join('')
+                        + '<span class="text-xs text-slate-500">Bitta yangi vaqt barcha tanlangan kunlarga — bitta so‘rov, tasdiqda hammasi birga qo‘llanadi.</span></div>' : '') +
                     '<label>O‘zgarish sababi<textarea name="reason" required maxlength="1000" rows="3"></textarea></label>' +
                     '<p role="alert" class="text-red-600"></p><button type="button" data-recheck>Vaqtni qayta tekshirish</button><div class="flex justify-end gap-3"><button type="button" data-close>Bekor</button>' +
                     '<button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded">Taklif yuborish</button></div></form>';
@@ -8157,25 +8314,48 @@
                 m.querySelector('[data-close]').onclick = () => m.remove();
                 m.onclick = ev => { if (ev.target === m) m.remove(); };
                 const form = m.querySelector('form');
-                const body = () => ({ specialty_name: card.specialty, course: card.course, subject_name: card.subject, group_name: card.group,
-                    date: date.iso, scope: form.elements.scope.value, start_hour: form.elements.start_hour.value });
+                const box = m.querySelector('[data-days]');
+                const picked = () => box ? [...box.querySelectorAll('input:checked')].map(i => i.value).sort() : [];
+                const body = () => {
+                    const b = { specialty_name: card.specialty, course: card.course, subject_name: card.subject, group_name: card.group,
+                        start_hour: form.elements.start_hour.value, training_type: lecture ? 'lecture' : 'practice' };
+                    const sc = form.elements.scope.value;
+                    return sc === 'multi' ? Object.assign(b, { dates: picked() }) : Object.assign(b, { date: date.iso, scope: sc });
+                };
                 let seq = 0;
                 const check = async () => {
                     const my = ++seq, button = form.querySelector('[type="submit"]'), status = form.querySelector('[role="alert"]');
-                    button.disabled = true; status.className = 'text-slate-600'; status.textContent = 'Vaqt tekshirilmoqda…';
+                    button.disabled = true;
+                    if (box) box.querySelectorAll('.cr-day-bad').forEach(x => x.classList.remove('cr-day-bad'));
+                    if (form.elements.scope.value === 'multi' && !picked().length) {
+                        status.className = 'text-red-600'; status.textContent = 'Kamida bitta kunni tanlang.'; return;
+                    }
+                    status.className = 'text-slate-600'; status.textContent = 'Vaqt tekshirilmoqda…';
                     try {
                         const r = await api(BASE + '/boards/' + board.id + '/cycle-time-proposal/check', 'POST', body());
                         if (my !== seq || !m.isConnected) return;
                         status.className = 'text-green-700'; status.textContent = r.message + ' ' + r.old + ' → ' + r.new;
+                        // Ma'ruza: oqimdagi guruhchalar (server ro'yxati) — "Ma'ruza butun oqim uchun o'zgaradi: 05a, 05b … (N guruhcha)".
+                        const fl = m.querySelector('[data-flow]');
+                        if (fl && (r.units || []).length) {
+                            const lb = lectureLabel('', r.units);
+                            fl.textContent = 'Ma’ruza butun oqim uchun o‘zgaradi: ' + lb.text.replace(/^Ma'ruza · oqim \(/, '').replace(/\)$/, '') + ' (' + r.units.length + ' guruhcha)';
+                            fl.title = lb.title;
+                        }
                         button.disabled = false;
                     } catch (e) {
                         if (my !== seq || !m.isConnected) return;
-                        status.className = 'text-red-600'; status.textContent = e.message;
+                        // Ko'p kunli: muammoli kunlar ("12.11: …") belgilanadi — shu kunni olib tashlab qayta tekshiring.
+                        const bad = form.elements.scope.value === 'multi' ? String(e.message).split('\n').map(l => (/^(\d{2}\.\d{2}):/.exec(l) || [])[1]).filter(Boolean) : [];
+                        if (box) bad.forEach(dm => box.querySelectorAll('label[data-day]').forEach(l => { if (l.dataset.day.slice(8, 10) + '.' + l.dataset.day.slice(5, 7) === dm) l.classList.add('cr-day-bad'); }));
+                        status.className = 'text-red-600';
+                        status.textContent = e.message + (bad.length ? '\nQizil belgilangan kun(lar)ni olib tashlab, qayta tekshiring.' : '');
                     }
                 };
                 m.querySelector('[data-recheck]').onclick = check;
                 form.elements.start_hour.onchange = check;
-                form.elements.scope.onchange = check;
+                form.elements.scope.onchange = () => { if (box) box.hidden = form.elements.scope.value !== 'multi'; check(); };
+                if (box) box.onchange = check;
                 check();
                 form.onsubmit = async ev => {
                     ev.preventDefault();
@@ -8685,6 +8865,16 @@
                     if (!cell || cell.disabled) return;
                     ev.preventDefault();
                     if (cycCellDragged) { cycCellDragged = false; return; }   // sudrash tugadi — kun oynasi ochilmaydi
+                    // Ctrl+bosish (kun oynasi ochiq, shu blok): bir nechta kunli so'rov uchun kun qo'shiladi / olinadi.
+                    if ((ev.ctrlKey || ev.metaKey) && cycDaySel && cycDaySel.key === cell.dataset.mkKey && cycDaySel.offset >= 0) {
+                        const key = cycDaySel.key, at = cycDaySel.offset, anchorCell = document.querySelector('#cycleGrid .cyc-mk-cell.is-day-sel') || cell;
+                        const sel = cycMultiSel && cycMultiSel.key === key ? cycMultiSel.offsets : new Set([at]);
+                        const o = +cell.dataset.mkDay;
+                        if (sel.has(o) && o !== at) sel.delete(o); else sel.add(o);
+                        cycMultiSel = { key: key, offsets: sel };
+                        openCycDayPop(key, at, anchorCell, true);
+                        return;
+                    }
                     if (cycDaySel && cycDaySel.key === cell.dataset.mkKey && cycDaySel.offset === +cell.dataset.mkDay) {
                         closeCycDayPop();
                         return;
@@ -10516,7 +10706,8 @@
                 const link = (attr, text) => '<a href="#" class="tt-agenda-link" ' + attr + '>' + esc(text) + '</a>';
                 pop.innerHTML = '<div class="pn-pop-head" style="position:sticky;top:0;z-index:1;background:#fff;display:flex;justify-content:space-between;gap:6px;padding-top:8px;padding-bottom:2px"><b>' + esc(c.subject_name) + '</b>' +
                     '<button type="button" data-pop-close aria-label="Yopish" style="font-size:16px;line-height:1">&times;</button></div>' +
-                    '<div style="color:#64748b">' + esc((c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + cardGroups(c).join(', ')) +
+                    '<div style="color:#64748b"' + (c.training_type === 'lecture' ? ' title="' + esc(lectureLabel(c.oqim_label, cardGroups(c)).title) + '"' : '') + '>'
+                        + esc((c.training_type === 'lecture' ? lectureLabel(c.oqim_label, cardGroups(c)).text : 'Amaliy · ' + cardGroups(c).join(', ')) +
                         (len ? ' · ' + len + ' soat' : '')) + '</div>' +
                     row("O'qituvchi", tInfo ? link('data-pop-teacher title="' + esc((tName || '') + (teacherPhones[c.teacher_id] ? ' · ' + teacherPhones[c.teacher_id].text : '')) + '"',
                         tName || c.teacher_name || "O'qituvchi") + (teacherPhones[c.teacher_id]
@@ -11156,13 +11347,14 @@
                 const iso = String(l.date || '');
                 const d = iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
                 const isLec = l.training_type === 'lecture';
-                const canAsk = ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE) && !isLec;
+                // Ma'ruza so'rovi — butun oqim uchun (server ruxsati: l.ask); guruhcha qismlari bo'yicha so'rov — faqat amaliy.
+                const canAsk = ['oqituvchi', 'fan_masuli'].includes(TIMETABLE_ROLE);
                 // Birlashtirilgan chip (bitta darsning guruhchalari har xil vaqtda): har biri o'z vaqti va so'rovi bilan.
                 const parts = Array.isArray(l.parts) && l.parts.length > 1 ? l.parts : null;
                 const partTime = p => { const a = +p.hour || 0, n = +p.hours || 0; return a && hours[a] && hours[a + n - 1] ? hours[a][0] + '–' + hours[a + n - 1][1] : ''; };
                 const partsHtml = parts ? '<div class="dp-sub"><b>Guruhchalar vaqti:</b></div>' + parts.map((p, k) => '<div class="dp-sub">'
                     + esc((p.group_names || [p.group_name]).join(', ')) + ': ' + esc(partTime(p)) + ' (' + (+p.hours || 1) + ' s)'
-                    + (canAsk && p.ask ? ' <button type="button" data-cyc-ask-part="' + k + '" class="dp-ask px-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button>' : '')
+                    + (canAsk && !isLec && p.ask ? ' <button type="button" data-cyc-ask-part="' + k + '" class="dp-ask px-1 rounded bg-blue-600 text-white">Vaqtini o\'zgartirishni so\'rash</button>' : '')
                     + '</div>').join('') : '';
                 const pop = document.createElement('div');
                 pop.id = 'crossCycPop';
@@ -11188,7 +11380,9 @@
                 const ask = pop.querySelector('[data-cyc-ask]');
                 if (ask) ask.onclick = () => {
                     closeCrossCycPop();
-                    openCycleTimeProposal({ subject: l.subject_name, group: l.group_name, specialty: l.specialty_name, course: l.course }, dp, { iso: iso, d: d });
+                    const kd = isLec ? 'lecture' : 'practice';
+                    openCycleTimeProposal({ subject: l.subject_name, group: l.group_name, specialty: l.specialty_name, course: l.course, type: kd }, cycAskDp(dp, kd),
+                        { iso: iso, d: d }, { kind: kd });
                 };
                 // Guruhcha bo'yicha so'rov (birlashtirilgan chip) — o'sha guruhcha va uning kun rejasi bilan.
                 pop.onclick = ev => {
@@ -11946,7 +12140,9 @@
                 if (TIMETABLE_ROLE === 'oqituvchi') { openTeacherTimeProposal(c); return; }
                 modalCard = c;
                 $('cmTitle').textContent = c.subject_name;
-                $('cmSub').textContent = (c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + (c.group_name || '')) +
+                const cmLec = c.training_type === 'lecture' ? lectureLabel(c.oqim_label, cardGroups(c)) : null;
+                $('cmSub').title = cmLec ? cmLec.title : '';
+                $('cmSub').textContent = (cmLec ? cmLec.text : 'Amaliy · ' + (c.group_name || '')) +
                     ' · ' + c.students + ' talaba' + (c.kafedra_name ? ' · ' + c.kafedra_name : '') +
                     (curWeek ? ' · ' + curWeek + '-hafta' + (hasWeekOverride(c) ? ' (individual)' : '') : '');
                 $('cmCap').textContent = '(kamida ' + c.students + ' o\'rin)';
@@ -13779,6 +13975,12 @@
             };
             $('asgFilter').onchange = $('asgSearch').oninput = $('asgOnlyEmpty').onchange = $('asgTypeFilter').onchange = () => renderAsgTable();
 
+            // Qidiruv: fan nomi, kafedra yoki guruh/guruhcha nomi ("02b" — shu guruhchani qamragan ma'ruzalar ham chiqadi).
+            function asgUnitSearchMatch(u, q) {
+                return String(u.subject_name || '').toLowerCase().includes(q) || (u.kafedra_name || '').toLowerCase().includes(q)
+                    || (u.group_name || '').toLowerCase().includes(q) || (u.group_names || []).some(g => String(g).toLowerCase().includes(q));
+            }
+
             function asgFiltered() {
                 const q = ($('asgSearch').value || '').toLowerCase().trim();
                 const fv = $('asgFilter').value;
@@ -13788,7 +13990,7 @@
                     if (fv && (u.specialty_name + ' · ' + u.course + '-kurs') !== fv) return false;
                     if (tv && asgTypeLabel(u) !== tv) return false;
                     if (onlyEmpty && u.teacher_id) return false;
-                    if (q && !(u.subject_name.toLowerCase().includes(q) || (u.kafedra_name || '').toLowerCase().includes(q))) return false;
+                    if (q && !asgUnitSearchMatch(u, q)) return false;
                     return true;
                 });
             }
@@ -13802,7 +14004,7 @@
                     if (fv && asgSpecLabel(u) !== fv) return false;
                     if (tv && asgTypeLabel(u) !== tv) return false;
                     if (onlyEmpty && u.teacher_id) return false;
-                    if (q && !(u.subject_name.toLowerCase().includes(q) || (u.kafedra_name || '').toLowerCase().includes(q))) return false;
+                    if (q && !asgUnitSearchMatch(u, q)) return false;
                     return true;
                 });
             }
@@ -13829,7 +14031,9 @@
                         : (u.teacher_name ? esc(u.teacher_name) : '<span class="text-gray-400">— biriktirilmagan —</span>');
                     h += '<tr data-i="' + i + '"' + (asgSel === rows[i] ? ' class="sel"' : '') + '>' +
                         '<td>' + esc(u.subject_name) + '</td><td>' + asgSpecHtml(u) + '</td><td class="text-center">' + ttLabel + '</td>' +
-                        '<td>' + esc(scopeLabel) + '</td><td class="asg-kaf" title="' + esc(u.kafedra_name || '') + '">' + esc(u.kafedra_name || '—') + '</td>' +
+                        (u.training_type === 'lecture' && (u.group_names || []).length
+                            ? '<td title="' + esc(lectureLabel(u.oqim_label, u.group_names).title) + '">' + esc(lectureLabel(u.oqim_label, u.group_names).text.replace(/^Ma'ruza · /, '')) + '</td>'
+                            : '<td>' + esc(scopeLabel) + '</td>') + '<td class="asg-kaf" title="' + esc(u.kafedra_name || '') + '">' + esc(u.kafedra_name || '—') + '</td>' +
                         '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '✓)</span>' : '') + '</td>' +
                         '<td>' + teacherLabel + '</td>' +
                         '<td>' + (u.room_mixed ? '<span class="text-amber-600">⚠ turlicha</span>'
@@ -13871,7 +14075,8 @@
                 setAsgTeacherPanel(u);
                 $('asgUnitInfo').innerHTML = '<b>' + esc(u.subject_name) + '</b><br>' +
                     '<span class="text-slate-600">' + asgSpecHtml(u) + '</span><br>' +
-                    (u.training_type === 'lecture' ? "Ma'ruza · " + esc(u.oqim_label || '') : 'Amaliy · ' + esc(u.group_name || '')) +
+                    (u.training_type === 'lecture' ? '<span title="' + esc(lectureLabel(u.oqim_label, u.group_names).title) + '">'
+                        + esc(lectureLabel(u.oqim_label, u.group_names).text) + '</span>' : 'Amaliy · ' + esc(u.group_name || '')) +
                     ' · ' + u.cards + ' karta' + (u.kafedra_name ? '<br><span class="text-gray-400">' + esc(u.kafedra_name) + '</span>' : '');
                 renderAsgRoomCurrent();
                 await Promise.all([loadAsgTeachers(''), loadAsgBusy(u)]);
@@ -13889,8 +14094,9 @@
             }
             async function openAsgRoomModal() {
                 if (!asgSel) return;
-                $('asgRoomFor').textContent = asgSel.subject_name + ' · ' +
-                    (asgSel.training_type === 'lecture' ? "Ma'ruza · " + (asgSel.oqim_label || '') : 'Amaliy · ' + (asgSel.group_name || ''));
+                const forLec = asgSel.training_type === 'lecture' ? lectureLabel(asgSel.oqim_label, asgSel.group_names) : null;
+                $('asgRoomFor').title = forLec ? forLec.title : '';
+                $('asgRoomFor').textContent = asgSel.subject_name + ' · ' + (forLec ? forLec.text : 'Amaliy · ' + (asgSel.group_name || ''));
                 $('asgRoomSearch').value = '';
                 $('asgRoomList').innerHTML = '<div class="p-3 text-sm text-slate-400">Yuklanmoqda...</div>';
                 $('asgRoomModal').classList.remove('hidden');
@@ -13920,10 +14126,9 @@
             }
             function renderAsgRooms() {
                 if (!asgSel || !asgRoomsList) return;
-                const q = ($('asgRoomSearch').value || '').toLowerCase().trim();
+                const q = $('asgRoomSearch').value || '';
                 const why = (asgBusy.rank && asgBusy.rank.why) || {};
-                const list = asgRoomsSorted(asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name]
-                    .some(v => String(v || '').toLowerCase().includes(q))));
+                const list = asgRoomsSorted(asgRoomsList.filter(room => roomMatches(room, q)));
                 // Sig'imdan oshadigan xona — aniq raqamlar (1.4, to'qnashuvlar oynasi bilan bitta formatlovchi — cfCapText): server matni
                 // "Xona sig'maydi: 215 — 65 o'rin, 98 talaba (+33) — …"; sig'imi kiritilmagan — to'qnashuv emas.
                 const caps = asgBusy.caps || {};
@@ -14090,8 +14295,8 @@
             }
 
             function filteredAsgAudRooms() {
-                const q = ($('asgAudSearch').value || '').toLowerCase().trim();
-                return asgAudRooms.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name].some(value => String(value || '').toLowerCase().includes(q)));
+                const q = $('asgAudSearch').value || '';
+                return asgAudRooms.filter(room => roomMatches(room, q));
             }
 
             function renderAsgAudTable() {

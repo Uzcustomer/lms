@@ -654,8 +654,8 @@ it('cycle-week: tanlangan haftadagi sikl darslari — ma\'ruza bir marta (oqim g
     expect($mine->where('group_name', 'd22-05a')->where('training_type', 'practice')->pluck('ask')->unique()->all())->toBe([true])
         ->and($mine->where('group_name', 'd22-05b')->pluck('ask')->unique()->all())->toBe([false])
         ->and($mine->where('training_type', 'lecture')->pluck('ask')->unique()->all())->toBe([false])
-        // Ma'ruzachining o'z ma'ruzasi ham — so'rash faqat amaliy dars uchun.
-        ->and(collect($week($lector, 'oqituvchi', ['week' => 1])['lessons'])->where('teacher_id', $lector->id)->pluck('ask')->unique()->all())->toBe([false]);
+        // Ma'ruzachining o'z ma'ruzasi — so'rash mumkin (butun oqim uchun).
+        ->and(collect($week($lector, 'oqituvchi', ['week' => 1])['lessons'])->where('teacher_id', $lector->id)->pluck('ask')->unique()->all())->toBe([true]);
     $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-16 09:00', 'Asia/Tashkent'));
     expect(collect($week($ustoz, 'oqituvchi', ['week' => 1])['lessons'])->where('group_name', 'd22-05a')->where('training_type', 'practice')
         ->mapWithKeys(fn ($l) => [$l['date'] => $l['ask']])->all())

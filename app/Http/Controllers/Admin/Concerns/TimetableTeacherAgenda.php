@@ -45,6 +45,8 @@ trait TimetableTeacherAgenda
             'move' => 'nullable|string|max:500',
             // "Shu va keyingi haftalar" tekshiruvi — tanlangan bo'sh para ("Y-m-d|para"): har hafta alohida tekshiriladi (og'ir).
             'rest_for' => 'nullable|string|max:40',
+            // "Bir nechta hafta / kunni tanlash" tekshiruvi: "Y-m-d|para|tanlanganlar" (haftalik — hafta raqamlari, sikl — sanalar, vergul bilan).
+            'sel' => 'nullable|string|max:2000',
         ]);
         $roomCode = empty($data['teacher_id']) ? (string) ($data['room_code'] ?? '') : null;
         $tid = (int) ($data['teacher_id'] ?? 0);
@@ -70,7 +72,7 @@ trait TimetableTeacherAgenda
                 array_filter($pairs, fn ($p) => !$this->agendaBusyAt($entries, $d, $p['from'], $p['to']))));
         }
         $move = !empty($data['move']) && $roomCode === null
-            ? $this->agendaMove($request, $board, (string) $data['move'], $entries, $days, $pairs, $free, $layer, $rights, $data['rest_for'] ?? null, $tid) : null;
+            ? $this->agendaMove($request, $board, (string) $data['move'], $entries, $days, $pairs, $free, $layer, $rights, $data['rest_for'] ?? null, $tid, $data['sel'] ?? null) : null;
         // Sarlavha: o'qituvchi — to'liq F.I.Sh. (bo'sh bo'lsa qisqa nomi); xona — to'liq nomi, binosi va sig'imi.
         $short = (string) (TimetableCard::where('board_id', $board->id)->where('teacher_id', $tid)->whereNotNull('teacher_name')->value('teacher_name')
             ?: ($teacher?->short_name ?: $teacher?->full_name));
@@ -310,7 +312,7 @@ trait TimetableTeacherAgenda
      * sikl — block[sana][para] (butun blokning kelgusi kunlari). via — apply (darhol) | propose (so'rov); why — ko'chirib bo'lmasa.
      */
     private function agendaMove(Request $request, TimetableBoard $board, string $key, array $entries, array $days, array $pairs, array $free,
-        string $layer, array $rights, ?string $restFor = null, int $tid = 0): ?array
+        string $layer, array $rights, ?string $restFor = null, int $tid = 0, ?string $sel = null): ?array
     {
         // Kalit — yozuvniki; birlashgan haftalik ma'ruza oqimida istalgan karta kaliti ("w|karta|hafta") ham shu yozuvni topadi — faqat
         // shu kartaning shu sanadagi haftasi kalitdagi hafta bo'lsa (boshqa haftaga o'tilganda boshqa hafta darsi tanlanmasin).
@@ -338,7 +340,10 @@ trait TimetableTeacherAgenda
         }
         $out = ['key' => $key, 'kind' => $entry['kind'], 'label' => $entry['label'], 'date' => $entry['date'], 'from' => $entry['from'],
             'to' => $entry['to'], 'week' => $entry['week'], 'card_id' => $entry['card_ids'][0] ?? null, 'unit' => $entry['unit'],
-            'via' => null, 'why' => null, 'options' => [], 'block' => [], 'block_date' => null, 'rest_weeks' => []];
+            'via' => null, 'why' => null, 'options' => [], 'block' => [], 'block_date' => null, 'rest_weeks' => [], 'block_days' => []];
+        // Tanlangan haftalar / kunlar: "Y-m-d|para|a,b,c".
+        [$selDate, $selPair, $selItems] = array_pad(explode('|', (string) $sel, 3), 3, '');
+        $selItems = array_values(array_unique(array_filter(array_map('trim', explode(',', $selItems)), fn ($v) => $v !== '')));
         $role = $this->timetableActiveRole($request);
         $why = match (true) {
             $layer === 'external' => "Tashqi qatlam — faqat ko'rish.",
@@ -384,6 +389,16 @@ trait TimetableTeacherAgenda
                     ? $this->agendaWeeklyRestCheck($board, $card, $out['rest_weeks'], (int) $entry['week'], $opt)
                     : ['ok' => false, 'why' => $opt['why'] ?? "Bu vaqtga ko'chirib bo'lmaydi."]);
             }
+            // "Bir nechta haftani tanlash": tanlangan haftalar (dars shu joyda turganlari) — har hafta alohida, muammolilari ro'yxati.
+            if ($sel !== null && $selItems) {
+                $opt = $out['options'][$selDate][(int) $selPair] ?? null;
+                $weeks = array_values(array_intersect(array_map('intval', $out['rest_weeks']), array_map('intval', $selItems)));
+                $out['sel'] = ['date' => $selDate, 'pair' => (int) $selPair, 'items' => $weeks] + (!$opt || !$opt['ok']
+                    ? ['ok' => false, 'why' => $opt['why'] ?? "Bu vaqtga ko'chirib bo'lmaydi.", 'bad' => []]
+                    : (count($weeks) !== count($selItems)
+                        ? ['ok' => false, 'why' => "Tanlangan haftalarning ba'zisida dars shu joyda emas — ro'yxatni yangilang.", 'bad' => []]
+                        : $this->agendaWeeklyWeeksCheck($board, $card, $weeks, (int) $entry['week'], $opt)));
+            }
         } else {
             $u = $entry['unit'];
             $teacherFlow = in_array($this->timetableActiveRole($request), TimetableChangeApproval::TEACHER_PROPOSAL_ROLES, true);
@@ -401,6 +416,12 @@ trait TimetableTeacherAgenda
             $future = $x ? array_values(array_filter(array_keys($x['prac']), fn ($d) => $d > $today)) : [];
             sort($future);
             $out['block_date'] = $future[0] ?? null;
+            // "Bir nechta kunni tanlash": blokning kelgusi amaliy kunlari (sana, sikl kuni, hozirgi vaqt).
+            foreach ($future as $d) {
+                $k = $x ? array_search($d, $x['dates'], true) : false;
+                $out['block_days'][] = ['date' => $d, 'k' => $k === false ? null : (int) $k + 1,
+                    'time' => $this->cycleHoursTime($board, (int) $x['prac'][$d][0], (int) $x['prac'][$d][1])];
+            }
             if (in_array($entry['date'], $days, true)) {
                 foreach ($pairs as $p) {
                     if (!in_array($p['no'], $free[$entry['date']], true)) {
@@ -412,6 +433,15 @@ trait TimetableTeacherAgenda
                     $out['block'][$entry['date']][$p['no']] = ($out['block_date']
                         ? $this->agendaCycleOption($board, $base + ['date' => $out['block_date'], 'scope' => 'rest'])
                         : ['ok' => false, 'why' => "Blokning kelgusi kunlari yo'q.", 'room' => null]) + $at;
+                }
+                // Tanlangan kunlar: shu soatdan, har kun alohida tekshiruv (cycle-time-proposal dates bilan bir xil).
+                $p = collect($pairs)->firstWhere('no', (int) $selPair);
+                $dates = array_values(array_intersect($future, $selItems));
+                if ($sel !== null && $selItems && $p && $selDate === $entry['date']) {
+                    $out['sel'] = ['date' => $selDate, 'pair' => (int) $selPair, 'items' => $dates, 'bad' => []] + (count($dates) !== count($selItems)
+                        ? ['ok' => false, 'why' => "Tanlangan kunlarning ba'zisi blokning kelgusi amaliy kuni emas."]
+                        : $this->agendaCycleOption($board, $u + ['units' => [$u['unit']], 'start_hour' => $p['from'], 'dates' => $dates,
+                            'date' => $dates[0], 'scope' => 'day']));
                 }
             }
         }
@@ -507,6 +537,26 @@ trait TimetableTeacherAgenda
         }
 
         return ['ok' => true, 'why' => null];
+    }
+
+    /** "Bir nechta haftani tanlash": har tanlangan hafta (tanlangan joriy haftadan tashqari) — muammoli haftalar ro'yxati (bad). */
+    private function agendaWeeklyWeeksCheck(TimetableBoard $board, TimetableCard $card, array $weeks, int $selected, array $opt): array
+    {
+        $room = !empty($opt['room']['code']) ? Auditorium::where('code', $opt['room']['code'])->first() : null;
+        $why = [];
+        $bad = [];
+        foreach ($weeks as $w) {
+            if ((int) $w === $selected) {
+                continue;
+            }
+            [$errors] = $this->agendaWeekErrors($board, $card, (int) $w, (int) $opt['day'], (int) $opt['pair'], $room);
+            if ($errors) {
+                $bad[] = (int) $w;
+                $why[] = $w . '-hafta (' . $this->weekStartDate($board, $card, (int) $w)->addDays((int) $opt['day'] - 1)->format('d.m') . '): ' . implode(' · ', $errors);
+            }
+        }
+
+        return ['ok' => !$why, 'why' => $why ? implode("\n", $why) : null, 'bad' => $bad];
     }
 
     /** Sabab matni: "Auditoriya band: X — …" → "Xona band: X — …"; "Xona 215 band: …" → "Xona band: 215 — …" ("Xona sig'maydi: …" — o'zgarmaydi). */

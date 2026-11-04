@@ -927,7 +927,7 @@ class TimetableChangeApproval
      * Qabul qiluvchilarga (o'qituvchi yoki foydalanuvchi) LMS xabarnomasi darhol, Telegram — javobdan keyin (bitta navbat).
      * Kim xabar olgani (yoki hech kim topilmagani) logga yoziladi — "xabar kelmadi" holatini tekshirish uchun.
      */
-    public function notifyNow(iterable $recipients, string $title, string $message, TimetableChangeRequest $req, string $what): void
+    public function notifyNow(iterable $recipients, string $title, string $message, ?TimetableChangeRequest $req, string $what, ?int $boardId = null): void
     {
         $queue = [];
         $names = [];
@@ -941,18 +941,41 @@ class TimetableChangeApproval
                 continue;
             }
             $seen[$k] = true;
-            $this->storeNotification($r, $title, $message, $req);
+            $this->storeNotification($r, $title, $message, $req, $boardId);
             $names[] = ($r->full_name ?? $r->name ?? '') . ' (' . class_basename($r) . ' ' . $r->getKey() . ')';
             if (!empty($r->telegram_chat_id)) {
                 $queue[] = [(string) $r->telegram_chat_id, '<b>' . e($title) . '</b>' . "\n\n" . e($message)];
             }
         }
         if ($names) {
-            Log::info('[TimetableChange] #' . $req->id . " xabar ({$what}): " . implode(', ', $names));
+            Log::info('[TimetableChange] #' . ($req?->id ?? '-') . " xabar ({$what}): " . implode(', ', $names));
         } else {
-            Log::warning('[TimetableChange] #' . $req->id . " xabar ({$what}): qabul qiluvchi topilmadi");
+            Log::warning('[TimetableChange] #' . ($req?->id ?? '-') . " xabar ({$what}): qabul qiluvchi topilmadi");
         }
         $this->sendTelegramLater($queue);
+    }
+
+    /**
+     * Kafedra mudiri(lar)iga darhol xabar — so'rovsiz amal uchun (masalan "Vaqtincha kafedra mudiriga yozish"): LMS xabarnomasi va
+     * Telegram (notifyNow). Yuborilganlar F.I.Sh. ro'yxati; xato — faqat logda (amal bekor qilinmaydi).
+     */
+    public function notifyDepartmentHeadsNow(?int $departmentId, string $title, string $message, ?int $boardId, string $what): array
+    {
+        if (!$departmentId) {
+            Log::warning("[TimetableChange] xabar ({$what}): kafedra aniqlanmadi");
+
+            return [];
+        }
+        try {
+            $heads = collect($this->departmentHeads($departmentId))->filter()->unique(fn ($r) => $r->getMorphClass() . '#' . $r->getKey())->values();
+            $this->notifyNow($heads, $title, $message, null, $what, $boardId);
+
+            return $heads->map(fn ($r) => (string) ($r->full_name ?? $r->name ?? ''))->filter()->values()->all();
+        } catch (\Throwable $e) {
+            Log::warning("[TimetableChange] xabar ({$what}): " . $e->getMessage());
+
+            return [];
+        }
     }
 
     /** Telegram navbati — javob yuborilgach (sekin tarmoq so'rovni kutdirmasin). */
@@ -974,20 +997,22 @@ class TimetableChangeApproval
     }
 
     /** LMS xabarnomasi: o'qituvchiga — TeacherNotification va Notification, foydalanuvchiga — Notification. */
-    private function storeNotification($recipient, string $title, string $message, TimetableChangeRequest $req): void
+    private function storeNotification($recipient, string $title, string $message, ?TimetableChangeRequest $req, ?int $boardId = null): void
     {
-        $link = Route::has('admin.timetable.index') ? route('admin.timetable.index') . '?board=' . $req->board_id . '&change_request=' . $req->id : null;
+        // So'rovsiz xabar (req yo'q) — havola doskaga.
+        $link = !Route::has('admin.timetable.index') ? null : route('admin.timetable.index') . '?board=' . ($req?->board_id ?? $boardId)
+            . ($req ? '&change_request=' . $req->id : '');
         if ($recipient instanceof Teacher) {
             try {
                 TeacherNotification::create(['teacher_id' => $recipient->id, 'type' => 'timetable_change', 'title' => $title, 'message' => $message,
-                    'link' => $link, 'data' => ['timetable_change_request_id' => $req->id]]);
+                    'link' => $link, 'data' => ['timetable_change_request_id' => $req?->id]]);
             } catch (\Throwable $e) {
                 Log::warning('[TimetableChange] TeacherNotification: ' . $e->getMessage());
             }
         }
         try {
             Notification::create(['recipient_id' => $recipient->getKey(), 'recipient_type' => get_class($recipient), 'subject' => $title, 'body' => $message,
-                'type' => 'timetable_change', 'url' => $link, 'data' => ['timetable_change_request_id' => $req->id],
+                'type' => 'timetable_change', 'url' => $link, 'data' => ['timetable_change_request_id' => $req?->id],
                 'is_read' => false, 'is_draft' => false, 'sent_at' => now()]);
         } catch (\Throwable $e) {
             Log::warning('[TimetableChange] Notification: ' . $e->getMessage());

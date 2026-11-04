@@ -4665,6 +4665,9 @@ class TimetableController extends Controller
                     'lecture_slots' => $hasLectureSlots ? (array) ($placement->lecture_slots ?? []) : [],
                     // Vaqtincha kafedra mudirida (amaliy blok; butun blok yoki sanalar).
                     'mudir_ph' => $hasLectureSlots && $blockType === 'practice' ? $this->cycleMudirPhFor($placement, (string) ($g['unit'] ?? $g['name'])) : null,
+                    // Oqim ma'ruzasi vaqtincha kafedra mudirida (mudir_ph_lec — shu guruhcha oqimining ma'ruzasi).
+                    'mudir_ph_lec' => $hasLectureSlots && $blockType === 'practice'
+                        ? $this->cycleMudirPhLecForUnit($lecPhMap ??= $this->cycleMudirPhLecMap((int) $board->id), (string) ($g['unit'] ?? $g['name'])) : null,
                     'lecture_hours' => $hrs === null ? null : $fmtHours((float) $hrs['lecture']),
                     'practice_hours' => $hrs === null ? null : $fmtHours((float) $hrs['practice']),
                     'day_plan' => $cycleMark
@@ -4737,6 +4740,7 @@ class TimetableController extends Controller
                         'conflicts' => $block['conflicts'] ?? [],
                         'conflict_level' => $block['conflict_level'] ?? null,
                         'mudir_ph' => $block['mudir_ph'] ?? null,
+                        'mudir_ph_lec' => $block['mudir_ph_lec'] ?? null,
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
                         // Vaqt so'rovi tugmasi (o'qituvchi: o'z darsi; fan mas'uli: mas'ul fani).
@@ -6194,7 +6198,8 @@ class TimetableController extends Controller
         // Guruhcha smenasi (shift_g — "O'qituvchi biriktirish" oynasidan) ma'ruza belgilari bilan o'chmasin.
         $shifts = ((array) ($placement->lecture_slots ?? []))['shift_g'] ?? null;
         $ph = ((array) ($placement->lecture_slots ?? []))['mudir_ph'] ?? null;   // vaqtincha kafedra mudirida belgisi ham
-        $placement->update(['lecture_slots' => $slots + array_filter(['shift_g' => $shifts, 'mudir_ph' => $ph])]);
+        $phLec = ((array) ($placement->lecture_slots ?? []))['mudir_ph_lec'] ?? null;   // oqim ma'ruzasi mudirda belgisi ham
+        $placement->update(['lecture_slots' => $slots + array_filter(['shift_g' => $shifts, 'mudir_ph' => $ph, 'mudir_ph_lec' => $phLec])]);
 
         return response()->json(['ok' => true, 'slots' => $slots]);
     }
@@ -6801,6 +6806,8 @@ class TimetableController extends Controller
                 . '|' . mb_strtolower(trim((string) $c->subject_name))][] = $c;
         }
         $roomNames = Auditorium::pluck('name', 'code')->all();
+        // Oqim ma'ruzasi "vaqtincha kafedra mudirida" (mudir_ph_lec): ma'ruza kartasi id => belgi (barcha joylashuvlardan).
+        $lecPh = $hasSlots ? $this->cycleMudirPhLecMap((int) $board->id) : [];
         $out = [];
         foreach ($units as $ui => $u) {
             if (!$includeInfoOnly && $this->isNonBlocking($u, $board)) continue;
@@ -6864,6 +6871,17 @@ class TimetableController extends Controller
                     // Xona yuklamasi: amaliy karta (umumiy "A + B" ham) — bitta dars, talabalari bir marta; oqim ma'ruzasi —
                     // har guruhcha o'z talabalari bilan.
                     $lecture = $card->training_type === 'lecture';
+                    // Ma'ruza — mudir nomida va mudir xonasida (shu sanalarda), to'qnashuvsiz (amaliydagi kabi).
+                    $lph = $lecture ? ($lecPh[(int) $card->id] ?? null) : null;
+                    if ($lph && self::cyclePhOn($lph, $date)) {
+                        $out[] = ['kind' => 'cycle', 'unit' => $ui, 'lesson' => (int) $card->id, 'card' => (int) $card->id, 'from' => $from, 'to' => $to,
+                            'date' => $date, 'load_key' => 'l' . $card->id . '|' . $ui, 'load' => $students, 'students' => $students,
+                            'teacher_id' => (int) $lph['teacher_id'], 'teacher' => (string) $lph['teacher_name'], 'room' => $lph['room_code'] ?: null,
+                            'room_name' => (string) ($lph['room_name'] ?: $lph['room_code']), 'free_room' => true, 'ph' => true,
+                            'ph_orig' => (string) ($lph['orig_teacher_name'] ?? $card->teacher_name), 'label' => $u['group'] . ', ' . $u['subject']]
+                            + ($withPlan ? ['dp' => $d !== null ? array_intersect_key($d, array_flip(['k', 'lec', 'prc', 'start', 'ps', 'tl', 'tp', 'ktr'])) : null] : []);
+                        continue;
+                    }
                     if (!$lecture && self::cyclePhOn($ph, $date)) {
                         $out[] = ['kind' => 'cycle', 'unit' => $ui, 'lesson' => (int) $card->id, 'card' => (int) $card->id, 'from' => $from, 'to' => $to,
                             'date' => $date, 'load_key' => 'c' . $card->id, 'load' => $this->cardStudents($card), 'students' => $students,

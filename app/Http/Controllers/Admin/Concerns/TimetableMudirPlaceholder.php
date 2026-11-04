@@ -148,6 +148,15 @@ trait TimetableMudirPlaceholder
         $actor = $this->timetableActor($request);
         $mudir = $t['teacher'];
         [$roomCode, $roomName] = $t['room'];
+        // Bildirishnoma uchun sabab — shu haftadagi joridagi to'qnashuvlar (yozishdan oldin).
+        $ov0 = TimetableCardOverride::where('card_id', $card->id)->where('week', $W)->first();
+        [$d0, $p0] = $ov0 && $ov0->day && $ov0->pair ? [(int) $ov0->day, (int) $ov0->pair] : [(int) $card->day, (int) $card->pair];
+        try {
+            $clash = $d0 && $p0 ? $this->findWeekConflicts($card, $W, $d0, $p0) : [];
+        } catch (\Throwable $e) {
+            $clash = [];
+        }
+        $origRoom = $ov0?->auditorium_name ?: ($ov0?->auditorium_code ?: ($card->auditorium_name ?: $card->auditorium_code));
         // Faqat tanlangan hafta(lar)ning yozuvi o'zgaradi (karta asosiy o'qituvchisi va xonasi — boshqa haftalar uchun — o'zgarmaydi):
         // mudir va shu haftaning asl xonasi (override) mudir_placeholder'da saqlanadi — qaytarishda aynan tiklanadi.
         DB::transaction(function () use ($cards, $chain, $weeks, $day, $pair, $mudir, $roomCode, $roomName, $data, $actor) {
@@ -180,7 +189,33 @@ trait TimetableMudirPlaceholder
             }
         });
 
-        return response()->json(['ok' => true, 'weeks' => $weeks, 'unit' => $this->unitPayload($cards, $W, false)]);
+        $when = count($weeks) > 1 ? $weeks[0] . '–' . end($weeks) . '-haftalar' : $weeks[0] . '-hafta';
+        $notified = $this->mudirPlaceholderNotify($card, (string) ($card->group_name ?: implode(', ', (array) $card->group_names)), $when, $clash,
+            (string) $card->teacher_name, (string) $origRoom, $data['reason'] ?? null);
+
+        return response()->json(['ok' => true, 'weeks' => $weeks, 'unit' => $this->unitPayload($cards, $W, false), 'notified' => $notified]);
+    }
+
+    /**
+     * Yozilgach fan kafedrasi mudiri(lar)iga bildirishnoma (to'qnashuvni hal qilish — kafedraning ishi). Yuborilmasa — faqat logda,
+     * yozish bekor qilinmaydi. Yuborilganlar F.I.Sh.
+     */
+    private function mudirPlaceholderNotify(TimetableCard $card, string $who, string $when, array $reasons, string $origTeacher, string $origRoom, ?string $note): array
+    {
+        try {
+            $reasons = array_values(array_unique(array_filter(array_map('trim', $reasons))));
+            $msg = trim((string) $card->subject_name) . ' — ' . $who . ', ' . $when . '.'
+                . ' Sabab: ' . ($reasons ? implode('; ', $reasons) : 'to\'qnashuv') . '.'
+                . ' Asl o\'qituvchi: ' . ($origTeacher !== '' ? $origTeacher : 'biriktirilmagan') . ', asl xona: ' . ($origRoom !== '' ? $origRoom : 'biriktirilmagan') . '.'
+                . ' Iltimos, to\'g\'ri o\'qituvchi/xonani belgilang.' . (trim((string) $note) !== '' ? ' Izoh: ' . trim((string) $note) . '.' : '');
+
+            return app(\App\Services\Timetable\TimetableChangeApproval::class)->notifyDepartmentHeadsNow($this->cardDepartmentId($card),
+                'Dars vaqtincha sizning nomingizga yozildi — hal qilish kerak', $msg, (int) $card->board_id, 'kafedra mudiriga yozildi');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[MudirPlaceholder] bildirishnoma: ' . $e->getMessage());
+
+            return [];
+        }
     }
 
     /**
@@ -268,6 +303,39 @@ trait TimetableMudirPlaceholder
     // belgini olib tashlaydi (aynan oldingi holat). Shu sanalardagi amaliy darslar mudir va mudir xonasida (cycleOccupancy), to'qnashuv
     // sanalmaydi (cycleConflicts), HEMIS'ga mudir nomiga (hemisCycleLessons).
 
+    // Oqim ma'ruzasi: lecture_slots.mudir_ph_lec = {dates, teacher_id, teacher_name, mudir_name, hemis_id, room_code, room_name,
+    // orig_teacher_name, orig_room_code, orig_room_name, lecture_ids (ma'ruza kartalari), units (oqim guruhchalari), reason, by_*, at} —
+    // yozilgan blok joylashuvida; oqimdagi barcha guruhchalar uchun (lecture_ids bo'yicha — guruhchalar alohida joylangan bo'lsa ham).
+
+    /** Oqim ma'ruzasi belgilari: ma'ruza kartasi id => belgi (+ placement_id) — doskadagi barcha joylashuvlardan. */
+    private function cycleMudirPhLecMap(int $boardId): array
+    {
+        $map = [];
+        foreach (\App\Models\TimetableCyclePlacement::where('board_id', $boardId)->where('lecture_slots', 'like', '%mudir_ph_lec%')->get(['id', 'lecture_slots']) as $p) {
+            $ph = ((array) ($p->lecture_slots ?? []))['mudir_ph_lec'] ?? null;
+            if (!is_array($ph) || !$ph) {
+                continue;
+            }
+            foreach ((array) ($ph['lecture_ids'] ?? []) as $id) {
+                $map[(int) $id] ??= $ph + ['placement_id' => (int) $p->id];
+            }
+        }
+
+        return $map;
+    }
+
+    /** Guruhcha oqimi ma'ruzasining belgisi (belgining units ro'yxatida bo'lsa). */
+    private function cycleMudirPhLecForUnit(array $map, string $unit): ?array
+    {
+        foreach ($map as $ph) {
+            if (in_array($unit, array_map('strval', (array) ($ph['units'] ?? [])), true)) {
+                return $ph;
+            }
+        }
+
+        return null;
+    }
+
     /** Guruhcha (shift_g kaliti) uchun belgi. */
     private function cycleMudirPhFor($placement, string $unit): ?array
     {
@@ -322,42 +390,103 @@ trait TimetableMudirPlaceholder
         if ($t['why']) {
             return response()->json(['error' => $t['why']], 422);
         }
-        $dates = null;
-        if (($data['scope'] ?? 'all') === 'conflicts') {
-            $today = self::proposalToday();
-            $dates = [];
-            foreach ($this->cycleConflicts($board, $units, $calendar)[$u['key']]['items'] ?? [] as $it) {
-                if (!empty($it['past']) || empty($it['date_from']) || !empty($it['lecture'])) {
-                    continue;
-                }
-                foreach ($this->cycleDatesBetween($calendar, $it['date_from'], $it['date_to'], $u) as $d) {
-                    if ($d >= $today) {
-                        $dates[$d] = true;
-                    }
-                }
+        // Oqim ma'ruzasi (bo'lsa) — kartalari va oqim guruhchalari (belgi butun oqim uchun).
+        $lecCards = $this->cycleFlowLectureCards($board, $u);
+        $lecIds = $lecCards->pluck('id')->map(fn ($x) => (int) $x)->values()->all();
+        $lc = fn ($v) => mb_strtolower(trim((string) $v));
+        $flowUnits = array_values(array_unique(array_map(fn ($x) => (string) $x['unit'], array_filter($units, fn ($x) => $lc($x['specialty']) === $lc($u['specialty'])
+            && (int) $x['course'] === (int) $u['course'] && $lc($x['parent']) === $lc($u['parent']) && $lc($x['subject']) === $lc($u['subject'])))));
+        $items = $this->cycleConflicts($board, $units, $calendar)[$u['key']]['items'] ?? [];
+        $scopeAll = ($data['scope'] ?? 'all') !== 'conflicts';
+        $today = self::proposalToday();
+        // Amaliy va ma'ruza sanalari: null — butun blok; [] — yozilmaydi.
+        $pDates = $scopeAll ? null : [];
+        $lDates = $scopeAll && $lecIds ? null : [];
+        $lines = [];
+        foreach ($items as $it) {
+            if (!empty($it['past']) || empty($it['date_from'])) {
+                continue;
             }
-            $dates = array_keys($dates);
-            sort($dates);
-            if (!$dates) {
-                return response()->json(['error' => "Kelgusi to'qnashuv sanasi yo'q."], 422);
+            $lines[] = (string) ($it['line'] ?? '');
+            if ($scopeAll) {
+                continue;
+            }
+            $lecture = !empty($it['lecture']);
+            if ($lecture && !$lecIds) {
+                continue;
+            }
+            foreach ($this->cycleDatesBetween($calendar, $it['date_from'], $it['date_to'], $u) as $d) {
+                if ($d >= $today && $lecture) {
+                    $lDates[$d] = true;
+                } elseif ($d >= $today) {
+                    $pDates[$d] = true;
+                }
             }
         }
+        if (!$scopeAll) {
+            $pDates = array_keys($pDates);
+            $lDates = array_keys($lDates);
+            sort($pDates);
+            sort($lDates);
+            if (!$pDates && !$lDates) {
+                return response()->json(['error' => "Bugundan keyingi to'qnashuv sanasi yo'q (o'tgan sanalarni o'zgartirib bo'lmaydi)."], 422);
+            }
+        }
+        $writePractice = $pDates === null || $pDates;
+        $writeLecture = $lecIds && ($lDates === null || $lDates);
         $actor = $this->timetableActor($request);
         $mudir = $t['teacher'];
         $first = $cards->first();
-        $placement = \App\Models\TimetableCyclePlacement::find($u['placement']->id);
-        $slots = (array) ($placement->lecture_slots ?? []);
-        $slots['mudir_ph'] = (array) ($slots['mudir_ph'] ?? []);
-        $slots['mudir_ph'][(string) $u['unit']] = [
-            'dates' => $dates, 'teacher_id' => (int) $mudir->id, 'teacher_name' => (string) ($mudir->short_name ?: $mudir->full_name),
+        $lec0 = $lecCards->first();
+        $reason = trim((string) ($data['reason'] ?? '')) ?: null;
+        $who = ['teacher_id' => (int) $mudir->id, 'teacher_name' => (string) ($mudir->short_name ?: $mudir->full_name),
             'mudir_name' => (string) $mudir->full_name, 'hemis_id' => $mudir->hemis_id ? (int) $mudir->hemis_id : null,
-            'room_code' => $t['room'][0], 'room_name' => $t['room'][1], 'orig_teacher_name' => $first->teacher_name,
-            'orig_room_name' => $first->auditorium_name, 'reason' => trim((string) ($data['reason'] ?? '')) ?: null,
-            'by_id' => $actor?->getKey(), 'by_name' => $actor?->full_name ?? $actor?->name, 'at' => now()->toDateTimeString(),
-        ];
-        $placement->update(['lecture_slots' => $slots]);
+            'room_code' => $t['room'][0], 'room_name' => $t['room'][1]];
+        $by = ['reason' => $reason, 'by_id' => $actor?->getKey(), 'by_name' => $actor?->full_name ?? $actor?->name, 'at' => now()->toDateTimeString()];
+        DB::transaction(function () use ($u, $writePractice, $writeLecture, $pDates, $lDates, $who, $by, $first, $lec0, $lecIds, $flowUnits, $board) {
+            $placement = \App\Models\TimetableCyclePlacement::lockForUpdate()->find($u['placement']->id);
+            if ($writeLecture) {
+                // Shu ma'ruzaning boshqa joylashuvlardagi eski belgisi — olib tashlanadi (bitta ma'ruza — bitta belgi).
+                foreach (array_unique(array_column(array_intersect_key($this->cycleMudirPhLecMap((int) $board->id), array_flip($lecIds)), 'placement_id')) as $pid) {
+                    if ((int) $pid !== (int) $placement->id && ($other = \App\Models\TimetableCyclePlacement::find($pid))) {
+                        $os = (array) ($other->lecture_slots ?? []);
+                        unset($os['mudir_ph_lec']);
+                        $other->update(['lecture_slots' => $os]);
+                    }
+                }
+            }
+            $slots = (array) ($placement->lecture_slots ?? []);
+            if ($writePractice) {
+                $slots['mudir_ph'] = (array) ($slots['mudir_ph'] ?? []);
+                $slots['mudir_ph'][(string) $u['unit']] = ['dates' => $pDates] + $who + [
+                    'orig_teacher_name' => $first->teacher_name, 'orig_room_name' => $first->auditorium_name] + $by;
+            }
+            if ($writeLecture) {
+                $slots['mudir_ph_lec'] = ['dates' => $lDates] + $who + [
+                    'orig_teacher_name' => $lec0?->teacher_name, 'orig_room_code' => $lec0?->auditorium_code, 'orig_room_name' => $lec0?->auditorium_name,
+                    'lecture_ids' => $lecIds, 'units' => $flowUnits] + $by;
+            }
+            $placement->update(['lecture_slots' => $slots]);
+        });
+        request()->attributes->remove('timetable.cycle_units.' . $board->id);
 
-        return response()->json(['ok' => true, 'dates' => $dates]);
+        // Bildirishnoma (fan kafedrasi mudiri): sanalar yoki butun blok, sabab — to'qnashuv matni, asl o'qituvchi va xona.
+        $fmt = fn (array $ds) => implode(', ', array_map(fn ($d) => \Carbon\Carbon::parse($d)->format('d.m'), $ds));
+        $parts = [];
+        if ($writePractice) {
+            $parts[] = 'amaliy — ' . ($pDates === null ? 'butun blok' : $fmt($pDates));
+        }
+        if ($writeLecture) {
+            $parts[] = "ma'ruza (oqim: " . $u['parent'] . ') — ' . ($lDates === null ? 'butun blok' : $fmt($lDates));
+        }
+        $orig = array_filter([$writePractice ? ($first->teacher_name ?: 'biriktirilmagan') . ' (amaliy)' : null,
+            $writeLecture ? (($lec0?->teacher_name) ?: 'biriktirilmagan') . " (ma'ruza)" : null]);
+        $origRoom = array_filter([$writePractice ? ($first->auditorium_name ?: $first->auditorium_code ?: 'biriktirilmagan') . ' (amaliy)' : null,
+            $writeLecture ? (($lec0?->auditorium_name ?: $lec0?->auditorium_code) ?: 'biriktirilmagan') . " (ma'ruza)" : null]);
+        $notified = $this->mudirPlaceholderNotify($first, (string) $u['group'], implode('; ', $parts), $lines, implode(', ', $orig), implode(', ', $origRoom), $reason);
+
+        return response()->json(['ok' => true, 'dates' => $writePractice ? $pDates : [], 'lecture_dates' => $writeLecture ? $lDates : [],
+            'lecture' => (bool) $writeLecture, 'notified' => $notified]);
     }
 
     /** POST boards/{board}/cycle-mudir-placeholder/revert {key}: belgi olib tashlanadi — oldingi holat (bandlik tekshirilmaydi). */
@@ -372,15 +501,32 @@ trait TimetableMudirPlaceholder
         $u = $units[$i];
         $placement = \App\Models\TimetableCyclePlacement::find($u['placement']->id);
         $slots = (array) ($placement->lecture_slots ?? []);
-        if (!isset(((array) ($slots['mudir_ph'] ?? []))[(string) $u['unit']])) {
+        $hasPractice = isset(((array) ($slots['mudir_ph'] ?? []))[(string) $u['unit']]);
+        // Oqim ma'ruzasi belgisi — shu guruhcha oqimi ma'ruzasini qamragan joylashuv(lar)da (istalgan guruhcha blokidan qaytariladi).
+        $lecIds = $this->cycleFlowLectureCards($board, $u)->pluck('id')->map(fn ($x) => (int) $x)->all();
+        $lecPlacements = array_unique(array_column(array_intersect_key($this->cycleMudirPhLecMap((int) $board->id), array_flip($lecIds)), 'placement_id'));
+        if (!$hasPractice && !$lecPlacements) {
             return response()->json(['error' => 'Bu blok vaqtincha kafedra mudirida emas.'], 422);
         }
-        unset($slots['mudir_ph'][(string) $u['unit']]);
-        if (!$slots['mudir_ph']) {
-            unset($slots['mudir_ph']);
-        }
-        $placement->update(['lecture_slots' => $slots]);
+        DB::transaction(function () use ($placement, $hasPractice, $lecPlacements, $u) {
+            if ($hasPractice) {
+                $slots = (array) ($placement->fresh()->lecture_slots ?? []);
+                unset($slots['mudir_ph'][(string) $u['unit']]);
+                if (!$slots['mudir_ph']) {
+                    unset($slots['mudir_ph']);
+                }
+                $placement->update(['lecture_slots' => $slots]);
+            }
+            foreach ($lecPlacements as $pid) {
+                if ($p = \App\Models\TimetableCyclePlacement::find($pid)) {
+                    $ps = (array) ($p->lecture_slots ?? []);
+                    unset($ps['mudir_ph_lec']);
+                    $p->update(['lecture_slots' => $ps]);
+                }
+            }
+        });
+        request()->attributes->remove('timetable.cycle_units.' . $board->id);
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'lecture' => (bool) $lecPlacements]);
     }
 }

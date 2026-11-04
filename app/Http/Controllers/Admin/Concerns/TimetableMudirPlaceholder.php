@@ -324,11 +324,16 @@ trait TimetableMudirPlaceholder
         return $map;
     }
 
-    /** Guruhcha oqimi ma'ruzasining belgisi (belgining units ro'yxatida bo'lsa). */
-    private function cycleMudirPhLecForUnit(array $map, string $unit): ?array
+    /**
+     * Guruhcha oqimi ma'ruzasining belgisi: guruhcha belgining units ro'yxatida va fan (yo'nalish, kurs) bir xil — guruhchaning boshqa
+     * sikl fanlari bu belgini olmaydi.
+     */
+    private function cycleMudirPhLecForUnit(array $map, string $unit, string $subject, string $specialty, int $course): ?array
     {
+        $lc = fn ($v) => mb_strtolower(trim((string) $v));
         foreach ($map as $ph) {
-            if (in_array($unit, array_map('strval', (array) ($ph['units'] ?? [])), true)) {
+            if (in_array($unit, array_map('strval', (array) ($ph['units'] ?? [])), true) && $lc($ph['subject'] ?? '') === $lc($subject)
+                && $lc($ph['specialty'] ?? '') === $lc($specialty) && (int) ($ph['course'] ?? 0) === $course) {
                 return $ph;
             }
         }
@@ -464,7 +469,8 @@ trait TimetableMudirPlaceholder
             if ($writeLecture) {
                 $slots['mudir_ph_lec'] = ['dates' => $lDates] + $who + [
                     'orig_teacher_name' => $lec0?->teacher_name, 'orig_room_code' => $lec0?->auditorium_code, 'orig_room_name' => $lec0?->auditorium_name,
-                    'lecture_ids' => $lecIds, 'units' => $flowUnits] + $by;
+                    'lecture_ids' => $lecIds, 'units' => $flowUnits,
+                    'subject' => (string) $u['subject'], 'specialty' => (string) $u['specialty'], 'course' => (int) $u['course']] + $by;
             }
             $placement->update(['lecture_slots' => $slots]);
         });

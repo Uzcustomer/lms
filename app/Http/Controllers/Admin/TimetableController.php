@@ -4667,7 +4667,8 @@ class TimetableController extends Controller
                     'mudir_ph' => $hasLectureSlots && $blockType === 'practice' ? $this->cycleMudirPhFor($placement, (string) ($g['unit'] ?? $g['name'])) : null,
                     // Oqim ma'ruzasi vaqtincha kafedra mudirida (mudir_ph_lec — shu guruhcha oqimining ma'ruzasi).
                     'mudir_ph_lec' => $hasLectureSlots && $blockType === 'practice'
-                        ? $this->cycleMudirPhLecForUnit($lecPhMap ??= $this->cycleMudirPhLecMap((int) $board->id), (string) ($g['unit'] ?? $g['name'])) : null,
+                        ? $this->cycleMudirPhLecForUnit($lecPhMap ??= $this->cycleMudirPhLecMap((int) $board->id), (string) ($g['unit'] ?? $g['name']),
+                            (string) $placement->subject_name, (string) $g['specialty'], (int) $g['course']) : null,
                     'lecture_hours' => $hrs === null ? null : $fmtHours((float) $hrs['lecture']),
                     'practice_hours' => $hrs === null ? null : $fmtHours((float) $hrs['practice']),
                     'day_plan' => $cycleMark

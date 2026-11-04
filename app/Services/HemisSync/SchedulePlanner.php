@@ -339,9 +339,10 @@ class SchedulePlanner
             // Sikl fani — faqat o'z bloki kunlari (work_dates); haftalik — guruhning umumiy dars kunlari.
             $this->fixSwaps($u, $blocks, $fixes);
             $this->fixCountSurplus($u, $blocks, $occ, $fixes, $notes);
-            if (!empty($u['cycle'])) {
+            if (!empty($u['cycle']) && $this->tally($u, $blocks)['count_diff']['A'] <= 0) {
                 // Siklda kun — bitta: amaliy soat kamomadi avval o'z kunlari davomiga (izohsiz, sinov), so'ng ma'ruza yangi kunga —
-                // aks holda yangi ma'ruza amaliy davomini egallab, amaliy "sig'madi" bo'lardi.
+                // aks holda yangi ma'ruza amaliy davomini egallab, amaliy "sig'madi" bo'lardi. Amaliy kuni ham kam bo'lsa — qilinmaydi:
+                // yangi amaliy kun uchun soat qolishi kerak (aks holda mavjud kun uzayib, ma'ruzaga joy qolmasdi).
                 $silent = [];
                 $this->fixHoursDeficit($u, $blocks, $occ, $fixes, $silent, ['A']);
             }

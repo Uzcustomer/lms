@@ -167,13 +167,20 @@
                                     Joriy semestr
                                 </label>
                                 @if(!empty($currentSemesterHint))
-                                    <span class="vs-switch-hint" title="Har guruh o'zi hozir o'qiyotgan semestr bo'yicha (talabalar ma'lumotidan)">{{ $currentSemesterHint }}</span>
+                                    <span class="vs-switch-hint" title="«Joriy semestr» — har guruh hozir o'qiyotgan semestr (talabalar ma'lumotidan)">{{ $currentSemesterHint }}</span>
                                 @endif
                                 @if(!empty($staleGroups['count']))
-                                    <span class="vs-switch-hint" style="color:#b45309;"
-                                          title="{{ implode(', ', $staleGroups['names']) }}{{ $staleGroups['count'] > count($staleGroups['names']) ? ' …' : '' }}">
-                                        ⚠ {{ $staleGroups['count'] }} ta guruh talabalari o'tgan o'quv yili semestrida qolgan (HEMIS'da yangi semestrga o'tkazilmagan) — ular «Joriy semestr»da ko'rinmaydi
-                                    </span>
+                                    <details class="vs-stale">
+                                        <summary title="Bosing — qaysi guruhlar">
+                                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+                                            {{ $staleGroups['count'] }} ta guruh ko'rinmaydi
+                                        </summary>
+                                        <div class="vs-stale-body">
+                                            Bu guruhlar talabalari HEMIS'da hali yangi semestrga o'tkazilmagan (o'tgan o'quv yili semestrida turibdi),
+                                            shuning uchun «Joriy semestr» yoqilganda ularning vedomostlari ro'yxatda chiqmaydi. Ko'rish uchun «Joriy semestr»ni o'chiring.
+                                            <div class="vs-stale-names">{{ implode(', ', $staleGroups['names']) }}{{ $staleGroups['count'] > count($staleGroups['names']) ? ' …' : '' }}</div>
+                                        </div>
+                                    </details>
                                 @endif
                             </div>
                             <details class="vd-more" {{ $advCount ? 'open' : '' }}>
@@ -845,7 +852,7 @@
         .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
         /* Qo'shimcha filtrlar (yig'iladigan) */
         .vd-filter-sub { align-items: flex-start; margin-bottom: 0; }
-        .vd-filter-sub .vs-switch-item { padding-bottom: 14px; }
+        .vd-filter-sub .vs-switch-item { padding-bottom: 6px; }
         .vd-more { flex: 1; min-width: 260px; }
         .vd-more summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px dashed #94a3b8; background: #fff; color: #334155; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; }
         .vd-more summary::-webkit-details-marker { display: none; }
@@ -935,6 +942,13 @@
         .vs-switch input:checked + .vs-switch-track .vs-switch-thumb { transform: translateX(16px); }
         .vs-switch input:focus-visible + .vs-switch-track { outline: 2px solid #2563eb; outline-offset: 2px; }
         .vs-switch-item { position: relative; }
-        .vs-switch-hint { position: absolute; left: 0; top: 100%; font-size: 10.5px; color: #64748b; white-space: nowrap; }
+        .vs-switch-hint { display: block; max-width: 260px; font-size: 11px; color: #64748b; line-height: 1.35; }
+        .vs-stale { margin-top: 4px; font-size: 11.5px; }
+        .vs-stale summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; font-weight: 700; cursor: pointer; }
+        .vs-stale summary::-webkit-details-marker { display: none; }
+        .vs-stale summary svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .vs-stale summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .vs-stale-body { margin-top: 6px; max-width: 420px; padding: 8px 10px; border-radius: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; line-height: 1.45; }
+        .vs-stale-names { margin-top: 4px; color: #92400e; font-weight: 600; }
     </style>
 </x-app-layout>

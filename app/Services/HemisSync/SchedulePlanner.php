@@ -20,6 +20,12 @@ namespace App\Services\HemisSync;
  *  - Tur almashtirish (amaliy ↔ laboratoriya) kun va soatni o'zgartirmaydi.
  *  - Kelajak (ertadan) darslari har safar barcha maydonlar bo'yicha solishtiriladi: sana, para vaqti,
  *    tur, o'qituvchi, xona — qo'shish / o'zgartirish / o'chirish amallari chiqadi.
+ *  - Sikl fani (4–6-kurs, birlikda cycle = true): darslar har kuni, KTR qatori = SIKL KUNI (hafta emas). Balans butun blok
+ *    (sikl davri) bo'yicha: HEMIS bugungacha + ertadan blok oxirigacha = KTR jami (har tur soati, har qism kunlari — ma'ruza ham).
+ *    Tuzatish faqat blok ichida — birlikning work_dates (ertadan keyingi sikl kunlari); blokdan tashqariga dars qo'yilmaydi.
+ *    "Har hafta o'z KTR soatigacha" — siklda "har sikl kuni o'z KTR soatigacha"; ortiqcha kun — eng yaqin kunga birlashtiriladi.
+ *    Sig'masa (blokda bo'sh soat yo'q, kun oxiri, HEMIS para vaqti yo'q) — tuzatilmaydi, izohda ogohlantirish. Faqat HEMIS'ga
+ *    yoziladi: LMS ichki sikl jadvali o'zgarmaydi.
  *
  * Soat birligi — akademik soat = yarim para = bitta yarim-slot (40 daqiqa).
  */
@@ -51,7 +57,9 @@ class SchedulePlanner
      *  hemis: [[id, date, start, end, code, employee_id, employee_name, auditorium_code, auditorium_name]],
      *  plan:  [[date, week, slot, len, part, employee_id, employee_name, auditorium_code, auditorium_name]],
      *  fallback_employee: [id, name] | null — o'qituvchi biriktirilmasa (kafedra mudiri),
-     *  fallback_room: [code, name] | null — xona biriktirilmasa ("Kafedra mudiri xonasi").
+     *  fallback_room: [code, name] | null — xona biriktirilmasa ("Kafedra mudiri xonasi"),
+     *  cycle: true — sikl fani (ktr qatori, plan.week va current_week — sikl kuni), work_dates: ['Y-m-d' => sikl kuni] — ertadan
+     *  keyingi blok kunlari (tuzatish faqat shu kunlarga), block_from / block_to — blok chegarasi (ogohlantirish matni uchun).
      */
     public function planGroup(array $units, array $busy, array $workDates): array
     {
@@ -327,10 +335,17 @@ class SchedulePlanner
 
         if ($u['ktr'] === null) {
             $notes[] = 'KTR kiritilmagan — balans tekshirilmadi, faqat jadval solishtirildi.';
-        } elseif (empty($u['mirror'])) {   // sikl fani (mirror) — HEMIS ichki sikl jadvaliga aynan moslanadi, tuzatishsiz
+        } else {
+            // Sikl fani — faqat o'z bloki kunlari (work_dates); haftalik — guruhning umumiy dars kunlari.
             $this->fixSwaps($u, $blocks, $fixes);
             $this->fixCountSurplus($u, $blocks, $occ, $fixes, $notes);
-            $this->fixCountDeficit($u, $blocks, $occ, $workDates, $fixes, $notes);
+            if (!empty($u['cycle'])) {
+                // Siklda kun — bitta: amaliy soat kamomadi avval o'z kunlari davomiga (izohsiz, sinov), so'ng ma'ruza yangi kunga —
+                // aks holda yangi ma'ruza amaliy davomini egallab, amaliy "sig'madi" bo'lardi.
+                $silent = [];
+                $this->fixHoursDeficit($u, $blocks, $occ, $fixes, $silent, ['A']);
+            }
+            $this->fixCountDeficit($u, $blocks, $occ, !empty($u['cycle']) ? (array) ($u['work_dates'] ?? []) : $workDates, $fixes, $notes);
             $this->fixHoursDeficit($u, $blocks, $occ, $fixes, $notes);
             $this->fixHoursSurplus($u, $blocks, $occ, $fixes, $notes);
             $this->fixSwaps($u, $blocks, $fixes);
@@ -354,6 +369,20 @@ class SchedulePlanner
             'records' => $records,
             'actions' => $actions,
         ];
+    }
+
+    /**
+     * Sikl fani ogohlantirishi (blok chegarasi bilan): kamomad — "Sikl bloki oxirigacha sig'madi: …" (frontendda qizil),
+     * ortiqcha — "Sikl blokida ortiqcha: …" (sariq).
+     */
+    private function cycleNote(array $u, bool $deficit, string $what): string
+    {
+        $fmt = fn ($d) => $d ? date('d.m', strtotime((string) $d)) : '?';
+        $block = 'blok ' . $fmt($u['block_from'] ?? null) . '–' . $fmt($u['block_to'] ?? null);
+
+        return $deficit
+            ? "Sikl bloki oxirigacha sig'madi: {$what} ({$block}, qolgan kunlar band)"
+            : "Sikl blokida ortiqcha: {$what} ({$block})";
     }
 
     private function tallyD(array $u, array $blocks): array
@@ -411,7 +440,8 @@ class SchedulePlanner
                 $done = false;
                 // Avval faqat shu haftadagi kunlar birlashtiriladi (haftada KTR'dagidan ko'p kun — ortiqcha kun aynan shu);
                 // shunday hafta qolmasagina boshqa haftaga (eng yaqin kun). Aks holda ortiqchasi yo'q haftaning kuni
-                // olib tashlanib, butun semestr bo'ylab zanjir surilishlar chiqardi.
+                // olib tashlanib, butun semestr bo'ylab zanjir surilishlar chiqardi. Siklda "hafta" — sikl kuni (bir kunda
+                // bir qism — bitta blok), shuning uchun darhol shu kunga eng yaqin kunga birlashtiriladi (blok ichida).
                 foreach ([true, false] as $sameWeekOnly) {
                 foreach ($blocks as $xi => $x) {
                     if ($x['part'] !== $part) {
@@ -456,7 +486,9 @@ class SchedulePlanner
                 }
                 }
                 if (!$done) {
-                    $notes[] = ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ' kunlari ' . (-$C) . ' ta ortiqcha — avtomatik birlashtirib bo\'lmadi.';
+                    $notes[] = !empty($u['cycle'])
+                        ? $this->cycleNote($u, false, ($part === 'L' ? 'ma\'ruza' : 'amaliy') . ' kunlari ' . (-$C) . ' ta ortiqcha — birlashtirib bo\'lmadi')
+                        : ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ' kunlari ' . (-$C) . ' ta ortiqcha — avtomatik birlashtirib bo\'lmadi.';
                     break;
                 }
                 $C++;
@@ -504,6 +536,26 @@ class SchedulePlanner
         return $best === null ? null : ['ph' => null] + $best;
     }
 
+    /** Sikl fani: LMS rejasidagi (o'tgan kunlar ham) shu qismning sanaga eng yaqin darsi — o'qituvchi va xona. */
+    private function nearestPlanAttrs(array $u, string $part, string $date): ?array
+    {
+        $best = null;
+        $bestD = PHP_INT_MAX;
+        foreach ((array) $u['plan'] as $p) {
+            if ($p['part'] !== $part || !empty($p['placeholder'])) {
+                continue;
+            }
+            $d = abs(strtotime($p['date']) - strtotime($date));
+            if ($d < $bestD) {
+                $bestD = $d;
+                $best = ['emp' => $p['employee_id'] ?? null, 'emp_name' => $p['employee_name'] ?? null,
+                    'room' => $p['auditorium_code'] ?? null, 'room_name' => $p['auditorium_name'] ?? null, 'ph' => null];
+            }
+        }
+
+        return $best;
+    }
+
     private function bestPositiveCode(array $u, array $D, string $part): string
     {
         $order = $this->codesByPart($u, $part);
@@ -517,7 +569,8 @@ class SchedulePlanner
         return (string) $best;
     }
 
-    // --- 3) Kunlar soni yetmaydi: shu qism darsi yo'q eng yaqin kunga 1–2 soatlik dars.
+    // --- 3) Kunlar soni yetmaydi: shu qism darsi yo'q eng yaqin kunga 1–2 soatlik dars. Sikl fanida — faqat blok ichidagi
+    //        (work_dates) kunga; ma'ruza ham (o'qituvchi/xona — eng yaqin ma'ruzadan, nearestAttrs).
     private function fixCountDeficit(array $u, array &$blocks, array &$occ, array $workDates, array &$fixes, array &$notes): void
     {
         foreach (['L', 'A'] as $part) {
@@ -549,7 +602,10 @@ class SchedulePlanner
                         if (array_filter($range, fn ($s) => !$this->isFree($occ, $u['key'], $u['base'], $part, $date, $s))) {
                             continue;
                         }
-                        $attrs = $this->nearestAttrs($blocks, $part, $date) ?? ['emp' => null, 'emp_name' => null, 'room' => null, 'room_name' => null];
+                        // Sikl fani: shu qismning ertangi darsi bo'lmasa — eng yaqin (o'tgan kunlar ham) LMS rejadagi shu qism darsidan
+                        // (ma'ruza — ma'ruza o'qituvchisi va xonasi, amaliydan emas).
+                        $attrs = (!empty($u['cycle']) && !array_filter($blocks, fn ($b) => $b['part'] === $part) ? $this->nearestPlanAttrs($u, $part, $date) : null)
+                            ?? $this->nearestAttrs($blocks, $part, $date) ?? ['emp' => null, 'emp_name' => null, 'room' => null, 'room_name' => null];
                         $code = $this->bestPositiveCode($u, $D, $part);
                         $slots = [];
                         foreach ($range as $s) {
@@ -566,7 +622,9 @@ class SchedulePlanner
                     }
                 }
                 if (!$placed) {
-                    $notes[] = ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ' soni ' . $C . ' ta kam — bo\'sh kun topilmadi.';
+                    $notes[] = !empty($u['cycle'])
+                        ? $this->cycleNote($u, true, ($part === 'L' ? 'ma\'ruza' : 'amaliy') . ' kunlari ' . $C . ' ta kam')
+                        : ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ' soni ' . $C . ' ta kam — bo\'sh kun topilmadi.';
                     break;
                 }
                 $C--;
@@ -574,12 +632,12 @@ class SchedulePlanner
         }
     }
 
-    // --- 4) Soat yetmaydi (soni to'g'ri). Avval har hafta o'z KTR soatigacha — shu haftaning darsi davomiga
+    // --- 4) Soat yetmaydi (soni to'g'ri). Avval har hafta (siklda — har sikl kuni) o'z KTR soatigacha — shu haftaning darsi davomiga
     //        (masalan LMS kartasi 2 soat, KTR 4 soat bo'lsa har haftaga 2 soatdan); qolgan kamomad
     //        darslarga navbat bilan 1 soatdan (bitta kunga yig'ilmaydi).
-    private function fixHoursDeficit(array $u, array &$blocks, array &$occ, array &$fixes, array &$notes): void
+    private function fixHoursDeficit(array $u, array &$blocks, array &$occ, array &$fixes, array &$notes, array $parts = ['L', 'A']): void
     {
-        foreach (['L', 'A'] as $part) {
+        foreach ($parts as $part) {
             $added = [];
             $D = $this->tallyD($u, $blocks);
             $codes = $this->codesByPart($u, $part);
@@ -623,7 +681,7 @@ class SchedulePlanner
                     $need = array_sum(array_map(fn ($c) => (int) ($row[$c] ?? 0), $codes));
                     $have = array_sum(array_map(fn ($i) => count($blocks[$i]['slots']), $idx));
                     if ($need > $have) {
-                        $short[] = $week . '-hafta: KTR ' . $need . ' soat, jadvalda ' . $have;
+                        $short[] = $week . (!empty($u['cycle']) ? '-kun' : '-hafta') . ': KTR ' . $need . ' soat, jadvalda ' . $have;
                     }
                     while ($have < $need && $debt() > 0) {
                         $ok = false;
@@ -642,7 +700,7 @@ class SchedulePlanner
                 if ($short) {
                     $notes[] = ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ': LMS ichki jadvalidagi dars KTR soatidan qisqa ('
                         . implode('; ', array_slice($short, 0, 6)) . (count($short) > 6 ? '; …' : '')
-                        . ') — kartochka soatini KTR bo\'yicha tuzating.';
+                        . (!empty($u['cycle']) ? ') — sikl kun rejasini (KTR) tekshiring.' : ') — kartochka soatini KTR bo\'yicha tuzating.');
                 }
             }
 
@@ -655,7 +713,9 @@ class SchedulePlanner
                     }
                 }
                 if (!$ok) {
-                    $notes[] = ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ' ' . $debt() . ' soat kam — dars davomida bo\'sh vaqt topilmadi.';
+                    $notes[] = !empty($u['cycle'])
+                        ? $this->cycleNote($u, true, ($part === 'L' ? 'ma\'ruza' : 'amaliy') . ' ' . $debt() . ' soat kam')
+                        : ($part === 'L' ? 'Ma\'ruza' : 'Amaliy qism') . ' ' . $debt() . ' soat kam — dars davomida bo\'sh vaqt topilmadi.';
                     break;
                 }
             }
@@ -695,7 +755,9 @@ class SchedulePlanner
                 $fixes[] = ['type' => 'shrink', 'date' => $date, 'text' => "{$date} dagi " . $this->codeName($u, $code) . " {$n} soat kamaytirildi (dars kamida 1 soat qoladi)"];
             }
             if ($D[$code] < 0) {
-                $notes[] = $this->codeName($u, $code) . ' ' . (-$D[$code]) . ' soat ortiqcha — qisqartirib bo\'lmadi (har dars kamida 1 soat).';
+                $notes[] = !empty($u['cycle'])
+                    ? $this->cycleNote($u, false, mb_strtolower($this->codeName($u, $code)) . ' ' . (-$D[$code]) . ' soat ortiqcha — qisqartirib bo\'lmadi (har dars kamida 1 soat)')
+                    : $this->codeName($u, $code) . ' ' . (-$D[$code]) . ' soat ortiqcha — qisqartirib bo\'lmadi (har dars kamida 1 soat).';
             }
         }
     }

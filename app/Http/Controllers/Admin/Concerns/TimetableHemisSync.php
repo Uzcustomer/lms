@@ -319,8 +319,13 @@ trait TimetableHemisSync
             $lmsDays[$l['part']][$l['date']] = true;
         }
 
+        // Sikl fani: davrga tushgan sikl kunlari (Excel "Davr" ustuni — haftalar emas, kunlar).
+        $cycleDays = isset($u['ktr_dates']) ? array_keys(array_filter((array) $u['ktr_dates'], fn ($d) => $d >= $fromDate && $d <= $toDate)) : null;
+
         return [
             'from_week' => $fromWeek, 'to_week' => $toWeek, 'from' => $fromDate, 'to' => $toDate,
+            'cycle_days' => $cycleDays !== null ? ($cycleDays ? [min($cycleDays), max($cycleDays)] : []) : null,
+            'cycle_dates' => $cycleDays ? [$u['ktr_dates'][min($cycleDays)], $u['ktr_dates'][max($cycleDays)]] : null,
             'ktr_hours' => $ktrH, 'ktr_count' => $ktrC,
             'hemis_hours' => $hemH, 'hemis_count' => array_map('count', $hemDays),
             'lms_hours' => $lmsH, 'lms_count' => array_map('count', $lmsDays),
@@ -1036,6 +1041,9 @@ trait TimetableHemisSync
                         }
                     }
                     $mudir = $mudirFor($cs->department_id);
+                    // Tuzatish faqat blok ichida — ertadan keyingi sikl kunlari: [sana => sikl kuni] (sana tartibida); blok chegarasi.
+                    $workCycle = array_filter(array_flip($ktrDates), fn ($day, $date) => $date > $today, ARRAY_FILTER_USE_BOTH);
+                    ksort($workCycle);
                     $units[] = [
                         'key' => $gk . '|' . $cs->id,
                         'subject_id' => (int) $cs->subject_id,
@@ -1045,7 +1053,11 @@ trait TimetableHemisSync
                         'ktr' => $ktr,
                         'ktr_dates' => $ktrDates,
                         'current_week' => $doneDays,
-                        'mirror' => true,
+                        // Sikl fani: KTR qatori — sikl kuni, balans butun blok bo'yicha, tuzatish faqat blok ichida (work_dates).
+                        'cycle' => true,
+                        'work_dates' => $workCycle,
+                        'block_from' => $ktrDates ? min($ktrDates) : null,
+                        'block_to' => $ktrDates ? max($ktrDates) : null,
                         'hemis' => $hemisRows->map(fn ($r) => [
                             'id' => (int) $r->schedule_hemis_id, 'date' => substr((string) $r->lesson_date, 0, 10),
                             'start' => substr((string) $r->lesson_pair_start_time, 0, 5), 'end' => substr((string) $r->lesson_pair_end_time, 0, 5),
@@ -1697,7 +1709,11 @@ trait TimetableHemisSync
                         $part === 'L' ? 'Ma\'ruza' : 'Amaliy qism', $b['ktr_count'][$part] ?? 0, $b['past_count'][$part] ?? 0,
                         $b['count_diff'][$part] ?? 0, $a['count_diff'][$part] ?? 0,
                         $first ? $fixes : '', $first ? $notes : '',
-                        isset($u['period']) ? $u['period']['from_week'] . '–' . $u['period']['to_week'] . '-hafta' : '',
+                        !isset($u['period']) ? '' : (isset($u['period']['cycle_days'])
+                            // Sikl fani: davr — sikl kunlari (sanalari bilan).
+                            ? ($u['period']['cycle_days'] ? $u['period']['cycle_days'][0] . '–' . $u['period']['cycle_days'][1] . '-kun ('
+                                . Carbon::parse($u['period']['cycle_dates'][0])->format('d.m') . '–' . Carbon::parse($u['period']['cycle_dates'][1])->format('d.m') . ')' : 'davrda sikl kuni yo\'q')
+                            : $u['period']['from_week'] . '–' . $u['period']['to_week'] . '-hafta'),
                         $u['period']['ktr_hours'][$code] ?? 0, $u['period']['hemis_hours'][$code] ?? 0,
                         ($u['period']['hemis_hours'][$code] ?? 0) - ($u['period']['ktr_hours'][$code] ?? 0),
                         $u['period']['ktr_count'][$part] ?? 0, $u['period']['hemis_count'][$part] ?? 0, $u['period']['lms_count'][$part] ?? 0,

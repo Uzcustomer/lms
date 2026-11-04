@@ -50,8 +50,10 @@ trait TimetableBolakParts
         $sets = [];
         foreach ($q->orderBy('id')->get() as $c) {
             $subject = (string) $c->subject_name;
-            if ($this->cycleSubjectVariantBase($subject) === null
-                || isset($cycleKeys[$this->specKey((string) $c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject($subject)])) {
+            $vBase = $this->cycleSubjectVariantBase($subject);
+            // Sikl fani — bo'lak nomi yoki asosiy nomi (masalan "Farmakologiya") bilan sozlangan bo'lsa ham — kirmaydi.
+            $ck = $this->specKey((string) $c->specialty_name) . '|' . (int) $c->course . '|';
+            if ($vBase === null || isset($cycleKeys[$ck . $this->normSubject($subject)]) || isset($cycleKeys[$ck . $this->normSubject($vBase)])) {
                 continue;
             }
             $groups = array_values($c->occupiedGroups());
@@ -163,6 +165,11 @@ trait TimetableBolakParts
                         $row['placed_at'][] = null;
                     } else {
                         $row['placed_at'][] = $keep->day && $keep->pair ? ['day' => (int) $keep->day, 'pair' => (int) $keep->pair] : null;
+                    }
+                    // Tashqi jadvaldagi joyi: kengaygan guruhchalar bilan to'qnashuv bo'lsa — tashqi joy ham olinadi (ogohlantirish bilan).
+                    if ($keep->ext_day && $keep->ext_pair && ($ext = $this->findExternalConflicts($keep->fresh(), (int) $keep->ext_day, (int) $keep->ext_pair))) {
+                        $keep->update(['ext_day' => null, 'ext_pair' => null]);
+                        $notes[] = $label . ': tashqi jadvaldagi joyida to\'qnashuv: ' . implode(' · ', array_slice(array_values(array_unique($ext)), 0, 3)) . ' — tashqi joy olindi';
                     }
                 }
                 $merged++;

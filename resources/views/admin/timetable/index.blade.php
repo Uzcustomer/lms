@@ -1606,6 +1606,8 @@
         #cycleGrid .cyc-mk-cell.is-practice::after { content: 'A'; }
         #cycleGrid .cyc-mk-cell.is-lecture { background: #facc15; color: #713f12; }
         #cycleGrid .cyc-mk-cell.is-lecture::after { content: 'M'; }
+        /* Oqim ma'ruzasi vaqtincha kafedra mudirida — sariq uzuq chegara. */
+        #cycleGrid .cyc-mk-cell.is-lecture.is-ph-lec { box-shadow: inset 0 0 0 2px #ca8a04; background-image: repeating-linear-gradient(45deg, rgba(202, 138, 4, .25) 0 4px, transparent 4px 8px); }
         #cycleGrid .cyc-mk-cell:hover { outline: 2px solid rgba(37, 99, 235, .45); outline-offset: -2px; }
         /* Blok ichidagi dam olish/bayram kuni: ustun yuqoridan pastgacha chiziqli — soat emas */
         #cycleGrid .cyc-mk-cell.is-off { cursor: default; color: #64748b; font-size: 8px; font-weight: 700;
@@ -6948,6 +6950,9 @@
                                             const ps = dp.ps != null ? +dp.ps : st + (+dp.lec || 0);
                                             if (hour >= st && hour < st + (+dp.lec || 0)) kind = ' is-lecture';
                                             else if (hour >= ps && hour < ps + (+dp.prc || 0)) kind = ' is-practice';
+                                            // Oqim ma'ruzasi shu sanada vaqtincha kafedra mudirida (mudir_ph_lec).
+                                            const lph = block.mudir_ph_lec;
+                                            if (kind === ' is-lecture' && lph && date && (!(lph.dates || []).length || lph.dates.includes(date.iso))) kind += ' is-ph-lec';
                                         }
                                         const offLabel = off && hour === Math.ceil(dayHours / 2) ? (date.holiday ? 'bayram' : 'dam') : '';
                                         inner += '<button type="button" class="cyc-mk-cell'
@@ -6959,7 +6964,8 @@
                                             + ' data-mk-day="' + offset + '" data-mk-hour="' + hour + '"'
                                             + (offLabel ? ' data-off-label="' + offLabel + '"' : '')
                                             + (off ? ' disabled' : '')
-                                            + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + esc(blockTip) + '"></button>';
+                                            + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + esc(blockTip)
+                                            + (kind.includes('is-ph-lec') ? ' · ma‘ruza vaqtincha kafedra mudirida: ' + esc(block.mudir_ph_lec.mudir_name || block.mudir_ph_lec.teacher_name || '') : '') + '"></button>';
                                     }
                                 }
                                 cellHtml = '<td class="cyc-cell cyc-block is-mark' + cfBlockClass(block.key, block.conflicts, cfOwners) + '" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
@@ -8223,14 +8229,20 @@
                 const d = cyclePlanData && cyclePlanData.dates && card.start_index !== null && card.start_index !== undefined ? cyclePlanData.dates[card.start_index] : null;
                 return (it && it.date_from) || (d && d.iso) || new Date().toISOString().slice(0, 10);
             }
+            // Belgilar: amaliy (mudir_ph) va oqim ma'ruzasi (mudir_ph_lec) — har biri mudir, xona, asl o'qituvchi, sanalar; qaytarish — ikkalasi.
             function cycPhHtml(card) {
-                const ph = card && card.mudir_ph;
-                if (!ph) return '';
-                const ds = ph.dates && ph.dates.length ? ph.dates.map(cfDate).join(', ') : 'butun blok';
-                return '<div class="cyc-ph" data-cyc-ph><b>Vaqtincha kafedra mudirida:</b> ' + esc(ph.mudir_name || ph.teacher_name || '') +
-                    (ph.room_name ? ' · ' + esc(ph.room_name) : '') + '<div>Asl o‘qituvchi: ' + esc(ph.orig_teacher_name || '—') + '; sanalar: ' + esc(ds) + '</div>' +
-                    (ph.reason ? '<div>Sabab: ' + esc(ph.reason) + '</div>' : '') +
-                    (ph.by_name || ph.at ? '<div class="dp-sub">' + esc([ph.by_name, String(ph.at || '').slice(0, 16)].filter(Boolean).join(', ')) + '</div>' : '') +
+                const one = (ph, what) => {
+                    const ds = ph.dates && ph.dates.length ? ph.dates.map(cfDate).join(', ') : 'butun blok';
+                    return '<div><b>Vaqtincha kafedra mudirida' + what + ':</b> ' + esc(ph.mudir_name || ph.teacher_name || '') +
+                        (ph.room_name ? ' · ' + esc(ph.room_name) : '') + '<div>Asl o‘qituvchi: ' + esc(ph.orig_teacher_name || '—') +
+                        (ph.orig_room_name ? ', asl xona: ' + esc(ph.orig_room_name) : '') + '; sanalar: ' + esc(ds) + '</div>' +
+                        (ph.reason ? '<div>Sabab: ' + esc(ph.reason) + '</div>' : '') +
+                        (ph.by_name || ph.at ? '<div class="dp-sub">' + esc([ph.by_name, String(ph.at || '').slice(0, 16)].filter(Boolean).join(', ')) + '</div>' : '') + '</div>';
+                };
+                const ph = card && card.mudir_ph, lec = card && card.mudir_ph_lec;
+                if (!ph && !lec) return '';
+                return '<div class="cyc-ph" data-cyc-ph>' + (ph ? one(ph, lec ? ' (amaliy)' : '') : '') +
+                    (lec ? one(lec, ' (ma‘ruza — butun oqim' + ((lec.units || []).length ? ', ' + lec.units.length + ' guruhcha' : '') + ')') : '') +
                     (cycActAllowed() ? '<button type="button" data-cyc-ph-revert>Asl holatga qaytarish</button>' : '') + '</div>';
             }
             function cycActionsHtml(card, own) {
@@ -8243,7 +8255,8 @@
                 } else if (cycActAllowed() && card.type !== 'lecture') {
                     if ((own || []).some(cfWantsShiftAdvice)) btns += '<button type="button" data-cyc-shift disabled title="tekshirilmoqda…">Bo‘sh smenaga o‘tkazish</button>';
                     btns += '<button type="button" data-cyc-teacher>Boshqa o‘qituvchi</button>';
-                    if (!card.mudir_ph && (own || []).some(i => !i.past)) btns += '<button type="button" data-cyc-mudir>Vaqtincha kafedra mudiriga yozish</button>';
+                    // Amaliy yoki ma'ruza to'qnashuvi hali mudirga yozilmagan bo'lsa.
+                    if ((own || []).some(i => !i.past && (i.lecture ? !card.mudir_ph_lec : !card.mudir_ph))) btns += '<button type="button" data-cyc-mudir>Vaqtincha kafedra mudiriga yozish</button>';
                 }
                 return '<div class="cyc-links"><div><span class="dp-sub">O‘qituvchi:</span> ' +
                     (t && t.id ? '<a href="#" class="tt-agenda-link" data-cyc-agenda="t">' + esc(t.name) + '</a>' : '<i>biriktirilmagan</i>') + '</div>' +
@@ -8359,7 +8372,13 @@
                     }
                     if (t.hasAttribute('data-cyc-mudir')) {
                         const fd = futureDates();
-                        form('<div class="cyc-confirm"><div><b>Vaqtincha kafedra mudiriga yozish</b> — fan kafedrasi mudiri, «Kafedra mudiri xonasi»; asl o‘qituvchi, xona va smena saqlanadi.</div>' +
+                        // Ma'ruza oqim darajasida: belgi oqimdagi barcha guruhchalarga tegadi — ogohlantirish (guruhchalar soni bilan).
+                        const flowN = ((cyclePlanData && cyclePlanData.cycle_cards) || []).filter(x => x.subject === card.subject
+                            && (x.placement_group || x.group) === (card.placement_group || card.group)).length;
+                        const lecWarn = !card.mudir_ph_lec;   // ma'ruza belgisi hali yo'q — yozishda ma'ruza ham o'tishi mumkin
+                        form('<div class="cyc-confirm"><div><b>Vaqtincha kafedra mudiriga yozish</b> — o‘qituvchi ham, xona ham: fan kafedrasi mudiri va «Kafedra mudiri xonasi»; asl o‘qituvchi, xona va smena saqlanadi. Kafedra mudiriga xabar yuboriladi.</div>' +
+                            (lecWarn ? '<div class="cyc-warn" style="margin-top:4px;color:#92400e"><b>Diqqat:</b> ma‘ruza bo‘lsa, u butun oqim' + (flowN > 1 ? ' (' + flowN + ' guruhcha)' : '') +
+                                ' uchun kafedra mudiriga o‘tadi (“Butun blok” — barcha kunlari, “Faqat to‘qnashuv sanalari” — ma‘ruza to‘qnashuvi sanalari).</div>' : '') +
                             '<label><input type="radio" name="cycPhScope" value="conflicts" checked> Faqat to‘qnashuv sanalari' + (fd ? ' (' + esc(fd) + ')' : '') + '</label><br>' +
                             '<label><input type="radio" name="cycPhScope" value="all"> Butun blok</label>' +
                             '<input type="text" data-cyc-reason maxlength="500" placeholder="Sabab (ixtiyoriy)" style="width:100%;margin-top:4px">' +
@@ -8371,9 +8390,10 @@
                         const reason = (pop.querySelector('[data-cyc-reason]') || {}).value || '';
                         t.disabled = true;
                         try {
-                            await api(BASE + '/boards/' + board.id + '/cycle-mudir-placeholder', 'POST', Object.assign(cycCardBody(card), { key: card.key, scope, reason }));
+                            const res = await api(BASE + '/boards/' + board.id + '/cycle-mudir-placeholder', 'POST', Object.assign(cycCardBody(card), { key: card.key, scope, reason }));
                             closeCycDayPop();
-                            ttToast('<b>Vaqtincha kafedra mudiriga yozildi</b><div>' + esc(card.group + ' · ' + card.subject) + (scope === 'all' ? ' — butun blok' : ' — to‘qnashuv sanalari') + '</div>', 'ok');
+                            ttToast('<b>' + (typeof mudirNotifiedText === 'function' ? mudirNotifiedText(res) : 'Vaqtincha kafedra mudiriga yozildi') + '</b><div>' + esc(card.group + ' · ' + card.subject) + (scope === 'all' ? ' — butun blok' : ' — to‘qnashuv sanalari')
+                                + (res && res.lecture ? ' (ma‘ruza ham — butun oqim)' : '') + '</div>', 'ok');
                             await loadCyclePlan();
                         } catch (e) { t.disabled = false; msg(esc(e.message), true); }
                     }
@@ -8793,11 +8813,11 @@
             }
             // "Vaqtincha kafedra mudirida" bo'limi (panel ostida): qamrovdagi belgili bloklar — mudir, sanalar, sabab va "Asl holatga qaytarish".
             function cycPhSectionHtml(cards) {
-                const list = (cards || []).filter(c => c.mudir_ph).sort((a, b) => (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
+                const list = (cards || []).filter(c => c.mudir_ph || c.mudir_ph_lec).sort((a, b) => (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
                 if (!list.length) return '';
                 return '<div class="cyc-ph-sec" data-cyc-ph-sec><b>Vaqtincha kafedra mudirida — ' + list.length + ' ta</b>' + list.map(c => {
-                    const ph = c.mudir_ph;
-                    const ds = ph.dates && ph.dates.length ? ph.dates.map(cfDate).join(', ') : 'butun blok';
+                    const ph = c.mudir_ph || c.mudir_ph_lec;
+                    const ds = (ph.dates && ph.dates.length ? ph.dates.map(cfDate).join(', ') : 'butun blok') + (c.mudir_ph_lec ? (c.mudir_ph ? ' (+ ma‘ruza)' : ' (ma‘ruza)') : '');
                     return '<div class="cyc-ph-item"><div><b>' + esc(c.group) + '</b> · ' + esc(c.subject) + '</div><div>' + esc(ph.mudir_name || ph.teacher_name || '') +
                         ' (asl: ' + esc(ph.orig_teacher_name || '—') + '); ' + esc(ds) + (ph.reason ? '; sabab: ' + esc(ph.reason) : '') + '</div>' +
                         (cycActAllowed() ? '<button type="button" data-cyc-ph-revert-key="' + esc(c.key) + '">Asl holatga qaytarish</button>' : '') + '</div>';
@@ -9972,6 +9992,11 @@
             // ===== "Vaqtincha kafedra mudiriga yozish" (to'qnashuv hal bo'lguncha) =====
             // Joy: tashqi jadvaldagi joyi; bo'lmasa — joylashgan joyi (to'qnashuvli karta); bo'lmasa — jadvaldan katak tanlanadi (mudirPick).
             // O'qituvchi — fan kafedrasi mudiri, xona — «Kafedra mudiri xonasi» (server). To'qnashuv tekshirilmaydi. Admin va kafedra mudiri.
+            // Javob (notified — xabar yuborilgan kafedra mudirlari): "Kafedra mudiriga yozildi va xabar yuborildi: F.I.Sh."
+            function mudirNotifiedText(res) {
+                const who = (res && Array.isArray(res.notified) ? res.notified : []).filter(Boolean);
+                return who.length ? 'Kafedra mudiriga yozildi va xabar yuborildi: ' + esc(who.join(', ')) : 'Kafedra mudiriga yozildi (xabar yuborilmadi — kafedra mudiri topilmadi)';
+            }
             const mudirPhAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek
                 && (typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN || TIMETABLE_ROLE === 'kafedra_mudiri');
             let mudirPick = null;   // tashqi joyi yo'q karta — jadvaldan katak kutilmoqda
@@ -10028,9 +10053,10 @@
                     const scopeEl = m.querySelector('input[name="phScope"]:checked');
                     const reasonEl = m.querySelector('[data-ph-reason]');
                     try {
-                        await api(BASE + '/cards/' + c.id + '/mudir-placeholder', 'POST', { week: curWeek, scope: scopeEl ? scopeEl.value : 'one',
+                        const res = await api(BASE + '/cards/' + c.id + '/mudir-placeholder', 'POST', { week: curWeek, scope: scopeEl ? scopeEl.value : 'one',
                             day: slot.day, pair: slot.pair, reason: reasonEl ? reasonEl.value : '' });
                         m.remove();
+                        ttToast('<b>' + (typeof mudirNotifiedText === 'function' ? mudirNotifiedText(res) : 'Vaqtincha kafedra mudiriga yozildi') + '</b><div>' + esc(c.subject_name || '') + '</div>', 'ok');
                         mudirPick = null; selected = null;
                         closePanelCardPop();
                         await loadBoard(board.id);

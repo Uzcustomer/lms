@@ -731,7 +731,13 @@ trait TimetableHemisSync
                         $start = max(1, (int) ($d['start'] ?? 1));
                         $base = ['date' => $date, 'week' => (int) ($d['k'] ?? 0), 'cycle' => true, 'card_id' => null];
                         if ((int) ($d['lec'] ?? 0) > 0) {
-                            $out[$gk][$sk][] = $base + ['slot' => $start, 'len' => (int) $d['lec'], 'part' => 'L'] + $lec;
+                            // Oqim ma'ruzasi "vaqtincha kafedra mudirida" (mudir_ph_lec, shu sana) — mudir (HEMIS id'si) va mudir xonasi.
+                            $lph = $b['mudir_ph_lec'] ?? null;
+                            $lphOn = is_array($lph) && $lph && self::cyclePhOn($lph, $date);
+                            $out[$gk][$sk][] = $base + ['slot' => $start, 'len' => (int) $d['lec'], 'part' => 'L']
+                                + ($lphOn ? ['employee_id' => $lph['hemis_id'] ?? null, 'employee_name' => $lph['teacher_name'] ?? null,
+                                    'auditorium_code' => $lph['room_code'] ?? null, 'auditorium_name' => $lph['room_name'] ?? null,
+                                    'placeholder' => (string) ($lph['orig_teacher_name'] ?? '')] : $lec);
                         }
                         if ((int) ($d['prc'] ?? 0) > 0) {
                             // Amaliy — kun rejasidagi boshlanishi (guruhcha smenasi, masalan 13:30, bilan). "Vaqtincha kafedra mudirida"

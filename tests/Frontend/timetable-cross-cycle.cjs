@@ -59,6 +59,7 @@ const ctx = {
     scopeBody: () => ({ faculty_names: ['F1'], specialty_names: ['davolash ishi'], courses: [5] }),
     renderGrid: () => { ctx.renders = (ctx.renders || 0) + 1; ctx.renderGridCross(ctx.viewMode); }, renderStats() {},
     openCycleTimeProposal: (...a) => { ctx.proposal = a; },
+    cycAskDp: (dp, kind) => kind === 'lecture' ? Object.assign({}, dp, { prc: +dp.lec || 1, ps: +dp.start || 1, lec: 0, start: +dp.start || 1 }) : dp,
     cycHourTimes: () => [null].concat(Array.from({ length: 12 }, (_, i) => [String(8 + i).padStart(2, '0') + ':05', String(8 + i).padStart(2, '0') + ':45'])),   // soatlar — qatorlardan farqli
     api: async (url, method, body) => { calls.push([url.replace('/admin/boards/7', ''), JSON.parse(JSON.stringify(body))]); return answers.shift(); },
     document: { addEventListener() {}, getElementById: id => appended.find(x => x.id === id && !x.removed) || null,
@@ -87,7 +88,7 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     answers.push({ week: 8, lessons: [
         lesson({ id: 21, teacher_full_name: "MAHMARAIMOV SHAVKAT TO'XTASHOVICH" }),
         lesson({ id: 22, training_type: 'lecture', group_name: 'd22-05a', group_names: ['d22-05a', 'd22-05b', 'd22-05c', 'd22-05d'], teacher_id: 9,
-            teacher_name: 'LEKTOR', day: 2, pair: 1, len_half: 2, ask: true }),   // ma'ruza — ask bo'lsa ham so'rash tugmasi yo'q
+            teacher_name: 'LEKTOR', day: 2, pair: 1, len_half: 2, ask: false }),   // ma'ruza — server ruxsat bermagan (boshqa o'qituvchi): so'rash tugmasi yo'q
     ] });
     ctx.renderGridCross('teacher');
     assert.deepEqual(calls[0], ['/cycle-week', { week: 8, layer: 'internal', faculty_names: ['F1'], specialty_names: ['davolash ishi'], courses: [5] }]);
@@ -126,8 +127,8 @@ const lesson = o => Object.assign({ cycle: true, faculty_name: 'F1', specialty_n
     assert.match(pop.innerHTML, /Guruh: d22-06a · F1 \/ 2-oqim/);
     assert.match(pop.innerHTML, /data-cyc-ask/);
     pop.ask.onclick();
-    assert.deepEqual(JSON.parse(JSON.stringify(ctx.proposal)), [{ subject: 'Klinik farmakologiya', group: 'd22-06a', specialty: 'davolash ishi', course: 5 },
-        { k: 2, lec: 2, prc: 4, start: 1, ps: 3 }, { iso: '2026-11-02', d: '02.11.2026' }]);
+    assert.deepEqual(JSON.parse(JSON.stringify(ctx.proposal)), [{ subject: 'Klinik farmakologiya', group: 'd22-06a', specialty: 'davolash ishi', course: 5, type: 'practice' },
+        { k: 2, lec: 2, prc: 4, start: 1, ps: 3 }, { iso: '2026-11-02', d: '02.11.2026' }, { kind: 'practice' }]);
     // Ma'ruza (yoki ruxsatsiz dars) — so'rash tugmasi yo'q.
     gridClick({ target: Object.assign({}, chip, { dataset: { cyc: '1' }, closest() { return this; } }), preventDefault() {}, stopPropagation() {} });
     assert.doesNotMatch(appended[appended.length - 1].innerHTML, /data-cyc-ask/);

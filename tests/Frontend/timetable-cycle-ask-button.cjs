@@ -13,8 +13,8 @@ const cut = (from, to) => {
 const css = cut('<style>', '</style>').slice('<style>'.length);
 // Sahifadagi Tailwind klasslari (tugmadagi).
 const tw = '.bg-blue-600{background-color:#2563eb}.text-white{color:#fff}.rounded{border-radius:.25rem}.px-2{padding-left:.5rem;padding-right:.5rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}';
-const code = cut('            function cycCanAsk(card, dp, date, today) {', '            async function loadChangeRequests() {')
-    + cut('            function openCycDayPop(key, offset, anchor) {', '            // Fan nomi bosilganda:')
+const code = cut('            function cycCanAsk(card, dp, date, today, kind = \'practice\') {', '            async function loadChangeRequests() {')
+    + cut('            function openCycDayPop(key, offset, anchor, keepMulti = false) {', '            // Fan nomi bosilganda:')
     + cut('            function closeCrossCycPop() {', '                document.body.appendChild(pop);\n                const r = anchor.getBoundingClientRect();\n                pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.right + 8))')
     + '                document.body.appendChild(pop);\n            }\n';
 
@@ -34,6 +34,8 @@ const stubs = role => `
     const cycRoomClashes = () => [];
     function closeCycDayPop() { const p = document.getElementById('cycDayPop'); if (p) p.remove(); cycDaySel = null; }
     const openCycleTimeProposal = () => {}, moveCycDay = () => {};
+    let cycMultiSel = null;
+    const cycMultiPaint = () => {}, cycAskDays = () => [], cycAskDp = dp => dp;
 `;
 const look = (p, sel) => p.evaluate(s => {
     const b = document.querySelector(s);

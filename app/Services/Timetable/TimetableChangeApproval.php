@@ -871,7 +871,9 @@ class TimetableChangeApproval
             'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index', 'mode']),
             'admin.timetable.cycle-place', 'admin.timetable.cycle-assign', 'admin.timetable.cycle-mudir-placeholder',
             'admin.timetable.cycle-mudir-placeholder.revert' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
-            'admin.timetable.cycle-practice-starts' => $pick(['specialty_name', 'course', 'subject_name', 'units', 'date']),
+            // Ko'p kunli / ma'ruza so'rovi — kalitga sanalar va tur ham (eski amaliy so'rovlar kaliti o'zgarmaydi).
+            'admin.timetable.cycle-practice-starts' => $pick(['specialty_name', 'course', 'subject_name', 'units', 'date'])
+                . (!empty($p['dates']) ? '|' . $pick(['dates']) : '') . (($p['training_type'] ?? '') === 'lecture' ? '|lecture' : ''),
             TimetableController::SUGGESTION_ROUTE => 'card:' . ($p['card_id'] ?? '') . ':w' . ($p['week'] ?? ''),
             'admin.timetable.assign-teacher', 'admin.timetable.assign-room' => $pick(['faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'oqim_label', 'group_name']),
             default => md5(json_encode([$p['faculty_names'] ?? null, $p['specialty_names'] ?? null, $p['specialty_name'] ?? null, $p['courses'] ?? null, $p['course'] ?? null])),

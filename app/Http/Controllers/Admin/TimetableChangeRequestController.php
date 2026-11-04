@@ -143,26 +143,33 @@ class TimetableChangeRequestController extends Controller
         return $this->submitProposal($svc, $draft, $department, $actor, $notice, $data['reason']);
     }
 
-    /** Sikl (4–6-kurs) amaliy darsi: shu kunga (yoki shu kundan blok oxirigacha) yangi boshlanish soati — tekshiruv. */
+    /**
+     * Sikl (4–6-kurs) darsi: amaliy — shu kunga (shu kundan blok oxirigacha yoki tanlangan kunlarga); ma'ruza — butun oqim uchun
+     * tanlangan kun(lar)ga yangi boshlanish soati — tekshiruv (har kun alohida; muammoli kunlar ro'yxati — 422).
+     */
     public function checkCycleTime(Request $request, TimetableBoard $board)
     {
         [$data, $units] = $this->cycleProposalInput($request, $board, false);
         $labels = app(TimetableController::class)->cycleProposalLabels($board, $units, $data);
 
-        return response()->json(['ok' => true, 'message' => 'Vaqt bo‘sh. Taklif yuborishingiz mumkin.', 'old' => $labels['old'], 'new' => $labels['new']]);
+        return response()->json(['ok' => true, 'message' => 'Vaqt bo‘sh. Taklif yuborishingiz mumkin.', 'old' => $labels['old'], 'new' => $labels['new'],
+            'days' => $labels['days'], 'units' => array_values(array_map(fn ($x) => (string) $x['u']['unit'], $units))]);
     }
 
     public function proposeCycleTime(Request $request, TimetableBoard $board, TimetableChangeApproval $svc)
     {
-        [$data, $units, $as, $lessonTeachers] = $this->cycleProposalInput($request, $board, true);
+        [$data, $units, $as, $lessonTeachers, $cardIds] = $this->cycleProposalInput($request, $board, true);
         $actor = $this->actor($request);
         $controller = app(TimetableController::class);
-        $cards = TimetableCard::whereIn('id', collect($units)->flatMap(fn ($x) => array_map(fn ($c) => (int) $c->id, $x['u']['cards'])))->get();
+        $lecture = TimetableController::cycleProposalIsLecture($data);
+        $cards = TimetableCard::whereIn('id', $cardIds)->get();
         $department = $this->proposalDepartment(fn (int $id) => $cards->every(fn ($c) => $controller->proposalDepartmentMatches($c, $id)));
+        // Ko'p kunli so'rov: dates (bitta yangi soat barcha kunlarga); date — birinchi kun (eski maydon, tavsif va qidiruv uchun).
         $payload = ['specialty_name' => $data['specialty_name'], 'course' => (int) $data['course'], 'subject_name' => $data['subject_name'],
             'group_name' => $data['group_name'], 'units' => array_values(array_map(fn ($x) => (string) $x['u']['unit'], $units)),
             'date' => $data['date'], 'scope' => $data['scope'] ?? 'day', 'start_hour' => (int) $data['start_hour'],
-            'layer' => 'internal', 'view' => 'group', 'training_type' => 'practice', '_change_hint' => $data['reason']];
+            'layer' => 'internal', 'view' => 'group', 'training_type' => $lecture ? 'lecture' : 'practice', '_change_hint' => $data['reason']]
+            + (!empty($data['dates']) ? ['dates' => array_values($data['dates'])] : []);
         $notice = $controller->cycleProposalLabels($board, $units, $payload);
         // Kim yubordi: o'qituvchi (o'z darsi) yoki fan mas'uli (mas'ul fanidagi boshqa o'qituvchi darsi) — requester_role.
         $draft = $svc->draft($this->proposalRequest(TimetableController::TEACHER_CYCLE_ROUTE, $payload, 'board', $board), $actor, $board, $as);
@@ -170,7 +177,10 @@ class TimetableChangeRequestController extends Controller
         $draft['details']['proposer'] = ['as' => $as, 'teacher_id' => (int) $actor->id];
         $draft['details']['lesson_teacher_ids'] = $lessonTeachers;
         $draft['details']['original_signature'] = $controller->teacherProposalSignature(TimetableController::TEACHER_CYCLE_ROUTE, ['board' => $board->id], $payload);
-        $draft['summary'] = $notice['subject'] . ' · ' . $notice['groups'] . ' (amaliy, sikl): ' . $notice['old'] . ' → ' . $notice['new']
+        $type = $lecture ? "ma'ruza" : 'amaliy';
+        $draft['summary'] = ($notice['days']
+            ? $notice['subject'] . ' · ' . $notice['groups'] . ' · ' . $type . ' (sikl) · ' . $notice['when'] . ' → ' . $notice['new_time']
+            : $notice['subject'] . ' · ' . $notice['groups'] . ' (' . $type . ', sikl' . ($lecture ? ', butun oqim' : '') . '): ' . $notice['old'] . ' → ' . $notice['new'])
             . ' — ' . mb_substr($data['reason'], 0, 300);
 
         return $this->submitProposal($svc, $draft, $department, $actor, $notice, $data['reason']);
@@ -179,7 +189,10 @@ class TimetableChangeRequestController extends Controller
     /**
      * Sikl so'rovi kiritmasi: shu guruhcha(lar)dagi amaliy dars — o'qituvchining o'z darsi YOKI fani uning mas'ul fanlari
      * ro'yxatida (fan mas'uli — shu fanning istalgan o'qituvchisi darsi); bandlik va sana tekshiriladi.
-     * @return array{0: array, 1: array, 2: string, 3: int[]} [ma'lumot, guruhchalar, kim (oqituvchi|fan_masuli), dars o'qituvchilari (o'zidan boshqa)]
+     * Ma'ruza (training_type = lecture) — doim oqim bo'yicha: istalgan guruhcha qatoridan oqimdagi barcha guruhchalar; o'qituvchi — oqim
+     * ma'ruzasini o'tadigan, fan mas'uli — ma'ruza fani mas'ul fanlarida. Ko'p kunli (dates) — date birinchi sana bo'ladi.
+     * @return array{0: array, 1: array, 2: string, 3: int[], 4: int[]} [ma'lumot, guruhchalar, kim (oqituvchi|fan_masuli), dars o'qituvchilari
+     *     (o'zidan boshqa), dars kartalari (kafedra uchun)]
      */
     private function cycleProposalInput(Request $request, TimetableBoard $board, bool $withReason): array
     {
@@ -192,12 +205,40 @@ class TimetableChangeRequestController extends Controller
             'course' => 'required|integer|min:1|max:7',
             'subject_name' => 'required|string|max:255',
             'group_name' => 'required|string|max:255',
-            'date' => 'required|date_format:Y-m-d',
+            'date' => 'required_without:dates|nullable|date_format:Y-m-d',
+            'dates' => 'nullable|array|min:1|max:60',
+            'dates.*' => 'distinct|date_format:Y-m-d',
             'scope' => 'nullable|in:day,rest',
             'start_hour' => 'required|integer|min:1|max:24',
+            'training_type' => 'nullable|in:practice,lecture',
         ] + ($withReason ? ['reason' => 'required|string|max:1000'] : []));
+        if (!empty($data['dates'])) {
+            $data['dates'] = TimetableController::cycleProposalDates($data);
+            $data['date'] = $data['dates'][0];
+            $data['scope'] = 'day';
+        } else {
+            unset($data['dates']);
+        }
         $controller = app(TimetableController::class);
         $tid = (int) $actor->id;
+        if (TimetableController::cycleProposalIsLecture($data)) {
+            // Oqim: so'rov qaysi guruhcha qatoridan bo'lsa ham — shu guruhchaning oqimidagi barcha guruhchalar.
+            $first = $controller->cycleProposalUnits($board, $data, null);
+            abort_unless($first, 422, 'Sikl darsi topilmadi (blok joylanmagan yoki guruhcha o‘zgargan).');
+            $flow = (string) ($first[0]['u']['parent'] ?: $first[0]['u']['unit']);
+            $units = $controller->cycleProposalUnits($board, ['group_name' => $flow] + $data, null) ?: $first;
+            $lecCards = $controller->cycleLectureCardsFor($board, $units);
+            $own = $lecCards->contains(fn ($c) => (int) $c->teacher_id === $tid);
+            abort_unless($own || $controller->cycleLectureResponsible($lecCards, $tid), 403,
+                "Faqat o'zingiz o'tadigan yoki mas'ul faningizdagi ma'ruza vaqtini taklif qila olasiz.");
+            $as = $own ? 'oqituvchi' : 'fan_masuli';
+            $lessonTeachers = $lecCards->pluck('teacher_id')->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0 && $id !== $tid)->unique()->sort()->values()->all();
+            $data['units'] = array_map(fn ($x) => (string) $x['u']['unit'], $units);
+            $controller->teacherProposalValidate(TimetableController::TEACHER_CYCLE_ROUTE, ['board' => $board->id], $data, []);
+
+            return [$data, $units, $as, $lessonTeachers, $lecCards->pluck('id')->map(fn ($id) => (int) $id)->all()];
+        }
         // Mas'ul fani — guruhning shu fandagi barcha guruhchalari (har o'qituvchisi); aks holda faqat o'zi o'tadiganlari.
         $all = $controller->cycleProposalUnits($board, $data, null);
         $units = $all && $controller->cycleUnitsResponsible($all, $tid) ? $all : $controller->cycleProposalUnits($board, $data, $tid);
@@ -209,7 +250,7 @@ class TimetableChangeRequestController extends Controller
         $data['units'] = array_map(fn ($x) => (string) $x['u']['unit'], $units);
         $controller->teacherProposalValidate(TimetableController::TEACHER_CYCLE_ROUTE, ['board' => $board->id], $data, []);
 
-        return [$data, $units, $as, $lessonTeachers];
+        return [$data, $units, $as, $lessonTeachers, collect($units)->flatMap(fn ($x) => array_map(fn ($c) => (int) $c->id, $x['u']['cards']))->all()];
     }
 
     /**

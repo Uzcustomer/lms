@@ -59,6 +59,7 @@ class TimetableController extends Controller
     use Concerns\TimetableTeacherAgenda;
     use Concerns\TimetableJointGroups;
     use Concerns\TimetableBolakParts;
+    use Concerns\TimetableBoardSemesters;
     use Concerns\TimetableWeeklyUnits;
     use Concerns\TimetableMudirPlaceholder;
 
@@ -413,8 +414,8 @@ class TimetableController extends Controller
             ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->where('cs.is_active', true)
-            ->where('s.education_year', (string) $start)
-            ->whereRaw('MOD(CAST(cs.semester_code AS UNSIGNED) - 10, 2) = ?', [$parityRem])
+            // Doska davridagi semestr — o'quv reja sanalari bo'yicha (juft/toqlik emas; bahorgi qabul guruhlari ham).
+            ->where(fn ($q) => $this->whereBoardSemester($q, $board))
             ->get(['cs.subject_name', 'cs.subject_details', 'cs.department_name', 'cs.semester_code', 'cs.updated_at', 'cs.curricula_hemis_id',
                 'c.name as plan_name', 'sp.name as specialty_name', 'f.name as faculty_name', 's.level_code']);
 
@@ -918,8 +919,8 @@ class TimetableController extends Controller
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
-            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
+            // Semestr: HEMIS o'quv rejasiga bog'langan reja — sanalar bo'yicha, aks holda eski qoida (juft/toqlik + reja yili).
+            ->where(fn ($q) => $this->whereManualSemester($q, $board))
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
             ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name, MAX(s.lecture) as lecture')
             ->get());
@@ -963,8 +964,8 @@ class TimetableController extends Controller
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
-            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
+            // Semestr: HEMIS o'quv rejasiga bog'langan reja — sanalar bo'yicha, aks holda eski qoida (juft/toqlik + reja yili).
+            ->where(fn ($q) => $this->whereManualSemester($q, $board))
             ->groupBy('mc.specialty_name', 'mc.level_code')
             ->selectRaw('mc.specialty_name, mc.level_code')
             ->get());
@@ -1041,8 +1042,8 @@ class TimetableController extends Controller
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
-            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
+            // Semestr: HEMIS o'quv rejasiga bog'langan reja — sanalar bo'yicha, aks holda eski qoida (juft/toqlik + reja yili).
+            ->where(fn ($q) => $this->whereManualSemester($q, $board))
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
             ->selectRaw("mc.specialty_name, mc.level_code, s.subject_name,
                 MAX(s.lecture) as lecture,
@@ -1575,7 +1576,7 @@ class TimetableController extends Controller
                 $res['kept_placement_conflicts'] = $kept['conflicts'];
             }
 
-            return response()->json($res + $jointWarn());
+            return response()->json($res + $jointWarn() + ['semester_warnings' => $this->boardSemesterWarnings($board)]);
         }
 
         // O'qituvchi/xona biriktirishlari dars birligi bo'yicha saqlab qolinadi
@@ -1605,7 +1606,7 @@ class TimetableController extends Controller
         // Fakultet nomi to'ldirilgandan keyin — birlik kaliti unga bog'liq
         $restored = $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $kept);
 
-        return response()->json(['ok' => true, 'created' => count($rows)] + $restored + $jointWarn());
+        return response()->json(['ok' => true, 'created' => count($rows)] + $restored + $jointWarn() + ['semester_warnings' => $this->boardSemesterWarnings($board)]);
     }
 
     /**
@@ -2255,8 +2256,8 @@ class TimetableController extends Controller
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
-            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
+            // Semestr: HEMIS o'quv rejasiga bog'langan reja — sanalar bo'yicha, aks holda eski qoida (juft/toqlik + reja yili).
+            ->where(fn ($q) => $this->whereManualSemester($q, $board))
             ->orderByDesc('s.updated_at')
             ->orderByDesc('s.id')
             ->get(['mc.specialty_name', 'mc.level_code', 's.subject_name']));
@@ -5613,8 +5614,8 @@ class TimetableController extends Controller
             ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
             ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-            ->where('s.education_year', (string) $start)
-            ->whereRaw('MOD(CAST(cs.semester_code AS UNSIGNED) - 10, 2) = ?', [$parityRem])
+            // Doska davridagi semestr — o'quv reja sanalari bo'yicha (juft/toqlik emas; bahorgi qabul guruhlari ham).
+            ->where(fn ($q) => $this->whereBoardSemester($q, $board))
             ->orderByDesc('kp.updated_at')
             ->get(['cs.curricula_hemis_id', 'kp.plan_data', 'kp.week_count', 'cs.subject_name', 'cs.subject_details',
                 'sp.name as specialty_name', 'f.name as faculty_name', 's.level_code']);
@@ -5819,8 +5820,8 @@ class TimetableController extends Controller
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
-            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
+            // Semestr: HEMIS o'quv rejasiga bog'langan reja — sanalar bo'yicha, aks holda eski qoida (juft/toqlik + reja yili).
+            ->where(fn ($q) => $this->whereManualSemester($q, $board))
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
             ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name,
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice,
@@ -11418,8 +11419,8 @@ class TimetableController extends Controller
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
-            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
+            // Semestr: HEMIS o'quv rejasiga bog'langan reja — sanalar bo'yicha, aks holda eski qoida (juft/toqlik + reja yili).
+            ->where(fn ($q) => $this->whereManualSemester($q, $board))
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.semester', 's.subject_name')
             ->selectRaw("mc.specialty_name, mc.level_code, s.semester, s.subject_name,
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice,

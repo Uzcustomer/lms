@@ -776,7 +776,9 @@ trait TimetableHemisSync
         $hasGroupActive = Schema::hasColumn('groups', 'active');
         $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
         $parityKuzgi = $board->semester_parity !== 'bahorgi';
-        return function (array $g) use ($groupRows, $facKey, $hasGroupActive, $hasCsActive, $parityKuzgi) {
+        // Semestr — o'quv reja sanalari bo'yicha (boardSemesterCodes); topilmasa — eski formula (juft/toqlik).
+        $semCodes = $this->boardSemesterCodes($board);
+        return function (array $g) use ($groupRows, $facKey, $hasGroupActive, $hasCsActive, $parityKuzgi, $semCodes) {
             $cands = $groupRows[$this->groupNameKey($g['raw'])] ?? $groupRows[$this->groupNameKey($g['name'])] ?? collect();
             $own = $cands->filter(fn ($r) => $facKey($r->department_name) === $facKey($g['card']->faculty_name));
             $pool = $own->isNotEmpty() ? $own : ($cands->pluck('group_hemis_id')->unique()->count() === 1 ? $cands : collect());
@@ -786,15 +788,19 @@ trait TimetableHemisSync
             // Bir xil nomli bir nechta guruh (eski / qayta ochilgan): faol, shu semestrda HEMIS jadvali bor,
             // o'quv rejasida shu semestr fanlari bor guruh tanlanadi.
             $course = (int) $g['card']->course;
-            $sem = (string) ($parityKuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course);
-            return $pool->sortByDesc(fn ($r) => [
-                $hasGroupActive ? (int) (bool) ($r->active ?? 1) : 1,
-                (int) DB::table('schedules')->where('group_id', $r->group_hemis_id)->where('semester_code', $sem)->whereNull('deleted_at')->exists(),
-                // Fanlar keyingi so'rovdagidek: HEMIS'dan olib tashlanganlari (is_active = false) hisobga olinmaydi.
-                (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)
-                    ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->exists(),
-                (int) $r->group_hemis_id,
-            ])->first();
+            $legacySem = (string) ($parityKuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course);
+            return $pool->sortByDesc(function ($r) use ($semCodes, $legacySem, $hasGroupActive, $hasCsActive) {
+                $sem = (string) ($semCodes[(int) $r->curriculum_hemis_id] ?? $legacySem);
+
+                return [
+                    $hasGroupActive ? (int) (bool) ($r->active ?? 1) : 1,
+                    (int) DB::table('schedules')->where('group_id', $r->group_hemis_id)->where('semester_code', $sem)->whereNull('deleted_at')->exists(),
+                    // Fanlar keyingi so'rovdagidek: HEMIS'dan olib tashlanganlari (is_active = false) hisobga olinmaydi.
+                    (int) DB::table('curriculum_subjects')->where('curricula_hemis_id', $r->curriculum_hemis_id)->where('semester_code', $sem)
+                        ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->exists(),
+                    (int) $r->group_hemis_id,
+                ];
+            })->first();
         };
     }
 
@@ -926,6 +932,7 @@ trait TimetableHemisSync
         $hasCsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
 
         $kuzgi = $board->semester_parity !== 'bahorgi';
+        $semCodesBoard = $this->boardSemesterCodes($board);
         // "Kafedra mudiri xonasi" (faqat faollari; aynan shu nomlisi ustuvor) — bitta umumiy vaqtinchalik xona, kafedraga
         // bog'lanmaydi (xonalar kafedralarga tegishli emas).
         // Biriktirilmagan darslar uchun vaqtinchalik chora: HEMIS'da xona ustma-ust tushishiga ruxsat yoqilgan,
@@ -954,7 +961,8 @@ trait TimetableHemisSync
                 continue;
             }
             $course = (int) $sample->course;
-            $semCode = (string) ($kuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course);
+            // Guruh o'quv rejasining shu doska davridagi semestri (sanalar bo'yicha); topilmasa — eski formula.
+            $semCode = (string) ($semCodesBoard[(int) $grp->curriculum_hemis_id] ?? ($kuzgi ? 10 + 2 * $course - 1 : 10 + 2 * $course));
             $csQ = DB::table('curriculum_subjects')->where('curricula_hemis_id', $grp->curriculum_hemis_id)->where('semester_code', $semCode);
             if ($hasCsActive) {
                 $csQ->where('is_active', true);
@@ -1327,7 +1335,8 @@ trait TimetableHemisSync
             'info_only_notice' => \App\Services\Timetable\InfoOnlyCourses::hemisNotice($board),
             'board_id' => $board->id,
             'missing_room_count' => $missingRoomCount,
-            'warnings' => array_keys($roomWarnings),
+            // Xona ogohlantirishlari va semestri topilmagan guruhlar (o'quv reja sanalari shu davrga kesishmaydi).
+            'warnings' => array_merge(array_keys($roomWarnings), $this->boardSemesterWarnings($board)),
             'fallback_room' => $fallbackRoom ? ['code' => $fallbackRoom->code, 'name' => $fallbackRoom->name] : null,
             'hemis_pairs' => self::HEMIS_PAIRS,
             'until_week' => $untilWeek ?? $currentWeekOut,

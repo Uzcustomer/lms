@@ -869,6 +869,37 @@ class TimetableController extends Controller
      * shu qamrov ichida tekshiriladi — aks holda bir fakultetning darsi ikkinchisining
      * guruhini "band" qilib qo'yadi.
      */
+    /**
+     * Qoida qamrovi (scopes) shu fakultet · yo'nalish · kursga tegishlimi. Qiymatlar: yangi — "fakultet|yo'nalish|kurs", eski —
+     * "yo'nalish · kurs" (fakultetsiz — barcha fakultetlar). Bo'sh ro'yxat — barchasi. Taqqoslash normallashtirilgan (katta-kichik
+     * harf, bo'shliqlar; yo'nalish — specKey). Fakultet nomi bo'sh karta — fakultet tekshirilmaydi (faqat yo'nalish va kurs).
+     */
+    private function ruleScopeMatches(array $scopes, ?string $faculty, string $specialty, int $course): bool
+    {
+        if (!$scopes) {
+            return true;
+        }
+        $norm = fn ($v) => mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $v)));
+        $fac = $norm($faculty);
+        foreach ($scopes as $scope) {
+            $scope = (string) $scope;
+            if (str_contains($scope, '|')) {
+                [$f, $sp, $c] = array_pad(explode('|', $scope, 3), 3, '');
+            } else {
+                $parts = explode(' · ', $scope);
+                $c = (string) array_pop($parts);
+                $sp = implode(' · ', $parts);
+                $f = '';
+            }
+            if ($this->specKey(trim($sp)) === $this->specKey($specialty) && (int) trim($c) === $course
+                && ($norm($f) === '' || $fac === '' || $norm($f) === $fac)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function groupScopeKey(object $c): string
     {
         return ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . (int) $c->course;
@@ -1332,7 +1363,7 @@ class TimetableController extends Controller
                                 }
 
                                 $practiceRows = array_values($practiceRowsByName);
-                                $jointRule = !$variantUnits ? $this->jointRuleForRow($jointRules, $cycleKeys, (string) $specName, (int) $course, (string) $s->subject_name) : null;
+                                $jointRule = !$variantUnits ? $this->jointRuleForRow($jointRules, $cycleKeys, (string) $blockFac, (string) $specName, (int) $course, (string) $s->subject_name) : null;
                                 $practiceBundles = $jointRule ? $this->jointBundles($jointRule, $practiceRows)
                                     : $this->practiceBundles($practiceRows, (bool) $variantUnits, $pairPracticeGroups, $separateHere);
 
@@ -3640,7 +3671,6 @@ class TimetableController extends Controller
                 ->orderBy('position')->orderBy('id')->get()
             : collect();
         $distributionFor = function ($c) use ($distributionRules): string {
-            $scopeLabel = $c->specialty_name . ' · ' . (int) $c->course;
             $bestMode = 'auto';
             $bestScore = -1;
             $bestPosition = PHP_INT_MAX;
@@ -3651,7 +3681,7 @@ class TimetableController extends Controller
                 if ($subjects && !in_array($c->subject_name, $subjects, true)) {
                     continue;
                 }
-                if ($scopes && !in_array($scopeLabel, $scopes, true)) {
+                if (!$this->ruleScopeMatches($scopes, $c->faculty_name, (string) $c->specialty_name, (int) $c->course)) {
                     continue;
                 }
 

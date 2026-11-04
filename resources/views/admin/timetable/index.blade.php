@@ -843,11 +843,13 @@
                             </div>
                             <button type="button" id="ruleEditClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
                         </div>
-                        <div class="flex-1 overflow-hidden p-3" style="min-height:0;">
-                            <div class="flex gap-3 h-full" style="min-height:0;">
+                        {{-- Tana: balandlik cheklangan (flex-1 min-h-0), ichidagi ro'yxatlar o'zi aylanadi; balandlik baribir yetmasa (kichik ekran) —
+                             butun tana aylanadi, hech narsa kesilmaydi. --}}
+                        <div class="flex-1 min-h-0 overflow-y-auto p-3" style="min-height:0;">
+                            <div class="flex gap-3 h-full min-h-0" style="min-height:0;">
                                 {{-- Chap ustun: fanlar + qamrov + og'irlik --}}
-                                <div class="flex flex-col gap-3" style="width:330px; min-height:0;">
-                                    <div class="bg-white border border-gray-300 rounded p-2 flex flex-col" style="min-height:0; flex:1 1 50%;">
+                                <div class="flex flex-col gap-3 min-h-0" style="width:330px; min-height:0;">
+                                    <div class="bg-white border border-gray-300 rounded p-2 flex flex-col min-h-0" style="min-height:120px; flex:1 1 50%;">
                                         <div class="flex items-center justify-between mb-1">
                                             <span class="text-xs font-bold text-blue-700">1. Fanlar</span>
                                             <label class="text-[11px] text-gray-600 flex items-center gap-1">
@@ -855,32 +857,40 @@
                                             </label>
                                         </div>
                                         <input id="ruleSubjSearch" placeholder="Fan qidirish..." class="w-full rounded border-gray-300 text-xs mb-1 py-1">
-                                        <div id="ruleSubjList" class="flex-1 overflow-auto border border-gray-200 rounded p-1" style="min-height:0;"></div>
+                                        <div id="ruleSubjList" class="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded p-1" style="min-height:0;"></div>
                                     </div>
-                                    <div class="bg-white border border-gray-300 rounded p-2 flex flex-col" style="min-height:0; flex:1 1 40%;">
+                                    <div class="bg-white border border-gray-300 rounded p-2 flex flex-col min-h-0" style="min-height:120px; flex:1 1 50%;">
                                         <div class="flex items-center justify-between mb-1">
-                                            <span class="text-xs font-bold text-blue-700">2. Yo'nalish · kurs</span>
+                                            <span class="text-xs font-bold text-blue-700">2. Qamrov (fakultet · yo'nalish · kurs)</span>
                                             <label class="text-[11px] text-gray-600 flex items-center gap-1">
                                                 <input type="checkbox" id="ruleAllScopes" class="rounded border-gray-300"> Barchasi
                                             </label>
                                         </div>
-                                        <div id="ruleScopeList" class="flex-1 overflow-auto border border-gray-200 rounded p-1" style="min-height:0;"></div>
+                                        <input id="ruleScopeSearch" placeholder="Fakultet / yo'nalish qidirish..." class="w-full rounded border-gray-300 text-xs mb-1 py-1">
+                                        <div id="ruleScopeList" class="flex-1 min-h-0 overflow-y-auto border border-gray-200 rounded p-1" style="min-height:0;"></div>
                                     </div>
-                                    <div class="bg-white border border-gray-300 rounded p-2">
-                                        <label class="block text-[11px] text-gray-600 mb-1">Qoida og'irligi</label>
-                                        <select id="ruleWeight" class="w-full rounded border-gray-300 text-xs mb-2">
-                                            <option value="majburiy">Majburiy (buzilmasin)</option>
-                                            <option value="normal" selected>Normal</option>
-                                            <option value="yengil">Yengil (imkon qadar)</option>
-                                        </select>
-                                        <label class="block text-[11px] text-gray-600 mb-1">Izoh</label>
-                                        <input id="ruleNote" class="w-full rounded border-gray-300 text-xs" placeholder="ixtiyoriy">
+                                    {{-- Og'irlik va izoh — bir qatorda (ro'yxatlarga joy qolsin). --}}
+                                    <div class="bg-white border border-gray-300 rounded p-2 grid grid-cols-2 gap-2 shrink-0">
+                                        <div>
+                                            <label class="block text-[11px] text-gray-600 mb-1">Qoida og'irligi</label>
+                                            <select id="ruleWeight" class="w-full rounded border-gray-300 text-xs py-1">
+                                                <option value="majburiy">Majburiy (buzilmasin)</option>
+                                                <option value="normal" selected>Normal</option>
+                                                <option value="yengil">Yengil (imkon qadar)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] text-gray-600 mb-1">Izoh</label>
+                                            <input id="ruleNote" class="w-full rounded border-gray-300 text-xs py-1" placeholder="ixtiyoriy">
+                                        </div>
                                     </div>
                                 </div>
                                 {{-- O'ng ustun: shartlar ro'yxati --}}
-                                <div class="flex-1 bg-white border border-gray-300 rounded p-2 flex flex-col" style="min-height:0;">
+                                <div class="flex-1 bg-white border border-gray-300 rounded p-2 flex flex-col min-h-0" style="min-height:0;">
                                     <span class="text-xs font-bold text-blue-700 mb-1">3. Shart</span>
-                                    <div id="ruleCondList" class="flex-1 overflow-auto pr-1" style="min-height:0;"></div>
+                                    {{-- Shartlar va parametrlar paneli (ma'ruza haftalari, qo'lda juftlash) — bitta aylanadigan blokda. --}}
+                                    <div id="ruleCondScroll" class="flex-1 min-h-0 overflow-y-auto pr-1" style="min-height:0;">
+                                    <div id="ruleCondList"></div>
                                     <div id="ruleLectureWeekOptions" class="hidden mt-2 rounded border border-amber-200 bg-amber-50 p-3">
                                         <label class="block text-xs font-bold text-amber-800 mb-1">Ma'ruza haftalari</label>
                                         <select id="ruleLectureWeekMode" class="w-full rounded border-amber-300 bg-white text-xs">
@@ -919,6 +929,7 @@
                                             <b>Qo'llash</b> tugmasi kartalarni birlashtiradi (avval natija ko'rsatiladi). Kartochkalar qayta yaratilganda ham qoida hisobga olinadi.
                                         </div>
                                     </div>
+                                    </div>{{-- /ruleCondScroll --}}
                                 </div>
                             </div>
                         </div>
@@ -9195,7 +9206,7 @@
                     : new Set([...document.querySelectorAll('#ruleScopeList .rule-scope:checked')].map(c => c.value));
                 const out = new Set();
                 (typeof cards !== 'undefined' ? cards : []).forEach(c => {
-                    if (c.training_type === 'lecture' || (picked && picked.size && !picked.has(c.specialty_name + ' · ' + c.course))) return;
+                    if (c.training_type === 'lecture' || (picked && picked.size && !picked.has((c.faculty_name || '') + '|' + c.specialty_name + '|' + c.course))) return;
                     cardGroups(c).forEach(g => out.add(g));
                 });
                 return [...out].sort((a, b) => a.localeCompare(b, 'uz', { numeric: true }));
@@ -9297,8 +9308,10 @@
             const ruleSubjLabel = r => (r.subjects && r.subjects.length)
                 ? (r.subjects.length > 2 ? (r.subjects.length + ' ta fan') : r.subjects.join(', '))
                 : 'Barcha fanlar';
+            // Qamrov qiymati: yangi — "fakultet|yo'nalish|kurs", eski — "yo'nalish · kurs" (barcha fakultetlar).
+            const ruleScopeText = v => String(v).includes('|') ? String(v).split('|').filter(Boolean).join(' · ') : v + ' (barcha fakultetlar)';
             const ruleScopeLabel = r => (r.scopes && r.scopes.length)
-                ? (r.scopes.length > 2 ? (r.scopes.length + ' ta yo\'nalish·kurs') : r.scopes.join('; '))
+                ? (r.scopes.length > 2 ? (r.scopes.length + ' ta fakultet·yo\'nalish·kurs') : r.scopes.map(ruleScopeText).join('; '))
                 : 'Barchasi';
 
             function renderRulesTable() {
@@ -9363,19 +9376,43 @@
 
                 // Fanlar va qamrov ro'yxatlari — doskadagi kartalardan
                 const subs = [...new Set(cards.map(c => c.subject_name))].sort((a, b) => a.localeCompare(b, 'uz'));
-                const scopes = [...new Set(cards.map(c => c.specialty_name + ' · ' + c.course))].sort((a, b) => a.localeCompare(b, 'uz'));
+                // Qamrov: fakultet bo'yicha guruhlangan "fakultet|yo'nalish|kurs" (karta fakulteti bo'sh — "Fakultetsiz").
+                const scopeKey = c => (c.faculty_name || '') + '|' + c.specialty_name + '|' + c.course;
+                const scopes = [...new Set(cards.map(scopeKey))].sort((a, b) => a.localeCompare(b, 'uz', { numeric: true }));
                 const selSubs = new Set(rule ? rule.subjects : []);
-                const selScopes = new Set(rule ? rule.scopes : []);
+                // Eski qiymat ("yo'nalish · kurs") — barcha fakultetlardagi shu yo'nalish·kurs belgilanadi (saqlanganda yangi formatga o'tadi).
+                const norm = v => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                const selScopes = new Set();
+                (rule ? rule.scopes : []).forEach(v => {
+                    if (String(v).includes('|')) {
+                        const [f, sp, c] = String(v).split('|');
+                        scopes.filter(k => { const [kf, ks, kc] = k.split('|'); return norm(ks) === norm(sp) && +kc === +c && (!norm(f) || !norm(kf) || norm(kf) === norm(f)); })
+                            .forEach(k => selScopes.add(k));
+                    } else {
+                        const parts = String(v).split(' · ');
+                        const c = parts.pop(), sp = parts.join(' · ');
+                        scopes.filter(k => { const [, ks, kc] = k.split('|'); return norm(ks) === norm(sp) && +kc === +c; }).forEach(k => selScopes.add(k));
+                    }
+                });
                 $('ruleAllSubjects').checked = !selSubs.size;
                 $('ruleAllScopes').checked = !selScopes.size;
                 $('ruleSubjList').innerHTML = subs.map(s =>
                     '<label class="tt-pick-item"><input type="checkbox" class="rule-subj" value="' + esc(s) + '"' +
                     (selSubs.has(s) ? ' checked' : '') + '>' + esc(s) + '</label>').join('') ||
                     '<div class="text-[11px] text-gray-400 p-1">Fan yo\'q</div>';
-                $('ruleScopeList').innerHTML = scopes.map(s =>
-                    '<label class="tt-pick-item"><input type="checkbox" class="rule-scope" value="' + esc(s) + '"' +
-                    (selScopes.has(s) ? ' checked' : '') + '>' + esc(s) + '</label>').join('') ||
+                const byFac = {};
+                scopes.forEach(k => { (byFac[k.split('|')[0]] = byFac[k.split('|')[0]] || []).push(k); });
+                $('ruleScopeSearch').value = '';
+                $('ruleScopeList').innerHTML = Object.keys(byFac).sort((a, b) => a.localeCompare(b, 'uz', { numeric: true })).map(f =>
+                    '<div class="rule-scope-fac" data-fac="' + esc(f) + '">' +
+                    '<label class="tt-pick-item" style="font-weight:700;color:#1e3a8a"><input type="checkbox" class="rule-scope-facall">' + esc(f || 'Fakultetsiz') + '</label>' +
+                    byFac[f].map(k => {
+                        const [kf, ks, kc] = k.split('|');
+                        return '<label class="tt-pick-item" style="padding-left:18px"><input type="checkbox" class="rule-scope" value="' + esc(k) + '"' +
+                            (selScopes.has(k) ? ' checked' : '') + '>' + esc((kf ? kf + ' · ' : '') + ks + ' · ' + kc) + '</label>';
+                    }).join('') + '</div>').join('') ||
                     '<div class="text-[11px] text-gray-400 p-1">Yo\'nalish yo\'q</div>';
+                syncScopeFacBoxes();
 
                 if (cur === 'joint_groups') renderJointPairs();   // qamrov ro'yxati endi tayyor
                 $('ruleEditModal').classList.remove('hidden');
@@ -9386,14 +9423,47 @@
             };
             if ($('ruleAllScopes')) $('ruleAllScopes').onchange = function () {
                 if (this.checked) $('ruleScopeList').querySelectorAll('.rule-scope').forEach(c => c.checked = false);
+                if (this.checked) syncScopeFacBoxes();
+                refreshJointPairsIfOpen();
             };
             // Alohida fan belgilansa — "Barchasi" olib tashlanadi
             if ($('ruleSubjList')) $('ruleSubjList').addEventListener('change', ev => {
                 if (ev.target.classList.contains('rule-subj') && ev.target.checked) $('ruleAllSubjects').checked = false;
             });
+            const refreshJointPairsIfOpen = () => {
+                if ($('ruleJointOptions') && !$('ruleJointOptions').classList.contains('hidden') && typeof renderJointPairs === 'function') renderJointPairs();
+            };
+            // Fakultet sarlavhasi: belgilansa — uning barcha yo'nalish·kurslari; qisman tanlangan bo'lsa — oraliq holat.
+            function syncScopeFacBoxes() {
+                document.querySelectorAll('#ruleScopeList .rule-scope-fac').forEach(box => {
+                    const items = [...box.querySelectorAll('.rule-scope')], n = items.filter(i => i.checked).length;
+                    const head = box.querySelector('.rule-scope-facall');
+                    head.checked = items.length > 0 && n === items.length;
+                    head.indeterminate = n > 0 && n < items.length;
+                });
+            }
             if ($('ruleScopeList')) $('ruleScopeList').addEventListener('change', ev => {
-                if (ev.target.classList.contains('rule-scope') && ev.target.checked) $('ruleAllScopes').checked = false;
+                if (ev.target.classList.contains('rule-scope-facall')) {
+                    ev.target.closest('.rule-scope-fac').querySelectorAll('.rule-scope').forEach(i => { i.checked = ev.target.checked; });
+                }
+                if ((ev.target.classList.contains('rule-scope') || ev.target.classList.contains('rule-scope-facall')) && ev.target.checked) $('ruleAllScopes').checked = false;
+                syncScopeFacBoxes();
+                refreshJointPairsIfOpen();   // qamrov holati yangilangach — qo'lda juftlash guruhchalari ham yangi qamrov bo'yicha
             });
+            // Qamrov qidirish (fakultet, yo'nalish yoki kurs bo'yicha); mos qatori yo'q fakultet bo'limi yashiriladi.
+            if ($('ruleScopeSearch')) $('ruleScopeSearch').oninput = function () {
+                const q = this.value.toLowerCase().trim();
+                document.querySelectorAll('#ruleScopeList .rule-scope-fac').forEach(box => {
+                    const facHit = !q || box.dataset.fac.toLowerCase().includes(q);
+                    let any = false;
+                    box.querySelectorAll('.rule-scope').forEach(i => {
+                        const show = facHit || i.parentElement.textContent.toLowerCase().includes(q);
+                        i.parentElement.style.display = show ? '' : 'none';
+                        any = any || show;
+                    });
+                    box.style.display = any ? '' : 'none';
+                });
+            };
             // Fan qidirish
             if ($('ruleSubjSearch')) $('ruleSubjSearch').oninput = function () {
                 const q = this.value.toLowerCase().trim();

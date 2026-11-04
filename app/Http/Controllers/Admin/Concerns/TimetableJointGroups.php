@@ -40,22 +40,15 @@ trait TimetableJointGroups
             : collect();
     }
 
-    /** Qoida shu yo'nalish · kurs · fanga tegishlimi (fanlar va qamrov bo'sh — barchasi). */
-    private function jointRuleCovers(TimetableRule $rule, string $specialty, int $course, string $subject): bool
+    /** Qoida shu fakultet · yo'nalish · kurs · fanga tegishlimi (fanlar va qamrov bo'sh — barchasi; qamrov — ruleScopeMatches). */
+    private function jointRuleCovers(TimetableRule $rule, ?string $faculty, string $specialty, int $course, string $subject): bool
     {
         $subjects = (array) ($rule->subjects ?: []);
-        $scopes = (array) ($rule->scopes ?: []);
         if ($subjects && !in_array($this->normSubject($subject), array_map(fn ($s) => $this->normSubject((string) $s), $subjects), true)) {
             return false;
         }
 
-        return !$scopes || in_array($this->specKey($specialty) . '|' . $course,
-            array_map(function ($s) {
-                $p = explode(' · ', (string) $s);
-                $c = (int) trim((string) array_pop($p));
-
-                return $this->specKey(implode(' · ', $p)) . '|' . $c;
-            }, $scopes), true);
+        return $this->ruleScopeMatches((array) ($rule->scopes ?: []), $faculty, $specialty, $course);
     }
 
     /** Fan shu qoida uchun mos emas: bo'lakli ("Fan (a)") yoki sikl fani. */
@@ -115,13 +108,13 @@ trait TimetableJointGroups
     }
 
     /** Kartalar yaratilganda: shu fan uchun faol qoida (birinchisi) yoki null. */
-    private function jointRuleForRow($rules, array $cycleKeys, string $specialty, int $course, string $subject): ?TimetableRule
+    private function jointRuleForRow($rules, array $cycleKeys, ?string $faculty, string $specialty, int $course, string $subject): ?TimetableRule
     {
         if ($this->jointSkippedSubject($cycleKeys, $specialty, $course, $subject)) {
             return null;
         }
         foreach ($rules as $rule) {
-            if ($this->jointRuleCovers($rule, $specialty, $course, $subject)) {
+            if ($this->jointRuleCovers($rule, $faculty, $specialty, $course, $subject)) {
                 return $rule;
             }
         }
@@ -160,7 +153,7 @@ trait TimetableJointGroups
 
         return TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->orderBy('id')->get()
             ->filter(fn (TimetableCard $c) => !$this->jointSkippedSubject($cycleKeys, (string) $c->specialty_name, (int) $c->course, (string) $c->subject_name)
-                && $this->jointRuleCovers($rule, (string) $c->specialty_name, (int) $c->course, (string) $c->subject_name))
+                && $this->jointRuleCovers($rule, $c->faculty_name, (string) $c->specialty_name, (int) $c->course, (string) $c->subject_name))
             ->values();
     }
 

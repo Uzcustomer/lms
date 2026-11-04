@@ -224,6 +224,13 @@ trait TimetableJointGroups
                     continue;   // birlashtiradigan yakka guruhcha yo'q (allaqachon birlashgan yoki bitta guruhcha)
                 }
                 $label = $subject . ' · ' . self::jointShortLabel($groups);
+                // Qo'lda juftlik turli oqimda — kartalar yaratishda (oqim bo'yicha) birlashmaydi; qo'llash ham bir xil natija bersin.
+                $oqims = array_unique(array_map(fn ($l) => mb_strtolower(trim((string) $l[0]->oqim_label)), $single));
+                if (count($oqims) > 1) {
+                    $list[] = ['subject' => $subject, 'type' => 'practice', 'groups' => self::jointShortLabel($groups), 'cards_from' => [], 'card_to' => [],
+                        'placed_at' => [], 'warning' => $label . ': juftlikdagi guruhchalar turli oqimda — birlashtirilmadi (bir oqim ichida juftlang)'];
+                    continue;
+                }
                 $row = ['subject' => $subject, 'type' => 'practice', 'groups' => self::jointShortLabel($groups), 'cards_from' => [], 'card_to' => [],
                     'placed_at' => [], 'warning' => null];
                 // Bo'laklar: har guruhchada (len_half, weeks) bo'yicha saralangan ro'yxat — bir xil bo'lishi kerak.
@@ -272,19 +279,25 @@ trait TimetableJointGroups
                         $removed++;
                     }
                     $row['card_to'][] = $keep->id;
-                    // Joy: birinchi kartaniki; shu joyda to'qnashuv (o'qituvchi, xona, guruh, sig'im) — panelga qaytadi.
+                    // Joy: birinchi kartaniki (shablon joyi va hafta bo'yicha ko'chirilgan joylari); shu joylarda to'qnashuv (o'qituvchi,
+                    // xona, guruh, sig'im) bo'lsa — butunlay panelga qaytadi (shablon joyi ham, hafta joylari ham olinadi).
                     $keep = $keep->fresh();
-                    if ($keep->day && $keep->pair) {
-                        $why = $this->findConflicts($keep, (int) $keep->day, (int) $keep->pair, (int) $keep->start_half);
-                        if ($why) {
-                            $keep->update(['day' => null, 'pair' => null, 'start_half' => 0]);
-                            $notes[] = $label . ': birinchi karta joyida to\'qnashuv: ' . implode(' · ', array_slice($why, 0, 3)) . ' — panelga qaytarildi';
-                            $row['placed_at'][] = null;
-                        } else {
-                            $row['placed_at'][] = ['day' => (int) $keep->day, 'pair' => (int) $keep->pair];
+                    $why = $keep->day && $keep->pair ? $this->findConflicts($keep, (int) $keep->day, (int) $keep->pair, (int) $keep->start_half) : [];
+                    $moved = $hasOv ? TimetableCardOverride::where('card_id', $keep->id)->where('cancelled', false)->whereNotNull('day')->whereNotNull('pair')->get() : collect();
+                    foreach ($moved as $ov) {
+                        foreach ($this->findWeekConflicts($keep, (int) $ov->week, (int) $ov->day, (int) $ov->pair, (int) $ov->start_half) as $e) {
+                            $why[] = $ov->week . '-hafta: ' . $e;
                         }
-                    } else {
+                    }
+                    if ($why) {
+                        $keep->update(['day' => null, 'pair' => null, 'start_half' => 0]);
+                        foreach ($moved as $ov) {
+                            $ov->delete();
+                        }
+                        $notes[] = $label . ': birinchi karta joyida to\'qnashuv: ' . implode(' · ', array_slice(array_values(array_unique($why)), 0, 3)) . ' — panelga qaytarildi';
                         $row['placed_at'][] = null;
+                    } else {
+                        $row['placed_at'][] = $keep->day && $keep->pair ? ['day' => (int) $keep->day, 'pair' => (int) $keep->pair] : null;
                     }
                 }
                 $merged++;
@@ -375,6 +388,44 @@ trait TimetableJointGroups
         }
 
         return array_values(array_unique($out));
+    }
+
+    /**
+     * Kartalar yaratilganda: qoida bo'yicha birlashgan karta (group_name "01a + 01b") biriktiruv kaliti guruhchalarnikidan farq qiladi —
+     * guruhchalarning saqlangan o'qituvchi/xonasi birlashgan birlikka o'tkaziladi (o'qituvchi — guruhchalarda bir xil bo'lsa; xona —
+     * birinchisi). restoreAssignments chaqiradi; $kept — [unit kalit => [meta, teacher_id, teacher_name, auditorium_code, auditorium_name]].
+     */
+    private function jointMapAssignments(array $kept): array
+    {
+        foreach ($this->jointGenerated as [$fac, $spec, $course, $subject, $names]) {
+            $card = fn (?string $f, string $g) => (new TimetableCard())->forceFill(['faculty_name' => $f, 'specialty_name' => $spec, 'course' => (int) $course,
+                'subject_name' => $subject, 'training_type' => 'practice', 'group_name' => $g]);
+            $joint = $card($fac ?: null, implode(' + ', $names));
+            $jk = $this->unitKeyHash($joint);
+            if (isset($kept[$jk])) {
+                continue;
+            }
+            $teachers = [];
+            $room = null;
+            foreach ($names as $g) {
+                $a = $kept[$this->unitKeyHash($card($fac ?: null, (string) $g))] ?? $kept[$this->unitKeyHash($card(null, (string) $g))] ?? null;
+                if (!$a) {
+                    continue;
+                }
+                if (!empty($a['teacher_id'])) {
+                    $teachers[(int) $a['teacher_id']] = (string) $a['teacher_name'];
+                }
+                $room ??= !empty($a['auditorium_code']) ? [$a['auditorium_code'], $a['auditorium_name']] : null;
+            }
+            if (!$teachers && !$room) {
+                continue;
+            }
+            $one = count($teachers) === 1;
+            $kept[$jk] = ['meta' => $this->unitMeta($joint), 'teacher_id' => $one ? array_key_first($teachers) : null,
+                'teacher_name' => $one ? reset($teachers) : null, 'auditorium_code' => $room[0] ?? null, 'auditorium_name' => $room[1] ?? null];
+        }
+
+        return $kept;
     }
 
     private function jointCardKey(string $fac, string $spec, int $course, string $subject, string $group): string

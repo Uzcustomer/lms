@@ -1975,6 +1975,8 @@ class TimetableController extends Controller
     /** Saqlangan biriktirishlarni yangi kartalarga qaytaradi. */
     private function restoreAssignments(TimetableBoard $board, array $kept, array $skipIds = []): array
     {
+        // "Guruhchalar birga o'tadi": guruhchalar biriktiruvi qoida bo'yicha birlashgan kartaga (kaliti boshqa — "01a + 01b").
+        $kept = $this->jointGenerated ? $this->jointMapAssignments($kept) : $kept;
         if ($kept === []) {
             return ['restored_units' => 0, 'restored_cards' => 0];
         }

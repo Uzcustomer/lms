@@ -1376,6 +1376,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'saveRule'])->name('rules.save');
                 Route::post('/boards/{board}/rules/{rule}/state', [\App\Http\Controllers\Admin\TimetableController::class, 'updateRuleState'])->name('rules.state');
                 Route::delete('/boards/{board}/rules/{rule}', [\App\Http\Controllers\Admin\TimetableController::class, 'deleteRule'])->name('rules.delete');
+                // "Guruhchalar birga o'tadi" qoidasi: kartalarni birlashtirish / ajratish (dry_run bilan).
+                Route::post('/boards/{board}/rules/{rule}/apply-joint', [\App\Http\Controllers\Admin\TimetableController::class, 'applyJointGroups'])->name('rules.apply-joint');
+                Route::post('/boards/{board}/rules/{rule}/split-joint', [\App\Http\Controllers\Admin\TimetableController::class, 'splitJointGroups'])->name('rules.split-joint');
                 // aSc uslubidagi boshqaruv dialoglari
                 Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
                 Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');

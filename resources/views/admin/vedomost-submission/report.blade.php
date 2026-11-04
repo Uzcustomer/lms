@@ -169,7 +169,7 @@
                                 @php $tk = $sec['key'].'|__total'; @endphp
                                 @if(empty($sec['noTotal']))
                                 <th style="border:1px solid #e2e8f0;padding:5px 7px;text-align:center;background:{{ $sec['tint'] }};font-weight:700;">
-                                    <a href="{{ $sortUrl($tk) }}" style="{{ $thLink }}">Jami{!! $arrow($tk) !!}</a>
+                                    <a href="{{ $sortUrl($tk) }}" style="{{ $thLink }}">{{ $sec['totalLabel'] ?? 'Jami' }}{!! $arrow($tk) !!}</a>
                                 </th>
                                 @endif
                             @endforeach

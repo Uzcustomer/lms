@@ -845,8 +845,8 @@
                         </div>
                         {{-- Tana: balandlik cheklangan (flex-1 min-h-0), ichidagi ro'yxatlar o'zi aylanadi; balandlik baribir yetmasa (kichik ekran) —
                              butun tana aylanadi, hech narsa kesilmaydi. --}}
-                        <div class="flex-1 min-h-0 overflow-y-auto p-3" style="min-height:0;">
-                            <div class="flex gap-3 h-full min-h-0" style="min-height:0;">
+                        <div class="flex-1 min-h-0 flex flex-col overflow-y-auto p-3" style="min-height:0;">
+                            <div class="flex gap-3 flex-1 min-h-0" style="flex:1 1 0; min-height:0;">
                                 {{-- Chap ustun: fanlar + qamrov + og'irlik --}}
                                 <div class="flex flex-col gap-3 min-h-0" style="width:330px; min-height:0;">
                                     <div class="bg-white border border-gray-300 rounded p-2 flex flex-col min-h-0" style="min-height:120px; flex:1 1 50%;">

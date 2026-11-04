@@ -4872,6 +4872,8 @@
                 });
                 return { rows, sheet_title: 'Bugungi darslar', freeze_rows: 1 };
             }
+            // Fayl nomi qo'shimchasi: "_<guruh>_<fan>" (tanlanganlari; xavfsiz belgilar, har biri 50 belgigacha — server nomni 150 bilan cheklaydi).
+            const htFileSuffix = () => [hemisTodayGroup, hemisTodaySubject].filter(Boolean).map(v => '_' + String(v).replace(/[^\w\-]+/g, '_').slice(0, 50)).join('');
             function hemisTodayRender(rep) {
                 // Tanlangan guruh / fan bog'liq ro'yxatdan chiqib qolsa — "hammasi" ga tushadi (chizishdan oldin: jadval, son, JSON, Excel bir xil).
                 if (hemisTodaySubject && !htSubjects(rep, hemisTodayGroup).includes(hemisTodaySubject)) hemisTodaySubject = '';
@@ -4884,14 +4886,14 @@
                 $('htJson').onclick = () => {
                     const blob = new Blob([JSON.stringify(hemisTodayJson(rep, hemisTodayGroup, hemisTodaySubject), null, 1)], { type: 'application/json' });
                     const a = document.createElement('a');
-                    const safe = v => String(v).replace(/[^\w\-]+/g, '_');
-                    a.href = URL.createObjectURL(blob); a.download = 'hemis_bugun_' + rep.today + (hemisTodayGroup ? '_' + safe(hemisTodayGroup) : '')
-                        + (hemisTodaySubject ? '_' + safe(hemisTodaySubject) : '') + '.json';
+                    a.href = URL.createObjectURL(blob); a.download = 'hemis_bugun_' + rep.today + htFileSuffix() + '.json';
                     document.body.appendChild(a); a.click(); a.remove();
                 };
                 $('htExcel').onclick = function () {
-                    return sendExcelExport(hemisTodayExcel(rep, hemisTodayGroup, hemisTodaySubject), 'Bugungi darslar (HEMIS) · ' + htDate(rep.today) + ' · ' + scopeLabelText(),
-                        'hemis_bugun_' + rep.today, this);
+                    // Sarlavha va fayl nomi — tanlangan guruh va fan bilan (JSON bilan bir xil).
+                    return sendExcelExport(hemisTodayExcel(rep, hemisTodayGroup, hemisTodaySubject), ('Bugungi darslar (HEMIS) · ' + htDate(rep.today) + ' · ' + scopeLabelText()
+                        + (hemisTodayGroup ? ' · ' + hemisTodayGroup : '') + (hemisTodaySubject ? ' · ' + hemisTodaySubject : '')).slice(0, 255),
+                        'hemis_bugun_' + rep.today + htFileSuffix(), this);
                 };
             }
             async function hemisTodayRun() {

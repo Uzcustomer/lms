@@ -166,7 +166,9 @@ trait TimetableBoardSemesters
                 $w->orWhere(fn ($o) => $o->where('s.semester', $sem)->whereIn('mc.curricula_hemis_id', $ids));
             }
             $w->orWhere(function ($o) use ($mine, $start, $parityRem) {
-                $o->where(fn ($n) => $n->whereNull('mc.curricula_hemis_id')->when($mine, fn ($x) => $x->orWhereNotIn('mc.curricula_hemis_id', array_keys($mine))))
+                // Semestri sanalar bo'yicha topilmagan rejalar (bog'lanmagan yoki o'quv rejasi semestri topilmagan) — eski qoida;
+                // hech biri topilmagan bo'lsa ($mine bo'sh) — barcha rejalar eski qoida bilan (bog'langanlari ham).
+                $o->when($mine, fn ($x) => $x->where(fn ($n) => $n->whereNull('mc.curricula_hemis_id')->orWhereNotIn('mc.curricula_hemis_id', array_keys($mine))))
                     ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
                     ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start]);
             });

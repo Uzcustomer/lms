@@ -9424,11 +9424,15 @@
             if ($('ruleAllScopes')) $('ruleAllScopes').onchange = function () {
                 if (this.checked) $('ruleScopeList').querySelectorAll('.rule-scope').forEach(c => c.checked = false);
                 if (this.checked) syncScopeFacBoxes();
+                refreshJointPairsIfOpen();
             };
             // Alohida fan belgilansa — "Barchasi" olib tashlanadi
             if ($('ruleSubjList')) $('ruleSubjList').addEventListener('change', ev => {
                 if (ev.target.classList.contains('rule-subj') && ev.target.checked) $('ruleAllSubjects').checked = false;
             });
+            const refreshJointPairsIfOpen = () => {
+                if ($('ruleJointOptions') && !$('ruleJointOptions').classList.contains('hidden') && typeof renderJointPairs === 'function') renderJointPairs();
+            };
             // Fakultet sarlavhasi: belgilansa — uning barcha yo'nalish·kurslari; qisman tanlangan bo'lsa — oraliq holat.
             function syncScopeFacBoxes() {
                 document.querySelectorAll('#ruleScopeList .rule-scope-fac').forEach(box => {
@@ -9444,6 +9448,7 @@
                 }
                 if ((ev.target.classList.contains('rule-scope') || ev.target.classList.contains('rule-scope-facall')) && ev.target.checked) $('ruleAllScopes').checked = false;
                 syncScopeFacBoxes();
+                refreshJointPairsIfOpen();   // qamrov holati yangilangach — qo'lda juftlash guruhchalari ham yangi qamrov bo'yicha
             });
             // Qamrov qidirish (fakultet, yo'nalish yoki kurs bo'yicha); mos qatori yo'q fakultet bo'limi yashiriladi.
             if ($('ruleScopeSearch')) $('ruleScopeSearch').oninput = function () {

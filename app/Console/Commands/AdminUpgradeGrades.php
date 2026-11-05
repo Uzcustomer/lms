@@ -137,10 +137,11 @@ class AdminUpgradeGrades extends Command
      * Baholarni formula bo'yicha oshiradi (yoki --revert da qaytaradi). $rows — student_grades qatorlari
      * (id, student_hemis_id, lesson_date, grade, retake_grade, reason, status, upgraded_by_admin,
      * admin_original_grade); $students — hemis_id => level_code. Namunalar $samples ga qo'shiladi.
+     * $lowGradeDebt = false — otrabotka qarzi (low_grade) yo'q baholar uchun (MT): status/reason tegilmaydi.
      *
      * @return array{changed: int, below: int, retake: int, same: int}
      */
-    public static function applyRows(iterable $rows, $students, float $limit, $deadlineDays, bool $revert, bool $force, string $groupName, array &$samples): array
+    public static function applyRows(iterable $rows, $students, float $limit, $deadlineDays, bool $revert, bool $force, string $groupName, array &$samples, bool $lowGradeDebt = true): array
     {
         $changed = $below = $retake = $same = 0;
         foreach ($rows as $r) {
@@ -152,12 +153,12 @@ class AdminUpgradeGrades extends Command
                 }
                 $old = (float) $r->admin_original_grade;
                 $update = [$column => $old, 'upgraded_by_admin' => false, 'admin_original_grade' => null, 'admin_upgraded_at' => null];
-                if ($column === 'grade' && $old < $limit && $r->reason === null && $r->retake_grade === null) {
+                if ($lowGradeDebt && $column === 'grade' && $old < $limit && $r->reason === null && $r->retake_grade === null) {
                     $update += ['reason' => 'low_grade', 'status' => 'pending',
                         'deadline' => Carbon::parse($r->lesson_date)->addDays((int) ($deadlineDays[$students[$r->student_hemis_id] ?? ''] ?? 7))->endOfDay()];
                 }
                 $changed++;
-                $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($r->{$column}), self::num($old)];
+                $samples[] = [$groupName, $r->student_hemis_id, substr((string) $r->lesson_date, 0, 10), self::num($r->{$column}), self::num($old)];
             } else {
                 $old = $r->upgraded_by_admin ? (float) $r->admin_original_grade : (float) $r->{$column};
                 $new = self::upgradedGrade($old);
@@ -171,14 +172,14 @@ class AdminUpgradeGrades extends Command
                 }
                 $update = [$column => $new, 'upgraded_by_admin' => true, 'admin_original_grade' => $old, 'admin_upgraded_at' => now()];
                 // Yangi baho chegaradan o'tsa — otrabotka qarzi yopiladi
-                if ($column === 'grade' && $r->reason === 'low_grade' && $new >= $limit) {
+                if ($lowGradeDebt && $column === 'grade' && $r->reason === 'low_grade' && $new >= $limit) {
                     $update += ['reason' => null, 'status' => 'recorded', 'deadline' => null];
                 }
                 if ($column === 'retake_grade') {
                     $retake++;
                 }
                 $changed++;
-                $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($old), self::num($new)];
+                $samples[] = [$groupName, $r->student_hemis_id, substr((string) $r->lesson_date, 0, 10), self::num($old), self::num($new)];
             }
 
             if ($force) {

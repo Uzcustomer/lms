@@ -1318,6 +1318,10 @@ class JournalController extends Controller
             ->get()
             ->keyBy('student_hemis_id');
         $manualMtGrades = $manualMtGradesRaw->map(fn($g) => $g->grade)->toArray();
+        // grades:upgrade-mt oshirgan MT: hemis_id => "Eski baho / Yangi baho" (jurnalda to'q sariq katak)
+        $mtUpgradeMap = $manualMtGradesRaw->filter(fn($g) => !empty($g->upgraded_by_admin))
+            ->map(fn($g) => 'Eski baho: ' . round((float) $g->admin_original_grade, 0) . "\nYangi baho: " . round((float) $g->grade, 0))
+            ->toArray();
 
         // Baholarni kim qo'yganini ko'rsatish uchun lookup'lar — JN (jbGrades),
         // MT (mtGrades) va qo'lda kiritilgan MT (manualMtGradesRaw) — uchalasidan
@@ -2568,6 +2572,7 @@ class JournalController extends Controller
             'testQosh3DateMap',
             'oskiAttempt1DateMap',
             'oskiUpgradeMap',
+            'mtUpgradeMap',
             'testAttempt1DateMap',
             'oskiAttempt2DateMap',
             'testAttempt2DateMap',

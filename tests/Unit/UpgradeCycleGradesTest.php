@@ -17,7 +17,7 @@ beforeEach(function () {
     DB::purge('sqlite');
     Schema::create('settings', fn ($t) => [$t->id(), $t->string('key'), $t->text('value')->nullable(), $t->timestamps()]);
     Schema::create('deadlines', fn ($t) => [$t->id(), $t->string('level_code'), $t->integer('deadline_days'), $t->timestamps()]);
-    Schema::create('groups', fn ($t) => [$t->id(), $t->unsignedBigInteger('group_hemis_id'), $t->string('name')]);
+    Schema::create('groups', fn ($t) => [$t->id(), $t->unsignedBigInteger('group_hemis_id'), $t->string('name'), $t->string('department_name')->default('1-son davolash fakulteti')]);
     Schema::create('students', fn ($t) => [$t->id(), $t->string('hemis_id'), $t->unsignedBigInteger('group_id'), $t->string('level_code')]);
     Schema::create('schedules', fn ($t) => [$t->id(), $t->unsignedBigInteger('group_id'), $t->unsignedBigInteger('subject_id'), $t->string('subject_name'),
         $t->string('semester_code'), $t->dateTime('lesson_date'), $t->softDeletes()]);
@@ -78,4 +78,28 @@ it('upgrades only grades before the cutoff of cycles that span it', function () 
     expect((float) $g($before)->grade)->toBe(80.0)
         ->and((bool) $g($before)->upgraded_by_admin)->toBeFalse()
         ->and((float) $g($beforeNb)->retake_grade)->toBe(72.0);
+});
+
+it('takes all 4-6 course groups of the given faculty', function () {
+    // 3 — 1-son davolash, 2-kurs; 4 — 2-son davolash, 5-kurs; 5 — pediatriya, 5-kurs
+    DB::table('groups')->insert([['group_hemis_id' => 3, 'name' => 'd1/d25-01a', 'department_name' => '1-son davolash fakulteti'],
+        ['group_hemis_id' => 4, 'name' => 'd2/d22-01a', 'department_name' => '2-son davolash fakulteti'],
+        ['group_hemis_id' => 5, 'name' => 'p/d22-01a', 'department_name' => 'Pediatriya fakulteti']]);
+    DB::table('students')->insert([['hemis_id' => '30', 'group_id' => 3, 'level_code' => '12'],
+        ['hemis_id' => '40', 'group_id' => 4, 'level_code' => '15'], ['hemis_id' => '50', 'group_id' => 5, 'level_code' => '15']]);
+    foreach ([3, 4, 5] as $group) {
+        foreach (['2026-10-24', '2026-11-02'] as $d) {
+            DB::table('schedules')->insert(['group_id' => $group, 'subject_id' => 1, 'subject_name' => 'Akusherlik', 'semester_code' => '19', 'lesson_date' => "$d 08:30:00"]);
+        }
+    }
+    $ids = collect(['10', '20', '30', '40', '50'])->mapWithKeys(fn ($s) => [$s => cycleGrade(['grade' => 80, 'student_hemis_id' => $s])]);
+
+    $this->artisan('grades:upgrade-cycle', ['--faculty' => ['1-son davolash', '2-son davolash'], '--force' => true])->assertSuccessful();
+
+    $up = fn ($s) => (bool) DB::table('student_grades')->find($ids[$s])->upgraded_by_admin;
+    expect($up('10'))->toBeTrue()      // 1-son, 5-kurs, kichik guruh
+        ->and($up('20'))->toBeTrue()   // 1-son, 5-kurs, asosiy guruh ham (fakultet bo'yicha hamma guruh)
+        ->and($up('40'))->toBeTrue()   // 2-son, 5-kurs
+        ->and($up('30'))->toBeFalse()  // 2-kurs
+        ->and($up('50'))->toBeFalse(); // boshqa fakultet
 });

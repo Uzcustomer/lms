@@ -333,3 +333,26 @@ it('Codex: oqim qatorida "Faqat amaliy" — guruhchalar har xil soatda bo\'lsa h
     $n = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 6, 'mode' => 'practice', 'dry_run' => 1])->assertOk()->json('days.0');
     expect($n['status'])->toBe('nofit')->and($n['why'])->toContain('4 soat 13-soatdan');
 });
+
+it('Codex: oqim qatorida "Faqat amaliy" start_hour — birinchi guruhcha shu soatda bo\'lsa ham, boshqasi surilsa "o\'zgarmaydi" emas', function () {
+    $s = dmSetup();
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04a' => 7, 'd2/d23-04b' => 9]]]);
+    $d = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'start_hour' => 7, 'mode' => 'practice'])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and(dmDays($s, 'd2/d23-04b')['2026-11-16']['prc'])->toBe([7, 11])
+        ->and(dmDays($s)['2026-11-16']['prc'])->toBe([7, 11]);
+    // Hammasi allaqachon 7-soatda — o'zgarmaydi.
+    expect(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'start_hour' => 7, 'mode' => 'practice', 'dry_run' => 1])->json('days.0.status'))->toBe('same');
+});
+
+it('Codex: guruhcha qatorida "Birga" — smenali guruhchaning o\'z kun boshi (starts_g) bo\'lsa amaliy kun boshiga ergashadi, oraliqqa kiradi', function () {
+    $s = dmSetup();
+    // 04a: smena 7, lekin 16.11 da o'z kun boshi 3 — ma'ruza 3–4, amaliy ergashadi (5–8).
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04a' => 7, 'd2/d23-04b' => 7], 'starts_g' => ['d2/d23-04a' => [0 => 3]]]]);
+    expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [3, 5], 'prc' => [5, 9]]);
+    $sub = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'mode' => 'both', 'day_indexes' => [0]];
+    // +5: amaliy 10–13 — kunga sig'maydi (avval amaliy oraliqdan tushib qolib, faqat yozuvdan keyin aniqlanardi).
+    $n = dmMove($s, $s['admin'], 'admin', $sub + ['delta' => 5, 'dry_run' => 1])->assertOk()->json('days.0');
+    expect($n['status'])->toBe('nofit');
+    $d = dmMove($s, $s['admin'], 'admin', $sub + ['delta' => 1])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [4, 6], 'prc' => [6, 10]]);
+});

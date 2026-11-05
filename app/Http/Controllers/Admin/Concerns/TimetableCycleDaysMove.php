@@ -62,7 +62,7 @@ trait TimetableCycleDaysMove
                     continue;
                 }
                 $date = reset($units)['date'];
-                [$part, $span, $why, $width] = array_pad($this->cycleDayMovingPart($units, $mode, $sub, (array) ($placement->lecture_slots ?? []), $k), 4, null);
+                [$part, $span, $why, $width, $starts] = array_pad($this->cycleDayMovingPart($units, $mode, $sub, (array) ($placement->lecture_slots ?? []), $k), 5, null);
                 if (!$part) {
                     $out[] = array_merge($row, ['date' => $date, 'why' => $why]);
                     continue;
@@ -78,7 +78,8 @@ trait TimetableCycleDaysMove
                         : ($todayOk ? 'Bugungi dars boshlangan (yoki yangi vaqt o‘tib ketgan).' : 'Bugungi darsni ko‘chirib bo‘lmaydi.')]);
                     continue;
                 }
-                if ($shift === 0) {
+                // "Faqat amaliy" — hamma guruhcha amaliyoti allaqachon shu soatda bo'lsagina o'zgarmaydi (oqim qatorida har xil soatda bo'lishi mumkin).
+                if ($starts !== null ? !array_filter($starts, fn ($st) => $st !== $h) : $shift === 0) {
                     $out[] = array_merge($row, ['status' => 'same', 'why' => 'Vaqt o‘zgarmaydi.']);
                     continue;
                 }
@@ -151,7 +152,8 @@ trait TimetableCycleDaysMove
      * (kunga sig'ishi va "boshlanganmi" uchun), sabab (qism yo'q bo'lsa)]. "Birga": boshi — qatorning kun boshi (oqim — starts, guruhcha —
      * starts_g, aks holda oqimniki; front — dp.start), oraliq — suriladigan guruhchalar (guruhcha qatorida o'zi, oqimda — shu kunni o'zi
      * surmaganlar) ma'ruza va amaliysi. Ma'ruza — oqimniki; amaliy — guruhcha qatorida o'ziniki, oqimda — birinchi guruhchaniki; amaliyda
-     * 4-qiymat — eng uzun amaliy (hammasi bitta yangi soatdan qo'yiladi — kunga sig'ishi shu bo'yicha).
+     * 4-qiymat — eng uzun amaliy (hammasi bitta yangi soatdan qo'yiladi — kunga sig'ishi shu bo'yicha), 5-qiymat — har guruhcha amaliy boshi
+     * ("o'zgarmaydi" — hammasi yangi soatda bo'lsagina).
      */
     private function cycleDayMovingPart(array $units, string $mode, string $sub, array $slots, int $k): array
     {
@@ -171,7 +173,7 @@ trait TimetableCycleDaysMove
         }
         if ($mode === 'practice') {
             return $prc ? [$prc[0], [min(array_column($prc, 0)), max(array_column($prc, 1))], null,
-                max(array_map(fn ($r) => $r[1] - $r[0], $prc))] : [null, null, 'Bu kuni amaliy dars yo‘q.'];
+                max(array_map(fn ($r) => $r[1] - $r[0], $prc)), array_map(fn ($r) => (int) $r[0], $prc)] : [null, null, 'Bu kuni amaliy dars yo‘q.'];
         }
         $flowStart = (int) (((array) ($slots['starts'] ?? []))[$k] ?? 1);
         $base = max(1, $sub !== '' ? (int) (((array) ($own[$sub] ?? []))[$k] ?? $flowStart) : $flowStart);
@@ -181,8 +183,11 @@ trait TimetableCycleDaysMove
             if ($sub !== '' ? (string) $unit !== $sub : isset(((array) ($own[$unit] ?? []))[$k])) {
                 continue;
             }
-            // Smenasi qotirilgan amaliy (shift_g, shu kunga ps_g yo'q) kun boshi bilan surilmaydi — oraliqqa kirmaydi (cycleBothDayWrite).
-            $stays = (int) (((array) ($slots['shift_g'] ?? []))[$unit] ?? 0) > 0 && (int) ((((array) ($slots['ps_g'] ?? []))[$unit] ?? [])[$k] ?? 0) <= 0;
+            // Smenasi qotirilgan amaliy (shift_g, shu kunga ps_g yo'q) oqim qatorida kun boshi bilan surilmaydi — oraliqqa kirmaydi
+            // (cycleBothDayWrite). Shu kunni o'zi surgan guruhcha (starts_g) yuqorida o'tkazib yuborilgan; guruhcha qatorida esa surish starts_g
+            // yozadi va cycleStarts smenani o'chiradi — amaliy kun boshiga ergashadi, shuning uchun oraliqda qoladi.
+            $stays = $sub === '' && (int) (((array) ($slots['shift_g'] ?? []))[$unit] ?? 0) > 0
+                && (int) ((((array) ($slots['ps_g'] ?? []))[$unit] ?? [])[$k] ?? 0) <= 0;
             $fixed = $fixed || ($stays && isset($x['prac'][$date]));
             array_push($ranges, ...array_filter([$x['lec'][$date] ?? null, $stays ? null : ($x['prac'][$date] ?? null)]));
         }

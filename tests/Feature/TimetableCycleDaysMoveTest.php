@@ -356,3 +356,18 @@ it('Codex: guruhcha qatorida "Birga" — smenali guruhchaning o\'z kun boshi (st
     $d = dmMove($s, $s['admin'], 'admin', $sub + ['delta' => 1])->assertOk()->json('days.0');
     expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [4, 6], 'prc' => [6, 10]]);
 });
+
+it('Codex: guruhcha qatorida "Birga" — smenali guruhcha (o\'z kun boshisiz): amaliy ma\'ruzadan keyinga o\'tadi, sig\'ishi shu bo\'yicha', function () {
+    $s = dmSetup();
+    // 04a: ma'ruza 1–2, amaliy smenada 7–10. Guruhcha qatorida +3: yozuv starts_g qo'yadi, smena o'chadi — ma'ruza 4–5, amaliy 6–9 (sig'adi).
+    $sub = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'mode' => 'both'];
+    $d = dmMove($s, $s['admin'], 'admin', $sub + ['day_indexes' => [0], 'delta' => 3])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [4, 6], 'prc' => [6, 10]])
+        ->and(dmDays($s, 'd2/d23-04b')['2026-11-16'])->toBe(['lec' => [1, 3], 'prc' => [7, 11]]);
+    // +7: ma'ruza 8–9, amaliy 10–13 — sig'maydi.
+    expect(dmMove($s, $s['admin'], 'admin', $sub + ['day_indexes' => [1], 'delta' => 7, 'dry_run' => 1])->json('days.0.status'))->toBe('nofit');
+    // Shu kunga ps_g bor (amaliy 9–12) — u kun boshi bilan siljiydi (10–13): +1 ham sig'maydi.
+    $s['placement']->update(['lecture_slots' => array_merge($s['placement']->fresh()->lecture_slots, ['ps_g' => ['d2/d23-04a' => [2 => 9]]])]);
+    expect(dmDays($s)['2026-11-18']['prc'])->toBe([9, 13])
+        ->and(dmMove($s, $s['admin'], 'admin', $sub + ['day_indexes' => [2], 'delta' => 1, 'dry_run' => 1])->json('days.0.status'))->toBe('nofit');
+});

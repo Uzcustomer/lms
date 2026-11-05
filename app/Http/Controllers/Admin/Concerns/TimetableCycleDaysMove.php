@@ -62,7 +62,7 @@ trait TimetableCycleDaysMove
                     continue;
                 }
                 $date = reset($units)['date'];
-                [$part, $span, $why, $width, $starts] = array_pad($this->cycleDayMovingPart($units, $mode, $sub, (array) ($placement->lecture_slots ?? []), $k), 5, null);
+                [$part, $span, $why, $rel, $starts] = array_pad($this->cycleDayMovingPart($units, $mode, $sub, (array) ($placement->lecture_slots ?? []), $k), 5, null);
                 if (!$part) {
                     $out[] = array_merge($row, ['date' => $date, 'why' => $why]);
                     continue;
@@ -70,9 +70,9 @@ trait TimetableCycleDaysMove
                 $h = $delta !== null ? $part[0] + $delta : (int) $data['start_hour'];
                 $shift = $h - $part[0];
                 $row = array_merge($row, ['date' => $date, 'from' => $part[0], 'to' => $h, 'len' => $part[1] - $part[0]]);
-                // Yangi joy: "Faqat amaliy" — barcha guruhchalar bitta $h dan (cyclePracticeDayErrors), eng uzun amaliy bo'yicha; qolganlari —
-                // oraliq siljiydi.
-                [$lo, $hi] = $width !== null ? [$h, $h + $width] : [$span[0] + $shift, $span[1] + $shift];
+                // Yangi joy: $rel — yangi boshdan nisbiy oraliq (yozuvdan keyingi jadval surishdan farq qilsa: "Faqat amaliy" — hammasi bitta
+                // $h dan, guruhcha qatoridagi smenali amaliy — ma'ruzadan keyinga); aks holda oraliq siljiydi.
+                [$lo, $hi] = $rel !== null ? [$h + $rel[0], $h + $rel[1]] : [$span[0] + $shift, $span[1] + $shift];
                 if ($date < $today || ($date === $today && (!$todayOk || $started(min($span[0], $lo))))) {
                     $out[] = array_merge($row, ['status' => 'past', 'why' => $date < $today ? 'O‘tgan kun.'
                         : ($todayOk ? 'Bugungi dars boshlangan (yoki yangi vaqt o‘tib ketgan).' : 'Bugungi darsni ko‘chirib bo‘lmaydi.')]);
@@ -152,8 +152,9 @@ trait TimetableCycleDaysMove
      * (kunga sig'ishi va "boshlanganmi" uchun), sabab (qism yo'q bo'lsa)]. "Birga": boshi — qatorning kun boshi (oqim — starts, guruhcha —
      * starts_g, aks holda oqimniki; front — dp.start), oraliq — suriladigan guruhchalar (guruhcha qatorida o'zi, oqimda — shu kunni o'zi
      * surmaganlar) ma'ruza va amaliysi. Ma'ruza — oqimniki; amaliy — guruhcha qatorida o'ziniki, oqimda — birinchi guruhchaniki; amaliyda
-     * 4-qiymat — eng uzun amaliy (hammasi bitta yangi soatdan qo'yiladi — kunga sig'ishi shu bo'yicha), 5-qiymat — har guruhcha amaliy boshi
-     * ("o'zgarmaydi" — hammasi yangi soatda bo'lsagina).
+     * 4-qiymat — yangi boshdan nisbiy yangi oraliq, yozuvdan keyingi jadval oddiy surishdan farq qilsa (amaliy — hammasi bitta yangi
+     * soatdan, eng uzun amaliy bo'yicha; "Birga" guruhcha qatoridagi smenali amaliy — ma'ruzadan keyinga), 5-qiymat — har guruhcha amaliy
+     * boshi ("o'zgarmaydi" — hammasi yangi soatda bo'lsagina).
      */
     private function cycleDayMovingPart(array $units, string $mode, string $sub, array $slots, int $k): array
     {
@@ -173,7 +174,7 @@ trait TimetableCycleDaysMove
         }
         if ($mode === 'practice') {
             return $prc ? [$prc[0], [min(array_column($prc, 0)), max(array_column($prc, 1))], null,
-                max(array_map(fn ($r) => $r[1] - $r[0], $prc)), array_map(fn ($r) => (int) $r[0], $prc)] : [null, null, 'Bu kuni amaliy dars yo‘q.'];
+                [0, max(array_map(fn ($r) => $r[1] - $r[0], $prc))], array_map(fn ($r) => (int) $r[0], $prc)] : [null, null, 'Bu kuni amaliy dars yo‘q.'];
         }
         $flowStart = (int) (((array) ($slots['starts'] ?? []))[$k] ?? 1);
         $base = max(1, $sub !== '' ? (int) (((array) ($own[$sub] ?? []))[$k] ?? $flowStart) : $flowStart);
@@ -194,8 +195,16 @@ trait TimetableCycleDaysMove
         if (!$ranges) {
             return [null, null, $fixed ? 'Bu kuni faqat smenada qotirilgan amaliy — kun boshi bilan surilmaydi.' : 'Bu kuni dars yo‘q.'];
         }
+        // Guruhcha qatori, smena bor, shu kunga ps_g yo'q: surish starts_g yozadi, cycleStarts smenani o'chiradi — amaliy ma'ruzadan keyin
+        // (kun boshi + ma'ruza). Yangi joy — kun boshidan ma'ruza + amaliy (o'z kun boshi bo'lsa ham shunday — amaliy allaqachon ergashadi).
+        $rel = null;
+        $x = $sub !== '' ? ($units[$sub] ?? null) : null;
+        if ($x && (int) (((array) ($slots['shift_g'] ?? []))[$sub] ?? 0) > 0 && (int) ((((array) ($slots['ps_g'] ?? []))[$sub] ?? [])[$k] ?? 0) <= 0) {
+            $len = fn ($r) => $r ? (int) $r[1] - (int) $r[0] : 0;
+            $rel = [0, $len($x['lec'][$date] ?? null) + $len($x['prac'][$date] ?? null)];
+        }
 
-        return [[$base, $base + 1], [min(array_column($ranges, 0)), max(array_column($ranges, 1))], null];
+        return [[$base, $base + 1], [min(array_column($ranges, 0)), max(array_column($ranges, 1))], null, $rel];
     }
 
     /**

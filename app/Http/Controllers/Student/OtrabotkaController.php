@@ -46,7 +46,9 @@ class OtrabotkaController extends Controller
         $lowLimit = $student->level_code == 16 ? 3 : MarkingSystemScore::lowGradeLimit();
 
         $rows = (clone $base)
-            ->when($yearCode, fn ($q) => $q->where('education_year_code', $yearCode))
+            // Jurnalda qo'yilgan (HEMIS'dan kelmagan) baholarda o'quv yili kodi bo'sh — ular joriy yilniki
+            ->when($yearCode, fn ($q) => $q->where(fn ($w) => $w->where('education_year_code', $yearCode)
+                ->orWhereNull('education_year_code')))
             // NB va past baho. Past baho — joriy minimal chegaradan (sozlama, masalan 70) past:
             // chegara ko'tarilishidan oldin import qilingan 60–69 lar "low_grade" belgisisiz qolgan
             ->where(fn ($q) => $q->whereIn('reason', ['absent', 'low_grade'])

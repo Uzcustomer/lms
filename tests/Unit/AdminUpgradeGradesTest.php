@@ -28,11 +28,13 @@ beforeEach(function () {
     DB::table('settings')->insert(['key' => MarkingSystemScore::SETTING_MINIMUM_LIMIT, 'value' => '70']);
     MarkingSystemScore::forgetLmsMinimumLimit();
     DB::table('deadlines')->insert(['level_code' => '15', 'deadline_days' => 7]);
-    // Ro'yxatda d1/d23-09 — faqat kichik guruhlar (a), (b) olinadi; d1/d23-09 o'zi va d1/d23-091 — yo'q
+    // Ro'yxatda d1/d23-09 — faqat kichik guruhlar: (a), (b), c (rus); o'zi, "(rus)", d1/d23-091, d1/d23-090a — yo'q
     DB::table('groups')->insert([['group_hemis_id' => 1, 'name' => 'd1/d23-09(a)'], ['group_hemis_id' => 2, 'name' => 'd1/d23-01'],
-        ['group_hemis_id' => 3, 'name' => 'd1/d23-09 (b)'], ['group_hemis_id' => 4, 'name' => 'd1/d23-091'], ['group_hemis_id' => 5, 'name' => 'd1/d23-09']]);
+        ['group_hemis_id' => 3, 'name' => 'd1/d23-09 (b)'], ['group_hemis_id' => 4, 'name' => 'd1/d23-091'], ['group_hemis_id' => 5, 'name' => 'd1/d23-09'],
+        ['group_hemis_id' => 6, 'name' => 'd1/d23-09c (rus)'], ['group_hemis_id' => 7, 'name' => 'd1/d23-09 (rus)'], ['group_hemis_id' => 8, 'name' => 'd1/d23-090a']]);
     DB::table('students')->insert([['hemis_id' => '10', 'group_id' => 1, 'level_code' => '15'], ['hemis_id' => '20', 'group_id' => 2, 'level_code' => '15'],
-        ['hemis_id' => '30', 'group_id' => 3, 'level_code' => '15'], ['hemis_id' => '40', 'group_id' => 4, 'level_code' => '15'], ['hemis_id' => '50', 'group_id' => 5, 'level_code' => '15']]);
+        ['hemis_id' => '30', 'group_id' => 3, 'level_code' => '15'], ['hemis_id' => '40', 'group_id' => 4, 'level_code' => '15'], ['hemis_id' => '50', 'group_id' => 5, 'level_code' => '15'],
+        ['hemis_id' => '60', 'group_id' => 6, 'level_code' => '15'], ['hemis_id' => '70', 'group_id' => 7, 'level_code' => '15'], ['hemis_id' => '80', 'group_id' => 8, 'level_code' => '15']]);
 
     // Ro'yxat yo'li base_path() ga nisbiy
     $this->list = 'storage/framework/testing-upgrade-list.csv';
@@ -74,6 +76,9 @@ it('upgrades only listed group/subject/dates, keeps the old grade, is idempotent
     $otherGroup = upgradeGrade(['grade' => 80, 'student_hemis_id' => '20']);
     $similarGroup = upgradeGrade(['grade' => 80, 'student_hemis_id' => '40']);
     $parentGroup = upgradeGrade(['grade' => 80, 'student_hemis_id' => '50']);
+    $subgroupC = upgradeGrade(['grade' => 60, 'student_hemis_id' => '60']);
+    $rusOnly = upgradeGrade(['grade' => 80, 'student_hemis_id' => '70']);
+    $longer = upgradeGrade(['grade' => 80, 'student_hemis_id' => '80']);
     $subgroupB = upgradeGrade(['grade' => 90, 'student_hemis_id' => '30']);
 
     $local = $this->list;
@@ -91,8 +96,9 @@ it('upgrades only listed group/subject/dates, keeps the old grade, is idempotent
         ->and($g($low)->status)->toBe('recorded')
         ->and((float) $g($mid)->grade)->toBe(85.0)        // ikki marta ishlatildi — baribir 85
         ->and((float) $g($mid)->admin_original_grade)->toBe(80.0)
-        ->and((float) $g($subgroupB)->grade)->toBe(95.0);
-    foreach ([$below, $retaken, $lecture, $outside, $otherSubject, $otherGroup, $similarGroup, $parentGroup] as $id) {
+        ->and((float) $g($subgroupB)->grade)->toBe(95.0)
+        ->and((float) $g($subgroupC)->grade)->toBe(70.0);
+    foreach ([$below, $retaken, $lecture, $outside, $otherSubject, $otherGroup, $similarGroup, $parentGroup, $rusOnly, $longer] as $id) {
         expect((bool) $g($id)->upgraded_by_admin)->toBeFalse();
     }
 

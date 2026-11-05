@@ -72,11 +72,14 @@ class AdminUpgradeGrades extends Command
         $samples = [];
         $total = 0;
         foreach ($this->readList($path) as [$groupName, $subject, $from, $to]) {
-            // Ro'yxatdagi guruhning faqat kichik guruhlari: d1/d22-01 → d1/d22-01(a), d1/d22-01 (b) ... (o'zi emas)
+            // Ro'yxatdagi guruhning faqat kichik guruhlari (o'zi emas): d1/d22-01 → d1/d22-01a (rus),
+            // d1/d22-01(b), d1/d22-01 c ...; d1/d22-010a, d1/d22-01 (rus) — yo'q
+            $subgroup = '/^' . preg_quote($groupName, '/') . '\s*\(?[a-z]\)?(\s|$)/iu';
             $groups = DB::table('groups')
-                ->where(fn ($q) => $q->where('name', 'like', $groupName . '(%')
-                    ->orWhere('name', 'like', $groupName . ' (%'))
-                ->get(['group_hemis_id', 'name']);
+                ->where('name', 'like', $groupName . '%')
+                ->get(['group_hemis_id', 'name'])
+                ->filter(fn ($g) => preg_match($subgroup, trim($g->name)))
+                ->values();
             if ($groups->isEmpty()) {
                 $table[] = [$groupName, $subject, 'GURUH TOPILMADI', '', '', '', ''];
                 continue;

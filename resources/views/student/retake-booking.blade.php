@@ -162,14 +162,22 @@
                     </div>
                     <p class="rb-hint" style="margin:8px 0 0;">
                         Shu vaqt oralig'ida test markazida Moodle'ga kirsangiz, qayta topshirish oynasi avtomatik ochiladi.
-                        Tanlangan vaqtni o'zgartirib yoki bekor qilib bo'lmaydi.
+                        Kelolmasangiz, vaqt boshlanmasidan oldin bronni bekor qiling va boshqa vaqt tanlang.
                         @if($debt['excused'])
                             Vaqtida kelolmasangiz, urinish kuymaydi: shu kuni {{ $dayEnd }} gacha boshqa vaqtni tanlashingiz mumkin.
                         @else
-                            Vaqtida kelmasangiz, urinish kuyadi va keyingi urinish uchun yangi kun va vaqt tanlaysiz.
+                            Bekor qilmasdan vaqtida kelmasangiz, urinish kuyadi va keyingi urinish uchun yangi kun va vaqt tanlaysiz.
                         @endif
                         @if($debt['sync_pending']) <br><strong>Moodle bilan sinxronlash kutilmoqda.</strong> @endif
                     </p>
+                    @if($debt['booking'] && $debt['booking']->slot_start->isFuture())
+                        <div class="rb-actions">
+                            <form method="POST" action="{{ route('student.retake-booking.cancel', $debt['booking']->id) }}" onsubmit="return confirm('Tanlangan vaqt bekor qilinsinmi?');">
+                                @csrf
+                                <button type="submit" class="rb-btn danger">Bekor qilish</button>
+                            </form>
+                        </div>
+                    @endif
                 </section>
             @endif
 

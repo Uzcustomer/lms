@@ -462,9 +462,33 @@ class RetakeBookingService
             ];
         }
 
+        if (!$result['ok']) {
+            // Moodle rad etdi (masalan, vaqti boshlangan — "started"): bron amalda qoladi
+            $this->restoreBooked($booking, $result);
+
+            return [
+                'type' => 'error',
+                'message' => $result['message'] !== '' ? $result['message'] : "Bronni bekor qilib bo'lmadi.",
+                'booking' => $booking,
+            ];
+        }
+
         $this->markSynced($booking, $result);
 
         return ['type' => 'success', 'message' => 'Bron bekor qilindi.', 'booking' => $booking];
+    }
+
+    /** Moodle bekor qilishni rad etgan bron — LMS'da ham amaldagi holatiga qaytadi */
+    private function restoreBooked(RetakeBooking $booking, array $result): void
+    {
+        $booking->update([
+            'status' => RetakeBooking::STATUS_BOOKED,
+            'cancelled_at' => null,
+            'moodle_sync' => RetakeBooking::SYNC_OK,
+            'moodle_code' => $result['code'],
+            'moodle_message' => $result['message'],
+            'synced_at' => now(),
+        ]);
     }
 
     /**
@@ -490,6 +514,12 @@ class RetakeBookingService
                 'moodle_message' => $result['message'],
                 'synced_at' => now(),
             ]);
+
+            return true;
+        }
+        if ($booking->status === RetakeBooking::STATUS_CANCELLED && !$result['ok'] && $result['code'] === 'started') {
+            // Bekor qilish kech yetib bordi — Moodle'da bron vaqti boshlangan, u amalda qoladi
+            $this->restoreBooked($booking, $result);
 
             return true;
         }

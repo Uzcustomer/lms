@@ -34,7 +34,7 @@ class RetakeBookingController extends Controller
 
     private const MOODLE_DOWN = "Moodle bilan bog'lanib bo'lmadi. Birozdan keyin qayta urinib ko'ring.";
 
-    private const LOCKED = "Tanlangan vaqtni o'zgartirib yoki bekor qilib bo'lmaydi. Shu vaqtda kelmasangiz, urinish kuyadi.";
+    private const LOCKED = "Tanlangan vaqtni o'zgartirib bo'lmaydi. Boshqa vaqt kerak bo'lsa, avval uni bekor qiling (vaqti boshlanmasidan oldin).";
 
     public function __construct(private RetakeBookingService $service)
     {
@@ -161,14 +161,23 @@ class RetakeBookingController extends Controller
             ->with('booking_flash', ['type' => $result['type'], 'message' => $result['message']]);
     }
 
-    /** Talaba saqlangan vaqtni bekor qila olmaydi (eski havola yoki forma yuborilsa ham) */
+    /** Talaba bronni faqat vaqti boshlanmasidan oldin bekor qila oladi (keyin — urinish kuygan) */
     public function cancel(RetakeBooking $booking)
     {
         $hemisId = (int) $this->student()->hemis_id;
         abort_unless((int) $booking->student_hemis_id === $hemisId, 404);
 
-        return redirect($this->debtUrl($booking->subject_id, $booking->lesson_date->format('Y-m-d')))
-            ->with('booking_flash', ['type' => 'error', 'message' => self::LOCKED]);
+        $back = $this->debtUrl($booking->subject_id, $booking->lesson_date->format('Y-m-d'));
+        if ($booking->status !== RetakeBooking::STATUS_BOOKED) {
+            return redirect($back)->with('booking_flash', ['type' => 'warning', 'message' => 'Bu bron allaqachon amalda emas.']);
+        }
+        if ($booking->slot_start->lessThanOrEqualTo(now())) {
+            return redirect($back)->with('booking_flash', ['type' => 'error', 'message' => "Vaqti boshlangan bronni bekor qilib bo'lmaydi."]);
+        }
+
+        $result = $this->service->cancel($booking);
+
+        return redirect($back)->with('booking_flash', ['type' => $result['type'], 'message' => $result['message']]);
     }
 
     /**

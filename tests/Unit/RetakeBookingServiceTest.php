@@ -149,6 +149,22 @@ it('does not overwrite a past booking — the next attempt gets a new id', funct
         ->and($second->slot_start->format('Y-m-d H:i'))->toBe('2026-10-30 09:00');
 });
 
+it('keeps the booking when Moodle refuses to cancel a started slot', function () {
+    Http::fake([SVC_WS => Http::sequence()
+        ->push(['ok' => true, 'code' => 'saved', 'message' => 'ok'])
+        ->push(['ok' => false, 'code' => 'started', 'message' => "Vaqti boshlangan bronni bekor qilib bo'lmaydi."])]);
+
+    $booking = svcBook()['booking'];
+    $result = app(RetakeBookingService::class)->cancel($booking->fresh());
+    $b = $booking->fresh();
+
+    expect($result['type'])->toBe('error')
+        ->and($result['message'])->toContain('boshlangan')
+        ->and($b->status)->toBe('booked')
+        ->and($b->cancelled_at)->toBeNull()
+        ->and($b->moodle_code)->toBe('started');
+});
+
 it('keeps the booking with moodle_sync=failed on a network error', function () {
     Http::fake(fn () => throw new ConnectionException('timeout'));
 

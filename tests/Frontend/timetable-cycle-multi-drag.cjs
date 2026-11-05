@@ -410,8 +410,15 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         await p.mouse.up();
         await p.waitForTimeout(60);
         assert.equal(await p.getAttribute('.cyc-mk-cell[data-mk-day="0"][data-mk-hour="1"]', 'data-busy-note'), 'tekshirilmoqda…');
+        // Kutish paytida ↓ — yangi surish boshlanmaydi (qulf sudrashniki), ogohlantirish; sudrash javob kelgach davom etadi.
+        await p.keyboard.press('ArrowDown');
+        assert.match((await p.evaluate(() => window.toasts)).map(x => x.html).join(' '), /Avvalgi surish hali tugamadi/);
         await p.waitForTimeout(1700);
         assert.deepEqual((await apiCalls(p)).map(c => [c.dry_run, c.day_indexes, c.delta]), [[1, [0, 1, 2], 2], [undefined, [0, 1, 2], 2]]);
+        await reset(p);
+        await p.keyboard.press('ArrowDown');   // qulf bo'shagan — keyingi surish ishlaydi
+        await p.waitForTimeout(80);
+        assert.deepEqual((await apiCalls(p)).map(c => [c.dry_run, c.day_indexes, c.delta]), [[1, [0, 1, 2], 1], [undefined, [0, 1, 2], 1]]);
         await reset(p);
         await p.keyboard.press('Escape');
 

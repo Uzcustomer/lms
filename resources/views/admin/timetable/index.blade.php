@@ -9628,10 +9628,12 @@
             }
             // Tanlangan kunlarni surish (sudrash yoki ↑ ↓): avval tekshiruv; muammo va amaliyot ko'chishi yo'q — darhol, bo'lsa — oyna.
             // "Faqat amaliy" ma'ruza ustiga tushsa — ma'ruza bilan o'rin almashish taklifi (lecture_swap, oldindan ko'rinish bilan).
+            // opts.locked — chaqiruvchi qulfni (cycDaysBusy) oldindan olgan (sudrash: tekshiruv javobini kutish paytida boshqa surish
+            // boshlanmasin); qulf shu yerda bo'shatiladi.
             async function cycDaysApply(key, offsets, mode, delta, dry, opts = {}) {
-                if (!offsets.length || !delta) return;
+                if (!offsets.length || !delta) { if (opts.locked) cycDaysBusy = false; return; }
                 // Oldingi surish hali ketmoqda — jim e'tiborsiz qoldirilmaydi.
-                if (cycDaysBusy) { ttToast('Avvalgi surish hali tugamadi — kuting.', 'warn'); return; }
+                if (cycDaysBusy && !opts.locked) { ttToast('Avvalgi surish hali tugamadi — kuting.', 'warn'); return; }
                 cycDaysBusy = true;
                 const extra = opts.extra || {};
                 try {
@@ -9854,8 +9856,14 @@
                         // Sudrash paytidagi tekshiruv hali ketmoqda — qayta so'ralmaydi: darhol "tekshirilmoqda…", javob kelishi bilan davom etadi.
                         // Tekshiruv boshlanmagan bo'lsa — cycDaysApply o'zi darhol ko'rsatadi va so'raydi.
                         if (!ready() && s0.dry[k] === null && s0.dryP && s0.dryP[k]) {
+                            if (cycDaysBusy) { ttToast('Avvalgi surish hali tugamadi — kuting.', 'warn'); return; }
+                            // Qulf kutishdan oldin olinadi: shu paytda ↑ ↓ boshqa surishni boshlamasin (ogohlantirish chiqadi), bu sudrash
+                            // esa javob kelgach o'z qulfi bilan davom etadi (cycDaysApply bo'shatadi).
+                            cycDaysBusy = true;
                             cycBusyShow(s0.key, s0.multi, s0.modes, 'tekshirilmoqda…');
                             try { await s0.dryP[k]; } finally { cycBusyHide(); }
+                            await cycDaysApply(s0.key, s0.multi, s0.modes, s0.delta, ready(), { locked: true });
+                            return;
                         }
                         await cycDaysApply(s0.key, s0.multi, s0.modes, s0.delta, ready());
                         return;

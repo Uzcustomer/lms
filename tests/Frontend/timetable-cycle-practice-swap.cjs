@@ -154,6 +154,32 @@ const SWAPS = [{ unit: 'd2/d23-08a', from: 3, to: 1, len: 2, how: 'swap', busy: 
         assert.deepEqual((await apiCalls(k)).map(c => [c.dry_run, c.day_indexes, c.mode, c.start_hour, c.delta, c.practice_place]),
             [[1, [0], 'lecture', 2, undefined, 'swap']]);
         await k.click('#cycMultiDlg [data-cmd="cancel"]');
+        // 1b) Bir nechta kun tanlangan bo'lsa, kun oynasidagi ↓ — hammasiga (har biri o'z boshidan, delta), faqat ochiq kunga emas.
+        await reset(k);
+        await k.evaluate(() => { closeCycDayPop(); window.srv = null; });
+        for (const d of [2, 3]) {
+            const c = await at(k, d, 1);
+            await k.keyboard.down('Control'); await k.mouse.click(c.x, c.y); await k.keyboard.up('Control');
+        }
+        await k.evaluate(() => openCycDayPop('K', 2, document.querySelector('.cyc-mk-cell[data-mk-day="2"][data-mk-hour="1"]'), true));
+        await reset(k);
+        await k.click('#cycDayPop [data-dp-move="1"]');
+        await k.waitForTimeout(80);
+        assert.deepEqual((await apiCalls(k)).map(c => [c.dry_run, c.day_indexes, c.mode, c.delta, c.start_hour]),
+            [[1, [2, 3], 'lecture', 1, undefined], [undefined, [2, 3], 'lecture', 1, undefined]]);
+        // Oyna qayta ochiladi, tanlov qoladi — keyingi ↓ ham ikkala kunga.
+        assert.match(await k.textContent('#cycSelBadge'), /Tanlangan: 2 kun/);
+        await reset(k);
+        await k.click('#cycDayPop [data-dp-move="1"]');
+        await k.waitForTimeout(80);
+        assert.deepEqual((await apiCalls(k)).map(c => c.day_indexes), [[2, 3], [2, 3]]);
+        // Tanlovga kirmagan kun oynasi — faqat shu kun.
+        await k.evaluate(() => openCycDayPop('K', 4, document.querySelector('.cyc-mk-cell[data-mk-day="4"][data-mk-hour="1"]'), true));
+        await reset(k);
+        await k.click('#cycDayPop [data-dp-move="1"]');
+        await k.waitForTimeout(80);
+        assert.deepEqual((await apiCalls(k)).map(c => [c.dry_run, c.day_indexes, c.start_hour]), [[1, [4], 2], [undefined, [4], 2]]);
+        await k.keyboard.press('Escape');
 
         // 2) Ma'ruzani (M) amaliy ustiga sudrash: kesishuv xato emas, ko'rsatkichda usul; qo'yib yuborilganda — oyna: "Ma'ruza 08:30 → 10:00 (oqim,
         //    1 kun). Amaliyot o'rin almashadi: d2/d23-08a 10:00 → 08:30, 09a 10:00 → 08:30, 09b 10:00 → 12:00 (sig'madi — keyinga)".
@@ -316,7 +342,7 @@ const SWAPS = [{ unit: 'd2/d23-08a', from: 3, to: 1, len: 2, how: 'swap', busy: 
         await q.waitForTimeout(50);
         assert.equal(await q.textContent('#teacherTimeProposal [data-swaps]'), '');
         assert.equal(await q.evaluate(() => window.calls.filter(c => c.check).pop().check.practice_place), 'keep');
-        console.log('timetable cycle practice swap: 9 scenarios passed');
+        console.log('timetable cycle practice swap: 10 scenarios passed');
     } finally {
         await browser.close();
     }

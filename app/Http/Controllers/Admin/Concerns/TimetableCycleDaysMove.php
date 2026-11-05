@@ -62,7 +62,7 @@ trait TimetableCycleDaysMove
                     continue;
                 }
                 $date = reset($units)['date'];
-                [$part, $span, $why] = $this->cycleDayMovingPart($units, $mode, $sub, (array) ($placement->lecture_slots ?? []), $k);
+                [$part, $span, $why, $width] = array_pad($this->cycleDayMovingPart($units, $mode, $sub, (array) ($placement->lecture_slots ?? []), $k), 4, null);
                 if (!$part) {
                     $out[] = array_merge($row, ['date' => $date, 'why' => $why]);
                     continue;
@@ -70,7 +70,10 @@ trait TimetableCycleDaysMove
                 $h = $delta !== null ? $part[0] + $delta : (int) $data['start_hour'];
                 $shift = $h - $part[0];
                 $row = array_merge($row, ['date' => $date, 'from' => $part[0], 'to' => $h, 'len' => $part[1] - $part[0]]);
-                if ($date < $today || ($date === $today && (!$todayOk || $started(min($span[0], $span[0] + $shift))))) {
+                // Yangi joy: "Faqat amaliy" — barcha guruhchalar bitta $h dan (cyclePracticeDayErrors), eng uzun amaliy bo'yicha; qolganlari —
+                // oraliq siljiydi.
+                [$lo, $hi] = $width !== null ? [$h, $h + $width] : [$span[0] + $shift, $span[1] + $shift];
+                if ($date < $today || ($date === $today && (!$todayOk || $started(min($span[0], $lo))))) {
                     $out[] = array_merge($row, ['status' => 'past', 'why' => $date < $today ? 'O‘tgan kun.'
                         : ($todayOk ? 'Bugungi dars boshlangan (yoki yangi vaqt o‘tib ketgan).' : 'Bugungi darsni ko‘chirib bo‘lmaydi.')]);
                     continue;
@@ -79,9 +82,9 @@ trait TimetableCycleDaysMove
                     $out[] = array_merge($row, ['status' => 'same', 'why' => 'Vaqt o‘zgarmaydi.']);
                     continue;
                 }
-                if ($span[0] + $shift < 1 || $span[1] + $shift - 1 > $grid) {
-                    $out[] = array_merge($row, ['status' => 'nofit', 'why' => 'Kunga sig‘maydi: ' . ($span[1] - $span[0]) . ' soat '
-                        . ($span[0] + $shift) . '-soatdan boshlab bo‘lmaydi (kunda ' . $grid . ' soat).']);
+                if ($lo < 1 || $hi - 1 > $grid) {
+                    $out[] = array_merge($row, ['status' => 'nofit', 'why' => 'Kunga sig‘maydi: ' . ($hi - $lo) . ' soat '
+                        . $lo . '-soatdan boshlab bo‘lmaydi (kunda ' . $grid . ' soat).']);
                     continue;
                 }
                 $p = array_merge($data, ['day_index' => $k, 'start_hour' => $h]);
@@ -147,7 +150,8 @@ trait TimetableCycleDaysMove
      * Sikl kunida surilayotgan qism: [qism [boshi, oxiri) — delta shu boshidan hisoblanadi, kun bo'yicha suriladigan oraliq [boshi, oxiri)
      * (kunga sig'ishi va "boshlanganmi" uchun), sabab (qism yo'q bo'lsa)]. "Birga": boshi — qatorning kun boshi (oqim — starts, guruhcha —
      * starts_g, aks holda oqimniki; front — dp.start), oraliq — suriladigan guruhchalar (guruhcha qatorida o'zi, oqimda — shu kunni o'zi
-     * surmaganlar) ma'ruza va amaliysi. Ma'ruza — oqimniki; amaliy — guruhcha qatorida o'ziniki, oqimda — birinchi guruhchaniki.
+     * surmaganlar) ma'ruza va amaliysi. Ma'ruza — oqimniki; amaliy — guruhcha qatorida o'ziniki, oqimda — birinchi guruhchaniki; amaliyda
+     * 4-qiymat — eng uzun amaliy (hammasi bitta yangi soatdan qo'yiladi — kunga sig'ishi shu bo'yicha).
      */
     private function cycleDayMovingPart(array $units, string $mode, string $sub, array $slots, int $k): array
     {
@@ -166,7 +170,8 @@ trait TimetableCycleDaysMove
             return $lec ? [$lec, $lec, null] : [null, null, 'Bu kuni ma’ruza yo‘q.'];
         }
         if ($mode === 'practice') {
-            return $prc ? [$prc[0], [min(array_column($prc, 0)), max(array_column($prc, 1))], null] : [null, null, 'Bu kuni amaliy dars yo‘q.'];
+            return $prc ? [$prc[0], [min(array_column($prc, 0)), max(array_column($prc, 1))], null,
+                max(array_map(fn ($r) => $r[1] - $r[0], $prc))] : [null, null, 'Bu kuni amaliy dars yo‘q.'];
         }
         $flowStart = (int) (((array) ($slots['starts'] ?? []))[$k] ?? 1);
         $base = max(1, $sub !== '' ? (int) (((array) ($own[$sub] ?? []))[$k] ?? $flowStart) : $flowStart);

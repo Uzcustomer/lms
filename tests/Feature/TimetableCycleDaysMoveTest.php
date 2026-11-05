@@ -320,3 +320,16 @@ it('Codex: "Birga" — smenasi qotirilgan amaliy (shift_g) surilmaydi, kunga sig
     expect(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 9, 'mode' => 'both', 'dry_run' => 1])->json('days.0.status'))->toBe('blocked')
         ->and(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 11, 'mode' => 'both', 'dry_run' => 1])->json('days.0.status'))->toBe('nofit');
 });
+
+it('Codex: oqim qatorida "Faqat amaliy" — guruhchalar har xil soatda bo\'lsa ham, kunga sig\'ishi yangi joy (bitta soat) bo\'yicha', function () {
+    $s = dmSetup();
+    // 04a amaliyoti 7–10, 04b — 9–12; oqim qatorida +1: ikkalasi 8-soatdan (8–11) — sig'adi (eski oraliq 7–12 ni surish noto'g'ri "sig'maydi" edi).
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04a' => 7, 'd2/d23-04b' => 9]]]);
+    expect(dmDays($s, 'd2/d23-04b')['2026-11-16']['prc'])->toBe([9, 13]);
+    $d = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => 1, 'mode' => 'practice'])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-16']['prc'])->toBe([8, 12])
+        ->and(dmDays($s, 'd2/d23-04b')['2026-11-16']['prc'])->toBe([8, 12]);
+    // +6 — 13-soatdan: sig'maydi (eng uzun amaliy 4 soat).
+    $n = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 6, 'mode' => 'practice', 'dry_run' => 1])->assertOk()->json('days.0');
+    expect($n['status'])->toBe('nofit')->and($n['why'])->toContain('4 soat 13-soatdan');
+});

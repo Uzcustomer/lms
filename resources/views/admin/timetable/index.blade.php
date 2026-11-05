@@ -8397,6 +8397,13 @@
                 });
                 pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => {
                     const d = +btn.dataset.dpMove;
+                    // Bir nechta kun tanlangan (shu kun ham) — hammasi birga, har biri o'z boshidan (sudrash va klaviatura ↑ ↓ kabi).
+                    const many = cycMultiSel && cycMultiSel.key === key && cycMultiSel.offsets.size > 1 && cycMultiSel.offsets.has(+offset)
+                        ? [...cycMultiSel.offsets].sort((a, b) => a - b) : null;
+                    if (many) {
+                        cycDaysApply(key, many, curMode, d, null, { reopen: true });
+                        return;
+                    }
                     // Faqat ma'ruza / faqat amaliy — avval tekshiruv (o'rin almashish rejasi, teskari taklif), kerak bo'lsa tasdiq oynasi.
                     if (curMode !== 'both') {
                         cycDaysApply(key, [+offset], curMode, d, null, { extra: { start_hour: stepBase + d, delta: undefined }, reopen: true });
@@ -9011,10 +9018,10 @@
                 });
                 return out.join(', ');
             }
-            // Surishdan keyin kun oynasini qayta ochish (↑ ↓ kun oynasidan bosilgan bo'lsa).
+            // Surishdan keyin kun oynasini qayta ochish (↑ ↓ kun oynasidan bosilgan bo'lsa); kunlar tanlovi qoladi (keyingi ↑ ↓ ham hammasiga).
             function cycReopenDay(key, offset) {
                 const cell = document.querySelector('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
-                if (cell) openCycDayPop(key, offset, cell);
+                if (cell) openCycDayPop(key, offset, cell, true);
             }
             // Qo'llash (dry_run emas). Tasdiq talab qilinadigan doskada — so'rov; aks holda jadval yangilanadi, qisqa xabar + "Qaytarish".
             async function cycDaysCommit(key, offsets, mode, delta, extra = {}) {

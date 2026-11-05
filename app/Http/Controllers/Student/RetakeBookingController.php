@@ -274,6 +274,13 @@ class RetakeBookingController extends Controller
             'slot_start' => $isBooked ? $slotStart : null,
             'slot_end' => $isBooked ? $slotEnd : null,
             'booking' => $local,
+            // Test markazi bekor qilgan bron (oxirgi 3 kun) — talabaga sababi ko'rsatiladi
+            'admin_cancelled' => $isBooked ? null : RetakeBooking::forDebt($hemisId, $subjectId, $lessonDate)
+                ->where('status', RetakeBooking::STATUS_CANCELLED)
+                ->where('moodle_code', RetakeBookingService::CODE_ADMIN_CANCELLED)
+                ->where('cancelled_at', '>=', now()->subDays(3))
+                ->orderByDesc('cancelled_at')
+                ->first(),
             'sync_pending' => $local && $local->moodle_sync !== RetakeBooking::SYNC_OK,
             'url' => $this->debtUrl($subjectId, $lessonDate),
         ];

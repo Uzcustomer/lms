@@ -208,6 +208,25 @@ it('marks a booking missed when Moodle reports it', function () {
     expect($booking->fresh()->status)->toBe('missed');
 });
 
+it('cancels a booking the test centre cancelled in Moodle', function () {
+    Http::fake([SVC_WS => Http::response(['ok' => true, 'code' => 'saved', 'message' => 'ok'])]);
+    $booking = svcBook()['booking'];
+
+    svcRefake([SVC_WS => Http::response(['found' => true, 'debts' => [svcDebt(['state' => 'nobooking'])],
+        'cancelled_booking_ids' => [$booking->id]])]);
+    // Boshqa talabaning so'rovi bu bronga tegmasin
+    app(RetakeBookingService::class)->debts(9999);
+    expect($booking->fresh()->status)->toBe('booked');
+
+    app(RetakeBookingService::class)->debts(5531);
+    $b = $booking->fresh();
+    expect($b->status)->toBe('cancelled')
+        ->and($b->moodle_code)->toBe(RetakeBookingService::CODE_ADMIN_CANCELLED)
+        ->and($b->cancelled_at)->not->toBeNull()
+        // Endi talaba shu mavzuga yangi vaqt tanlay oladi
+        ->and(RetakeBookingService::activeBooking(5531, 181, '2026-10-24'))->toBeNull();
+});
+
 it('validates the slot', function () {
     $v = fn ($s, $e, $d = '2026-10-31') => RetakeBookingService::validateSlot(Carbon::parse($s), Carbon::parse($e), $d);
 

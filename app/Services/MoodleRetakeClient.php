@@ -23,6 +23,8 @@ class MoodleRetakeClient
             'debts' => array_values(array_filter($body['debts'] ?? [], 'is_array')),
             // Test markazi yopgan vaqtlar: [{start, end, note}] (Y-m-d H:i)
             'closed' => array_values(array_filter($body['closed'] ?? [], 'is_array')),
+            // Moodle'da test markazi bekor qilgan bronlar (LMS bron ID)
+            'cancelled_booking_ids' => array_values(array_map('intval', (array) ($body['cancelled_booking_ids'] ?? []))),
         ];
     }
 

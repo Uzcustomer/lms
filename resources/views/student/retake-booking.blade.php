@@ -129,6 +129,13 @@
                 </div>
             @endif
 
+            @if($debt['admin_cancelled'])
+                <div class="rb-alert warning">
+                    Test markazi {{ $debt['admin_cancelled']->slot_start->format('d.m.Y H:i') }}–{{ $debt['admin_cancelled']->slot_end->format('H:i') }}
+                    vaqtidagi broningizni bekor qildi. Urinishingiz kuymadi — yangi vaqt tanlang.
+                </div>
+            @endif
+
             @if($debt['no_time_left'])
                 <div class="rb-alert warning">
                     Bir kunda bitta urinish: keyingi urinish {{ $minDate->format('d.m.Y') }} dan bo'lishi mumkin, qayta topshirish muddati esa

@@ -58,6 +58,19 @@ class RetakeBookingService
                 ->where('status', RetakeBooking::STATUS_BOOKED)
                 ->update(['status' => RetakeBooking::STATUS_MISSED, 'updated_at' => now()]);
         }
+        // Test markazi Moodle'da bekor qilgan bronlar: urinish kuymaydi, talaba qayta tanlaydi
+        if ($cancelledIds = $response['cancelled_booking_ids'] ?? []) {
+            RetakeBooking::whereIn('id', $cancelledIds)
+                ->where('student_hemis_id', $studentHemisId)
+                ->whereIn('status', [RetakeBooking::STATUS_BOOKED, RetakeBooking::STATUS_MISSED])
+                ->update([
+                    'status' => RetakeBooking::STATUS_CANCELLED,
+                    'cancelled_at' => now(),
+                    'moodle_sync' => RetakeBooking::SYNC_OK,
+                    'moodle_code' => self::CODE_ADMIN_CANCELLED,
+                    'updated_at' => now(),
+                ]);
+        }
 
         return $debts;
     }
@@ -113,6 +126,9 @@ class RetakeBookingService
 
         return null;
     }
+
+    /** Test markazi Moodle'da bekor qilgan bron (moodle_code) */
+    public const CODE_ADMIN_CANCELLED = 'admin_cancelled';
 
     /** Bir vaqt oralig'ida talaba ko'pi bilan shuncha fanni topshiradi */
     public const MAX_SUBJECTS_PER_SLOT = 2;

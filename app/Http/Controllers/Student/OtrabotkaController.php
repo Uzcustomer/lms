@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\Deadline;
 use App\Models\MarkingSystemScore;
+use App\Models\RetakeBooking;
 use App\Models\StudentGrade;
 use App\Services\RetakeBookingService;
 use Carbon\Carbon;
@@ -99,6 +100,17 @@ class OtrabotkaController extends Controller
         $items = $items->groupBy(fn ($i) => $i['subject_id'] . '|' . $i['lesson_date']->toDateString())
             ->map(fn ($day) => $this->mergeDay($day))
             ->values();
+
+        // Tanlangan (hali o'tmagan) qayta topshirish vaqtlari — ro'yxatda "Vaqt tanlash" o'rniga
+        $bookings = RetakeBooking::where('student_hemis_id', $student->hemis_id)
+            ->where('status', RetakeBooking::STATUS_BOOKED)
+            ->where('slot_end', '>', now())
+            ->orderBy('slot_start')
+            ->get()
+            ->keyBy(fn (RetakeBooking $b) => $b->subject_id . '|' . $b->lesson_date->toDateString());
+        $items = $items->map(fn ($i) => $i + [
+            'booking' => $bookings->get($i['subject_id'] . '|' . $i['lesson_date']->toDateString()),
+        ]);
 
         $groups = $items->groupBy('subject_id')->map(fn ($list) => [
             'name' => $list->first()['subject_name'],

@@ -388,3 +388,20 @@ it('Codex: tasdiqlangan ko\'p kunli so\'rov qayta bajarilganda hech bir kun o\'z
     // To'g'ridan-to'g'ri (admin) — kun bo'yicha natija, 200.
     dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 2, 'mode' => 'lecture'])->assertOk()->assertJsonPath('applied', 0);
 });
+
+it('Codex: guruhcha qatorida "Birga" oqim soatiga qaytsa — o\'z kun boshi o\'chadi, smena qayta yoqiladi; sig\'ishi yozuvdan keyingi holat bo\'yicha', function () {
+    $s = dmSetup();
+    // Oqim kuni 9-soatdan (ma'ruza 9–10); 04a — o'z kun boshi 1 (ma'ruza 1–2, amaliy ergashadi 3–6), smena 1.
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04a' => 1, 'd2/d23-04b' => 1], 'starts' => [0 => 9],
+        'starts_g' => ['d2/d23-04a' => [0 => 1]]]]);
+    expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]]);
+    $sub = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'mode' => 'both', 'day_indexes' => [0]];
+    // 9-soatga (oqim soati): starts_g o'chadi — ma'ruza 9–10, amaliy smenada 1–4 (avval [9,15) deb "sig'maydi" berilardi).
+    $d = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 9])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [9, 11], 'prc' => [1, 5]])
+        ->and($s['placement']->fresh()->lecture_slots['starts_g'] ?? [])->toBe([]);
+    // Smenasiz guruhcha — oldindan tekshiruv (oraliq siljiydi): sabab aniq.
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04b' => 1]]]);
+    $n = dmMove($s, $s['admin'], 'admin', array_merge($sub, ['day_indexes' => [1], 'delta' => 7, 'dry_run' => 1]))->assertOk()->json('days.0');
+    expect($n['status'])->toBe('nofit')->and($n['why'])->toBe('Kunga sig‘maydi: 6 soat 8-soatdan boshlab bo‘lmaydi (kunda 12 soat).');
+});

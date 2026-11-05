@@ -85,7 +85,7 @@
                 @if($canToggleNotify)
                     {{-- Vedomost xabarlari toggle (faqat admin) — faqat shu bo'limga tegishli xabarlarni yoqadi/o'chiradi --}}
                     <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:10px 16px 0;">
-                        <span style="font-size:12px;color:#64748b;">Vedomost xabarlari (Telegram + tizim):</span>
+                        <span style="font-size:13px;color:#1e293b;font-weight:600;">Vedomost xabarlari (Telegram + tizim):</span>
                         <form method="POST" action="{{ route('admin.vedomost-submission.toggle-notify') }}">
                             @csrf
                             @foreach(request()->query() as $k => $val)
@@ -103,11 +103,6 @@
 
                 {{-- Filtrlar (yopilish shakli sahifasi uslubida) --}}
                 <form id="filter-form" method="GET" action="{{ route('admin.vedomost-submission.index') }}">
-                    @php
-                        $advKeys = ['specialty', 'closing_form_filter', 'form_type', 'status', 'overdue'];
-                        $advCount = collect($advKeys)->filter(fn ($k) => request()->filled($k) && !($k === 'overdue' && !request()->boolean('overdue')))->count()
-                            + (request('order', 'newest') !== 'newest' ? 1 : 0);
-                    @endphp
                     <div class="filter-container">
                         <div class="filter-row">
                             <div class="filter-item" style="min-width:160px;">
@@ -167,22 +162,23 @@
                                     Joriy semestr
                                 </label>
                                 @if(!empty($currentSemesterHint))
-                                    <span class="vs-switch-hint" title="Har guruh o'zi hozir o'qiyotgan semestr bo'yicha (talabalar ma'lumotidan)">{{ $currentSemesterHint }}</span>
+                                    <span class="vs-switch-hint" title="«Joriy semestr» — har guruh hozir o'qiyotgan semestr (talabalar ma'lumotidan)">{{ $currentSemesterHint }}</span>
                                 @endif
                                 @if(!empty($staleGroups['count']))
-                                    <span class="vs-switch-hint" style="color:#b45309;"
-                                          title="{{ implode(', ', $staleGroups['names']) }}{{ $staleGroups['count'] > count($staleGroups['names']) ? ' …' : '' }}">
-                                        ⚠ {{ $staleGroups['count'] }} ta guruh talabalari o'tgan o'quv yili semestrida qolgan (HEMIS'da yangi semestrga o'tkazilmagan) — ular «Joriy semestr»da ko'rinmaydi
-                                    </span>
+                                    <details class="vs-stale">
+                                        <summary title="Bosing — qaysi guruhlar">
+                                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+                                            {{ $staleGroups['count'] }} ta guruh ko'rinmaydi
+                                        </summary>
+                                        <div class="vs-stale-body">
+                                            Bu guruhlar talabalari HEMIS'da hali yangi semestrga o'tkazilmagan (o'tgan o'quv yili semestrida turibdi),
+                                            shuning uchun «Joriy semestr» yoqilganda ularning vedomostlari ro'yxatda chiqmaydi. Ko'rish uchun «Joriy semestr»ni o'chiring.
+                                            <div class="vs-stale-names">{{ implode(', ', $staleGroups['names']) }}{{ $staleGroups['count'] > count($staleGroups['names']) ? ' …' : '' }}</div>
+                                        </div>
+                                    </details>
                                 @endif
                             </div>
-                            <details class="vd-more" {{ $advCount ? 'open' : '' }}>
-                                <summary>
-                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
-                                    Qo'shimcha filtrlar
-                                    @if($advCount)<span class="vd-badge is-indigo">{{ $advCount }}</span>@endif
-                                </summary>
-                                <div class="filter-row vd-more-body">
+
                                     <div class="filter-item" style="flex:1;min-width:220px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                                 <select name="specialty" id="specialty" class="select2" style="width:100%;">
@@ -237,13 +233,12 @@
                             </div>
                                     <div class="filter-item" style="min-width:150px;">
                                 <label class="filter-label">&nbsp;</label>
-                                <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;height:36px;">
+                                <label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:#0f172a;height:38px;">
                                     <input type="checkbox" name="overdue" value="1" {{ request('overdue') ? 'checked' : '' }}>
                                     Faqat kechikkanlar
                                 </label>
                             </div>
                                 </div>
-                            </details>
                         </div>
                     </div>
                 </form>
@@ -808,54 +803,51 @@
         .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: flex-end; }
         .filter-row:last-child { margin-bottom: 0; }
         .filter-item { display: flex; flex-direction: column; }
-        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #1e293b; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-        .filter-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 12px; font-size: 0.8rem; color: #1e293b; background: #fff; width: 100%; outline: none; }
+        .filter-input { height: 38px; border: 1px solid #94a3b8; border-radius: 8px; padding: 0 12px; font-size: 14px; color: #0f172a; background: #fff; width: 100%; outline: none; }
         .filter-input:hover { border-color: #2b5ea7; }
         .btn-search { height: 36px; display: inline-flex; align-items: center; gap: 6px; background: #1a3268; color: #fff; border: none; padding: 0 18px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
         .btn-search:hover { background: #15264f; }
 
-        .vd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .vd-table thead th { background: #f1f5f9; text-align: left; padding: 9px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #475569; white-space: nowrap; }
-        .vd-table thead th a { color: #475569; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+        .vd-table { width: 100%; border-collapse: collapse; font-size: 14px; color: #0f172a; }
+        .vd-table thead th { background: #e2e8f0; text-align: left; padding: 10px 10px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: #0f172a; white-space: nowrap; }
+        .vd-table thead th a { color: #0f172a; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
         .vd-table thead th a:hover { color: #1a3268; }
-        .vd-table tbody td { padding: 10px 10px; border-top: 1px solid #eef2f7; vertical-align: top; }
+        .vd-table tbody td { padding: 11px 10px; border-top: 1px solid #e2e8f0; vertical-align: top; }
         .vd-table tbody tr:hover { background: #f5f8ff; }
         .vd-row { cursor: pointer; }
-        .vd-th-sub { display: inline-flex !important; margin-left: 6px; font-size: 10px; font-weight: 600; color: #94a3b8 !important; text-transform: lowercase; }
-        .vd-num { color: #94a3b8; font-variant-numeric: tabular-nums; }
+        .vd-th-sub { display: inline-flex !important; margin-left: 6px; font-size: 11px; font-weight: 700; color: #475569 !important; text-transform: lowercase; }
+        .vd-num { color: #475569; font-weight: 600; font-variant-numeric: tabular-nums; }
         .vd-main { font-weight: 600; color: #0f172a; line-height: 1.35; }
-        .vd-sub { font-size: 11.5px; color: #64748b; line-height: 1.4; margin-top: 2px; }
-        .vd-pill { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; white-space: nowrap; vertical-align: 1px; }
-        .vd-tag { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 10.5px; font-weight: 600; }
-        .vd-people { font-size: 12px; color: #334155; min-width: 220px; }
-        .vd-people > div { display: flex; align-items: center; gap: 4px; line-height: 1.5; }
-        .vd-role { flex: none; width: 92px; font-size: 10.5px; color: #94a3b8; font-weight: 600; }
+        .vd-sub { font-size: 12.5px; color: #334155; line-height: 1.4; margin-top: 2px; }
+        .vd-pill { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; vertical-align: 1px; }
+        .vd-tag { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 6px; background: #e2e8f0; color: #1e293b; font-size: 11.5px; font-weight: 600; }
+        .vd-people { font-size: 13px; color: #0f172a; min-width: 290px; }
+        .vd-people > div { display: flex; align-items: center; gap: 4px; line-height: 1.55; white-space: nowrap; }
+        .vd-role { flex: none; width: 100px; font-size: 11.5px; color: #475569; font-weight: 700; }
         .vd-tel { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; color: #2563eb; }
         .vd-tel:hover, .vd-tel:focus-visible { background: #eff6ff; }
-        .vd-tel svg, .vd-open svg, .vd-more summary svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        .vd-due { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; }
+        .vd-tel svg, .vd-open svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .vd-due { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #e2e8f0; color: #1e293b; }
         .vd-due.is-today { background: #fef3c7; color: #92400e; }
         .vd-due.is-late { background: #fee2e2; color: #b91c1c; }
-        .vd-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+        .vd-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; }
         .vd-dot { width: 7px; height: 7px; border-radius: 50%; }
         .vd-open { display: inline-flex; align-items: center; gap: 2px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid #c7d2fe; color: #1a3268; font-weight: 700; font-size: 12.5px; text-decoration: none; white-space: nowrap; }
         .vd-open:hover, .vd-open:focus-visible { background: #1a3268; color: #fff; border-color: #1a3268; }
         .vd-table a:focus-visible, .vd-table input:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
         .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-        /* Qo'shimcha filtrlar (yig'iladigan) */
         .vd-filter-sub { align-items: flex-start; margin-bottom: 0; }
-        .vd-filter-sub .vs-switch-item { padding-bottom: 14px; }
-        .vd-more { flex: 1; min-width: 260px; }
-        .vd-more summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px dashed #94a3b8; background: #fff; color: #334155; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; }
-        .vd-more summary::-webkit-details-marker { display: none; }
-        .vd-more[open] summary { border-style: solid; border-color: #1a3268; color: #1a3268; }
-        .vd-more summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-        .vd-more-body { margin-top: 10px; padding: 12px; background: rgba(255,255,255,.65); border-radius: 10px; border: 1px solid #dbe4ef; }
+        .vd-filter-sub .vs-switch-item { padding-bottom: 6px; }
         @media (prefers-reduced-motion: reduce) { .vd-stat, .vd-btn, .vs-switch-track, .vs-switch-thumb { transition: none !important; } .vd-stat:hover { transform: none; } }
         .vd-person { cursor: help; }
-        .vd-merge { display:inline-block; margin-left:6px; background:#eef2ff; color:#4338ca; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; cursor:help; white-space:nowrap; }
+        .vd-merge { display:inline-block; margin-left:6px; background:#e0e7ff; color:#3730a3; font-size:11.5px; font-weight:700; padding:1px 7px; border-radius:999px; cursor:help; white-space:nowrap; }
 
+        .filter-container .select2-container--classic .select2-selection--single { height: 38px; border: 1px solid #94a3b8; border-radius: 8px; background: #fff; }
+        .filter-container .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 36px; color: #0f172a; font-size: 14px; font-weight: 500; }
+        .filter-container .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 36px; background: #f8fafc; border-left-color: #cbd5e1; }
+        .filter-container .select2-container--classic .select2-selection__placeholder { color: #475569; }
         #manual-open-modal .select2-container--classic .select2-selection--single {
             height: 42px;
             border: 1px solid #cbd5e1;
@@ -882,7 +874,7 @@
         .vd-stat { position: relative; display: flex; flex-direction: column; gap: 2px; background: var(--bg); border: 2px solid transparent; border-radius: 12px; padding: 11px 14px 13px; text-decoration: none; color: var(--c); transition: transform .12s, box-shadow .12s, border-color .12s; }
         .vd-stat:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,.08); }
         .vd-stat.is-active { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 15%, transparent); }
-        .vd-stat-label { font-size: 12px; font-weight: 600; }
+        .vd-stat-label { font-size: 13px; font-weight: 700; }
         .vd-stat-num { font-size: 24px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
         .vd-stat-bar { position: absolute; left: 14px; right: 14px; bottom: 6px; height: 3px; border-radius: 3px; background: color-mix(in srgb, var(--c) 15%, transparent); overflow: hidden; }
         .vd-stat-bar span { display: block; height: 100%; background: var(--c); border-radius: 3px; }
@@ -890,17 +882,17 @@
         /* Amallar paneli */
         .vd-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid #eef2f7; }
         .vd-toolbar-left, .vd-toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .vd-total { font-size: 13px; color: #475569; margin-right: 4px; }
+        .vd-total { font-size: 14px; color: #1e293b; margin-right: 4px; }
         .vd-total b { color: #0f172a; font-size: 15px; }
-        .vd-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 600; text-decoration: none; border: 1px solid #e2e8f0; }
+        .vd-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #f1f5f9; color: #0f172a; font-size: 13px; font-weight: 600; text-decoration: none; border: 1px solid #e2e8f0; }
         a.vd-chip:hover { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
         .vd-chip.is-green { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
         .vd-chip.is-gray { background: #f8fafc; color: #64748b; }
         .vd-reset { font-size: 12px; color: #2563eb; font-weight: 600; text-decoration: none; }
         .vd-reset:hover { text-decoration: underline; }
-        .vd-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #1e293b; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
+        .vd-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #94a3b8; background: #fff; color: #0f172a; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
         .vd-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
-        .vd-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .vd-btn:disabled { opacity: .55; cursor: not-allowed; }
         .vd-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .vd-btn.is-primary { background: #1a3268; border-color: #1a3268; color: #fff; }
         .vd-btn.is-primary:hover { background: #15264f; }
@@ -923,11 +915,11 @@
         .vd-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 #e2e8f0; }
         .vd-table tbody tr.is-overdue td:first-child { box-shadow: inset 3px 0 0 #dc2626; }
         .vd-table tbody tr.is-approved { background: #fbfefc; }
-        .vd-empty { padding: 48px 20px !important; text-align: center; color: #64748b; font-size: 13px; line-height: 1.7; }
+        .vd-empty { padding: 48px 20px !important; text-align: center; color: #334155; font-size: 14px; line-height: 1.7; }
         .vd-empty-title { font-size: 15px; font-weight: 700; color: #334155; margin-bottom: 4px; }
 
             /* Joriy semestr toggle */
-        .vs-switch { display: flex; align-items: center; gap: 8px; height: 36px; font-size: 13px; font-weight: 600; color: #334155; cursor: pointer; user-select: none; }
+        .vs-switch { display: flex; align-items: center; gap: 8px; height: 38px; font-size: 14px; font-weight: 700; color: #0f172a; cursor: pointer; user-select: none; }
         .vs-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
         .vs-switch-track { position: relative; flex: none; width: 38px; height: 22px; border-radius: 999px; background: #cbd5e1; transition: background .18s; }
         .vs-switch-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .18s; }
@@ -935,6 +927,13 @@
         .vs-switch input:checked + .vs-switch-track .vs-switch-thumb { transform: translateX(16px); }
         .vs-switch input:focus-visible + .vs-switch-track { outline: 2px solid #2563eb; outline-offset: 2px; }
         .vs-switch-item { position: relative; }
-        .vs-switch-hint { position: absolute; left: 0; top: 100%; font-size: 10.5px; color: #64748b; white-space: nowrap; }
+        .vs-switch-hint { display: block; max-width: 280px; font-size: 12px; color: #334155; line-height: 1.35; }
+        .vs-stale { margin-top: 4px; font-size: 11.5px; }
+        .vs-stale summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; font-weight: 700; cursor: pointer; }
+        .vs-stale summary::-webkit-details-marker { display: none; }
+        .vs-stale summary svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .vs-stale summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .vs-stale-body { margin-top: 6px; max-width: 420px; padding: 8px 10px; border-radius: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; line-height: 1.45; }
+        .vs-stale-names { margin-top: 4px; color: #92400e; font-weight: 600; }
     </style>
 </x-app-layout>

@@ -48,81 +48,60 @@ class UpgradeCycleGrades extends Command
         $excluded = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $cut = $cutoff->format('d.m');
 
-        $faculties = array_filter($this->option('faculty'));
-        if (!$faculties && !$this->argument('groups')) {
-            $this->error('Guruh yoki --faculty bering. Masalan: grades:upgrade-cycle --faculty="1-son davolash"');
-
-            return self::FAILURE;
-        }
-
         $table = [];
         $samples = [];
         $total = 0;
-        $groupSets = [];
-        foreach ($this->argument('groups') as $groupName) {
-            $groups = AdminUpgradeGrades::subgroups($groupName);
-            if ($groups->isEmpty()) {
-                $table[] = [$groupName, '', '', '', 'GURUH TOPILMADI', '', '', '', ''];
-                continue;
-            }
-            $groupSets[] = $groups;
-        }
-        if ($faculties) {
-            $groups = $this->facultyGroups($faculties);
-            if ($groups === null) {
-                return self::FAILURE;
-            }
-            $groupSets[] = $groups;
+        $groups = $this->selectedGroups($table, 9);
+        if ($groups === null) {
+            return self::FAILURE;
         }
         // Fakultet bo'yicha jadval katta — u yerda faqat oshiriladigan sikllar va namunasiz
-        $brief = (bool) $faculties;
-        $courseOf = $this->courses(collect($groupSets)->flatten(1)->pluck('group_hemis_id'));
+        $brief = (bool) array_filter($this->option('faculty'));
+        $courseOf = $this->courses($groups->pluck('group_hemis_id'));
 
-        foreach ($groupSets as $groups) {
-            foreach ($groups as $group) {
-                $course = $courseOf[$group->group_hemis_id] ?? '';
-                $students = DB::table('students')->where('group_id', $group->group_hemis_id)->pluck('level_code', 'hemis_id');
-                // Fan sikllari: birinchi va oxirgi dars kuni (o'tgan yillar/semestrlar — chegara sanadan 2 oy oldin tugaganlar — ko'rsatilmaydi)
-                $cycles = DB::table('schedules')
-                    ->whereNull('deleted_at')
-                    ->where('group_id', $group->group_hemis_id)
-                    ->groupBy('subject_id', 'subject_name', 'semester_code')
-                    ->havingRaw('MAX(lesson_date) >= ?', [$cutoff->copy()->subMonths(2)])
-                    ->orderByRaw('MIN(lesson_date)')
-                    ->get([DB::raw('subject_id, subject_name, semester_code, MIN(lesson_date) AS cycle_start, MAX(lesson_date) AS cycle_end')]);
+        foreach ($groups as $group) {
+            $course = $courseOf[$group->group_hemis_id] ?? '';
+            $students = DB::table('students')->where('group_id', $group->group_hemis_id)->pluck('level_code', 'hemis_id');
+            // Fan sikllari: birinchi va oxirgi dars kuni (o'tgan yillar/semestrlar — chegara sanadan 2 oy oldin tugaganlar — ko'rsatilmaydi)
+            $cycles = DB::table('schedules')
+                ->whereNull('deleted_at')
+                ->where('group_id', $group->group_hemis_id)
+                ->groupBy('subject_id', 'subject_name', 'semester_code')
+                ->havingRaw('MAX(lesson_date) >= ?', [$cutoff->copy()->subMonths(2)])
+                ->orderByRaw('MIN(lesson_date)')
+                ->get([DB::raw('subject_id, subject_name, semester_code, MIN(lesson_date) AS cycle_start, MAX(lesson_date) AS cycle_end')]);
 
-                foreach ($cycles as $c) {
-                    $start = Carbon::parse($c->cycle_start)->startOfDay();
-                    $end = Carbon::parse($c->cycle_end)->startOfDay();
-                    $period = $start->format('d.m') . ' – ' . $end->format('d.m.Y');
-                    if ($end->lt($cutoff) || $start->gte($cutoff)) {
-                        if (!$brief) {
-                            $table[] = [$group->name, $course, $c->subject_name, $period,
-                                $end->lt($cutoff) ? "{$cut} gacha tugagan" : "{$cut} dan keyin boshlangan", '', '', '', ''];
-                        }
-                        continue;
+            foreach ($cycles as $c) {
+                $start = Carbon::parse($c->cycle_start)->startOfDay();
+                $end = Carbon::parse($c->cycle_end)->startOfDay();
+                $period = $start->format('d.m') . ' – ' . $end->format('d.m.Y');
+                if ($end->lt($cutoff) || $start->gte($cutoff)) {
+                    if (!$brief) {
+                        $table[] = [$group->name, $course, $c->subject_name, $period,
+                            $end->lt($cutoff) ? "{$cut} gacha tugagan" : "{$cut} dan keyin boshlangan", '', '', '', ''];
                     }
-
-                    $rows = DB::table('student_grades')
-                        ->whereNull('deleted_at')
-                        ->whereIn('student_hemis_id', $students->keys()->map(fn ($id) => (string) $id)->all() ?: ['0'])
-                        ->where('subject_id', (string) $c->subject_id)
-                        ->where('semester_code', (string) $c->semester_code)
-                        ->where('lesson_date', '>=', $start)
-                        ->where('lesson_date', '<', $cutoff)
-                        ->whereNotIn('training_type_code', $excluded)
-                        ->where(fn ($q) => $q->whereNotNull('grade')->orWhereNotNull('retake_grade'))
-                        ->get(['id', 'student_hemis_id', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status',
-                            'upgraded_by_admin', 'admin_original_grade']);
-
-                    $sampleCount = count($samples);
-                    $r = AdminUpgradeGrades::applyRows($rows, $students, $limit, $deadlineDays, $revert, $force, $group->name, $samples);
-                    // Namunalar har guruh/fandan 4 tadan — hammasi ko'rinsin
-                    array_splice($samples, $brief ? 0 : $sampleCount + 4);
-                    $total += $r['changed'];
-                    $table[] = [$group->name, $course, $c->subject_name, $period, $rows->count(), $r['changed'], $r['below'], $r['retake'],
-                        $r['same'] ? "allaqachon: {$r['same']}" : ''];
+                    continue;
                 }
+
+                $rows = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $students->keys()->map(fn ($id) => (string) $id)->all() ?: ['0'])
+                    ->where('subject_id', (string) $c->subject_id)
+                    ->where('semester_code', (string) $c->semester_code)
+                    ->where('lesson_date', '>=', $start)
+                    ->where('lesson_date', '<', $cutoff)
+                    ->whereNotIn('training_type_code', $excluded)
+                    ->where(fn ($q) => $q->whereNotNull('grade')->orWhereNotNull('retake_grade'))
+                    ->get(['id', 'student_hemis_id', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status',
+                        'upgraded_by_admin', 'admin_original_grade']);
+
+                $sampleCount = count($samples);
+                $r = AdminUpgradeGrades::applyRows($rows, $students, $limit, $deadlineDays, $revert, $force, $group->name, $samples);
+                // Namunalar har guruh/fandan 4 tadan — hammasi ko'rinsin
+                array_splice($samples, $brief ? 0 : $sampleCount + 4);
+                $total += $r['changed'];
+                $table[] = [$group->name, $course, $c->subject_name, $period, $rows->count(), $r['changed'], $r['below'], $r['retake'],
+                    $r['same'] ? "allaqachon: {$r['same']}" : ''];
             }
         }
 
@@ -143,10 +122,43 @@ class UpgradeCycleGrades extends Command
     }
 
     /**
+     * Argumentdagi guruhlarning kichik guruhlari + --faculty guruhlari. Topilmagan guruh nomlari
+     * $table ga "GURUH TOPILMADI" qatori ($cols ustunli) bo'lib qo'shiladi; xato bo'lsa — null.
+     */
+    protected function selectedGroups(array &$table, int $cols)
+    {
+        $faculties = array_filter($this->option('faculty'));
+        if (!$faculties && !$this->argument('groups')) {
+            $this->error('Guruh yoki --faculty bering. Masalan: ' . $this->getName() . ' --faculty="1-son davolash"');
+
+            return null;
+        }
+
+        $selected = collect();
+        foreach ($this->argument('groups') as $groupName) {
+            $groups = AdminUpgradeGrades::subgroups($groupName);
+            if ($groups->isEmpty()) {
+                $table[] = array_pad([$groupName, '', '', '', 'GURUH TOPILMADI'], $cols, '');
+                continue;
+            }
+            $selected = $selected->merge($groups);
+        }
+        if ($faculties) {
+            $groups = $this->facultyGroups($faculties);
+            if ($groups === null) {
+                return null;
+            }
+            $selected = $selected->merge($groups);
+        }
+
+        return $selected->unique('group_hemis_id')->values();
+    }
+
+    /**
      * Fakultet(lar)ning (--specialty berilsa — faqat shu yo'nalishlar) --courses kurslaridagi guruhlari;
      * topilmasa — mavjud fakultet/yo'nalishlar ro'yxati va null.
      */
-    private function facultyGroups(array $faculties)
+    protected function facultyGroups(array $faculties)
     {
         $likeAny = function ($q, string $column, array $values) {
             $q->where(function ($q) use ($column, $values) {
@@ -191,7 +203,7 @@ class UpgradeCycleGrades extends Command
     }
 
     /** group_hemis_id => kurs (guruh talabalarining eng ko'p level_code i bo'yicha: 15 → 5). */
-    private function courses($groupHemisIds): array
+    protected function courses($groupHemisIds): array
     {
         return DB::table('students')
             ->whereIn('group_id', collect($groupHemisIds)->all() ?: [0])

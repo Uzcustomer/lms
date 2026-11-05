@@ -304,6 +304,11 @@ class TimetableChangeApproval
         if (in_array($route, ['admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed', 'admin.timetable.boards.merge-variant-lectures', 'admin.timetable.boards.add-missing-groups'], true)) {
             return !$request->boolean('dry_run');
         }
+        // Sikl kunlarini surish: dry_run faqat ko'p kunli yo'lda (day_indexes — TimetableCycleDaysMove) hech narsa saqlamaydi. Bitta kun
+        // (day_index) va slots_json yo'llari dry_run ni bilmaydi — ular doim o'zgarish (aks holda tasdiqni chetlab o'tardi).
+        if ($route === 'admin.timetable.cycle-lecture-slots') {
+            return !($request->boolean('dry_run') && !empty($request->input('day_indexes')) && empty($request->input('undo')));
+        }
 
         return true;
     }
@@ -800,10 +805,24 @@ class TimetableChangeApproval
                 $text = ($p['week'] ?? '?') . '-hafta: qisman joylangan darslar ' . (($p['action'] ?? '') === 'clear' ? 'yaxlit bo\'shatiladi' : 'yaxlit joylanadi');
                 break;
             case 'admin.timetable.cycle-lecture-slots':
-                $day = isset($p['day_index']) ? ((int) $p['day_index'] + 1) . '-kun' : 'kunlar';
+                // Ko'p kunli surish: "3, 4, 6-kun"; qaytarish — oldingi qiymatlar.
+                $many = array_values(array_unique(array_map('intval', (array) ($p['day_indexes'] ?? []))));
+                sort($many);
+                $day = $many ? implode(', ', array_map(fn ($k) => $k + 1, $many)) . '-kun' : (isset($p['day_index']) ? ((int) $p['day_index'] + 1) . '-kun' : 'kunlar');
                 // Rejim: faqat ma'ruza / faqat amaliy (berilmasa — ikkalasi birga).
                 $what = ['lecture' => 'ma\'ruza', 'practice' => 'amaliy'][$p['mode'] ?? ''] ?? 'darslar';
-                $text = $head . ': ' . $day . (isset($p['start_hour']) ? ' — ' . $what . ' ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi');
+                $text = $head . ': ' . $day . (!empty($p['undo']) ? ' — oxirgi surish qaytariladi'
+                    : (isset($p['delta']) && $many ? ' — ' . $what . ' ' . ((int) $p['delta'] > 0 ? '+' : '') . (int) $p['delta'] . ' soatga suriladi'
+                    : (isset($p['start_hour']) ? ' — ' . $what . ' ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi')));
+                // To'sib turgan amaliyot (TimetableCyclePracticeSwap) va teskari holat — ma'ruza bilan o'rin almashish.
+                $place = ['swap' => 'o\'rin almashadi', 'after' => 'ma\'ruzadan keyinga', 'gap' => (int) ($p['practice_gap'] ?? 0) . ' para oraliq bilan',
+                    'pair' => (int) ($p['practice_pair'] ?? 1) . '-paradan'][$p['practice_place'] ?? ''] ?? null;
+                if (empty($p['undo']) && ($p['mode'] ?? '') === 'practice' && !empty($p['lecture_swap'])) {
+                    $text .= '; ma\'ruza bilan o\'rin almashadi';
+                }
+                if (empty($p['undo']) && $place && (($p['mode'] ?? '') === 'lecture' || (($p['mode'] ?? '') === 'practice' && !empty($p['lecture_swap'])))) {
+                    $text .= '; to\'sib turgan amaliyot — ' . $place;
+                }
                 break;
             case 'admin.timetable.cycle-place':
                 $act = $p['action'] ?? 'place';
@@ -868,7 +887,8 @@ class TimetableChangeApproval
             'admin.timetable.cards.place', 'admin.timetable.cards.update' => 'card:' . $card?->id,
             'admin.timetable.cards.week-override', 'admin.timetable.cards.unit-place' => 'card:' . $card?->id . ':w' . ($p['week'] ?? ''),
             'admin.timetable.boards.unit-fix' => 'w' . ($p['week'] ?? '') . ':' . ($p['action'] ?? ''),
-            'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index', 'mode']),
+            'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index', 'mode'])
+                . (!empty($p['day_indexes']) ? '|d' . $pick(['day_indexes']) : ''),
             'admin.timetable.cycle-place', 'admin.timetable.cycle-assign', 'admin.timetable.cycle-mudir-placeholder',
             'admin.timetable.cycle-mudir-placeholder.revert' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
             // Ko'p kunli / ma'ruza so'rovi — kalitga sanalar va tur ham (eski amaliy so'rovlar kaliti o'zgarmaydi).

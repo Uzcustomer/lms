@@ -36,6 +36,7 @@ const stubs = role => `
     const openCycleTimeProposal = () => {}, moveCycDay = () => {};
     let cycMultiSel = null;
     const cycMultiPaint = () => {}, cycAskDays = () => [], cycAskDp = dp => dp;
+    const cycPracPlaceBind = () => {}, cycPracPlaceHtml = () => '', cycOverlapOk = () => false, cycDaysApply = () => {};
 `;
 const look = (p, sel) => p.evaluate(s => {
     const b = document.querySelector(s);

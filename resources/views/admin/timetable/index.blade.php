@@ -1688,6 +1688,12 @@
         #cycDayPop .dp-modes { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; font-size: 12px; }
         #cycDayPop .dp-modes label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
         #cycDayPop .dp-hint { margin-top: 6px; color: #64748b; font-size: 11px; }
+        /* "Faqat ma'ruza": to'sib turgan amaliyot sozlamasi. */
+        #cycDayPop .dp-swap { margin-top: 8px; padding: 5px 6px; border: 1px solid #ccfbf1; border-radius: 6px; background: #f0fdfa; font-size: 12px; }
+        #cycDayPop .dp-swap label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 600; color: #115e59; }
+        #cycDayPop .dp-swap-how { margin-top: 4px; color: #334155; }
+        #cycDayPop .dp-swap select, #cycDayPop .dp-swap input[type="number"] { font-size: 11px; padding: 0 18px 0 4px; border-radius: 4px; border-color: #cbd5e1; }
+        #cycDayPop .dp-swap input[type="number"] { width: 46px; padding-right: 2px; }
         #cycDayPop .dp-hint select { font-size: 11px; padding: 0 18px 0 4px; border-radius: 4px; border-color: #cbd5e1; }
         /* Sikl katagini sudrash: yangi joy — yashil (mumkin) yoki qizil (kun chegarasi / ma'ruza–amaliy ustma-ust). */
         #cycleGrid .cyc-mk-cell.is-drag-ok { box-shadow: inset 0 0 0 2px #16a34a; background: rgba(22, 163, 74, .28); }
@@ -1843,7 +1849,23 @@
         .cr-days { display: grid; gap: 2px; max-height: 180px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
         .cr-proposal-form .cr-days label { display: flex; gap: 6px; align-items: center; }
         .cr-days .cr-day-bad { color: #b91c1c; }
-        #cycleGrid .cyc-mk-cell.is-multi-sel { box-shadow: inset 0 0 0 2px #2563eb; }
+        #cycleGrid .cyc-mk-cell.is-multi-sel { box-shadow: inset 0 0 0 2px #2563eb; background-image: linear-gradient(rgba(37, 99, 235, .14), rgba(37, 99, 235, .14)); }
+        /* Ko'p kunli sudrash: kunga sig'maydigan kun — kulrang, "sig'maydi" belgisi */
+        #cycleGrid .cyc-mk-cell.is-drag-nofit { box-shadow: inset 0 0 0 2px #94a3b8; background: rgba(148, 163, 184, .45); }
+        #cycleGrid .cyc-mk-cell.is-drag-nofit[data-drag-note]::after { content: attr(data-drag-note); position: absolute; left: 1px; top: 1px; z-index: 3;
+            padding: 0 3px; border-radius: 3px; background: #475569; color: #fff; font-size: 8px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+        #cycSelBadge { position: fixed; z-index: 66; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px;
+            background: #1e3a8a; color: #fff; font-size: 12px; box-shadow: 0 4px 12px rgba(15, 23, 42, .25); }
+        #cycSelBadge button { border: 1px solid rgba(255, 255, 255, .5); border-radius: 4px; padding: 0 6px; background: transparent; color: #fff; font-size: 11px; }
+        #cycSelBadge button:hover { background: rgba(255, 255, 255, .15); }
+        #cycMultiDlg .cmd-list { max-height: 50vh; overflow: auto; margin: 6px 0; padding: 0; list-style: none; font-size: 13px; }
+        #cycMultiDlg .cmd-list li { padding: 3px 6px; border-left: 3px solid #16a34a; margin-bottom: 2px; }
+        #cycMultiDlg .cmd-list li.cmd-conflict { border-left-color: #dc2626; color: #991b1b; }
+        #cycMultiDlg .cmd-list li.cmd-nofit, #cycMultiDlg .cmd-list li.cmd-blocked, #cycMultiDlg .cmd-list li.cmd-past { border-left-color: #94a3b8; color: #475569; }
+        #cycMultiDlg .cmd-list li.cmd-same, #cycMultiDlg .cmd-list li.cmd-skip { border-left-color: #e2e8f0; color: #94a3b8; }
+        #cycMultiDlg .cmd-list .cmd-sub { color: #0f766e; font-size: 12px; }
+        #cycMultiDlg .cmd-swaps { color: #0f766e; }
+        .tt-toast .tt-toast-btn { margin-left: 6px; border: 1px solid currentColor; border-radius: 4px; padding: 0 6px; font-size: 12px; background: transparent; }
         .cr-day-list { margin: 2px 0 0 14px; font-size: 11px; color: #475569; list-style: disc; }
         .ag-weeks { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 4px 18px; font-size: 12px; }
         .ag-weeks .ag-bad { color: #b91c1c; }
@@ -3406,7 +3428,9 @@
                 if (!card) return null;
                 return pendingReqs().find(r => r.route === 'admin.timetable.cycle-lecture-slots' && r.payload
                     && r.payload.subject_name === card.subject && r.payload.group_name === card.group
-                    && String(r.payload.day_index) === String(dayIndex) && r.payload.start_hour
+                    // Bitta kun: day_index yoki (↑ ↓ — cycDaysApply) bitta elementli day_indexes + start_hour.
+                    && (String(r.payload.day_index) === String(dayIndex) || (Array.isArray(r.payload.day_indexes) && r.payload.day_indexes.length === 1
+                        && String(r.payload.day_indexes[0]) === String(dayIndex))) && r.payload.start_hour
                     && (!mode || (r.payload.mode || 'both') === mode)) || null;
             }
             function openChangeReqModal() {
@@ -6311,6 +6335,7 @@
                     renderHolChips();
                     renderCyclePlan(j);
                     renderCycleCards(j);
+                    if (typeof cycMultiPaint === 'function') cycMultiPaint();   // kunlar tanlovi qayta chizilgan jadvalda ham
                     if (typeof renderStats === 'function') renderStats();
                     if (keep && !options.resetScroll && !(focusScroll && ttFocus && ttFocus.scrolled)) {
                         // Shu chizishda tanlangan haftaga scroll qilingan bo'lsa (birinchi yuklash / boshqa hafta) — gorizontal joy tiklanmaydi.
@@ -8071,13 +8096,84 @@
             function cycBlockByKey(key) {
                 return (cyclePlanData && cyclePlanData.rows || []).flatMap(row => row.blocks || []).find(b => b.key === key) || null;
             }
-            // Ctrl+bosish bilan tanlangan kunlar (bir nechta kunli so'rov): { key, offsets: Set }.
+            // ===== Bir nechta kunni tanlash (surish va so'rov uchun): { key, offsets: Set, last } — faqat bitta blok ichida =====
+            // Ctrl/Cmd+bosish — kun qo'shiladi / olinadi; Shift+bosish — oxirgi tanlangandan shu kungacha; blok sarlavhasida ikki marta
+            // bosish yoki "Hammasini tanlash" — blokning barcha kunlari; Esc yoki bo'sh joyga bosish — tozalaydi.
             let cycMultiSel = null;
+            // Bugungi kun — faqat shu rollar va kunning birinchi darsi hali boshlanmagan bo'lsa (server ham tekshiradi).
+            const CYC_TODAY_ROLES = ['admin', 'superadmin', 'registrator_ofisi'];
+            const cycNowHm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+            // Kunning birinchi darsi boshlanadigan soat qatori (ma'ruza yoki amaliy — qaysi biri oldin).
+            function cycDayFirstHour(dp) {
+                const st = +dp.start || 1, lec = +dp.lec || 0, prc = +dp.prc || 0;
+                const ps = dp.ps != null ? +dp.ps : st + lec;
+                return lec > 0 && prc > 0 ? Math.min(st, ps) : (lec > 0 ? st : ps);
+            }
+            // Kunni tanlab bo'ladimi: darsi bor, kelgusi kun; bugungi — admin / registrator, birinchi dars hali boshlanmagan bo'lsa.
+            function cycSelEligible(block, offset) {
+                const dp = block && block.day_plan ? block.day_plan[offset] : null;
+                const dt = dp && cyclePlanData ? (cyclePlanData.dates || [])[block.from + (+offset)] : null;
+                if (!dt || (+dp.lec || 0) + (+dp.prc || 0) <= 0) return false;
+                const today = cycLocalToday();
+                if (dt.iso > today) return true;
+                if (dt.iso < today || !cyclePlanData.day_edit || !CYC_TODAY_ROLES.includes(TIMETABLE_ROLE)) return false;
+                const t = cycHourTimes()[cycDayFirstHour(dp)];
+                return Boolean(t && t[0] > cycNowHm());
+            }
+            function cycSelSet(key, offsets, last) {
+                cycMultiSel = offsets.size ? { key: key, offsets: offsets, last: last } : null;
+                cycMultiPaint();
+            }
+            function cycSelToggle(key, offset) {
+                if (!cycSelEligible(cycBlockByKey(key), offset)) { ttToast('Bu kunni tanlab bo\'lmaydi: o\'tgan kun yoki bugungi dars boshlangan.', 'warn'); return; }
+                const sel = new Set(cycMultiSel && cycMultiSel.key === key ? cycMultiSel.offsets : []);
+                if (sel.has(+offset)) sel.delete(+offset); else sel.add(+offset);
+                cycSelSet(key, sel, +offset);
+            }
+            function cycSelRange(key, offset) {
+                const block = cycBlockByKey(key);
+                const same = cycMultiSel && cycMultiSel.key === key;
+                const last = same && cycMultiSel.last != null ? cycMultiSel.last : +offset;
+                const sel = new Set(same ? cycMultiSel.offsets : []);
+                for (let o = Math.min(last, +offset); o <= Math.max(last, +offset); o++) if (cycSelEligible(block, o)) sel.add(o);
+                cycSelSet(key, sel, +offset);
+            }
+            function cycSelAll(key) {
+                const block = cycBlockByKey(key);
+                const sel = new Set(Object.keys(block && block.day_plan || {}).map(Number).filter(o => cycSelEligible(block, o)));
+                cycSelSet(key, sel, sel.size ? Math.max(...sel) : null);
+                if (!sel.size) ttToast('Bu blokda tanlab bo\'ladigan (kelgusi) kun yo\'q.', 'warn');
+            }
+            function cycSelClear() { if (cycMultiSel) { cycMultiSel = null; cycMultiPaint(); } }
+            const cycSelOffsets = key => (cycMultiSel && cycMultiSel.key === key ? [...cycMultiSel.offsets].sort((a, b) => a - b) : []);
+            // Tanlangan kunlar ustunlari (ramka + och fon) va tepadagi yorliq: "Tanlangan: 5 kun · Esc — bekor".
             function cycMultiPaint() {
                 document.querySelectorAll('#cycleGrid .cyc-mk-cell.is-multi-sel').forEach(c => c.classList.remove('is-multi-sel'));
-                if (!cycMultiSel) return;
+                let badge = document.getElementById('cycSelBadge');
+                if (cycMultiSel && !cycBlockByKey(cycMultiSel.key)) cycMultiSel = null;   // blok yo'qolgan (qayta yuklash, filtr)
+                if (!cycMultiSel) { if (badge) badge.remove(); return; }
                 cycMultiSel.offsets.forEach(o => document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(cycMultiSel.key) + '"][data-mk-day="' + o + '"]')
                     .forEach(c => c.classList.add('is-multi-sel')));
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.id = 'cycSelBadge';
+                    badge.addEventListener('click', ev => {
+                        const b = ev.target.closest ? ev.target.closest('[data-sel-act]') : null;
+                        if (!b || !cycMultiSel) return;
+                        if (b.dataset.selAct === 'all') cycSelAll(cycMultiSel.key); else cycSelClear();
+                    });
+                    document.body.appendChild(badge);
+                }
+                badge.innerHTML = '<b>Tanlangan: ' + cycMultiSel.offsets.size + ' kun</b> · Esc — bekor'
+                    + (cyclePlanData && cyclePlanData.day_edit ? ' · ↑ ↓ — 1 soat, sudrab — hammasi' : '')
+                    + ' <button type="button" data-sel-act="all">Hammasini tanlash</button><button type="button" data-sel-act="clear" aria-label="Tanlovni bekor qilish">×</button>';
+                // Jadval tepasida (sana sarlavhasi ustida — blok sarlavhasi va kataklarni yopmaydi), tanlangan birinchi ustun ro'parasida.
+                const first = document.querySelector('#cycleGrid .cyc-mk-cell.is-multi-sel');
+                const wrap = $('cycleGridWrap');
+                const wr = wrap ? wrap.getBoundingClientRect() : { left: 8, top: 8 };
+                const left = first ? first.getBoundingClientRect().left : wr.left;
+                badge.style.left = Math.max(8, Math.min(window.innerWidth - badge.offsetWidth - 8, left)) + 'px';
+                badge.style.top = Math.max(8, wr.top + 2) + 'px';
             }
             // So'rov uchun blokning kelgusi kunlari (shu turdagi darsi bor): sana, hafta kuni, sikl kuni, hozirgi vaqt.
             function cycAskDays(block, kind) {
@@ -8093,12 +8189,11 @@
             }
             // So'rov formasi uchun kun rejasi: ma'ruza — davomiyligi lec, boshi start (ps — e'tiborsiz).
             const cycAskDp = (dp, kind) => kind === 'lecture' ? Object.assign({}, dp, { prc: +dp.lec || 1, ps: +dp.start || 1, lec: 0, start: +dp.start || 1 }) : dp;
+            // Kun oynasini yopadi; kunlar tanlovi (cycMultiSel) qoladi — uni Esc / bo'sh joyga bosish / cycSelClear tozalaydi.
             function closeCycDayPop() {
                 const pop = document.getElementById('cycDayPop');
                 if (pop) pop.remove();
                 cycPopUnwatch();
-                cycMultiSel = null;
-                cycMultiPaint();
                 document.querySelectorAll('#cycleGrid .cyc-mk-cell.is-day-sel')
                     .forEach(c => c.classList.remove('is-day-sel', 'is-day-top', 'is-day-bottom'));
                 cycDaySel = null;
@@ -8118,6 +8213,50 @@
             }
             const cycBothKeyLabel = () => CYC_BOTH_KEYS[cycBothKey()];
             const cycBothKeyDown = ev => Boolean(ev && ev[cycBothKey() + 'Key']);
+            // ===== "Faqat ma'ruza": yangi vaqtni to'sib turgan amaliyot (kun oynasida; shaxsiy sozlama — brauzerda) =====
+            // on — "Amaliyot bilan o'rin almashish" (sukut — yoqilgan; o'chirilsa — avvalgidek: kesishsa xato); how — usul: swap (ma'ruzaning
+            // bo'shagan joyiga, sig'masa — keyin/oldin), after (ma'ruzadan keyin), gap (N para oraliq bilan), pair (aniq paradan).
+            const CYC_PLACE_HOW = { swap: 'O\'rin almashish', after: 'Ma\'ruzadan keyin', gap: 'Oraliq bilan', pair: 'Aniq para' };
+            function cycPracPlace() {
+                let v = null;
+                try { v = JSON.parse(localStorage.getItem('tt.cycPracPlace') || 'null'); } catch (_) { }
+                v = v && typeof v === 'object' ? v : {};
+                const num = (x, lo, hi, def) => { const n = parseInt(x, 10); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : def; };
+                return { on: v.on !== false, how: CYC_PLACE_HOW[v.how] ? v.how : 'swap', gap: num(v.gap, 0, 6, 1), pair: num(v.pair, 1, 12, 3) };
+            }
+            function setCycPracPlace(patch) {
+                try { localStorage.setItem('tt.cycPracPlace', JSON.stringify(Object.assign(cycPracPlace(), patch))); } catch (_) { }
+            }
+            // So'rov parametrlari (cycle-lecture-slots, cycle-time-proposal): practice_place (+ practice_gap / practice_pair).
+            function cycPracPlaceParams(p = cycPracPlace()) {
+                if (!p.on) return { practice_place: 'keep' };
+                return Object.assign({ practice_place: p.how }, p.how === 'gap' ? { practice_gap: p.gap } : {}, p.how === 'pair' ? { practice_pair: p.pair } : {});
+            }
+            // Sudrash / ↑ ↓ da ma'ruza–amaliy kesishuvi mijozda xato emas: ma'ruza (o'rin almashish yoqilgan) — server amaliyotni joylaydi;
+            // amaliy — ma'ruza bilan o'rin almashish taklif qilinadi.
+            const cycOverlapOk = mode => mode === 'practice' || (mode === 'lecture' && cycPracPlace().on);
+            // Kun oynasidagi sozlama: belgi va usul (gap — necha para, pair — qaysi para).
+            function cycPracPlaceHtml() {
+                const p = cycPracPlace();
+                const pairs = boardSchedule().filter(it => it.type === 'pair');
+                return '<div class="dp-swap"><label><input type="checkbox" data-dp-swap' + (p.on ? ' checked' : '') + '> Amaliyot bilan o\'rin almashish</label>'
+                    + (p.on ? '<div class="dp-swap-how">To\'sib turgan amaliyot: <select data-dp-swap-how>' + Object.entries(CYC_PLACE_HOW).map(([v, t]) =>
+                        '<option value="' + v + '"' + (v === p.how ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>'
+                        + (p.how === 'gap' ? ' <input type="number" min="0" max="6" data-dp-swap-gap value="' + p.gap + '"> para keyin' : '')
+                        + (p.how === 'pair' ? ' <select data-dp-swap-pair>' + pairs.map((it, i) => '<option value="' + (i + 1) + '"' + (i + 1 === p.pair ? ' selected' : '') + '>'
+                            + esc((it.abbr && it.abbr !== '—' ? it.abbr : i + 1) + ' para' + (it.start ? ' (' + it.start + ')' : '')) + '</option>').join('') + '</select>' : '')
+                        + '</div>' : '<div class="dp-sub">O\'chiq: ma\'ruza amaliyot bilan kesishsa — xato.</div>') + '</div>';
+            }
+            function cycPracPlaceBind(pop, reopen) {
+                const on = pop.querySelector('[data-dp-swap]');
+                if (on) on.onchange = () => { setCycPracPlace({ on: on.checked }); reopen(); };
+                const how = pop.querySelector('[data-dp-swap-how]');
+                if (how) how.onchange = () => { setCycPracPlace({ how: how.value }); reopen(); };
+                const gap = pop.querySelector('[data-dp-swap-gap]');
+                if (gap) gap.onchange = () => setCycPracPlace({ gap: gap.value });
+                const pair = pop.querySelector('[data-dp-swap-pair]');
+                if (pair) pair.onchange = () => setCycPracPlace({ pair: pair.value });
+            }
             // Rejim bo'yicha kunning yangi holati: { lec: [boshi, oxiri) | null, prc: [boshi, oxiri) | null, base } — base — ↑/↓ va
             // sudrash hisoblanadigan boshlanish (birga — kun boshi, ma'ruza — ma'ruza boshi, amaliy — amaliy boshi).
             function cycDayShape(dp, mode, delta, baseSt) {
@@ -8131,10 +8270,11 @@
                 return { lec: L, prc: P, base: base };
             }
             // Mijozdagi tekshiruv (bandlik — serverda): kun chegarasi va ma'ruza–amaliy kesishuvi. Xato matni yoki ''.
-            function cycDayShapeError(shape, dayHours) {
+            // overlapOk — kesishuv xato emas (cycOverlapOk: o'rin almashish serverda).
+            function cycDayShapeError(shape, dayHours, overlapOk = false) {
                 const out = r => r && (r[0] < 1 || r[1] - 1 > dayHours);
                 if (out(shape.lec) || out(shape.prc)) return 'Kun chegarasidan chiqadi';
-                if (shape.lec && shape.prc && shape.lec[0] < shape.prc[1] && shape.prc[0] < shape.lec[1]) return 'Ma\'ruza va amaliy ustma-ust';
+                if (!overlapOk && shape.lec && shape.prc && shape.lec[0] < shape.prc[1] && shape.prc[0] < shape.lec[1]) return 'Ma\'ruza va amaliy ustma-ust';
                 return '';
             }
             function openCycDayPop(key, offset, anchor, keepMulti = false) {
@@ -8197,7 +8337,7 @@
                 const modePending = curMode !== 'both' && savedBase != null ? pendingDaySlot(dayCard, dp.k - 1, curMode) : null;
                 const pendOff = modePending && modePending.mine ? +modePending.payload.start_hour - savedBase : 0;
                 const shapeAt = d => typeof cycDayShape === 'function' ? cycDayShape(dp, curMode, d + pendOff, curMode === 'both' ? baseSt : null) : null;
-                const canStep = d => { const sh = shapeAt(d); return sh ? !cycDayShapeError(sh, dayHours) : true; };
+                const canStep = d => { const sh = shapeAt(d); return sh ? !cycDayShapeError(sh, dayHours, cycOverlapOk(curMode)) : true; };
                 const stepBase = curMode === 'both' ? baseSt : (savedBase != null ? savedBase + pendOff : baseSt);
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
@@ -8227,13 +8367,21 @@
                         ? (modes.length > 1 ? '<div class="dp-modes" role="radiogroup" aria-label="Surish rejimi">' + modes.map(m => '<label><input type="radio" name="dpMode" value="' + m + '"' +
                             (m === curMode ? ' checked' : '') + '> ' + modeLabels[m] + '</label>').join('') + '</div>' : '') +
                           (curMode === 'practice' ? '<div class="dp-sub">Amaliy: ' + (isSubRow ? 'faqat shu guruhcha' : 'oqimdagi barcha guruhchalar') + '</div>' : '') +
+                          // Ma'ruza va amaliy bor kun: ma'ruza surilganda to'sib turgan amaliyot qayerga o'tadi (sudrashda ham shu sozlama).
+                          ((+dp.lec || 0) > 0 && (+dp.prc || 0) > 0 ? cycPracPlaceHtml() : '') +
                           '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (Math.min(baseSt, baseSt + psOff) <= 1 && curMode === 'both' || !canStep(-1) ? ' disabled' : '') + '>&#8593;</button>' +
                           '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (Math.max(baseSt + (+dp.lec || 0), baseSt + psOff + (+dp.prc || 0)) - 1 >= dayHours && curMode === 'both' || !canStep(1) ? ' disabled' : '') + '>&#8595;</button>' +
                           '<span class="dp-sub">' + (curMode === 'lecture' ? 'Ma\'ruza ' + st : curMode === 'practice' ? 'Amaliy ' + (dp.ps != null ? +dp.ps : st + (+dp.lec || 0)) : 'Darslar ' + st) + '-soatdan boshlanadi</span></div>' +
                           '<div class="dp-hint">Katakni sudrang: M — faqat ma\'ruza, A — faqat amaliy; <b>' + esc(bothKeyLabel) + '</b> bilan — hammasi birga. ' +
                           '<label>Tugma: <select data-dp-bothkey>' + Object.entries({ shift: 'Shift', alt: 'Alt', ctrl: 'Ctrl' }).map(([v, t]) => '<option value="' + v + '"' +
                             (t === bothKeyLabel ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label></div>'
-                        : '');
+                        : '') +
+                    // Bir nechta kun: tanlangan kunlarni sudrash / ↑ ↓ — hammasiga birga (tahrirlovchi); so'rovda — kunlar oldindan belgilanadi.
+                    (askKinds.length || (canEdit && total > 0)
+                        ? '<div class="dp-hint dp-multi">' + (cycMultiSel && cycMultiSel.key === key && cycMultiSel.offsets.size > 1
+                            ? 'Tanlangan: ' + cycMultiSel.offsets.size + ' kun' + (canEdit ? ' — katakni sudrang yoki ↑ ↓: hammasi birga.' : '.')
+                            : 'Ctrl+bosish — kun qo\'shish, Shift+bosish — oraliq.')
+                            + ' <button type="button" data-dp-selall>Hammasini tanlash</button></div>' : '');
                 document.body.appendChild(pop);
                 const r = anchor.getBoundingClientRect();
                 const left = Math.min(window.innerWidth - pop.offsetWidth - 8, r.right + 8);
@@ -8249,12 +8397,29 @@
                     openCycleTimeProposal(Object.assign({}, dayCard, { type: kd }), cycAskDp(dp, kd), date,
                         { kind: kd, days: days, preselect: days.filter(x => sel.includes(x.offset)).map(x => x.iso) });
                 });
-                pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => moveCycDay(key, +offset, stepBase + (+btn.dataset.dpMove),
-                    (date ? date.d + ' (' + dp.k + '-kun)' : dp.k + '-kun') + (curMode !== 'both' ? ', ' + modeLabels[curMode].toLowerCase() : '') + ': '
-                        + stepBase + '-soatdan → ' + (stepBase + (+btn.dataset.dpMove)) + '-soatdan', curMode));
+                pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => {
+                    const d = +btn.dataset.dpMove;
+                    // Bir nechta kun tanlangan (shu kun ham) — hammasi birga, har biri o'z boshidan (sudrash va klaviatura ↑ ↓ kabi).
+                    const many = cycMultiSel && cycMultiSel.key === key && cycMultiSel.offsets.size > 1 && cycMultiSel.offsets.has(+offset)
+                        ? [...cycMultiSel.offsets].sort((a, b) => a - b) : null;
+                    if (many) {
+                        cycDaysApply(key, many, curMode, d, null, { reopen: true });
+                        return;
+                    }
+                    // Faqat ma'ruza / faqat amaliy — avval tekshiruv (o'rin almashish rejasi, teskari taklif), kerak bo'lsa tasdiq oynasi.
+                    if (curMode !== 'both') {
+                        cycDaysApply(key, [+offset], curMode, d, null, { extra: { start_hour: stepBase + d, delta: undefined }, reopen: true });
+                        return;
+                    }
+                    moveCycDay(key, +offset, stepBase + d, (date ? date.d + ' (' + dp.k + '-kun)' : dp.k + '-kun') + ': ' + stepBase + '-soatdan → '
+                        + (stepBase + d) + '-soatdan', curMode);
+                });
+                cycPracPlaceBind(pop, () => openCycDayPop(key, offset, anchor, true));
                 pop.querySelectorAll('input[name="dpMode"]').forEach(r => r.onchange = () => { cycMoveMode = r.value; openCycDayPop(key, offset, anchor); });
                 const keySel = pop.querySelector('[data-dp-bothkey]');
                 if (keySel) keySel.onchange = () => { setCycBothKey(keySel.value); openCycDayPop(key, offset, anchor); };
+                const selAll = pop.querySelector('[data-dp-selall]');
+                if (selAll) selAll.onclick = () => { cycSelAll(key); openCycDayPop(key, offset, anchor, true); };
             }
             // Fan nomi bosilganda: blok bo'yicha jami soatlar, sanalar, o'qituvchi va xona.
             function openCycSubjPop(key, anchor) {
@@ -8321,8 +8486,22 @@
                     (lecture ? '<p class="text-sm font-semibold text-amber-700" data-flow>Ma’ruza butun oqim uchun o‘zgaradi.</p>' : '') +
                     '<p class="text-sm">' + esc(date.d) + ' (' + dp.k + '-kun) · hozir: ' + esc(label(cur)) + '</p>' +
                     '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Kun, guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
+                    // Sudrab ochilganda (opts.start) — yangi vaqt oldindan tanlangan; aks holda hozirgi.
                     '<label>Yangi boshlanish vaqti<select name="start_hour" required>' + Array.from({ length: maxStart }, (_, i) => i + 1)
-                        .map(h => '<option value="' + h + '"' + (h === cur ? ' selected' : '') + '>' + esc(label(h)) + '</option>').join('') + '</select></label>' +
+                        .map(h => '<option value="' + h + '"' + (h === (opts.start >= 1 && opts.start <= maxStart ? +opts.start : cur) ? ' selected' : '') + '>'
+                            + esc(label(h)) + '</option>').join('') + '</select></label>' +
+                    // Ma'ruza: yangi vaqtni to'sib turgan amaliyot qayerga o'tadi (kun oynasidagi sozlama sukut bo'yicha) — tasdiqlansa birga.
+                    (lecture ? (() => {
+                        const pp = cycPracPlace(), cur = pp.on ? pp.how : 'keep';
+                        const pairs = boardSchedule().filter(it => it.type === 'pair');
+                        return '<label>To‘sib turgan amaliyot<select name="practice_place">' + [['swap', 'O‘rin almashish (ma’ruzaning bo‘shagan joyiga)'],
+                            ['after', 'Ma’ruzadan keyin'], ['gap', 'Oraliq bilan'], ['pair', 'Aniq para'], ['keep', 'Tegmaslik (kesishsa — xato)']]
+                            .map(([v, t]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>'
+                            + '<label data-pp-gap' + (cur === 'gap' ? '' : ' hidden') + '>Necha para oraliq<input type="number" name="practice_gap" min="0" max="6" value="' + pp.gap + '"></label>'
+                            + '<label data-pp-pair' + (cur === 'pair' ? '' : ' hidden') + '>Qaysi paradan<select name="practice_pair">' + pairs.map((it, i) => '<option value="' + (i + 1) + '"'
+                                + (i + 1 === pp.pair ? ' selected' : '') + '>' + esc((it.abbr && it.abbr !== '—' ? it.abbr : i + 1) + ' para' + (it.start ? ' (' + it.start + ')' : '')) + '</option>').join('') + '</select></label>'
+                            + '<p class="text-sm text-teal-700" data-swaps></p>';
+                    })() : '') +
                     '<label>Qaysi kunlar<select name="scope"><option value="day"' + (multiStart ? '' : ' selected') + '>Faqat shu kun</option>' +
                         (lecture ? '' : '<option value="rest">Shu kundan blok oxirigacha</option>') +
                         (days.length > 1 ? '<option value="multi"' + (multiStart ? ' selected' : '') + '>Bir nechta kunni tanlash</option>' : '') + '</select></label>' +
@@ -8341,6 +8520,11 @@
                 const body = () => {
                     const b = { specialty_name: card.specialty, course: card.course, subject_name: card.subject, group_name: card.group,
                         start_hour: form.elements.start_hour.value, training_type: lecture ? 'lecture' : 'practice' };
+                    if (lecture) {
+                        const pl = form.elements.practice_place.value;
+                        Object.assign(b, { practice_place: pl }, pl === 'gap' ? { practice_gap: form.elements.practice_gap.value } : {},
+                            pl === 'pair' ? { practice_pair: form.elements.practice_pair.value } : {});
+                    }
                     const sc = form.elements.scope.value;
                     return sc === 'multi' ? Object.assign(b, { dates: picked() }) : Object.assign(b, { date: date.iso, scope: sc });
                 };
@@ -8357,6 +8541,8 @@
                         const r = await api(BASE + '/boards/' + board.id + '/cycle-time-proposal/check', 'POST', body());
                         if (my !== seq || !m.isConnected) return;
                         status.className = 'text-green-700'; status.textContent = r.message + ' ' + r.old + ' → ' + r.new;
+                        const sw = m.querySelector('[data-swaps]');
+                        if (sw) sw.textContent = r.swaps || '';
                         // Ma'ruza: oqimdagi guruhchalar (server ro'yxati) — "Ma'ruza butun oqim uchun o'zgaradi: 05a, 05b … (N guruhcha)".
                         const fl = m.querySelector('[data-flow]');
                         if (fl && (r.units || []).length) {
@@ -8367,6 +8553,8 @@
                         button.disabled = false;
                     } catch (e) {
                         if (my !== seq || !m.isConnected) return;
+                        const sw0 = m.querySelector('[data-swaps]');
+                        if (sw0) sw0.textContent = '';
                         // Ko'p kunli: muammoli kunlar ("12.11: …") belgilanadi — shu kunni olib tashlab qayta tekshiring.
                         const bad = form.elements.scope.value === 'multi' ? String(e.message).split('\n').map(l => (/^(\d{2}\.\d{2}):/.exec(l) || [])[1]).filter(Boolean) : [];
                         if (box) bad.forEach(dm => box.querySelectorAll('label[data-day]').forEach(l => { if (l.dataset.day.slice(8, 10) + '.' + l.dataset.day.slice(5, 7) === dm) l.classList.add('cr-day-bad'); }));
@@ -8376,6 +8564,15 @@
                 };
                 m.querySelector('[data-recheck]').onclick = check;
                 form.elements.start_hour.onchange = check;
+                if (lecture) {
+                    form.elements.practice_place.onchange = () => {
+                        m.querySelector('[data-pp-gap]').hidden = form.elements.practice_place.value !== 'gap';
+                        m.querySelector('[data-pp-pair]').hidden = form.elements.practice_place.value !== 'pair';
+                        check();
+                    };
+                    form.elements.practice_gap.onchange = check;
+                    form.elements.practice_pair.onchange = check;
+                }
                 form.elements.scope.onchange = () => { if (box) box.hidden = form.elements.scope.value !== 'multi'; check(); };
                 if (box) box.onchange = check;
                 check();
@@ -8769,47 +8966,290 @@
             // joy kataklarda yashil (mumkin) yoki qizil (kun chegarasi / ma'ruza–amaliy ustma-ust) va vaqt yorlig'i; bandlik — serverda
             // (qo'yib yuborilganda xato matni). Oddiy bosish — kun oynasi (5 px dan kam siljish — sudrash emas).
             let cycCellDragged = false;
+            // Ko'p kunli surish so'rovi (cycle-lecture-slots, day_indexes): tanlangan kunlar (blok ichidagi siljishlar) → sikl kunlari.
+            function cycDaysBody(key, offsets, mode, delta, extra = {}) {
+                const card = (cyclePlanData && cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                const block = cycBlockByKey(key);
+                if (!card || !block) throw new Error('Sikl bloki topilmadi.');
+                return Object.assign({
+                    specialty_name: card.specialty, course: card.course, group_name: card.group, subject_name: card.subject,
+                    training_type: card.type || 'practice', view: cycleEffView(), placement_group: card.placement_group || undefined,
+                    sub_group: card.placement_group && card.placement_group !== card.group ? card.group : undefined,
+                    day_indexes: offsets.map(o => block.day_plan[o].k - 1), mode: mode, delta: delta,
+                }, mode === 'lecture' || extra.lecture_swap ? cycPracPlaceParams() : {}, extra);
+            }
+            const cycDaysRequest = (key, offsets, mode, delta, extra) =>
+                api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', cycDaysBody(key, offsets, mode, delta, extra));
+            const CYC_MODE_WHAT = { both: 'darslar', lecture: 'ma\'ruza', practice: 'amaliy' };
+            const CYC_DAY_STATUS = { ok: 'o\'zgaradi', conflict: 'to\'qnashuv', nofit: 'sig\'maydi', blocked: 'o\'zgarmaydi', past: 'o\'tgan / boshlangan',
+                same: 'o\'zgarmaydi', skip: 'dars yo\'q' };
+            const cycDayLabel = d => (d.date ? d.date.slice(8, 10) + '.' + d.date.slice(5, 7) + ' ' : '') + '(' + (+d.day_index + 1) + '-kun)';
+            const cycHourLabel = h => { const t = cycHourTimes()[h]; return t ? t[0] : h + '-soat'; };
+            // Oxirgi surish — Ctrl+Z / "Qaytarish" (server oldingi qiymatlarni saqlaydi; bitta so'rov).
+            let cycLastUndo = null;   // { key, token }
+            let cycDaysBusy = false;
+            // Natija qisqa matni: "5 kun: ma'ruza 08:30 → 12:00" (kunlarda har xil bo'lsa — "+2 soat").
+            function cycDaysSummary(days, mode, delta) {
+                const done = days.filter(d => d.applied);
+                const pairs = [...new Set(done.map(d => d.from + '>' + d.to))];
+                const how = pairs.length === 1 ? cycHourLabel(done[0].from) + ' → ' + cycHourLabel(done[0].to) : (delta > 0 ? '+' : '') + delta + ' soat';
+                const moved = new Set(done.flatMap(d => (d.swaps || []).filter(w => w.how !== 'pin').map(w => w.unit)));
+                return done.length + ' kun: ' + CYC_MODE_WHAT[mode] + ' ' + how + (done.some(d => d.lecture) ? ' · ma\'ruza bilan o\'rin almashdi' : '')
+                    + (moved.size ? ' · amaliyot ko\'chdi: ' + moved.size + ' guruhcha' : '');
+            }
+            // Ko'chadigan amaliyotlar: "d2/d23-08a 10:00 → 08:30, 09a 10:00 → 08:30, 09b 10:00 → 12:00 (sig'madi — keyinga)" — birinchi
+            // guruhcha to'liq nomi bilan, shu oqimdagi keyingilari qisqa; takrorlar (ko'p kunda bir xil) bir marta.
+            function cycSwapNote(w) {
+                const dir = { after: 'keyinga', before: 'oldinga' }[w.how];
+                if (dir && w.why) return (w.why === 'busy' ? 'band' : 'sig\'madi') + ' — ' + dir;
+                const t = { swap: '', after: 'ma\'ruzadan keyin', before: 'ma\'ruzadan oldin', gap: 'oraliq bilan', pair: 'tanlangan para', pin: 'siz surgan' }[w.how];
+                return t == null ? String(w.how) : t;
+            }
+            function cycSwapsText(list) {
+                const seen = new Set(), out = [];
+                let prefix = null;
+                (list || []).forEach(w => {
+                    const k = [w.unit, w.from, w.to, w.how, w.why, w.busy].join('|');
+                    if (seen.has(k)) return;
+                    seen.add(k);
+                    const m = /^(.*-)([^-]+)$/.exec(String(w.unit));
+                    const name = prefix !== null && m && m[1] === prefix ? m[2] : w.unit;
+                    if (prefix === null && m) prefix = m[1];
+                    const note = cycSwapNote(w);
+                    out.push(name + ' ' + cycHourLabel(w.from) + ' → ' + cycHourLabel(w.to) + (note ? ' (' + note + ')' : '') + (w.busy ? ' — band!' : ''));
+                });
+                return out.join(', ');
+            }
+            // Surishdan keyin kun oynasini qayta ochish (↑ ↓ kun oynasidan bosilgan bo'lsa); kunlar tanlovi qoladi (keyingi ↑ ↓ ham hammasiga).
+            function cycReopenDay(key, offset) {
+                const cell = document.querySelector('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                if (cell) openCycDayPop(key, offset, cell, true);
+            }
+            // Qo'llash (dry_run emas). Tasdiq talab qilinadigan doskada — so'rov; aks holda jadval yangilanadi, qisqa xabar + "Qaytarish".
+            async function cycDaysCommit(key, offsets, mode, delta, extra = {}) {
+                const j = await cycDaysRequest(key, offsets, mode, delta, extra);
+                if (j && j.pending_approval) { onPendingApproval(j); return j; }
+                const days = (j && j.days) || [];
+                const left = days.filter(d => !d.applied && !['same', 'skip'].includes(d.status));
+                if (j.undo) cycLastUndo = { key: key, token: j.undo };
+                await loadCyclePlan();
+                const block = cycBlockByKey(key);
+                days.filter(d => d.applied).forEach(d => {
+                    const o = block ? Object.keys(block.day_plan || {}).find(x => block.day_plan[x].k - 1 === d.day_index) : null;
+                    document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + o + '"]')
+                        .forEach(c => { c.classList.remove('cyc-just-changed'); void c.offsetWidth; c.classList.add('cyc-just-changed'); });
+                });
+                ttToast((days.some(d => d.applied) ? esc(cycDaysSummary(days, mode, delta)) : 'Hech bir kun o\'zgarmadi.')
+                    + (j.undo ? ' <button type="button" class="tt-toast-btn" data-cyc-undo>Qaytarish (Ctrl+Z)</button>' : '')
+                    + (left.length ? '<div class="tt-toast-sub">' + left.length + ' kun o\'zgarmadi: ' + esc(left.map(d => cycDayLabel(d) + ' — '
+                        + (CYC_DAY_STATUS[d.status] || d.status)).join('; ')) + '</div>' : ''), j.undo ? 'ok' : 'warn');
+                return j;
+            }
+            async function cycUndo() {
+                const u = cycLastUndo;
+                if (!u) { ttToast('Qaytariladigan surish yo\'q.', 'warn'); return; }
+                cycLastUndo = null;
+                try {
+                    const j = await cycDaysRequest(u.key, [], 'both', null, { undo: u.token, day_indexes: undefined, delta: undefined, mode: undefined });
+                    if (j && j.pending_approval) { onPendingApproval(j); return; }
+                    await loadCyclePlan();
+                    ttToast('Oxirgi surish qaytarildi.', 'ok');
+                } catch (e) { ttToast('Qaytarib bo\'lmadi: ' + esc(e.message), 'warn'); }
+            }
+            // Oldindan tekshiruv natijasi oynasi: qaysi kunlar o'zgaradi, qaysilarida to'qnashuv (sababi bilan), qaysilari sig'maydi; ma'ruza
+            // surilganda — to'sib turgan amaliyot qayerga ko'chadi ("Amaliyot o'rin almashadi: …"); teskari holat (opts.reverse) — "Ma'ruza bilan
+            // o'rin almashsinmi?". opts: { extra (so'rovga qo'shimcha), reverse, reopen }.
+            function cycDaysDialog(key, offsets, mode, delta, dry, opts = {}) {
+                const prior = document.getElementById('cycMultiDlg');
+                if (prior) prior.remove();
+                const block = cycBlockByKey(key);
+                const days = dry.days || [];
+                const offOf = d => offsets.find(o => block && block.day_plan[o] && block.day_plan[o].k - 1 === d.day_index);
+                const ok = days.filter(d => d.status === 'ok'), conf = days.filter(d => d.status === 'conflict');
+                const moving = ok.concat(conf);
+                const swaps = moving.flatMap(d => d.swaps || []);
+                const lec = moving.map(d => d.lecture).find(Boolean);
+                const pairs = [...new Set(moving.map(d => d.from + '>' + d.to))];
+                const what = { both: 'Darslar', lecture: 'Ma\'ruza', practice: 'Amaliy' }[mode];
+                const head = moving.length ? what + ' ' + (pairs.length === 1 ? cycHourLabel(moving[0].from) + ' → ' + cycHourLabel(moving[0].to)
+                    : (delta > 0 ? '+' : '') + delta + ' soat') + ' (' + (mode === 'lecture' ? 'oqim, ' : '') + moving.length + ' kun).' : '';
+                const multi = days.length > 1;
+                const m = document.createElement('div');
+                m.id = 'cycMultiDlg';
+                m.className = 'cr-proposal-overlay';
+                m.innerHTML = '<div class="cr-proposal-form"><h3 class="font-bold text-lg">' + (opts.reverse ? 'Ma\'ruza bilan o\'rin almashsinmi?' : multi ? 'Bir nechta kunni surish' : 'Kunni surish') + '</h3>'
+                    + '<p class="text-sm">' + esc((block ? block.subject + ' · ' : '') + CYC_MODE_WHAT[mode] + ' ' + (delta > 0 ? '+' : '') + delta + ' soat · ' + days.length + ' kun') + '</p>'
+                    + (head ? '<p class="text-sm font-semibold" data-cmd-head>' + esc(head) + '</p>' : '')
+                    + (opts.reverse && lec ? '<p class="text-sm" data-cmd-lec>' + esc('Ma\'ruza (butun oqim) ' + cycHourLabel(lec.from) + ' → ' + cycHourLabel(lec.to) + '.') + '</p>' : '')
+                    + (swaps.length ? '<p class="text-sm cmd-swaps" data-cmd-swaps>' + esc('Amaliyot o\'rin almashadi: ' + cycSwapsText(swaps) + '.') + '</p>' : '')
+                    + '<ul class="cmd-list">' + days.map(d => '<li class="cmd-' + esc(d.status) + '"><b>' + esc(cycDayLabel(d)) + '</b> '
+                        + (d.from != null && d.to != null ? esc(cycHourLabel(d.from) + ' → ' + cycHourLabel(d.to)) + ' ' : '')
+                        + '— ' + esc(CYC_DAY_STATUS[d.status] || d.status) + (d.why ? ': ' + esc(d.why) : '')
+                        + (multi && (d.swaps || []).length && ['ok', 'conflict'].includes(d.status) ? '<div class="cmd-sub">' + esc('amaliyot: ' + cycSwapsText(d.swaps)) + '</div>' : '')
+                        + '</li>').join('') + '</ul>'
+                    + '<div class="flex justify-end gap-2 flex-wrap"><button type="button" data-cmd="cancel">Bekor</button>'
+                    + (mode === 'lecture' && swaps.length && !opts.reverse ? '<button type="button" data-cmd="keep">Faqat ma\'ruzani (amaliyotga tegmasdan — xato beradi)</button>' : '')
+                    + (conf.length ? '<button type="button" data-cmd="force" class="px-3 py-2 rounded bg-amber-600 text-white">Baribir hammasiga (' + (ok.length + conf.length) + ')</button>' : '')
+                    + '<button type="button" data-cmd="apply" class="px-3 py-2 rounded bg-blue-600 text-white"' + (ok.length ? '' : ' disabled') + '>'
+                        + (opts.reverse ? 'Ha, o\'rin almashsin' : 'Qo\'llash') + ' (' + ok.length + ')</button></div>'
+                    + '<p role="alert" class="text-red-600"></p></div>';
+                document.body.appendChild(m);
+                const close = () => m.remove();
+                m.onclick = ev => { if (ev.target === m) close(); };
+                m.querySelector('[data-cmd="cancel"]').onclick = close;
+                const run = async (list, extra) => {
+                    m.querySelectorAll('button').forEach(b => { b.disabled = true; });
+                    try {
+                        await cycDaysCommit(key, list, mode, delta, Object.assign({}, opts.extra || {}, extra));
+                        close();
+                        if (opts.reopen) cycReopenDay(key, list[0] != null ? list[0] : offsets[0]);
+                    } catch (e) { m.querySelector('[role="alert"]').textContent = e.message; m.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
+                };
+                m.querySelector('[data-cmd="apply"]').onclick = () => run(ok.map(offOf).filter(o => o != null), {});
+                const force = m.querySelector('[data-cmd="force"]');
+                if (force) force.onclick = () => run(ok.concat(conf).map(offOf).filter(o => o != null).sort((a, b) => a - b), { force: 1 });
+                const keep = m.querySelector('[data-cmd="keep"]');
+                if (keep) keep.onclick = () => run(ok.concat(conf).map(offOf).filter(o => o != null).sort((a, b) => a - b), { practice_place: 'keep' });
+            }
+            // Tanlangan kunlarni surish (sudrash yoki ↑ ↓): avval tekshiruv; muammo va amaliyot ko'chishi yo'q — darhol, bo'lsa — oyna.
+            // "Faqat amaliy" ma'ruza ustiga tushsa — ma'ruza bilan o'rin almashish taklifi (lecture_swap, oldindan ko'rinish bilan).
+            async function cycDaysApply(key, offsets, mode, delta, dry, opts = {}) {
+                if (cycDaysBusy || !offsets.length || !delta) return;
+                cycDaysBusy = true;
+                const extra = opts.extra || {};
+                try {
+                    if (!dry || !dry.days) dry = await cycDaysRequest(key, offsets, mode, delta, Object.assign({}, extra, { dry_run: 1 }));
+                    const days = dry.days || [];
+                    if (mode === 'practice' && !extra.lecture_swap && days.some(d => d.status === 'blocked' && /Ma.ruza vaqti bilan ustma-ust/.test(d.why || ''))) {
+                        const ex2 = Object.assign({}, extra, { lecture_swap: 1 });
+                        const dry2 = await cycDaysRequest(key, offsets, mode, delta, Object.assign({}, ex2, { dry_run: 1 }));
+                        cycDaysDialog(key, offsets, mode, delta, dry2, Object.assign({}, opts, { extra: ex2, reverse: true }));
+                        return;
+                    }
+                    const moves = days.some(d => (d.swaps || []).length || d.lecture);
+                    if (!moves && days.some(d => d.status === 'ok' || d.status === 'conflict') && days.every(d => ['ok', 'same', 'skip'].includes(d.status))) {
+                        await cycDaysCommit(key, offsets, mode, delta, extra);
+                        if (opts.reopen) cycReopenDay(key, offsets[0]);
+                    } else {
+                        cycDaysDialog(key, offsets, mode, delta, dry, opts);
+                    }
+                } catch (e) {
+                    ttToast('Ko\'chirib bo\'lmadi: ' + esc(e.message), 'warn');
+                } finally {
+                    cycDaysBusy = false;
+                }
+            }
             function setupCycCellDrag(grid) {
-                let st = null;   // { key, offset, hour, kind, dp, x, y, moving, delta, mode, shape, bad }
+                let st = null;   // { key, offset, hour, kind, dp, x, y, moving, delta, mode, shape, bad, multi, staff, ask, dry }
                 const cellsOf = (key, offset) => [...grid.querySelectorAll('.cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]')];
                 const clear = () => {
                     grid.classList.remove('is-cyc-dragging');
-                    grid.querySelectorAll('.cyc-mk-cell.is-drag-ok, .cyc-mk-cell.is-drag-bad').forEach(c => c.classList.remove('is-drag-ok', 'is-drag-bad'));
+                    grid.querySelectorAll('.cyc-mk-cell.is-drag-ok, .cyc-mk-cell.is-drag-bad, .cyc-mk-cell.is-drag-nofit')
+                        .forEach(c => { c.classList.remove('is-drag-ok', 'is-drag-bad', 'is-drag-nofit'); c.removeAttribute('data-drag-note'); });
                     const tip = document.getElementById('cycDragTip');
                     if (tip) tip.remove();
                 };
                 const timeOf = r => { const t = cycHourTimes(); return r ? ((t[r[0]] ? t[r[0]][0] : r[0] + '-soat') + '–' + (t[r[1] - 1] ? t[r[1] - 1][1] : (r[1] - 1) + '-soat')) : ''; };
+                const rangesOf = (shape, mode) => mode === 'lecture' ? [shape.lec] : mode === 'practice' ? [shape.prc] : [shape.lec, shape.prc];
+                const dryKey = () => st.mode + '|' + st.delta;
+                // Ko'p kun (tahrirlovchi): server tekshiruvi (dry_run) — rejim / siljish o'zgarganda, 250 ms kechikib; shu sudrash ichida keshlanadi.
+                const scheduleDry = () => {
+                    if (!st || !st.multi || !st.staff || !st.delta || st.dry[dryKey()] !== undefined) return;
+                    const k = dryKey(), s0 = st;
+                    clearTimeout(s0.dryTimer);
+                    s0.dryTimer = setTimeout(async () => {
+                        if (st !== s0 || dryKey() !== k || s0.dry[k] !== undefined) return;
+                        s0.dry[k] = null;   // so'ralmoqda
+                        try { s0.dry[k] = await cycDaysRequest(s0.key, s0.multi, s0.mode, s0.delta, { dry_run: 1 }); }
+                        catch (e) { s0.dry[k] = { error: e.message, days: [] }; }
+                        if (st === s0 && dryKey() === k && s0.moving) paint(s0.lastEv);
+                    }, 250);
+                };
                 const paint = ev => {
                     clear();
                     grid.classList.add('is-cyc-dragging');
+                    st.lastEv = { clientX: ev.clientX, clientY: ev.clientY, shiftKey: ev.shiftKey, altKey: ev.altKey, ctrlKey: ev.ctrlKey, metaKey: ev.metaKey };
                     const dayHours = Math.max(1, +cyclePlanData.day_hours || 6);
-                    st.mode = cycBothKeyDown(ev) ? 'both' : (st.kind === 'lecture' ? 'lecture' : 'practice');
+                    // O'qituvchi / fan mas'uli: so'rov — katak turi bo'yicha (birga surish yo'q).
+                    st.mode = !st.ask && cycBothKeyDown(ev) ? 'both' : (st.kind === 'lecture' ? 'lecture' : 'practice');
                     st.shape = cycDayShape(st.dp, st.mode, st.delta, null);
-                    st.bad = cycDayShapeError(st.shape, dayHours);
-                    const moving = st.mode === 'lecture' ? [st.shape.lec] : st.mode === 'practice' ? [st.shape.prc] : [st.shape.lec, st.shape.prc];
-                    cellsOf(st.key, st.offset).forEach(c => {
-                        const h = +c.dataset.mkHour;
-                        if (moving.some(r => r && h >= r[0] && h < r[1])) c.classList.add(st.bad ? 'is-drag-bad' : 'is-drag-ok');
-                    });
+                    st.bad = cycDayShapeError(st.shape, dayHours, cycOverlapOk(st.mode));
+                    // Ma'ruza–amaliy kesishuvi (xato emas): ma'ruza — amaliyot usul bo'yicha ko'chadi; amaliy — ma'ruza bilan o'rin almashish taklifi.
+                    const over = !st.ask && st.mode !== 'both' && st.shape.lec && st.shape.prc && st.shape.lec[0] < st.shape.prc[1] && st.shape.prc[0] < st.shape.lec[1];
+                    const overText = !over ? '' : st.mode === 'lecture' ? ' · amaliyot: ' + CYC_PLACE_HOW[cycPracPlace().how].toLowerCase()
+                        : ' · ma\'ruza bilan o\'rin almashish taklif qilinadi';
+                    const what = { both: 'Birga', lecture: 'Ma\'ruza', practice: 'Amaliy' }[st.mode];
+                    let text;
+                    if (st.multi) {
+                        // Har tanlangan kunda yangi o'rin: xira soya; to'qnashuvli (server) — qizil; kunga sig'maydigan — kulrang, "sig'maydi".
+                        const block = cycBlockByKey(st.key);
+                        const dry = st.dry[dryKey()];
+                        const srv = {};
+                        ((dry && dry.days) || []).forEach(d => { srv[d.day_index] = d; });
+                        let conf = 0, bad = 0;
+                        st.multi.forEach(o => {
+                            const dp = block && block.day_plan ? block.day_plan[o] : null;
+                            if (!dp) return;
+                            const shape = cycDayShape(dp, st.mode, st.delta, null);
+                            const d = srv[dp.k - 1];
+                            // Amaliy ma'ruza ustiga (server: blocked) — taklif qilinadi: qizil, sig'maydigan emas.
+                            const offer = Boolean(d && st.mode === 'practice' && d.status === 'blocked' && /Ma.ruza vaqti bilan ustma-ust/.test(d.why || ''));
+                            // Server natijasi bo'lsa — o'sha (masalan, smenasi qotirilgan amaliy "Birga" surilmaydi); bo'lmasa — mijozdagi taxmin.
+                            const nofit = !offer && (d ? ['nofit', 'blocked', 'past'].includes(d.status) : Boolean(cycDayShapeError(shape, dayHours, cycOverlapOk(st.mode))));
+                            const isConf = !nofit && Boolean(d && (d.status === 'conflict' || offer));
+                            if (nofit) bad++; else if (isConf) conf++;
+                            // Sig'maydigan kun — hozirgi joyida kulrang; qolganlari — yangi o'rnida.
+                            const ranges = rangesOf(nofit ? cycDayShape(dp, st.mode, 0, null) : shape, st.mode);
+                            let first = true;
+                            cellsOf(st.key, o).forEach(c => {
+                                const h = +c.dataset.mkHour;
+                                if (!ranges.some(r => r && h >= r[0] && h < r[1])) return;
+                                c.classList.add(nofit ? 'is-drag-nofit' : isConf ? 'is-drag-bad' : 'is-drag-ok');
+                                if (nofit && first) { c.setAttribute('data-drag-note', 'sig\'maydi'); first = false; }
+                            });
+                        });
+                        st.counts = { conf: conf, bad: bad };
+                        text = (st.delta > 0 ? '+' : '') + st.delta + ' soat · ' + st.multi.length + ' kun'
+                            + (conf ? ' · ' + conf + ' ta to\'qnashuv' : '') + (bad ? ' · ' + bad + ' ta sig\'maydi' : '')
+                            + (st.staff && st.delta && dry === null ? ' · tekshirilmoqda…' : '') + ' (' + what.toLowerCase() + ')';
+                    } else {
+                        const moving = rangesOf(st.shape, st.mode);
+                        cellsOf(st.key, st.offset).forEach(c => {
+                            const h = +c.dataset.mkHour;
+                            if (moving.some(r => r && h >= r[0] && h < r[1])) c.classList.add(st.bad ? 'is-drag-bad' : 'is-drag-ok');
+                        });
+                        const shown = st.mode === 'practice' ? st.shape.prc : st.shape.lec || st.shape.prc;
+                        text = what + ': ' + timeOf(shown) + (st.bad ? ' — ' + st.bad : overText);
+                    }
                     const tip = document.createElement('div');
                     tip.id = 'cycDragTip';
-                    tip.className = st.bad ? 'is-bad' : '';
-                    const what = { both: 'Birga', lecture: 'Ma\'ruza', practice: 'Amaliy' }[st.mode];
-                    const shown = st.mode === 'practice' ? st.shape.prc : st.shape.lec || st.shape.prc;
-                    tip.textContent = what + ': ' + timeOf(shown) + (st.bad ? ' — ' + st.bad : '') + (st.mode === 'both' ? '' : ' (' + cycBothKeyLabel() + ' — birga)');
+                    tip.className = (st.multi ? st.counts.conf || st.counts.bad : st.bad) ? 'is-bad' : '';
+                    tip.textContent = text + (st.ask ? ' — so\'rov' : st.mode === 'both' ? '' : ' (' + cycBothKeyLabel() + ' — birga)');
                     document.body.appendChild(tip);
                     tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 14) + 'px';
                     tip.style.top = Math.max(8, ev.clientY - 30) + 'px';
+                    scheduleDry();
                 };
                 grid.addEventListener('pointerdown', ev => {
-                    if (ev.button !== 0 || !cyclePlanData || !cyclePlanData.day_edit || typeof TIMETABLE_READ_ONLY !== 'undefined' && TIMETABLE_READ_ONLY) return;
+                    if (ev.button !== 0 || !cyclePlanData) return;
                     const cell = ev.target.closest ? ev.target.closest('.cyc-mk-cell.is-lecture, .cyc-mk-cell.is-practice') : null;
                     if (!cell || cell.disabled) return;
-                    const block = cycBlockByKey(cell.dataset.mkKey);
-                    const dp = block && block.day_plan ? block.day_plan[cell.dataset.mkDay] : null;
+                    const key = cell.dataset.mkKey, offset = +cell.dataset.mkDay;
+                    const block = cycBlockByKey(key);
+                    const dp = block && block.day_plan ? block.day_plan[offset] : null;
                     if (!dp) return;
-                    st = { key: cell.dataset.mkKey, offset: +cell.dataset.mkDay, hour: +cell.dataset.mkHour, dp,
-                        kind: cell.classList.contains('is-lecture') ? 'lecture' : 'practice', x: ev.clientX, y: ev.clientY, moving: false, delta: 0 };
+                    const kind = cell.classList.contains('is-lecture') ? 'lecture' : 'practice';
+                    const staff = Boolean(cyclePlanData.day_edit) && !(typeof TIMETABLE_READ_ONLY !== 'undefined' && TIMETABLE_READ_ONLY);
+                    // O'qituvchi / fan mas'uli: sudrash — so'rov oynasi (shu darsga so'rash mumkin bo'lgan kunlar).
+                    const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                    const askable = o => { const dpo = block.day_plan[o]; const dt = (cyclePlanData.dates || [])[block.from + (+o)];
+                        return Boolean(dpo && dt && card && typeof cycCanAsk === 'function' && cycCanAsk(card, dpo, dt, cycLocalToday(), kind)); };
+                    const ask = !staff && askable(offset);
+                    if (!staff && !ask) return;
+                    const sel = cycSelOffsets(key);
+                    const multi = sel.length > 1 && sel.includes(offset) ? (ask ? sel.filter(askable) : sel) : null;
+                    st = { key: key, offset: offset, hour: +cell.dataset.mkHour, dp: dp, kind: kind, x: ev.clientX, y: ev.clientY, moving: false, delta: 0,
+                        staff: staff, ask: ask, multi: multi && multi.length > 1 ? multi : null, dry: {} };
                 });
                 document.addEventListener('pointermove', ev => {
                     if (!st) return;
@@ -8818,40 +9258,85 @@
                         st.moving = true;
                         closeCycDayPop();
                     }
-                    // Sichqoncha ostidagi shu kun katagi — soat qatori; boshqa joyda — oxirgi qiymat qoladi.
+                    // Sichqoncha ostidagi katak soat qatori (bitta kun — shu kun ustuni, ko'p kun — tanlangan kunlardan istalgani);
+                    // boshqa joyda — oxirgi qiymat qoladi.
                     const under = document.elementFromPoint(ev.clientX, ev.clientY);
                     const c = under && under.closest ? under.closest('.cyc-mk-cell') : null;
-                    if (c && c.dataset.mkKey === st.key && +c.dataset.mkDay === st.offset) st.delta = +c.dataset.mkHour - st.hour;
-                    st.lx = ev.clientX;
-                    st.ly = ev.clientY;
+                    if (c && c.dataset.mkKey === st.key && (st.multi ? st.multi.includes(+c.dataset.mkDay) : +c.dataset.mkDay === st.offset)) {
+                        st.delta = +c.dataset.mkHour - st.hour;
+                    }
                     paint(ev);
                 });
                 const finish = async (ev, cancel) => {
                     const s0 = st;
                     st = null;
                     if (!s0 || !s0.moving) return;
+                    clearTimeout(s0.dryTimer);
                     clear();
                     cycCellDragged = true;
                     setTimeout(() => { cycCellDragged = false; }, 0);
                     if (cancel || !s0.delta) return;
-                    if (s0.bad) { ttToast('Ko\'chirib bo\'lmadi: ' + esc(s0.bad) + '.', 'warn'); return; }
                     const block = cycBlockByKey(s0.key);
                     const date = block ? (cyclePlanData.dates || [])[block.from + s0.offset] : null;
-                    const label = { both: '', lecture: ', faqat ma\'ruza', practice: ', faqat amaliy' }[s0.mode];
-                    const from = s0.mode === 'practice' ? s0.shape.base : (+s0.dp.start || 1);
-                    const to = s0.mode === 'practice' ? s0.shape.prc[0] : (s0.shape.lec || s0.shape.prc)[0];
-                    // "Birga" ma'ruzasiz kunda — kun boshi = amaliy boshi (amaliy o'z soatida bo'lsa — kun boshi delta bilan).
-                    const start = s0.mode === 'both' ? (+s0.dp.start || 1) + s0.delta : to;
-                    await moveCycDay(s0.key, s0.offset, start,
-                        (date ? date.d + ' (' + s0.dp.k + '-kun)' : s0.dp.k + '-kun') + label + ': ' + from + '-soatdan → ' + to + '-soatdan (sudrab)', s0.mode);
+                    if (s0.ask) {
+                        // So'rov oynasi: tanlangan kunlar (yoki shu kun) va yangi vaqt oldindan to'ldiriladi; sabab so'raladi.
+                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === s0.key);
+                        const days = cycAskDays(block, s0.kind);
+                        const offs = s0.multi || [s0.offset];
+                        const r = s0.kind === 'lecture' ? s0.shape.lec : s0.shape.prc;
+                        openCycleTimeProposal(Object.assign({}, card, { type: s0.kind }), cycAskDp(s0.dp, s0.kind), date,
+                            { kind: s0.kind, days: days, preselect: days.filter(x => offs.includes(x.offset)).map(x => x.iso), start: r ? r[0] : null });
+                        return;
+                    }
+                    if (s0.multi) {
+                        const k = s0.mode + '|' + s0.delta;
+                        await cycDaysApply(s0.key, s0.multi, s0.mode, s0.delta, s0.dry[k] && s0.dry[k].days && !s0.dry[k].error ? s0.dry[k] : null);
+                        return;
+                    }
+                    if (s0.bad) { ttToast('Ko\'chirib bo\'lmadi: ' + esc(s0.bad) + '.', 'warn'); return; }
+                    // Faqat ma'ruza / faqat amaliy — tekshiruv (o'rin almashish rejasi, teskari taklif) va kerak bo'lsa tasdiq oynasi orqali.
+                    if (s0.mode !== 'both') {
+                        await cycDaysApply(s0.key, [s0.offset], s0.mode, s0.delta, null);
+                        return;
+                    }
+                    // "Birga": kun boshi delta bilan (ma'ruzasiz kunda — amaliy boshi; amaliy o'z soatida bo'lsa ham kun boshi).
+                    const from = +s0.dp.start || 1;
+                    await moveCycDay(s0.key, s0.offset, from + s0.delta,
+                        (date ? date.d + ' (' + s0.dp.k + '-kun)' : s0.dp.k + '-kun') + ': ' + from + '-soatdan → ' + (from + s0.delta) + '-soatdan (sudrab)', 'both');
                 };
                 document.addEventListener('pointerup', ev => finish(ev, false));
                 document.addEventListener('pointercancel', ev => finish(ev, true));
-                document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && st && st.moving) finish(ev, true); });
+                // Esc sudrash paytida — faqat sudrash bekor qilinadi (tanlov qoladi).
+                document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && st && st.moving) { ev.stopImmediatePropagation(); finish(ev, true); } });
                 // Tugma sudrash paytida bosilsa / qo'yib yuborilsa — rejim darhol almashadi.
-                const repaint = ev => { if (st && st.moving) paint({ clientX: st.lx, clientY: st.ly, shiftKey: ev.shiftKey, altKey: ev.altKey, ctrlKey: ev.ctrlKey }); };
+                const repaint = ev => { if (st && st.moving) paint({ clientX: st.lastEv.clientX, clientY: st.lastEv.clientY, shiftKey: ev.shiftKey, altKey: ev.altKey, ctrlKey: ev.ctrlKey, metaKey: ev.metaKey }); };
                 document.addEventListener('keydown', repaint);
                 document.addEventListener('keyup', repaint);
+                // Klaviatura: tanlangan kunlarda ↑ ↓ — 1 soatga (sudrash kabi; rejim — kun oynasidagi tanlov, sukut — birga); Ctrl+Z — qaytarish.
+                const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+                document.addEventListener('keydown', ev => {
+                    if (typeof viewMode !== 'undefined' && viewMode !== 'cycle') return;
+                    if (typing(ev.target) || document.getElementById('cycMultiDlg') || document.getElementById('teacherTimeProposal')) return;
+                    if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && !ev.altKey && String(ev.key).toLowerCase() === 'z' && cycLastUndo) {
+                        ev.preventDefault();
+                        cycUndo();
+                        return;
+                    }
+                    if ((ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') || !cycMultiSel || !cyclePlanData || !cyclePlanData.day_edit
+                        || (typeof TIMETABLE_READ_ONLY !== 'undefined' && TIMETABLE_READ_ONLY)) return;
+                    ev.preventDefault();
+                    const key = cycMultiSel.key;
+                    const mode = ['both', 'lecture', 'practice'].includes(cycMoveMode) ? cycMoveMode : 'both';
+                    cycDaysApply(key, cycSelOffsets(key), mode, ev.key === 'ArrowUp' ? -1 : 1, null);
+                });
+                // Xabardagi "Qaytarish".
+                document.addEventListener('click', ev => {
+                    const b = ev.target && ev.target.closest ? ev.target.closest('[data-cyc-undo]') : null;
+                    if (!b) return;
+                    ev.preventDefault();
+                    b.disabled = true;
+                    cycUndo();
+                });
             }
             function setupCycleMarking() {
                 const grid = $('cycleGrid');
@@ -8887,23 +9372,38 @@
                     if (!cell || cell.disabled) return;
                     ev.preventDefault();
                     if (cycCellDragged) { cycCellDragged = false; return; }   // sudrash tugadi — kun oynasi ochilmaydi
-                    // Ctrl+bosish (kun oynasi ochiq, shu blok): bir nechta kunli so'rov uchun kun qo'shiladi / olinadi.
-                    if ((ev.ctrlKey || ev.metaKey) && cycDaySel && cycDaySel.key === cell.dataset.mkKey && cycDaySel.offset >= 0) {
-                        const key = cycDaySel.key, at = cycDaySel.offset, anchorCell = document.querySelector('#cycleGrid .cyc-mk-cell.is-day-sel') || cell;
-                        const sel = cycMultiSel && cycMultiSel.key === key ? cycMultiSel.offsets : new Set([at]);
-                        const o = +cell.dataset.mkDay;
-                        if (sel.has(o) && o !== at) sel.delete(o); else sel.add(o);
-                        cycMultiSel = { key: key, offsets: sel };
-                        openCycDayPop(key, at, anchorCell, true);
+                    const key = cell.dataset.mkKey, o = +cell.dataset.mkDay;
+                    // Kun oynasi ochiq (shu blok, tanlov hali yo'q) — oynadagi kun ham tanlovga birinchi bo'lib kiradi.
+                    const popDay = cycDaySel && cycDaySel.key === key && cycDaySel.offset >= 0 ? cycDaySel.offset : null;
+                    if ((ev.ctrlKey || ev.metaKey || ev.shiftKey) && popDay !== null && !(cycMultiSel && cycMultiSel.key === key)
+                        && popDay !== o && cycSelEligible(cycBlockByKey(key), popDay)) {
+                        cycSelSet(key, new Set([popDay]), popDay);
+                    }
+                    // Ctrl/Cmd+bosish — kunni tanlovga qo'shish / olish; Shift+bosish — oraliq. Kun oynasi ochiq bo'lsa — yangilanadi.
+                    if (ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+                        if (ev.ctrlKey || ev.metaKey) cycSelToggle(key, o); else cycSelRange(key, o);
+                        if (popDay !== null) openCycDayPop(key, popDay, document.querySelector('#cycleGrid .cyc-mk-cell.is-day-sel') || cell, true);
                         return;
                     }
-                    if (cycDaySel && cycDaySel.key === cell.dataset.mkKey && cycDaySel.offset === +cell.dataset.mkDay) {
+                    if (cycDaySel && cycDaySel.key === key && cycDaySel.offset === o) {
                         closeCycDayPop();
                         return;
                     }
-                    openCycDayPop(cell.dataset.mkKey, cell.dataset.mkDay, cell);
+                    // Tanlangan kun bosilsa — tanlov qoladi (so'rov / surish shu kunlar bilan); boshqa kun — tanlov tozalanadi.
+                    openCycDayPop(key, o, cell, Boolean(cycMultiSel && cycMultiSel.key === key && cycMultiSel.offsets.has(o)));
                 });
-                document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeCycDayPop(); });
+                // Blok sarlavhasida (fan nomi) ikki marta bosish — blokning barcha kunlari.
+                grid.addEventListener('dblclick', ev => {
+                    const subj = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
+                    if (!subj) return;
+                    ev.preventDefault();
+                    closeCycDayPop();
+                    cycSelAll(subj.dataset.mkSubj);
+                });
+                document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeCycDayPop(); cycSelClear(); } });
+                // Jadval aylantirilganda tepadagi yorliq tanlangan ustunlar bilan birga yuradi.
+                const wrapEl = $('cycleGridWrap');
+                if (wrapEl) wrapEl.addEventListener('scroll', () => { if (cycMultiSel) cycMultiPaint(); }, { passive: true });
                 // Fan nomi (role=button) klaviaturadan ham ochiladi: Enter / Space.
                 grid.addEventListener('keydown', ev => {
                     if (ev.key !== 'Enter' && ev.key !== ' ') return;
@@ -8913,9 +9413,10 @@
                     subj.click();
                 });
                 document.addEventListener('mousedown', ev => {
-                    if (!cycDaySel) return;
                     if (ev.target.closest && (ev.target.closest('#cycDayPop') || ev.target.closest('.cyc-mk-cell') || ev.target.closest('.cyc-mk-title'))) return;
-                    closeCycDayPop();
+                    if (cycDaySel) closeCycDayPop();
+                    // Bo'sh joyga bosish — kunlar tanlovi ham tozalanadi (yorliq, oyna, xabar va so'rov formasi — bundan mustasno).
+                    if (cycMultiSel && !(ev.target.closest && ev.target.closest('#cycSelBadge, #cycMultiDlg, #ttToastBox, #teacherTimeProposal'))) cycSelClear();
                 });
             }
 

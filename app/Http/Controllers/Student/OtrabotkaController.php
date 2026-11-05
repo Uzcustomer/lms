@@ -8,6 +8,7 @@ use App\Models\Deadline;
 use App\Models\MarkingSystemScore;
 use App\Models\RetakeBooking;
 use App\Models\StudentGrade;
+use App\Services\MoodleRetakeException;
 use App\Services\RetakeBookingService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -63,7 +64,7 @@ class OtrabotkaController extends Controller
         $today = Carbon::today();
 
         $windows = [];
-        $items = $rows->map(function (StudentGrade $g) use ($deadlineDays, $today, $student, &$windows) {
+        $items = $rows->map(function (StudentGrade $g) use ($deadlineDays, $today, $student, $lowLimit, &$windows) {
             $lessonDate = Carbon::parse($g->lesson_date);
             // Sababli ariza davridagi dars: muddat — arizada belgilangan qayta topshirish oralig'i oxiri
             $key = $g->subject_id . '|' . $lessonDate->toDateString();
@@ -73,7 +74,12 @@ class OtrabotkaController extends Controller
                 : RetakeBookingService::rowDeadline($g->deadline, $g->lesson_date, $deadlineDays);
 
             if ($g->retake_grade !== null) {
-                $state = 'done';
+                // 1-urinish (Moodle mavzu testi) jurnalga ×0.8 bilan yozilgan; asl foizi o'tish
+                // balidan past, sababsiz va muddat o'tmagan bo'lsa — 2-urinish bo'lishi mumkin
+                // (aniq javob — Moodle'dan, quyida)
+                $entered = (float) $g->retake_grade / ($g->retake_was_sababli ? 1.0 : 0.8);
+                $state = !$windows[$key] && $student->level_code != 16 && $entered < $lowLimit && now()->lte($deadline)
+                    ? 'retry' : 'done';
             } elseif (now()->greaterThan($deadline) || ($g->status === 'closed' && !$windows[$key])) {
                 // grades:close-expired sozlamadagi muddat bo'yicha yopadi — sababli oraliqda bu hisobga olinmaydi
                 $state = 'expired';
@@ -93,8 +99,28 @@ class OtrabotkaController extends Controller
                 'deadline' => $deadline,
                 'days_left' => (int) $today->diffInDays($deadline->copy()->startOfDay(), false),
                 'state' => $state,
+                'retry' => false,
             ];
         });
+
+        // 2-urinish: Moodle shu mavzuni hali ochiq desa (urinish qolgan); Moodle javob bermasa — taxmin
+        if ($items->contains('state', 'retry')) {
+            try {
+                $open = collect(app(RetakeBookingService::class)->debts((int) $student->hemis_id))
+                    ->reject(fn ($d) => in_array($d['state'] ?? '', ['done', 'expired'], true))
+                    ->mapWithKeys(fn ($d) => [($d['subject_id'] ?? '') . '|' . ($d['lesson_date'] ?? '') => true]);
+            } catch (MoodleRetakeException $e) {
+                $open = null;
+            }
+            $items = $items->map(function ($i) use ($open) {
+                if ($i['state'] === 'retry') {
+                    $retry = $open === null || isset($open[$i['subject_id'] . '|' . $i['lesson_date']->toDateString()]);
+                    $i['state'] = $retry ? 'open' : 'done';
+                    $i['retry'] = $retry;
+                }
+                return $i;
+            });
+        }
 
         // Bir kundagi juftliklar bitta qator: talaba kun bo'yicha qayta topshiradi
         $items = $items->groupBy(fn ($i) => $i['subject_id'] . '|' . $i['lesson_date']->toDateString())
@@ -162,6 +188,8 @@ class OtrabotkaController extends Controller
             'deadline' => $deadline,
             'days_left' => $relevant->min('days_left'),
             'state' => $state,
+            // 1-urinish natijasi bor, 2-urinish ochiq
+            'retry' => $state === 'open' && $relevant->contains('retry', true),
         ];
     }
 

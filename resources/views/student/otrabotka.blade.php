@@ -46,6 +46,7 @@
         .ot-slot { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; padding: 2px 8px; border-radius: 8px; background: #eff6ff;
             border: 1px solid #bfdbfe; color: #1e3a8a !important; font-size: 11px; font-weight: 800; text-decoration: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
         .ot-slot.now { background: #ecfdf5; border-color: #6ee7b7; color: #065f46 !important; }
+        .ot-state span.ot-try { color: #b91c1c; font-weight: 700; }
         .ot-empty { padding: 20px 12px; text-align: center; color: #64748b; font-size: 13px; background: #fff; border-radius: 12px; border: 1px dashed #cbd5e1; }
         .ot-empty b { display: block; margin-bottom: 2px; font-size: 14px; color: #15803d; }
     </style>
@@ -114,7 +115,8 @@
                                 <b>{{ __("Muddati o'tgan") }}</b>
                                 <span>{{ $item['deadline']->format('d.m.Y') }}</span>
                             @elseif($b)
-                                <b>{{ __('Vaqt tanlangan') }}</b>
+                                <b>{{ $item['retry'] ? __('2-urinish: vaqt tanlangan') : __('Vaqt tanlangan') }}</b>
+                                @if($item['retry'])<span class="ot-try">{{ __('1-urinish') }}: {{ $item['retake'] }}</span>@endif
                                 <a class="ot-slot {{ $b->slot_start->lte(now()) ? 'now' : '' }}" href="{{ $url }}"
                                    title="{{ __('Batafsil') }}">🕒 {{ $b->slot_start->format('d.m') }}, {{ $b->slot_start->format('H:i') }}–{{ $b->slot_end->format('H:i') }}</a>
                             @else
@@ -125,8 +127,9 @@
                                         {{ $item['days_left'] }} {{ __('kun qoldi') }}
                                     @endif
                                 </b>
+                                @if($item['retry'])<span class="ot-try">{{ __('1-urinish') }}: {{ $item['retake'] }}</span>@endif
                                 <span>{{ $item['deadline']->format('d.m.Y') }} {{ __('gacha') }}</span>
-                                <a class="ot-book" href="{{ $url }}">{{ __('Vaqt tanlash') }}</a>
+                                <a class="ot-book" href="{{ $url }}">{{ $item['retry'] ? __('2-urinish: vaqt tanlash') : __('Vaqt tanlash') }}</a>
                             @endif
                         </span>
                     </div>

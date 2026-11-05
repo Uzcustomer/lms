@@ -9,14 +9,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Fan chegara sanada (sukut bo'yicha 26.10.2026) yoki undan keyin tugagan bo'lsa — fan tugashi:
- * oxirgi dars, OSKI va Test sanalarining eng kechi — shu fanning chegara sanadan oldin:
- *   - otrabotka qilingan NB (sababli ham, sababsiz ham) — otrabotka bahosi;
- *   - topshirilgan OSKI — OSKI bahosi (Test bahosiga tegilmaydi)
- * grades:admin-upgrade formulasi bo'yicha oshiriladi (60 dan pasti — yo'q). Chegara sanagacha
- * butunlay tugagan fanlarga tegilmaydi. Guruhlar grades:upgrade-cycle dagidek tanlanadi.
+ * Chegara sanadan (sukut bo'yicha 26.10.2026) oldin:
+ *   - otrabotka qilingan NB (sababli ham, sababsiz ham) — faqat darslari chegara sanada yoki keyin
+ *     tugagan fanlarda, otrabotka bahosi;
+ *   - topshirilgan OSKI — fan (oxirgi dars, OSKI, Test eng kechi) chegara sanada yoki keyin
+ *     tugagan bo'lsa (masalan Test 26–27.10 da), OSKI bahosi (Test bahosiga tegilmaydi)
+ * grades:admin-upgrade formulasi bo'yicha oshiriladi (60 dan pasti — yo'q). Guruhlar
+ * grades:upgrade-cycle dagidek tanlanadi.
  * Sukut bo'yicha faqat hisobot, yozish — --force; --revert — shu baholarni qaytaradi;
- * --revert-finished — tugagan fanlarda (avvalgi versiya) oshirib yuborilgan baholarni qaytaradi.
+ * --revert-finished — shu shartlarga to'g'ri kelmaydigan (avvalgi versiya oshirib yuborgan) baholarni qaytaradi.
  */
 class UpgradeNbOskiGrades extends UpgradeCycleGrades
 {
@@ -105,9 +106,11 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
                     $row = [$group->name, $courseOf[$group->group_hemis_id] ?? '', $subject, $end['label'] ?? '?',
                         $kind . ($attempts ? " ({$attempts}-urinish)" : ''), $when, $rows->count()];
 
-                    // Fan chegara sanagacha butunlay tugagan — tegilmaydi; avvalgi versiya oshirib
-                    // yuborgan bo'lsa — ko'rsatiladi va --revert-finished bilan qaytariladi
-                    if ($end === null || $end['end']->lt($cutoff)) {
+                    // NB otrabotka — faqat darslari chegara sanada yoki keyin tugagan fanlarda; OSKI — fan
+                    // (dars/OSKI/Test eng kechi) chegara sanada yoki keyin tugagan bo'lsa. Aks holda
+                    // tegilmaydi; avvalgi versiya oshirib yuborgan bo'lsa — --revert-finished bilan qaytadi
+                    $finishedAt = $kind === 'OSKI' ? ($end['end'] ?? null) : ($end['lessons'] ?? null);
+                    if ($finishedAt === null || $finishedAt->lt($cutoff)) {
                         $upgraded = $rows->filter(fn ($r) => $r->upgraded_by_admin);
                         if ($upgraded->isEmpty()) {
                             continue;
@@ -117,7 +120,8 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
                         $r = $revertFinished
                             ? AdminUpgradeGrades::applyRows($upgraded, $students, $limit, $deadlineDays, true, $force, $group->name, $none)
                             : ['changed' => 0];
-                        $table[] = array_merge($row, [$r['changed'], '', "FAN TUGAGAN — noto'g'ri oshirilgan: {$upgraded->count()}"
+                        $table[] = array_merge($row, [$r['changed'], '', ($kind === 'OSKI' ? 'FAN' : 'DARSLAR')
+                            . " TUGAGAN — noto'g'ri oshirilgan: {$upgraded->count()}"
                             . ($revertFinished ? ($force ? ', qaytarildi' : ', qaytariladi') : '')]);
                         continue;
                     }
@@ -136,7 +140,7 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
         $this->table(['Guruh', 'Kurs', 'Fan', 'Fan tugashi (eng kechi)', 'Tur', "Sana ({$cut} gacha)", 'Baholar',
             $revert ? 'Qaytariladi' : 'Oshiriladi', '<60', 'Izoh'], $table);
         if ($wrong) {
-            $this->warn("Tugagan fanlarda noto'g'ri oshirilgan baholar: {$wrong} ta."
+            $this->warn("Noto'g'ri oshirilgan baholar (darslari/fani {$cut} gacha tugagan): {$wrong} ta."
                 . ($revertFinished ? '' : ' Qaytarish uchun: --revert-finished --force'));
         }
         if ($samples) {
@@ -158,7 +162,7 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
      * Guruh fanlarining tugash sanasi: oxirgi dars (schedules), OSKI va Test (exam_schedules,
      * guruh sathidagi qatorlar) sanalarining eng kechi.
      *
-     * @return array<string, array{end: Carbon, label: string}> subject_id => ...
+     * @return array<string, array{end: Carbon, lessons: ?Carbon, label: string}> subject_id => ...
      */
     private function subjectEnds($groupHemisId, Carbon $since): array
     {
@@ -194,6 +198,7 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
         foreach ($dates as $subjectId => $kinds) {
             $ends[$subjectId] = [
                 'end' => collect($kinds)->max(),
+                'lessons' => $kinds['dars'] ?? null,
                 'label' => collect($kinds)->map(fn ($d, $k) => "{$k} " . $d->format('d.m'))->implode(', '),
             ];
         }

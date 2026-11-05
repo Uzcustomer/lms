@@ -36,10 +36,11 @@ beforeEach(function () {
     DB::table('groups')->insert([['group_hemis_id' => 1, 'name' => 'd1/d22-03a'], ['group_hemis_id' => 2, 'name' => 'd1/d25-01a']]);
     DB::table('students')->insert([['hemis_id' => '10', 'group_id' => 1, 'level_code' => '15'], ['hemis_id' => '20', 'group_id' => 2, 'level_code' => '12']]);
 
-    // 1 — darslar 20.10 gacha, OSKI 24.10, Test 27.10 → fan 27.10 da tugaydi (olinadi)
+    // 1 — darslar 20.10 gacha, OSKI 24.10, Test 27.10 → fan 27.10 da tugaydi: OSKI olinadi, NB — yo'q (darslar tugagan)
+    // 4 — darslar 28.10 gacha → NB otrabotkasi olinadi
     // 2 — darslar 15.10, OSKI 18.10, Test 19.10 → 26.10 gacha tugagan (tegilmaydi)
     // 3 — faqat OSKI, 20.10 → tugagan (tegilmaydi)
-    foreach ([[1, '2026-10-20', '2026-10-24', '2026-10-27'], [2, '2026-10-15', '2026-10-18', '2026-10-19'], [3, '2026-10-12', '2026-10-20', null]] as [$id, $last, $oski, $test]) {
+    foreach ([[1, '2026-10-20', '2026-10-24', '2026-10-27'], [2, '2026-10-15', '2026-10-18', '2026-10-19'], [3, '2026-10-12', '2026-10-20', null], [4, '2026-10-28', '2026-10-28', '2026-10-30']] as [$id, $last, $oski, $test]) {
         foreach ([1, 2] as $group) {
             DB::table('schedules')->insert(['group_id' => $group, 'subject_id' => $id, 'subject_name' => "Fan $id", 'lesson_date' => "$last 08:30:00"]);
             DB::table('exam_schedules')->insert(['group_hemis_id' => (string) $group, 'subject_id' => (string) $id, 'oski_date' => $oski, 'test_date' => $test]);
@@ -55,16 +56,20 @@ function nbOskiGrade(array $row): int
         'lesson_date' => '2026-10-15 08:30:00', 'training_type_code' => 13, 'status' => 'recorded']);
 }
 
-it('upgrades NB retakes and OSKI before the cutoff only for subjects that end on or after it', function () {
-    $nb = ['grade' => null, 'reason' => 'absent', 'status' => 'retake'];
+it('upgrades NB retakes (lessons go on after the cutoff) and OSKI (subject ends after it) before the cutoff', function () {
+    $nb = ['grade' => null, 'reason' => 'absent', 'status' => 'retake', 'subject_id' => '4'];
     $nbBefore = nbOskiGrade($nb + ['retake_grade' => 80, 'retake_graded_at' => '2026-10-20 12:00:00']);
     $nbSababli = nbOskiGrade($nb + ['retake_grade' => 90, 'retake_graded_at' => '2026-10-25 23:00:00']);
     $nbAfter = nbOskiGrade($nb + ['retake_grade' => 80, 'retake_graded_at' => '2026-10-26 09:00:00']);
+    // Darslari 20.10 da tugagan fan (OSKI 24.10, Test 27.10): NB oshmaydi; avvalgi versiya oshirgani qaytadi
+    $lessonsEndedNb = nbOskiGrade(['subject_id' => '1'] + $nb + ['retake_grade' => 80, 'retake_graded_at' => '2026-10-18 12:00:00']);
+    $wronglyUpgradedNb = nbOskiGrade(['subject_id' => '1', 'retake_grade' => 85, 'upgraded_by_admin' => true, 'admin_original_grade' => 80]
+        + $nb + ['retake_graded_at' => '2026-10-19 12:00:00']);
     $plain = nbOskiGrade(['grade' => 80]);
     $oski = nbOskiGrade(['grade' => 80, 'training_type_code' => 101, 'attempt' => 1, 'lesson_date' => '2026-10-24 09:00:00']);
     $test = nbOskiGrade(['grade' => 80, 'training_type_code' => 102, 'attempt' => 1, 'lesson_date' => '2026-10-27 09:00:00']);
     // Tugagan fanlar
-    $finishedNb = nbOskiGrade($nb + ['subject_id' => '2', 'retake_grade' => 80, 'retake_graded_at' => '2026-10-16 12:00:00']);
+    $finishedNb = nbOskiGrade(['subject_id' => '2'] + $nb + ['retake_grade' => 80, 'retake_graded_at' => '2026-10-16 12:00:00']);
     $finishedOski = nbOskiGrade(['grade' => 80, 'subject_id' => '2', 'training_type_code' => 101, 'attempt' => 1, 'lesson_date' => '2026-10-18 09:00:00']);
     $oskiOnly = nbOskiGrade(['grade' => 80, 'subject_id' => '3', 'training_type_code' => 101, 'attempt' => 1, 'lesson_date' => '2026-10-20 09:00:00']);
     // Avvalgi versiya tugagan fanda oshirib yuborgan OSKI
@@ -83,12 +88,15 @@ it('upgrades NB retakes and OSKI before the cutoff only for subjects that end on
         ->and((float) $g($oski)->grade)->toBe(85.0)
         ->and((float) $g($oski)->admin_original_grade)->toBe(80.0)
         ->and((float) $g($wronglyUpgraded)->grade)->toBe(85.0);       // --revert-finished siz qoladi
-    foreach ([$nbAfter, $plain, $test, $finishedNb, $finishedOski, $oskiOnly, $course2] as $id) {
+    foreach ([$nbAfter, $lessonsEndedNb, $plain, $test, $finishedNb, $finishedOski, $oskiOnly, $course2] as $id) {
         expect((bool) $g($id)->upgraded_by_admin)->toBeFalse();
     }
 
     $this->artisan('grades:upgrade-nb-oski', ['--faculty' => ['1-son davolash'], '--revert-finished' => true, '--force' => true])->assertSuccessful();
     expect((float) $g($wronglyUpgraded)->grade)->toBe(80.0)
+        ->and((float) $g($wronglyUpgradedNb)->retake_grade)->toBe(80.0)
+        ->and((bool) $g($wronglyUpgradedNb)->upgraded_by_admin)->toBeFalse()
+        ->and((float) $g($nbBefore)->retake_grade)->toBe(85.0)          // to'g'ri oshirilgani qoladi
         ->and((bool) $g($wronglyUpgraded)->upgraded_by_admin)->toBeFalse()
         ->and((float) $g($oski)->grade)->toBe(85.0);                   // to'g'ri oshirilgani qoladi
 

@@ -89,7 +89,7 @@ class UpgradeMtGrades extends UpgradeCycleGrades
                     continue;
                 }
 
-                $uploaded = $this->uploadDates($group->group_hemis_id, $c, $hemisIds);
+                $uploaded = self::uploadDates($group->group_hemis_id, $c, $hemisIds);
                 $before = $rows->filter(fn ($r) => isset($uploaded[$r->student_hemis_id]) && $uploaded[$r->student_hemis_id]->lt($cutoff));
                 $after = $rows->filter(fn ($r) => isset($uploaded[$r->student_hemis_id]) && $uploaded[$r->student_hemis_id]->gte($cutoff))->count();
                 $noFile = $rows->count() - $before->count() - $after;
@@ -133,7 +133,7 @@ class UpgradeMtGrades extends UpgradeCycleGrades
      * Talabalar MT faylini oxirgi marta qachon yuklagani (JournalController MT baholashdagidek:
      * guruh + semestr + fan bo'yicha topshiriqlar). @return array<string, Carbon> hemis_id => submitted_at
      */
-    private function uploadDates($groupHemisId, object $cycle, array $hemisIds): array
+    public static function uploadDates($groupHemisId, object $cycle, array $hemisIds): array
     {
         $csHemisIds = DB::table('curriculum_subjects')
             ->where('subject_id', $cycle->subject_id)

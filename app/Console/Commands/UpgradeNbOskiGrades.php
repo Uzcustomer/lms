@@ -68,7 +68,7 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
         $columns = ['id', 'student_hemis_id', 'subject_id', 'subject_name', 'lesson_date', 'retake_graded_at', 'grade', 'retake_grade',
             'reason', 'status', 'upgraded_by_admin', 'admin_original_grade'];
 
-        $from = $this->gradesTable();
+        $from = self::gradesTable();
         $this->output->progressStart($groups->count());
         foreach ($groups as $group) {
             $this->output->progressAdvance();
@@ -93,7 +93,7 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
                         ->where(fn ($q) => $q->whereNotNull('grade')->orWhereNotNull('retake_grade'))))
                 ->get(array_merge($columns, ['training_type_code'], $hasAttempt ? ['attempt'] : []));
             [$oski, $nb] = $rows->partition(fn ($r) => (int) $r->training_type_code === self::OSKI);
-            $ends = $this->subjectEnds($group->group_hemis_id, $since);
+            $ends = self::subjectEnds($group->group_hemis_id, $since);
 
             foreach (['NB otrabotka' => $nb, 'OSKI' => $oski] as $kind => $kindRows) {
                 foreach ($kindRows->groupBy('subject_id') as $subjectId => $rows) {
@@ -162,9 +162,9 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
      * Guruh fanlarining tugash sanasi: oxirgi dars (schedules), OSKI va Test (exam_schedules,
      * guruh sathidagi qatorlar) sanalarining eng kechi.
      *
-     * @return array<string, array{end: Carbon, lessons: ?Carbon, label: string}> subject_id => ...
+     * @return array<string, array{end: Carbon, lessons: ?Carbon, dates: array<string, Carbon>, label: string}> subject_id => ...
      */
-    private function subjectEnds($groupHemisId, Carbon $since): array
+    public static function subjectEnds($groupHemisId, Carbon $since): array
     {
         $dates = [];
         $add = function ($subjectId, string $kind, $date) use (&$dates, $since) {
@@ -199,6 +199,7 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
             $ends[$subjectId] = [
                 'end' => collect($kinds)->max(),
                 'lessons' => $kinds['dars'] ?? null,
+                'dates' => $kinds,
                 'label' => collect($kinds)->map(fn ($d, $k) => "{$k} " . $d->format('d.m'))->implode(', '),
             ];
         }
@@ -210,7 +211,7 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
      * Fan sharti yo'q so'rovda MySQL lesson_date/deleted_at indeksini tanlab, katta jadvalni
      * har guruh uchun aylanib chiqadi — talaba bo'yicha indeks majburan ishlatiladi.
      */
-    private function gradesTable()
+    public static function gradesTable()
     {
         $index = 'idx_sg_student_subject_semester';
         if (DB::getDriverName() === 'mysql' && DB::select('SHOW INDEX FROM student_grades WHERE Key_name = ?', [$index])) {

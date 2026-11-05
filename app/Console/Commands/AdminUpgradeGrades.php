@@ -72,10 +72,9 @@ class AdminUpgradeGrades extends Command
         $samples = [];
         $total = 0;
         foreach ($this->readList($path) as [$groupName, $subject, $from, $to]) {
-            // Ro'yxatdagi guruh + uning kichik guruhlari: d1/d22-01 → d1/d22-01(a), d1/d22-01 (b) ...
+            // Ro'yxatdagi guruhning faqat kichik guruhlari: d1/d22-01 → d1/d22-01(a), d1/d22-01 (b) ... (o'zi emas)
             $groups = DB::table('groups')
-                ->where(fn ($q) => $q->where('name', $groupName)
-                    ->orWhere('name', 'like', $groupName . '(%')
+                ->where(fn ($q) => $q->where('name', 'like', $groupName . '(%')
                     ->orWhere('name', 'like', $groupName . ' (%'))
                 ->get(['group_hemis_id', 'name']);
             if ($groups->isEmpty()) {

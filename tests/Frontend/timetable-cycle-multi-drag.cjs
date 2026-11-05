@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 // Sikl jadvali: bir nechta kunni belgilab sudrash — Ctrl/Shift/ikki marta bosish bilan tanlov, yorliq, Esc; tanlangan kunlarni sudrash
 // (oldindan ko'rinish, server tekshiruvi), muammosiz — darhol + "Qaytarish", to'qnashuv — oyna ("Qo'llash" / "Baribir hammasiga"), Ctrl+Z,
-// ↑ ↓; o'qituvchi — so'rov oynasi tanlangan kunlar bilan; bitta kunni sudrash — avvalgidek (moveCycDay).
+// ↑ ↓; o'qituvchi — so'rov oynasi tanlangan kunlar bilan; bitta kunni sudrash: birga — moveCycDay, faqat ma'ruza / amaliy — tekshiruv
+// bilan (cycDaysApply, bitta kun).
 const { chromium } = require('playwright');
 const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin/timetable/index.blade.php'), 'utf8');
 const cut = (from, to) => {
@@ -150,7 +151,8 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         const commit = calls.filter(c => !c.dry_run);
         assert.equal(commit.length, 1);
         assert.deepEqual(commit[0], { specialty_name: 'davolash ishi', course: 4, group_name: 'F1 / 1-oqim', subject_name: 'Ichki kasalliklar',
-            training_type: 'practice', view: 'group', placement_group: 'F1 / 1-oqim', day_indexes: [0, 1, 2, 3], mode: 'lecture', delta: 2 });
+            training_type: 'practice', view: 'group', placement_group: 'F1 / 1-oqim', day_indexes: [0, 1, 2, 3], mode: 'lecture', delta: 2,
+            practice_place: 'swap' });
         let toasts = await p.evaluate(() => window.toasts);
         assert.match(toasts[0].html, /^4 kun: ma'ruza 08:30 → 10:00 <button type="button" class="tt-toast-btn" data-cyc-undo>Qaytarish \(Ctrl\+Z\)<\/button>/);
         assert.equal(await p.evaluate(() => window.reloads), 1);
@@ -227,13 +229,20 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         await drag(p, [1, 1], [3, 3]);
         assert.deepEqual((await apiCalls(p)).filter(c => !c.dry_run).map(c => [c.day_indexes, c.delta]), [[[0, 1, 2, 3], 2]]);
 
-        // 7) Bitta kunni oddiy sudrash (tanlovsiz) — avvalgidek: moveCycDay, ko'p kunli so'rov yo'q.
+        // 7) Bitta kunni sudrash (tanlovsiz): A katak — faqat amaliy, tekshiruv bilan (bitta kun, muammo yo'q — darhol); Shift bilan — birga
+        // (avvalgidek moveCycDay).
         await p.keyboard.press('Escape');
         await reset(p);
         await drag(p, [4, 7], [4, 9], { hold: 50 });
-        const all = await p.evaluate(() => window.calls);
+        let all = await p.evaluate(() => window.calls);
+        assert.deepEqual(all.filter(c => c.api).map(c => [c.api.dry_run, c.api.day_indexes, c.api.delta, c.api.mode, c.api.practice_place]),
+            [[1, [4], 2, 'practice', undefined], [undefined, [4], 2, 'practice', undefined]]);
+        assert.equal(all.filter(c => c.move).length, 0);
+        await reset(p);
+        await drag(p, [4, 7], [4, 9], { hold: 50, mods: ['Shift'] });
+        all = await p.evaluate(() => window.calls);
         assert.equal(all.filter(c => c.api).length, 0);
-        assert.deepEqual(all.filter(c => c.move).map(c => c.move.slice(0, 3).concat(c.move[4])), [['K', 4, 9, 'practice']]);
+        assert.deepEqual(all.filter(c => c.move).map(c => c.move.slice(0, 3).concat(c.move[4])), [['K', 4, 3, 'both']]);
 
         // 7b) O'tgan va bugungi kun: o'tgan — tanlanmaydi; bugungi — admin, birinchi dars hali boshlanmagan bo'lsa (aks holda — yo'q).
         await p.keyboard.press('Escape');

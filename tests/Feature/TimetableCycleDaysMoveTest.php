@@ -476,3 +476,98 @@ it('bitta kun (day_index): o\'tgan kun — hamma uchun 422; bugun — admin qo\'
     expect(dmDays($s)['2026-11-17']['lec'])->toBe([3, 5])
         ->and(\App\Models\TimetableChangeRequest::latest('id')->first()->summary)->toContain('bugungi dars ko‘chirildi');
 });
+
+// ===== ↑ ↓ qadami (step=jump) va aralash tanlov (day_modes) =====
+// Smenasiz blok: ma'ruza 1–2, amaliy darhol ortidan 3–6 (ikkala guruhcha) — yonma-yon.
+function dmAdjacent(array $s): array
+{
+    $s['placement']->update(['lecture_slots' => []]);
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]]);
+
+    return $s;
+}
+
+it('sakrash: ma\'ruza ↓ — ostidagi amaliy (4 soat) butunligicha tepaga, ma\'ruza uning ortidan; yana ↓ — 1 soat; ↑ ↑ — qaytadi', function () {
+    $s = dmAdjacent(dmSetup());
+    $jump = fn (int $dir) => dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => $dir, 'mode' => 'lecture', 'step' => 'jump',
+        'practice_place' => 'swap'])->assertOk()->json('days.0');
+    // 1-bosish: amaliy 1–4, ma'ruza 5–6 (III para) — o'rin almashish, oyna kerak emas (faqat qo'shni amaliyot — "pin").
+    $r = $jump(1);
+    expect($r)->toMatchArray(['status' => 'ok', 'from' => 1, 'to' => 5, 'mode' => 'lecture', 'jump' => true])
+        ->and(array_unique(array_column($r['swaps'], 'how')))->toBe(['pin']);
+    foreach (['d2/d23-04a', 'd2/d23-04b'] as $g) {
+        expect(dmDays($s, $g)['2026-11-16'])->toBe(['lec' => [5, 7], 'prc' => [1, 5]]);
+    }
+    // 2-bosish: ostida bo'sh — 1 soat (3,5-para); qolgan kunlar o'zgarmaydi.
+    expect($jump(1))->toMatchArray(['from' => 5, 'to' => 6, 'jump' => false]);
+    expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [6, 8], 'prc' => [1, 5]])->and(dmDays($s)['2026-11-17'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]]);
+    // ↑: avval 1 soat (amaliy bilan orada bo'sh), keyin yonma-yon — amaliy ma'ruza ortiga tushadi (avvalgi oraliq 1–6).
+    expect($jump(-1))->toMatchArray(['to' => 5, 'jump' => false]);
+    expect($jump(-1))->toMatchArray(['from' => 5, 'to' => 1, 'jump' => true]);
+    expect(dmDays($s, 'd2/d23-04a')['2026-11-16'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]])
+        ->and(dmDays($s, 'd2/d23-04b')['2026-11-16'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]]);
+});
+
+it('sakrash: amaliy ↑ — ma\'ruza ustidan o\'tib, ma\'ruza amaliyot ortiga; ↓ — qaytadi (guruhcha qatori)', function () {
+    $s = dmAdjacent(dmSetup());
+    $row = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'practice_place' => 'swap'];
+    $r = dmMove($s, $s['admin'], 'admin', $row + ['day_indexes' => [0], 'delta' => -1, 'mode' => 'practice', 'step' => 'jump'])->assertOk()->json('days.0');
+    expect($r)->toMatchArray(['status' => 'ok', 'from' => 3, 'to' => 1, 'mode' => 'practice', 'jump' => true])
+        ->and($r['lecture'])->toBe(['from' => 1, 'to' => 5, 'len' => 2]);
+    expect(dmDays($s, 'd2/d23-04a')['2026-11-16'])->toBe(['lec' => [5, 7], 'prc' => [1, 5]]);
+    // Boshqa guruhcha amaliyoti yangi ma'ruza bilan kesishdi — o'rin almashish qoidasi bo'yicha (ma'ruzaning eski joyiga).
+    expect(dmDays($s, 'd2/d23-04b')['2026-11-16'])->toBe(['lec' => [5, 7], 'prc' => [1, 5]]);
+    $b = dmMove($s, $s['admin'], 'admin', $row + ['day_indexes' => [0], 'delta' => 1, 'mode' => 'practice', 'step' => 'jump'])->assertOk()->json('days.0');
+    expect($b)->toMatchArray(['from' => 1, 'to' => 3, 'jump' => true])->and($b['lecture'])->toBe(['from' => 5, 'to' => 1, 'len' => 2])
+        ->and(dmDays($s, 'd2/d23-04a')['2026-11-16'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]]);
+});
+
+it('sakrash: kun oxirida ostida joy yo\'q — "sig\'maydi"; tepada amaliy yonma-yon — sakraydi; step=jump faqat ±1 bilan', function () {
+    $s = dmSetup();
+    // Ma'ruza kun oxirida (11–12), amaliy smenada 7–10 — ma'ruza amaliyot ortidan.
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04a' => 7, 'd2/d23-04b' => 7], 'starts' => [0 => 11]]]);
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [11, 13], 'prc' => [7, 11]]);
+    $down = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => 1, 'mode' => 'lecture', 'step' => 'jump', 'dry_run' => 1])->assertOk()->json('days.0');
+    expect($down)->toMatchArray(['status' => 'nofit', 'to' => 12, 'jump' => false]);
+    $up = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => -1, 'mode' => 'lecture', 'step' => 'jump', 'practice_place' => 'swap'])->assertOk()->json('days.0');
+    expect($up)->toMatchArray(['status' => 'ok', 'from' => 11, 'to' => 7, 'jump' => true])
+        ->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [7, 9], 'prc' => [9, 13]]);
+    dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => 2, 'mode' => 'lecture', 'step' => 'jump'])->assertUnprocessable();
+});
+
+it('aralash tanlov (day_modes): bitta so\'rov — har kun o\'z rejimi bilan, bitta qaytarish kaliti; dry_run hech narsa saqlamaydi', function () {
+    $s = dmAdjacent(dmSetup());
+    $before = $s['placement']->fresh()->lecture_slots;
+    $row = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'practice_place' => 'swap'];
+    $body = $row + ['day_indexes' => [0, 1, 2], 'day_modes' => [0 => 'lecture', 1 => 'practice', 2 => 'both'], 'mode' => 'both', 'delta' => 1, 'step' => 'jump'];
+    $dry = dmMove($s, $s['admin'], 'admin', $body + ['dry_run' => 1])->assertOk()->json();
+    expect(array_column($dry['days'], 'mode'))->toBe(['lecture', 'practice', 'both'])
+        ->and(array_column($dry['days'], 'status'))->toBe(['ok', 'ok', 'ok'])
+        ->and($s['placement']->fresh()->lecture_slots)->toBe($before);
+    $r = dmMove($s, $s['admin'], 'admin', $body)->assertOk()->json();
+    expect($r['applied'])->toBe(3)->and($r['undo'])->toBeString();
+    $d = dmDays($s, 'd2/d23-04a');
+    // 16.11 — ma'ruza sakradi; 17.11 — amaliy (ostida bo'sh) 1 soat; 18.11 — "Birga": guruhcha kun boshi 1 soat; 19.11 — tanlanmagan.
+    expect($d['2026-11-16'])->toBe(['lec' => [5, 7], 'prc' => [1, 5]])
+        ->and($d['2026-11-17'])->toBe(['lec' => [1, 3], 'prc' => [4, 8]])
+        ->and($d['2026-11-18'])->toBe(['lec' => [2, 4], 'prc' => [4, 8]])
+        ->and($d['2026-11-19'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]]);
+    dmMove($s, $s['admin'], 'admin', ['undo' => $r['undo']])->assertOk()->assertJsonPath('undone', true);
+    expect($s['placement']->fresh()->lecture_slots)->toBe($before);
+});
+
+it('aralash tanlov tasdiq doskasida: bitta so\'rov, tavsifda har tur o\'z kunlari bilan; tasdiqlangach hammasi', function () {
+    $s = dmAdjacent(dmSetup());
+    $head = dmHead();
+    $s['board']->update(['settings' => array_merge($s['board']->settings, ['approval_required' => true])]);
+    $r = dmMove($s, $head, 'kafedra_mudiri', ['day_indexes' => [1, 2], 'day_modes' => [1 => 'lecture', 2 => 'practice'], 'mode' => 'both',
+        'delta' => 1, 'step' => 'jump', 'practice_place' => 'swap'])->assertOk()->json();
+    expect($r['pending_approval'] ?? false)->toBeTrue()->and(\App\Models\TimetableChangeRequest::count())->toBe(1);
+    $req = \App\Models\TimetableChangeRequest::latest('id')->first();
+    expect($req->summary)->toContain("ma'ruza (2-kun), amaliy (3-kun)")->toContain('bir qadam pastga');
+    dmAs($s['admin'], 'admin')->postJson(route('admin.timetable.change-requests.approve', $req->id))->assertOk();
+    expect(dmDays($s)['2026-11-17'])->toBe(['lec' => [5, 7], 'prc' => [1, 5]])
+        ->and(dmDays($s)['2026-11-18'])->toBe(['lec' => [1, 3], 'prc' => [4, 8]]);
+});

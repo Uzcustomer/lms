@@ -6133,6 +6133,10 @@ class TimetableController extends Controller
             // dry_run — faqat natija, force — bandlikka qaramay (sig'maydigan kun baribir o'zgarmaydi), undo — oxirgi surishni qaytarish.
             'day_indexes'    => 'nullable|array|min:1|max:60',
             'day_indexes.*'  => 'integer|min:0|max:200',
+            // Aralash tanlov: har sikl kunining o'z rejimi (berilmagan kun — mode); step=jump — ↑ ↓ qadami (qo'shni dars bilan o'rin almashish).
+            'day_modes'      => 'nullable|array|max:60',
+            'day_modes.*'    => 'in:both,lecture,practice',
+            'step'           => 'nullable|in:jump',
             'delta'          => 'nullable|integer|min:-24|max:24',
             'dry_run'        => 'nullable|boolean',
             'force'          => 'nullable|boolean',

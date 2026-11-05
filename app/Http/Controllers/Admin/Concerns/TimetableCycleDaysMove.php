@@ -14,7 +14,8 @@ use Illuminate\Support\Str;
  * Sikl jadvali: bir nechta kunni bitta surish (cycle-lecture-slots, day_indexes). Har tanlangan sikl kunida surilayotgan qism —
  * mode bo'yicha: both — kun boshi (ma'ruza va amaliy birga), lecture — oqim ma'ruzasi (amaliy joyida), practice — amaliy (guruhcha
  * qatorida shu guruhcha, oqim qatorida — oqimdagi hammasi). Yangi soat: delta — har kunning o'z boshidan (sudrash), yoki start_hour —
- * hammasiga bir xil. Bitta tranzaksiya: har kun alohida sinab ko'riladi (savepoint), natija kun bo'yicha:
+ * hammasiga bir xil; step=jump — ↑ ↓ qadami (cycleDayJump: qo'shni ma'ruza / amaliy bilan o'rin almashish yoki 1 soat). day_modes — har
+ * kunning o'z rejimi (ma'ruza va amaliy aralash tanlov). Bitta tranzaksiya: har kun alohida sinab ko'riladi (savepoint), natija kun bo'yicha:
  *   ok — o'zgaradi; conflict — bandlik (o'qituvchi / xona / guruhning haftalik darsi) — force bo'lsa baribir qo'llanadi;
  *   nofit — kun oxiriga sig'maydi; blocked — ma'ruza va amaliy ustma-ust va h.k. (force ham qo'llamaydi);
  *   past — o'tgan kun (hamma uchun) yoki bugun (admin, superadmin, registrator ofisidan boshqalar uchun; xodimga bugungi dars boshlangan,
@@ -36,6 +37,15 @@ trait TimetableCycleDaysMove
         if ($delta === 0) {
             return response()->json(['error' => 'Vaqt o‘zgarmaydi (siljish 0 soat).'], 422);
         }
+        // ↑ ↓ (step=jump): delta — faqat yo'nalish (±1); har kunda qadam o'zicha (cycleDayJump): yo'nalishda qo'shni turgan ikkinchi qism
+        // (ma'ruza ↔ amaliy) bilan o'rin almashish yoki 1 soat.
+        $jumpDir = ($data['step'] ?? null) === 'jump' ? (int) ($delta <=> 0) : 0;
+        if (($data['step'] ?? null) === 'jump' && ($delta === null || abs($delta) !== 1)) {
+            return response()->json(['error' => 'Qadam (step=jump) uchun siljish +1 yoki -1 bo‘lishi kerak.'], 422);
+        }
+        // Har kunning o'z rejimi (day_modes: sikl kuni => both | lecture | practice; berilmagan kun — mode): ma'ruza va amaliy aralash tanlov
+        // bitta so'rovda — bitta tranzaksiya (hammasi yoki hech narsa), bitta qaytarish kaliti, tasdiq doskasida bitta so'rov.
+        $modes = array_map('strval', (array) ($data['day_modes'] ?? []));
         $dry = $request->boolean('dry_run');
         $force = !$dry && $request->boolean('force');
         // Bugungi dars — faqat admin, superadmin va registrator ofisi (boshlangan, tugagan bo'lsa ham; yangi vaqt — bugunning istalgan
@@ -62,14 +72,17 @@ trait TimetableCycleDaysMove
                     continue;
                 }
                 $date = reset($units)['date'];
-                [$part, $span, $why, $rel, $starts] = array_pad($this->cycleDayMovingPart($units, $mode, $sub, (array) ($placement->lecture_slots ?? []), $k), 5, null);
+                $dayMode = in_array($modes[$k] ?? '', ['both', 'lecture', 'practice'], true) ? $modes[$k] : $mode;
+                $row['mode'] = $dayMode;
+                [$part, $span, $why, $rel, $starts] = array_pad($this->cycleDayMovingPart($units, $dayMode, $sub, (array) ($placement->lecture_slots ?? []), $k), 5, null);
                 if (!$part) {
                     $out[] = array_merge($row, ['date' => $date, 'why' => $why]);
                     continue;
                 }
-                $h = $delta !== null ? $part[0] + $delta : (int) $data['start_hour'];
+                $jump = $jumpDir ? $this->cycleDayJump($units, $dayMode, $sub, $jumpDir) : null;
+                $h = $jump ? $part[0] + $jump['delta'] : ($delta !== null ? $part[0] + $delta : (int) $data['start_hour']);
                 $shift = $h - $part[0];
-                $row = array_merge($row, ['date' => $date, 'from' => $part[0], 'to' => $h, 'len' => $part[1] - $part[0]]);
+                $row = array_merge($row, ['date' => $date, 'from' => $part[0], 'to' => $h, 'len' => $part[1] - $part[0], 'jump' => (bool) ($jump['swap'] ?? false)]);
                 // Yangi joy: $rel — yangi boshdan nisbiy oraliq ("Faqat amaliy" — hammasi bitta $h dan); false — oldindan aytib bo'lmaydi
                 // (guruhcha qatoridagi smenali amaliy), kunga sig'ishi yozuvdan keyingi holat bo'yicha; aks holda oraliq siljiydi.
                 [$lo, $hi] = $rel === false ? [$h, null] : ($rel !== null ? [$h + $rel[0], $h + $rel[1]] : [$span[0] + $shift, $span[1] + $shift]);
@@ -91,9 +104,11 @@ trait TimetableCycleDaysMove
                 $p = array_merge($data, ['day_index' => $k, 'start_hour' => $h]);
                 DB::beginTransaction();   // shu kun — savepoint
                 try {
-                    $e = match ($mode) {
-                        'lecture' => $this->cycleLectureDayErrors($board, $placement, $p, $units, true),
-                        'practice' => ($request->boolean('lecture_swap') ? $this->cyclePracticeLectureSwap($board, $placement, $p, $units, $sub, $k, $h) : null)
+                    // Sakrash: ma'ruza — qo'shni amaliyot aniq soatga (pin); amaliy — ma'ruza bilan o'rin almashish (aniq soatga).
+                    $e = match ($dayMode) {
+                        'lecture' => $this->cycleLectureDayErrors($board, $placement, $p, $units, true, $jump['pin'] ?? []),
+                        'practice' => (isset($jump['lecture_at']) || $request->boolean('lecture_swap')
+                            ? $this->cyclePracticeLectureSwap($board, $placement, $p, $units, $sub, $k, $h, $jump['lecture_at'] ?? null) : null)
                             ?? $this->cyclePracticeDayErrors($board, $units, $sub, $k, $h),
                         default => $this->cycleBothDayWrite($board, $placement, $p, $units, true),
                     };
@@ -212,6 +227,56 @@ trait TimetableCycleDaysMove
     }
 
     /**
+     * ↑ ↓ qadami (step=jump) bitta sikl kunida: surilayotgan qism yo'nalishda ikkinchi qism bilan yonma-yon bo'lsa — o'rin almashadi:
+     * ikkinchi qism butunligicha (bo'linmasdan) birinchisining joyiga, birinchisi uning ortidan — ikkalasi avvalgi oraliqda, tartibi teskari
+     * (para chegarasiga tekislanmaydi). Masalan, ma'ruza 1–2, amaliy 3–6: ma'ruza ↓ — amaliy 1–4, ma'ruza 5–6; yana ↓ (ostida bo'sh) —
+     * ma'ruza 6–7. Yonma-yon bo'lmasa — 1 soat. Qo'shni amaliyot — shu qatorniki (guruhcha qatorida — o'zi, oqimda — hammasi; amaliy
+     * rejimida — birinchisi, cycleDayMovingPart kabi). "Birga" — doim 1 soat.
+     * Natija: ['delta' => ma'ruza / amaliy boshining siljishi, 'swap' => o'rin almashadimi, 'pin' => [guruhcha => amaliyot yangi boshi]
+     * (ma'ruza), 'lecture_at' => ma'ruza yangi boshi (amaliy) | yo'q].
+     */
+    private function cycleDayJump(array $units, string $mode, string $sub, int $dir): array
+    {
+        $step = ['delta' => $dir, 'swap' => false, 'pin' => []];
+        if ($mode === 'both') {
+            return $step;
+        }
+        $date = reset($units)['date'];
+        $lec = null;
+        $prc = [];
+        foreach ($units as $unit => $x) {
+            $lec ??= $x['lec'][$date] ?? null;
+            if (($sub === '' || (string) $unit === $sub) && ($r = $x['prac'][$date] ?? null)) {
+                $prc[(string) $unit] = [(int) $r[0], (int) $r[1]];
+            }
+        }
+        if (!$lec || !$prc) {
+            return $step;
+        }
+        [$l0, $l1] = [(int) $lec[0], (int) $lec[1]];
+        if ($mode === 'lecture') {
+            $adj = array_filter($prc, fn ($r) => $dir > 0 ? $r[0] === $l1 : $r[1] === $l0);
+            if (!$adj) {
+                return $step;
+            }
+            $plen = max(array_map(fn ($r) => $r[1] - $r[0], $adj));
+            $h = $dir > 0 ? $l0 + $plen : $l0 - $plen;
+            // Amaliyot: pastga — ma'ruzaning eski boshiga; tepaga — yangi ma'ruzadan keyin.
+            $at = $dir > 0 ? $l0 : $h + ($l1 - $l0);
+
+            return ['delta' => $h - $l0, 'swap' => true, 'pin' => array_map(fn () => $at, $adj)];
+        }
+        [$p0, $p1] = reset($prc);
+        if ($dir > 0 ? $l0 !== $p1 : $l1 !== $p0) {
+            return $step;
+        }
+        // Amaliy: pastga — ma'ruza amaliyotning eski boshiga, amaliy uning ortidan; tepaga — amaliy ma'ruza boshiga, ma'ruza uning ortidan.
+        $h = $dir > 0 ? $p0 + ($l1 - $l0) : $l0;
+
+        return ['delta' => $h - $p0, 'swap' => true, 'pin' => [], 'lecture_at' => $dir > 0 ? $p0 : $l0 + ($p1 - $p0)];
+    }
+
+    /**
      * "Faqat amaliy" bitta sikl kuni: guruhcha qatorida shu guruhcha, oqim qatorida — shu kuni amaliy darsi bor barcha guruhchalar
      * yangi soatga (ps_g); hard — kun oxiri va ma'ruza bilan ustma-ust, busy — bandlik (cyclePracticeBusyErrors). Yozuv — chaqiruvchi
      * tranzaksiyasida.
@@ -252,9 +317,10 @@ trait TimetableCycleDaysMove
      * "Faqat amaliy" ma'ruza ustiga (lecture_swap): amaliyot yangi soatga ($h), ma'ruza esa amaliyotning bo'shagan joyiga (sig'masa — yangi
      * amaliyotdan keyin yoki oldin, para chegarasidan). Oqimning boshqa guruhchalari amaliyoti yangi ma'ruza bilan kesishsa — practice_place
      * usuli bo'yicha (cycleLectureDayErrors). Amaliyot ma'ruza bilan kesishmasa — null (odatdagi "Faqat amaliy"). Natija: hard / busy / swaps
-     * va lecture {from, to, len}.
+     * va lecture {from, to, len}. $lecAt — ma'ruzaning aniq yangi boshi (↑ ↓ sakrashi, cycleDayJump): birinchi bo'lib sinaladi.
      */
-    private function cyclePracticeLectureSwap(TimetableBoard $board, TimetableCyclePlacement $placement, array $p, array $units, string $sub, int $k, int $h): ?array
+    private function cyclePracticeLectureSwap(TimetableBoard $board, TimetableCyclePlacement $placement, array $p, array $units, string $sub, int $k, int $h,
+        ?int $lecAt = null): ?array
     {
         $mine = array_filter($units, fn ($x, $unit) => ($sub === '' || (string) $unit === $sub) && isset($x['prac'][$x['date']])
             && !$this->isNonBlocking($x['u'], $board), ARRAY_FILTER_USE_BOTH);
@@ -277,7 +343,7 @@ trait TimetableCycleDaysMove
         $up = $end + (($rph - (($end - 1) % $rph)) % $rph);
         $down = $h - $llen >= 1 ? ($h - $llen) - (($h - $llen - 1) % $rph) : 0;
         $at = null;
-        foreach ([$p0, $up, $down] as $c) {
+        foreach (array_merge($lecAt !== null ? [$lecAt] : [], [$p0, $up, $down]) as $c) {
             if ($c >= 1 && $c + $llen - 1 <= $grid && !($c < $end && $h < $c + $llen) && $c !== $l0) {
                 $at = $c;
                 break;

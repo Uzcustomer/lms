@@ -34,8 +34,10 @@ const stubs = role => `
     const cycRoomClashes = () => [];
     function closeCycDayPop() { const p = document.getElementById('cycDayPop'); if (p) p.remove(); cycDaySel = null; }
     const openCycleTimeProposal = () => {}, moveCycDay = () => {};
-    let cycMultiSel = null;
+    let cycMultiSel = null, cycMoveMode = 'both';
     const cycMultiPaint = () => {}, cycAskDays = () => [], cycAskDp = dp => dp;
+    const cycDaySelPaint = () => {}, cycPartsMode = () => null, cycSelLook = () => null, cycModeParts = () => [], cycSelOffsets = () => [],
+        cycSelModes = () => ({}), cycSelApplyMode = () => {};
     const cycPracPlaceBind = () => {}, cycPracPlaceHtml = () => '', cycOverlapOk = () => false, cycDaysApply = () => {};
 `;
 const look = (p, sel) => p.evaluate(s => {

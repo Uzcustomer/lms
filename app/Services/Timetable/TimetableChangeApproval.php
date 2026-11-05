@@ -830,18 +830,29 @@ class TimetableChangeApproval
                 $many = array_values(array_unique(array_map('intval', (array) ($p['day_indexes'] ?? []))));
                 sort($many);
                 $day = $many ? implode(', ', array_map(fn ($k) => $k + 1, $many)) . '-kun' : (isset($p['day_index']) ? ((int) $p['day_index'] + 1) . '-kun' : 'kunlar');
-                // Rejim: faqat ma'ruza / faqat amaliy (berilmasa — ikkalasi birga).
-                $what = ['lecture' => 'ma\'ruza', 'practice' => 'amaliy'][$p['mode'] ?? ''] ?? 'darslar';
+                // Rejim: faqat ma'ruza / faqat amaliy (berilmasa — ikkalasi birga); aralash tanlov (day_modes) — "ma'ruza (1, 2-kun), amaliy (4-kun)".
+                $names = ['lecture' => 'ma\'ruza', 'practice' => 'amaliy', 'both' => 'darslar'];
+                $byMode = [];
+                foreach ($many as $k) {
+                    $m = (string) (((array) ($p['day_modes'] ?? []))[$k] ?? '');
+                    $byMode[isset($names[$m]) ? $m : ((string) ($p['mode'] ?? '') ?: 'both')][] = $k + 1;
+                }
+                $what = count($byMode) > 1
+                    ? implode(', ', array_map(fn ($m, $ks) => $names[$m] . ' (' . implode(', ', $ks) . '-kun)', array_keys($byMode), $byMode))
+                    : ($names[$byMode ? array_key_first($byMode) : (string) ($p['mode'] ?? '')] ?? 'darslar');
+                $hasMode = fn (string $m) => $byMode ? isset($byMode[$m]) : ($p['mode'] ?? '') === $m;
                 $text = $head . ': ' . $day . (!empty($p['undo']) ? ' — oxirgi surish qaytariladi'
+                    : (isset($p['delta']) && $many && ($p['step'] ?? '') === 'jump'
+                        ? ' — ' . $what . ' bir qadam ' . ((int) $p['delta'] > 0 ? 'pastga' : 'tepaga') . ' (yonidagi ma\'ruza / amaliy bilan o\'rin almashib yoki 1 soat)'
                     : (isset($p['delta']) && $many ? ' — ' . $what . ' ' . ((int) $p['delta'] > 0 ? '+' : '') . (int) $p['delta'] . ' soatga suriladi'
-                    : (isset($p['start_hour']) ? ' — ' . $what . ' ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi')));
+                    : (isset($p['start_hour']) ? ' — ' . $what . ' ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi'))));
                 // To'sib turgan amaliyot (TimetableCyclePracticeSwap) va teskari holat — ma'ruza bilan o'rin almashish.
                 $place = ['swap' => 'o\'rin almashadi', 'after' => 'ma\'ruzadan keyinga', 'gap' => (int) ($p['practice_gap'] ?? 0) . ' para oraliq bilan',
                     'pair' => (int) ($p['practice_pair'] ?? 1) . '-paradan'][$p['practice_place'] ?? ''] ?? null;
-                if (empty($p['undo']) && ($p['mode'] ?? '') === 'practice' && !empty($p['lecture_swap'])) {
+                if (empty($p['undo']) && $hasMode('practice') && !empty($p['lecture_swap'])) {
                     $text .= '; ma\'ruza bilan o\'rin almashadi';
                 }
-                if (empty($p['undo']) && $place && (($p['mode'] ?? '') === 'lecture' || (($p['mode'] ?? '') === 'practice' && !empty($p['lecture_swap'])))) {
+                if (empty($p['undo']) && $place && ($hasMode('lecture') || ($hasMode('practice') && !empty($p['lecture_swap'])))) {
                     $text .= '; to\'sib turgan amaliyot — ' . $place;
                 }
                 break;
@@ -909,7 +920,9 @@ class TimetableChangeApproval
             'admin.timetable.cards.week-override', 'admin.timetable.cards.unit-place' => 'card:' . $card?->id . ':w' . ($p['week'] ?? ''),
             'admin.timetable.boards.unit-fix' => 'w' . ($p['week'] ?? '') . ':' . ($p['action'] ?? ''),
             'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index', 'mode'])
-                . (!empty($p['day_indexes']) ? '|d' . $pick(['day_indexes']) : ''),
+                . (!empty($p['day_indexes']) ? '|d' . $pick(['day_indexes']) : '')
+                // Aralash tanlov (har kunning rejimi) va ↑ ↓ qadami — boshqa so'rov (eski so'rovlar kaliti o'zgarmaydi).
+                . (!empty($p['day_modes']) ? '|m' . md5(json_encode((array) $p['day_modes'])) : '') . (!empty($p['step']) ? '|s' . $p['step'] : ''),
             'admin.timetable.cycle-place', 'admin.timetable.cycle-assign', 'admin.timetable.cycle-mudir-placeholder',
             'admin.timetable.cycle-mudir-placeholder.revert' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
             // Ko'p kunli / ma'ruza so'rovi — kalitga sanalar va tur ham (eski amaliy so'rovlar kaliti o'zgarmaydi).

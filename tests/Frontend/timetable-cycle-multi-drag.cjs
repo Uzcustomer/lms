@@ -1,7 +1,8 @@
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-// Sikl jadvali: bir nechta kunni belgilab sudrash — Ctrl/Shift/ikki marta bosish bilan tanlov, yorliq, Esc; tanlangan kunlarni sudrash
+// Sikl jadvali: bir nechta kunni belgilab sudrash — Excel kabi tanlov (bo'lak — kunning M yoki A si; Ctrl — bo'lak, Shift — to'rtburchak,
+// Ctrl+Shift — qo'shib), ikki marta bosish, yorliq (rejim bilan), Esc, rejim filtri; aralash tanlov — bitta so'rov (day_modes); tanlangan kunlarni sudrash
 // (oldindan ko'rinish, server tekshiruvi), muammosiz — darhol + "Qaytarish", to'qnashuv — oyna ("Qo'llash" / "Baribir hammasiga"), Ctrl+Z,
 // ↑ ↓; o'qituvchi — so'rov oynasi tanlangan kunlar bilan; bitta kunni sudrash: birga — moveCycDay, faqat ma'ruza / amaliy — tekshiruv
 // bilan (cycDaysApply, bitta kun).
@@ -117,12 +118,15 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
             return p;
         };
 
-        // 1) Tanlov: Ctrl+bosish — 4 kun; yorliq; Shift — oraliq; sarlavhada ikki marta bosish — hammasi; Esc — bekor.
+        // 1) Tanlov: Ctrl+bosish (M katagi) — 4 kun ma'ruzasi; yorliqda rejim; Shift — to'rtburchak; sarlavhada ikki marta bosish — hammasi;
+        //    Esc — bekor.
         const p = await page('admin', true);
         for (const d of [0, 1, 2, 3]) await click(p, d, 1, ['Control']);
         assert.deepEqual(await selected(p), [0, 1, 2, 3]);
-        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 4 kun · Esc — bekor/);
-        assert.match(await cls(p, 2, 5), /is-multi-sel/);   // butun kun ustuni ajratiladi
+        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 4 kun · Faqat ma'ruza · Esc — bekor/);
+        assert.match(await cls(p, 2, 2), /is-multi-sel/);          // ma'ruzaning har ikki soati (bo'lak butunligicha)
+        assert.doesNotMatch(await cls(p, 2, 5), /is-multi-sel/);   // bo'sh soat — yo'q
+        assert.doesNotMatch(await cls(p, 2, 7), /is-multi-sel/);   // amaliy — tanlanmagan
         await click(p, 1, 1, ['Control']);                   // qayta Ctrl — olinadi
         assert.deepEqual(await selected(p), [0, 2, 3]);
         await p.keyboard.press('Escape');
@@ -214,27 +218,33 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         await p.click('#cycMultiDlg [data-cmd="cancel"]');
         assert.equal((await apiCalls(p)).filter(c => !c.dry_run).length, 0);
 
-        // 5b) "Birga" +3: mijoz taxmini — amaliy (7–10) kun oxiridan chiqadi, server — ok (smenasi qotirilgan amaliy surilmaydi): server natijasi
-        //     ustun — "sig'maydi" emas.
+        // 5a) Tanlangan bo'lakni sudrash — tanlovning o'z rejimi: Shift (birga tugmasi) hisobga olinmaydi, faqat ma'ruza.
+        await reset(p);
+        const pre5 = await drag(p, [1, 1], [1, 2], { hold: 50, mods: ['Shift'] });
+        assert.doesNotMatch(pre5.tip, /Shift — birga/);
+        assert.deepEqual((await apiCalls(p)).filter(c => !c.dry_run).map(c => [c.day_indexes, c.delta, c.mode]), [[[0, 1, 2, 3], 1, 'lecture']]);
+        // 5b) "Birga" +3 (Ctrl bilan amaliyotlari ham qo'shildi — tanlov M+A): mijoz taxmini — amaliy (7–10) kun oxiridan chiqadi, server — ok
+        //     (smenasi qotirilgan amaliy surilmaydi): server natijasi ustun — "sig'maydi" emas.
+        for (const d of [0, 1, 2, 3]) await click(p, d, 7, ['Control']);
+        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 4 kun · Birga/);
         await reset(p);
         const g1 = await at(p, 1, 1), g2 = await at(p, 1, 4);
-        await p.keyboard.down('Shift');
         await p.mouse.move(g1.x, g1.y); await p.mouse.down(); await p.mouse.move(g1.x, g1.y + 8, { steps: 2 }); await p.mouse.move(g2.x, g2.y, { steps: 4 });
         await p.waitForTimeout(400);
         assert.doesNotMatch(await p.textContent('#cycDragTip'), /sig'maydi/);
         assert.match(await cls(p, 0, 4), /is-drag-ok/);
         assert.doesNotMatch(await cls(p, 0, 1), /is-drag-nofit/);
         await p.mouse.up();
-        await p.keyboard.up('Shift');
         await p.waitForTimeout(80);
         assert.deepEqual((await apiCalls(p)).filter(c => !c.dry_run).map(c => [c.day_indexes, c.delta, c.mode]), [[[0, 1, 2, 3], 3, 'both']]);
 
-        // 6) Klaviatura ↓ / ↑ — tanlangan kunlar 1 soatga (rejim — sukut "birga").
+        // 6) Klaviatura ↓ / ↑ — tanlangan kunlar bir qadam (step=jump), har kun o'z bo'laklari bilan (bu yerda M+A — "birga").
         await reset(p);
         await p.keyboard.press('ArrowDown');
         await p.waitForTimeout(60);
         calls = await apiCalls(p);
-        assert.deepEqual(calls.map(c => [c.dry_run, c.day_indexes, c.delta, c.mode]), [[1, [0, 1, 2, 3], 1, 'both'], [undefined, [0, 1, 2, 3], 1, 'both']]);
+        assert.deepEqual(calls.map(c => [c.dry_run, c.day_indexes, c.delta, c.mode, c.step]),
+            [[1, [0, 1, 2, 3], 1, 'both', 'jump'], [undefined, [0, 1, 2, 3], 1, 'both', 'jump']]);
         await reset(p);
         await p.keyboard.press('ArrowUp');
         await p.waitForTimeout(60);
@@ -275,6 +285,60 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         await p.keyboard.press('Escape');
         await p.evaluate(() => { window.TODAY = '2026-11-05'; window.T12 = ['08:30'].concat(window.T12.slice(1)); });
 
+        // 7d) Excel kabi: oddiy bosish — boshlanish nuqtasi; Shift — to'rtburchak (kunlar × soatlar) tanlovni almashtiradi, tegib o'tgan bo'lak
+        //     butunligicha (A 7–10 ning 8–9-soati — butun amaliy); Ctrl+Shift — qo'shadi (boshlanish nuqtasi joyida).
+        await reset(p);
+        await click(p, 0, 8);
+        await click(p, 2, 9, ['Shift']);
+        assert.deepEqual(await selected(p), [0, 1, 2]);
+        assert.match(await cls(p, 1, 7), /is-multi-sel/);
+        assert.match(await cls(p, 1, 10), /is-multi-sel/);
+        assert.doesNotMatch(await cls(p, 1, 1), /is-multi-sel/);
+        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 3 kun · Faqat amaliy/);
+        await click(p, 4, 1, ['Control', 'Shift']);   // 0..4 kun × 1..8 soat — M va A
+        assert.deepEqual(await selected(p), [0, 1, 2, 3, 4]);
+        assert.match(await cls(p, 4, 2), /is-multi-sel/);
+        assert.match(await cls(p, 3, 9), /is-multi-sel/);
+        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 5 kun · Birga/);
+        await click(p, 5, 5, ['Shift']);   // bo'sh soatlar (5-qator) — faqat to'rtburchakka tegib o'tgan bo'laklar: 0..5 kun 5..8 soat — A
+        assert.deepEqual(await selected(p), [0, 1, 2, 3, 4, 5]);
+        assert.doesNotMatch(await cls(p, 0, 1), /is-multi-sel/);
+        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 6 kun · Faqat amaliy/);
+        // Bo'sh soatni Ctrl bilan — tanlanmaydi (xabar).
+        await reset(p);
+        await click(p, 3, 5, ['Control']);
+        assert.match((await p.evaluate(() => window.toasts))[0].html, /Bo'sh soat tanlanmaydi/);
+        // Rejim filtri (kun oynasidagi radio): "Faqat ma'ruza" — tanlangan kunlarda faqat M; ma'ruzasi yo'q kun tanlovda qoladi (uzuq ramka,
+        // surilmaydi), "Birga" — yana tanlanadi.
+        await p.keyboard.press('Escape');
+        await p.evaluate(() => { BLOCK.day_plan[5] = { k: 6, lec: 0, prc: 4, start: 1, ps: 7, ktr: true }; });
+        await click(p, 4, 7, ['Control']);
+        await click(p, 5, 7, ['Control']);
+        await p.evaluate(() => { cycMoveMode = 'lecture'; cycSelApplyMode('K', 'lecture'); });
+        assert.deepEqual(await selected(p), [4]);
+        assert.match(await cls(p, 5, 8), /is-multi-idle/);
+        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 2 kun · Faqat ma'ruza<\/b>|Tanlangan: 2 kun · Faqat ma'ruza · 1 kunda ma'ruza yo'q/);
+        await reset(p);
+        await p.keyboard.press('ArrowDown');
+        await p.waitForTimeout(60);
+        assert.deepEqual((await apiCalls(p)).map(c => [c.day_indexes, c.mode]), [[[4], 'lecture'], [[4], 'lecture']]);
+        await p.evaluate(() => { cycMoveMode = 'both'; cycSelApplyMode('K', 'both'); });
+        assert.deepEqual(await selected(p), [4, 5]);
+        assert.doesNotMatch(await cls(p, 5, 8), /is-multi-idle/);
+        await p.keyboard.press('Escape');
+        await p.evaluate(() => { BLOCK.day_plan[5] = DAY(6); });
+        // Aralash (Ctrl): 0-kun M, 1-kun A — yorliq "Aralash", ↓ — bitta so'rov, har kun o'z rejimi (day_modes).
+        await click(p, 0, 1, ['Control']);
+        await click(p, 1, 8, ['Control']);
+        assert.match(await p.textContent('#cycSelBadge'), /Tanlangan: 2 kun · Aralash \(M 1, A 1\)/);
+        await reset(p);
+        await p.keyboard.press('ArrowDown');
+        await p.waitForTimeout(60);
+        assert.deepEqual((await apiCalls(p)).map(c => [c.dry_run, c.day_indexes, c.mode, c.day_modes, c.step, c.practice_place]),
+            [[1, [0, 1], 'both', { 0: 'lecture', 1: 'practice' }, 'jump', 'swap'], [undefined, [0, 1], 'both', { 0: 'lecture', 1: 'practice' }, 'jump', 'swap']]);
+        assert.match((await p.evaluate(() => window.toasts))[0].html, /^2 kun: darslar \(aralash\) 08:30 → 09:10/);
+        await p.keyboard.press('Escape');
+
         // 7c) Kafedra mudiri (kun soatini sura oladi) — bugungi kun tanlanmaydi (faqat admin / registrator ofisi).
         const km = await page('kafedra_mudiri', true);
         await km.evaluate(() => { window.TODAY = '2026-11-17'; window.T12 = ['24:00'].concat(window.T12.slice(1)); });
@@ -298,6 +362,15 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         assert.equal(tc.filter(c => c.api).length, 0);
         assert.deepEqual(tc.filter(c => c.proposal).map(c => c.proposal),
             [{ kind: 'practice', preselect: ['2026-11-17', '2026-11-18'], start: 5, date: '2026-11-17' }]);
+        // Aralash tanlov (M va A) — so'rov bitta tur uchun: sudrab bo'lmaydi, xabar (so'rov oynasi ochilmaydi).
+        await t.keyboard.press('Escape');
+        await t.evaluate(() => { window.calls = []; window.toasts = []; });
+        await click(t, 1, 1, ['Control']);
+        await click(t, 2, 7, ['Control']);
+        assert.match(await t.textContent('#cycSelBadge'), /Aralash/);
+        await drag(t, [1, 1], [1, 3], { hold: 50 });
+        assert.equal((await t.evaluate(() => window.calls)).filter(c => c.proposal || c.api).length, 0);
+        assert.match((await t.evaluate(() => window.toasts)).map(x => x.html).join(' '), /ma'ruza va amaliy aralash/);
         // 9) So'rov oynasi (haqiqiy openCycleTimeProposal): sudrashdagi yangi vaqt (opts.start) va tanlangan kunlar oldindan belgilangan.
         const q = await (await browser.newContext({ viewport: { width: 1000, height: 700 } })).newPage();
         await q.setContent('<!doctype html><html><head><style>' + css + '</style></head><body></body></html>');
@@ -313,7 +386,7 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         // Sudrashsiz (start yo'q) — hozirgi vaqt.
         await q.evaluate(d => window.open1({ kind: 'practice', days: d, preselect: ['2026-11-17'] }), days);
         assert.equal(await q.$eval('#teacherTimeProposal select[name="start_hour"]', el => el.value), '7');
-        console.log('timetable cycle multi drag: 9 scenarios passed');
+        console.log('timetable cycle multi drag: 10 scenarios passed');
     } finally {
         await browser.close();
     }

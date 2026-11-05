@@ -17,7 +17,8 @@ use Illuminate\Support\Str;
  * hammasiga bir xil. Bitta tranzaksiya: har kun alohida sinab ko'riladi (savepoint), natija kun bo'yicha:
  *   ok — o'zgaradi; conflict — bandlik (o'qituvchi / xona / guruhning haftalik darsi) — force bo'lsa baribir qo'llanadi;
  *   nofit — kun oxiriga sig'maydi; blocked — ma'ruza va amaliy ustma-ust va h.k. (force ham qo'llamaydi);
- *   past — o'tgan kun yoki bugungi boshlangan dars (bugun — faqat admin / registrator, hali boshlanmagan dars); same — vaqt o'zgarmaydi;
+ *   past — o'tgan kun (hamma uchun) yoki bugun (admin, superadmin, registrator ofisidan boshqalar uchun; xodimga bugungi dars boshlangan,
+ *   hatto tugagan bo'lsa ham ochiq — TimetableStaffToday); same — vaqt o'zgarmaydi;
  *   skip — bu kuni shu turdagi dars yo'q.
  * dry_run — faqat natija (hech narsa saqlanmaydi). Qo'llanganda — qaytarish kaliti (undo): oldingi qiymatlar serverda saqlanadi, Ctrl+Z
  * bitta so'rov bilan tiklaydi (jadval keyin o'zgarmagan bo'lsa). Guruhcha smenalari (shift_g) va tanlanmagan kunlar o'zgarmaydi.
@@ -37,12 +38,11 @@ trait TimetableCycleDaysMove
         }
         $dry = $request->boolean('dry_run');
         $force = !$dry && $request->boolean('force');
-        // Bugungi dars — faqat admin va registrator ofisi, hali boshlanmagan bo'lsa (yangi vaqt ham kelgusida).
-        $todayOk = in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true);
+        // Bugungi dars — faqat admin, superadmin va registrator ofisi (boshlangan, tugagan bo'lsa ham; yangi vaqt — bugunning istalgan
+        // parasi); o'tgan kun — hamma uchun yopiq.
+        $todayOk = $this->staffTodayOk($request);
         $today = self::proposalToday();
-        $now = Carbon::now('Asia/Tashkent')->format('H:i');
-        $times = $this->hemisSlotTimes($board);
-        $started = fn (int $h) => ($times[$h][0] ?? '00:00') <= $now;
+        $todayMoved = false;
         $grid = $this->cycleGridHours($board);
         $sub = trim((string) ($data['sub_group'] ?? ''));
         $days = array_values(array_unique(array_map('intval', (array) $data['day_indexes'])));
@@ -70,12 +70,12 @@ trait TimetableCycleDaysMove
                 $h = $delta !== null ? $part[0] + $delta : (int) $data['start_hour'];
                 $shift = $h - $part[0];
                 $row = array_merge($row, ['date' => $date, 'from' => $part[0], 'to' => $h, 'len' => $part[1] - $part[0]]);
-                // Yangi joy: $rel — yangi boshdan nisbiy oraliq (yozuvdan keyingi jadval surishdan farq qilsa: "Faqat amaliy" — hammasi bitta
-                // $h dan, guruhcha qatoridagi smenali amaliy — ma'ruzadan keyinga); aks holda oraliq siljiydi.
-                [$lo, $hi] = $rel !== null ? [$h + $rel[0], $h + $rel[1]] : [$span[0] + $shift, $span[1] + $shift];
-                if ($date < $today || ($date === $today && (!$todayOk || $started(min($span[0], $lo))))) {
-                    $out[] = array_merge($row, ['status' => 'past', 'why' => $date < $today ? 'O‘tgan kun.'
-                        : ($todayOk ? 'Bugungi dars boshlangan (yoki yangi vaqt o‘tib ketgan).' : 'Bugungi darsni ko‘chirib bo‘lmaydi.')]);
+                // Yangi joy: $rel — yangi boshdan nisbiy oraliq ("Faqat amaliy" — hammasi bitta $h dan); false — oldindan aytib bo'lmaydi
+                // (guruhcha qatoridagi smenali amaliy), kunga sig'ishi yozuvdan keyingi holat bo'yicha; aks holda oraliq siljiydi.
+                [$lo, $hi] = $rel === false ? [$h, null] : ($rel !== null ? [$h + $rel[0], $h + $rel[1]] : [$span[0] + $shift, $span[1] + $shift]);
+                $row['today'] = $date === $today;
+                if ($date < $today || ($date === $today && !$todayOk)) {
+                    $out[] = array_merge($row, ['status' => 'past', 'why' => $date < $today ? 'O‘tgan kun.' : self::todayStaffOnlyText()]);
                     continue;
                 }
                 // "Faqat amaliy" — hamma guruhcha amaliyoti allaqachon shu soatda bo'lsagina o'zgarmaydi (oqim qatorida har xil soatda bo'lishi mumkin).
@@ -83,8 +83,8 @@ trait TimetableCycleDaysMove
                     $out[] = array_merge($row, ['status' => 'same', 'why' => 'Vaqt o‘zgarmaydi.']);
                     continue;
                 }
-                if ($lo < 1 || $hi - 1 > $grid) {
-                    $out[] = array_merge($row, ['status' => 'nofit', 'why' => 'Kunga sig‘maydi: ' . ($hi - $lo) . ' soat '
+                if ($lo < 1 || ($hi !== null && $hi - 1 > $grid)) {
+                    $out[] = array_merge($row, ['status' => 'nofit', 'why' => 'Kunga sig‘maydi: ' . ($hi !== null ? ($hi - $lo) . ' soat ' : '')
                         . $lo . '-soatdan boshlab bo‘lmaydi (kunda ' . $grid . ' soat).']);
                     continue;
                 }
@@ -101,23 +101,19 @@ trait TimetableCycleDaysMove
                     DB::rollBack();
                     throw $ex;
                 }
-                // Birga ko'chgan amaliyot / ma'ruza ham: bugun — boshlanmagan (eski va yangi vaqti) bo'lishi kerak.
-                $also = [];
-                foreach (array_merge($e['swaps'] ?? [], array_filter([$e['lecture'] ?? null])) as $w) {
-                    array_push($also, (int) $w['from'], (int) $w['to']);
-                }
-                if (!$e['hard'] && $date === $today && $also && $started(min($also))) {
-                    $e['hard'] = ['Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).'];
-                }
                 $row['swaps'] = $e['swaps'] ?? [];
                 $row['lecture'] = $e['lecture'] ?? null;
+                // Oldindan tekshirilmagan kun (guruhcha qatoridagi smenali amaliy): "Birga" yozuvidan keyingi xato — faqat kun oxiriga sig'maslik
+                // (kun rejasi ma'ruza va amaliyni ustma-ust qo'ymaydi) — "sig'maydi".
+                $fitOnly = $rel === false && $e['hard'];
                 if ($e['hard'] || ($e['busy'] && !$force)) {
                     DB::rollBack();
-                    $row = array_merge($row, $e['hard'] ? ['status' => 'blocked', 'why' => implode(' · ', $e['hard'])]
+                    $row = array_merge($row, $e['hard'] ? ['status' => $fitOnly ? 'nofit' : 'blocked', 'why' => implode(' · ', $e['hard'])]
                         : ['status' => 'conflict', 'why' => implode(' · ', $e['busy'])]);
                 } else {
                     DB::commit();
                     $applied++;
+                    $todayMoved = $todayMoved || $date === $today;
                     $row = array_merge($row, ['status' => $e['busy'] ? 'conflict' : 'ok', 'why' => $e['busy'] ? implode(' · ', $e['busy']) : null,
                         'applied' => !$dry]);
                 }
@@ -143,6 +139,10 @@ trait TimetableCycleDaysMove
                 : ($r['day_index'] + 1) . '-kun') . ' — ' . ($r['why'] ?: $r['status']), $out)), 'days' => $out], 422);
         }
         $undo = null;
+        $todayMoved = $todayMoved && !$dry;
+        if ($todayMoved) {
+            $this->markTodayMoved($request);
+        }
         if (!$dry && $applied) {
             $undo = Str::random(32);
             Cache::put($this->cycleUndoKey($board, $undo), ['placement' => (int) $placement->id, 'before' => $beforeSlots,
@@ -150,7 +150,9 @@ trait TimetableCycleDaysMove
         }
 
         return response()->json(['ok' => true, 'dry_run' => $dry, 'mode' => $mode, 'delta' => $delta, 'days' => $out,
-            'applied' => $dry ? 0 : $applied, 'undo' => $undo]);
+            'applied' => $dry ? 0 : $applied, 'undo' => $undo, 'today_moved' => $todayMoved]
+            // Bugungi kun ham o'zgaradi (yoki o'zgardi) — HEMIS eslatmasi (tasdiq oynasi va natija).
+            + (collect($out)->contains(fn ($r) => !empty($r['today']) && in_array($r['status'], ['ok', 'conflict'], true)) ? ['hemis_hint' => self::todayHemisHint()] : []));
     }
 
     /**
@@ -159,8 +161,8 @@ trait TimetableCycleDaysMove
      * starts_g, aks holda oqimniki; front — dp.start), oraliq — suriladigan guruhchalar (guruhcha qatorida o'zi, oqimda — shu kunni o'zi
      * surmaganlar) ma'ruza va amaliysi. Ma'ruza — oqimniki; amaliy — guruhcha qatorida o'ziniki, oqimda — birinchi guruhchaniki; amaliyda
      * 4-qiymat — yangi boshdan nisbiy yangi oraliq, yozuvdan keyingi jadval oddiy surishdan farq qilsa (amaliy — hammasi bitta yangi
-     * soatdan, eng uzun amaliy bo'yicha; "Birga" guruhcha qatoridagi smenali amaliy — ma'ruzadan keyinga), 5-qiymat — har guruhcha amaliy
-     * boshi ("o'zgarmaydi" — hammasi yangi soatda bo'lsagina).
+     * soatdan, eng uzun amaliy bo'yicha) yoki false — oldindan aytib bo'lmaydi ("Birga" guruhcha qatoridagi smenali amaliy: kunga sig'ishi
+     * yozuvdan keyin), 5-qiymat — har guruhcha amaliy boshi ("o'zgarmaydi" — hammasi yangi soatda bo'lsagina).
      */
     private function cycleDayMovingPart(array $units, string $mode, string $sub, array $slots, int $k): array
     {
@@ -201,16 +203,12 @@ trait TimetableCycleDaysMove
         if (!$ranges) {
             return [null, null, $fixed ? 'Bu kuni faqat smenada qotirilgan amaliy — kun boshi bilan surilmaydi.' : 'Bu kuni dars yo‘q.'];
         }
-        // Guruhcha qatori, smena bor, shu kunga ps_g yo'q: surish starts_g yozadi, cycleStarts smenani o'chiradi — amaliy ma'ruzadan keyin
-        // (kun boshi + ma'ruza). Yangi joy — kun boshidan ma'ruza + amaliy (o'z kun boshi bo'lsa ham shunday — amaliy allaqachon ergashadi).
-        $rel = null;
-        $x = $sub !== '' ? ($units[$sub] ?? null) : null;
-        if ($x && (int) (((array) ($slots['shift_g'] ?? []))[$sub] ?? 0) > 0 && (int) ((((array) ($slots['ps_g'] ?? []))[$sub] ?? [])[$k] ?? 0) <= 0) {
-            $len = fn ($r) => $r ? (int) $r[1] - (int) $r[0] : 0;
-            $rel = [0, $len($x['lec'][$date] ?? null) + $len($x['prac'][$date] ?? null)];
-        }
+        // Guruhcha qatori, smena bor, shu kunga ps_g yo'q: yozuv starts_g ni qo'yadi (amaliy smenadan ma'ruzaga ergashadi) yoki oqim soatiga
+        // qaytsa o'chiradi (smena qayta yoqiladi) — yangi jadvalni oldindan aytib bo'lmaydi: kunga sig'ishi yozuvdan keyin tekshiriladi.
+        $deferred = $sub !== '' && isset($units[$sub]) && (int) (((array) ($slots['shift_g'] ?? []))[$sub] ?? 0) > 0
+            && (int) ((((array) ($slots['ps_g'] ?? []))[$sub] ?? [])[$k] ?? 0) <= 0;
 
-        return [[$base, $base + 1], [min(array_column($ranges, 0)), max(array_column($ranges, 1))], null, $rel];
+        return [[$base, $base + 1], [min(array_column($ranges, 0)), max(array_column($ranges, 1))], null, $deferred ? false : null];
     }
 
     /**

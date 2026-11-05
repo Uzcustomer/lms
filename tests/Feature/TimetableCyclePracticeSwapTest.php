@@ -290,16 +290,16 @@ it('teskari holat: "Faqat amaliy" ma\'ruza ustiga — lecture_swap bilan ma\'ruz
     expect($n)->toMatchArray(['status' => 'ok', 'lecture' => null, 'swaps' => []]);
 });
 
-it('bugun: birga ko\'chadigan amaliyotning yangi vaqti o\'tib ketgan bo\'lsa — o\'zgarmaydi; kelgusi vaqtga — mumkin', function () {
+it('bugun (admin): birga ko\'chadigan amaliyotning yangi vaqti o\'tib ketgan bo\'lsa ham — mumkin (xodimga bugun ochiq)', function () {
     $s = psSetup();
     // Ma'ruza bugun (16.11) III parada (12:00), amaliy IV parada (13:30); hozir 10:30.
     $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-08b' => 7], 'starts' => [0 => 5]]]);
     expect(psDays($s, '08a')['2026-11-16'])->toBe(['lec' => [5, 7], 'prc' => [7, 9]]);
     $this->travelTo(Carbon::parse('2026-11-16 10:30', 'Asia/Tashkent'));
-    // Ma'ruza IV paraga — to'sib turgan amaliyot I paraga (08:30, o'tib ketgan): o'zgarmaydi.
+    // Ma'ruza IV paraga — to'sib turgan amaliyot I paraga (08:30, o'tib ketgan): admin uchun mumkin.
     $p = psMove($s, ['day_indexes' => [0], 'start_hour' => 7, 'mode' => 'lecture', 'practice_place' => 'pair', 'practice_pair' => 1, 'dry_run' => 1])
         ->assertOk()->json('days.0');
-    expect($p['status'])->toBe('blocked')->and($p['why'])->toBe('Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).');
+    expect($p['status'])->toBe('ok')->and($p['today'])->toBeTrue()->and(array_values(array_unique(array_column($p['swaps'], 'to'))))->toBe([1]);
     // O'rin almashish — amaliyot 12:00 ga (hali boshlanmagan): mumkin.
     $ok = psMove($s, ['day_indexes' => [0], 'start_hour' => 7, 'mode' => 'lecture', 'practice_place' => 'swap', 'dry_run' => 1])->assertOk()->json('days.0');
     expect($ok['status'])->toBe('ok')->and(array_values(array_unique(array_column($ok['swaps'], 'to'))))->toBe([5]);

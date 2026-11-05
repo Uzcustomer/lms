@@ -135,7 +135,7 @@ it('agenda: bo\'sh paraga ko\'chirish — guruh band, xona sig\'maydi (sababi bi
     // Sig'adigan bo'sh xona yo'q — VI para ham o'chiq, sababi bilan.
     $s['r1']->update(['volume' => 11]);
     $opt = agGet($s, $s['admin'], 'admin', ['move' => $key])['move']['options']['2026-11-19'];
-    expect($opt[6])->toBe(['ok' => false, 'why' => "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)", 'room' => null, 'day' => 4, 'pair' => 11]);
+    expect($opt[6])->toBe(['ok' => false, 'why' => "Xona sig'maydi: 102-xona — 10 o'rin, 12 talaba (+2)", 'room' => null, 'day' => 4, 'pair' => 11, 'fix' => false]);
     $s['r1']->update(['volume' => 30]);
 
     // Admin: VI paraga (101-xona bilan) — darhol; endi haftalik darslar to'qnashmaydi.
@@ -149,7 +149,7 @@ it('agenda: bo\'sh paraga ko\'chirish — guruh band, xona sig\'maydi (sababi bi
         ->and($after['free'])->toBe(['2026-11-19' => [5]]);
 });
 
-it('agenda: sikl amaliyoti — kun o\'zgarmaydi, kun oxirigacha sig\'maydigan para o\'chiq; bugungi/o\'tgan dars ko\'chirilmaydi', function () {
+it('agenda: sikl amaliyoti — kun o\'zgarmaydi, kun oxirigacha sig\'maydigan para o\'chiq; bugungi dars — faqat admin / registrator, o\'tgan — hech kim', function () {
     $s = agSetup();
     $units = fn () => collect(agGet($s, $s['admin'], 'admin')['entries'])->where('kind', 'cycle')->values();
     $key = $units()[1]['key'];
@@ -159,15 +159,29 @@ it('agenda: sikl amaliyoti — kun o\'zgarmaydi, kun oxirigacha sig\'maydigan pa
         ->and($j['move']['options']['2026-11-19'][5])->toMatchArray(['ok' => false, 'start_hour' => 9])
         ->and($j['move']['options']['2026-11-19'][5]['why'])->toContain("kun oxirigacha sig‘maydi")
         ->and($j['move']['block']['2026-11-19'][6]['ok'])->toBeFalse();
-    // O'tgan (bugungi) dars: ko'chirish yo'q.
-    $this->travelTo(Carbon::parse('2026-11-19 09:00', 'Asia/Tashkent'));
-    $past = agGet($s, $s['admin'], 'admin', ['move' => $key]);
-    expect($past['move'])->toMatchArray(['via' => null, 'why' => "Bugungi va o'tgan darslar ko'chirilmaydi."])
-        ->and((array) $past['move']['options'])->toBe([]);
-    // Server ham: bugungi kunning sikl amaliyoti soati — 422.
+    // Bugungi dars (soat 15:00 — dars boshlangan): admin — ko'chira oladi, o'qituvchi — yo'q.
+    $this->travelTo(Carbon::parse('2026-11-19 15:00', 'Asia/Tashkent'));
+    $today = agGet($s, $s['admin'], 'admin', ['move' => $key]);
+    expect($today['move'])->toMatchArray(['via' => 'apply', 'why' => null, 'block_date' => '2026-11-19'])
+        ->and(collect($today['entries'])->firstWhere('key', $key))->toMatchArray(['past' => false, 'movable' => true, 'movable_why' => null]);
+    $mine = agGet($s, $s['mux'], 'oqituvchi', ['move' => $key]);
+    expect($mine['move'])->toMatchArray(['via' => null, 'why' => "Bugungi va o'tgan darslar ko'chirilmaydi. Bugungi darsni faqat admin va registrator ofisi ko'chiradi."])
+        ->and((array) $mine['move']['options'])->toBe([])
+        ->and(collect($mine['entries'])->firstWhere('key', $key))->toMatchArray(['past' => true, 'movable' => false]);
+    // Server ham: bugungi kunning sikl amaliyoti soati — admin uchun (boshlangan bo'lsa ham) qo'llanadi, tarixda belgi. V–VI para bo'sh
+    // bo'lishi uchun haftalik darslar olib tashlanadi (6 soatlik amaliy 7-soatdan — kun oxirigacha).
+    $s['ppA']->delete();
+    $s['ppB']->delete();
     agAs($s['admin'], 'admin')->postJson(route('admin.timetable.cycle-practice-starts', $s['board']), ['specialty_name' => 'davolash ishi', 'course' => 5,
         'subject_name' => 'Klinik farmakologiya', 'group_name' => 'd1/d22-01b', 'units' => ['d1/d22-01b'], 'date' => '2026-11-19', 'scope' => 'day',
-        'start_hour' => 3])->assertStatus(422)->assertJsonPath('error', "Bugungi yoki o'tgan darsning vaqtini o'zgartirib bo'lmaydi (dars sanasi: 19.11.2026).");
+        'start_hour' => 7])->assertOk()->assertJsonPath('today_moved', true)->assertJsonPath('hemis_hint', fn ($h) => str_contains($h, 'Bugungi darslar (HEMIS)'));
+    expect(\App\Models\TimetableChangeRequest::latest('id')->first()->summary)->toContain('bugungi dars ko‘chirildi');
+    // O'tgan kun — admin uchun ham yopiq.
+    $this->travelTo(Carbon::parse('2026-11-20 09:00', 'Asia/Tashkent'));
+    expect(agGet($s, $s['admin'], 'admin', ['move' => $key])['move'])->toMatchArray(['via' => null, 'why' => "O'tgan kun darsi ko'chirilmaydi."]);
+    agAs($s['admin'], 'admin')->postJson(route('admin.timetable.cycle-practice-starts', $s['board']), ['specialty_name' => 'davolash ishi', 'course' => 5,
+        'subject_name' => 'Klinik farmakologiya', 'group_name' => 'd1/d22-01b', 'units' => ['d1/d22-01b'], 'date' => '2026-11-19', 'scope' => 'day',
+        'start_hour' => 1])->assertStatus(422)->assertJsonPath('error', "O'tgan kun darsining vaqtini o'zgartirib bo'lmaydi (dars sanasi: 19.11.2026).");
 });
 
 it('agenda: qamrovdan tashqari dars tafsilotsiz; o\'qituvchi o\'z darsini ko\'radi va ko\'chirish so\'rov bo\'lib ketadi', function () {
@@ -181,11 +195,12 @@ it('agenda: qamrovdan tashqari dars tafsilotsiz; o\'qituvchi o\'z darsini ko\'ra
     $key = 'w|' . $s['ppB']->id . '|' . $s['week'];
     expect(agGet($s, $s['other'], 'oqituvchi', ['move' => $key])['move']['why'])->toBe("Ko'chiriladigan dars bu kunlarda yo'q.");
 
-    // O'zi: to'liq ko'radi; ko'chirish — so'rov (kafedra mudiri → registrator).
+    // O'zi: to'liq ko'radi; dars to'qnashuvda (IV parada ikki guruh) — apply_fix, lekin VI para toza emas (boshqa xona taklifi) — so'rov.
     $mine = agGet($s, $s['mux'], 'oqituvchi', ['move' => $key]);
     expect(collect($mine['entries'])->every(fn ($e) => !$e['hidden']))->toBeTrue()
-        ->and($mine['move']['via'])->toBe('propose')
-        ->and($mine['move']['options']['2026-11-19'][6]['room']['code'])->toBe('R1');
+        ->and($mine['move']['via'])->toBe('apply_fix')
+        ->and($mine['move']['options']['2026-11-19'][6]['room']['code'])->toBe('R1')
+        ->and($mine['move']['options']['2026-11-19'][6]['fix'])->toBeFalse();
     $res = agAs($s['mux'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['week' => $s['week'],
         'card_id' => $s['ppB']->id, 'type' => 'agenda', 'title' => "VI paraga ko'chirish", 'reason' => "To'qnashuv: IV parada ikki guruh",
         'actions' => [['op' => 'move', 'card_id' => $s['ppB']->id, 'week' => $s['week'], 'day' => 4, 'pair' => 11, 'auditorium_code' => 'R1']]])

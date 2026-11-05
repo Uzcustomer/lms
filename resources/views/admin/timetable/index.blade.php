@@ -1458,6 +1458,18 @@
         #ttAgendaModal .ag-pick-btns { margin-top: 6px; } #ttAgendaModal .ag-pick-btns button { border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 10px; }
         #ttAgendaModal .ag-pick-btns button[data-ag="submit"] { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
         #ttAgendaModal .ag-pick-btns button[disabled] { opacity: .5; }
+        /* Oynada sudrab ko'chirish: ko'chirsa bo'ladigan dars — "grab"; sudrash paytida bo'sh paralar rangi va kursor yonidagi yorliq. */
+        #ttAgendaModal .ag-e[data-ag-drag] { cursor: grab; touch-action: none; }
+        #ttAgendaModal.is-ag-dragging, #ttAgendaModal.is-ag-dragging * { cursor: grabbing !important; user-select: none; }
+        #ttAgendaModal .ag-free.is-ok { background: #dcfce7; outline: 2px solid #16a34a; border-radius: 6px; }
+        #ttAgendaModal .ag-free.is-warn { background: #fef9c3; outline: 2px solid #ca8a04; border-radius: 6px; }
+        #ttAgendaModal .ag-free.is-bad { background: #fee2e2; outline: 2px dashed #dc2626; border-radius: 6px; color: #991b1b; }
+        #ttAgendaModal .ag-free.is-over { outline-width: 3px; outline-style: solid; }
+        #ttAgendaModal .ag-fix-note { color: #166534; font-size: 11px; }
+        #ttAgendaModal .ag-hemis, .tt-hemis-hint { color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 3px 7px; }
+        #agDragTip { position: fixed; z-index: 10040; pointer-events: none; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
+            background: #166534; color: #fff; box-shadow: 0 4px 14px #0004; max-width: 420px; }
+        #agDragTip.is-warn { background: #a16207; } #agDragTip.is-bad { background: #b91c1c; } #agDragTip.is-wait { background: #334155; }
         .cyc-wk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; font-weight: 600; color: #1e3a8a; margin: 0 0 4px; width: 100%; }
         .cyc-wk-head .cyc-wk-all { font-weight: 400; color: #475569; display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
         .cycle-pn-state { display: block; font-size: 10px; color: #64748b; }
@@ -7362,6 +7374,8 @@
             // "Shu vaqtga ko'chirish" — server tekshiruvi (guruh, xona, sig'im) bilan: o'chiq — sababi bilan; xona muammosida — bo'sh xona
             // taklifi. Ko'chirish: haftalik — Takliflar bajaruvchisi (admin — darhol, boshqalar — so'rov), sikl — kun boshlanishi yoki
             // blokning kelgusi kunlari (cycle-practice-starts / cycle-time-proposal). Keyin oyna va jadval yangilanadi.
+            // Bugungi darsni ko'chirgandan keyin — HEMIS dagi jadval va davomatni solishtirish eslatmasi (server ham hemis_hint beradi).
+            const TT_HEMIS_HINT = 'Bugungi dars — ko\u2018chirgandan keyin HEMIS dagi jadval va davomatni \u00abBugungi darslar (HEMIS)\u00bb orqali solishtiring.';
             let ttAgenda = null;   // { teacher_id, teacher_name, date, range, move, data, pick, msg, busy }
             let agendaSeq = 0;     // so'rov tartibi: kun/hafta tez almashsa — eski (kechikkan) javob yangisining ustiga yozilmaydi
             document.addEventListener('click', ev => {
@@ -7417,6 +7431,7 @@
                 if (m) m.remove();
             }
             function agendaKey(e) {
+                if (e.key === 'Escape' && agDrag) { e.preventDefault(); e.stopPropagation(); agendaDragEnd(null); return; }   // sudrash bekor
                 if (e.key === 'Escape' && !document.getElementById('ttReasonModal')) { e.preventDefault(); e.stopPropagation(); ttAgendaClose(); }
             }
             function agendaRender(loading) {
@@ -7428,6 +7443,7 @@
                     m.setAttribute('role', 'dialog');
                     m.setAttribute('aria-modal', 'true');
                     m.addEventListener('click', agendaClick);
+                    m.addEventListener('pointerdown', agendaPointerDown);
                     document.body.appendChild(m);
                     document.addEventListener('keydown', agendaKey, true);
                 }
@@ -7477,10 +7493,13 @@
             function agendaEntryHtml(e, moveKey, cont, compact) {
                 const moving = !!(e.key && e.key === moveKey);
                 const cls = 'ag-e' + (e.info_only ? ' tt-info-only' : '') + (e.conflict ? ' ag-conf' : '') + (moving ? ' ag-moving' : '') + (e.hidden ? ' ag-hidden' : '') + (cont ? ' ag-cont' : '');
-                if (cont) return '<div class="' + cls + '">↳ ' + esc(e.hidden ? e.label : e.subject + ' (' + e.type + ')') + '</div>';
+                // Sudrash: ko'chirsa bo'ladigan dars (server — movable); bo'lmasa — sababi sarlavhada (title).
+                const drag = e.key && e.movable ? ' data-ag-drag="' + esc(e.key) + '" title="Sudrab bo\u2018sh paraga ko\u2018chiring"'
+                    : (e.key && e.movable_why ? ' title="' + esc(e.movable_why) + '"' : '');
+                if (cont) return '<div class="' + cls + '"' + drag + '>↳ ' + esc(e.hidden ? e.label : e.subject + ' (' + e.type + ')') + '</div>';
                 const text = e.hidden ? e.label : e.subject + ' (' + e.type + ') — ' + (compact ? cfGroups(e.groups) : (e.groups || []).join(', ')) +
                     (e.room && !compact ? ' · ' + e.room : '') + (e.info_only && infoOnlyText(e) ? ' · ' + infoOnlyText(e) : '');
-                return '<div class="' + cls + '"><span class="ag-time">' + esc((e.start || '') + '–' + (e.end || '')) + '</span> ' + esc(text) +
+                return '<div class="' + cls + '"' + drag + '><span class="ag-time">' + esc((e.start || '') + '–' + (e.end || '')) + '</span> ' + esc(text) +
                     (e.conflict ? ' <span class="ag-tag">to‘qnashuv</span>' : '') + (moving ? ' <span class="ag-tag ag-tag-mv">ko‘chiriladi</span>' : '') + '</div>';
             }
             // Bo'sh para: "bo'sh" va (ko'chiriladigan dars bo'lsa) "Shu vaqtga ko'chirish" — o'chiq bo'lsa sababi bilan; xona taklifi.
@@ -7496,7 +7515,7 @@
                         : ' <button type="button" class="ag-mv" disabled title="' + esc(opt.why || '') + '">' + esc(label) + '</button>' +
                             (!compact ? '<div class="ag-why">' + esc(opt.why || '') + '</div>' : '');
                 }
-                return '<div class="ag-free">bo‘sh' + (infoLabels.length ? ' · ' + infoLabels.map(esc).join(', ') : '') + btn + '</div>';
+                return '<div class="ag-free" data-ag-free="' + esc(date + '|' + no) + '">bo‘sh' + (infoLabels.length ? ' · ' + infoLabels.map(esc).join(', ') : '') + btn + '</div>';
             }
             function agendaCellHtml(j, st, date, p, compact) {
                 const here = (j.entries || []).filter(e => e.date === date && e.from < p.to && p.from < e.to);
@@ -7541,17 +7560,27 @@
                         + esc(cfDate(x.date) + ' · ' + crDow(x.date) + (x.k ? ' · ' + x.k + '-kun' : '') + ' · hozir ' + x.time) + '</label>')).join('')
                     + '</div>' + (cur && !cur.ok && cur.why ? '<div class="ag-why" style="white-space:pre-line">' + esc(cur.why)
                         + (bad.size || /\d{2}\.\d{2}:/.test(cur.why) ? '\nMuammoli hafta/kunni olib tashlab, qayta tekshiring.' : '') + '</div>' : '') : '';
+                // To'qnashuvdagi dars toza joyga (faqat shu hafta / kun) — so'rovsiz; bugungi dars (xodim) — HEMIS eslatmasi.
+                const fixNow = agendaDirectFix(mv, cur, pk);
+                const today = j.today && (pk.date === j.today || mv.date === j.today) && mv.via === 'apply';
                 return '<div class="ag-pick"><div><b>' + esc(mv.label || '') + '</b> → ' + esc(cfDate(pk.date) + ', ' + (pair.label || '') +
                     ' (' + (pair.start || '') + '–' + (pair.end || '') + ')') + (one && one.room ? ', xona: ' + esc(one.room.name) : '') + '</div>' +
+                    (fixNow ? '<div class="ag-fix-note" data-ag-fix>To‘qnashuvdagi dars — so‘rovsiz joylanadi</div>' : '') +
+                    (today ? '<div class="ag-hemis" data-ag-hemis>' + esc(j.hemis_hint || TT_HEMIS_HINT) + '</div>' : '') +
                     choices.map(([v, label, o]) => '<label class="ag-ch"><input type="radio" name="agChoice" value="' + v + '"' + (pk.choice === v ? ' checked' : '') +
                         (o && o.ok ? '' : ' disabled') + '> ' + esc(label) + (o && !o.ok && o.why ? ' <span class="ag-why">— ' + esc(o.why) + '</span>' : '') + '</label>').join('') +
                     listHtml +
                     '<div class="ag-pick-btns"><button type="button" data-ag="submit"' + (cur && cur.ok && !st.busy ? '' : ' disabled') + '>' +
-                    (mv.via === 'apply' ? 'Qo‘llash' : 'So‘rov yuborish') + '</button> <button type="button" data-ag="unpick">Bekor</button></div></div>';
+                    (mv.via === 'apply' ? 'Qo‘llash' : fixNow ? 'Joylash (darhol)' : 'So‘rov yuborish') + '</button> <button type="button" data-ag="unpick">Bekor</button></div></div>';
             }
+            // O'qituvchi: to'qnashuvdagi dars (via = apply_fix) tanlangan toza joyga, faqat shu hafta / shu kun — so'rovsiz (server qayta tekshiradi).
+            const agendaDirectFix = (mv, opt, pk) => Boolean(mv && mv.via === 'apply_fix' && opt && opt.ok && opt.fix && pk && pk.choice === 'one');
             // So'rov: haftalik — Takliflar "move" amallari (har hafta), sikl — kun boshlanishi (scope day | rest).
             function agendaApplyRequest(mv, opt, pick, reason) {
-                const withReason = b => (mv.via === 'propose' ? Object.assign(b, { reason }) : b);
+                // Darhol: admin (apply) yoki o'qituvchining to'qnashuvdagi darsi toza joyga (apply_fix — haftalik: week-suggestions/apply,
+                // sikl: cycle-time-proposal — server har kunni o'zi ajratadi, sababsiz). Qolgani — so'rov (sabab bilan).
+                const direct = mv.via === 'apply' || agendaDirectFix(mv, opt, pick);
+                const withReason = b => (!direct ? Object.assign(b, { reason }) : b);
                 if (mv.kind === 'weekly') {
                     const weeks = pick.choice === 'weeks' && (pick.items || []).length ? pick.items.map(Number)
                         : pick.choice === 'rest' && (mv.rest_weeks || []).length ? mv.rest_weeks : [mv.week];
@@ -7565,7 +7594,7 @@
                         let off = -unitLen(list.slice(0, Math.max(0, at)));
                         return list.map(x => { const r = [x.id, off]; off += cardLen(x); return r; });
                     };
-                    return { path: '/week-suggestions/' + (mv.via === 'apply' ? 'apply' : 'propose'), body: withReason({ week: mv.week, card_id: mv.card_id,
+                    return { path: '/week-suggestions/' + (direct ? 'apply' : 'propose'), body: withReason({ week: mv.week, card_id: mv.card_id,
                         type: 'agenda', title: "O'qituvchi jadvalidan ko'chirish",
                         actions: weeks.flatMap(w => pieces(w).map(([id, off]) =>
                             Object.assign({ op: 'move', card_id: id, week: w, day: opt.day, pair: opt.pair + off }, room))) }) };
@@ -7586,7 +7615,7 @@
                     && !(mv.rest && mv.rest.ok && mv.rest.date === pk.date && +mv.rest.pair === +pk.pair);
                 if (!opt || !opt.ok || restBad || st.busy) return;
                 let reason = '';
-                if (mv.via === 'propose') {
+                if (mv.via !== 'apply' && !agendaDirectFix(mv, opt, pk)) {
                     reason = await askSugReason();
                     if (reason === null) { st.msg = { kind: 'err', text: "So'rov yuborilmadi: sabab kiritilmadi." }; agendaRender(false); return; }
                 }
@@ -7596,7 +7625,7 @@
                 try {
                     const r = await api(BASE + '/boards/' + board.id + req.path, 'POST', req.body);
                     const text = (r && r.message) || (mv.via === 'apply' ? 'Ko‘chirildi.' : 'So‘rov yuborildi.');
-                    ttToast(esc(text), 'ok');
+                    ttToast(esc(text) + (r && r.today_moved ? '<div class="tt-toast-sub" data-hemis-hint>' + esc(r.hemis_hint || TT_HEMIS_HINT) + '</div>' : ''), 'ok');
                     st.pick = null;
                     st.restFor = null;
                     st.selFor = null;
@@ -7609,9 +7638,131 @@
                 st.busy = false;
                 if (ttAgenda === st) await ttAgendaLoad();
             }
+            // ===== Oynada sudrab ko'chirish (pointer; HTML5 DnD emas — oyna innerHTML bilan qayta chiziladi) =====
+            // Ko'chirsa bo'ladigan dars (data-ag-drag) 5px dan ortiq siljisa — sudrash: shu dars uchun variantlar (teacher-agenda?move=)
+            // oynani qayta chizmasdan olinadi; bo'sh paralar: yashil — ko'chiriladi, sariq — ogohlantirish / boshqa xona, qizil — yo'q.
+            // Bo'sh paraga tashlansa — "Shu vaqtga ko'chirish" bosilgandek (tasdiq paneli); qizil / band katak — toast; Esc — bekor.
+            let agDrag = null;   // { key, st, x, y, on, mv, wait, over }
+            let agDragSuppress = false;
+            function agendaPointerDown(ev) {
+                const el = ev.button === 0 && ev.target.closest ? ev.target.closest('[data-ag-drag]') : null;
+                if (!el || !ttAgenda || ttAgenda.busy) return;
+                agDrag = { key: el.dataset.agDrag, st: ttAgenda, x: ev.clientX, y: ev.clientY, on: false, mv: null, wait: false, over: null };
+                document.addEventListener('pointermove', agendaPointerMove, true);
+                document.addEventListener('pointerup', agendaPointerUp, true);
+            }
+            function agendaDragTip(text, tone, ev) {
+                let tip = document.getElementById('agDragTip');
+                if (!tip) { tip = document.createElement('div'); tip.id = 'agDragTip'; document.body.appendChild(tip); }
+                tip.className = tone || '';
+                tip.textContent = text;
+                tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 8, ev.clientX + 14) + 'px';
+                tip.style.top = (ev.clientY + 16) + 'px';
+            }
+            // Bo'sh para varianti: holati (ok | warn | bad) va sababi.
+            function agendaDropState(mv, date, pair) {
+                const opt = mv ? agendaOpt(mv, date, pair, 'one') : null;
+                if (!opt) return { tone: 'bad', why: mv && mv.why ? mv.why : (mv && mv.kind === 'cycle' ? 'sikl darsi — kun o‘zgarmaydi' : 'bu kunga ko‘chirib bo‘lmaydi'), opt: null };
+                if (!opt.ok) return { tone: 'bad', why: opt.why || 'ko‘chirib bo‘lmaydi', opt };
+                const room = opt.room ? 'bo‘sh xona: ' + opt.room.name : '';
+                return { tone: opt.why || opt.room ? 'warn' : 'ok', why: [opt.why, room].filter(Boolean).join(' · '), opt };
+            }
+            async function agendaDragFetch(d) {
+                const st = d.st;
+                if (st.move === d.key && st.data && st.data.move && st.data.move.key === d.key) { d.mv = st.data.move; return; }
+                d.wait = true;
+                const layer = viewMode === 'cycle' ? cycleLayer : weeklyLayer;
+                const q = new URLSearchParams({ teacher_id: st.teacher_id, date: st.date, range: st.range, layer: layer === 'external' ? 'external' : 'internal', move: d.key });
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/teacher-agenda?' + q);
+                    if (agDrag !== d || ttAgenda !== st) return;
+                    // Oyna qayta chizilmaydi — faqat ko'chirish variantlari (keyingi chizishda "ko'chiriladi" belgisi bilan).
+                    st.move = d.key; st.pick = null; st.restFor = null; st.selFor = null;
+                    if (st.data) st.data.move = j.move;
+                    d.mv = j.move;
+                } catch (e) {
+                    if (agDrag === d) d.mv = { why: e.message, options: {}, block: {} };
+                }
+                d.wait = false;
+                if (agDrag === d && d.lastEv) agendaDragPaint(d.lastEv);
+            }
+            function agendaDragPaint(ev) {
+                const d = agDrag, m = document.getElementById('ttAgendaModal');
+                if (!d || !m) return;
+                d.lastEv = { clientX: ev.clientX, clientY: ev.clientY };
+                m.classList.add('is-ag-dragging');
+                const cell = (document.elementFromPoint(ev.clientX, ev.clientY) || m).closest('[data-ag-free]');
+                d.over = cell ? cell.dataset.agFree : null;
+                m.querySelectorAll('[data-ag-free]').forEach(c => {
+                    c.classList.remove('is-ok', 'is-warn', 'is-bad', 'is-over');
+                    if (d.wait || !d.mv) return;
+                    const [date, pair] = c.dataset.agFree.split('|');
+                    c.classList.add('is-' + agendaDropState(d.mv, date, +pair).tone);
+                    if (c === cell) c.classList.add('is-over');
+                });
+                const label = (d.mv && d.mv.label ? d.mv.label.split(' — ')[0] : 'Dars');
+                if (d.wait || !d.mv) { agendaDragTip(label + ': tekshirilmoqda…', 'is-wait', ev); return; }
+                if (!cell) { agendaDragTip(label + ' → bo‘sh paraga tashlang', d.mv.why ? 'is-bad' : 'is-wait', ev); return; }
+                const [date, pair] = cell.dataset.agFree.split('|');
+                const p = ((ttAgenda.data && ttAgenda.data.pairs) || []).find(x => x.no === +pair) || {};
+                const r = agendaDropState(d.mv, date, +pair);
+                const how = r.tone === 'bad' ? r.why : (agendaDirectFix(d.mv, r.opt, { choice: 'one' }) ? 'so‘rovsiz joylanadi'
+                    : d.mv.via === 'apply' ? 'ko‘chiriladi' : 'so‘rov yuboriladi') + (r.why ? ' (' + r.why + ')' : '');
+                agendaDragTip(label + ' → ' + cfDate(date) + ' ' + (p.label || '') + ': ' + how, r.tone === 'ok' ? '' : 'is-' + r.tone, ev);
+            }
+            function agendaPointerMove(ev) {
+                const d = agDrag;
+                if (!d) return;
+                if (!d.on) {
+                    if (Math.abs(ev.clientX - d.x) + Math.abs(ev.clientY - d.y) <= 5) return;
+                    d.on = true;
+                    agendaDragFetch(d);
+                }
+                ev.preventDefault();
+                agendaDragPaint(ev);
+            }
+            function agendaPointerUp(ev) {
+                const d = agDrag;
+                if (!d) return;
+                if (d.on) { ev.preventDefault(); agDragSuppress = true; setTimeout(() => { agDragSuppress = false; }, 0); }
+                agendaDragEnd(d.on ? ev : null);
+            }
+            // Sudrash tugadi: ev — tashlash (null — bekor / oddiy bosish).
+            function agendaDragEnd(ev) {
+                const d = agDrag;
+                agDrag = null;
+                document.removeEventListener('pointermove', agendaPointerMove, true);
+                document.removeEventListener('pointerup', agendaPointerUp, true);
+                const tip = document.getElementById('agDragTip');
+                if (tip) tip.remove();
+                const m = document.getElementById('ttAgendaModal');
+                if (m) {
+                    m.classList.remove('is-ag-dragging');
+                    m.querySelectorAll('[data-ag-free]').forEach(c => c.classList.remove('is-ok', 'is-warn', 'is-bad', 'is-over'));
+                }
+                if (!d || !ev || ttAgenda !== d.st) return;
+                const target = document.elementFromPoint(ev.clientX, ev.clientY);
+                const cell = target && target.closest ? target.closest('[data-ag-free]') : null;
+                if (!cell) {
+                    if (target && target.closest && target.closest('#ttAgendaModal td')) ttToast('Bu para band — bo‘sh paraga tashlang.', 'warn');
+                    return;
+                }
+                if (d.wait || !d.mv) { ttToast('Hali tekshirilmoqda — qayta urinib ko‘ring.', 'warn'); return; }
+                const [date, pair] = cell.dataset.agFree.split('|');
+                const r = agendaDropState(d.mv, date, +pair);
+                if (r.tone === 'bad') { ttToast('Ko‘chirib bo‘lmaydi: ' + esc(r.why), 'warn'); agendaRender(false); return; }
+                // "Shu vaqtga ko'chirish" bosilgandek: tanlov paneli (haftalik — shu / keyingi haftalar, sikl — shu kun / butun blok).
+                const st = d.st;
+                st.move = d.key;
+                st.pick = { date, pair: +pair, choice: 'one' };
+                st.selFor = null;
+                if (d.mv.kind === 'weekly' && (d.mv.rest_weeks || []).length > 1) { st.restFor = date + '|' + pair; ttAgendaLoad(); }
+                else agendaRender(false);
+            }
             function agendaClick(e) {
                 const st = ttAgenda;
                 if (!st) return;
+                if (agDragSuppress) { e.preventDefault(); e.stopPropagation(); return; }
                 if (e.target === e.currentTarget) { ttAgendaClose(); return; }
                 const t = e.target.closest ? e.target : null;
                 const pick = t && t.closest('[data-ag-pick]');
@@ -8100,32 +8251,23 @@
             // Ctrl/Cmd+bosish — kun qo'shiladi / olinadi; Shift+bosish — oxirgi tanlangandan shu kungacha; blok sarlavhasida ikki marta
             // bosish yoki "Hammasini tanlash" — blokning barcha kunlari; Esc yoki bo'sh joyga bosish — tozalaydi.
             let cycMultiSel = null;
-            // Bugungi kun — faqat shu rollar va kunning birinchi darsi hali boshlanmagan bo'lsa (server ham tekshiradi).
+            // Bugungi kun — faqat shu rollar (dars boshlangan, hatto tugagan bo'lsa ham; server ham tekshiradi — TimetableStaffToday).
             const CYC_TODAY_ROLES = ['admin', 'superadmin', 'registrator_ofisi'];
-            const cycNowHm = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-            // Kunning birinchi darsi boshlanadigan soat qatori (ma'ruza yoki amaliy — qaysi biri oldin).
-            function cycDayFirstHour(dp) {
-                const st = +dp.start || 1, lec = +dp.lec || 0, prc = +dp.prc || 0;
-                const ps = dp.ps != null ? +dp.ps : st + lec;
-                return lec > 0 && prc > 0 ? Math.min(st, ps) : (lec > 0 ? st : ps);
-            }
-            // Kunni tanlab bo'ladimi: darsi bor, kelgusi kun; bugungi — admin / registrator, birinchi dars hali boshlanmagan bo'lsa.
+            // Kunni tanlab bo'ladimi: darsi bor, kelgusi kun; bugungi — admin / registrator ofisi (har qanday holatda); o'tgan — hech kim.
             function cycSelEligible(block, offset) {
                 const dp = block && block.day_plan ? block.day_plan[offset] : null;
                 const dt = dp && cyclePlanData ? (cyclePlanData.dates || [])[block.from + (+offset)] : null;
                 if (!dt || (+dp.lec || 0) + (+dp.prc || 0) <= 0) return false;
                 const today = cycLocalToday();
                 if (dt.iso > today) return true;
-                if (dt.iso < today || !cyclePlanData.day_edit || !CYC_TODAY_ROLES.includes(TIMETABLE_ROLE)) return false;
-                const t = cycHourTimes()[cycDayFirstHour(dp)];
-                return Boolean(t && t[0] > cycNowHm());
+                return dt.iso === today && Boolean(cyclePlanData.day_edit) && CYC_TODAY_ROLES.includes(TIMETABLE_ROLE);
             }
             function cycSelSet(key, offsets, last) {
                 cycMultiSel = offsets.size ? { key: key, offsets: offsets, last: last } : null;
                 cycMultiPaint();
             }
             function cycSelToggle(key, offset) {
-                if (!cycSelEligible(cycBlockByKey(key), offset)) { ttToast('Bu kunni tanlab bo\'lmaydi: o\'tgan kun yoki bugungi dars boshlangan.', 'warn'); return; }
+                if (!cycSelEligible(cycBlockByKey(key), offset)) { ttToast('Bu kunni tanlab bo\'lmaydi: o\'tgan kun (bugungi darsni faqat admin va registrator ofisi ko\'chiradi).', 'warn'); return; }
                 const sel = new Set(cycMultiSel && cycMultiSel.key === key ? cycMultiSel.offsets : []);
                 if (sel.has(+offset)) sel.delete(+offset); else sel.add(+offset);
                 cycSelSet(key, sel, +offset);
@@ -8583,8 +8725,10 @@
                     try {
                         const r = await api(BASE + '/boards/' + board.id + '/cycle-time-proposal', 'POST', Object.assign(body(), { reason: form.elements.reason.value }));
                         m.remove();
-                        ttToast(r.message, 'ok');
+                        // To'qnashuvdagi kunlar darhol joylangan bo'lishi mumkin: "2 kun darhol joylandi, 3 kun — so'rov #…".
+                        ttToast(esc(r.message || ''), 'ok');
                         await loadChangeRequests();
+                        if ((r.applied_days || []).length) await loadCyclePlan();
                     } catch (e) { form.querySelector('[role="alert"]').className = 'text-red-600'; form.querySelector('[role="alert"]').textContent = e.message; button.disabled = false; }
                 };
             }
@@ -8609,6 +8753,7 @@
                         await loadChangeRequests();
                     }
                     await loadCyclePlan();
+                    if (res && res.today_moved) ttToast(esc(res.hemis_hint || TT_HEMIS_HINT), 'warn');
                     const cells = document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
                     // O'zgargan kun ustuni bir necha soniya yonib turadi — nima o'zgargani ko'rinsin.
                     cells.forEach(c => { c.classList.remove('cyc-just-changed'); void c.offsetWidth; c.classList.add('cyc-just-changed'); });
@@ -9041,6 +9186,7 @@
                 });
                 ttToast((days.some(d => d.applied) ? esc(cycDaysSummary(days, mode, delta)) : 'Hech bir kun o\'zgarmadi.')
                     + (j.undo ? ' <button type="button" class="tt-toast-btn" data-cyc-undo>Qaytarish (Ctrl+Z)</button>' : '')
+                    + (j.today_moved ? '<div class="tt-toast-sub" data-hemis-hint>' + esc(j.hemis_hint || TT_HEMIS_HINT) + '</div>' : '')
                     + (left.length ? '<div class="tt-toast-sub">' + left.length + ' kun o\'zgarmadi: ' + esc(left.map(d => cycDayLabel(d) + ' — '
                         + (CYC_DAY_STATUS[d.status] || d.status)).join('; ')) + '</div>' : ''), j.undo ? 'ok' : 'warn');
                 return j;
@@ -9082,6 +9228,8 @@
                     + (head ? '<p class="text-sm font-semibold" data-cmd-head>' + esc(head) + '</p>' : '')
                     + (opts.reverse && lec ? '<p class="text-sm" data-cmd-lec>' + esc('Ma\'ruza (butun oqim) ' + cycHourLabel(lec.from) + ' → ' + cycHourLabel(lec.to) + '.') + '</p>' : '')
                     + (swaps.length ? '<p class="text-sm cmd-swaps" data-cmd-swaps>' + esc('Amaliyot o\'rin almashadi: ' + cycSwapsText(swaps) + '.') + '</p>' : '')
+                    // Bugungi kun ham o'zgaradi (admin / registrator ofisi) — HEMIS eslatmasi.
+                    + (moving.some(d => d.today) ? '<p class="text-sm tt-hemis-hint" data-cmd-hemis>' + esc(dry.hemis_hint || TT_HEMIS_HINT) + '</p>' : '')
                     + '<ul class="cmd-list">' + days.map(d => '<li class="cmd-' + esc(d.status) + '"><b>' + esc(cycDayLabel(d)) + '</b> '
                         + (d.from != null && d.to != null ? esc(cycHourLabel(d.from) + ' → ' + cycHourLabel(d.to)) + ' ' : '')
                         + '— ' + esc(CYC_DAY_STATUS[d.status] || d.status) + (d.why ? ': ' + esc(d.why) : '')
@@ -9127,7 +9275,9 @@
                         return;
                     }
                     const moves = days.some(d => (d.swaps || []).length || d.lecture);
-                    if (!moves && days.some(d => d.status === 'ok' || d.status === 'conflict') && days.every(d => ['ok', 'same', 'skip'].includes(d.status))) {
+                    // Bugungi kun ham o'zgarsa — oyna (HEMIS eslatmasi bilan) — darhol emas.
+                    if (!moves && !days.some(d => d.today && ['ok', 'conflict'].includes(d.status))
+                        && days.some(d => d.status === 'ok' || d.status === 'conflict') && days.every(d => ['ok', 'same', 'skip'].includes(d.status))) {
                         await cycDaysCommit(key, offsets, mode, delta, extra);
                         if (opts.reopen) cycReopenDay(key, offsets[0]);
                     } else {

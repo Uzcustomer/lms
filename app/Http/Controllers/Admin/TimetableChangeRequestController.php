@@ -162,8 +162,29 @@ class TimetableChangeRequestController extends Controller
         $actor = $this->actor($request);
         $controller = app(TimetableController::class);
         $lecture = TimetableController::cycleProposalIsLecture($data);
+        // O'qituvchi (amaliy): har kun alohida — shu kunda amaliyot qizil to'qnashuvda va yangi soat toza bo'lsa — darhol (so'rovsiz,
+        // TimetableTeacherConflictFix); qolgan kunlar — bitta so'rov. Sabab faqat so'rov qoladigan bo'lsa kerak.
+        [$fixDays, $restDays] = $controller->teacherCycleFixSplit($request, $board, $units, $data);
+        if ($restDays && trim((string) ($data['reason'] ?? '')) === '') {
+            throw \Illuminate\Validation\ValidationException::withMessages(['reason' => "So'rov sababini kiriting."]);
+        }
+        // So'rov qoladigan bo'lsa — fan kafedrasi va tasdiqlovchi mudir darhol yozishdan OLDIN aniqlanadi (topilmasa — hech narsa o'zgarmaydi).
         $cards = TimetableCard::whereIn('id', $cardIds)->get();
-        $department = $this->proposalDepartment(fn (int $id) => $cards->every(fn ($c) => $controller->proposalDepartmentMatches($c, $id)));
+        $department = $restDays ? $this->proposalDepartment(fn (int $id) => $cards->every(fn ($c) => $controller->proposalDepartmentMatches($c, $id))) : null;
+        if ($department && $fixDays) {
+            $heads = $svc->departmentHeads((int) $department->department_hemis_id);
+            abort_unless($heads->isNotEmpty(), 422, "Ushbu kafedra uchun tasdiqlovchi kafedra mudiri topilmadi.");
+        }
+        $notified = $fixDays ? $controller->teacherCycleFixApply($request, $board, $units, $data, $fixDays, $as) : [];
+        if (!$restDays) {
+            return response()->json(['ok' => true, 'applied_days' => $fixDays, 'proposed_request_id' => null, 'notified' => $notified,
+                'message' => count($fixDays) . " kun darhol joylandi (to'qnashuvdagi dars — so'rovsiz)."]);
+        }
+        if ($fixDays) {
+            // Qolgan kunlar — aniq sanalar bilan bitta so'rov (darhol yozilgan kunlardan keyingi holat bo'yicha).
+            $data = array_merge($data, ['dates' => $restDays, 'date' => $restDays[0], 'scope' => 'day']);
+            $units = $controller->cycleProposalUnits($board, $data, null);
+        }
         // Ko'p kunli so'rov: dates (bitta yangi soat barcha kunlarga); date — birinchi kun (eski maydon, tavsif va qidiruv uchun).
         $payload = ['specialty_name' => $data['specialty_name'], 'course' => (int) $data['course'], 'subject_name' => $data['subject_name'],
             'group_name' => $data['group_name'], 'units' => array_values(array_map(fn ($x) => (string) $x['u']['unit'], $units)),
@@ -185,7 +206,16 @@ class TimetableChangeRequestController extends Controller
             : $notice['subject'] . ' · ' . $notice['groups'] . ' (' . $type . ', sikl' . ($lecture ? ', butun oqim' : '') . '): ' . $notice['old'] . ' → ' . $notice['new'])
             . ($notice['swaps'] ? ' · ' . $notice['swaps'] : '') . ' — ' . mb_substr($data['reason'], 0, 300);
 
-        return $this->submitProposal($svc, $draft, $department, $actor, $notice, $data['reason']);
+        $res = $this->submitProposal($svc, $draft, $department, $actor, $notice, (string) $data['reason']);
+        $j = $res->getData(true);
+        $j['applied_days'] = $fixDays;
+        $j['proposed_request_id'] = $j['change_request_id'] ?? null;
+        if ($fixDays) {
+            $j['notified'] = $notified;
+            $j['message'] = count($fixDays) . ' kun darhol joylandi, ' . count($restDays) . ' kun — so‘rov #' . ($j['change_request_id'] ?? '') . '. ' . ($j['message'] ?? '');
+        }
+
+        return response()->json($j);
     }
 
     /**
@@ -217,7 +247,8 @@ class TimetableChangeRequestController extends Controller
             'practice_place' => 'nullable|in:keep,swap,after,gap,pair',
             'practice_gap' => 'nullable|integer|min:0|max:6',
             'practice_pair' => 'nullable|integer|min:1|max:12',
-        ] + ($withReason ? ['reason' => 'required|string|max:1000'] : []));
+        // Sabab — so'rov uchun (o'qituvchining to'qnashuvdagi darsi hamma kunda so'rovsiz joylansa — kerak emas; proposeCycleTime tekshiradi).
+        ] + ($withReason ? ['reason' => 'nullable|string|max:1000'] : []));
         if (!empty($data['dates'])) {
             $data['dates'] = TimetableController::cycleProposalDates($data);
             $data['date'] = $data['dates'][0];

@@ -259,20 +259,29 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         assert.equal(all.filter(c => c.api).length, 0);
         assert.deepEqual(all.filter(c => c.move).map(c => c.move.slice(0, 3).concat(c.move[4])), [['K', 4, 3, 'both']]);
 
-        // 7b) O'tgan va bugungi kun: o'tgan — tanlanmaydi; bugungi — admin, birinchi dars hali boshlanmagan bo'lsa (aks holda — yo'q).
+        // 7b) O'tgan va bugungi kun: o'tgan — tanlanmaydi; bugungi — admin (dars boshlangan, hatto tugagan bo'lsa ham).
         await p.keyboard.press('Escape');
         await reset(p);
         await p.evaluate(() => { window.TODAY = '2026-11-17'; window.T12 = ['24:00'].concat(window.T12.slice(1)); });
         await click(p, 0, 1, ['Control']);
         assert.deepEqual(await selected(p), []);
-        assert.match((await p.evaluate(() => window.toasts))[0].html, /tanlab bo'lmaydi/);
+        assert.match((await p.evaluate(() => window.toasts))[0].html, /tanlab bo'lmaydi: o'tgan kun/);
         await click(p, 1, 1, ['Control']);
         assert.deepEqual(await selected(p), [1]);   // bugun, 1-soat "24:00" — hali boshlanmagan
         await p.keyboard.press('Escape');
         await p.evaluate(() => { window.T12 = ['00:00'].concat(window.T12.slice(1)); });
         await click(p, 1, 1, ['Control']);
-        assert.deepEqual(await selected(p), []);    // boshlangan
+        assert.deepEqual(await selected(p), [1]);   // boshlangan — admin uchun baribir mumkin
+        await p.keyboard.press('Escape');
         await p.evaluate(() => { window.TODAY = '2026-11-05'; window.T12 = ['08:30'].concat(window.T12.slice(1)); });
+
+        // 7c) Kafedra mudiri (kun soatini sura oladi) — bugungi kun tanlanmaydi (faqat admin / registrator ofisi).
+        const km = await page('kafedra_mudiri', true);
+        await km.evaluate(() => { window.TODAY = '2026-11-17'; window.T12 = ['24:00'].concat(window.T12.slice(1)); });
+        await click(km, 1, 1, ['Control']);
+        assert.deepEqual(await selected(km), []);
+        await click(km, 2, 1, ['Control']);
+        assert.deepEqual(await selected(km), [2]);
 
         // 8) O'qituvchi: tanlangan kunlarni sudrash — so'rov oynasi (kunlar va yangi vaqt oldindan), to'g'ridan-to'g'ri o'zgartirish yo'q.
         const t = await page('oqituvchi', false);

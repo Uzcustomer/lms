@@ -25,7 +25,9 @@ use Illuminate\Validation\ValidationException;
  * Ko'chirish: haftalik — Takliflar bajaruvchisi (admin — week-suggestions/apply, darhol; boshqalar — week-suggestions/propose, sabab
  * va tasdiq zanjiri), shu hafta yoki "shu va keyingi haftalar"; sikl amaliyoti — shu kunning boshlanish soati (cycle-practice-starts
  * scope=day) yoki butun blokning kelgusi kunlari (scope=rest); kun o'zgarmaydi. O'qituvchi / fan mas'uli — cycle-time-proposal.
- * Bugungi va o'tgan darslar ko'chirilmaydi.
+ * O'tgan kun darslari ko'chirilmaydi; bugungi dars — faqat admin, superadmin va registrator ofisi (boshlangan bo'lsa ham; TimetableStaffToday).
+ * O'qituvchining to'qnashuvdagi (yoki joylanmagan) darsi toza joyga — so'rovsiz (via = apply_fix, TimetableTeacherConflictFix).
+ * Har yozuvda movable / movable_why — oynada sudrab ko'chirish uchun (agendaMove bilan bir xil sabablar).
  */
 trait TimetableTeacherAgenda
 {
@@ -65,7 +67,17 @@ trait TimetableTeacherAgenda
         $rights = $this->suggestionRights($this->timetableActor($request));
         $slots = $this->hemisSlotTimes($board);
         $pairs = $this->agendaPairs($slots);
-        $entries = $this->agendaEntries($board, $tid, $days, $layer, $rights, $slots, $roomCode);
+        $staff = $this->staffTodayOk($request);
+        $entries = $this->agendaEntries($board, $tid, $days, $layer, $rights, $slots, $roomCode, $staff);
+        // Sudrash uchun: har yozuvni ko'chirish mumkinmi (huquq — karta / birlik bo'yicha bir marta, memo).
+        $memo = [];
+        foreach ($entries as &$en) {
+            $r = $roomCode !== null ? ['why' => "Xona bandligi — faqat ko'rish."] : ($en['hidden'] ? ['why' => 'Qamrovdan tashqari dars.']
+                : $this->agendaMoveRight($request, $board, $en, $layer, $rights, $memo));
+            $en['movable'] = $r['why'] === null;
+            $en['movable_why'] = $r['why'];
+        }
+        unset($en);
         $free = [];
         foreach ($days as $d) {
             $free[$d] = array_values(array_map(fn ($p) => $p['no'],
@@ -88,6 +100,8 @@ trait TimetableTeacherAgenda
             'room' => $roomCode !== null ? ['code' => $roomObj->code, 'name' => $roomObj->name, 'volume' => (int) $roomObj->volume,
                 'building' => $roomObj->building_name] : null,
             'date' => $day->toDateString(), 'range' => $range, 'layer' => $layer, 'today' => self::proposalToday(),
+            // Bugungi dars ko'chirilsa — HEMIS eslatmasi (faqat xodimga bugun ochiq).
+            'staff_today' => $staff, 'hemis_hint' => self::todayHemisHint(),
             'title' => $name . ' — ' . ($range === 'week'
                 ? Carbon::parse($days[0])->format('d.m') . '–' . Carbon::parse(end($days))->format('d.m.Y')
                 : $day->format('d.m.Y') . ' (' . self::AGENDA_DOW[$day->dayOfWeekIso] . ')'),
@@ -176,7 +190,8 @@ trait TimetableTeacherAgenda
      * subject, groups, room, room_code, key, card_ids, week (haftalik), unit (sikl amaliyoti), layer, conflict, hidden, label.
      * Bitta oqim ma'ruzasi (bir nechta guruhcha yoki yo'nalish kartasi; fan, xona, vaqt bir xil) — bitta yozuv.
      */
-    private function agendaEntries(TimetableBoard $board, int $tid, array $days, string $layer, array $rights, array $slots, ?string $room = null): array
+    private function agendaEntries(TimetableBoard $board, int $tid, array $days, string $layer, array $rights, array $slots, ?string $room = null,
+        bool $staff = false): array
     {
         $dates = array_flip($days);
         $rh = max(1, $this->cycleRowHours($board));
@@ -268,7 +283,6 @@ trait TimetableTeacherAgenda
         }
         $list = array_values($merged);
         usort($list, fn ($a, $b) => [$a['date'], $a['from'], $a['key']] <=> [$b['date'], $b['from'], $b['key']]);
-        $today = self::proposalToday();
         $out = [];
         foreach ($list as $i => $x) {
             $conflict = false;
@@ -282,7 +296,9 @@ trait TimetableTeacherAgenda
             $dow = Carbon::parse($x['date'])->dayOfWeekIso;
             $base = ['date' => $x['date'], 'dow' => $dow, 'from' => $x['from'], 'to' => $x['to'],
                 'start' => $slots[$x['from']][0] ?? null, 'end' => $slots[$x['to'] - 1][1] ?? null,
-                'kind' => $x['kind'], 'layer' => $x['layer'], 'info_only' => (bool) $x['info_only'], 'course' => $x['course'], 'conflict' => $conflict, 'past' => $x['date'] <= $today];
+                'kind' => $x['kind'], 'layer' => $x['layer'], 'info_only' => (bool) $x['info_only'], 'course' => $x['course'], 'conflict' => $conflict,
+                // Ko'chirib bo'lmaydigan kun: xodimga — o'tgan kun, boshqalarga — bugun va o'tgan.
+                'past' => self::pastFor($staff, $x['date'])];
             $out[] = $visible
                 ? $base + ['hidden' => false, 'type' => $x['lecture'] ? 'M' : 'A', 'subject' => $x['subject'], 'groups' => $x['groups'],
                     'room' => $x['room'], 'room_code' => $x['room_code'], 'key' => $x['key'], 'card_ids' => $x['card_ids'], 'week' => $x['week'],
@@ -344,40 +360,37 @@ trait TimetableTeacherAgenda
         // Tanlangan haftalar / kunlar: "Y-m-d|para|a,b,c".
         [$selDate, $selPair, $selItems] = array_pad(explode('|', (string) $sel, 3), 3, '');
         $selItems = array_values(array_unique(array_filter(array_map('trim', explode(',', $selItems)), fn ($v) => $v !== '')));
-        $role = $this->timetableActiveRole($request);
-        $why = match (true) {
-            $layer === 'external' => "Tashqi qatlam — faqat ko'rish.",
-            $entry['past'] => "Bugungi va o'tgan darslar ko'chirilmaydi.",
-            $entry['kind'] === 'cycle' && $entry['type'] === 'M' => "Sikl ma'ruzasi bu oynadan ko'chirilmaydi (ma'ruza soati — sikl jadvalida).",
-            // Bir nechta kartali haftalik ma'ruza oqimi — bitta karta ko'chsa oqim bo'linib qoladi.
-            $entry['kind'] === 'weekly' && ($entry['flow_size'] ?? count($entry['card_ids'])) > 1 => "Bir nechta kartadan iborat ma'ruza oqimi bu oynadan ko'chirilmaydi — oqim bo'linib qolmasin (jadvaldan yoki Takliflar orqali).",
-            default => null,
-        };
-        if ($why) {
-            return ['why' => $why] + $out;
+        $memo = [];
+        $right = $this->agendaMoveRight($request, $board, $entry, $layer, $rights, $memo);
+        if ($right['why'] !== null) {
+            return ['why' => $right['why']] + $out;
         }
-        $today = self::proposalToday();
+        $staff = $this->staffTodayOk($request);
+        $out['via'] = $right['via'];
+        // Bugungi dars (yoki bugunga ko'chirish) — xodimga ochiq; HEMIS eslatmasi.
+        $out['today'] = self::proposalToday();
+        // O'qituvchining to'qnashuvdagi (yoki shu haftada joylanmagan) darsi: toza joyga — so'rovsiz (apply_fix; har variantda fix).
+        $teacherFix = $right['via'] === 'propose' && $this->teacherFixRole($request);
         if ($entry['kind'] === 'weekly') {
             $card = TimetableCard::with('board')->findOrFail($out['card_id']);
             $rh = max(1, $this->cycleRowHours($board));
             $row = fn (int $hour) => intdiv($hour - 1, $rh) + 1;
-            // Huquq: Takliflar bilan bir xil (admin — darhol, boshqalar — so'rov).
-            $check = $this->suggestionApplyCheck($rights, $board, ['card_id' => $card->id, 'actions' => [['op' => 'move', 'card_id' => $card->id,
-                'week' => $entry['week'], 'day' => $entry['dow'], 'pair' => $row($entry['from'])]]], null, null, false);
-            if ($check['mode'] === null) {
-                return ['why' => $check['why']] + $out;
+            $fixable = $teacherFix && (!empty($entry['unplaced']) || $this->weeklyLessonNeedsFix($board, $card, (int) $entry['week']));
+            if ($fixable) {
+                $out['via'] = 'apply_fix';
             }
-            $out['via'] = $check['mode'] === 'direct' ? 'apply' : 'propose';
             $out['rest_weeks'] = $this->agendaRestWeeks($card, (int) $entry['week']);
             foreach ($days as $d) {
-                if ($d <= $today || $this->calendarWeekAt($board, $card, $d) !== (int) $entry['week']) {
+                if (self::pastFor($staff, $d) || $this->calendarWeekAt($board, $card, $d) !== (int) $entry['week']) {
                     continue;
                 }
                 foreach ($pairs as $p) {
                     if (in_array($p['no'], $free[$d], true)) {
                         // Maqsad: shu haftaning kuni va para qatori (Takliflar "move" amali uchun).
                         $at = ['day' => Carbon::parse($d)->dayOfWeekIso, 'pair' => $row($p['from'])];
-                        $out['options'][$d][$p['no']] = $this->agendaWeeklyOption($board, $card, (int) $entry['week'], $at['day'], $at['pair']) + $at;
+                        $o = $this->agendaWeeklyOption($board, $card, (int) $entry['week'], $at['day'], $at['pair']) + $at;
+                        // So'rovsiz: yangi joy to'liq toza (sabab / ogohlantirish va boshqa xona taklifisiz).
+                        $out['options'][$d][$p['no']] = $o + ['fix' => $fixable && $o['ok'] && $o['why'] === null && $o['room'] === null];
                     }
                 }
             }
@@ -401,19 +414,15 @@ trait TimetableTeacherAgenda
             }
         } else {
             $u = $entry['unit'];
-            $teacherFlow = in_array($this->timetableActiveRole($request), TimetableChangeApproval::TEACHER_PROPOSAL_ROLES, true);
-            $cards = collect($this->cycleProposalUnits($board, $u + ['units' => [$u['unit']]], null))->flatMap(fn ($x) => $x['u']['cards']);
-            $allowed = $teacherFlow
-                ? $cards->contains(fn ($c) => $rights['tid'] > 0 && ((int) $c->teacher_id === $rights['tid'] || $this->responsibleMatch($rights['keys'], $c)))
-                : $this->cycleLayerEditable($role, 'internal') && ($rights['level'] === 'admin' || ($rights['kafedra']
-                    && $cards->every(fn ($c) => $this->sameKafedra($c->kafedra_name, $rights['kafedra']))));
-            if (!$allowed) {
-                return ['why' => "Bu darsni ko'chirish huquqingiz yo'q."] + $out;
-            }
-            $out['via'] = $teacherFlow ? 'propose' : 'apply';
-            // Butun blok: kelgusi (ertangi va keyingi) amaliy kunlaridan birinchisi.
+            // Butun blok: kelgusi amaliy kunlaridan birinchisi (xodimga — bugundan, boshqalarga — ertadan).
             $x = $this->cycleProposalUnits($board, $u + ['units' => [$u['unit']]], null)[0] ?? null;
-            $future = $x ? array_values(array_filter(array_keys($x['prac']), fn ($d) => $d > $today)) : [];
+            // O'qituvchi: shu kunda amaliyot qizil to'qnashuvda (kartada kutilayotgan so'rov yo'q) — toza soatga so'rovsiz.
+            $fixable = $teacherFix && $x && !array_intersect_key($this->pendingCardRequests($board->id), array_flip(array_map(fn ($c) => (int) $c->id, $x['u']['cards'])))
+                && $this->cyclePracticeNeedsFix($board, $x, (string) $entry['date']);
+            if ($fixable) {
+                $out['via'] = 'apply_fix';
+            }
+            $future = $x ? array_values(array_filter(array_keys($x['prac']), fn ($d) => !self::pastFor($staff, $d))) : [];
             sort($future);
             $out['block_date'] = $future[0] ?? null;
             // "Bir nechta kunni tanlash": blokning kelgusi amaliy kunlari (sana, sikl kuni, hozirgi vaqt).
@@ -429,7 +438,8 @@ trait TimetableTeacherAgenda
                     }
                     $base = $u + ['units' => [$u['unit']], 'start_hour' => $p['from']];
                     $at = ['start_hour' => $p['from']];
-                    $out['options'][$entry['date']][$p['no']] = $this->agendaCycleOption($board, $base + ['date' => $entry['date'], 'scope' => 'day']) + $at;
+                    $o = $this->agendaCycleOption($board, $base + ['date' => $entry['date'], 'scope' => 'day']) + $at;
+                    $out['options'][$entry['date']][$p['no']] = $o + ['fix' => $fixable && $o['ok']];
                     $out['block'][$entry['date']][$p['no']] = ($out['block_date']
                         ? $this->agendaCycleOption($board, $base + ['date' => $out['block_date'], 'scope' => 'rest'])
                         : ['ok' => false, 'why' => "Blokning kelgusi kunlari yo'q.", 'room' => null]) + $at;
@@ -449,6 +459,58 @@ trait TimetableTeacherAgenda
         $out['block'] = (object) $out['block'];
 
         return $out;
+    }
+
+    /**
+     * Agenda yozuvini ko'chirish mumkinmi va qanday: ['why' => sabab|null, 'via' => apply (darhol) | propose (so'rov) | null]. Sabablar:
+     * tashqi qatlam, o'tgan (xodimga — o'tgan kun; boshqalarga — bugun ham), sikl ma'ruzasi, ko'p kartali haftalik ma'ruza oqimi, huquq
+     * (haftalik — Takliflar huquqi, kutilayotgan so'rov bilan; sikl — o'qituvchi o'z darsi / kafedra mudiri o'z kafedrasi / admin).
+     * Huquq — karta (hafta) yoki birlik bo'yicha bir marta ($memo).
+     */
+    private function agendaMoveRight(Request $request, TimetableBoard $board, array $entry, string $layer, array $rights, array &$memo): array
+    {
+        $staff = $memo['staff'] ??= $this->staffTodayOk($request);
+        $why = match (true) {
+            $layer === 'external' => "Tashqi qatlam — faqat ko'rish.",
+            !empty($entry['past']) => $staff ? "O'tgan kun darsi ko'chirilmaydi."
+                : "Bugungi va o'tgan darslar ko'chirilmaydi." . ($entry['date'] === self::proposalToday() ? ' ' . self::todayStaffOnlyText() : ''),
+            $entry['kind'] === 'cycle' && ($entry['type'] ?? null) === 'M' => "Sikl ma'ruzasi bu oynadan ko'chirilmaydi (ma'ruza soati — sikl jadvalida).",
+            // Bir nechta kartali haftalik ma'ruza oqimi — bitta karta ko'chsa oqim bo'linib qoladi.
+            $entry['kind'] === 'weekly' && ($entry['flow_size'] ?? count($entry['card_ids'])) > 1 => "Bir nechta kartadan iborat ma'ruza oqimi bu oynadan ko'chirilmaydi — oqim bo'linib qolmasin (jadvaldan yoki Takliflar orqali).",
+            default => null,
+        };
+        if ($why !== null) {
+            return ['why' => $why, 'via' => null];
+        }
+        if ($entry['kind'] === 'weekly') {
+            $cid = (int) ($entry['card_ids'][0] ?? 0);
+            $k = 'w|' . $cid . '|' . (int) $entry['week'];
+            if (!isset($memo[$k])) {
+                $rh = max(1, $this->cycleRowHours($board));
+                $memo['pending'] ??= $rights['level'] && $rights['level'] !== 'admin' ? $this->pendingCardRequests($board->id) : [];
+                // Huquq: Takliflar bilan bir xil (admin — darhol, boshqalar — so'rov).
+                $check = $this->suggestionApplyCheck($rights, $board, ['card_id' => $cid, 'actions' => [['op' => 'move', 'card_id' => $cid,
+                    'week' => (int) $entry['week'], 'day' => (int) $entry['dow'], 'pair' => intdiv((int) $entry['from'] - 1, $rh) + 1]]], null, null, false, $memo['pending']);
+                $memo[$k] = $check['mode'] === null ? ['why' => $check['why'], 'via' => null]
+                    : ['why' => null, 'via' => $check['mode'] === 'direct' ? 'apply' : 'propose'];
+            }
+
+            return $memo[$k];
+        }
+        $u = (array) ($entry['unit'] ?? []);
+        $k = 'c|' . ($u['key'] ?? '');
+        if (!isset($memo[$k])) {
+            $teacherFlow = $this->teacherFixRole($request);
+            $unit = collect($this->placedCycleUnits($board)[0])->firstWhere('key', $u['key'] ?? null);
+            $cards = collect($unit['cards'] ?? []);
+            $allowed = $cards->isNotEmpty() && ($teacherFlow
+                ? $cards->contains(fn ($c) => $this->teacherFixOwns($rights, $c))
+                : $this->cycleLayerEditable($this->timetableActiveRole($request), 'internal') && ($rights['level'] === 'admin' || ($rights['kafedra']
+                    && $cards->every(fn ($c) => $this->sameKafedra($c->kafedra_name, $rights['kafedra'])))));
+            $memo[$k] = $allowed ? ['why' => null, 'via' => $teacherFlow ? 'propose' : 'apply'] : ['why' => "Bu darsni ko'chirish huquqingiz yo'q.", 'via' => null];
+        }
+
+        return $memo[$k];
     }
 
     /** "Shu va keyingi haftalar": shu haftadan boshlab dars xuddi shu joyida (bekor qilinmagan) turgan haftalar (ko'pi bilan 20). */

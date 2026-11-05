@@ -708,7 +708,8 @@ it('o\'qituvchi so\'rovi: tasdiq kechiksa (dars sanasi o\'tib ketsa) — "Muddat
     if ($stage === 'registrar') {
         asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
     }
-    test()->travelTo($monday->copy()->addDays(2)->setTime(8, 0));   // chorshanba — yangi sana bugun
+    // Kafedra mudiri: chorshanba — yangi sana bugun (unga bugun yopiq); registrator (xodim): bugun to'siq emas — payshanba, yangi sana o'tgan.
+    test()->travelTo($monday->copy()->addDays($stage === 'registrar' ? 3 : 2)->setTime(8, 0));
     $actor = $stage === 'registrar' ? [$reg, 'registrator_ofisi'] : [$head, 'kafedra_mudiri'];
     $r = asRole(...$actor)->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
     expect($r->json('error'))->toContain("Muddati o'tgan")

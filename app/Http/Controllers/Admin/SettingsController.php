@@ -186,7 +186,12 @@ class SettingsController extends Controller
             'scores.*.test_active' => 'nullable',
             'scores.*.total_limit' => 'required|integer|min:0',
             'scores.*.total_active' => 'nullable',
+            'grade_minimum_limit' => 'nullable|integer|min:1|max:100',
         ]);
+
+        // Minimal chegara: bo'sh — HEMIS qiymati; to'ldirilgan — barcha baholash tizimlari uchun
+        Setting::set(MarkingSystemScore::SETTING_MINIMUM_LIMIT, $validated['grade_minimum_limit'] ?? '');
+        MarkingSystemScore::forgetLmsMinimumLimit();
 
         foreach ($validated['scores'] as $id => $scoreData) {
             MarkingSystemScore::where('id', $id)->update([

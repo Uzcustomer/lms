@@ -45,6 +45,6 @@ class StudentPerformance extends Model
     // TODO: Consider making threshold dynamic per marking system
     public function isRetakeAllowed()
     {
-        return $this->grade < 60;
+        return $this->grade < \App\Models\MarkingSystemScore::lowGradeLimit();
     }
 }

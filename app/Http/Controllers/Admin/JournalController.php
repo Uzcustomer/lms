@@ -590,7 +590,7 @@ class JournalController extends Controller
             // ENG YUQORI QOIDA: asl baho 60 dan past va retake_grade mavjud bo'lsa,
             // status/reason qanday bo'lishidan qat'iy nazar retake ustun (jurnal "ixcham"
             // tabidagi qiymat shu). Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+            if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $row->retake_grade !== null) {
                 return ['grade' => $row->retake_grade, 'is_retake' => true];
             }
             // status = pending + low_grade → show the failing grade (retake hali yo'q)
@@ -4531,7 +4531,7 @@ class JournalController extends Controller
                 ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
                 ->where('id', '!=', $gradeId)
                 ->whereNull('deleted_at')
-                ->where('grade', '>=', 60)
+                ->where('grade', '>=', \App\Models\MarkingSystemScore::lowGradeLimit())
                 ->whereIn('status', ['recorded', 'closed'])
                 ->first();
 
@@ -4555,7 +4555,7 @@ class JournalController extends Controller
                 // Faqat NB (absent) yoki past baho (<60) larga ruxsat
                 $isAbsentReason = $studentGrade->reason === 'absent';
                 $isLowGrade = $studentGrade->reason === 'low_grade'
-                    || ($studentGrade->grade !== null && round((float)$studentGrade->grade) < 60);
+                    || ($studentGrade->grade !== null && round((float)$studentGrade->grade) < \App\Models\MarkingSystemScore::lowGradeLimit());
 
                 if (!$isAbsentReason && !$isLowGrade) {
                     return response()->json(['success' => false, 'message' => 'O\'qituvchi faqat NB va past baholarni tahrirlashi mumkin.'], 403);
@@ -7170,7 +7170,7 @@ class JournalController extends Controller
             ->get();
 
         $getEffectiveGrade = function ($row) {
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+            if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $row->retake_grade !== null) {
                 return $row->retake_grade;
             }
             if ($row->status === 'pending') return null;
@@ -7579,7 +7579,7 @@ class JournalController extends Controller
                 ->get();
             foreach ($allGrades as $g) {
                 $effective = null;
-                if ($g->grade !== null && (float) $g->grade < 60 && $g->retake_grade !== null) {
+                if ($g->grade !== null && (float) $g->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $g->retake_grade !== null) {
                     $effective = $g->retake_grade;
                 } elseif ($g->status === 'recorded' || $g->status === 'closed') {
                     $effective = $g->grade;
@@ -8145,7 +8145,7 @@ class JournalController extends Controller
         $getEffectiveGrade = function ($row) {
             // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
             // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+            if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $row->retake_grade !== null) {
                 return $row->retake_grade;
             }
             if ($row->status === 'pending') return null;
@@ -9196,7 +9196,7 @@ class JournalController extends Controller
         $getEffectiveGrade = function ($row) {
             // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
             // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+            if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $row->retake_grade !== null) {
                 return $row->retake_grade;
             }
             if ($row->status === 'pending') return null;
@@ -10151,7 +10151,7 @@ class JournalController extends Controller
             }
             // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
             // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $retakeGrade !== null) {
+            if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $retakeGrade !== null) {
                 return $retakeGrade;
             }
             if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {

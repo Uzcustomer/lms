@@ -52,7 +52,7 @@ class TeacherMissedLessons
         (
             sg.reason = 'absent'
             OR (CASE
-                WHEN sg.grade IS NOT NULL AND sg.grade < 60 AND sg.retake_grade IS NOT NULL THEN sg.retake_grade
+                WHEN sg.grade IS NOT NULL AND sg.grade < {LOW_GRADE} AND sg.retake_grade IS NOT NULL THEN sg.retake_grade
                 WHEN sg.status = 'pending' AND sg.reason = 'low_grade' AND sg.grade IS NOT NULL THEN sg.grade
                 WHEN sg.status = 'pending' THEN NULL
                 WHEN sg.reason = 'absent' AND sg.grade IS NULL THEN sg.retake_grade
@@ -470,7 +470,7 @@ class TeacherMissedLessons
             ->whereNotIn('sg.training_type_code', [99, 100, 101, 102, 103])
             ->where('sg.lesson_date', '>=', $from.' 00:00:00')
             ->where('sg.lesson_date', '<', $today.' 00:00:00')
-            ->whereRaw(self::PROCESSED_SQL)
+            ->whereRaw(str_replace('{LOW_GRADE}', (string) \App\Models\MarkingSystemScore::lowGradeLimit(), self::PROCESSED_SQL))
             ->select('sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.student_hemis_id', DB::raw('DATE(sg.lesson_date) as lesson_day'))
             // Oqim bilan o'qiymiz: bo'laklash har safar "id > oxirgi" shartini
             // qo'shib qayta saralar edi; cursor() bitta so'rov bilan kifoya
@@ -625,7 +625,7 @@ class TeacherMissedLessons
      */
     private function effectiveGrade(object $row)
     {
-        if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+        if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $row->retake_grade !== null) {
             return $row->retake_grade;
         }
         if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {

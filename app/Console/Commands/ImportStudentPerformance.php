@@ -61,7 +61,7 @@ class ImportStudentPerformance extends Command
         $this->processApiData('student-grade-list', $queryParams, function ($item) {
             $student = Student::where('hemis_id', $item['_student'])->first();
             if ($student) {
-                $isLowGrade = ($student->level_code == 16 && $item['grade'] < 3) || ($student->level_code != 16 && $item['grade'] < 60);
+                $isLowGrade = ($student->level_code == 16 && $item['grade'] < 3) || ($student->level_code != 16 && $item['grade'] < \App\Models\MarkingSystemScore::lowGradeLimit());
                 if ($isLowGrade) {
                     $this->processGrades($item, $student);
                 }

@@ -667,12 +667,28 @@
                     <form method="POST" action="{{ route('admin.settings.update.marking-system-scores') }}">
                         @csrf
 
+                        {{-- Minimal chegara: past baho (otrabotka), MT qulfi, JN va hisobotlar shunga tayanadi --}}
+                        @php $lmsMinimum = \App\Models\MarkingSystemScore::lmsMinimumLimit(); @endphp
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 14px; padding: 16px 20px; margin-bottom: 16px;">
+                            <div style="flex: 1; min-width: 240px;">
+                                <label for="grade_minimum_limit" style="display: block; font-size: 14px; font-weight: 700; color: #78350f;">Minimal chegara (barcha baholash tizimlari)</label>
+                                <div style="font-size: 12px; color: #92400e; margin-top: 4px; line-height: 1.5;">
+                                    Shundan past kunlik baho — past baho (otrabotka qarzi); MT qulfi, JN va hisobotlar ham shunga tayanadi.
+                                    Bo'sh qoldirilsa — HEMIS qiymati. HEMIS dan yangilash bu sozlamani o'zgartirmaydi.
+                                </div>
+                            </div>
+                            <input type="number" id="grade_minimum_limit" name="grade_minimum_limit" min="1" max="100" step="1"
+                                   value="{{ old('grade_minimum_limit', $lmsMinimum) }}" placeholder="HEMIS"
+                                   style="width: 110px; padding: 8px 12px; font-size: 16px; font-weight: 700; text-align: center; border: 1px solid #fcd34d; border-radius: 10px; background: #fff;">
+                        </div>
+                        @error('grade_minimum_limit')<div style="color: #dc2626; font-size: 13px; margin: -8px 0 12px;">{{ $message }}</div>@enderror
+
                         @foreach($markingSystemScores as $score)
                         <div style="background: #f8fafc; border-radius: 14px; padding: 20px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
                                 <div>
                                     <div style="font-size: 15px; font-weight: 700; color: #1e293b;">{{ $score->marking_system_name }}</div>
-                                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">Kod: {{ $score->marking_system_code }} | HEMIS minimum: {{ $score->minimum_limit }} | GPA: {{ $score->gpa_limit }}</div>
+                                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">Kod: {{ $score->marking_system_code }} | HEMIS minimum: {{ $score->hemisMinimumLimit() }}@if($lmsMinimum !== null) (LMS: {{ $lmsMinimum }})@endif | GPA: {{ $score->gpa_limit }}</div>
                                 </div>
                             </div>
 

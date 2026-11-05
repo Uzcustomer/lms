@@ -42,6 +42,54 @@ class MarkingSystemScore extends Model
         'total_active' => 'boolean',
     ];
 
+    /** settings jadvalidagi kalit: LMS bo'yicha minimal chegara (bo'sh — HEMIS qiymati) */
+    public const SETTING_MINIMUM_LIMIT = 'grade_minimum_limit';
+
+    private static ?int $lmsMinimumLimit = null;
+    private static bool $lmsMinimumLimitLoaded = false;
+
+    /**
+     * Minimal chegara (past baho → otrabotka, MT qulfi, JN va hisobotlar): admin sozlamasida
+     * belgilangan bo'lsa — barcha baholash tizimlari uchun shu, aks holda HEMIS qiymati.
+     * HEMIS sinxronizatsiyasi faqat asl ustunni yangilaydi — sozlamaga tegmaydi.
+     */
+    public function getMinimumLimitAttribute($value): int
+    {
+        return self::lmsMinimumLimit() ?? (int) $value;
+    }
+
+    /** HEMIS dan kelgan asl qiymat (sozlamadan qat'i nazar) */
+    public function hemisMinimumLimit(): int
+    {
+        return (int) $this->getRawOriginal('minimum_limit', $this->attributes['minimum_limit'] ?? 60);
+    }
+
+    public static function lmsMinimumLimit(): ?int
+    {
+        if (!self::$lmsMinimumLimitLoaded) {
+            $value = Setting::get(self::SETTING_MINIMUM_LIMIT);
+            self::$lmsMinimumLimit = is_numeric($value) ? (int) $value : null;
+            self::$lmsMinimumLimitLoaded = true;
+        }
+
+        return self::$lmsMinimumLimit;
+    }
+
+    /**
+     * Kunlik baho uchun past baho chegarasi (otrabotka huquqi, "asl baho chegaradan past
+     * bo'lsa otrabotka bahosi ustun" qoidasi): sozlama, bo'lmasa avvalgidek 60.
+     * OSKI/test va yakuniy ball (V<60) bunga kirmaydi.
+     */
+    public static function lowGradeLimit(): int
+    {
+        return self::lmsMinimumLimit() ?? 60;
+    }
+
+    public static function forgetLmsMinimumLimit(): void
+    {
+        self::$lmsMinimumLimitLoaded = false;
+    }
+
     public function curricula()
     {
         return $this->hasMany(Curriculum::class, 'marking_system_code', 'marking_system_code');

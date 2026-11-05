@@ -83,7 +83,7 @@ class JournalExamGradesExportJob implements ShouldQueue
      */
     private function effMain(object $r): ?float
     {
-        if ($r->grade !== null && (float) $r->grade < 60 && $r->retake_grade !== null) {
+        if ($r->grade !== null && (float) $r->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $r->retake_grade !== null) {
             return (float) $r->retake_grade;
         }
         if ($r->status === 'pending' && $r->reason === 'low_grade' && $r->grade !== null) {

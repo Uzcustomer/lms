@@ -33,7 +33,7 @@ class VedomostTekshirishService
             // retake ustun. Jurnal (JournalController::getEffectiveGrade) va
             // JnMtCalculator bilan bir xil — aks holda vedomostda otrabotka
             // qilingan kunlar past asl baho bilan hisoblanib, JN past chiqadi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+            if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $row->retake_grade !== null) {
                 return (float) $row->retake_grade;
             }
             if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {

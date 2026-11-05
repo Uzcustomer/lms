@@ -156,7 +156,7 @@ class JnMtCalculator
     {
         // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
         // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
-        if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+        if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $row->retake_grade !== null) {
             return (float) $row->retake_grade;
         }
         if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {

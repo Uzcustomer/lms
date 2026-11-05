@@ -216,7 +216,7 @@ class YnStageService
             if (!$includeSababli && !empty($row->retake_was_sababli)) {
                 $retakeGrade = null;
             }
-            if ($row->grade !== null && (float) $row->grade < 60 && $retakeGrade !== null) {
+            if ($row->grade !== null && (float) $row->grade < \App\Models\MarkingSystemScore::lowGradeLimit() && $retakeGrade !== null) {
                 return $retakeGrade;
             }
             if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {

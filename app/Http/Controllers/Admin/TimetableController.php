@@ -6296,8 +6296,20 @@ class TimetableController extends Controller
         if (!$beforeUnits) {
             return ['starts' => $starts, 'hard' => [], 'busy' => []];
         }
+        $e = $this->cycleDayMoveErrors($board, $placement, $data, (int) $k, $hour, array_keys($moved), [], $busy);
+        // Kun boshi bilan surilgan amaliy darslar: o'qituvchi, xona va guruh bandligi — yangi joyida (cycleDayMoveErrors faqat ma'ruzaniki).
+        if ($busy && !$e['hard']) {
+            foreach ($this->cycleDayUnits($board, $placement, $data, (int) $k) as $unit => $x) {
+                $was = $beforeUnits[$unit]['prac'][$beforeUnits[$unit]['date'] ?? ''] ?? null;
+                $now = $x['prac'][$x['date']] ?? null;
+                if ($was && $now && (int) $was[0] !== (int) $now[0]) {
+                    array_push($e['busy'], ...$this->cyclePracticeBusyErrors($board, [$x], [(string) $unit => [(int) $k => $x['date']]], (int) $now[0]));
+                }
+            }
+            $e['busy'] = array_values(array_unique($e['busy']));
+        }
 
-        return ['starts' => $starts] + $this->cycleDayMoveErrors($board, $placement, $data, (int) $k, $hour, array_keys($moved), [], $busy);
+        return ['starts' => $starts] + $e;
     }
 
     /**

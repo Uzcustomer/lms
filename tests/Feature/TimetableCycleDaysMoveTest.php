@@ -285,3 +285,38 @@ it('bitta kunni "Birga" surish — avvalgidek bandlik tekshirilmaydi (regressiya
     dmMove($s, $s['admin'], 'admin', ['day_index' => 2, 'start_hour' => 3])->assertOk();
     expect(dmDays($s)['2026-11-18']['lec'])->toBe([3, 5]);
 });
+
+it('Codex: tasdiq talab qilinadigan doskada bitta kunlik so\'rov dry_run bilan ham so\'rov bo\'ladi (tasdiqni chetlab o\'tmaydi)', function () {
+    $s = dmSetup();
+    $head = dmHead();
+    $s['board']->update(['settings' => array_merge($s['board']->settings, ['approval_required' => true])]);
+    $r = dmMove($s, $head, 'kafedra_mudiri', ['day_index' => 1, 'start_hour' => 3, 'mode' => 'lecture', 'dry_run' => 1])->assertOk()->json();
+    expect($r['pending_approval'] ?? false)->toBeTrue()->and(dmDays($s)['2026-11-17']['lec'])->toBe([1, 3])
+        ->and(\App\Models\TimetableChangeRequest::count())->toBe(1);
+    // slots_json yo'li ham.
+    dmMove($s, $head, 'kafedra_mudiri', ['slots_json' => '{"1":[3,4]}', 'dry_run' => 1])->assertOk()->assertJsonPath('pending_approval', true);
+    expect(\App\Models\TimetableChangeRequest::count())->toBe(2);
+});
+
+it('Codex: ko\'p kunli "Birga" — ko\'chgan amaliy darsning o\'qituvchi bandligi ham tekshiriladi', function () {
+    $s = dmSetup();
+    // 04a smenasiz: amaliy ma'ruzadan keyin (3–6); "Birga" +2 — ma'ruza 3–4, amaliy 5–8. USTOZ U. dushanba 5–6-soatda haftalik darsda.
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04b' => 7]]]);
+    expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [1, 3], 'prc' => [3, 7]]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 3,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Anatomiya', 'group_name' => 'd2/d24-01a', 'kafedra_name' => 'Anatomiya kafedrasi', 'day' => 1, 'pair' => 5,
+        'teacher_id' => $s['ustoz']->id, 'teacher_name' => 'USTOZ U.']);
+    $d = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0, 1], 'delta' => 2, 'mode' => 'both', 'dry_run' => 1])->assertOk()->json('days');
+    expect(array_column($d, 'status'))->toBe(['conflict', 'ok'])->and($d[0]['why'])->toContain("O'qituvchi band: d2/d24-01a, Anatomiya");
+});
+
+it('Codex: "Birga" — smenasi qotirilgan amaliy (shift_g) surilmaydi, kunga sig\'ishi shunga qarab hisoblanadi', function () {
+    $s = dmSetup();
+    // Ma'ruza 1–2, amaliy smenada 7–10 (qotirilgan): +3 — ma'ruza 4–5, amaliy joyida — sig'adi va kesishmaydi.
+    $d = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => 3, 'mode' => 'both'])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [4, 6], 'prc' => [7, 11]]);
+    // +9 — ma'ruza 10–11 amaliy bilan ustma-ust: o'zgarmaydi; +11 — kunga sig'maydi.
+    expect(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 9, 'mode' => 'both', 'dry_run' => 1])->json('days.0.status'))->toBe('blocked')
+        ->and(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 11, 'mode' => 'both', 'dry_run' => 1])->json('days.0.status'))->toBe('nofit');
+});

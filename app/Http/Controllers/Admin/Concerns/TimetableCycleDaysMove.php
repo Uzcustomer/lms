@@ -171,14 +171,18 @@ trait TimetableCycleDaysMove
         $flowStart = (int) (((array) ($slots['starts'] ?? []))[$k] ?? 1);
         $base = max(1, $sub !== '' ? (int) (((array) ($own[$sub] ?? []))[$k] ?? $flowStart) : $flowStart);
         $ranges = [];
+        $fixed = false;
         foreach ($units as $unit => $x) {
             if ($sub !== '' ? (string) $unit !== $sub : isset(((array) ($own[$unit] ?? []))[$k])) {
                 continue;
             }
-            array_push($ranges, ...array_filter([$x['lec'][$date] ?? null, $x['prac'][$date] ?? null]));
+            // Smenasi qotirilgan amaliy (shift_g, shu kunga ps_g yo'q) kun boshi bilan surilmaydi — oraliqqa kirmaydi (cycleBothDayWrite).
+            $stays = (int) (((array) ($slots['shift_g'] ?? []))[$unit] ?? 0) > 0 && (int) ((((array) ($slots['ps_g'] ?? []))[$unit] ?? [])[$k] ?? 0) <= 0;
+            $fixed = $fixed || ($stays && isset($x['prac'][$date]));
+            array_push($ranges, ...array_filter([$x['lec'][$date] ?? null, $stays ? null : ($x['prac'][$date] ?? null)]));
         }
         if (!$ranges) {
-            return [null, null, 'Bu kuni dars yo‘q.'];
+            return [null, null, $fixed ? 'Bu kuni faqat smenada qotirilgan amaliy — kun boshi bilan surilmaydi.' : 'Bu kuni dars yo‘q.'];
         }
 
         return [[$base, $base + 1], [min(array_column($ranges, 0)), max(array_column($ranges, 1))], null];

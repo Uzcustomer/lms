@@ -301,9 +301,13 @@ class TimetableChangeApproval
             return $request->boolean('clear') && !$request->boolean('mine') && !$request->boolean('kafedra');
         }
         // KTR haftalari, qatlamga ko'chirish, bo'lak kartalarini bo'lish/birlashtirish: avval sinov (dry_run) — u hech narsani o'zgartirmaydi.
-        // Sikl kunlarini surish (ko'p kunli): dry_run — faqat tekshiruv natijasi (sudrash paytidagi oldindan ko'rinish va oyna).
-        if (in_array($route, ['admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed', 'admin.timetable.boards.merge-variant-lectures', 'admin.timetable.boards.add-missing-groups', 'admin.timetable.cycle-lecture-slots'], true)) {
+        if (in_array($route, ['admin.timetable.ktr-weeks', 'admin.timetable.weekly-layer-copy', 'admin.timetable.boards.split-variant-mixed', 'admin.timetable.boards.merge-variant-lectures', 'admin.timetable.boards.add-missing-groups'], true)) {
             return !$request->boolean('dry_run');
+        }
+        // Sikl kunlarini surish: dry_run faqat ko'p kunli yo'lda (day_indexes — TimetableCycleDaysMove) hech narsa saqlamaydi. Bitta kun
+        // (day_index) va slots_json yo'llari dry_run ni bilmaydi — ular doim o'zgarish (aks holda tasdiqni chetlab o'tardi).
+        if ($route === 'admin.timetable.cycle-lecture-slots') {
+            return !($request->boolean('dry_run') && !empty($request->input('day_indexes')) && empty($request->input('undo')));
         }
 
         return true;

@@ -214,6 +214,21 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         await p.click('#cycMultiDlg [data-cmd="cancel"]');
         assert.equal((await apiCalls(p)).filter(c => !c.dry_run).length, 0);
 
+        // 5b) "Birga" +3: mijoz taxmini — amaliy (7–10) kun oxiridan chiqadi, server — ok (smenasi qotirilgan amaliy surilmaydi): server natijasi
+        //     ustun — "sig'maydi" emas.
+        await reset(p);
+        const g1 = await at(p, 1, 1), g2 = await at(p, 1, 4);
+        await p.keyboard.down('Shift');
+        await p.mouse.move(g1.x, g1.y); await p.mouse.down(); await p.mouse.move(g1.x, g1.y + 8, { steps: 2 }); await p.mouse.move(g2.x, g2.y, { steps: 4 });
+        await p.waitForTimeout(400);
+        assert.doesNotMatch(await p.textContent('#cycDragTip'), /sig'maydi/);
+        assert.match(await cls(p, 0, 4), /is-drag-ok/);
+        assert.doesNotMatch(await cls(p, 0, 1), /is-drag-nofit/);
+        await p.mouse.up();
+        await p.keyboard.up('Shift');
+        await p.waitForTimeout(80);
+        assert.deepEqual((await apiCalls(p)).filter(c => !c.dry_run).map(c => [c.day_indexes, c.delta, c.mode]), [[[0, 1, 2, 3], 3, 'both']]);
+
         // 6) Klaviatura ↓ / ↑ — tanlangan kunlar 1 soatga (rejim — sukut "birga").
         await reset(p);
         await p.keyboard.press('ArrowDown');

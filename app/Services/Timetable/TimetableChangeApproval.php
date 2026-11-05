@@ -129,7 +129,7 @@ class TimetableChangeApproval
     {
         $result = $this->whilePending($req, function ($locked) use ($actor, $role) {
             abort_unless($locked->approval_stage === 'department' && $this->canReviewTeacherProposal($locked, $actor, $role), 403);
-            if ($problem = $this->teacherProposalProblem($locked, $actor)) {
+            if ($problem = $this->teacherProposalProblem($locked, $actor, self::staffRole($actor, $role))) {
                 return $problem + ['req' => $locked];
             }
             $locked->update([
@@ -150,15 +150,26 @@ class TimetableChangeApproval
     }
 
     /**
-     * O'qituvchi so'rovini har bosqichda qayta tekshirish (qulf ostida): sana bugun yoki o'tgan — "Muddati o'tgan"; dars yoki
-     * biriktiruv o'zgargan, yangi vaqt band (shu orada boshqa o'zgarish) — "Qo'llanmadi". Muammo yo'q — null.
+     * Bugungi darsni ko'chira oladigan xodim (admin, superadmin, registrator ofisi) shu faol rolda ishlayaptimi — u tasdiqlaganda
+     * so'rovning bugungi kunga tegishi to'siq emas (TimetableStaffToday), faqat o'tgan kun rad.
      */
-    private function teacherProposalProblem(TimetableChangeRequest $req, $actor): ?array
+    public static function staffRole($actor, ?string $role): bool
+    {
+        return in_array((string) $role, TimetableController::TODAY_STAFF_ROLES, true)
+            && $actor && method_exists($actor, 'hasRole') && $actor->hasRole((string) $role);
+    }
+
+    /**
+     * O'qituvchi so'rovini har bosqichda qayta tekshirish (qulf ostida): sana bugun yoki o'tgan — "Muddati o'tgan" ($staff — xodim
+     * tasdiqlayapti: faqat o'tgan kun); dars yoki biriktiruv o'zgargan, yangi vaqt band (shu orada boshqa o'zgarish) — "Qo'llanmadi".
+     * Muammo yo'q — null.
+     */
+    private function teacherProposalProblem(TimetableChangeRequest $req, $actor, bool $staff = false): ?array
     {
         $ctl = app(TimetableController::class);
         $params = (array) $req->params;
         $payload = (array) $req->payload;
-        if ($why = $ctl->teacherProposalExpired($req->route_name, $params, $payload)) {
+        if ($why = $ctl->teacherProposalExpired($req->route_name, $params, $payload, $staff)) {
             $this->conclude($req, TimetableChangeRequest::EXPIRED, $why, $actor);
 
             return ['ok' => false, 'error' => "Muddati o'tgan: " . $why];
@@ -175,7 +186,7 @@ class TimetableChangeApproval
             return ['ok' => false, 'error' => "Dars jadvali taklifdan keyin o'zgargan. Yangi taklif yuboring."];
         }
         try {
-            $ctl->teacherProposalValidate($req->route_name, $params, $payload, [$req->id]);
+            $ctl->teacherProposalValidate($req->route_name, $params, $payload, [$req->id], $staff);
         } catch (ValidationException $e) {
             $msg = (string) collect($e->errors())->flatten()->first();
             $this->conclude($req, TimetableChangeRequest::FAILED, $msg, $actor);
@@ -595,9 +606,11 @@ class TimetableChangeApproval
         if ($teacherProposal) {
             abort_unless($this->canReviewTeacherProposal($req, $approver, (string) session('active_role')), 403);
         }
+        // Xodim (admin / registrator ofisi) tasdiqlayapti — bugungi kun to'siq emas (faqat o'tgan kun rad), qayta bajarishga ham uzatiladi.
+        $staff = self::staffRole($approver, (string) session('active_role'));
         // O'qituvchi so'rovi va Takliflar (kafedra mudiri so'rovi ham): sana, huquq, imzo va bandlik qayta tekshiriladi.
         if ($teacherProposal || $req->route_name === TimetableController::SUGGESTION_ROUTE) {
-            if ($problem = $this->teacherProposalProblem($req, $approver)) {
+            if ($problem = $this->teacherProposalProblem($req, $approver, $staff)) {
                 return $problem;
             }
         }
@@ -641,6 +654,9 @@ class TimetableChangeApproval
         $sub->headers->set('Accept', 'application/json');
         // Tasdiqlangan so'rovni qayta bajarish (to'g'ridan-to'g'ri HTTP chaqiruv emas).
         $sub->attributes->set('timetable.change_replay', (int) $req->id);
+        if ($staff) {
+            $sub->attributes->set('timetable.staff_today', true);
+        }
         $sub->setUserResolver(fn () => $requester);
         if (request()->hasSession()) {
             $sub->setLaravelSession(request()->session());
@@ -665,6 +681,11 @@ class TimetableChangeApproval
             $error = 'Bajarishda xatolik: ' . $e->getMessage();
         } finally {
             session(['active_role' => $prevRole]);
+        }
+        // Amal qo'ygan belgilar (masalan "bugungi dars ko'chirildi") — tarix yozuvida (so'rov tavsifida) ko'rinsin.
+        if ($error === null && ($notes = array_values(array_filter((array) $sub->attributes->get('timetable.history_notes', []))))) {
+            $req->update(['summary' => trim((string) $req->summary) . ' — ' . implode('; ', $notes),
+                'details' => (array) ($req->details ?? []) + ['flags' => $notes]]);
         }
 
         return $this->finish($req, $approver, $error === null, $error);

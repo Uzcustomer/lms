@@ -562,7 +562,7 @@ it('takliflar: o\'qituvchi o\'z darsiga qo\'llaydi — so\'rov ikki bosqichdan o
     $card = collect($res['cards'])->firstWhere('id', $s['own']->id);
     $sug = collect($card['suggestions'])->firstWhere('type', 'slot');
     expect($sug['can_apply'])->toBeTrue()->and($sug['mode'])->toBe('department');
-    sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), sapBody($card, $sug))->assertForbidden();
+    // (Joylanmagan darsni toza joyga darhol joylash — TimetableTeacherConflictFixTest; so'rov yo'li ham avvalgidek ochiq.)
     sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))
         ->assertOk()->assertJsonPath('pending_approval', true);
     $req = \App\Models\TimetableChangeRequest::sole();
@@ -620,7 +620,8 @@ it('takliflar: kafedra mudiri qo\'llasa — faqat registrator tasdiqlaydi; ko\'p
     $sg2 = collect($c2['suggestions'])->firstWhere('type', 'slot');
     sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($c2, $sg2))->assertOk();
     $req3 = \App\Models\TimetableChangeRequest::where('status', 'pending')->sole();
-    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, $sg2['actions'][0]['day']) . ' 08:00', 'Asia/Tashkent'));
+    // Registrator (xodim) tasdiqlaganda bugun to'siq emas — kechikib, sana o'tgan kun bo'lsa "Muddati o'tgan".
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, $sg2['actions'][0]['day']) . ' 08:00', 'Asia/Tashkent')->addDay());
     sugAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req3))->assertUnprocessable();
     expect($req3->fresh()->status)->toBe('expired')
         ->and(\App\Models\TeacherNotification::where('teacher_id', $s['head']->id)->where('title', "Vaqt o'zgarishi so'rovi muddati o'tgan")->exists())->toBeTrue()
@@ -640,16 +641,29 @@ it('takliflar: o\'qituvchi boshqa o\'qituvchining darsini suradigan taklifni va 
     sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $s['own']->id,
         'actions' => [['op' => 'teacher', 'card_id' => $s['own']->id, 'teacher_id' => $b->id]]])
         ->assertForbidden()->assertJsonPath('message', fn ($m) => str_contains($m, "O'qituvchini almashtirish"));
-    // Bugungi kunga tegadigan taklif: ko'rinadi, lekin qo'llab bo'lmaydi (admin ham).
+    // Bugungi kunga tegadigan taklif: o'qituvchiga ko'rinadi, lekin qo'llab bo'lmaydi (so'rov ham, darhol ham).
     $blk->delete();
     test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, 2) . ' 08:00', 'Asia/Tashkent'));
-    foreach ([[$s['t'], 'oqituvchi', 'propose'], [$s['admin'], 'superadmin', 'apply']] as [$who, $role, $ep]) {
-        $card = collect(sapGet($who, $role, $s)['cards'])->firstWhere('id', $s['own']->id);
-        $sug = collect($card['suggestions'])->first(fn ($x) => $x['actions'][0]['day'] === 2);
-        expect($sug['can_apply'])->toBeFalse()->and($sug['why'])->toContain("Bugungi yoki o'tgan");
-        sugAs($who, $role)->postJson(route('admin.timetable.week-suggestions.' . $ep, $s['board']), sapBody($card, $sug))->assertUnprocessable();
+    $card = collect(sapGet($s['t'], 'oqituvchi', $s)['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->first(fn ($x) => $x['actions'][0]['day'] === 2);
+    expect($sug['can_apply'])->toBeFalse()->and($sug['why'])->toContain("Bugungi yoki o'tgan")->toContain("Bugungi darsni faqat admin va registrator ofisi ko'chiradi");
+    foreach (['propose', 'apply'] as $ep) {
+        sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.' . $ep, $s['board']), sapBody($card, $sug))->assertUnprocessable();
     }
     expect(\App\Models\TimetableChangeRequest::count())->toBe(0)->and(TimetableCardOverride::where('card_id', $s['own']->id)->exists())->toBeFalse();
+    // Admin (superadmin) — bugungi kunga darhol qo'llay oladi; tarixda "bugungi dars ko'chirildi", javobda HEMIS eslatmasi.
+    $card = collect(sapGet($s['admin'], 'superadmin', $s)['cards'])->firstWhere('id', $s['own']->id);
+    $sug = collect($card['suggestions'])->first(fn ($x) => $x['actions'][0]['day'] === 2);
+    expect($sug['can_apply'])->toBeTrue()->and($sug['mode'])->toBe('direct');
+    sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), sapBody($card, $sug))
+        ->assertOk()->assertJsonPath('today_moved', true)->assertJsonPath('hemis_hint', fn ($h) => str_contains($h, 'Bugungi darslar (HEMIS)'));
+    expect(TimetableCardOverride::where('card_id', $s['own']->id)->where('week', 3)->value('day'))->toBe(2)
+        ->and(\App\Models\TimetableChangeRequest::where('status', 'applied')->sole()->summary)->toContain('bugungi dars ko‘chirildi');
+    // Kechagi kun — admin uchun ham yopiq.
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, 3) . ' 08:00', 'Asia/Tashkent'));
+    sugAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), ['week' => 3, 'card_id' => $s['own']->id,
+        'actions' => [['op' => 'move', 'card_id' => $s['own']->id, 'week' => 3, 'day' => 5, 'pair' => $sug['actions'][0]['pair']]]])
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "O'tgan kunga tegadi"));
 });
 
 it('takliflar: tasdiq paytida to\'qnashuv chiqsa — "Qo\'llanmadi"; sana o\'tib ketsa — "Muddati o\'tgan"', function () {
@@ -670,7 +684,8 @@ it('takliflar: tasdiq paytida to\'qnashuv chiqsa — "Qo\'llanmadi"; sana o\'tib
     sugAs($s['t'], 'oqituvchi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertOk();
     $req = \App\Models\TimetableChangeRequest::where('status', 'pending')->sole();
     sugAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
-    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, $sug['actions'][0]['day']) . ' 08:00', 'Asia/Tashkent'));
+    // Registrator (xodim) uchun bugun to'siq emas — sana o'tgan kun bo'lib qolsa "Muddati o'tgan".
+    test()->travelTo(\Illuminate\Support\Carbon::parse($s['date'](3, $sug['actions'][0]['day']) . ' 08:00', 'Asia/Tashkent')->addDay());
     sugAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertUnprocessable();
     expect($req->fresh()->status)->toBe('expired')
         ->and(\App\Models\TeacherNotification::where('teacher_id', $s['t']->id)->latest('id')->value('title'))->toBe("Vaqt o'zgarishi so'rovi muddati o'tgan");
@@ -765,21 +780,22 @@ it('takliflar: sana — boshidagi va yakuniy joy bo\'yicha; blokni qayta qo\'yis
     $acts = fn (int $d) => [['op' => 'reset', 'card_id' => $b1->id, 'week' => 3], ['op' => 'reset', 'card_id' => $b2->id, 'week' => 3],
         ['op' => 'move', 'card_id' => $b1->id, 'week' => 3, 'day' => $d, 'pair' => 1], ['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => $d, 'pair' => 3]];
     $url = route('admin.timetable.week-suggestions.apply', $s['board']);
-    // Yakuniy joy — o'tgan kun (1-kun): rad.
+    // Yakuniy joy — o'tgan kun (1-kun): rad (admin uchun ham).
     sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b1->id, 'actions' => $acts(1)])
-        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "O'tgan kunga tegadi"));
     // 4-kundan 5-kunga (ikkalasi kelgusi): o'tadi.
     sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b1->id, 'actions' => $acts(5)])->assertOk();
     expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
         ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(5);
-    // Faqat "reset" (yakuniy joy — o'tgan shablon kuni) — rad; bugungi darsni (boshidagi joyi bugun) kelgusi kunga ko'chirish — rad.
+    // Faqat "reset" (yakuniy joy — o'tgan shablon kuni) — rad; bugungi darsni (boshidagi joyi bugun) kelgusi kunga ko'chirish — admin uchun
+    // mumkin (xodimga bugun ochiq).
     sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b1->id, 'actions' => [['op' => 'reset', 'card_id' => $b1->id, 'week' => 3]]])
-        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "O'tgan kunga tegadi"));
     TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->update(['day' => 2]);
     sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b2->id, 'actions' => [['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => 6, 'pair' => 3]]])
-        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Bugungi yoki o'tgan"));
+        ->assertOk()->assertJsonPath('today_moved', true);
     expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
-        ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(2);
+        ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(6);
 });
 
 it('takliflar: kutilayotgan so\'rovdagi yangi xona ham bron — boshqa guruh va o\'qituvchi shu vaqtda shu xonani so\'ray olmaydi', function () {

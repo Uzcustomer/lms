@@ -127,7 +127,7 @@ trait TimetableSuggestionApply
      * @return array{mode: ?string, why: ?string, code: int} mode: direct | registrar | department
      */
     public function suggestionApplyCheck(array $r, TimetableBoard $board, array $p, ?\Closure $cardOf = null, ?\Closure $ovOf = null,
-        bool $dates = true, ?array $pendingCards = null, array $ignoreIds = []): array
+        bool $dates = true, ?array $pendingCards = null, array $ignoreIds = [], bool $staffToday = false): array
     {
         $no = fn (string $why, int $code = 403) => ['mode' => null, 'why' => $why, 'code' => $code];
         if ($r['level'] === null) {
@@ -172,7 +172,8 @@ trait TimetableSuggestionApply
                 }
             }
         }
-        if ($dates && ($why = $this->suggestionExpiredWith($board, $acts, $cardOf, $ovOf))) {
+        // Bugun: admin darhol qo'llaganda (faol rol — admin / superadmin / registrator ofisi) ochiq; so'rov (propose) — avvalgidek yopiq.
+        if ($dates && ($why = $this->suggestionExpiredWith($board, $acts, $cardOf, $ovOf, $staffToday && $r['level'] === 'admin'))) {
             return $no($why, 422);
         }
         if ($r['level'] !== 'admin') {
@@ -207,9 +208,10 @@ trait TimetableSuggestionApply
 
     /**
      * Taklif tegadigan darslar sanalari: har (karta, hafta) uchun boshidagi joyi va barcha amallardan keyingi yakuniy joyi (oraliq
-     * "reset" — blokni qayta qo'yishdan oldingi bo'shatish — haqiqiy joy emas). Bugun yoki o'tgan bo'lsa — sababi.
+     * "reset" — blokni qayta qo'yishdan oldingi bo'shatish — haqiqiy joy emas). Bugun yoki o'tgan bo'lsa — sababi. $staff — admin /
+     * registrator ofisi darhol qo'llayapti (yoki tasdiqlayapti): bugun ochiq, faqat o'tgan kun rad.
      */
-    private function suggestionExpiredWith(TimetableBoard $board, array $acts, \Closure $cardOf, \Closure $ovOf): ?string
+    private function suggestionExpiredWith(TimetableBoard $board, array $acts, \Closure $cardOf, \Closure $ovOf, bool $staff = false): ?string
     {
         $today = self::proposalToday();
         $orig = [];
@@ -238,8 +240,9 @@ trait TimetableSuggestionApply
             $monday = $this->weekStartDate($board, $c, $w);
             foreach (array_unique(array_filter([$cur, $final[$k]])) as $d) {
                 $date = $monday->copy()->addDays($d - 1)->toDateString();
-                if ($date <= $today) {
-                    return "Bugungi yoki o'tgan kunga tegadi (" . Carbon::parse($date)->format('d.m.Y') . ') — taklifni qo‘llab bo‘lmaydi.';
+                if (self::pastFor($staff, $date)) {
+                    return ($staff ? "O'tgan kunga tegadi (" : "Bugungi yoki o'tgan kunga tegadi (") . Carbon::parse($date)->format('d.m.Y')
+                        . ') — taklifni qo‘llab bo‘lmaydi.' . (!$staff && $date === $today ? ' ' . self::todayStaffOnlyText() : '');
                 }
             }
         }
@@ -247,11 +250,32 @@ trait TimetableSuggestionApply
         return null;
     }
 
-    public function suggestionExpired(TimetableBoard $board, array $p): ?string
+    public function suggestionExpired(TimetableBoard $board, array $p, bool $staff = false): ?string
     {
         return $this->suggestionExpiredWith($board, array_values((array) ($p['actions'] ?? [])),
             fn (int $id) => TimetableCard::where('board_id', $board->id)->find($id),
-            fn (int $id, int $w) => TimetableCardOverride::where('card_id', $id)->where('week', $w)->first());
+            fn (int $id, int $w) => TimetableCardOverride::where('card_id', $id)->where('week', $w)->first(), $staff);
+    }
+
+    /** Taklif amallari bugungi kunga tegadimi (eski yoki yakuniy joyi) — tarix belgisi va HEMIS eslatmasi uchun. */
+    private function suggestionTouchesToday(TimetableBoard $board, array $acts): bool
+    {
+        $today = self::proposalToday();
+        foreach ($acts as $a) {
+            $c = TimetableCard::where('board_id', $board->id)->find((int) ($a['card_id'] ?? 0));
+            $w = (int) ($a['week'] ?? 0);
+            if (!$c || $w < 1) {
+                continue;
+            }
+            $monday = $this->weekStartDate($board, $c, $w);
+            foreach (array_filter([($this->suggestionPlace($c, $w) ?? [0])[0], ($a['op'] ?? '') === 'move' ? (int) ($a['day'] ?? 0) : 0]) as $d) {
+                if ($monday->copy()->addDays($d - 1)->toDateString() === $today) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -578,15 +602,33 @@ trait TimetableSuggestionApply
     public function weekSuggestionApply(Request $request, TimetableBoard $board)
     {
         // Darhol — admin huquqi (barcha rollaridan, takliflar oynasidagidek); tasdiqlangan so'rovni qayta bajarish — applyLocked belgisi bilan.
-        if (!$request->attributes->has('timetable.change_replay')
-            && $this->suggestionRights($this->timetableActor($request))['level'] !== 'admin') {
+        // O'qituvchi / fan mas'uli (faol rol) — faqat o'z darsini, u to'qnashuvda (yoki shu haftada joylanmagan) bo'lsa va yangi joyi to'liq
+        // toza bo'lsa (teacherConflictFix — serverda qayta hisoblanadi, mijozga ishonilmaydi); aks holda — so'rov orqali.
+        $rights = $this->suggestionRights($this->timetableActor($request));
+        $teacherFix = !$request->attributes->has('timetable.change_replay') && $rights['level'] !== 'admin'
+            && in_array($this->timetableActiveRole($request), TimetableChangeApproval::TEACHER_PROPOSAL_ROLES, true);
+        if (!$request->attributes->has('timetable.change_replay') && $rights['level'] !== 'admin' && !$teacherFix) {
             abort(403, 'Taklifni darhol qo‘llash faqat adminlar uchun — boshqa rollar so‘rov yuboradi.');
         }
         $data = $this->suggestionPayload($request);
         $acts = array_map(fn ($a) => $a + ['week' => (int) $data['week']], array_values($data['actions']));
-        if ($why = $this->suggestionExpired($board, ['actions' => $acts])) {
+        if ($teacherFix) {
+            // Huquq, ma'ruza, sana (bugun — yopiq) va kartadagi kutilayotgan so'rov — so'rov yuborishdagidek.
+            $check = $this->suggestionApplyCheck($rights, $board, ['card_id' => $data['card_id'], 'actions' => $acts]);
+            if ($check['mode'] === null) {
+                return response()->json(['error' => $check['why'], 'message' => $check['why']], $check['code']);
+            }
+            if ($why = $this->teacherConflictFixWeekly($board, $acts, $rights)) {
+                $msg = "Joylashgan darsni o'zgartirish — so'rov orqali.";
+
+                return response()->json(['error' => $msg, 'message' => $msg, 'why' => $why], 403);
+            }
+        }
+        // Bugun — faqat admin / superadmin / registrator ofisi (faol rol) yoki ular tasdiqlagan so'rovni qayta bajarish uchun ochiq.
+        if ($why = $this->suggestionExpired($board, ['actions' => $acts], $this->staffTodayOk($request))) {
             return response()->json(['error' => $why], 422);
         }
+        $today = $this->suggestionTouchesToday($board, $acts);
         $error = null;
         try {
             DB::transaction(function () use ($board, $acts, &$error) {
@@ -600,6 +642,15 @@ trait TimetableSuggestionApply
             }
         }
 
-        return $error !== null ? response()->json(['error' => $error], 422) : response()->json(['ok' => true]);
+        if ($error !== null) {
+            return response()->json(['error' => $error], 422);
+        }
+        if ($today) {
+            $this->markTodayMoved($request);
+        }
+        $notified = $teacherFix ? $this->teacherConflictFixDone($request, $board, $acts) : [];
+
+        return response()->json(['ok' => true, 'today_moved' => $today] + ($today ? ['hemis_hint' => self::todayHemisHint()] : [])
+            + ($teacherFix ? ['fixed' => true, 'notified' => $notified, 'message' => "To'qnashuvdagi dars so'rovsiz joylandi."] : []));
     }
 }

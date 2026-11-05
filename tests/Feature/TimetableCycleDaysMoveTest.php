@@ -204,7 +204,7 @@ it('"Birga" (tugma bilan): kun boshi barcha tanlangan kunlarda; start_hour — h
     expect([$d['2026-11-17']['lec'], $d['2026-11-18']['lec'], $d['2026-11-19']['lec']])->toBe([[2, 4], [2, 4], [2, 4]]);
 });
 
-it('o\'tgan va bugungi kunlar: o\'tgan — yo\'q; bugungi — admin / registrator faqat boshlanmagan bo\'lsa, kafedra mudiri — yo\'q', function () {
+it('o\'tgan va bugungi kunlar: o\'tgan — yo\'q; bugungi — admin / registrator (boshlangan bo\'lsa ham), kafedra mudiri — yo\'q', function () {
     $s = dmSetup();
     $head = dmHead();
     $reg = dmTeacher('REG R.', 'registrator_ofisi');
@@ -213,15 +213,23 @@ it('o\'tgan va bugungi kunlar: o\'tgan — yo\'q; bugungi — admin / registrato
     $r = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0, 1, 2], 'delta' => 2, 'mode' => 'lecture', 'dry_run' => 1])->assertOk()->json();
     expect(array_column($r['days'], 'status'))->toBe(['past', 'ok', 'ok']);
     $m = dmMove($s, $head, 'kafedra_mudiri', ['day_indexes' => [0, 1, 2], 'delta' => 2, 'mode' => 'lecture', 'dry_run' => 1])->assertOk()->json();
-    expect(array_column($m['days'], 'status'))->toBe(['past', 'past', 'ok']);
-    // Registrator ofisi — darhol (ichki jadvalni boshqa tahrirlay olmasa ham).
+    expect(array_column($m['days'], 'status'))->toBe(['past', 'past', 'ok'])
+        ->and(array_column($m['days'], 'why'))->toBe(['O‘tgan kun.', "Bugungi darsni faqat admin va registrator ofisi ko'chiradi.", null]);
+    // Registrator ofisi — darhol (ichki jadvalni boshqa tahrirlay olmasa ham); bugungi kun ham — tarixda belgi, javobda HEMIS eslatmasi.
     $g = dmMove($s, $reg, 'registrator_ofisi', ['day_indexes' => [1, 2], 'delta' => 2, 'mode' => 'lecture'])->assertOk()->json();
-    expect($g['applied'])->toBe(2)->and(dmDays($s)['2026-11-17']['lec'])->toBe([3, 5]);
-    // 09:00 — bugungi dars (10:00 dan) boshlanmagan, lekin 08:30 ga qaytarish — o'tib ketgan vaqt.
-    $this->travelTo(Carbon::parse('2026-11-17 09:00', 'Asia/Tashkent'));
-    $back = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => -2, 'mode' => 'lecture', 'dry_run' => 1])->assertOk()->json();
-    expect($back['days'][0]['status'])->toBe('past');
-    expect(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 1, 'mode' => 'lecture', 'dry_run' => 1])->json('days.0.status'))->toBe('ok');
+    expect($g['applied'])->toBe(2)->and(dmDays($s)['2026-11-17']['lec'])->toBe([3, 5])
+        ->and($g['today_moved'])->toBeTrue()->and($g['hemis_hint'])->toContain('«Bugungi darslar (HEMIS)»')
+        ->and($g['days'][0]['today'])->toBeTrue()->and($g['days'][1]['today'])->toBeFalse()
+        ->and(\App\Models\TimetableChangeRequest::latest('id')->first()->summary)->toContain('bugungi dars ko‘chirildi');
+    // 15:00 — bugungi dars (10:00 dan) boshlangan va tugagan: admin baribir ko'chira oladi (o'tib ketgan paraga ham).
+    $this->travelTo(Carbon::parse('2026-11-17 15:00', 'Asia/Tashkent'));
+    $back = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => -2, 'mode' => 'lecture'])->assertOk()->json();
+    expect($back['days'][0]['status'])->toBe('ok')->and(dmDays($s)['2026-11-17']['lec'])->toBe([1, 3]);
+    // Kafedra mudiri — bugun yopiq, sababi bilan; kechagi kun — admin uchun ham yopiq.
+    expect(dmMove($s, $head, 'kafedra_mudiri', ['day_indexes' => [1], 'delta' => 1, 'mode' => 'lecture', 'dry_run' => 1])->json('days.0'))
+        ->toMatchArray(['status' => 'past', 'why' => "Bugungi darsni faqat admin va registrator ofisi ko'chiradi."]);
+    expect(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => 1, 'mode' => 'lecture', 'dry_run' => 1])->json('days.0'))
+        ->toMatchArray(['status' => 'past', 'why' => 'O‘tgan kun.']);
     // Registrator kun soatini sura oladi (day_edit), lekin sikl blokini joylay olmaydi.
     $plan = dmAs($reg, 'registrator_ofisi')->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'])->assertOk()->json();
     expect($plan['day_edit'])->toBeTrue()->and($plan['can_edit'])->toBeFalse();
@@ -434,7 +442,7 @@ it('Codex: "faqat ma\'lumot" guruhcha ham kunga sig\'ishi tekshiriladi (kun reja
         ->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [4, 6], 'prc' => [6, 10]]);
 });
 
-it('Codex: bugun — yozuvdan keyingi haqiqiy jadval bo\'yicha: smena qayta yoqilib amaliy o\'tgan vaqtga tushsa — o\'zgarmaydi', function () {
+it('bugun (admin): smena qayta yoqilib amaliy o\'tib ketgan vaqtga tushsa ham — o\'zgaradi (xodimga bugun ochiq); kafedra mudiri — yo\'q', function () {
     $s = dmSetup();
     // Bugun 16.11, 11:00. Oqim kuni 9-soatdan; 04a — o'z kun boshi 5 (ma'ruza 5–6, amaliy 7–10), smena 1.
     $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04a' => 1, 'd2/d23-04b' => 1], 'starts' => [0 => 9],
@@ -442,9 +450,10 @@ it('Codex: bugun — yozuvdan keyingi haqiqiy jadval bo\'yicha: smena qayta yoqi
     $this->travelTo(Carbon::parse('2026-11-16 11:00', 'Asia/Tashkent'));
     expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [5, 7], 'prc' => [7, 11]]);
     $sub = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'mode' => 'both', 'day_indexes' => [0]];
-    // 9-soatga (oqim soati): starts_g o'chadi, amaliy smenaga (1-soat, 08:30 — o'tgan) — o'zgarmaydi.
-    $d = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 9, 'dry_run' => 1])->assertOk()->json('days.0');
-    expect($d['status'])->toBe('blocked')->and($d['why'])->toBe('Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).');
+    // 9-soatga (oqim soati): starts_g o'chadi, amaliy smenaga (1-soat, 08:30 — o'tgan) — admin uchun mumkin.
+    $d = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 9])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and($d['today'])->toBeTrue()->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [9, 11], 'prc' => [1, 5]]);
+    expect(dmMove($s, dmHead(), 'kafedra_mudiri', $sub + ['start_hour' => 5, 'dry_run' => 1])->json('days.0.status'))->toBe('past');
 });
 
 it('"faqat ma\'lumot" guruhcha: ma\'ruza amaliy ustiga surilsa ham ustma-ust xato emas (avvalgidek), kunga sig\'ishi esa tekshiriladi', function () {
@@ -454,4 +463,16 @@ it('"faqat ma\'lumot" guruhcha: ma\'ruza amaliy ustiga surilsa ham ustma-ust xat
     $d = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'start_hour' => 7, 'mode' => 'lecture', 'practice_place' => 'keep', 'dry_run' => 1])
         ->assertOk()->json('days.0');
     expect($d['status'])->toBe('ok');
+});
+
+it('bitta kun (day_index): o\'tgan kun — hamma uchun 422; bugun — admin qo\'llaydi (boshlangan bo\'lsa ham, tarixda belgi), kafedra mudiri — 422', function () {
+    $s = dmSetup();
+    $this->travelTo(Carbon::parse('2026-11-17 15:00', 'Asia/Tashkent'));
+    dmMove($s, $s['admin'], 'admin', ['day_index' => 0, 'start_hour' => 3, 'mode' => 'both'])->assertUnprocessable()
+        ->assertJsonPath('error', 'O‘tgan kun darsini ko‘chirib bo‘lmaydi.');
+    dmMove($s, dmHead(), 'kafedra_mudiri', ['day_index' => 1, 'start_hour' => 3, 'mode' => 'both'])->assertUnprocessable()
+        ->assertJsonPath('error', "Bugungi darsni faqat admin va registrator ofisi ko'chiradi.");
+    dmMove($s, $s['admin'], 'admin', ['day_index' => 1, 'start_hour' => 3, 'mode' => 'both'])->assertOk()->assertJsonPath('today_moved', true);
+    expect(dmDays($s)['2026-11-17']['lec'])->toBe([3, 5])
+        ->and(\App\Models\TimetableChangeRequest::latest('id')->first()->summary)->toContain('bugungi dars ko‘chirildi');
 });

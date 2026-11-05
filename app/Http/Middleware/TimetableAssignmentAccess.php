@@ -63,7 +63,9 @@ class TimetableAssignmentAccess
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
-            return $next($request);
+            // To'qnashuvdagi darsni so'rovsiz joylash (week-suggestions/apply — controller tekshiradi) — o'zgarishlar tarixiga yoziladi.
+            return $request->routeIs('admin.timetable.week-suggestions.apply')
+                ? $this->withHistory($request, $next, $user, $activeRole) : $next($request);
         }
 
         // Kafedra mudiri va o'quv bo'limi ruxsatlari bir xil: joylashtirish
@@ -242,6 +244,11 @@ class TimetableAssignmentAccess
         $response = $next($request);
         if ($draft && TimetableChangeApproval::succeeded($response)) {
             try {
+                // Amal qo'ygan belgilar ("bugungi dars ko'chirildi", "To'qnashuvni o'qituvchi hal qildi") — tarix yozuvida ko'rinsin.
+                if ($notes = array_values(array_filter((array) $request->attributes->get('timetable.history_notes', [])))) {
+                    $draft['summary'] = trim((string) $draft['summary']) . ' — ' . implode('; ', $notes);
+                    $draft['details'] = (array) ($draft['details'] ?? []) + ['flags' => $notes];
+                }
                 $approval->record($draft);
                 if ($firstAssignment) {
                     $approval->supersedeAssignments($draft);

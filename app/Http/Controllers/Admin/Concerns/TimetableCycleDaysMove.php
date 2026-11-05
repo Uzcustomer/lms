@@ -17,7 +17,8 @@ use Illuminate\Support\Str;
  * hammasiga bir xil. Bitta tranzaksiya: har kun alohida sinab ko'riladi (savepoint), natija kun bo'yicha:
  *   ok — o'zgaradi; conflict — bandlik (o'qituvchi / xona / guruhning haftalik darsi) — force bo'lsa baribir qo'llanadi;
  *   nofit — kun oxiriga sig'maydi; blocked — ma'ruza va amaliy ustma-ust va h.k. (force ham qo'llamaydi);
- *   past — o'tgan kun yoki bugungi boshlangan dars (bugun — faqat admin / registrator, hali boshlanmagan dars); same — vaqt o'zgarmaydi;
+ *   past — o'tgan kun (hamma uchun) yoki bugun (admin, superadmin, registrator ofisidan boshqalar uchun; xodimga bugungi dars boshlangan,
+ *   hatto tugagan bo'lsa ham ochiq — TimetableStaffToday); same — vaqt o'zgarmaydi;
  *   skip — bu kuni shu turdagi dars yo'q.
  * dry_run — faqat natija (hech narsa saqlanmaydi). Qo'llanganda — qaytarish kaliti (undo): oldingi qiymatlar serverda saqlanadi, Ctrl+Z
  * bitta so'rov bilan tiklaydi (jadval keyin o'zgarmagan bo'lsa). Guruhcha smenalari (shift_g) va tanlanmagan kunlar o'zgarmaydi.
@@ -37,12 +38,11 @@ trait TimetableCycleDaysMove
         }
         $dry = $request->boolean('dry_run');
         $force = !$dry && $request->boolean('force');
-        // Bugungi dars — faqat admin va registrator ofisi, hali boshlanmagan bo'lsa (yangi vaqt ham kelgusida).
-        $todayOk = in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true);
+        // Bugungi dars — faqat admin, superadmin va registrator ofisi (boshlangan, tugagan bo'lsa ham; yangi vaqt — bugunning istalgan
+        // parasi); o'tgan kun — hamma uchun yopiq.
+        $todayOk = $this->staffTodayOk($request);
         $today = self::proposalToday();
-        $now = Carbon::now('Asia/Tashkent')->format('H:i');
-        $times = $this->hemisSlotTimes($board);
-        $started = fn (int $h) => ($times[$h][0] ?? '00:00') <= $now;
+        $todayMoved = false;
         $grid = $this->cycleGridHours($board);
         $sub = trim((string) ($data['sub_group'] ?? ''));
         $days = array_values(array_unique(array_map('intval', (array) $data['day_indexes'])));
@@ -73,9 +73,9 @@ trait TimetableCycleDaysMove
                 // Yangi joy: $rel — yangi boshdan nisbiy oraliq ("Faqat amaliy" — hammasi bitta $h dan); false — oldindan aytib bo'lmaydi
                 // (guruhcha qatoridagi smenali amaliy), kunga sig'ishi yozuvdan keyingi holat bo'yicha; aks holda oraliq siljiydi.
                 [$lo, $hi] = $rel === false ? [$h, null] : ($rel !== null ? [$h + $rel[0], $h + $rel[1]] : [$span[0] + $shift, $span[1] + $shift]);
-                if ($date < $today || ($date === $today && (!$todayOk || $started(min($span[0], $lo))))) {
-                    $out[] = array_merge($row, ['status' => 'past', 'why' => $date < $today ? 'O‘tgan kun.'
-                        : ($todayOk ? 'Bugungi dars boshlangan (yoki yangi vaqt o‘tib ketgan).' : 'Bugungi darsni ko‘chirib bo‘lmaydi.')]);
+                $row['today'] = $date === $today;
+                if ($date < $today || ($date === $today && !$todayOk)) {
+                    $out[] = array_merge($row, ['status' => 'past', 'why' => $date < $today ? 'O‘tgan kun.' : self::todayStaffOnlyText()]);
                     continue;
                 }
                 // "Faqat amaliy" — hamma guruhcha amaliyoti allaqachon shu soatda bo'lsagina o'zgarmaydi (oqim qatorida har xil soatda bo'lishi mumkin).
@@ -101,30 +101,11 @@ trait TimetableCycleDaysMove
                     DB::rollBack();
                     throw $ex;
                 }
-                // Bugun: yozuvdan keyingi haqiqiy jadval bo'yicha — o'zgargan har bir dars (ma'ruza, amaliyot; birga ko'chganlari ham: o'rin
-                // almashish, smena qayta yoqilishi) eski va yangi vaqtida hali boshlanmagan bo'lishi kerak.
-                $todayBlocked = false;
-                if (!$e['hard'] && $date === $today) {
-                    $changed = [];
-                    foreach ($this->cycleDayUnits($board, $placement, $p, $k) as $unit => $x) {
-                        foreach (['lec', 'prac'] as $t) {
-                            $r0 = $units[$unit][$t][$date] ?? null;
-                            $r1 = $x[$t][$x['date']] ?? null;
-                            if ($r0 != $r1) {
-                                array_push($changed, ...array_map(fn ($r) => (int) $r[0], array_filter([$r0, $r1])));
-                            }
-                        }
-                    }
-                    if ($changed && $started(min($changed))) {
-                        $e['hard'] = ['Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).'];
-                        $todayBlocked = true;
-                    }
-                }
                 $row['swaps'] = $e['swaps'] ?? [];
                 $row['lecture'] = $e['lecture'] ?? null;
                 // Oldindan tekshirilmagan kun (guruhcha qatoridagi smenali amaliy): "Birga" yozuvidan keyingi xato — faqat kun oxiriga sig'maslik
                 // (kun rejasi ma'ruza va amaliyni ustma-ust qo'ymaydi) — "sig'maydi".
-                $fitOnly = $rel === false && $e['hard'] && !$todayBlocked;
+                $fitOnly = $rel === false && $e['hard'];
                 if ($e['hard'] || ($e['busy'] && !$force)) {
                     DB::rollBack();
                     $row = array_merge($row, $e['hard'] ? ['status' => $fitOnly ? 'nofit' : 'blocked', 'why' => implode(' · ', $e['hard'])]
@@ -132,6 +113,7 @@ trait TimetableCycleDaysMove
                 } else {
                     DB::commit();
                     $applied++;
+                    $todayMoved = $todayMoved || $date === $today;
                     $row = array_merge($row, ['status' => $e['busy'] ? 'conflict' : 'ok', 'why' => $e['busy'] ? implode(' · ', $e['busy']) : null,
                         'applied' => !$dry]);
                 }
@@ -157,6 +139,10 @@ trait TimetableCycleDaysMove
                 : ($r['day_index'] + 1) . '-kun') . ' — ' . ($r['why'] ?: $r['status']), $out)), 'days' => $out], 422);
         }
         $undo = null;
+        $todayMoved = $todayMoved && !$dry;
+        if ($todayMoved) {
+            $this->markTodayMoved($request);
+        }
         if (!$dry && $applied) {
             $undo = Str::random(32);
             Cache::put($this->cycleUndoKey($board, $undo), ['placement' => (int) $placement->id, 'before' => $beforeSlots,
@@ -164,7 +150,9 @@ trait TimetableCycleDaysMove
         }
 
         return response()->json(['ok' => true, 'dry_run' => $dry, 'mode' => $mode, 'delta' => $delta, 'days' => $out,
-            'applied' => $dry ? 0 : $applied, 'undo' => $undo]);
+            'applied' => $dry ? 0 : $applied, 'undo' => $undo, 'today_moved' => $todayMoved]
+            // Bugungi kun ham o'zgaradi (yoki o'zgardi) — HEMIS eslatmasi (tasdiq oynasi va natija).
+            + (collect($out)->contains(fn ($r) => !empty($r['today']) && in_array($r['status'], ['ok', 'conflict'], true)) ? ['hemis_hint' => self::todayHemisHint()] : []));
     }
 
     /**

@@ -958,11 +958,13 @@ trait TimetableWeekSuggestions
         $caps = $result ? $this->weeklyCapacityWarnings($board, $W, array_flip(array_column($result, 'id')), false) : [];
         $cardOf = fn (int $id) => $state['cards'][$id] ?? null;
         $ovOf = fn (int $id, int $w) => $state['ov'][$id][$w] ?? null;
+        // Bugungi kun — admin darhol qo'llaganda ochiq (faol rol: admin / superadmin / registrator ofisi).
+        $staffToday = $this->staffTodayOk($request);
         foreach ($result as &$rc) {
             $rc['cap_warn'] = $caps[$rc['id']]['line'] ?? null;
             foreach ($rc['suggestions'] as &$sg) {
                 $chk = $this->suggestionApplyCheck($rights, $board, ['week' => $W, 'card_id' => $rc['id'],
-                    'actions' => array_map(fn ($a) => $a + ['week' => $W], $sg['actions'])], $cardOf, $ovOf, true, $pendingCards);
+                    'actions' => array_map(fn ($a) => $a + ['week' => $W], $sg['actions'])], $cardOf, $ovOf, true, $pendingCards, [], $staffToday);
                 $sg['can_apply'] = $chk['mode'] !== null;
                 $sg['mode'] = $chk['mode'];
                 $sg['why'] = $chk['why'];

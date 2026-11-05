@@ -606,12 +606,9 @@
         .non-final-grade {
             background-color: #fee2e2 !important; /* Och qizil — is_final=false */
         }
-        /* Admin oshirgan baho (grades:admin-upgrade) — to'q to'q sariq, hover'da eski/yangi baho */
+        /* Admin oshirgan baho (grades:admin-upgrade) — och to'q sariq, hover'da eski/yangi baho */
         .admin-upgraded-cell {
-            background-color: #ea580c !important;
-        }
-        .admin-upgraded-cell, .admin-upgraded-cell * {
-            color: #fff !important;
+            background-color: #fdba74 !important;
         }
         .exam-cell[onclick]:hover { background: #eff6ff; cursor: pointer; }
         .grade-fail {
@@ -1429,6 +1426,19 @@
                                                     }
                                                     $dayTitle = implode(' | ', $dayGraderLines);
 
+                                                    // Admin oshirgan baholar: hover'da har juftlikning eski/yangi bahosi
+                                                    $dayUpgradeLines = [];
+                                                    foreach ($dayGrades as $pair => $gd) {
+                                                        if (!empty($gd['upgraded_by_admin'])) {
+                                                            $dayUpgradeLines[] = '(' . $pair . ') Eski baho: ' . round((float) $gd['admin_original_grade'], 0)
+                                                                . ' → Yangi baho: ' . round((float) ($gd['original_grade'] ?? $gd['grade']), 0);
+                                                        }
+                                                    }
+                                                    $hasUpgradedInDay = (bool) $dayUpgradeLines;
+                                                    if ($hasUpgradedInDay) {
+                                                        $dayTitle = implode("\n", $dayUpgradeLines) . ($dayTitle ? "\n" . $dayTitle : '');
+                                                    }
+
                                                     // Superadmin: kunga bitta baho — har juftlik o'z yo'li bilan
                                                     // (batafsil ko'rinishdagidek): baho bor → tahrir, NB → otrabotka,
                                                     // bo'sh → yangi baho. LMS sababli ariza NB lari modal orqali
@@ -1453,7 +1463,7 @@
                                                         $dayTitle = 'Superadmin: kunga bitta baho — barcha juftliklarga (' . count($superDayOps) . ' ta) yoziladi' . ($dayTitle ? ' | ' . $dayTitle : '');
                                                     }
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }} {{ $hasUpgradedInDay ? 'admin-upgraded-cell' : '' }}" {!! $isRetake && !$hasUpgradedInDay ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
                                                     @if($superDayOps) onclick="superadminDayGrade(this)" data-ops="{{ json_encode($superDayOps) }}" data-student="{{ $student->hemis_id }}" data-date="{{ $date }}" data-subject="{{ $subjectId }}" data-semester="{{ $semesterCode }}" @endif>
                                                     @if($hasGrades)
                                                         @php

@@ -571,3 +571,33 @@ it('aralash tanlov tasdiq doskasida: bitta so\'rov, tavsifda har tur o\'z kunlar
     expect(dmDays($s)['2026-11-17'])->toBe(['lec' => [5, 7], 'prc' => [1, 5]])
         ->and(dmDays($s)['2026-11-18'])->toBe(['lec' => [1, 3], 'prc' => [4, 8]]);
 });
+
+it('tezlik: ko\'p kunli surishda butun doska (sikl birliklari) kunlar soniga qarab qayta hisoblanmaydi — natija avvalgidek', function () {
+    $s = dmAdjacent(dmSetup());
+    // cycleInternalUnits — "timetable_subject_settings ... mode = cycle" so'rovi bilan boshlanadi (butun doska qayta qurilishi belgisi).
+    $n = null;
+    DB::listen(function ($q) use (&$n) {
+        if ($n !== null && str_contains($q->sql, 'timetable_subject_settings') && str_contains($q->sql, '`mode` = ?')) {
+            $n++;
+        }
+    });
+    $count = function (array $days, array $extra = []) use ($s, &$n) {
+        $n = 0;
+        $r = dmMove($s, $s['admin'], 'admin', ['day_indexes' => $days, 'delta' => 4, 'mode' => 'lecture', 'practice_place' => 'swap'] + $extra)->assertOk()->json();
+        $c = $n;
+        $n = null;
+
+        return [$c, $r];
+    };
+    [$one] = $count([0], ['dry_run' => 1]);
+    [$six, $dry] = $count([0, 1, 2, 3, 4, 5], ['dry_run' => 1]);
+    // Ilgari: bir kunga ~50 marta (6 kun — 300+); endi — kunlar sonidan qat'i nazar bir xil, bir necha marta (so'rov boshida).
+    expect($six)->toBe($one)->and($one)->toBeLessThanOrEqual(5)
+        ->and(array_column($dry['days'], 'status'))->toBe(['ok', 'ok', 'ok', 'ok', 'ok', 'ok']);
+    // Saqlash ham: har kun yozuvdan keyingi holat to'g'ri (keshdagi blok yangilanadi) — 6 kunda ma'ruza 5–6, amaliy 1–4 (o'rin almashdi).
+    [$saved, $r] = $count([0, 1, 2, 3, 4, 5]);
+    expect($saved)->toBe($one)->and($r['applied'])->toBe(6);
+    foreach (dmDays($s) as $d) {
+        expect($d)->toBe(['lec' => [5, 7], 'prc' => [1, 5]]);
+    }
+});

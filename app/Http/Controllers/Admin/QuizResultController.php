@@ -3413,8 +3413,9 @@ class QuizResultController extends Controller
         // Xalqaro ta'lim fakulteti — jurnal 5 ballik (2–5): koeffitsient (0.8)
         // qo'llanmaydi, har qanday holatda Moodle bahosining o'zi 5 ballikka
         // o'tkaziladi (70 → 4); o'tish chegarasi 3.
+        // Boshqalar: jurnaldagi baho 70 va undan yuqori bo'lsa retake qabul qilinmaydi.
         $isFivePoint = $student->isInternationalFaculty();
-        $passMark = $isFivePoint ? 3 : 60;
+        $passMark = $isFivePoint ? 3 : 70;
         $scaled = fn (float $v) => $isFivePoint ? self::toFivePointScale($v) : round($v, 2);
 
         foreach ($sgRecords as $sg) {
@@ -3484,7 +3485,7 @@ class QuizResultController extends Controller
                     'updated_at'           => now(),
                 ];
             } else {
-                // NB emas — oddiy baho bor. Faqat baho 60 dan past bo'lsa retake qabul qilinadi,
+                // NB emas — oddiy baho bor. Faqat baho $passMark (70) dan past bo'lsa retake qabul qilinadi,
                 // retake_grade = Moodle × 0.8 (diagonal ko'rinishda saqlanadi)
                 $currentValue = $sg->retake_grade ?? $sg->grade;
 
@@ -3494,7 +3495,7 @@ class QuizResultController extends Controller
                 }
 
                 if ($currentValue >= $passMark) {
-                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: baho ({$currentValue}) {$passMark} dan yuqori — retake kerak emas";
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: baho ({$currentValue}) {$passMark} va undan yuqori — retake kerak emas";
                     continue;
                 }
 

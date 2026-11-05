@@ -83,14 +83,7 @@ class AdminUpgradeGrades extends Command
         $samples = [];
         $total = 0;
         foreach ($this->readList($path) as [$groupName, $subject, $from, $to]) {
-            // Ro'yxatdagi guruhning faqat kichik guruhlari (o'zi emas): d1/d22-01 → d1/d22-01a (rus),
-            // d1/d22-01(b), d1/d22-01 c ...; d1/d22-010a, d1/d22-01 (rus) — yo'q
-            $subgroup = '/^' . preg_quote($groupName, '/') . '\s*\(?[a-z]\)?(\s|$)/iu';
-            $groups = DB::table('groups')
-                ->where('name', 'like', $groupName . '%')
-                ->get(['group_hemis_id', 'name'])
-                ->filter(fn ($g) => preg_match($subgroup, trim($g->name)))
-                ->values();
+            $groups = self::subgroups($groupName);
             if ($groups->isEmpty()) {
                 $table[] = [$groupName, $subject, 'GURUH TOPILMADI', '', '', '', ''];
                 continue;
@@ -118,52 +111,9 @@ class AdminUpgradeGrades extends Command
                 continue;
             }
 
-            $changed = $below = $retake = $same = 0;
-            foreach ($rows as $r) {
-                // NB / past baho ustidan qo'yilgan otrabotka bahosi ham oshiriladi (jurnal shuni ko'rsatadi)
-                $column = self::targetColumn($r, $limit);
-                if ($revert) {
-                    if (!$r->upgraded_by_admin) {
-                        continue;
-                    }
-                    $old = (float) $r->admin_original_grade;
-                    $update = [$column => $old, 'upgraded_by_admin' => false, 'admin_original_grade' => null, 'admin_upgraded_at' => null];
-                    if ($column === 'grade' && $old < $limit && $r->reason === null && $r->retake_grade === null) {
-                        $update += ['reason' => 'low_grade', 'status' => 'pending',
-                            'deadline' => Carbon::parse($r->lesson_date)->addDays((int) ($deadlineDays[$students[$r->student_hemis_id] ?? ''] ?? 7))->endOfDay()];
-                    }
-                    $changed++;
-                    $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($r->{$column}), self::num($old)];
-                } else {
-                    $old = $r->upgraded_by_admin ? (float) $r->admin_original_grade : (float) $r->{$column};
-                    $new = self::upgradedGrade($old);
-                    if ($new === null) {
-                        $below++;
-                        continue;
-                    }
-                    if ($r->upgraded_by_admin && abs((float) $r->{$column} - $new) < 0.001) {
-                        $same++;
-                        continue;
-                    }
-                    $update = [$column => $new, 'upgraded_by_admin' => true, 'admin_original_grade' => $old, 'admin_upgraded_at' => now()];
-                    // Yangi baho chegaradan o'tsa — otrabotka qarzi yopiladi
-                    if ($column === 'grade' && $r->reason === 'low_grade' && $new >= $limit) {
-                        $update += ['reason' => null, 'status' => 'recorded', 'deadline' => null];
-                    }
-                    if ($column === 'retake_grade') {
-                        $retake++;
-                    }
-                    $changed++;
-                    $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($old), self::num($new)];
-                }
-
-                if ($force) {
-                    DB::table('student_grades')->where('id', $r->id)->update($update + ['updated_at' => now()]);
-                }
-            }
-
-            $total += $changed;
-            $table[] = [$groupName, $subject, $rows->count(), $changed, $below, $retake, $same ? "allaqachon: {$same}" : ''];
+            $c = self::applyRows($rows, $students, $limit, $deadlineDays, $revert, $force, $groupName, $samples);
+            $total += $c['changed'];
+            $table[] = [$groupName, $subject, $rows->count(), $c['changed'], $c['below'], $c['retake'], $c['same'] ? "allaqachon: {$c['same']}" : ''];
         }
 
         $this->table(['Guruh', 'Fan', 'Baholar', $revert ? 'Qaytariladi' : 'Oshiriladi', '<60', 'Shundan otrabotka', 'Izoh'], $table);
@@ -181,6 +131,78 @@ class AdminUpgradeGrades extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Baholarni formula bo'yicha oshiradi (yoki --revert da qaytaradi). $rows — student_grades qatorlari
+     * (id, student_hemis_id, lesson_date, grade, retake_grade, reason, status, upgraded_by_admin,
+     * admin_original_grade); $students — hemis_id => level_code. Namunalar $samples ga qo'shiladi.
+     *
+     * @return array{changed: int, below: int, retake: int, same: int}
+     */
+    public static function applyRows(iterable $rows, $students, float $limit, $deadlineDays, bool $revert, bool $force, string $groupName, array &$samples): array
+    {
+        $changed = $below = $retake = $same = 0;
+        foreach ($rows as $r) {
+            // NB / past baho ustidan qo'yilgan otrabotka bahosi ham oshiriladi (jurnal shuni ko'rsatadi)
+            $column = self::targetColumn($r, $limit);
+            if ($revert) {
+                if (!$r->upgraded_by_admin) {
+                    continue;
+                }
+                $old = (float) $r->admin_original_grade;
+                $update = [$column => $old, 'upgraded_by_admin' => false, 'admin_original_grade' => null, 'admin_upgraded_at' => null];
+                if ($column === 'grade' && $old < $limit && $r->reason === null && $r->retake_grade === null) {
+                    $update += ['reason' => 'low_grade', 'status' => 'pending',
+                        'deadline' => Carbon::parse($r->lesson_date)->addDays((int) ($deadlineDays[$students[$r->student_hemis_id] ?? ''] ?? 7))->endOfDay()];
+                }
+                $changed++;
+                $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($r->{$column}), self::num($old)];
+            } else {
+                $old = $r->upgraded_by_admin ? (float) $r->admin_original_grade : (float) $r->{$column};
+                $new = self::upgradedGrade($old);
+                if ($new === null) {
+                    $below++;
+                    continue;
+                }
+                if ($r->upgraded_by_admin && abs((float) $r->{$column} - $new) < 0.001) {
+                    $same++;
+                    continue;
+                }
+                $update = [$column => $new, 'upgraded_by_admin' => true, 'admin_original_grade' => $old, 'admin_upgraded_at' => now()];
+                // Yangi baho chegaradan o'tsa — otrabotka qarzi yopiladi
+                if ($column === 'grade' && $r->reason === 'low_grade' && $new >= $limit) {
+                    $update += ['reason' => null, 'status' => 'recorded', 'deadline' => null];
+                }
+                if ($column === 'retake_grade') {
+                    $retake++;
+                }
+                $changed++;
+                $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($old), self::num($new)];
+            }
+
+            if ($force) {
+                DB::table('student_grades')->where('id', $r->id)->update($update + ['updated_at' => now()]);
+            }
+        }
+
+        return compact('changed', 'below', 'retake', 'same');
+    }
+
+    /**
+     * Ro'yxatdagi guruhning faqat kichik guruhlari (o'zi emas): d1/d22-01 → d1/d22-01a (rus),
+     * d1/d22-01(b), d1/d22-01 c ...; d1/d22-010a, d1/d22-01 (rus) — yo'q
+     */
+    public static function subgroups(string $groupName)
+    {
+        $pattern = '/^' . preg_quote($groupName, '/') . '\s*\(?[a-z]\)?(\s|$)/iu';
+
+        return DB::table('groups')
+            ->where('name', 'like', $groupName . '%')
+            ->get(['group_hemis_id', 'name'])
+            ->filter(fn ($g) => preg_match($pattern, trim($g->name)))
+            ->sortBy('name')
+            ->values();
     }
 
     /** @return array<int, array{0: string, 1: string, 2: Carbon, 3: Carbon}> */
@@ -201,7 +223,7 @@ class AdminUpgradeGrades extends Command
         return $list;
     }
 
-    private static function num($v): string
+    public static function num($v): string
     {
         return rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
     }

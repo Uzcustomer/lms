@@ -286,11 +286,12 @@
                         </div>
                         @if(!empty($aiAccess['jamlanma']))
                         <div class="vd-group is-teal" role="group" aria-label="Tasdiqlanganlar jamlanmasi">
-                            <span class="vd-group-label">Jamlanma</span>
-                            <a class="vd-btn" href="{{ route('admin.vedomost-submission.jamlanma', request()->query()) }}"
-                               title="Joriy filtrdagi barcha TASDIQLANGAN vedomostlar — bitta jadvalda («Vedomost tekshirish» formati, A–AJ + yopilish shakli)">Filtrdagilar</a>
+                            <a class="vd-btn is-teal-solid" href="{{ route('admin.vedomost-submission.jamlanma', request()->query()) }}"
+                               title="Joriy filtrdagi barcha TASDIQLANGAN vedomostlar jamlanmasi — Excel («Vedomost tekshirish» formati, A–AJ + yopilish shakli)">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>Jamlanma
+                            </a>
                             <button type="submit" form="jam-form" id="jam-selected" class="vd-btn" disabled
-                                    title="Jadvalda belgilangan tasdiqlangan vedomostlar jamlanmasi">Tanlanganlar <span class="vd-badge" id="jam-count">0</span></button>
+                                    title="Faqat jadvalda belgilangan tasdiqlangan vedomostlar jamlanmasi">Tanlanganlar <span class="vd-badge" id="jam-count">0</span></button>
                         </div>
                         @endif
                         @if(!empty($aiAccess['check']))
@@ -904,6 +905,8 @@
         .vd-group.is-teal { border-color: #99f6e4; }
         .vd-group.is-teal .vd-btn { color: #0f766e; }
         .vd-group.is-teal .vd-btn:hover:not(:disabled) { background: #f0fdfa; }
+        .vd-group .vd-btn.is-teal-solid { background: #0f766e; color: #fff; }
+        .vd-group .vd-btn.is-teal-solid:hover { background: #115e59; }
         .vd-group-label { padding: 0 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #fff; background: #0f766e; align-self: stretch; display: flex; align-items: center; }
         .vd-btn.is-review { border-color: #c7d2fe; color: #3730a3; }
         .vd-btn.is-review:hover:not(:disabled) { background: #eef2ff; }

@@ -136,6 +136,12 @@ trait TimetableCycleDaysMove
         } finally {
             request()->attributes->remove('timetable.cycle_units.' . $board->id);
         }
+        // Tasdiqlangan so'rov qayta bajarilganda (TimetableChangeApproval) birorta kun o'zgarmasa — xato: so'rov "tasdiqlandi" bo'lib,
+        // o'zgarish xabarlari ketmasin (sana o'tib ketgan yoki joy band bo'lib qolgan). To'g'ridan-to'g'ri so'rovda — kun bo'yicha natija.
+        if (!$dry && !$applied && $request->attributes->has('timetable.change_replay')) {
+            return response()->json(['error' => 'Hech bir kun o‘zgarmadi: ' . implode('; ', array_map(fn ($r) => ($r['date'] ? Carbon::parse($r['date'])->format('d.m')
+                : ($r['day_index'] + 1) . '-kun') . ' — ' . ($r['why'] ?: $r['status']), $out)), 'days' => $out], 422);
+        }
         $undo = null;
         if (!$dry && $applied) {
             $undo = Str::random(32);

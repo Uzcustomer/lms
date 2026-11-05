@@ -3428,7 +3428,9 @@
                 if (!card) return null;
                 return pendingReqs().find(r => r.route === 'admin.timetable.cycle-lecture-slots' && r.payload
                     && r.payload.subject_name === card.subject && r.payload.group_name === card.group
-                    && String(r.payload.day_index) === String(dayIndex) && r.payload.start_hour
+                    // Bitta kun: day_index yoki (↑ ↓ — cycDaysApply) bitta elementli day_indexes + start_hour.
+                    && (String(r.payload.day_index) === String(dayIndex) || (Array.isArray(r.payload.day_indexes) && r.payload.day_indexes.length === 1
+                        && String(r.payload.day_indexes[0]) === String(dayIndex))) && r.payload.start_hour
                     && (!mode || (r.payload.mode || 'both') === mode)) || null;
             }
             function openChangeReqModal() {

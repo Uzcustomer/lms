@@ -371,3 +371,20 @@ it('Codex: guruhcha qatorida "Birga" — smenali guruhcha (o\'z kun boshisiz): a
     expect(dmDays($s)['2026-11-18']['prc'])->toBe([9, 13])
         ->and(dmMove($s, $s['admin'], 'admin', $sub + ['day_indexes' => [2], 'delta' => 1, 'dry_run' => 1])->json('days.0.status'))->toBe('nofit');
 });
+
+it('Codex: tasdiqlangan ko\'p kunli so\'rov qayta bajarilganda hech bir kun o\'zgarmasa — so\'rov bajarilmadi (FAILED), tasdiqlanmaydi', function () {
+    $s = dmSetup();
+    $head = dmHead();
+    $s['board']->update(['settings' => array_merge($s['board']->settings, ['approval_required' => true])]);
+    dmMove($s, $head, 'kafedra_mudiri', ['day_indexes' => [1, 2], 'delta' => 2, 'mode' => 'lecture'])->assertOk()->assertJsonPath('pending_approval', true);
+    $req = \App\Models\TimetableChangeRequest::latest('id')->first();
+    // Tasdiqqacha sanalar o'tib ketdi.
+    $this->travelTo(Carbon::parse('2026-11-20 09:00', 'Asia/Tashkent'));
+    dmAs($s['admin'], 'admin')->postJson(route('admin.timetable.change-requests.approve', $req->id));
+    $req->refresh();
+    expect($req->status)->toBe(\App\Models\TimetableChangeRequest::FAILED)
+        ->and($req->error)->toContain('Hech bir kun o‘zgarmadi: 17.11 — O‘tgan kun.; 18.11 — O‘tgan kun.')
+        ->and(dmDays($s)['2026-11-17']['lec'])->toBe([1, 3]);
+    // To'g'ridan-to'g'ri (admin) — kun bo'yicha natija, 200.
+    dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 2, 'mode' => 'lecture'])->assertOk()->assertJsonPath('applied', 0);
+});

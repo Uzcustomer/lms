@@ -103,11 +103,6 @@
 
                 {{-- Filtrlar (yopilish shakli sahifasi uslubida) --}}
                 <form id="filter-form" method="GET" action="{{ route('admin.vedomost-submission.index') }}">
-                    @php
-                        $advKeys = ['specialty', 'closing_form_filter', 'form_type', 'status', 'overdue'];
-                        $advCount = collect($advKeys)->filter(fn ($k) => request()->filled($k) && !($k === 'overdue' && !request()->boolean('overdue')))->count()
-                            + (request('order', 'newest') !== 'newest' ? 1 : 0);
-                    @endphp
                     <div class="filter-container">
                         <div class="filter-row">
                             <div class="filter-item" style="min-width:160px;">
@@ -183,13 +178,7 @@
                                     </details>
                                 @endif
                             </div>
-                            <details class="vd-more" {{ $advCount ? 'open' : '' }}>
-                                <summary>
-                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
-                                    Qo'shimcha filtrlar
-                                    @if($advCount)<span class="vd-badge is-indigo">{{ $advCount }}</span>@endif
-                                </summary>
-                                <div class="filter-row vd-more-body">
+
                                     <div class="filter-item" style="flex:1;min-width:220px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                                 <select name="specialty" id="specialty" class="select2" style="width:100%;">
@@ -250,7 +239,6 @@
                                 </label>
                             </div>
                                 </div>
-                            </details>
                         </div>
                     </div>
                 </form>
@@ -840,7 +828,7 @@
         .vd-role { flex: none; width: 92px; font-size: 10.5px; color: #94a3b8; font-weight: 600; }
         .vd-tel { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; color: #2563eb; }
         .vd-tel:hover, .vd-tel:focus-visible { background: #eff6ff; }
-        .vd-tel svg, .vd-open svg, .vd-more summary svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .vd-tel svg, .vd-open svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .vd-due { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; }
         .vd-due.is-today { background: #fef3c7; color: #92400e; }
         .vd-due.is-late { background: #fee2e2; color: #b91c1c; }
@@ -850,15 +838,8 @@
         .vd-open:hover, .vd-open:focus-visible { background: #1a3268; color: #fff; border-color: #1a3268; }
         .vd-table a:focus-visible, .vd-table input:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
         .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-        /* Qo'shimcha filtrlar (yig'iladigan) */
         .vd-filter-sub { align-items: flex-start; margin-bottom: 0; }
         .vd-filter-sub .vs-switch-item { padding-bottom: 6px; }
-        .vd-more { flex: 1; min-width: 260px; }
-        .vd-more summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px dashed #94a3b8; background: #fff; color: #334155; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; }
-        .vd-more summary::-webkit-details-marker { display: none; }
-        .vd-more[open] summary { border-style: solid; border-color: #1a3268; color: #1a3268; }
-        .vd-more summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-        .vd-more-body { margin-top: 10px; padding: 12px; background: rgba(255,255,255,.65); border-radius: 10px; border: 1px solid #dbe4ef; }
         @media (prefers-reduced-motion: reduce) { .vd-stat, .vd-btn, .vs-switch-track, .vs-switch-thumb { transition: none !important; } .vd-stat:hover { transform: none; } }
         .vd-person { cursor: help; }
         .vd-merge { display:inline-block; margin-left:6px; background:#eef2ff; color:#4338ca; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; cursor:help; white-space:nowrap; }

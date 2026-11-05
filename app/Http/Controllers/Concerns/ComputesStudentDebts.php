@@ -530,8 +530,8 @@ trait ComputesStudentDebts
                         $best = $val;
                     }
                 }
-                if ($best !== null && $best < 60) {
-                    $reasons[] = $ttLabel . '<60';
+                if ($best !== null && $best < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                    $reasons[] = $ttLabel . '<' . \App\Models\MarkingSystemScore::lowGradeLimit();
                 }
             }
 
@@ -545,8 +545,8 @@ trait ComputesStudentDebts
                         $mtGrade = $val;
                     }
                 }
-                if ($mtGrade !== null && $mtGrade < 60) {
-                    $reasons[] = 'MT<60';
+                if ($mtGrade !== null && $mtGrade < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                    $reasons[] = 'MT<' . \App\Models\MarkingSystemScore::lowGradeLimit();
                 }
             }
 
@@ -572,8 +572,8 @@ trait ComputesStudentDebts
                     }
                 }
                 $jnVal = $jnGroupCache[$jnCacheKey][$hemisId] ?? null;
-                if ($jnVal !== null && $jnVal > 0 && $jnVal < 60) {
-                    $reasons[] = 'JN<60 (' . $jnVal . ')';
+                if ($jnVal !== null && $jnVal > 0 && $jnVal < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                    $reasons[] = 'JN<' . \App\Models\MarkingSystemScore::lowGradeLimit() . ' (' . $jnVal . ')';
                 }
             }
 
@@ -619,7 +619,7 @@ trait ComputesStudentDebts
             foreach ($grades as $g) {
                 if (!in_array((int) $g->training_type_code, [101, 102])) continue;
                 $val = $g->retake_grade !== null ? (float) $g->retake_grade : ($g->grade !== null ? (float) $g->grade : null);
-                if ($val !== null && $val >= 60) {
+                if ($val !== null && $val >= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                     $passedExam[$g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code] = true;
                 }
             }

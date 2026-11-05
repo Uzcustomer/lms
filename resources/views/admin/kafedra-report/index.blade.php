@@ -6,7 +6,7 @@
     @php
         $q = array_filter(['kafedra' => $kafedras->isNotEmpty() ? $deptId : null, 'from' => $from, 'to' => $to, 'scope' => $scope ?? null]);
         $fmt = fn ($v) => $v === null || $v === '' ? '—' : (is_numeric($v) ? rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.') : $v);
-        $tone = fn ($v) => !is_numeric($v) ? ($v === 'NB' ? 'nb' : 'none') : ($v >= 90 ? 'a' : ($v >= 70 ? 'b' : ($v >= 60 ? 'c' : 'd')));
+        $tone = fn ($v) => !is_numeric($v) ? ($v === 'NB' ? 'nb' : 'none') : ($v >= 90 ? 'a' : ($v >= 70 ? 'b' : ($v >= \App\Models\MarkingSystemScore::lowGradeLimit() ? 'c' : 'd')));
         $periodLabel = $from || $to
             ? ($from ? \Carbon\Carbon::parse($from)->format('d.m.Y') : '…') . ' – ' . ($to ? \Carbon\Carbon::parse($to)->format('d.m.Y') : '…')
             : 'Joriy semestr';
@@ -149,7 +149,7 @@
                 @endif
                 <div class="kr-legend" style="margin-left:auto">
                     <span><i style="background:#e7f6ec"></i>90+</span><span><i style="background:#e8efff"></i>70–89</span>
-                    <span><i style="background:#fff4dc"></i>60–69</span><span><i style="background:#fde8e7"></i>60 dan past</span>
+                    <span><i style="background:#fff4dc"></i>{{ \App\Models\MarkingSystemScore::lowGradeLimit() }}–69</span><span><i style="background:#fde8e7"></i>{{ \App\Models\MarkingSystemScore::lowGradeLimit() }} dan past</span>
                 </div>
             </form>
 

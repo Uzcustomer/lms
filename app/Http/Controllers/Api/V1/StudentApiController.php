@@ -558,7 +558,7 @@ class StudentApiController extends Controller
                 'mustaqil_rules' => [
                     'max_file_mb' => RetakeMustaqilSubmission::MAX_FILE_MB,
                     'max_attempts' => RetakeMustaqilSubmission::MAX_ATTEMPTS,
-                    'pass_grade' => RetakeMustaqilSubmission::PASS_GRADE,
+                    'pass_grade' => \App\Models\MarkingSystemScore::lowGradeLimit(),
                 ],
             ],
         ]);

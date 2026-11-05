@@ -379,7 +379,7 @@ class VedomostTekshirishController extends Controller
         $wOski = (int) ($request->weight_oski ?? 0);
         $wTest = (int) ($request->weight_test ?? 30);
         // O'tish bali — Excel yaratishda so'raladi (sahifada standart 70)
-        $pass  = (int) ($request->pass_score ?? 60);
+        $pass  = (int) ($request->pass_score ?? \App\Models\MarkingSystemScore::lowGradeLimit());
         $shaklId = (int) ($request->shakl ?? 1);
 
         $shakllar = config('app.shakllar', []);

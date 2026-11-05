@@ -427,7 +427,7 @@ class RetakeTestMarkaziController extends Controller
             $section->addText('Guruh: ' . $group->name, ['bold' => true, 'size' => 12], ['spaceAfter' => 60]);
             $section->addText('Fan: ' . ($group->subject_name ?? '—'), ['size' => 11], ['spaceAfter' => 30]);
             $section->addText('Tur: ' . ($group->assessment_type ?? '—'), ['size' => 11], ['spaceAfter' => 30]);
-            $section->addText("Qoidalar: JN >= 60 va MT >= 60 bo'lsa testga ruxsat, aks holda ruxsat yo'q.", ['size' => 11], ['spaceAfter' => 160]);
+            $section->addText("Qoidalar: JN >= " . \App\Models\MarkingSystemScore::lowGradeLimit() . " va MT >= " . \App\Models\MarkingSystemScore::lowGradeLimit() . " bo'lsa testga ruxsat, aks holda ruxsat yo'q.", ['size' => 11], ['spaceAfter' => 160]);
 
             $tableStyle = [
                 'borderSize' => 6,
@@ -456,13 +456,13 @@ class RetakeTestMarkaziController extends Controller
                 $jn = $app->joriy_score !== null ? round((float) $app->joriy_score, 2) : null;
                 $mt = ($mustaqilMap[$app->id] ?? null)?->grade;
                 $mt = $mt !== null ? round((float) $mt, 2) : null;
-                $allowed = $jn !== null && $mt !== null && $jn >= 60 && $mt >= 60;
+                $allowed = $jn !== null && $mt !== null && $jn >= \App\Models\MarkingSystemScore::lowGradeLimit() && $mt >= \App\Models\MarkingSystemScore::lowGradeLimit();
 
                 $row = $table->addRow();
                 $row->addCell(500)->addText((string) ($idx + 1), $bodyFont, $cellCenter);
                 $row->addCell(5200)->addText($student?->full_name ?? '—', $bodyFont, $cellLeft);
-                $row->addCell(1200)->addText($jn !== null ? rtrim(rtrim(number_format($jn, 2, '.', ''), '0'), '.') : '—', $jn !== null && $jn < 60 ? $bodyFontRed : $bodyFont, $cellCenter);
-                $row->addCell(1200)->addText($mt !== null ? rtrim(rtrim(number_format($mt, 2, '.', ''), '0'), '.') : '—', $mt !== null && $mt < 60 ? $bodyFontRed : $bodyFont, $cellCenter);
+                $row->addCell(1200)->addText($jn !== null ? rtrim(rtrim(number_format($jn, 2, '.', ''), '0'), '.') : '—', $jn !== null && $jn < \App\Models\MarkingSystemScore::lowGradeLimit() ? $bodyFontRed : $bodyFont, $cellCenter);
+                $row->addCell(1200)->addText($mt !== null ? rtrim(rtrim(number_format($mt, 2, '.', ''), '0'), '.') : '—', $mt !== null && $mt < \App\Models\MarkingSystemScore::lowGradeLimit() ? $bodyFontRed : $bodyFont, $cellCenter);
                 $row->addCell(1800)->addText(
                     $allowed ? 'Testga ruxsat' : 'Ruxsat yo\'q',
                     $allowed ? ['size' => 10, 'bold' => true, 'color' => '0F9D58'] : ['size' => 10, 'bold' => true, 'color' => 'C00000'],

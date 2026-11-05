@@ -236,7 +236,7 @@ class VedomostCheckEngine
             $skipAll = $expelled ? 'talaba chetlashtirilgan'
                 : ($this->jnMtFailed($vt, $settings) ? 'JN/MT o‘tmagan — imtihonga kiritilmagan' : null);
             $oskeVt = VedomostScanReader::num($vt['P']);
-            $skipTest = $skipAll ?? (($useO && $useT && $oskeVt !== null && $oskeVt < (float) ($settings['oski_min'] ?? 60))
+            $skipTest = $skipAll ?? (($useO && $useT && $oskeVt !== null && $oskeVt < (float) ($settings['oski_min'] ?? \App\Models\MarkingSystemScore::lowGradeLimit()))
                 ? 'OSKE ' . $this->f($oskeVt) . '% — Testga kiritilmagan' : null);
             if ($useO && $tmUsed['oski'] && !$kurs6) {
                 $tm['oski'] = $skipAll
@@ -470,11 +470,11 @@ class VedomostCheckEngine
         // JN/MT/ON ballni butun songacha yaxlitlaydi va YN ni shu ballardan hisoblaydi
         // (YnAttemptStatusService::computeV). «Vedomost tekshirish» (12-shakl) hisobi o'zgarmaydi.
         if (($expected['form_type'] ?? '12') !== '12' && in_array($level, ['14', '15'], true)) {
-            $half = fn ($pct, $wt) => $pct >= 60 ? (int) floor($pct * $wt / 100 + 0.5) : 0;
+            $half = fn ($pct, $wt) => $pct >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($pct * $wt / 100 + 0.5) : 0;
             $c['jnBall'] = $half($c['jn'], $w['jb']);
             $c['mtBall'] = $half($c['mt'], $w['mt']);
             $c['onBall'] = $half($c['on'], $w['on']);
-            $c['sumBall'] = ($c['jn'] < 60 || $c['mt'] < 60) ? 0 : $c['jnBall'] + $c['mtBall'] + $c['onBall'];
+            $c['sumBall'] = ($c['jn'] < \App\Models\MarkingSystemScore::lowGradeLimit() || $c['mt'] < \App\Models\MarkingSystemScore::lowGradeLimit()) ? 0 : $c['jnBall'] + $c['mtBall'] + $c['onBall'];
             $c['yn'] = \App\Services\YnAttemptStatusService::computeV((int) round($c['jn']), (int) round($c['mt']), (float) $c['on'], (float) $c['oski'], (float) $c['test'],
                 (float) $c['dav'], $w['jb'], $w['mt'], $w['on'], $w['oski'], $w['test'], $level);
             $c['ects'] = $this->vt->toEcts($c['yn']);
@@ -652,9 +652,9 @@ class VedomostCheckEngine
         if (!($yn !== null && $yn > 0)) {
             return [];
         }
-        $jnMin = (float) ($settings['jn_mt_pass'] ?? 60);
+        $jnMin = (float) ($settings['jn_mt_pass'] ?? \App\Models\MarkingSystemScore::lowGradeLimit());
         $mtMin = $jnMin * $w['mt'] / 100;
-        $oskeMin = (float) ($settings['oski_min'] ?? 60);
+        $oskeMin = (float) ($settings['oski_min'] ?? \App\Models\MarkingSystemScore::lowGradeLimit());
         $useO = $w['oski'] > 0;
         $useT = $w['test'] > 0;
         $hasO = $oske !== null && $oske > 0;
@@ -697,8 +697,8 @@ class VedomostCheckEngine
         $jnmtFail = $this->jnMtFailed($vt, $settings);
         $jnmt = $jnmtFail ? 0 : $this->floorRound($jn * $w['jb'] / 100 + $mt * $w['mt'] / 100 + $on * $w['on'] / 100);
         $fail = $jnmtFail
-            || ($w['oski'] > 0 && $oske !== null && $oske < (float) ($settings['oski_min'] ?? 60))
-            || ($w['test'] > 0 && $test !== null && $test < (float) ($settings['test_min'] ?? 60));
+            || ($w['oski'] > 0 && $oske !== null && $oske < (float) ($settings['oski_min'] ?? \App\Models\MarkingSystemScore::lowGradeLimit()))
+            || ($w['test'] > 0 && $test !== null && $test < (float) ($settings['test_min'] ?? \App\Models\MarkingSystemScore::lowGradeLimit()));
         $calc = $fail ? 0 : $this->floorRound($jnmt
             + ($w['oski'] > 0 ? ($oske ?? 0) * $w['oski'] / 100 : 0)
             + ($w['test'] > 0 ? ($test ?? 0) * $w['test'] / 100 : 0));
@@ -712,7 +712,7 @@ class VedomostCheckEngine
 
     private function jnMtFailed(array $vt, array $settings): bool
     {
-        $pass = (float) ($settings['jn_mt_pass'] ?? 60);
+        $pass = (float) ($settings['jn_mt_pass'] ?? \App\Models\MarkingSystemScore::lowGradeLimit());
         $jn = VedomostScanReader::num($vt['D']);
         $mt = VedomostScanReader::num($vt['G']);
 
@@ -771,15 +771,15 @@ class VedomostCheckEngine
                 return null;
             }
             if ($dual) {
-                return $pct >= 60 ? $pct * $wt / 100 : 0.0;
+                return $pct >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $pct * $wt / 100 : 0.0;
             }
             $r = $this->floorRound($pct * $wt / 100);
 
-            return (float) (($r == $wt * 0.6 && $pct < 60) ? $r - 1 : $r);
+            return (float) (($r == $wt * \App\Models\MarkingSystemScore::lowGradeLimit() / 100 && $pct < \App\Models\MarkingSystemScore::lowGradeLimit()) ? $r - 1 : $r);
         };
-        $jbE = $jn === null ? null : ($jn >= 60 ? $jn * $w['jb'] / 100 : 0.0);
-        $mbE = $mt === null ? null : ($mt >= 60 ? $mt * $w['mt'] / 100 : 0.0);
-        $jnmtE = ($jn === null || $mt === null) ? null : (($jn < 60 || $mt < 60) ? 0 : $this->floorRound($jbE + $mbE));
+        $jbE = $jn === null ? null : ($jn >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $jn * $w['jb'] / 100 : 0.0);
+        $mbE = $mt === null ? null : ($mt >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $mt * $w['mt'] / 100 : 0.0);
+        $jnmtE = ($jn === null || $mt === null) ? null : (($jn < \App\Models\MarkingSystemScore::lowGradeLimit() || $mt < \App\Models\MarkingSystemScore::lowGradeLimit()) ? 0 : $this->floorRound($jbE + $mbE));
         $oE = $needO ? $ctl($o, $wO) : null;
         $tE = $needT ? $ctl($t, $wT) : null;
 
@@ -788,13 +788,13 @@ class VedomostCheckEngine
         if ($jnmtE !== null) {
             $nn = ($w['jb'] + $w['mt']) ? $jnmtE / ($w['jb'] + $w['mt']) : 1;
             $base = 'JN+MT ' . $f2($jbE) . ' + ' . $f2($mbE) . ' = ' . $f2($jbE + $mbE) . " → {$jnmtE}";
-            if ($nn < 0.6) {
-                [$exp, $why] = [-2, "JN+MT {$jnmtE} (" . round($nn * 100) . '%) < 60% → qo‘yilmadi'];
+            if ($nn < \App\Models\MarkingSystemScore::lowGradeLimit() / 100) {
+                [$exp, $why] = [-2, "JN+MT {$jnmtE} (" . round($nn * 100) . '%) < ' . \App\Models\MarkingSystemScore::lowGradeLimit() . '% → qo‘yilmadi'];
             } elseif ($dual) {
                 if (!$o || !$t) {
                     [$exp, $why] = [-1, (!$o ? 'OSKE' : 'Test') . ' 0 → kelmadi'];
-                } elseif ($o < 60 || $t < 60) {
-                    [$exp, $why] = [0, ($o < 60 ? 'OSKE ' . $this->f($o) : 'Test ' . $this->f($t)) . '% < 60 → 0'];
+                } elseif ($o < \App\Models\MarkingSystemScore::lowGradeLimit() || $t < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                    [$exp, $why] = [0, ($o < \App\Models\MarkingSystemScore::lowGradeLimit() ? 'OSKE ' . $this->f($o) : 'Test ' . $this->f($t)) . '% < ' . \App\Models\MarkingSystemScore::lowGradeLimit() . ' → 0'];
                 } else {
                     $ct = $this->floorRound($oE + $tE);
                     $exp = $jnmtE + $ct;
@@ -802,13 +802,13 @@ class VedomostCheckEngine
                 }
             } elseif ($needO || $needT) {
                 [$lbl, $p, $cb, $wx] = $needO ? ['OSKE', $o, $oE, $wO] : ['Test', $t, $tE, $wT];
-                if ($sin && $p !== null && $p == $jn && $p >= 60) {
+                if ($sin && $p !== null && $p == $jn && $p >= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                     $exp = $jnmtE + $cb;
                     $why = "JN+MT {$jnmtE}; {$lbl} (sinov) " . $this->f($p) . "% × {$wx} → " . $this->f($cb) . "; jami " . $this->f($exp);
                 } elseif (!$p) {
                     [$exp, $why] = [-1, "{$lbl} 0 → kelmadi"];
-                } elseif ($p < 60) {
-                    [$exp, $why] = [0, "{$lbl} " . $this->f($p) . '% < 60 → 0'];
+                } elseif ($p < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                    [$exp, $why] = [0, "{$lbl} " . $this->f($p) . '% < ' . \App\Models\MarkingSystemScore::lowGradeLimit() . ' → 0'];
                 } else {
                     $exp = $jnmtE + $cb;
                     $why = "{$base}; {$lbl} " . $this->f($p) . "% × {$wx}/100 = " . $f2($p * $wx / 100) . ' → ' . $this->f($cb) . '; jami ' . $this->f($exp);
@@ -833,10 +833,10 @@ class VedomostCheckEngine
             $chk('Joriy', $jn, $jb, $jbE, 0.051, false);
             $chk("Mustaqil ta’lim", $mt, $mb, $mbE, 0.051, false);
             if ($needO) {
-                $o === null ? $out[] = 'OSKE bahosi bo‘sh' : $chk('OSKE', $o, $ob, $oE, $dual ? 0.051 : 0.01, $o < 60);
+                $o === null ? $out[] = 'OSKE bahosi bo‘sh' : $chk('OSKE', $o, $ob, $oE, $dual ? 0.051 : 0.01, $o < \App\Models\MarkingSystemScore::lowGradeLimit());
             }
             if ($needT) {
-                $t === null ? $out[] = 'Test bahosi bo‘sh' : $chk('Test', $t, $tb, $tE, $dual ? 0.051 : 0.01, $t < 60 && !$sin);
+                $t === null ? $out[] = 'Test bahosi bo‘sh' : $chk('Test', $t, $tb, $tE, $dual ? 0.051 : 0.01, $t < \App\Models\MarkingSystemScore::lowGradeLimit() && !$sin);
             }
             if ($sin && $t !== null && $jn !== null && $t != $jn) {
                 $out[] = 'sinov: Test ' . $this->f($t) . '% ≠ Joriy ' . $this->f($jn) . '% (joriy baho testga ko‘chirilmagan)';

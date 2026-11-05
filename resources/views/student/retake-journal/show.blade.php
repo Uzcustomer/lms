@@ -117,7 +117,7 @@
                         @php
                             $jnClass = $jnInt >= 75
                                 ? 'text-green-600 bg-green-50 border-green-300'
-                                : ($jnInt >= 60 ? 'text-amber-600 bg-amber-50 border-amber-300' : 'text-red-600 bg-red-50 border-red-300');
+                                : ($jnInt >= \App\Models\MarkingSystemScore::lowGradeLimit() ? 'text-amber-600 bg-amber-50 border-amber-300' : 'text-red-600 bg-red-50 border-red-300');
                         @endphp
                         <div class="inline-flex flex-col items-center justify-center w-32 h-32 rounded-full border-4 {{ $jnClass }}">
                             <p class="text-5xl font-bold leading-none">{{ $jnInt }}</p>
@@ -147,7 +147,7 @@
                         @if($mustaqil->grade !== null)
                             @php
                                 $mv = (float) $mustaqil->grade;
-                                $mc = $mv >= 75 ? 'bg-green-100 text-green-800' : ($mv >= 60 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800');
+                                $mc = $mv >= 75 ? 'bg-green-100 text-green-800' : ($mv >= \App\Models\MarkingSystemScore::lowGradeLimit() ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800');
                             @endphp
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $mc }}">
                                 <svg class="mr-1.5 h-2 w-2 flex-shrink-0" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
@@ -214,7 +214,7 @@
                     {{-- Yuklash formasi --}}
                     @php
                         $maxAttempts = \App\Models\RetakeMustaqilSubmission::MAX_ATTEMPTS;
-                        $passGrade = \App\Models\RetakeMustaqilSubmission::PASS_GRADE;
+                        $passGrade = \App\Models\MarkingSystemScore::lowGradeLimit();
                         $attemptCount = (int) ($mustaqil->attempt_count ?? 0);
                         $mustaqilPassed = $mustaqil && $mustaqil->grade !== null && (float) $mustaqil->grade >= $passGrade;
                         $attemptsLeft = max(0, $maxAttempts - $attemptCount);

@@ -20,9 +20,6 @@ class VedomostSubmissionService
     /** 12a/12b (qayta topshirish) ochiladigan yopilish shakllari — OSKI/Test imtihonli fanlar. */
     public const RESIT_CLOSING_FORMS = ['oski', 'test', 'oski_test'];
 
-    /** Yiqilgan deb hisoblanadigan chegara (V < 60). */
-    public const PASS_GRADE = 60;
-
     /** Deadline: base sanadan necha ish kuni keyin. */
     public const DEADLINE_WORKDAYS = 3;
 
@@ -1286,7 +1283,7 @@ class VedomostSubmissionService
 
             if ($att <= 1) {
                 $perUnit[$unitKey][$sid]['a1'] = true;
-                if ((float) $val < self::PASS_GRADE) {
+                if ((float) $val < \App\Models\MarkingSystemScore::lowGradeLimit()) {
                     $perUnit[$unitKey][$sid]['f1'] = true;
                 } elseif ($isAbsent) {
                     $perUnit[$unitKey][$sid]['f1'] = true;
@@ -1294,7 +1291,7 @@ class VedomostSubmissionService
             } elseif ($att === 2) {
                 $perUnit[$unitKey][$sid]['a2'] = true;
                 $unitHas[$unitKey]['h2'] = true;
-                if ((float) $val < self::PASS_GRADE) {
+                if ((float) $val < \App\Models\MarkingSystemScore::lowGradeLimit()) {
                     $perUnit[$unitKey][$sid]['f2'] = true;
                 } elseif ($isAbsent) {
                     $perUnit[$unitKey][$sid]['f2'] = true;

@@ -7005,7 +7005,7 @@ class JournalController extends Controller
 
         $message = "{$applied} ta talabaga JN o'rtachasi qo'llandi";
         if ($zeroed > 0) {
-            $message .= " (shundan {$zeroed} ta talaba JN<60, MT<60 yoki sababsiz davomat ≥25% bo'lgani uchun 0 baho qo'yildi)";
+            $message .= " (shundan {$zeroed} ta talaba JN/MT chegaradan past yoki sababsiz davomat ≥25% bo'lgani uchun 0 baho qo'yildi)";
         }
         if ($skipped > 0) {
             $message .= ", {$skipped} ta talaba allaqachon jurnalga ko'chirilgan (qulflangan) edi";
@@ -9775,7 +9775,7 @@ class JournalController extends Controller
             );
             $dataRow->addCell(1200)->addText(
                 $yakuniyBall,
-                $yakuniyBall < 60 ? $cellFontRed : $cellFontGreen,
+                $yakuniyBall < \App\Models\MarkingSystemScore::lowGradeLimit() ? $cellFontRed : $cellFontGreen,
                 $cellCenter
             );
             $dataRow->addCell(1500)->addText(
@@ -10520,29 +10520,29 @@ class JournalController extends Controller
             $roundJnMtToInt = in_array($levelCodeForRounding, ['14', '15'], true);
 
             if ($roundJnMtToInt) {
-                $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
-                $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
-                $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+                $eBall = $jnVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+                $hBall = $mtVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+                $kBall = $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
             } else {
-                $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
-                $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
-                $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+                $eBall = $jnVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($jnVal * $weightJn / 100, 1) : 0;
+                $hBall = $mtVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($mtVal * $weightMt / 100, 1) : 0;
+                $kBall = $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($onVal * $weightOn / 100, 1) : 0;
             }
             if ($weightOski > 0 && $weightTest > 0) {
-                $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
-                $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+                $qBall = $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $oskiVal * $weightOski / 100 : 0;
+                $tBall = $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $testVal * $weightTest / 100 : 0;
             } elseif ($weightOski > 0) {
-                $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+                $qBall = $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) round($oskiVal * $weightOski / 100) : 0;
                 $tBall = 0;
             } elseif ($weightTest > 0) {
                 $qBall = 0;
-                $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+                $tBall = $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) round($testVal * $weightTest / 100) : 0;
             } else {
                 $qBall = 0; $tBall = 0;
             }
 
             $maxJbMtOn = $weightJn + $weightMt + $weightOn;
-            $mSum = (($jnVal < 60) || ($mtVal < 60)) ? 0 : round($eBall + $hBall + $kBall, 1);
+            $mSum = (($jnVal < \App\Models\MarkingSystemScore::lowGradeLimit()) || ($mtVal < \App\Models\MarkingSystemScore::lowGradeLimit())) ? 0 : round($eBall + $hBall + $kBall, 1);
             $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
 
             if ($jnVal === 0 && $mtVal === 0) {
@@ -10553,9 +10553,9 @@ class JournalController extends Controller
                 $v = -2;
             } elseif (($weightOski > 0 && $oskiVal == 0) || ($weightTest > 0 && $testVal == 0)) {
                 $v = -1;
-            } elseif (($weightJn > 0 && $jnVal < 60) || ($weightMt > 0 && $mtVal < 60)
-                || ($weightOn > 0 && $onVal < 60)
-                || ($weightOski > 0 && $oskiVal < 60) || ($weightTest > 0 && $testVal < 60)) {
+            } elseif (($weightJn > 0 && $jnVal < \App\Models\MarkingSystemScore::lowGradeLimit()) || ($weightMt > 0 && $mtVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+                || ($weightOn > 0 && $onVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+                || ($weightOski > 0 && $oskiVal < \App\Models\MarkingSystemScore::lowGradeLimit()) || ($weightTest > 0 && $testVal < \App\Models\MarkingSystemScore::lowGradeLimit())) {
                 $v = 0;
             } else {
                 // Har GURUH alohida butun songacha (half-up) yaxlitlanadi:
@@ -10797,31 +10797,31 @@ class JournalController extends Controller
                 $roundJnMtToInt = in_array($levelCodeForRounding, ['14', '15'], true);
 
                 if ($roundJnMtToInt) {
-                    $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
-                    $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
-                    $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+                    $eBall = $jnVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+                    $hBall = $mtVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+                    $kBall = $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
                 } else {
-                    $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
-                    $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
-                    $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+                    $eBall = $jnVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($jnVal * $weightJn / 100, 1) : 0;
+                    $hBall = $mtVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($mtVal * $weightMt / 100, 1) : 0;
+                    $kBall = $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($onVal * $weightOn / 100, 1) : 0;
                 }
 
                 if ($weightOski > 0 && $weightTest > 0) {
-                    $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
-                    $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+                    $qBall = $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $oskiVal * $weightOski / 100 : 0;
+                    $tBall = $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $testVal * $weightTest / 100 : 0;
                 } elseif ($weightOski > 0) {
-                    $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+                    $qBall = $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) round($oskiVal * $weightOski / 100) : 0;
                     $tBall = 0;
                 } elseif ($weightTest > 0) {
                     $qBall = 0;
-                    $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+                    $tBall = $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) round($testVal * $weightTest / 100) : 0;
                 } else {
                     $qBall = 0;
                     $tBall = 0;
                 }
 
                 $maxJbMtOn = $weightJn + $weightMt + $weightOn;
-                $mSum = (($jnVal < 60) || ($mtVal < 60))
+                $mSum = (($jnVal < \App\Models\MarkingSystemScore::lowGradeLimit()) || ($mtVal < \App\Models\MarkingSystemScore::lowGradeLimit()))
                     ? 0
                     : round($eBall + $hBall + $kBall, 1);
                 $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
@@ -10835,11 +10835,11 @@ class JournalController extends Controller
                 } elseif (($weightOski > 0 && $oskiVal == 0)
                        || ($weightTest > 0 && $testVal == 0)) {
                     $v = -1;
-                } elseif (($weightJn   > 0 && $jnVal   < 60)
-                       || ($weightMt   > 0 && $mtVal   < 60)
-                       || ($weightOn   > 0 && $onVal   < 60)
-                       || ($weightOski > 0 && $oskiVal < 60)
-                       || ($weightTest > 0 && $testVal < 60)) {
+                } elseif (($weightJn   > 0 && $jnVal   < \App\Models\MarkingSystemScore::lowGradeLimit())
+                       || ($weightMt   > 0 && $mtVal   < \App\Models\MarkingSystemScore::lowGradeLimit())
+                       || ($weightOn   > 0 && $onVal   < \App\Models\MarkingSystemScore::lowGradeLimit())
+                       || ($weightOski > 0 && $oskiVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+                       || ($weightTest > 0 && $testVal < \App\Models\MarkingSystemScore::lowGradeLimit())) {
                     $v = 0;
                 } else {
                     // Har GURUH alohida butun songacha (half-up) yaxlitlanadi:
@@ -10866,8 +10866,8 @@ class JournalController extends Controller
                     if ($v >= 90 && $v <= 100)      $w = 'A';
                     elseif ($v >= 85)               $w = 'B+';
                     elseif ($v >= 70)               $w = 'B';
-                    elseif ($v >= 60)               $w = 'C';
-                    elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                    elseif ($v >= \App\Models\MarkingSystemScore::lowGradeLimit())               $w = 'C';
+                    elseif ($v >= 0 && $v <= \App\Models\MarkingSystemScore::lowGradeLimit())    $w = 'F';
                     elseif ($v == -1)               $w = '';
                     elseif ($v == -3)               $w = '';
                     else                            $w = 'FX';
@@ -10877,7 +10877,7 @@ class JournalController extends Controller
                 if (is_numeric($v)) {
                     if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
                     elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
-                    elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                    elseif ($v >= \App\Models\MarkingSystemScore::lowGradeLimit() && $v <= 69.9)   $y = "o\u{02BB}rta";
                     elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
                     elseif ($v == -1)                 $y = 'kelmadi';
                     elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";

@@ -30,8 +30,6 @@ class FanTestiJournalSync
     /** Jurnalda "Baho qo'ydi" sifatida ko'rinadi */
     public const GRADED_BY = 'Kafedra';
 
-    private const PASS = 60;
-
     public static function sync(FanTestiAttempt $attempt): ?string
     {
         if (!Schema::hasColumn('fan_testi_attempts', 'journal_sync_note')) {
@@ -95,7 +93,7 @@ class FanTestiJournalSync
             ->whereNotIn('training_type_code', self::NON_PRACTICE)
             ->get();
         $cells = $dayCells->filter(fn ($c) => $c->reason === 'absent'
-            || ($c->grade !== null && round((float) $c->grade) < self::PASS));
+            || ($c->grade !== null && round((float) $c->grade) < \App\Models\MarkingSystemScore::lowGradeLimit()));
 
         if ($cells->isEmpty()) {
             // Jurnalda shu kuni 60+ baho bor — qaysi baho ekani test jurnalida ko'rinsin
@@ -137,7 +135,7 @@ class FanTestiJournalSync
             // Jurnaldagi kabi: shu juftlikda boshqa yozuvda o'tgan (60+) baho bor — otrabotka o'rinsiz
             $passingTwin = $dayCells->first(fn ($c) => $c->id !== $cell->id
                 && (string) $c->lesson_pair_code === (string) $cell->lesson_pair_code
-                && $c->grade !== null && (float) $c->grade >= self::PASS
+                && $c->grade !== null && (float) $c->grade >= \App\Models\MarkingSystemScore::lowGradeLimit()
                 && in_array($c->status, ['recorded', 'closed'], true));
             if ($passingTwin) {
                 $skipped[] = "shu juftlikda {$passingTwin->grade} baho bor";

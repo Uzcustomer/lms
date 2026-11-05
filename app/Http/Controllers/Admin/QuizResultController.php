@@ -3228,7 +3228,7 @@ class QuizResultController extends Controller
                 ->whereColumn('sg.semester_code', 'st.semester_code')
                 ->whereIn('sg.training_type_code', [101, 102])
                 ->whereNull('sg.deleted_at')
-                ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
             if ($hasAttemptCol) {
                 $q->where(function ($x) {
                     $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
@@ -4917,8 +4917,8 @@ class QuizResultController extends Controller
 
         if ($state['type'] === 'grade') {
             $jn = (float) $state['grade'];
-            if ($jn >= 60) {
-                return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — 60+ bo\'lgani uchun qayta topshirilmaydi'];
+            if ($jn >= \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — ' . \App\Models\MarkingSystemScore::lowGradeLimit() . '+ bo\'lgani uchun qayta topshirilmaydi'];
             }
             // jn < 60: retake (test×0.8) darsdagi bahodan baland bo'lsa yuklanadi (gap),
             // aks holda darsdagi baho baland — jurnal o'zgarmaydi (ogohlantirish).

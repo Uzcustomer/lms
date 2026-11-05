@@ -105,7 +105,7 @@
                 $mustaqil = $mustaqilMap[$app->id] ?? null;
                 $mGrade = $mustaqil?->grade;
                 $final = $app->final_grade_value;
-                $pass = $final !== null && (float) $final >= 60;
+                $pass = $final !== null && (float) $final >= \App\Models\MarkingSystemScore::lowGradeLimit();
                 $finalClass = $final === null ? '' : ($pass ? 'pass' : 'fail');
             @endphp
             <tr>

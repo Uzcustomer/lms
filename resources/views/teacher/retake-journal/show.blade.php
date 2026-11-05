@@ -120,13 +120,13 @@
                                             $val = $app->joriy_score;
                                             $mustaqil = $mustaqilMap[$app->id] ?? null;
                                             // Testga yuborish faqat JN >= 60 VA MT >= 60 bo'lganda faol.
-                                            $jnOk = $val !== null && (float) $val >= 60;
-                                            $mtOk = $mustaqil?->grade !== null && (float) $mustaqil->grade >= 60;
+                                            $jnOk = $val !== null && (float) $val >= \App\Models\MarkingSystemScore::lowGradeLimit();
+                                            $mtOk = $mustaqil?->grade !== null && (float) $mustaqil->grade >= \App\Models\MarkingSystemScore::lowGradeLimit();
                                             $canSendToTestMarkazi = $jnOk && $mtOk;
                                             $cellStyle = '';
                                             if ($val !== null) {
                                                 $f = (float) $val;
-                                                if ($f < 60)        $cellStyle = 'color:#b91c1c;font-weight:700;';
+                                                if ($f < \App\Models\MarkingSystemScore::lowGradeLimit())        $cellStyle = 'color:#b91c1c;font-weight:700;';
                                                 elseif ($f < 75)    $cellStyle = 'color:#b45309;font-weight:600;';
                                                 elseif ($f < 90)    $cellStyle = 'color:#15803d;font-weight:600;';
                                                 else                $cellStyle = 'color:#0f5132;font-weight:700;';
@@ -880,7 +880,7 @@
                                 input.style.color = '';
                                 input.style.fontWeight = '';
                                 if (v !== null) {
-                                    if (v < 60) { input.style.color = '#b91c1c'; input.style.fontWeight = '700'; }
+                                    if (v < {{ \App\Models\MarkingSystemScore::lowGradeLimit() }}) { input.style.color = '#b91c1c'; input.style.fontWeight = '700'; }
                                     else if (v < 75) { input.style.color = '#b45309'; input.style.fontWeight = '600'; }
                                     else if (v < 90) { input.style.color = '#15803d'; input.style.fontWeight = '600'; }
                                     else { input.style.color = '#0f5132'; input.style.fontWeight = '700'; }

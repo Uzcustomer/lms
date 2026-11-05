@@ -804,12 +804,12 @@ class IndividualExamScheduleController extends Controller
 
                 if ($att <= 1) {
                     $has1 = true;
-                    if ($val !== null && (float) $val < 60) {
+                    if ($val !== null && (float) $val < \App\Models\MarkingSystemScore::lowGradeLimit()) {
                         $failed1ByGrade = true;
                     }
                 } elseif ($att === 2) {
                     $has2 = true;
-                    if ($val !== null && (float) $val < 60) {
+                    if ($val !== null && (float) $val < \App\Models\MarkingSystemScore::lowGradeLimit()) {
                         $failed2ByGrade = true;
                     }
                 } elseif ($att === 3) {

@@ -72,8 +72,8 @@ class YnAttemptStatusService
     ): array {
         $passes = fn(?array $row) => $row !== null && self::isPassing($row);
         $jnMtOk = fn(?array $row) => $row !== null
-            && (int)($row['jn'] ?? 0) >= 60
-            && (int)($row['mt'] ?? 0) >= 60;
+            && (int)($row['jn'] ?? 0) >= \App\Models\MarkingSystemScore::lowGradeLimit()
+            && (int)($row['mt'] ?? 0) >= \App\Models\MarkingSystemScore::lowGradeLimit();
         // Davomat ≥ 25% bo'lsa computeV -3 qaytaradi (pullik deb hisoblash uchun)
         $davomatFailed = fn(?array $row) => $row !== null && ($row['v'] ?? null) === -3;
 
@@ -138,7 +138,7 @@ class YnAttemptStatusService
         // Hali hech qaysi keyingi urinishga o'tmagan — asosiy yiqilgan
         return [
             'stage' => $isPullikCondition ? self::STAGE_IN_12A_PULLIK : self::STAGE_IN_12A,
-            'reason' => $isPullikCondition ? $pullikReason : 'Asosiy urinishda V<60',
+            'reason' => $isPullikCondition ? $pullikReason : 'Asosiy urinishda V<' . \App\Models\MarkingSystemScore::lowGradeLimit(),
         ];
     }
 
@@ -153,7 +153,7 @@ class YnAttemptStatusService
         $v = $row['v'] ?? null;
         if ($v === null || $v === '') return false;
         if (!is_numeric($v)) return false;
-        return ((float)$v) >= 60;
+        return ((float)$v) >= \App\Models\MarkingSystemScore::lowGradeLimit();
     }
 
     /**
@@ -183,31 +183,31 @@ class YnAttemptStatusService
         $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
 
         if ($roundJnMtToInt) {
-            $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
-            $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
-            $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+            $eBall = $jnVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+            $hBall = $mtVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+            $kBall = $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
         } else {
-            $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
-            $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
-            $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+            $eBall = $jnVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($jnVal * $weightJn / 100, 1) : 0;
+            $hBall = $mtVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($mtVal * $weightMt / 100, 1) : 0;
+            $kBall = $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($onVal * $weightOn / 100, 1) : 0;
         }
 
         if ($weightOski > 0 && $weightTest > 0) {
-            $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
-            $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+            $qBall = $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $oskiVal * $weightOski / 100 : 0;
+            $tBall = $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $testVal * $weightTest / 100 : 0;
         } elseif ($weightOski > 0) {
-            $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+            $qBall = $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) round($oskiVal * $weightOski / 100) : 0;
             $tBall = 0;
         } elseif ($weightTest > 0) {
             $qBall = 0;
-            $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+            $tBall = $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit() ? (int) round($testVal * $weightTest / 100) : 0;
         } else {
             $qBall = 0;
             $tBall = 0;
         }
 
         $maxJbMtOn = $weightJn + $weightMt + $weightOn;
-        $mSum = (($jnVal < 60) || ($mtVal < 60)) ? 0 : round($eBall + $hBall + $kBall, 1);
+        $mSum = (($jnVal < \App\Models\MarkingSystemScore::lowGradeLimit()) || ($mtVal < \App\Models\MarkingSystemScore::lowGradeLimit())) ? 0 : round($eBall + $hBall + $kBall, 1);
         $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
 
         if ($jnVal === 0 && $mtVal === 0) {
@@ -218,9 +218,9 @@ class YnAttemptStatusService
             $v = -2;
         } elseif (($weightOski > 0 && $oskiVal == 0) || ($weightTest > 0 && $testVal == 0)) {
             $v = -1;
-        } elseif (($weightJn > 0 && $jnVal < 60) || ($weightMt > 0 && $mtVal < 60)
-            || ($weightOn > 0 && $onVal < 60)
-            || ($weightOski > 0 && $oskiVal < 60) || ($weightTest > 0 && $testVal < 60)) {
+        } elseif (($weightJn > 0 && $jnVal < \App\Models\MarkingSystemScore::lowGradeLimit()) || ($weightMt > 0 && $mtVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+            || ($weightOn > 0 && $onVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+            || ($weightOski > 0 && $oskiVal < \App\Models\MarkingSystemScore::lowGradeLimit()) || ($weightTest > 0 && $testVal < \App\Models\MarkingSystemScore::lowGradeLimit())) {
             $v = 0;
         } else {
             // Har GURUH alohida butun songacha (half-up) yaxlitlanadi:

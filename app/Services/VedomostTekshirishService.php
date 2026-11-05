@@ -560,7 +560,7 @@ class VedomostTekshirishService
         if ($yn >= 90) return 'A';
         if ($yn >= 85) return 'B+';
         if ($yn >= 70) return 'B';
-        if ($yn >= 60) return 'C';
+        if ($yn >= \App\Models\MarkingSystemScore::lowGradeLimit()) return 'C';
         return 'F';
     }
 
@@ -575,7 +575,7 @@ class VedomostTekshirishService
         if ($yn < $pass) return 'qon-siz';
         if ($yn >= 90) return "a\u{02BC}lo";
         if ($yn >= 70) return 'yaxshi';
-        if ($yn >= 60) return "o\u{02BB}rta";
+        if ($yn >= \App\Models\MarkingSystemScore::lowGradeLimit()) return "o\u{02BB}rta";
         return 'qon-siz';
     }
 

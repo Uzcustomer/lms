@@ -557,11 +557,11 @@ class ExamCapacityService
                     $w->where('sg.attempt', '>=', 2)
                       ->orWhere(function ($x) {
                           $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
-                            ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                            ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                       });
                 });
             } else {
-                $query->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                $query->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
             }
             return $query->distinct()->pluck('sg.student_hemis_id')->map(fn($v) => (string) $v)->all();
         } catch (\Throwable $e) {
@@ -609,11 +609,11 @@ class ExamCapacityService
                     $w->where('sg.attempt', '>=', 2)
                       ->orWhere(function ($x) {
                           $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
-                            ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                            ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                       });
                 });
             } else {
-                $query->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                $query->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
             }
             $rows = $query
                 ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',

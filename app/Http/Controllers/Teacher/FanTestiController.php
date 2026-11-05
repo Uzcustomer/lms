@@ -959,7 +959,7 @@ class FanTestiController extends Controller
         $attempt->total_points = $total;
         $attempt->score = $score;
         $attempt->percent = $percent;
-        $attempt->is_passed = $percent >= (float) ($fanTesti->pass_percent ?? 60);
+        $attempt->is_passed = $percent >= (float) ($fanTesti->pass_percent ?? \App\Models\MarkingSystemScore::lowGradeLimit());
         $attempt->submitted_at = now();
         $attempt->duration_seconds = null;
         $attempt->setRelation('answers', $answers);

@@ -214,7 +214,7 @@ class KafedraSubjectReport
         $jns = array_values(array_filter($jns, fn ($v) => $v !== null));
         $b = ['a' => 0, 'b' => 0, 'c' => 0, 'd' => 0];
         foreach ($jns as $v) {
-            $v >= 90 ? $b['a']++ : ($v >= 70 ? $b['b']++ : ($v >= 60 ? $b['c']++ : $b['d']++));
+            $v >= 90 ? $b['a']++ : ($v >= 70 ? $b['b']++ : ($v >= \App\Models\MarkingSystemScore::lowGradeLimit() ? $b['c']++ : $b['d']++));
         }
 
         return ['avg' => $jns ? round(array_sum($jns) / count($jns), 1) : null, 'graded' => count($jns)] + $b;

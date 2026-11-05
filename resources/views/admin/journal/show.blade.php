@@ -2748,7 +2748,7 @@
                             @if($isAdminRoleForTransfer && isset($ynSubmission) && $ynSubmission && empty($ynSubmission12a ?? null) && $failed12aCount > 0)
                                 <a href="{{ route('admin.academic-schedule.index') }}"
                                     class="inline-flex items-center px-4 py-2 mr-2 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm text-sm"
-                                    title="V<60 olgan {{ $failed12aCount }} ta talaba uchun 2-urinish (12a-shakl) OSKI/Test sanasi belgilash">
+                                    title="V<{{ \App\Models\MarkingSystemScore::lowGradeLimit() }} olgan {{ $failed12aCount }} ta talaba uchun 2-urinish (12a-shakl) OSKI/Test sanasi belgilash">
                                     2-urinish sana belgilash
                                     <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-white text-amber-700">{{ $failed12aCount }}</span>
                                 </a>

@@ -566,19 +566,19 @@ class RetakeApplicationReportController extends Controller
         $test = $app->test_score !== null ? (float) $app->test_score : null;
 
         if ($at === 'oske') {
-            return $oske === null ? 'none' : ($oske >= 60 ? 'pass' : 'fail');
+            return $oske === null ? 'none' : ($oske >= \App\Models\MarkingSystemScore::lowGradeLimit() ? 'pass' : 'fail');
         }
         if ($at === 'test' || $at === 'sinov' || $at === 'sinov_fan') {
-            return $test === null ? 'none' : ($test >= 60 ? 'pass' : 'fail');
+            return $test === null ? 'none' : ($test >= \App\Models\MarkingSystemScore::lowGradeLimit() ? 'pass' : 'fail');
         }
         if ($at === 'oske_test') {
             if ($oske === null || $test === null) {
                 return 'none';
             }
-            return ($oske < 60 || $test < 60) ? 'fail' : 'pass';
+            return ($oske < \App\Models\MarkingSystemScore::lowGradeLimit() || $test < \App\Models\MarkingSystemScore::lowGradeLimit()) ? 'fail' : 'pass';
         }
         $s = $test ?? $oske;
-        return $s === null ? 'none' : ($s >= 60 ? 'pass' : 'fail');
+        return $s === null ? 'none' : ($s >= \App\Models\MarkingSystemScore::lowGradeLimit() ? 'pass' : 'fail');
     }
 
     private function studentQuery(Request $request)

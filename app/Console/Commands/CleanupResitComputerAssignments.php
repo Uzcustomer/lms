@@ -82,11 +82,11 @@ class CleanupResitComputerAssignments extends Command
                             ->orWhere(function ($x) {
                                 $x->where(function ($y) {
                                     $y->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                                })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                                })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                             });
                     });
                 }, function ($q) {
-                    $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                 })
                 ->distinct()
                 ->pluck('sg.student_hemis_id')

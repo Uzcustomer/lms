@@ -8019,12 +8019,12 @@ class AcademicScheduleController extends Controller
                             $w->where('sg.attempt', '>=', 2)
                               ->orWhere(function ($x) {
                                   $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
-                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                               });
                         });
                     } else {
                         // attempt ustuni yo'q bo'lsa, oddiy "grade<60" tekshiruv.
-                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                     }
                     $resitRows = $resitQuery
                         ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
@@ -8340,11 +8340,11 @@ class AcademicScheduleController extends Controller
                             $w->where('sg.attempt', '>=', 2)
                               ->orWhere(function ($x) {
                                   $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
-                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                               });
                         });
                     } else {
-                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                     }
                     $resitRows = $resitQuery
                         ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
@@ -8760,11 +8760,11 @@ class AcademicScheduleController extends Controller
                         ->orWhere(function ($x) {
                             $x->where(function ($y) {
                                 $y->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                            })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                            })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
                         });
                 });
             }, function ($q) {
-                $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit());
             })
             ->distinct()
             ->pluck('sg.student_hemis_id')
@@ -8840,7 +8840,7 @@ class AcademicScheduleController extends Controller
                 ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
                 ->whereNull('sg.deleted_at')
                 ->whereIn('sg.training_type_code', [101, 102]);
-            $failedExpr = 'CASE WHEN COALESCE(sg.retake_grade, sg.grade) < 60 THEN 1 ELSE 0 END';
+            $failedExpr = 'CASE WHEN COALESCE(sg.retake_grade, sg.grade) < ' . \App\Models\MarkingSystemScore::lowGradeLimit() . ' THEN 1 ELSE 0 END';
             $att1Cond = $hasAttemptCol ? '(sg.attempt = 1 OR sg.attempt IS NULL)' : '1';
             $att2Cond = $hasAttemptCol ? 'sg.attempt = 2' : '0';
             $att3Cond = $hasAttemptCol ? 'sg.attempt = 3' : '0';
@@ -9078,7 +9078,7 @@ class AcademicScheduleController extends Controller
                     ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
                     ->whereNull('sg.deleted_at')
                     ->where('sg.training_type_code', $trainingTypeCode)
-                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) >= 60')
+                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) >= ' . \App\Models\MarkingSystemScore::lowGradeLimit())
                     ->when($hasAttemptCol, function ($q) {
                         $q->where(function ($qq) {
                             $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');

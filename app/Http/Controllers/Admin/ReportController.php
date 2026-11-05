@@ -10892,8 +10892,8 @@ class ReportController extends Controller
             // mexanizmidan oldingi eskirgan ma'lumot bo'lishi mumkin.
             $sinovKey = $hemisId . '|' . $subjectId . '|' . $semCode;
             if (isset($sinovGradeMap[$sinovKey])) {
-                if ($sinovGradeMap[$sinovKey] < 60) {
-                    $reasons[] = '1-urinish: V<60';
+                if ($sinovGradeMap[$sinovKey] < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                    $reasons[] = '1-urinish: V<' . \App\Models\MarkingSystemScore::lowGradeLimit();
                 }
             } else {
                 // Imtihon urinishlari (OSKI/Test) — faqat ENG OXIRGI (sana bo'yicha) yozuvga qaraladi.
@@ -10910,9 +10910,9 @@ class ReportController extends Controller
                         $lastAttempt = (int) $latestRow->attempt;
                     }
                     // Faqat oxirgi urinish muvaffaqiyatsiz bo'lsa — xavf bor
-                    if ($lastBaho !== null && $lastBaho < 60) {
-                        if ($lastAttempt <= 1) $reasons[] = '1-urinish: V<60';
-                        elseif ($lastAttempt === 2) $reasons[] = '2-urinish: V<60';
+                    if ($lastBaho !== null && $lastBaho < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                        if ($lastAttempt <= 1) $reasons[] = '1-urinish: V<' . \App\Models\MarkingSystemScore::lowGradeLimit();
+                        elseif ($lastAttempt === 2) $reasons[] = '2-urinish: V<' . \App\Models\MarkingSystemScore::lowGradeLimit();
                         else $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
                     }
                 } else {
@@ -10930,7 +10930,7 @@ class ReportController extends Controller
                     $val = $r->grade !== null ? (float)$r->grade : null;
                     if ($val !== null && ($mtGrade === null || $val > $mtGrade)) $mtGrade = $val;
                 }
-                if ($mtGrade !== null && $mtGrade < 60) $reasons[] = 'MT<60';
+                if ($mtGrade !== null && $mtGrade < \App\Models\MarkingSystemScore::lowGradeLimit()) $reasons[] = 'MT<' . \App\Models\MarkingSystemScore::lowGradeLimit();
             } elseif (in_array($closingForm, ['test', 'oski_test'], true)) {
                 $reasons[] = 'MT yo\'q';
             }
@@ -10955,8 +10955,8 @@ class ReportController extends Controller
                     }
                 }
                 $jnVal = $jnGroupCache[$jnCacheKey][$hemisId] ?? null;
-                if ($jnVal !== null && $jnVal > 0 && $jnVal < 60) {
-                    $reasons[] = 'JN<60 (' . $jnVal . ')';
+                if ($jnVal !== null && $jnVal > 0 && $jnVal < \App\Models\MarkingSystemScore::lowGradeLimit()) {
+                    $reasons[] = 'JN<' . \App\Models\MarkingSystemScore::lowGradeLimit() . ' (' . $jnVal . ')';
                 }
             }
 
@@ -10998,9 +10998,9 @@ class ReportController extends Controller
                 if (isset($grouped[$key])) continue;         // birinchi siklda ko'rilgan
                 // Sinov fani — sinov_test_grades orqali (jurnaldagi yakuniy natija)
                 if (isset($sinovGradeMap[$key])) {
-                    if ($sinovGradeMap[$key] < 60) {
+                    if ($sinovGradeMap[$key] < \App\Models\MarkingSystemScore::lowGradeLimit()) {
                         $nm = $schedSubjectName[$sid] ?? 'Fan';
-                        $risks[$hid][] = ['subject_id' => $sid, 'semester_code' => $sem, 'subject_name' => $nm, 'reasons' => ['1-urinish: V<60']];
+                        $risks[$hid][] = ['subject_id' => $sid, 'semester_code' => $sem, 'subject_name' => $nm, 'reasons' => ['1-urinish: V<' . \App\Models\MarkingSystemScore::lowGradeLimit()]];
                     }
                     continue;
                 }

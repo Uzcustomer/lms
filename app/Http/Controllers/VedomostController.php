@@ -515,9 +515,9 @@ class VedomostController extends Controller
                         $bahosi = "B+";
                     } elseif ($ozlashtirish >= 71) {
                         $bahosi = "B";
-                    } elseif ($ozlashtirish >= 60) {
+                    } elseif ($ozlashtirish >= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                         $bahosi = "C";
-                    } elseif ($ozlashtirish >= 0 && $ozlashtirish <= 60) {
+                    } elseif ($ozlashtirish >= 0 && $ozlashtirish <= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                         $bahosi = "F";
                     } elseif ($ozlashtirish == -1) {
                         $bahosi = "";
@@ -533,7 +533,7 @@ class VedomostController extends Controller
                     } elseif ($ozlashtirish >= 71 && $ozlashtirish <= 89) {
                         $izoh_baho = "yaxshi";
                         $b_count += 1;
-                    } elseif ($ozlashtirish >= 60 && $ozlashtirish <= 70) {
+                    } elseif ($ozlashtirish >= \App\Models\MarkingSystemScore::lowGradeLimit() && $ozlashtirish <= 70) {
                         $c_count += 1;
                         $izoh_baho = "o‘rta";
                     } elseif ($ozlashtirish >= 0 && $ozlashtirish <= 59) {
@@ -926,9 +926,9 @@ class VedomostController extends Controller
                         $bahosi = "B+";
                     } elseif ($ozlashtirish >= 71) {
                         $bahosi = "B";
-                    } elseif ($ozlashtirish >= 60) {
+                    } elseif ($ozlashtirish >= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                         $bahosi = "C";
-                    } elseif ($ozlashtirish >= 0 && $ozlashtirish <= 60) {
+                    } elseif ($ozlashtirish >= 0 && $ozlashtirish <= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                         $bahosi = "F";
                     } elseif ($ozlashtirish == -1) {
                         $bahosi = "";
@@ -944,7 +944,7 @@ class VedomostController extends Controller
                     } elseif ($ozlashtirish >= 71 && $ozlashtirish <= 89) {
                         $izoh_baho = "yaxshi";
                         $b_count += 1;
-                    } elseif ($ozlashtirish >= 60 && $ozlashtirish <= 70) {
+                    } elseif ($ozlashtirish >= \App\Models\MarkingSystemScore::lowGradeLimit() && $ozlashtirish <= 70) {
                         $c_count += 1;
                         $izoh_baho = "o‘rta";
                     } elseif ($ozlashtirish >= 0 && $ozlashtirish <= 59) {

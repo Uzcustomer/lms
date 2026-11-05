@@ -311,7 +311,7 @@ class RetakeJournalService
         if ($existing) {
             // 60+ baho olgan bo'lsa — o'tgan, qayta yuklash shart emas
             if ($existing->grade !== null
-                && (float) $existing->grade >= RetakeMustaqilSubmission::PASS_GRADE) {
+                && (float) $existing->grade >= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                 throw ValidationException::withMessages([
                     'file' => 'Siz mustaqil ta\'limdan o\'tdingiz (60+ baho) — qayta yuklash shart emas',
                 ]);
@@ -512,7 +512,7 @@ class RetakeJournalService
             ->where('retake_group_id', $group->id)
             ->where('application_id', $app->id)
             ->value('grade');
-        if ($jn === null || (float) $jn < 60 || $mt === null || (float) $mt < 60) {
+        if ($jn === null || (float) $jn < \App\Models\MarkingSystemScore::lowGradeLimit() || $mt === null || (float) $mt < \App\Models\MarkingSystemScore::lowGradeLimit()) {
             throw ValidationException::withMessages([
                 'application_id' => "JN va MT 60 dan kam — testga yuborib bo'lmaydi",
             ]);
@@ -756,15 +756,15 @@ class RetakeJournalService
         }
 
         // 2) JN yoki MT 60 dan past — talaba testga umuman o'tmaydi → yiqildi.
-        if ($jnVal < 60 || $mtVal < 60) {
+        if ($jnVal < \App\Models\MarkingSystemScore::lowGradeLimit() || $mtVal < \App\Models\MarkingSystemScore::lowGradeLimit()) {
             return ['status' => 'failed', 'value' => 0, 'baho' => ''];
         }
 
         // 3) Qo'yilgan imtihon bahosi (OSKE yoki TEST) 60 dan past — yiqildi.
         //    Ikkinchi komponent hali qo'yilmagan bo'lsa ham: bittasida <60
         //    bo'lishi yiqilish uchun yetarli ("imtihonga kelmagan" emas).
-        if (($needsOske && $oskeVal !== null && $oskeVal < 60)
-            || ($needsTest && $testVal !== null && $testVal < 60)) {
+        if (($needsOske && $oskeVal !== null && $oskeVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+            || ($needsTest && $testVal !== null && $testVal < \App\Models\MarkingSystemScore::lowGradeLimit())) {
             return ['status' => 'failed', 'value' => 0, 'baho' => ''];
         }
 
@@ -1182,19 +1182,19 @@ class RetakeJournalService
             if ($weightTest > 0) $sheet->setCellValue('S' . $row, $testVal);
 
             // Komponent ballari
-            $eBall = $jnVal   >= 60 ? round($jnVal   * $weightJn   / 100, 1) : 0;
-            $hBall = $mtVal   >= 60 ? round($mtVal   * $weightMt   / 100, 1) : 0;
-            $kBall = $onVal   >= 60 ? round($onVal   * $weightOn   / 100, 1) : 0;
-            $qBall = ($weightOski > 0 && $oskiVal >= 60) ? round($oskiVal * $weightOski / 100, 1) : 0;
-            $tBall = ($weightTest > 0 && $testVal >= 60) ? round($testVal * $weightTest / 100, 1) : 0;
+            $eBall = $jnVal   >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($jnVal   * $weightJn   / 100, 1) : 0;
+            $hBall = $mtVal   >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($mtVal   * $weightMt   / 100, 1) : 0;
+            $kBall = $onVal   >= \App\Models\MarkingSystemScore::lowGradeLimit() ? round($onVal   * $weightOn   / 100, 1) : 0;
+            $qBall = ($weightOski > 0 && $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? round($oskiVal * $weightOski / 100, 1) : 0;
+            $tBall = ($weightTest > 0 && $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? round($testVal * $weightTest / 100, 1) : 0;
 
             // Yakuniy ball
             if ($jnVal === 0 && $mtVal === 0) {
                 $v = '';
-            } elseif (($weightJn > 0 && $jnVal < 60)
-                   || ($weightMt > 0 && $mtVal < 60)
-                   || ($weightOski > 0 && $oskiVal < 60)
-                   || ($weightTest > 0 && $testVal < 60)) {
+            } elseif (($weightJn > 0 && $jnVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+                   || ($weightMt > 0 && $mtVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+                   || ($weightOski > 0 && $oskiVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+                   || ($weightTest > 0 && $testVal < \App\Models\MarkingSystemScore::lowGradeLimit())) {
                 $v = 0;
             } else {
                 // Har GURUH alohida butun songacha (half-up) yaxlitlanadi:
@@ -1218,7 +1218,7 @@ class RetakeJournalService
                 if ($v >= 90)      { $w = 'A';  $y = "a\u{02BC}lo"; }
                 elseif ($v >= 85)  { $w = 'B+'; $y = 'yaxshi'; }
                 elseif ($v >= 70)  { $w = 'B';  $y = 'yaxshi'; }
-                elseif ($v >= 60)  { $w = 'C';  $y = "o\u{02BB}rta"; }
+                elseif ($v >= \App\Models\MarkingSystemScore::lowGradeLimit())  { $w = 'C';  $y = "o\u{02BB}rta"; }
                 elseif ($v > 0)    { $w = 'F';  $y = 'qon-siz'; }
                 elseif ($v === 0)  { $w = 'F';  $y = 'qon-siz'; }
             }

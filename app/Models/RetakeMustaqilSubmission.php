@@ -11,9 +11,6 @@ class RetakeMustaqilSubmission extends Model
     /** Mustaqil ta'lim uchun eng ko'p urinishlar soni. */
     public const MAX_ATTEMPTS = 3;
 
-    /** O'tish bahosi — shu yoki undan yuqori bo'lsa qayta yuklash shart emas. */
-    public const PASS_GRADE = 60;
-
     protected $fillable = [
         'retake_group_id',
         'application_id',
@@ -40,7 +37,7 @@ class RetakeMustaqilSubmission extends Model
     /** Talaba o'tib bo'lganmi (baho 60+)? */
     public function isPassed(): bool
     {
-        return $this->grade !== null && (float) $this->grade >= self::PASS_GRADE;
+        return $this->grade !== null && (float) $this->grade >= \App\Models\MarkingSystemScore::lowGradeLimit();
     }
 
     /** Urinishlar tugaganmi (3 marta)? */

@@ -389,7 +389,7 @@ class RetakeApplicationApiController extends Controller
             'attempt_count' => $attemptCount,
             'attempts_left' => max(0, RetakeMustaqilSubmission::MAX_ATTEMPTS - $attemptCount),
             'max_attempts' => RetakeMustaqilSubmission::MAX_ATTEMPTS,
-            'pass_grade' => RetakeMustaqilSubmission::PASS_GRADE,
+            'pass_grade' => \App\Models\MarkingSystemScore::lowGradeLimit(),
             'is_passed' => $passed,
             'is_exhausted' => $exhausted,
             'can_upload' => $canUpload,

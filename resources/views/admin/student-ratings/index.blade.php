@@ -154,7 +154,7 @@
                 else { $border = 'border-blue-200 bg-blue-50'; $medal = ''; }
 
                 if ($r->jn_average >= 80) $scoreColor = 'text-green-600';
-                elseif ($r->jn_average >= 60) $scoreColor = 'text-yellow-600';
+                elseif ($r->jn_average >= \App\Models\MarkingSystemScore::lowGradeLimit()) $scoreColor = 'text-yellow-600';
                 else $scoreColor = 'text-red-600';
             @endphp
             <button type="button" class="border-2 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-shadow {{ $border }} text-left w-full"
@@ -200,7 +200,7 @@
                     @foreach($others as $r)
                     @php
                         if ($r->jn_average >= 80) $scoreBg = 'bg-green-100 text-green-800';
-                        elseif ($r->jn_average >= 60) $scoreBg = 'bg-yellow-100 text-yellow-800';
+                        elseif ($r->jn_average >= \App\Models\MarkingSystemScore::lowGradeLimit()) $scoreBg = 'bg-yellow-100 text-yellow-800';
                         else $scoreBg = 'bg-red-100 text-red-800';
                     @endphp
                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="showSubjectsModal('{{ $r->student_hemis_id }}')">
@@ -270,7 +270,7 @@
             + '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500">JN bali</th>'
             + '</tr></thead><tbody>';
         subjects.forEach(function(s, i) {
-            let color = s.average >= 80 ? 'text-green-700 bg-green-50' : (s.average >= 60 ? 'text-yellow-700 bg-yellow-50' : 'text-red-700 bg-red-50');
+            let color = s.average >= 80 ? 'text-green-700 bg-green-50' : (s.average >= {{ \App\Models\MarkingSystemScore::lowGradeLimit() }} ? 'text-yellow-700 bg-yellow-50' : 'text-red-700 bg-red-50');
             html += '<tr class="border-t border-gray-100">'
                 + '<td class="px-3 py-2 text-gray-400">' + (i+1) + '</td>'
                 + '<td class="px-3 py-2 text-gray-800">' + s.name + '</td>'

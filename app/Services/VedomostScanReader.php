@@ -467,7 +467,7 @@ class VedomostScanReader
             $w = $ratios[$key] ?? null;
             $pv = self::num($row[$pf] ?? null);
             $bv = self::num($row[$bf] ?? null);
-            if (in_array($key, ['oski', 'test', 'jb', 'mt'], true) && $pv !== null && $pv < 60 && $bv !== null && abs($bv) < 0.001) {
+            if (in_array($key, ['oski', 'test', 'jb', 'mt'], true) && $pv !== null && $pv < \App\Models\MarkingSystemScore::lowGradeLimit() && $bv !== null && abs($bv) < 0.001) {
                 continue; // o'tmagan: foiz bor, ball 0 — vedomostda shunday yoziladi
             }
             // Ball foiz × vazn ga teng yoki (4–5 kurs qayta topshirish shakllarida) butun songacha yaxlitlangan.
@@ -493,7 +493,7 @@ class VedomostScanReader
             foreach (['oski', 'test'] as $key) {
                 $pv = self::num($row[self::PAIRS[$key][0]] ?? null);
                 $bv = self::num($row[self::PAIRS[$key][1]] ?? null);
-                if ($pv !== null && $pv < 60 && $bv !== null && abs($bv) < 0.001) {
+                if ($pv !== null && $pv < \App\Models\MarkingSystemScore::lowGradeLimit() && $bv !== null && abs($bv) < 0.001) {
                     continue;
                 }
                 if ($bv !== null) {
@@ -553,7 +553,7 @@ class VedomostScanReader
             if ($pv === null && $bv === null) {
                 continue;
             }
-            if ($pv !== null && $pv < 60) {
+            if ($pv !== null && $pv < \App\Models\MarkingSystemScore::lowGradeLimit()) {
                 $failed = true;
             }
             if ($bv !== null) {
@@ -591,7 +591,7 @@ class VedomostScanReader
         if ($yn !== null && $yn >= 0) {
             $e = strtoupper(trim((string) ($row['ects'] ?? '')));
             $expE = match (true) {
-                $yn >= 90 => 'A', $yn >= 85 => 'B+', $yn >= 70 => 'B', $yn >= 60 => 'C', default => 'F',
+                $yn >= 90 => 'A', $yn >= 85 => 'B+', $yn >= 70 => 'B', $yn >= \App\Models\MarkingSystemScore::lowGradeLimit() => 'C', default => 'F',
             };
             if ($e !== '' && $e !== $expE && !($expE === 'F' && $e === 'FX')) {
                 $p[] = ["ECTS o'zlashtirish ko'rsatkichiga mos emas ({$yn} → {$expE})", ['ects', 'yn']];
@@ -599,7 +599,7 @@ class VedomostScanReader
             $baho = preg_replace('/[^a-z]/', '', mb_strtolower(VedomostNames::latin((string) ($row['baho'] ?? ''))));
             if ($baho !== '' && $yn > 0) {
                 $expB = match (true) {
-                    $yn >= 90 => ['alo'], $yn >= 70 => ['yaxshi'], $yn >= 60 => ['orta'], default => ['qoniqarsiz', 'qonsiz'],
+                    $yn >= 90 => ['alo'], $yn >= 70 => ['yaxshi'], $yn >= \App\Models\MarkingSystemScore::lowGradeLimit() => ['orta'], default => ['qoniqarsiz', 'qonsiz'],
                 };
                 $has = fn (array $words) => (bool) array_filter($words, fn ($w) => str_contains($baho, $w));
                 $ok = $has($expB);

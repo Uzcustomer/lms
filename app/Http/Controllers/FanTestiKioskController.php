@@ -733,7 +733,7 @@ class FanTestiKioskController extends Controller
             }
             // Qayta topshirish rejimi: o'tolmagan (yoki qatnashmagan) talaba bir marta qayta ishlaydi.
             // 60% dan past baho olgan ham kiradi — to'plamning o'tish foizi pastroq qo'yilgan bo'lsa ham.
-            if ($latest->is_passed && (float) $latest->percent >= 60) {
+            if ($latest->is_passed && (float) $latest->percent >= \App\Models\MarkingSystemScore::lowGradeLimit()) {
                 $shown = rtrim(rtrim(number_format((float) $latest->percent, 1, '.', ''), '0'), '.');
                 $fail("Bu talaba testdan {$shown}% bilan o'tgan — qayta topshirish shart emas.");
             }
@@ -1094,7 +1094,7 @@ class FanTestiKioskController extends Controller
             'total_points' => $total,
             'score' => $score,
             'percent' => $percent,
-            'is_passed' => $passPercent ? $percent >= (float) $passPercent : $percent >= 60,
+            'is_passed' => $passPercent ? $percent >= (float) $passPercent : $percent >= \App\Models\MarkingSystemScore::lowGradeLimit(),
         ]);
 
         // Qayta topshirish testi — natija jurnaldagi mavzuga mos NB katagiga otrabotka bo'lib tushadi

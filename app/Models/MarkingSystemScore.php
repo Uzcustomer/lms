@@ -142,19 +142,17 @@ class MarkingSystemScore extends Model
     }
 
     /**
-     * YN ga ruxsat uchun JN va MT chegarasi — xalqaro ta'lim fakulteti (PIMU) dan
-     * tashqari barcha talabalar uchun. PIMU talabalari avvalgidek sozlamadagi
-     * chegarada qoladi. Ular uchala baholash tizimida ham bor, shuning uchun qoida
-     * sozlamada emas, fakultet bo'yicha.
+     * YN ga ruxsat uchun JN va MT chegarasi — barcha talabalar uchun, xalqaro ta'lim
+     * fakulteti (PIMU) ham (avval PIMU 60 da qolardi).
      */
     public const YN_JN_MT_LIMIT = 70;
 
-    /** PIMU talabalari uchun vedomost hisobidagi JN/MT o'tish chegarasi (avvalgidek). */
-    public const INTERNATIONAL_VEDOMOST_PASS = 60;
+    /** PIMU talabalari uchun vedomost hisobidagi JN/MT o'tish chegarasi — endi boshqalar bilan bir xil. */
+    public const INTERNATIONAL_VEDOMOST_PASS = self::YN_JN_MT_LIMIT;
 
     /**
      * YN ga ruxsat (YN jadval, qaytnoma, vedomost) uchun chegaralar:
-     * getByStudentHemisId() + PIMU dan tashqari talabalar uchun JN va MT 70.
+     * getByStudentHemisId() + barcha talabalar uchun JN va MT 70.
      */
     public static function forYnAdmission($studentHemisId): self
     {
@@ -162,7 +160,7 @@ class MarkingSystemScore extends Model
 
         $raiseJn = $score->jn_active && $score->jn_limit < self::YN_JN_MT_LIMIT;
         $raiseMt = $score->mt_active && $score->mt_limit < self::YN_JN_MT_LIMIT;
-        if ((!$raiseJn && !$raiseMt) || static::isInternationalStudent($studentHemisId)) {
+        if (!$raiseJn && !$raiseMt) {
             return $score;
         }
 
@@ -179,20 +177,11 @@ class MarkingSystemScore extends Model
     }
 
     /**
-     * Vedomost hisobidagi JN/MT o'tish chegarasi: PIMU uchun 60 (avvalgidek), qolganlarga 70.
+     * Vedomost hisobidagi JN/MT o'tish chegarasi: barcha talabalar (PIMU ham) uchun 70.
      */
     public static function vedomostJnMtPass($studentHemisId): int
     {
-        return static::isInternationalStudent($studentHemisId)
-            ? self::INTERNATIONAL_VEDOMOST_PASS
-            : self::YN_JN_MT_LIMIT;
-    }
-
-    public static function isInternationalStudent($studentHemisId): bool
-    {
-        static $cache = [];
-
-        return $cache[$studentHemisId] ??= (bool) Student::where('hemis_id', $studentHemisId)->first()?->isInternationalFaculty();
+        return self::YN_JN_MT_LIMIT;
     }
 
     /**

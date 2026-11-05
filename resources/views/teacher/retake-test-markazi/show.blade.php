@@ -238,7 +238,7 @@
                                 // Testga ruxsat: JN >= 60 VA MT >= 60 (YN-oldi / jurnal mantig'i)
                                 $jnVal = $app->joriy_score !== null ? (float) $app->joriy_score : null;
                                 $mtVal = $mustaqil?->grade !== null ? (float) $mustaqil->grade : null;
-                                $allowed = $jnVal !== null && $mtVal !== null && $jnVal >= 60 && $mtVal >= 60;
+                                $allowed = $jnVal !== null && $mtVal !== null && $jnVal >= \App\Models\MarkingSystemScore::lowGradeLimit() && $mtVal >= \App\Models\MarkingSystemScore::lowGradeLimit();
                                 // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
                                 $isSinovGroup = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true);
                                 $effTest = $isSinovGroup ? $app->joriy_score : $app->test_score;

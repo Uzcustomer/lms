@@ -1208,11 +1208,11 @@ class YnQaytnomaController extends Controller
                 if ($roundJnMtToInt) {
                     $eBall = ($jnVal !== null && $jnVal >= $jnMtPass) ? (int) floor($jnVal * $wJn / 100 + 0.5) : 0;
                     $hBall = ($mtVal !== null && $mtVal >= $jnMtPass) ? (int) floor($mtVal * $wMt / 100 + 0.5) : 0;
-                    $kBall = ($onVal !== null && $onVal >= 60) ? (int) floor($onVal * $wOn / 100 + 0.5) : 0;
+                    $kBall = ($onVal !== null && $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? (int) floor($onVal * $wOn / 100 + 0.5) : 0;
                 } else {
                     $eBall = ($jnVal !== null && $jnVal >= $jnMtPass) ? round($jnVal * $wJn / 100, 1) : 0;
                     $hBall = ($mtVal !== null && $mtVal >= $jnMtPass) ? round($mtVal * $wMt / 100, 1) : 0;
-                    $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
+                    $kBall = ($onVal !== null && $onVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? round($onVal * $wOn / 100, 1) : 0;
                 }
 
                 // OSKI/Test ball — vazn sxemasiga qarab:
@@ -1220,14 +1220,14 @@ class YnQaytnomaController extends Controller
                 //    format 1 kasr ko'rsatadi;
                 //  * faqat bittasi vaznga ega → o'sha butun songacha yaxlitlanadi.
                 if ($wOski > 0 && $wTest > 0) {
-                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? $oskiVal * $wOski / 100 : 0;
-                    $tBall = ($testVal !== null && $testVal >= 60) ? $testVal * $wTest / 100 : 0;
+                    $qBall = ($oskiVal !== null && $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? $oskiVal * $wOski / 100 : 0;
+                    $tBall = ($testVal !== null && $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? $testVal * $wTest / 100 : 0;
                 } elseif ($wOski > 0) {
-                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? (int) round($oskiVal * $wOski / 100) : 0;
+                    $qBall = ($oskiVal !== null && $oskiVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? (int) round($oskiVal * $wOski / 100) : 0;
                     $tBall = 0;
                 } elseif ($wTest > 0) {
                     $qBall = 0;
-                    $tBall = ($testVal !== null && $testVal >= 60) ? (int) round($testVal * $wTest / 100) : 0;
+                    $tBall = ($testVal !== null && $testVal >= \App\Models\MarkingSystemScore::lowGradeLimit()) ? (int) round($testVal * $wTest / 100) : 0;
                 } else {
                     $qBall = 0;
                     $tBall = 0;
@@ -1252,9 +1252,9 @@ class YnQaytnomaController extends Controller
                     $v = -1; // kelmadi
                 } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < $jnMtPass)
                        || ($wMt > 0   && $mtVal   !== null && $mtVal   < $jnMtPass)
-                       || ($wOn > 0   && $onVal   !== null && $onVal   < 60)
-                       || ($wOski > 0 && $oskiVal !== null && $oskiVal < 60)
-                       || ($wTest > 0 && $testVal !== null && $testVal < 60)) {
+                       || ($wOn > 0   && $onVal   !== null && $onVal   < \App\Models\MarkingSystemScore::lowGradeLimit())
+                       || ($wOski > 0 && $oskiVal !== null && $oskiVal < \App\Models\MarkingSystemScore::lowGradeLimit())
+                       || ($wTest > 0 && $testVal !== null && $testVal < \App\Models\MarkingSystemScore::lowGradeLimit())) {
                     $v = 0;
                 } else {
                     // Har GURUH alohida butun songacha (half-up) yaxlitlanadi,
@@ -1285,8 +1285,8 @@ class YnQaytnomaController extends Controller
                     if ($v >= 90 && $v <= 100)      $w = 'A';
                     elseif ($v >= 85)               $w = 'B+';
                     elseif ($v >= 70)               $w = 'B';
-                    elseif ($v >= 60)               $w = 'C';
-                    elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                    elseif ($v >= \App\Models\MarkingSystemScore::lowGradeLimit())               $w = 'C';
+                    elseif ($v >= 0 && $v <= \App\Models\MarkingSystemScore::lowGradeLimit())    $w = 'F';
                     elseif ($v == -1)               $w = '';
                     elseif ($v == -3)               $w = '';
                     else                            $w = 'FX'; // -2 va boshqalar
@@ -1297,7 +1297,7 @@ class YnQaytnomaController extends Controller
                 if (is_numeric($v)) {
                     if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
                     elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
-                    elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                    elseif ($v >= \App\Models\MarkingSystemScore::lowGradeLimit() && $v <= 69.9)   $y = "o\u{02BB}rta";
                     elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
                     elseif ($v == -1)                 $y = 'kelmadi';
                     elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";

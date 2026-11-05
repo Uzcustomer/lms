@@ -405,3 +405,19 @@ it('Codex: guruhcha qatorida "Birga" oqim soatiga qaytsa — o\'z kun boshi o\'c
     $n = dmMove($s, $s['admin'], 'admin', array_merge($sub, ['day_indexes' => [1], 'delta' => 7, 'dry_run' => 1]))->assertOk()->json('days.0');
     expect($n['status'])->toBe('nofit')->and($n['why'])->toBe('Kunga sig‘maydi: 6 soat 8-soatdan boshlab bo‘lmaydi (kunda 12 soat).');
 });
+
+it('Codex: guruhcha qatorida "Birga" — ma\'ruzasiz kunda kun rejasi qisib qo\'ysa (smena starts_g bilan o\'chgan), "qo\'llandi" emas — "sig\'maydi"', function () {
+    $s = dmSetup();
+    // Ma'ruza 4 soat (2 kun), amaliy 28: 3-kun (18.11) — faqat amaliy, 6 soat; 04a smenada 7–12.
+    DB::table('manual_curriculum_subjects')->update(['lecture' => 4, 'practice' => 28]);
+    expect(dmDays($s)['2026-11-18'])->toBe(['lec' => null, 'prc' => [7, 13]]);
+    $sub = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'mode' => 'both', 'day_indexes' => [2]];
+    $before = $s['placement']->fresh()->lecture_slots;
+    // 9-soatga: starts_g = 9, smena o'chadi, kun rejasi 6 soatni 7-soatdan qo'yadi — so'ralgan soatga yetmaydi.
+    $n = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 9])->assertOk()->json('days.0');
+    expect($n['status'])->toBe('nofit')->and($n['applied'])->toBeFalse()->and($n['why'])->toContain("Amaliy dars (6 soat) kun oxirigacha sig'maydi")
+        ->and($s['placement']->fresh()->lecture_slots)->toBe($before);
+    // 5-soatga — sig'adi: amaliy 5–10.
+    $d = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 5])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-18'])->toBe(['lec' => null, 'prc' => [5, 11]]);
+});

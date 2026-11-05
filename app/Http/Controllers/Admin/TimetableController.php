@@ -6362,9 +6362,10 @@ class TimetableController extends Controller
         $after = $this->cycleDayUnits($board, $placement, $data, $k);
         $grid = $this->cycleGridHours($board);
         $now = (array) ($placement->fresh()->lecture_slots ?? []);
-        // Amaliy o'z soatida (ps_g yoki guruhcha smenasi) — kun boshiga bog'liq emas.
+        // Amaliy o'z soatida (ps_g yoki guruhcha smenasi) — kun boshiga bog'liq emas. Smena — faqat shu kunga o'z kun boshi (starts_g)
+        // bo'lmasa (cycleStarts bilan bir xil: starts_g bo'lsa smena o'chadi, amaliy kun boshiga ergashadi).
         $ownPractice = fn (string $unit) => (int) ((((array) ($now['ps_g'] ?? []))[$unit] ?? [])[$k] ?? 0) > 0
-            || (int) (((array) ($now['shift_g'] ?? []))[$unit] ?? 0) > 0;
+            || ((int) (((array) ($now['shift_g'] ?? []))[$unit] ?? 0) > 0 && !isset(((array) (((array) ($now['starts_g'] ?? []))[$unit] ?? []))[$k]));
         $errors = [];
         foreach ($after as $unit => $x) {
             $unit = (string) $unit;

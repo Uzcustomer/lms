@@ -997,9 +997,9 @@ class InternationalStudentController extends Controller
             1 => 'BIR martalik',
             2 => 'IKKI martalik',
             3 => 'UÇ martalik',
-            4 => 'TÓRT martalik',
+            4 => 'TÖRT martalik',
             5 => 'BEŞ martalik',
-            99 => 'KÓP martalik',
+            99 => 'KÖP martalik',
             default => $count . ' martalik',
         };
     }
@@ -1052,11 +1052,11 @@ class InternationalStudentController extends Controller
             $c1->addText('qonuniy hal qiling', ['italic' => true, 'size' => 11]);
             $c2 = $table->addCell(4500);
             $c2->addText('Termiz şahar IIB M va PB', ['size' => 11], ['alignment' => Jc::END]);
-            $c2->addText('boşliǵi podpolkovnik', ['size' => 11], ['alignment' => Jc::END]);
+            $c2->addText('boşliği podpolkovnik', ['size' => 11], ['alignment' => Jc::END]);
             $c2->addText('S. S. Kabilovga', ['size' => 11], ['alignment' => Jc::END]);
 
             $section->addText('TALABNOMA', ['bold' => true, 'size' => 14], ['alignment' => Jc::CENTER]);
-            $section->addText(self::INSTITUTION_NAME . ' Sizdan quyidagi çet el fuqarosi yoki fuqaroligi bólmagan şaxsni vaqtinça róyxatga olişni (vaqtinça róyxat muddatini uzaytirişni) sóraydi:', $n, ['alignment' => Jc::BOTH]);
+            $section->addText(self::INSTITUTION_NAME . ' Sizdan quyidagi çet el fuqarosi yoki fuqaroligi bölmagan şaxsni vaqtinça röyxatga olişni (vaqtinça röyxat muddatini uzaytirişni) söraydi:', $n, ['alignment' => Jc::BOTH]);
 
             $bp = ($v?->birth_city ?? '___') . ', ' . ($v?->birth_region ?? '');
             $entries = $v?->visa_entries_count ? $this->entriesText($v->visa_entries_count) : '___';
@@ -1064,21 +1064,21 @@ class InternationalStudentController extends Controller
             $vizaGiven = ($v?->visa_issued_place ?? '___') . ' (' . ($v?->visa_type ?? '') . ', № ' . ($v?->visa_number ?? '') . '; ' . ($v?->visa_start_date?->format('d.m.Y') ?? '___') . ' dan ' . ($v?->visa_end_date?->format('d.m.Y') ?? '___') . ' gaça)';
 
             $this->addField($section, '1. F.I.O: ', strtoupper($student->full_name));
-            $section->addText('(çet el fuqarosi yoki fuqaroligi bólmagan şaxsning familiyasi, ismi, otasining ismi hujjat bóyiça lotinçada yoziladi)', ['size' => 9, 'italic' => true]);
+            $section->addText('(çet el fuqarosi yoki fuqaroligi bölmagan şaxsning familiyasi, ismi, otasining ismi hujjat böyiça lotinçada yoziladi)', ['size' => 9, 'italic' => true]);
             $this->addField($section, '2. Farzandlari: ', '_______________');
-            $section->addText('(16 yoşgaça bólgan farzandlarning familiyasi, ismi, otasining ismi tuǵilgan yili)', ['size' => 9, 'italic' => true]);
+            $section->addText('(16 yoşgaça bölgan farzandlarning familiyasi, ismi, otasining ismi tuğilgan yili)', ['size' => 9, 'italic' => true]);
             $this->addField($section, '3. Fuqaroligi: ', ($student->country_name ?? '___') . '   4. Jinsi: ' . strtoupper($student->gender_name ?? '___'));
-            $this->addField($section, '5. Tuǵilgan joyi va sanasi: ', $bp . ',  ' . ($student->birth_date?->format('d.m.Y') ?? '___'));
+            $this->addField($section, '5. Tuğilgan joyi va sanasi: ', $bp . ',  ' . ($student->birth_date?->format('d.m.Y') ?? '___'));
             $this->addField($section, '6. Iş joyi va lavozimi: ', self::INSTITUTION_NAME . ' talaba');
             $this->addField($section, '7. Passport/harakatlaniş hujjati: ', $v?->passport_number ?? '___');
             $this->addField($section, '8. Viza turi: ', $vizaStr);
             $this->addField($section, '9. Viza kim tomonidan rasmiylaştirib berilgan va uning muddati: ', $vizaGiven);
-            $this->addField($section, '10. Sóralayotgan vaqtinça róyxat muddati (kunlarda): ', $regMonths . ' oy');
-            $this->addField($section, '11. Ózbekistonga kirib kelgan sanasi (nazorat ótiş punkti): ', $v?->entry_date?->format('d.m.Y') ?? '________');
-            $this->addField($section, '12. Vaqtinça yaşaş manzili: ', 'Termiz şahar I.Karimov kóçasi 64-uy');
+            $this->addField($section, '10. Söralayotgan vaqtinça röyxat muddati (kunlarda): ', $regMonths . ' oy');
+            $this->addField($section, '11. Özbekistonga kirib kelgan sanasi (nazorat ötiş punkti): ', $v?->entry_date?->format('d.m.Y') ?? '________');
+            $this->addField($section, '12. Vaqtinça yaşaş manzili: ', 'Termiz şahar I.Karimov köçasi 64-uy');
             $this->addField($section, '13. Uy joy maydon bergan şaxsning F.I.O: ', self::INSTITUTION_NAME . ' yotoqxona');
             $section->addText('      Kadastr raqami: 19:15:01:03:01:0704', $n);
-            $this->addField($section, '14. Hujjatlarni rasmiylaştiriş va taqdim etişga mas’ul bólgan şaxsning F.I.O: ', '');
+            $this->addField($section, '14. Hujjatlarni rasmiylaştiriş va taqdim etişga mas’ul bölgan şaxsning F.I.O: ', '');
             $section->addText('      Temirov Şukrullo Xonimquloviç', $n);
             $section->addText('      Passport harakatlaniş hujjat seriyasi va raqami:  AC 2275461', $n);
             $section->addText('      Xizmat tel raqami_______________ uyali tel. raqami +998995721774', $n);
@@ -1119,14 +1119,14 @@ class InternationalStudentController extends Controller
             $section = $word->addSection(['marginTop' => 600, 'marginBottom' => 600, 'marginLeft' => 800, 'marginRight' => 600]);
 
             $section->addText("Surxondaryo viloyati IIB Migratsiya va fuqarolikni", ['bold' => true, 'size' => 11], ['alignment' => Jc::END]);
-            $section->addText('rasmiylaştiriş boşqarmasi boşliǵiga', ['bold' => true, 'size' => 11], ['alignment' => Jc::END]);
+            $section->addText('rasmiylaştiriş boşqarmasi boşliğiga', ['bold' => true, 'size' => 11], ['alignment' => Jc::END]);
             $section->addTextBreak(1);
             $section->addText('TALABNOMA', ['bold' => true, 'size' => 14], ['alignment' => Jc::CENTER]);
 
             $bodyRun = $section->addTextRun(['alignment' => Jc::BOTH]);
             $bodyRun->addText(self::INSTITUTION_NAME . ' quyidagi xorijiy talaba vizasining amal qiliş muddatini ', $n);
             $bodyRun->addText("{$visaMonths} oy muddatga  {$entriesText}", ['size' => 11, 'bold' => true]);
-            $bodyRun->addText(' uzaytirib berişda amaliy yordam berişingizni sóraydi', $n);
+            $bodyRun->addText(' uzaytirib berişda amaliy yordam berişingizni söraydi', $n);
 
             $bp = ($v?->birth_city ?? '___') . ', ' . ($v?->birth_region ?? '');
             $lavozim = self::INSTITUTION_NAME . ' ' . ($student->department_name ?? '') . ' "' . ($student->specialty_code ?? '') . '" ' . ($student->level_code ?? '') . '-bosqiç talabasi';
@@ -1143,10 +1143,10 @@ class InternationalStudentController extends Controller
             $r = $section->addTextRun();
             $r->addText('3. Jinsi: ', $n);
             $r->addText(ucfirst(strtolower($student->gender_name ?? '___')), ['size' => 11, 'bold' => true]);
-            $r->addText('   4. Tuǵilgan sanasi: ', $n);
+            $r->addText('   4. Tuğilgan sanasi: ', $n);
             $r->addText($student->birth_date?->format('d.m.Y') ?? '___', ['size' => 11, 'bold' => true]);
 
-            $this->addField($section, '5. Tuǵilgan joyi: ', strtoupper($bp), true);
+            $this->addField($section, '5. Tuğilgan joyi: ', strtoupper($bp), true);
             $this->addField($section, '6. Iş joyi va lavozimi: ', $lavozim, true);
 
             $r = $section->addTextRun();
@@ -1155,18 +1155,18 @@ class InternationalStudentController extends Controller
             $r->addText('   8. Viza turi raqami hamda safarlar soni: ', $n);
             $r->addText($vizaStr, ['size' => 11, 'bold' => true]);
             $r->addText('   9. Farzandlari: ', $n);
-            $r->addText('yóq', ['size' => 11, 'bold' => true]);
+            $r->addText('yöq', ['size' => 11, 'bold' => true]);
 
             $this->addField($section, '10. Viza kim tomonidan rasmiylaştirilib berilgan (turi, raqam va amal qiliş muddati): ', $vizaGiven, true);
-            $this->addField($section, '11. Viza uzaytiriş sóralayotgan muddat (kunlarda) ', $visaMonths . ' oy', true);
-            $this->addField($section, '12. Çegara nazorat maskanidan Ózbekiston Respublikasiga kirib kelgan sanasi: ', $v?->entry_date?->format('d.m.Y') ?? '________', true);
-            $this->addField($section, '13. Vaqtinça yaşaş manzili (uy. telefon r.): ', 'MA’RIFAT MFY, Islom Karimov kóçasi, 64-uy', true);
+            $this->addField($section, '11. Viza uzaytiriş söralayotgan muddat (kunlarda) ', $visaMonths . ' oy', true);
+            $this->addField($section, '12. Çegara nazorat maskanidan Özbekiston Respublikasiga kirib kelgan sanasi: ', $v?->entry_date?->format('d.m.Y') ?? '________', true);
+            $this->addField($section, '13. Vaqtinça yaşaş manzili (uy. telefon r.): ', 'MA’RIFAT MFY, Islom Karimov köçasi, 64-uy', true);
             $this->addField($section, '14. Uy joy taqdim etayotgan şaxs yoki taşkilot nomi: ', self::INSTITUTION_NAME, true);
-            $this->addField($section, '15. TIV akkreditatsiyadan ótgan róyxat raqami: ', 'yóq', true);
-            $this->addField($section, '16. Adliya Vazirligi yoki Hokimiyatdan ótgan róyxat raqami: ', 'yóq', true);
-            $this->addField($section, '17. B va MM vazirligidan ótgan róyxat raqami va muddati: ', 'yóq', true);
-            $this->addField($section, '18. Moliya vazirligidan ótgan róyxat raqami va muddati: ', 'yóq', true);
-            $this->addField($section, '19. Hujjatlarni rasmiylaştiriş va topşirişga mas’ul bólgan şaxsning F.I.Ş, passport ma’lumotlari hamda telefon raqami: ', 'Temirov Şukrullo Xonimquloviç AC 2275461  +998995721774', true);
+            $this->addField($section, '15. TIV akkreditatsiyadan ötgan röyxat raqami: ', 'yöq', true);
+            $this->addField($section, '16. Adliya Vazirligi yoki Hokimiyatdan ötgan röyxat raqami: ', 'yöq', true);
+            $this->addField($section, '17. B va MM vazirligidan ötgan röyxat raqami va muddati: ', 'yöq', true);
+            $this->addField($section, '18. Moliya vazirligidan ötgan röyxat raqami va muddati: ', 'yöq', true);
+            $this->addField($section, '19. Hujjatlarni rasmiylaştiriş va topşirişga mas’ul bölgan şaxsning F.I.Ş, passport ma’lumotlari hamda telefon raqami: ', 'Temirov Şukrullo Xonimquloviç AC 2275461  +998995721774', true);
 
             $section->addTextBreak(3);
             $st = $section->addTable(); $st->addRow();

@@ -257,3 +257,31 @@ it('tasdiq talab qilinadigan doska: kafedra mudiri — oldindan ko\'rinish (dry_
     $d = dmDays($s);
     expect([$d['2026-11-17']['lec'], $d['2026-11-18']['lec'], $d['2026-11-19']['lec'], $d['2026-11-20']['lec']])->toBe([[3, 5], [3, 5], [3, 5], [1, 3]]);
 });
+
+it('qaytarish kaliti faqat o\'z blokiga: boshqa blok bilan — 410, hech narsa o\'zgarmaydi', function () {
+    $s = dmSetup();
+    $r = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 2, 'mode' => 'lecture'])->assertOk()->json();
+    $other = TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 4,
+        'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Jarrohlik', 'start_index' => 0, 'training_type' => 'practice', 'lecture_slots' => ['x' => 1]]);
+    dmMove($s, $s['admin'], 'admin', ['undo' => $r['undo'], 'subject_name' => 'Jarrohlik'])->assertStatus(410);
+    expect($other->fresh()->lecture_slots)->toBe(['x' => 1])->and(dmDays($s)['2026-11-17']['lec'])->toBe([3, 5]);
+});
+
+it('"Birga" oqim qatori: shu kunni o\'zi surgan guruhcha hisobga olinmaydi (uning kech darsi "sig\'maydi" demaydi)', function () {
+    $s = dmSetup();
+    // 04a 17.11 da o'z vaqtida: kun 7-soatdan — ma'ruza 7–8, amaliy 9–12 (kun oxirigacha).
+    $s['placement']->update(['lecture_slots' => array_merge($s['placement']->lecture_slots, ['starts_g' => ['d2/d23-04a' => [1 => 7]]])]);
+    expect(dmDays($s)['2026-11-17'])->toBe(['lec' => [7, 9], 'prc' => [9, 13]]);
+    $r = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [1], 'delta' => 2, 'mode' => 'both'])->assertOk()->json();
+    expect($r['days'][0]['status'])->toBe('ok')->and(dmDays($s, 'd2/d23-04b')['2026-11-17']['lec'])->toBe([3, 5])
+        ->and(dmDays($s)['2026-11-17'])->toBe(['lec' => [7, 9], 'prc' => [9, 13]]);
+});
+
+it('bitta kunni "Birga" surish — avvalgidek bandlik tekshirilmaydi (regressiya)', function () {
+    $s = dmSetup();
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => 4,
+        'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
+        'subject_name' => 'Fizika', 'group_name' => 'd2/d23-04a', 'kafedra_name' => 'Fizika kafedrasi', 'day' => 3, 'pair' => 3]);
+    dmMove($s, $s['admin'], 'admin', ['day_index' => 2, 'start_hour' => 3])->assertOk();
+    expect(dmDays($s)['2026-11-18']['lec'])->toBe([3, 5]);
+});

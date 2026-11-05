@@ -810,6 +810,15 @@ class TimetableChangeApproval
                 $text = $head . ': ' . $day . (!empty($p['undo']) ? ' — oxirgi surish qaytariladi'
                     : (isset($p['delta']) && $many ? ' — ' . $what . ' ' . ((int) $p['delta'] > 0 ? '+' : '') . (int) $p['delta'] . ' soatga suriladi'
                     : (isset($p['start_hour']) ? ' — ' . $what . ' ' . (int) $p['start_hour'] . '-soatdan boshlanadi' : ' — kun soatlari o\'zgartiriladi')));
+                // To'sib turgan amaliyot (TimetableCyclePracticeSwap) va teskari holat — ma'ruza bilan o'rin almashish.
+                $place = ['swap' => 'o\'rin almashadi', 'after' => 'ma\'ruzadan keyinga', 'gap' => (int) ($p['practice_gap'] ?? 0) . ' para oraliq bilan',
+                    'pair' => (int) ($p['practice_pair'] ?? 1) . '-paradan'][$p['practice_place'] ?? ''] ?? null;
+                if (empty($p['undo']) && ($p['mode'] ?? '') === 'practice' && !empty($p['lecture_swap'])) {
+                    $text .= '; ma\'ruza bilan o\'rin almashadi';
+                }
+                if (empty($p['undo']) && $place && (($p['mode'] ?? '') === 'lecture' || (($p['mode'] ?? '') === 'practice' && !empty($p['lecture_swap'])))) {
+                    $text .= '; to\'sib turgan amaliyot — ' . $place;
+                }
                 break;
             case 'admin.timetable.cycle-place':
                 $act = $p['action'] ?? 'place';

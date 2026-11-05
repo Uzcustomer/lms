@@ -153,7 +153,7 @@ class TimetableChangeRequestController extends Controller
         $labels = app(TimetableController::class)->cycleProposalLabels($board, $units, $data);
 
         return response()->json(['ok' => true, 'message' => 'Vaqt bo‘sh. Taklif yuborishingiz mumkin.', 'old' => $labels['old'], 'new' => $labels['new'],
-            'days' => $labels['days'], 'units' => array_values(array_map(fn ($x) => (string) $x['u']['unit'], $units))]);
+            'days' => $labels['days'], 'units' => array_values(array_map(fn ($x) => (string) $x['u']['unit'], $units)), 'swaps' => $labels['swaps']]);
     }
 
     public function proposeCycleTime(Request $request, TimetableBoard $board, TimetableChangeApproval $svc)
@@ -169,7 +169,9 @@ class TimetableChangeRequestController extends Controller
             'group_name' => $data['group_name'], 'units' => array_values(array_map(fn ($x) => (string) $x['u']['unit'], $units)),
             'date' => $data['date'], 'scope' => $data['scope'] ?? 'day', 'start_hour' => (int) $data['start_hour'],
             'layer' => 'internal', 'view' => 'group', 'training_type' => $lecture ? 'lecture' : 'practice', '_change_hint' => $data['reason']]
-            + (!empty($data['dates']) ? ['dates' => array_values($data['dates'])] : []);
+            + (!empty($data['dates']) ? ['dates' => array_values($data['dates'])] : [])
+            // Ma'ruza: to'sib turgan amaliyot usuli — tasdiqlanganda ma'ruza bilan birga qo'llanadi.
+            + ($lecture ? array_filter(array_intersect_key($data, array_flip(['practice_place', 'practice_gap', 'practice_pair'])), fn ($v) => $v !== null) : []);
         $notice = $controller->cycleProposalLabels($board, $units, $payload);
         // Kim yubordi: o'qituvchi (o'z darsi) yoki fan mas'uli (mas'ul fanidagi boshqa o'qituvchi darsi) — requester_role.
         $draft = $svc->draft($this->proposalRequest(TimetableController::TEACHER_CYCLE_ROUTE, $payload, 'board', $board), $actor, $board, $as);
@@ -181,7 +183,7 @@ class TimetableChangeRequestController extends Controller
         $draft['summary'] = ($notice['days']
             ? $notice['subject'] . ' · ' . $notice['groups'] . ' · ' . $type . ' (sikl) · ' . $notice['when'] . ' → ' . $notice['new_time']
             : $notice['subject'] . ' · ' . $notice['groups'] . ' (' . $type . ', sikl' . ($lecture ? ', butun oqim' : '') . '): ' . $notice['old'] . ' → ' . $notice['new'])
-            . ' — ' . mb_substr($data['reason'], 0, 300);
+            . ($notice['swaps'] ? ' · ' . $notice['swaps'] : '') . ' — ' . mb_substr($data['reason'], 0, 300);
 
         return $this->submitProposal($svc, $draft, $department, $actor, $notice, $data['reason']);
     }
@@ -211,6 +213,10 @@ class TimetableChangeRequestController extends Controller
             'scope' => 'nullable|in:day,rest',
             'start_hour' => 'required|integer|min:1|max:24',
             'training_type' => 'nullable|in:practice,lecture',
+            // Ma'ruza: to'sib turgan amaliyot (keep — tegilmaydi, kesishsa xato; swap — o'rin almashish; after; gap; pair).
+            'practice_place' => 'nullable|in:keep,swap,after,gap,pair',
+            'practice_gap' => 'nullable|integer|min:0|max:6',
+            'practice_pair' => 'nullable|integer|min:1|max:12',
         ] + ($withReason ? ['reason' => 'required|string|max:1000'] : []));
         if (!empty($data['dates'])) {
             $data['dates'] = TimetableController::cycleProposalDates($data);

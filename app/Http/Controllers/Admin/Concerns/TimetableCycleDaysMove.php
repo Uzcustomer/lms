@@ -89,13 +89,24 @@ trait TimetableCycleDaysMove
                 try {
                     $e = match ($mode) {
                         'lecture' => $this->cycleLectureDayErrors($board, $placement, $p, $units, true),
-                        'practice' => $this->cyclePracticeDayErrors($board, $units, $sub, $k, $h),
+                        'practice' => ($request->boolean('lecture_swap') ? $this->cyclePracticeLectureSwap($board, $placement, $p, $units, $sub, $k, $h) : null)
+                            ?? $this->cyclePracticeDayErrors($board, $units, $sub, $k, $h),
                         default => $this->cycleBothDayWrite($board, $placement, $p, $units, true),
                     };
                 } catch (\Throwable $ex) {
                     DB::rollBack();
                     throw $ex;
                 }
+                // Birga ko'chgan amaliyot / ma'ruza ham: bugun — boshlanmagan (eski va yangi vaqti) bo'lishi kerak.
+                $also = [];
+                foreach (array_merge($e['swaps'] ?? [], array_filter([$e['lecture'] ?? null])) as $w) {
+                    array_push($also, (int) $w['from'], (int) $w['to']);
+                }
+                if (!$e['hard'] && $date === $today && $also && $started(min($also))) {
+                    $e['hard'] = ['Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).'];
+                }
+                $row['swaps'] = $e['swaps'] ?? [];
+                $row['lecture'] = $e['lecture'] ?? null;
                 if ($e['hard'] || ($e['busy'] && !$force)) {
                     DB::rollBack();
                     $row = array_merge($row, $e['hard'] ? ['status' => 'blocked', 'why' => implode(' · ', $e['hard'])]
@@ -208,6 +219,51 @@ trait TimetableCycleDaysMove
         $this->writeCyclePracticeStarts($list, $days, $h);
 
         return ['hard' => [], 'busy' => $this->cyclePracticeBusyErrors($board, $list, $days, $h)];
+    }
+
+    /**
+     * "Faqat amaliy" ma'ruza ustiga (lecture_swap): amaliyot yangi soatga ($h), ma'ruza esa amaliyotning bo'shagan joyiga (sig'masa — yangi
+     * amaliyotdan keyin yoki oldin, para chegarasidan). Oqimning boshqa guruhchalari amaliyoti yangi ma'ruza bilan kesishsa — practice_place
+     * usuli bo'yicha (cycleLectureDayErrors). Amaliyot ma'ruza bilan kesishmasa — null (odatdagi "Faqat amaliy"). Natija: hard / busy / swaps
+     * va lecture {from, to, len}.
+     */
+    private function cyclePracticeLectureSwap(TimetableBoard $board, TimetableCyclePlacement $placement, array $p, array $units, string $sub, int $k, int $h): ?array
+    {
+        $mine = array_filter($units, fn ($x, $unit) => ($sub === '' || (string) $unit === $sub) && isset($x['prac'][$x['date']])
+            && !$this->isNonBlocking($x['u'], $board), ARRAY_FILTER_USE_BOTH);
+        $lec = null;
+        foreach ($units as $x) {
+            $lec ??= $x['lec'][$x['date']] ?? null;
+        }
+        if (!$mine || !$lec) {
+            return null;
+        }
+        $first = reset($mine);
+        $p0 = (int) $first['prac'][$first['date']][0];
+        $end = $h + max(array_map(fn ($x) => (int) $x['prac'][$x['date']][1] - (int) $x['prac'][$x['date']][0], $mine));
+        [$l0, $llen] = [(int) $lec[0], (int) $lec[1] - (int) $lec[0]];
+        if (!($h < $l0 + $llen && $l0 < $end)) {
+            return null;
+        }
+        $grid = $this->cycleGridHours($board);
+        $rph = max(1, $this->cycleRowHours($board));
+        $up = $end + (($rph - (($end - 1) % $rph)) % $rph);
+        $down = $h - $llen >= 1 ? ($h - $llen) - (($h - $llen - 1) % $rph) : 0;
+        $at = null;
+        foreach ([$p0, $up, $down] as $c) {
+            if ($c >= 1 && $c + $llen - 1 <= $grid && !($c < $end && $h < $c + $llen) && $c !== $l0) {
+                $at = $c;
+                break;
+            }
+        }
+        if ($at === null) {
+            return ['hard' => ["Ma’ruza bilan o‘rin almashib bo‘lmaydi: ma’ruza ({$llen} soat) uchun shu kunda joy yo‘q."], 'busy' => [], 'swaps' => [],
+                'lecture' => null];
+        }
+        $pin = array_map(fn () => $h, $mine);
+        $e = $this->cycleLectureDayErrors($board, $placement, array_merge($p, ['start_hour' => $at]), $units, true, $pin);
+
+        return $e + ['lecture' => ['from' => $l0, 'to' => $at, 'len' => $llen]];
     }
 
     /** Oxirgi ko'p kunli surishni qaytarish: jadval keyin o'zgarmagan bo'lsa — oldingi qiymatlar (bitta so'rov). */

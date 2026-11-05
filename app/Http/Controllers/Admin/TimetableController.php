@@ -63,6 +63,7 @@ class TimetableController extends Controller
     use Concerns\TimetableWeeklyUnits;
     use Concerns\TimetableMudirPlaceholder;
     use Concerns\TimetableCycleDaysMove;
+    use Concerns\TimetableCyclePracticeSwap;
 
     public function index(Request $request)
     {
@@ -6119,6 +6120,13 @@ class TimetableController extends Controller
             // Kunni surish rejimi: both — ma'ruza va amaliy birga (eski xatti-harakat), lecture — faqat ma'ruza (oqim bo'yicha,
             // amaliy joyida qoladi), practice — faqat amaliy (cyclePracticeStarts). Berilmasa — both.
             'mode'           => 'nullable|in:both,lecture,practice',
+            // "Faqat ma'ruza": to'sib turgan amaliyot (TimetableCyclePracticeSwap) — keep (tegilmaydi, kesishsa xato), swap (o'rin
+            // almashish), after (ma'ruzadan keyin), gap (N para oraliq bilan), pair (tanlangan paradan). "Faqat amaliy" ma'ruza ustiga —
+            // lecture_swap: ma'ruza amaliyotning bo'shagan joyiga (boshqa guruhchalar amaliyoti — shu usul bilan).
+            'practice_place' => 'nullable|in:keep,swap,after,gap,pair',
+            'practice_gap'   => 'nullable|integer|min:0|max:6',
+            'practice_pair'  => 'nullable|integer|min:1|max:12',
+            'lecture_swap'   => 'nullable|boolean',
             // Bir nechta kun (TimetableCycleDaysMove): sikl kunlari, siljish (har kunning o'z boshidan) yoki start_hour — hammasiga,
             // dry_run — faqat natija, force — bandlikka qaramay (sig'maydigan kun baribir o'zgarmaydi), undo — oxirgi surishni qaytarish.
             'day_indexes'    => 'nullable|array|min:1|max:60',
@@ -6433,36 +6441,31 @@ class TimetableController extends Controller
     {
         DB::beginTransaction();
         try {
-            $error = $this->cycleLectureDayWrite($board, $placement, $data, $before);
-        } catch (\Throwable $e) {
+            $e = $this->cycleLectureDayErrors($board, $placement, $data, $before, true);
+        } catch (\Throwable $ex) {
             DB::rollBack();
-            throw $e;
+            throw $ex;
         }
         request()->attributes->remove('timetable.cycle_units.' . $board->id);
-        if ($error !== null) {
+        $all = array_values(array_unique(array_merge($e['hard'], $e['busy'])));
+        if ($all) {
             DB::rollBack();
 
-            return response()->json(['error' => $error], 422);
+            return response()->json(['error' => implode(' · ', $all)], 422);
         }
         DB::commit();
 
-        return response()->json(['ok' => true, 'starts' => (array) ($placement->fresh()->lecture_slots['starts'] ?? [])]);
+        return response()->json(['ok' => true, 'starts' => (array) ($placement->fresh()->lecture_slots['starts'] ?? []), 'swaps' => $e['swaps']]);
     }
 
     /**
-     * "Faqat ma'ruza" bitta sikl kuni uchun: yozadi va tekshiradi (tranzaksiyani chaqiruvchi boshqaradi) — xato matni yoki null.
-     * Xato bo'lsa chaqiruvchi rollback qiladi; $before — cycleDayUnits (surishdan oldingi holat).
+     * "Faqat ma'ruza" bitta sikl kuni uchun: yozadi va tekshiradi (tranzaksiyani chaqiruvchi boshqaradi; xato bo'lsa — rollback). $before —
+     * cycleDayUnits (surishdan oldingi holat). Natija cycleDayMoveErrors kabi: ['hard' => [...], 'busy' => [...], 'swaps' => [...]].
+     * swaps — joyi o'zgargan amaliyotlar: [{unit, from, to, len, how (swap|after|before|gap|pair|pin), busy (hamma variant band — to'qnashuv),
+     * why (busy — oldingi variant band, nofit — eski ma'ruza joyiga sig'madi, null)}] (practice_place, $pin).
      */
-    private function cycleLectureDayWrite(TimetableBoard $board, TimetableCyclePlacement $placement, array $data, array $before): ?string
-    {
-        $e = $this->cycleLectureDayErrors($board, $placement, $data, $before, true);
-        $all = array_values(array_unique(array_merge($e['hard'], $e['busy'])));
-
-        return $all ? implode(' · ', $all) : null;
-    }
-
-    /** cycleLectureDayWrite — xatolar ajratilgan holda (cycleDayMoveErrors kabi): ['hard' => [...], 'busy' => [...]]. */
-    private function cycleLectureDayErrors(TimetableBoard $board, TimetableCyclePlacement $placement, array $data, array $before, bool $busy): array
+    private function cycleLectureDayErrors(TimetableBoard $board, TimetableCyclePlacement $placement, array $data, array $before, bool $busy,
+        array $pin = []): array
     {
         $k = (int) $data['day_index'];
         $h = (int) $data['start_hour'];
@@ -6471,25 +6474,47 @@ class TimetableController extends Controller
             $lec ??= $x['lec'][$x['date']] ?? null;
         }
         if (!$before || !$lec) {
-            return ['hard' => ["Bu kuni ma'ruza yo'q — «Faqat amaliy» rejimini tanlang."], 'busy' => []];
+            return ['hard' => ["Bu kuni ma'ruza yo'q — «Faqat amaliy» rejimini tanlang."], 'busy' => [], 'swaps' => []];
         }
         if ((int) $lec[0] === $h) {
-            return ['hard' => ['Yangi vaqt hozirgisi bilan bir xil.'], 'busy' => []];
+            return ['hard' => ['Yangi vaqt hozirgisi bilan bir xil.'], 'busy' => [], 'swaps' => []];
         }
         $len = (int) $lec[1] - (int) $lec[0];
         if ($h < 1 || $h + $len - 1 > $this->cycleGridHours($board)) {
-            return ['hard' => ["Ma'ruza ({$len} soat) kun oxirigacha sig'maydi: {$h}-soatdan boshlab bo'lmaydi."], 'busy' => []];
+            return ['hard' => ["Ma'ruza ({$len} soat) kun oxirigacha sig'maydi: {$h}-soatdan boshlab bo'lmaydi."], 'busy' => [], 'swaps' => []];
         }
         $placement = $placement->fresh() ?? $placement;
         $slots = (array) ($placement->lecture_slots ?? []);
+        // Amaliyot: yangi ma'ruza bilan kesishmasa — joyida (ps_g ga muzlatiladi); kesishsa — usul bo'yicha nomzodlar (TimetableCyclePracticeSwap),
+        // $pin — aniq soat (teskari holat: surilgan amaliyot). Usul "keep" — joyida, kesishuv xato bo'ladi (eski xatti-harakat).
+        $place = $this->cyclePracticePlace($data);
         $keep = [];
+        $plans = [];
+        $hard = [];
         foreach ($before as $unit => $x) {
-            if ($prc = $x['prac'][$x['date']] ?? null) {
-                $keep[$unit] = (int) $prc[0];
-                if ((int) ($slots['ps_g'][$unit][$k] ?? $slots['ps_g'][$unit][(string) $k] ?? 0) <= 0) {
-                    $slots['ps_g'][$unit][$k] = (int) $prc[0];
-                }
+            $unit = (string) $unit;
+            if (!($prc = $x['prac'][$x['date']] ?? null)) {
+                continue;
             }
+            [$p0, $plen] = [(int) $prc[0], (int) $prc[1] - (int) $prc[0]];
+            if (isset($pin[$unit])) {
+                $plans[$unit] = [[(int) $pin[$unit], 'pin']];
+            } elseif ($place['how'] !== 'keep' && !$this->isNonBlocking($x['u'], $board) && $p0 < $h + $len && $h < $p0 + $plen) {
+                [$cands, $why] = $this->cyclePracticeCandidates($board, $place, $p0, $plen, (int) $lec[0], $h, $len);
+                if (!$cands) {
+                    $hard[] = "Amaliy ({$unit}) joylashmadi: {$why}.";
+                    continue;
+                }
+                $plans[$unit] = $cands;
+            }
+            $at = isset($plans[$unit]) ? $plans[$unit][0][0] : $p0;
+            $keep[$unit] = $at;
+            if (isset($plans[$unit]) || (int) ($slots['ps_g'][$unit][$k] ?? $slots['ps_g'][$unit][(string) $k] ?? 0) <= 0) {
+                $slots['ps_g'][$unit][$k] = $at;
+            }
+        }
+        if ($hard) {
+            return ['hard' => $hard, 'busy' => [], 'swaps' => []];
         }
         $starts = (array) ($slots['starts'] ?? []);
         if ($h === 1) {
@@ -6512,8 +6537,46 @@ class TimetableController extends Controller
         $slots = array_filter($slots, fn ($key) => !is_int($key) && !ctype_digit((string) $key), ARRAY_FILTER_USE_KEY);
         $placement->update(['lecture_slots' => $slots]);
         request()->attributes->remove('timetable.cycle_units.' . $board->id);
+        // Ko'chgan amaliyot: o'qituvchi / xona / guruh bandligi — band bo'lsa keyingi nomzod; hammasi band — birinchisi qoladi (to'qnashuv).
+        $swaps = [];
+        $busyTexts = [];
+        foreach ($plans as $unit => $cands) {
+            $x = $before[$unit];
+            $put = function (int $s) use ($placement, $unit, $k, $board) {
+                $sl = (array) ($placement->fresh()->lecture_slots ?? []);
+                $sl['ps_g'][$unit][$k] = $s;
+                $placement->update(['lecture_slots' => $sl]);
+                request()->attributes->remove('timetable.cycle_units.' . $board->id);
+            };
+            $chosen = null;
+            $first = null;
+            foreach ($cands as $i => [$s, $how]) {
+                if ($i > 0) {
+                    $put($s);
+                }
+                $e = $busy ? $this->cyclePracticeBusyErrors($board, [$x], [$unit => [$k => $x['date']]], $s) : [];
+                if (!$e) {
+                    // Nega birinchi variant emas: oldingisi band; yoki o'rin almashishda eski ma'ruza joyiga sig'madi.
+                    $chosen = [$s, $how, [], $i > 0 ? 'busy' : ($place['how'] === 'swap' && !in_array($how, ['swap', 'pin'], true) && !isset($pin[$unit]) ? 'nofit' : null)];
+                    break;
+                }
+                $first ??= [$s, $how, $e, null];
+            }
+            if (!$chosen) {
+                if (count($cands) > 1) {
+                    $put($first[0]);
+                }
+                $chosen = $first;
+                array_push($busyTexts, ...array_map(fn ($t) => "Amaliy ({$unit}): {$t}", $first[2]));
+            }
+            $keep[$unit] = $chosen[0];
+            $prc = $x['prac'][$x['date']];
+            $swaps[] = ['unit' => $unit, 'from' => (int) $prc[0], 'to' => $chosen[0], 'len' => (int) $prc[1] - (int) $prc[0], 'how' => $chosen[1],
+                'busy' => (bool) $chosen[2], 'why' => $chosen[3]];
+        }
+        $e = $this->cycleDayMoveErrors($board, $placement, $data, $k, $h, array_keys($before), $keep, $busy);
 
-        return $this->cycleDayMoveErrors($board, $placement, $data, $k, $h, array_keys($before), $keep, $busy);
+        return ['hard' => $e['hard'], 'busy' => array_values(array_unique(array_merge($e['busy'], $busyTexts))), 'swaps' => $swaps];
     }
 
     /**
@@ -10228,8 +10291,11 @@ class TimetableController extends Controller
         return $out;
     }
 
-    /** Bir sanadagi ma'ruzani yangi soatga yozadi va tekshiradi (tranzaksiya — chaqiruvchida) — xato matni yoki null. */
-    private function cycleLectureDayRun(TimetableBoard $board, array $units, array $placements, int $h): ?string
+    /**
+     * Bir sanadagi ma'ruzani yangi soatga yozadi va tekshiradi (tranzaksiya — chaqiruvchida) — xato matni yoki null. $place — to'sib
+     * turgan amaliyot usuli (practice_place, practice_gap, practice_pair — so'rovdan); joyi o'zgargan amaliyotlar $swaps ga qo'shiladi.
+     */
+    private function cycleLectureDayRun(TimetableBoard $board, array $units, array $placements, int $h, array $place = [], array &$swaps = []): ?string
     {
         foreach ($placements as $pid => $k) {
             $placement = TimetableCyclePlacement::find($pid);
@@ -10239,10 +10305,13 @@ class TimetableController extends Controller
             }
             $flow = (string) ($x['u']['parent'] ?: $x['u']['unit']);
             $data = ['specialty_name' => (string) $x['u']['specialty'], 'course' => (int) $x['u']['course'], 'subject_name' => (string) $x['u']['subject'],
-                'group_name' => $flow, 'placement_group' => $flow, 'day_index' => (int) $k, 'start_hour' => $h];
-            if ($error = $this->cycleLectureDayWrite($board, $placement, $data, $this->cycleDayUnits($board, $placement, $data, (int) $k))) {
-                return $error;
+                'group_name' => $flow, 'placement_group' => $flow, 'day_index' => (int) $k, 'start_hour' => $h]
+                + array_intersect_key($place, array_flip(['practice_place', 'practice_gap', 'practice_pair']));
+            $e = $this->cycleLectureDayErrors($board, $placement, $data, $this->cycleDayUnits($board, $placement, $data, (int) $k), true);
+            if ($all = array_values(array_unique(array_merge($e['hard'], $e['busy'])))) {
+                return implode(' · ', $all);
             }
+            array_push($swaps, ...$e['swaps']);
         }
 
         return null;
@@ -10263,12 +10332,17 @@ class TimetableController extends Controller
         $dates = self::cycleProposalDates($p) ?? [(string) ($p['date'] ?? '')];
         $days = $this->cycleLectureProposalDays($units, $dates);
         $errors = [];
+        $swaps = [];
         foreach ($dates as $d) {
             $error = isset($days[$d]) ? null : "Bu kuni ma'ruza yo'q.";
             if ($error === null) {
                 DB::beginTransaction();
                 try {
-                    $error = $this->cycleLectureDayRun($board, $units, $days[$d], (int) ($p['start_hour'] ?? 0));
+                    $sw = [];
+                    $error = $this->cycleLectureDayRun($board, $units, $days[$d], (int) ($p['start_hour'] ?? 0), $p, $sw);
+                    if ($sw) {
+                        $swaps[$d] = $sw;
+                    }
                 } finally {
                     DB::rollBack();
                     request()->attributes->remove('timetable.cycle_units.' . $board->id);
@@ -10281,6 +10355,8 @@ class TimetableController extends Controller
         if ($errors) {
             $fail(implode("\n", $errors));
         }
+        // So'rov tavsifi (cycleProposalLabels) uchun: sana bo'yicha joyi o'zgaradigan amaliyotlar.
+        request()->attributes->set('timetable.cycle_lecture_swaps', $swaps);
 
         return $units;
     }
@@ -10294,7 +10370,7 @@ class TimetableController extends Controller
         DB::beginTransaction();
         try {
             foreach ($dates as $d) {
-                $error = isset($days[$d]) ? $this->cycleLectureDayRun($board, $units, $days[$d], (int) $p['start_hour']) : "Bu kuni ma'ruza yo'q.";
+                $error = isset($days[$d]) ? $this->cycleLectureDayRun($board, $units, $days[$d], (int) $p['start_hour'], $p) : "Bu kuni ma'ruza yo'q.";
                 if ($error !== null) {
                     DB::rollBack();
                     request()->attributes->remove('timetable.cycle_units.' . $board->id);
@@ -10378,10 +10454,17 @@ class TimetableController extends Controller
             ? ((string) ($x['u']['parent'] ?: $x['u']['unit'])) . ' (' . count($units) . ' guruhcha)'
             : implode(', ', array_map(fn ($y) => (string) $y['u']['unit'], $units));
 
+        // Ma'ruza: to'sib turgan amaliyotlar qayerga ko'chadi (validateCycleLectureProposal natijasi) — "16.11: d2/d23-08a 10:00 → 08:30, …".
+        $swaps = [];
+        foreach ($lecture ? (array) request()->attributes->get('timetable.cycle_lecture_swaps', []) : [] as $d => $list) {
+            $swaps[] = ($multi ? Carbon::parse($d)->format('d.m') . ': ' : '') . $this->cycleSwapsText($board, $list);
+        }
+
         return ['old' => $when . ', ' . $this->cycleHoursTime($board, $from, $to), 'new' => $when . ', ' . $this->cycleHoursTime($board, $h, $h + $to - $from),
             'room' => (string) ($card->auditorium_name ?? '') ?: (string) ($card->auditorium_code ?? ''), 'teacher' => (string) ($card->teacher_name ?? ''),
             'subject' => (string) $x['u']['subject'], 'groups' => $groups, 'type' => $lecture ? 'lecture' : 'practice',
-            'when' => $when, 'new_time' => $this->cycleHoursTime($board, $h, $h + $to - $from), 'days' => $multi ? $days : []];
+            'when' => $when, 'new_time' => $this->cycleHoursTime($board, $h, $h + $to - $from), 'days' => $multi ? $days : [],
+            'swaps' => $swaps ? 'Amaliyot o‘rin almashadi: ' . implode('; ', $swaps) : ''];
     }
 
     /** Haftalik so'rov tavsifi: eski va yangi kun, sana, vaqt; xona. */
@@ -10420,6 +10503,10 @@ class TimetableController extends Controller
             'dates'          => 'nullable|array|max:60',
             'dates.*'        => 'date_format:Y-m-d',
             'training_type'  => 'nullable|in:practice,lecture',
+            // Ma'ruza so'rovi: to'sib turgan amaliyot usuli (TimetableCyclePracticeSwap) — ma'ruza bilan birga qo'llanadi.
+            'practice_place' => 'nullable|in:keep,swap,after,gap,pair',
+            'practice_gap'   => 'nullable|integer|min:0|max:6',
+            'practice_pair'  => 'nullable|integer|min:1|max:12',
         ]);
         $role = $this->timetableActiveRole($request);
         if (!$this->cycleLayerEditable($role, 'internal') && !($request->attributes->get('cycle_day_practice') && $this->cycleDayEditor($role))) {

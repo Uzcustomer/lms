@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\Deadline;
+use App\Models\MarkingSystemScore;
 use App\Models\StudentGrade;
 use App\Services\RetakeBookingService;
 use Carbon\Carbon;
@@ -41,10 +42,15 @@ class OtrabotkaController extends Controller
 
         // Semestrni qayta o'qiyotganlarda o'tgan yilning shu semestr baholari aralashmasin
         $yearCode = (clone $base)->max('education_year_code');
+        // Past baho chegarasi (import bilan bir xil): 5 ballik — 3, qolganlari — minimal chegara
+        $lowLimit = $student->level_code == 16 ? 3 : MarkingSystemScore::lowGradeLimit();
 
         $rows = (clone $base)
             ->when($yearCode, fn ($q) => $q->where('education_year_code', $yearCode))
-            ->whereIn('reason', ['absent', 'low_grade'])
+            // NB va past baho. Past baho — joriy minimal chegaradan (sozlama, masalan 70) past:
+            // chegara ko'tarilishidan oldin import qilingan 60–69 lar "low_grade" belgisisiz qolgan
+            ->where(fn ($q) => $q->whereIn('reason', ['absent', 'low_grade'])
+                ->orWhere(fn ($w) => $w->whereNotNull('grade')->where('grade', '<', $lowLimit)))
             ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102, 103]))
             ->orderBy('lesson_date')
             ->get();
@@ -114,6 +120,7 @@ class OtrabotkaController extends Controller
             'byTestMarkazi' => (bool) ($setting->retake_by_test_markazi ?? false),
             'byTeacher' => (bool) ($setting->retake_by_oqituvchi ?? false),
             'semesterName' => $student->semester_name,
+            'lowLimit' => $lowLimit,
         ]);
     }
 

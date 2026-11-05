@@ -49,7 +49,7 @@
         <div class="ot-hero">
             <small>{{ $semesterName ?: __('Joriy semestr') }}</small>
             <h1>{{ __('Qayta topshirish') }}</h1>
-            <p>{{ __("Joriy fanlaringizdagi NB va 60 dan past baholar hamda ularni qayta topshirish muddati.") }}</p>
+            <p>{{ __("Joriy fanlaringizdagi NB va :limit dan past baholar hamda ularni qayta topshirish muddati.", ['limit' => $lowLimit]) }}</p>
             @if($groups->isNotEmpty())
                 <div class="ot-stats">
                     <div class="ot-stat"><b>{{ $openCount }}</b>{{ __('topshirish kerak') }}</div>
@@ -113,7 +113,7 @@
         @empty
             <div class="ot-empty">
                 <b>{{ __("Qarzingiz yo'q") }}</b>
-                {{ __("Joriy fanlaringizda NB yoki 60 dan past baho topilmadi.") }}
+                {{ __("Joriy fanlaringizda NB yoki :limit dan past baho topilmadi.", ['limit' => $lowLimit]) }}
             </div>
         @endforelse
     </div>

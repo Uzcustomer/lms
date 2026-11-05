@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AbsenceExcuse;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\Deadline;
+use App\Models\MarkingSystemScore;
 use App\Models\RetakeBooking;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
@@ -147,7 +148,9 @@ class RetakeBookingService
         return StudentGrade::where('student_hemis_id', $studentHemisId)
             ->where('subject_id', $subjectId)
             ->whereDate('lesson_date', $lessonDate)
-            ->whereIn('reason', ['absent', 'low_grade'])
+            // Chegara ko'tarilishidan oldin import qilingan past baholar "low_grade" belgisisiz
+            ->where(fn ($q) => $q->whereIn('reason', ['absent', 'low_grade'])
+                ->orWhere(fn ($w) => $w->whereNotNull('grade')->where('grade', '<', MarkingSystemScore::lowGradeLimit())))
             ->orderBy('id')
             ->get(['id', 'grade', 'reason', 'retake_grade', 'deadline', 'lesson_date']);
     }

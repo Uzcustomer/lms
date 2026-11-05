@@ -1878,6 +1878,12 @@
         #cycleGrid .cyc-mk-cell.is-drag-nofit { box-shadow: inset 0 0 0 2px #94a3b8; background: rgba(148, 163, 184, .45); }
         #cycleGrid .cyc-mk-cell.is-drag-nofit[data-drag-note]::after { content: attr(data-drag-note); position: absolute; left: 1px; top: 1px; z-index: 3;
             padding: 0 3px; border-radius: 3px; background: #475569; color: #fff; font-size: 8px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+        /* Ko'p kunli surish so'rovi ketmoqda: kursor "wait", tanlangan kunlar bo'lagining birinchi katagida "tekshirilmoqda…" / "saqlanmoqda…" */
+        body.cyc-busy, body.cyc-busy * { cursor: wait !important; }
+        #cycleGrid .cyc-mk-cell.is-cyc-busy { position: relative; }
+        #cycleGrid .cyc-mk-cell.is-cyc-busy[data-busy-note]::before { content: attr(data-busy-note); position: absolute; left: 1px; top: 1px; z-index: 3;
+            padding: 0 3px; border-radius: 3px; background: #1e3a8a; color: #fff; font-size: 8px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+        #cycSelBadge [data-sel-busy] { padding: 0 6px; border-radius: 4px; background: #fde68a; color: #713f12; font-weight: 700; }
         #cycSelBadge { position: fixed; z-index: 66; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px;
             background: #1e3a8a; color: #fff; font-size: 12px; box-shadow: 0 4px 12px rgba(15, 23, 42, .25); }
         #cycSelBadge button { border: 1px solid rgba(255, 255, 255, .5); border-radius: 4px; padding: 0 6px; background: transparent; color: #fff; font-size: 11px; }
@@ -3323,7 +3329,8 @@
                 }
                 fd.append(key, v);
             }
-            async function api(url, method = 'GET', body = null) {
+            // opts.timeout (ms) — shu vaqtda javob kelmasa so'rov to'xtatiladi: xato status 'timeout' bilan (gateway 504 ni kutmasdan).
+            async function api(url, method = 'GET', body = null, opts = {}) {
                 // Doska ma'lumoti tez o'zgaradi — brauzer eski GET javobini keshdan bermasin.
                 const opt = { method, cache: 'no-store', headers: { 'Accept': 'application/json' } };
                 if (body) {
@@ -3332,7 +3339,25 @@
                     Object.entries(body).forEach(([k, v]) => appendFormValue(fd, k, v));
                     opt.body = fd;
                 }
-                const r = await fetch(url, opt);
+                let timer = null;
+                if (opts.timeout && typeof AbortController === 'function') {
+                    const ac = new AbortController();
+                    opt.signal = ac.signal;
+                    timer = setTimeout(() => ac.abort(), opts.timeout);
+                }
+                let r;
+                try {
+                    r = await fetch(url, opt);
+                } catch (e) {
+                    if (e && e.name === 'AbortError') {
+                        const err = new Error('Server javob bermadi (vaqt tugadi).');
+                        err.status = 'timeout';
+                        throw err;
+                    }
+                    throw e;
+                } finally {
+                    clearTimeout(timer);
+                }
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok) {
                     // Javob tanasi ham xatoda: masalan 409 needs_confirm — "Baribir biriktirish" so'rovi.
@@ -8933,6 +8958,7 @@
                 const block = cycBlockByKey(key);
                 const dp = block && block.day_plan ? block.day_plan[offset] : null;
                 if (!card || !dp) return;
+                cycBusyShow(key, [offset], mode || 'both', 'saqlanmoqda…');
                 try {
                     const res = await api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', {
                         specialty_name: card.specialty, course: card.course,
@@ -8941,7 +8967,8 @@
                         sub_group: card.placement_group && card.placement_group !== card.group ? card.group : undefined,
                         day_index: dp.k - 1, start_hour: newStart, mode: mode || 'both',
                         _change_hint: hint || undefined,
-                    });
+                    }, { timeout: CYC_DAYS_TIMEOUT_MS });
+                    cycBusyHide();
                     if (res && res.pending_approval) {
                         // So'rov bo'ldi: umumiy qayta yuklash o'rniga shu yerda — oyna so'ralgan soat bilan qayta ochiladi.
                         clearTimeout(pendingReloadTimer);
@@ -8956,7 +8983,9 @@
                     const cell = cells[0];
                     if (cell) openCycDayPop(key, offset, cell);
                 } catch (e) {
-                    alert('Kun soatini o\'zgartirib bo\'lmadi: ' + e.message);
+                    cycBusyHide();
+                    if (cycTimedOut(e)) { try { await loadCyclePlan(); } catch (_) { } }
+                    alert('Kun soatini o\'zgartirib bo\'lmadi: ' + cycErrText(e));
                 }
             }
 
@@ -9333,8 +9362,67 @@
                     day_modes: uni ? undefined : Object.fromEntries(offsets.map(o => [block.day_plan[o].k - 1, cycModeOf(mode, o)])),
                 }, place, extra);
             }
+            // Ko'p kunli surish: so'rovning vaqt chegarasi (gateway ~60 s dan biroz ko'p — javob kelsa ham, 504 bo'lsa ham bir xil matn),
+            // bo'lak hajmi (5 kundan ko'p — 5 kunlik bo'laklar ketma-ket).
+            const CYC_DAYS_TIMEOUT_MS = 65000;
+            const CYC_DAYS_CHUNK = 5;
+            const CYC_TIMEOUT_TEXT = 'Server javob bermadi (vaqt tugadi). Kamroq kun tanlab qayta urinib ko\'ring.';
+            const cycTimedOut = e => Boolean(e && (e.status === 504 || e.status === 'timeout'));
+            const cycErrText = e => cycTimedOut(e) ? CYC_TIMEOUT_TEXT : String((e && e.message) || e);
             const cycDaysRequest = (key, offsets, mode, delta, extra) =>
-                api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', cycDaysBody(key, offsets, mode, delta, extra));
+                api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', cycDaysBody(key, offsets, mode, delta, extra), { timeout: CYC_DAYS_TIMEOUT_MS });
+            function cycChunks(offsets) {
+                const out = [];
+                for (let i = 0; i < offsets.length; i += CYC_DAYS_CHUNK) out.push(offsets.slice(i, i + CYC_DAYS_CHUNK));
+                return out.length ? out : [[]];
+            }
+            // Tasdiq talab qilinadigan doskada kafedra mudiri: so'rov yoziladi xolos (og'ir ish — tasdiqda) — bo'linmaydi (bitta so'rov).
+            const cycApprovalGated = () => TIMETABLE_ROLE === 'kafedra_mudiri'
+                && Boolean((typeof changeReqs !== 'undefined' && changeReqs.approval_required) || (board && board.settings && board.settings.approval_required));
+            // So'rov ketayotganda: kursor "wait", har kunning surilayotgan bo'lagi birinchi katagida "tekshirilmoqda…" / "saqlanmoqda…",
+            // tanlov yorlig'ida jarayon ("Tekshirilmoqda: 6–10-kun (2/2)").
+            function cycBusyShow(key, offsets, mode, text, progress = '') {
+                cycBusyHide();
+                document.body.classList.add('cyc-busy');
+                const block = cycBlockByKey(key);
+                offsets.forEach(o => {
+                    const parts = cycModeParts(cycModeOf(mode, o));
+                    const cells = [...document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + o + '"]')]
+                        .filter(c => parts.includes(cycCellPart(c))).sort((a, b) => a.dataset.mkHour - b.dataset.mkHour);
+                    if (cells[0]) { cells[0].classList.add('is-cyc-busy'); cells[0].setAttribute('data-busy-note', text); }
+                });
+                const badge = document.getElementById('cycSelBadge');
+                if (badge && offsets.length) {
+                    const k = o => (block && block.day_plan && block.day_plan[o] ? block.day_plan[o].k : +o + 1);
+                    const span = k(offsets[0]) + (offsets.length > 1 ? '–' + k(offsets[offsets.length - 1]) : '') + '-kun';
+                    const el = document.createElement('span');
+                    el.dataset.selBusy = '';
+                    el.textContent = text.charAt(0).toUpperCase() + text.slice(1).replace(/…$/, '') + ': ' + span + (progress ? ' (' + progress + ')' : '') + '…';
+                    badge.prepend(el);
+                }
+            }
+            function cycBusyHide() {
+                document.body.classList.remove('cyc-busy');
+                document.querySelectorAll('#cycleGrid .cyc-mk-cell.is-cyc-busy').forEach(c => { c.classList.remove('is-cyc-busy'); c.removeAttribute('data-busy-note'); });
+                document.querySelectorAll('#cycSelBadge [data-sel-busy]').forEach(el => el.remove());
+            }
+            // Oldindan tekshiruv (dry_run): 5 kundan ko'p bo'lsa — 5 kunlik bo'laklarda ketma-ket, natijalar bitta javobga birlashtiriladi
+            // (bitta tasdiq oynasi). Har kun alohida tekshiriladi — bo'lib yuborish natijani o'zgartirmaydi.
+            async function cycDaysDry(key, offsets, mode, delta, extra = {}, busy = true) {
+                const parts = cycChunks(offsets);
+                const out = { ok: true, dry_run: true, days: [], applied: 0, undo: null };
+                try {
+                    for (let i = 0; i < parts.length; i++) {
+                        if (busy) cycBusyShow(key, parts[i], mode, 'tekshirilmoqda…', parts.length > 1 ? (i + 1) + '/' + parts.length : '');
+                        const j = await cycDaysRequest(key, parts[i], mode, delta, Object.assign({}, extra, { dry_run: 1 }));
+                        out.days = out.days.concat((j && j.days) || []);
+                        if (j && j.hemis_hint) out.hemis_hint = j.hemis_hint;
+                    }
+                } finally {
+                    if (busy) cycBusyHide();
+                }
+                return out;
+            }
             const CYC_MODE_WHAT = { both: 'darslar', lecture: 'ma\'ruza', practice: 'amaliy' };
             const CYC_DAY_STATUS = { ok: 'o\'zgaradi', conflict: 'to\'qnashuv', nofit: 'sig\'maydi', blocked: 'o\'zgarmaydi', past: 'o\'tgan / boshlangan',
                 same: 'o\'zgarmaydi', skip: 'dars yo\'q' };
@@ -9387,12 +9475,44 @@
                 if (cell) openCycDayPop(key, offset, cell, true);
             }
             // Qo'llash (dry_run emas). Tasdiq talab qilinadigan doskada — so'rov; aks holda jadval yangilanadi, qisqa xabar + "Qaytarish".
+            // 5 kundan ko'p — 5 kunlik bo'laklarda ketma-ket (tasdiq doskasida — bitta so'rov). Hammasi yoki hech narsa: biror bo'lak xato
+            // bersa, oldingi bo'laklar qaytarish kalitlari bilan teskari tartibda qaytariladi; oxirida bitta xabar va bitta Ctrl+Z (hamma
+            // bo'laklar). Vaqt tugasa — jadval qayta yuklanadi (server shu bo'lakni saqlagan bo'lishi mumkin).
             async function cycDaysCommit(key, offsets, mode, delta, extra = {}) {
-                const j = await cycDaysRequest(key, offsets, mode, delta, extra);
-                if (j && j.pending_approval) { onPendingApproval(j); return j; }
-                const days = (j && j.days) || [];
+                const parts = cycApprovalGated() ? [offsets] : cycChunks(offsets);
+                const tokens = [];
+                const j = { ok: true, days: [], applied: 0, undo: null, today_moved: false };
+                try {
+                    for (let i = 0; i < parts.length; i++) {
+                        cycBusyShow(key, parts[i], mode, 'saqlanmoqda…', parts.length > 1 ? (i + 1) + '/' + parts.length : '');
+                        let r;
+                        try {
+                            r = await cycDaysRequest(key, parts[i], mode, delta, extra);
+                        } catch (e) {
+                            const back = tokens.length ? await cycUndoTokens(key, tokens) : true;
+                            if (cycTimedOut(e) || !back) {
+                                try { await loadCyclePlan(); } catch (_) { }
+                            }
+                            const err = new Error(cycErrText(e) + (parts.length > 1 ? (back
+                                ? (tokens.length ? ' Oldingi bo\'laklar qaytarildi — hech narsa o\'zgarmadi.' : '')
+                                : ' Oldingi bo\'laklarni qaytarib bo\'lmadi — jadvalni tekshiring.') : ''));
+                            err.status = e && e.status;
+                            throw err;
+                        }
+                        if (r && r.pending_approval) { onPendingApproval(r); return r; }
+                        if (r && r.undo) tokens.push(r.undo);
+                        j.days = j.days.concat((r && r.days) || []);
+                        j.applied += +((r && r.applied) || 0);
+                        j.today_moved = j.today_moved || Boolean(r && r.today_moved);
+                        if (r && r.hemis_hint) j.hemis_hint = r.hemis_hint;
+                    }
+                } finally {
+                    cycBusyHide();
+                }
+                j.undo = tokens.length ? tokens[tokens.length - 1] : null;
+                const days = j.days;
                 const left = days.filter(d => !d.applied && !['same', 'skip'].includes(d.status));
-                if (j.undo) cycLastUndo = { key: key, token: j.undo };
+                if (tokens.length) cycLastUndo = { key: key, tokens: tokens };
                 await loadCyclePlan();
                 const block = cycBlockByKey(key);
                 days.filter(d => d.applied).forEach(d => {
@@ -9407,16 +9527,32 @@
                         + (CYC_DAY_STATUS[d.status] || d.status)).join('; ')) + '</div>' : ''), j.undo ? 'ok' : 'warn');
                 return j;
             }
+            // Qaytarish kalitlari — teskari tartibda (oxirgi bo'lak birinchi: har biri "keyin o'zgarmagan" tekshiruvidan o'tadi). true — hammasi.
+            async function cycUndoTokens(key, tokens) {
+                for (const t of tokens.slice().reverse()) {
+                    try { await cycDaysRequest(key, [], 'both', null, { undo: t, day_indexes: undefined, delta: undefined, mode: undefined }); }
+                    catch (e) { return false; }
+                }
+                return true;
+            }
             async function cycUndo() {
                 const u = cycLastUndo;
                 if (!u) { ttToast('Qaytariladigan surish yo\'q.', 'warn'); return; }
                 cycLastUndo = null;
                 try {
-                    const j = await cycDaysRequest(u.key, [], 'both', null, { undo: u.token, day_indexes: undefined, delta: undefined, mode: undefined });
-                    if (j && j.pending_approval) { onPendingApproval(j); return; }
+                    // Bo'laklab saqlangan surish — hamma bo'laklar bitta harakat sifatida (teskari tartibda).
+                    let j = null;
+                    for (const t of (u.tokens || [u.token]).slice().reverse()) {
+                        j = await cycDaysRequest(u.key, [], 'both', null, { undo: t, day_indexes: undefined, delta: undefined, mode: undefined });
+                        if (j && j.pending_approval) { onPendingApproval(j); return; }
+                    }
                     await loadCyclePlan();
                     ttToast('Oxirgi surish qaytarildi.', 'ok');
-                } catch (e) { ttToast('Qaytarib bo\'lmadi: ' + esc(e.message), 'warn'); }
+                } catch (e) {
+                    ttToast('Qaytarib bo\'lmadi: ' + esc(cycErrText(e)), 'warn');
+                    // Bo'laklardan bir qismi qaytgan bo'lishi mumkin — jadval qayta yuklanadi.
+                    if ((u.tokens || []).length > 1) { try { await loadCyclePlan(); } catch (_) { } }
+                }
             }
             // Oldindan tekshiruv natijasi oynasi: qaysi kunlar o'zgaradi, qaysilarida to'qnashuv (sababi bilan), qaysilari sig'maydi; ma'ruza
             // surilganda — to'sib turgan amaliyot qayerga ko'chadi ("Amaliyot o'rin almashadi: …"); teskari holat (opts.reverse) — "Ma'ruza bilan
@@ -9466,12 +9602,23 @@
                 m.onclick = ev => { if (ev.target === m) close(); };
                 m.querySelector('[data-cmd="cancel"]').onclick = close;
                 const run = async (list, extra) => {
+                    if (cycDaysBusy) { ttToast('Avvalgi surish hali tugamadi — kuting.', 'warn'); return; }
                     m.querySelectorAll('button').forEach(b => { b.disabled = true; });
+                    cycDaysBusy = true;
+                    const msg = m.querySelector('[role="alert"]');
+                    msg.className = 'text-slate-600';
+                    msg.textContent = '⌛ Saqlanmoqda: ' + list.length + ' kun…';
                     try {
                         await cycDaysCommit(key, list, mode, delta, Object.assign({}, opts.extra || {}, extra));
                         close();
                         if (opts.reopen) cycReopenDay(key, list[0] != null ? list[0] : offsets[0]);
-                    } catch (e) { m.querySelector('[role="alert"]').textContent = e.message; m.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
+                    } catch (e) {
+                        msg.className = 'text-red-600';
+                        msg.textContent = cycErrText(e);
+                        m.querySelectorAll('button').forEach(b => { b.disabled = false; });
+                    } finally {
+                        cycDaysBusy = false;
+                    }
                 };
                 m.querySelector('[data-cmd="apply"]').onclick = () => run(ok.map(offOf).filter(o => o != null), {});
                 const force = m.querySelector('[data-cmd="force"]');
@@ -9481,19 +9628,27 @@
             }
             // Tanlangan kunlarni surish (sudrash yoki ↑ ↓): avval tekshiruv; muammo va amaliyot ko'chishi yo'q — darhol, bo'lsa — oyna.
             // "Faqat amaliy" ma'ruza ustiga tushsa — ma'ruza bilan o'rin almashish taklifi (lecture_swap, oldindan ko'rinish bilan).
+            // opts.locked — chaqiruvchi qulfni (cycDaysBusy) oldindan olgan (sudrash: tekshiruv javobini kutish paytida boshqa surish
+            // boshlanmasin); qulf shu yerda bo'shatiladi.
             async function cycDaysApply(key, offsets, mode, delta, dry, opts = {}) {
-                if (cycDaysBusy || !offsets.length || !delta) return;
+                if (!offsets.length || !delta) { if (opts.locked) cycDaysBusy = false; return; }
+                // Oldingi surish hali ketmoqda — jim e'tiborsiz qoldirilmaydi.
+                if (cycDaysBusy && !opts.locked) { ttToast('Avvalgi surish hali tugamadi — kuting.', 'warn'); return; }
                 cycDaysBusy = true;
                 const extra = opts.extra || {};
                 try {
-                    if (!dry || !dry.days) dry = await cycDaysRequest(key, offsets, mode, delta, Object.assign({}, extra, { dry_run: 1 }));
+                    // Tekshiruv natijasi yo'q — darhol "tekshirilmoqda…" (ko'p kunda xabar ham), 5 kundan ko'p — bo'laklab.
+                    if (!dry || !dry.days) {
+                        if (offsets.length > 1) ttToast('&#8987; Tekshirilmoqda: ' + offsets.length + ' kun…', '');
+                        dry = await cycDaysDry(key, offsets, mode, delta, extra);
+                    }
                     const days = dry.days || [];
                     // Kunning rejimi: server javobidan, bo'lmasa — so'rovdagi (aralash tanlovda har kun o'zi).
                     const block = cycBlockByKey(key);
                     const dayMode = d => d.mode || cycModeOf(mode, offsets.find(o => block && block.day_plan[o] && block.day_plan[o].k - 1 === d.day_index));
                     if (!extra.lecture_swap && days.some(d => dayMode(d) === 'practice' && d.status === 'blocked' && /Ma.ruza vaqti bilan ustma-ust/.test(d.why || ''))) {
                         const ex2 = Object.assign({}, extra, { lecture_swap: 1 });
-                        const dry2 = await cycDaysRequest(key, offsets, mode, delta, Object.assign({}, ex2, { dry_run: 1 }));
+                        const dry2 = await cycDaysDry(key, offsets, mode, delta, ex2);
                         cycDaysDialog(key, offsets, mode, delta, dry2, Object.assign({}, opts, { extra: ex2, reverse: true }));
                         return;
                     }
@@ -9503,13 +9658,14 @@
                     // Bugungi kun ham o'zgarsa — oyna (HEMIS eslatmasi bilan) — darhol emas.
                     if (!moves && !days.some(d => d.today && ['ok', 'conflict'].includes(d.status))
                         && days.some(d => d.status === 'ok' || d.status === 'conflict') && days.every(d => ['ok', 'same', 'skip'].includes(d.status))) {
+                        if (offsets.length > 1) ttToast('&#8987; Saqlanmoqda: ' + offsets.length + ' kun…', '');
                         await cycDaysCommit(key, offsets, mode, delta, extra);
                         if (opts.reopen) cycReopenDay(key, offsets[0]);
                     } else {
                         cycDaysDialog(key, offsets, mode, delta, dry, opts);
                     }
                 } catch (e) {
-                    ttToast('Ko\'chirib bo\'lmadi: ' + esc(e.message), 'warn');
+                    ttToast('Ko\'chirib bo\'lmadi: ' + esc(cycErrText(e)), 'warn');
                 } finally {
                     cycDaysBusy = false;
                 }
@@ -9539,8 +9695,11 @@
                     s0.dryTimer = setTimeout(async () => {
                         if (st !== s0 || dryKey() !== k || s0.dry[k] !== undefined) return;
                         s0.dry[k] = null;   // so'ralmoqda
-                        try { s0.dry[k] = await cycDaysRequest(s0.key, s0.multi, s0.modes, s0.delta, { dry_run: 1 }); }
-                        catch (e) { s0.dry[k] = { error: e.message, days: [] }; }
+                        // Va'da saqlanadi: qo'yib yuborilganda javob hali kelmagan bo'lsa — qayta so'ralmaydi, shu kutiladi (finish).
+                        s0.dryP = s0.dryP || {};
+                        s0.dryP[k] = cycDaysDry(s0.key, s0.multi, s0.modes, s0.delta, {}, false)
+                            .then(r => { s0.dry[k] = r; }, e => { s0.dry[k] = { error: cycErrText(e), days: [] }; });
+                        await s0.dryP[k];
                         if (st === s0 && dryKey() === k && s0.moving) paint(s0.lastEv);
                     }, 250);
                 };
@@ -9693,7 +9852,20 @@
                     }
                     if (s0.multi) {
                         const k = 'sel|' + s0.delta;
-                        await cycDaysApply(s0.key, s0.multi, s0.modes, s0.delta, s0.dry[k] && s0.dry[k].days && !s0.dry[k].error ? s0.dry[k] : null);
+                        const ready = () => (s0.dry[k] && s0.dry[k].days && !s0.dry[k].error ? s0.dry[k] : null);
+                        // Sudrash paytidagi tekshiruv hali ketmoqda — qayta so'ralmaydi: darhol "tekshirilmoqda…", javob kelishi bilan davom etadi.
+                        // Tekshiruv boshlanmagan bo'lsa — cycDaysApply o'zi darhol ko'rsatadi va so'raydi.
+                        if (!ready() && s0.dry[k] === null && s0.dryP && s0.dryP[k]) {
+                            if (cycDaysBusy) { ttToast('Avvalgi surish hali tugamadi — kuting.', 'warn'); return; }
+                            // Qulf kutishdan oldin olinadi: shu paytda ↑ ↓ boshqa surishni boshlamasin (ogohlantirish chiqadi), bu sudrash
+                            // esa javob kelgach o'z qulfi bilan davom etadi (cycDaysApply bo'shatadi).
+                            cycDaysBusy = true;
+                            cycBusyShow(s0.key, s0.multi, s0.modes, 'tekshirilmoqda…');
+                            try { await s0.dryP[k]; } finally { cycBusyHide(); }
+                            await cycDaysApply(s0.key, s0.multi, s0.modes, s0.delta, ready(), { locked: true });
+                            return;
+                        }
+                        await cycDaysApply(s0.key, s0.multi, s0.modes, s0.delta, ready());
                         return;
                     }
                     if (s0.bad) { ttToast('Ko\'chirib bo\'lmadi: ' + esc(s0.bad) + '.', 'warn'); return; }

@@ -6337,7 +6337,8 @@ class TimetableController extends Controller
      */
     private function cycleDayUnits(TimetableBoard $board, TimetableCyclePlacement $placement, array $data, int $k): array
     {
-        request()->attributes->remove('timetable.cycle_units.' . $board->id);
+        // Shu blokning hozirgi (yozuvdan keyingi) holati — faqat shu blok yangilanadi (cycleUnitsRefresh), butun doska emas.
+        $this->cycleUnitsRefresh((int) $board->id, [(int) $placement->id]);
         $flow = trim((string) ($data['placement_group'] ?? '')) ?: (string) $data['group_name'];
         $out = [];
         foreach ([$flow, (string) $data['group_name']] as $group) {
@@ -6567,7 +6568,7 @@ class TimetableController extends Controller
         $slots['starts_g'] = $byGroup;
         $slots = array_filter($slots, fn ($key) => !is_int($key) && !ctype_digit((string) $key), ARRAY_FILTER_USE_KEY);
         $placement->update(['lecture_slots' => $slots]);
-        request()->attributes->remove('timetable.cycle_units.' . $board->id);
+        $this->cycleUnitsRefresh((int) $board->id, [(int) $placement->id]);
         // Ko'chgan amaliyot: o'qituvchi / xona / guruh bandligi — band bo'lsa keyingi nomzod; hammasi band — birinchisi qoladi (to'qnashuv).
         $swaps = [];
         $busyTexts = [];
@@ -6577,7 +6578,7 @@ class TimetableController extends Controller
                 $sl = (array) ($placement->fresh()->lecture_slots ?? []);
                 $sl['ps_g'][$unit][$k] = $s;
                 $placement->update(['lecture_slots' => $sl]);
-                request()->attributes->remove('timetable.cycle_units.' . $board->id);
+                $this->cycleUnitsRefresh((int) $board->id, [(int) $placement->id]);
             };
             $chosen = null;
             $first = null;
@@ -7013,20 +7014,27 @@ class TimetableController extends Controller
     private function cycleOccupancy(TimetableBoard $board, array $units, array $calendar, ?array $onlyDates = null, ?array $onlyCards = null, bool $withPlan = false, bool $includeInfoOnly = false): array
     {
         [$dates, $workIndices] = $calendar;
-        $hasSlots = Schema::hasColumn('timetable_cycle_placements', 'lecture_slots');
-        $cycleHours = $this->cycleSubjectHoursMap($board);
-        $ktr = $this->cycleKtrDayPlans($board);
-        $gridHours = $this->cycleGridHours($board);
-        // Oqim ma'ruzasi: oqim nomi + fan bo'yicha ma'ruza kartalari.
-        $lectures = [];
-        foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')) as $c) {
-            if (!$includeInfoOnly && $this->isNonBlocking($c, $board)) continue;
-            $lectures[mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($this->cycleFlowName($c))
-                . '|' . mb_strtolower(trim((string) $c->subject_name))][] = $c;
+        // Doska ma'lumoti (soatlar, KTR, ma'ruza kartalari, xonalar, mudir belgilari): ko'p kunli surishda (timetable.cycle_occ_memo —
+        // kartalar, KTR va mudir belgilari o'zgarmaydi) so'rov davomida bir marta; boshqa yo'llarda — har chaqiruvda (avvalgidek).
+        $memoKey = 'timetable.cycle_occ_base.' . $board->id . '.' . (int) $includeInfoOnly;
+        $base = request()->attributes->get($memoKey);
+        if ($base === null) {
+            $hasSlots = Schema::hasColumn('timetable_cycle_placements', 'lecture_slots');
+            // Oqim ma'ruzasi: oqim nomi + fan bo'yicha ma'ruza kartalari.
+            $lectures = [];
+            foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'lecture')) as $c) {
+                if (!$includeInfoOnly && $this->isNonBlocking($c, $board)) continue;
+                $lectures[mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($this->cycleFlowName($c))
+                    . '|' . mb_strtolower(trim((string) $c->subject_name))][] = $c;
+            }
+            // Oqim ma'ruzasi "vaqtincha kafedra mudirida" (mudir_ph_lec): ma'ruza kartasi id => belgi (barcha joylashuvlardan).
+            $base = [$hasSlots, $this->cycleSubjectHoursMap($board), $this->cycleKtrDayPlans($board), $this->cycleGridHours($board), $lectures,
+                Auditorium::pluck('name', 'code')->all(), $hasSlots ? $this->cycleMudirPhLecMap((int) $board->id) : []];
+            if (request()->attributes->get('timetable.cycle_occ_memo')) {
+                request()->attributes->set($memoKey, $base);
+            }
         }
-        $roomNames = Auditorium::pluck('name', 'code')->all();
-        // Oqim ma'ruzasi "vaqtincha kafedra mudirida" (mudir_ph_lec): ma'ruza kartasi id => belgi (barcha joylashuvlardan).
-        $lecPh = $hasSlots ? $this->cycleMudirPhLecMap((int) $board->id) : [];
+        [$hasSlots, $cycleHours, $ktr, $gridHours, $lectures, $roomNames, $lecPh] = $base;
         $out = [];
         foreach ($units as $ui => $u) {
             if (!$includeInfoOnly && $this->isNonBlocking($u, $board)) continue;
@@ -7424,6 +7432,20 @@ class TimetableController extends Controller
      */
     private function weeklyOccupancy(TimetableBoard $board, array $state, ?array $onlyDates = null, bool $includeInfoOnly = false): array
     {
+        // Ko'p kunli surishda (cycleMoveMemo) — bir xil kartalar va sanalar uchun bir marta (holat kartalar id lari bilan aniqlanadi).
+        $ids = array_map('intval', array_keys($state['cards'] ?? []));
+        sort($ids);
+        $only = $onlyDates === null ? null : array_keys($onlyDates);
+        if ($only !== null) {
+            sort($only);
+        }
+
+        return $this->cycleMoveMemo('wocc|' . $board->id . '|' . md5(json_encode([$ids, $only, $includeInfoOnly, array_keys($state['ov'] ?? [])])),
+            fn () => $this->weeklyOccupancyLoad($board, $state, $onlyDates, $includeInfoOnly));
+    }
+
+    private function weeklyOccupancyLoad(TimetableBoard $board, array $state, ?array $onlyDates = null, bool $includeInfoOnly = false): array
+    {
         $isCycle = $this->cycleCardTest($this->cycleSubjectKeys($board));
         $grids = [];
         $days = [];      // grid|hafta => [kun => sana]
@@ -7710,6 +7732,56 @@ class TimetableController extends Controller
     }
 
     /**
+     * So'rov keshidagi (placedCycleUnits) sikl birliklarini blok(lar)ning bazadagi lecture_slots bilan yangilaydi — kun soatlari, amaliy
+     * boshi (ps_g), smena yozilgandan yoki savepoint bekor qilingandan keyin. Butun doska (cycleInternalUnits → cyclePlan) qayta
+     * hisoblanmaydi: ilgari har yozuvdan keyin kesh o'chirilardi va ko'p kunli surishda bir kunga ~50 marta butun "Sikl jadvali"
+     * qayta hisoblanardi (10 kun — 50+ s, 504). Kun surish blok sanalarini (start_index) va kartalarni o'zgartirmaydi; ular o'zgarsa —
+     * kesh butunlay o'chiriladi (request()->attributes->remove). Kesh hali yo'q bo'lsa — hech narsa (keyingi chaqiriq bazadan quradi).
+     */
+    private function cycleUnitsRefresh(int $boardId, array $placementIds): void
+    {
+        $memoKey = 'timetable.cycle_units.' . $boardId;
+        $placementIds = array_values(array_unique(array_filter(array_map('intval', $placementIds))));
+        if (!$placementIds || !request()->attributes->has($memoKey)) {
+            return;
+        }
+        $slots = [];
+        foreach (TimetableCyclePlacement::whereIn('id', $placementIds)->get(['id', 'lecture_slots']) as $p) {
+            $slots[(int) $p->id] = (array) ($p->lecture_slots ?? []);
+        }
+        [$units, $calendar] = request()->attributes->get($memoKey);
+        foreach ($units as $i => $u) {
+            $id = (int) ($u['placement']->id ?? 0);
+            if (isset($slots[$id])) {
+                // Nusxa: birlikdagi obyekt (cyclePlan bloki yoki model) boshqa joyda ham ishlatilgan bo'lishi mumkin.
+                $placement = clone $u['placement'];
+                $placement->lecture_slots = $slots[$id];
+                $units[$i]['placement'] = $placement;
+            }
+        }
+        request()->attributes->set($memoKey, [$units, $calendar]);
+    }
+
+    /**
+     * Ko'p kunli surish davomida (timetable.cycle_occ_memo — cycleDaysMove) o'zgarmaydigan doska ma'lumoti: haftalik darslar, ularning
+     * bandligi, sikl fanlari ro'yxati — so'rov davomida kalit bo'yicha bir marta. Kun surish faqat sikl blokining lecture_slots ini
+     * o'zgartiradi, haftalik kartalar va sozlamalar o'zgarmaydi. Boshqa yo'llarda (bayroq yo'q) — har safar hisoblanadi (avvalgidek).
+     */
+    private function cycleMoveMemo(string $key, \Closure $make)
+    {
+        if (!request()->attributes->get('timetable.cycle_occ_memo')) {
+            return $make();
+        }
+        $all = request()->attributes->get('timetable.cycle_move_memo', []);
+        if (!array_key_exists($key, $all)) {
+            $all[$key] = $make();
+            request()->attributes->set('timetable.cycle_move_memo', $all);
+        }
+
+        return $all[$key];
+    }
+
+    /**
      * Karta qatorlari — model emas, faqat bandlik/to'qnashuv uchun kerakli ustunlar (id tartibida, id => qator; group_names —
      * massiv). Katta doskada Eloquent modellar xotirani (128 MB) tugatadi.
      */
@@ -7832,6 +7904,17 @@ class TimetableController extends Controller
      */
     private function weeklyStateOn(TimetableBoard $board, array $dates, int $maxTo, array $exceptIds): array
     {
+        $ds = array_values(array_unique($dates));
+        sort($ds);
+        $ex = array_map('intval', array_keys($exceptIds));
+        sort($ex);
+
+        return $this->cycleMoveMemo('wstate|' . $board->id . '|' . md5(json_encode([$ds, $maxTo, $ex])),
+            fn () => $this->weeklyStateOnLoad($board, $dates, $maxTo, $exceptIds));
+    }
+
+    private function weeklyStateOnLoad(TimetableBoard $board, array $dates, int $maxTo, array $exceptIds): array
+    {
         $dows = array_values(array_unique(array_map(fn ($d) => Carbon::parse($d)->dayOfWeekIso, $dates)));
         $weeks = $this->weeksAt($board, $dates);
         $ov = $this->overrideRows($board, fn ($q) => $q->whereIn('o.week', $weeks)
@@ -7873,9 +7956,11 @@ class TimetableController extends Controller
         // sanalarga (hafta kuni, kalendar haftasi) va vaqtgacha tushadigan boshqa darslar — yengil qatorlar. Sikl birliklari so'rov
         // davomida bir marta olinadi.
         [$units, $calendar] = $this->placedCycleUnits($board);
+        // $onlyDates berilsa — shu birlik darslari ham faqat shu sanalar bo'yicha hisoblanadi (butun semestr emas; natija — quyidagi
+        // filtr bilan bir xil): ko'p kunli surishda har kun bitta sana.
         $mine = array_merge($this->weeklyOccupancy($board, ['cards' => $this->cardRows($board, fn ($q) => $q->whereIn('id', array_keys($ids))),
-            'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($ids)))]),
-            array_values(array_filter($this->cycleOccupancy($board, $units, $calendar, null, $ids), fn ($e) => empty($e['ph']))));
+            'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($ids)))], $onlyDates),
+            array_values(array_filter($this->cycleOccupancy($board, $units, $calendar, $onlyDates, $ids), fn ($e) => empty($e['ph']))));
         // $onlyDates — faqat shu sanalardagi darslari (o'qituvchi so'rovi: ko'chiriladigan kun). O'tgan sanalar (bugundan oldin) — hech qachon:
         // o'tib ketgan to'qnashuv biriktirishni ham, "band" belgisini ham bermaydi; bugun — kiradi.
         $today = self::proposalToday();
@@ -8199,6 +8284,11 @@ class TimetableController extends Controller
 
     /** Sikl rejimidagi fanlar: "specKey|kurs|normSubject" => true. */
     private function cycleSubjectKeys(TimetableBoard $board): array
+    {
+        return $this->cycleMoveMemo('ckeys|' . $board->id, fn () => $this->cycleSubjectKeysLoad($board));
+    }
+
+    private function cycleSubjectKeysLoad(TimetableBoard $board): array
     {
         $keys = [];
         foreach ($this->subjectSettingsFor($board) as $st) {
@@ -10402,7 +10492,8 @@ class TimetableController extends Controller
                     }
                 } finally {
                     DB::rollBack();
-                    request()->attributes->remove('timetable.cycle_units.' . $board->id);
+                    // Savepoint bekor — keshdagi shu bloklar bazadagi (avvalgi) holatga (butun doska qayta hisoblanmaydi).
+                    $this->cycleUnitsRefresh((int) $board->id, array_map(fn ($x) => (int) ($x['u']['placement']->id ?? 0), $units));
                 }
             }
             if ($error !== null) {
@@ -10457,7 +10548,8 @@ class TimetableController extends Controller
             }
             $placement->update(['lecture_slots' => $slots]);
         }
-        request()->attributes->remove('timetable.cycle_units.' . ($units[0]['u']['placement']->board_id ?? 0));
+        // Faqat ps_g o'zgardi — keshdagi shu bloklar yangilanadi (cycleUnitsRefresh).
+        $this->cycleUnitsRefresh((int) ($units[0]['u']['placement']->board_id ?? 0), array_map(fn ($x) => (int) ($x['u']['placement']->id ?? 0), $units));
     }
 
     /**

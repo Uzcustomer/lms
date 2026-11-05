@@ -60,11 +60,17 @@ trait TimetableCycleDaysMove
         $beforeSlots = (array) ($placement->fresh()->lecture_slots ?? []);
         $out = [];
         $applied = 0;
+        $t0 = microtime(true);
+        // Doska ma'lumoti (sikl birliklari, KTR, soatlar, ma'ruza kartalari) — so'rov boshida bir marta; har kundan keyin faqat shu blok
+        // yozuvi yangilanadi (cycleUnitsRefresh). Kartalar va KTR kun surishda o'zgarmaydi — bandlik asoslari ham keshlanadi (cycleOccupancy).
+        request()->attributes->set('timetable.cycle_occ_memo', true);
         DB::beginTransaction();
         try {
             foreach ($days as $k) {
+                $tDay = microtime(true);
                 $placement = $placement->fresh() ?? $placement;
                 $units = $this->cycleDayUnits($board, $placement, $data, $k);
+                $this->cycleProfileLog('kun ' . ($k + 1) . ': birliklar', $tDay);
                 $row = ['day_index' => $k, 'date' => null, 'status' => 'skip', 'why' => 'Bu kun blokda yo‘q.', 'from' => null, 'to' => null,
                     'applied' => false];
                 if (!$units) {
@@ -116,6 +122,7 @@ trait TimetableCycleDaysMove
                     DB::rollBack();
                     throw $ex;
                 }
+                $this->cycleProfileLog('kun ' . ($k + 1) . ': yozuv va tekshiruv (' . $dayMode . ')', $tDay);
                 $row['swaps'] = $e['swaps'] ?? [];
                 $row['lecture'] = $e['lecture'] ?? null;
                 // Oldindan tekshirilmagan kun (guruhcha qatoridagi smenali amaliy): "Birga" yozuvidan keyingi xato — faqat kun oxiriga sig'maslik
@@ -132,7 +139,9 @@ trait TimetableCycleDaysMove
                     $row = array_merge($row, ['status' => $e['busy'] ? 'conflict' : 'ok', 'why' => $e['busy'] ? implode(' · ', $e['busy']) : null,
                         'applied' => !$dry]);
                 }
-                request()->attributes->remove('timetable.cycle_units.' . $board->id);
+                // Savepoint qo'llandi yoki bekor qilindi — keshdagi shu blok bazadagi holatga (butun doska qayta hisoblanmaydi).
+                $this->cycleUnitsRefresh((int) $board->id, [(int) $placement->id]);
+                $this->cycleProfileLog('kun ' . ($k + 1) . ': jami', $tDay, ['status' => $row['status']]);
                 $out[] = $row;
             }
             $after = $applied ? (array) ($placement->fresh()->lecture_slots ?? []) : null;
@@ -146,7 +155,12 @@ trait TimetableCycleDaysMove
             throw $ex;
         } finally {
             request()->attributes->remove('timetable.cycle_units.' . $board->id);
+            request()->attributes->remove('timetable.cycle_occ_memo');
+            request()->attributes->remove('timetable.cycle_move_memo');
+            request()->attributes->remove('timetable.cycle_occ_base.' . $board->id . '.0');
+            request()->attributes->remove('timetable.cycle_occ_base.' . $board->id . '.1');
         }
+        $this->cycleProfileLog('jami: ' . count($days) . ' kun' . ($dry ? ' (dry_run)' : ''), $t0, ['applied' => $applied]);
         // Tasdiqlangan so'rov qayta bajarilganda (TimetableChangeApproval) birorta kun o'zgarmasa — xato: so'rov "tasdiqlandi" bo'lib,
         // o'zgarish xabarlari ketmasin (sana o'tib ketgan yoki joy band bo'lib qolgan). To'g'ridan-to'g'ri so'rovda — kun bo'yicha natija.
         if (!$dry && !$applied && $request->attributes->has('timetable.change_replay')) {
@@ -357,6 +371,16 @@ trait TimetableCycleDaysMove
         $e = $this->cycleLectureDayErrors($board, $placement, array_merge($p, ['start_hour' => $at]), $units, true, $pin);
 
         return $e + ['lecture' => ['from' => $l0, 'to' => $at, 'len' => $llen]];
+    }
+
+    /**
+     * TIMETABLE_PROFILE=1 (config/timetable.php): bosqich vaqti (ms) daily logga — vaqtincha, sekinlikni haqiqiy doskada o'lchash uchun.
+     */
+    private function cycleProfileLog(string $stage, float $t0, array $ctx = []): void
+    {
+        if (config('timetable.profile')) {
+            \Illuminate\Support\Facades\Log::channel('daily')->info('[cycle-days] ' . $stage . ': ' . round((microtime(true) - $t0) * 1000) . ' ms', $ctx);
+        }
     }
 
     /** Oxirgi ko'p kunli surishni qaytarish: jadval keyin o'zgarmagan bo'lsa — oldingi qiymatlar (bitta so'rov). */

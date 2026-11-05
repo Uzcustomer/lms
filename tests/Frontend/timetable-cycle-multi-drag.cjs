@@ -43,16 +43,22 @@ const stubs = (role, dayEdit) => `
     window.toasts = [];
     window.reloads = 0;
     window.dryDays = null;   // dry_run javobi (test o'rnatadi)
-    function ttToast(html, tone) { window.toasts.push({ html, tone }); }
+    // Jarayon xabarlari ("⌛ Tekshirilmoqda…", "⌛ Saqlanmoqda…") — alohida (natija xabarlari window.toasts da).
+    function ttToast(html, tone) { (String(html).startsWith('&#8987;') ? (window.progress = window.progress || []) : window.toasts).push({ html, tone }); }
     function onPendingApproval(j) { window.toasts.push({ html: 'pending', tone: 'warn' }); }
     async function loadCyclePlan() { window.reloads++; }
     function openCycDayPop(key, offset) { window.calls.push({ pop: [key, +offset] }); cycDaySel = { key: key, offset: +offset }; }
     function moveCycDay(...args) { window.calls.push({ move: args }); }
     function openCycleTimeProposal(card, dp, date, opts) { window.calls.push({ proposal: { kind: opts.kind, preselect: opts.preselect, start: opts.start, date: date.iso } }); }
     const cycCanAsk = (card, dp, date, today, kind) => date.iso > today;
-    async function api(url, method, body) {
+    async function api(url, method, body, opts) {
         body = JSON.parse(JSON.stringify(body));
-        window.calls.push({ api: body });
+        window.calls.push({ api: body, timeout: opts && opts.timeout });
+        // Sekin server (window.delay), saqlashdagi xato (window.failOn — shu kun bo'lagi; failStatus — 504 va h.k.).
+        if (window.delay) await new Promise(r => setTimeout(r, window.delay));
+        if (!body.dry_run && !body.undo && window.failOn != null && (body.day_indexes || []).includes(window.failOn)) {
+            const e = new Error(window.failMsg || 'Server xatosi'); e.status = window.failStatus; throw e;
+        }
         if (body.undo) return { ok: true, undone: true };
         const days = (body.day_indexes || []).map(k => {
             const preset = window.dryDays && window.dryDays[k];
@@ -60,7 +66,8 @@ const stubs = (role, dayEdit) => `
                 applied: !body.dry_run }, preset || {}, preset && preset.status === 'conflict' ? { applied: !body.dry_run && Boolean(body.force) } : {},
                 preset && ['nofit', 'past'].includes(preset.status) ? { applied: false } : {});
         });
-        return { ok: true, dry_run: Boolean(body.dry_run), days: days, applied: days.filter(d => d.applied).length, undo: body.dry_run ? null : 'TOKEN' };
+        return { ok: true, dry_run: Boolean(body.dry_run), days: days, applied: days.filter(d => d.applied).length,
+            undo: body.dry_run ? null : (window.tokenSeq ? 'T' + (++window.tokenSeq) : 'TOKEN') };
     }
 `;
 // Panjara: 6 kun × 12 soat; M — 1–2-soat, A — 7–10-soat; sarlavha (fan nomi).
@@ -105,7 +112,8 @@ const drag = async (p, from, to, { hold = 400, mods = [] } = {}) => {
     return preview;
 };
 const apiCalls = p => p.evaluate(() => window.calls.filter(c => c.api).map(c => c.api));
-const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; window.dryDays = null; });
+const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; window.progress = []; window.dryDays = null; window.delay = 0; window.failOn = null;
+    window.failStatus = undefined; window.failMsg = null; window.tokenSeq = 0; });
 
 (async () => {
     const browser = await chromium.launch();
@@ -339,6 +347,90 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         assert.match((await p.evaluate(() => window.toasts))[0].html, /^2 kun: darslar \(aralash\) 08:30 → 09:10/);
         await p.keyboard.press('Escape');
 
+        // 7e) 5 kundan ko'p — 5 kunlik bo'laklar: tekshiruv ham, saqlash ham ketma-ket (har so'rovda vaqt chegarasi 65 s); bitta natija xabari,
+        //     bitta Ctrl+Z (hamma bo'laklar, teskari tartibda); jarayon xabarlari.
+        await reset(p);
+        for (const d of [0, 1, 2, 3, 4, 5]) await click(p, d, 1, ['Control']);
+        await p.evaluate(() => { window.tokenSeq = 100; });
+        await p.keyboard.press('ArrowDown');
+        await p.waitForTimeout(80);
+        let all7 = await p.evaluate(() => window.calls.filter(c => c.api));
+        assert.deepEqual(all7.map(c => [c.api.dry_run, c.api.day_indexes]), [[1, [0, 1, 2, 3, 4]], [1, [5]], [undefined, [0, 1, 2, 3, 4]], [undefined, [5]]]);
+        assert.ok(all7.every(c => c.timeout === 65000));
+        assert.deepEqual((await p.evaluate(() => window.progress)).map(x => x.html), ['&#8987; Tekshirilmoqda: 6 kun…', '&#8987; Saqlanmoqda: 6 kun…']);
+        let t7 = await p.evaluate(() => window.toasts);
+        assert.equal(t7.length, 1);
+        assert.match(t7[0].html, /^6 kun: ma'ruza .*data-cyc-undo>Qaytarish \(Ctrl\+Z\)/);
+        await reset(p);
+        await p.keyboard.press('Control+z');
+        await p.waitForTimeout(60);
+        assert.deepEqual((await apiCalls(p)).map(c => c.undo), ['T102', 'T101']);
+        assert.match((await p.evaluate(() => window.toasts))[0].html, /qaytarildi/);
+        // Kutish paytida: kursor "wait", kunlarda "tekshirilmoqda…" / "saqlanmoqda…", yorliqda jarayon; yana ↓ — "hali tugamadi".
+        await reset(p);
+        await p.evaluate(() => { window.delay = 250; });
+        await p.keyboard.press('ArrowDown');
+        await p.waitForTimeout(80);
+        assert.equal(await p.evaluate(() => document.body.classList.contains('cyc-busy')), true);
+        assert.equal(await p.getAttribute('.cyc-mk-cell[data-mk-day="0"][data-mk-hour="1"]', 'data-busy-note'), 'tekshirilmoqda…');
+        assert.match(await p.textContent('#cycSelBadge [data-sel-busy]'), /^Tekshirilmoqda: 1–5-kun \(1\/2\)…/);
+        await p.keyboard.press('ArrowDown');
+        assert.match((await p.evaluate(() => window.toasts)).map(x => x.html).join(' '), /Avvalgi surish hali tugamadi/);
+        await p.waitForTimeout(700);
+        assert.equal(await p.getAttribute('.cyc-mk-cell[data-mk-day="5"][data-mk-hour="1"]', 'data-busy-note'), 'saqlanmoqda…');
+        await p.waitForTimeout(400);
+        assert.equal(await p.evaluate(() => document.body.classList.contains('cyc-busy')), false);
+        assert.equal(await p.$('.cyc-mk-cell[data-busy-note]'), null);
+        assert.equal(await p.$('#cycSelBadge [data-sel-busy]'), null);
+        // 2-bo'lak saqlanmadi — 1-bo'lak qaytariladi (hammasi yoki hech narsa), xabarda sababi.
+        await reset(p);
+        await p.evaluate(() => { window.tokenSeq = 200; window.failOn = 5; window.failMsg = 'Ichki xato'; });
+        await p.keyboard.press('ArrowDown');
+        await p.waitForTimeout(100);
+        assert.deepEqual((await apiCalls(p)).filter(c => !c.dry_run).map(c => c.undo || c.day_indexes), [[0, 1, 2, 3, 4], [5], 'T201']);
+        assert.match((await p.evaluate(() => window.toasts))[0].html, /Ko'chirib bo'lmadi: Ichki xato Oldingi bo'laklar qaytarildi — hech narsa o'zgarmadi\./);
+        // 504 / vaqt tugadi — tushunarli matn, jadval qayta yuklanadi.
+        await reset(p);
+        await p.evaluate(() => { window.reloads = 0; window.failOn = 0; window.failStatus = 504; window.failMsg = 'HTTP 504'; });
+        await p.keyboard.press('ArrowDown');
+        await p.waitForTimeout(100);
+        assert.match((await p.evaluate(() => window.toasts))[0].html, /Server javob bermadi \(vaqt tugadi\)\. Kamroq kun tanlab qayta urinib ko'ring\./);
+        assert.equal(await p.evaluate(() => window.reloads), 1);
+        await reset(p);
+        await p.keyboard.press('Escape');
+
+        // 7f) Sudrash: tekshiruv javobi kelmasdan qo'yib yuborilsa — qayta so'ralmaydi, darhol "tekshirilmoqda…", javob kelgach davom etadi.
+        await reset(p);
+        for (const d of [0, 1, 2]) await click(p, d, 1, ['Control']);
+        await reset(p);
+        await p.evaluate(() => { window.delay = 600; });
+        const f1 = await at(p, 1, 1), f2 = await at(p, 1, 3);
+        await p.mouse.move(f1.x, f1.y); await p.mouse.down(); await p.mouse.move(f1.x, f1.y + 8, { steps: 2 }); await p.mouse.move(f2.x, f2.y, { steps: 4 });
+        await p.waitForTimeout(350);   // tekshiruv (250 ms dan keyin) ketdi, javob hali yo'q
+        await p.mouse.up();
+        await p.waitForTimeout(60);
+        assert.equal(await p.getAttribute('.cyc-mk-cell[data-mk-day="0"][data-mk-hour="1"]', 'data-busy-note'), 'tekshirilmoqda…');
+        // Kutish paytida ↓ — yangi surish boshlanmaydi (qulf sudrashniki), ogohlantirish; sudrash javob kelgach davom etadi.
+        await p.keyboard.press('ArrowDown');
+        assert.match((await p.evaluate(() => window.toasts)).map(x => x.html).join(' '), /Avvalgi surish hali tugamadi/);
+        await p.waitForTimeout(1700);
+        assert.deepEqual((await apiCalls(p)).map(c => [c.dry_run, c.day_indexes, c.delta]), [[1, [0, 1, 2], 2], [undefined, [0, 1, 2], 2]]);
+        await reset(p);
+        await p.keyboard.press('ArrowDown');   // qulf bo'shagan — keyingi surish ishlaydi
+        await p.waitForTimeout(80);
+        assert.deepEqual((await apiCalls(p)).map(c => [c.dry_run, c.day_indexes, c.delta]), [[1, [0, 1, 2], 1], [undefined, [0, 1, 2], 1]]);
+        await reset(p);
+        await p.keyboard.press('Escape');
+
+        // 7g) Tasdiq talab qilinadigan doska (kafedra mudiri): tekshiruv bo'laklab, saqlash — bitta so'rov (tasdiq ro'yxatida bitta).
+        const kg = await page('kafedra_mudiri', true);
+        await kg.evaluate(() => { board.settings = { approval_required: true }; });
+        for (const d of [0, 1, 2, 3, 4, 5]) await click(kg, d, 1, ['Control']);
+        await reset(kg);
+        await kg.keyboard.press('ArrowDown');
+        await kg.waitForTimeout(80);
+        assert.deepEqual((await apiCalls(kg)).map(c => [c.dry_run, c.day_indexes]), [[1, [0, 1, 2, 3, 4]], [1, [5]], [undefined, [0, 1, 2, 3, 4, 5]]]);
+
         // 7c) Kafedra mudiri (kun soatini sura oladi) — bugungi kun tanlanmaydi (faqat admin / registrator ofisi).
         const km = await page('kafedra_mudiri', true);
         await km.evaluate(() => { window.TODAY = '2026-11-17'; window.T12 = ['24:00'].concat(window.T12.slice(1)); });
@@ -386,7 +478,7 @@ const reset = p => p.evaluate(() => { window.calls = []; window.toasts = []; win
         // Sudrashsiz (start yo'q) — hozirgi vaqt.
         await q.evaluate(d => window.open1({ kind: 'practice', days: d, preselect: ['2026-11-17'] }), days);
         assert.equal(await q.$eval('#teacherTimeProposal select[name="start_hour"]', el => el.value), '7');
-        console.log('timetable cycle multi drag: 10 scenarios passed');
+        console.log('timetable cycle multi drag: 13 scenarios passed');
     } finally {
         await browser.close();
     }

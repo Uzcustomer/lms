@@ -674,6 +674,7 @@
                                 <label for="grade_minimum_limit" style="display: block; font-size: 14px; font-weight: 700; color: #78350f;">Minimal chegara (barcha baholash tizimlari)</label>
                                 <div style="font-size: 12px; color: #92400e; margin-top: 4px; line-height: 1.5;">
                                     Shundan past kunlik baho — past baho (otrabotka qarzi); MT qulfi, JN va hisobotlar ham shunga tayanadi.
+                                    Saqlanganda pastdagi 100 ballik chegaralar (JN, MT, OSKI, Test, O'zl.) undan past bo'lsa — shu qiymatga ko'tariladi (5 ballik tegilmaydi).
                                     Bo'sh qoldirilsa — HEMIS qiymati. HEMIS dan yangilash bu sozlamani o'zgartirmaydi.
                                 </div>
                             </div>

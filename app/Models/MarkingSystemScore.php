@@ -123,20 +123,21 @@ class MarkingSystemScore extends Model
      */
     public static function getDefault(): self
     {
+        $limit = self::lowGradeLimit();
         $default = new static;
         $default->minimum_limit = 60;
         $default->gpa_limit = 2.0;
-        $default->jn_limit = 60;
+        $default->jn_limit = $limit;
         $default->jn_active = true;
-        $default->mt_limit = 60;
+        $default->mt_limit = $limit;
         $default->mt_active = true;
-        $default->on_limit = 60;
+        $default->on_limit = $limit;
         $default->on_active = false;
-        $default->oski_limit = 60;
+        $default->oski_limit = $limit;
         $default->oski_active = true;
-        $default->test_limit = 60;
+        $default->test_limit = $limit;
         $default->test_active = true;
-        $default->total_limit = 60;
+        $default->total_limit = $limit;
         $default->total_active = true;
         return $default;
     }

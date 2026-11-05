@@ -193,7 +193,18 @@ class SettingsController extends Controller
         Setting::set(MarkingSystemScore::SETTING_MINIMUM_LIMIT, $validated['grade_minimum_limit'] ?? '');
         MarkingSystemScore::forgetLmsMinimumLimit();
 
+        $minimum = $validated['grade_minimum_limit'] ?? null;
         foreach ($validated['scores'] as $id => $scoreData) {
+            // Butun tizim chegarasi: 100 ballik komponentlar undan past bo'lmaydi (5 ballikdagi 3 — tegilmaydi)
+            if ($minimum !== null) {
+                foreach (['jn', 'mt', 'on', 'oski', 'test', 'total'] as $type) {
+                    $limit = (int) $scoreData[$type . '_limit'];
+                    if ($limit > 5 && $limit < $minimum) {
+                        $scoreData[$type . '_limit'] = $minimum;
+                    }
+                }
+            }
+
             MarkingSystemScore::where('id', $id)->update([
                 'jn_limit' => $scoreData['jn_limit'],
                 'jn_active' => !empty($scoreData['jn_active']),

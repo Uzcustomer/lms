@@ -21,6 +21,8 @@ class MoodleRetakeClient
         return [
             'found' => (bool) ($body['found'] ?? false),
             'debts' => array_values(array_filter($body['debts'] ?? [], 'is_array')),
+            // Test markazi yopgan vaqtlar: [{start, end, note}] (Y-m-d H:i)
+            'closed' => array_values(array_filter($body['closed'] ?? [], 'is_array')),
         ];
     }
 

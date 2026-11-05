@@ -72,7 +72,14 @@ class RetakeBookingController extends Controller
                             'end' => $b->slot_end->format('Y-m-d\TH:i'),
                             'name' => (string) $b->subject_name,
                             'same' => (int) $b->subject_id === $subjectId,
-                        ])->values(),
+                        ])->values()
+                        // Test markazi yopgan vaqtlar (Moodle) — tanlab bo'lmaydi
+                        ->concat(collect($this->service->closedSlots())->map(fn ($c) => [
+                            'start' => str_replace(' ', 'T', (string) ($c['start'] ?? '')),
+                            'end' => str_replace(' ', 'T', (string) ($c['end'] ?? '')),
+                            'name' => (string) ($c['note'] ?? ''),
+                            'closed' => true,
+                        ]))->values(),
                 ]);
             }
             $notFound = true;

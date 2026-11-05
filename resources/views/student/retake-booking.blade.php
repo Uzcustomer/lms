@@ -282,13 +282,17 @@
                             radios.forEach(function (r) {
                                 var past = !!date && new Date(date + 'T' + r.dataset.end) <= now;
                                 var late = saturday && !!form.dataset.saturdayTo && r.dataset.end > form.dataset.saturdayTo;
-                                var taken = date ? busyAt(date, r).filter(function (b) { return !b.same; }) : [];
+                                var here = date ? busyAt(date, r) : [];
+                                // Test markazi yopgan vaqt
+                                var shut = here.filter(function (b) { return b.closed; })[0] || null;
+                                var taken = here.filter(function (b) { return !b.same && !b.closed; });
                                 var full = taken.length >= perSlot;
                                 var note = r.parentNode.querySelector('.rb-busy');
-                                note.textContent = sameDay ? 'shu fan bor' : taken.map(function (b) { return b.name || 'band'; }).join(', ');
-                                note.hidden = !(sameDay || taken.length);
+                                note.textContent = shut ? 'yopiq' + (shut.name ? ': ' + shut.name : '')
+                                    : (sameDay ? 'shu fan bor' : taken.map(function (b) { return b.name || 'band'; }).join(', '));
+                                note.hidden = !(shut || sameDay || taken.length);
                                 r.parentNode.hidden = late;
-                                r.disabled = past || late || full || sameDay;
+                                r.disabled = past || late || full || sameDay || !!shut;
                                 if (r.disabled && r.checked) { r.checked = false; }
                                 if (!r.disabled) { free++; }
                             });

@@ -39,9 +39,14 @@ class RetakeBookingService
      *
      * @throws MoodleRetakeException
      */
+    /** Oxirgi debts() so'rovidagi test markazi yopgan vaqtlar: [{start, end, note}] */
+    private array $closed = [];
+
     public function debts(int $studentHemisId): array
     {
-        $debts = $this->client->getDebts($studentHemisId)['debts'];
+        $response = $this->client->getDebts($studentHemisId);
+        $debts = $response['debts'];
+        $this->closed = $response['closed'] ?? [];
 
         $missedIds = collect($debts)
             ->filter(fn ($d) => ($d['state'] ?? '') === 'missed' && (int) ($d['missed_booking_id'] ?? 0) > 0)
@@ -64,6 +69,12 @@ class RetakeBookingService
      * oralig'i (book_from — deadline). Muddati LMS bo'yicha o'tgan qarzga vaqt
      * tanlab bo'lmaydi.
      */
+    /** Test markazi yopgan vaqtlar (oxirgi debts() so'rovidan) */
+    public function closedSlots(): array
+    {
+        return $this->closed;
+    }
+
     public function withLmsDeadline(array $debts, $student): array
     {
         $today = now()->toDateString();

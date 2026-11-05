@@ -1431,7 +1431,7 @@
                                                     foreach ($dayGrades as $pair => $gd) {
                                                         if (!empty($gd['upgraded_by_admin'])) {
                                                             $dayUpgradeLines[] = '(' . $pair . ') Eski baho: ' . round((float) $gd['admin_original_grade'], 0)
-                                                                . ' → Yangi baho: ' . round((float) ($gd['original_grade'] ?? $gd['grade']), 0);
+                                                                . ' → Yangi baho: ' . round((float) $gd['grade'], 0);
                                                         }
                                                     }
                                                     $hasUpgradedInDay = (bool) $dayUpgradeLines;
@@ -2013,7 +2013,7 @@
                                                     // Admin oshirgan baho: hover'da eski va yangi baho
                                                     $isAdminUpgraded = $gradeData && !empty($gradeData['upgraded_by_admin']);
                                                     $upgradeTitle = $isAdminUpgraded
-                                                        ? 'Eski baho: ' . round((float) $gradeData['admin_original_grade'], 0) . "\nYangi baho: " . round((float) $gradeData['original_grade'], 0)
+                                                        ? 'Eski baho: ' . round((float) $gradeData['admin_original_grade'], 0) . "\nYangi baho: " . round((float) $gradeData['grade'], 0)
                                                         : null;
                                                     if ($upgradeTitle) {
                                                         $cellTitle = $upgradeTitle . ($cellTitle ? "\n" . $cellTitle : '');

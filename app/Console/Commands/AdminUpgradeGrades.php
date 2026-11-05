@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\Schema;
  *   60–69.9  → eski + 10
  *   70–89.9  → eski + (90 − eski) / 2
  *   90–100   → eski + (100 − eski) / 2
- * 60 dan past, NB, ma'ruza/MT/nazoratlar va otrabotka qilingan (retake_grade bor) baholarga tegilmaydi.
+ * NB yoki past baho ustidan otrabotka qilingan bo'lsa — otrabotka bahosi (retake_grade) oshiriladi.
+ * 60 dan past, otrabotkasiz NB, ma'ruza/MT/nazoratlar baholariga tegilmaydi.
  *
  * Yozuvda: grade = yangi baho, upgraded_by_admin = true, admin_original_grade = eski baho.
  * HEMIS importi bunday baholarni qayta yozmaydi; jurnalda katak to'q sariq, hover'da eski/yangi baho.
@@ -45,6 +46,16 @@ class AdminUpgradeGrades extends Command
         };
 
         return round(min($new, 100), 2);
+    }
+
+    /**
+     * Jurnalda ko'rinadigan ustun: NB yoki chegaradan past baho ustidan otrabotka qo'yilgan
+     * bo'lsa — retake_grade (JournalController::getEffectiveGrade), aks holda — grade.
+     * Otrabotka bahosi oshirilganda grade o'zgarmaydi, shuning uchun qoida --revert da ham bir xil.
+     */
+    public static function targetColumn(object $r, float $limit): string
+    {
+        return $r->retake_grade !== null && ($r->grade === null || (float) $r->grade < $limit) ? 'retake_grade' : 'grade';
     }
 
     public function handle(): int
@@ -94,7 +105,7 @@ class AdminUpgradeGrades extends Command
                 ->where('lesson_date', '>=', $from->copy()->startOfDay())
                 ->where('lesson_date', '<=', $to->copy()->endOfDay())
                 ->whereNotIn('training_type_code', $excluded)
-                ->whereNotNull('grade')
+                ->where(fn ($q) => $q->whereNotNull('grade')->orWhereNotNull('retake_grade'))
                 ->get(['id', 'student_hemis_id', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status',
                     'upgraded_by_admin', 'admin_original_grade']);
 
@@ -109,38 +120,38 @@ class AdminUpgradeGrades extends Command
 
             $changed = $below = $retake = $same = 0;
             foreach ($rows as $r) {
+                // NB / past baho ustidan qo'yilgan otrabotka bahosi ham oshiriladi (jurnal shuni ko'rsatadi)
+                $column = self::targetColumn($r, $limit);
                 if ($revert) {
                     if (!$r->upgraded_by_admin) {
                         continue;
                     }
                     $old = (float) $r->admin_original_grade;
-                    $update = ['grade' => $old, 'upgraded_by_admin' => false, 'admin_original_grade' => null, 'admin_upgraded_at' => null];
-                    if ($old < $limit && $r->reason === null && $r->retake_grade === null) {
+                    $update = [$column => $old, 'upgraded_by_admin' => false, 'admin_original_grade' => null, 'admin_upgraded_at' => null];
+                    if ($column === 'grade' && $old < $limit && $r->reason === null && $r->retake_grade === null) {
                         $update += ['reason' => 'low_grade', 'status' => 'pending',
                             'deadline' => Carbon::parse($r->lesson_date)->addDays((int) ($deadlineDays[$students[$r->student_hemis_id] ?? ''] ?? 7))->endOfDay()];
                     }
                     $changed++;
-                    $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($r->grade), self::num($old)];
+                    $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($r->{$column}), self::num($old)];
                 } else {
-                    // Otrabotka qilingan bahoga tegilmaydi (jurnal otrabotka bahosini ko'rsatadi)
-                    if ($r->retake_grade !== null) {
-                        $retake++;
-                        continue;
-                    }
-                    $old = $r->upgraded_by_admin ? (float) $r->admin_original_grade : (float) $r->grade;
+                    $old = $r->upgraded_by_admin ? (float) $r->admin_original_grade : (float) $r->{$column};
                     $new = self::upgradedGrade($old);
                     if ($new === null) {
                         $below++;
                         continue;
                     }
-                    if ($r->upgraded_by_admin && abs((float) $r->grade - $new) < 0.001) {
+                    if ($r->upgraded_by_admin && abs((float) $r->{$column} - $new) < 0.001) {
                         $same++;
                         continue;
                     }
-                    $update = ['grade' => $new, 'upgraded_by_admin' => true, 'admin_original_grade' => $old, 'admin_upgraded_at' => now()];
+                    $update = [$column => $new, 'upgraded_by_admin' => true, 'admin_original_grade' => $old, 'admin_upgraded_at' => now()];
                     // Yangi baho chegaradan o'tsa — otrabotka qarzi yopiladi
-                    if ($r->reason === 'low_grade' && $new >= $limit) {
+                    if ($column === 'grade' && $r->reason === 'low_grade' && $new >= $limit) {
                         $update += ['reason' => null, 'status' => 'recorded', 'deadline' => null];
+                    }
+                    if ($column === 'retake_grade') {
+                        $retake++;
                     }
                     $changed++;
                     $samples[] = [$groupName, $r->student_hemis_id, substr($r->lesson_date, 0, 10), self::num($old), self::num($new)];
@@ -155,7 +166,7 @@ class AdminUpgradeGrades extends Command
             $table[] = [$groupName, $subject, $rows->count(), $changed, $below, $retake, $same ? "allaqachon: {$same}" : ''];
         }
 
-        $this->table(['Guruh', 'Fan', 'Baholar', $revert ? 'Qaytariladi' : 'Oshiriladi', '<60', 'Otrabotka', 'Izoh'], $table);
+        $this->table(['Guruh', 'Fan', 'Baholar', $revert ? 'Qaytariladi' : 'Oshiriladi', '<60', 'Shundan otrabotka', 'Izoh'], $table);
         if ($samples) {
             $this->line('Namunalar:');
             $this->table(['Guruh', 'Talaba', 'Sana', $revert ? 'Hozir' : 'Eski', $revert ? 'Qaytadi' : 'Yangi'], array_slice($samples, 0, 15));

@@ -70,6 +70,9 @@ it('upgrades only listed group/subject/dates, keeps the old grade, is idempotent
     $mid = upgradeGrade(['grade' => 80]);
     $below = upgradeGrade(['grade' => 50, 'reason' => 'low_grade', 'status' => 'pending']);
     $retaken = upgradeGrade(['grade' => 65, 'retake_grade' => 85, 'reason' => 'low_grade', 'status' => 'retake']);
+    $nbRetaken = upgradeGrade(['grade' => null, 'retake_grade' => 72, 'reason' => 'absent', 'status' => 'retake']);
+    $nbLowRetake = upgradeGrade(['grade' => null, 'retake_grade' => 55, 'reason' => 'absent', 'status' => 'retake']);
+    $nbOnly = upgradeGrade(['grade' => null, 'reason' => 'absent', 'status' => 'pending']);
     $lecture = upgradeGrade(['grade' => 80, 'training_type_code' => 11]);
     $outside = upgradeGrade(['grade' => 80, 'lesson_date' => '2026-10-23 10:00:00']);
     $otherSubject = upgradeGrade(['grade' => 80, 'subject_name' => 'Onkologiya']);
@@ -97,8 +100,16 @@ it('upgrades only listed group/subject/dates, keeps the old grade, is idempotent
         ->and((float) $g($mid)->grade)->toBe(85.0)        // ikki marta ishlatildi — baribir 85
         ->and((float) $g($mid)->admin_original_grade)->toBe(80.0)
         ->and((float) $g($subgroupB)->grade)->toBe(95.0)
-        ->and((float) $g($subgroupC)->grade)->toBe(70.0);
-    foreach ([$below, $retaken, $lecture, $outside, $otherSubject, $otherGroup, $similarGroup, $parentGroup, $rusOnly, $longer] as $id) {
+        ->and((float) $g($subgroupC)->grade)->toBe(70.0)
+        // NB / past baho ustidan otrabotka — otrabotka bahosi oshadi, asl baho o'zgarmaydi
+        ->and((float) $g($retaken)->retake_grade)->toBe(87.5)
+        ->and((float) $g($retaken)->grade)->toBe(65.0)
+        ->and($g($retaken)->reason)->toBe('low_grade')
+        ->and((float) $g($retaken)->admin_original_grade)->toBe(85.0)
+        ->and((float) $g($nbRetaken)->retake_grade)->toBe(81.0)
+        ->and($g($nbRetaken)->grade)->toBeNull()
+        ->and((bool) $g($nbRetaken)->upgraded_by_admin)->toBeTrue();
+    foreach ([$below, $nbLowRetake, $nbOnly, $lecture, $outside, $otherSubject, $otherGroup, $similarGroup, $parentGroup, $rusOnly, $longer] as $id) {
         expect((bool) $g($id)->upgraded_by_admin)->toBeFalse();
     }
 
@@ -109,5 +120,11 @@ it('upgrades only listed group/subject/dates, keeps the old grade, is idempotent
         ->and($g($low)->admin_original_grade)->toBeNull()
         ->and($g($low)->reason)->toBe('low_grade')        // 65 < 70 — qarz qaytdi
         ->and($g($low)->status)->toBe('pending')
-        ->and((float) $g($mid)->grade)->toBe(80.0);
+        ->and((float) $g($mid)->grade)->toBe(80.0)
+        ->and((float) $g($retaken)->retake_grade)->toBe(85.0)
+        ->and((float) $g($retaken)->grade)->toBe(65.0)
+        ->and($g($retaken)->status)->toBe('retake')
+        ->and((float) $g($nbRetaken)->retake_grade)->toBe(72.0)
+        ->and($g($nbRetaken)->grade)->toBeNull()
+        ->and((bool) $g($nbRetaken)->upgraded_by_admin)->toBeFalse();
 });

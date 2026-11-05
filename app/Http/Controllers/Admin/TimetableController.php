@@ -7939,7 +7939,10 @@ class TimetableController extends Controller
      * Dars birligi (kartalari) darslari vaqtida band o'qituvchilar va xonalar: haftalik va sikl jadvalidagi boshqa guruhcha
      * darslari bilan sana va vaqt kesishsa — biriktirishdan oldingi ogohlantirish va o'qituvchilar ro'yxatidagi kulrang belgi
      * uchun. Xona: "Kafedra mudiri xonasi" va umumiy xonalar band emas; sikl darslari o'zaro — sig'im va talabalar soni ma'lum
-     * bo'lsa, sig'imdan oshsagina band; haftalik dars bilan — har qanday kesishish (clashWith kabi). Qaytaradi: ['teachers' => [id => "guruh, fan, 30.10–10.11; ..."], 'rooms' => [kod => matn]].
+     * bo'lsa, sig'imdan oshsagina band; haftalik dars bilan — har qanday kesishish (clashWith kabi); zalda bir vaqtda ikki xil ma'ruza
+     * (bitta oqim emas: fan, o'qituvchi yoki vaqt boshqa) — sig'imdan qat'i nazar band. Faqat bugungi va kelgusi sanalar (birlikning o'tgan
+     * darslari to'qnashuv hisoblanmaydi; hammasi o'tgan bo'lsa — bandlik yo'q). Qaytaradi: ['teachers' => [id => "guruh, fan, 30.10–10.11; ..."],
+     * 'rooms' => [kod => matn]].
      */
     protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false): array
     {
@@ -7958,10 +7961,10 @@ class TimetableController extends Controller
         $mine = array_merge($this->weeklyOccupancy($board, ['cards' => $this->cardRows($board, fn ($q) => $q->whereIn('id', array_keys($ids))),
             'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($ids)))], $onlyDates),
             array_values(array_filter($this->cycleOccupancy($board, $units, $calendar, $onlyDates, $ids), fn ($e) => empty($e['ph']))));
-        // $onlyDates — faqat shu sanalardagi darslari (o'qituvchi so'rovi: ko'chiriladigan kun).
-        if ($onlyDates !== null) {
-            $mine = array_values(array_filter($mine, fn ($e) => isset($onlyDates[$e['date']])));
-        }
+        // $onlyDates — faqat shu sanalardagi darslari (o'qituvchi so'rovi: ko'chiriladigan kun). O'tgan sanalar (bugundan oldin) — hech qachon:
+        // o'tib ketgan to'qnashuv biriktirishni ham, "band" belgisini ham bermaydi; bugun — kiradi.
+        $today = self::proposalToday();
+        $mine = array_values(array_filter($mine, fn ($e) => $e['date'] >= $today && ($onlyDates === null || isset($onlyDates[$e['date']]))));
         if (!$mine) {
             return $hits;
         }
@@ -7995,9 +7998,19 @@ class TimetableController extends Controller
             // Hafta — haftalik tomondan (avval shu birlikniki): aralash (haftalik + sikl) to'qnashuv ham o'sha haftada ko'rsatiladi.
             $x['week'] ??= $m['kind'] === 'weekly' ? ($m['week'] ?? null) : ($o['kind'] === 'weekly' ? ($o['week'] ?? null) : null);
         };
+        // Zal ikki ma'ruzaga: ikkalasi sikl ma'ruzasi va bitta oqim emas (cycleConflicts room_lectures dagidek: fan asosiy nomi, o'qituvchi,
+        // vaqt bir xil bo'lsa — bitta oqim, xona — shu zal).
+        $isLec = fn (array $e) => str_starts_with((string) ($e['load_key'] ?? ''), 'l');
+        $flowKey = function (array $e) use ($units): string {
+            $subject = (string) ($units[$e['unit']]['subject'] ?? '');
+
+            return $this->normSubject($this->cycleSubjectVariantBase($subject) ?? $subject) . '|' . ($e['teacher_id'] ?: '-') . '|' . $e['from'] . '|' . $e['to'];
+        };
+        $lectureClash = fn (array $m, array $o) => $m['kind'] === 'cycle' && $o['kind'] === 'cycle' && $isLec($m) && $isLec($o) && $flowKey($m) !== $flowKey($o);
         $peak = [];       // xona => boshqa darslarning bir vaqtdagi eng yuqori yuklamasi (talabalar; bitta karta — bir marta)
         $unknown = [];    // xona => talabalar soni noma'lum dars bor
         $exclusive = [];  // haftalik darsli xona: sig'imdan qat'i nazar band (haftalik jadvalda xona — bitta dars uchun)
+        $lecClash = [];   // zalda bir vaqtda boshqa oqimning ma'ruzasi: sig'imdan qat'i nazar band (sig'im oshsa — raqamlar ham)
         foreach ($mine as $m) {
             $over = array_filter($others[$m['date']] ?? [], fn ($o) => $o['from'] < $m['to'] && $m['from'] < $o['to']);
             $inRoom = [];
@@ -8012,6 +8025,8 @@ class TimetableController extends Controller
                     $inRoom[$o['room']][] = $o;
                     if ($m['kind'] === 'weekly' || $o['kind'] === 'weekly') {
                         $exclusive[$o['room']] = true;
+                    } elseif ($lectureClash($m, $o)) {
+                        $lecClash[$o['room']] = true;
                     }
                 }
             }
@@ -8033,10 +8048,11 @@ class TimetableController extends Controller
             // Haftalik darsli xona — har qanday kesishish; sikl darslari o'zaro — sig'im ma'lum bo'lsa, oshgandagina; sig'imi kiritilmagan
             // xona to'qnashuv hisoblanmaydi; talabalar soni noma'lum — band.
             $exclusiveRoom = isset($exclusive[$code]);
-            $over = $exclusiveRoom || ($vol > 0 && ($mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol));
+            $capOver = $vol > 0 && ($mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol);
+            $over = $exclusiveRoom || isset($lecClash[$code]) || $capOver;
             if (!$over) {
                 unset($hits['rooms'][$code], $acc['rooms'][(string) $code]);
-            } elseif (!$exclusiveRoom && $mineStudents > 0 && empty($unknown[$code])) {
+            } elseif (!$exclusiveRoom && $capOver && $mineStudents > 0 && empty($unknown[$code])) {
                 $students = ($peak[$code] ?? 0) + $mineStudents;
                 $caps[$code] = ['room_code' => (string) $code, 'room_name' => (string) ($roomRows[$code]->name ?? $code), 'volume' => $vol,
                     'students' => $students, 'over' => $students - $vol];
@@ -11539,9 +11555,10 @@ class TimetableController extends Controller
     /**
      * Shablon joyi to'qnashuvlari: shu kunda shablonda turgan boshqa kartalar (oraliq kesishuvi bilan) va haftalik
      * ko'chirish bilan shu vaqtga kelgan kartalar — karta o'sha haftada shablon joyida bo'lsa (o'sha hafta bekor
-     * qilinmagan va boshqa joyga ko'chirilmagan). $state — tiklashda bir marta yuklangan doska bandligi.
+     * qilinmagan va boshqa joyga ko'chirilmagan). $state — tiklashda bir marta yuklangan doska bandligi. $fromDate — faqat shu sanadan
+     * (masalan bugundan) boshlab o'tiladigan haftalar (o'tgan to'qnashuv hisoblanmaydi).
      */
-    private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0, ?array $state = null): array
+    private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0, ?array $state = null, ?string $fromDate = null): array
     {
         if ($this->isNonBlocking($card, $card->board)) return [];
         $state ??= $this->calendarConflictState($card);
@@ -11550,6 +11567,7 @@ class TimetableController extends Controller
         foreach (range(1, $this->cardGrid($card->board, $card)['weeks']) as $week) {
             $own = $state['ov'][$card->id][$week] ?? null;
             if ($own && ($own->cancelled || $own->day)) continue;
+            if ($fromDate !== null && $this->weekStartDate($card->board, $card, $week)->addDays($day - 1)->toDateString() < $fromDate) continue;
             $checked++;
             foreach ($this->findWeekConflicts($card, $week, $day, $pair, $startHalf, $state) as $error) {
                 $weeksOf[$error][] = $week;
@@ -12695,25 +12713,28 @@ class TimetableController extends Controller
             return $denied;
         }
 
+        // Xona o'qituvchiga biriktirilmagan — qattiq xato (422). Darsning o'z (o'qituvchi / guruh) to'qnashuvi xona biriktirishni to'smaydi —
+        // xona biriktiriladi, javobda warnings (sariq). Xona muammolari (band, sig'maydi, zal ikki ma'ruzaga) — unitBusy orqali 409
+        // needs_confirm, force=1 bilan biriktiriladi. Faqat bugungi va kelgusi sanalar (o'tgan to'qnashuv hisoblanmaydi).
         $roomMap = $room ? $this->auditoriumTeacherMap() : [];
-        $problems = [];
+        $warnings = [];
+        $today = self::proposalToday();
         foreach ($cards as $card) {
             if ($room && !$this->auditoriumAllowedForCard($room, $card, $roomMap)) {
-                $problems[] = "Xona «{$room->name}» kartaning o'qituvchisiga biriktirilmagan";
-                break;
+                return response()->json(['error' => "Xona «{$room->name}» kartaning o'qituvchisiga biriktirilmagan"], 422);
             }
             $card->auditorium_code = $room?->code;
             $card->auditorium_name = $room?->name;
             if ($room && $card->day && $card->pair) {
-                foreach ($this->findConflicts($card, $card->day, $card->pair, (int) ($card->start_half ?? 0)) as $conflict) {
-                    $problems[] = $conflict;
+                foreach ($this->findConflicts($card, $card->day, $card->pair, (int) ($card->start_half ?? 0), null, $today) as $conflict) {
+                    // Xona bandligi — quyida unitBusy bilan (sanalar va sig'im qoidalari bilan); bu yerda — faqat darsning o'z to'qnashuvlari.
+                    if (!str_contains($conflict, 'Auditoriya band: ')) {
+                        $warnings[] = $conflict;
+                    }
                 }
             }
         }
-        if ($problems) {
-            return response()->json(['error' => implode(' · ', array_slice(array_unique($problems), 0, 3))], 422);
-        }
-        // Xona shu darslar vaqtida (boshqa haftalar, sikl) boshqa guruhcha bilan band — ogohlantirish.
+        // Xona shu darslar vaqtida (haftalik va sikl, bugundan) boshqa guruhcha bilan band yoki sig'maydi — ogohlantirish ("Baribir biriktirish").
         if ($room && !$request->boolean('force') && $cards->contains(fn ($c) => $c->getOriginal('auditorium_code') !== $room->code)
             && ($busy = $this->unitBusySafe($request, $board, $cards))
             && ($warn = $this->busyWarning("Xona «{$room->name}»", $busy['rooms'][$room->code] ?? null, $busy['items']['rooms'][(string) $room->code] ?? [],
@@ -12733,6 +12754,8 @@ class TimetableController extends Controller
             'auditorium_code' => $room?->code,
             'auditorium_name' => $room?->name,
             'affected' => $cards->count(),
+            // Darsning o'z to'qnashuvlari (o'qituvchi / guruh band) — xona biriktirildi, lekin hal qilish kerak (asgMsg da sariq).
+            'warnings' => array_values(array_slice(array_unique($warnings), 0, 5)),
         ]);
     }
 

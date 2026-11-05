@@ -6369,9 +6369,8 @@ class TimetableController extends Controller
         $errors = [];
         foreach ($after as $unit => $x) {
             $unit = (string) $unit;
-            if ($this->isNonBlocking($x['u'], $board)) {
-                continue;
-            }
+            // "Faqat ma'lumot" guruhchasi — faqat ustma-ust tekshiruvidan ozod; kunga sig'ishi (so'ralgan soatga yetdimi) — hammaga.
+            $nb = $this->isNonBlocking($x['u'], $board);
             $d = $x['date'];
             $lec = $x['lec'][$d] ?? null;
             $prc = $x['prac'][$d] ?? null;
@@ -6384,7 +6383,7 @@ class TimetableController extends Controller
             if ($prc && (int) $prc[1] - 1 > $grid) {
                 $errors[] = 'Amaliy dars kun oxirigacha sig‘maydi (' . $unit . ').';
             }
-            if ($lec && $prc && ((isset($keepPractice[$unit]) && (int) $prc[0] !== (int) $keepPractice[$unit])
+            if (!$nb && $lec && $prc && ((isset($keepPractice[$unit]) && (int) $prc[0] !== (int) $keepPractice[$unit])
                 || ((int) $lec[0] < (int) $prc[1] && (int) $prc[0] < (int) $lec[1]))) {
                 $lecAt = isset($keepPractice[$unit]) ? [$h, $h + $lec[1] - $lec[0]] : $lec;
                 $errors[] = "Ma'ruza " . $this->cycleHoursTime($board, $lecAt[0], $lecAt[1]) . ' amaliy bilan ustma-ust (' . $unit . ')';

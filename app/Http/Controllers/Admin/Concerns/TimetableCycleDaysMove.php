@@ -101,19 +101,30 @@ trait TimetableCycleDaysMove
                     DB::rollBack();
                     throw $ex;
                 }
-                // Birga ko'chgan amaliyot / ma'ruza ham: bugun — boshlanmagan (eski va yangi vaqti) bo'lishi kerak.
-                $also = [];
-                foreach (array_merge($e['swaps'] ?? [], array_filter([$e['lecture'] ?? null])) as $w) {
-                    array_push($also, (int) $w['from'], (int) $w['to']);
-                }
-                if (!$e['hard'] && $date === $today && $also && $started(min($also))) {
-                    $e['hard'] = ['Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).'];
+                // Bugun: yozuvdan keyingi haqiqiy jadval bo'yicha — o'zgargan har bir dars (ma'ruza, amaliyot; birga ko'chganlari ham: o'rin
+                // almashish, smena qayta yoqilishi) eski va yangi vaqtida hali boshlanmagan bo'lishi kerak.
+                $todayBlocked = false;
+                if (!$e['hard'] && $date === $today) {
+                    $changed = [];
+                    foreach ($this->cycleDayUnits($board, $placement, $p, $k) as $unit => $x) {
+                        foreach (['lec', 'prac'] as $t) {
+                            $r0 = $units[$unit][$t][$date] ?? null;
+                            $r1 = $x[$t][$x['date']] ?? null;
+                            if ($r0 != $r1) {
+                                array_push($changed, ...array_map(fn ($r) => (int) $r[0], array_filter([$r0, $r1])));
+                            }
+                        }
+                    }
+                    if ($changed && $started(min($changed))) {
+                        $e['hard'] = ['Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).'];
+                        $todayBlocked = true;
+                    }
                 }
                 $row['swaps'] = $e['swaps'] ?? [];
                 $row['lecture'] = $e['lecture'] ?? null;
                 // Oldindan tekshirilmagan kun (guruhcha qatoridagi smenali amaliy): "Birga" yozuvidan keyingi xato — faqat kun oxiriga sig'maslik
                 // (kun rejasi ma'ruza va amaliyni ustma-ust qo'ymaydi) — "sig'maydi".
-                $fitOnly = $rel === false && $e['hard'];
+                $fitOnly = $rel === false && $e['hard'] && !$todayBlocked;
                 if ($e['hard'] || ($e['busy'] && !$force)) {
                     DB::rollBack();
                     $row = array_merge($row, $e['hard'] ? ['status' => $fitOnly ? 'nofit' : 'blocked', 'why' => implode(' · ', $e['hard'])]

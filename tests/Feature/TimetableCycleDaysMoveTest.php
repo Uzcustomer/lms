@@ -421,3 +421,37 @@ it('Codex: guruhcha qatorida "Birga" — ma\'ruzasiz kunda kun rejasi qisib qo\'
     $d = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 5])->assertOk()->json('days.0');
     expect($d['status'])->toBe('ok')->and(dmDays($s)['2026-11-18'])->toBe(['lec' => null, 'prc' => [5, 11]]);
 });
+
+it('Codex: "faqat ma\'lumot" guruhcha ham kunga sig\'ishi tekshiriladi (kun rejasi qisib qo\'ysa — "sig\'maydi")', function () {
+    $s = dmSetup();
+    // 4-kurs — "faqat ma'lumot" (bandlikdan ozod). 04a: ma'ruza 1–2, amaliy smenada 7–10; guruhcha qatorida 9-soatga — kun rejasi 7 ga qisadi.
+    $s['board']->update(['settings' => array_merge($s['board']->settings, ['info_only_courses' => [4]])]);
+    $sub = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'mode' => 'both', 'day_indexes' => [0]];
+    $before = $s['placement']->fresh()->lecture_slots;
+    $n = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 9])->assertOk()->json('days.0');
+    expect($n['status'])->toBe('nofit')->and($n['applied'])->toBeFalse()->and($s['placement']->fresh()->lecture_slots)->toBe($before);
+    expect(dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 4])->json('days.0.status'))->toBe('ok')
+        ->and(dmDays($s)['2026-11-16'])->toBe(['lec' => [4, 6], 'prc' => [6, 10]]);
+});
+
+it('Codex: bugun — yozuvdan keyingi haqiqiy jadval bo\'yicha: smena qayta yoqilib amaliy o\'tgan vaqtga tushsa — o\'zgarmaydi', function () {
+    $s = dmSetup();
+    // Bugun 16.11, 11:00. Oqim kuni 9-soatdan; 04a — o'z kun boshi 5 (ma'ruza 5–6, amaliy 7–10), smena 1.
+    $s['placement']->update(['lecture_slots' => ['shift_g' => ['d2/d23-04a' => 1, 'd2/d23-04b' => 1], 'starts' => [0 => 9],
+        'starts_g' => ['d2/d23-04a' => [0 => 5]]]]);
+    $this->travelTo(Carbon::parse('2026-11-16 11:00', 'Asia/Tashkent'));
+    expect(dmDays($s)['2026-11-16'])->toBe(['lec' => [5, 7], 'prc' => [7, 11]]);
+    $sub = ['group_name' => 'd2/d23-04a', 'placement_group' => 'F1 / 1-oqim', 'sub_group' => 'd2/d23-04a', 'mode' => 'both', 'day_indexes' => [0]];
+    // 9-soatga (oqim soati): starts_g o'chadi, amaliy smenaga (1-soat, 08:30 — o'tgan) — o'zgarmaydi.
+    $d = dmMove($s, $s['admin'], 'admin', $sub + ['start_hour' => 9, 'dry_run' => 1])->assertOk()->json('days.0');
+    expect($d['status'])->toBe('blocked')->and($d['why'])->toBe('Bugun birga ko‘chadigan dars boshlangan (yoki yangi vaqti o‘tib ketgan).');
+});
+
+it('"faqat ma\'lumot" guruhcha: ma\'ruza amaliy ustiga surilsa ham ustma-ust xato emas (avvalgidek), kunga sig\'ishi esa tekshiriladi', function () {
+    $s = dmSetup();
+    $s['board']->update(['settings' => array_merge($s['board']->settings, ['info_only_courses' => [4]])]);
+    // Ma'ruza 1–2 → 7–8 (amaliy 7–10 ustiga), amaliyotga tegilmaydi (keep).
+    $d = dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'start_hour' => 7, 'mode' => 'lecture', 'practice_place' => 'keep', 'dry_run' => 1])
+        ->assertOk()->json('days.0');
+    expect($d['status'])->toBe('ok');
+});

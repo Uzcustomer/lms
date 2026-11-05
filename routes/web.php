@@ -174,10 +174,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return redirect()->route('admin.dashboard');
         });
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-        // Qayta topshirish (otrabotka) bronlari — haftalik jadval (test markazi)
-        Route::get('/retake-bookings/schedule', [\App\Http\Controllers\Admin\RetakeBookingScheduleController::class, 'index'])
-            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|test_markazi|registrator_ofisi')
-            ->name('retake-bookings.schedule');
         Route::get('/student-ratings', [\App\Http\Controllers\Admin\StudentRatingController::class, 'index'])->name('student-ratings.index');
         Route::get('/student-ratings/export-excel', [\App\Http\Controllers\Admin\StudentRatingController::class, 'exportExcel'])->name('student-ratings.export-excel');
         Route::get('/student-ratings/five-candidates', [\App\Http\Controllers\Admin\StudentRatingController::class, 'fiveCandidates'])->name('student-ratings.five-candidates');

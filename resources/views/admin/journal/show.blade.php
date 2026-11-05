@@ -1581,8 +1581,13 @@
                                                 }
                                                 $oskiDatePart = implode(' · ', $oskiInfoParts);
                                                 $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
+                                                // Admin oshirgan OSKI (grades:upgrade-nb-oski): to'q sariq katak, hover'da eski/yangi baho
+                                                $oskiUpgradeTitle = $oskiUpgradeMap[$student->hemis_id][1] ?? null;
+                                                if ($oskiUpgradeTitle) {
+                                                    $oskiTitle = $oskiUpgradeTitle . ($oskiTitle ? "\n" . $oskiTitle : '');
+                                                }
                                             @endphp
-                                            <td class="px-1 py-1 text-center relative {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                            <td class="px-1 py-1 text-center relative {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }} {{ $oskiUpgradeTitle ? 'admin-upgraded-cell' : '' }}"
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
@@ -2423,8 +2428,13 @@
                                                 }
                                                 $oskiDatePart = implode(' · ', $oskiInfoParts);
                                                 $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
+                                                // Admin oshirgan OSKI (grades:upgrade-nb-oski): to'q sariq katak, hover'da eski/yangi baho
+                                                $oskiUpgradeTitle = $oskiUpgradeMap[$student->hemis_id][1] ?? null;
+                                                if ($oskiUpgradeTitle) {
+                                                    $oskiTitle = $oskiUpgradeTitle . ($oskiTitle ? "\n" . $oskiTitle : '');
+                                                }
                                             @endphp
-                                            <td class="px-1 py-1 text-center relative {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                            <td class="px-1 py-1 text-center relative {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }} {{ $oskiUpgradeTitle ? 'admin-upgraded-cell' : '' }}"
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)

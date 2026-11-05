@@ -1119,10 +1119,13 @@ class JournalController extends Controller
             ->select(array_merge(
                 ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt', 'lesson_date',
                  'graded_by_user_id', 'employee_id', 'employee_name', 'retake_by'],
-                $hasSababliCol ? ['retake_was_sababli'] : []
+                $hasSababliCol ? ['retake_was_sababli'] : [],
+                $hasUpgradeCol ? ['upgraded_by_admin', 'admin_original_grade'] : []
             ))
             ->get();
 
+        // grades:upgrade-nb-oski oshirgan OSKI: [hemis_id][attempt] => "Eski baho / Yangi baho" (jurnalda to'q sariq katak)
+        $oskiUpgradeMap = [];
         $otherGrades = [];
         $otherGradesSababli = [];
         // Sana tooltip uchun: $otherGradeDates[hemis_id][ttc][attempt] = 'YYYY-MM-DD'
@@ -1146,6 +1149,10 @@ class JournalController extends Controller
                 }
                 $attempt = (int) ($g->attempt ?? 1);
                 $otherGrades[$g->student_hemis_id][$typeCode][$attempt][] = $effectiveGrade['grade'];
+                if ($typeCode == 101 && !empty($g->upgraded_by_admin)) {
+                    $oskiUpgradeMap[$g->student_hemis_id][$attempt] = 'Eski baho: ' . round((float) $g->admin_original_grade, 0)
+                        . "\nYangi baho: " . round((float) $effectiveGrade['grade'], 0);
+                }
                 if (!empty($g->retake_was_sababli)) {
                     $otherGradesSababli[$g->student_hemis_id][$typeCode][$attempt] = true;
                 }
@@ -2560,6 +2567,7 @@ class JournalController extends Controller
             'oskiQosh3DateMap',
             'testQosh3DateMap',
             'oskiAttempt1DateMap',
+            'oskiUpgradeMap',
             'testAttempt1DateMap',
             'oskiAttempt2DateMap',
             'testAttempt2DateMap',

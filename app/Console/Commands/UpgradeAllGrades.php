@@ -112,7 +112,10 @@ class UpgradeAllGrades extends UpgradeCycleGrades
 
             foreach ($cycles as $c) {
                 $subjectRows = $grades[(string) $c->subject_id] ?? collect();
-                $daily = $subjectRows->filter(fn ($r) => $r->lesson_date !== null && (string) $r->semester_code === (string) $c->semester_code
+                // Kunlik baholar — faqat sikl ichidagi (jadvaldagi birinchi dars kunidan) darslar
+                $cycleStart = Carbon::parse($c->cycle_start)->startOfDay()->toDateTimeString();
+                $daily = $subjectRows->filter(fn ($r) => $r->lesson_date !== null && (string) $r->lesson_date >= $cycleStart
+                    && (string) $r->semester_code === (string) $c->semester_code
                     && !in_array((int) $r->training_type_code, $excluded, true));
                 $oski = $subjectRows->filter(fn ($r) => (int) $r->training_type_code === self::OSKI && $r->lesson_date !== null);
                 $mt = $subjectRows->filter(fn ($r) => (int) $r->training_type_code === self::MT && $r->lesson_date === null

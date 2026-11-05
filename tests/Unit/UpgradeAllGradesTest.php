@@ -79,6 +79,7 @@ it('applies all cutoff rules in one command', function () {
         ];
     }
     $after = allGrade('1', ['lesson_date' => '2026-10-27 08:30:00']);
+    $beforeCycle = allGrade('1', ['lesson_date' => '2026-09-17 08:30:00']);   // sikl 16.10 da boshlanadi — sikldan tashqari
     $oski2 = allGrade('2', ['training_type_code' => 101, 'attempt' => 1, 'lesson_date' => '2026-10-23 09:00:00']);
     $test2 = allGrade('2', ['training_type_code' => 102, 'attempt' => 1, 'lesson_date' => '2026-10-26 09:00:00']);
     $wrong4 = allGrade('4', ['training_type_code' => 101, 'attempt' => 1, 'lesson_date' => '2026-10-18 09:00:00',
@@ -99,7 +100,7 @@ it('applies all cutoff rules in one command', function () {
     }
     expect((float) $g($oski2)->grade)->toBe(85.0)
         ->and((float) $g($wrong4)->grade)->toBe(85.0);                  // --revert-finished siz qoladi
-    foreach ([$ids['4']['daily'], $ids['4']['nb'], $ids['4']['mt'], $after, $test2, $otherSpecialty] as $id) {
+    foreach ([$ids['4']['daily'], $ids['4']['nb'], $ids['4']['mt'], $after, $beforeCycle, $test2, $otherSpecialty] as $id) {
         expect((bool) $g($id)->upgraded_by_admin)->toBeFalse();
     }
 

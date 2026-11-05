@@ -72,13 +72,19 @@ class AdminUpgradeGrades extends Command
         $samples = [];
         $total = 0;
         foreach ($this->readList($path) as [$groupName, $subject, $from, $to]) {
-            $group = DB::table('groups')->where('name', $groupName)->first();
-            if (!$group) {
+            // Ro'yxatdagi guruh + uning kichik guruhlari: d1/d22-01 → d1/d22-01(a), d1/d22-01 (b) ...
+            $groups = DB::table('groups')
+                ->where(fn ($q) => $q->where('name', $groupName)
+                    ->orWhere('name', 'like', $groupName . '(%')
+                    ->orWhere('name', 'like', $groupName . ' (%'))
+                ->get(['group_hemis_id', 'name']);
+            if ($groups->isEmpty()) {
                 $table[] = [$groupName, $subject, 'GURUH TOPILMADI', '', '', '', ''];
                 continue;
             }
+            $groupName = $groups->pluck('name')->sort()->implode(', ');
 
-            $students = DB::table('students')->where('group_id', $group->group_hemis_id)->pluck('level_code', 'hemis_id');
+            $students = DB::table('students')->whereIn('group_id', $groups->pluck('group_hemis_id'))->pluck('level_code', 'hemis_id');
             $rows = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $students->keys()->map(fn ($id) => (string) $id)->all() ?: ['0'])

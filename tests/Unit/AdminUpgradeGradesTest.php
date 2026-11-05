@@ -28,8 +28,11 @@ beforeEach(function () {
     DB::table('settings')->insert(['key' => MarkingSystemScore::SETTING_MINIMUM_LIMIT, 'value' => '70']);
     MarkingSystemScore::forgetLmsMinimumLimit();
     DB::table('deadlines')->insert(['level_code' => '15', 'deadline_days' => 7]);
-    DB::table('groups')->insert([['group_hemis_id' => 1, 'name' => 'd1/d23-09'], ['group_hemis_id' => 2, 'name' => 'd1/d23-01']]);
-    DB::table('students')->insert([['hemis_id' => '10', 'group_id' => 1, 'level_code' => '15'], ['hemis_id' => '20', 'group_id' => 2, 'level_code' => '15']]);
+    // Ro'yxatda d1/d23-09 — LMS da kichik guruhlar (a), (b); d1/d23-091 — boshqa guruh
+    DB::table('groups')->insert([['group_hemis_id' => 1, 'name' => 'd1/d23-09(a)'], ['group_hemis_id' => 2, 'name' => 'd1/d23-01'],
+        ['group_hemis_id' => 3, 'name' => 'd1/d23-09 (b)'], ['group_hemis_id' => 4, 'name' => 'd1/d23-091']]);
+    DB::table('students')->insert([['hemis_id' => '10', 'group_id' => 1, 'level_code' => '15'], ['hemis_id' => '20', 'group_id' => 2, 'level_code' => '15'],
+        ['hemis_id' => '30', 'group_id' => 3, 'level_code' => '15'], ['hemis_id' => '40', 'group_id' => 4, 'level_code' => '15']]);
 
     // Ro'yxat yo'li base_path() ga nisbiy
     $this->list = 'storage/framework/testing-upgrade-list.csv';
@@ -69,6 +72,8 @@ it('upgrades only listed group/subject/dates, keeps the old grade, is idempotent
     $outside = upgradeGrade(['grade' => 80, 'lesson_date' => '2026-10-23 10:00:00']);
     $otherSubject = upgradeGrade(['grade' => 80, 'subject_name' => 'Onkologiya']);
     $otherGroup = upgradeGrade(['grade' => 80, 'student_hemis_id' => '20']);
+    $similarGroup = upgradeGrade(['grade' => 80, 'student_hemis_id' => '40']);
+    $subgroupB = upgradeGrade(['grade' => 90, 'student_hemis_id' => '30']);
 
     $local = $this->list;
     $this->artisan('grades:admin-upgrade', ['file' => $local])->assertSuccessful();
@@ -84,8 +89,9 @@ it('upgrades only listed group/subject/dates, keeps the old grade, is idempotent
         ->and($g($low)->reason)->toBeNull()              // 75 ≥ 70 — otrabotka qarzi yopildi
         ->and($g($low)->status)->toBe('recorded')
         ->and((float) $g($mid)->grade)->toBe(85.0)        // ikki marta ishlatildi — baribir 85
-        ->and((float) $g($mid)->admin_original_grade)->toBe(80.0);
-    foreach ([$below, $retaken, $lecture, $outside, $otherSubject, $otherGroup] as $id) {
+        ->and((float) $g($mid)->admin_original_grade)->toBe(80.0)
+        ->and((float) $g($subgroupB)->grade)->toBe(95.0);
+    foreach ([$below, $retaken, $lecture, $outside, $otherSubject, $otherGroup, $similarGroup] as $id) {
         expect((bool) $g($id)->upgraded_by_admin)->toBeFalse();
     }
 

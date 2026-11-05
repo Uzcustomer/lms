@@ -7,7 +7,9 @@ use App\Models\AbsenceExcuseMakeup;
 use App\Models\Deadline;
 use App\Models\MarkingSystemScore;
 use App\Models\RetakeBooking;
+use App\Models\Student;
 use App\Models\StudentGrade;
+use App\Models\StudentNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -59,17 +61,13 @@ class RetakeBookingService
                 ->update(['status' => RetakeBooking::STATUS_MISSED, 'updated_at' => now()]);
         }
         // Test markazi Moodle'da bekor qilgan bronlar: urinish kuymaydi, talaba qayta tanlaydi
+        // (odatda Moodle buni darhol API orqali aytadi; yetib bormagan bo'lsa — shu yerda)
         if ($cancelledIds = $response['cancelled_booking_ids'] ?? []) {
             RetakeBooking::whereIn('id', $cancelledIds)
                 ->where('student_hemis_id', $studentHemisId)
                 ->whereIn('status', [RetakeBooking::STATUS_BOOKED, RetakeBooking::STATUS_MISSED])
-                ->update([
-                    'status' => RetakeBooking::STATUS_CANCELLED,
-                    'cancelled_at' => now(),
-                    'moodle_sync' => RetakeBooking::SYNC_OK,
-                    'moodle_code' => self::CODE_ADMIN_CANCELLED,
-                    'updated_at' => now(),
-                ]);
+                ->get()
+                ->each(fn (RetakeBooking $b) => self::adminCancel($b));
         }
 
         return $debts;
@@ -82,6 +80,82 @@ class RetakeBookingService
      * oralig'i (book_from — deadline). Muddati LMS bo'yicha o'tgan qarzga vaqt
      * tanlab bo'lmaydi.
      */
+    /**
+     * Test markazi Moodle'da bekor qilgan bron: LMS'da ham bekor (urinish kuymaydi),
+     * talabaga profil bildirishnomasi va Telegram xabari. Faqat amaldagi (booked/missed)
+     * bron uchun — takroriy chaqiriq xabarni qayta yubormaydi.
+     *
+     * @return bool bekor qilindimi
+     */
+    public static function adminCancel(RetakeBooking $booking): bool
+    {
+        $changed = RetakeBooking::whereKey($booking->id)
+            ->whereIn('status', [RetakeBooking::STATUS_BOOKED, RetakeBooking::STATUS_MISSED])
+            ->update([
+                'status' => RetakeBooking::STATUS_CANCELLED,
+                'cancelled_at' => now(),
+                'moodle_sync' => RetakeBooking::SYNC_OK,
+                'moodle_code' => self::CODE_ADMIN_CANCELLED,
+                'updated_at' => now(),
+            ]);
+        if (!$changed) {
+            return false;
+        }
+        $booking->refresh();
+
+        try {
+            self::notifyAdminCancelled($booking);
+        } catch (\Throwable $e) {
+            Log::warning('Otrabotka: bekor qilingan bron haqida xabar yuborilmadi: ' . $e->getMessage(), ['booking_id' => $booking->id]);
+        }
+
+        return true;
+    }
+
+    /** Talabaga: profil e'loni (StudentNotification) va Telegram */
+    private static function notifyAdminCancelled(RetakeBooking $booking): void
+    {
+        $student = Student::where('hemis_id', $booking->student_hemis_id)->first(['id', 'telegram_chat_id']);
+        if (!$student) {
+            return;
+        }
+        $subject = trim(($booking->subject_name ?: 'Fan') . ($booking->mavzu ? ', ' . $booking->mavzu . '-mavzu' : ''));
+        $slot = $booking->slot_start->format('d.m.Y') . ', ' . $booking->slot_start->format('H:i') . '–' . $booking->slot_end->format('H:i');
+        $link = route('student.retake-booking.index', [
+            'subject_id' => $booking->subject_id,
+            'lesson_date' => $booking->lesson_date->format('Y-m-d'),
+        ], false);
+
+        StudentNotification::create([
+            'student_id' => $student->id,
+            'type' => 'retake_booking',
+            'title' => 'Qayta topshirish broningiz bekor qilindi',
+            'message' => "{$subject} bo'yicha {$slot} vaqtidagi qayta topshirish broningiz test markazi tomonidan bekor qilindi. "
+                . 'Urinishingiz kuymadi — iltimos, qayta sana va vaqt tanlang.',
+            'link' => $link,
+            'data' => [
+                'booking_id' => $booking->id,
+                'subject_id' => $booking->subject_id,
+                'lesson_date' => $booking->lesson_date->format('Y-m-d'),
+                'slot' => $slot,
+            ],
+        ]);
+
+        if (!empty($student->telegram_chat_id)) {
+            app(TelegramService::class)->sendToUser((string) $student->telegram_chat_id, implode("\n", [
+                '❌ <b>Qayta topshirish broningiz bekor qilindi</b>',
+                '',
+                '📚 <b>' . e($booking->subject_name ?: 'Fan') . '</b>' . ($booking->mavzu ? ' — ' . $booking->mavzu . '-mavzu' : ''),
+                '📅 Dars sanasi: ' . $booking->lesson_date->format('d.m.Y'),
+                '🕒 Bekor qilingan vaqt: <b>' . $slot . '</b>',
+                '',
+                'Test markazi bu vaqtni bekor qildi. Urinishingiz <b>kuymadi</b>.',
+                '👉 Iltimos, qayta sana va vaqt tanlang:',
+                '<a href="' . e(url($link)) . '">Qayta topshirish vaqtini tanlash</a>',
+            ]));
+        }
+    }
+
     /** Test markazi yopgan vaqtlar (oxirgi debts() so'rovidan) */
     public function closedSlots(): array
     {

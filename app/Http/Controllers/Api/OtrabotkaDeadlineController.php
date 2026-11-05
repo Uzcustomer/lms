@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\RetakeBooking;
 use App\Models\Student;
 use App\Services\RetakeBookingService;
 use Illuminate\Http\JsonResponse;
@@ -78,5 +79,39 @@ class OtrabotkaDeadlineController extends Controller
         })->values();
 
         return response()->json(['ok' => true, 'items' => $result]);
+    }
+
+    /**
+     * Moodle → LMS: test markazi "Otrabotka bronlari" sahifasida bronni bekor qildi.
+     * Bron LMS'da ham bekor bo'ladi (urinish kuymaydi), talabaga profil e'loni va
+     * Telegram xabari boradi.
+     *
+     * Request body: {"booking_id": 123, "student_hemis_id": 7545}
+     * Response: {"ok": true, "cancelled": true|false}
+     */
+    public function bookingCancelled(Request $request): JsonResponse
+    {
+        $secret = (string) config('services.moodle.pull_secret');
+        $got = (string) $request->header('X-SYNC-SECRET', '');
+        if ($secret === '' || !hash_equals($secret, $got)) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'booking_id' => ['required', 'integer', 'min:1'],
+            'student_hemis_id' => ['required', 'integer', 'min:1'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['ok' => false, 'error' => 'Invalid payload', 'details' => $validator->errors()], 422);
+        }
+
+        $booking = RetakeBooking::whereKey((int) $request->input('booking_id'))
+            ->where('student_hemis_id', (int) $request->input('student_hemis_id'))
+            ->first();
+        if (!$booking) {
+            return response()->json(['ok' => true, 'cancelled' => false, 'error' => 'not_found']);
+        }
+
+        return response()->json(['ok' => true, 'cancelled' => RetakeBookingService::adminCancel($booking)]);
     }
 }

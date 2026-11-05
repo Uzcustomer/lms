@@ -98,6 +98,10 @@ Route::post('/moodle/trigger-push', MoodleTriggerPushController::class)
 Route::post('/otrabotka/deadlines', [\App\Http\Controllers\Api\OtrabotkaDeadlineController::class, 'deadlines'])
     ->middleware('throttle:240,1')
     ->name('api.moodle.otrabotka-deadlines');
+// Moodle → LMS: test markazi bronni bekor qildi (talabaga e'lon va Telegram). Same X-SYNC-SECRET.
+Route::post('/otrabotka/booking-cancelled', [\App\Http\Controllers\Api\OtrabotkaDeadlineController::class, 'bookingCancelled'])
+    ->middleware('throttle:240,1')
+    ->name('api.moodle.otrabotka-booking-cancelled');
 
 /*
 |--------------------------------------------------------------------------

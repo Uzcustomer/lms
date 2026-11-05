@@ -460,6 +460,58 @@ it('opens booking until the excuse deadline even when the settings deadline pass
         ->and(RetakeBookingService::validateSlot(Carbon::parse('2026-11-08 10:00'), Carbon::parse('2026-11-08 11:00'), '2026-11-07', '2026-11-02'))->not->toBeNull();
 });
 
+it('cancels a booking over the X-SYNC-SECRET API and notifies the student once', function () {
+    config()->set('services.moodle.pull_secret', 'pull-secret');
+    config()->set('services.telegram.bot_token', 'tg-token');
+    Schema::create('students', function ($t) {
+        $t->id();
+        $t->unsignedBigInteger('hemis_id');
+        $t->string('telegram_chat_id')->nullable();
+        $t->timestamps();
+    });
+    Schema::create('student_notifications', function ($t) {
+        $t->id();
+        $t->unsignedBigInteger('student_id');
+        $t->string('type')->nullable();
+        $t->string('title');
+        $t->text('message');
+        $t->string('link')->nullable();
+        $t->json('data')->nullable();
+        $t->timestamp('read_at')->nullable();
+        $t->timestamps();
+    });
+    DB::table('students')->insert(['hemis_id' => 5531, 'telegram_chat_id' => '777']);
+    $booking = RetakeBooking::create(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24',
+        'subject_name' => 'Mikrobiologiya', 'mavzu' => 8, 'slot_start' => '2026-10-30 10:00', 'slot_end' => '2026-10-30 11:00',
+        'status' => 'booked', 'moodle_sync' => 'ok']);
+    Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
+
+    $body = ['booking_id' => $booking->id, 'student_hemis_id' => 5531];
+    $this->postJson('/api/otrabotka/booking-cancelled', $body)->assertStatus(403);
+    $this->postJson('/api/otrabotka/booking-cancelled', ['booking_id' => 'x'], ['X-SYNC-SECRET' => 'pull-secret'])->assertStatus(422);
+    // Boshqa talabaning broni emas
+    $this->postJson('/api/otrabotka/booking-cancelled', ['booking_id' => $booking->id, 'student_hemis_id' => 999],
+        ['X-SYNC-SECRET' => 'pull-secret'])->assertOk()->assertJson(['cancelled' => false]);
+
+    $this->postJson('/api/otrabotka/booking-cancelled', $body, ['X-SYNC-SECRET' => 'pull-secret'])
+        ->assertOk()->assertJson(['ok' => true, 'cancelled' => true]);
+    // Takroriy chaqiriq — xabar qayta yuborilmaydi
+    $this->postJson('/api/otrabotka/booking-cancelled', $body, ['X-SYNC-SECRET' => 'pull-secret'])
+        ->assertOk()->assertJson(['cancelled' => false]);
+
+    $b = $booking->fresh();
+    $note = DB::table('student_notifications')->get();
+    expect($b->status)->toBe('cancelled')
+        ->and($b->moodle_code)->toBe(RetakeBookingService::CODE_ADMIN_CANCELLED)
+        ->and($note)->toHaveCount(1)
+        ->and($note[0]->title)->toBe('Qayta topshirish broningiz bekor qilindi')
+        ->and($note[0]->message)->toContain('30.10.2026, 10:00–11:00')
+        ->and($note[0]->message)->toContain('qayta sana va vaqt tanlang');
+    Http::assertSentCount(1);
+    Http::assertSent(fn (Request $r) => str_contains($r->url(), 'api.telegram.org') && $r['chat_id'] == '777'
+        && str_contains($r['text'], 'bekor qilindi') && str_contains($r['text'], '30.10.2026, 10:00–11:00'));
+});
+
 it('gives Moodle the LMS deadlines over the X-SYNC-SECRET API', function () {
     config()->set('services.moodle.pull_secret', 'pull-secret');
     Schema::create('students', function ($t) {

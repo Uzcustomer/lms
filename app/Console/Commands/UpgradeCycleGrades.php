@@ -90,7 +90,10 @@ class UpgradeCycleGrades extends Command
                         ->get(['id', 'student_hemis_id', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status',
                             'upgraded_by_admin', 'admin_original_grade']);
 
+                    $sampleCount = count($samples);
                     $r = AdminUpgradeGrades::applyRows($rows, $students, $limit, $deadlineDays, $revert, $force, $group->name, $samples);
+                    // Namunalar har guruh/fandan 4 tadan — hammasi ko'rinsin
+                    array_splice($samples, $sampleCount + 4);
                     $total += $r['changed'];
                     $table[] = [$group->name, $c->subject_name, $period, $rows->count(), $r['changed'], $r['below'], $r['retake'],
                         $r['same'] ? "allaqachon: {$r['same']}" : ''];
@@ -101,7 +104,7 @@ class UpgradeCycleGrades extends Command
         $this->table(['Guruh', 'Fan', 'Sikl', "Baholar ({$cut} gacha)", $revert ? 'Qaytariladi' : 'Oshiriladi', '<60', 'Shundan otrabotka', 'Izoh'], $table);
         if ($samples) {
             $this->line('Namunalar:');
-            $this->table(['Guruh', 'Talaba', 'Sana', $revert ? 'Hozir' : 'Eski', $revert ? 'Qaytadi' : 'Yangi'], array_slice($samples, 0, 20));
+            $this->table(['Guruh', 'Talaba', 'Sana', $revert ? 'Hozir' : 'Eski', $revert ? 'Qaytadi' : 'Yangi'], $samples);
         }
 
         if ($force) {

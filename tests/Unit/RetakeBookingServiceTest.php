@@ -258,6 +258,42 @@ it('builds time slots from the configured working hours', function () {
     ]);
 });
 
+it('skips the lunch break and ends Saturday early', function () {
+    config()->set('services.moodle.retake_slot_from', '09:00');
+    config()->set('services.moodle.retake_slot_to', '17:00');
+    config()->set('services.moodle.retake_slot_minutes', 60);
+    config()->set('services.moodle.retake_slot_breaks', '13:00-14:00');
+    config()->set('services.moodle.retake_slot_to_saturday', '15:00');
+
+    expect(array_keys(RetakeBookingService::slotOptions(Carbon::parse('2026-11-05'))))->toBe([
+        '09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', '14:00-15:00', '15:00-16:00', '16:00-17:00',
+    ])
+        // Shanba — qisqa kun
+        ->and(array_keys(RetakeBookingService::slotOptions(Carbon::parse('2026-11-07'))))->toBe([
+            '09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', '14:00-15:00',
+        ]);
+});
+
+it('allows two subjects in one slot, refuses a third and a second topic of the same subject that day', function () {
+    RetakeBooking::create(['student_hemis_id' => 5531, 'subject_id' => 200, 'lesson_date' => '2026-10-24', 'subject_name' => 'Gistologiya',
+        'slot_start' => '2026-11-02 11:00', 'slot_end' => '2026-11-02 12:00', 'status' => 'booked']);
+    $conflict = fn (int $subject, string $lesson, string $from, string $to) => RetakeBookingService::bookingConflict(
+        5531, $subject, $lesson, Carbon::parse($from), Carbon::parse($to));
+
+    // Ikkinchi fan shu soatga — mumkin
+    expect($conflict(181, '2026-10-24', '2026-11-02 11:00', '2026-11-02 12:00'))->toBeNull();
+
+    RetakeBooking::create(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24', 'subject_name' => 'Mikrobiologiya',
+        'slot_start' => '2026-11-02 11:00', 'slot_end' => '2026-11-02 12:00', 'status' => 'booked']);
+
+    // Uchinchi fan — yo'q; boshqa soatga — mumkin
+    expect($conflict(300, '2026-10-25', '2026-11-02 11:00', '2026-11-02 12:00'))->toContain('2 ta fan')
+        ->and($conflict(300, '2026-10-25', '2026-11-02 12:00', '2026-11-02 13:00'))->toBeNull()
+        // Shu fanning boshqa mavzusi shu kuni — yo'q, ertasiga — mumkin
+        ->and($conflict(200, '2026-10-30', '2026-11-02 15:00', '2026-11-02 16:00'))->toContain('bitta fandan')
+        ->and($conflict(200, '2026-10-30', '2026-11-03 15:00', '2026-11-03 16:00'))->toBeNull();
+});
+
 it('takes the deadline from LMS: stored grade deadline, else lesson date + level days', function () {
     DB::table('deadlines')->insert(['level_code' => '13', 'deadline_days' => 6]);
 

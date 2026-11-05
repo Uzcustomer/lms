@@ -102,6 +102,9 @@ return [
         'retake_slot_from' => env('RETAKE_SLOT_FROM', '09:00'),
         'retake_slot_to' => env('RETAKE_SLOT_TO', '17:00'),
         'retake_slot_minutes' => (int) env('RETAKE_SLOT_MINUTES', 60),
+        // Shanba — qisqa kun; tanaffus (tushlik) oraliqlari tanlanmaydi: "13:00-14:00[,...]"
+        'retake_slot_to_saturday' => env('RETAKE_SLOT_TO_SATURDAY', '15:00'),
+        'retake_slot_breaks' => env('RETAKE_SLOT_BREAKS', '13:00-14:00'),
         'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
         // "Yangilash" Moodle'dan to'g'ridan-to'g'ri tortganda, mavjud eng katta
         // attempt_id dan shuncha ORQAGA so'raladi (kech tugagan urinishlarni

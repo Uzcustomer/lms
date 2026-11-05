@@ -103,24 +103,61 @@ class RetakeBookingService
         return null;
     }
 
+    /** Bir vaqt oralig'ida talaba ko'pi bilan shuncha fanni topshiradi */
+    public const MAX_SUBJECTS_PER_SLOT = 2;
+
     /**
-     * Talaba tanlay oladigan vaqt oraliqlari (test markazi ish vaqti bo'yicha).
+     * Talaba tanlay oladigan vaqt oraliqlari (test markazi ish vaqti bo'yicha):
+     * tushlik (13:00–14:00) olib tashlanadi, shanba — qisqa kun (15:00 gacha).
+     * Kun berilmasa — oddiy ish kuni.
      *
      * @return array<string, array{0: string, 1: string}> "09:00-10:00" => ["09:00", "10:00"]
      */
-    public static function slotOptions(): array
+    public static function slotOptions(?Carbon $date = null): array
     {
         $from = Carbon::createFromFormat('H:i', (string) config('services.moodle.retake_slot_from', '09:00'));
-        $to = Carbon::createFromFormat('H:i', (string) config('services.moodle.retake_slot_to', '17:00'));
+        $to = Carbon::createFromFormat('H:i', $date && $date->isSaturday()
+            ? self::saturdayTo()
+            : (string) config('services.moodle.retake_slot_to', '17:00'));
         $minutes = max(15, (int) config('services.moodle.retake_slot_minutes', 60));
+        $breaks = self::breaks();
 
         $slots = [];
         for ($start = $from->copy(); $start->copy()->addMinutes($minutes)->lessThanOrEqualTo($to); $start->addMinutes($minutes)) {
             $end = $start->copy()->addMinutes($minutes);
-            $slots[$start->format('H:i') . '-' . $end->format('H:i')] = [$start->format('H:i'), $end->format('H:i')];
+            [$s, $e] = [$start->format('H:i'), $end->format('H:i')];
+            foreach ($breaks as [$bs, $be]) {
+                if ($s < $be && $e > $bs) {
+                    continue 2;
+                }
+            }
+            $slots[$s . '-' . $e] = [$s, $e];
         }
 
         return $slots;
+    }
+
+    /** Shanba — qisqa kun: vaqt oraliqlari shu soatgacha */
+    public static function saturdayTo(): string
+    {
+        return (string) config('services.moodle.retake_slot_to_saturday', '15:00');
+    }
+
+    /**
+     * Tanaffuslar (tushlik): "13:00-14:00,..." → [["13:00", "14:00"], ...]
+     *
+     * @return array<int, array{0: string, 1: string}>
+     */
+    public static function breaks(): array
+    {
+        $breaks = [];
+        foreach (explode(',', (string) config('services.moodle.retake_slot_breaks', '13:00-14:00')) as $part) {
+            if (preg_match('/^\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})\s*$/', $part, $m) && $m[1] < $m[2]) {
+                $breaks[] = [$m[1], $m[2]];
+            }
+        }
+
+        return $breaks;
     }
 
     /** Talaba tanlagan vaqt oralig'ini tekshiradi: xato matni yoki null */
@@ -273,8 +310,39 @@ class RetakeBookingService
     /** Tanlangan vaqt boshqa mavzu broni bilan ustma-ust tushsa — o'sha bron */
     public static function overlappingBooking(int $studentHemisId, int $subjectId, string $lessonDate, Carbon $start, Carbon $end): ?RetakeBooking
     {
+        return self::overlappingBookings($studentHemisId, $subjectId, $lessonDate, $start, $end)->first();
+    }
+
+    /** Tanlangan vaqt bilan ustma-ust tushadigan boshqa mavzular bronlari */
+    public static function overlappingBookings(int $studentHemisId, int $subjectId, string $lessonDate, Carbon $start, Carbon $end): Collection
+    {
         return self::otherBookings($studentHemisId, $subjectId, $lessonDate)
-            ->first(fn (RetakeBooking $b) => $b->slot_start->lt($end) && $b->slot_end->gt($start));
+            ->filter(fn (RetakeBooking $b) => $b->slot_start->lt($end) && $b->slot_end->gt($start))
+            ->values();
+    }
+
+    /**
+     * Tanlangan vaqt uchun xato matni yoki null: bir kunda bitta fandan bitta qayta
+     * topshirish; bir vaqt oralig'ida ko'pi bilan MAX_SUBJECTS_PER_SLOT ta fan.
+     */
+    public static function bookingConflict(int $studentHemisId, int $subjectId, string $lessonDate, Carbon $start, Carbon $end): ?string
+    {
+        $others = self::otherBookings($studentHemisId, $subjectId, $lessonDate);
+        $sameSubject = $others->first(fn (RetakeBooking $b) => (int) $b->subject_id === $subjectId
+            && $b->slot_start->isSameDay($start));
+        if ($sameSubject) {
+            return 'Bir kunda bitta fandan faqat bitta qayta topshirish: shu kuni ' . ($sameSubject->subject_name ?: 'bu fan')
+                . ' fanidan ' . $sameSubject->slot_start->format('H:i') . '–' . $sameSubject->slot_end->format('H:i')
+                . ' vaqti tanlangan. Boshqa kunni tanlang.';
+        }
+        $overlap = self::overlappingBookings($studentHemisId, $subjectId, $lessonDate, $start, $end);
+        if ($overlap->count() >= self::MAX_SUBJECTS_PER_SLOT) {
+            return 'Bu vaqtda sizda allaqachon ' . $overlap->count() . ' ta fan bor ('
+                . $overlap->map(fn (RetakeBooking $b) => $b->subject_name ?: 'boshqa fan')->implode(', ')
+                . '). Bir vaqt oralig\'ida ko\'pi bilan ' . self::MAX_SUBJECTS_PER_SLOT . ' ta fan — boshqa vaqtni tanlang.';
+        }
+
+        return null;
     }
 
     /**

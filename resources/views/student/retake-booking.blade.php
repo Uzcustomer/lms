@@ -58,6 +58,7 @@
         .rb-day-fixed { border: 1px solid #c7d2fe; background: #eef2ff; border-radius: 12px; padding: 10px 12px; font-size: 16px; font-weight: 700; color: #1e3a8a; }
         .rb-slot-opt .rb-busy { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .rb-slot-opt .rb-busy[hidden] { display: none; }
+        .rb-slots .rb-slot-opt[hidden] { display: none; }
         .rb-error { font-size: 13px; color: #b91c1c; font-weight: 600; }
         .rb-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: #fff; border: 1px solid #e5eaf2;
             box-shadow: 0 2px 8px rgba(15, 39, 72, .05); text-decoration: none; color: inherit; }
@@ -186,7 +187,8 @@
                     <h2>{{ $retakeDay ? 'Vaqtni tanlang' : 'Kun va vaqtni tanlang' }}</h2>
                     <form method="POST" action="{{ route('student.retake-booking.store') }}" class="rb-form" id="rb-form"
                           data-deadline="{{ $debt['deadline']?->format('Y-m-d') }}" data-from="{{ $minDate->format('Y-m-d') }}"
-                          data-busy="{{ json_encode($busy ?? []) }}">
+                          data-busy="{{ json_encode($busy ?? []) }}"
+                          data-saturday-to="{{ $saturdayTo ?? '' }}" data-per-slot="{{ $perSlot ?? 2 }}">
                         @csrf
                         <input type="hidden" name="subject_id" value="{{ $debt['subject_id'] }}">
                         <input type="hidden" name="lesson_date" value="{{ $debt['lesson_date_raw'] }}">
@@ -265,20 +267,28 @@
                         var noSlots = document.getElementById('rb-no-slots');
                         var busy = JSON.parse(form.dataset.busy || '[]');
                         // Shu oraliqda boshqa fan bo'yicha tanlangan vaqt (sababli: bir kunda bir nechta fan)
+                        var perSlot = parseInt(form.dataset.perSlot || '2', 10);
+                        // Shu oraliqdagi boshqa fanlar bronlari (bir vaqtda ko'pi bilan perSlot ta fan)
                         function busyAt(date, r) {
                             var s = date + 'T' + r.dataset.start, e = date + 'T' + r.dataset.end;
-                            return busy.filter(function (b) { return b.start < e && b.end > s; })[0] || null;
+                            return busy.filter(function (b) { return b.start < e && b.end > s; });
                         }
                         // Tanlangan kun bugun bo'lsa, tugab bo'lgan oraliqlar tanlanmaydi (davom etayotgani ochiq)
                         function refreshSlots() {
                             var date = form.date.value, now = new Date(), free = 0;
+                            // Shanba — qisqa kun; shu fanning boshqa mavzusi tanlangan kun — butunlay band
+                            var saturday = !!date && new Date(date + 'T12:00').getDay() === 6;
+                            var sameDay = !!date && busy.some(function (b) { return b.same && b.start.slice(0, 10) === date; });
                             radios.forEach(function (r) {
                                 var past = !!date && new Date(date + 'T' + r.dataset.end) <= now;
-                                var taken = date ? busyAt(date, r) : null;
+                                var late = saturday && !!form.dataset.saturdayTo && r.dataset.end > form.dataset.saturdayTo;
+                                var taken = date ? busyAt(date, r).filter(function (b) { return !b.same; }) : [];
+                                var full = taken.length >= perSlot;
                                 var note = r.parentNode.querySelector('.rb-busy');
-                                note.textContent = taken ? (taken.name || 'band') : '';
-                                note.hidden = !taken;
-                                r.disabled = past || !!taken;
+                                note.textContent = sameDay ? 'shu fan bor' : taken.map(function (b) { return b.name || 'band'; }).join(', ');
+                                note.hidden = !(sameDay || taken.length);
+                                r.parentNode.hidden = late;
+                                r.disabled = past || late || full || sameDay;
                                 if (r.disabled && r.checked) { r.checked = false; }
                                 if (!r.disabled) { free++; }
                             });

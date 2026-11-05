@@ -62,12 +62,16 @@ class RetakeBookingController extends Controller
                 return view('student.retake-booking', [
                     'debt' => $this->present($hemisId, $debt), 'debts' => collect(), 'loadError' => null, 'notFound' => false,
                     'slots' => RetakeBookingService::slotOptions(),
-                    // Boshqa fanlar bo'yicha tanlangan vaqtlar — shu oraliqlar band ko'rsatiladi
+                    'saturdayTo' => RetakeBookingService::saturdayTo(),
+                    'perSlot' => RetakeBookingService::MAX_SUBJECTS_PER_SLOT,
+                    // Boshqa fanlar bo'yicha tanlangan vaqtlar: oraliqda 2 ta fan bo'lsa — band;
+                    // shu fanning boshqa mavzusi tanlangan kun — butunlay band
                     'busy' => RetakeBookingService::otherBookings($hemisId, $subjectId, $lessonDate)
                         ->map(fn (RetakeBooking $b) => [
                             'start' => $b->slot_start->format('Y-m-d\TH:i'),
                             'end' => $b->slot_end->format('Y-m-d\TH:i'),
                             'name' => (string) $b->subject_name,
+                            'same' => (int) $b->subject_id === $subjectId,
                         ])->values(),
                 ]);
             }
@@ -126,7 +130,13 @@ class RetakeBookingController extends Controller
             return redirect($back)->with('booking_flash', ['type' => 'error', 'message' => self::LOCKED]);
         }
 
-        [$startTime, $endTime] = $slots[$data['slot']];
+        // Shu kunning vaqtlari (shanba — qisqa kun, tushlik yo'q)
+        $daySlots = RetakeBookingService::slotOptions(Carbon::createFromFormat('Y-m-d', $data['date']));
+        if (!isset($daySlots[$data['slot']])) {
+            return redirect($back)->withInput()->withErrors(['slot' => "Bu kunda bunday vaqt oralig'i yo'q (shanba — "
+                . RetakeBookingService::saturdayTo() . ' gacha). Boshqa vaqtni tanlang.']);
+        }
+        [$startTime, $endTime] = $daySlots[$data['slot']];
         $start = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $startTime);
         $end = Carbon::createFromFormat('Y-m-d H:i', $data['date'] . ' ' . $endTime);
         if ($end->lessThanOrEqualTo(now())) {
@@ -148,10 +158,8 @@ class RetakeBookingController extends Controller
         if ($error = RetakeBookingService::validateSlot($start, $end, $debt['deadline'] ?? null, $debt['book_from'] ?? null)) {
             return redirect($back)->withInput()->withErrors(['slot' => $error]);
         }
-        if ($busy = RetakeBookingService::overlappingBooking($hemisId, (int) $data['subject_id'], $data['lesson_date'], $start, $end)) {
-            return redirect($back)->withInput()->withErrors(['slot' => 'Bu vaqtda sizda ' . ($busy->subject_name ?: 'boshqa fan')
-                . ' fanidan qayta topshirish bor (' . $busy->slot_start->format('H:i') . '–' . $busy->slot_end->format('H:i')
-                . '). Boshqa vaqt oralig\'ini tanlang.']);
+        if ($conflict = RetakeBookingService::bookingConflict($hemisId, (int) $data['subject_id'], $data['lesson_date'], $start, $end)) {
+            return redirect($back)->withInput()->withErrors(['slot' => $conflict]);
         }
 
         $result = $this->service->book($hemisId, $debt, $start, $end);

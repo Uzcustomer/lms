@@ -24,6 +24,7 @@ class UpgradeCycleGrades extends Command
     protected $signature = 'grades:upgrade-cycle
         {groups?* : Guruhlar, masalan d1/d22-01 (kichik guruhlari a, b, c olinadi)}
         {--faculty=* : Fakultet nomidan qism, masalan "1-son davolash" (bir nechta bo\'lishi mumkin)}
+        {--specialty=* : --faculty ichida faqat shu yo\'nalishlar (nomidan qism), masalan "Stomatologiya"}
         {--courses=4,5,6 : --faculty da qaysi kurslar}
         {--cutoff=2026-10-26 : Shu sanadan oldingi baholar oshiriladi}
         {--force : Haqiqatan yozish (bo\'lmasa faqat hisobot)}
@@ -141,21 +142,39 @@ class UpgradeCycleGrades extends Command
         return self::SUCCESS;
     }
 
-    /** Fakultet(lar)ning --courses kurslaridagi guruhlari; topilmasa — mavjud fakultetlar ro'yxati va null. */
+    /**
+     * Fakultet(lar)ning (--specialty berilsa — faqat shu yo'nalishlar) --courses kurslaridagi guruhlari;
+     * topilmasa — mavjud fakultet/yo'nalishlar ro'yxati va null.
+     */
     private function facultyGroups(array $faculties)
     {
-        $groups = DB::table('groups')
-            ->where(function ($q) use ($faculties) {
-                foreach ($faculties as $f) {
-                    $q->orWhere('department_name', 'like', '%' . $f . '%');
+        $likeAny = function ($q, string $column, array $values) {
+            $q->where(function ($q) use ($column, $values) {
+                foreach ($values as $v) {
+                    $q->orWhere($column, 'like', '%' . $v . '%');
                 }
-            })
-            ->get(['group_hemis_id', 'name', 'department_name']);
+            });
+        };
+        $groups = DB::table('groups')
+            ->tap(fn ($q) => $likeAny($q, 'department_name', $faculties))
+            ->get(['group_hemis_id', 'name', 'department_name', 'specialty_name']);
         if ($groups->isEmpty()) {
             $this->error('Fakultet topilmadi: ' . implode(', ', $faculties) . '. Mavjudlari:');
             DB::table('groups')->distinct()->orderBy('department_name')->pluck('department_name')->each(fn ($n) => $this->line("  {$n}"));
 
             return null;
+        }
+
+        $specialties = array_filter($this->option('specialty'));
+        if ($specialties) {
+            $all = $groups;
+            $groups = $groups->filter(fn ($g) => collect($specialties)->contains(fn ($s) => mb_stripos((string) $g->specialty_name, $s) !== false))->values();
+            if ($groups->isEmpty()) {
+                $this->error("Yo'nalish topilmadi: " . implode(', ', $specialties) . '. Bu fakultetdagilari:');
+                $all->pluck('specialty_name')->unique()->sort()->each(fn ($n) => $this->line("  {$n}"));
+
+                return null;
+            }
         }
 
         // Kurs: level_code 11 = 1-kurs … 16 = 6-kurs
@@ -166,6 +185,7 @@ class UpgradeCycleGrades extends Command
 
         $this->info('Fakultet: ' . $groups->pluck('department_name')->unique()->implode(', ')
             . " — {$selected->count()} ta guruh (" . $this->option('courses') . '-kurslar)');
+        $this->info("Yo'nalishlar: " . $selected->pluck('specialty_name')->unique()->sort()->implode(', '));
 
         return $selected;
     }

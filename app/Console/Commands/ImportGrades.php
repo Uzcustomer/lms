@@ -29,6 +29,7 @@ class ImportGrades extends Command
     private string $currentDayKey = '';
     private int $currentDayNum = 0;
     private int $currentDayTotal = 0;
+    private ?bool $adminUpgradeColumn = null;
 
     public function __construct()
     {
@@ -390,7 +391,7 @@ class ImportGrades extends Command
                             AND g2.id != sg.id
                         SET sg.deleted_at = NOW()
                         WHERE sg.is_final = 0
-                            AND sg.deleted_at IS NULL
+                            AND sg.deleted_at IS NULL{$this->adminUpgradedSql()}
                             AND DATE(sg.lesson_date) = ?
                     ", [$dateStr]);
 
@@ -547,7 +548,7 @@ class ImportGrades extends Command
                         AND g2.id != sg.id
                     SET sg.deleted_at = NOW()
                     WHERE sg.is_final = 0
-                        AND sg.deleted_at IS NULL
+                        AND sg.deleted_at IS NULL{$this->adminUpgradedSql()}
                         AND DATE(sg.lesson_date) = ?
                 ", [$staleDate]);
                 $globalCleaned += $cleaned;
@@ -854,19 +855,21 @@ class ImportGrades extends Command
             return ['error' => null, 'count' => 0];
         }
 
-        // 3-QADAM: is_final=false yozuvlarni soft-delete (bir marta)
+        // 3-QADAM: is_final=false yozuvlarni soft-delete (bir marta). Admin oshirgan baholar qoladi
         $softDeletedCount = $this->retryOnLockTimeout(function () use ($dateStart, $dateEnd) {
             return DB::transaction(function () use ($dateStart, $dateEnd) {
                 return StudentGrade::where('lesson_date', '>=', $dateStart)
                     ->where('lesson_date', '<=', $dateEnd)
                     ->where('is_final', false)
+                    ->tap(fn ($q) => $this->keepAdminUpgraded($q))
                     ->delete();
             });
         });
         $this->info("Soft deleted {$softDeletedCount} old live grades");
+        $adminUpgraded = $this->adminUpgradedKeys($dateStart, $dateEnd);
 
         // 4-QADAM: Birinchi sahifani process qilish
-        $pageGradeCount = $this->processGradePage($firstPageResult['items'], $date);
+        $pageGradeCount = $this->processGradePage($firstPageResult['items'], $date, $adminUpgraded);
         $totalGradeCount += $pageGradeCount;
         unset($firstPageResult);
 
@@ -886,7 +889,7 @@ class ImportGrades extends Command
                 break;
             }
 
-            $pageGradeCount = $this->processGradePage($pageResult['items'], $date);
+            $pageGradeCount = $this->processGradePage($pageResult['items'], $date, $adminUpgraded);
             $totalGradeCount += $pageGradeCount;
             unset($pageResult);
 
@@ -979,7 +982,7 @@ class ImportGrades extends Command
     // =========================================================================
     // Bitta sahifadagi baholarni bazaga yozish (insert only, delete allaqachon bo'lgan)
     // =========================================================================
-    private function processGradePage(array $items, Carbon $date): int
+    private function processGradePage(array $items, Carbon $date, array $adminUpgraded = []): int
     {
         if (empty($items)) return 0;
 
@@ -1001,6 +1004,9 @@ class ImportGrades extends Command
         foreach ($filteredItems as $item) {
             $student = $studentsMap->get($item['_student']);
             if (!$student) continue;
+            // Admin oshirgan baho — HEMIS bahosi yozilmaydi
+            if (isset($adminUpgraded[self::adminUpgradedKey($item['_student'], $item['subject']['id'],
+                Carbon::createFromTimestamp($item['lesson_date'])->toDateString(), $item['lessonPair']['code'], $item['trainingType']['code'])])) continue;
 
             $gradeValue = $item['grade'];
             $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
@@ -1195,12 +1201,17 @@ class ImportGrades extends Command
 
         // ===== INSERT QATORLARINI OLDINDAN TAYYORLASH (transaction tashqarisida) =====
         // Bu xotirani tejaydi: Eloquent model yaratish + LogsActivity o'rniga oddiy array
+        $adminUpgraded = $this->adminUpgradedKeys($dateStart, $dateEnd);
+
         $insertRows = [];
         $now = Carbon::now();
 
         foreach ($filteredItems as $item) {
             $student = $studentsMap->get($item['_student']);
             if (!$student) continue;
+            // Admin oshirgan baho — HEMIS bahosi yozilmaydi
+            if (isset($adminUpgraded[self::adminUpgradedKey($item['_student'], $item['subject']['id'],
+                Carbon::createFromTimestamp($item['lesson_date'])->toDateString(), $item['lessonPair']['code'], $item['trainingType']['code'])])) continue;
 
             $gradeValue = $item['grade'];
             $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
@@ -1301,6 +1312,9 @@ class ImportGrades extends Command
                 $query = StudentGrade::where('lesson_date', '>=', $dateStart)
                     ->where('lesson_date', '<=', $dateEnd);
 
+                // Admin oshirgan baholar o'chirilmaydi (HEMIS ulardan ustun emas)
+                $this->keepAdminUpgraded($query);
+
                 if ($isFinal) {
                     $softDeletedCount = $query->delete();
                 } else {
@@ -1327,6 +1341,7 @@ class ImportGrades extends Command
             $leftoverCount = StudentGrade::where('lesson_date', '>=', $dateStart)
                 ->where('lesson_date', '<=', $dateEnd)
                 ->where('is_final', false)
+                ->tap(fn ($q) => $this->keepAdminUpgraded($q))
                 ->delete();
             if ($leftoverCount > 0) {
                 $this->warn("Safety cleanup: {$leftoverCount} ta is_final=false qoldiq tozalandi ({$dateStart->toDateString()})");
@@ -1571,6 +1586,50 @@ class ImportGrades extends Command
     // =========================================================================
     // Yordamchi metodlar
     // =========================================================================
+    /**
+     * Admin oshirgan baholar (grades:admin-upgrade, upgraded_by_admin = true): import ularni
+     * o'chirmaydi va o'rniga HEMIS bahosini yozmaydi. Migratsiya hali ishlamagan bo'lsa — hech narsa.
+     */
+    private function hasAdminUpgradeColumn(): bool
+    {
+        return $this->adminUpgradeColumn ??= \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'upgraded_by_admin');
+    }
+
+    private function keepAdminUpgraded($query): void
+    {
+        if ($this->hasAdminUpgradeColumn()) {
+            $query->where('upgraded_by_admin', false);
+        }
+    }
+
+    private function adminUpgradedSql(): string
+    {
+        return $this->hasAdminUpgradeColumn() ? ' AND sg.upgraded_by_admin = 0' : '';
+    }
+
+    /** [kalit => true]: talaba|fan|sana|juftlik|mashg'ulot turi */
+    private function adminUpgradedKeys(Carbon $dateStart, Carbon $dateEnd): array
+    {
+        if (!$this->hasAdminUpgradeColumn()) {
+            return [];
+        }
+
+        return DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where('upgraded_by_admin', true)
+            ->where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd)
+            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_code'])
+            ->mapWithKeys(fn ($g) => [self::adminUpgradedKey($g->student_hemis_id, $g->subject_id,
+                Carbon::parse($g->lesson_date)->toDateString(), $g->lesson_pair_code, $g->training_type_code) => true])
+            ->all();
+    }
+
+    public static function adminUpgradedKey($studentHemisId, $subjectId, string $date, $pairCode, $trainingTypeCode): string
+    {
+        return $studentHemisId . '|' . $subjectId . '|' . $date . '|' . $pairCode . '|' . $trainingTypeCode;
+    }
+
     private function getDeadline($levelCode, $lessonDate)
     {
         $deadline = Deadline::where('level_code', $levelCode)->first();

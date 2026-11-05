@@ -331,6 +331,7 @@ class JournalController extends Controller
         // Migratsiya hali ishlatilmagan instancelarda ham jurnal ochilishi uchun
         // retake_was_sababli ustunining mavjudligini tekshirib olamiz
         $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+        $hasUpgradeCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'upgraded_by_admin');
 
         // Nazoratchi: faqat biriktirilgan guruhlarga ruxsat
         if (is_active_nazoratchi()) {
@@ -578,7 +579,8 @@ class JournalController extends Controller
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
                 ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at', 'graded_by_user_id', 'retake_graded_at', 'quiz_result_id', 'employee_id', 'employee_name', 'retake_by'],
-                $hasSababliCol ? ['retake_was_sababli'] : []
+                $hasSababliCol ? ['retake_was_sababli'] : [],
+                $hasUpgradeCol ? ['upgraded_by_admin', 'admin_original_grade'] : []
             ))
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
@@ -740,6 +742,9 @@ class JournalController extends Controller
                     'retake_by' => $g->retake_by ?? null,
                     // Diagnostikadan kelgan baho (1 — testdan chetlashgan)
                     'quiz_result_id' => $g->quiz_result_id ?? null,
+                    // grades:admin-upgrade — jurnalda to'q sariq katak, hover'da eski baho
+                    'upgraded_by_admin' => !empty($g->upgraded_by_admin),
+                    'admin_original_grade' => $g->admin_original_grade ?? null,
                 ]);
             }
         }
@@ -3160,6 +3165,10 @@ class JournalController extends Controller
                     // yozilmaydi (davomat qadami oldinroq NB qilgan) — o'qituvchi
                     // sababli ariza / otrabotka orqali qayta baho qo'yadi.
                     if ($existingGrade->reason === 'absent') {
+                        return;
+                    }
+                    // Admin oshirgan baho (grades:admin-upgrade) — HEMIS bahosi ustidan yozilmaydi
+                    if (!empty($existingGrade->upgraded_by_admin)) {
                         return;
                     }
 

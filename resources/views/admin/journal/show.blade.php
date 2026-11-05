@@ -606,6 +606,13 @@
         .non-final-grade {
             background-color: #fee2e2 !important; /* Och qizil — is_final=false */
         }
+        /* Admin oshirgan baho (grades:admin-upgrade) — to'q to'q sariq, hover'da eski/yangi baho */
+        .admin-upgraded-cell {
+            background-color: #ea580c !important;
+        }
+        .admin-upgraded-cell, .admin-upgraded-cell * {
+            color: #fff !important;
+        }
         .exam-cell[onclick]:hover { background: #eff6ff; cursor: pointer; }
         .grade-fail {
             color: #dc2626 !important;
@@ -1993,12 +2000,20 @@
                                                         }
                                                     }
                                                     $cellTitle = $cellGrader ? ('Baho qo\'ygan: ' . $cellGrader) : '';
+                                                    // Admin oshirgan baho: hover'da eski va yangi baho
+                                                    $isAdminUpgraded = $gradeData && !empty($gradeData['upgraded_by_admin']);
+                                                    $upgradeTitle = $isAdminUpgraded
+                                                        ? 'Eski baho: ' . round((float) $gradeData['admin_original_grade'], 0) . "\nYangi baho: " . round((float) $gradeData['original_grade'], 0)
+                                                        : null;
+                                                    if ($upgradeTitle) {
+                                                        $cellTitle = $upgradeTitle . ($cellTitle ? "\n" . $cellTitle : '');
+                                                    }
                                                     // Diagnostikada 1 — talaba testdan chetlashtirilgan
                                                     if ($gradeData && !empty($gradeData['quiz_result_id']) && isset($gradeData['grade']) && (int) round((float) $gradeData['grade']) === 1) {
                                                         $cellTitle = 'Testdan chetlashgan' . ($cellTitle ? ' · ' . $cellTitle : '');
                                                     }
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }} {{ $isAdminUpgraded ? 'admin-upgraded-cell' : '' }}" {!! $isRetake && !$isAdminUpgraded ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         // Admin/superadmin baho qo'yishi "Superadmin baho tahriri"
@@ -2060,7 +2075,7 @@
                                                     @if($grade !== null)
                                                         @if($isSuperAdmin && $cellEditable && $gradeData)
                                                             {{-- Superadmin: istalgan bahoni edit qilish --}}
-                                                            <div class="editable-cell cursor-pointer hover:bg-purple-50" onclick="superadminEdit(this, {{ $gradeData['id'] }})" title="Superadmin: bahoni o'zgartirish">
+                                                            <div class="editable-cell cursor-pointer hover:bg-purple-50" onclick="superadminEdit(this, {{ $gradeData['id'] }})" title="{{ $upgradeTitle ? $upgradeTitle . "\n" : '' }}Superadmin: bahoni o'zgartirish">
                                                                 @if($hasRetake && $retakeType === 'low_grade')
                                                                     @php $origVal = round($gradeData['original_grade'], 0); $retakeVal = round($gradeData['retake_grade'], 0); @endphp
                                                                     <div class="split-cell"><svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg><span class="split-top text-red-600">{{ $origVal }}</span><span class="split-bottom">{{ $retakeVal }}</span></div>

@@ -564,14 +564,16 @@ trait TimetableTeacherAgenda
      * xona faqat xonadan boshqa sabab bo'lmasa taklif qilinadi): guruh, o'qituvchi, xona (haftalik va sikl), kutilayotgan so'rovlar,
      * amaliy blok qoidasi, xona sig'imi. $room — boshqa xona bilan. Qaytaradi: [sabablar, xona kodi, talabalar].
      */
-    private function agendaWeekErrors(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, ?Auditorium $room = null): array
+    private function agendaWeekErrors(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, ?Auditorium $room = null,
+        bool $splitCheck = true): array
     {
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
         $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
         $roomCode = $room ? (string) $room->code : (string) ($ov?->auditorium_code ?: $card->auditorium_code);
         $data = ['week' => $week, 'day' => $day, 'pair' => $pair] + ($room ? ['auditorium_code' => $roomCode] : []);
+        // $splitCheck = false — bir nechta bo'lak birga ko'chiriladi (blok yaxlitligi chaqiruvchida, yakuniy holat bo'yicha).
         $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair, 0, null, $room ? $roomCode : null),
-            $this->pendingTimeConflicts($card, $data, []), $this->practiceSplitConflicts($card, $week, $day, $pair),
+            $this->pendingTimeConflicts($card, $data, []), $splitCheck ? $this->practiceSplitConflicts($card, $week, $day, $pair) : [],
             $this->weeklyProposalBusy($card, $week, $day, $pair, $date, $room));
         $room ??= $roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null;
         $students = $this->cardStudents($card);

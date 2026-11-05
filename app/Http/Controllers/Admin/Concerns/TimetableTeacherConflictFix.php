@@ -126,6 +126,16 @@ trait TimetableTeacherConflictFix
                 return '«' . $card->subject_name . '» (' . $w . "-hafta) joylashgan va to'qnashuvsiz.";
             }
         }
+        // Amaliy blok yaxlit ko'chadi: asl joyida tegib turgan bo'laklar (bir fan, guruhlar, kun) — hammasi shu amallarda bo'lishi kerak.
+        $orig = [];
+        foreach ($moves as [$card, $w]) {
+            $orig[$card->id . '|' . $w] = $this->suggestionPlace($card, $w);
+        }
+        foreach ($moves as [$card, $w]) {
+            if ($why = $this->teacherFixBlockPart($board, $card, $w, $orig[$card->id . '|' . $w], $moves)) {
+                return $why;
+            }
+        }
         $why = null;
         DB::beginTransaction();
         try {
@@ -134,10 +144,13 @@ trait TimetableTeacherConflictFix
             }
             foreach ($moves as [$card, $w, $d, $p]) {
                 $grid = $this->cardGrid($board, $card);
+                // Bitta kartani surish qoidasi (practiceSplitConflicts) o'rniga — yakuniy holatda blok yaxlitligi (eski va yangi kun):
+                // bo'laklar birga ko'chganda ular bir-biriga tegib turadi, bu bo'linish emas.
                 [$errors] = $d < 1 || $p < 1 || $d > (int) $grid['days'] || $p + $card->lenHalf() - 1 > (int) $grid['pairs']
-                    ? [['Tanlangan vaqt jadval chegarasidan tashqarida.']] : $this->agendaWeekErrors($board, $card, $w, $d, $p);
+                    ? [['Tanlangan vaqt jadval chegarasidan tashqarida.']] : $this->agendaWeekErrors($board, $card, $w, $d, $p, null, false);
+                $errors = array_merge($errors, $this->practiceDaySplits($card, $w, array_values(array_unique(array_filter([$orig[$card->id . '|' . $w][0] ?? null, $d])))));
                 if ($errors) {
-                    $why = 'Yangi joy toza emas: ' . implode(' · ', $errors);
+                    $why = 'Yangi joy toza emas: ' . implode(' · ', array_values(array_unique($errors)));
                     break;
                 }
             }
@@ -146,6 +159,41 @@ trait TimetableTeacherConflictFix
         }
 
         return $why;
+    }
+
+    /**
+     * Ko'chiriladigan karta asl joyida amaliy blokning bir qismimi (shu kunda unga tegib yoki ustma-ust turgan bo'lak — bir fan, guruhlar)
+     * va o'sha bo'lak shu amallarda ko'chmayaptimi — unda sabab (blok bo'linadi); aks holda null.
+     */
+    private function teacherFixBlockPart(TimetableBoard $board, TimetableCard $card, int $w, ?array $place, array $moves): ?string
+    {
+        if (!$place) {
+            return null;
+        }
+        $moving = [];
+        foreach ($moves as [$c, $mw]) {
+            if ($mw === $w) {
+                $moving[(int) $c->id] = true;
+            }
+        }
+        $mine = $this->rangeFor($card, $place[1], (int) (TimetableCardOverride::where('card_id', $card->id)->where('week', $w)->value('start_half')
+            ?? $card->start_half ?? 0));
+        $sibs = TimetableCard::where('board_id', $board->id)->where('id', '!=', $card->id)->where('training_type', '!=', 'lecture')
+            ->where('faculty_name', $card->faculty_name)->where('specialty_name', $card->specialty_name)->where('course', $card->course)->get()
+            ->filter(fn (TimetableCard $o) => $this->teacherFixSameUnit($o, $card));
+        foreach ($sibs as $o) {
+            $op = $this->suggestionPlace($o, $w);
+            if (!$op || $op[0] !== $place[0] || isset($moving[(int) $o->id])) {
+                continue;
+            }
+            $r = $this->rangeFor($o, $op[1], (int) (TimetableCardOverride::where('card_id', $o->id)->where('week', $w)->value('start_half') ?? $o->start_half ?? 0));
+            if ($r[1] === $mine[0] || $mine[1] === $r[0] || $this->halfOverlap($r, $mine)) {
+                return '«' . $card->subject_name . '» (' . $w . "-hafta) — shu kungi amaliy blokning bir qismi («" . $o->subject_name . '» '
+                    . $this->halfRangeTime($board, $r) . "): blok bo'linmasin — hamma bo'lagini birga ko'chiring.";
+            }
+        }
+
+        return null;
     }
 
     /**

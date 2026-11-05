@@ -315,3 +315,24 @@ it('sikl: so\'rov qoladigan kunlar bor, lekin kafedra mudiri topilmasa — darho
     expect(TimetableCyclePlacement::where('group_name', 'd1/d22-01b')->value('lecture_slots'))->toBeNull()
         ->and(TimetableChangeRequest::count())->toBe(0);
 });
+
+it('Codex: ko\'p kartali amaliy blok (to\'qnashuvdagi) butunlay toza joyga — so\'rovsiz; blokning bir qismini ajratib — yo\'q', function () {
+    $s = tfSetup();
+    // Ikki bo'lakli amaliy blok (pp/2024-04a, payshanba IV–V para); I bo'lak SOTTOROVning B darsi bilan bir vaqtda — o'qituvchi band (qizil).
+    $p1 = $s['weekly']('pp/2024-04a', $s['t'], 4, 7, $s['r3'], ['subject_name' => 'Biologiya']);
+    $p2 = $s['weekly']('pp/2024-04a', $s['t'], 4, 9, $s['r3'], ['subject_name' => 'Biologiya']);
+    $both = ['week' => $s['week'], 'card_id' => $p1->id, 'actions' => [
+        ['op' => 'move', 'card_id' => $p1->id, 'week' => $s['week'], 'day' => 2, 'pair' => 1],
+        ['op' => 'move', 'card_id' => $p2->id, 'week' => $s['week'], 'day' => 2, 'pair' => 3]]];
+    // Faqat bitta bo'lak — blok bo'linadi: rad.
+    tfApply($s, ['week' => $s['week'], 'card_id' => $p1->id, 'actions' => [$both['actions'][0]]])->assertForbidden()
+        ->assertJsonPath('why', fn ($w) => str_contains($w, "blokning bir qismi"));
+    // Ikkala bo'lak bir kunga, lekin oraliq bilan (I va III para) — yakuniy holatda blok bo'linadi: rad.
+    $gap = $both;
+    $gap['actions'][1]['pair'] = 5;
+    tfApply($s, $gap)->assertForbidden()->assertJsonPath('why', fn ($w) => str_contains($w, "amaliy soatlar bo'linadi"));
+    // Butun blok seshanba I–II paraga — toza: so'rovsiz.
+    tfApply($s, $both)->assertOk()->assertJsonPath('fixed', true);
+    expect(TimetableCardOverride::where('week', $s['week'])->whereIn('card_id', [$p1->id, $p2->id])->orderBy('card_id')->get(['day', 'pair'])->toArray())
+        ->toBe([['day' => 2, 'pair' => 1], ['day' => 2, 'pair' => 3]]);
+});

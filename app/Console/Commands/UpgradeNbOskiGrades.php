@@ -62,27 +62,31 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
         $columns = ['id', 'student_hemis_id', 'subject_name', 'lesson_date', 'retake_graded_at', 'grade', 'retake_grade', 'reason',
             'status', 'upgraded_by_admin', 'admin_original_grade'];
 
+        $from = $this->gradesTable();
+        $this->output->progressStart($groups->count());
         foreach ($groups as $group) {
+            $this->output->progressAdvance();
             $students = DB::table('students')->where('group_id', $group->group_hemis_id)->pluck('level_code', 'hemis_id');
-            $base = fn () => DB::table('student_grades')
+            if ($students->isEmpty()) {
+                continue;
+            }
+            $rows = DB::table($from)
+                ->whereIn('student_hemis_id', $students->keys()->map(fn ($id) => (string) $id)->all())
                 ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $students->keys()->map(fn ($id) => (string) $id)->all() ?: ['0'])
-                ->where('lesson_date', '>=', $since);
-
-            // Kunlik darsdagi NB (sababli/sababsiz), otrabotkasi chegara sanadan oldin qo'yilgan
-            $nb = $base()
-                ->whereNotIn('training_type_code', $excluded)
-                ->where('reason', 'absent')
-                ->whereNull('grade')
-                ->whereNotNull('retake_grade')
-                ->where('retake_graded_at', '<', $cutoff)
-                ->get($columns);
-            // Chegara sanadan oldin topshirilgan OSKI (barcha urinishlar)
-            $oski = $base()
-                ->where('training_type_code', self::OSKI)
-                ->where('lesson_date', '<', $cutoff)
-                ->where(fn ($q) => $q->whereNotNull('grade')->orWhereNotNull('retake_grade'))
-                ->get($hasAttempt ? array_merge($columns, ['attempt']) : $columns);
+                ->where('lesson_date', '>=', $since)
+                ->where(fn ($q) => $q
+                    // Kunlik darsdagi NB (sababli/sababsiz), otrabotkasi chegara sanadan oldin qo'yilgan
+                    ->where(fn ($q) => $q->whereNotIn('training_type_code', $excluded)
+                        ->where('reason', 'absent')
+                        ->whereNull('grade')
+                        ->whereNotNull('retake_grade')
+                        ->where('retake_graded_at', '<', $cutoff))
+                    // Chegara sanadan oldin topshirilgan OSKI (barcha urinishlar)
+                    ->orWhere(fn ($q) => $q->where('training_type_code', self::OSKI)
+                        ->where('lesson_date', '<', $cutoff)
+                        ->where(fn ($q) => $q->whereNotNull('grade')->orWhereNotNull('retake_grade'))))
+                ->get(array_merge($columns, ['training_type_code'], $hasAttempt ? ['attempt'] : []));
+            [$oski, $nb] = $rows->partition(fn ($r) => (int) $r->training_type_code === self::OSKI);
 
             foreach (['NB otrabotka' => $nb, 'OSKI' => $oski] as $kind => $kindRows) {
                 foreach ($kindRows->groupBy('subject_name') as $subject => $rows) {
@@ -101,6 +105,8 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
             }
         }
 
+        $this->output->progressFinish();
+
         $this->table(['Guruh', 'Kurs', 'Fan', 'Tur', "Sana ({$cut} gacha)", 'Baholar', $revert ? 'Qaytariladi' : 'Oshiriladi', '<60', 'Izoh'], $table);
         if ($samples) {
             $this->line('Namunalar:');
@@ -115,5 +121,19 @@ class UpgradeNbOskiGrades extends UpgradeCycleGrades
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Fan sharti yo'q so'rovda MySQL lesson_date/deleted_at indeksini tanlab, katta jadvalni
+     * har guruh uchun aylanib chiqadi — talaba bo'yicha indeks majburan ishlatiladi.
+     */
+    private function gradesTable()
+    {
+        $index = 'idx_sg_student_subject_semester';
+        if (DB::getDriverName() === 'mysql' && DB::select('SHOW INDEX FROM student_grades WHERE Key_name = ?', [$index])) {
+            return DB::raw("student_grades FORCE INDEX ({$index})");
+        }
+
+        return 'student_grades';
     }
 }

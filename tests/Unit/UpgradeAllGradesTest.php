@@ -71,10 +71,11 @@ function allGrade(string $subject, array $row): int
 it('applies all cutoff rules in one command', function () {
     $nb = ['grade' => null, 'retake_grade' => 80, 'reason' => 'absent', 'status' => 'retake'];
     $ids = [];
-    foreach (['1', '2', '3', '4'] as $s) {
+    // Har fanning kunlik bahosi o'z sikli ichida
+    foreach (['1' => '2026-10-20', '2' => '2026-10-20', '3' => '2026-10-15', '4' => '2026-10-10'] as $s => $day) {
         $ids[$s] = [
-            'daily' => allGrade($s, ['lesson_date' => '2026-10-15 08:30:00']),
-            'nb' => allGrade($s, $nb + ['lesson_date' => '2026-10-14 08:30:00']),
+            'daily' => allGrade($s, ['lesson_date' => "$day 08:30:00"]),
+            'nb' => allGrade($s, $nb + ['lesson_date' => "$day 10:00:00"]),
             'mt' => allGrade($s, ['training_type_code' => 99, 'lesson_date' => null]),
         ];
     }

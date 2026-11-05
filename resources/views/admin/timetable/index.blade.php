@@ -15098,16 +15098,20 @@
                             c.auditorium_code = asgSel.auditorium_code; c.auditorium_name = asgSel.auditorium_name;
                         }
                     });
-                    $('asgMsg').textContent = (j.auditorium_name ? '«' + j.auditorium_name + '» xonasi biriktirildi' : 'Xona olib tashlandi') +
-                        ' · ' + j.affected + ' karta';
+                    // Darsning o'z to'qnashuvlari (o'qituvchi / guruh band) xona biriktirishni to'smaydi — sariq ogohlantirish.
+                    $('asgMsg').innerHTML = esc((j.auditorium_name ? '«' + j.auditorium_name + '» xonasi biriktirildi' : 'Xona olib tashlandi') +
+                        ' · ' + j.affected + ' karta') + ((j.warnings || []).length ? '<div class="asg-room-warn" style="color:#b45309">⚠ Darsning o\u2018z to\u2018qnashuvi (hal qilish kerak): '
+                        + (j.warnings || []).map(esc).join(' · ') + '</div>' : '');
                     renderAsgTable();
                     renderAsgRoomCurrent();
                     closeAsgRoomModal();
                     loadAsgBusy(asgSel).then(markAsgBusy);   // hozirgi xona o'zgardi — reyting (shu bino, odat) yangilanadi
                 } catch (e) {
                     if (e.data && e.data.needs_confirm) {
-                        closeAsgRoomModal();
-                        showBusyConfirm($('asgMsg'), e.message, () => applyAsgRoom(code, true), e.data.conflict_items);
+                        // Xona band / sig'maydi — "Baribir biriktirish" (force); "Xona tanlash" oynasi ochiq bo'lsa — o'sha yerda ham.
+                        const force = () => applyAsgRoom(code, true);
+                        showBusyConfirm($('asgMsg'), e.message, force, e.data.conflict_items);
+                        if (!$('asgRoomModal').classList.contains('hidden')) showBusyConfirm($('asgRoomFor'), e.message, force, e.data.conflict_items);
                         $('asgRoomOpen').disabled = $('asgRoomClear').disabled = false;
                         return;
                     }

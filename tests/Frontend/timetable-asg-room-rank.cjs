@@ -154,5 +154,41 @@ const resp = (order, why = {}) => ({ teachers: {}, rooms: {}, room_rank: { order
     assert.equal(unitBusyCalls().length, n);
     assert.equal(el2('asgMsg').textContent, "Xatolik: Ruxsat yo'q");
 
-    console.log('timetable asg room rank: 10 scenarios passed');
+    // 7) Xona biriktirildi, darsning o'z to'qnashuvi (o'qituvchi / guruh band) — sariq ogohlantirish (asgMsg), xato emas.
+    const pw = ctx2.applyAsgRoom('R101');
+    calls.at(-1).res({ auditorium_code: 'R101', auditorium_name: '101', affected: 1, warnings: ["O'qituvchi band: USTOZ — d1/d24-03b"] });
+    await pw; await tick();
+    assert.match(el2('asgMsg').innerHTML, /^«101» xonasi biriktirildi · 1 karta<div class="asg-room-warn" style="color:#b45309">⚠ Darsning o‘z to‘qnashuvi \(hal qilish kerak\): O'qituvchi band: USTOZ — d1\/d24-03b<\/div>$/);
+    const pnw = ctx2.applyAsgRoom('R102');
+    calls.at(-1).res({ auditorium_code: 'R102', auditorium_name: '102', affected: 1, warnings: [] });
+    await pnw; await tick();
+    assert.equal(el2('asgMsg').innerHTML, '«102» xonasi biriktirildi · 1 karta');
+
+    // 8) Band xona (409 needs_confirm) — "Baribir biriktirish": asgMsg da va ochiq "Xona tanlash" oynasida ham; bosilsa — force=1.
+    const shown = [];
+    ctx2.showBusyConfirm = (target, msg, onForce, items) => shown.push({ target: target.id, msg, onForce, items });
+    el2('asgRoomModal').hidden = false;
+    const pb2 = ctx2.applyAsgRoom('R214');
+    calls.at(-1).rej(Object.assign(new Error('Xona «214» shu davrda boshqa guruhcha bilan band: g-03a, Fan, 14.09'),
+        { data: { needs_confirm: true, conflict_items: [{ kind: 'room_busy', room_code: 'R214' }] } }));
+    await pb2; await tick();
+    assert.deepEqual(shown.map(x => x.target), ['asgMsg', 'asgRoomFor']);
+    assert.equal(shown[0].msg, 'Xona «214» shu davrda boshqa guruhcha bilan band: g-03a, Fan, 14.09');
+    assert.equal(shown[1].items[0].room_code, 'R214');
+    assert.equal(el2('asgRoomModal').hidden, false);
+    assert.equal(el2('asgRoomOpen').disabled, false);
+    shown[1].onForce();
+    assert.equal(calls.at(-1).body.force, 1);
+    assert.equal(calls.at(-1).body.auditorium_code, 'R214');
+    calls.at(-1).res({ auditorium_code: 'R214', auditorium_name: '214', affected: 1, warnings: [] });
+    await tick(); await tick();
+    // Oyna yopiq bo'lsa — faqat asgMsg da.
+    shown.length = 0;
+    el2('asgRoomModal').hidden = true;
+    const pb3 = ctx2.applyAsgRoom('R090');
+    calls.at(-1).rej(Object.assign(new Error('band'), { data: { needs_confirm: true, conflict_items: [] } }));
+    await pb3; await tick();
+    assert.deepEqual(shown.map(x => x.target), ['asgMsg']);
+
+    console.log('timetable asg room rank: 12 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

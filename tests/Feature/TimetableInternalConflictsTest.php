@@ -282,8 +282,11 @@ it('biriktirish: haftalik — band o\'qituvchi va boshqa haftada band xona uchun
     // "Baribir biriktirish" — band o'qituvchi saqlanadi
     $as()->postJson(route('admin.timetable.assign-teacher', $board), $unit + ['teacher_id' => $busy->id, 'force' => 1])->assertOk();
     expect(TimetableCard::where('group_name', 'd2-01a')->value('teacher_id'))->toBe($busy->id);
-    // Haftalik jadvalda xona to'qnashuvi avvalgidek qat'iy rad etiladi (ko'chirilgan hafta ham) — "Baribir" yo'q
-    $as()->postJson(route('admin.timetable.assign-room', $board), $unit + ['auditorium_code' => 'R7', 'force' => 1])->assertStatus(422);
+    // Haftalik jadvalda xona to'qnashuvi (ko'chirilgan hafta ham) — 422 emas, "Baribir biriktirish" (409 needs_confirm), force bilan — biriktiriladi.
+    $as()->postJson(route('admin.timetable.assign-room', $board), $unit + ['auditorium_code' => 'R7'])->assertStatus(409)
+        ->assertJsonPath('needs_confirm', true)->assertJsonPath('conflict_items.0.room_code', 'R7');
+    $as()->postJson(route('admin.timetable.assign-room', $board), $unit + ['auditorium_code' => 'R7', 'force' => 1])->assertOk();
+    expect(TimetableCard::where('group_name', 'd2-01a')->value('auditorium_code'))->toBe('R7');
 });
 
 it('biriktirish: sikl guruhchasiga xona — sig\'imdan oshsa ogohlantirish, yetsa yo\'q; "Baribir" bilan saqlanadi', function () {
@@ -987,4 +990,19 @@ it('smena maslahati (qabul): MUXAMMADIYEV (752), d1/d22-01a Klinik farmakologiya
     // Chorshanba ham — har smenada 5 sana qoladi (kamaymaydi): umumiy maslahat.
     $weekly(3, ['group_name' => 'pp/2024-04a']);
     expect($advice())->toMatchArray(['kind' => 'none', 'text' => "boshqa o'qituvchi biriktiring yoki smenani almashtiring"]);
+});
+
+it('unitBusy: zalda shu vaqtda boshqa oqimning ma\'ruzasi — sig\'im yetsa ham band ("zal ikki ma\'ruzaga"); bitta oqim — band emas', function () {
+    $hall = Auditorium::create(['code' => 'ZAL', 'name' => 'Zal', 'volume' => 100, 'active' => true]);
+    $lector = icTeacher('LEKTOR', 'oqituvchi');
+    $s = icLectureSetup($lector, icTeacher('USTOZ', 'oqituvchi'), $hall);
+    $ctl = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $busy = fn () => (new ReflectionMethod($ctl, 'unitBusy'))->invoke($ctl, $s['board'], TimetableCard::whereKey($s['lecture']->id)->get(), null, true);
+    // Bitta oqim (LEKTOR, Zal, vaqt bir xil) — band emas.
+    expect($busy()['rooms'])->toBe([]);
+    // 2-oqim ma'ruzasi — boshqa o'qituvchi: 15.09 zalda ikki ma'ruza (100 o'rin yetadi — baribir band, sig'im matnisiz).
+    TimetableCard::where('oqim_label', '2-oqim')->where('training_type', 'lecture')->update(['teacher_id' => icTeacher('BOSHQA')->id, 'teacher_name' => 'BOSHQA']);
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    $b = $busy();
+    expect($b['rooms'])->toBe(['ZAL' => 'd22-06a, Klinik farmakologiya, 15.09'])->and($b['caps'])->toBe([]);
 });

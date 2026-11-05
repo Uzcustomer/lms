@@ -23,9 +23,13 @@ if (!function_exists('legacyUnitBusy')) {
                 $this->cycleOccupancy($board, array_values(array_filter($units, fn ($u) => $u['placement'] !== null)), $calendar));
             $mine = [];
             $others = [];
+            $today = self::proposalToday();
             foreach ($entries as $e) {
                 if (isset($ids[$e['card']])) {
-                    $mine[] = $e;
+                    // Faqat bugungi va kelgusi sanalar (o'tgan to'qnashuv bandlik emas).
+                    if ($e['date'] >= $today) {
+                        $mine[] = $e;
+                    }
                 } else {
                     $others[$e['date']][] = $e;
                 }
@@ -34,6 +38,12 @@ if (!function_exists('legacyUnitBusy')) {
             $peak = [];
             $unknown = [];
             $exclusive = [];
+            $lecClash = [];
+            // Zalda boshqa oqimning sikl ma'ruzasi (fan asosiy nomi, o'qituvchi yoki vaqt boshqa) — sig'imdan qat'i nazar band.
+            $sikl = array_values(array_filter($units, fn ($u) => $u['placement'] !== null));
+            $flow = fn (array $e) => $this->normSubject($this->cycleSubjectVariantBase((string) ($sikl[$e['unit']]['subject'] ?? '')) ?? (string) ($sikl[$e['unit']]['subject'] ?? ''))
+                . '|' . ($e['teacher_id'] ?: '-') . '|' . $e['from'] . '|' . $e['to'];
+            $lec = fn (array $e) => $e['kind'] === 'cycle' && str_starts_with((string) ($e['load_key'] ?? ''), 'l');
             foreach ($mine as $m) {
                 $over = array_filter($others[$m['date']] ?? [], fn ($o) => $o['from'] < $m['to'] && $m['from'] < $o['to']);
                 $inRoom = [];
@@ -46,6 +56,8 @@ if (!function_exists('legacyUnitBusy')) {
                         $inRoom[$o['room']][] = $o;
                         if ($m['kind'] === 'weekly' || $o['kind'] === 'weekly') {
                             $exclusive[$o['room']] = true;
+                        } elseif ($lec($m) && $lec($o) && $flow($m) !== $flow($o)) {
+                            $lecClash[$o['room']] = true;
                         }
                     }
                 }
@@ -66,10 +78,10 @@ if (!function_exists('legacyUnitBusy')) {
             $prefix = [];
             foreach (array_keys($hits['rooms']) as $code) {
                 $vol = (int) ($volumes[$code] ?? 0);
-                $over = isset($exclusive[$code]) || ($vol > 0 && ($mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol));
-                if (!$over) {
+                $capOver = $vol > 0 && ($mineStudents <= 0 || !empty($unknown[$code]) || ($peak[$code] ?? 0) + $mineStudents > $vol);
+                if (!isset($exclusive[$code]) && !isset($lecClash[$code]) && !$capOver) {
                     unset($hits['rooms'][$code]);
-                } elseif (!isset($exclusive[$code]) && $mineStudents > 0 && empty($unknown[$code])) {
+                } elseif (!isset($exclusive[$code]) && $capOver && $mineStudents > 0 && empty($unknown[$code])) {
                     $n = ($peak[$code] ?? 0) + $mineStudents;
                     // Yagona ko'rinish (1.4): "Xona sig'maydi: 215 — 65 o'rin, 98 talaba (+33) — ...".
                     $prefix[$code] = "Xona sig'maydi: " . (string) ($roomRows[$code]->name ?? $code) . ' — ' . $vol . " o'rin, " . $n . ' talaba (+' . ($n - $vol) . ') — ';

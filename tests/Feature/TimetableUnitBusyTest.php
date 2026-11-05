@@ -75,6 +75,8 @@ function ubSetup(): array
 }
 
 it('kafedra mudiri: unit-busy va assign-room 200 qaytaradi (Patologik anatomiya · d1/d24-03a)', function () {
+    // Semestr boshidan oldin (bandlik — faqat bugungi va kelgusi sanalar bo'yicha).
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
     $s = ubSetup();
     $res = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
     expect($res)->not->toHaveKey('warning')
@@ -215,6 +217,7 @@ function ubBigBoard(): array
 }
 
 it('katta doska (3000+ karta): unit-busy < 1 s va < 64 MB xotira, natija eski (butun doska) hisob bilan bir xil', function () {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
     $s = ubSetup();
     $big = ubBigBoard();
     $board = $big['board'];
@@ -395,4 +398,61 @@ it('biriktirish oynasi: ma\'ruza oqimi — xona sig\'imi oqim guruhlari talabala
     // 24 talaba: 30 o'rinli R103 sig'adi, 20 o'rinli R101 / R102 sig'maydi — oxirida.
     expect(($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $params))->assertOk()->json('room_rank.order'))
         ->toBe(['R103', 'R101', 'R102']);
+});
+
+it('bandlik faqat bugungi va kelgusi sanalar bo\'yicha: o\'tgan to\'qnashuv — "band" emas, ogohlantirishsiz biriktiriladi', function () {
+    // 10.09: d1/d24-03a dushanba darslari — 07.09 o'tgan, 14.09 dan kelgusi. USTOZ B (Gistologiya sikli) bilan to'qnashuv faqat 07.09 da.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-10 09:00', 'Asia/Tashkent'));
+    $s = ubSetup();
+    $res = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
+    expect($res['teachers'])->toBe([(string) $s['a']->id => 'd1/d24-03b, Patologik anatomiya, 14.09–14.12'])
+        ->and($res['rooms'])->toBe(['R101' => 'd1/d24-03b, Patologik anatomiya, 14.09–14.12']);
+    // O'tgan sanada kesishgan o'qituvchi va xona — ogohlantirishsiz.
+    ($s['as'])()->postJson(route('admin.timetable.assign-teacher', $s['board']), $s['params'] + ['teacher_id' => $s['b']->id])->assertOk();
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102'])->assertOk()
+        ->assertJsonPath('warnings', []);
+    // Kelgusida kesishadigan — "Baribir biriktirish" (409), force bilan — biriktiriladi.
+    ($s['as'])()->postJson(route('admin.timetable.assign-teacher', $s['board']), $s['params'] + ['teacher_id' => $s['a']->id])
+        ->assertStatus(409)->assertJsonPath('needs_confirm', true)->assertJsonPath('conflicts', 'd1/d24-03b, Patologik anatomiya, 14.09–14.12');
+    ($s['as'])()->postJson(route('admin.timetable.assign-teacher', $s['board']), $s['params'] + ['teacher_id' => $s['a']->id, 'force' => 1])->assertOk();
+    expect($s['unit']->fresh()->teacher_id)->toBe($s['a']->id);
+    // Bugun ham hisoblanadi: 14.09 (dushanba) kuni — to'qnashuv bor.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-14 16:00', 'Asia/Tashkent'));
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    $b2 = ubTeacher('USTOZ C', null, ['department_hemis_id' => 601]);
+    TimetableCard::where('group_name', 'd1/d24-03b')->update(['teacher_id' => $b2->id, 'teacher_name' => 'USTOZ C']);
+    expect(($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->json('teachers'))
+        ->toBe([(string) $b2->id => 'd1/d24-03b, Patologik anatomiya, 14.09–14.12']);
+    // Hamma darslari o'tgan birlik — bandlik tekshiruvi yo'q.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-20 09:00', 'Asia/Tashkent'));
+    $all = ($s['as'])()->getJson(route('admin.timetable.unit-busy', ['board' => $s['board']->id] + $s['params']))->assertOk()->json();
+    expect($all['teachers'])->toBe([])->and($all['rooms'])->toBe([]);
+    ($s['as'])()->postJson(route('admin.timetable.assign-teacher', $s['board']), $s['params'] + ['teacher_id' => $b2->id])->assertOk();
+});
+
+it('xona biriktirish: darsning o\'qituvchi to\'qnashuvi to\'smaydi (warnings), band xona — 409 needs_confirm / force; xona o\'qituvchiga biriktirilmagan — 422', function () {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    $s = ubSetup();
+    // Birlik o'qituvchisi — USTOZ A (u shu vaqtda d1/d24-03b da): o'qituvchi to'qnashuvi.
+    TimetableCard::whereKey($s['unit']->id)->update(['teacher_id' => $s['a']->id, 'teacher_name' => 'USTOZ A']);
+    $r = ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R103'])->assertOk()->json();
+    expect($r['auditorium_code'])->toBe('R103')->and($r['warnings'])->toHaveCount(1)
+        ->and($r['warnings'][0])->toContain("O'qituvchi band: USTOZ A");
+    // Band xona (haftalik) — 409, conflict_items bilan; force — biriktiriladi (o'qituvchi to'qnashuvi ham warnings da).
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R101'])->assertStatus(409)
+        ->assertJsonPath('needs_confirm', true)->assertJsonPath('conflict_items.0.room_code', 'R101')
+        ->assertJsonPath('error', "Xona «101» shu davrda boshqa guruhcha bilan band: d1/d24-03b, Patologik anatomiya, 07.09–14.12");
+    $f = ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R101', 'force' => 1])->assertOk()->json();
+    // Xona bandligi faqat 409 da (unitBusy) — warnings da takrorlanmaydi, faqat darsning o'z to'qnashuvi.
+    expect($s['unit']->fresh()->auditorium_code)->toBe('R101')->and($f['warnings'])->toHaveCount(1)
+        ->and($f['warnings'][0])->toContain("O'qituvchi band: USTOZ A")->not->toContain('Auditoriya band');
+    // O'tgan haftalardagi o'qituvchi to'qnashuvi — ogohlantirish emas.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-20 09:00', 'Asia/Tashkent'));
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R103'])->assertOk()
+        ->assertJsonPath('warnings', []);
+    // Xona o'qituvchiga biriktirilmagan — qattiq xato.
+    DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id, 'auditorium_id' => Auditorium::where('code', 'R102')->value('id'),
+        'teacher_id' => $s['b']->id, 'is_general' => false, 'created_at' => now(), 'updated_at' => now()]);
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102', 'force' => 1])
+        ->assertStatus(422)->assertJsonPath('error', "Xona «102» kartaning o'qituvchisiga biriktirilmagan");
 });

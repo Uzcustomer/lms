@@ -122,6 +122,8 @@ class SendUnratedRegistrationsReport extends Command
             })
             // O'quv rejada nofaol fanlar — jurnal kabi ko'rsatilmaydi
             ->tap(fn ($q) => \App\Services\InactiveSubjects::exclude($q, 'g', 'sch'))
+            // O'quv/tanishuv amaliyoti: davomat bor, baho yo'q
+            ->tap(fn ($q) => SendLessonOpeningReminders::excludeUngradedSubjects($q))
             ->select(
                 'sch.schedule_hemis_id',
                 'sch.employee_id',

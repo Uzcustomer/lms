@@ -191,6 +191,8 @@ class SendLessonOpeningReminders extends Command
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');
             })
+            // O'quv/tanishuv amaliyoti: davomat bor, baho yo'q
+            ->tap(fn ($q) => self::excludeUngradedSubjects($q))
             ->select(
                 'sch.schedule_hemis_id',
                 'sch.employee_id',
@@ -357,6 +359,14 @@ class SendLessonOpeningReminders extends Command
         }
 
         return $sentCount;
+    }
+
+    /** Baho qo'yilmaydigan fanlar (config app.grade_excluded_subject_patterns) — TeacherMissedLessons bilan bir xil. */
+    public static function excludeUngradedSubjects($query, string $alias = 'sch'): void
+    {
+        foreach (config('app.grade_excluded_subject_patterns', []) as $pattern) {
+            $query->whereRaw("LOWER({$alias}.subject_name) NOT LIKE ?", ['%' . mb_strtolower($pattern) . '%']);
+        }
     }
 
     private function countLessons(array $lessons): int

@@ -633,6 +633,9 @@
         .day-sababli, .admin-upgraded-cell.day-sababli {
             box-shadow: inset 0 0 0 2px #7c3aed;
         }
+        .day-nb, .admin-upgraded-cell.day-nb, .au-nb .split-cell {
+            box-shadow: inset 0 0 0 2px #dc2626;
+        }
         .au-nb .split-line,
         .au-sababli .split-line {
             display: none;

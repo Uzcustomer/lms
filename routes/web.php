@@ -1369,6 +1369,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Jadval o'zgarishlari — registrator ofisi tasdig'i
                 Route::post('/cards/{card}/time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkTime'])->name('cards.time-proposal.check');
                 Route::post('/cards/{card}/time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeTime'])->name('cards.time-proposal');
+                // Fan mas'uli: mas'ul fani kartasini shu haftaga (vaqt + xona) — to'qnashuvdagi dars toza joyga darhol, aks holda so'rov.
+                Route::post('/cards/{card}/responsible-move/check', [\App\Http\Controllers\Admin\TimetableController::class, 'responsibleMoveCheck'])->name('cards.responsible-move.check');
+                Route::post('/cards/{card}/responsible-move', [\App\Http\Controllers\Admin\TimetableController::class, 'responsibleMove'])->name('cards.responsible-move');
                 Route::post('/boards/{board}/cycle-time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkCycleTime'])->name('cycle-time-proposal.check');
                 Route::post('/boards/{board}/cycle-time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeCycleTime'])->name('cycle-time-proposal');
                 Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');

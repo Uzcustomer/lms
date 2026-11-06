@@ -4,7 +4,8 @@ const path = require('node:path');
 // "Joylash uchun tanlash" va sudrash: bo'sh katak hukmi bitta funksiyadan (placeVerdict ← conflictsAtDetail) — yashil / to'q qizil
 // (o'qituvchi band) / och qizil (guruh band) / sariq (faqat xona band); title — har sabab alohida qatorda (takrorsiz, 10 tadan ortig'i
 // "… yana N ta"), sariqda — xonani almashtirish ko'rsatmasi. Sichqoncha band katakda — sabab bo'lgan dars chipi ramka bilan. Sariq katak
-// bosilsa — bo'sh va sig'adigan xonalar (reyting bo'yicha) oynasi: hafta — week-override xona bilan, shablon — assign-room, so'ng joylash.
+// bosilsa — bo'sh va sig'adigan xonalar (reyting bo'yicha) oynasi; tanlansa — bitta so'rov: hafta — week-override xona bilan, shablon —
+// place + auditorium_code (faqat shu karta; tasdiqqa ketsa — mahalliy holat o'zgarmaydi). Tashqi jadval — oddiy joylash.
 const { chromium } = require('playwright');
 const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin/timetable/index.blade.php'), 'utf8');
 const cut = (from, to) => {
@@ -46,6 +47,9 @@ const page0 = `<!doctype html><html><head><style>${css}</style></head><body><tab
     const ttToast = (h, t) => window.toasts.push([h, t]);
     const renderAll = () => { window.renders++; };
     const weeklyEditGuard = () => {};
+    const rememberLayerPlace = () => {};
+    const placeCardAt = (card, d, p) => window.calls.push({ placeAt: [card.id, d, p] });
+    window.setLayer = l => { weeklyLayer = l; };
     async function placeOneCard(card, d, p) {
         window.calls.push({ place: [card.id, d, p] });
         if (window.next.place) { const e = new Error(window.next.place); throw e; }
@@ -170,45 +174,53 @@ const ROOMS = [
     assert.deepEqual(await page.evaluate(() => [window.overrides['1|10'].auditorium_code, window.getSelected(), window.renders]), ['R2', null, 1]);
     assert.match((await page.evaluate(() => window.toasts))[0][0], /Joylandi: 102-xona xonasi bilan/);
 
-    // 5) Shablon (hafta tanlanmagan): darsning xonasi (assign-room), so'ng joylash. 409 needs_confirm — "Baribir joylash" (force).
+    // 5) Shablon (hafta tanlanmagan): bitta so'rov — place + auditorium_code (faqat shu karta); assign-room yo'q.
     await page.evaluate(() => { delete window.overrides['1|10']; window.setWeek(0); });
-    await setNext({ '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: null } }],
-        '/admin/timetable/boards/7/assign-room': [{ status: 409, j: { error: 'Xona band: 102-xona — Seshanba', needs_confirm: true } }, { j: { ok: true } }] });
+    await setNext({ '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: null } }], '/admin/timetable/cards/1/place': [{ j: { ok: true, auditorium_code: 'R2' } }] });
     await page.evaluate(() => window.openPlaceRoomPick(window.cards[0], 1, 5));
     await page.waitForSelector('#ttPlaceRoom [data-pr-code]');
-    assert.match(await page.textContent('#ttPlaceRoom'), /barcha haftalar \(darsning xonasi almashtiriladi\)/);
+    assert.match(await page.textContent('#ttPlaceRoom'), /barcha haftalar \(shu kartaning xonasi almashtiriladi\)/);
     // Reytingsiz — sig'imi yaqini avval.
     assert.deepEqual(await page.$$eval('#ttPlaceRoom [data-pr-code]', els => els.map(el => el.dataset.prCode)), ['R7', 'R2']);
     await page.click('#ttPlaceRoom [data-pr-code="R2"]');
-    await page.waitForSelector('#ttPlaceRoom [data-pr-force]');
-    assert.match(await page.textContent('#ttPlaceRoom [data-pr-msg]'), /⚠ Xona band: 102-xona — Seshanba/);
-    calls = await page.evaluate(() => window.calls.filter(c => c.method === 'POST' || c.place));
-    assert.deepEqual(calls.map(c => c.place ? 'place' : c.body.force), [undefined]);
-    await page.click('#ttPlaceRoom [data-pr-force]');
     await page.waitForFunction(() => !document.getElementById('ttPlaceRoom'));
     calls = await page.evaluate(() => window.calls.filter(c => c.method === 'POST' || c.place));
-    assert.deepEqual(calls.map(c => c.place ? 'place ' + c.place.join(',') : c.url.split('/').pop() + ' ' + c.body.auditorium_code + ' ' + c.body.force),
-        ['assign-room R2 undefined', 'assign-room R2 1', 'place 1,1,5']);
-    assert.equal(await page.evaluate(() => window.cards[0].auditorium_code), 'R2');
+    assert.deepEqual(calls, [{ url: '/admin/timetable/cards/1/place', method: 'POST', body: { day: 1, pair: 5, layer: 'internal', auditorium_code: 'R2' } }]);
+    assert.deepEqual(await page.evaluate(() => { const c = window.cards[0]; return [c.day, c.pair, c.auditorium_code, c.auditorium_name]; }), [1, 5, 'R2', '102-xona']);
+    // Boshqa kartalarning xonasi o'zgarmaydi.
+    assert.equal(await page.evaluate(() => window.cards.find(c => c.id === 13).auditorium_code), 'R1');
 
-    // 6) Joylanmasa — xona avvalgisiga qaytariladi, xato oynada (oyna ochiq qoladi).
+    // 6) Tasdiqqa ketdi (kafedra mudiri) — mahalliy holat o'zgarmaydi, "Joylandi" yo'q; rad etildi (422) — xato oynada, hech narsa o'zgarmaydi.
     await page.evaluate(() => { const c = window.cards[0]; c.day = null; c.pair = null; c.auditorium_code = 'R1'; c.auditorium_name = '101-xona'; });
-    await setNext({ '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: null } }], '/admin/timetable/boards/7/assign-room': [{ j: { ok: true } }, { j: { ok: true } }],
-        place: 'Guruh band' });
+    await setNext({ '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: null } }], '/admin/timetable/cards/1/place': [{ j: { ok: true, pending_approval: true } }] });
+    await page.evaluate(() => window.openPlaceRoomPick(window.cards[0], 1, 5));
+    await page.waitForSelector('#ttPlaceRoom [data-pr-code]');
+    await page.click('#ttPlaceRoom [data-pr-code="R7"]');
+    await page.waitForFunction(() => !document.getElementById('ttPlaceRoom'));
+    assert.deepEqual(await page.evaluate(() => [window.cards[0].day, window.cards[0].auditorium_code, window.toasts.length]), [null, 'R1', 0]);
+    await setNext({ '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: null } }],
+        '/admin/timetable/cards/1/place': [{ status: 422, j: { error: 'Auditoriya band: 107-xona — Fan9' } }] });
     await page.evaluate(() => window.openPlaceRoomPick(window.cards[0], 1, 5));
     await page.waitForSelector('#ttPlaceRoom [data-pr-code]');
     await page.click('#ttPlaceRoom [data-pr-code="R7"]');
     await page.waitForFunction(() => /Joylanmadi/.test(document.querySelector('#ttPlaceRoom [data-pr-msg]').textContent));
-    calls = await page.evaluate(() => window.calls.filter(c => c.method === 'POST' || c.place));
-    assert.deepEqual(calls.map(c => c.place ? 'place' : c.body.auditorium_code), ['R7', 'place', 'R1']);
-    assert.deepEqual(await page.evaluate(() => [window.cards[0].auditorium_code, window.cards[0].day]), ['R1', null]);
-    assert.match(await page.textContent('#ttPlaceRoom [data-pr-msg]'), /Joylanmadi: Guruh band/);
+    assert.match(await page.textContent('#ttPlaceRoom [data-pr-msg]'), /Joylanmadi: Auditoriya band: 107-xona/);
+    assert.deepEqual(await page.evaluate(() => [window.cards[0].day, window.cards[0].auditorium_code]), [null, 'R1']);
+    assert.equal(await page.isDisabled('#ttPlaceRoom [data-pr-code="R7"]'), false);
 
     // 7) Bekor (Esc) — hech narsa.
     await page.evaluate(() => { window.next = {}; window.calls = []; });
     await page.keyboard.press('Escape');
     assert.equal(await page.$('#ttPlaceRoom'), null);
     assert.deepEqual(await page.evaluate(() => window.calls), []);
+
+    // 7a) Tashqi jadval — xona bu qatlamda yo'q: sariq katak oddiy joylashdek (oyna ochilmaydi).
+    await page.evaluate(() => { window.calls = []; window.setLayer('external'); window.openPlaceRoomPick(window.cards[0], 1, 5); });
+    assert.equal(await page.$('#ttPlaceRoom'), null);
+    assert.deepEqual(await page.evaluate(() => window.calls), [{ placeAt: [1, 1, 5] }]);
+    await page.evaluate(() => window.setLayer('internal'));
+    // Mijozda assign-room + qaytarish yo'q (xona va joy — bitta so'rov).
+    assert.doesNotMatch(picker, /assign-room/);
 
     // 8) Ulanish (manba): ikkala katakda (ma'ruza oqimi va amaliy guruh) hukm, sariq — data-room-place → xona oynasi; legend; sudrash —
     //    dragPaint (tanlash bilan bir xil); tashqi tooltip (dragTip) o'zgarmagan.
@@ -221,5 +233,5 @@ const ROOMS = [
     assert.match(source, /tip\.textContent = \(slotRangeText\(plan\.start, plan\.len\) \|\| ''\) \+ \(bad \? ' — band' : ''\);/);
 
     await browser.close();
-    console.log('timetable place tones: 8 scenarios passed');
+    console.log('timetable place tones: 9 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

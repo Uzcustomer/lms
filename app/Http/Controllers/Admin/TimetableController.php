@@ -12055,6 +12055,8 @@ class TimetableController extends Controller
             'pair'       => 'nullable|integer|min:1|max:' . $grid['pairs'],
             'start_half' => 'nullable|integer|min:0|max:1',
             'layer'      => 'nullable|in:external,internal',
+            // Faqat ichki qatlam: shu kartani shu xona bilan joylash (xona va joy — bitta amal, bitta tasdiq so'rovi).
+            'auditorium_code' => 'nullable|string|max:50',
         ]);
 
         $day = $data['day'] ?? null;
@@ -12063,6 +12065,26 @@ class TimetableController extends Controller
         $layer = $this->weeklyLayer($request, $data['layer'] ?? null);
         if ($denied = $this->weeklyLayerDenied($request, $layer, $card)) {
             return $denied;
+        }
+        $room = null;
+        if (!empty($data['auditorium_code'])) {
+            if ($layer === 'external') {
+                return response()->json(['error' => 'Xona bilan joylash — faqat ichki jadvalda.'], 422);
+            }
+            if (!$day || !$pair) {
+                return response()->json(['error' => 'Xona bilan joylash uchun kun va para ko\'rsatilishi kerak.'], 422);
+            }
+            // Xona tekshiruvi week-override dagidek: mavjud va tanlangan o'qituvchiga ruxsat etilgan (nofaol xona — TimetableActiveRoom).
+            $room = Auditorium::where('code', $data['auditorium_code'])->first();
+            if (!$room) {
+                return response()->json(['error' => 'Auditoriya topilmadi'], 422);
+            }
+            if (!$this->auditoriumAllowedForCard($room, $card, $this->auditoriumTeacherMap())) {
+                return response()->json(['error' => 'Bu auditoriya tanlangan o\'qituvchiga biriktirilmagan.'], 422);
+            }
+            // To'qnashuv — yangi xona bilan (kartaning xonasi faqat shu kartada, saqlash bilan birga o'zgaradi).
+            $card->auditorium_code = $room->code;
+            $card->auditorium_name = $room->name;
         }
 
         if ($layer === 'external') {
@@ -12085,13 +12107,14 @@ class TimetableController extends Controller
             }
         }
 
-        $card->update([
+        // Joy va (berilgan bo'lsa) xona — bitta tranzaksiyada: yo ikkalasi, yo hech biri.
+        DB::transaction(fn () => $card->update([
             'day' => $day, 'pair' => $pair,
             'start_half' => $day && $pair ? $startHalf : 0,
             'placement_reason_code' => null,
             'placement_reason' => null,
-        ]);
-        return response()->json(['ok' => true]);
+        ] + ($room ? ['auditorium_code' => $room->code, 'auditorium_name' => $room->name] : [])));
+        return response()->json(['ok' => true] + ($room ? ['auditorium_code' => $room->code, 'auditorium_name' => $room->name] : []));
     }
 
     /** Ikki yarim-slot oralig'i kesishadimi: [a1,a2) va [b1,b2). */

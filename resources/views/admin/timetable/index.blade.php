@@ -11588,9 +11588,9 @@
             // ===== Sariq katak (faqat xona band): boshqa xona bilan joylash =====
             // Xonalar: faol, hozirgisidan boshqa, sig'imi talabalar sonidan kam emas (sig'imi kiritilmagani — yo'q), shu vaqtda bo'sh
             // (conflictsAtDetail shu xona bilan — xona sababi yo'q). Tartib — server reytingi (unit-busy room_rank: odatdagi, o'qituvchiniki,
-            // kafedraniki, shu bino, sig'imi yaqin) sabab yorlig'i bilan; reyting kelmasa — sig'imi yaqini. Tanlansa: tanlangan hafta (ichki
-            // jadval) — shu hafta istisnosi shu xona bilan (week-override); shablon / tashqi jadval — dars birligining xonasi almashtiriladi
-            // (assign-room), so'ng joylanadi (rad etilsa — xona qaytariladi). Bekor / Esc / fon — hech narsa.
+            // kafedraniki, shu bino, sig'imi yaqin) sabab yorlig'i bilan; reyting kelmasa — sig'imi yaqini. Tanlansa — bitta so'rov (placeCardWithRoom):
+            // tanlangan hafta — shu hafta istisnosi shu xona bilan, shablon — kartaning o'zi shu xona bilan. Tashqi jadvalda xona yo'q — sariq katak
+            // oddiy joylashdek. Bekor / Esc / fon — hech narsa.
             let placeRoomsAll = null;
             function placeRoomCandidates(card, d, p, rooms, rank) {
                 const cur = effectiveCard(card).auditorium_code || '';
@@ -11604,6 +11604,8 @@
                     .map(x => x.r);
             }
             async function openPlaceRoomPick(card, d, p) {
+                // Tashqi jadval: server faqat guruh bandligini tekshiradi (xona bu qatlamda yo'q) — oddiy joylash.
+                if (weeklyLayer === 'external') { placeCardAt(card, d, p); return; }
                 const prior = document.getElementById('ttPlaceRoom');
                 if (prior) prior.remove();
                 const m = document.createElement('div');
@@ -11615,7 +11617,7 @@
                 m.innerHTML = '<div class="cr-proposal-form" role="dialog" aria-modal="true" aria-label="Boshqa xona bilan joylash">'
                     + '<h3 class="font-bold text-lg">Boshqa xona bilan joylash</h3>'
                     + '<p>' + esc(card.subject_name) + ' · ' + esc(card.training_type === 'lecture' ? (card.oqim_label || '') : (card.group_name || '')) + ' → ' + esc(when)
-                    + (week ? ' · ' + curWeek + '-hafta (faqat shu hafta)' : ' · barcha haftalar (darsning xonasi almashtiriladi)') + '</p>'
+                    + (week ? ' · ' + curWeek + '-hafta (faqat shu hafta)' : ' · barcha haftalar (shu kartaning xonasi almashtiriladi)') + '</p>'
                     + '<p class="text-sm text-amber-700" style="white-space:pre-line" data-pr-why>' + esc(why.join('\n')) + '</p>'
                     + '<p class="text-sm">Shu vaqtda bo‘sh va sig‘adigan xonalar' + (+card.students ? ' (' + +card.students + ' talaba)' : '') + ':</p>'
                     + '<input type="search" data-pr-q placeholder="Xona qidirish…" aria-label="Xona qidirish" autocomplete="off">'
@@ -11655,67 +11657,49 @@
                 render();
                 q.oninput = render;
                 q.focus();
-                const run = async (room, force) => {
+                const run = async room => {
                     busy = true;
-                    m.querySelectorAll('[data-pr-list] button, [data-pr-force]').forEach(b => { b.disabled = true; });
+                    m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = true; });
                     msg.className = 'text-sm text-slate-600';
                     msg.textContent = 'Joylanmoqda…';
                     try {
-                        await placeCardWithRoom(card, d, p, room, force);
+                        const r = await placeCardWithRoom(card, d, p, room);
                         close();
                         selected = null;
                         renderAll();
-                        ttToast(esc('Joylandi: ' + (room.name || room.code) + ' xonasi bilan.'), 'ok');
+                        // Tasdiqqa ketgan bo'lsa — xabar onPendingApproval'da (doska qayta yuklanadi).
+                        if (!(r && r.pending_approval)) ttToast(esc('Joylandi: ' + (room.name || room.code) + ' xonasi bilan.'), 'ok');
                     } catch (e) {
                         busy = false;
                         m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = false; });
-                        // Shablon: xona darsning boshqa vaqtlarida band / sig'maydi / boshqa o'qituvchiniki — "Baribir joylash" (biriktirish oynasidagidek).
-                        if (e.data && e.data.needs_confirm && !force) {
-                            msg.className = 'text-sm text-amber-700';
-                            msg.innerHTML = '⚠ ' + esc(e.message) + ' <button type="button" data-pr-force>Baribir joylash</button>';
-                            msg.querySelector('[data-pr-force]').onclick = () => run(room, true);
-                            return;
-                        }
                         msg.className = 'text-sm text-red-600';
                         msg.textContent = 'Joylanmadi: ' + e.message;
                     }
                 };
                 list.onclick = ev => {
                     const row = ev.target.closest ? ev.target.closest('[data-pr-code]') : null;
-                    if (row && !busy) run(cands.find(r => r.code === row.dataset.prCode), false);
+                    if (row && !busy) run(cands.find(r => r.code === row.dataset.prCode));
                 };
             }
-            // Kartani (d, p) ga shu xona bilan joylash: tanlangan hafta (ichki) — shu hafta istisnosi; shablon / tashqi — birlik xonasi, so'ng joylash.
-            async function placeCardWithRoom(card, d, p, room, force = false) {
+            // Kartani (d, p) ga shu xona bilan joylash — bitta so'rov (yo xona ham, joy ham, yo hech biri; kafedra mudirida — bitta tasdiq
+            // so'rovi): tanlangan hafta (ichki) — shu hafta istisnosi xona bilan (week-override); shablon (ichki) — kartaning o'zi shu xona bilan
+            // (place + auditorium_code; faqat shu kartaning xonasi o'zgaradi). Qaytaradi: server javobi (pending_approval — tasdiqqa ketdi).
+            async function placeCardWithRoom(card, d, p, room) {
                 weeklyEditGuard();
-                if (curWeek && weeklyLayer !== 'external') {
-                    await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'move', day: d, pair: p, auditorium_code: room.code });
+                if (curWeek) {
+                    const r = await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'move', day: d, pair: p, auditorium_code: room.code });
+                    if (r && r.pending_approval) return r;
                     const key = card.id + '|' + curWeek;
                     overrides[key] = Object.assign({}, overrides[key] || {}, { day: d, pair: p, cancelled: false,
                         auditorium_code: room.code, auditorium_name: room.name || room.code, auditorium_volume: +room.volume || null });
-                    return;
+                    return r;
                 }
-                const unit = cards.filter(c => (c.faculty_name || '') === (card.faculty_name || '') && c.specialty_name === card.specialty_name && c.course === card.course
-                    && c.subject_name === card.subject_name && c.training_type === card.training_type
-                    && (card.training_type === 'lecture' ? c.oqim_label === card.oqim_label : c.group_name === card.group_name));
-                const before = unit.map(c => [c, c.auditorium_code || null, c.auditorium_name || null]);
-                const setRoom = (code, name) => unit.forEach(c => { c.auditorium_code = code; c.auditorium_name = name; });
-                // Xona — tanlangan vaqtda bo'sh (yuqorida tekshirilgan); darsning boshqa vaqtlaridagi muammo — 409 needs_confirm ("Baribir" — force).
-                await api(BASE + '/boards/' + board.id + '/assign-room', 'POST', Object.assign(asgUnitParams(card), { auditorium_code: room.code, force: force ? 1 : undefined }));
-                setRoom(room.code, room.name || room.code);
-                try {
-                    await placeOneCard(card, d, p);
-                } catch (e) {
-                    // Joylanmadi — xona avvalgisiga qaytariladi (birlik kartalarida avval bitta xona bo'lgan bo'lsa).
-                    const old = [...new Set(before.map(x => x[1] || ''))];
-                    if (old.length === 1) {
-                        try {
-                            await api(BASE + '/boards/' + board.id + '/assign-room', 'POST', Object.assign(asgUnitParams(card), { auditorium_code: old[0], force: 1 }));
-                            before.forEach(([c, code, name]) => { c.auditorium_code = code; c.auditorium_name = name; });
-                        } catch (e2) { /* qaytarib bo'lmadi — xona yangisida qoladi */ }
-                    }
-                    throw e;
-                }
+                const r = await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p, layer: 'internal', auditorium_code: room.code });
+                if (r && r.pending_approval) return r;
+                card.day = d; card.pair = p;
+                card.auditorium_code = room.code; card.auditorium_name = room.name || room.code;
+                rememberLayerPlace(card, d, p);
+                return r;
             }
             // ===== Parallel bo'laklar ("Fan (a)", "(b)", "(c)" — guruhning turli talabalari, bir vaqtda yonma-yon) =====
             const bolakLetter = c => { const m = BOLAK_RX.exec(String(c.subject_name || '').trim()); return m ? m[2].toLowerCase() : ''; };

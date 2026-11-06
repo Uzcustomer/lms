@@ -175,6 +175,23 @@ class Teacher extends Authenticatable
         return $this->hasMany(TeacherEmployment::class);
     }
 
+    /**
+     * Xodim ishlaydigan barcha kafedralar nomi: asosiy ish joyi va amaldagi
+     * o'rindoshlik/soatbay ish joylari (kafedraga bog'liq ruxsatlar uchun).
+     */
+    public function workingDepartmentNames(): array
+    {
+        $names = [(string) ($this->department ?? '')];
+        if ($this->department_hemis_id) {
+            $names[] = (string) Department::where('department_hemis_id', $this->department_hemis_id)->value('name');
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('teacher_employments')) {
+            $names = array_merge($names, $this->employments()->where('is_working', true)->pluck('department_name')->all());
+        }
+
+        return array_values(array_unique(array_filter(array_map('trim', $names))));
+    }
+
     public function deanFaculties()
     {
         return $this->belongsToMany(Department::class, 'dean_faculties', 'teacher_id', 'department_hemis_id', 'id', 'department_hemis_id')

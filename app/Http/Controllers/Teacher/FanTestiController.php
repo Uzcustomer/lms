@@ -1438,22 +1438,16 @@ class FanTestiController extends Controller
         }
     }
 
+    /** Asosiy yoki amaldagi o'rindoshlik/soatbay ish joyi ruxsat berilgan kafedrada bo'lsa. */
     private function isAllowedDepartment($teacher): bool
     {
-        $teacherDepartment = trim((string) ($teacher->department ?? ''));
-        if ($this->matchesAllowedDepartment($teacherDepartment)) {
-            return true;
+        foreach ($teacher->workingDepartmentNames() as $name) {
+            if ($this->matchesAllowedDepartment($name)) {
+                return true;
+            }
         }
 
-        if (!$teacher->department_hemis_id) {
-            return false;
-        }
-
-        $departmentName = \App\Models\Department::query()
-            ->where('department_hemis_id', $teacher->department_hemis_id)
-            ->value('name');
-
-        return $this->matchesAllowedDepartment((string) $departmentName);
+        return false;
     }
 
     private function normalizeDepartment(string $name): string

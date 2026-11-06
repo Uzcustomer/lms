@@ -70,13 +70,9 @@
                     && str_contains($normalized, 'sud tibbiyoti')
                     && str_contains($normalized, 'huquqi');
             };
-            $teacherDepartment = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', ($user->department ?? ''))));
-            if ($matchesAllowedDepartment($teacherDepartment)) {
-                $canCreateFanTestlari = true;
-            } elseif ($user->department_hemis_id) {
-                $departmentName = \App\Models\Department::where('department_hemis_id', $user->department_hemis_id)->value('name');
-                $canCreateFanTestlari = $matchesAllowedDepartment($departmentName);
-            }
+            // Asosiy yoki amaldagi o'rindoshlik/soatbay ish joyi shu kafedrada bo'lsa
+            $canCreateFanTestlari = $user instanceof \App\Models\Teacher
+                && collect($user->workingDepartmentNames())->contains(fn ($name) => $matchesAllowedDepartment($name));
         }
     }
 

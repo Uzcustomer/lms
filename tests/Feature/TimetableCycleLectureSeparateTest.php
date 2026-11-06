@@ -313,3 +313,21 @@ it('regressiya: belgisi yo\'q fan va boshqa fakultet (2-son davolash) bloklari �
         ->get(['subject_name', 'training_type', 'start_index'])->map(fn ($p) => [$p->subject_name, $p->training_type, $p->start_index])->all())
         ->toBe([['Ichki kasalliklar', 'lecture', 0], ['Ichki kasalliklar', 'practice', 0], ['Pediatriya', 'lecture', 25], ['Pediatriya', 'practice', 25]]);
 });
+
+it('faqat kunlar soni o\'zgarsa ham: saqlangan yoki meros ma\'ruza kunlari sikl kunlaridan kam bo\'lishi kerak (Codex)', function () {
+    $s = lspSetup();
+    lspFlag($s)->assertOk();   // xd/23: 21 kun, ma'ruza 5 kun
+    // O'quv reja darajasida faqat kunlar (ma'ruza sozlamasi saqlanib qoladi): 3 — rad, hech narsa o'zgarmaydi; 6 — qabul.
+    lspSave($s, ['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 701, 'cycle_days' => 3])->assertUnprocessable()
+        ->assertJsonPath('error', 'Ma‘ruza kunlari (5) sikl kunlaridan (3) kam bo‘lishi kerak — ' . mb_strtolower($s['xd']) . ' · o‘quv reja #701: sikl kunlari jami (ma‘ruza + amaliy), masalan 21 = 5 + 16.');
+    expect(TimetableSubjectSetting::where('curriculum_hemis_id', 701)->first()->cycle_days)->toBe(21);
+    lspSave($s, ['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 701, 'cycle_days' => 6])->assertOk();
+    // Meros: umumiy darajada ma'ruza [6,6] — fakultet kunlari 2 bo'lsa (o'zida ma'ruza sozlamasi yo'q) — rad; umumiy kunlar 2 — rad.
+    lspSave($s, ['cycle_days' => 18, 'lecture' => 'on', 'lecture_hours' => '6,6'])->assertOk();
+    lspSave($s, ['faculty_name' => $s['d2'], 'cycle_days' => 2])->assertUnprocessable();
+    expect(TimetableSubjectSetting::where('faculty_name', $s['d2'])->exists())->toBeFalse();
+    lspSave($s, ['cycle_days' => 2])->assertUnprocessable();
+    expect(TimetableSubjectSetting::general()->where('subject_name', 'Ichki kasalliklar')->first()->cycle_days)->toBe(18);
+    // Oldindan ko'rish (dry_run) ham shu xatoni qaytaradi.
+    lspSave($s, ['cycle_days' => 2, 'dry_run' => 1])->assertUnprocessable();
+});

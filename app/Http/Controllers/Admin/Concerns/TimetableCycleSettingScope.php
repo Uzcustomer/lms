@@ -399,6 +399,40 @@ trait TimetableCycleSettingScope
         return [$plan, $prcHours, true];
     }
 
+    /**
+     * Saqlangandan keyingi holat (tranzaksiya ichida): har darajada (umumiy, fakultet, fakultet + o'quv reja) meros bilan hisoblangan
+     * ma'ruza kunlari sikl kunlaridan kam bo'lishi kerak — faqat kunlar soni o'zgarganda ham (ma'ruza sozlamasi saqlanib qolgan yoki
+     * yuqori darajadan meros). Buzilsa — xato matni, aks holda null.
+     */
+    private function cycleLectureConsistencyError(TimetableBoard $board, string $specialty, int $course, string $subject): ?string
+    {
+        $set = $this->cycleSettingIndex($board)[self::cycleSettingKey($specialty, $course, $subject)] ?? null;
+        if (!$set || $set['mode'] !== 'cycle') {
+            return null;
+        }
+        $lec = $set['lec'] ?? ['general' => null, 'fac' => [], 'cur' => []];
+        $general = $set['days'] ?? 1;
+        $levels = [['umumiy', $general, $lec['general']]];
+        foreach (array_unique(array_merge(array_keys($set['fac']), array_keys($lec['fac']),
+            array_map(fn ($k) => explode('|', $k)[0], array_merge(array_keys($set['cur']), array_keys($lec['cur']))))) as $fac) {
+            $levels[] = [$fac, $set['fac'][$fac] ?? $general, array_key_exists($fac, $lec['fac']) ? $lec['fac'][$fac] : $lec['general']];
+        }
+        foreach (array_unique(array_merge(array_keys($set['cur']), array_keys($lec['cur']))) as $key) {
+            $fac = explode('|', $key)[0];
+            $levels[] = [$fac . ' · o‘quv reja #' . explode('|', $key)[1], $set['cur'][$key] ?? $set['fac'][$fac] ?? $general,
+                array_key_exists($key, $lec['cur']) ? $lec['cur'][$key] : (array_key_exists($fac, $lec['fac']) ? $lec['fac'][$fac] : $lec['general'])];
+        }
+        foreach ($levels as [$label, $total, $cfg]) {
+            $n = $cfg && !empty($cfg['on']) ? count($cfg['hours']) : 0;
+            if ($n > 0 && $n >= (int) $total) {
+                return 'Ma‘ruza kunlari (' . $n . ') sikl kunlaridan (' . (int) $total . ') kam bo‘lishi kerak — ' . $label
+                    . ': sikl kunlari jami (ma‘ruza + amaliy), masalan 21 = 5 + 16.';
+            }
+        }
+
+        return null;
+    }
+
     /** Kunlik ma'ruza soatlari ro'yxati (JSON massiv yoki "8,8,6,6,6" matni) — butun musbat sonlar. */
     private static function cycleLectureHoursList($value): array
     {

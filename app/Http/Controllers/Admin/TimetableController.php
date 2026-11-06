@@ -3370,6 +3370,13 @@ class TimetableController extends Controller
                 return $res;
             }
             $this->cycleSettingForget($board);
+            // Alohida ma'ruza: saqlangan holatda har darajada ma'ruza kunlari sikl kunlaridan kam (faqat kunlar o'zgarganda ham).
+            if ($lecErr = $this->cycleLectureConsistencyError($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'])) {
+                DB::rollBack();
+                $this->cycleSettingForget($board);
+
+                return response()->json(['error' => $lecErr], 422);
+            }
             $after = $this->cycleSettingPlacedDays($board, $data['specialty_name'], (int) $data['course'], $data['subject_name']);
             $dry ? DB::rollBack() : DB::commit();
         } catch (\Throwable $e) {

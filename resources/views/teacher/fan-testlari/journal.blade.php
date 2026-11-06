@@ -64,6 +64,8 @@
     }
     .jr-group-clear button:hover { background: var(--bad-bg); }
 
+    .jr-retake.jr-stop { color: var(--bad); border-color: #f3d0ce; background: var(--bad-bg); }
+    .jr-retake.jr-stop:hover { background: var(--bad); color: #fff; }
     .jr-del-form { margin: 0; }
     .jr-del {
         width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent;
@@ -632,6 +634,18 @@
                                             @endif
                                         </td>
                                         <td class="jr-retake-cell">
+                                            @if($attempt->status === 'in_progress')
+                                                {{-- "Ishlamoqda" bo'lib qolgan test — saqlangan javoblari bilan yakunlash --}}
+                                                @php
+                                                    $stopText = $attempt->student_name . " — testni to'xtatasizmi? Saqlangan javoblari baholanib, test topshirilgan hisoblanadi.";
+                                                @endphp
+                                                <form method="POST" class="jr-retake-form"
+                                                      action="{{ route('teacher.fan-testlari.attempts.stop', [$selected, $attempt, 'group' => request('group'), 'student' => request('student'), 'tab' => request('tab')]) }}"
+                                                      onsubmit="return confirm({{ \Illuminate\Support\Js::from($stopText) }})">
+                                                    @csrf
+                                                    <button type="submit" class="jr-retake jr-stop">To'xtatish</button>
+                                                </form>
+                                            @endif
                                             {{-- Qayta topshirish: faqat talabaning oxirgi, tugagan urinishida --}}
                                             @if(($retakeReady ?? false) && $attempt->status !== 'in_progress')
                                                 @php

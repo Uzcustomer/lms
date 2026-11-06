@@ -1176,6 +1176,39 @@ class FanTestiController extends Controller
     }
 
     /**
+     * "Ishlamoqda" bo'lib qolgan urinishni jurnaldan to'xtatish (sahifa yopilgan, talaba ketgan
+     * va h.k.): talabaning oxirgi saqlangan javoblari baholanib, urinish topshirilgan holatga
+     * o'tadi. Talaba sahifasi hali ochiq bo'lsa, u ham to'xtatish buyrug'ini oladi.
+     */
+    public function stopAttempt(FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $attempt->fan_testi_id === (int) $fanTesti->id, 404);
+
+        $back = redirect()->route('teacher.fan-testlari.journal', array_filter([
+            'test_id' => $fanTesti->id,
+            'group' => request('group'),
+            'student' => request('student'),
+            'tab' => request('tab'),
+        ]));
+
+        if ($attempt->isFinished()) {
+            return $back->with('success', $attempt->student_name . ': test allaqachon yakunlangan.');
+        }
+
+        if (Schema::hasTable('fan_testi_entry_requests') && Schema::hasColumn('fan_testi_entry_requests', 'stop_requested_at')) {
+            FanTestiEntryRequest::where('attempt_id', $attempt->id)->whereNull('stop_requested_at')->update(['stop_requested_at' => now()]);
+        }
+        app(\App\Http\Controllers\FanTestiKioskController::class)->finalizeFromDraft($attempt);
+        $attempt->refresh();
+        \App\Services\ActivityLogService::log('stop', 'fan_testi', "Test to'xtatildi (jurnaldan): {$attempt->student_name}, "
+            . $attempt->attemptLabel() . ", {$attempt->score}/{$attempt->total_points}", $attempt);
+
+        return $back->with('success', $attempt->student_name . ': test to\'xtatildi — saqlangan javoblari bilan baholandi ('
+            . rtrim(rtrim(number_format((float) $attempt->score, 2, '.', ''), '0'), '.') . ' / ' . (int) $attempt->total_points . ').');
+    }
+
+    /**
      * Natijani butunlay o'chirish — faqat superadmin o'qituvchi profiliga kirganda
      * (impersonatsiya). O'qituvchining o'zi o'chira olmaydi. Javoblari ham o'chadi
      * (cascade), amal faoliyat jurnaliga natija ma'lumotlari bilan yoziladi.

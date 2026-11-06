@@ -245,3 +245,37 @@ it('o\'qituvchi oqimi o\'zgarmagan: Takliflar "boshqa xona bilan" — so\'rov or
     rmAs($s['fm'], 'fan_masuli')->getJson(route('admin.timetable.auditoriums'))->assertForbidden();
     rmAs($s['fm'], 'fan_masuli')->getJson(route('admin.timetable.teachers'))->assertForbidden();
 });
+
+it('ko\'p bo\'lakli dars shu kunda o\'z eski joyi bilan kesishadigan joyga (1 va 3 → 3 va 5) — check ham, qo\'llash ham o\'tadi (Codex)', function () {
+    $s = rmSetup();
+    $who = rmTeacher('TORTINCHI T.');
+    $p1 = $s['card']('pp/2024-01k', $who, 5, 1, $s['r1']);
+    $p2 = $s['card']('pp/2024-01k', $who, 5, 3, $s['r1']);
+    // To'qnashuv: shu o'qituvchining boshqa darsi juma I parada (o'qituvchi band) — darhol tuzatish rejimi.
+    $s['card']('pp/2024-01m', $who, 5, 1, $s['r2'], ['subject_name' => 'Anatomiya', 'kafedra_name' => 'Anatomiya kafedrasi']);
+    expect(rmCheck($s, $p1, ['day' => 5, 'pair' => 3])->assertOk()->json('mode'))->toBe('fix');
+    rmMove($s, $p1, ['day' => 5, 'pair' => 3])->assertOk()->assertJsonPath('mode', 'fix');
+    $ovs = TimetableCardOverride::whereIn('card_id', [$p1->id, $p2->id])->orderBy('card_id')->get();
+    expect($ovs->map(fn ($o) => [$o->day, $o->pair, (bool) $o->cancelled])->all())->toBe([[5, 3, false], [5, 5, false]]);
+});
+
+it('fan mas\'ulining boshqa rollari (admin, boshqa kafedra mudiri) so\'rov zanjirini o\'zgartirmaydi — kafedra mudiri → registrator (Codex)', function () {
+    $s = rmSetup();
+    $s['fm']->assignRole('admin');
+    rmMove($s, $s['c'], ['day' => 3, 'pair' => 5, 'reason' => 'sabab'])->assertOk()->assertJsonPath('mode', 'request');
+    $req = TimetableChangeRequest::where('status', TimetableChangeRequest::PENDING)->sole();
+    expect([$req->requester_role, $req->approval_stage])->toBe(['fan_masuli', 'department']);
+    // Boshqa kafedra mudiri ham bo'lsa — baribir shu fan kafedrasi mudiri.
+    $req->update(['status' => 'cancelled']);
+    DB::table('departments')->insert(['department_hemis_id' => 777, 'name' => 'Anatomiya kafedrasi', 'code' => 'A1', 'structure_type_code' => 12,
+        'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    $s['fm']->removeRole('admin');
+    $s['fm']->assignRole('kafedra_mudiri');
+    $s['fm']->update(['department_hemis_id' => 777, 'head_department_hemis_id' => 777]);
+    rmMove($s, $s['c'], ['day' => 3, 'pair' => 7, 'reason' => 'sabab'])->assertOk()->assertJsonPath('mode', 'request');
+    $req2 = TimetableChangeRequest::where('status', TimetableChangeRequest::PENDING)->sole();
+    expect([$req2->requester_role, $req2->approval_stage, (int) $req2->department_hemis_id])->toBe(['fan_masuli', 'department', 501]);
+    rmAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req2))->assertOk();
+    rmAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req2))->assertOk();
+    expect(TimetableCardOverride::where('card_id', $s['c']->id)->value('pair'))->toBe(7);
+});

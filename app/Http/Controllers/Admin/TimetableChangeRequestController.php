@@ -346,6 +346,35 @@ class TimetableChangeRequestController extends Controller
     }
 
     /**
+     * Fan mas'uli (responsible-move, faol rol — fan_masuli): Takliflar so'rovi FAOL ROL huquqi bilan — fan mas'uli (o'qituvchi darajasi),
+     * boshqa rollaridan (admin, kafedra mudiri) qat'i nazar: doim fan kafedrasi mudiri → registrator ofisi (mudirning o'zi so'rasa —
+     * submitProposal kabi faqat registrator). Huquq, sana va bandlik chaqiruvchida (responsibleMoveEvaluate) tekshirilgan; submit() qulf
+     * ostida qayta tekshiradi.
+     */
+    public function proposeResponsibleSuggestion(Request $request, TimetableBoard $board, array $payload, string $reason, TimetableChangeApproval $svc)
+    {
+        $this->ensureProposalTable();
+        $actor = $this->actor($request);
+        abort_unless($actor instanceof Teacher, 403);
+        $ctl = app(TimetableController::class);
+        $run = $ctl->suggestionDryRun($board, $payload, []);
+        $cards = $ctl->suggestionCards($board, $payload);
+        $primary = $cards->firstWhere('id', (int) $payload['card_id']) ?? $cards->first();
+        $tid = (int) $actor->id;
+        $draft = $svc->draft($this->proposalRequest(TimetableController::SUGGESTION_ROUTE, $payload + ['_change_hint' => $reason], 'board', $board), $actor, $board, 'fan_masuli');
+        $draft['details']['proposer'] = ['as' => 'fan_masuli', 'teacher_id' => $tid];
+        $draft['details']['lesson_teacher_ids'] = array_values(array_diff($run['teacher_ids'], [$tid]));
+        $draft['details']['notices'] = $run['notices'];
+        $draft['details']['original_signature'] = $ctl->suggestionSignature($board, $payload);
+        $first = $run['notices'][0] ?? ['old' => '—', 'new' => (string) ($payload['title'] ?? ''), 'subject' => (string) $primary->subject_name,
+            'teacher' => (string) $primary->teacher_name, 'room' => (string) ($primary->auditorium_name ?: $primary->auditorium_code)];
+        $notice = ['old' => $first['old'], 'new' => $first['new'], 'subject' => $first['subject'], 'teacher' => $first['teacher'], 'room' => $first['room'] ?? ''];
+        $department = $this->proposalDepartment(fn (int $id) => $ctl->proposalDepartmentMatches($primary, $id));
+
+        return $this->submitProposal($svc, $draft, $department, $actor, $notice, $reason);
+    }
+
+    /**
      * Fan kafedrasi (aniq bitta) — id bo'yicha: bir xil nomli yozuvlar (asosiy va o'rindoshlik) bitta kafedra, natija — asosiy
      * yozuv (mudiri biriktirilgani). Turli kafedralar mos kelsa — aniq emas (422).
      */

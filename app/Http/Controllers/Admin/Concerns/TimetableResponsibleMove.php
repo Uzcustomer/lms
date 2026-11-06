@@ -54,9 +54,10 @@ trait TimetableResponsibleMove
             if ($reason === '') {
                 throw ValidationException::withMessages(['reason' => "So'rov sababini kiriting."]);
             }
-            // Takliflar so'rovi — mavjud zanjir (kafedra mudiri → registrator ofisi), qayta tekshiruv va tasdiqdan keyin qo'llash bilan.
-            $request->merge($payload + ['reason' => $reason]);
-            $res = app(TimetableChangeRequestController::class)->proposeSuggestion($request, $board, app(TimetableChangeApproval::class));
+            // Takliflar so'rovi — faol rol (fan mas'uli) huquqi bilan, tekshiruvdagidek: kafedra mudiri → registrator ofisi (boshqa
+            // rollari — admin / kafedra mudiri — zanjirni o'zgartirmaydi); har bosqichda qayta tekshiruv, tasdiqdan keyin qo'llash.
+            $res = app(TimetableChangeRequestController::class)->proposeResponsibleSuggestion($request, $board, $payload, $reason,
+                app(TimetableChangeApproval::class));
             $j = $res->getData(true);
 
             return response()->json($j + ['mode' => 'request'], $res->getStatusCode());
@@ -203,8 +204,16 @@ trait TimetableResponsibleMove
         if ($roomErrors) {
             return $no(422, implode(' ', $roomErrors), $roomErrors, $info + ['rooms' => $rooms]);
         }
-        $acts = array_map(fn ($m) => ['op' => 'move', 'card_id' => (int) $m[0]->id, 'week' => $week, 'day' => $day, 'pair' => $m[1]]
-            + ($room ? ['auditorium_code' => (string) $room->code] : []), $moves);
+        // Ko'p bo'lakli dars: avval hamma bo'lak shu haftada bo'shatiladi ("cancel"), so'ng ketma-ket qo'yiladi — aks holda bo'lak o'z
+        // blokining eski joyi bilan to'qnashardi (bir kunda surilganda, masalan 1 va 3 → 3 va 5). "cancel" shu haftaning xonasini o'chiradi —
+        // xona tanlanmagan bo'lsa, bo'lakning shu haftadagi xonasi qayta beriladi; yakuniy holat runSuggestionActions oxirida tekshiriladi.
+        $multi = count($moves) > 1;
+        $acts = $multi ? array_map(fn ($m) => ['op' => 'cancel', 'card_id' => (int) $m[0]->id, 'week' => $week], $moves) : [];
+        foreach ($moves as [$c, $p]) {
+            $code = $room ? (string) $room->code
+                : ($multi ? (string) (TimetableCardOverride::where('card_id', $c->id)->where('week', $week)->value('auditorium_code') ?? '') : '');
+            $acts[] = ['op' => 'move', 'card_id' => (int) $c->id, 'week' => $week, 'day' => $day, 'pair' => $p] + ($code !== '' ? ['auditorium_code' => $code] : []);
+        }
 
         // Huquq, sana (eski va yangi — bugun / o'tgan yopiq), kartadagi kutilayotgan so'rov — Takliflar qoidasi (o'qituvchi darajasi).
         $rights = ['level' => 'teacher', 'view' => false, 'tid' => (int) $actor->id, 'kafedra' => null, 'keys' => $keys];

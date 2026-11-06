@@ -13,6 +13,9 @@ const cut = (from, to) => {
 };
 const css = cut('<style>', '</style>').slice('<style>'.length);
 const code = cut("            // ===== Fan mas'uli: mas'ul fani darsining vaqti va xonasi", "            // ===== Kartochka modali (o'qituvchi/auditoriya) =====");
+// Xona qidiruvi (harf, tutuq belgisi, kirill-lotin farqsiz) va sig'im matni — sahifadagi asl funksiyalar.
+const search = cut('            const UZ_CYR_LAT = {', '            // Ma\'ruza yorlig\'i:');
+const capText = cut('            const cfCapText = ', '            const cfDate = ');
 
 const page0 = `<!doctype html><html><head><style>${css}</style></head><body><script>
     const BASE = '/admin/timetable';
@@ -28,8 +31,12 @@ const page0 = `<!doctype html><html><head><style>${css}</style></head><body><scr
     const unitOf = c => window.units[c.id] || [c];
     const effPlace = c => c.day ? { day: c.day, pair: c.pair } : null;
     const slotRangeText = (p, len) => String(7 + p).padStart(2, '0') + ':00–' + String(7 + p + len).padStart(2, '0') + ':00';
-    window.calls = []; window.toasts = []; window.reloaded = 0; window.reqLoaded = 0;
+    window.calls = []; window.toasts = []; window.reloaded = 0; window.reqLoaded = 0; window.escSeen = 0;
+    // Sahifaning umumiy Esc ishlovchilari (sikl tanlovini tozalash va h.k.) — ro'yxatdagi Esc ularga yetib bormasligi kerak.
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') window.escSeen++; });
     window.next = [];
+${search}
+${capText}
     const ttToast = (h, t) => window.toasts.push([h, t]);
     const loadBoard = async () => { window.reloaded++; };
     const loadChangeRequests = async () => { window.reqLoaded++; };
@@ -44,8 +51,14 @@ ${code}
     window.setWeek = w => { curWeek = w; };
 </script></body></html>`;
 
-const ROOMS = [{ code: 'R2', name: '102-xona', volume: 30, free: true, why: 'kafedra xonasi', busy: null },
-    { code: 'R3', name: '103-xona', volume: 30, free: false, why: null, busy: 'Band: pp/2024-01c, Farmakologiya' }];
+const BUSY = { teacher: 'UMAROV J. A.', teacher_full: 'UMAROV JASUR AKMALOVICH', groups: ['d1/d25-07a'], subject: 'Normal fiziologiya',
+    time: '08:30–11:20', date: '2026-11-12', dates: ['2026-11-12', '2026-11-12'] };
+const ROOMS = [{ code: 'R1', name: '101-xona', volume: 30, free: true, current: true, why: null, kind: null, busy_items: [] },
+    { code: 'R2', name: '3-bino, 2-qavat, Bo‘lim xonasi', volume: 30, free: true, why: 'shu qavat · kafedra xonasi', kind: null, busy_items: [] },
+    { code: 'R3', name: '103-xona', volume: 30, free: false, why: null, kind: 'busy', busy: 'Band: d1/d25-07a, Normal fiziologiya',
+        busy_items: [BUSY, { ...BUSY, teacher: 'ALIYEV B.', teacher_full: 'ALIYEV BOBUR', subject: 'Anatomiya', time: '13:30–14:50' }] },
+    { code: 'R4', name: '104-xona', volume: 20, free: false, why: null, kind: 'capacity', busy_items: [], cap: { volume: 20, students: 35, over: 15 } }];
+const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.map(x => [x.dataset.code, x.getAttribute('aria-disabled') === 'true', x.textContent]));
 
 (async () => {
     const browser = await chromium.launch();
@@ -77,25 +90,71 @@ const ROOMS = [{ code: 'R2', name: '102-xona', volume: 30, free: true, why: 'kaf
     assert.deepEqual(c0.body, { week: 10, day: 4, pair: 7 });
     assert.match(await page.locator('#respMove').innerText(), /Amaldagi: Payshanba 14:00–16:00, xona 101-xona/);
     assert.match(await page.locator('#respMove [role="alert"]').innerText(), /Darhol qo'llanadi/);
-    const opts = await page.$$eval('#respMove select[name="room"] option', xs => xs.map(o => [o.value, o.disabled, o.textContent]));
-    assert.deepEqual(opts.map(o => o.slice(0, 2)), [['', false], ['R2', false], ['R3', true]]);
-    assert.match(opts[2][2], /103-xona \(30 o‘rin\) — Band: pp\/2024-01c/);
+    // Qidiruvli ro'yxat (oddiy select emas): yopiq — tanlov "hozirgi xona"; ochilganda birinchi qator — hozirgi xona (takrorlanmaydi),
+    // bo'shi — yaqinlik sababi bilan, band — kim / guruh / fan / vaqt (+1), sig'maydigan — raqamlar bilan; bandlari tanlab bo'lmaydi.
+    assert.equal(await page.locator('#respMove select[name="room"]').count(), 0);
+    assert.equal(await page.innerText('#respMove [data-rmv-pick]'), '— hozirgi xona (101-xona) —');
+    assert.equal(await page.isVisible('#respMove [data-rmv-panel]'), false);
+    await page.click('#respMove [data-rmv-pick]');
+    assert.equal(await page.evaluate(() => document.activeElement.matches('#respMove [data-rmv-q]')), true);
+    let r0 = await rows(page);
+    assert.deepEqual(r0.map(r => r.slice(0, 2)), [['', false], ['R2', false], ['R3', true], ['R4', true]]);
+    assert.match(r0[1][2], /shu qavat · kafedra xonasi/);
+    assert.match(r0[2][2], /Band: UMAROV J\. A\. · d1\/d25-07a · Normal fiziologiya · 08:30–11:20 \+1/);
+    assert.match(r0[3][2], /Xona sig‘maydi: 20 o'rin, 35 talaba \(\+15\)/);
+    const title = await page.getAttribute('#respMove .rm-row[data-code="R3"]', 'title');
+    assert.match(title, /UMAROV JASUR AKMALOVICH · d1\/d25-07a · Normal fiziologiya · 12\.11 · 08:30–11:20/);
+    assert.match(title, /ALIYEV BOBUR · d1\/d25-07a · Anatomiya/);
+    // Band xona — bosilsa ham tanlanmaydi (check yuborilmaydi).
+    let n0 = (await calls()).length;
+    await page.click('#respMove .rm-row[data-code="R3"]', { force: true });
+    assert.equal((await calls()).length, n0);
+    assert.equal(await page.inputValue('#respMove input[name="room"]'), '');
+    // Qidiruv: harf va tutuq belgisi farqsiz (o' ↔ o‘), kod bo'yicha ham; topilmasa — xabar.
+    await page.fill('#respMove [data-rmv-q]', "BO'LIM");
+    assert.deepEqual((await rows(page)).map(r => r[0]), ['', 'R2']);
+    await page.fill('#respMove [data-rmv-q]', 'r4');
+    assert.deepEqual((await rows(page)).map(r => r[0]), ['', 'R4']);
+    await page.fill('#respMove [data-rmv-q]', 'yo‘q-xona');
+    assert.match(await page.innerText('#respMove [data-rmv-list]'), /Xona topilmadi/);
+    // "Faqat bo'shlar" — sukut o'chiq; yoqilsa bandlar va sig'maydiganlar yashirinadi.
+    await page.fill('#respMove [data-rmv-q]', '');
+    assert.equal(await page.isChecked('#respMove [data-rmv-free]'), false);
+    await page.check('#respMove [data-rmv-free]');
+    assert.deepEqual((await rows(page)).map(r => r[0]), ['', 'R2']);
+    await page.uncheck('#respMove [data-rmv-free]');
+    // Klaviatura: ↓ — faqat tanlanadiganlar bo'ylab (band / sig'maydigan o'tkaziladi), Esc — ro'yxat yopiladi, oyna ochiq qoladi.
+    await page.press('#respMove [data-rmv-q]', 'ArrowDown');
+    await page.press('#respMove [data-rmv-q]', 'ArrowDown');
+    await page.press('#respMove [data-rmv-q]', 'ArrowDown');
+    assert.equal(await page.getAttribute('#respMove .rm-row.is-active', 'data-code'), 'R2');
+    await page.press('#respMove [data-rmv-q]', 'Escape');
+    assert.equal(await page.isVisible('#respMove [data-rmv-panel]'), false);
+    assert.equal(await page.locator('#respMove').count(), 1);
+    assert.equal(await page.evaluate(() => window.escSeen), 0);
 
-    // 3) Xona tanlansa — qayta check (auditorium_code bilan); band joy (422) — qizil, "Band", tugma o'chiq, xonalar baribir yangilanadi.
+    // 3) Xona tanlansa (Enter) — qayta check (auditorium_code bilan); band joy (422) — qizil, tugma o'chiq va kulrang: "Qo'llab bo'lmaydi".
     await page.evaluate(rooms => { window.next = [{ status: 422, j: { ok: false, mode: null, message: "O'qituvchi band: SOTTOROV S.", rooms } }]; }, ROOMS);
-    await page.selectOption('#respMove select[name="room"]', 'R2');
-    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Band');
+    await page.click('#respMove [data-rmv-pick]');
+    await page.press('#respMove [data-rmv-q]', 'ArrowDown');
+    await page.press('#respMove [data-rmv-q]', 'ArrowDown');
+    await page.press('#respMove [data-rmv-q]', 'Enter');
+    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llab bo‘lmaydi');
     c0 = (await calls()).at(-1);
     assert.deepEqual(c0.body, { week: 10, day: 4, pair: 7, auditorium_code: 'R2' });
     assert.equal(await page.isDisabled('#respMove [type="submit"]'), true);
+    assert.match(await page.getAttribute('#respMove [type="submit"]', 'class'), /rmv-off/);
     assert.match(await page.locator('#respMove [role="alert"]').getAttribute('class'), /text-red-600/);
-    assert.equal(await page.inputValue('#respMove select[name="room"]'), 'R2');
+    assert.equal(await page.inputValue('#respMove input[name="room"]'), 'R2');
+    assert.match(await page.innerText('#respMove [data-rmv-pick]'), /3-bino, 2-qavat, Bo‘lim xonasi \(30 o‘rin\) — shu qavat/);
+    assert.equal(await page.isVisible('#respMove [data-rmv-panel]'), false);
 
     // 4) Kun o'zgarsa — "request": "So'rov yuborish"; sababsiz — yuborilmaydi; sabab bilan — so'rov, so'ng so'rovlar ro'yxati.
     await page.evaluate(rooms => { window.next = [{ status: 200, j: { ok: true, mode: 'request', message: "So'rov kafedra mudiri va registrator ofisiga yuboriladi.",
         new: 'Chorshanba 12:00–14:00', rooms } }]; }, ROOMS);
     await page.selectOption('#respMove select[name="day"]', '3');
     await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'So‘rov yuborish');
+    assert.doesNotMatch(await page.getAttribute('#respMove [type="submit"]', 'class'), /rmv-off/);
     assert.match(await page.locator('#respMove [role="alert"]').getAttribute('class'), /text-amber-700/);
     const before = (await calls()).length;
     await page.click('#respMove [type="submit"]');
@@ -120,6 +179,35 @@ const ROOMS = [{ code: 'R2', name: '102-xona', volume: 30, free: true, why: 'kaf
     await page.click('#respMove [type="submit"]');
     await page.waitForFunction(() => !document.getElementById('respMove'));
     assert.deepEqual(await page.evaluate(() => [window.reloaded, window.toasts.at(-1)[1]]), [1, 'ok']);
+
+    // 5b) Ko'p xona (~650): avval 50 ta, "Ko'proq ko'rsatish" — yana 50; qidiruv — hammasidan (ro'yxatdan tashqaridagi ham topiladi).
+    // Tanlangan xona yangi vaqtda band bo'lib qolsa — "hozirgi xona"ga qaytadi. Mobil kenglikda ro'yxat sahifadan chiqib ketmaydi.
+    const many = Array.from({ length: 120 }, (_, i) => ({ code: 'M' + i, name: (200 + i) + '-xona', volume: 30, free: true, why: null, kind: null, busy_items: [] }));
+    await page.evaluate(rooms => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms } }]; }, many);
+    await page.setViewportSize({ width: 375, height: 740 });
+    await page.evaluate(c => window.openResponsibleMove(c), card);
+    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llash');
+    await page.click('#respMove [data-rmv-pick]');
+    assert.equal((await rows(page)).length, 1 + 50);
+    assert.match(await page.innerText('#respMove [data-rmv-more]'), /Ko‘proq ko‘rsatish \(yana 70 ta\)/);
+    await page.click('#respMove [data-rmv-more]');
+    assert.equal((await rows(page)).length, 1 + 100);
+    await page.fill('#respMove [data-rmv-q]', '319-xona');
+    assert.deepEqual((await rows(page)).map(r => r[0]), ['', 'M119']);
+    const box = await page.locator('#respMove [data-rmv-panel]').boundingBox();
+    assert.ok(box.x >= 0 && box.x + box.width <= 375, JSON.stringify(box));
+    await page.evaluate(rooms => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms } }]; }, many);
+    await page.click('#respMove .rm-row[data-code="M119"]');
+    await page.waitForFunction(() => window.next.length === 0 && document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llash');
+    assert.equal(await page.inputValue('#respMove input[name="room"]'), 'M119');
+    assert.deepEqual((await calls()).at(-1).body, { week: 10, day: 4, pair: 7, auditorium_code: 'M119' });
+    const busyNow = many.map(r => r.code === 'M119' ? { ...r, free: false, kind: 'busy', busy_items: [BUSY] } : r);
+    await page.evaluate(rooms => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms } }]; }, busyNow);
+    await page.selectOption('#respMove select[name="day"]', '5');
+    await page.waitForFunction(() => document.querySelector('#respMove input[name="room"]').value === '');
+    assert.equal(await page.innerText('#respMove [data-rmv-pick]'), '— hozirgi xona (101-xona) —');
+    await page.click('#respMove [data-close]');
+    await page.setViewportSize({ width: 1280, height: 800 });
 
     // 6) openModal: fan mas'uli — shu oyna (kafedra mudiri oynasi emas).
     assert.match(source, /if \(TIMETABLE_ROLE === 'fan_masuli'\) \{ openResponsibleMove\(c\); return; \}/);

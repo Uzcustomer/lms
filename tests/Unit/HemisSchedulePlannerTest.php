@@ -446,7 +446,10 @@ it('balanslash: shanba guruh kelmaydi — keyingi haftaning eng yaqin dars kunig
 
     expect($r['fixes'])->toBe([['type' => 'balance_day', 'date' => $tue, 'week' => 6, 'later' => true,
         'text' => "Balanslash: amaliy qism soni yetmaydi (6-hafta darsi o'rniga): {$tue} ga 2 soat qo'shildi"]])
-        ->and($r['after']['count_diff']['A'])->toBe(0);
+        // Hozir yozilmaydi — "takliflardan keyin" kamomad qoladi; uning soati uchun yoziladigan darslar uzaytirilmaydi (izoh ham yo'q).
+        ->and($r['after']['count_diff']['A'])->toBe(1)
+        ->and($r['after']['hours_diff'])->toBe(['13' => 2])
+        ->and($r['notes'])->toBe([]);
     // Vaqti — fanning odatdagi (eng yaqin LMS darsi) boshlanishi, guruhning o'sha kundagi birinchi darsi emas.
     $bal = array_values(array_filter($r['actions'], fn ($a) => $a['date'] === $tue));
     expect(array_map(fn ($a) => [$a['op'], $a['start'], $a['balance']], $bal))->toBe([['create', '10:00', true]]);
@@ -727,4 +730,113 @@ it('balanslash darsi vaqti: odatdagi boshlanish HEMIS para vaqtiga to\'g\'ri kel
     $bal = array_values(array_filter($r['actions'], fn ($a) => !empty($a['balance'])));
 
     expect(array_map(fn ($a) => [$a['date'], $a['start'], $a['end'], $a['blocked']], $bal))->toBe([[$sat, '10:00', '11:20', []]]);
+});
+
+it('HEMIS\'ga yozilgan balanslash darsi (o\'tgan) hafta limitiga kirmaydi: o\'sha haftaning oddiy darsi o\'chirilmaydi', function () {
+    // KTR 1..10 amaliy 2 soat, LMS har juma 10:00. 6-hafta darsi o'tilmagan — o'rniga 9-hafta dushanbasi 13:30 da balanslash darsi
+    // HEMIS'da (o'tgan). Bugun 9-hafta seshanba; 9-hafta jumasi HEMIS'da bor.
+    $hemis = [];
+    foreach ([1, 2, 3, 4, 5, 7, 8, 9, 10] as $w) {
+        $hemis[] = hsHemis($w, hsDate($w, 5), 3, 2, '13');
+    }
+    $plan = [];
+    for ($w = 1; $w <= 10; $w++) {
+        $plan[] = hsPlan($w, 5, 3, 2, 'A');
+    }
+    $bal = hsHemis(60, hsDate(9, 1), 7, 2, '13');
+    $mk = fn (array $balRow) => hsWeekly(['codes' => ['13' => 'A'], 'code_names' => ['13' => 'Amaliy'], 'ktr' => array_fill(0, 10, ['13' => 2]),
+        'current_week' => 9, 'until_week' => 10, 'until_date' => hsDate(10, 7), 'hemis' => array_merge($hemis, [$balRow]), 'plan' => $plan]);
+    $run = fn (array $u) => (new SchedulePlanner(hsSlots(), hsDate(9, 2)))->planGroup([$u], [], hsWorkDates(9, 10))[0];
+
+    // Belgisiz — oddiy dars deb sanaladi: 9-haftada 2 dars, juma "hafta limiti" bilan olib tashlanib, o'rniga balanslash darsi
+    // bo'lib qaytadi (xato holat: oddiy dars balanslash deb belgilanardi).
+    $r = $run($mk($bal));
+    expect(array_column($r['fixes'], 'type'))->toBe(['week_limit', 'balance_day'])
+        ->and(array_column(array_filter($r['records'], fn ($x) => !empty($x['balance'])), 'date'))->toBe([hsDate(9, 5)]);
+
+    // Belgi bilan (balance: true) — limitdan istisno, umumiy balansda qoladi: hech narsa o'zgarmaydi.
+    $r = $run($mk($bal + ['balance' => true, 'balance_week' => 6]));
+    expect($r['before']['count_diff'])->toBe(['L' => 0, 'A' => 0])
+        ->and($r['before']['past_count']['A'])->toBe(8)
+        ->and($r['fixes'])->toBe([])
+        ->and($r['notes'])->toBe([])
+        ->and($r['actions'])->toBe([]);
+
+    // 9-hafta chorshanbasida LMS'da yo'q ortiqcha HEMIS darsi — o'chirish sababida balanslash darsi sanalmaydi (HEMIS 2: chorshanba, juma).
+    $u = $mk($bal + ['balance' => true, 'balance_week' => 6]);
+    $u['hemis'][] = hsHemis(61, hsDate(9, 3), 3, 2, '13');
+    $del = array_values(array_filter($run($u)['actions'], fn ($a) => $a['op'] === 'delete'));
+    expect(array_map(fn ($a) => [$a['date'], $a['reason_code'], $a['reason']], $del))
+        ->toBe([[hsDate(9, 3), 'week_surplus', '9-hafta: KTR 1 dars, HEMIS 2 — ortiqcha']]);
+});
+
+it('o\'tilgan balanslash darsi o\'z haftasini qoplaydi: keyingi balanslash darsi keyingi o\'tilmagan hafta uchun', function () {
+    // 4- va 6-hafta darslari o'tilmagan; 4-hafta o'rniga balanslash darsi 8-hafta shanbasida (o'tgan). Endi 6-hafta uchun.
+    $u = hsMissingWeek6();
+    $u['hemis'] = array_values(array_filter($u['hemis'], fn ($r) => $r['date'] !== hsDate(4, 1)));
+    $u['hemis'][] = hsHemis(40, hsDate(7, 6), 3, 2, '13') + ['balance' => true, 'balance_week' => 4];
+    $sat = hsDate(8, 6);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(8, 5)))->planGroup([$u], [], hsWorkDates(8, 9), [$sat => [1 => true]])[0];
+
+    expect(array_column($r['fixes'], 'text'))->toBe(["Balanslash: amaliy qism soni yetmaydi (6-hafta darsi o'rniga): {$sat} ga 2 soat qo'shildi"]);
+
+    // Shu (kelgusi) balanslash darsi HEMIS'ga yozilgan — qayta taklif qilinadi, o'z haftasi bilan (kelgusisi haftani "qoplamaydi"), amal yo'q.
+    $u['hemis'][] = hsHemis(41, $sat, 3, 2, '13') + ['balance' => true, 'balance_week' => 6];
+    $r = (new SchedulePlanner(hsSlots(), hsDate(8, 5)))->planGroup([$u], [], hsWorkDates(8, 9), [$sat => [1 => true]])[0];
+    expect(array_column($r['fixes'], 'text'))->toBe(["Balanslash: amaliy qism soni yetmaydi (6-hafta darsi o'rniga): {$sat} ga 2 soat qo'shildi"])
+        ->and(array_values(array_filter($r['actions'], fn ($a) => $a['date'] === $sat)))->toBe([]);
+});
+
+it('hozir yozilmaydigan balanslash darsi (chegaradan keyin) yoziladigan darslarni qisqartirmaydi va uzaytirmaydi', function () {
+    // KTR 1–3-hafta amaliy 2 soatdan (6 soat). HEMIS: 1-hafta bitta kunda 4 soat; 2-hafta darsi yo'q; LMS: 3-hafta dushanba 2 soat.
+    // Bugun 2-hafta yakshanba; guruh faqat 4-hafta seshanbasida keladi — balanslash darsi chegaradan (H = 3) keyin.
+    $u = hsWeekly(['codes' => ['13' => 'A'], 'code_names' => ['13' => 'Amaliy'], 'ktr' => array_fill(0, 3, ['13' => 2]), 'current_week' => 2,
+        'until_week' => 3, 'until_date' => hsDate(3, 7), 'hemis' => [hsHemis(1, hsDate(1, 1), 1, 4, '13')],
+        'plan' => [hsPlan(1, 1, 1, 4, 'A'), hsPlan(3, 1, 3, 2, 'A')]]);
+    $tue = hsDate(4, 2);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(2, 7)))->planGroup([$u], [], hsWorkDates(3, 4), [$tue => [3 => true]])[0];
+
+    expect($r['balance_weeks'])->toBe(['A' => 3])
+        ->and($r['fixes'])->toBe([['type' => 'balance_day', 'date' => $tue, 'week' => 2, 'later' => true,
+            'text' => "Balanslash: amaliy qism soni yetmaydi (2-hafta darsi o'rniga): {$tue} ga 1 soat qo'shildi"]])
+        // 3-hafta darsi o'z 2 soatida qoladi (yozilmaydigan soat hisobiga qisqartirilmaydi).
+        ->and(array_map(fn ($a) => [$a['op'], $a['date'], $a['start'], $a['end'], !empty($a['balance_later'])], $r['actions']))->toBe([
+            ['create', hsDate(3, 1), '10:00', '11:20', false],
+            ['create', $tue, '10:00', '10:40', true],
+        ])
+        ->and($r['after']['hours_diff'])->toBe(['13' => 0])
+        ->and($r['after']['count_diff']['A'])->toBe(1);
+
+    // Kamomadni qoplaydi: soat ham yetmasa — yoziladigan dars uning soati uchun uzaytirilmaydi ("Hafta almashinuvi" — limitsiz).
+    $u['mode'] = 'alternate';
+    $u['hemis'] = [hsHemis(1, hsDate(1, 1), 1, 2, '13')];
+    $u['plan'] = [hsPlan(1, 1, 1, 2, 'A'), hsPlan(3, 1, 3, 2, 'A')];
+    $r = (new SchedulePlanner(hsSlots(), hsDate(2, 7)))->planGroup([$u], [], hsWorkDates(3, 4), [$tue => [3 => true]])[0];
+    expect(array_map(fn ($a) => [$a['op'], $a['date'], $a['start'], $a['end']], $r['actions']))->toBe([
+        ['create', hsDate(3, 1), '10:00', '11:20'],
+        ['create', $tue, '10:00', '11:20'],
+    ])->and(array_column($r['fixes'], 'type'))->toBe(['balance_day'])
+        ->and($r['after']['hours_diff'])->toBe(['13' => 2]);
+
+    // Qoplamagan qismi — yoziladigan darsga: 3 soat kam, balanslash darsi 2 soat → 3-hafta darsiga 1 soat qo'shiladi.
+    $u['hemis'] = [hsHemis(1, hsDate(1, 1), 1, 1, '13')];
+    $r = (new SchedulePlanner(hsSlots(), hsDate(2, 7)))->planGroup([$u], [], hsWorkDates(3, 4), [$tue => [3 => true]])[0];
+    expect(array_map(fn ($a) => [$a['op'], $a['date'], $a['start'], $a['end']], $r['actions']))->toBe([
+        ['create', hsDate(3, 1), '10:00', '11:20'],
+        ['create', hsDate(3, 1), '12:00', '12:40'],
+        ['create', $tue, '10:00', '11:20'],
+    ])->and($r['after']['hours_diff'])->toBe(['13' => 2]);
+
+    // Ikki dars kam, ikkalasi ham chegaradan keyin: har biri o'z kuniga (bir kunga ikkita emas); ikkinchisining soati — birinchisi
+    // qoplagandan qolgan kamomad (3 soat − 2 = 1). Yoziladigan 3 soatlik dars ularning hisobiga o'zgarmaydi.
+    $u['hemis'] = [];
+    $u['plan'] = [hsPlan(3, 1, 3, 3, 'A')];
+    $tue5 = hsDate(5, 2);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(2, 7)))->planGroup([$u], [], hsWorkDates(3, 5), [$tue => [3 => true], $tue5 => [3 => true]])[0];
+    expect(array_column($r['fixes'], 'text'))->toBe([
+        "Balanslash: amaliy qism soni yetmaydi (1-hafta darsi o'rniga): {$tue} ga 2 soat qo'shildi",
+        "Balanslash: amaliy qism soni yetmaydi (2-hafta darsi o'rniga): {$tue5} ga 1 soat qo'shildi",
+    ])->and(array_map(fn ($a) => [$a['date'], $a['start'], $a['end']], $r['actions']))->toBe([
+        [hsDate(3, 1), '10:00', '11:20'], [hsDate(3, 1), '12:00', '12:40'], [$tue, '10:00', '11:20'], [$tue5, '10:00', '10:40'],
+    ]);
 });

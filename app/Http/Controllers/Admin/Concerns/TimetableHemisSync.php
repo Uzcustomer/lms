@@ -987,6 +987,10 @@ trait TimetableHemisSync
                 ->whereNull('deleted_at')->whereNotNull('lesson_date')
                 ->get(['schedule_hemis_id', 'subject_id', 'subject_name', 'training_type_code', 'training_type_name', 'lesson_date',
                     'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'updated_at']);
+            // HEMIS'ga yozilgan balanslash darslari (LMS belgisi): kalit => hafta — rejalashtiruvchida hafta limitiga kirmaydi.
+            $balanceMarks = $this->hemisBalanceGroupMarks((int) $grp->group_hemis_id);
+            $isBalanceRow = fn ($r) => $balanceMarks[$this->hemisBalanceKey($grp->group_hemis_id, $r->subject_id, $r->lesson_date, $r->lesson_pair_start_time,
+                $r->training_type_code)] ?? null;
 
             $gCards = $cards->filter(fn ($c) => in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true))->values();
             $usedCards = [];
@@ -1164,7 +1168,7 @@ trait TimetableHemisSync
                         'start' => substr((string) $r->lesson_pair_start_time, 0, 5), 'end' => substr((string) $r->lesson_pair_end_time, 0, 5),
                         'code' => (string) $r->training_type_code, 'employee_id' => $r->employee_id, 'employee_name' => $r->employee_name,
                         'auditorium_code' => $r->auditorium_code, 'auditorium_name' => $r->auditorium_name,
-                    ])->values()->all(),
+                    ] + (($bw = $isBalanceRow($r)) !== null ? ['balance' => true, 'balance_week' => $bw ?: null] : []))->values()->all(),
                     'plan' => $plan,
                     'fallback_employee' => $mudir,
                     'fallback_room' => $fallbackRoomFor(),
@@ -1269,6 +1273,7 @@ trait TimetableHemisSync
             }
             $explain ??= $this->hemisMoveExplainer($board, $slotTimes, $isCycle);
             $balanceRows = [];
+            $regularKeys = [];
             foreach ($results as &$r) {
                 $r += $unitMeta[$r['key']] ?? [];
                 // Fan rejimi va balans davri: shu davr bo'yicha KTR / HEMIS (bugungacha) / LMS (ertadan muddatgacha) — soni va soati.
@@ -1312,6 +1317,8 @@ trait TimetableHemisSync
                     if (!empty($rec['balance'])) {
                         $balanceRows[] = ['subject_id' => (int) $r['subject_id'], 'lesson_date' => $rec['date'], 'start_time' => $rec['start'],
                             'end_time' => $rec['end'], 'training_type_code' => (string) $rec['code'], 'week' => $rec['balance_week'] ?? null];
+                    } else {
+                        $regularKeys[$this->hemisBalanceKey($grp->group_hemis_id, $r['subject_id'], $rec['date'], $rec['start'], $rec['code'])] = true;
                     }
                 }
                 unset($r['records']);
@@ -1388,7 +1395,15 @@ trait TimetableHemisSync
             }
             unset($r);
             // Balanslash darslari — HEMIS'dan qaytganda tanib olish uchun (to'qnashuv / bandlik emas): guruhning ertangi yozuvlari yangilanadi.
-            $this->hemisBalanceStore((int) $grp->group_hemis_id, (int) $board->id, $balanceRows, $today);
+            // HEMIS'da turgan (yozilgan) darsning belgisi u HEMIS'dan o'chirilgani importda ko'rinmaguncha saqlanadi.
+            $hemisFutureKeys = [];
+            foreach ($hemisAll as $hr) {
+                if (substr((string) $hr->lesson_date, 0, 10) > $today) {
+                    $hemisFutureKeys[$this->hemisBalanceKey($grp->group_hemis_id, $hr->subject_id, $hr->lesson_date, $hr->lesson_pair_start_time,
+                        $hr->training_type_code)] = true;
+                }
+            }
+            $this->hemisBalanceStore((int) $grp->group_hemis_id, (int) $board->id, $balanceRows, $today, $hemisFutureKeys, $regularKeys);
 
             $groupsOut[] = [
                 'group' => $gname,
@@ -1911,19 +1926,48 @@ trait TimetableHemisSync
     /**
      * Guruhning ertangi balanslash darslari yozuvini yangilaydi (bugun va o'tganlari — tarix, tanib olish uchun qoladi). Faqat yozuv:
      * HEMIS'ga yozilgan dars shu kalit bilan tanib olinadi (yozilmagani hech narsaga ta'sir qilmaydi).
+     *
+     * Hisobot — faqat taklif (HEMIS'ga o'zi yozmaydi): HEMIS'da turgan darsning belgisi ($hemisKeys — importdagi ertangi darslar) yangi
+     * hisobot uni takrorlamasa ham (muddat qisqargan, LMS o'zgargan) saqlanadi — o'chirilishi importda ko'rinmaguncha. Olib tashlanadi:
+     * HEMIS'da yo'q (yozilmagan taklif yoki o'chirilgani tasdiqlangan) yoki endi oddiy LMS darsiga aynan mos ($regularKeys).
      */
-    private function hemisBalanceStore(int $groupHemisId, int $boardId, array $rows, string $today): void
+    private function hemisBalanceStore(int $groupHemisId, int $boardId, array $rows, string $today, array $hemisKeys = [], array $regularKeys = []): void
     {
         if (!Schema::hasTable('hemis_balance_lessons')) {
             return;
         }
-        DB::table('hemis_balance_lessons')->where('group_hemis_id', $groupHemisId)->where('lesson_date', '>', $today)->delete();
+        $drop = DB::table('hemis_balance_lessons')->where('group_hemis_id', $groupHemisId)->where('lesson_date', '>', $today)
+            ->get(['id', 'group_hemis_id', 'subject_id', 'lesson_date', 'start_time', 'training_type_code'])
+            ->filter(function ($m) use ($hemisKeys, $regularKeys) {
+                $k = $this->hemisBalanceKey($m->group_hemis_id, $m->subject_id, $m->lesson_date, $m->start_time, $m->training_type_code);
+
+                return !isset($hemisKeys[$k]) || isset($regularKeys[$k]);
+            })->pluck('id')->all();
+        foreach (array_chunk($drop, 500) as $ids) {
+            DB::table('hemis_balance_lessons')->whereIn('id', $ids)->delete();
+        }
         $now = now();
         $ins = array_map(fn ($r) => $r + ['board_id' => $boardId, 'group_hemis_id' => $groupHemisId, 'created_at' => $now, 'updated_at' => $now],
             array_values(array_filter($rows, fn ($r) => $r['lesson_date'] > $today)));
         foreach (array_chunk($ins, 500) as $chunk) {
-            DB::table('hemis_balance_lessons')->insertOrIgnore($chunk);
+            // Saqlangan belgi qayta taklif qilinsa — haftasi yangilanadi.
+            DB::table('hemis_balance_lessons')->upsert($chunk, ['group_hemis_id', 'subject_id', 'lesson_date', 'start_time', 'training_type_code'],
+                ['board_id', 'end_time', 'week', 'updated_at']);
         }
+    }
+
+    /** Guruhning barcha balanslash darslari belgilari: kalit => hafta (0 — noma'lum). */
+    private function hemisBalanceGroupMarks(int $groupHemisId): array
+    {
+        if (!Schema::hasTable('hemis_balance_lessons')) {
+            return [];
+        }
+        $out = [];
+        foreach (DB::table('hemis_balance_lessons')->where('group_hemis_id', $groupHemisId)->get() as $r) {
+            $out[$this->hemisBalanceKey($r->group_hemis_id, $r->subject_id, $r->lesson_date, $r->start_time, $r->training_type_code)] = (int) $r->week;
+        }
+
+        return $out;
     }
 
     /** Sana oralig'idagi balanslash darslari: kalit => hafta ("N-hafta darsi o'rniga"; noma'lum — 0). */

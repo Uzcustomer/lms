@@ -39,8 +39,10 @@ namespace App\Services\HemisSync;
  *  - Soni yetmasa — BALANSLASH DARSI (jurnal ustunlari soni KTR bilan teng bo'lishi uchun): ertadan sana tartibida birinchi mos kun —
  *    guruhning LMS'da boshqa darsi bor (talaba keladi) va shu fanning shu qismi yo'q kun. Bandlik (guruh, o'qituvchi, xona) tekshirilmaydi,
  *    guruh bandligiga qo'shilmaydi; vaqti — fanning shu qismdagi eng yaqin LMS darsi boshlanishi (yo'q bo'lsa — guruhning o'sha kundagi
- *    birinchi darsi), faqat HEMIS para vaqti va kun chegarasi tekshiriladi. H dan keyingi kunga ham tushadi — hozir yozilmaydi.
- *    Hafta limitidan istisno. Yozuvda balance: true, balance_week — darsi o'tilmagan KTR haftasi (eng eskisi birinchi).
+ *    birinchi darsi), faqat HEMIS para vaqti va kun chegarasi tekshiriladi. H dan keyingi kunga ham tushadi — hozir yozilmaydi
+ *    (yoziladigan darslar soatiga ta'sir qilmaydi). Hafta limitidan istisno. Yozuvda balance: true, balance_week — darsi o'tilmagan KTR
+ *    haftasi (eng eskisi birinchi). HEMIS'ga yozilgani (hemis yozuvida balance: true — LMS belgisi) hafta limitiga kirmaydi, umumiy
+ *    balansda qoladi va o'z balance_week haftasini qoplaydi.
  *
  * Soat birligi — akademik soat = yarim para = bitta yarim-slot (40 daqiqa).
  */
@@ -228,13 +230,16 @@ class SchedulePlanner
         return $h;
     }
 
-    /** O'tgan (bugungacha) HEMIS darslari haftalar bo'yicha: [hafta => ['days' => [sana => true], 'hours' => soat]] (shu qism). */
+    /**
+     * O'tgan (bugungacha) HEMIS darslari haftalar bo'yicha: [hafta => ['days' => [sana => true], 'hours' => soat]] (shu qism).
+     * Balanslash darslari (HEMIS yozuvida balance: true — LMS belgisi bo'yicha) kirmaydi: hafta limitidan istisno, umumiy balansda qoladi.
+     */
     private function pastByWeek(array $u, string $part): array
     {
         $out = [];
         foreach ((array) $u['hemis'] as $r) {
             $code = (string) $r['code'];
-            if ($r['date'] > $this->today || !isset($u['codes'][$code]) || $this->partOf($u, $code) !== $part
+            if ($r['date'] > $this->today || !empty($r['balance']) || !isset($u['codes'][$code]) || $this->partOf($u, $code) !== $part
                 || ($w = $this->weekOf($u, $r['date'])) === null) {
                 continue;
             }
@@ -276,7 +281,7 @@ class SchedulePlanner
 
     /**
      * Darsi o'tilmagan KTR haftalari (eng eskisi birinchi): balans davrida shu qism KTR'da bor, lekin HEMIS'da (bugungacha) ham,
-     * rejada (ertadan, balanslash darslarisiz) ham shu haftada dars yo'q.
+     * rejada (ertadan, balanslash darslarisiz) ham shu haftada dars yo'q, o'rniga o'tilgan balanslash darsi (HEMIS) ham yo'q.
      */
     private function missingWeeks(array $u, array $blocks, string $part): array
     {
@@ -284,6 +289,13 @@ class SchedulePlanner
             return [];
         }
         $past = $this->pastByWeek($u, $part);
+        $covered = [];
+        foreach ((array) $u['hemis'] as $r) {
+            if (!empty($r['balance']) && !empty($r['balance_week']) && $r['date'] <= $this->today && isset($u['codes'][(string) $r['code']])
+                && $this->partOf($u, (string) $r['code']) === $part) {
+                $covered[(int) $r['balance_week']] = true;
+            }
+        }
         $planned = [];
         foreach ($blocks as $b) {
             if ($b['part'] === $part && empty($b['balance'])) {
@@ -293,7 +305,7 @@ class SchedulePlanner
         $out = [];
         $last = $this->hzWeek($u, $part) ?? count((array) $u['ktr']);
         for ($w = 1; $w <= $last; $w++) {
-            if ($this->ktrPartHours($u, $w, $part) > 0 && empty($past[$w]['days']) && !isset($planned[$w])) {
+            if ($this->ktrPartHours($u, $w, $part) > 0 && empty($past[$w]['days']) && !isset($planned[$w]) && !isset($covered[$w])) {
                 $out[] = $w;
             }
         }
@@ -549,6 +561,9 @@ class SchedulePlanner
         $before = $this->tally($u, $blocks);
         $fixes = [];
         $notes = [];
+        // Balans chegarasidan keyingi kunga tushgan balanslash darslari — hozir yozilmaydi: yozuvlarda (belgi bilan) ko'rsatiladi, lekin
+        // soat tuzatishlari va "takliflardan keyin" hisobiga kirmaydi.
+        $deferred = [];
 
         if ($u['ktr'] === null) {
             $notes[] = 'KTR kiritilmagan — balans tekshirilmadi, faqat jadval solishtirildi.';
@@ -569,7 +584,8 @@ class SchedulePlanner
             if ($mode === 'cycle') {
                 $this->fixCountDeficit($u, $blocks, $occ, (array) ($u['work_dates'] ?? []), $fixes, $notes);
             } else {
-                $this->fixCountBalance($u, $blocks, $outside, $workDates, $fixes, $notes);
+                $this->fixCountBalance($u, $blocks, $outside, $deferred, $workDates, $fixes, $notes);
+                $u['_deferred'] = $deferred;
             }
             $this->fixHoursDeficit($u, $blocks, $occ, $fixes, $notes);
             $this->fixHoursSurplus($u, $blocks, $occ, $fixes, $notes);
@@ -578,7 +594,7 @@ class SchedulePlanner
         $this->sortBlocks($blocks);
         $after = $this->tally($u, $blocks);
 
-        $all = array_merge($blocks, $outside);
+        $all = array_merge($blocks, $outside, $deferred);
         $this->sortBlocks($all);
         $records = $this->records($u, $all);
         $actions = $this->diffActions($u, $records);
@@ -618,9 +634,23 @@ class SchedulePlanner
             : "Sikl blokida ortiqcha: {$what} ({$block})";
     }
 
+    /**
+     * Soat farqi (kod => KTR − HEMIS − reja). Balans chegarasidan keyingi (hozir yozilmaydigan) balanslash darslari ($u['_deferred'])
+     * kamomadni qoplaydi — hozir yoziladigan darslar ular uchun uzaytirilmaydi, lekin ortiqcha hisoblanmaydi — ular uchun
+     * qisqartirilmaydi ham (yozilmagan soat hisobiga yoziladigan dars kamaymasin).
+     */
     private function tallyD(array $u, array $blocks): array
     {
-        return $this->tally($u, $blocks)['hours_diff'];
+        $D = $this->tally($u, $blocks)['hours_diff'];
+        if (empty($u['_deferred'])) {
+            return $D;
+        }
+        $all = $this->tally($u, array_merge($blocks, $u['_deferred']))['hours_diff'];
+        foreach ($D as $code => $d) {
+            $D[$code] = $all[$code] > 0 ? $all[$code] : min(0, $d);
+        }
+
+        return $D;
     }
 
     private function codeName(array $u, string $code): string
@@ -939,8 +969,9 @@ class SchedulePlanner
     //         guruhning LMS'da boshqa darsi bor (talaba keladi) va shu fanning shu qismi yo'q. Bandlik (guruh, o'qituvchi, xona, ustma-ust)
     //         tekshirilmaydi, guruh bandligiga (occ) qo'shilmaydi; vaqti — fanning shu qismdagi eng yaqin LMS darsi boshlanishi, yo'q
     //         bo'lsa — guruhning o'sha kundagi birinchi darsi; faqat HEMIS para vaqti va kun chegarasi tekshiriladi. Muddat bilan
-    //         cheklanmaydi (keyingi kun — hozir yozilmaydi), hafta limitidan istisno.
-    private function fixCountBalance(array $u, array &$blocks, array $outside, array $workDates, array &$fixes, array &$notes): void
+    //         cheklanmaydi (balans chegarasidan keyingi kun — $deferred'ga: hozir yozilmaydi, yoziladigan darslar soatiga ta'sir
+    //         qilmaydi), hafta limitidan istisno.
+    private function fixCountBalance(array $u, array &$blocks, array $outside, array &$deferred, array $workDates, array &$fixes, array &$notes): void
     {
         foreach (['L', 'A'] as $part) {
             $hzEnd = $this->hzEnd($u, $part);
@@ -953,12 +984,12 @@ class SchedulePlanner
             $name = $part === 'L' ? 'ma\'ruza' : 'amaliy qism';
             while ($C > 0) {
                 $week = array_shift($missing);
-                $D = $this->tallyD($u, $blocks);
+                $D = $this->tallyD(array_merge($u, ['_deferred' => $deferred]), $blocks);
                 $debt = array_sum(array_map(fn ($c) => max(0, $D[$c] ?? 0), $codes));
                 $h = min(2, max(1, $debt));
                 $pick = null;
                 foreach ($this->groupDays as $date => $first) {
-                    if (array_filter(array_merge($blocks, $outside), fn ($b) => $b['date'] === $date && $b['part'] === $part)) {
+                    if (array_filter(array_merge($blocks, $outside, $deferred), fn ($b) => $b['date'] === $date && $b['part'] === $part)) {
                         continue;
                     }
                     foreach (array_unique(array_filter([$this->usualStart($u, $part, $date), $first], fn ($x) => $x !== null)) as $s0) {
@@ -983,12 +1014,17 @@ class SchedulePlanner
                 }
                 // Balans chegarasidan keyingi kun — rejada, lekin hozir yozilmaydi (o'sha haftalar LMS'da joylanishini kutadi).
                 $later = $hzEnd !== null && $date > $hzEnd;
-                $blocks[] = ['date' => $date, 'week' => $this->weekOf($u, $date) ?? (int) ($workDates[$date] ?? 0), 'part' => $part,
+                $block = ['date' => $date, 'week' => $this->weekOf($u, $date) ?? (int) ($workDates[$date] ?? 0), 'part' => $part,
                     'slots' => $slots, 'new' => true, 'balance' => true, 'balance_week' => $week, 'balance_later' => $later];
-                $this->sortBlocks($blocks);
+                if ($later) {
+                    $deferred[] = $block;
+                } else {
+                    $blocks[] = $block;
+                    $this->sortBlocks($blocks);
+                }
                 $fixes[] = ['type' => 'balance_day', 'date' => $date, 'week' => $week, 'later' => $later,
                     'text' => 'Balanslash: ' . $name . ' soni yetmaydi' . ($week ? " ({$week}-hafta darsi o'rniga)" : '')
-                        . ": {$date} ga {$h} soat qo'shildi" . ($debt < $h ? ' (soati boshqa darsdan olinadi)' : '')];
+                        . ": {$date} ga {$h} soat qo'shildi" . ($debt < $h && !$later ? ' (soati boshqa darsdan olinadi)' : '')];
                 $C--;
             }
         }
@@ -1324,7 +1360,8 @@ class SchedulePlanner
         $part = $this->partOf($u, $code);
         $days = [];
         foreach ((array) $u['hemis'] as $r) {
-            if (isset($u['codes'][(string) $r['code']]) && $this->partOf($u, (string) $r['code']) === $part && $this->weekOf($u, $r['date']) === $week) {
+            if (empty($r['balance']) && isset($u['codes'][(string) $r['code']]) && $this->partOf($u, (string) $r['code']) === $part
+                && $this->weekOf($u, $r['date']) === $week) {
                 $days[$r['date']] = true;
             }
         }

@@ -275,3 +275,53 @@ it('HEMIS fan nomi tuzatilganda: fakultet yozuvi yangi nomga o\'tadi — yangi n
         ['Ichki kasalliklar', 'Xalqaro ta\'lim fakulteti', 601, 14],        // o'quv reja: yangi nomniki qoladi
     ]);
 });
+
+it('guruhchaning o\'z joylashuvi (aralash oqimda): uzunlik guruhcha qatori bo\'yicha — sikl rejasi, birliklar va saqlash ro\'yxati bir xil (Codex)', function () {
+    $s = scsSetup();
+    scsSave($s, ['faculty_name' => $s['xd'], 'cycle_days' => 15])->assertOk();
+    scsSave($s, ['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 601, 'cycle_days' => 13])->assertOk();
+    // Aralash 3-oqimdagi xd/22-03a (601) — o'z joylashuvi bilan; xd/23-03a — oqimnikidan.
+    $own = TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 4,
+        'group_name' => 'xd/22-03a', 'subject_name' => 'Ichki kasalliklar', 'start_index' => 110, 'training_type' => 'practice']);
+    $internal = [];
+    foreach (scsAs($s['admin'])->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'])->assertOk()->json('rows') as $row) {
+        foreach ($row['blocks'] ?? [] as $b) {
+            if ($b['type'] === 'practice' && in_array($row['group'], ['xd/22-03a', 'xd/23-03a'], true)) {
+                $internal[$row['group']] = [$b['days'], $b['from'], $b['scope_note'] ?? null];
+            }
+        }
+    }
+    ksort($internal);
+    expect($internal)->toBe(['xd/22-03a' => [13, 110, null], 'xd/23-03a' => [15, 75, "o'quv rejalar har xil — fakultet sozlamasi olindi"]]);
+    $units = scsUnits($s);
+    expect([$units['xd/22-03a'], $units['xd/23-03a']])->toBe([13, 15]);
+    // Saqlashdan oldingi ro'yxat ham shu qator bo'yicha: 601 o'zgarsa — guruhchaning o'z bloki (13 → 14).
+    $dry = scsSave($s, ['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 601, 'cycle_days' => 14, 'dry_run' => 1])->assertOk()->json('affected');
+    expect(collect($dry)->firstWhere('placement_id', $own->id))->toMatchArray(['row' => 'xd/22-03a', 'from' => 13, 'to' => 14]);
+});
+
+it('"A + B" umumiy amaliy kartasi (group_names bo\'sh): o\'quv reja har guruhcha bo\'yicha aniqlanadi (Codex)', function () {
+    $s = scsSetup();
+    $gid = 2000;
+    foreach (['xd/22-05a', 'xd/22-05b'] as $g) {
+        DB::table('groups')->insert(['group_hemis_id' => ++$gid, 'name' => $g, 'department_hemis_id' => 1, 'department_name' => $s['xd'],
+            'department_code' => 'F', 'department_structure_type_code' => '11', 'department_structure_type_name' => 'Fakultet',
+            'department_locality_type_code' => '11', 'department_locality_type_name' => 'M', 'department_active' => true,
+            'specialty_hemis_id' => 1, 'specialty_code' => 'S', 'specialty_name' => 'davolash ishi', 'education_lang_code' => '11',
+            'education_lang_name' => 'uz', 'curriculum_hemis_id' => 601, 'active' => true, 'created_at' => now(), 'updated_at' => now()]);
+    }
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => $s['xd'], 'specialty_name' => 'davolash ishi', 'course' => 4,
+        'oqim_label' => '4-oqim', 'lang' => 'uz', 'len_half' => 2, 'weeks' => 30, 'subject_name' => 'Ichki kasalliklar',
+        'kafedra_name' => 'Ichki kasalliklar kafedrasi', 'students' => 20, 'training_type' => 'practice', 'group_name' => 'xd/22-05a + xd/22-05b']);
+    TimetableCyclePlacement::create(['board_id' => $s['board']->id, 'specialty_name' => 'davolash ishi', 'course' => 4,
+        'group_name' => $s['xd'] . ' / 4-oqim', 'subject_name' => 'Ichki kasalliklar', 'start_index' => 110, 'training_type' => 'practice']);
+    scsSave($s, ['faculty_name' => $s['xd'], 'cycle_days' => 15])->assertOk();
+    scsSave($s, ['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 601, 'cycle_days' => 13])->assertOk();
+    expect(scsPlan($s)[$s['xd'] . ' / 4-oqim'])->toBe([13, null]);
+    $units = scsUnits($s);
+    expect([$units['xd/22-05a'], $units['xd/22-05b']])->toBe([13, 13]);
+    // "Darslar" oynasida ham ikkala guruh 601 o'quv rejasida (aniqlanmagan qator yo'q).
+    $xd = collect(scsAs($s['admin'])->getJson(route('admin.timetable.subject-setting.scopes', $s['board']) . '?' . http_build_query([
+        'specialty_name' => 'davolash ishi', 'course' => 4, 'subject_name' => 'Ichki kasalliklar']))->assertOk()->json('faculties'))->firstWhere('name', $s['xd']);
+    expect(array_map(fn ($c) => [$c['id'], $c['groups']], $xd['curricula']))->toBe([[601, 5], [701, 3]]);
+});

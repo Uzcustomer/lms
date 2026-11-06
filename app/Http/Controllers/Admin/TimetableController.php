@@ -4734,6 +4734,7 @@ class TimetableController extends Controller
             $placeKey = (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . $placeGroup;
             $rowPlacements = [];
             $placementGroupOf = [];   // fan|tur => joylashuv saqlangan qator nomi
+            $placementMerged = [];    // fan|tur => bo'lak joylashuvi asosiy nomga yig'ilgan
             $variantPlaced = [];      // asosiy nom => [bo'lak => true] (amaliy yozuvlar)
             // Bo'lak joylashuvi sozlama (o'quv reja) nomi bilan yoziladi — karta nomidan harf
             // registri/bo'shliq bilan farq qilishi mumkin, shuning uchun normallashgan moslash.
@@ -4765,6 +4766,7 @@ class TimetableController extends Controller
                     $typeKey = $placement->subject_name . '|' . ($placement->training_type ?: 'practice');
                     $rowPlacements[$typeKey] = $placement;
                     $placementGroupOf[$typeKey] = $savedGroup;
+                    $placementMerged[$typeKey] = $baseSubject !== null;
                 }
             }
             $savedBlocks = collect(array_values($rowPlacements))->sortBy('start_index');
@@ -4785,12 +4787,14 @@ class TimetableController extends Controller
                     continue;
                 }
                 $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name, $g['faculty'] ?? null);
+                // Fan kunlari soni — joylashuv saqlangan qator tarkibi bo'yicha (cyclePlaceOne bilan bir xil): odatda oqim; guruhchaning
+                // o'z joylashuvi bo'lsa — guruhcha (o'z o'quv rejasi).
+                [$subDays, $blockNote] = $this->cycleBlockDays($board, $g, (string) $placement->subject_name,
+                    $placementGroupOf[$placement->subject_name . '|' . $blockType] ?? null, $placementMerged[$placement->subject_name . '|' . $blockType] ?? false);
                 // Kun = 6 soat: ma'ruza o'z soatidan (2 soat/kun), amaliy to'liq sikl.
                 $days = $cycleSimple
-                    ? max(1, (int) ($g['subs'][$placement->subject_name] ?? 1))
-                    : max(1, $this->cycleTypeDays(
-                        max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)), $hrs, $blockType
-                    ));
+                    ? $subDays
+                    : max(1, $this->cycleTypeDays($subDays, $hrs, $blockType));
                 $from = max(0, (int) $placement->start_index);
                 if ($from >= $totalDays) {
                     continue;
@@ -4830,7 +4834,7 @@ class TimetableController extends Controller
                     'to' => $to,
                     'days' => (int) $days,
                     // Fakultet / o'quv reja sozlamasi qo'llanmagan bo'lsa (oqimda o'quv rejalar yoki fakultetlar har xil) — sababi.
-                    'scope_note' => $g['scope_notes'][$placement->subject_name] ?? null,
+                    'scope_note' => $blockNote,
                     'hours' => $fmtHours($hrs === null ? null
                         : (float) ($cycleSimple
                             ? ($hrs['lecture'] + $hrs['practice'])
@@ -6892,12 +6896,19 @@ class TimetableController extends Controller
             $rk = (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
             // Fanning o'z oqimi qatoridagi joylashuv, so'ng guruhning o'zinikisi (fan+tur bo'yicha ustuvor) — cyclePlan'dagidek.
             $rowPlacements = [];
-            foreach ($this->cyclePlacementSources($g, $rk) as [$savedKey, , $subjects]) {
+            $rowPlacementRow = [];   // fan|tur => joylashuv saqlangan qator nomi
+            foreach ($this->cyclePlacementSources($g, $rk) as [$savedKey, $savedRow, $subjects]) {
                 foreach ($savedByRow[$savedKey] ?? [] as $placement) {
                     if ($subjects === null || isset($subjects[mb_strtolower(trim((string) $placement->subject_name))])) {
-                        $rowPlacements[$placement->subject_name . '|' . ($placement->training_type ?: 'practice')] = $placement;
+                        $typeKey = $placement->subject_name . '|' . ($placement->training_type ?: 'practice');
+                        $rowPlacements[$typeKey] = $placement;
+                        $rowPlacementRow[$typeKey] = $savedRow;
                     }
                 }
+            }
+            // Kunlar soni — amaliy joylashuv saqlangan qator bo'yicha (cyclePlan / cyclePlaceOne bilan bir xil).
+            foreach (array_keys($g['subs']) as $subject) {
+                $g['subs'][$subject] = $this->cycleBlockDays($board, $g, (string) $subject, $rowPlacementRow[$subject . '|practice'] ?? null, false)[0];
             }
             $placed = [];
             foreach ($rowPlacements as $placement) {

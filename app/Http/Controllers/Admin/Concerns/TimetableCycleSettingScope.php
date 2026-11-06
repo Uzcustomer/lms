@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * Bir yo'nalish va kursdagi fan turli fakultet / o'quv rejada turli sikl kunlari soniga ega bo'lishi mumkin. Qidiruv ustuvorligi:
  * (fakultet + o'quv reja) → (fakultet) → (umumiy). Umumiy yozuv — ('', 0); fan rejimi (sikl / hafta almashinuvi) faqat unda.
- * Aniqlovchi — sikl qatori (oqim yoki guruhcha) tarkibi: qatordagi amaliy kartalarning fakulteti va o'quv rejasi (cardCurriculumId).
+ * Aniqlovchi — sikl qatori (oqim yoki guruhcha) tarkibi: qatordagi amaliy kartalarning fakulteti va guruhchalarining o'quv rejasi (cycleMemberCurriculum).
  * Bir qatorda bir nechta o'quv reja (yoki rejasi aniqlanmagan guruh) — fakultet darajasi; bir nechta fakultet — umumiy.
  */
 trait TimetableCycleSettingScope
@@ -92,6 +92,32 @@ trait TimetableCycleSettingScope
         }
     }
 
+    /** Guruhchaning o'quv rejasi (groups.curriculum_hemis_id; kartaning fakulteti bo'yicha); aniqlanmasa — 0. */
+    private function cycleMemberCurriculum(object $card, string $member): int
+    {
+        return $this->cardCurriculumId(['group_names' => [$member], 'group_name' => $member, 'faculty_name' => $card->faculty_name ?? null]);
+    }
+
+    /**
+     * Joylangan blok kunlari soni: qatordagi kartalar bo'yicha hisoblangan oqim qiymati ($g['subs'], ogohlantirish — $g['scope_notes']);
+     * joylashuv guruhchaning o'z qatorida saqlangan bo'lsa ($savedRow oqimdan farqli) — shu qator tarkibi bo'yicha (cyclePlaceOne
+     * joylashni ham shu qator bilan tekshiradi). Bo'lak qatori va asosiy nomga yig'ilgan bo'lak joylashuvi — oqim qiymati.
+     * Qaytaradi: [kunlar (kamida 1), ogohlantirish | null].
+     */
+    private function cycleBlockDays(TimetableBoard $board, array $g, string $subject, ?string $savedRow, bool $merged): array
+    {
+        $days = max(1, (int) ($g['subs'][$subject] ?? 1));
+        $note = $g['scope_notes'][$subject] ?? null;
+        $parent = (string) ($g['parents'][$subject] ?? $g['parent'] ?? $g['name'] ?? '');
+        if ($savedRow === null || $merged || !empty($g['variant'])
+            || mb_strtolower(trim($savedRow)) === mb_strtolower(trim($parent))) {
+            return [$days, $note];
+        }
+        [$own, $ownNote] = $this->cycleDaysResolve($board, (string) $g['specialty'], (int) $g['course'], $subject, $savedRow);
+
+        return $own !== null ? [max(1, $own), $ownNote] : [$days, $note];
+    }
+
     /** Fan sikl rejimidami (umumiy yozuv bo'yicha). */
     private function cycleSettingIsCycle(TimetableBoard $board, $specialty, int $course, $subject): bool
     {
@@ -113,21 +139,20 @@ trait TimetableCycleSettingScope
         $out = [];
         foreach ($this->cardRows($board, fn ($q) => $q->where('training_type', 'practice')->whereNotNull('group_name')) as $c) {
             $fac = mb_strtolower(trim((string) ($c->faculty_name ?? '')));
-            $cid = $this->cardCurriculumId($c);
             $base = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|';
             $subject = '|' . mb_strtolower(trim((string) $c->subject_name));
-            $rows = [];
+            // O'quv reja — har guruhcha bo'yicha ("A + B" umumiy kartasida ham har a'zo alohida): guruhcha qatoriga o'ziniki,
+            // oqim qatoriga a'zolarning hammasiniki.
             foreach ($this->cycleCardGroups($c) as $member) {
-                $rows[mb_strtolower(trim((string) $member))] = true;
-                $rows[mb_strtolower(trim($this->cycleFlowName($c, $member)))] = true;
-            }
-            foreach (array_keys($rows) as $row) {
-                $k = $base . $row . $subject;
-                $out[$k]['fac'][$fac] = (string) ($c->faculty_name ?? '');
-                if ($cid > 0) {
-                    $out[$k]['cur'][$fac . '|' . $cid] = true;
-                } else {
-                    $out[$k]['unknown'] = true;
+                $cid = $this->cycleMemberCurriculum($c, $member);
+                foreach (array_unique([mb_strtolower(trim((string) $member)), mb_strtolower(trim($this->cycleFlowName($c, $member)))]) as $row) {
+                    $k = $base . $row . $subject;
+                    $out[$k]['fac'][$fac] = (string) ($c->faculty_name ?? '');
+                    if ($cid > 0) {
+                        $out[$k]['cur'][$fac . '|' . $cid] = true;
+                    } else {
+                        $out[$k]['unknown'] = true;
+                    }
                 }
             }
         }
@@ -231,10 +256,9 @@ trait TimetableCycleSettingScope
         $faculties = [];
         foreach ($mine ?: $cards as $c) {
             $fac = trim((string) ($c->faculty_name ?? ''));
-            $cid = $this->cardCurriculumId($c);
             $faculties[$fac] ??= ['name' => $fac, 'curricula' => []];
             foreach ($this->cycleCardGroups($c) as $g) {
-                $faculties[$fac]['curricula'][$cid]['groups'][$g] = true;
+                $faculties[$fac]['curricula'][$this->cycleMemberCurriculum($c, $g)]['groups'][$g] = true;
             }
         }
         $codes = $this->boardSemesterCodes($board);

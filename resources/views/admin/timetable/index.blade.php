@@ -2929,8 +2929,9 @@
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
             const TIMETABLE_ROLE = @json($timetableActiveRole);
-            // Haftalik jadval qatlami (sikl kabi): tashqi — o'quv bo'limi, ichki — kafedra mudiri.
-            const WEEKLY_ADMIN = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'].includes(TIMETABLE_ROLE);
+            // Haftalik jadval qatlami (sikl kabi): tashqi — o'quv bo'limi, ichki — kafedra mudiri; ikkalasi — to'liq tahrirlovchilar (server bilan
+            // bitta ro'yxat: TIMETABLE_FULL_EDIT_ROLES). Sikl ko'rinishida tahrir — server bergan can_edit bo'yicha.
+            const WEEKLY_ADMIN = @json(\App\Http\Controllers\Admin\TimetableController::TIMETABLE_FULL_EDIT_ROLES).includes(TIMETABLE_ROLE);
             // "Takliflar" oynasi: qaysi rollarga ochiq (qamrov va "Qo'llash" huquqini server beradi).
             const SUGGEST_ROLES = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri', 'fan_masuli', 'oqituvchi'];
             const WEEKLY_OQUV = ['oquv_bolimi', 'oquv_bolimi_boshligi'].includes(TIMETABLE_ROLE);

@@ -105,6 +105,7 @@ class TimetableAssignmentAccess
                 $allowed = array_merge($allowed, [
                     'admin.timetable.subjects',
                     'admin.timetable.subject-setting.save',
+                    'admin.timetable.subject-setting.scopes',
                     'admin.timetable.teachers',
                     'admin.timetable.teachers.departments',
                     'admin.timetable.auditorium-teachers',
@@ -160,7 +161,8 @@ class TimetableAssignmentAccess
             // Kafedra mudiri: ichki qatlamda o'z kafedrasi kartalarining joylashuvi, o'qituvchisi va xonasi — ha; kartalarni
             // yaratish, o'chirish, bo'shatish, fan sozlamalari (fanlar menejeri) va sikl kalendari (bayramlar) — faqat adminlar.
             if ($activeRole === 'kafedra_mudiri') {
-                $allowed = array_values(array_diff($allowed, ['admin.timetable.boards.unplace', 'admin.timetable.subject-setting.save']));
+                $allowed = array_values(array_diff($allowed, ['admin.timetable.boards.unplace', 'admin.timetable.subject-setting.save',
+                    'admin.timetable.subject-setting.scopes']));
                 if ($request->routeIs('admin.timetable.cycle-plan') && $request->boolean('clear')) {
                     abort(403, "Sikl bloklarini bo'shatish — faqat jadval administratoriga ochiq.");
                 }

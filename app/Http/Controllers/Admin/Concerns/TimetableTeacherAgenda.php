@@ -68,6 +68,7 @@ trait TimetableTeacherAgenda
         $slots = $this->hemisSlotTimes($board);
         $pairs = $this->agendaPairs($slots);
         $staff = $this->staffTodayOk($request);
+        $t0 = microtime(true);
         $entries = $this->agendaEntries($board, $tid, $days, $layer, $rights, $slots, $roomCode, $staff);
         // Sudrash uchun: har yozuvni ko'chirish mumkinmi (huquq — karta / birlik bo'yicha bir marta, memo).
         $memo = [];
@@ -83,8 +84,28 @@ trait TimetableTeacherAgenda
             $free[$d] = array_values(array_map(fn ($p) => $p['no'],
                 array_filter($pairs, fn ($p) => !$this->agendaBusyAt($entries, $d, $p['from'], $p['to']))));
         }
-        $move = !empty($data['move']) && $roomCode === null
-            ? $this->agendaMove($request, $board, (string) $data['move'], $entries, $days, $pairs, $free, $layer, $rights, $data['rest_for'] ?? null, $tid, $data['sel'] ?? null) : null;
+        // Ko'chirish variantlari: har bo'sh para sinab ko'riladi (tranzaksiyada, bekor qilinadi) — o'zgarmaydigan doska ma'lumoti so'rov
+        // davomida bir marta (agendaMemo).
+        $move = null;
+        $tMove = microtime(true);
+        if (!empty($data['move']) && $roomCode === null) {
+            request()->attributes->set('timetable.agenda_memo', true);
+            try {
+                $move = $this->agendaMove($request, $board, (string) $data['move'], $entries, $days, $pairs, $free, $layer, $rights, $data['rest_for'] ?? null, $tid, $data['sel'] ?? null);
+            } finally {
+                request()->attributes->remove('timetable.agenda_memo');
+                request()->attributes->remove('timetable.agenda_memo_data');
+                request()->attributes->remove('timetable.cycle_occ_base.' . $board->id . '.0');
+                request()->attributes->remove('timetable.cycle_occ_base.' . $board->id . '.1');
+            }
+        }
+        // TIMETABLE_PROFILE=1: bosqichlar vaqti (ms) daily logga — haqiqiy doskada sekinlikni o'lchash uchun.
+        if (config('timetable.profile')) {
+            $opts = $move ? array_sum(array_map('count', (array) $move['options'])) : 0;
+            \Illuminate\Support\Facades\Log::channel('daily')->info('[teacher-agenda] ' . $range . ($move ? ' move=' . ($move['kind'] ?? '-') : '')
+                . ': darslar ' . round(($tMove - $t0) * 1000) . ' ms' . ($move ? ', variantlar ' . round((microtime(true) - $tMove) * 1000) . ' ms (' . $opts . ' para)' : ''),
+                ['board' => $board->id, 'teacher' => $tid, 'date' => $day->toDateString(), 'rest_for' => $data['rest_for'] ?? null, 'sel' => $data['sel'] ?? null]);
+        }
         // Sarlavha: o'qituvchi — to'liq F.I.Sh. (bo'sh bo'lsa qisqa nomi); xona — to'liq nomi, binosi va sig'imi.
         $short = (string) (TimetableCard::where('board_id', $board->id)->where('teacher_id', $tid)->whereNotNull('teacher_name')->value('teacher_name')
             ?: ($teacher?->short_name ?: $teacher?->full_name));
@@ -163,6 +184,26 @@ trait TimetableTeacherAgenda
     }
 
     /** Paralar (08:30 … 17:50): ikki akademik soat — bitta para; [no, from, to (soat, [from, to)), start, end, label]. */
+    /**
+     * O'qituvchi jadvalida ko'chirish variantlari (agendaMove — bayroq timetable.agenda_memo) davomida o'zgarmaydigan ma'lumot: kalit bo'yicha
+     * so'rov davomida bir marta. Har bo'sh para faqat tranzaksiyada sinab ko'riladi va bekor qilinadi — doska o'zgarmaydi; ilgari har para
+     * uchun to'qnashuv holati, guruhning boshqa amaliy kartalari va boshqa darslar bandligi qaytadan hisoblanardi (hafta ko'rinishida
+     * ~35 para — bir necha soniya). Bayroq yo'q (boshqa yo'llar, yozuvlar orasida) — har safar hisoblanadi (avvalgidek).
+     */
+    private function agendaMemo(string $key, \Closure $make)
+    {
+        if (!request()->attributes->get('timetable.agenda_memo')) {
+            return $make();
+        }
+        $all = request()->attributes->get('timetable.agenda_memo_data', []);
+        if (!array_key_exists($key, $all)) {
+            $all[$key] = $make();
+            request()->attributes->set('timetable.agenda_memo_data', $all);
+        }
+
+        return $all[$key];
+    }
+
     private function agendaPairs(array $slots): array
     {
         $out = [];
@@ -568,15 +609,18 @@ trait TimetableTeacherAgenda
         bool $splitCheck = true): array
     {
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
-        $ov = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
+        $ov = $this->agendaMemo('ov|' . $card->id . '|' . $week, fn () => TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first());
         $roomCode = $room ? (string) $room->code : (string) ($ov?->auditorium_code ?: $card->auditorium_code);
         $data = ['week' => $week, 'day' => $day, 'pair' => $pair] + ($room ? ['auditorium_code' => $roomCode] : []);
+        // To'qnashuv holati (findWeekConflicts) — karta va sinalayotgan xona bo'yicha (ko'chirish variantlarida bir marta).
+        $proposed = $room ? $roomCode : null;
+        $state = $this->agendaMemo('cstate|' . $card->id . '|' . $proposed, fn () => $this->calendarConflictState($card, $proposed));
         // $splitCheck = false — bir nechta bo'lak birga ko'chiriladi (blok yaxlitligi chaqiruvchida, yakuniy holat bo'yicha).
-        $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair, 0, null, $room ? $roomCode : null),
+        $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair, 0, $state, $proposed),
             $this->pendingTimeConflicts($card, $data, []), $splitCheck ? $this->practiceSplitConflicts($card, $week, $day, $pair) : [],
             $this->weeklyProposalBusy($card, $week, $day, $pair, $date, $room));
-        $room ??= $roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null;
-        $students = $this->cardStudents($card);
+        $room ??= $roomCode !== '' ? $this->agendaMemo('room|' . $roomCode, fn () => Auditorium::where('code', $roomCode)->first()) : null;
+        $students = $this->agendaMemo('students|' . $card->id, fn () => $this->cardStudents($card));
         if (!$this->isNonBlocking($card, $board) && $room && (int) $room->volume > 0 && $students > (int) $room->volume) {
             $errors[] = self::capacityLine((string) ($room->name ?: $room->code), (int) $room->volume, $students);
         }
@@ -647,7 +691,8 @@ trait TimetableTeacherAgenda
             }
             // Haftalik darslar bilan (findWeekConflicts), kutilayotgan so'rovlardagi xona broni va sikl darslari bilan
             // (weeklyProposalBusy — shu xona bilan sinab).
-            $busy = array_merge(array_filter($this->findWeekConflicts($card, $week, $day, $pair, 0, null, (string) $r->code),
+            $state = $this->agendaMemo('cstate|' . $card->id . '|' . $r->code, fn () => $this->calendarConflictState($card, (string) $r->code));
+            $busy = array_merge(array_filter($this->findWeekConflicts($card, $week, $day, $pair, 0, $state, (string) $r->code),
                 fn ($m) => str_starts_with($m, 'Auditoriya band')),
                 $this->pendingTimeConflicts($card, ['week' => $week, 'day' => $day, 'pair' => $pair, 'auditorium_code' => (string) $r->code], [], ['room']));
             if (!$busy) {

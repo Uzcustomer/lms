@@ -7320,7 +7320,9 @@ class TimetableController extends Controller
             // Oqim ma'ruzasi "vaqtincha kafedra mudirida" (mudir_ph_lec): ma'ruza kartasi id => belgi (barcha joylashuvlardan).
             $base = [$hasSlots, $this->cycleSubjectHoursMap($board), $this->cycleKtrDayPlans($board), $this->cycleGridHours($board), $lectures,
                 Auditorium::pluck('name', 'code')->all(), $hasSlots ? $this->cycleMudirPhLecMap((int) $board->id) : []];
-            if (request()->attributes->get('timetable.cycle_occ_memo')) {
+            // O'qituvchi jadvalidagi ko'chirish variantlari (timetable.agenda_memo) ham: sinov yozuvlari faqat bloklarning boshlanish soatini
+            // (ps_g) yoki haftalik ko'chirishni o'zgartiradi va bekor qilinadi — bu asoslar o'zgarmaydi.
+            if (request()->attributes->get('timetable.cycle_occ_memo') || request()->attributes->get('timetable.agenda_memo')) {
                 request()->attributes->set($memoKey, $base);
             }
         }
@@ -8299,16 +8301,25 @@ class TimetableController extends Controller
             return $hits;
         }
         $dates = array_flip(array_column($mine, 'date'));
-        $others = [];
-        foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), max(array_column($mine, 'to')), $ids), $dates),
-            $this->cycleOccupancy($board, $units, $calendar, $dates)] as $entries) {
-            foreach ($entries as $e) {
-                // Vaqtincha kafedra mudirida darslar hech kimni band qilmaydi.
-                if (!isset($ids[$e['card']]) && empty($e['ph'])) {
-                    $others[$e['date']][] = $e;
+        $collect = function (int $maxTo) use ($board, $dates, $ids, $units, $calendar): array {
+            $others = [];
+            foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), $maxTo, $ids), $dates),
+                $this->cycleOccupancy($board, $units, $calendar, $dates)] as $entries) {
+                foreach ($entries as $e) {
+                    // Vaqtincha kafedra mudirida darslar hech kimni band qilmaydi.
+                    if (!isset($ids[$e['card']]) && empty($e['ph'])) {
+                        $others[$e['date']][] = $e;
+                    }
                 }
             }
-        }
+
+            return $others;
+        };
+        // O'qituvchi jadvalidagi haftalik ko'chirish variantlari (weeklyProposalBusy, agendaMemo — timetable.agenda_others): boshqa darslar
+        // (shu birliksiz) har bo'sh para uchun bir xil — sana bo'yicha bir marta, vaqt chegarasisiz (kesishuv quyida aniq tekshiriladi — natija bir xil).
+        $others = request()->attributes->get('timetable.agenda_others')
+            ? $this->agendaMemo('others|' . $board->id . '|' . md5(json_encode([array_keys($dates), array_keys($ids)])), fn () => $collect(PHP_INT_MAX))
+            : $collect(max(array_column($mine, 'to')));
         // "Ko'rsatish" uchun tuzilgan ma'lumot: tur => kim => boshqa dars yorlig'i => guruhlar, sanalar, kartalar, soatlar.
         $acc = ['teachers' => [], 'rooms' => []];
         $note = function (string $type, string $id, array $m, array $o) use (&$acc, $units) {
@@ -10529,13 +10540,15 @@ class TimetableController extends Controller
         }
         $base = fn (TimetableCard $c) => $this->normSubject((string) ($this->cycleSubjectVariantBase((string) $c->subject_name) ?? $c->subject_name));
         $groups = fn (TimetableCard $c) => collect($c->occupiedGroups())->map(fn ($g) => $this->groupNameKey((string) $g))->sort()->values()->all();
-        $sibs = TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)->where('training_type', '!=', 'lecture')
-            ->where('faculty_name', $card->faculty_name)->where('specialty_name', $card->specialty_name)->where('course', $card->course)->get()
-            ->filter(fn (TimetableCard $o) => $base($o) === $base($card) && $groups($o) === $groups($card));
+        // O'qituvchi jadvalidagi ko'chirish variantlarida (agendaMemo) — karta va hafta bo'yicha bir marta.
+        $sibs = $this->agendaMemo('split_sibs|' . $card->id, fn () => TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)
+            ->where('training_type', '!=', 'lecture')->where('faculty_name', $card->faculty_name)->where('specialty_name', $card->specialty_name)
+            ->where('course', $card->course)->get()->filter(fn (TimetableCard $o) => $base($o) === $base($card) && $groups($o) === $groups($card)));
         if ($sibs->isEmpty()) {
             return [];
         }
-        $ovs = TimetableCardOverride::whereIn('card_id', $sibs->pluck('id')->push($card->id))->where('week', $week)->get()->keyBy('card_id');
+        $ovs = $this->agendaMemo('split_ovs|' . $card->id . '|' . $week, fn () => TimetableCardOverride::whereIn('card_id', $sibs->pluck('id')->push($card->id))
+            ->where('week', $week)->get()->keyBy('card_id'));
         $place = function (TimetableCard $c) use ($ovs): ?array {
             $o = $ovs[$c->id] ?? null;
             if ($o && $o->cancelled) {
@@ -10578,7 +10591,16 @@ class TimetableController extends Controller
             TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $week],
                 ['day' => $day, 'pair' => $pair, 'start_half' => 0, 'cancelled' => false]
                 + ($altRoom ? ['auditorium_code' => $altRoom->code, 'auditorium_name' => $altRoom->name] : []));
-            $busy = $this->unitBusy($card->board, collect([$card]), [$date => true]);
+            // O'qituvchi jadvalidagi ko'chirish variantlarida boshqa darslar bandligi (shu kartasiz) — sana bo'yicha bir marta (unitBusy).
+            $memoOthers = (bool) request()->attributes->get('timetable.agenda_memo');
+            if ($memoOthers) {
+                request()->attributes->set('timetable.agenda_others', true);
+            }
+            try {
+                $busy = $this->unitBusy($card->board, collect([$card]), [$date => true]);
+            } finally {
+                request()->attributes->remove('timetable.agenda_others');
+            }
             $room = (string) (TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->value('auditorium_code') ?: $card->auditorium_code);
         } finally {
             DB::rollBack();
@@ -10912,7 +10934,9 @@ class TimetableController extends Controller
             $errors = $this->cyclePracticeBusyErrors($board, $units, $days, $h);
         } finally {
             DB::rollBack();
-            request()->attributes->remove('timetable.cycle_units.' . $board->id);
+            // Sinov yozuvi (faqat shu bloklarning ps_g) bekor — keshdagi shu bloklar bazadagi holatga qaytadi; butun doska (cycleInternalUnits)
+            // qayta hisoblanmaydi: o'qituvchi jadvalida har bo'sh para uchun shu tekshiruv chaqiriladi.
+            $this->cycleUnitsRefresh((int) $board->id, array_map(fn ($x) => (int) ($x['u']['placement']->id ?? 0), $units));
         }
         if ($errors) {
             $fail(implode(' · ', $errors));

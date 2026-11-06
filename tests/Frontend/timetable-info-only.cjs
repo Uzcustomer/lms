@@ -10,7 +10,9 @@ const cut = (from, to) => {
     return source.slice(a, b);
 };
 const esc = value => String(value ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const ctx = { board: { id: 7 }, esc, cardGroups: c => c.group_names || [c.group_name], cfGroups: gs => gs.join(', '), BOLAK_RX: /^(.*?)\s*\(([a-z])\)$/i };
+// agPending / ttAgenda — o'qituvchi jadvali oynasi holati (kutilayotgan tashlash yo'q).
+const ctx = { board: { id: 7 }, esc, cardGroups: c => c.group_names || [c.group_name], cfGroups: gs => gs.join(', '), BOLAK_RX: /^(.*?)\s*\(([a-z])\)$/i,
+    agPending: null, ttAgenda: null };
 vm.createContext(ctx);
 require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(cut('            function agendaOpt(', '            function agendaHtml(')

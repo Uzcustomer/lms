@@ -530,3 +530,36 @@ it('qabul (1.4): xona sig\'imi bir xil ko\'rinishda — haftalik karta, o\'qituv
         ->assertUnprocessable()->json('message');
     expect($why)->toContain($cycle . ' — ')->not->toContain('Xona R2 band');
 });
+
+it('agenda: ko\'chirish variantlari so\'rov ichidagi kesh bilan — har para alohida (keshsiz) hisoblangandagi bilan aynan bir xil', function () {
+    $s = agSetup();
+    $ctl = app(TimetableController::class);
+    $weeklyOpt = new ReflectionMethod($ctl, 'agendaWeeklyOption');
+    $cycleOpt = new ReflectionMethod($ctl, 'agendaCycleOption');
+    // Haftalik (hafta ko'rinishi — bir necha kun) va sikl amaliyoti (kun): javobdagi har variant — o'sha parani alohida tekshirgandek.
+    foreach (['week', 'day'] as $range) {
+        $j = agGet($s, $s['admin'], 'admin', ['move' => 'w|' . $s['ppB']->id . '|' . $s['week'], 'range' => $range]);
+        $card = TimetableCard::find($s['ppB']->id);
+        $n = 0;
+        foreach ($j['move']['options'] as $date => $byPair) {
+            foreach ($byPair as $pair => $o) {
+                $alone = $weeklyOpt->invoke($ctl, $s['board'], $card, $s['week'], $o['day'], $o['pair']);
+                expect(array_intersect_key($o, $alone))->toBe($alone, "$range $date $pair");
+                $n++;
+            }
+        }
+        expect($n)->toBeGreaterThan($range === 'week' ? 5 : 1);
+    }
+    $key = collect(agGet($s, $s['admin'], 'admin')['entries'])->firstWhere('kind', 'cycle')['key'];
+    $j = agGet($s, $s['admin'], 'admin', ['move' => $key]);
+    $u = $j['move']['unit'];
+    expect($j['move']['options'])->not->toBeEmpty();
+    foreach ($j['move']['options'] as $date => $byPair) {
+        foreach ($byPair as $pair => $o) {
+            $alone = $cycleOpt->invoke($ctl, $s['board'], $u + ['units' => [$u['unit']], 'start_hour' => $o['start_hour'], 'date' => $date, 'scope' => 'day']);
+            expect(array_intersect_key($o, $alone))->toBe($alone, "cycle $date $pair");
+        }
+    }
+    // Kesh so'rovdan tashqariga chiqmaydi.
+    expect(request()->attributes->has('timetable.agenda_memo'))->toBeFalse();
+});

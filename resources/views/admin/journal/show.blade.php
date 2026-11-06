@@ -618,6 +618,10 @@
         .admin-upgraded-cell.admin-upgraded-retake {
             background: linear-gradient(to top right, #fdba74 calc(50% - 1px), #64748b 50%, #fdba74 calc(50% + 1px)) !important;
         }
+        /* Ixcham ko'rinish: sababsiz NB otrabotka — diagonal chiziqsiz, och qizil fon */
+        .admin-upgraded-cell.admin-upgraded-nb {
+            background: #fecaca !important;
+        }
         /* Ixcham ko'rinish: sababli otrabotka — diagonal chiziqsiz, och ko'k fon */
         .admin-upgraded-cell.admin-upgraded-sababli {
             background: #bfdbfe !important;
@@ -1442,6 +1446,7 @@
                                                     // Admin oshirgan baholar: hover'da har juftlikning eski/yangi bahosi
                                                     $dayUpgradeLines = [];
                                                     $hasSababliRetakeInDay = false;
+                                                    $hasNbRetakeInDay = false;
                                                     foreach ($dayGrades as $pair => $gd) {
                                                         if (!empty($gd['upgraded_by_admin'])) {
                                                             $gdKind = !empty($gd['is_retake'])
@@ -1452,6 +1457,8 @@
                                                         }
                                                         if (!empty($gd['is_retake']) && !empty($gd['retake_was_sababli'])) {
                                                             $hasSababliRetakeInDay = true;
+                                                        } elseif (!empty($gd['is_retake']) && ($gd['reason'] ?? null) === 'absent') {
+                                                            $hasNbRetakeInDay = true;
                                                         }
                                                     }
                                                     $hasUpgradedInDay = (bool) $dayUpgradeLines;
@@ -1483,7 +1490,7 @@
                                                         $dayTitle = 'Superadmin: kunga bitta baho — barcha juftliklarga (' . count($superDayOps) . ' ta) yoziladi' . ($dayTitle ? ' | ' . $dayTitle : '');
                                                     }
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }} {{ $hasUpgradedInDay ? 'admin-upgraded-cell' : '' }} {{ $hasUpgradedInDay && $isRetake ? 'admin-upgraded-retake' : '' }} {{ $hasUpgradedInDay && $hasSababliRetakeInDay ? 'admin-upgraded-sababli' : '' }}" {!! $isRetake && !$hasUpgradedInDay ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }} {{ $hasUpgradedInDay ? 'admin-upgraded-cell' : '' }} {{ $hasUpgradedInDay && $isRetake ? 'admin-upgraded-retake' : '' }} {{ $hasUpgradedInDay && $hasNbRetakeInDay ? 'admin-upgraded-nb' : '' }} {{ $hasUpgradedInDay && $hasSababliRetakeInDay ? 'admin-upgraded-sababli' : '' }}" {!! $isRetake && !$hasUpgradedInDay ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
                                                     @if($superDayOps) onclick="superadminDayGrade(this)" data-ops="{{ json_encode($superDayOps) }}" data-student="{{ $student->hemis_id }}" data-date="{{ $date }}" data-subject="{{ $subjectId }}" data-semester="{{ $semesterCode }}" @endif>
                                                     @if($hasGrades)
                                                         @php

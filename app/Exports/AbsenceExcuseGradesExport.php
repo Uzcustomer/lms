@@ -80,13 +80,18 @@ class AbsenceExcuseGradesExport implements FromArray, WithHeadings, WithStyles, 
     private function subjects(string $hemisId, $groupId, Carbon $from, Carbon $to): array
     {
         $subjects = [];
+        $pairNames = [];   // lesson_pair_code => juftlik nomi (jadvaldan)
         if ($groupId) {
-            DB::table('schedules')
+            $lessons = DB::table('schedules')
                 ->whereNull('deleted_at')
                 ->where('group_id', $groupId)
                 ->whereBetween('lesson_date', [$from, $to])
                 ->where('training_type_code', '!=', 11)
-                ->get(['subject_id', 'subject_name', 'lesson_date', 'lesson_pair_code'])
+                ->get(['subject_id', 'subject_name', 'lesson_date', 'lesson_pair_code', 'lesson_pair_name']);
+            foreach ($lessons as $l) {
+                $pairNames[(string) $l->lesson_pair_code] ??= $l->lesson_pair_name;
+            }
+            $lessons
                 ->groupBy(fn ($r) => (string) $r->subject_id)
                 ->each(function ($lessons, $subjectId) use (&$subjects) {
                     $subjects[$subjectId] = [
@@ -104,7 +109,7 @@ class AbsenceExcuseGradesExport implements FromArray, WithHeadings, WithStyles, 
             ->where('training_type_code', '!=', 11)
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
-            ->get(['subject_id', 'subject_name', 'lesson_date', 'lesson_pair_code', 'training_type_code', 'grade', 'retake_grade', 'reason']);
+            ->get(['subject_id', 'subject_name', 'lesson_date', 'lesson_pair_code', 'lesson_pair_name', 'training_type_code', 'grade', 'retake_grade', 'reason']);
 
         foreach ($grades as $g) {
             $key = (string) $g->subject_id;
@@ -112,7 +117,7 @@ class AbsenceExcuseGradesExport implements FromArray, WithHeadings, WithStyles, 
             $label = Carbon::parse($g->lesson_date)->format('d.m')
                 . (isset(self::TYPE_LABELS[(int) $g->training_type_code])
                     ? ' ' . self::TYPE_LABELS[(int) $g->training_type_code]
-                    : ' (' . $g->lesson_pair_code . ')');
+                    : ', ' . $this->pairLabel($g, $pairNames));
 
             if ($g->reason === 'absent') {
                 // NB: ustiga LMS'da baho qo'yilgan bo'lsa — Markda (otrabotka retake_grade da yoki ochilgan katak grade da)
@@ -130,6 +135,21 @@ class AbsenceExcuseGradesExport implements FromArray, WithHeadings, WithStyles, 
         uasort($subjects, fn ($a, $b) => strcmp($a['name'], $b['name']));
 
         return array_values($subjects);
+    }
+
+    /**
+     * "1-juftlik": juftlik nomidagi raqam (baho yozuvidan, bo'lmasa jadvaldan — LMS'da yaratilgan
+     * yozuvlarda nom "Manual" bo'lishi mumkin); topilmasa — HEMIS juftlik kodi.
+     */
+    private function pairLabel(object $g, array $pairNames): string
+    {
+        foreach ([$g->lesson_pair_name ?? null, $pairNames[(string) $g->lesson_pair_code] ?? null] as $name) {
+            if ($name !== null && preg_match('/\d+/', (string) $name, $m)) {
+                return (int) $m[0] . '-juftlik';
+            }
+        }
+
+        return 'juftlik ' . $g->lesson_pair_code;
     }
 
     private function num($v): string
@@ -153,6 +173,9 @@ class AbsenceExcuseGradesExport implements FromArray, WithHeadings, WithStyles, 
         $sheet->getRowDimension(1)->setRowHeight(32);
         $sheet->freezePane('A2');
         $last = max($sheet->getHighestRow(), $this->rowCount + 1);
+        // Har bir katak chegarasi ko'rinsin (rangli ustunlarda Excel to'r chiziqlari yo'qoladi)
+        $sheet->getStyle("A1:N{$last}")->getBorders()->getAllBorders()
+            ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
         if ($last > 1) {
             $sheet->setAutoFilter("A1:N{$last}");
             $sheet->getStyle("A2:N{$last}")->getAlignment()->setVertical('top');

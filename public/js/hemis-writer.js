@@ -5,8 +5,9 @@
  * bugun va o'tgan kunlarga yozilmaydi, to'siqli amallar o'tkaziladi, boshida bir marta tasdiq so'raladi.
  * Istisno — «Bugungi darslar (HEMIS)» JSON'i (amalda today: true): faqat bugungi kun va faqat o'zgartirish (qo'shish/o'chirish
  * rad etiladi); har biridan oldin davomat/baho HEMIS'dan qayta tekshiriladi (mark'dagi imzolangan havola) — belgilangan bo'lsa tegilmaydi.
- * LMS'da joylanmagani uchun o'chiriladigan darslar (reason_code lms_unplaced) bo'lsa — "HEMIS'ga yozish"da, birinchi amaldan oldin
- * BIR MARTA oyna: "Ha, hammasini bajar" / "O'chirishlarsiz bajar" / "Bekor"; tanlovdan keyin jarayon oxirigacha savolsiz ishlaydi.
+ * Ogohlantirish bilan o'chiriladigan darslar — LMS'da joylanmagani uchun (reason_code lms_unplaced) va guruh o'qimaydigan bo'lak darslari
+ * (not_studied) — bo'lsa, "HEMIS'ga yozish"da, birinchi amaldan oldin BIR MARTA oyna (ikki sabab alohida soni bilan): "Ha, hammasini
+ * bajar" / "O'chirishlarsiz bajar" (ikkalasini ham o'tkazib yuboradi) / "Bekor"; tanlovdan keyin jarayon oxirigacha savolsiz ishlaydi.
  */
 (function () {
     'use strict';
@@ -122,22 +123,32 @@
     // Bugun — JSON'dagi sana va shu kompyuterdagi sanadan kattasi. Har safar qayta hisoblanadi: oyna kechadan ochiq qolishi mumkin.
     const cutoff = () => [String(rep.today || ''), localToday()].sort().pop();
 
-    // LMS'da joylanmagani uchun o'chirish (mark: reason_code lms_unplaced) — boshlashda bir marta so'raladi.
-    const isUnplacedDelete = j => j.op === 'delete' && (j.reason_code === 'lms_unplaced' || j.reason === 'lms_unplaced');
+    // Ogohlantirish bilan o'chirish (mark: reason_code lms_unplaced — LMS'da joylanmagan, not_studied — guruh bu bo'lakni o'qimaydi) —
+    // boshlashda bir marta so'raladi.
+    const ASK_REASONS = { lms_unplaced: 'LMSda joylanmagan', not_studied: 'guruh bu bo\'lakni o\'qimaydi' };
+    const askReason = j => j.op !== 'delete' ? null
+        : Object.keys(ASK_REASONS).find(k => j.reason_code === k || j.reason === k) || null;
+    const isUnplacedDelete = j => askReason(j) !== null;
     // Bitta oyna (uch tugma); javob: 'all' | 'skip' | 'cancel'. Oyna ochiq turganda boshqa hech narsa bajarilmaydi.
     const askUnplaced = (list, total, nGroups) => new Promise(resolve => {
-        const by = {};
+        const by = {}, nBy = {};
         list.forEach(j => {
-            const k = j.group + ' · ' + j.subject + ' · ' + j.type;
-            by[k] = by[k] || { n: 0, weeks: new Set() };
+            const r = askReason(j);
+            nBy[r] = (nBy[r] || 0) + 1;
+            const k = r + '|' + j.group + ' · ' + j.subject + ' · ' + j.type;
+            by[k] = by[k] || { r, label: j.group + ' · ' + j.subject + ' · ' + j.type, n: 0, weeks: new Set() };
             by[k].n++;
             if (j.week) by[k].weeks.add(+j.week);
         });
         const weeks = s => [...s].sort((a, b) => a - b).join(', ');
-        $('hwAsk').innerHTML = '<b style="color:#b45309">⚠ Diqqat: ' + list.length + ' ta dars LMSda joylanmagani uchun HEMIS\'dan o\'chiriladi</b>'
-            + ' (jami ' + total + ' ta amal, ' + nGroups + ' ta guruh):<ul style="margin:4px 0 6px 18px;padding:0">'
-            + Object.entries(by).map(([k, v]) => '<li>' + esc(k) + (v.weeks.size ? ': ' + esc(weeks(v.weeks)) + '-hafta' : '') + ' — ' + v.n + ' ta</li>').join('')
-            + '</ul>Davom etasizmi? Tanlovdan keyin yozish oxirigacha savolsiz davom etadi.<div style="margin-top:6px">'
+        const reasons = Object.keys(ASK_REASONS).filter(r => nBy[r]);
+        $('hwAsk').innerHTML = '<b style="color:#b45309">⚠ Diqqat: ' + list.length + ' ta dars HEMIS\'dan o\'chiriladi ('
+            + esc(reasons.map(r => ASK_REASONS[r] + ' — ' + nBy[r] + ' ta').join(', ')) + ')</b>'
+            + ' (jami ' + total + ' ta amal, ' + nGroups + ' ta guruh):'
+            + reasons.map(r => '<div style="margin-top:4px">' + esc(ASK_REASONS[r].charAt(0).toUpperCase() + ASK_REASONS[r].slice(1)) + ':</div>'
+                + '<ul style="margin:2px 0 6px 18px;padding:0">' + Object.values(by).filter(v => v.r === r)
+                    .map(v => '<li>' + esc(v.label) + (v.weeks.size ? ': ' + esc(weeks(v.weeks)) + '-hafta' : '') + ' — ' + v.n + ' ta</li>').join('') + '</ul>').join('')
+            + 'Davom etasizmi? Tanlovdan keyin yozish oxirigacha savolsiz davom etadi.<div style="margin-top:6px">'
             + '<button id="hwAskAll" style="padding:4px 10px;background:#059669;color:#fff;border:0;border-radius:4px">Ha, hammasini bajar</button> '
             + '<button id="hwAskSkip" style="padding:4px 10px">O\'chirishlarsiz bajar</button> '
             + '<button id="hwAskCancel" style="padding:4px 10px">Bekor</button></div>';
@@ -248,7 +259,8 @@
         if (!batch.length) return;
         // Bitta tasdiq — butun ro'yxat uchun (guruhlar soni bilan); guruh almashganda qayta so'ralmaydi. To'xtatish — "To'xtatish" tugmasi.
         const nGroups = new Set(batch.map(x => x.group_id)).size;
-        // LMS'da joylanmagani uchun o'chirishlar bo'lsa — oddiy tasdiq o'rniga bitta uch tugmali oyna (faqat yozishda).
+        // Ogohlantirish bilan o'chirishlar (LMS'da joylanmagan / guruh o'qimaydigan bo'lak) bo'lsa — oddiy tasdiq o'rniga bitta uch tugmali
+        // oyna (faqat yozishda); "O'chirishlarsiz bajar" — ikkala sababdagilarni ham o'tkazib yuboradi.
         const unplaced = apply ? batch.filter(isUnplacedDelete) : [];
         let preSkipped = [];
         if (unplaced.length) {
@@ -262,7 +274,7 @@
                 return;
             }
             if (choice === 'skip') {
-                preSkipped = unplaced.map(j => Object.assign({}, j, { status: 'skipped', reason: 'LMSda joylanmagan — o\'chirishsiz tanlandi' }));
+                preSkipped = unplaced.map(j => Object.assign({}, j, { status: 'skipped', reason: ASK_REASONS[askReason(j)] + ' — o\'chirishsiz tanlandi' }));
                 batch = batch.filter(j => !isUnplacedDelete(j));
             }
         } else if (apply && !confirm((rep.mode === 'today'

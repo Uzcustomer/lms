@@ -130,6 +130,35 @@ class SchedulePlanner
         return $out;
     }
 
+    /**
+     * Guruh o'qimaydigan bo'lak (birlikda not_studied = true): faqat ertadan keyingi HEMIS darslarini o'chirish — KTR / balanssiz,
+     * balanslashsiz, guruh bandligiga kirmaydi. Sababi — not_studied ("guruh bu bo'lakni o'qimaydi"); muddat — chaqiruvchida (muddatdan
+     * keyingilari "keyinroq").
+     */
+    public function notStudiedResult(array $u, string $reason): array
+    {
+        $actions = [];
+        foreach ((array) $u['hemis'] as $e) {
+            if ($e['date'] <= $this->today || !isset($u['codes'][(string) $e['code']])) {
+                continue;
+            }
+            $actions[] = ['op' => 'delete', 'hemis_id' => $e['id'], 'date' => $e['date'],
+                'start' => substr($e['start'], 0, 5), 'end' => substr($e['end'], 0, 5), 'code' => (string) $e['code'],
+                'employee_id' => $e['employee_id'], 'employee_name' => $e['employee_name'],
+                'auditorium_code' => $e['auditorium_code'], 'auditorium_name' => $e['auditorium_name'],
+                'flags' => [], 'blocked' => [], 'changes' => [], 'reason_code' => 'not_studied', 'reason' => $reason,
+                'week' => $this->weekOf($u, $e['date'])];
+        }
+        usort($actions, fn ($a, $b) => [$a['date'], $a['start']] <=> [$b['date'], $b['start']]);
+        $zero = ['ktr_hours' => [], 'ktr_count' => ['L' => 0, 'A' => 0], 'ktr_now_hours' => [], 'ktr_now_count' => ['L' => 0, 'A' => 0],
+            'past_hours' => [], 'past_count' => ['L' => 0, 'A' => 0], 'future_hours' => [], 'future_count' => ['L' => 0, 'A' => 0],
+            'hours_diff' => [], 'count_diff' => ['L' => 0, 'A' => 0]];
+
+        return ['key' => $u['key'], 'subject_id' => $u['subject_id'], 'subject_name' => $u['subject_name'], 'code_names' => $u['code_names'],
+            'codes' => $u['codes'], 'mode' => 'weekly', 'not_studied' => true, 'balance_weeks' => null, 'unplaced_weeks' => [],
+            'before' => $zero, 'after' => $zero, 'fixes' => [], 'notes' => [], 'records' => [], 'actions' => $actions];
+    }
+
     // ---------------------------------------------------------------------------------------------
 
     private function partOf(array $u, string $code): string

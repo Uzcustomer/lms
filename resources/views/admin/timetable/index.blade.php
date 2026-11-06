@@ -4439,21 +4439,28 @@
                 return Object.keys(byGroup).sort((a, b) => a.localeCompare(b)).map(g => '<div><b>' + hsEsc(g) + '</b>: ' +
                     byGroup[g].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('; ') + '</div>').join('');
             }
-            // LMS'da joylanmagani uchun o'chiriladigan HEMIS darslari (reason_code lms_unplaced) — JSON meta va ogohlantirish uchun.
+            // Ogohlantirish bilan o'chiriladigan HEMIS darslari — JSON meta va ogohlantirish uchun: LMS'da joylanmagani uchun (lms_unplaced) va
+            // guruh o'qimaydigan bo'lak darslari (not_studied); by_reason — sababi bo'yicha soni.
+            const HS_DEL_REASONS = { lms_unplaced: 'LMSda joylanmagan', not_studied: 'guruh bu bo\'lakni o\'qimaydi' };
             function hsUnplacedDeletes(groups) {
                 const by = {};
+                const byReason = { lms_unplaced: 0, not_studied: 0 };
                 let count = 0;
                 (groups || []).forEach(g => (g.units || []).forEach(u => (u.actions || []).forEach(a => {
-                    if (a.op !== 'delete' || a.reason_code !== 'lms_unplaced') return;
+                    if (a.op !== 'delete' || !(a.reason_code in byReason)) return;
                     const part = ((u.codes || {})[a.code] === 'L') ? 'Ma\'ruza' : 'Amaliy qism';
-                    const k = g.group + '|' + u.subject_name + '|' + part;
-                    by[k] = by[k] || { group: g.group, subject: u.subject_name, part, weeks: [], count: 0 };
+                    const k = a.reason_code + '|' + g.group + '|' + u.subject_name + '|' + part;
+                    by[k] = by[k] || { group: g.group, subject: u.subject_name, part, reason_code: a.reason_code, weeks: [], count: 0 };
                     by[k].count++;
+                    byReason[a.reason_code]++;
                     count++;
                     if (a.week) by[k].weeks.push(+a.week);
                 })));
-                return { count, by_unit: Object.values(by).map(x => Object.assign(x, { weeks: hsWeekRanges([...new Set(x.weeks)].sort((a, b) => a - b)) })) };
+                return { count, by_reason: byReason,
+                    by_unit: Object.values(by).map(x => Object.assign(x, { weeks: hsWeekRanges([...new Set(x.weeks)].sort((a, b) => a - b)) })) };
             }
+            // "LMSda joylanmagan — x ta, guruh bu bo'lakni o'qimaydi — y ta" (soni bor sabablar).
+            const hsDelReasonsText = br => Object.keys(HS_DEL_REASONS).filter(k => br[k]).map(k => HS_DEL_REASONS[k] + ' — ' + br[k] + ' ta').join(', ');
             // JSON (HEMIS'ga yozish uchun) — faqat filtrda tanlangan guruh, fan va amallar; meta: unplaced_deletes (xatcho'p boshlashda so'raydi).
             function hsJsonOut(rep) {
                 const out = JSON.parse(JSON.stringify(rep));
@@ -4468,8 +4475,10 @@
                 const ud = hsJsonOut(rep).unplaced_deletes;
                 if (!units.length && !ud.count) return '';
                 return '<div class="mb-2 p-2 rounded border border-amber-300 bg-amber-50 text-amber-900" data-hs-unplaced-weeks>'
-                    + (ud.count ? '<div class="font-semibold text-red-700" data-hs-unplaced-deletes>⚠ Diqqat: ' + ud.count + ' ta dars LMSda joylanmagani uchun HEMIS\'dan o\'chiriladi</div>'
-                        + '<ul class="ml-4 list-disc">' + ud.by_unit.map(x => '<li>' + hsEsc(x.group + ' · ' + x.subject + ' · ' + x.part + ': ' + x.weeks + '-hafta — ' + x.count + ' ta') + '</li>').join('') + '</ul>' : '')
+                    + (ud.count ? '<div class="font-semibold text-red-700" data-hs-unplaced-deletes>⚠ Diqqat: ' + ud.count + ' ta dars HEMIS\'dan o\'chiriladi ('
+                        + hsEsc(hsDelReasonsText(ud.by_reason)) + ')</div>'
+                        + '<ul class="ml-4 list-disc">' + ud.by_unit.map(x => '<li>' + hsEsc(x.group + ' · ' + x.subject + ' · ' + x.part + (x.weeks ? ': ' + x.weeks + '-hafta' : '')
+                            + ' — ' + x.count + ' ta' + (x.reason_code === 'not_studied' ? ' (guruh bu bo\'lakni o\'qimaydi)' : '')) + '</li>').join('') + '</ul>' : '')
                     + (units.length ? '<div class="mt-1"><b>LMSda joylanmagan haftalar</b> — balanslanmadi (joylanishi kutilmoqda):</div><ul class="ml-4 list-disc">'
                         + units.map(x => '<li>' + hsEsc(x.group + ' · ' + x.subject + ' · ' + x.part + ': ' + x.weeks + '-hafta')
                             + (x.deletes ? ' <span class="text-red-700">(HEMIS\'dan o\'chiriladi: ' + x.deletes + ' ta)</span>' : '') + '</li>').join('') + '</ul>' : '')
@@ -4588,12 +4597,14 @@
                             const k = +p.ktr_count[x] || 0, h = +p.hemis_count[x] || 0, l = +p.lms_count[x] || 0;
                             return '<div class="' + (k !== h ? 'text-red-600' : 'text-gray-500') + '"' + (x === 'A' ? HS_A_TITLE : '') + '><b>' + HS_PART[x] + '</b> kunlari — KTR ' + k + ' · HEMIS ' + h + ' · LMS ' + l + '</div>';
                         }).join('') : '';
-                        const hd = Object.keys(u.code_names).map(c => {
+                        // Guruh o'qimaydigan bo'lak (not_studied): KTR / balans yo'q — faqat HEMIS'dagi ertangi darslarini o'chirish.
+                        const ns = !!u.not_studied;
+                        const hd = ns ? '' : Object.keys(u.code_names).map(c => {
                             const b = u.before.hours_diff[c] || 0, a = u.after.hours_diff[c] || 0;
                             return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '">' + hsEsc(u.code_names[c]) + ' soati: ' +
                                 (b || a ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
                         }).join('');
-                        const cd = ['L', 'A'].filter(x => Object.values(u.codes).includes(x)).map(x => {
+                        const cd = ns ? '' : ['L', 'A'].filter(x => Object.values(u.codes).includes(x)).map(x => {
                             const b = u.before.count_diff[x] || 0, a = u.after.count_diff[x] || 0;
                             return '<div class="' + (a ? 'text-red-600' : (b ? 'text-amber-700' : 'text-gray-400')) + '"' + (x === 'A' ? HS_A_TITLE : '') + '>' + HS_PART[x] + ' kunlari: ' +
                                 (b || a ? hsSigned(-b) + ' → ' + hsSigned(-a) : '0') + '</div>';
@@ -4623,7 +4634,7 @@
                         const nBlk = acts.filter(a => a.blocked && a.blocked.length).length;
                         // Fan rejimi va balans davri: shu davr bo'yicha KTR / HEMIS (bugungacha) / LMS (ertadan muddatgacha) — dars / soat.
                         const bs = u.balance_stats;
-                        const balLine = u.mode_label ? '<div class="text-gray-500" data-hs-mode>' + hsEsc(u.mode_label)
+                        const balLine = u.mode_label && !ns ? '<div class="text-gray-500" data-hs-mode>' + hsEsc(u.mode_label)
                             + (u.balance_period ? ' · balans ' + hsEsc(u.balance_period) : '')
                             + (bs && u.balance_period ? ': KTR ' + bs.ktr.count + ' / ' + bs.ktr.hours + ' · HEMIS ' + bs.hemis.count + ' / ' + bs.hemis.hours
                                 + ' · LMS ' + bs.lms.count + ' / ' + bs.lms.hours + ' <span class="text-gray-400">(dars / soat)</span>' : '') + '</div>' : '';
@@ -4631,10 +4642,16 @@
                         // H < muddat: LMS'da joylanmagan haftalar — sariq belgi (balanslanmadi, joylanishi kutilmoqda).
                         const unplacedBadge = u.unplaced_label ? '<div class="mt-0.5 px-1 rounded bg-amber-100 text-amber-800 border border-amber-300" data-hs-unplaced>'
                             + hsEsc(u.unplaced_label) + '</div>' : '';
-                        body += '<tr class="align-top"><td class="border px-1">' + hsEsc(u.subject_name)
-                            + (u.cycle ? ' <span class="px-1 rounded bg-sky-100 text-sky-700 text-[10px]" title="Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma\'lumot)">sikl</span>' : '') + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div>' + balLine + unplacedBadge + '</td>' +
-                            '<td class="border px-1 whitespace-nowrap">' + per + '</td>' +
-                            '<td class="border px-1 whitespace-nowrap">' + hd + '</td><td class="border px-1 whitespace-nowrap">' + cd + '</td>' +
+                        // Bo'lakli fan: umumiy ma'ruza boshqa bo'lakda hisoblanadi; o'qimaydigan bo'lak — tekshirilgan dalillar bilan.
+                        const lectureNote = u.lecture_note ? '<div class="text-gray-500" data-hs-lecture-note>' + hsEsc(u.lecture_note) + '</div>' : '';
+                        const nsBadge = ns ? '<div class="mt-0.5 px-1 rounded bg-gray-100 text-gray-600 border border-gray-300" data-hs-not-studied>guruh bu bo\'lakni o\'qimaydi'
+                            + ((u.not_studied_checks || []).length ? ' (' + hsEsc(u.not_studied_checks.join(' · ')) + ')' : '')
+                            + ' — faqat HEMIS\'dagi ertangi darslari o\'chiriladi</div>' : '';
+                        const dash = '<span class="text-gray-400">—</span>';
+                        body += '<tr class="align-top' + (ns ? ' bg-gray-50 text-gray-600' : '') + '"><td class="border px-1">' + hsEsc(u.subject_name)
+                            + (u.cycle ? ' <span class="px-1 rounded bg-sky-100 text-sky-700 text-[10px]" title="Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma\'lumot)">sikl</span>' : '') + '<div class="text-gray-400">' + hsEsc(u.kafedra || '') + '</div>' + balLine + lectureNote + unplacedBadge + nsBadge + '</td>' +
+                            '<td class="border px-1 whitespace-nowrap">' + (ns ? dash : per) + '</td>' +
+                            '<td class="border px-1 whitespace-nowrap">' + (ns ? dash : hd) + '</td><td class="border px-1 whitespace-nowrap">' + (ns ? dash : cd) + '</td>' +
                             '<td class="border px-1">' + (fx || '<span class="text-gray-400">—</span>') + '</td>' +
                             '<td class="border px-1">' + (acts.length
                                 ? '<details><summary class="cursor-pointer">+' + cnt.create + ' · ~' + cnt.update + ' · −' + cnt.delete + (nBlk ? ' · ⛔' + nBlk : '') + '</summary>' + list + '</details>'
@@ -4645,7 +4662,7 @@
                     }
                     // Fan filtri tanlangan bo'lsa — o'tkazilgan fanlar ham faqat tanlanganlari.
                     for (const sk of skippedShown) {
-                        body += '<tr class="text-gray-500"><td class="border px-1">' + hsEsc(sk.subject_name) + '</td><td class="border px-1" colspan="5">' + hsEsc(sk.reason) + '</td></tr>';
+                        body += '<tr class="text-gray-500"><td class="border px-1">' + hsEsc(sk.subject_name) + '</td><td class="border px-1" colspan="5" data-hs-skip="' + hsEsc(sk.kind || '') + '">' + hsEsc(sk.reason) + '</td></tr>';
                     }
                     body += '</tbody></table>';
                     if (noSubjCards.length) {

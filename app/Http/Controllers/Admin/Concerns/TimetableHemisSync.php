@@ -636,6 +636,77 @@ trait TimetableHemisSync
         return array_slice($out, 0, 12, true);
     }
 
+    /**
+     * Bo'lakli fanlar ("Fan (a)", "Fan (b)" ...) — guruh shu bo'lakni o'qiydimi va umumiy ma'ruza qaysi bo'lakda hisoblanadi:
+     * [curriculum_subject id => ['studied', 'checks' (tekshirilgan dalillar matni), 'letter', 'owner' (ma'ruza shu bo'lakda),
+     * 'owner_letter']]. Bo'laksiz fan — ro'yxatda yo'q (avvalgidek).
+     * Dalillar (bittasi yetarli): a) guruhda shu bo'lakning ma'ruzadan boshqa LMS kartasi (haftalik yoki sikl, guruh unda qatnashadi);
+     * b) HEMIS'da guruhning shu bo'lak (subject_id) darslari — LMS balanslash belgisi bor yozuvlar dalil emas (avvalgi noto'g'ri
+     * sinxron o'zini saqlab qolmasin); c) student_subjects — guruh talabalari shu bo'lakka biriktirilgan (qo'shimcha dalil; eskirgan
+     * bo'lishi mumkin). Umumiy ma'ruza egasi — guruh o'qiydigan bo'laklardan HEMIS'da ma'ruza yozuvlari (balanslash belgisisiz) eng
+     * ko'pi; teng yoki yo'q — harf tartibida birinchisi.
+     */
+    private function hemisVariantStudy(TimetableBoard $board, array $gInfo, string $gk, $csRows, $gCards, $gCycleCards, $hemisAll, \Closure $isBalanceRow): array
+    {
+        $year = (int) substr((string) $board->academic_year, 0, 4);
+        $lecCodes = function ($cs): array {
+            $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+            $out = [];
+            foreach ((array) $details as $d) {
+                $code = (string) ($d['trainingType']['code'] ?? '');
+                if ($code !== '' && $this->hemisPartOf((string) ($d['trainingType']['name'] ?? '')) === 'L' && (int) ($d['academic_load'] ?? 0) > 0) {
+                    $out[$code] = true;
+                }
+            }
+
+            return $out;
+        };
+        $info = [];
+        $families = [];   // asosiy nom => [cs id, ...]
+        foreach ($csRows as $cs) {
+            $letter = $this->variantLetter((string) $cs->subject_name);
+            if ($letter === null) {
+                continue;
+            }
+            $key = $this->hemisSubjectKey((string) $cs->subject_name);
+            $isPractice = fn ($c) => $c->training_type !== 'lecture' && $this->hemisSubjectKey((string) $c->subject_name) === $key;
+            $card = $gCards->contains($isPractice) || $gCycleCards->contains($isPractice);
+            $rows = $hemisAll->where('subject_id', $cs->subject_id)->reject(fn ($r) => $isBalanceRow($r) !== null);
+            $hemis = $rows->isNotEmpty();
+            $students = $this->groupAssignedCount($this->variantStudentCounts((string) $cs->subject_name, $year), (string) ($gInfo['raw'] ?? $gInfo['name']),
+                $gInfo['card']->faculty_name ?? null) > 0;
+            $lc = $lecCodes($cs);
+            $info[(int) $cs->id] = ['studied' => $card || $hemis || $students, 'letter' => $letter, 'owner' => false, 'owner_letter' => null,
+                'checks' => [$card ? 'karta bor' : 'karta yo‘q', $hemis ? 'HEMIS darsi bor' : 'HEMIS darsi yo‘q',
+                    $students ? 'talaba biriktirilgan' : 'talaba biriktirilmagan'],
+                '_lec' => $rows->filter(fn ($r) => isset($lc[(string) $r->training_type_code]))->count()];
+            $families[$this->hemisSubjectBase((string) $cs->subject_name)][] = (int) $cs->id;
+        }
+        foreach ($families as $ids) {
+            $studied = array_values(array_filter($ids, fn ($id) => $info[$id]['studied']));
+            if (!$studied) {
+                continue;
+            }
+            usort($studied, fn ($a, $b) => [-$info[$a]['_lec'], $info[$a]['letter']] <=> [-$info[$b]['_lec'], $info[$b]['letter']]);
+            $top = $studied[0];
+            // Ma'ruza yozuvlari eng ko'pi bittadan ko'p bo'lsa (teng) — harf tartibida birinchisi.
+            if (count($studied) > 1 && $info[$studied[1]]['_lec'] === $info[$top]['_lec']) {
+                usort($studied, fn ($a, $b) => strcmp($info[$a]['letter'], $info[$b]['letter']));
+                $top = $studied[0];
+            }
+            foreach ($ids as $id) {
+                $info[$id]['owner'] = $id === $top;
+                $info[$id]['owner_letter'] = $info[$top]['letter'];
+            }
+        }
+        foreach ($info as &$x) {
+            unset($x['_lec']);
+        }
+        unset($x);
+
+        return $info;
+    }
+
     /** Fan kaliti: kichik harf, tutuq belgisiz, kirill a/b/c (bo'lak harfi) lotinga. */
     private function hemisSubjectKey(string $name): string
     {
@@ -998,8 +1069,13 @@ trait TimetableHemisSync
             $unitMeta = [];
             $handledSubjects = [];
             // O'tkazilgan fanlar; kind: finished — darslari tugagan (bugun va o'tgan kunlar HEMIS'da tahrirlanmaydi, qiladigan
-            // ish yo'q), unplaced — sikl fani ichki jadvalda joylanmagan, no_card — LMS doskasida kartochka yo'q.
+            // ish yo'q), unplaced — sikl fani ichki jadvalda joylanmagan, no_card — LMS doskasida kartochka yo'q, not_studied — guruh
+            // bo'lakli fanning shu bo'lagini o'qimaydi.
             $skipped = [];
+            // Bo'lakli fanlar ("Fan (a)"): guruh shu bo'lakni o'qiydimi (dalillar) va umumiy ma'ruza egasi (cs id => ...).
+            $variantStudy = $this->hemisVariantStudy($board, $gInfo, $gk, $csRows, $gCards,
+                $cycleCards->filter(fn ($c) => in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true))->values(),
+                $hemisAll, $isBalanceRow);
             foreach ($csRows as $cs) {
                 $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
                 $codes = [];
@@ -1017,17 +1093,64 @@ trait TimetableHemisSync
                 }
                 $key = $this->hemisSubjectKey((string) $cs->subject_name);
                 $base = $this->hemisSubjectBase((string) $cs->subject_name);
-                $matched = $gCards->filter(function ($c) use ($key, $base) {
+                $hemisRows = $hemisAll->where('subject_id', $cs->subject_id);
+                $vs = $variantStudy[(int) $cs->id] ?? null;   // null — bo'laksiz fan (avvalgidek)
+                if ($vs !== null && !$vs['studied']) {
+                    // Guruh bu bo'lakni o'qimaydi: birlik yo'q (balanslash ham yo'q); HEMIS'dagi ertangi darslari (dalil emas — LMS balanslash
+                    // yozgani) — o'chirishga (muddat ichida, "LMSda joylanmagan" kabi ogohlantirish bilan).
+                    $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => "guruh bu bo'lakni o'qimaydi (" . implode(' · ', $vs['checks']) . ')',
+                        'kind' => 'not_studied', 'checks' => $vs['checks']];
+                    $future = $hemisRows->filter(fn ($hr) => substr((string) $hr->lesson_date, 0, 10) > $today && isset($codes[(string) $hr->training_type_code]));
+                    if ($future->isNotEmpty()) {
+                        $handledSubjects[(int) $cs->subject_id] = ($handledSubjects[(int) $cs->subject_id] ?? []) + $codes;
+                        foreach ($hemisRows as $hr) {
+                            if (isset($codes[(string) $hr->training_type_code])) {
+                                $handledIds[(int) $hr->schedule_hemis_id] = true;
+                            }
+                        }
+                        $units[] = ['key' => $gk . '|' . $cs->id, 'subject_id' => (int) $cs->subject_id, 'subject_name' => $cs->subject_name, 'base' => $base,
+                            'codes' => $codes, 'code_names' => $codeNames, 'ktr' => null, 'current_week' => 0, 'mode' => 'weekly', 'plan' => [],
+                            'not_studied' => true,
+                            'week_starts' => array_combine(range(1, max(1, $gridFor($sample)['weeks'])),
+                                array_map(fn ($w) => $weekMonday($sample, $w), range(1, max(1, $gridFor($sample)['weeks'])))),
+                            'hemis' => $future->map(fn ($r) => [
+                                'id' => (int) $r->schedule_hemis_id, 'date' => substr((string) $r->lesson_date, 0, 10),
+                                'start' => substr((string) $r->lesson_pair_start_time, 0, 5), 'end' => substr((string) $r->lesson_pair_end_time, 0, 5),
+                                'code' => (string) $r->training_type_code, 'employee_id' => $r->employee_id, 'employee_name' => $r->employee_name,
+                                'auditorium_code' => $r->auditorium_code, 'auditorium_name' => $r->auditorium_name,
+                            ])->values()->all(),
+                            'fallback_employee' => null, 'fallback_room' => null];
+                        $unitMeta[$gk . '|' . $cs->id] = ['kafedra' => $cs->department_name, 'cs_id' => $cs->id, 'not_studied' => true,
+                            'not_studied_checks' => $vs['checks']];
+                    }
+                    continue;
+                }
+                // Bo'lakli fanning umumiy ma'ruzasi — faqat egasi bo'lakda (guruh o'qiydiganlar ichida); boshqasida ma'ruza qismi chiqariladi
+                // (KTR ma'ruza soati ham, LMS ma'ruza darsi ham), HEMIS'dagi ma'ruza yozuvlariga tegilmaydi — guruh bandligi.
+                $lectureNote = null;
+                if ($vs !== null && !$vs['owner'] && in_array('L', $codes, true)) {
+                    $codes = array_filter($codes, fn ($part) => $part !== 'L');
+                    $codeNames = array_intersect_key($codeNames, $codes);
+                    $lectureNote = $vs['owner_letter'] !== null ? "ma'ruza — (" . $vs['owner_letter'] . ') bo\'lagida hisoblanadi' : null;
+                    if (!$codes) {
+                        continue;
+                    }
+                }
+                $matched = $gCards->filter(function ($c) use ($key, $base, $codes) {
                     $ck = $this->hemisSubjectKey((string) $c->subject_name);
+                    // Ma'ruza qismi chiqarilgan bo'lakda — ma'ruza kartalari ham.
+                    if ($c->training_type === 'lecture' && !in_array('L', $codes, true)) {
+                        return false;
+                    }
                     if ($ck === $key) {
                         return true;
                     }
                     // Bo'lakli fanning umumiy ma'ruzasi asosiy nom bilan.
                     return $c->training_type === 'lecture' && $this->variantLetter((string) $c->subject_name) === null && $ck === $base;
                 });
-                $hemisRows = $hemisAll->where('subject_id', $cs->subject_id);
-                // Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma'lumot).
-                $cyc = $cycleLessons[$gk][$key] ?? [];
+                // Sikl fani: HEMIS LMS ichki sikl jadvaliga aynan moslashtiriladi (KTR balansi — faqat ma'lumot). Ma'ruza qismi
+                // chiqarilgan bo'lak — sikl blokidagi ma'ruza darslari ham.
+                $cyc = array_values(array_filter($cycleLessons[$gk][$key] ?? [], fn ($l) => ($l['part'] ?? 'A') !== 'L' || in_array('L', $codes, true)));
                 $isCycleSubject = $cycleCards->contains(fn ($c) => $this->hemisSubjectBase((string) $c->subject_name) === $base
                     && in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true));
                 if ($matched->isEmpty() && $isCycleSubject) {
@@ -1095,7 +1218,7 @@ trait TimetableHemisSync
                     ];
                     $otherTypes = $hemisRows->filter(fn ($r) => substr((string) $r->lesson_date, 0, 10) > $today && !isset($codes[(string) $r->training_type_code]))->count();
                     $unitMeta[$gk . '|' . $cs->id] = ['kafedra' => $cs->department_name, 'cs_id' => $cs->id, 'mudir' => $mudir[1] ?? null,
-                        'other_type_rows' => $otherTypes, 'cycle' => true];
+                        'other_type_rows' => $otherTypes, 'cycle' => true, 'lecture_note' => $lectureNote];
                     continue;
                 }
                 if ($matched->isEmpty()) {
@@ -1175,7 +1298,7 @@ trait TimetableHemisSync
                 ];
                 $otherTypes = $hemisRows->filter(fn ($r) => substr((string) $r->lesson_date, 0, 10) > $today && !isset($codes[(string) $r->training_type_code]))->count();
                 $unitMeta[$gk . '|' . $cs->id] = ['kafedra' => $cs->department_name, 'cs_id' => $cs->id, 'mudir' => $mudir[1] ?? null,
-                    'other_type_rows' => $otherTypes];
+                    'other_type_rows' => $otherTypes, 'lecture_note' => $lectureNote];
             }
 
             // Guruhning boshqa bandligi: rejaga kirmagan HEMIS darslari va LMS'da fani topilmagan kartalar.
@@ -1255,10 +1378,15 @@ trait TimetableHemisSync
                 array_map($addLesson, $lessons);
             }
             // Control subjects remain exportable and plan independently of group occupancy.
-            $blockingUnits = array_values(array_filter($units, fn ($u) => !$this->isNonBlocking($u, $board)));
+            $blockingUnits = array_values(array_filter($units, fn ($u) => empty($u['not_studied']) && !$this->isNonBlocking($u, $board)));
             $results = $blockingUnits ? $planner->planGroup($blockingUnits, $busy, $workDates, $groupLessons) : [];
             foreach ($units as $unit) {
-                if ($this->isNonBlocking($unit, $board)) array_push($results, ...$planner->planGroup([$unit], [], $workDates, $groupLessons));
+                if (!empty($unit['not_studied'])) {
+                    // Guruh o'qimaydigan bo'lak: faqat ertangi HEMIS darslarini o'chirish (KTR / balanssiz, balanslashsiz).
+                    $results[] = $planner->notStudiedResult($unit, "guruh bu bo'lakni o'qimaydi");
+                } elseif ($this->isNonBlocking($unit, $board)) {
+                    array_push($results, ...$planner->planGroup([$unit], [], $workDates, $groupLessons));
+                }
             }
             $resultByKey = array_column($results, null, 'key');
             $results = array_values(array_map(fn ($u) => $resultByKey[$u['key']], $units));
@@ -1297,7 +1425,7 @@ trait TimetableHemisSync
                 $r['_fb'] = [$unitByKey[$r['key']]['fallback_employee'] ?? null, $unitByKey[$r['key']]['fallback_room'] ?? null];
                 // HEMIS'dagi asl yozuvlar (id bo'yicha) — "o'zgartirish" kerakmi, ismi emas, id bo'yicha hal qilinadi.
                 $r['_hemis'] = array_column($unitByKey[$r['key']]['hemis'] ?? [], null, 'id');
-                $r['period'] = isset($unitByKey[$r['key']])
+                $r['period'] = isset($unitByKey[$r['key']]) && empty($r['not_studied'])
                     ? $this->hemisPeriodStats($unitByKey[$r['key']], $pFrom, $pTo, $pFromDate, $pToDate) : null;
                 if (!empty($r['other_type_rows'])) {
                     $r['notes'][] = "HEMIS'da rejaga kirmagan turdagi {$r['other_type_rows']} ta kelajak dars bor — o'zgartirilmaydi, vaqti band hisoblanadi.";
@@ -1426,26 +1554,30 @@ trait TimetableHemisSync
         $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today, $mudirFor,
             filter_var(($board->settings ?? [])['hemis_mudir_fallback'] ?? false, FILTER_VALIDATE_BOOLEAN), $board);
         // LMS'da joylanmagan haftalar (balans chegarasidan keyin) va ular sababli o'chiriladigan HEMIS darslari (muddat ichida) — yig'ma.
+        // Guruh o'qimaydigan bo'lak darslari (not_studied) ham shu ogohlantirishda — sababi bo'yicha alohida soni (by_reason).
         $unplacedUnits = [];
-        $unplacedDeletes = ['count' => 0, 'by_unit' => []];
+        $unplacedDeletes = ['count' => 0, 'by_reason' => ['lms_unplaced' => 0, 'not_studied' => 0], 'by_unit' => []];
         foreach ($groupsOut as $g) {
             foreach ($g['units'] as $u) {
                 $dels = [];
                 foreach ($u['actions'] as $a) {
-                    if ($a['op'] === 'delete' && ($a['reason_code'] ?? '') === 'lms_unplaced') {
+                    $rc = (string) ($a['reason_code'] ?? '');
+                    if ($a['op'] === 'delete' && in_array($rc, ['lms_unplaced', 'not_studied'], true)) {
                         $p = $u['codes'][(string) $a['code']] ?? 'A';
-                        $dels[$p]['count'] = ($dels[$p]['count'] ?? 0) + 1;
-                        $dels[$p]['weeks'][(int) ($a['week'] ?? 0)] = true;
+                        $dels[$rc . '|' . $p]['count'] = ($dels[$rc . '|' . $p]['count'] ?? 0) + 1;
+                        $dels[$rc . '|' . $p]['weeks'][(int) ($a['week'] ?? 0)] = true;
                     }
                 }
                 foreach ((array) ($u['unplaced_weeks'] ?? []) as $p => $weeks) {
                     $unplacedUnits[] = ['group' => $g['group'], 'subject' => $u['subject_name'], 'part' => $p === 'L' ? 'Ma\'ruza' : 'Amaliy qism',
-                        'weeks' => $this->weekRangesText($weeks), 'deletes' => (int) ($dels[$p]['count'] ?? 0)];
+                        'weeks' => $this->weekRangesText($weeks), 'deletes' => (int) ($dels['lms_unplaced|' . $p]['count'] ?? 0)];
                 }
-                foreach ($dels as $p => $d) {
+                foreach ($dels as $rp => $d) {
+                    [$rc, $p] = explode('|', $rp);
                     $unplacedDeletes['count'] += $d['count'];
+                    $unplacedDeletes['by_reason'][$rc] += $d['count'];
                     $unplacedDeletes['by_unit'][] = ['group' => $g['group'], 'subject' => $u['subject_name'], 'part' => $p === 'L' ? 'Ma\'ruza' : 'Amaliy qism',
-                        'weeks' => $this->weekRangesText(array_keys($d['weeks'])), 'count' => $d['count']];
+                        'reason_code' => $rc, 'weeks' => $this->weekRangesText(array_filter(array_keys($d['weeks']))), 'count' => $d['count']];
                 }
             }
         }
@@ -1837,9 +1969,10 @@ trait TimetableHemisSync
                 }
                 $until = $g['until'] ?? null;
                 $fixes = implode("\n", array_map(fn ($f) => $f['text'] . (($until && !empty($f['date']) && $f['date'] > $until) ? ' (hozir yozilmaydi)' : ''), $u['fixes']));
-                $notes = implode("\n", $u['notes']);
+                $notes = implode("\n", array_filter([$u['lecture_note'] ?? null, ...$u['notes']]));
                 $first = true;
-                foreach ($u['code_names'] as $code => $name) {
+                // Guruh o'qimaydigan bo'lak: KTR / balans yo'q — Balansga chiqmaydi, faqat o'chirish amallari ("Amallar"da, sababi bilan).
+                foreach (empty($u['not_studied']) ? $u['code_names'] : [] as $code => $name) {
                     $part = $u['codes'][$code];
                     $b = $u['before'];
                     $a = $u['after'];

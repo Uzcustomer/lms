@@ -4,8 +4,9 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const writer = fs.readFileSync(path.join(__dirname, '../../public/js/hemis-writer.js'), 'utf8');
 
-// Xatcho'p: LMS'da joylanmagani uchun o'chirishlar (reason_code lms_unplaced) — "HEMIS'ga yozish"da birinchi amaldan oldin BIR MARTA
-// oyna (uch tugma); tanlovdan keyin jarayon savolsiz. Boshqa o'chirishlar oynaga kirmaydi; bunday o'chirish yo'q — avvalgi tasdiq.
+// Xatcho'p: ogohlantirish bilan o'chirishlar — LMS'da joylanmagan (reason_code lms_unplaced) va guruh o'qimaydigan bo'lak (not_studied) —
+// "HEMIS'ga yozish"da birinchi amaldan oldin BIR MARTA oyna (uch tugma, ikki sabab alohida soni bilan); tanlovdan keyin jarayon savolsiz.
+// "O'chirishlarsiz bajar" — ikkalasini ham o'tkazadi. Boshqa o'chirishlar oynaga kirmaydi; bunday o'chirish yo'q — avvalgi tasdiq.
 const unesc = s => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const els = {};
 const node = id => els[id] || (els[id] = new El(id));
@@ -42,14 +43,17 @@ vm.createContext(ctx);
 vm.runInContext(writer, ctx);
 
 const act = o => Object.assign({ start: '08:30', end: '09:50', code: '13', employee_id: 141, auditorium_code: '438', blocked: [], changes: [] }, o);
-const mkRep = actions => ({ today: '2099-10-27', hemis_pairs: { '08:30-09:50': 11 }, weeks: [],
-    groups: [{ group: 'p/st25-05b', group_hemis_id: 1596, units: [{ subject_id: 16, subject_name: 'Gigiyena', code_names: { 13: 'Amaliy' }, actions }] }] });
+const mkRep = (actions, extra = []) => ({ today: '2099-10-27', hemis_pairs: { '08:30-09:50': 11 }, weeks: [],
+    groups: [{ group: 'p/st25-05b', group_hemis_id: 1596, units: [{ subject_id: 16, subject_name: 'Gigiyena', code_names: { 13: 'Amaliy' }, actions }, ...extra] }] });
+// Guruh o'qimaydigan bo'lak (Ichki kasalliklar (a)): faqat o'chirish, sababi not_studied.
+const notStudied = [{ subject_id: 17, subject_name: 'Ichki kasalliklar (a)', code_names: { 13: 'Amaliy' }, not_studied: true, actions: [
+    act({ op: 'delete', hemis_id: 301, date: '2099-11-05', reason_code: 'not_studied', reason: "guruh bu bo'lakni o'qimaydi", week: 10 })] }];
 const withUnplaced = mkRep([
     act({ op: 'update', hemis_id: 100, date: '2099-10-28' }),
     act({ op: 'delete', hemis_id: 201, date: '2099-11-04', reason_code: 'lms_unplaced', reason: 'LMSda joylanmagan (10-hafta)', week: 10 }),
     act({ op: 'delete', hemis_id: 202, date: '2099-11-11', reason_code: 'lms_unplaced', reason: 'LMSda joylanmagan (11-hafta)', week: 11 }),
     act({ op: 'delete', hemis_id: 203, date: '2099-10-29', reason_code: 'week_surplus', reason: '9-hafta: KTR 1 dars, HEMIS 2 — ortiqcha' }),
-]);
+], notStudied);
 const tick = () => new Promise(r => setTimeout(r, 20));
 // Oyna javobsiz kutib qolsa (va'da hal bo'lmasa) Node jim chiqib ketadi — test oxirigacha yetmagani xato hisoblanadi.
 let completed = false;
@@ -64,19 +68,20 @@ const load = async rep => { await els.hwFile.onchange.call({ files: [{ text: asy
     const p1 = els.hwApply.onclick();
     await tick();
     assert.equal(els.hwAsk.style.display, 'block');
-    assert.match(els.hwAsk.innerHTML, /Diqqat: 2 ta dars LMSda joylanmagani uchun HEMIS'dan o'chiriladi/);
-    assert.match(els.hwAsk.innerHTML, /p\/st25-05b · Gigiyena · Amaliy: 10, 11-hafta — 2 ta/);
+    assert.match(els.hwAsk.innerHTML, /Diqqat: 3 ta dars HEMIS'dan o'chiriladi \(LMSda joylanmagan — 2 ta, guruh bu bo'lakni o'qimaydi — 1 ta\)/);
+    assert.match(unesc(els.hwAsk.innerHTML), /LMSda joylanmagan:<\/div><ul[^>]*><li>p\/st25-05b · Gigiyena · Amaliy: 10, 11-hafta — 2 ta<\/li><\/ul>/);
+    assert.match(unesc(els.hwAsk.innerHTML), /Guruh bu bo'lakni o'qimaydi:<\/div><ul[^>]*><li>p\/st25-05b · Ichki kasalliklar \(a\) · Amaliy: 10-hafta — 1 ta<\/li><\/ul>/);
     assert.match(els.hwAsk.innerHTML, /Ha, hammasini bajar.*O'chirishlarsiz bajar.*Bekor/s);
     assert.deepEqual([confirms.length, fetched.length], [0, 0]);
     assert.equal(els.hwApply.disabled, true);
-    // "O'chirishlarsiz bajar": lms_unplaced o'chirishlari bajarilmaydi, qolganlari (boshqa o'chirish ham) — savolsiz.
+    // "O'chirishlarsiz bajar": lms_unplaced va not_studied o'chirishlari bajarilmaydi, qolganlari (boshqa o'chirish ham) — savolsiz.
     els.hwAskSkip.onclick();
     await p1;
     await finished();
     assert.deepEqual(ids().sort(), ['100', '203']);
     assert.deepEqual(confirms, []);
     assert.equal(els.hwAsk.style.display, 'none');
-    assert.match(els.hwList.textContent, /Tashlab o'tildi: 2 ta \(LMSda joylanmagan — o'chirishsiz tanlandi — 2\)/);
+    assert.match(els.hwList.textContent, /Tashlab o'tildi: 3 ta \(LMSda joylanmagan — o'chirishsiz tanlandi — 2; guruh bu bo'lakni o'qimaydi — o'chirishsiz tanlandi — 1\)/);
 
     // 2) "Ha, hammasini bajar" — barcha amallar, o'rtada savol yo'q.
     await load(withUnplaced);
@@ -85,7 +90,7 @@ const load = async rep => { await els.hwFile.onchange.call({ files: [{ text: asy
     els.hwAskAll.onclick();
     await p2;
     await finished();
-    assert.deepEqual(ids().sort(), ['100', '201', '202', '203']);
+    assert.deepEqual(ids().sort(), ['100', '201', '202', '203', '301']);
     assert.deepEqual(confirms, []);
     assert.doesNotMatch(els.hwList.textContent, /Tashlab o'tildi/);
 
@@ -108,7 +113,7 @@ const load = async rep => { await els.hwFile.onchange.call({ files: [{ text: asy
     await p4;
     await finished();
     assert.equal(els.hwAsk.style.display, 'none');
-    assert.equal(fetched.length, 4);
+    assert.equal(fetched.length, 5);
 
     // 5) count = 0 (boshqa o'chirishlar — oynaga kirmaydi): avvalgidek bitta oddiy tasdiq, oyna yo'q.
     await load(mkRep([act({ op: 'update', hemis_id: 100, date: '2099-10-28' }),
@@ -121,6 +126,17 @@ const load = async rep => { await els.hwFile.onchange.call({ files: [{ text: asy
     assert.equal(els.hwAsk.style.display, 'none');
     assert.deepEqual(ids().sort(), ['100', '203']);
 
+    // 6) Faqat not_studied o'chirishi: oyna faqat shu sabab bilan.
+    await load(mkRep([act({ op: 'update', hemis_id: 100, date: '2099-10-28' })], notStudied));
+    const p6 = els.hwApply.onclick();
+    await tick();
+    assert.match(els.hwAsk.innerHTML, /Diqqat: 1 ta dars HEMIS'dan o'chiriladi \(guruh bu bo'lakni o'qimaydi — 1 ta\)/);
+    assert.doesNotMatch(els.hwAsk.innerHTML, /LMSda joylanmagan/);
+    els.hwAskSkip.onclick();
+    await p6;
+    await finished();
+    assert.deepEqual(ids(), ['100']);
+
     completed = true;
-    console.log('HEMIS writer: LMSda joylanmagan o\'chirishlar — 5 scenarios passed');
+    console.log('HEMIS writer: LMSda joylanmagan / guruh o\'qimaydigan bo\'lak o\'chirishlari — 6 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

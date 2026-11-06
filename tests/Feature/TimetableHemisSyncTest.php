@@ -2912,8 +2912,8 @@ it('balans chegarasi: LMS\'da joylanmagan haftalardagi HEMIS darslari — o\'chi
             ['delete', '2026-10-05', 'lms_unplaced', 'LMSda joylanmagan (4-hafta)'],
         ])
         ->and($r['unplaced_units'])->toBe([['group' => 'p/st26-01a', 'subject' => 'Odam anatomiyasi', 'part' => 'Amaliy qism', 'weeks' => '3–4', 'deletes' => 2]])
-        ->and($r['unplaced_deletes'])->toBe(['count' => 2, 'by_unit' => [
-            ['group' => 'p/st26-01a', 'subject' => 'Odam anatomiyasi', 'part' => 'Amaliy qism', 'weeks' => '3–4', 'count' => 2]]]);
+        ->and($r['unplaced_deletes'])->toBe(['count' => 2, 'by_reason' => ['lms_unplaced' => 2, 'not_studied' => 0], 'by_unit' => [
+            ['group' => 'p/st26-01a', 'subject' => 'Odam anatomiyasi', 'part' => 'Amaliy qism', 'reason_code' => 'lms_unplaced', 'weeks' => '3–4', 'count' => 2]]]);
 
     // Muddat 3-hafta: 4-hafta darsi muddatdan keyin — amal yo'q (hozir yozilmaydi), o'chirish faqat 3-hafta.
     $r = $run(3);
@@ -2923,7 +2923,7 @@ it('balans chegarasi: LMS\'da joylanmagan haftalardagi HEMIS darslari — o\'chi
     $r = $run(2);
     expect(array_column($r['groups'][0]['units'][0]['actions'], 'reason_code'))->toBe(['week_surplus'])
         ->and($r['unplaced_units'])->toBe([])
-        ->and($r['unplaced_deletes'])->toBe(['count' => 0, 'by_unit' => []]);
+        ->and($r['unplaced_deletes'])->toBe(['count' => 0, 'by_reason' => ['lms_unplaced' => 0, 'not_studied' => 0], 'by_unit' => []]);
 });
 
 it('bugungi darslar: balanslash darsi (HEMIS solishtirish qo\'ygan) — "ortiqcha" emas, boshqa darsni band qilmaydi, belgisi bilan', function () {

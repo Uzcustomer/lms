@@ -330,8 +330,9 @@ assert.equal(tb({ hour_from: 9, hour_unit: 'hour' }), "To'qnashuvni ko'rish: Gur
 // 10) Havolalar manbada: to'qnashuv qatori, biriktirish ogohlantirishi (409 conflict_items), band o'qituvchi tanlovi, Takliflar.
 assert.match(source, /: ' <span class="cf-todo">→ ' \+ esc\(i\.todo \|\| CF_TODO\[i\.kind\] \|\| ''\) \+ '<\/span>'\) \+ focusLinkHtml\(i\.show\) \+ '<\/li>';/);
 assert.match(source, /'<div style="color:#b45309">⚠ ' \+ esc\(message\) \+ focusLinksHtml\(items\) \+ agendaLinksHtml\(items, null\) \+ '<\/div>'/);
-// Sikl biriktirish, o'qituvchi, xona (asgMsg va ochiq "Xona tanlash" oynasi) — 4 joyda conflict_items bilan.
-assert.equal((source.match(/showBusyConfirm\([^\n]*, e\.data\.conflict_items\);/g) || []).length, 4);
+// Sikl biriktirish, o'qituvchi, xona (asgMsg va ochiq "Xona tanlash" oynasi), kartochka (cmMsg — xona boshqa o'qituvchiniki) —
+// 5 joyda conflict_items bilan.
+assert.equal((source.match(/showBusyConfirm\([^\n]*, e\.data\.conflict_items\);/g) || []).length, 5);
 assert.match(source, /esc\(c\.reason\) \+ focusLinksHtml\(c\.clashes\) \+\s+agendaLinksHtml\(c\.clashes, 'w\|' \+ c\.id \+ '\|' \+ res\.week\) \+ '<\/div>'/);
 assert.match(source, /focusLinksHtml\(cycAssignBusy\.items\[id\]\)/);
 assert.match(source, /focusLinksHtml\(\(\(asgBusy\.items \|\| \{\}\)\.teachers \|\| \{\}\)\[id\]\)/);

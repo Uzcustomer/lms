@@ -190,5 +190,35 @@ const resp = (order, why = {}) => ({ teachers: {}, rooms: {}, room_rank: { order
     await pb3; await tick();
     assert.deepEqual(shown.map(x => x.target), ['asgMsg']);
 
-    console.log('timetable asg room rank: 12 scenarios passed');
+    // 9) Ogohlantirishdan keyin boshqa dars birligi tanlansa — eski "Baribir" xonani / o'qituvchini yangi birlikka force bilan
+    // yozmaydi: force'siz qayta tekshiriladi (yangi birlikning o'z ogohlantirishi).
+    const uOther = { group_name: 'g-09a' };
+    ctx2.st(uOther);
+    shown[0].onForce();
+    assert.equal(calls.at(-1).body.force, undefined);
+    assert.equal(calls.at(-1).body.auditorium_code, 'R090');
+    assert.equal(calls.at(-1).body.group_name, 'g-09a');
+    calls.at(-1).res({ auditorium_code: 'R090', auditorium_name: '090', affected: 1, warnings: [] });
+    await tick(); await tick();
+    shown.length = 0;
+    ctx2.st(u);
+    const pt2 = ctx2.applyAsg('15');
+    calls.at(-1).rej(Object.assign(new Error('band'), { data: { needs_confirm: true, conflict_items: [] } }));
+    await pt2; await tick();
+    shown[0].onForce();
+    assert.equal(calls.at(-1).body.force, 1);
+    calls.at(-1).res({ teacher_name: 'USTOZ', affected: 1 });
+    await tick(); await tick();
+    shown.length = 0;
+    const pt3 = ctx2.applyAsg('15');
+    calls.at(-1).rej(Object.assign(new Error('band'), { data: { needs_confirm: true, conflict_items: [] } }));
+    await pt3; await tick();
+    ctx2.st(uOther);
+    shown[0].onForce();
+    assert.equal(calls.at(-1).body.force, undefined);
+    assert.equal(calls.at(-1).body.teacher_id, '15');
+    calls.at(-1).res({ teacher_name: 'USTOZ', affected: 1 });
+    await tick(); await tick();
+
+    console.log('timetable asg room rank: 13 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

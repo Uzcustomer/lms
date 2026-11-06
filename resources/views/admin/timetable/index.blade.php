@@ -13354,9 +13354,12 @@
                 tSearchTimer = setTimeout(() => loadTeachers(this.value.trim()), 300);
             };
             $('cmClose').onclick = $('cmCancel').onclick = () => { $('cardModal').classList.add('hidden'); modalCard = null; selected = null; renderPanel(); renderGrid(); };
-            $('cmSave').onclick = async function () {
+            $('cmSave').onclick = () => cmSaveRun(false);
+            const cmAsgKey = () => ($('cmTeacher').value || '') + '|' + ($('cmAud').value || '');
+            async function cmSaveRun(force) {
                 if (!modalCard) return;
-                this.disabled = true;
+                const btn = $('cmSave');
+                btn.disabled = true;
                 try {
                     const j = await api(BASE + '/cards/' + modalCard.id + '/update', 'POST', {
                         teacher_id: $('cmTeacher').value || '',
@@ -13364,6 +13367,8 @@
                         ...(($('cmAud').selectedOptions[0] || {}).dataset && $('cmAud').selectedOptions[0].dataset.roomOff ? {} : { auditorium_code: $('cmAud').value || '' }),
                         len_half: $('cmLen').value,
                         start_half: $('cmStartHalf').value,
+                        // Xona boshqa o'qituvchiga biriktirilgan — "Baribir biriktirish" dan keyin.
+                        force: force ? 1 : undefined,
                     });
                     modalCard.teacher_id = $('cmTeacher').value ? +$('cmTeacher').value : null;
                     modalCard.teacher_name = j.teacher_name;
@@ -13388,11 +13393,19 @@
                     renderAll();
                 } catch (e) {
                     const m = $('cmMsg');
-                    m.className = 'text-sm rounded px-3 py-2 bg-red-50 text-red-700';
-                    m.textContent = e.message; m.classList.remove('hidden');
+                    if (e.data && e.data.needs_confirm && !force) {
+                        // Xona boshqa o'qituvchiga biriktirilgan — ogohlantirish, "Baribir biriktirish" bilan saqlanadi. Tasdiq shu
+                        // tanlov (o'qituvchi + xona) uchun: keyin o'zgartirilgan bo'lsa — force'siz qayta tekshiriladi (o'z ogohlantirishi).
+                        const warned = cmAsgKey();
+                        m.className = 'text-sm rounded px-3 py-2 bg-amber-50';
+                        showBusyConfirm(m, e.message, () => cmSaveRun(cmAsgKey() === warned), e.data.conflict_items);
+                    } else {
+                        m.className = 'text-sm rounded px-3 py-2 bg-red-50 text-red-700';
+                        m.textContent = e.message; m.classList.remove('hidden');
+                    }
                 }
-                this.disabled = false;
-            };
+                btn.disabled = false;
+            }
             $('cmUnplace').onclick = async () => {
                 if (!modalCard) return;
                 try {
@@ -15280,8 +15293,10 @@
                     loadAsgBusy(asgSel).then(markAsgBusy);   // hozirgi xona o'zgardi — reyting (shu bino, odat) yangilanadi
                 } catch (e) {
                     if (e.data && e.data.needs_confirm) {
-                        // Xona band / sig'maydi — "Baribir biriktirish" (force); "Xona tanlash" oynasi ochiq bo'lsa — o'sha yerda ham.
-                        const force = () => applyAsgRoom(code, true);
+                        // Xona band / sig'maydi / boshqa o'qituvchiniki — "Baribir biriktirish" (force); "Xona tanlash" oynasi ochiq bo'lsa —
+                        // o'sha yerda ham. Tasdiq shu dars birligi uchun: boshqa birlik tanlangan bo'lsa — force'siz qayta tekshiriladi.
+                        const unit = asgSel;
+                        const force = () => applyAsgRoom(code, asgSel === unit);
                         showBusyConfirm($('asgMsg'), e.message, force, e.data.conflict_items);
                         if (!$('asgRoomModal').classList.contains('hidden')) showBusyConfirm($('asgRoomFor'), e.message, force, e.data.conflict_items);
                         $('asgRoomOpen').disabled = $('asgRoomClear').disabled = false;
@@ -15354,7 +15369,11 @@
                     renderAsgTable();
                     loadAsgBusy(asgSel).then(markAsgBusy);   // o'qituvchi o'zgardi — unga biriktirilgan xonalar reytingi yangilanadi
                 } catch (e) {
-                    if (e.data && e.data.needs_confirm) showBusyConfirm($('asgMsg'), e.message, () => applyAsg(teacherId, true), e.data.conflict_items);
+                    // Tasdiq shu dars birligi uchun: boshqa birlik tanlangan bo'lsa — force'siz qayta tekshiriladi.
+                    if (e.data && e.data.needs_confirm) {
+                        const unit = asgSel;
+                        showBusyConfirm($('asgMsg'), e.message, () => applyAsg(teacherId, asgSel === unit), e.data.conflict_items);
+                    }
                     else $('asgMsg').textContent = 'Xatolik: ' + e.message;
                 }
                 $('asgApply').disabled = $('asgClear').disabled = false;

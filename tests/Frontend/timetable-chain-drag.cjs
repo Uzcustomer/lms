@@ -83,6 +83,9 @@ async function move(from, to, blocked = false, parallel = true, type = 'lecture'
     Object.assign(hx, { cardLen: c => c.len, unitOf: c => (c.id === 9 ? [c] : hx.cards.slice(0, 2)), unitLen: l => l.reduce((n, x) => n + x.len, 0),
         conflictsAt: (c, d, p, ign) => hx.cards.filter(o => o.id !== c.id && !ign.includes(o.id) && o.day === d && o.teacher_id === c.teacher_id
             && p < o.pair + o.len && o.pair < p + c.len).map(o => "O'qituvchi band: #" + o.id) });
+    // dragPlan sabablarni tafsilot bilan oladi (conflictsAtDetail — rang turi uchun): stub — o'sha matnlar, o'qituvchi turi.
+    hx.conflictsAtDetail = (c, d, p, ign) => hx.conflictsAt(c, d, p, ign).map(text => ({ kind: 'teacher', cardId: null, text }));
+    const plan = r => { const { start, len, errs } = r; return JSON.parse(JSON.stringify({ start, len, errs })); };
     vm.createContext(hx);
     require('./helpers/timetable-info-only.cjs')(hx);
     vm.runInContext(helpers + '; this.dropSlotAt = dropSlotAt; this.dragPlan = dragPlan;', hx);
@@ -91,10 +94,10 @@ async function move(from, to, blocked = false, parallel = true, type = 'lecture'
     assert.equal(hx.dropSlotAt(td, { clientY: 130 }), 6);
     assert.equal(hx.dropSlotAt({ dataset: { pair: '3' }, rowSpan: 1 }, { clientY: 0 }), 3);
     // 3 soatlik dars (2 + 1) 12:40 ga (6 — 12:40–14:50): o'z bo'laklari to'qnashuv emas; 14:10 dagi (8) boshqa dars — haqiqiy to'qnashuv.
-    assert.deepEqual(JSON.parse(JSON.stringify(hx.dragPlan([1], 5, 6, false))), { start: 6, len: 3, errs: ["O'qituvchi band: #9"] });
-    assert.deepEqual(JSON.parse(JSON.stringify(hx.dragPlan([1], 5, 5, false))), { start: 5, len: 3, errs: [] });
+    assert.deepEqual(plan(hx.dragPlan([1], 5, 6, false)), { start: 6, len: 3, errs: ["O'qituvchi band: #9"] });
+    assert.deepEqual(plan(hx.dragPlan([1], 5, 5, false)), { start: 5, len: 3, errs: [] });
     hx.cards[2].pair = 9;
-    assert.deepEqual(JSON.parse(JSON.stringify(hx.dragPlan([1], 5, 6, false))), { start: 6, len: 3, errs: [] });
+    assert.deepEqual(plan(hx.dragPlan([1], 5, 6, false)), { start: 6, len: 3, errs: [] });
     // 1 soatlik bo'lakdan sudralsa — birlik boshi undan oldingi bo'lak uzunligicha yuqorida.
     assert.equal(hx.dragPlan([2], 5, 8, false).start, 6);
     console.log('10 timetable chain movement scenarios passed');

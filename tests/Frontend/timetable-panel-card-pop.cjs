@@ -48,7 +48,7 @@ const ctx = {
     effectiveCard: c => c, weeklyCanEdit: () => true, boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
     boardSchedule: () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i], abbr: ab[i] })),
     weekMonday: () => new Date(2026, 9, 26), weeklyEditGuard() {}, rememberLayerPlace() {},
-    conflictsAt: () => [], renderAll() {}, renderPanel() {}, renderGrid() {}, selected: null,
+    conflictsAt: () => [], conflictsAtDetail: () => [], renderAll() {}, renderPanel() {}, renderGrid() {}, selected: null,
     ttAgendaOpen: info => agenda.push(JSON.parse(JSON.stringify(info))), openTeacherTimeProposal: c => proposals.push(c.id),
     loadBoard: async () => {}, confirm: () => true,
     api: async (url, method, body) => {

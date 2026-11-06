@@ -618,6 +618,19 @@
         .admin-upgraded-cell.admin-upgraded-retake {
             background: linear-gradient(to top right, #fdba74 calc(50% - 1px), #64748b 50%, #fdba74 calc(50% + 1px)) !important;
         }
+        /* Batafsil ko'rinish: oshirilgan sababsiz NB otrabotka — och qizil, sababli — och ko'k, diagonal chiziqsiz */
+        .admin-upgraded-cell.au-nb,
+        .admin-upgraded-cell.au-nb .split-cell {
+            background: #fecaca !important;
+        }
+        .admin-upgraded-cell.au-sababli,
+        .admin-upgraded-cell.au-sababli .split-cell {
+            background: #bfdbfe !important;
+        }
+        .au-nb .split-line,
+        .au-sababli .split-line {
+            display: none;
+        }
         /* Ixcham ko'rinish: sababsiz NB otrabotka — diagonal chiziqsiz, och qizil fon */
         .admin-upgraded-cell.admin-upgraded-nb {
             background: #fecaca !important;
@@ -2050,12 +2063,21 @@
                                                     if ($upgradeTitle) {
                                                         $cellTitle = $upgradeTitle . ($cellTitle ? "\n" . $cellTitle : '');
                                                     }
+                                                    // Oshirilgan otrabotka rangi (ixchamdagidek): sababli — och ko'k, sababsiz NB — och qizil
+                                                    $upgradeRetakeClass = '';
+                                                    if ($isAdminUpgraded && !empty($gradeData['is_retake'])) {
+                                                        if (!empty($gradeData['retake_was_sababli'])) {
+                                                            $upgradeRetakeClass = 'au-sababli';
+                                                        } elseif (($gradeData['reason'] ?? null) === 'absent') {
+                                                            $upgradeRetakeClass = 'au-nb';
+                                                        }
+                                                    }
                                                     // Diagnostikada 1 — talaba testdan chetlashtirilgan
                                                     if ($gradeData && !empty($gradeData['quiz_result_id']) && isset($gradeData['grade']) && (int) round((float) $gradeData['grade']) === 1) {
                                                         $cellTitle = 'Testdan chetlashgan' . ($cellTitle ? ' · ' . $cellTitle : '');
                                                     }
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }} {{ $isAdminUpgraded ? 'admin-upgraded-cell' : '' }}" {!! $isRetake && !$isAdminUpgraded ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }} {{ $isAdminUpgraded ? 'admin-upgraded-cell' : '' }} {{ $upgradeRetakeClass }}" {!! $isRetake && !$isAdminUpgraded ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         // Admin/superadmin baho qo'yishi "Superadmin baho tahriri"

@@ -10,6 +10,7 @@ use App\Models\CurriculumSubject;
 use App\Models\Department;
 use App\Models\Semester;
 use App\Models\Teacher;
+use App\Models\TeacherEmployment;
 use App\Services\ActivityLogService;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -27,21 +28,28 @@ class TeacherController extends Controller
 
     public function index(Request $request)
     {
-        $query = Teacher::with(Schema::hasTable('teacher_employments')
+        $hasEmployments = Schema::hasTable('teacher_employments');
+        $query = Teacher::with($hasEmployments
             ? ['roles', 'employments' => fn ($q) => $q->where('is_primary', false)->where('is_working', true)]
             : ['roles']);
 
         if ($request->filled('search')) {
             $searchTerm = $request->search;
-            $query->where(function ($q) use ($searchTerm) {
+            $query->where(function ($q) use ($searchTerm, $hasEmployments) {
                 $q->where('full_name', 'like', "%{$searchTerm}%")
                     ->orWhere('employee_id_number', 'like', "%{$searchTerm}%")
-                    ->orWhere('department', 'like', "%{$searchTerm}%");
+                    ->orWhere('department', 'like', "%{$searchTerm}%")
+                    ->when($hasEmployments, fn ($q) => $q->orWhereHas('employments', fn ($e) => $e->where('is_working', true)
+                        ->where('department_name', 'like', "%{$searchTerm}%")));
             });
         }
 
+        // Kafedra — asosiy ish joyi yoki amaldagi o'rindoshlik/soatbay ish joyi shu kafedrada bo'lsa
         if ($request->filled('department')) {
-            $query->where('department', $request->department);
+            $department = $request->department;
+            $query->where(fn ($q) => $q->where('department', $department)
+                ->when($hasEmployments, fn ($q) => $q->orWhereHas('employments', fn ($e) => $e->where('is_working', true)
+                    ->where('department_name', $department))));
         }
 
         if ($request->filled('staff_position')) {
@@ -65,7 +73,12 @@ class TeacherController extends Controller
 
         $teachers = $query->paginate(15)->withQueryString();
 
-        $departments = Teacher::whereNotNull('department')->distinct()->pluck('department')->sort()->values();
+        $departments = Teacher::whereNotNull('department')->distinct()->pluck('department')
+            // Faqat o'rindoshlik bo'yicha xodimi bor kafedralar ham ro'yxatda bo'lsin
+            ->merge($hasEmployments
+                ? TeacherEmployment::where('is_working', true)->whereNotNull('department_name')->distinct()->pluck('department_name')
+                : [])
+            ->unique()->sort()->values();
         $positions = Teacher::whereNotNull('staff_position')->distinct()->pluck('staff_position')->sort()->values();
         $activeRoles = Role::where('guard_name', 'web')->pluck('name');
 

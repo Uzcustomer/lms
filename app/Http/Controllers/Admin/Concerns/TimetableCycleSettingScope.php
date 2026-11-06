@@ -25,7 +25,9 @@ trait TimetableCycleSettingScope
     /**
      * Doska sozlamalari indeksi (so'rov davomida bir marta): kalit (cycleSettingKey) => [
      *   'mode' => umumiy yozuv rejimi | null, 'days' => umumiy cycle_days | null, 'row' => umumiy yozuv (model) | null,
-     *   'fac' => [fakultet (kichik harf) => kunlar], 'cur' => ["fakultet|o'quv reja" => kunlar] ].
+     *   'fac' => [fakultet (kichik harf) => kunlar], 'cur' => ["fakultet|o'quv reja" => kunlar],
+     *   'lec' => ['general' => ma'ruza sozlamasi | null, 'fac' => [...], 'cur' => [...]] ] — ma'ruza sozlamasi: ['on' => bool,
+     *   'hours' => [kunlik soatlar]] (lecture_separate NULL — shu darajada berilmagan, meros).
      */
     private function cycleSettingIndex(TimetableBoard $board): array
     {
@@ -36,25 +38,33 @@ trait TimetableCycleSettingScope
         $out = [];
         if (Schema::hasTable('timetable_subject_settings')) {
             $scoped = Schema::hasColumn('timetable_subject_settings', 'faculty_name');
+            $hasLec = Schema::hasColumn('timetable_subject_settings', 'lecture_separate');
             foreach (TimetableSubjectSetting::where('board_id', $board->id)->orderBy('id')->get() as $s) {
                 $k = self::cycleSettingKey($s->specialty_name, (int) $s->course, $s->subject_name);
                 $fac = $scoped ? mb_strtolower(trim((string) $s->faculty_name)) : '';
                 $cur = $scoped ? (int) $s->curriculum_hemis_id : 0;
                 $days = $s->cycle_days !== null ? max(1, (int) $s->cycle_days) : null;
-                $out[$k] ??= ['mode' => null, 'days' => null, 'row' => null, 'fac' => [], 'cur' => []];
+                $lec = $hasLec && $s->lecture_separate !== null
+                    ? ['on' => (bool) $s->lecture_separate, 'hours' => self::cycleLectureHoursList($s->lecture_hours)] : null;
+                $out[$k] ??= ['mode' => null, 'days' => null, 'row' => null, 'fac' => [], 'cur' => [],
+                    'lec' => ['general' => null, 'fac' => [], 'cur' => []]];
                 if ($fac === '' && $cur === 0) {
                     // Umumiy yozuv (eski ma'lumotda nom katta-kichik harfda farqli dublikat bo'lsa — birinchisi, avvalgidek).
                     if ($out[$k]['row'] === null) {
                         $out[$k]['mode'] = (string) $s->mode;
                         $out[$k]['days'] = $days;
                         $out[$k]['row'] = $s;
+                        $out[$k]['lec']['general'] = $lec;
                     }
-                } elseif ($days !== null) {
-                    if ($cur > 0) {
-                        $out[$k]['cur'][$fac . '|' . $cur] = $days;
-                    } else {
-                        $out[$k]['fac'][$fac] = $days;
-                    }
+                    continue;
+                }
+                $slot = $cur > 0 ? 'cur' : 'fac';
+                $slotKey = $cur > 0 ? $fac . '|' . $cur : $fac;
+                if ($days !== null) {
+                    $out[$k][$slot][$slotKey] = $days;
+                }
+                if ($lec !== null) {
+                    $out[$k]['lec'][$slot][$slotKey] = $lec;
                 }
             }
         }
@@ -182,8 +192,23 @@ trait TimetableCycleSettingScope
         if (!$set || $set['mode'] !== 'cycle') {
             return [null, null];
         }
-        $general = $set['days'] ?? 1;
-        if ($row === null || (!$set['fac'] && !$set['cur'])) {
+        [$days, $warn] = $this->cycleScopedPick($board, $set['days'] ?? 1, $set['fac'], $set['cur'], $specialty, $course, $subject, $row);
+        // "Ma'ruza alohida": sikl kunlari — jami (ma'ruza kunlari + amaliy); amaliy blok — qolgan kunlar (masalan 21 = 5 + 16).
+        if ($lec = $this->cycleLectureResolve($board, $specialty, $course, $subject, $row)) {
+            $days = max(1, (int) $days - $lec['days']);
+        }
+
+        return [$days, $warn];
+    }
+
+    /**
+     * Aniqlovchili qiymatni tanlash (sikl kunlari, ma'ruza sozlamasi): qator (oqim / guruhcha) tarkibi bo'yicha — bitta fakultet va bitta
+     * o'quv reja: (fakultet + reja) → (fakultet) → (umumiy); bir nechta o'quv reja yoki rejasi aniqlanmagan guruh — (fakultet) → (umumiy);
+     * bir nechta fakultet yoki qator noma'lum — umumiy. Qaytaradi: [qiymat, ogohlantirish | null].
+     */
+    private function cycleScopedPick(TimetableBoard $board, $general, array $facMap, array $curMap, $specialty, int $course, $subject, ?string $row): array
+    {
+        if ($row === null || (!$facMap && !$curMap)) {
             return [$general, null];
         }
         $ctx = $this->cycleRowCtxIndex($board)[mb_strtolower(trim((string) $specialty)) . '|' . $course . '|' . mb_strtolower(trim($row)) . '|'
@@ -191,21 +216,251 @@ trait TimetableCycleSettingScope
         $facs = array_keys($ctx['fac'] ?? []);
         if (count($facs) !== 1) {
             // Fakultetlar har xil (yoki qator topilmadi) — umumiy; shu fakultetlardan biriga aniqlovchili sozlama berilgan bo'lsa — ogohlantirish.
-            $scopedHere = count($facs) > 1 && array_filter($facs, fn ($f) => isset($set['fac'][$f])
-                || array_filter(array_keys($set['cur']), fn ($k) => str_starts_with($k, $f . '|')));
+            $scopedHere = count($facs) > 1 && array_filter($facs, fn ($f) => array_key_exists($f, $facMap)
+                || array_filter(array_keys($curMap), fn ($k) => str_starts_with($k, $f . '|')));
 
             return [$general, $scopedHere ? 'fakultetlar har xil — umumiy sozlama olindi' : null];
         }
         $fac = $facs[0];
         $curs = array_keys($ctx['cur'] ?? []);
-        if (count($curs) === 1 && empty($ctx['unknown']) && isset($set['cur'][$curs[0]])) {
-            return [$set['cur'][$curs[0]], null];
+        if (count($curs) === 1 && empty($ctx['unknown']) && array_key_exists($curs[0], $curMap)) {
+            return [$curMap[$curs[0]], null];
         }
         // Bir nechta o'quv reja (yoki rejasi aniqlanmagan guruh) — fakultet darajasi; ulardan biriga reja sozlamasi berilgan bo'lsa — ogohlantirish.
-        $warn = (count($curs) > 1 || (!empty($ctx['unknown']) && $curs)) && array_filter($curs, fn ($k) => isset($set['cur'][$k]))
+        $warn = (count($curs) > 1 || (!empty($ctx['unknown']) && $curs)) && array_filter($curs, fn ($k) => array_key_exists($k, $curMap))
             ? "o'quv rejalar har xil — fakultet sozlamasi olindi" : null;
 
-        return [$set['fac'][$fac] ?? $general, $warn];
+        return [array_key_exists($fac, $facMap) ? $facMap[$fac] : $general, $warn];
+    }
+
+    /**
+     * "Ma'ruza alohida" (qator tarkibi bo'yicha, sikl kunlari bilan bir xil ustuvorlik): ['hours' => kunlik soatlar, 'days' => ma'ruza
+     * kunlari soni, 'note' => ogohlantirish | null]; belgi yo'q (yoki o'chirilgan, ro'yxat bo'sh) yoki fan sikl rejimida emas — null.
+     * Ma'ruza bloki oqim qatorida joylanadi ($row — oqim nomi); amaliy blok qatori uchun ham shu (amaliy kunlari = jami − ma'ruza kunlari).
+     */
+    private function cycleLectureResolve(TimetableBoard $board, $specialty, int $course, $subject, ?string $row): ?array
+    {
+        $set = $this->cycleSettingIndex($board)[self::cycleSettingKey($specialty, $course, $subject)] ?? null;
+        if (!$set || $set['mode'] !== 'cycle') {
+            return null;
+        }
+        $lec = $set['lec'] ?? ['general' => null, 'fac' => [], 'cur' => []];
+        [$cfg, $warn] = $this->cycleScopedPick($board, $lec['general'], $lec['fac'], $lec['cur'], $specialty, $course, $subject, $row);
+        if (!$cfg || empty($cfg['on']) || !$cfg['hours']) {
+            return null;
+        }
+
+        return ['hours' => $cfg['hours'], 'days' => count($cfg['hours']), 'note' => $warn];
+    }
+
+    /** Ma'ruza ustunlari bormi (migratsiya bajarilgan). */
+    private function cycleLectureColumns(): bool
+    {
+        return Schema::hasTable('timetable_subject_settings') && Schema::hasColumn('timetable_subject_settings', 'lecture_separate');
+    }
+
+    /**
+     * Saqlash so'rovidagi "ma'ruza alohida" qiymatlari: [ustunlar (lecture_separate, lecture_hours) | null — yuborilmagan, xato | null,
+     * ogohlantirishlar]. Tekshiruv: har kun soati 1..kun soatlari (kun to'ri); ma'ruza kunlari sikl kunlaridan kam (amaliyga kamida
+     * 1 kun); yig'indi rejadagi ma'ruza soatiga teng bo'lmasa — ogohlantirish (taqiq emas). Umumiy yozuvda "inherit" — o'chirilgan.
+     */
+    private function cycleLectureInput(TimetableBoard $board, array $data, string $faculty, int $curriculum, ?TimetableSubjectSetting $existing): array
+    {
+        $mode = $data['lecture'] ?? null;
+        if ($mode === null || !$this->cycleLectureColumns()) {
+            return [null, null, []];
+        }
+        $general = $faculty === '' && $curriculum === 0;
+        if ($mode === 'inherit') {
+            return [['lecture_separate' => $general ? false : null, 'lecture_hours' => null], null, []];
+        }
+        if ($mode === 'off') {
+            return [['lecture_separate' => false, 'lecture_hours' => null], null, []];
+        }
+        $raw = $data['lecture_hours'] ?? null;
+        $tokens = is_array($raw) ? array_values($raw) : preg_split('/[\s,;]+/u', trim((string) $raw), -1, PREG_SPLIT_NO_EMPTY);
+        $dayHours = $this->cycleGridHours($board);
+        $hours = [];
+        foreach ($tokens as $t) {
+            if (!is_numeric($t) || (int) $t != (float) $t || (int) $t < 1 || (int) $t > $dayHours) {
+                return [null, 'Ma‘ruza kunlik soati 1 dan ' . $dayHours . ' gacha butun son bo‘lishi kerak (kun to‘ri — ' . $dayHours
+                    . ' soat): "' . $t . '".', []];
+            }
+            $hours[] = (int) $t;
+        }
+        if (!$hours) {
+            return [null, 'Ma‘ruza kunlik soatlarini kiriting (soatda, vergul bilan, masalan 8,8,6,6,6).', []];
+        }
+        if (count($hours) > 60) {
+            return [null, 'Ma‘ruza kunlari juda ko‘p (60 dan oshmasin).', []];
+        }
+        // Shu darajadagi jami sikl kunlari: yuborilgan qiymat, bo'lmasa meros (o'quv reja → fakultet → umumiy).
+        $set = $this->cycleSettingIndex($board)[self::cycleSettingKey($data['specialty_name'], (int) $data['course'], $data['subject_name'])] ?? [];
+        $facKey = mb_strtolower($faculty);
+        $total = $data['cycle_days'] ?? null;
+        if ($total === null && !$general) {
+            $total = ($curriculum > 0 ? ($set['cur'][$facKey . '|' . $curriculum] ?? null) : null) ?? ($set['fac'][$facKey] ?? null) ?? ($set['days'] ?? null);
+        }
+        if ($total !== null && count($hours) >= (int) $total) {
+            return [null, 'Ma‘ruza kunlari (' . count($hours) . ') sikl kunlaridan (' . (int) $total . ') kam bo‘lishi kerak: sikl kunlari — jami '
+                . '(ma‘ruza + amaliy), masalan 21 = 5 + 16.', []];
+        }
+        $warnings = [];
+        $plan = $this->cycleHoursLookup($this->cycleSubjectHoursMap($board), $faculty !== '' ? $faculty : null, $data['specialty_name'],
+            (int) $data['course'], $data['subject_name'])['lecture'] ?? null;
+        if ($plan !== null && abs(array_sum($hours) - (float) $plan) > 0.01) {
+            $fmt = fn ($v) => fmod((float) $v, 1.0) == 0.0 ? (string) (int) $v : (string) round((float) $v, 1);
+            $warnings[] = 'Ma‘ruza soatlari yig‘indisi ' . array_sum($hours) . ' — rejada ' . $fmt($plan) . ' soat.';
+        }
+
+        return [['lecture_separate' => true, 'lecture_hours' => $hours], null, $warnings];
+    }
+
+    /**
+     * Alohida ma'ruzali fan bloki uchun kun rejasi kirishlari (cycleDayPlan): [KTR kun rejasi | null, soatlar | null, KTR bormi].
+     * - ma'ruza bloki: har kun soati — ro'yxatdan; KTR ma'ruza mavzulari kunlarga tartib bilan, soatlar bo'yicha (8 soatli kunga 4 ta
+     *   2 soatlik mavzu);
+     * - amaliy bloki: ma'ruzasiz; KTR bo'lsa — amaliy mavzular amaliy kunlariga tartib bilan (kuniga 6 soatgacha), bo'lmasa — reja
+     *   soatlari (ma'ruza 0).
+     * $lec null (belgi yo'q) — kirishlar o'zgarmaydi (hozirgidek: ma'ruza amaliy blok ichida).
+     */
+    private function cycleSepDayInputs(?array $lec, string $type, ?array $ktrPlan, ?array $hours, int $days): array
+    {
+        if ($lec === null) {
+            return [$ktrPlan, $hours, $ktrPlan !== null];
+        }
+        $rows = ['lec' => [], 'prc' => []];
+        if ($ktrPlan !== null) {
+            ksort($ktrPlan);
+            foreach ($ktrPlan as $d) {
+                if ((int) ($d['lec'] ?? 0) > 0) {
+                    $rows['lec'][] = [(int) $d['lec'], trim((string) ($d['tl'] ?? ''))];
+                }
+                if ((int) ($d['prc'] ?? 0) > 0) {
+                    $rows['prc'][] = [(int) $d['prc'], trim((string) ($d['tp'] ?? ''))];
+                }
+            }
+        }
+        // Mavzularni kunlarga soat bo'yicha tartib bilan: kun sig'imi to'lguncha navbatdagi mavzular (oxirgi kunga qolgani ham).
+        $fill = function (array $list, array $caps): array {
+            $out = [];
+            $i = 0;
+            $left = $list[0][0] ?? 0;
+            $n = count($caps);
+            foreach (array_values($caps) as $k => $cap) {
+                $topics = [];
+                $need = $cap;
+                while ($i < count($list) && ($need > 0 || $k === $n - 1)) {
+                    if ($list[$i][1] !== '' && end($topics) !== $list[$i][1]) {
+                        $topics[] = $list[$i][1];
+                    }
+                    $take = min($need, $left);
+                    $need -= $take;
+                    $left -= $take;
+                    if ($left <= 0 || ($need <= 0 && $k === $n - 1)) {
+                        $i++;
+                        $left = $list[$i][0] ?? 0;
+                    }
+                }
+                $out[$k] = implode('; ', $topics);
+            }
+
+            return $out;
+        };
+        if ($type === 'lecture') {
+            $caps = array_values($lec['hours']);
+            $topics = $fill($rows['lec'], $caps);
+            $plan = [];
+            foreach ($caps as $k => $h) {
+                $plan[$k] = ['lec' => (int) $h, 'prc' => 0, 'tl' => $topics[$k] ?? '', 'tp' => ''];
+            }
+
+            return [$plan, null, $ktrPlan !== null];
+        }
+        $prcHours = $hours !== null ? ['lecture' => 0, 'practice' => (float) ($hours['practice'] ?? 0)] + $hours : null;
+        if ($prcHours !== null) {
+            $prcHours['lecture'] = 0;
+        }
+        if ($ktrPlan === null) {
+            return [null, $prcHours, false];
+        }
+        $left = array_sum(array_column($rows['prc'], 0));
+        $caps = [];
+        for ($k = 0; $k < max(1, $days); $k++) {
+            $caps[$k] = min(6, max(0, $left));
+            $left -= $caps[$k];
+        }
+        $topics = $fill($rows['prc'], $caps);
+        $plan = [];
+        foreach ($caps as $k => $h) {
+            $plan[$k] = ['lec' => 0, 'prc' => (int) $h, 'tl' => '', 'tp' => $topics[$k] ?? ''];
+        }
+
+        return [$plan, $prcHours, true];
+    }
+
+    /**
+     * Saqlangandan keyingi holat (tranzaksiya ichida): har darajada (umumiy, fakultet, fakultet + o'quv reja) meros bilan hisoblangan
+     * ma'ruza kunlari sikl kunlaridan kam bo'lishi kerak — faqat kunlar soni o'zgarganda ham (ma'ruza sozlamasi saqlanib qolgan yoki
+     * yuqori darajadan meros). Buzilsa — xato matni, aks holda null.
+     */
+    private function cycleLectureConsistencyError(TimetableBoard $board, string $specialty, int $course, string $subject): ?string
+    {
+        $set = $this->cycleSettingIndex($board)[self::cycleSettingKey($specialty, $course, $subject)] ?? null;
+        if (!$set || $set['mode'] !== 'cycle') {
+            return null;
+        }
+        $lec = $set['lec'] ?? ['general' => null, 'fac' => [], 'cur' => []];
+        $general = $set['days'] ?? 1;
+        $levels = [['umumiy', $general, $lec['general']]];
+        foreach (array_unique(array_merge(array_keys($set['fac']), array_keys($lec['fac']),
+            array_map(fn ($k) => explode('|', $k)[0], array_merge(array_keys($set['cur']), array_keys($lec['cur']))))) as $fac) {
+            $levels[] = [$fac, $set['fac'][$fac] ?? $general, array_key_exists($fac, $lec['fac']) ? $lec['fac'][$fac] : $lec['general']];
+        }
+        foreach (array_unique(array_merge(array_keys($set['cur']), array_keys($lec['cur']))) as $key) {
+            $fac = explode('|', $key)[0];
+            $levels[] = [$fac . ' · o‘quv reja #' . explode('|', $key)[1], $set['cur'][$key] ?? $set['fac'][$fac] ?? $general,
+                array_key_exists($key, $lec['cur']) ? $lec['cur'][$key] : (array_key_exists($fac, $lec['fac']) ? $lec['fac'][$fac] : $lec['general'])];
+        }
+        foreach ($levels as [$label, $total, $cfg]) {
+            $n = $cfg && !empty($cfg['on']) ? count($cfg['hours']) : 0;
+            if ($n > 0 && $n >= (int) $total) {
+                return 'Ma‘ruza kunlari (' . $n . ') sikl kunlaridan (' . (int) $total . ') kam bo‘lishi kerak — ' . $label
+                    . ': sikl kunlari jami (ma‘ruza + amaliy), masalan 21 = 5 + 16.';
+            }
+        }
+
+        return null;
+    }
+
+    /** Kunlik ma'ruza soatlari ro'yxati (JSON massiv yoki "8,8,6,6,6" matni) — butun musbat sonlar. */
+    private static function cycleLectureHoursList($value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : preg_split('/[\s,;]+/u', trim($value), -1, PREG_SPLIT_NO_EMPTY);
+        }
+        $out = [];
+        foreach ((array) $value as $h) {
+            if (is_numeric($h) && (int) $h >= 1) {
+                $out[] = (int) $h;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Joylashuv blokining kunlari soni — turi bo'yicha: "ma'ruza alohida" fanning ma'ruza yozuvi — ma'ruza kunlari (ro'yxat uzunligi);
+     * qolganlari — cycleDaysFor (alohida ma'ruzali fanda amaliy — qolgan kunlar). Fan sikl rejimida bo'lmasa — null.
+     */
+    private function cyclePlacementTypeDays(TimetableBoard $board, $specialty, int $course, $subject, ?string $row, string $type): ?int
+    {
+        if ($type === 'lecture' && ($lec = $this->cycleLectureResolve($board, $specialty, $course, $subject, $row))) {
+            return $lec['days'];
+        }
+
+        return $this->cycleDaysFor($board, $specialty, $course, $subject, $row);
     }
 
     /**
@@ -227,7 +482,8 @@ trait TimetableCycleSettingScope
             }
             $row = (string) $p->group_name;
             $facs = array_values(array_filter($ctx[$spec . '|' . $course . '|' . mb_strtolower(trim($row)) . '|' . $subj]['fac'] ?? []));
-            $out[(int) $p->id] = ['days' => $this->cycleDaysFor($board, $specialty, $course, $subject, $row), 'row' => $row,
+            $out[(int) $p->id] = ['days' => $this->cyclePlacementTypeDays($board, $specialty, $course, $subject, $row, (string) ($p->training_type ?: 'practice')),
+                'row' => $row,
                 'faculty' => $this->cycleRowFaculty($row) ?? ($facs ? implode(', ', array_unique($facs)) : ''),
                 'type' => (string) ($p->training_type ?: 'practice')];
         }
@@ -284,13 +540,22 @@ trait TimetableCycleSettingScope
                 $prefixes = array_values(array_unique(array_map(fn ($g) => preg_replace('/-[^-]*$/u', '', (string) $g), $groups)));
                 $curricula[] = ['id' => (int) $cid, 'name' => (int) $cid > 0 ? (string) ($names[$cid] ?? ('O‘quv reja #' . $cid)) : 'O‘quv rejasi aniqlanmagan',
                     'semester' => $semesters[$cid] ?? null, 'prefix' => implode(', ', $prefixes), 'groups' => count($groups),
-                    'days' => (int) $cid > 0 ? ($set['cur'][$facKey . '|' . $cid] ?? null) : null];
+                    'days' => (int) $cid > 0 ? ($set['cur'][$facKey . '|' . $cid] ?? null) : null,
+                    'lecture' => (int) $cid > 0 ? ($set['lec']['cur'][$facKey . '|' . $cid] ?? null) : null];
             }
             usort($curricula, fn ($a, $b) => strnatcasecmp($a['prefix'], $b['prefix']));
-            $out[] = ['name' => $fac, 'days' => $set['fac'][$facKey] ?? null, 'curricula' => $curricula];
+            $planLec = $this->cycleHoursLookup($hoursMap ??= $this->cycleSubjectHoursMap($board), $fac, $data['specialty_name'], (int) $data['course'],
+                $data['subject_name'])['lecture'] ?? null;
+            $out[] = ['name' => $fac, 'days' => $set['fac'][$facKey] ?? null, 'lecture' => $set['lec']['fac'][$facKey] ?? null,
+                'plan_lecture_hours' => $planLec !== null ? (float) $planLec : null, 'curricula' => $curricula];
         }
         usort($out, fn ($a, $b) => strnatcasecmp($a['name'], $b['name']));
+        $planGeneral = $this->cycleHoursLookup($hoursMap ?? $this->cycleSubjectHoursMap($board), null, $data['specialty_name'], (int) $data['course'],
+            $data['subject_name'])['lecture'] ?? null;
 
-        return response()->json(['mode' => $set['mode'] ?? 'normal', 'days' => $set['days'] ?? null, 'faculties' => $out]);
+        // Ma'ruza sozlamasi: lecture — ['on', 'hours'] | null (meros); day_hours — kunlik soat chegarasi (kun to'ri).
+        return response()->json(['mode' => $set['mode'] ?? 'normal', 'days' => $set['days'] ?? null, 'lecture' => $set['lec']['general'] ?? null,
+            'plan_lecture_hours' => $planGeneral !== null ? (float) $planGeneral : null, 'day_hours' => $this->cycleGridHours($board),
+            'faculties' => $out]);
     }
 }

@@ -1886,14 +1886,21 @@
         #cycSelBadge [data-sel-busy] { padding: 0 6px; border-radius: 4px; background: #fde68a; color: #713f12; font-weight: 700; }
         /* "Darslar" oynasi: fakultet / o'quv reja bo'yicha alohida sikl kunlari; blokda — yuqori daraja olingani belgisi */
         .cyc-scope-note { color: #b45309; font-weight: 700; cursor: help; }
+        .cyc-scope-note.is-clash { color: #b91c1c; }
         .asc-subj-scope { margin-left: 6px; padding: 0 6px; border: 1px solid #c7d2fe; border-radius: 5px; background: #eef2ff; color: #3730a3; font-size: 11px; }
         .asc-subj-scope:hover { background: #e0e7ff; }
+        .asc-subj-lec { margin-left: 6px; font-size: 11px; white-space: nowrap; }
+        .asc-subj-lechours { width: 96px; margin-left: 4px; border: 1px solid #cbd5e1; border-radius: 5px; padding: 0 4px; font-size: 11px; }
         #subjScopeDlg .ssc-list { display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
         #subjScopeDlg .ssc-fac { border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 8px; display: grid; gap: 4px; }
         #subjScopeDlg .ssc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
         #subjScopeDlg .ssc-cur { padding-left: 12px; }
         #subjScopeDlg .ssc-cur small { display: block; color: #64748b; font-size: 11px; }
         #subjScopeDlg input[type="number"] { width: 72px; border: 1px solid #cbd5e1; border-radius: 5px; padding: 1px 4px; }
+        #subjScopeDlg .ssc-lec { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+        #subjScopeDlg .ssc-lec select { border: 1px solid #cbd5e1; border-radius: 5px; padding: 1px 2px; font-size: 12px; max-width: 220px; }
+        #subjScopeDlg .ssc-lec input { width: 110px; border: 1px solid #cbd5e1; border-radius: 5px; padding: 1px 4px; }
+        #subjScopeDlg .ssc-row > label { display: flex; align-items: center; gap: 6px; }
         #subjAffectDlg .saf-list { max-height: 50vh; overflow: auto; margin: 6px 0; padding: 0; list-style: none; font-size: 13px; }
         #subjAffectDlg .saf-list li { padding: 3px 6px; border-left: 3px solid #f59e0b; margin-bottom: 2px; }
         #cycSelBadge { position: fixed; z-index: 66; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px;
@@ -6035,8 +6042,14 @@
                 if (mode === 'cycle') {
                     // Fakultet / o'quv reja bo'yicha alohida kunlar soni (openSubjScopeDlg): saqlanganlar soni bilan.
                     const n = (setting.scoped || []).length;
+                    // "Ma'ruza alohida" (umumiy daraja): kunlik ma'ruza soatlari (SOATDA); sikl kunlari — jami (ma'ruza + amaliy).
+                    const lec = setting.lecture && setting.lecture.on ? setting.lecture : null;
                     return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="120" value="' + (setting.cycle_days ?? '') + '" placeholder="kun"></span>'
-                        + '<button type="button" class="asc-subj-scope" title="Shu fan uchun fakultet yoki o\'quv reja bo\'yicha alohida sikl kunlari soni">'
+                        + '<label class="asc-subj-param asc-subj-lec" title="Ma\'ruza amaliy blokidan alohida blok bo\'lib joylanadi (kunlik soatlar ro\'yxati, soatda)">'
+                        + '<input type="checkbox" class="asc-subj-lecon"' + (lec ? ' checked' : '') + '> Ma\'ruza alohida</label>'
+                        + '<input class="asc-subj-lechours" value="' + esc(lec ? (lec.hours || []).join(',') : '') + '" placeholder="8,8,6,6,6"' + (lec ? '' : ' hidden')
+                        + ' title="Kunlik ma\'ruza soatlari (soatda, vergul bilan)">'
+                        + '<button type="button" class="asc-subj-scope" title="Shu fan uchun fakultet yoki o\'quv reja bo\'yicha alohida sikl kunlari soni va ma\'ruza">'
                         + 'Fakultet / o\'quv reja bo\'yicha alohida' + (n ? ' (' + n + ')' : '') + '</button>';
                 }
                 return '<span class="text-slate-400">—</span>';
@@ -6074,6 +6087,8 @@
             // "Fakultet / o'quv reja bo'yicha alohida": shu yo'nalish va kursdagi fakultetlar, har fakultet ichida o'quv rejalar (nomi,
             // semestri, guruh prefiksi, guruhlar soni). Bo'sh — yuqori daraja: avval fakultet, keyin umumiy. O'zgarishi bilan saqlanadi
             // (joylangan bloklar o'zgarsa — tasdiq oynasi).
+            // Ma'ruza sozlamasi matni: {on, hours} → "alohida 8+8+6+6+6" / "amaliy ichida"; null — meros.
+            const subjLecText = lec => !lec ? null : (lec.on && (lec.hours || []).length ? 'alohida ' + lec.hours.join('+') : 'amaliy ichida');
             async function openSubjScopeDlg(row, onSaved) {
                 const prior = document.getElementById('subjScopeDlg');
                 if (prior) prior.remove();
@@ -6090,34 +6105,72 @@
                     catch (e) { m.querySelector('.cr-proposal-form').innerHTML = '<p class="text-red-600">' + esc(e.message) + '</p>'; return; }
                     const general = j.days != null ? j.days : 1;
                     const shortFac = n => String(n || '—').replace(/\s+fakulteti$/i, '');
+                    const genLec = subjLecText(j.lecture && j.lecture.on ? j.lecture : null) || 'amaliy ichida';
+                    // "Ma'ruza alohida" (kunlik soatlar, SOATDA): meros — yuqori daraja; amaliy ichida — hozirgidek; alohida — ro'yxat.
+                    const lecCtl = (key, lec, inherited) => '<span class="ssc-lec"><select data-ssl="' + key + '" title="Ma\'ruza: alohida blok (kunlik soatlar) yoki amaliy blok ichida">'
+                        + '<option value="inherit"' + (!lec ? ' selected' : '') + '>ma\'ruza: meros (' + esc(inherited) + ')</option>'
+                        + '<option value="off"' + (lec && !lec.on ? ' selected' : '') + '>ma\'ruza amaliy ichida</option>'
+                        + '<option value="on"' + (lec && lec.on ? ' selected' : '') + '>ma\'ruza alohida</option></select>'
+                        + '<input data-sslh="' + key + '" value="' + esc(lec && lec.on ? (lec.hours || []).join(',') : '') + '" placeholder="8,8,6,6,6" title="Kunlik ma\'ruza soatlari (soatda, vergul bilan; har kun 1–' + (j.day_hours || 12) + ')"'
+                        + (lec && lec.on ? '' : ' hidden') + '> soat</span>';
                     m.querySelector('.cr-proposal-form').innerHTML = '<h3 class="font-bold text-lg">Fakultet / o\'quv reja bo\'yicha alohida</h3>'
                         + '<p class="text-sm">' + esc(row.subject_name + ' · ' + row.specialty_name + ' · ' + row.course + '-kurs') + ' — umumiy: <b>' + general
-                        + ' kun</b>. Bo\'sh — yuqori daraja (avval fakultet, keyin umumiy).</p><div class="ssc-list">'
-                        + (j.faculties || []).map((f, fi) => '<div class="ssc-fac"><label class="ssc-row"><b>' + esc(f.name || '—') + '</b>'
+                        + ' kun</b>, ma\'ruza: <b>' + esc(genLec) + '</b>' + (j.plan_lecture_hours != null ? ' (rejada ' + j.plan_lecture_hours + ' soat)' : '')
+                        + '. Bo\'sh — yuqori daraja (avval fakultet, keyin umumiy). Ma\'ruza alohida bo\'lsa, sikl kunlari — jami (masalan 21 = 5 ma\'ruza + 16 amaliy).</p><div class="ssc-list">'
+                        + (j.faculties || []).map((f, fi) => {
+                            const facLec = subjLecText(f.lecture) || genLec;
+                            return '<div class="ssc-fac"><div class="ssc-row"><label><b>' + esc(f.name || '—') + '</b> '
                             + '<input type="number" min="1" max="120" data-ssc="' + fi + '" value="' + (f.days ?? '') + '" placeholder="umumiy: ' + general + '"> kun</label>'
-                            + (f.curricula || []).map((c, ci) => '<label class="ssc-row ssc-cur"><span>' + esc(shortFac(f.name) + ' · ' + (c.prefix || '—') + ' · '
+                            + lecCtl(String(fi), f.lecture, genLec) + '</div>'
+                            + (f.curricula || []).map((c, ci) => '<div class="ssc-row ssc-cur"><label><span>' + esc(shortFac(f.name) + ' · ' + (c.prefix || '—') + ' · '
                                 + (c.semester || 'semestr —') + ' (' + c.groups + ' guruh)') + '<small>' + esc(c.name) + '</small></span>'
                                 + '<input type="number" min="1" max="120" data-ssc="' + fi + '|' + ci + '" value="' + (c.days ?? '') + '"'
-                                + ' placeholder="' + (f.days != null ? 'fakultet: ' + f.days : 'umumiy: ' + general) + '"' + (c.id > 0 ? '' : ' disabled title="Guruhlarning o\'quv rejasi aniqlanmagan"') + '> kun</label>').join('')
-                            + '</div>').join('')
+                                + ' placeholder="' + (f.days != null ? 'fakultet: ' + f.days : 'umumiy: ' + general) + '"' + (c.id > 0 ? '' : ' disabled title="Guruhlarning o\'quv rejasi aniqlanmagan"') + '> kun</label>'
+                                + (c.id > 0 ? lecCtl(fi + '|' + ci, c.lecture, facLec) : '') + '</div>').join('')
+                            + '</div>';
+                        }).join('')
                         + '</div><p role="alert" class="text-sm"></p><div class="flex justify-end"><button type="button" data-ssc-close>Yopish</button></div>';
                     m.querySelector('[data-ssc-close]').onclick = () => m.remove();
-                    m.querySelectorAll('input[data-ssc]').forEach(inp => inp.onchange = async () => {
-                        const [fi, ci] = inp.dataset.ssc.split('|');
-                        const f = j.faculties[+fi], c = ci != null ? f.curricula[+ci] : null;
+                    const target = key => {
+                        const [fi, ci] = key.split('|');
+                        const f = j.faculties[+fi];
+                        return [f, ci != null ? f.curricula[+ci] : null];
+                    };
+                    const save = async (key, extra) => {
+                        const [f, c] = target(key);
                         const msg = m.querySelector('[role="alert"]');
                         msg.className = 'text-sm text-slate-500';
                         msg.textContent = 'Saqlanmoqda…';
+                        const daysInp = m.querySelector('input[data-ssc="' + key + '"]');
                         try {
-                            const saved = await subjSettingSave({ specialty_name: row.specialty_name, course: +row.course, subject_name: row.subject_name, mode: 'cycle',
-                                faculty_name: f.name, curriculum_hemis_id: c ? c.id : 0, cycle_days: inp.value ? +inp.value : null });
+                            const saved = await subjSettingSave(Object.assign({ specialty_name: row.specialty_name, course: +row.course, subject_name: row.subject_name, mode: 'cycle',
+                                faculty_name: f.name, curriculum_hemis_id: c ? c.id : 0, cycle_days: daysInp && daysInp.value ? +daysInp.value : null }, extra));
                             if (!saved) { msg.textContent = 'Bekor qilindi.'; await render(); return; }
                             if (onSaved) await onSaved();
                             await render();
-                            m.querySelector('[role="alert"]').className = 'text-sm text-emerald-700';
-                            m.querySelector('[role="alert"]').textContent = 'Saqlandi' + ((saved.affected || []).length ? ': ' + saved.affected.length + ' ta blok uzunligi o\'zgardi.' : '.');
+                            const out = m.querySelector('[role="alert"]');
+                            const warns = saved.warnings || [];
+                            out.className = 'text-sm ' + (warns.length ? 'text-amber-700' : 'text-emerald-700');
+                            out.textContent = 'Saqlandi' + ((saved.affected || []).length ? ': ' + saved.affected.length + ' ta blok uzunligi o\'zgardi.' : '.')
+                                + (warns.length ? ' ⚠ ' + warns.join(' ') : '');
                         } catch (e) { msg.className = 'text-sm text-red-600'; msg.textContent = e.message; }
-                    });
+                    };
+                    m.querySelectorAll('input[data-ssc]').forEach(inp => inp.onchange = () => save(inp.dataset.ssc, {}));
+                    // Ma'ruza: "alohida" tanlansa — soatlar kiritilgach saqlanadi; meros / amaliy ichida — darhol.
+                    const lecSave = key => {
+                        const sel = m.querySelector('select[data-ssl="' + key + '"]'), hrs = m.querySelector('input[data-sslh="' + key + '"]');
+                        hrs.hidden = sel.value !== 'on';
+                        if (sel.value === 'on' && !hrs.value.trim()) {
+                            hrs.focus();
+                            const msg = m.querySelector('[role="alert"]');
+                            msg.className = 'text-sm text-slate-600';
+                            msg.textContent = 'Kunlik ma\'ruza soatlarini kiriting (soatda, vergul bilan, masalan 8,8,6,6,6).';
+                            return;
+                        }
+                        save(key, { lecture: sel.value, lecture_hours: sel.value === 'on' ? hrs.value.trim() : undefined });
+                    };
+                    m.querySelectorAll('select[data-ssl]').forEach(sel => sel.onchange = () => lecSave(sel.dataset.ssl));
+                    m.querySelectorAll('input[data-sslh]').forEach(inp => inp.onchange = () => lecSave(inp.dataset.sslh));
                 };
                 await render();
             }
@@ -6140,6 +6193,12 @@
                 } else if (mode === 'cycle') {
                     const cycle = tr.querySelector('.asc-subj-cycle');
                     if (cycle && cycle.value) body.cycle_days = +cycle.value;
+                    // "Ma'ruza alohida": belgi va kunlik soatlar (belgisiz — amaliy ichida, hozirgidek).
+                    const lecOn = tr.querySelector('.asc-subj-lecon'), lecHours = tr.querySelector('.asc-subj-lechours');
+                    if (lecOn) {
+                        body.lecture = lecOn.checked ? 'on' : 'off';
+                        if (lecOn.checked) body.lecture_hours = (lecHours && lecHours.value.trim()) || '';
+                    }
                 }
                 const status = tr.querySelector('.asc-subj-status');
                 status.textContent = '…';
@@ -6158,11 +6217,19 @@
                     }
                     const effectiveSeason = (saved && saved.season) || body.season || ((board && board.semester_parity) || 'kuzgi');
                     row.season = effectiveSeason;
+                    // Mijozdagi ma'ruza sozlamasi — server ko'rinishida ({on, hours}).
+                    const lecState = body.lecture === 'on'
+                        ? { on: true, hours: String(body.lecture_hours || '').split(/[\s,;]+/).filter(Boolean).map(Number) }
+                        : (body.lecture === 'off' ? { on: false, hours: [] } : subjectSettingOf(row).lecture || null);
+                    const { lecture: _l, lecture_hours: _lh, ...plain } = body;
                     if (mode === 'normal' && effectiveSeason === ((board && board.semester_parity) || 'kuzgi')) delete subjectSettings[key];
-                    else subjectSettings[key] = { ...subjectSettingOf(row), ...body, season: effectiveSeason };
+                    else subjectSettings[key] = { ...subjectSettingOf(row), ...plain, lecture: mode === 'cycle' ? lecState : null, season: effectiveSeason };
                     repaintSubjectSeason(tr, row, effectiveSeason);
-                    status.textContent = '✓';
-                    status.className = 'asc-subj-status text-emerald-600';
+                    const warns = (saved && saved.warnings) || [];
+                    status.textContent = warns.length ? '⚠' : '✓';
+                    status.className = 'asc-subj-status ' + (warns.length ? 'text-amber-600' : 'text-emerald-600');
+                    status.title = warns.join('\n');
+                    if (warns.length && typeof ttToast === 'function') ttToast('<b>Saqlandi, ogohlantirish bilan</b>' + warns.map(w => '<div>⚠ ' + esc(w) + '</div>').join(''), 'warn');
                 } catch (e) {
                     status.textContent = '✕';
                     status.className = 'asc-subj-status text-red-600';
@@ -6731,6 +6798,10 @@
                     ttToast('<b>Sikl kartasi joylanmadi</b><div>' + esc(text) + '</div>', 'error');
                 }
             }
+            // Karta shu qatorga tushadimi: o'z qatori; alohida ma'ruza kartasi — oqimning istalgan guruhcha qatori (row_keys).
+            function cycCardRowOk(card, rowKey) {
+                return Boolean(card) && (card.row_keys || [card.row_key]).includes(rowKey);
+            }
             async function placeCycleCardAt(card, index, pair) {
                 if (!card) {
                     showCyclePlacementResult(null, index, 'Karta ma\u2019lumoti topilmadi. Sahifani yangilab qayta urinib ko\u2018ring.');
@@ -6741,10 +6812,15 @@
                         ...cycleOverlapParams(), ...cycleLayerParams(),
                         action: 'place', specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject, start_index: index,
-                        training_type: card.type || 'practice', pair: pair || 1, view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
+                        training_type: card.type || 'practice', pair: pair || 1, view: card.view || cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
+                    // Ogohlantirish (xato emas): alohida ma'ruza kunlariga boshqa fan amaliyoti tushdi.
+                    const warns = (result && result.warnings) || [];
+                    if (warns.length && typeof ttToast === 'function') {
+                        ttToast('<b>Joylandi, ogohlantirish bilan</b>' + warns.map(w => '<div>⚠ ' + esc(w) + '</div>').join(''), 'warn');
+                    }
                     const reloaded = ((cyclePlanData && cyclePlanData.cycle_cards) || [])
                         .find(item => item.key === card.key);
                     if (result && result.pending_approval) {
@@ -6753,7 +6829,7 @@
                         showCyclePlacementResult(card, index,
                             'Server yozuvni qabul qildi, lekin qayta yuklanganda blok topilmadi. Fan/oqim nomlari mosligini tekshiring.');
                     } else {
-                        showCyclePlacementResult(card, index, '', 'success');
+                        showCyclePlacementResult(card, index, warns.length ? '⚠ ' + warns.join('; ') : '', 'success');
                     }
                 } catch (e) {
                     console.error('Sikl joylash xatosi: ' + (e && e.message ? e.message : 'Noma\u2019lum xato'), {karta: card, index: index});
@@ -6769,7 +6845,7 @@
                 $('cycleGrid').querySelectorAll('[data-cycle-row]').forEach(cell => {
                     cell.classList.remove('cycle-row-target', 'cycle-row-muted');
                     if (!card) return;
-                    cell.classList.add(cell.dataset.cycleRow === card.row_key
+                    cell.classList.add(cycCardRowOk(card, cell.dataset.cycleRow)
                         ? 'cycle-row-target' : 'cycle-row-muted');
                 });
             }
@@ -7295,9 +7371,15 @@
                             .filter(Boolean);
                         const req = reqParts.join(' · ');
                         const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
-                        const typeChip = simple
+                        // Alohida ma'ruza bloki sodda ko'rinishda ham "M" belgisi bilan (amaliy blokidan ajralib tursin).
+                        const sepLecBlock = block.type === 'lecture' && block.lecture_separate;
+                        const typeChip = simple && !sepLecBlock
                             ? ''
-                            : '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
+                            : '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" + (sepLecBlock ? ' (alohida: ' + (block.lecture_list || []).join('+') + ' soat)' : '') : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
+                        // Alohida ma'ruza: kesishuv (xato), boshqa fan amaliyoti ma'ruza kunlarida (ogohlantirish), soatlar yig'indisi rejadan farqli.
+                        const sepNotes = [block.lecture_clash, ...(block.lecture_warn || []), block.lecture_note].filter(Boolean);
+                        const sepNoteHtml = sepNotes.length
+                            ? ' <span class="cyc-scope-note' + (block.lecture_clash ? ' is-clash' : '') + '" title="' + esc(sepNotes.join('\n')) + '">⚠</span>' : '';
                         const twoRects = rects.length > 1;
                         rects.forEach(rect => {
                             // Dum bo'lagi (ma'ruza tugagach) yuqoriroq paradan boshlanishi mumkin.
@@ -7331,7 +7413,12 @@
                                 let sumLec = 0, sumPrc = 0;
                                 Object.values(plan).forEach(dp => { sumLec += +dp.lec || 0; sumPrc += +dp.prc || 0; });
                                 const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
-                                const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
+                                // Alohida ma'ruzali fan: ma'ruza blokida — faqat M (kunlik soatlar), amaliy blokida — faqat A.
+                                const sumLabel = block.lecture_separate
+                                    ? (block.type === 'lecture'
+                                        ? 'M ' + sumLec + ' s (' + (block.lecture_list || []).join('+') + ')' + (lecTotal != null ? ' · reja ' + lecTotal + ' s' : '')
+                                        : 'A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s')
+                                    : 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
                                 // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
                                 // Blok ichida ko'rinadigan kunlar (yashirilgan dam olish/bayram ustunlarisiz).
                                 const visDays = [];
@@ -7374,7 +7461,7 @@
                                             + (kind.includes('is-ph-lec') ? ' · ma‘ruza vaqtincha kafedra mudirida: ' + esc(block.mudir_ph_lec.mudir_name || block.mudir_ph_lec.teacher_name || '') : '') + '"></button>';
                                     }
                                 }
-                                cellHtml = '<td class="cyc-cell cyc-block is-mark' + cfBlockClass(block.key, block.conflicts, cfOwners) + '" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.scope_note ? ' · ⚠ ' + esc(block.scope_note) : '') + ' · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block is-mark' + cfBlockClass(block.key, block.conflicts, cfOwners) + '" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.scope_note ? ' · ⚠ ' + esc(block.scope_note) : '') + (sepNotes.length ? ' · ⚠ ' + esc(sepNotes.join('; ')) : '') + ' · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + visDays.length + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
@@ -7387,18 +7474,18 @@
                                     // To'qnashuv: qisqa belgi (qizil — o'qituvchi/guruh, sariq — xona, kulrang — o'tgan); tafsilot — bosilganda.
                                     cfBadgeHtml(block.key, block.conflicts, cfOwners) +
                                     // Oqimda o'quv rejalar / fakultetlar har xil — aniqlovchili sozlama o'rniga yuqori daraja olindi (⚠).
-                                    esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span>' + (block.scope_note ? ' <span class="cyc-scope-note" title="' + esc(block.scope_note) + '">⚠</span>' : '') + '</span>' +
+                                    (sepLecBlock ? '<span class="cyc-type lecture">M</span> ' : '') + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span>' + (block.scope_note ? ' <span class="cyc-scope-note" title="' + esc(block.scope_note) + '">⚠</span>' : '') + sepNoteHtml + '</span>' +
                                     // O'qituvchi/xona doskada yozilmaydi — fan nomi bosilganda oynada chiqadi.
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +
                                     '</div></div></td>';
                             } else if (rect.main) {
-                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.scope_note ? ' · ⚠ ' + esc(block.scope_note) : '') + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.scope_note ? ' · ⚠ ' + esc(block.scope_note) : '') + (sepNotes.length ? ' · ⚠ ' + esc(sepNotes.join('; ')) : '') + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<span class="cyc-shift-actions">' +
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
                                     '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                                    '</span><span class="cyc-lbl">' + typeChip + '<b class="cyc-subj">' + esc(block.subject) + '</b> <span class="cyc-days">(' + block.days + ')</span>' + (block.scope_note ? ' <span class="cyc-scope-note" title="' + esc(block.scope_note) + '">⚠</span>' : '') + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
+                                    '</span><span class="cyc-lbl">' + typeChip + '<b class="cyc-subj">' + esc(block.subject) + '</b> <span class="cyc-days">(' + block.days + ')</span>' + (block.scope_note ? ' <span class="cyc-scope-note" title="' + esc(block.scope_note) + '">⚠</span>' : '') + sepNoteHtml + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
                                     reqHtml +
                                     '</td>';
                             } else {
@@ -9939,6 +10026,8 @@
                     const block = cycBlockByKey(key);
                     const dp = block && block.day_plan ? block.day_plan[offset] : null;
                     if (!dp) return;
+                    // Alohida ma'ruza bloki: kunlari blok joylashuvidan (panel / tashqi jadval) — kataklar sudralmaydi.
+                    if (block.type === 'lecture' && block.lecture_separate) return;
                     const kind = cell.classList.contains('is-lecture') ? 'lecture' : 'practice';
                     const staff = Boolean(cyclePlanData.day_edit) && !(typeof TIMETABLE_READ_ONLY !== 'undefined' && TIMETABLE_READ_ONLY);
                     // O'qituvchi / fan mas'uli: sudrash — so'rov oynasi (shu darsga so'rash mumkin bo'lgan kunlar).
@@ -10188,7 +10277,7 @@
                     const index = indexAt(cell, ev);
                     const card = (cyclePlanData && cyclePlanData.cycle_cards || [])
                         .find(item => item.key === cycleDragKey);
-                    const allowed = Boolean(card) && card.row_key === cell.dataset.cycleRow;
+                    const allowed = cycCardRowOk(card, cell.dataset.cycleRow);
 
                     markCycleDrop(cell, index, allowed);
                 });
@@ -10211,7 +10300,7 @@
                         showCyclePlacementResult(null, index, 'Karta ma\u2019lumoti topilmadi. Sahifani yangilab qayta urinib ko\u2018ring.');
                         return;
                     }
-                    if (card.row_key !== rowKey) {
+                    if (!cycCardRowOk(card, rowKey)) {
                         console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
                         showCyclePlacementResult(card, index, 'Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
                         return;
@@ -10254,7 +10343,7 @@
                                 ...cycleOverlapParams(), ...cycleLayerParams(),
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
-                                training_type: card.type || 'practice', pair: card.pair || 1, view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
+                                training_type: card.type || 'practice', pair: card.pair || 1, view: card.view || cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                                 direction: direction, start_date: $('cycleStart').value, holidays: cycleHolidays,
                             });
                             await loadCyclePlan();
@@ -10274,7 +10363,7 @@
                     const index = indexAt(cell, ev);
                     cycleDragKey = null;
                     highlightCycleRow(null);
-                    if (!card || card.row_key !== rowKey) {
+                    if (!card || !cycCardRowOk(card, rowKey)) {
                         showCyclePlacementResult(card, index, card
                             ? 'Fan kartasini faqat o\u2018z oqimining qatoriga joylang.'
                             : 'Karta ma\u2019lumoti topilmadi. Sahifani yangilab qayta urinib ko\u2018ring.');
@@ -10314,7 +10403,7 @@
             }
             // Panel guruh filtri: jadvaldagi ko'p tanlov (cycleRowFilters — bo'lak qatorlari bilan) va oqim tanlovi.
             function cycleCardGroupMatch(card, rowKeys) {
-                return (!rowKeys || rowKeys.has(card.row_key)) && (!cycleGroupFilter || card.group === cycleGroupFilter);
+                return (!rowKeys || (card.row_keys || [card.row_key]).some(k => rowKeys.has(k))) && (!cycleGroupFilter || card.group === cycleGroupFilter);
             }
             // Jadval: tanlangan hafta ustunlari ajratiladi, boshqa sanalar va hafta tashqarisidagi bloklar xira; hafta almashganda — scroll.
             function cycleWeekHighlight() {
@@ -10421,7 +10510,8 @@
                     // Panel kartasi jadvaldagi blok bilan bir xil rangda — qaysi fan
                     // qayerga tushishi ko'rinib tursin.
                     const color = subjColor(card.subject);
-                    const typeChip = (j && j.simple)
+                    // Alohida ma'ruza kartasi sodda ko'rinishda ham belgilanadi (oqim qatoriga, amaliydan alohida joylanadi).
+                    const typeChip = (j && j.simple && !card.separate)
                         ? ''
                         : '<span class="cycle-pn-type ' + (card.type || 'practice') + '">' + (card.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '</span>';
                     // Oqim ma'ruzasi to'qnashuvi — faqat ma'ruza egasi kartasida; boshqalarida "ma'ruzada muammo bor ↗" (bosiladi).
@@ -10432,7 +10522,8 @@
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
                         'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
                         '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + infoOnlyBadgeHtml(card) + '</span>' +
-                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span>' +
+                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '')
+                            + ((card.lecture_list || []).length ? ' (' + card.lecture_list.join('+') + ')' : '') + '</span></span>' +
                         // Holat: "joylanmagan" yoki "joylangan · to'qnashuv 13.11–24.11" (joylanmagan bilan aralashmasin).
                         '<span class="cycle-pn-state' + (card.placed ? ' is-placed' : '') + '">' + esc(cycleCardStateText(card)) + '</span>' +
                         (card.conflict && (ownText || !split.elsewhere.length)
@@ -10493,7 +10584,7 @@
                             ...cycleOverlapParams(), ...cycleLayerParams(),
                             action: 'remove', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject,
-                            training_type: card.type || 'practice', view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
+                            training_type: card.type || 'practice', view: card.view || cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                         });
                         await loadCyclePlan();
                     } catch (e) { alert('Sikl blokini olib bo‘lmadi: ' + e.message); }
@@ -13906,6 +13997,13 @@
                                 ev.target.classList.contains('asc-subj-cycle')) {
                                 saveSubjectModeRow(tr, row);
                             }
+                            // "Ma'ruza alohida": belgi qo'yilsa — soatlar kiritilgach saqlanadi; olinsa — darhol.
+                            if (ev.target.classList.contains('asc-subj-lecon') || ev.target.classList.contains('asc-subj-lechours')) {
+                                const lecOn = tr.querySelector('.asc-subj-lecon'), lecHours = tr.querySelector('.asc-subj-lechours');
+                                lecHours.hidden = !lecOn.checked;
+                                if (lecOn.checked && !lecHours.value.trim()) { lecHours.focus(); return; }
+                                saveSubjectModeRow(tr, row);
+                            }
                         });
                         // "Fakultet / o'quv reja bo'yicha alohida": oyna; saqlangach qatordagi soni va (sikl ko'rinishida) jadval yangilanadi.
                         tr.addEventListener('click', ev => {
@@ -13917,8 +14015,8 @@
                                 const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
                                 const scoped = [];
                                 (j.faculties || []).forEach(f => {
-                                    if (f.days != null) scoped.push({ faculty_name: f.name, curriculum_hemis_id: 0, cycle_days: f.days });
-                                    (f.curricula || []).forEach(c => { if (c.days != null) scoped.push({ faculty_name: f.name, curriculum_hemis_id: c.id, cycle_days: c.days }); });
+                                    if (f.days != null || f.lecture) scoped.push({ faculty_name: f.name, curriculum_hemis_id: 0, cycle_days: f.days, lecture: f.lecture || null });
+                                    (f.curricula || []).forEach(c => { if (c.days != null || c.lecture) scoped.push({ faculty_name: f.name, curriculum_hemis_id: c.id, cycle_days: c.days, lecture: c.lecture || null }); });
                                 });
                                 subjectSettings[key] = Object.assign({}, subjectSettingOf(row), { scoped });
                                 refreshParams();

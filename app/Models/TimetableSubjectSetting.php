@@ -7,15 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl).
  * Aniqlovchilar (faculty_name, curriculum_hemis_id): umumiy yozuv — ('', 0); fakultet / o'quv reja bo'yicha alohida yozuvda faqat
- * sikl kunlari soni (cycle_days) — qidiruv: (fakultet + o'quv reja) → (fakultet) → (umumiy). Fan rejimi — umumiy yozuvda.
+ * sikl kunlari soni (cycle_days) va alohida ma'ruza (lecture_separate, lecture_hours — kunlik soatlar) — qidiruv: (fakultet + o'quv reja)
+ * → (fakultet) → (umumiy). Fan rejimi — umumiy yozuvda.
  * @see database/migrations/2026_07_23_140000_create_timetable_subject_settings.php
  * @see database/migrations/2026_11_06_120000_add_scope_to_timetable_subject_settings.php
+ * @see database/migrations/2026_11_06_150000_add_lecture_separate_to_timetable_subject_settings.php
  */
 class TimetableSubjectSetting extends Model
 {
     protected $fillable = [
         'board_id', 'specialty_name', 'course', 'subject_name', 'faculty_name', 'curriculum_hemis_id',
-        'mode', 'season', 'rotation_group', 'occurrences', 'cycle_weeks', 'cycle_days', 'note',
+        'mode', 'season', 'rotation_group', 'occurrences', 'cycle_weeks', 'cycle_days', 'lecture_separate', 'lecture_hours', 'note',
     ];
 
     protected $casts = [
@@ -24,6 +26,8 @@ class TimetableSubjectSetting extends Model
         'occurrences' => 'integer',
         'cycle_weeks' => 'integer',
         'cycle_days'  => 'integer',
+        'lecture_separate' => 'boolean',
+        'lecture_hours' => 'array',
     ];
 
     public const MODES = ['normal', 'alternate', 'cycle'];

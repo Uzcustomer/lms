@@ -156,8 +156,8 @@ it('qidiruv ustuvorligi: (fakultet + o\'quv reja) → (fakultet) → (umumiy); b
     ]);
     $data = scsAs($s['admin'])->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json('subject_settings');
     expect($data)->toHaveCount(1)->and($data[0]['cycle_days'])->toBe(20)
-        ->and($data[0]['scoped'])->toBe([['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 601, 'cycle_days' => 13],
-            ['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 701, 'cycle_days' => 21]]);
+        ->and($data[0]['scoped'])->toBe([['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 601, 'cycle_days' => 13, 'lecture' => null],
+            ['faculty_name' => $s['xd'], 'curriculum_hemis_id' => 701, 'cycle_days' => 21, 'lecture' => null]]);
 });
 
 it('saqlashdan oldin (dry_run): faqat ta\'sirlangan joylangan bloklar ro\'yxati, hech narsa saqlanmaydi; boshqa fakultet bloklari ro\'yxatda yo\'q', function () {

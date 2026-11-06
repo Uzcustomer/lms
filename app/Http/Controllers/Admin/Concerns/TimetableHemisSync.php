@@ -2370,10 +2370,11 @@ trait TimetableHemisSync
 
         // LMS'dagi bugungi darslar: guruh kaliti => [dars, ...] (slot va len — yarim-para).
         $lms = [];
-        $lesson = fn (string $subject, string $part, int $slot, int $len, $emp, $empName, $room, $roomName, bool $cycle, ?string $ph = null) => [
+        // ktr_week — shu darsning KTR qatori: haftalik — kartaning kalendar haftasi, sikl — sikl kuni (qo'shiladigan darsning turi uchun).
+        $lesson = fn (string $subject, string $part, int $slot, int $len, $emp, $empName, $room, $roomName, bool $cycle, ?string $ph = null, ?int $ktrWeek = null) => [
             'subject' => $subject, 'key' => $this->hemisSubjectKey($subject), 'part' => $part, 'slot' => $slot, 'len' => max(1, $len),
             'emp' => $emp ?: null, 'emp_name' => $empName ?: null, 'room' => $room ?: null, 'room_name' => $roomName ?: null, 'cycle' => $cycle,
-            'ph' => $ph,
+            'ph' => $ph, 'ktr_week' => $ktrWeek ?: null,
         ];
         if ($weekly) {
             $state = ['cards' => $weekly, 'ov' => $this->overrideRows($board, fn ($q) => $q->whereIn('o.card_id', array_keys($weekly)))];
@@ -2384,7 +2385,7 @@ trait TimetableHemisSync
                 $l = $lesson((string) $c->subject_name, $c->training_type === 'lecture' ? 'L' : 'A', (int) $e['from'], (int) $e['to'] - (int) $e['from'],
                     $ph ? ($ph['hemis_id'] ?? null) : ($c->teacher_id ? ($teacherHemis[$c->teacher_id] ?? null) : null),
                     $ph ? ($ph['teacher_name'] ?? 'kafedra mudiri') : ($c->teacher_id ? $c->teacher_name : null),
-                    $e['room'], $e['room_name'], false, $ph ? (string) ($ph['orig_teacher_name'] ?? '') : null);
+                    $e['room'], $e['room_name'], false, $ph ? (string) ($ph['orig_teacher_name'] ?? '') : null, (int) ($e['week'] ?? 0));
                 foreach ($this->cardGroupsOf($c) as $raw) {
                     $lms[$facKey($c->faculty_name) . '|' . $this->groupNameKey(trim((string) $raw))][] = $l;
                 }
@@ -2401,7 +2402,7 @@ trait TimetableHemisSync
                     foreach ($list as $x) {
                         if ($x['date'] === $today) {
                             $lms[$gk][] = $lesson($names[$sk] ?? $sk, $x['part'], (int) $x['slot'], (int) $x['len'], $x['employee_id'], $x['employee_name'],
-                                $x['auditorium_code'], $x['auditorium_name'], true, $x['placeholder'] ?? null);
+                                $x['auditorium_code'], $x['auditorium_name'], true, $x['placeholder'] ?? null, (int) ($x['week'] ?? 0));
                         }
                     }
                 }
@@ -2479,7 +2480,7 @@ trait TimetableHemisSync
             $sems = $metaOf($gid)['sems'];
             $list = [];
             $csRows = DB::table('curriculum_subjects')->where('curricula_hemis_id', $groups[$gid]['row']->curriculum_hemis_id)->whereIn('semester_code', $sems)
-                ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->get(['subject_id', 'subject_name', 'subject_details', 'department_id', 'semester_code'])
+                ->when($hasCsActive, fn ($q) => $q->where('is_active', true))->get(['id', 'subject_id', 'subject_name', 'subject_details', 'department_id', 'semester_code'])
                 ->sortBy(fn ($cs) => array_search((string) $cs->semester_code, $sems, true));
             foreach ($csRows as $cs) {
                 if (isset($list[(int) $cs->subject_id])) {
@@ -2496,7 +2497,7 @@ trait TimetableHemisSync
                 }
                 if ($codes) {
                     $list[(int) $cs->subject_id] = ['subject_id' => (int) $cs->subject_id, 'name' => (string) $cs->subject_name, 'dept' => $cs->department_id,
-                        'plan' => true, 'codes' => $codes];
+                        'plan' => true, 'codes' => $codes, 'cs_id' => (int) $cs->id];
                 }
             }
             $hs = DB::table('schedules')->where('group_id', $gid)->whereIn('semester_code', $sems)->whereNull('deleted_at')
@@ -2520,7 +2521,18 @@ trait TimetableHemisSync
 
             return $subjectsMemo[$gid] = array_values($list);
         };
-        $targetOf = function (int $gid, array $r) use ($subjectsOf): ?array {
+        // KTR'dagi shu qator (hafta / sikl kuni) soatlari: [o'quv reja fani id => [qator => [tur kodi => soat]]] — so'rov davomida bir marta.
+        $ktrMemo = [];
+        $ktrRow = function (int $csId, int $row) use (&$ktrMemo): array {
+            if (!array_key_exists($csId, $ktrMemo)) {
+                $kp = Schema::hasTable('ktr_plans') ? DB::table('ktr_plans')->where('curriculum_subject_id', $csId)->first() : null;
+                $pd = $kp ? (is_string($kp->plan_data) ? json_decode($kp->plan_data, true) : $kp->plan_data) : null;
+                $ktrMemo[$csId] = $pd ? (array) ($pd['hours'] ?? $pd) : [];
+            }
+
+            return array_map('intval', (array) ($ktrMemo[$csId][$row] ?? $ktrMemo[$csId][(string) $row] ?? []));
+        };
+        $targetOf = function (int $gid, array $r) use ($subjectsOf, $ktrRow): ?array {
             $part = $r['part'];
             $base = $this->hemisSubjectBase((string) $r['subject']);
             $partCodes = fn (array $s) => array_filter($s['codes'], fn ($c) => $c['part'] === $part);
@@ -2533,6 +2545,15 @@ trait TimetableHemisSync
                 usort($found, fn ($a, $b) => [(int) $b['plan'], $hits($b), $a['subject_id']] <=> [(int) $a['plan'], $hits($a), $b['subject_id']]);
                 $s = $found[0];
                 $codes = $partCodes($s);
+                // Amaliy qismda bir nechta tur (amaliy, seminar, laboratoriya...): shu hafta (sikl — shu kun) KTR'ida soati bor turlar;
+                // KTR'da yo'q yoki hech birida soat yo'q — avvalgidek (HEMIS jadvalida ko'p uchragani, so'ng yuklamasi).
+                if (count($codes) > 1 && !empty($s['cs_id']) && !empty($r['ktr_week'])) {
+                    $hours = $ktrRow((int) $s['cs_id'], (int) $r['ktr_week']);
+                    $withHours = array_filter($codes, fn ($c, $code) => ($hours[(string) $code] ?? 0) > 0, ARRAY_FILTER_USE_BOTH);
+                    if ($withHours) {
+                        $codes = $withHours;
+                    }
+                }
                 uksort($codes, fn ($a, $b) => [$codes[$b]['n'], $codes[$b]['load'], (int) $a] <=> [$codes[$a]['n'], $codes[$a]['load'], (int) $b]);
                 $code = (string) array_key_first($codes);
 

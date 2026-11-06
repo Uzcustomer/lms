@@ -66,6 +66,30 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.equal(ctx.card(), null);
     assert.equal(renders, 1);
 
+    // 2b) Ogohlantirishdan keyin xona yoki o'qituvchi o'zgartirilsa — eski "Baribir" yangi tanlovni force bilan yubormaydi:
+    // force'siz qayta tekshiriladi (yangi xonaning o'z ogohlantirishi chiqadi).
+    for (const change of [() => { el('cmAud').value = 'R101'; }, () => { el('cmTeacher').value = '8'; }]) {
+        ctx.setCard({ id: 44, teacher_id: 7 });
+        el('cmTeacher').value = '7';
+        el('cmAud').value = 'R102';
+        shown.length = 0;
+        el('cmSave').onclick();
+        calls.at(-1).rej(Object.assign(new Error(msg), { data: { needs_confirm: true, room_owner: true, conflict_items: [] } }));
+        await tick(); await tick();
+        assert.equal(shown.length, 1);
+        change();
+        shown[0].onForce();
+        assert.equal(calls.at(-1).body.force, undefined);
+        calls.at(-1).rej(Object.assign(new Error('boshqa xona'), { data: { needs_confirm: true, conflict_items: [] } }));
+        await tick(); await tick();
+        assert.deepEqual(shown.map(x => x.msg), [msg, 'boshqa xona']);
+        // Yangi ogohlantirish — yangi tanlov uchun: o'zgarishsiz bosilsa — force=1.
+        shown[1].onForce();
+        assert.equal(calls.at(-1).body.force, 1);
+        calls.at(-1).res({ teacher_name: 'X', auditorium_code: el('cmAud').value, auditorium_name: 'x', len_half: 2 });
+        await tick(); await tick();
+    }
+
     // 3) force bilan ham rad etilsa (yoki oddiy xato) — qizil matn, qayta ogohlantirish yo'q.
     ctx.setCard({ id: 43, teacher_id: 7 });
     shown.length = 0;
@@ -81,5 +105,5 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.equal(shown.length, 0);
     assert.equal(el('cmMsg').textContent, 'Auditoriya topilmadi');
 
-    console.log('timetable card room owner: 3 scenarios passed');
+    console.log('timetable card room owner: 4 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -1337,6 +1337,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/subject-colors', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectColors'])->name('subject-colors.save');
                 // Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl)
                 Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
+                // Fan sozlamasi: fakultet / o'quv reja ro'yxati ("Darslar" oynasi — alohida kunlar soni).
+                Route::get('/boards/{board}/subject-setting/scopes', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleSettingScopes'])->name('subject-setting.scopes');
                 // Sikl (4-6 kurs) kalendar rejasi
                 Route::post('/boards/{board}/cycle-plan', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlan'])->name('cycle-plan');
                 // Haftalik kesimlar (o'qituvchi / fan / xona): tanlangan haftadagi sikl darslari (faqat ko'rish)

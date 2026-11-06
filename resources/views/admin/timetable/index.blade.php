@@ -1884,6 +1884,18 @@
         #cycleGrid .cyc-mk-cell.is-cyc-busy[data-busy-note]::before { content: attr(data-busy-note); position: absolute; left: 1px; top: 1px; z-index: 3;
             padding: 0 3px; border-radius: 3px; background: #1e3a8a; color: #fff; font-size: 8px; font-weight: 700; white-space: nowrap; pointer-events: none; }
         #cycSelBadge [data-sel-busy] { padding: 0 6px; border-radius: 4px; background: #fde68a; color: #713f12; font-weight: 700; }
+        /* "Darslar" oynasi: fakultet / o'quv reja bo'yicha alohida sikl kunlari; blokda — yuqori daraja olingani belgisi */
+        .cyc-scope-note { color: #b45309; font-weight: 700; cursor: help; }
+        .asc-subj-scope { margin-left: 6px; padding: 0 6px; border: 1px solid #c7d2fe; border-radius: 5px; background: #eef2ff; color: #3730a3; font-size: 11px; }
+        .asc-subj-scope:hover { background: #e0e7ff; }
+        #subjScopeDlg .ssc-list { display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
+        #subjScopeDlg .ssc-fac { border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 8px; display: grid; gap: 4px; }
+        #subjScopeDlg .ssc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+        #subjScopeDlg .ssc-cur { padding-left: 12px; }
+        #subjScopeDlg .ssc-cur small { display: block; color: #64748b; font-size: 11px; }
+        #subjScopeDlg input[type="number"] { width: 72px; border: 1px solid #cbd5e1; border-radius: 5px; padding: 1px 4px; }
+        #subjAffectDlg .saf-list { max-height: 50vh; overflow: auto; margin: 6px 0; padding: 0; list-style: none; font-size: 13px; }
+        #subjAffectDlg .saf-list li { padding: 3px 6px; border-left: 3px solid #f59e0b; margin-bottom: 2px; }
         #cycSelBadge { position: fixed; z-index: 66; display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px;
             background: #1e3a8a; color: #fff; font-size: 12px; box-shadow: 0 4px 12px rgba(15, 23, 42, .25); }
         #cycSelBadge button { border: 1px solid rgba(255, 255, 255, .5); border-radius: 4px; padding: 0 6px; background: transparent; color: #fff; font-size: 11px; }
@@ -6021,9 +6033,93 @@
                         '<span class="asc-subj-param">Hafta <input type="number" class="asc-subj-occ" min="1" max="60" value="' + (setting.occurrences ?? '') + '" placeholder="—"></span>';
                 }
                 if (mode === 'cycle') {
-                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="120" value="' + (setting.cycle_days ?? '') + '" placeholder="kun"></span>';
+                    // Fakultet / o'quv reja bo'yicha alohida kunlar soni (openSubjScopeDlg): saqlanganlar soni bilan.
+                    const n = (setting.scoped || []).length;
+                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="120" value="' + (setting.cycle_days ?? '') + '" placeholder="kun"></span>'
+                        + '<button type="button" class="asc-subj-scope" title="Shu fan uchun fakultet yoki o\'quv reja bo\'yicha alohida sikl kunlari soni">'
+                        + 'Fakultet / o\'quv reja bo\'yicha alohida' + (n ? ' (' + n + ')' : '') + '</button>';
                 }
                 return '<span class="text-slate-400">—</span>';
+            }
+
+            // Fan sozlamasini saqlash: sikl kunlari soni o'zgarsa — avval oldindan ko'rish (dry_run); joylangan bloklar uzunligi o'zgarsa —
+            // tasdiq oynasi ("N ta joylangan blok uzunligi o'zgaradi" + ro'yxat). Bekor — null.
+            async function subjSettingSave(body) {
+                const url = BASE + '/boards/' + board.id + '/subject-setting';
+                if (body.mode === 'cycle') {
+                    const dry = await api(url, 'POST', Object.assign({}, body, { dry_run: 1 }));
+                    if ((dry.affected || []).length && !(await subjAffectedConfirm(dry.affected))) return null;
+                }
+                return api(url, 'POST', body);
+            }
+            function subjAffectedConfirm(list) {
+                return new Promise(resolve => {
+                    const prior = document.getElementById('subjAffectDlg');
+                    if (prior) prior.remove();
+                    const m = document.createElement('div');
+                    m.id = 'subjAffectDlg';
+                    m.className = 'cr-proposal-overlay';
+                    m.innerHTML = '<div class="cr-proposal-form"><h3 class="font-bold text-lg">' + list.length + ' ta joylangan blok uzunligi o\'zgaradi</h3>'
+                        + '<ul class="saf-list">' + list.map(a => '<li><b>' + esc(a.faculty || '—') + '</b> · ' + esc(a.row) + (a.type === 'lecture' ? ' (ma\'ruza)' : '')
+                            + ': ' + esc(a.from == null ? '—' : String(a.from)) + ' → ' + esc(a.to == null ? '—' : String(a.to)) + ' kun</li>').join('') + '</ul>'
+                        + '<div class="flex justify-end gap-2"><button type="button" data-saf="cancel">Bekor</button>'
+                        + '<button type="button" data-saf="ok" class="px-3 py-2 rounded bg-blue-600 text-white">Saqlash</button></div></div>';
+                    document.body.appendChild(m);
+                    const done = v => { m.remove(); resolve(v); };
+                    m.onclick = ev => { if (ev.target === m) done(false); };
+                    m.querySelector('[data-saf="cancel"]').onclick = () => done(false);
+                    m.querySelector('[data-saf="ok"]').onclick = () => done(true);
+                });
+            }
+            // "Fakultet / o'quv reja bo'yicha alohida": shu yo'nalish va kursdagi fakultetlar, har fakultet ichida o'quv rejalar (nomi,
+            // semestri, guruh prefiksi, guruhlar soni). Bo'sh — yuqori daraja: avval fakultet, keyin umumiy. O'zgarishi bilan saqlanadi
+            // (joylangan bloklar o'zgarsa — tasdiq oynasi).
+            async function openSubjScopeDlg(row, onSaved) {
+                const prior = document.getElementById('subjScopeDlg');
+                if (prior) prior.remove();
+                const m = document.createElement('div');
+                m.id = 'subjScopeDlg';
+                m.className = 'cr-proposal-overlay';
+                m.innerHTML = '<div class="cr-proposal-form"><div class="text-slate-500">Yuklanmoqda…</div></div>';
+                document.body.appendChild(m);
+                m.onclick = ev => { if (ev.target === m) m.remove(); };
+                const qs = new URLSearchParams({ specialty_name: row.specialty_name, course: row.course, subject_name: row.subject_name });
+                const render = async () => {
+                    let j;
+                    try { j = await api(BASE + '/boards/' + board.id + '/subject-setting/scopes?' + qs); }
+                    catch (e) { m.querySelector('.cr-proposal-form').innerHTML = '<p class="text-red-600">' + esc(e.message) + '</p>'; return; }
+                    const general = j.days != null ? j.days : 1;
+                    const shortFac = n => String(n || '—').replace(/\s+fakulteti$/i, '');
+                    m.querySelector('.cr-proposal-form').innerHTML = '<h3 class="font-bold text-lg">Fakultet / o\'quv reja bo\'yicha alohida</h3>'
+                        + '<p class="text-sm">' + esc(row.subject_name + ' · ' + row.specialty_name + ' · ' + row.course + '-kurs') + ' — umumiy: <b>' + general
+                        + ' kun</b>. Bo\'sh — yuqori daraja (avval fakultet, keyin umumiy).</p><div class="ssc-list">'
+                        + (j.faculties || []).map((f, fi) => '<div class="ssc-fac"><label class="ssc-row"><b>' + esc(f.name || '—') + '</b>'
+                            + '<input type="number" min="1" max="120" data-ssc="' + fi + '" value="' + (f.days ?? '') + '" placeholder="umumiy: ' + general + '"> kun</label>'
+                            + (f.curricula || []).map((c, ci) => '<label class="ssc-row ssc-cur"><span>' + esc(shortFac(f.name) + ' · ' + (c.prefix || '—') + ' · '
+                                + (c.semester || 'semestr —') + ' (' + c.groups + ' guruh)') + '<small>' + esc(c.name) + '</small></span>'
+                                + '<input type="number" min="1" max="120" data-ssc="' + fi + '|' + ci + '" value="' + (c.days ?? '') + '"'
+                                + ' placeholder="' + (f.days != null ? 'fakultet: ' + f.days : 'umumiy: ' + general) + '"' + (c.id > 0 ? '' : ' disabled title="Guruhlarning o\'quv rejasi aniqlanmagan"') + '> kun</label>').join('')
+                            + '</div>').join('')
+                        + '</div><p role="alert" class="text-sm"></p><div class="flex justify-end"><button type="button" data-ssc-close>Yopish</button></div>';
+                    m.querySelector('[data-ssc-close]').onclick = () => m.remove();
+                    m.querySelectorAll('input[data-ssc]').forEach(inp => inp.onchange = async () => {
+                        const [fi, ci] = inp.dataset.ssc.split('|');
+                        const f = j.faculties[+fi], c = ci != null ? f.curricula[+ci] : null;
+                        const msg = m.querySelector('[role="alert"]');
+                        msg.className = 'text-sm text-slate-500';
+                        msg.textContent = 'Saqlanmoqda…';
+                        try {
+                            const saved = await subjSettingSave({ specialty_name: row.specialty_name, course: +row.course, subject_name: row.subject_name, mode: 'cycle',
+                                faculty_name: f.name, curriculum_hemis_id: c ? c.id : 0, cycle_days: inp.value ? +inp.value : null });
+                            if (!saved) { msg.textContent = 'Bekor qilindi.'; await render(); return; }
+                            if (onSaved) await onSaved();
+                            await render();
+                            m.querySelector('[role="alert"]').className = 'text-sm text-emerald-700';
+                            m.querySelector('[role="alert"]').textContent = 'Saqlandi' + ((saved.affected || []).length ? ': ' + saved.affected.length + ' ta blok uzunligi o\'zgardi.' : '.');
+                        } catch (e) { msg.className = 'text-sm text-red-600'; msg.textContent = e.message; }
+                    });
+                };
+                await render();
             }
 
             async function saveSubjectModeRow(tr, row) {
@@ -6049,8 +6145,17 @@
                 status.textContent = '…';
                 status.className = 'asc-subj-status text-slate-400';
                 try {
-                    const saved = await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
+                    const saved = await subjSettingSave(body);
                     const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
+                    if (!saved) {
+                        // Tasdiq oynasida "Bekor" — avvalgi rejim va qiymat qaytadi.
+                        const prev = subjectSettingOf(row);
+                        tr.querySelector('.asc-subj-mode').value = prev.mode || 'normal';
+                        tr.querySelector('.asc-subj-params').innerHTML = subjectModeParamsHtml({ ...prev, mode: prev.mode || 'normal' });
+                        status.textContent = '—';
+                        status.className = 'asc-subj-status text-slate-400';
+                        return;
+                    }
                     const effectiveSeason = (saved && saved.season) || body.season || ((board && board.semester_parity) || 'kuzgi');
                     row.season = effectiveSeason;
                     if (mode === 'normal' && effectiveSeason === ((board && board.semester_parity) || 'kuzgi')) delete subjectSettings[key];
@@ -7269,7 +7374,7 @@
                                             + (kind.includes('is-ph-lec') ? ' · ma‘ruza vaqtincha kafedra mudirida: ' + esc(block.mudir_ph_lec.mudir_name || block.mudir_ph_lec.teacher_name || '') : '') + '"></button>';
                                     }
                                 }
-                                cellHtml = '<td class="cyc-cell cyc-block is-mark' + cfBlockClass(block.key, block.conflicts, cfOwners) + '" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block is-mark' + cfBlockClass(block.key, block.conflicts, cfOwners) + '" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.scope_note ? ' · ⚠ ' + esc(block.scope_note) : '') + ' · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + visDays.length + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
@@ -7281,18 +7386,19 @@
                                             + '<i class="bi bi-person-fill-exclamation" aria-label="O\'qituvchi biriktirilmagan"></i> ') +
                                     // To'qnashuv: qisqa belgi (qizil — o'qituvchi/guruh, sariq — xona, kulrang — o'tgan); tafsilot — bosilganda.
                                     cfBadgeHtml(block.key, block.conflicts, cfOwners) +
-                                    esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
+                                    // Oqimda o'quv rejalar / fakultetlar har xil — aniqlovchili sozlama o'rniga yuqori daraja olindi (⚠).
+                                    esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span>' + (block.scope_note ? ' <span class="cyc-scope-note" title="' + esc(block.scope_note) + '">⚠</span>' : '') + '</span>' +
                                     // O'qituvchi/xona doskada yozilmaydi — fan nomi bosilganda oynada chiqadi.
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +
                                     '</div></div></td>';
                             } else if (rect.main) {
-                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.scope_note ? ' · ⚠ ' + esc(block.scope_note) : '') + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<span class="cyc-shift-actions">' +
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
                                     '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                                    '</span><span class="cyc-lbl">' + typeChip + '<b class="cyc-subj">' + esc(block.subject) + '</b> <span class="cyc-days">(' + block.days + ')</span>' + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
+                                    '</span><span class="cyc-lbl">' + typeChip + '<b class="cyc-subj">' + esc(block.subject) + '</b> <span class="cyc-days">(' + block.days + ')</span>' + (block.scope_note ? ' <span class="cyc-scope-note" title="' + esc(block.scope_note) + '">⚠</span>' : '') + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
                                     reqHtml +
                                     '</td>';
                             } else {
@@ -13800,6 +13906,24 @@
                                 ev.target.classList.contains('asc-subj-cycle')) {
                                 saveSubjectModeRow(tr, row);
                             }
+                        });
+                        // "Fakultet / o'quv reja bo'yicha alohida": oyna; saqlangach qatordagi soni va (sikl ko'rinishida) jadval yangilanadi.
+                        tr.addEventListener('click', ev => {
+                            if (!ev.target.closest || !ev.target.closest('.asc-subj-scope')) return;
+                            ev.stopPropagation();
+                            openSubjScopeDlg(row, async () => {
+                                const j = await api(BASE + '/boards/' + board.id + '/subject-setting/scopes?' + new URLSearchParams({
+                                    specialty_name: row.specialty_name, course: row.course, subject_name: row.subject_name }));
+                                const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
+                                const scoped = [];
+                                (j.faculties || []).forEach(f => {
+                                    if (f.days != null) scoped.push({ faculty_name: f.name, curriculum_hemis_id: 0, cycle_days: f.days });
+                                    (f.curricula || []).forEach(c => { if (c.days != null) scoped.push({ faculty_name: f.name, curriculum_hemis_id: c.id, cycle_days: c.days }); });
+                                });
+                                subjectSettings[key] = Object.assign({}, subjectSettingOf(row), { scoped });
+                                refreshParams();
+                                if (typeof viewMode !== 'undefined' && viewMode === 'cycle' && typeof loadCyclePlan === 'function') loadCyclePlan();
+                            });
                         });
                     }
                     tr.onclick = () => {

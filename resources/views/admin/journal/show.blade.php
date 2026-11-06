@@ -618,27 +618,24 @@
         .admin-upgraded-cell.admin-upgraded-retake {
             background: linear-gradient(to top right, #fdba74 calc(50% - 1px), #64748b 50%, #fdba74 calc(50% + 1px)) !important;
         }
-        /* Batafsil ko'rinish: oshirilgan sababsiz NB otrabotka — och qizil, sababli — och ko'k, diagonal chiziqsiz */
-        .admin-upgraded-cell.au-nb,
-        .admin-upgraded-cell.au-nb .split-cell {
+        /* NB ustiga qo'yilgan baho (oshirilgan-oshirilmaganidan qat'i nazar), diagonal chiziqsiz:
+           sababsiz — och qizil, sababli — och ko'k. Batafsil: au-nb/au-sababli, ixcham: day-nb/day-sababli */
+        .au-nb, .au-nb .split-cell,
+        .admin-upgraded-cell.au-nb, .admin-upgraded-cell.au-nb .split-cell,
+        .day-nb, .admin-upgraded-cell.day-nb {
             background: #fecaca !important;
         }
-        .admin-upgraded-cell.au-sababli,
-        .admin-upgraded-cell.au-sababli .split-cell {
+        .au-sababli, .au-sababli .split-cell,
+        .admin-upgraded-cell.au-sababli, .admin-upgraded-cell.au-sababli .split-cell,
+        .day-sababli, .admin-upgraded-cell.day-sababli {
             background: #bfdbfe !important;
+        }
+        .day-sababli, .admin-upgraded-cell.day-sababli {
+            box-shadow: inset 0 0 0 2px #7c3aed;
         }
         .au-nb .split-line,
         .au-sababli .split-line {
             display: none;
-        }
-        /* Ixcham ko'rinish: sababsiz NB otrabotka — diagonal chiziqsiz, och qizil fon */
-        .admin-upgraded-cell.admin-upgraded-nb {
-            background: #fecaca !important;
-        }
-        /* Ixcham ko'rinish: sababli otrabotka — diagonal chiziqsiz, och ko'k fon */
-        .admin-upgraded-cell.admin-upgraded-sababli {
-            background: #bfdbfe !important;
-            box-shadow: inset 0 0 0 2px #7c3aed;
         }
         .exam-cell[onclick]:hover { background: #eff6ff; cursor: pointer; }
         .grade-fail {
@@ -1503,7 +1500,7 @@
                                                         $dayTitle = 'Superadmin: kunga bitta baho — barcha juftliklarga (' . count($superDayOps) . ' ta) yoziladi' . ($dayTitle ? ' | ' . $dayTitle : '');
                                                     }
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }} {{ $hasUpgradedInDay ? 'admin-upgraded-cell' : '' }} {{ $hasUpgradedInDay && $isRetake ? 'admin-upgraded-retake' : '' }} {{ $hasUpgradedInDay && $hasNbRetakeInDay ? 'admin-upgraded-nb' : '' }} {{ $hasUpgradedInDay && $hasSababliRetakeInDay ? 'admin-upgraded-sababli' : '' }}" {!! $isRetake && !$hasUpgradedInDay ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }} {{ $hasUpgradedInDay ? 'admin-upgraded-cell' : '' }} {{ $hasUpgradedInDay && $isRetake ? 'admin-upgraded-retake' : '' }} {{ $hasNbRetakeInDay ? 'day-nb' : '' }} {{ $hasSababliRetakeInDay ? 'day-sababli' : '' }}" {!! $isRetake && !$hasUpgradedInDay ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
                                                     @if($superDayOps) onclick="superadminDayGrade(this)" data-ops="{{ json_encode($superDayOps) }}" data-student="{{ $student->hemis_id }}" data-date="{{ $date }}" data-subject="{{ $subjectId }}" data-semester="{{ $semesterCode }}" @endif>
                                                     @if($hasGrades)
                                                         @php
@@ -2063,9 +2060,9 @@
                                                     if ($upgradeTitle) {
                                                         $cellTitle = $upgradeTitle . ($cellTitle ? "\n" . $cellTitle : '');
                                                     }
-                                                    // Oshirilgan otrabotka rangi (ixchamdagidek): sababli — och ko'k, sababsiz NB — och qizil
+                                                    // NB ustiga qo'yilgan baho rangi (ixchamdagidek): sababli — och ko'k, sababsiz NB — och qizil
                                                     $upgradeRetakeClass = '';
-                                                    if ($isAdminUpgraded && !empty($gradeData['is_retake'])) {
+                                                    if ($gradeData && !empty($gradeData['is_retake'])) {
                                                         if (!empty($gradeData['retake_was_sababli'])) {
                                                             $upgradeRetakeClass = 'au-sababli';
                                                         } elseif (($gradeData['reason'] ?? null) === 'absent') {

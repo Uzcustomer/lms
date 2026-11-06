@@ -368,11 +368,56 @@ it('faqat tanlangan haftagacha amallar chiqadi; sukut — joriy hafta oxirigacha
         ->and($u['actions_later'])->toBe(2)
         ->and($two['groups'][0]['until'])->toBe('2026-09-27');
 
-    // Sukut: joriy (2-) hafta — bugun 2026-09-22
+    // Sukut: joriy (2-) hafta — bugun 2026-09-22. 2-hafta dushanbasidagi dars HEMIS'ga kiritilmagan (o'tib ketdi): balans 1–2-hafta,
+    // balanslash darsi — guruh keladigan kunga; guruhning boshqa darsi yo'q (faqat shu fanning dushanbalari) — mos kun topilmadi.
     $def = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22'])->assertOk()->json();
+    $u = $def['groups'][0]['units'][0];
     expect($def['until_week'])->toBe(2)->and($def['current_week'])->toBe(2)
-        // 2-hafta dushanbasidagi dars HEMIS'ga kiritilmagan (o'tib ketdi) — shu haftaning o'zida yangi kun qo'shiladi
-        ->and(array_map(fn ($a) => $a['op'] . ' ' . $a['date'], $def['groups'][0]['units'][0]['actions']))->toBe(['create 2026-09-23']);
+        ->and($u['actions'])->toBe([])
+        ->and([$u['mode'], $u['mode_label'], $u['balance_period']])->toBe(['weekly', 'Har hafta', '1–2-hafta'])
+        ->and($u['balance_stats'])->toBe(['ktr' => ['count' => 2, 'hours' => 4], 'hemis' => ['count' => 1, 'hours' => 2], 'lms' => ['count' => 0, 'hours' => 0]])
+        ->and($u['notes'])->toContain("Balanslash: amaliy qism — 2-hafta darsi uchun mos kun topilmadi (guruhning dars kunlarida shu qism yo'q kun qolmadi).");
+
+    // Guruhning chorshanba kuni boshqa darsi bor (08:30) — balanslash darsi 23.09 ga, fanning odatdagi vaqtida (10:00), bandliksiz:
+    // o'qituvchi (5001) shu vaqtda boshqa guruhda HEMIS'da band bo'lsa ham — to'siq emas.
+    hsInsert('schedules', ['schedule_hemis_id' => 900, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11', 'group_id' => 4444,
+        'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy', 'lesson_date' => '2026-09-23 00:00:00',
+        'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00', 'employee_id' => 5001, 'employee_name' => 'USTOZ',
+        'auditorium_code' => '99', 'auditorium_name' => '99', 'department_id' => 1]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'practice', 'len_half' => 4, 'weeks' => 4,
+        'subject_name' => 'Lotin tili', 'group_name' => 'p/st26-01a (rus)', 'kafedra_name' => 'Tillar', 'day' => 3, 'pair' => 1]);
+    $def = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22'])->assertOk()->json();
+    $u = collect($def['groups'][0]['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    expect(array_map(fn ($a) => [$a['op'], $a['date'], $a['start'], $a['balance'] ?? false, $a['balance_week'] ?? null, $a['blocked']], $u['actions']))
+        ->toBe([['create', '2026-09-23', '10:00', true, 2, []]])
+        ->and($u['actions'][0]['reason'])->toStartWith("Balanslash — 2-hafta darsi o'rniga")
+        ->and(array_column($u['fixes'], 'text'))->toContain("Balanslash: amaliy qism soni yetmaydi (2-hafta darsi o'rniga): 2026-09-23 ga 2 soat qo'shildi")
+        // HEMIS'dan qaytganda tanib olish uchun saqlanadi.
+        ->and(DB::table('hemis_balance_lessons')->get(['group_hemis_id', 'subject_id', 'lesson_date', 'start_time', 'end_time', 'training_type_code', 'week'])
+            ->map(fn ($r) => (array) $r)->all())
+        ->toBe([['group_hemis_id' => 1596, 'subject_id' => 474, 'lesson_date' => '2026-09-23', 'start_time' => '10:00', 'end_time' => '11:20',
+            'training_type_code' => '13', 'week' => 2]]);
+
+    // Excel: Balans — fan rejimi, balans davri, KTR / HEMIS / LMS (dars / soat); Amallar — "Balanslash" ustuni.
+    $file = tempnam(sys_get_temp_dir(), 'hs') . '.xlsx';
+    file_put_contents($file, $as()->post(route('admin.timetable.hemis-sync.export', $s['board']), ['courses' => [1], 'today' => '2026-09-22'])
+        ->assertOk()->baseResponse->getFile()->getContent());
+    $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+    @unlink($file);
+    $bal = collect($book->getSheetByName('Balans')->toArray())->first(fn ($r) => $r[1] === 'Odam anatomiyasi');
+    $act = collect($book->getSheetByName('Amallar')->toArray())->first(fn ($r) => $r[1] === 'Odam anatomiyasi');
+    expect(array_slice($book->getSheetByName('Balans')->toArray()[0], 23))->toBe(['Fan rejimi', 'Balans davri', 'Balans: KTR (dars / soat)',
+        'Balans: HEMIS bugungacha (dars / soat)', 'Balans: LMS ertadan muddatgacha (dars / soat)'])
+        ->and(array_slice($bal, 23))->toBe(['Har hafta', '1–2-hafta', '2 / 4', '1 / 2', '0 / 0'])
+        ->and([$act[2], $act[3], $act[15]])->toBe(["Qo'shish", '2026-09-23', "Balanslash — 2-hafta darsi o'rniga"]);
+
+    // Fan rejimi "Darslar" oynasidan: Hafta almashinuvi.
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'subject_name' => 'Odam anatomiyasi', 'mode' => 'alternate']);
+    $u = collect($as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22'])->assertOk()
+        ->json('groups.0.units'))->firstWhere('subject_name', 'Odam anatomiyasi');
+    expect([$u['mode'], $u['mode_label']])->toBe(['alternate', 'Hafta almashinuvi']);
 });
 
 it('"Kafedra mudiri xonasi" — aynan shu nomli auditoriya ustuvor', function () {
@@ -2838,4 +2883,196 @@ it('limits HEMIS Excel export to the missing-room filter', function () {
     }
     expect(implode(' ', array_filter($book->getSheetByName('Amallar')->toArray()[1])))->toContain('mudir_xonasi');
     $book->disconnectWorksheets();
+});
+
+it('balans chegarasi: LMS\'da joylanmagan haftalardagi HEMIS darslari — o\'chirish (lms_unplaced), yig\'ma va ogohlantirish; muddatdan keyin — amal yo\'q', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // LMS: 3- va 4-hafta bekor qilingan (joylanmagan); HEMIS'da esa 1–4-hafta darslari bor. Bugun — 2-hafta seshanbasi.
+    foreach ([3, 4] as $w) {
+        DB::table('timetable_card_overrides')->insert(['card_id' => $s['card']->id, 'week' => $w, 'cancelled' => true, 'created_at' => now(), 'updated_at' => now()]);
+    }
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00');
+    hsSchedule(3, '2026-09-28', '10:00:00', '11:20:00');
+    hsSchedule(4, '2026-10-05', '10:00:00', '11:20:00');
+    hsSchedule(5, '2026-09-24', '10:00:00', '11:20:00');   // 2-haftada ikkinchi kun — ortiqcha (lms_unplaced emas)
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $run = fn (int $until) => $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22', 'until_week' => $until])
+        ->assertOk()->json();
+
+    $r = $run(4);
+    $u = $r['groups'][0]['units'][0];
+    expect([$u['balance_period'], $u['unplaced_label']])->toBe(['1–2-hafta', 'LMSda joylanmagan: 3–4-hafta — balanslanmadi (joylanishi kutilmoqda)'])
+        ->and($u['before']['count_diff'])->toBe(['L' => 0, 'A' => 0])
+        ->and(array_map(fn ($a) => [$a['op'], $a['date'], $a['reason_code'], $a['reason']], $u['actions']))->toBe([
+            ['delete', '2026-09-24', 'week_surplus', '2-hafta: KTR 1 dars, HEMIS 2 — ortiqcha'],
+            ['delete', '2026-09-28', 'lms_unplaced', 'LMSda joylanmagan (3-hafta)'],
+            ['delete', '2026-10-05', 'lms_unplaced', 'LMSda joylanmagan (4-hafta)'],
+        ])
+        ->and($r['unplaced_units'])->toBe([['group' => 'p/st26-01a', 'subject' => 'Odam anatomiyasi', 'part' => 'Amaliy qism', 'weeks' => '3–4', 'deletes' => 2]])
+        ->and($r['unplaced_deletes'])->toBe(['count' => 2, 'by_unit' => [
+            ['group' => 'p/st26-01a', 'subject' => 'Odam anatomiyasi', 'part' => 'Amaliy qism', 'weeks' => '3–4', 'count' => 2]]]);
+
+    // Muddat 3-hafta: 4-hafta darsi muddatdan keyin — amal yo'q (hozir yozilmaydi), o'chirish faqat 3-hafta.
+    $r = $run(3);
+    expect(array_column($r['groups'][0]['units'][0]['actions'], 'date'))->toBe(['2026-09-24', '2026-09-28'])
+        ->and($r['unplaced_deletes']['count'])->toBe(1);
+    // Muddat 2-hafta: joylanmagan hafta muddatdan tashqarida — hech qanday amal va ogohlantirish yo'q.
+    $r = $run(2);
+    expect(array_column($r['groups'][0]['units'][0]['actions'], 'reason_code'))->toBe(['week_surplus'])
+        ->and($r['unplaced_units'])->toBe([])
+        ->and($r['unplaced_deletes'])->toBe(['count' => 0, 'by_unit' => []]);
+});
+
+it('bugungi darslar: balanslash darsi (HEMIS solishtirish qo\'ygan) — "ortiqcha" emas, boshqa darsni band qilmaydi, belgisi bilan', function () {
+    $s = hsSetup();
+    $s['card']->update(['pair' => 7]);   // LMS: 13:30–14:50, HEMIS: 10:00–11:20
+    $items = [htItem(1, '2026-09-14', '10:00', '11:20'),
+        htItem(2, '2026-09-14', '14:10', '14:50', ['subject_id' => 1, 'subject' => 'Tarix', 'emp' => 7007, 'room' => '90'])];
+    // 14:10 dagi Tarix — balanslash darsi (oldingi solishtirishda qo'yilgan, 3-hafta darsi o'rniga).
+    DB::table('hemis_balance_lessons')->insert(['board_id' => $s['board']->id, 'group_hemis_id' => 1596, 'subject_id' => 1, 'lesson_date' => '2026-09-14',
+        'start_time' => '14:10', 'end_time' => '14:50', 'training_type_code' => '13', 'week' => 3, 'created_at' => now(), 'updated_at' => now()]);
+    htFake([1596 => $items]);
+    $res = htCall($s)->assertOk()->json();
+    $bal = collect($res['rows'])->firstWhere('hemis_id', 2);
+    expect([$bal['status'], $bal['balance'] ?? false, $bal['reason']])
+        ->toBe(['info', true, "balanslash — 3-hafta darsi o'rniga (HEMIS solishtirish qo'ygan) — o'zgartirilmaydi"])
+        // Balanslash darsi bilan ustma-ust tushsa ham — to'siq emas, o'zgartiriladi.
+        ->and(collect($res['rows'])->firstWhere('hemis_id', 1)['status'])->toBe('update');
+    // Yozuv bo'lmasa — avvalgidek: "ortiqcha dars" va guruh bandligi (to'siq).
+    DB::table('hemis_balance_lessons')->delete();
+    $res = htCall($s)->assertOk()->json();
+    expect(collect($res['rows'])->firstWhere('hemis_id', 2)['reason'])->toContain('ortiqcha dars')
+        ->and(collect($res['rows'])->firstWhere('hemis_id', 1)['status'])->toBe('blocked');
+});
+
+it('balanslash darsi: balans chegarasidan keyingi kunga tushsa — hozir yozilmaydi (later_balance); boshqa guruhning balanslash darsi to\'siq emas', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Bugun 22.09 (2-hafta seshanba). 1-hafta darsi HEMIS'da yo'q, 2-hafta dushanbasi bor; LMS'da 3-hafta bekor (joylanmagan) → H = 2.
+    DB::table('timetable_card_overrides')->insert(['card_id' => $s['card']->id, 'week' => 3, 'cancelled' => true, 'created_at' => now(), 'updated_at' => now()]);
+    hsSchedule(2, '2026-09-21', '10:00:00', '11:20:00');
+    // Guruh boshqa fan bilan faqat 4-hafta chorshanbasida keladi (07.10) — balans chegarasidan keyin, muddat (4-hafta) ichida.
+    $lat = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Lotin tili', 'group_name' => 'p/st26-01a (rus)', 'kafedra_name' => 'Tillar', 'day' => 3, 'pair' => 1]);
+    foreach ([1, 2, 3] as $w) {
+        DB::table('timetable_card_overrides')->insert(['card_id' => $lat->id, 'week' => $w, 'cancelled' => true, 'created_at' => now(), 'updated_at' => now()]);
+    }
+    $as = fn () => test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin']);
+    $r = $as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22', 'until_week' => 4])->assertOk()->json();
+    $u = collect($r['groups'][0]['units'])->firstWhere('subject_name', 'Odam anatomiyasi');
+    expect($u['balance_period'])->toBe('1–2-hafta')
+        // 07.10 dagi balanslash — rejada, lekin JSON'ga tushmaydi (hozir yozilmaydi); 4-hafta LMS darsi (05.10) — yoziladi.
+        ->and(array_map(fn ($a) => [$a['date'], !empty($a['balance'])], $u['actions']))->toBe([['2026-10-05', false]])
+        ->and(array_map(fn ($a) => [$a['date'], $a['start'], $a['later'], $a['balance_week']], $u['later_balance']))->toBe([['2026-10-07', '10:00', true, 1]])
+        ->and($u['later_balance'][0]['reason'])->toBe("Balanslash — 1-hafta darsi o'rniga (balans chegarasidan keyin — hozir yozilmaydi).")
+        // Yozilmaydigan taklifning belgisi saqlanmaydi (HEMIS'dagi o'sha vaqtdagi dars balanslash bo'lib qolmasin).
+        ->and(DB::table('hemis_balance_lessons')->count())->toBe(0);
+
+    // 05.10 10:00 da o'qituvchi (5001) boshqa guruhda HEMIS'da band — to'siq; o'sha dars balanslash darsi bo'lsa — to'siq emas.
+    hsInsert('schedules', ['schedule_hemis_id' => 901, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11', 'group_id' => 4444,
+        'group_name' => 'p/st26-09a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy', 'lesson_date' => '2026-10-05 00:00:00',
+        'lesson_pair_start_time' => '10:00:00', 'lesson_pair_end_time' => '11:20:00', 'employee_id' => 5001, 'employee_name' => 'USTOZ',
+        'auditorium_code' => '99', 'auditorium_name' => '99', 'department_id' => 1]);
+    $blocked = fn () => collect(collect($as()->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22', 'until_week' => 4])
+        ->assertOk()->json('groups.0.units'))->firstWhere('subject_name', 'Odam anatomiyasi')['actions'])->firstWhere('date', '2026-10-05')['blocked'];
+    expect($blocked())->not->toBe([]);
+    DB::table('hemis_balance_lessons')->insert(['group_hemis_id' => 4444, 'subject_id' => 999, 'lesson_date' => '2026-10-05', 'start_time' => '10:00',
+        'end_time' => '11:20', 'training_type_code' => '13', 'week' => 2]);
+    expect($blocked())->toBe([]);
+});
+
+it('balanslash darsi boshqa guruhning darsini band qilmaydi (guruhlararo tekshiruv)', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // 01a: Odam anatomiyasi dushanba 10:00, 2-hafta darsi HEMIS'da yo'q; guruh chorshanba Lotin tili bilan keladi → balanslash 23.09 10:00 (USTOZ).
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Lotin tili', 'group_name' => 'p/st26-01a (rus)', 'kafedra_name' => 'Tillar', 'day' => 3, 'pair' => 1]);
+    // 01b: o'sha fan, o'sha o'qituvchi chorshanba 10:00 da boshqa xonada — oddiy dars.
+    hsInsert('groups', ['group_hemis_id' => 1597, 'name' => 'p/st26-01b', 'curriculum_hemis_id' => 250, 'department_hemis_id' => 1, 'specialty_hemis_id' => 1]);
+    TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 4,
+        'subject_name' => 'Odam anatomiyasi', 'group_name' => 'p/st26-01b (rus)', 'kafedra_name' => 'Anatomiya', 'day' => 3, 'pair' => 3,
+        'teacher_id' => $s['card']->teacher_id, 'teacher_name' => 'USTOZ', 'auditorium_code' => '72', 'auditorium_name' => '424']);
+    $r = test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22'])->assertOk()->json();
+    $act = fn (string $g) => collect(collect($r['groups'])->firstWhere('group', $g)['units'])->firstWhere('subject_name', 'Odam anatomiyasi')['actions'];
+
+    expect(array_map(fn ($a) => [$a['date'], $a['start'], !empty($a['balance'])], $act('p/st26-01a')))->toBe([['2026-09-23', '10:00', true]])
+        // 01b ning 23.09 10:00 dagi darsi — balanslash darsi bilan bir vaqtda, lekin to'siq emas.
+        ->and(array_map(fn ($a) => [$a['date'], $a['start'], $a['blocked']], array_values(array_filter($act('p/st26-01b'), fn ($a) => $a['date'] === '2026-09-23'))))
+        ->toBe([['2026-09-23', '10:00', []]]);
+});
+
+it('HEMIS\'ga yozilgan (o\'tgan) balanslash darsi belgisi rejalashtiruvchiga uzatiladi: o\'sha haftaning oddiy darsi hafta limitidan o\'chmaydi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Dars — juma 10:00. 2-hafta jumasi o'tilmagan; o'rniga 3-hafta dushanbasi (28.09) 10:00 da balanslash darsi HEMIS'da. Bugun 29.09.
+    $s['card']->update(['day' => 5]);
+    hsSchedule(1, '2026-09-18', '10:00:00', '11:20:00');
+    hsSchedule(2, '2026-09-28', '10:00:00', '11:20:00');
+    hsSchedule(3, '2026-10-02', '10:00:00', '11:20:00');
+    hsSchedule(4, '2026-10-09', '10:00:00', '11:20:00');
+    $unit = fn () => collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-29', 'until_week' => 4])
+        ->assertOk()->json('groups.0.units'))->firstWhere('subject_name', 'Odam anatomiyasi');
+
+    // Belgisiz — 28.09 oddiy dars: 3-haftada 2 dars, 02.10 "hafta limiti" bilan olib tashlanadi.
+    expect(array_column($unit()['fixes'], 'type'))->toContain('week_limit');
+
+    DB::table('hemis_balance_lessons')->insert(['group_hemis_id' => 1596, 'subject_id' => 474, 'lesson_date' => '2026-09-28', 'start_time' => '10:00',
+        'end_time' => '11:20', 'training_type_code' => '13', 'week' => 2]);
+    $u = $unit();
+    expect($u['fixes'])->toBe([])
+        ->and($u['actions'])->toBe([])
+        ->and($u['before']['count_diff'])->toBe(['L' => 0, 'A' => 0]);
+});
+
+it('balanslash belgisi: HEMIS\'da turgan dars belgisi hisobot uni takrorlamasa ham saqlanadi — o\'chirilgani importda ko\'rinmaguncha', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Bugun 22.09; 2-hafta dushanbasi (21.09) HEMIS'da yo'q. Guruh chorshanba Lotin tili bilan keladi → balanslash darsi 23.09 10:00.
+    hsSchedule(1, '2026-09-14', '10:00:00', '11:20:00');
+    $lat = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => 'F1', 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'oqim_label' => '1-oqim', 'lang' => 'rus', 'students' => 10, 'training_type' => 'practice', 'len_half' => 4, 'weeks' => 4,
+        'subject_name' => 'Lotin tili', 'group_name' => 'p/st26-01a (rus)', 'kafedra_name' => 'Tillar', 'day' => 3, 'pair' => 1]);
+    // Balanslash darsi HEMIS'ga yozilgan (import qilingan); belgisida eski hafta.
+    hsSchedule(2, '2026-09-23', '10:00:00', '11:20:00');
+    // 05.10 — oddiy LMS darsiga aynan mos HEMIS darsi; 24.09 — HEMIS'da yo'q (yozilmagan taklif).
+    hsSchedule(3, '2026-10-05', '10:00:00', '11:20:00');
+    $mark = fn (string $date, int $week) => ['group_hemis_id' => 1596, 'subject_id' => 474, 'lesson_date' => $date, 'start_time' => '10:00',
+        'end_time' => '11:20', 'training_type_code' => '13', 'week' => $week];
+    DB::table('hemis_balance_lessons')->insert([$mark('2026-09-23', 1), $mark('2026-09-24', 2), $mark('2026-10-05', 2), $mark('2026-09-16', 1)]);
+    $marks = fn () => DB::table('hemis_balance_lessons')->orderBy('lesson_date')->get(['lesson_date', 'week'])->map(fn ($r) => [$r->lesson_date, $r->week])->all();
+    $unit = fn () => collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-22', 'until_week' => 4])
+        ->assertOk()->json('groups.0.units'))->firstWhere('subject_name', 'Odam anatomiyasi');
+
+    // Qayta taklif qilingan 23.09 — HEMIS'dagisiga mos (amal yo'q), haftasi yangilanadi; 24.09 (HEMIS'da yo'q) va 05.10 (oddiy dars) —
+    // olib tashlanadi; o'tgan kunlar (16.09) — tarix, tegilmaydi.
+    $u = $unit();
+    expect(array_filter($u['actions'], fn ($a) => in_array($a['date'], ['2026-09-23', '2026-10-05'], true)))->toBe([])
+        ->and($marks())->toBe([['2026-09-16', 1], ['2026-09-23', 2]]);
+
+    // LMS o'zgardi — guruh chorshanba kelmaydi: hisobot 23.09 ni takrorlamaydi va HEMIS'dagisini o'chirishni taklif qiladi. Hisobot o'zi
+    // yozmaydi — belgi saqlanadi (bekor qilinsa, dars HEMIS'da balanslash darsi bo'lib qoladi).
+    $lat->delete();
+    $u = $unit();
+    expect(array_map(fn ($a) => [$a['op'], $a['date']], array_values(array_filter($u['actions'], fn ($a) => $a['date'] === '2026-09-23'))))
+        ->toBe([['delete', '2026-09-23']])
+        ->and($marks())->toBe([['2026-09-16', 1], ['2026-09-23', 2]]);
+
+    // HEMIS'dan o'chirilgani importda ko'rindi — belgi ham olib tashlanadi.
+    DB::table('schedules')->where('schedule_hemis_id', 2)->update(['deleted_at' => now()]);
+    $unit();
+    expect($marks())->toBe([['2026-09-16', 1]]);
 });

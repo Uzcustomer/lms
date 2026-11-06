@@ -816,11 +816,16 @@ trait TimetableHemisSync
         $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
         $cards = $q->get();
 
-        // Sikl fanlari bu bosqichda yo'q (ularning kunlari sikl kalendarida).
+        // Sikl fanlari bu bosqichda yo'q (ularning kunlari sikl kalendarida). Fan rejimi ("Darslar" oynasi): Har hafta (normal) /
+        // Hafta almashinuvi (alternate) — haftalik fan balansi va hafta limiti uchun.
         $cycleSubjects = [];
+        $altSubjects = [];
         foreach ($this->subjectSettingsFor($board) as $st) {
+            $sk = $this->specKey($st['specialty_name']) . '|' . (int) $st['course'] . '|' . $this->normSubject((string) $st['subject_name']);
             if (($st['mode'] ?? '') === 'cycle') {
-                $cycleSubjects[$this->specKey($st['specialty_name']) . '|' . (int) $st['course'] . '|' . $this->normSubject((string) $st['subject_name'])] = true;
+                $cycleSubjects[$sk] = true;
+            } elseif (($st['mode'] ?? '') === 'alternate') {
+                $altSubjects[$sk] = true;
             }
         }
         $isCycle = function (TimetableCard $c) use ($cycleSubjects): bool {
@@ -829,6 +834,13 @@ trait TimetableHemisSync
 
             return isset($cycleSubjects[$k . $this->normSubject((string) $c->subject_name)])
                 || ($base !== null && isset($cycleSubjects[$k . $this->normSubject($base)]));
+        };
+        $weeklyMode = function (TimetableCard $c) use ($altSubjects): string {
+            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|';
+            $base = $this->cycleSubjectVariantBase((string) $c->subject_name);
+
+            return isset($altSubjects[$k . $this->normSubject((string) $c->subject_name)])
+                || ($base !== null && isset($altSubjects[$k . $this->normSubject($base)])) ? 'alternate' : 'weekly';
         };
         $cycleCards = $cards->filter($isCycle);
         $cards = $cards->reject($isCycle)->values();
@@ -975,6 +987,10 @@ trait TimetableHemisSync
                 ->whereNull('deleted_at')->whereNotNull('lesson_date')
                 ->get(['schedule_hemis_id', 'subject_id', 'subject_name', 'training_type_code', 'training_type_name', 'lesson_date',
                     'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'updated_at']);
+            // HEMIS'ga yozilgan balanslash darslari (LMS belgisi): kalit => hafta — rejalashtiruvchida hafta limitiga kirmaydi.
+            $balanceMarks = $this->hemisBalanceGroupMarks((int) $grp->group_hemis_id);
+            $isBalanceRow = fn ($r) => $balanceMarks[$this->hemisBalanceKey($grp->group_hemis_id, $r->subject_id, $r->lesson_date, $r->lesson_pair_start_time,
+                $r->training_type_code)] ?? null;
 
             $gCards = $cards->filter(fn ($c) => in_array($gk, array_map(fn ($n) => $groupKey($c, $n), $cardGroups($c)), true))->values();
             $usedCards = [];
@@ -1063,6 +1079,7 @@ trait TimetableHemisSync
                         'current_week' => $doneDays,
                         // Sikl fani: KTR qatori — sikl kuni, balans butun blok bo'yicha, tuzatish faqat blok ichida (work_dates).
                         'cycle' => true,
+                        'mode' => 'cycle',
                         'work_dates' => $workCycle,
                         'block_from' => $ktrDates ? min($ktrDates) : null,
                         'block_to' => $ktrDates ? max($ktrDates) : null,
@@ -1097,7 +1114,10 @@ trait TimetableHemisSync
                     $unplacedCard = $unplacedCard || !$lessons;
                     array_push($plan, ...$lessons);
                 }
-                if (!array_filter($plan, fn ($p) => $p['date'] > $today)) {
+                // Ertadan LMS'da darsi yo'q, lekin HEMIS'da kelgusi darsi bor (LMS'da qolgan haftalar bekor / joylanmagan) — mark asosiy manba:
+                // ular o'chiriladi (lms_unplaced, muddat ichida). LMS'da umuman darsi yo'q karta — avvalgidek tegilmaydi.
+                $hemisFuture = $hemisRows->contains(fn ($hr) => substr((string) $hr->lesson_date, 0, 10) > $today && isset($codes[(string) $hr->training_type_code]));
+                if (!array_filter($plan, fn ($p) => $p['date'] > $today) && (!$plan || !$hemisFuture)) {
                     // Ichki jadvalda birorta darsi yo'q (joylanmagan) karta bo'lsa — fan tugamagan, bu haqiqiy muammo.
                     $skipped[] = ['subject_name' => $cs->subject_name, 'reason' => 'LMS ichki jadvalida ertadan keyin dars yo\'q — HEMIS\'ga tegilmaydi',
                         'kind' => $unplacedCard ? 'unplaced' : 'finished'];
@@ -1128,6 +1148,10 @@ trait TimetableHemisSync
                     }
                 }
                 $mudir = $mudirFor($cs->department_id);
+                $weekStarts = [];
+                for ($w = 1; $w <= $gridFor($first)['weeks']; $w++) {
+                    $weekStarts[$w] = $weekMonday($first, $w);
+                }
                 $units[] = [
                     'key' => $gk . '|' . $cs->id,
                     'subject_id' => (int) $cs->subject_id,
@@ -1136,12 +1160,15 @@ trait TimetableHemisSync
                     'codes' => $codes, 'code_names' => $codeNames,
                     'ktr' => $ktr,
                     'current_week' => $currentWeek,
+                    // Fan rejimi va haftalar boshi (o'tgan HEMIS darslarining haftasi — hafta limiti, "N-hafta darsi o'rniga").
+                    'mode' => $weeklyMode($first),
+                    'week_starts' => $weekStarts,
                     'hemis' => $hemisRows->map(fn ($r) => [
                         'id' => (int) $r->schedule_hemis_id, 'date' => substr((string) $r->lesson_date, 0, 10),
                         'start' => substr((string) $r->lesson_pair_start_time, 0, 5), 'end' => substr((string) $r->lesson_pair_end_time, 0, 5),
                         'code' => (string) $r->training_type_code, 'employee_id' => $r->employee_id, 'employee_name' => $r->employee_name,
                         'auditorium_code' => $r->auditorium_code, 'auditorium_name' => $r->auditorium_name,
-                    ])->values()->all(),
+                    ] + (($bw = $isBalanceRow($r)) !== null ? ['balance' => true, 'balance_week' => $bw ?: null] : []))->values()->all(),
                     'plan' => $plan,
                     'fallback_employee' => $mudir,
                     'fallback_room' => $fallbackRoomFor(),
@@ -1204,11 +1231,34 @@ trait TimetableHemisSync
             if ($uw > 0) {
                 $until = Carbon::parse($weekMonday($sample, min($uw, $g['weeks'])))->addDays(6)->toDateString();
             }
+            // Haftalik fan balansi — "Hemisga yozish" muddatigacha (0 — semestr oxiri: chegarasiz).
+            foreach ($units as &$uu) {
+                if (empty($uu['cycle'])) {
+                    $uu['until_week'] = $uw > 0 ? min($uw, $g['weeks']) : null;
+                    $uu['until_date'] = $until;
+                }
+            }
+            unset($uu);
+            // Guruh keladigan kunlar (LMS ichki jadvali: barcha kartalar va sikl fanlari) — balanslash darsi faqat shu kunlarga.
+            $groupLessons = [];
+            $addLesson = function (array $l) use (&$groupLessons, $today): void {
+                if ($l['date'] > $today) {
+                    for ($i = 0; $i < max(1, (int) $l['len']); $i++) {
+                        $groupLessons[$l['date']][(int) $l['slot'] + $i] = true;
+                    }
+                }
+            };
+            foreach ($gCards as $c) {
+                array_map($addLesson, $cardLessons($c));
+            }
+            foreach ($cycleLessons[$gk] ?? [] as $lessons) {
+                array_map($addLesson, $lessons);
+            }
             // Control subjects remain exportable and plan independently of group occupancy.
             $blockingUnits = array_values(array_filter($units, fn ($u) => !$this->isNonBlocking($u, $board)));
-            $results = $blockingUnits ? $planner->planGroup($blockingUnits, $busy, $workDates) : [];
+            $results = $blockingUnits ? $planner->planGroup($blockingUnits, $busy, $workDates, $groupLessons) : [];
             foreach ($units as $unit) {
-                if ($this->isNonBlocking($unit, $board)) array_push($results, ...$planner->planGroup([$unit], [], $workDates));
+                if ($this->isNonBlocking($unit, $board)) array_push($results, ...$planner->planGroup([$unit], [], $workDates, $groupLessons));
             }
             $resultByKey = array_column($results, null, 'key');
             $results = array_values(array_map(fn ($u) => $resultByKey[$u['key']], $units));
@@ -1222,8 +1272,27 @@ trait TimetableHemisSync
                 $unitByKey[$uu['key']] = $uu;
             }
             $explain ??= $this->hemisMoveExplainer($board, $slotTimes, $isCycle);
+            $balanceRows = [];
+            $regularKeys = [];
             foreach ($results as &$r) {
                 $r += $unitMeta[$r['key']] ?? [];
+                // Fan rejimi va balans davri: shu davr bo'yicha KTR / HEMIS (bugungacha) / LMS (ertadan muddatgacha) — soni va soati.
+                $r['mode_label'] = ['weekly' => 'Har hafta', 'alternate' => 'Hafta almashinuvi', 'cycle' => 'Sikl'][$r['mode'] ?? 'weekly'] ?? 'Har hafta';
+                // Balans davri: har qism 1..H (bir xil bo'lsa — bitta); H < muddat — LMS'da joylanmagan haftalar (balanslanmadi, kutiladi).
+                $partName = ['L' => 'ma\'ruza', 'A' => 'amaliy'];
+                $bw = (array) ($r['balance_weeks'] ?? []);
+                $r['balance_period'] = !$bw ? null : (count(array_unique($bw)) === 1
+                    ? '1–' . reset($bw) . '-hafta'
+                    : implode(', ', array_map(fn ($p, $h) => $partName[$p] . ' 1–' . $h, array_keys($bw), $bw)) . '-hafta');
+                $uw2 = (array) ($r['unplaced_weeks'] ?? []);
+                $r['unplaced_label'] = $uw2 ? 'LMSda joylanmagan: ' . implode('; ', array_map(fn ($p, $ws) => (count($uw2) > 1 ? $partName[$p] . ' ' : '')
+                    . $this->weekRangesText($ws) . '-hafta', array_keys($uw2), $uw2)) . ' — balanslanmadi (joylanishi kutilmoqda)' : null;
+                $bt = $r['before'];
+                $r['balance_stats'] = [
+                    'ktr' => ['count' => array_sum($bt['ktr_count']), 'hours' => array_sum($bt['ktr_hours'])],
+                    'hemis' => ['count' => array_sum($bt['past_count']), 'hours' => array_sum($bt['past_hours'])],
+                    'lms' => ['count' => array_sum($bt['future_count']), 'hours' => array_sum($bt['future_hours'])],
+                ];
                 // To'siqni bartaraf etish uchun (hemisCrossCheck): kafedra mudiri va uning xonasi; javobdan olib tashlanadi.
                 $r['_fb'] = [$unitByKey[$r['key']]['fallback_employee'] ?? null, $unitByKey[$r['key']]['fallback_room'] ?? null];
                 // HEMIS'dagi asl yozuvlar (id bo'yicha) — "o'zgartirish" kerakmi, ismi emas, id bo'yicha hal qilinadi.
@@ -1245,17 +1314,34 @@ trait TimetableHemisSync
                         }
                     }
                     $finals[] = ['key' => $r['key'], 'label' => $gname . ' · ' . $r['subject_name']] + $rec;
+                    if (!empty($rec['balance'])) {
+                        $balanceRows[] = ['subject_id' => (int) $r['subject_id'], 'lesson_date' => $rec['date'], 'start_time' => $rec['start'],
+                            'end_time' => $rec['end'], 'training_type_code' => (string) $rec['code'], 'week' => $rec['balance_week'] ?? null];
+                    } else {
+                        $regularKeys[$this->hemisBalanceKey($grp->group_hemis_id, $r['subject_id'], $rec['date'], $rec['start'], $rec['code'])] = true;
+                    }
                 }
                 unset($r['records']);
-                $r['actions_later'] = 0;
-                if ($until !== null) {
-                    $r['actions_later'] = count(array_filter($r['actions'], fn ($a) => $a['date'] > $until));
-                    $r['actions'] = array_values(array_filter($r['actions'], fn ($a) => $a['date'] <= $until));
-                }
+                // Muddatdan keyingi amallar va balans chegarasidan (H) keyingi balanslash darslari — hozir yozilmaydi (JSON'ga tushmaydi);
+                // balanslash darslari ro'yxatda ko'rsatiladi (keyingi solishtirishda).
+                $isLater = fn ($a) => ($until !== null && $a['date'] > $until) || !empty($a['balance_later']);
+                $r['actions_later'] = count(array_filter($r['actions'], $isLater));
+                $r['later_balance'] = array_values(array_map(fn ($a) => $a + ['later' => true, 'reason' => 'Balanslash'
+                        . (!empty($a['balance_week']) ? ' — ' . $a['balance_week'] . '-hafta darsi o\'rniga' : '')
+                        . (!empty($a['balance_later']) && ($until === null || $a['date'] <= $until) ? ' (balans chegarasidan keyin' : ' (muddatdan keyin')
+                        . ' — hozir yozilmaydi).'],
+                    array_filter($r['actions'], fn ($a) => $isLater($a) && !empty($a['balance']))));
+                $r['actions'] = array_values(array_filter($r['actions'], fn ($a) => !$isLater($a)));
                 // Qo'shiladigan / o'zgartiriladigan dars tashqi jadvaldagi (Excel) joyidan boshqa vaqtda bo'lsa — nega.
                 $plan = $unitByKey[$r['key']]['plan'] ?? [];
                 foreach ($r['actions'] as &$a) {
                     if ($a['op'] === 'delete') {
+                        continue;
+                    }
+                    if (!empty($a['balance'])) {
+                        // Balanslash darsi: LMS kartasi yo'q, bandlik tekshirilmaydi (guruhlararo ham).
+                        $a['reason'] = 'Balanslash' . (!empty($a['balance_week']) ? ' — ' . $a['balance_week'] . '-hafta darsi o\'rniga' : '')
+                            . ' (jurnal ustunlari soni KTR bilan teng bo\'lishi uchun; guruh keladigan kun, bandlik tekshirilmaydi).';
                         continue;
                     }
                     $slot = $startToSlot[$a['start']] ?? null;
@@ -1308,6 +1394,16 @@ trait TimetableHemisSync
                 unset($a);
             }
             unset($r);
+            // Balanslash darslari — HEMIS'dan qaytganda tanib olish uchun (to'qnashuv / bandlik emas): guruhning ertangi yozuvlari yangilanadi.
+            // HEMIS'da turgan (yozilgan) darsning belgisi u HEMIS'dan o'chirilgani importda ko'rinmaguncha saqlanadi.
+            $hemisFutureKeys = [];
+            foreach ($hemisAll as $hr) {
+                if (substr((string) $hr->lesson_date, 0, 10) > $today) {
+                    $hemisFutureKeys[$this->hemisBalanceKey($grp->group_hemis_id, $hr->subject_id, $hr->lesson_date, $hr->lesson_pair_start_time,
+                        $hr->training_type_code)] = true;
+                }
+            }
+            $this->hemisBalanceStore((int) $grp->group_hemis_id, (int) $board->id, $balanceRows, $today, $hemisFutureKeys, $regularKeys);
 
             $groupsOut[] = [
                 'group' => $gname,
@@ -1329,6 +1425,30 @@ trait TimetableHemisSync
         // Band o'qituvchi/xona o'rniga kafedra mudiri — faqat doska sozlamasi yoqilgan bo'lsa (sukut: to'qnashuv — to'siq).
         $this->hemisCrossCheck($groupsOut, $finals, $handledIds, $today, $mudirFor,
             filter_var(($board->settings ?? [])['hemis_mudir_fallback'] ?? false, FILTER_VALIDATE_BOOLEAN), $board);
+        // LMS'da joylanmagan haftalar (balans chegarasidan keyin) va ular sababli o'chiriladigan HEMIS darslari (muddat ichida) — yig'ma.
+        $unplacedUnits = [];
+        $unplacedDeletes = ['count' => 0, 'by_unit' => []];
+        foreach ($groupsOut as $g) {
+            foreach ($g['units'] as $u) {
+                $dels = [];
+                foreach ($u['actions'] as $a) {
+                    if ($a['op'] === 'delete' && ($a['reason_code'] ?? '') === 'lms_unplaced') {
+                        $p = $u['codes'][(string) $a['code']] ?? 'A';
+                        $dels[$p]['count'] = ($dels[$p]['count'] ?? 0) + 1;
+                        $dels[$p]['weeks'][(int) ($a['week'] ?? 0)] = true;
+                    }
+                }
+                foreach ((array) ($u['unplaced_weeks'] ?? []) as $p => $weeks) {
+                    $unplacedUnits[] = ['group' => $g['group'], 'subject' => $u['subject_name'], 'part' => $p === 'L' ? 'Ma\'ruza' : 'Amaliy qism',
+                        'weeks' => $this->weekRangesText($weeks), 'deletes' => (int) ($dels[$p]['count'] ?? 0)];
+                }
+                foreach ($dels as $p => $d) {
+                    $unplacedDeletes['count'] += $d['count'];
+                    $unplacedDeletes['by_unit'][] = ['group' => $g['group'], 'subject' => $u['subject_name'], 'part' => $p === 'L' ? 'Ma\'ruza' : 'Amaliy qism',
+                        'weeks' => $this->weekRangesText(array_keys($d['weeks'])), 'count' => $d['count']];
+                }
+            }
+        }
 
         return [
             'today' => $today,
@@ -1345,6 +1465,9 @@ trait TimetableHemisSync
             'current_week' => $currentWeekOut,
             'weeks' => array_values($weeksOut),
             'groups' => $groupsOut,
+            // Joylanmagan haftalari bor birliklar va LMS'da joylanmagani uchun o'chiriladigan darslar (yozishdan oldin ogohlantirish).
+            'unplaced_units' => $unplacedUnits,
+            'unplaced_deletes' => $unplacedDeletes,
             'groups_not_in_hemis' => $missingGroups,
             // Joylanmagan kartalar HEMIS'ga yozilmaydi — oyna ogohlantiradi (oldindan ogohlantirish bilan bir xil hisob).
             'unplaced' => $this->hemisUnplacedSummary($board, $scope, $today),
@@ -1380,7 +1503,8 @@ trait TimetableHemisSync
             $idx[$type . '|' . $id . '|' . $date][] = [$start, $end, $unitKey, $label, (string) $emp, (string) $room, $info];
         };
         foreach ($finals as $f) {
-            if (isset($nonBlockingUnits[(string) $f['key']])) continue;
+            // Balanslash darsi boshqalarni band qilmaydi.
+            if (isset($nonBlockingUnits[(string) $f['key']]) || !empty($f['balance'])) continue;
             [$fGroup, $fSubj] = array_pad(explode(' · ', (string) $f['label'], 2), 2, '');
             $fInfo = ['source' => 'LMS', 'group' => $fGroup, 'subject' => $fSubj, 'teacher' => $f['employee_name'] ?? null, 'room' => $f['auditorium_name'] ?? null];
             if ($f['employee_id'] && !in_array('mudir', $f['flags'] ?? [], true)) {
@@ -1395,10 +1519,12 @@ trait TimetableHemisSync
         if ($emps || $rooms) {
             $ext = $this->withoutHemisExcluded(DB::table('schedules'), $board)->whereNull('deleted_at')->where('lesson_date', '>', $today . ' 23:59:59')
                 ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
-                ->get(['schedule_hemis_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time',
-                    'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
+                ->get(['schedule_hemis_id', 'group_id', 'subject_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_date', 'lesson_pair_start_time',
+                    'lesson_pair_end_time', 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
+            $balance = $ext->isNotEmpty() ? $this->hemisBalanceIndex(substr((string) $ext->min('lesson_date'), 0, 10), substr((string) $ext->max('lesson_date'), 0, 10)) : [];
             foreach ($ext as $r) {
-                if ($this->isNonBlocking($r, $policyBoard)) continue;
+                // Balanslash darsi (HEMIS solishtirish qo'ygan) — bandlik emas.
+                if ($this->isNonBlocking($r, $policyBoard) || $this->isHemisBalance($r, $balance)) continue;
                 if (isset($handledIds[(int) $r->schedule_hemis_id])) {
                     continue;
                 }
@@ -1491,7 +1617,8 @@ trait TimetableHemisSync
             ? $r['date'] . '|' . $r['start'] . '|' . $r['end'] . '|' . $r['employee_id'] . '|' . $r['auditorium_code'] : null;
         $shareSize = [];   // umumiy dars kaliti => guruhlar soni (HEMIS'da o'zgarmaydiganlari ham)
         foreach ($finals as $f) {
-            if (isset($nonBlockingUnits[(string) $f['key']])) continue;
+            // Balanslash darsi boshqalarni band qilmaydi.
+            if (isset($nonBlockingUnits[(string) $f['key']]) || !empty($f['balance'])) continue;
             if ($k = $shareKey($f)) {
                 $shareSize[$k] = ($shareSize[$k] ?? 0) + 1;
             }
@@ -1508,9 +1635,11 @@ trait TimetableHemisSync
                 foreach ($u['actions'] as $ai => $a) {
                     if (in_array($a['op'], ['create', 'update'], true)) {
                         // emp0/room0 — indeksdagi shu darsning o'z yozuvlari kaliti (asl qiymatlar).
-                        $st[] = ['gi' => $gi, 'ui' => $ui, 'ai' => $ai, 'key' => $u['key'], 'share' => isset($nonBlockingUnits[(string) $u['key']]) ? null : $shareKey($a),
+                        // Balanslash darsi — bandlik tekshirilmaydi (to'siq bo'lmaydi).
+                        $free = isset($nonBlockingUnits[(string) $u['key']]) || !empty($a['balance']);
+                        $st[] = ['gi' => $gi, 'ui' => $ui, 'ai' => $ai, 'key' => $u['key'], 'share' => $free ? null : $shareKey($a),
                             'emp0' => (string) ($a['employee_id'] ?? ''), 'room0' => (string) ($a['auditorium_code'] ?? ''),
-                            'queue' => isset($nonBlockingUnits[(string) $u['key']]) ? [] : ['e', 'r'], 'resolved' => [], 'unresolved' => []];
+                            'queue' => $free ? [] : ['e', 'r'], 'resolved' => [], 'unresolved' => []];
                     }
                 }
             }
@@ -1670,14 +1799,16 @@ trait TimetableHemisSync
         $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $bal = $book->getActiveSheet();
         $bal->setTitle('Balans');
-        $bal->fromArray(['Guruh', 'Fan', 'Kafedra', 'Dars turi', 'KTR jami (soat)', 'KTR joriy haftagacha', 'HEMIS bugungacha',
-            'Semestr soat farqi hozir (+ kam, − ortiq)', 'Semestr soat farqi takliflardan keyin', 'Qism (Amaliy qism = amaliy, seminar, lab, klinik)',
-            'KTR dars kunlari (semestr)', 'HEMIS dars kunlari (bugungacha)', 'Semestr kunlar farqi hozir (+ kam, − ortiq)', 'Semestr kunlar farqi takliflardan keyin',
-            'Tuzatishlar', 'Izohlar', 'Davr', 'Davr KTR soati', 'Davr HEMIS soati', 'Davr soat farqi (HEMIS−KTR)', 'Davr KTR kunlari', 'Davr HEMIS kunlari', 'Davr LMS kunlari'], null, 'A1');
+        // Balans — "Hemisga yozish" muddatigacha (haftalik fan: 1..muddat haftasi; sikl — blok): KTR, HEMIS bugungacha, LMS ertadan muddatgacha.
+        $bal->fromArray(['Guruh', 'Fan', 'Kafedra', 'Dars turi', 'KTR (balans davri, soat)', 'KTR joriy haftagacha', 'HEMIS bugungacha (balans davri)',
+            'Soat farqi hozir (+ kam, − ortiq)', 'Soat farqi takliflardan keyin', 'Qism (Amaliy qism = amaliy, seminar, lab, klinik)',
+            'KTR dars kunlari (balans davri)', 'HEMIS dars kunlari (bugungacha)', 'Kunlar farqi hozir (+ kam, − ortiq)', 'Kunlar farqi takliflardan keyin',
+            'Tuzatishlar', 'Izohlar', 'Davr', 'Davr KTR soati', 'Davr HEMIS soati', 'Davr soat farqi (HEMIS−KTR)', 'Davr KTR kunlari', 'Davr HEMIS kunlari', 'Davr LMS kunlari',
+            'Fan rejimi', 'Balans davri', 'Balans: KTR (dars / soat)', 'Balans: HEMIS bugungacha (dars / soat)', 'Balans: LMS ertadan muddatgacha (dars / soat)'], null, 'A1');
         $act = $book->createSheet();
         $act->setTitle('Amallar');
         $act->fromArray(['Guruh', 'Fan', 'Amal', 'Sana', 'Boshlanish', 'Tugash', 'HEMIS para', 'Dars turi', 'O\'qituvchi', 'Xona',
-            'HEMIS id', 'O\'zgarishlar', 'Belgilar', 'To\'siq', 'Sabab'], null, 'A1');
+            'HEMIS id', 'O\'zgarishlar', 'Belgilar', 'To\'siq', 'Sabab', 'Balanslash'], null, 'A1');
         // "To'siqlar" — har bir to'siq alohida qator: kim / nima xalaqit beradi, kimga murojaat qilish kerak.
         $blkSheet = $book->createSheet();
         $blkSheet->setTitle('To\'siqlar');
@@ -1726,17 +1857,24 @@ trait TimetableHemisSync
                         $u['period']['ktr_hours'][$code] ?? 0, $u['period']['hemis_hours'][$code] ?? 0,
                         ($u['period']['hemis_hours'][$code] ?? 0) - ($u['period']['ktr_hours'][$code] ?? 0),
                         $u['period']['ktr_count'][$part] ?? 0, $u['period']['hemis_count'][$part] ?? 0, $u['period']['lms_count'][$part] ?? 0,
+                        $u['mode_label'] ?? '', $u['balance_period'] ?? 'sikl bloki',
+                        ...array_map(fn ($k) => isset($u['balance_stats'][$k]) ? $u['balance_stats'][$k]['count'] . ' / ' . $u['balance_stats'][$k]['hours'] : '',
+                            ['ktr', 'hemis', 'lms']),
                     ], null, 'A' . $r1++);
                     $first = false;
                 }
-                foreach ($u['actions'] as $x) {
+                // Muddatdan keyingi balanslash darslari ham (Qo'shish — hozir yozilmaydi), oynadagidek.
+                foreach (array_merge($u['actions'], $u['later_balance'] ?? []) as $x) {
                     if (!$opOk($x)) {
                         continue;
                     }
-                    $act->fromArray([$g['group'], $u['subject_name'], $opName[$x['op']] ?? $x['op'], $x['date'], $x['start'], $x['end'],
+                    $act->fromArray([$g['group'], $u['subject_name'], ($opName[$x['op']] ?? $x['op']) . (!empty($x['later']) ? ' (hozir yozilmaydi)' : ''),
+                        $x['date'], $x['start'], $x['end'],
                         self::HEMIS_PAIRS[$x['start'] . '-' . $x['end']] ?? '', $u['code_names'][$x['code']] ?? $x['code'],
                         $x['employee_name'] ?? '', $x['auditorium_name'] ?? '', $x['hemis_id'] ?? '',
-                        implode('; ', $x['changes'] ?? []), implode(', ', $x['flags'] ?? []), implode('; ', $x['blocked'] ?? []), $x['reason'] ?? ''], null, 'A' . $r2++);
+                        implode('; ', $x['changes'] ?? []), implode(', ', $x['flags'] ?? []), implode('; ', $x['blocked'] ?? []), $x['reason'] ?? '',
+                        !empty($x['balance']) ? 'Balanslash' . (!empty($x['balance_week']) ? ' — ' . $x['balance_week'] . '-hafta darsi o\'rniga' : '') : ''],
+                        null, 'A' . $r2++);
                     // Bartaraf etilgan to'siqlar (kafedra mudiri / mudir xonasi qo'yilgan) ham ro'yxatda — kimga murojaat qilish uchun.
                     foreach ((array) ($x['resolved'] ?? []) as $b) {
                         $blkSheet->fromArray([$g['group'], $u['subject_name'], $u['kafedra'] ?? '', $u['mudir'] ?? '', $opName[$x['op']] ?? $x['op'], $x['date'],
@@ -1761,10 +1899,11 @@ trait TimetableHemisSync
             }
         }
         foreach ([$bal, $act, $blkSheet] as $sh) {
-            $sh->getStyle('A1:W1')->getFont()->setBold(true);
+            $last = $sh->getHighestColumn();
+            $sh->getStyle('A1:' . $last . '1')->getFont()->setBold(true);
             $sh->freezePane('A2');
-            foreach (range('A', 'W') as $col) {
-                $sh->getColumnDimension($col)->setAutoSize(true);
+            for ($i = 1; $i <= \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($last); $i++) {
+                $sh->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i))->setAutoSize(true);
             }
         }
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book);
@@ -1776,6 +1915,80 @@ trait TimetableHemisSync
 
         return response()->download($tmp, 'hemis_solishtirish_' . $rep['today'] . '.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
+    }
+
+    /** Balanslash darsi kaliti: guruh | fan | sana | boshlanish | tur. */
+    private function hemisBalanceKey($group, $subject, $date, $start, $code): string
+    {
+        return (int) $group . '|' . (int) $subject . '|' . substr((string) $date, 0, 10) . '|' . substr((string) $start, 0, 5) . '|' . (string) $code;
+    }
+
+    /**
+     * Guruhning ertangi balanslash darslari yozuvini yangilaydi (bugun va o'tganlari — tarix, tanib olish uchun qoladi). Faqat yozuv:
+     * HEMIS'ga yozilgan dars shu kalit bilan tanib olinadi (yozilmagani hech narsaga ta'sir qilmaydi).
+     *
+     * Hisobot — faqat taklif (HEMIS'ga o'zi yozmaydi): HEMIS'da turgan darsning belgisi ($hemisKeys — importdagi ertangi darslar) yangi
+     * hisobot uni takrorlamasa ham (muddat qisqargan, LMS o'zgargan) saqlanadi — o'chirilishi importda ko'rinmaguncha. Olib tashlanadi:
+     * HEMIS'da yo'q (yozilmagan taklif yoki o'chirilgani tasdiqlangan) yoki endi oddiy LMS darsiga aynan mos ($regularKeys).
+     */
+    private function hemisBalanceStore(int $groupHemisId, int $boardId, array $rows, string $today, array $hemisKeys = [], array $regularKeys = []): void
+    {
+        if (!Schema::hasTable('hemis_balance_lessons')) {
+            return;
+        }
+        $drop = DB::table('hemis_balance_lessons')->where('group_hemis_id', $groupHemisId)->where('lesson_date', '>', $today)
+            ->get(['id', 'group_hemis_id', 'subject_id', 'lesson_date', 'start_time', 'training_type_code'])
+            ->filter(function ($m) use ($hemisKeys, $regularKeys) {
+                $k = $this->hemisBalanceKey($m->group_hemis_id, $m->subject_id, $m->lesson_date, $m->start_time, $m->training_type_code);
+
+                return !isset($hemisKeys[$k]) || isset($regularKeys[$k]);
+            })->pluck('id')->all();
+        foreach (array_chunk($drop, 500) as $ids) {
+            DB::table('hemis_balance_lessons')->whereIn('id', $ids)->delete();
+        }
+        $now = now();
+        $ins = array_map(fn ($r) => $r + ['board_id' => $boardId, 'group_hemis_id' => $groupHemisId, 'created_at' => $now, 'updated_at' => $now],
+            array_values(array_filter($rows, fn ($r) => $r['lesson_date'] > $today)));
+        foreach (array_chunk($ins, 500) as $chunk) {
+            // Saqlangan belgi qayta taklif qilinsa — haftasi yangilanadi.
+            DB::table('hemis_balance_lessons')->upsert($chunk, ['group_hemis_id', 'subject_id', 'lesson_date', 'start_time', 'training_type_code'],
+                ['board_id', 'end_time', 'week', 'updated_at']);
+        }
+    }
+
+    /** Guruhning barcha balanslash darslari belgilari: kalit => hafta (0 — noma'lum). */
+    private function hemisBalanceGroupMarks(int $groupHemisId): array
+    {
+        if (!Schema::hasTable('hemis_balance_lessons')) {
+            return [];
+        }
+        $out = [];
+        foreach (DB::table('hemis_balance_lessons')->where('group_hemis_id', $groupHemisId)->get() as $r) {
+            $out[$this->hemisBalanceKey($r->group_hemis_id, $r->subject_id, $r->lesson_date, $r->start_time, $r->training_type_code)] = (int) $r->week;
+        }
+
+        return $out;
+    }
+
+    /** Sana oralig'idagi balanslash darslari: kalit => hafta ("N-hafta darsi o'rniga"; noma'lum — 0). */
+    private function hemisBalanceIndex(string $from, string $to): array
+    {
+        if (!Schema::hasTable('hemis_balance_lessons')) {
+            return [];
+        }
+        $out = [];
+        foreach (DB::table('hemis_balance_lessons')->whereBetween('lesson_date', [$from, $to])->get() as $r) {
+            $out[$this->hemisBalanceKey($r->group_hemis_id, $r->subject_id, $r->lesson_date, $r->start_time, $r->training_type_code)] = (int) $r->week;
+        }
+
+        return $out;
+    }
+
+    /** HEMIS yozuvi (schedules qatori) balanslash darsimi. */
+    private function isHemisBalance(object $r, array $index): bool
+    {
+        return $index && isset($index[$this->hemisBalanceKey($r->group_id ?? 0, $r->subject_id ?? 0, $r->lesson_date ?? '', $r->lesson_pair_start_time ?? '',
+            $r->training_type_code ?? '')]);
     }
 
     /**
@@ -2087,6 +2300,8 @@ trait TimetableHemisSync
         $nowHm = $today < $nowDate ? '24:00' : ($today > $nowDate ? '' : $now->format('H:i'));
         $out = [];   // qatorlar
         $hemisOf = [];
+        // Balanslash darslari (HEMIS solishtirish qo'ygan) — LMS'da kartasi yo'q: juftlanmaydi, "ortiqcha" ham, to'qnashuv ham emas.
+        $balanceIdx = $this->hemisBalanceIndex($today, $today);
         foreach ($groups as $gid => $g) {
             $gname = (string) $g['row']->name;
             // LMS darslari HEMIS yozuvlariga (to'liq yoki yarim para) bo'linadi — SchedulePlanner::records kabi. Har bo'lak (parallel
@@ -2129,6 +2344,15 @@ trait TimetableHemisSync
                 $hemisOf[(int) $h->schedule_hemis_id] = $h;
                 if ($part === null) {
                     continue;   // mustaqil ta'lim, amaliyot — solishtirilmaydi
+                }
+                $bk = $this->hemisBalanceKey($h->group_id, $h->subject_id, $today, $h->lesson_pair_start_time, $h->training_type_code);
+                if (isset($balanceIdx[$bk])) {
+                    $out[] = ['group' => $gname, 'group_hemis_id' => $gid, 'subject' => (string) $h->subject_name, 'type' => (string) $h->training_type_name,
+                        'hemis_id' => (int) $h->schedule_hemis_id, 'start' => $hm($h->lesson_pair_start_time), 'end' => $hm($h->lesson_pair_end_time),
+                        'employee_name' => $h->employee_name, 'auditorium_name' => $h->auditorium_name, 'status' => 'info', 'changes' => [], 'blocked' => [],
+                        'balance' => true, 'reason' => 'balanslash' . ($balanceIdx[$bk] ? ' — ' . $balanceIdx[$bk] . '-hafta darsi o\'rniga' : '')
+                            . ' (HEMIS solishtirish qo\'ygan) — o\'zgartirilmaydi'];
+                    continue;
                 }
                 $hb[$this->hemisSubjectBase((string) $h->subject_name) . '|' . $part][] = $h;
             }
@@ -2573,9 +2797,10 @@ trait TimetableHemisSync
         $day = Carbon::parse($today);
         $ext = $this->withoutHemisExcluded(DB::table('schedules'), $board)->whereNull('deleted_at')->whereBetween('lesson_date', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
             ->where(fn ($q) => $q->whereIn('employee_id', array_keys($emps))->orWhereIn('auditorium_code', array_keys($rooms)))
-            ->get(['schedule_hemis_id', 'group_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_pair_start_time', 'lesson_pair_end_time',
+            ->get(['schedule_hemis_id', 'group_id', 'subject_id', 'group_name', 'subject_name', 'training_type_code', 'lesson_pair_start_time', 'lesson_pair_end_time',
                 'employee_id', 'employee_name', 'auditorium_code', 'auditorium_name', 'department_id']);
         $all = collect($hemisRows)->flatten(1)->keyBy('schedule_hemis_id');
+        $balanceIdx = $this->hemisBalanceIndex($today, $today);
         foreach ($ext as $r) {
             $all[$r->schedule_hemis_id] ??= $r;
         }
@@ -2597,6 +2822,8 @@ trait TimetableHemisSync
                 'code' => (string) ($r->training_type_code ?? '')];
             $x = $mine[(int) $id] ?? null;
             if ($this->isNonBlocking($r, $policyBoard) || ($x && $this->isNonBlocking($x, $policyBoard))) continue;
+            // Balanslash darsi boshqa darslarni band qilmaydi.
+            if ($balanceIdx && isset($balanceIdx[$this->hemisBalanceKey($r->group_id, $r->subject_id ?? 0, $today, $r->lesson_pair_start_time, $r->training_type_code ?? '')])) continue;
             // LMS'da o'qituvchisi biriktirilmagan dars — HEMIS'dagi o'qituvchisi (kafedra mudiri) bandlik hisoblanmaydi.
             $forced = $x ? !$x['teacher_set'] : $isMudir($r->department_id, $r->employee_id);
             // moving — hozirgi joy, lekin dars o'zgartiriladi (shu nomzod indeksi): u ko'chgach bo'shaydi.

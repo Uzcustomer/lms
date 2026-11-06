@@ -5,6 +5,8 @@
  * bugun va o'tgan kunlarga yozilmaydi, to'siqli amallar o'tkaziladi, boshida bir marta tasdiq so'raladi.
  * Istisno — «Bugungi darslar (HEMIS)» JSON'i (amalda today: true): faqat bugungi kun va faqat o'zgartirish (qo'shish/o'chirish
  * rad etiladi); har biridan oldin davomat/baho HEMIS'dan qayta tekshiriladi (mark'dagi imzolangan havola) — belgilangan bo'lsa tegilmaydi.
+ * LMS'da joylanmagani uchun o'chiriladigan darslar (reason_code lms_unplaced) bo'lsa — "HEMIS'ga yozish"da, birinchi amaldan oldin
+ * BIR MARTA oyna: "Ha, hammasini bajar" / "O'chirishlarsiz bajar" / "Bekor"; tanlovdan keyin jarayon oxirigacha savolsiz ishlaydi.
  */
 (function () {
     'use strict';
@@ -104,6 +106,7 @@
         + '<div style="margin-bottom:6px">1) mark\'dagi «HEMIS solishtirish» oynasidan yuklangan JSON faylni tanlang: <input type="file" id="hwFile" accept=".json,application/json"></div>'
         + '<div id="hwFilters" style="display:none;margin-bottom:6px;padding:6px;background:#f5f5f5;border-radius:6px"></div>'
         + '<div id="hwSummary" style="margin-bottom:6px"></div>'
+        + '<div id="hwAsk" style="display:none;margin-bottom:6px;padding:8px;background:#fffbeb;border:1px solid #f59e0b;border-radius:6px"></div>'
         + '<div id="hwButtons" style="display:none;gap:6px;margin-bottom:6px">'
         + '<button id="hwCheck" style="padding:4px 10px">Tekshirish (yozmaydi)</button> '
         + '<button id="hwApply" style="padding:4px 10px;background:#059669;color:#fff;border:0;border-radius:4px">HEMIS\'ga yozish</button> '
@@ -118,6 +121,32 @@
     const FILTERS = ['hwUntil', 'hwGroup', 'hwSubject', 'hwOp_create', 'hwOp_update', 'hwOp_delete'];
     // Bugun — JSON'dagi sana va shu kompyuterdagi sanadan kattasi. Har safar qayta hisoblanadi: oyna kechadan ochiq qolishi mumkin.
     const cutoff = () => [String(rep.today || ''), localToday()].sort().pop();
+
+    // LMS'da joylanmagani uchun o'chirish (mark: reason_code lms_unplaced) — boshlashda bir marta so'raladi.
+    const isUnplacedDelete = j => j.op === 'delete' && (j.reason_code === 'lms_unplaced' || j.reason === 'lms_unplaced');
+    // Bitta oyna (uch tugma); javob: 'all' | 'skip' | 'cancel'. Oyna ochiq turganda boshqa hech narsa bajarilmaydi.
+    const askUnplaced = (list, total, nGroups) => new Promise(resolve => {
+        const by = {};
+        list.forEach(j => {
+            const k = j.group + ' · ' + j.subject + ' · ' + j.type;
+            by[k] = by[k] || { n: 0, weeks: new Set() };
+            by[k].n++;
+            if (j.week) by[k].weeks.add(+j.week);
+        });
+        const weeks = s => [...s].sort((a, b) => a - b).join(', ');
+        $('hwAsk').innerHTML = '<b style="color:#b45309">⚠ Diqqat: ' + list.length + ' ta dars LMSda joylanmagani uchun HEMIS\'dan o\'chiriladi</b>'
+            + ' (jami ' + total + ' ta amal, ' + nGroups + ' ta guruh):<ul style="margin:4px 0 6px 18px;padding:0">'
+            + Object.entries(by).map(([k, v]) => '<li>' + esc(k) + (v.weeks.size ? ': ' + esc(weeks(v.weeks)) + '-hafta' : '') + ' — ' + v.n + ' ta</li>').join('')
+            + '</ul>Davom etasizmi? Tanlovdan keyin yozish oxirigacha savolsiz davom etadi.<div style="margin-top:6px">'
+            + '<button id="hwAskAll" style="padding:4px 10px;background:#059669;color:#fff;border:0;border-radius:4px">Ha, hammasini bajar</button> '
+            + '<button id="hwAskSkip" style="padding:4px 10px">O\'chirishlarsiz bajar</button> '
+            + '<button id="hwAskCancel" style="padding:4px 10px">Bekor</button></div>';
+        $('hwAsk').style.display = 'block';
+        const done = v => { $('hwAsk').style.display = 'none'; $('hwAsk').innerHTML = ''; resolve(v); };
+        $('hwAskAll').onclick = () => done('all');
+        $('hwAskSkip').onclick = () => done('skip');
+        $('hwAskCancel').onclick = () => done('cancel');
+    });
 
     const line = j => OP_NAME[j.op] + ' · ' + j.group + ' · ' + j.date + ' ' + j.start + '–' + j.end + ' · ' + j.subject + ' · ' + j.type
         + ' · ' + (j.employee_name || '—') + ' · ' + (j.auditorium_name || '—') + (j.hemis_id ? ' · #' + j.hemis_id : '')
@@ -215,15 +244,32 @@
         // Bajariladigan ro'yxat boshlanishdagi holatdan olinadi; yozish davomida filtrlar o'chiq — tasdiqdagi son
         // va yoziladigan amallar bir xil bo'lib qoladi. Oldin qayta tuziladi — sana chegarasi hozirgi kun bo'yicha.
         build();
-        const batch = jobs.slice();
+        let batch = jobs.slice();
         if (!batch.length) return;
         // Bitta tasdiq — butun ro'yxat uchun (guruhlar soni bilan); guruh almashganda qayta so'ralmaydi. To'xtatish — "To'xtatish" tugmasi.
         const nGroups = new Set(batch.map(x => x.group_id)).size;
-        if (apply && !confirm((rep.mode === 'today'
+        // LMS'da joylanmagani uchun o'chirishlar bo'lsa — oddiy tasdiq o'rniga bitta uch tugmali oyna (faqat yozishda).
+        const unplaced = apply ? batch.filter(isUnplacedDelete) : [];
+        let preSkipped = [];
+        if (unplaced.length) {
+            running = true;   // oyna ochiq — tugmalar qayta bosilmasin
+            ['hwCheck', 'hwApply'].forEach(id => { $(id).disabled = true; });
+            const choice = await askUnplaced(unplaced, batch.length, nGroups);
+            running = false;
+            ['hwCheck', 'hwApply'].forEach(id => { $(id).disabled = false; });
+            if (choice === 'cancel') {
+                $('hwList').textContent += '\nBekor qilindi — hech narsa bajarilmadi.\n';
+                return;
+            }
+            if (choice === 'skip') {
+                preSkipped = unplaced.map(j => Object.assign({}, j, { status: 'skipped', reason: 'LMSda joylanmagan — o\'chirishsiz tanlandi' }));
+                batch = batch.filter(j => !isUnplacedDelete(j));
+            }
+        } else if (apply && !confirm((rep.mode === 'today'
             ? batch.length + ' ta dars o\'zgartiriladi (bugun, ' + nGroups + ' ta guruh). Har biridan oldin davomat/baho HEMIS\'dan qayta tekshiriladi — belgilangan darsga tegilmaydi.'
             : batch.length + ' ta amal (' + nGroups + ' ta guruh) HEMIS\'ga yoziladi.')
             + ' Guruhlar orasida qayta so\'ralmaydi — kerak bo\'lsa "To\'xtatish" tugmasini bosing.\n\nBoshlaymizmi?')) return;
-        running = true; stop = false; results = []; lastMode = apply ? 'apply' : 'check';
+        running = true; stop = false; results = preSkipped.slice(); lastMode = apply ? 'apply' : 'check';
         ['hwCheck', 'hwApply', 'hwFile'].concat(FILTERS).forEach(id => { $(id).disabled = true; });
         $('hwStop').disabled = false; $('hwLog').disabled = true;
         const list = $('hwList');
@@ -270,7 +316,12 @@
             await sleep(apply ? 400 : 100);
         }
         const ok = results.filter(r => r.status === 'ok').length, err = results.filter(r => r.status === 'error').length;
+        // Tashlab o'tilganlar — sababi bo'yicha (o'chirishsiz tanlangan, bugun/o'tgan kun, to'xtatildi...).
+        const why = {};
+        results.filter(r => r.status === 'skipped').forEach(r => { why[r.reason] = (why[r.reason] || 0) + 1; });
+        const nSkip = Object.values(why).reduce((a, b) => a + b, 0);
         list.textContent += '\n' + (apply ? 'Yozildi' : 'Tekshirildi') + ': ' + ok + ' ta muvaffaqiyatli, ' + err + ' ta xato.'
+            + (nSkip ? '\nTashlab o\'tildi: ' + nSkip + ' ta (' + Object.entries(why).map(([w, n]) => w + ' — ' + n).join('; ') + ').' : '')
             + (apply ? '\nEndi mark\'da «HEMIS solishtirish» → «HEMIS\'dan yangilab, keyin solishtirish»ni bosing.' : '');
         running = false;
         ['hwCheck', 'hwApply', 'hwFile'].concat(FILTERS).forEach(id => { $(id).disabled = false; });

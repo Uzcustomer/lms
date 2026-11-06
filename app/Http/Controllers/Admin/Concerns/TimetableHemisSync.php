@@ -1301,11 +1301,13 @@ trait TimetableHemisSync
                     'other_type_rows' => $otherTypes, 'lecture_note' => $lectureNote];
             }
 
-            // Guruhning boshqa bandligi: rejaga kirmagan HEMIS darslari va LMS'da fani topilmagan kartalar.
+            // Guruhning boshqa bandligi: rejaga kirmagan HEMIS darslari va LMS'da fani topilmagan kartalar. Balanslash darsi (belgisi bor) —
+            // bandlik emas (o'tkazilgan fanniki ham).
             $busy = [];
             foreach ($hemisAll as $r) {
                 $d = substr((string) $r->lesson_date, 0, 10);
-                if ($this->isNonBlocking($r, $board) || $d <= $today || isset($handledSubjects[(int) $r->subject_id][(string) $r->training_type_code])) {
+                if ($this->isNonBlocking($r, $board) || $d <= $today || isset($handledSubjects[(int) $r->subject_id][(string) $r->training_type_code])
+                    || $isBalanceRow($r) !== null) {
                     continue;
                 }
                 foreach ($toSlots((string) $r->lesson_pair_start_time, (string) $r->lesson_pair_end_time) as $s) {

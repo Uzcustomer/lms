@@ -17,7 +17,11 @@ const bm = sortOf('public/js/hemis-writer.js');
 const pw = sortOf('tools/hemis-sync/hemis-write.mjs');
 assert.deepEqual(bm, pw);
 // Repodagi yozuvchining o'z taqqoslash kodi (boshqa frontend testlaridagidek) alohida vm kontekstida baholanadi.
-const cmp = vm.runInNewContext('const OP_ORDER = ' + bm.order + '; (x, y) => ' + bm.cmp);
+const cmp = vm.runInNewContext('const OP_ORDER = ' + bm.order + '; const todayRank = j => j.today === true ? OP_ORDER[j.op] : 0; (x, y) => ' + bm.cmp);
+// todayRank ikkala faylda ham bir xil.
+for (const file of ['public/js/hemis-writer.js', 'tools/hemis-sync/hemis-write.mjs']) {
+    assert.match(fs.readFileSync(path.join(root, file), 'utf8'), /const todayRank = j => j\.today === true \? OP_ORDER\[j\.op\] : 0;/, file);
+}
 
 const job = (op, date, start, extra = {}) => ({ group: 'p/st26-01a', group_id: 1596, op, date, start, ...extra });
 const jobs = [
@@ -44,4 +48,13 @@ const today = [
     job('update', '2099-10-28', '10:00', { hemis_id: 8, gseq: 3 }),
 ];
 assert.deepEqual(today.slice().sort(cmp).map(j => j.hemis_id), [7, 6, 8]);
-console.log('HEMIS write order: bookmarklet and Playwright agree, moves follow seq (today — gseq)');
+// Bugungi qo'shish / o'chirish: gseq qanday bo'lmasin — avval hamma o'chirish (guruhlararo), so'ng o'zgartirish, oxirida qo'shish.
+const todayOps = [
+    job('create', '2099-10-28', '08:30', { today: true, gseq: 1 }),
+    job('update', '2099-10-28', '12:00', { today: true, hemis_id: 10, gseq: 3 }),
+    job('delete', '2099-10-28', '16:30', { today: true, group: 'p/st26-01b', group_id: 1597, hemis_id: 11, gseq: 4 }),
+    job('update', '2099-10-28', '10:00', { today: true, hemis_id: 12, gseq: 2 }),
+    job('delete', '2099-10-28', '14:00', { today: true, hemis_id: 13, gseq: 5 }),
+];
+assert.deepEqual(todayOps.slice().sort(cmp).map(j => j.op + ' ' + (j.hemis_id || '')), ['delete 11', 'delete 13', 'update 12', 'update 10', 'create ']);
+console.log('HEMIS write order: bookmarklet and Playwright agree, moves follow seq (today — gseq; delete → update → create)');

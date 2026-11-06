@@ -24,10 +24,9 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class AbsenceExcuseController extends Controller
 {
-    public function index(Request $request)
+    /** Ro'yxat va Excel uchun umumiy filtrlar. */
+    private function applyFilters($query, Request $request)
     {
-        $query = AbsenceExcuse::with('student')->orderByDesc('created_at');
-
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -49,17 +48,26 @@ class AbsenceExcuseController extends Controller
             $query->where('reason', $request->reason);
         }
 
+        // Sabab davri tanlangan oraliq bilan kesishsa topiladi (to'liq ichida bo'lishi shart emas):
+        // 29.10–31.10 tanlansa, 28.10–01.11 lik ariza ham chiqadi
         if ($request->filled('date_from')) {
-            $query->whereDate('start_date', '>=', $request->date_from);
+            $query->whereDate('end_date', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('end_date', '<=', $request->date_to);
+            $query->whereDate('start_date', '<=', $request->date_to);
         }
 
         // Filtrlash: reviewed_by bo'yicha
         if ($request->filled('reviewed_by')) {
             $query->where('reviewed_by', $request->reviewed_by);
         }
+
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $query = $this->applyFilters(AbsenceExcuse::with('student')->orderByDesc('created_at'), $request);
 
         $excuses = $query->paginate(20)->withQueryString();
 
@@ -99,6 +107,26 @@ class AbsenceExcuseController extends Controller
 
         $fileName = 'sababli-arizalar-' . $status . '-' . now()->format('Y-m-d_H-i') . '.xlsx';
         return Excel::download(new AbsenceExcuseStatusExport($status), $fileName);
+    }
+
+    /**
+     * Tasdiqlangan arizalar — sabab davridagi baholar fan bo'yicha (har ariza × fan = bitta qator):
+     * HEMIS'da qo'yilgan va NB ustiga LMS'da qo'yilgan baholar alohida ustunlarda.
+     */
+    public function exportGrades(Request $request)
+    {
+        $request->validate([
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+        ]);
+
+        $request->merge(['status' => 'approved']);
+        $excuses = $this->applyFilters(AbsenceExcuse::with('student')->orderBy('start_date')->orderBy('student_full_name'), $request)->get();
+
+        $period = trim(($request->date_from ? Carbon::parse($request->date_from)->format('Y-m-d') : '') . '_' . ($request->date_to ? Carbon::parse($request->date_to)->format('Y-m-d') : ''), '_');
+        $fileName = 'sababli-arizalar-baholar' . ($period ? '-' . $period : '') . '.xlsx';
+
+        return Excel::download(new \App\Exports\AbsenceExcuseGradesExport($excuses), $fileName);
     }
 
     public function show($id)

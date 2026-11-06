@@ -473,11 +473,11 @@
                             </select>
                         </div>
                         <div class="ae-field">
-                            <label for="ae-date-from">Sanadan</label>
+                            <label for="ae-date-from">Sabab davri: sanadan</label>
                             <input id="ae-date-from" type="date" name="date_from" value="{{ request('date_from') }}">
                         </div>
                         <div class="ae-field">
-                            <label for="ae-date-to">Sanagacha</label>
+                            <label for="ae-date-to">Sabab davri: sanagacha</label>
                             <input id="ae-date-to" type="date" name="date_to" value="{{ request('date_to') }}">
                         </div>
                         <div class="ae-filter-actions">
@@ -490,6 +490,13 @@
                                 <a href="{{ route('admin.absence-excuses.export-status', request('status')) }}" class="ae-btn ae-btn--success ae-btn--sm">
                                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
                                     Excel yuklash
+                                </a>
+                            @endif
+                            @if(request('status') === 'approved')
+                                <a href="{{ route('admin.absence-excuses.export-grades', request()->only(['date_from', 'date_to', 'search', 'reason', 'student_id', 'reviewed_by'])) }}"
+                                   class="ae-btn ae-btn--primary ae-btn--sm" title="Har bir ariza × fan bo'yicha: HEMIS'da va Markda (NB ustiga) qo'yilgan baholar">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                                    Baholar Excel (fanlar bo'yicha)
                                 </a>
                             @endif
                         </div>

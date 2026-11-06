@@ -7816,6 +7816,7 @@ class TimetableController extends Controller
                 $out[] = ['kind' => 'weekly', 'card' => (int) $id, 'week' => $w, 'date' => $date, 'day' => $d, 'pair' => $p, 'sh' => $sh,
                     'load_key' => 'w' . $id, 'load' => (int) $c->students,
                     'from' => $p, 'to' => $p + max(1, (int) ($c->len_half ?? 2)), 'teacher_id' => $c->teacher_id ? (int) $c->teacher_id : null,
+                    'teacher' => $c->teacher_name ? (string) $c->teacher_name : null,
                     'room' => $room ?: null, 'room_name' => $roomName ?: (string) $room,
                     'free_room' => $this->isSharedRoom($roomName) || preg_match('/kafedra\s+mudiri/iu', $roomName) === 1,
                     'groups' => $groups, 'students' => (int) $c->students, 'label' => $label];
@@ -8313,10 +8314,14 @@ class TimetableController extends Controller
         $acc = ['teachers' => [], 'rooms' => []];
         $note = function (string $type, string $id, array $m, array $o) use (&$acc, $units) {
             $x = &$acc[$type][$id][$o['label']];
-            $x ??= ['groups' => [], 'dates' => [], 'cards' => [], 'span' => [], 'kinds' => [], 'week' => null,
+            $x ??= ['groups' => [], 'by_groups' => [], 'dates' => [], 'cards' => [], 'span' => [], 'kinds' => [], 'week' => null,
                 'teacher' => $o['teacher'] ?? null, 'label' => $o['label']];
             foreach (array_merge($this->focusEntryGroups($m, $units), $this->focusEntryGroups($o, $units)) as $g) {
                 $x['groups'][mb_strtolower($g['faculty'] . '|' . $g['specialty'] . '|' . $g['course'] . '|' . $g['group'])] = $g;
+            }
+            // Band qilgan darsning o'zi (o'qituvchi, guruhlari) — fan mas'uli xona ro'yxatida "Band: UMAROV J. A. · d1/d25-07a · …".
+            foreach ($this->focusEntryGroups($o, $units) as $g) {
+                $x['by_groups'][mb_strtolower($g['group'])] = $g['group'];
             }
             $x['dates'][$m['date']] = true;
             $x['cards'][$m['card']] = true;
@@ -8421,7 +8426,9 @@ class TimetableController extends Controller
                         // Ikkalasi haftalik — haftalik jadval; ikkalasi sikl — sikl jadvali; aralash — haftalik o'qituvchi/xona kesimi
                         // (u yerda haftalik darslar ham, sikl darslari ham chiqadi).
                         'view' => count($x['kinds']) > 1 ? 'cross' : (isset($x['kinds']['weekly']) ? 'week' : 'cycle'),
-                        'week' => isset($x['kinds']['weekly']) ? $x['week'] : null]);
+                        'week' => isset($x['kinds']['weekly']) ? $x['week'] : null])
+                        // Band qilgan dars: o'qituvchisi (to'liq ism) va guruhlari (groups — ikkala darsniki).
+                        + ['by_teacher' => $x['teacher'] ? (string) $x['teacher'] : null, 'by_groups' => array_values($x['by_groups'])];
                 }
             }
         }

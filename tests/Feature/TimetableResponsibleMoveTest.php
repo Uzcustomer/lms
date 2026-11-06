@@ -111,14 +111,21 @@ it('to\'qnashuvdagi dars bo\'sh joy va bo\'sh xonaga — darhol; xona faqat shu 
     expect($chk['mode'])->toBe('fix')->and($chk['message'])->toContain("Darhol qo'llanadi")
         ->and($chk['new'])->toBe('Seshanba, 17.11.2026 10:00–11:20')
         ->and($chk['old'])->toContain('19.11.2026');
-    // Xonalar: faol va sig'adiganlar (nofaol 105 va kichik 104 — yo'q); shu vaqtda band 103 (C) — oxirida, sababi bilan.
+    // Xonalar: faol xonalar (nofaol 105 — yo'q); kichik 104 — ko'rinadi, tanlab bo'lmaydi (sig'maydi, raqamlar bilan); hozirgi xona (101) — birinchi.
     $rooms = collect($chk['rooms']);
-    expect($rooms->pluck('code')->all())->not->toContain('RX')->not->toContain('RS')
-        ->and($rooms->firstWhere('code', 'R2')['free'])->toBeTrue();
+    expect($rooms->pluck('code')->all())->not->toContain('RX')
+        ->and($rooms->first()['code'])->toBe('R1')->and($rooms->first()['current'])->toBeTrue()
+        ->and($rooms->firstWhere('code', 'R2')['free'])->toBeTrue()
+        ->and($rooms->firstWhere('code', 'RS'))->toMatchArray(['free' => false, 'kind' => 'capacity', 'busy_items' => [],
+            'cap' => ['volume' => 5, 'students' => 12, 'over' => 7]]);
+    // Shu vaqtda band 103 (C) — bo'shlardan keyin, kim band qilgani bilan (tuzilgan ro'yxat).
     $chk1 = rmCheck($s, $s['a'], ['day' => 2, 'pair' => 1])->assertOk()->json();
     $r3 = collect($chk1['rooms'])->firstWhere('code', 'R3');
-    expect($r3['free'])->toBeFalse()->and($r3['busy'])->toContain('pp/2024-01c')
-        ->and(collect($chk1['rooms'])->last()['code'])->toBe('R3');
+    expect($r3)->toMatchArray(['free' => false, 'kind' => 'busy'])->and($r3['busy'])->toContain('pp/2024-01c')
+        ->and($r3['busy_items'][0])->toMatchArray(['teacher' => 'BOSHQA B.', 'teacher_full' => 'BOSHQA B.', 'groups' => ['pp/2024-01c'],
+            'subject' => 'Farmakologiya', 'time' => '08:30–09:50', 'date' => '2026-11-17'])
+        ->and(collect($chk1['rooms'])->reject(fn ($r) => $r['current'])->pluck('free')->all())
+        ->toBe(collect($chk1['rooms'])->reject(fn ($r) => $r['current'])->pluck('free')->sortDesc()->values()->all());
 
     $res = rmMove($s, $s['a'], ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertOk()->json();
     expect($res)->toMatchArray(['mode' => 'fix', 'fixed' => true]);
@@ -278,4 +285,123 @@ it('fan mas\'ulining boshqa rollari (admin, boshqa kafedra mudiri) so\'rov zanji
     rmAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.change-requests.approve', $req2))->assertOk();
     rmAs($s['reg'], 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req2))->assertOk();
     expect(TimetableCardOverride::where('card_id', $s['c']->id)->value('pair'))->toBe(7);
+});
+
+it('xonalar ro\'yxati: band xona busy_items bilan (o\'qituvchi qisqa ismi, guruh, fan, vaqt); bo\'sh xonalar ko\'p bo\'lsa ham kesilmaydi', function () {
+    $s = rmSetup();
+    // 102-xona seshanba 10:00–11:20 da boshqa fakultet darsi bilan band (UMAROV JASUR AKMALOVICH, d1/d25-07a, Normal fiziologiya).
+    $s['card']('d1/d25-07a', rmTeacher('UMAROV JASUR AKMALOVICH'), 2, 3, $s['r2'], ['faculty_name' => 'F1', 'specialty_name' => 'davolash', 'course' => 1,
+        'subject_name' => 'Normal fiziologiya', 'kafedra_name' => 'Fiziologiya kafedrasi']);
+    foreach (range(1, 160) as $i) {
+        Auditorium::create(['code' => 'F' . $i, 'name' => (300 + $i) . '-xona', 'volume' => 30, 'active' => true]);
+    }
+    $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->json('rooms'));
+    $r2 = $rooms->firstWhere('code', 'R2');
+
+    // 4 ta + 160 ta faol xona (nofaol 105 — yo'q): bo'shlar 162 (hozirgi 101 bilan), band 102 va sig'maydigan 104.
+    expect($rooms->count())->toBe(164)
+        ->and($rooms->where('free', true)->count())->toBe(162)
+        ->and($r2)->toMatchArray(['free' => false, 'kind' => 'busy', 'cap' => null])
+        ->and($r2['busy_items'])->toHaveCount(1)
+        ->and($r2['busy_items'][0])->toMatchArray(['teacher' => 'UMAROV J. A.', 'teacher_full' => 'UMAROV JASUR AKMALOVICH',
+            'groups' => ['d1/d25-07a'], 'subject' => 'Normal fiziologiya', 'time' => '10:00–11:20', 'date' => '2026-11-17', 'view' => 'week'])
+        // Band va sig'maydigan xonalar bo'shlardan keyin (hozirgi xonadan tashqari).
+        ->and($rooms->slice(1)->takeWhile(fn ($r) => $r['free'])->count())->toBe(161);
+
+    // Hozirgi (shu haftadagi) xona — reyting bo'yicha pastroq bo'lsa ham (odatdagi 101 dan) eng tepada.
+    TimetableCardOverride::create(['card_id' => $s['a']->id, 'week' => $s['week'], 'day' => 4, 'pair' => 7, 'auditorium_code' => 'F160', 'auditorium_name' => '460-xona']);
+    $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->json('rooms'));
+    expect($rooms->first())->toMatchArray(['code' => 'F160', 'current' => true])->and($rooms->get(1)['code'])->toBe('R1');
+});
+
+/** Xona nomidan joylashuv: bino, bo'lim, qavat (yaqinlik tartibi uchun) — production nomlari. */
+function rmLocate(string $name): array
+{
+    $m = fn (string $f, ...$a) => (new ReflectionMethod(TimetableController::class, $f))->invoke(null, ...$a);
+
+    return [$m('roomBuilding', $name), $m('roomSection', $name), $m('roomFloor', $name, true), $m('roomFloor', $name)];
+}
+
+it('xona nomidan bino / bo\'lim / qavat: "N-bino", "… klasteri", "… bo\'limi" (qavsda ham), "N-qavat" / "N-etaj" / podval, 3+ xonali raqam', function () {
+    expect(rmLocate("3-bino, revmakardiologiya bo'limi, 2-qavat, 2-amaliyot xonasi"))->toBe(['3-bino', "s:revmakardiologiya bo'limi", 2, null])
+        ->and(rmLocate("7-bino, gematologiya bo'limi, 3-qavat, 3-amaliyot xonasi"))->toBe(['7-bino', "s:gematologiya bo'limi", 3, null])
+        ->and(rmLocate("Tibbiyot klasteri, kardioxirurgiya bo'limi, 2-qavat, 2-xona"))->toBe(['tibbiyot klasteri', "s:kardioxirurgiya bo'limi", 2, null])
+        ->and(rmLocate("Tibbiyot klasteri, podval, 2-ma'ruza xonasi"))->toBe(['tibbiyot klasteri', null, 0, null])
+        ->and(rmLocate('-1-qavat (podval), 1-amaliyot xonasi'))->toBe([null, null, 0, null])
+        ->and(rmLocate('2-etaj 2-amaliyot xonasi'))->toBe([null, null, 2, null])
+        ->and(rmLocate('1-qavat, 118-amaliyot xonasi'))->toBe([null, null, 1, 1])
+        // Aniq yozilgan qavat ustun (boshqa oynalardagi eski qoida — raqamdan: 3).
+        ->and(rmLocate('2-qavat, 305-auditoriya'))->toBe([null, null, 2, 3])
+        ->and(rmLocate("1-qavat, 23-xona (Suyak-bo'g'im kasalliklari bo'limi)"))->toBe([null, "s:suyak-bo'g'im kasalliklari bo'limi", 1, null])
+        ->and(rmLocate('404-amaliyot xonasi'))->toBe([null, null, 4, 4])
+        ->and(rmLocate('306b'))->toBe([null, null, 3, 3])
+        ->and(rmLocate("1-bo'lim, 1-qavat, 1-amaliyot xonasi"))->toBe([null, 'n:1', 1, null])
+        // Tutuq belgisi farqsiz: ' / ‘ / ’ / `.
+        ->and(rmLocate('3-bino, revmakardiologiya bo‘limi, 2-qavat')[1])->toBe("s:revmakardiologiya bo'limi")
+        ->and(rmLocate('3-bino, revmakardiologiya bo’limi, 2-qavat')[1])->toBe("s:revmakardiologiya bo'limi")
+        ->and(rmLocate('1-bo`lim, 2-qavat')[1])->toBe('n:1')
+        ->and(rmLocate('101-xona'))->toBe([null, null, 1, 1]);
+    $short = fn (?string $n) => (new ReflectionMethod(TimetableController::class, 'teacherShortName'))->invoke(null, $n);
+    expect($short('UMAROV JASUR AKMALOVICH'))->toBe('UMAROV J. A.')->and($short('UMAROV J. A.'))->toBe('UMAROV J. A.')
+        ->and($short("KARIMOV ALI VALI O'G'LI"))->toBe('KARIMOV A. V.')->and($short('  '))->toBeNull();
+});
+
+it('fan mas\'uli oynasida xonalar tartibi — yaqinlik birinchi (bino → bo\'lim → qavat); sabab — eng yaqin pog\'ona + ball; boshqa oynalar tartibi o\'zgarmaydi', function () {
+    $s = rmSetup();
+    $mk = fn (string $code, string $name, ?string $bid = null, bool $active = true) => Auditorium::create(['code' => $code, 'name' => $name, 'volume' => 30,
+        'active' => $active, 'building_id' => $bid]);
+    $s0 = $mk('S0', "3-bino, revmakardiologiya bo'limi, 2-qavat, 2-amaliyot xonasi", 'B1');
+    $mk('S1', "3-bino, revmakardiologiya bo'limi, 2-qavat, 5-amaliyot xonasi", 'B1');
+    $mk('S2', "3-bino, revmakardiologiya bo'limi, 3-qavat, 1-amaliyot xonasi", 'B1');
+    $mk('S3', "3-bino, gematologiya bo'limi, 2-qavat, 3-amaliyot xonasi");
+    $mk('S4', "3-bino, gematologiya bo'limi, 4-qavat, 1-xona");
+    // Boshqa bino: nomlar farq qiladi — building_id bir xil bo'lsa ham (nom ustun); bo'lim va qavati bir xil bo'lsa ham.
+    $mk('S5', "7-bino, revmakardiologiya bo'limi, 2-qavat, 2-amaliyot xonasi", 'B1');
+    $mk('S6', "Tibbiyot klasteri, kardioxirurgiya bo'limi, 2-qavat, 2-xona");
+    $mk('X1', '1-qavat, 9-xona', 'B5');
+    $mk('X2', '9-bino, 2-qavat, 1-xona', 'B5');
+    $s['a']->update(['auditorium_code' => 'S0', 'auditorium_name' => $s0->name]);
+    // Odat: shu guruh shu fanni boshqa haftalarda S3 (shu bino) va S6 (boshqa bino) da o'tgan.
+    foreach ([2 => 'S3', 3 => 'S6', 4 => 'S6'] as $w => $code) {
+        TimetableCardOverride::create(['card_id' => $s['a']->id, 'week' => $w, 'day' => 4, 'pair' => 7, 'auditorium_code' => $code, 'auditorium_name' => $code]);
+    }
+    $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->assertOk()->json('rooms'))->keyBy('code');
+    $order = $rooms->keys()->filter(fn ($c) => str_starts_with($c, 'S'))->values()->all();
+
+    // Boshqa binolar: qavat farqi hisobga olinmaydi (X2 — 2-qavat, hozirgidek; X1 — 1-qavat): nomi bo'yicha.
+    expect($rooms->keys()->search('X1'))->toBeLessThan($rooms->keys()->search('X2'))
+        ->and($order)->toBe(['S0', 'S1', 'S2', 'S3', 'S4', 'S6', 'S5'])
+        ->and($rooms['S0']['current'])->toBeTrue()
+        ->and([$rooms['S1']['why'], $rooms['S2']['why'], $rooms['S3']['why'], $rooms['S4']['why'], $rooms['S6']['why'], $rooms['S5']['why']])
+        ->toBe(['shu qavat', "shu bo'lim", 'shu qavat · shu fan odatda shu yerda', 'shu bino', 'shu fan odatda shu yerda', null]);
+
+    // Boshqa oynalar (biriktirish — roomRankForUnit / rankRooms sukut): eski tartib — odatdagi xona eng tepada, "shu bino" — ball.
+    $ctl = app(TimetableController::class);
+    $legacy = (new ReflectionMethod($ctl, 'roomRankForUnit'))->invoke($ctl, $s['board'], collect([$s['a']->fresh()]),
+        Auditorium::whereIn('code', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'])->get());
+    expect(array_slice($legacy['order'], 0, 2))->toBe(['S3', 'S6'])
+        ->and(array_search('S6', $legacy['order']))->toBeLessThan(array_search('S1', $legacy['order']))
+        ->and($legacy['why']['S6'])->toBe('shu fan odatda shu yerda')
+        ->and($legacy['why']['S1'])->toBe('shu bino');
+
+    // Hozirgi xona — shu haftadagi (override) xona: odatdagi va yaqinroq xonalar bo'lsa ham eng tepada; nuqta — shu xona.
+    TimetableCardOverride::create(['card_id' => $s['a']->id, 'week' => $s['week'], 'day' => 4, 'pair' => 7, 'auditorium_code' => 'S2', 'auditorium_name' => 'S2']);
+    $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->assertOk()->json('rooms'));
+    expect($rooms->first())->toMatchArray(['code' => 'S2', 'current' => true])
+        ->and($rooms->firstWhere('code', 'S0')['why'])->toStartWith("shu bo'lim");
+
+    // Nomda bino yo'q — building_id bo'yicha (hozirgi xona nofaol bo'lsa ham); bir xonada bor, ikkinchisida yo'q — building_id bo'yicha.
+    $c0 = $mk('T0', "1-qavat, 23-xona (Suyak-bo'g'im kasalliklari bo'limi)", 'B7', false);
+    $mk('T1', '1-qavat, 118-amaliyot xonasi', 'B7');
+    $mk('T2', '2-qavat, 305-auditoriya', 'B7');
+    $mk('T3', "7-bino, gematologiya bo'limi, 1-qavat, 3-amaliyot xonasi", 'B7');
+    $mk('T4', "1-qavat, 5-xona (Suyak-bo‘g‘im kasalliklari bo‘limi)", 'B7');
+    $mk('T5', '1-qavat, 6-xona', 'B9');
+    $s['a']->update(['auditorium_code' => 'T0', 'auditorium_name' => $c0->name]);
+    TimetableCardOverride::query()->delete();
+    $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->assertUnprocessable()->json('rooms'))->keyBy('code');
+    $order = $rooms->keys()->filter(fn ($c) => str_starts_with($c, 'T'))->values()->all();
+    expect($order)->toBe(['T4', 'T1', 'T3', 'T2', 'T5'])
+        ->and([$rooms['T4']['why'], $rooms['T1']['why'], $rooms['T3']['why'], $rooms['T2']['why'], $rooms['T5']['why']])
+        ->toBe(['shu qavat', 'shu qavat', 'shu qavat', 'shu bino', null]);
 });

@@ -310,9 +310,14 @@ trait TimetableResponsibleMove
     }
 
     /**
-     * Tanlangan vaqt uchun xonalar (check oynasi): faol, sig'imi yetadi (umumiy xona / bandlik tekshirilmaydigan karta — sig'imsiz),
-     * har bo'lak o'qituvchisiga ruxsat; yaqinlik bo'yicha (rankRooms), bo'shlari tepada, bandlari sababi bilan (tanlab bo'lmaydi).
-     * Bandlik — barcha bo'laklar shu vaqtga ko'chgan holatda (sinab) unitBusy: haftalik va sikl darslari bilan.
+     * Tanlangan vaqt uchun xonalar (check oynasi) — cheklovsiz (~650 xona; front avval 50 tasini chizadi, qidiruv — hammasidan): faol va har
+     * bo'lak o'qituvchisiga ruxsat etilgan xonalar (nofaol / ruxsatsiz — chiqmaydi). Tartib — hozirgi (shu haftadagi) xona eng tepada, so'ng
+     * bo'shlari, so'ng tanlab bo'lmaydiganlari; har guruh ichida yaqinlik (rankRooms, $proximity: bino → bo'lim → qavat, so'ng ballar).
+     * Tanlab bo'lmaydigan xona turi (kind): busy — boshqa dars bilan band (bandlik — barcha bo'laklar shu vaqtga ko'chgan holatda, sinab:
+     * unitBusy, haftalik va sikl darslari bilan; haftalik dars xonani to'liq band qiladi), capacity — sig'maydi (talabalar xona sig'imidan ko'p);
+     * ikkalasi bo'lsa — busy, cap bilan.
+     * Har band xonada tuzilgan ro'yxat busy_items: [{teacher ("UMAROV J. A."), teacher_full, groups[], subject, time ("08:30–11:20"), date,
+     * dates, card_ids, view, week}] — front matnni parse qilmaydi; cap: {volume, students, over}.
      */
     private function responsibleMoveRooms(TimetableBoard $board, array $moves, int $week, int $day, string $date): array
     {
@@ -322,31 +327,83 @@ trait TimetableResponsibleMove
         $first = $parts->first();
         $ov = TimetableCardOverride::where('card_id', $first->id)->where('week', $week)->first();
         $current = (string) ($ov?->auditorium_code ?: $first->auditorium_code);
-        $fit = $base['active']->filter(fn ($r) => $parts->every(fn (TimetableCard $c) => $this->auditoriumAllowedForCard($r, $c, $base['teacher'])
-            && $this->suggestionRoomProblem($board, $c, $r) === null));
-        $busy = ['rooms' => []];
+        $allowed = $base['active']->filter(fn ($r) => $parts->every(fn (TimetableCard $c) => $this->auditoriumAllowedForCard($r, $c, $base['teacher'])));
+        $busy = ['rooms' => [], 'items' => ['rooms' => []]];
         DB::beginTransaction();
         try {
             foreach ($moves as [$c, $p]) {
                 TimetableCardOverride::updateOrCreate(['card_id' => $c->id, 'week' => $week], ['day' => $day, 'pair' => $p, 'start_half' => 0, 'cancelled' => false]);
             }
             $busy = $this->unitBusy($board, TimetableCard::whereIn('id', $parts->pluck('id'))->get()->each(fn ($c) => $c->setRelation('board', $board)),
-                [$date => true]);
+                [$date => true], true);
         } catch (\Throwable $e) {
             Log::warning('[ResponsibleMove] xona bandligi: ' . $e->getMessage());
         } finally {
             DB::rollBack();
         }
+        $times = $this->responsibleBusyTimes($board);
         $out = [];
-        foreach ($this->rankRooms($first, $fit, $current !== '' ? $current : null, $this->roomHabitForCard($board, $first)) as [$r, $why]) {
-            $b = $busy['rooms'][(string) $r->code] ?? null;
-            $out[] = ['code' => (string) $r->code, 'name' => (string) ($r->name ?: $r->code), 'volume' => (int) $r->volume, 'why' => $why,
-                'current' => (string) $r->code === $current, 'free' => $b === null,
-                'busy' => $b !== null ? self::roomBusyText('Band: ', (string) $b) : null];
+        foreach ($this->rankRooms($first, $allowed, $current !== '' ? $current : null, $this->roomHabitForCard($board, $first), true) as [$r, $why]) {
+            $code = (string) $r->code;
+            $b = $busy['rooms'][$code] ?? null;
+            // Sig'im: xona talabalarga kichik (har bo'lak bo'yicha; umumiy xona va bandlik tekshirilmaydigan karta — tekshirilmaydi).
+            $cap = null;
+            foreach ($parts as $c) {
+                if ($this->suggestionRoomProblem($board, $c, $r) !== null) {
+                    $n = $this->cardStudents($c);
+                    $cap = ['volume' => (int) $r->volume, 'students' => $n, 'over' => $n - (int) $r->volume];
+                    break;
+                }
+            }
+            $items = array_map(fn ($it) => [
+                'teacher' => self::teacherShortName($it['by_teacher'] ?? null), 'teacher_full' => $it['by_teacher'] ?? null,
+                'groups' => (array) ($it['by_groups'] ?? []), 'subject' => $it['subject'] ?? null,
+                'time' => $this->responsibleBusyTime($times, $it), 'date' => $it['dates'][0] ?? null, 'dates' => $it['dates'] ?? [],
+                'card_ids' => $it['card_ids'] ?? [], 'view' => $it['view'] ?? 'week', 'week' => $it['week'] ?? null,
+            ], $b !== null ? (array) ($busy['items']['rooms'][$code] ?? []) : []);
+            $kind = $b !== null ? 'busy' : ($cap ? 'capacity' : null);
+            $out[] = ['code' => $code, 'name' => (string) ($r->name ?: $r->code), 'volume' => (int) $r->volume, 'why' => $why,
+                'building_name' => (string) ($r->building_name ?? ''), 'auditorium_type_name' => (string) ($r->auditorium_type_name ?? ''),
+                'current' => $code === $current, 'free' => $kind === null, 'kind' => $kind,
+                'busy' => $b !== null ? self::roomBusyText('Band: ', (string) $b) : null, 'busy_items' => $items, 'cap' => $cap];
         }
-        usort($out, fn ($a, $b) => [$a['free'] ? 0 : 1] <=> [$b['free'] ? 0 : 1]);
+        usort($out, fn ($a, $b) => [$a['current'] ? 0 : 1, $a['free'] ? 0 : 1] <=> [$b['current'] ? 0 : 1, $b['free'] ? 0 : 1]);
 
-        return array_slice($out, 0, 120);
+        return $out;
+    }
+
+    /** Bandlik vaqti jadvallari: row — qo'ng'iroq jadvali qatori (haftalik dars), hour — kunning akademik soati (sikl darsi, hemisSlotTimes). */
+    private function responsibleBusyTimes(TimetableBoard $board): array
+    {
+        $bell = $board->bell_schedule ?: TimetableBoard::defaultBellSchedule((int) $board->pairs_per_day);
+        $rows = [];
+        foreach (array_values(array_filter((array) $bell, fn ($it) => ($it['type'] ?? 'pair') === 'pair' && !empty($it['start']) && !empty($it['end']))) as $i => $it) {
+            $rows[$i + 1] = [substr((string) $it['start'], 0, 5), substr((string) $it['end'], 0, 5)];
+        }
+
+        return ['row' => $rows, 'hour' => $this->hemisSlotTimes($board)];
+    }
+
+    /** "08:30–11:20": bandlik yozuvining hour_from .. hour_to (oxiridan keyingi) oralig'i; aniqlanmasa — bo'sh. */
+    private function responsibleBusyTime(array $times, array $it): string
+    {
+        $t = $times[($it['hour_unit'] ?? 'row') === 'hour' ? 'hour' : 'row'];
+        $from = (int) ($it['hour_from'] ?? 0);
+        $to = (int) ($it['hour_to'] ?? 0) - 1;
+
+        return isset($t[$from], $t[$to]) ? $t[$from][0] . '–' . $t[$to][1] : '';
+    }
+
+    /** "UMAROV JASUR AKMALOVICH" → "UMAROV J. A." (familiya + bosh harflar; "o'g'li" / "qizi" tashlanadi); bo'sh — null. */
+    private static function teacherShortName(?string $full): ?string
+    {
+        $w = preg_split('/\s+/u', trim((string) $full), -1, PREG_SPLIT_NO_EMPTY);
+        if (!$w) {
+            return null;
+        }
+        $rest = array_filter(array_slice($w, 1), fn ($x) => !preg_match("/^(o['ʻ‘’`]?g['ʻ‘’`]?li|ugli|qizi|kizi)$/iu", $x));
+
+        return trim($w[0] . ' ' . implode(' ', array_map(fn ($x) => mb_strtoupper(mb_substr($x, 0, 1)) . '.', $rest)));
     }
 
     /** Eski va yangi joy matni: "Seshanba, 10.11.2026 10:00–11:20" (ko'p bo'lakli — birinchi bo'lak boshidan oxirgisi oxirigacha). */

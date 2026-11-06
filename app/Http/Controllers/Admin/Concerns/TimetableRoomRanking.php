@@ -23,6 +23,11 @@ use Illuminate\Support\Facades\Schema;
  *   6) qolganlari — sig'imi talabalar soniga eng yaqin (ortiqcha katta zal oxirida).
  * Har mezon o'zidan pastdagilarning hammasidan ustun (16 / 8 / 4 / 2 / 1). Har daraja ichida xona turi mos kelmagani oxirida
  * (amaliy darsga "Ma'ruza" turidagi zal, ma'ruzaga — boshqa turdagi xona). Xaritalar so'rov davomida bir marta quriladi.
+ *
+ * Yaqinlik rejimi ($proximity — fan mas'uli "Vaqt va xonani o'zgartirish" oynasi; boshqa oynalar tartibi o'zgarmaydi): avval hozirgi
+ * xonaga yaqinlik pog'onasi — shu bino + bo'lim + qavat → shu bino + bo'lim → shu bino + qavat → shu bino → boshqa / noma'lum bino;
+ * pog'ona ichida yuqoridagi ballar (odat, o'qituvchi, kafedra, fan), so'ng qavat farqi (faqat shu bino ichida), so'ng sig'im yaqinligi.
+ * Bino, bo'lim va qavat — xona nomidan (roomBuilding / roomSection / roomFloor(…, true)); bino nomda bo'lmasa — building_id.
  */
 trait TimetableRoomRanking
 {
@@ -41,6 +46,8 @@ trait TimetableRoomRanking
         'kafedra' => 'kafedra xonasi',
         'subject' => 'shu fan xonasi',
         'building' => 'shu bino',
+        'section' => "shu bo'lim",
+        'floor' => 'shu qavat',
     ];
 
     /**
@@ -205,10 +212,70 @@ trait TimetableRoomRanking
         return str_contains($t, "ma'ruza") || str_contains($t, 'maruza') || str_contains($t, 'лекц') || str_contains($t, 'lecture') ? 'L' : 'A';
     }
 
-    /** Qavat — nomdagi birinchi 3+ xonali raqamdan ("423" → 4, "2-215" → 2, "1203" → 12); aniqlanmasa — null. */
-    private static function roomFloor(?string $name): ?int
+    /**
+     * Qavat — nomdagi birinchi 3+ xonali raqamdan ("423" → 4, "2-215" → 2, "1203" → 12); aniqlanmasa — null. $explicit — avval nomda
+     * aniq yozilgani: "N-qavat" / "N-etaj" ("-1-qavat" — podval), "podval" — 0 (podval va manfiy qavat bir xil); yo'q bo'lsa — raqamdan
+     * ("2-qavat, 305-auditoriya" → 2, "404-amaliyot xonasi" → 4). Boshqa oynalar (biriktirish, Takliflar) — eski qoida ($explicit = false).
+     */
+    private static function roomFloor(?string $name, bool $explicit = false): ?int
     {
+        if ($explicit) {
+            $n = KafedraResolver::nameKey($name);
+            if (preg_match('/(?<![\d-])(-?\d+)\s*-\s*(?:qavat|etaj)/u', $n, $m)) {
+                return max(0, (int) $m[1]);
+            }
+            if (preg_match('/\bpodval\b/u', $n)) {
+                return 0;
+            }
+        }
+
         return preg_match('/(\d{3,})/', (string) $name, $m) ? intdiv((int) $m[1], 100) : null;
+    }
+
+    /** Xona nomi bo'laklari — vergul bo'yicha (vergulsiz — butun nom bitta bo'lak), normallashtirilgan (kichik harf, tutuq belgilari bir xil). */
+    private static function roomParts(?string $name): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', KafedraResolver::nameKey($name))), fn ($p) => $p !== ''));
+    }
+
+    /** Bino — nomdagi "N-bino", "… binosi" yoki "… klasteri" bo'lagi (normallashtirilgan); yo'q bo'lsa — null (building_id ishlatiladi). */
+    private static function roomBuilding(?string $name): ?string
+    {
+        foreach (self::roomParts($name) as $p) {
+            if (preg_match('/(?:^|\s)\d+\s*-\s*bino(?:\s|$)|binosi|klasteri/u', $p)) {
+                return $p;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Bo'lim — "N-bo'lim" (raqam bo'yicha) yoki "<nom> bo'limi" (shifoxona bo'limi; vergul bo'lagida yoki qavs ichida — "23-xona (Suyak-bo'g'im
+     * kasalliklari bo'limi)"), tutuq belgilari farqsiz; yo'q bo'lsa — null.
+     */
+    private static function roomSection(?string $name): ?string
+    {
+        $n = KafedraResolver::nameKey($name);
+        if (preg_match("/(?<![\d-])(\d+)\s*-\s*bo'lim/u", $n, $m)) {
+            return 'n:' . (int) $m[1];
+        }
+        if (preg_match("/([^,()]*?bo'limi)/u", $n, $m) && trim($m[1]) !== "bo'limi") {
+            return 's:' . trim($m[1]);
+        }
+
+        return null;
+    }
+
+    /** Yaqinlik rejimida bir binomi: ikkala nomda bino bo'lsa — nom bo'yicha (building_id bir xil bo'lsa ham); aks holda — building_id (ikkalasida). */
+    private static function roomSameBuilding(?string $curName, string $curId, Auditorium $r): bool
+    {
+        $rName = self::roomBuilding($r->name);
+        if ($curName !== null && $rName !== null) {
+            return $curName === $rName;
+        }
+
+        return $curId !== '' && (string) $r->building_id !== '' && (string) $r->building_id === $curId;
     }
 
     /**
@@ -216,7 +283,7 @@ trait TimetableRoomRanking
      * $habit — roomHabitMap natijasi. Sig'imi yetmaydigan yoki o'qituvchiga ruxsat etilmagan xonalar (ro'yxatdan chiqarilmagan bo'lsa) —
      * oxirida.
      */
-    private function rankRooms(object $c, iterable $rooms, ?string $currentCode, array $habit): array
+    private function rankRooms(object $c, iterable $rooms, ?string $currentCode, array $habit, bool $proximity = false): array
     {
         $base = $this->roomRankBase();
         $habitHere = $habit['g'][$this->roomHabitKey($c)] ?? [];
@@ -227,6 +294,9 @@ trait TimetableRoomRanking
         $curPrefix = $cur ? self::roomPrefix($cur->name) : null;
         $curBuilding = $cur && $cur->active && (string) $cur->building_id !== '' ? (string) $cur->building_id : null;
         $curFloor = $cur ? self::roomFloor($cur->name) : null;
+        // Yaqinlik rejimi: hozirgi xona — nuqta (faolligidan qat'i nazar); bino nomi / building_id, bo'lim, aniq qavat.
+        $px = $proximity && $cur ? ['b' => self::roomBuilding($cur->name), 'bid' => (string) $cur->building_id, 's' => self::roomSection($cur->name),
+            'f' => self::roomFloor($cur->name, true)] : null;
         $lesson = ($c->training_type ?? '') === 'lecture' ? 'L' : 'A';
         $students = (int) ($c->students ?? 0);
         $cardBoard = null;
@@ -252,6 +322,25 @@ trait TimetableRoomRanking
             $fits = ($infoOnly || !($vol > 0 && $students > 0 && $vol < $students)) && (!$card || $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
             $floor = $f['building'] && $curFloor !== null ? self::roomFloor($r->name) : null;
             $kind = self::roomKind($r->auditorium_type_name ?? null);
+            if ($proximity) {
+                $sameB = $px && self::roomSameBuilding($px['b'], $px['bid'], $r);
+                $rFloor = $sameB ? self::roomFloor($r->name, true) : null;
+                $sameS = $sameB && $px['s'] !== null && self::roomSection($r->name) === $px['s'];
+                $sameF = $sameB && $px['f'] !== null && $rFloor === $px['f'];
+                $tier = !$sameB ? 4 : ($sameS && $sameF ? 0 : ($sameS ? 1 : ($sameF ? 2 : 3)));
+                $f['building'] = false;
+                $rows[] = [$r, $f, [
+                    $fits ? 0 : 1,
+                    $tier,
+                    -(($f['habit'] ? 16 : 0) + ($f['teacher'] ? 8 : 0) + ($f['kafedra'] ? 4 : 0) + ($f['subject'] ? 2 : 0)),
+                    $kind !== null && $kind !== $lesson ? 1 : 0,
+                    -(int) ($habitHere[$code] ?? 0),
+                    -(int) ($subjectHere[$code] ?? 0),
+                    $rFloor !== null && $px['f'] !== null ? abs($rFloor - $px['f']) : PHP_INT_MAX,
+                    $vol > 0 && $students > 0 ? ($vol >= $students ? $vol - $students : PHP_INT_MAX) : PHP_INT_MAX - 1,
+                ], [0 => 'floor', 1 => 'section', 2 => 'floor', 3 => 'building'][$tier] ?? null];
+                continue;
+            }
             $rows[] = [$r, $f, [
                 $fits ? 0 : 1,
                 -(($f['habit'] ? 16 : 0) + ($f['teacher'] ? 8 : 0) + ($f['kafedra'] ? 4 : 0) + ($f['subject'] ? 2 : 0) + ($f['building'] ? 1 : 0)),
@@ -265,7 +354,10 @@ trait TimetableRoomRanking
         }
         usort($rows, fn ($x, $y) => ($x[2] <=> $y[2]) ?: strnatcasecmp((string) $x[0]->name, (string) $y[0]->name));
 
-        return array_map(fn ($row) => [$row[0], ($k = array_key_first(array_filter($row[1]))) !== null ? self::ROOM_WHY[$k] : null], $rows);
+        // Sabab: yaqinlik rejimida — eng yaqin pog'ona ("shu qavat" / "shu bo'lim" / "shu bino") va birinchi ball ("shu qavat · shu fan
+        // odatda shu yerda"); aks holda — birinchi ball (bino ham).
+        return array_map(fn ($row) => [$row[0], implode(' · ', array_filter([isset($row[3]) ? self::ROOM_WHY[$row[3]] : null,
+            ($k = array_key_first(array_filter($row[1]))) !== null ? self::ROOM_WHY[$k] : null])) ?: null], $rows);
     }
 
     /**

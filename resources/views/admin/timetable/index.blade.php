@@ -6229,7 +6229,7 @@
                     status.textContent = warns.length ? '⚠' : '✓';
                     status.className = 'asc-subj-status ' + (warns.length ? 'text-amber-600' : 'text-emerald-600');
                     status.title = warns.join('\n');
-                    if (warns.length && typeof ttToast === 'function') ttToast('<b>Saqlandi, ogohlantirish bilan</b>' + warns.map(w => '<div>⚠ ' + esc(w) + '</div>').join(''), 'warn');
+                    // (Ogohlantirish toast'i — api() ichida.)
                 } catch (e) {
                     status.textContent = '✕';
                     status.className = 'asc-subj-status text-red-600';
@@ -6816,11 +6816,8 @@
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
-                    // Ogohlantirish (xato emas): alohida ma'ruza kunlariga boshqa fan amaliyoti tushdi.
+                    // Ogohlantirish (xato emas): alohida ma'ruza kunlariga boshqa fan amaliyoti tushdi — api() uni toast qiladi; holat qatorida ham.
                     const warns = (result && result.warnings) || [];
-                    if (warns.length && typeof ttToast === 'function') {
-                        ttToast('<b>Joylandi, ogohlantirish bilan</b>' + warns.map(w => '<div>⚠ ' + esc(w) + '</div>').join(''), 'warn');
-                    }
                     const reloaded = ((cyclePlanData && cyclePlanData.cycle_cards) || [])
                         .find(item => item.key === card.key);
                     if (result && result.pending_approval) {
@@ -13485,9 +13482,122 @@
                 };
             }
 
+            // ===== Fan mas'uli: mas'ul fani darsining vaqti va xonasi (faqat shu hafta, ichki jadval) =====
+            // Rejim serverda: to'qnashuvdagi (yoki joylanmagan) dars toza joyga — darhol ("Qo'llash"); to'qnashuvsiz dars — so'rov (kafedra
+            // mudiri → registrator ofisi, sabab majburiy); band joy — qizil sabab. Har o'zgarishda check; xonalar ro'yxati — check javobida
+            // (bo'shlari tepada, bandlari sababi bilan, tanlab bo'lmaydi). Mas'ul fanida bo'lmagan dars va ma'ruza — faqat ko'rish.
+            function openResponsibleMove(c) {
+                const prior = document.getElementById('respMove');
+                if (prior) prior.remove();
+                const m = document.createElement('div');
+                m.id = 'respMove';
+                m.className = 'cr-proposal-overlay';
+                const days = boardDayNames().slice(0, +board.days || 6);
+                const lecture = c.training_type === 'lecture';
+                const unit = lecture ? [c] : unitOf(c);
+                const len = unitLen(unit);
+                const rows = boardSchedule().filter(it => it.type === 'pair').length || +board.pairs_per_day || 12;
+                const pl = effPlace(unit[0]);
+                const room = (c.auditorium_name || c.auditorium_code || '');
+                const head = '<h3 class="font-bold text-lg">Vaqt va xonani o‘zgartirish</h3>'
+                    + '<p>' + esc(c.subject_name) + ' · ' + esc(lecture ? (c.oqim_label || '') : (c.group_name || '')) + (curWeek ? ' · ' + curWeek + '-hafta' : '') + '</p>'
+                    + '<p class="text-sm">Amaldagi: ' + esc(pl ? (days[pl.day - 1] || pl.day + '-kun') + ' ' + slotRangeText(+pl.pair, len) : 'joylanmagan')
+                    + (room ? ', xona ' + esc(room) : '') + (unit.length > 1 ? ' · ' + unit.map(cardLen).join(' + ') + ' soatlik bo‘laklar' : '') + '</p>';
+                const why = !mySubjectCardIds.has(+c.id) ? "Bu fan sizning mas'ul fanlaringizda emas — faqat ko'rish."
+                    : lecture ? "Ma'ruzani surish — faqat kafedra mudiri va adminlar."
+                    : (weeklyLayer !== 'internal' || !curWeek) ? "Vaqt va xonani o'zgartirish uchun ichki jadval va haftani tanlang (faqat shu hafta o'zgaradi)." : null;
+                if (why) {
+                    m.innerHTML = '<div class="cr-proposal-form">' + head + '<p class="text-sm text-slate-600" data-rm-why>' + esc(why) + '</p>'
+                        + '<div class="flex justify-end"><button type="button" data-close>Yopish</button></div></div>';
+                    document.body.appendChild(m);
+                    m.querySelector('[data-close]').onclick = () => m.remove();
+                    m.onclick = ev => { if (ev.target === m) m.remove(); };
+                    return;
+                }
+                const starts = [];
+                for (let q = 1; q + len - 1 <= rows; q++) starts.push(q);
+                m.innerHTML = '<form class="cr-proposal-form">' + head
+                    + '<p class="text-sm">Faqat shu hafta o‘zgaradi (shablon va kartaning xonasi o‘zgarmaydi). Bugungi va o‘tgan kunlar — yopiq.</p>'
+                    + '<label>Kun<select name="day" required>' + days.map((d, i) => '<option value="' + (i + 1) + '"' + (pl && +pl.day === i + 1 ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select></label>'
+                    + '<label>Boshlanish vaqti<select name="pair" required>' + starts.map(q => '<option value="' + q + '"' + (pl && +pl.pair === q ? ' selected' : '') + '>'
+                        + esc(slotRangeText(q, len) || (q + '-katak')) + '</option>').join('') + '</select></label>'
+                    + '<label>Xona<select name="room"><option value="">— hozirgi xona' + (room ? ' (' + esc(room) + ')' : '') + ' —</option></select></label>'
+                    + '<label>Sabab (so‘rov uchun majburiy)<textarea name="reason" maxlength="1000" rows="2"></textarea></label>'
+                    + '<p role="alert" class="text-sm"></p>'
+                    + '<div class="flex justify-end gap-3"><button type="button" data-close>Bekor</button>'
+                    + '<button type="submit" class="px-3 py-2 bg-blue-600 text-white rounded" disabled>Tekshirilmoqda…</button></div></form>';
+                document.body.appendChild(m);
+                m.querySelector('[data-close]').onclick = () => m.remove();
+                m.onclick = ev => { if (ev.target === m) m.remove(); };
+                const form = m.querySelector('form'), btn = form.querySelector('[type="submit"]'), status = form.querySelector('[role="alert"]');
+                const week = curWeek;
+                let seq = 0, mode = null;
+                const body = () => ({ week: week, day: +form.elements.day.value, pair: +form.elements.pair.value,
+                    auditorium_code: form.elements.room.value || undefined });
+                // Xonalar: tanlangan vaqt uchun (check javobidan); tanlov saqlanadi, band xona — tanlab bo'lmaydi.
+                const fillRooms = list => {
+                    const sel = form.elements.room, keep = sel.value;
+                    sel.innerHTML = '<option value="">— hozirgi xona' + (room ? ' (' + esc(room) + ')' : '') + ' —</option>'
+                        + (list || []).map(r => '<option value="' + esc(r.code) + '"' + (r.free ? '' : ' disabled') + (r.code === keep ? ' selected' : '') + '>'
+                            + esc(r.name + (r.volume ? ' (' + r.volume + ' o‘rin)' : '') + (r.free ? (r.why ? ' — ' + r.why : '') : ' — ' + (r.busy || 'band'))) + '</option>').join('');
+                    if (keep && !(list || []).some(r => r.code === keep && r.free)) sel.value = '';
+                };
+                const check = async () => {
+                    const my = ++seq;
+                    mode = null;
+                    btn.disabled = true;
+                    btn.textContent = 'Tekshirilmoqda…';
+                    status.className = 'text-sm text-slate-500';
+                    status.textContent = 'Vaqt, xona va bronlar tekshirilmoqda…';
+                    let j, ok = true;
+                    try { j = await api(BASE + '/cards/' + c.id + '/responsible-move/check', 'POST', body()); }
+                    catch (e) { j = e.data || { message: e.message }; ok = false; }
+                    if (my !== seq || !m.isConnected) return;
+                    if (j.rooms) fillRooms(j.rooms);
+                    mode = ok ? j.mode : null;
+                    const msg = j.message || j.error || 'Tekshirib bo‘lmadi.';
+                    status.className = 'text-sm ' + (mode === 'fix' ? 'text-emerald-700' : mode === 'request' ? 'text-amber-700' : 'text-red-600');
+                    status.textContent = (mode ? (j.new ? j.new + ' — ' : '') : '') + msg;
+                    btn.textContent = mode === 'fix' ? 'Qo‘llash' : mode === 'request' ? 'So‘rov yuborish' : 'Band';
+                    btn.disabled = !mode;
+                };
+                form.elements.day.onchange = check;
+                form.elements.pair.onchange = check;
+                form.elements.room.onchange = check;
+                check();
+                form.onsubmit = async ev => {
+                    ev.preventDefault();
+                    if (!mode) return;
+                    if (mode === 'request' && !form.elements.reason.value.trim()) {
+                        status.className = 'text-sm text-red-600';
+                        status.textContent = "So'rov sababini kiriting.";
+                        form.elements.reason.focus();
+                        return;
+                    }
+                    btn.disabled = true;
+                    try {
+                        const sent = await api(BASE + '/cards/' + c.id + '/responsible-move', 'POST', Object.assign(body(), { reason: form.elements.reason.value }));
+                        m.remove();
+                        if (sent && sent.mode === 'fix') {
+                            ttToast('<b>' + esc(sent.message || 'Joylandi.') + '</b>', 'ok');
+                            await loadBoard(board.id);
+                        } else {
+                            // So'rov: api() "Tasdiqqa yuborildi" xabarini ko'rsatadi va so'rovlar ro'yxatini yangilaydi.
+                            await loadChangeRequests();
+                        }
+                    } catch (e) {
+                        status.className = 'text-sm text-red-600';
+                        status.textContent = (e.data && (e.data.message || e.data.error)) || e.message;
+                        btn.disabled = false;
+                    }
+                };
+            }
+
             // ===== Kartochka modali (o'qituvchi/auditoriya) =====
             async function openModal(c) {
                 if (TIMETABLE_ROLE === 'oqituvchi') { openTeacherTimeProposal(c); return; }
+                // Fan mas'uli: kafedra mudiri oynasi emas (o'qituvchi/xona ro'yxatlari unga yopiq) — vaqt va xona oynasi (mas'ul fanida — o'zgartirish).
+                if (TIMETABLE_ROLE === 'fan_masuli') { openResponsibleMove(c); return; }
                 modalCard = c;
                 $('cmTitle').textContent = c.subject_name;
                 const cmLec = c.training_type === 'lecture' ? lectureLabel(c.oqim_label, cardGroups(c)) : null;

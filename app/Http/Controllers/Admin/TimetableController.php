@@ -74,6 +74,7 @@ class TimetableController extends Controller
     use Concerns\TimetableStaffToday;
     use Concerns\TimetableTeacherConflictFix;
     use Concerns\TimetableCycleSettingScope;
+    use Concerns\TimetableResponsibleMove;
 
     public function index(Request $request)
     {

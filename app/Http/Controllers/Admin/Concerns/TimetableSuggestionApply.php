@@ -188,6 +188,24 @@ trait TimetableSuggestionApply
         return ['mode' => $r['level'] === 'admin' ? 'direct' : ($teacherLevel ? 'department' : 'registrar'), 'why' => null, 'code' => 200];
     }
 
+    /**
+     * Xona shu kartaga yaroqlimi (faol, talabalar sig'adi) — muammo matni yoki null. Sig'im: umumiy raqamsiz xona (isSharedRoom) va bandlik
+     * tekshirilmaydigan karta (isNonBlocking) uchun tekshirilmaydi; sig'imi noma'lum (0) xona — tekshirilmaydi.
+     */
+    public function suggestionRoomProblem(TimetableBoard $board, TimetableCard $card, Auditorium $room): ?string
+    {
+        $name = (string) ($room->name ?: $room->code);
+        if (!$room->active) {
+            return 'xona nofaol — boshqa xona tanlang (' . $name . ').';
+        }
+        $students = $this->cardStudents($card);
+        if (!$this->isNonBlocking($card, $board) && !$this->isSharedRoom((string) $room->name) && (int) $room->volume > 0 && $students > (int) $room->volume) {
+            return self::capacityLine($name, (int) $room->volume, $students);
+        }
+
+        return null;
+    }
+
     /** Doskadagi kutilayotgan so'rovlar tegadigan kartalar: [card_id => ['id', 'stage']]. */
     public function pendingCardRequests(int $boardId, array $ignoreIds = []): array
     {
@@ -366,6 +384,11 @@ trait TimetableSuggestionApply
                     }
                     if (!$this->auditoriumAllowedForCard($room, $card, $this->auditoriumTeacherMap())) {
                         return 'Bu auditoriya tanlangan o‘qituvchiga biriktirilmagan.';
+                    }
+                    // Xona ANIQ berilganda: faol va sig'adi (umumiy raqamsiz xona va bandlik tekshirilmaydigan kartada sig'im — yo'q,
+                    // hozirgi qoidalar bilan bir xil). Xonasiz amallar (eski takliflar, kutilayotgan so'rovlar) — avvalgidek.
+                    if ($msg = $this->suggestionRoomProblem($board, $card, $room)) {
+                        return '«' . $card->subject_name . '»: ' . $msg;
                     }
                 }
                 if ($conflicts = $this->findWeekConflicts($card, $w, $day, $pair, 0, null, $room?->code)) {

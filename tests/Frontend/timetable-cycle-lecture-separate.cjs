@@ -110,7 +110,9 @@ ${rowOk}
     // 6) Mijoz kodi: ma'ruza kartasi oqim ko'rinishida joylanadi (card.view), ogohlantirish — toast; alohida ma'ruza bloki "M" belgisi va
     // ⚠ (kesishuv, boshqa fan amaliyoti, soat yig'indisi); kataklari sudralmaydi.
     assert.match(source, /view: card\.view \|\| cycleEffView\(\), placement_group: \(card && card\.placement_group\) \|\| undefined,\n\s+start_date/);
-    assert.match(source, /ttToast\('<b>Joylandi, ogohlantirish bilan<\/b>'/);
+    // Ogohlantirish toast'i — api() ichida (bir marta); holat qatorida ham.
+    assert.match(source, /showCyclePlacementResult\(card, index, warns\.length \? '⚠ ' \+ warns\.join\('; '\) : '', 'success'\)/);
+    assert.doesNotMatch(source, /Joylandi, ogohlantirish bilan/);
     assert.match(source, /const sepNotes = \[block\.lecture_clash, \.\.\.\(block\.lecture_warn \|\| \[\]\), block\.lecture_note\]\.filter\(Boolean\);/);
     assert.match(source, /if \(block\.type === 'lecture' && block\.lecture_separate\) return;/);
     assert.match(source, /const typeChip = \(j && j\.simple && !card\.separate\)/);

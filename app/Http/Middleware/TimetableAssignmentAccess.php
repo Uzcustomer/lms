@@ -59,7 +59,10 @@ class TimetableAssignmentAccess
                 // apply — faqat admin huquqi bo'lsa (boshqa roli admin bo'lsa ham): executor o'zi tekshiradi.
                 'admin.timetable.boards.week-suggestions', 'admin.timetable.week-suggestions.propose', 'admin.timetable.week-suggestions.apply',
                 // To'qnashuvlar oynasi: smena maslahati va o'qituvchi kun/hafta jadvali (faqat o'qiydi; ko'chirish — so'rov bilan).
-                'admin.timetable.cycle-shift-advice', 'admin.timetable.teacher-agenda'])) {
+                'admin.timetable.cycle-shift-advice', 'admin.timetable.teacher-agenda',
+                // Fan mas'uli: mas'ul fani kartasini shu haftaga ko'chirish (vaqt + xona; huquq, rejim va tarix — controller ichida).
+                // Xonalar ro'yxati shu javobda — admin.timetable.auditoriums / teachers ochilmaydi.
+                'admin.timetable.cards.responsible-move.check', 'admin.timetable.cards.responsible-move'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 

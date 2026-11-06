@@ -136,7 +136,7 @@ it('fonda tayyorlanadi: yig\'ma, batafsil (sikl fanisiz), sikl va fanlar varaqla
 
     expect(array_keys($x))->toBe(['Yig\'ma', 'Batafsil (haftalik)', 'Sikl (joylanmagan)', 'Fanlar bo\'yicha', '_style'])
         // Qiymatli katak rangli; fakultet jamisi va umumiy jami — qalin; batafsilda avtofiltr va muzlatilgan sarlavha
-        ->and($x['_style'])->toMatchArray(['bold' => [false, true, true], 'filter' => 'A1:M2', 'freeze' => 'A2'])
+        ->and($x['_style'])->toMatchArray(['bold' => [false, true, true], 'filter' => 'A1:N2', 'freeze' => 'A2'])
         ->and($x['_style']['fill_D2'])->not->toBe('FFFFFF')
         // Yig'ma (har hafta alohida sanaladi): F1 / davolash ishi / 1-kurs — 1- va 2-haftada bittadan; 0 — bo'sh
         ->and($x['Yig\'ma'])->toBe([
@@ -144,6 +144,8 @@ it('fonda tayyorlanadi: yig\'ma, batafsil (sikl fanisiz), sikl va fanlar varaqla
             ['F1', 'davolash ishi', 1, 1, 1, null, null, 2],
             ['F1 — jami', null, null, 1, 1, null, null, 2],
             ['Jami', null, null, 1, 1, null, null, 2],
+            [null, null, null, null, null, null, null, null],
+            ['To\'qnashuvlar — faqat bugungi va kelgusi kunlar (doskadagi kabi)', null, null, null, null, null, null, null],
         ])
         // Batafsil: faqat haftalik kartalar (sikl fani — Pediatriya yo'q); sababi bir xil haftalar — bitta qatorda
         ->and(array_map(fn ($r) => [$r[0], $r[5], $r[6], $r[7], $r[8]], array_slice($x['Batafsil (haftalik)'], 1)))
@@ -367,4 +369,115 @@ it('progress: bosqichlar ketma-ket, foiz o\'smaydi-kamaymaydi', function () {
         ->and(collect($steps)->map(fn ($x) => implode('|', $x))->unique()->count())->toBe(count($steps))
         ->and($pcts[0])->toBe(0)
         ->and(end($pcts))->toBe(95);
+});
+
+// O'tgan sanadagi to'qnashuv: doskadagi kabi sanalmaydi (joylashgan), "Batafsil"da "O'tgan to'qnashuv" ustunida.
+function urConflictBoard(): array
+{
+    // 1-hafta 26.10–01.11 (to'liq o'tgan), 2-hafta 02.11–08.11 (joriy, bugun — chorshanba 04.11), 3-hafta 09.11–15.11
+    $board = TimetableBoard::create(['name' => 'C', 'academic_year' => '2026-2027', 'semester_parity' => 'kuzgi', 'days' => 6,
+        'pairs_per_day' => 12, 'weeks' => 3, 'settings' => ['semester_start' => '2026-10-26']]);
+    $mk = function (string $g, int $course, Teacher $t, int $day) use ($board) {
+        return TimetableCard::create(['board_id' => $board->id, 'faculty_name' => 'F1', 'specialty_name' => 'davolash ishi', 'course' => $course,
+            'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 10, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 3,
+            'subject_name' => 'Anatomiya', 'group_name' => $g, 'kafedra_name' => 'K', 'teacher_id' => $t->id, 'teacher_name' => $t->full_name,
+            'auditorium_code' => $g, 'auditorium_name' => $g, 'day' => $day, 'pair' => 3]);
+    };
+    // 1-kurs: o'qituvchi dushanba 2-parada ikki guruhda — 26.10 va 02.11 o'tgan, 09.11 kelgusi
+    $mon = urTeacher('USTOZ', 'oqituvchi');
+    // 2-kurs: chorshanba — 28.10 o'tgan, 04.11 bugun (sanaladi), 11.11 kelgusi
+    $wed = urTeacher('MUALLIM', 'oqituvchi');
+
+    return ['board' => $board, 'cards' => [$mk('d1-01a', 1, $mon, 1), $mk('d1-01b', 1, $mon, 1), $mk('d2-01a', 2, $wed, 3), $mk('d2-01b', 2, $wed, 3)]];
+}
+
+function urBuild(TimetableBoard $board, array $opts = []): array
+{
+    $file = app(TimetableController::class)->buildUnplacedReport($board, $opts);
+    $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+    @unlink($file);
+    $out = [];
+    foreach ($book->getAllSheets() as $sh) {
+        $out[$sh->getTitle()] = $sh->toArray(null, false, false, false);
+    }
+    $out['_note_italic'] = $book->getSheetByName('Yig\'ma')->getStyle('A' . count($out['Yig\'ma']))->getFont()->getItalic();
+
+    return $out;
+}
+
+it('to\'qnashuv: faqat bugungi va kelgusi sana joylanmagan (doskadagi kabi); o\'tgani — "O\'tgan to\'qnashuv" ustunida', function () {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-04 09:00', 'Asia/Tashkent'));
+    $s = urConflictBoard();
+    $x = urBuild($s['board']);
+    $note = TimetableController::UNPLACED_REPORT_CONFLICT_NOTE;
+
+    expect($note)->toBe('To\'qnashuvlar — faqat bugungi va kelgusi kunlar (doskadagi kabi)')
+        // 1-kurs: faqat 3-hafta (09.11); 2-kurs: 2-hafta (bugun, 04.11) va 3-hafta; 1-hafta — to'liq o'tgan, hech kim sanalmaydi
+        ->and($x['Yig\'ma'])->toBe([
+            ['Fakultet', 'Yo\'nalish', 'Kurs', '1-hafta', '2-hafta', '3-hafta', 'Jami'],
+            ['F1', 'davolash ishi', 1, null, null, 2, 2],
+            ['F1', 'davolash ishi', 2, null, 2, 2, 4],
+            ['F1 — jami', null, null, null, 2, 4, 6],
+            ['Jami', null, null, null, 2, 4, 6],
+            [null, null, null, null, null, null, null],
+            [$note, null, null, null, null, null, null],
+        ])
+        ->and($x['_note_italic'])->toBeTrue()
+        ->and(array_slice($x['Fanlar bo\'yicha'], 1))->toBe([
+            ['F1', 'davolash ishi', 1, 'Anatomiya', 2, 3],
+            ['F1', 'davolash ishi', 2, 'Anatomiya', 4, '2–3'],
+        ])
+        ->and($x['Batafsil (haftalik)'][0])->toBe(['Fakultet', 'Yo\'nalish', 'Kurs', 'Oqim', 'Guruh', 'Fan', 'Turi', 'Hafta', 'Soat',
+            'O\'qituvchi', 'Auditoriya', 'Tekshirilgan vaqt', 'Sabab', 'O\'tgan to\'qnashuv'])
+        // Har karta: avval joylanmagan (sanalgan) qatorlari, so'ng o'tgan to'qnashuvlar — "Sabab" bo'sh, sanalari bilan
+        ->and(array_map(fn ($r) => [$r[4], $r[7], $r[11], $r[12], $r[13]], array_slice($x['Batafsil (haftalik)'], 1)))->toBe([
+            ['d1-01a', 3, 'Dushanba, 2-para', "To'qnashuv: O'qituvchi band: USTOZ — F1, 1-kurs · d1-01b · Anatomiya (amaliy)", null],
+            ['d1-01a', '1–2', 'Dushanba, 2-para', null, "O'qituvchi band: USTOZ — F1, 1-kurs · d1-01b · Anatomiya (amaliy) (26.10, 02.11)"],
+            ['d1-01b', 3, 'Dushanba, 2-para', "To'qnashuv: O'qituvchi band: USTOZ — F1, 1-kurs · d1-01a · Anatomiya (amaliy)", null],
+            ['d1-01b', '1–2', 'Dushanba, 2-para', null, "O'qituvchi band: USTOZ — F1, 1-kurs · d1-01a · Anatomiya (amaliy) (26.10, 02.11)"],
+            ['d2-01a', '2–3', 'Chorshanba, 2-para', "To'qnashuv: O'qituvchi band: MUALLIM — F1, 2-kurs · d2-01b · Anatomiya (amaliy)", null],
+            ['d2-01a', 1, 'Chorshanba, 2-para', null, "O'qituvchi band: MUALLIM — F1, 2-kurs · d2-01b · Anatomiya (amaliy) (28.10)"],
+            ['d2-01b', '2–3', 'Chorshanba, 2-para', "To'qnashuv: O'qituvchi band: MUALLIM — F1, 2-kurs · d2-01a · Anatomiya (amaliy)", null],
+            ['d2-01b', 1, 'Chorshanba, 2-para', null, "O'qituvchi band: MUALLIM — F1, 2-kurs · d2-01a · Anatomiya (amaliy) (28.10)"],
+        ]);
+
+    // Doska (boardConflicts) xuddi shu karta-haftalarni qizil ko'rsatadi
+    $admin = urTeacher('ADM', 'admin');
+    $weekly = test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->getJson(route('admin.timetable.boards.conflicts', $s['board']))->assertOk()->json('weekly');
+    [$a, $b, $c, $d] = array_map(fn ($card) => (string) $card->id, $s['cards']);
+    expect(array_map('array_keys', $weekly))->toBe([$a => [3], $b => [3], $c => [2, 3], $d => [2, 3]]);
+
+    // "Sabab"siz tez variant: o'tgan to'qnashuv qatorlari va ustuni yo'q, sanoq o'sha
+    $x = urBuild($s['board'], ['with_reasons' => false]);
+    expect($x['Batafsil (haftalik)'][0])->toHaveCount(11)
+        ->and(array_map(fn ($r) => [$r[4], $r[7]], array_slice($x['Batafsil (haftalik)'], 1)))
+        ->toBe([['d1-01a', 3], ['d1-01b', 3], ['d2-01a', '2–3'], ['d2-01b', '2–3']])
+        ->and($x['Yig\'ma'][4])->toBe(['Jami', null, null, null, 2, 4, 6]);
+});
+
+it('to\'qnashuv: hammasi o\'tgan bo\'lsa (masalan, 8-hafta keyin) — hisobotda 0, faqat ma\'lumot qatorlari; tashqi qatlamda izoh yo\'q', function () {
+    // 3-hafta ham tugagan (16.11 — dushanba)
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-16 08:00', 'Asia/Tashkent'));
+    $s = urConflictBoard();
+    $x = urBuild($s['board']);
+
+    expect(array_slice($x['Yig\'ma'], 1))->toBe([
+        ['Jami', null, null, null, null, null, null],
+        [null, null, null, null, null, null, null],
+        [TimetableController::UNPLACED_REPORT_CONFLICT_NOTE, null, null, null, null, null, null],
+    ])
+        ->and(array_slice($x['Fanlar bo\'yicha'], 1))->toBe([])
+        ->and(array_map(fn ($r) => [$r[4], $r[7], $r[12], $r[13] !== null], array_slice($x['Batafsil (haftalik)'], 1)))->toBe([
+            ['d1-01a', '1–3', null, true], ['d1-01b', '1–3', null, true], ['d2-01a', '1–3', null, true], ['d2-01b', '1–3', null, true],
+        ])
+        ->and(array_slice($x['Batafsil (haftalik)'], 1)[0][13])->toEndWith('(26.10, 02.11, 09.11)');
+    // "Sabab"siz tez variant: o'tgan to'qnashuvli (joylashgan) kartalar qator bermaydi
+    expect(urBuild($s['board'], ['with_reasons' => false])['Batafsil (haftalik)'])->toHaveCount(1);
+
+    // Tashqi qatlam: ichki to'qnashuvlar umuman sanalmaydi — izoh qatori ham yo'q
+    $s['cards'][0]->update(['ext_day' => 1, 'ext_pair' => 3]);
+    $x = urBuild($s['board'], ['layer' => 'external']);
+    expect(collect($x['Yig\'ma'])->flatten()->filter()->contains(TimetableController::UNPLACED_REPORT_CONFLICT_NOTE))->toBeFalse()
+        ->and(end($x['Yig\'ma'])[0])->toBe('Jami');
 });

@@ -9059,6 +9059,9 @@ class TimetableController extends Controller
     /** Butun doska bo'yicha joylanmagan kartalar hisobotiga ruxsati bor rollar. */
     private const UNPLACED_REPORT_ROLES = ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
 
+    /** Butun doska hisobotining Yig'ma varag'idagi izoh (ichki qatlam). */
+    public const UNPLACED_REPORT_CONFLICT_NOTE = 'To\'qnashuvlar — faqat bugungi va kelgusi kunlar (doskadagi kabi)';
+
     /** Hisobot holati va fayli shu foydalanuvchiniki (guard + id). */
     private function unplacedReportUser(Request $request): string
     {
@@ -9168,7 +9171,9 @@ class TimetableController extends Controller
      * BuildUnplacedReportJob chaqiradi, faylning vaqtinchalik yo'lini qaytaradi.
      * Haftalik kartalar: har karta-hafta unplacedExport'dagi ($week > 0) kabi — bekor qilingan hafta sanalmaydi, ichki qatlamda
      * shu haftaga ko'chirilgan (kun va parasi bor) yoki shablonda joyi bor karta joylangan; hafta — kartaning kalendari (term)
-     * doirasida; ichki jadvalda joylashgan, lekin to'qnashuvli (weeklyConflicts) karta-hafta — joylanmagan, sababi "To'qnashuv".
+     * doirasida; ichki jadvalda joylashgan, lekin to'qnashuvli (weeklyConflicts) karta-hafta — joylanmagan, sababi "To'qnashuv" —
+     * faqat bugungi va kelgusi sanadagi to'qnashuv (doska — boardConflicts kabi); o'tgan sanadagisi (to'liq o'tgan hafta ham) —
+     * joylashgan, "Batafsil"da "O'tgan to'qnashuv" ustunida faqat ma'lumot uchun (with_reasons).
      * Sikl fanlari — cycleUnplacedCards (ichki sikl jadvali; oqim yoki guruh qatorida joylangani joylangan, to'qnashuvlisi — yo'q).
      * $opts: layer (internal|external), from_week, to_week, with_reasons (false — "Sabab"siz tez variant).
      * $progress(int foiz, string bosqich).
@@ -9211,10 +9216,25 @@ class TimetableController extends Controller
         $grids = [];
         $termOf = fn (TimetableCard $c): int => $grids[$c->faculty_name . '|' . $c->specialty_name . '|' . (int) $c->course . '|' . $this->cardCurriculumId($c)]
             ??= (int) $this->cardGrid($board, $c)['weeks'];
-        // Ichki jadvalda joylashgan, lekin to'qnashuvli (o'qituvchi/xona/guruh band) karta-hafta ham joylanmagan hisoblanadi.
+        // Ichki jadvalda joylashgan, lekin to'qnashuvli (o'qituvchi/xona/guruh band) karta-hafta ham joylanmagan hisoblanadi —
+        // doskadagi kabi faqat bugungi va kelgusi sanadagi to'qnashuv; o'tgani (to'liq o'tgan hafta ham) — joylashgan.
         $confState = $external ? null : $this->occupancyState($board->id);
-        $conflicts = $external ? [] : $this->weeklyConflicts($board, $confState);
+        $today = self::proposalToday();
+        $conflicts = [];       // [karta => [hafta => to'qnashuv]] — bugungi va kelgusi
+        $pastConflicts = [];   // o'tgan sanadagi — sanalmaydi, "Batafsil"da faqat ma'lumot
+        foreach ($external ? [] : $this->weeklyConflicts($board, $confState) as $id => $weeks) {
+            foreach ($weeks as $w => $x) {
+                if ($x['date'] >= $today) {
+                    $conflicts[$id][$w] = $x;
+                } else {
+                    $pastConflicts[$id][$w] = $x;
+                }
+            }
+        }
         $items = [];       // [karta, hafta]
+        $weeksOf = [];     // karta => joylanmagan haftalar
+        $pastOf = [];      // karta => o'tgan to'qnashuvli (joylashgan) haftalar
+        $cardOf = [];      // Batafsil qatorlari kartalari — doska tartibida
         $maxWeek = 0;
         $n = max(1, $cards->count());
         foreach ($cards as $i => $card) {
@@ -9223,29 +9243,34 @@ class TimetableController extends Controller
             for ($w = $from; $w <= $last; $w++) {
                 $o = $ovOf[$card->id][$w] ?? null;
                 $placed = (!$external && $o && $o->day && $o->pair) || ($card->{$dayCol} && $card->{$pairCol});
-                if (($o && $o->cancelled) || ($placed && !isset($conflicts[$card->id][$w]))) {
+                if ($o && $o->cancelled) {
+                    continue;
+                }
+                if ($placed && !isset($conflicts[$card->id][$w])) {
+                    if ($withReasons && isset($pastConflicts[$card->id][$w])) {
+                        $pastOf[$card->id][] = $w;
+                        $cardOf[$card->id] = $card;
+                    }
                     continue;
                 }
                 $items[] = [$card, $w];
+                $weeksOf[$card->id][] = $w;
+                $cardOf[$card->id] = $card;
             }
             $step((int) floor(25 * ($i + 1) / $n), 'Haftalik kartalar…');
         }
 
-        // 2) Batafsil: karta bo'yicha — bir xil sabab chiqqan haftalar bitta qatorga ("3–7, 9").
-        $weeksOf = [];
-        $cardOf = [];
-        foreach ($items as [$card, $w]) {
-            $weeksOf[$card->id][] = $w;
-            $cardOf[$card->id] = $card;
-        }
+        // 2) Batafsil: karta bo'yicha — bir xil sabab chiqqan haftalar bitta qatorga ("3–7, 9"); so'ng shu kartaning o'tgan
+        // to'qnashuvlari (sanalmaydi — "O'tgan to'qnashuv" ustunida, "Sabab" bo'sh).
         $state = $items && $withReasons ? ($confState ?? $this->occupancyState($board->id)) : null;
         $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
         $reasonFns = [];
         $details = [];
-        $n = max(1, count($weeksOf));
+        $n = max(1, count($cardOf));
         $i = 0;
-        foreach ($weeksOf as $id => $ws) {
-            $card = $cardOf[$id];
+        $slotOf = fn (array $cf): string => ($dayNames[$cf['day'] - 1] ?? $cf['day'] . '-kun') . ', ' . intdiv($cf['pair'] + 1, 2) . '-para';
+        foreach ($cardOf as $id => $card) {
+            $ws = $weeksOf[$id] ?? [];
             $groups = [];
             if (!$withReasons) {
                 $groups[''] = ['', '', $ws];
@@ -9254,20 +9279,29 @@ class TimetableController extends Controller
                 foreach ($ws as $w) {
                     $cf = $conflicts[$id][$w] ?? null;
                     [$slotText, $reason] = $cf
-                        ? [($dayNames[$cf['day'] - 1] ?? $cf['day'] . '-kun') . ', ' . intdiv($cf['pair'] + 1, 2) . '-para', 'To\'qnashuv: ' . $cf['text']]
+                        ? [$slotOf($cf), 'To\'qnashuv: ' . $cf['text']]
                         : ($external
                             ? ($cardReason ??= ($reasonFns[0] ??= $this->unplacedReasonFn($board, true, 0, $state))($card))
                             : ($reasonFns[$w] ??= $this->unplacedReasonFn($board, false, $w, $state))($card));
-                    $groups[$slotText . "\0" . $reason] ??= [$slotText, $reason, []];
+                    $groups[$slotText . "\0" . $reason] ??= [$slotText, $reason, [], null];
                     $groups[$slotText . "\0" . $reason][2][] = $w;
                 }
+                // O'tgan to'qnashuvlar: bir xil vaqt va matn — bitta qator, sanalari bilan ("02.11, 09.11").
+                foreach ($pastOf[$id] ?? [] as $w) {
+                    $cf = $pastConflicts[$id][$w];
+                    $key = "\1" . $slotOf($cf) . "\0" . $cf['text'];
+                    $groups[$key] ??= [$slotOf($cf), null, [], $cf['text'], []];
+                    $groups[$key][2][] = $w;
+                    $groups[$key][4][] = Carbon::parse($cf['date'])->format('d.m');
+                }
             }
-            foreach ($groups as [$slotText, $reason, $gw]) {
+            foreach ($groups as $g) {
+                [$slotText, $reason, $gw] = $g;
                 $details[] = array_merge([(string) ($card->faculty_name ?: '—'), $card->specialty_name, (int) $card->course, $card->oqim_label ?: '—',
                     $card->group_name ?: (is_array($card->group_names) ? implode(', ', $card->group_names) : '—'), $card->subject_name,
                     $card->training_type === 'lecture' ? 'Ma\'ruza' : 'Amaliy', $this->weekRangesText($gw), $card->lenHalf(),
                     $external ? '—' : ($card->teacher_name ?: 'Biriktirilmagan'), $external ? '—' : ($card->auditorium_name ?: 'Biriktirilmagan')],
-                    $withReasons ? [$slotText, $reason] : []);
+                    $withReasons ? [$slotText, $reason, isset($g[3]) ? $g[3] . ' (' . implode(', ', $g[4]) . ')' : null] : []);
             }
             $step(25 + (int) floor(50 * ++$i / $n), $withReasons ? 'Sabablar…' : 'Haftalik kartalar…');
         }
@@ -9343,13 +9377,18 @@ class TimetableController extends Controller
         $writeCounts($r, $grand);
         $bold($sum, 'A' . $r . ':' . $lastCol . $r);
         $bold($sum, 'A1:' . $lastCol . '1');
+        if (!$external) {
+            // Izoh (bitta bo'sh qatordan keyin): to'qnashuvlar doskadagi kabi sanaladi.
+            $sum->setCellValue('A' . ($r + 2), self::UNPLACED_REPORT_CONFLICT_NOTE);
+            $sum->getStyle('A' . ($r + 2))->getFont()->setItalic(true);
+        }
         $sum->freezePane('D2');
 
         // Batafsil (haftalik).
         $det = $book->createSheet();
         $det->setTitle('Batafsil (haftalik)');
         $detHead = array_merge(['Fakultet', 'Yo\'nalish', 'Kurs', 'Oqim', 'Guruh', 'Fan', 'Turi', 'Hafta', 'Soat', 'O\'qituvchi', 'Auditoriya'],
-            $withReasons ? ['Tekshirilgan vaqt', 'Sabab'] : []);
+            $withReasons ? ['Tekshirilgan vaqt', 'Sabab', 'O\'tgan to\'qnashuv'] : []);
         $detLast = $col(count($detHead));
         $det->fromArray($detHead, null, 'A1');
         if ($details) {
@@ -9394,7 +9433,8 @@ class TimetableController extends Controller
             }
         }
         if ($withReasons) {
-            $det->getColumnDimension($detLast)->setAutoSize(false)->setWidth(80);
+            $det->getColumnDimension($col(count($detHead) - 1))->setAutoSize(false)->setWidth(80);   // Sabab
+            $det->getColumnDimension($detLast)->setAutoSize(false)->setWidth(60);                    // O'tgan to'qnashuv
         }
         $book->setActiveSheetIndex(0);
 

@@ -8276,7 +8276,7 @@ class TimetableController extends Controller
      * darslari to'qnashuv hisoblanmaydi; hammasi o'tgan bo'lsa — bandlik yo'q). Qaytaradi: ['teachers' => [id => "guruh, fan, 30.10–10.11; ..."],
      * 'rooms' => [kod => matn]].
      */
-    protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false, bool $memoOthers = false): array
+    protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false): array
     {
         $unitCards = $unitCards->reject(fn ($c) => $this->isNonBlocking($c, $board));
         $hits = ['teachers' => [], 'rooms' => []];
@@ -8315,9 +8315,9 @@ class TimetableController extends Controller
 
             return $others;
         };
-        // $memoOthers — o'qituvchi jadvalidagi ko'chirish variantlari (agendaMemo): boshqa darslar (shu birliksiz) har bo'sh para uchun bir xil —
-        // sana bo'yicha bir marta, vaqt chegarasisiz (kesishuv quyida aniq tekshiriladi — natija bir xil).
-        $others = $memoOthers
+        // O'qituvchi jadvalidagi haftalik ko'chirish variantlari (weeklyProposalBusy, agendaMemo — timetable.agenda_others): boshqa darslar
+        // (shu birliksiz) har bo'sh para uchun bir xil — sana bo'yicha bir marta, vaqt chegarasisiz (kesishuv quyida aniq tekshiriladi — natija bir xil).
+        $others = request()->attributes->get('timetable.agenda_others')
             ? $this->agendaMemo('others|' . $board->id . '|' . md5(json_encode([array_keys($dates), array_keys($ids)])), fn () => $collect(PHP_INT_MAX))
             : $collect(max(array_column($mine, 'to')));
         // "Ko'rsatish" uchun tuzilgan ma'lumot: tur => kim => boshqa dars yorlig'i => guruhlar, sanalar, kartalar, soatlar.
@@ -10591,8 +10591,16 @@ class TimetableController extends Controller
             TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $week],
                 ['day' => $day, 'pair' => $pair, 'start_half' => 0, 'cancelled' => false]
                 + ($altRoom ? ['auditorium_code' => $altRoom->code, 'auditorium_name' => $altRoom->name] : []));
-            // O'qituvchi jadvalidagi ko'chirish variantlarida boshqa darslar bandligi (shu kartasiz) — sana bo'yicha bir marta.
-            $busy = $this->unitBusy($card->board, collect([$card]), [$date => true], false, (bool) request()->attributes->get('timetable.agenda_memo'));
+            // O'qituvchi jadvalidagi ko'chirish variantlarida boshqa darslar bandligi (shu kartasiz) — sana bo'yicha bir marta (unitBusy).
+            $memoOthers = (bool) request()->attributes->get('timetable.agenda_memo');
+            if ($memoOthers) {
+                request()->attributes->set('timetable.agenda_others', true);
+            }
+            try {
+                $busy = $this->unitBusy($card->board, collect([$card]), [$date => true]);
+            } finally {
+                request()->attributes->remove('timetable.agenda_others');
+            }
             $room = (string) (TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->value('auditorium_code') ?: $card->auditorium_code);
         } finally {
             DB::rollBack();

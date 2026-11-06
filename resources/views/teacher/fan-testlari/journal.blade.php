@@ -634,8 +634,8 @@
                                             @endif
                                         </td>
                                         <td class="jr-retake-cell">
-                                            @if($attempt->status === 'in_progress')
-                                                {{-- "Ishlamoqda" bo'lib qolgan test — saqlangan javoblari bilan yakunlash --}}
+                                            @if($attempt->status === 'in_progress' && ($canDeleteResults ?? false))
+                                                {{-- "Ishlamoqda" bo'lib qolgan test — saqlangan javoblari bilan yakunlash (faqat superadmin o'qituvchi profiliga kirganda) --}}
                                                 @php
                                                     $stopText = $attempt->student_name . " — testni to'xtatasizmi? Saqlangan javoblari baholanib, test topshirilgan hisoblanadi.";
                                                 @endphp

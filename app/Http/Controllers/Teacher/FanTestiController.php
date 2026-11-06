@@ -1179,11 +1179,13 @@ class FanTestiController extends Controller
      * "Ishlamoqda" bo'lib qolgan urinishni jurnaldan to'xtatish (sahifa yopilgan, talaba ketgan
      * va h.k.): talabaning oxirgi saqlangan javoblari baholanib, urinish topshirilgan holatga
      * o'tadi. Talaba sahifasi hali ochiq bo'lsa, u ham to'xtatish buyrug'ini oladi.
+     * Faqat superadmin o'qituvchi profiliga kirganda (o'chirish kabi).
      */
     public function stopAttempt(FanTesti $fanTesti, FanTestiAttempt $attempt)
     {
         $this->authorizeCollection($fanTesti);
         abort_unless((int) $attempt->fan_testi_id === (int) $fanTesti->id, 404);
+        abort_unless($this->isSuperadminImpersonating(), 403);
 
         $back = redirect()->route('teacher.fan-testlari.journal', array_filter([
             'test_id' => $fanTesti->id,

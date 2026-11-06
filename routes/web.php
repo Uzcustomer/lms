@@ -2074,7 +2074,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::post('/{fanTesti}/devices/{device}/attach', [FanTestiController::class, 'attachDevice'])->name('devices.attach');
                 Route::post('/{fanTesti}/attempts/{attempt}/unlock', [FanTestiController::class, 'unlockAttempt'])->name('attempts.unlock');
                 Route::post('/{fanTesti}/attempts/{attempt}/retake', [FanTestiController::class, 'allowRetake'])->name('attempts.retake');
-                // "Ishlamoqda" bo'lib qolgan urinishni saqlangan javoblari bilan yakunlash
+                // "Ishlamoqda" bo'lib qolgan urinishni saqlangan javoblari bilan yakunlash — faqat superadmin o'qituvchi profiliga kirganda
                 Route::post('/{fanTesti}/attempts/{attempt}/stop', [FanTestiController::class, 'stopAttempt'])->name('attempts.stop');
                 // Natijani o'chirish — faqat superadmin o'qituvchi profiliga kirganda
                 Route::delete('/{fanTesti}/attempts/{attempt}', [FanTestiController::class, 'destroyAttempt'])->name('attempts.destroy');

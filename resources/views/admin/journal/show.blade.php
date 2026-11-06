@@ -610,6 +610,17 @@
         .admin-upgraded-cell {
             background-color: #fdba74 !important;
         }
+        /* Oshirilgan otrabotka (NB / past baho ustidagi): to'q sariq fonda diagonal chiziq va
+           sababli bo'lsa binafsha hoshiya saqlanadi */
+        .admin-upgraded-cell .split-cell {
+            background: #fdba74 !important;
+        }
+        .admin-upgraded-cell.admin-upgraded-retake {
+            background: linear-gradient(to top right, #fdba74 calc(50% - 1px), #64748b 50%, #fdba74 calc(50% + 1px)) !important;
+        }
+        .admin-upgraded-cell.admin-upgraded-sababli {
+            box-shadow: inset 0 0 0 2px #7c3aed;
+        }
         .exam-cell[onclick]:hover { background: #eff6ff; cursor: pointer; }
         .grade-fail {
             color: #dc2626 !important;
@@ -1428,10 +1439,17 @@
 
                                                     // Admin oshirgan baholar: hover'da har juftlikning eski/yangi bahosi
                                                     $dayUpgradeLines = [];
+                                                    $hasSababliRetakeInDay = false;
                                                     foreach ($dayGrades as $pair => $gd) {
                                                         if (!empty($gd['upgraded_by_admin'])) {
+                                                            $gdKind = !empty($gd['is_retake'])
+                                                                ? ' (' . (($gd['reason'] ?? null) === 'absent' ? 'NB' : 'past baho') . ' otrabotka' . (!empty($gd['retake_was_sababli']) ? ', sababli' : '') . ')'
+                                                                : '';
                                                             $dayUpgradeLines[] = '(' . $pair . ') Eski baho: ' . round((float) $gd['admin_original_grade'], 0)
-                                                                . ' → Yangi baho: ' . round((float) $gd['grade'], 0);
+                                                                . ' → Yangi baho: ' . round((float) $gd['grade'], 0) . $gdKind;
+                                                        }
+                                                        if (!empty($gd['is_retake']) && !empty($gd['retake_was_sababli'])) {
+                                                            $hasSababliRetakeInDay = true;
                                                         }
                                                     }
                                                     $hasUpgradedInDay = (bool) $dayUpgradeLines;
@@ -1463,7 +1481,7 @@
                                                         $dayTitle = 'Superadmin: kunga bitta baho — barcha juftliklarga (' . count($superDayOps) . ' ta) yoziladi' . ($dayTitle ? ' | ' . $dayTitle : '');
                                                     }
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }} {{ $hasUpgradedInDay ? 'admin-upgraded-cell' : '' }}" {!! $isRetake && !$hasUpgradedInDay ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }} {{ $hasUpgradedInDay ? 'admin-upgraded-cell' : '' }} {{ $hasUpgradedInDay && $isRetake ? 'admin-upgraded-retake' : '' }} {{ $hasUpgradedInDay && $hasSababliRetakeInDay ? 'admin-upgraded-sababli' : '' }}" {!! $isRetake && !$hasUpgradedInDay ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
                                                     @if($superDayOps) onclick="superadminDayGrade(this)" data-ops="{{ json_encode($superDayOps) }}" data-student="{{ $student->hemis_id }}" data-date="{{ $date }}" data-subject="{{ $subjectId }}" data-semester="{{ $semesterCode }}" @endif>
                                                     @if($hasGrades)
                                                         @php
@@ -2138,7 +2156,7 @@
                                                                 $retakeByKafedra = ($gradeData['retake_by'] ?? null) === \App\Services\FanTestiJournalSync::GRADED_BY;
                                                                 $retakeRemoved = !empty($gradeData['quiz_result_id']) && (int) $retakeVal === 1;
                                                             @endphp
-                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}{{ $retakeByKafedra ? "\nBaho qo'ydi: " . $gradeData['retake_by'] . ' (qayta topshirish testi)' : '' }}{{ $retakeRemoved ? "\nTestdan chetlashgan" : '' }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $upgradeTitle ? $upgradeTitle . "\n" : '' }}Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}{{ $retakeByKafedra ? "\nBaho qo'ydi: " . $gradeData['retake_by'] . ' (qayta topshirish testi)' : '' }}{{ $retakeRemoved ? "\nTestdan chetlashgan" : '' }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -2156,7 +2174,7 @@
                                                                 $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                             @endphp
                                                             @php
-                                                                $retakeTooltip = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . round($grade, 0);
+                                                                $retakeTooltip = ($upgradeTitle ? $upgradeTitle . "\n" : '') . 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . round($grade, 0);
                                                                 if ($retakeSababli) {
                                                                     $retakeTooltip .= ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)';
                                                                 }

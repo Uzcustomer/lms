@@ -594,10 +594,18 @@ class SchedulePlanner
         $this->sortBlocks($blocks);
         $after = $this->tally($u, $blocks);
 
-        $all = array_merge($blocks, $outside, $deferred);
+        $all = array_merge($blocks, $outside);
         $this->sortBlocks($all);
         $records = $this->records($u, $all);
         $actions = $this->diffActions($u, $records);
+        // Hozir yozilmaydigan balanslash darslari yozuvlarga (HEMIS'ga yoziladigan, belgisi saqlanadigan) kirmaydi va HEMIS'dagi darslar
+        // bilan juftlanmaydi (o'sha darslar o'z amalini oladi — masalan, joylanmagan haftada lms_unplaced o'chirish): faqat ko'rsatish uchun
+        // alohida "qo'shish" taklifi (balance_later).
+        $this->sortBlocks($deferred);
+        foreach ($this->records($u, $deferred) as $w) {
+            $actions[] = ['op' => 'create', 'hemis_id' => null] + $w + ['changes' => []];
+        }
+        usort($actions, fn ($a, $b) => [$a['date'], $a['start']] <=> [$b['date'], $b['start']]);
         $parts = array_values(array_unique(array_values($u['codes'])));
         sort($parts);
 

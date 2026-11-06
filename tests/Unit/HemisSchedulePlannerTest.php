@@ -840,3 +840,21 @@ it('hozir yozilmaydigan balanslash darsi (chegaradan keyin) yoziladigan darslarn
         [hsDate(3, 1), '10:00', '11:20'], [hsDate(3, 1), '12:00', '12:40'], [$tue, '10:00', '11:20'], [$tue5, '10:00', '10:40'],
     ]);
 });
+
+it('hozir yozilmaydigan balanslash taklifi HEMIS\'dagi darsni "egallamaydi": joylanmagan haftadagi dars o\'chirishga chiqadi', function () {
+    // KTR 1–3 amaliy 2 soat; LMS: 1–2-hafta dushanba 10:00, 3-hafta joylanmagan → H = 2. 1-hafta darsi o'tilmagan (bugun 1-hafta
+    // yakshanba). Guruh 3-hafta dushanbasi boshqa darsda — balanslash darsi o'sha kunga, chegaradan keyin. HEMIS'da 3-hafta dushanbasi
+    // 10:00 da shu fanning darsi bor (aynan taklif vaqtida).
+    $mon3 = hsDate(3, 1);
+    $u = hsWeekly(['codes' => ['13' => 'A'], 'code_names' => ['13' => 'Amaliy'], 'ktr' => array_fill(0, 3, ['13' => 2]), 'current_week' => 1,
+        'until_week' => 3, 'until_date' => hsDate(3, 7), 'hemis' => [hsHemis(2, hsDate(2, 1), 3, 2, '13'), hsHemis(3, $mon3, 3, 2, '13')],
+        'plan' => [hsPlan(1, 1, 3, 2, 'A'), hsPlan(2, 1, 3, 2, 'A')]]);
+    $r = (new SchedulePlanner(hsSlots(), hsDate(1, 7)))->planGroup([$u], [], hsWorkDates(2, 3), [$mon3 => [1 => true]])[0];
+
+    expect($r['balance_weeks'])->toBe(['A' => 2])
+        ->and($r['unplaced_weeks'])->toBe(['A' => [3]])
+        ->and(array_map(fn ($a) => [$a['op'], $a['date'], $a['start'], $a['reason_code'] ?? null, !empty($a['balance_later'])], $r['actions']))->toBe([
+            ['delete', $mon3, '10:00', 'lms_unplaced', false],
+            ['create', $mon3, '10:00', null, true],
+        ]);
+});

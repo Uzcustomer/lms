@@ -2969,7 +2969,9 @@ it('balanslash darsi: balans chegarasidan keyingi kunga tushsa — hozir yozilma
         // 07.10 dagi balanslash — rejada, lekin JSON'ga tushmaydi (hozir yozilmaydi); 4-hafta LMS darsi (05.10) — yoziladi.
         ->and(array_map(fn ($a) => [$a['date'], !empty($a['balance'])], $u['actions']))->toBe([['2026-10-05', false]])
         ->and(array_map(fn ($a) => [$a['date'], $a['start'], $a['later'], $a['balance_week']], $u['later_balance']))->toBe([['2026-10-07', '10:00', true, 1]])
-        ->and($u['later_balance'][0]['reason'])->toBe("Balanslash — 1-hafta darsi o'rniga (balans chegarasidan keyin — hozir yozilmaydi).");
+        ->and($u['later_balance'][0]['reason'])->toBe("Balanslash — 1-hafta darsi o'rniga (balans chegarasidan keyin — hozir yozilmaydi).")
+        // Yozilmaydigan taklifning belgisi saqlanmaydi (HEMIS'dagi o'sha vaqtdagi dars balanslash bo'lib qolmasin).
+        ->and(DB::table('hemis_balance_lessons')->count())->toBe(0);
 
     // 05.10 10:00 da o'qituvchi (5001) boshqa guruhda HEMIS'da band — to'siq; o'sha dars balanslash darsi bo'lsa — to'siq emas.
     hsInsert('schedules', ['schedule_hemis_id' => 901, 'subject_id' => 999, 'subject_name' => 'Boshqa fan', 'semester_code' => '11', 'group_id' => 4444,

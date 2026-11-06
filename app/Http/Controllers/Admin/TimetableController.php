@@ -11811,6 +11811,30 @@ class TimetableController extends Controller
             || (int) $assignment['teacher_id'] === (int) $card->teacher_id;
     }
 
+    /**
+     * Xona kartalar o'qituvchisiga ruxsat etilmagan (auditorium_teacher: boshqa o'qituvchiga biriktirilgan, umumiy emas) —
+     * ogohlantirish matni ("Baribir biriktirish" bilan biriktiriladi): kimga biriktirilgani va dars o'qituvchisi. null — ruxsat bor.
+     */
+    private function roomOwnerWarning(Auditorium $room, iterable $cards, array $roomMap): ?string
+    {
+        $teachers = [];
+        foreach ($cards as $card) {
+            if (!$this->auditoriumAllowedForCard($room, $card, $roomMap)) {
+                $teachers[(int) $card->teacher_id] = (string) ($card->teacher_name ?? '');
+            }
+        }
+        if (!$teachers) {
+            return null;
+        }
+        $ownerId = $roomMap[(string) $room->id]['teacher_id'] ?? null;
+        $owner = $ownerId ? Teacher::find($ownerId) : null;
+        $ownerName = $owner ? ($owner->short_name ?: $owner->full_name) : null;
+        $names = implode(', ', array_filter($teachers, fn ($n) => $n !== ''));
+
+        return "Xona «{$room->name}» boshqa o'qituvchiga biriktirilgan" . ($ownerName ? ': ' . $ownerName : '')
+            . ($names !== '' ? " (dars o'qituvchisi — {$names})" : '');
+    }
+
     /** Kartochka rekvizitlari: o'qituvchi / auditoriya biriktirish. */
     public function updateCard(Request $request, TimetableCard $card)
     {
@@ -11819,6 +11843,7 @@ class TimetableController extends Controller
             'auditorium_code' => 'nullable|string|max:50',
             'len_half'        => 'nullable|integer|min:1|max:4',
             'start_half'      => 'nullable|integer|min:0|max:1',
+            'force'           => 'nullable|boolean',
         ]);
 
         if (array_key_exists('len_half', $data) && $data['len_half']) {
@@ -11840,13 +11865,11 @@ class TimetableController extends Controller
         if (array_key_exists('auditorium_code', $data)) {
             if ($data['auditorium_code']) {
                 $a = Auditorium::where('code', $data['auditorium_code'])->first();
-                if ($a) {
-                    $roomMap = $this->auditoriumTeacherMap();
-                    if (!$this->auditoriumAllowedForCard($a, $card, $roomMap)) {
-                        return response()->json([
-                            'error' => 'Bu auditoriya tanlangan o\'qituvchiga biriktirilmagan.',
-                        ], 422);
-                    }
+                // Xona boshqa o'qituvchiga biriktirilgan — ogohlantirish (409), "Baribir biriktirish" (force=1) bilan saqlanadi. Xona va
+                // o'qituvchi o'zgarmagan bo'lsa (boshqa rekvizit saqlanmoqda) — qayta so'ralmaydi.
+                if ($a && !$request->boolean('force') && ($a->code !== $card->auditorium_code || $card->isDirty('teacher_id'))
+                    && ($owner = $this->roomOwnerWarning($a, [$card], $this->auditoriumTeacherMap())) !== null) {
+                    return response()->json(['error' => $owner, 'needs_confirm' => true, 'room_owner' => true, 'conflict_items' => []], 409);
                 }
                 $card->auditorium_code = $a?->code;
                 $card->auditorium_name = $a?->name;
@@ -12753,16 +12776,16 @@ class TimetableController extends Controller
             return $denied;
         }
 
-        // Xona o'qituvchiga biriktirilmagan — qattiq xato (422). Darsning o'z (o'qituvchi / guruh) to'qnashuvi xona biriktirishni to'smaydi —
-        // xona biriktiriladi, javobda warnings (sariq). Xona muammolari (band, sig'maydi, zal ikki ma'ruzaga) — unitBusy orqali 409
-        // needs_confirm, force=1 bilan biriktiriladi. Faqat bugungi va kelgusi sanalar (o'tgan to'qnashuv hisoblanmaydi).
+        // Darsning o'z (o'qituvchi / guruh) to'qnashuvi xona biriktirishni to'smaydi — xona biriktiriladi, javobda warnings (sariq).
+        // Xona muammolari — 409 needs_confirm, force=1 ("Baribir biriktirish") bilan biriktiriladi: xona boshqa o'qituvchiga
+        // biriktirilgan (auditorium_teacher, umumiy emas) va unitBusy (band, sig'maydi, zal ikki ma'ruzaga; faqat bugungi va kelgusi
+        // sanalar). Ikkalasi bo'lsa — bitta ogohlantirishda.
         $roomMap = $room ? $this->auditoriumTeacherMap() : [];
         $warnings = [];
         $today = self::proposalToday();
+        // Xonasi o'zgaradigan kartalar (shu xona allaqachon turgan karta qayta ogohlantirilmaydi).
+        $changed = $room ? $cards->filter(fn ($c) => $c->auditorium_code !== $room->code) : collect();
         foreach ($cards as $card) {
-            if ($room && !$this->auditoriumAllowedForCard($room, $card, $roomMap)) {
-                return response()->json(['error' => "Xona «{$room->name}» kartaning o'qituvchisiga biriktirilmagan"], 422);
-            }
             $card->auditorium_code = $room?->code;
             $card->auditorium_name = $room?->name;
             if ($room && $card->day && $card->pair) {
@@ -12774,12 +12797,21 @@ class TimetableController extends Controller
                 }
             }
         }
-        // Xona shu darslar vaqtida (haftalik va sikl, bugundan) boshqa guruhcha bilan band yoki sig'maydi — ogohlantirish ("Baribir biriktirish").
-        if ($room && !$request->boolean('force') && $cards->contains(fn ($c) => $c->getOriginal('auditorium_code') !== $room->code)
-            && ($busy = $this->unitBusySafe($request, $board, $cards))
-            && ($warn = $this->busyWarning("Xona «{$room->name}»", $busy['rooms'][$room->code] ?? null, $busy['items']['rooms'][(string) $room->code] ?? [],
-                $busy['caps'][$room->code] ?? null))) {
-            return $warn;
+        // Xona boshqa o'qituvchiga biriktirilgan yoki shu darslar vaqtida (haftalik va sikl, bugundan) boshqa guruhcha bilan band /
+        // sig'maydi — ogohlantirish ("Baribir biriktirish").
+        if ($room && !$request->boolean('force') && $changed->isNotEmpty()) {
+            $owner = $this->roomOwnerWarning($room, $changed, $roomMap);
+            $busy = $this->unitBusySafe($request, $board, $cards);
+            $warn = $busy ? $this->busyWarning("Xona «{$room->name}»", $busy['rooms'][$room->code] ?? null,
+                $busy['items']['rooms'][(string) $room->code] ?? [], $busy['caps'][$room->code] ?? null) : null;
+            if ($owner !== null) {
+                $payload = $warn ? $warn->getData(true) : ['needs_confirm' => true, 'conflict_items' => []];
+
+                return response()->json(['error' => $owner . ($warn ? ' · ' . $payload['error'] : ''), 'room_owner' => true] + $payload, 409);
+            }
+            if ($warn) {
+                return $warn;
+            }
         }
 
         DB::transaction(function () use ($cards) {

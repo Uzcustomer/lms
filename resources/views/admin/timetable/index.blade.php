@@ -13354,9 +13354,11 @@
                 tSearchTimer = setTimeout(() => loadTeachers(this.value.trim()), 300);
             };
             $('cmClose').onclick = $('cmCancel').onclick = () => { $('cardModal').classList.add('hidden'); modalCard = null; selected = null; renderPanel(); renderGrid(); };
-            $('cmSave').onclick = async function () {
+            $('cmSave').onclick = () => cmSaveRun(false);
+            async function cmSaveRun(force) {
                 if (!modalCard) return;
-                this.disabled = true;
+                const btn = $('cmSave');
+                btn.disabled = true;
                 try {
                     const j = await api(BASE + '/cards/' + modalCard.id + '/update', 'POST', {
                         teacher_id: $('cmTeacher').value || '',
@@ -13364,6 +13366,8 @@
                         ...(($('cmAud').selectedOptions[0] || {}).dataset && $('cmAud').selectedOptions[0].dataset.roomOff ? {} : { auditorium_code: $('cmAud').value || '' }),
                         len_half: $('cmLen').value,
                         start_half: $('cmStartHalf').value,
+                        // Xona boshqa o'qituvchiga biriktirilgan — "Baribir biriktirish" dan keyin.
+                        force: force ? 1 : undefined,
                     });
                     modalCard.teacher_id = $('cmTeacher').value ? +$('cmTeacher').value : null;
                     modalCard.teacher_name = j.teacher_name;
@@ -13388,11 +13392,17 @@
                     renderAll();
                 } catch (e) {
                     const m = $('cmMsg');
-                    m.className = 'text-sm rounded px-3 py-2 bg-red-50 text-red-700';
-                    m.textContent = e.message; m.classList.remove('hidden');
+                    if (e.data && e.data.needs_confirm && !force) {
+                        // Xona boshqa o'qituvchiga biriktirilgan — ogohlantirish, "Baribir biriktirish" bilan saqlanadi.
+                        m.className = 'text-sm rounded px-3 py-2 bg-amber-50';
+                        showBusyConfirm(m, e.message, () => cmSaveRun(true), e.data.conflict_items);
+                    } else {
+                        m.className = 'text-sm rounded px-3 py-2 bg-red-50 text-red-700';
+                        m.textContent = e.message; m.classList.remove('hidden');
+                    }
                 }
-                this.disabled = false;
-            };
+                btn.disabled = false;
+            }
             $('cmUnplace').onclick = async () => {
                 if (!modalCard) return;
                 try {

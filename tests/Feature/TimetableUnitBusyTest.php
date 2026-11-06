@@ -430,7 +430,7 @@ it('bandlik faqat bugungi va kelgusi sanalar bo\'yicha: o\'tgan to\'qnashuv — 
     ($s['as'])()->postJson(route('admin.timetable.assign-teacher', $s['board']), $s['params'] + ['teacher_id' => $b2->id])->assertOk();
 });
 
-it('xona biriktirish: darsning o\'qituvchi to\'qnashuvi to\'smaydi (warnings), band xona — 409 needs_confirm / force; xona o\'qituvchiga biriktirilmagan — 422', function () {
+it('xona biriktirish: darsning o\'qituvchi to\'qnashuvi to\'smaydi (warnings), band xona va boshqa o\'qituvchining xonasi — 409 needs_confirm / force', function () {
     $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
     $s = ubSetup();
     // Birlik o'qituvchisi — USTOZ A (u shu vaqtda d1/d24-03b da): o'qituvchi to'qnashuvi.
@@ -450,9 +450,60 @@ it('xona biriktirish: darsning o\'qituvchi to\'qnashuvi to\'smaydi (warnings), b
     $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-20 09:00', 'Asia/Tashkent'));
     ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R103'])->assertOk()
         ->assertJsonPath('warnings', []);
-    // Xona o'qituvchiga biriktirilmagan — qattiq xato.
+    // Xona boshqa o'qituvchiga biriktirilgan (umumiy emas) — 409 ogohlantirish: kimga va dars o'qituvchisi; "Baribir biriktirish"
+    // (force) bilan biriktiriladi.
+    $own = fn (string $code, ?int $teacherId, bool $general = false) => DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id,
+        'auditorium_id' => Auditorium::where('code', $code)->value('id'), 'teacher_id' => $teacherId, 'is_general' => $general,
+        'created_at' => now(), 'updated_at' => now()]);
+    $own('R102', $s['b']->id);
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102'])->assertStatus(409)
+        ->assertJsonPath('needs_confirm', true)->assertJsonPath('room_owner', true)->assertJsonPath('conflict_items', [])
+        ->assertJsonPath('error', "Xona «102» boshqa o'qituvchiga biriktirilgan: USTOZ B (dars o'qituvchisi — USTOZ A)");
+    expect($s['unit']->fresh()->auditorium_code)->toBe('R103');
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102', 'force' => 1])->assertOk();
+    expect($s['unit']->fresh()->auditorium_code)->toBe('R102');
+    // Shu xona allaqachon turgan bo'lsa — qayta so'ralmaydi.
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102'])->assertOk();
+    // Umumiy xona va dars o'qituvchisiga biriktirilgan xona — ogohlantirishsiz.
+    $own('R103', null, true);
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R103'])->assertOk();
+    DB::table('auditorium_teacher')->where('auditorium_id', Auditorium::where('code', 'R102')->value('id'))->update(['teacher_id' => $s['a']->id]);
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102'])->assertOk();
+    // Boshqa o'qituvchiniki va shu davrda band — bitta ogohlantirishda ikkalasi (conflict_items — bandlik ro'yxati); force — biriktiriladi.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-01 09:00', 'Asia/Tashkent'));
+    request()->attributes->remove('timetable.cycle_units.' . $s['board']->id);
+    $own('R101', $s['b']->id);
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R101'])->assertStatus(409)
+        ->assertJsonPath('needs_confirm', true)->assertJsonPath('room_owner', true)->assertJsonPath('conflict_items.0.room_code', 'R101')
+        ->assertJsonPath('error', "Xona «101» boshqa o'qituvchiga biriktirilgan: USTOZ B (dars o'qituvchisi — USTOZ A) · "
+            . "Xona «101» shu davrda boshqa guruhcha bilan band: d1/d24-03b, Patologik anatomiya, 07.09–14.12");
+    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R101', 'force' => 1])->assertOk();
+    expect($s['unit']->fresh()->auditorium_code)->toBe('R101');
+});
+
+it('kartochka: boshqa o\'qituvchiga biriktirilgan xona — 409 ogohlantirish, force bilan saqlanadi; o\'zgarmagan xona qayta so\'ralmaydi', function () {
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-20 09:00', 'Asia/Tashkent'));
+    $s = ubSetup();
+    $card = $s['unit'];
+    // Joylanmagan karta (kartochkadagi vaqt to'qnashuvi tekshiruvi bu testga aralashmasin).
+    TimetableCard::whereKey($card->id)->update(['teacher_id' => $s['a']->id, 'teacher_name' => 'USTOZ A', 'auditorium_code' => 'R103', 'auditorium_name' => '103',
+        'day' => null, 'pair' => null]);
     DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id, 'auditorium_id' => Auditorium::where('code', 'R102')->value('id'),
         'teacher_id' => $s['b']->id, 'is_general' => false, 'created_at' => now(), 'updated_at' => now()]);
-    ($s['as'])()->postJson(route('admin.timetable.assign-room', $s['board']), $s['params'] + ['auditorium_code' => 'R102', 'force' => 1])
-        ->assertStatus(422)->assertJsonPath('error', "Xona «102» kartaning o'qituvchisiga biriktirilmagan");
+    $admin = ubTeacher('ADMIN', 'admin');
+    $save = fn (array $body) => test()->withoutVite()->actingAs($admin, 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.cards.update', $card), $body);
+
+    $save(['teacher_id' => $s['a']->id, 'auditorium_code' => 'R102'])->assertStatus(409)
+        ->assertJsonPath('needs_confirm', true)->assertJsonPath('room_owner', true)
+        ->assertJsonPath('error', "Xona «102» boshqa o'qituvchiga biriktirilgan: USTOZ B (dars o'qituvchisi — USTOZ A)");
+    expect($card->fresh()->auditorium_code)->toBe('R103');
+    $save(['teacher_id' => $s['a']->id, 'auditorium_code' => 'R102', 'force' => 1])->assertOk()->assertJsonPath('auditorium_code', 'R102');
+    // Xona va o'qituvchi o'zgarmagan (boshqa rekvizit saqlanmoqda) — qayta so'ralmaydi.
+    $save(['teacher_id' => $s['a']->id, 'auditorium_code' => 'R102', 'len_half' => 2])->assertOk();
+    // O'qituvchi o'zgarsa (xona o'sha) — yangi o'qituvchi uchun qayta tekshiriladi; xona egasi bo'lsa — ogohlantirishsiz.
+    $c = ubTeacher('USTOZ C', null, ['department_hemis_id' => 601]);
+    $save(['teacher_id' => $c->id, 'auditorium_code' => 'R102'])->assertStatus(409)
+        ->assertJsonPath('error', "Xona «102» boshqa o'qituvchiga biriktirilgan: USTOZ B (dars o'qituvchisi — USTOZ C)");
+    $save(['teacher_id' => $s['b']->id, 'auditorium_code' => 'R102'])->assertOk();
 });

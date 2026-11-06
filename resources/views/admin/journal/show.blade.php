@@ -618,7 +618,9 @@
         .admin-upgraded-cell.admin-upgraded-retake {
             background: linear-gradient(to top right, #fdba74 calc(50% - 1px), #64748b 50%, #fdba74 calc(50% + 1px)) !important;
         }
+        /* Ixcham ko'rinish: sababli otrabotka — diagonal chiziqsiz, och ko'k fon */
         .admin-upgraded-cell.admin-upgraded-sababli {
+            background: #bfdbfe !important;
             box-shadow: inset 0 0 0 2px #7c3aed;
         }
         .exam-cell[onclick]:hover { background: #eff6ff; cursor: pointer; }

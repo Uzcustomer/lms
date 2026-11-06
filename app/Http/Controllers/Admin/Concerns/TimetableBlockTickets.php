@@ -102,11 +102,14 @@ trait TimetableBlockTickets
         $rows = DB::table('schedules')->whereNull('deleted_at')->whereDate('lesson_date', $date)
             ->where('lesson_pair_start_time', '<', $end . ':00')->where('lesson_pair_end_time', '>', $start . ':00')
             ->where(fn ($q) => $q->when($empId, fn ($w) => $w->orWhere('employee_id', $empId))->when($room, fn ($w) => $w->orWhere('auditorium_code', $room)))
-            ->get(['group_name', 'subject_name', 'employee_id', 'auditorium_code', 'department_id', 'lesson_pair_start_time', 'lesson_pair_end_time']);
+            ->get(['group_id', 'subject_id', 'training_type_code', 'lesson_date', 'group_name', 'subject_name', 'employee_id', 'auditorium_code', 'department_id',
+                'lesson_pair_start_time', 'lesson_pair_end_time']);
         $headOf = [];
         $out = [];
+        // Balanslash darsi (HEMIS solishtirish qo'ygan) — bandlik emas.
+        $balance = $this->hemisBalanceIndex((string) $date, (string) $date);
         foreach ($rows as $r) {
-            if (in_array($this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name)), $own, true)) {
+            if (in_array($this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name)), $own, true) || $this->isHemisBalance($r, $balance)) {
                 continue;
             }
             $teacherBusy = $empId && (string) $r->employee_id === (string) $empId;
@@ -358,10 +361,14 @@ trait TimetableBlockTickets
         $slots = $this->hemisSlotTimes($card->board);
         $start = $slots[$pair][0] ?? $t->start_time;
         $end = $slots[$pair + $card->lenHalf() - 1][1] ?? $t->end_time;
-        foreach (DB::table('schedules')->whereNull('deleted_at')->whereDate('lesson_date', $this->ticketDateFor($t, (int) $day))
+        $tDate = $this->ticketDateFor($t, (int) $day);
+        $balance = $this->hemisBalanceIndex(substr((string) $tDate, 0, 10), substr((string) $tDate, 0, 10));
+        foreach (DB::table('schedules')->whereNull('deleted_at')->whereDate('lesson_date', $tDate)
             ->where('lesson_pair_start_time', '<', $end . ':00')->where('lesson_pair_end_time', '>', $start . ':00')
-            ->pluck('auditorium_code') as $code) {
-            $busy[(string) $code] = true;
+            ->get(['group_id', 'subject_id', 'training_type_code', 'lesson_date', 'lesson_pair_start_time', 'auditorium_code']) as $r) {
+            if (!$this->isHemisBalance($r, $balance)) {   // balanslash darsi xonani band qilmaydi
+                $busy[(string) $r->auditorium_code] = true;
+            }
         }
         $map = $this->auditoriumTeacherMap();
 

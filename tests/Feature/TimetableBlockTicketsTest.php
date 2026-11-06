@@ -202,6 +202,14 @@ it('vaqtni o\'zgartirishda HEMIS bandligi va kutilayotgan bronlar ham tekshirila
         'lesson_pair_start_time' => $s7 . ':00', 'lesson_pair_end_time' => $e7 . ':00', 'employee_id' => $s['teacher']->hemis_id, 'employee_name' => 'OQITUVCHI A.',
         'auditorium_code' => 'Z9', 'auditorium_name' => 'Z9']);
     expect($free()->has(7))->toBeFalse();
+    // Balanslash darsi (HEMIS solishtirish qo'ygan) — bandlik emas; yozuvi o'chirilsa — yana band.
+    \Illuminate\Support\Facades\DB::table('schedules')->where('schedule_hemis_id', 91)->update(['group_id' => 4444, 'subject_id' => 999, 'training_type_code' => '13']);
+    $balance = fn (string $start) => \Illuminate\Support\Facades\DB::table('hemis_balance_lessons')->insert(['group_hemis_id' => 4444, 'subject_id' => 999,
+        'lesson_date' => $t->lesson_date->toDateString(), 'start_time' => $start, 'end_time' => $start, 'training_type_code' => '13', 'week' => 1]);
+    $balance($s7);
+    expect($free()->has(7))->toBeTrue();
+    \Illuminate\Support\Facades\DB::table('hemis_balance_lessons')->delete();
+    expect($free()->has(7))->toBeFalse();
     ticketAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.block-tickets.resolve', $t), ['kind' => 'time', 'pair' => 7])
         ->assertStatus(422)->assertJsonFragment(['error' => "HEMIS: o'qituvchi band — boshqa-01 · Boshqa fan {$s7}-{$e7}"]);
 
@@ -252,6 +260,12 @@ it('bo\'sh xonalar darsning hozirgi joyi (ko\'chirilgan vaqti) bo\'yicha HEMIS b
     $rooms = collect(ticketAs($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.block-tickets.show', $t))->assertOk()
         ->json('ticket.free_rooms'))->pluck('code')->all();
     expect($rooms)->not->toContain('R1')->toContain('R2');
+    // R1 dagi dars — balanslash darsi: xona band emas.
+    \Illuminate\Support\Facades\DB::table('schedules')->where('schedule_hemis_id', 92)->update(['group_id' => 4445, 'subject_id' => 998, 'training_type_code' => '13']);
+    \Illuminate\Support\Facades\DB::table('hemis_balance_lessons')->insert(['group_hemis_id' => 4445, 'subject_id' => 998, 'lesson_date' => $t->lesson_date->toDateString(),
+        'start_time' => $st[7][0], 'end_time' => $st[8][1], 'training_type_code' => '13', 'week' => 1]);
+    expect(collect(ticketAs($s['head'], 'kafedra_mudiri')->getJson(route('admin.timetable.block-tickets.show', $t))->assertOk()
+        ->json('ticket.free_rooms'))->pluck('code')->all())->toContain('R1');
 });
 
 it('registrator tasdig\'ini kutayotgan so\'rov bekor qilinsa — bog\'liq o\'zgarish so\'rovi ham bekor bo\'ladi', function () {

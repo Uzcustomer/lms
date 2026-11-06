@@ -34,6 +34,13 @@ use Illuminate\Support\Facades\Schema;
  */
 class TimetableController extends Controller
 {
+    /**
+     * Dars jadvalining ikkala qatlamini (ichki va tashqi) — haftalik ham, sikl ham — to'liq tahrirlaydigan rollar (weeklyLayerDenied,
+     * cycleLayerEditable; mijozda — WEEKLY_ADMIN). Boshqalar: o'quv bo'limi — tashqi, kafedra mudiri — ichki (o'z kafedrasi), qolganlari
+     * faqat ko'radi.
+     */
+    public const TIMETABLE_FULL_EDIT_ROLES = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'];
+
     private function isNonBlocking($card, TimetableBoard $board): bool
     {
         return \App\Services\Timetable\InfoOnlyCourses::isNonBlocking($card, $board);
@@ -11193,7 +11200,7 @@ class TimetableController extends Controller
             return null;   // ichki chaqiruv (konsol/test) — HTTP so'rovlar middleware'dan o'tadi
         }
         $role = $this->timetableActiveRole($request);
-        if (in_array($role, ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'], true)) {
+        if (in_array($role, self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return null;
         }
         if ($layer === 'external') {
@@ -12221,12 +12228,13 @@ class TimetableController extends Controller
     }
 
     /**
-     * Qatlamni kim tahrirlaydi: tashqi — o'quv bo'limi, ichki — kafedra mudiri,
-     * admin/superadmin — ikkalasini. Boshqalar faqat ko'radi.
+     * Sikl qatlamini kim tahrirlaydi (haftalik jadval — weeklyLayerDenied bilan bir xil): tashqi — o'quv bo'limi, ichki — kafedra mudiri
+     * (o'z kafedrasi fanlari — ownKafedraCycleSubjects), TIMETABLE_FULL_EDIT_ROLES (admin, superadmin, registrator ofisi, kichik admin) —
+     * ikkalasini. Boshqalar faqat ko'radi.
      */
     private function cycleLayerEditable(string $role, string $layer): bool
     {
-        if (in_array($role, ['admin', 'superadmin'], true)) {
+        if (in_array($role, self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return true;
         }
         return $layer === 'external'
@@ -12234,7 +12242,10 @@ class TimetableController extends Controller
             : $role === 'kafedra_mudiri';
     }
 
-    /** Ichki sikl jadvalida kun soatlarini surish (cycle-lecture-slots: day_index / day_indexes) — tahrirlovchilardan tashqari. */
+    /**
+     * Ichki sikl jadvalida kun soatlarini surish (cycle-lecture-slots: day_index / day_indexes) — tahrirlovchilardan tashqari. Registrator
+     * ofisi endi to'liq tahrirlovchi (TIMETABLE_FULL_EDIT_ROLES) — bu tekshiruv ortiqcha, lekin zararsiz qoldirilgan.
+     */
     private function cycleDayEditor(string $role): bool
     {
         return $role === 'registrator_ofisi';

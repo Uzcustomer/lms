@@ -230,9 +230,9 @@ it('o\'tgan va bugungi kunlar: o\'tgan — yo\'q; bugungi — admin / registrato
         ->toMatchArray(['status' => 'past', 'why' => "Bugungi darsni faqat admin va registrator ofisi ko'chiradi."]);
     expect(dmMove($s, $s['admin'], 'admin', ['day_indexes' => [0], 'delta' => 1, 'mode' => 'lecture', 'dry_run' => 1])->json('days.0'))
         ->toMatchArray(['status' => 'past', 'why' => 'O‘tgan kun.']);
-    // Registrator kun soatini sura oladi (day_edit), lekin sikl blokini joylay olmaydi.
+    // Registrator ofisi — sikl jadvalini ham to'liq tahrirlaydi (haftalik jadval kabi): kun soatlari ham, bloklar ham.
     $plan = dmAs($reg, 'registrator_ofisi')->postJson(route('admin.timetable.cycle-plan', $s['board']), ['layer' => 'internal'])->assertOk()->json();
-    expect($plan['day_edit'])->toBeTrue()->and($plan['can_edit'])->toBeFalse();
+    expect($plan['day_edit'])->toBeTrue()->and($plan['can_edit'])->toBeTrue();
 });
 
 it('rollar: o\'qituvchi va fan mas\'uli surolmaydi (so\'rov orqali); kafedra mudiri — o\'z kafedrasi fani, boshqasi 403', function () {
@@ -599,5 +599,49 @@ it('tezlik: ko\'p kunli surishda butun doska (sikl birliklari) kunlar soniga qar
     expect($saved)->toBe($one)->and($r['applied'])->toBe(6);
     foreach (dmDays($s) as $d) {
         expect($d)->toBe(['lec' => [5, 7], 'prc' => [1, 5]]);
+    }
+});
+
+it('ruxsat: registrator ofisi va kichik admin sikl jadvalining ikkala qatlamini tahrirlaydi (haftalik kabi); kafedra mudiri — o\'z kafedrasi (ichki), o\'quv bo\'limi — tashqi, o\'qituvchi — faqat ko\'radi', function () {
+    Role::findOrCreate('oquv_bolimi', 'web');
+    Role::findOrCreate('oqituvchi', 'web');
+    // Har rol — o'z (toza) doskasida: blokni o'z joyiga "joylash" (ruxsat — joylashdan oldin tekshiriladi, joy o'zgarmaydi).
+    $place = fn (array $s, Teacher $t, string $role, string $layer) => dmAs($t, $role)->postJson(route('admin.timetable.cycle-place', $s['board']), [
+        'specialty_name' => 'davolash ishi', 'course' => 4, 'group_name' => 'F1 / 1-oqim', 'subject_name' => 'Ichki kasalliklar',
+        'training_type' => 'practice', 'view' => 'flow', 'layer' => $layer, 'action' => 'place', 'start_index' => $s['placement']->start_index, 'pair' => 1]);
+    $canEdit = fn (array $s, Teacher $t, string $role, string $layer) => dmAs($t, $role)->postJson(route('admin.timetable.cycle-plan', $s['board']),
+        ['layer' => $layer])->assertOk()->json('can_edit');
+    foreach (['registrator_ofisi', 'kichik_admin', 'admin'] as $role) {
+        foreach (['internal', 'external'] as $layer) {
+            $s = dmSetup();
+            $t = dmTeacher(strtoupper($role), $role);
+            expect($canEdit($s, $t, $role, $layer))->toBeTrue();
+            $place($s, $t, $role, $layer)->assertOk();
+        }
+    }
+    // Kafedra mudiri: ichki — o'z kafedrasi fani; tashqi — yo'q; boshqa kafedra fani — yo'q (registrator ofisi — baribir ha).
+    $s = dmSetup();
+    $head = dmHead();
+    expect($canEdit($s, $head, 'kafedra_mudiri', 'internal'))->toBeTrue()->and($canEdit($s, $head, 'kafedra_mudiri', 'external'))->toBeFalse();
+    $place($s, $head, 'kafedra_mudiri', 'external')->assertForbidden()->assertJsonPath('error', 'Tashqi dars jadvalini faqat o‘quv bo‘limi tahrirlaydi.');
+    $place($s, $head, 'kafedra_mudiri', 'internal')->assertOk();
+    TimetableCard::where('board_id', $s['board']->id)->update(['kafedra_name' => 'Jarrohlik kafedrasi']);
+    $place($s, $head, 'kafedra_mudiri', 'internal')->assertForbidden()->assertJsonPath('error', 'Bu fan sizning kafedrangizga tegishli emas.');
+    $place($s, dmTeacher('REG2', 'registrator_ofisi'), 'registrator_ofisi', 'internal')->assertOk();
+    // O'quv bo'limi: tashqi — ha, ichki — yo'q.
+    $s = dmSetup();
+    $oquv = dmTeacher('OQUV', 'oquv_bolimi');
+    expect($canEdit($s, $oquv, 'oquv_bolimi', 'external'))->toBeTrue()->and($canEdit($s, $oquv, 'oquv_bolimi', 'internal'))->toBeFalse();
+    $place($s, $oquv, 'oquv_bolimi', 'internal')->assertForbidden()->assertJsonPath('error', 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.');
+    $place($s, $oquv, 'oquv_bolimi', 'external')->assertOk();
+    // Mijoz (haftalik qatlam) — server bilan bitta ro'yxat.
+    expect(dmAs(dmTeacher('REG3', 'registrator_ofisi'), 'registrator_ofisi')->get(route('admin.timetable.index'))->assertOk()->getContent())
+        ->toContain('const WEEKLY_ADMIN = ["admin","superadmin","registrator_ofisi","kichik_admin"].includes(TIMETABLE_ROLE);');
+    // O'qituvchi — faqat ko'radi.
+    $s = dmSetup();
+    $s['ustoz']->assignRole('oqituvchi');
+    foreach (['internal', 'external'] as $layer) {
+        expect($canEdit($s, $s['ustoz'], 'oqituvchi', $layer))->toBeFalse();
+        $place($s, $s['ustoz'], 'oqituvchi', $layer)->assertForbidden();
     }
 });

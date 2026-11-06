@@ -4,8 +4,9 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const writer = fs.readFileSync(path.join(__dirname, '../../public/js/hemis-writer.js'), 'utf8');
 
-// «Bugungi darslar (HEMIS)» JSON'i xatcho'pda: faqat bugungi kun va faqat o'zgartirish; har biridan oldin davomat/baho qayta
-// tekshiriladi (mark havolasi) — belgilangan yoki tekshirib bo'lmasa, yozilmaydi.
+// «Bugungi darslar (HEMIS)» JSON'i xatcho'pda: faqat bugungi kun — o'zgartirish, qo'shish va o'chirish (vaqtidan qat'iy nazar).
+// O'zgartirish va o'chirishdan oldin davomat/baho qayta tekshiriladi (mark havolasi) — belgilangan yoki tekshirib bo'lmasa, yozilmaydi;
+// qo'shishda tekshirilmaydi. Tartib: o'chirish → o'zgartirish → qo'shish.
 const els = {};
 const node = id => els[id] || (els[id] = new El(id));
 function parse(html) {
@@ -44,14 +45,17 @@ vm.runInContext(writer, ctx);
 const LOCK = 'https://mark.example/hemis-today-locks/7?date=2099-11-02&expires=1&signature=s';
 const act = o => Object.assign({ today: true, date: '2099-11-02', start: '12:00', end: '13:20', code: '13', employee_id: 141, auditorium_code: '74', blocked: [], changes: ['xona: 73 → 74'] }, o);
 const rep = {
-    mode: 'today', today: '2099-11-02', hemis_pairs: { '12:00-13:20': 13, '10:00-11:20': 12 }, lock_check_url: LOCK,
-    groups: [{ group: 'p/st26-01a', group_hemis_id: 1596, units: [{ subject_id: 476, subject_name: 'Kimyo', code_names: { 13: 'Amaliy' }, actions: [
+    mode: 'today', today: '2099-11-02', hemis_pairs: { '12:00-13:20': 13, '10:00-11:20': 12, '08:30-09:50': 11 }, lock_check_url: LOCK,
+    groups: [{ group: 'p/st26-01a', group_hemis_id: 1596, curriculum_hemis_id: 250, education_year: 2026, semester_code: '11',
+        units: [{ subject_id: 476, subject_name: 'Kimyo', code_names: { 13: 'Amaliy' }, actions: [
         act({ op: 'update', hemis_id: 3 }),
         act({ op: 'update', hemis_id: 4, start: '10:00', end: '11:20' }),
         act({ op: 'update', hemis_id: 8, start: '10:00', end: '11:20' }),
         act({ op: 'update', hemis_id: 9, start: '10:00', end: '11:20' }),
-        act({ op: 'create' }),
-        act({ op: 'delete', hemis_id: 5 }),
+        act({ op: 'create', changes: [] }),
+        act({ op: 'delete', hemis_id: 5, changes: [] }),
+        // Belgilangan (shu orada baho qo'yildi) — o'chirilmaydi.
+        act({ op: 'delete', hemis_id: 15, start: '08:30', end: '09:50', changes: [] }),
         act({ op: 'update', hemis_id: 6, date: '2099-11-01' }),
         // Oddiy (to'liq solishtirish) amali bugunga — avvalgidek yozilmaydi.
         { op: 'update', hemis_id: 7, date: '2099-11-02', start: '12:00', end: '13:20', code: '13', employee_id: 141, auditorium_code: '74', blocked: [] },
@@ -60,32 +64,44 @@ const rep = {
 
 (async () => {
     await els.hwFile.onchange.call({ files: [{ text: async () => JSON.stringify(rep) }] });
-    assert.match(els.hwSummary.innerHTML, /Bajariladi: <b>4<\/b> ta — <span[^>]*>\+0 qo'shish<\/span>, <span[^>]*>~4 o'zgartirish<\/span>, <span[^>]*>−0 o'chirish<\/span>\. O'tkaziladi: 4 ta/);
-    assert.match(els.hwSummary.innerHTML, /bugungi darslar: faqat o'zgartirish; davomat olingan yoki baho qo'yilgan darsga tegilmaydi/);
-    assert.doesNotMatch(els.hwList.textContent, /Qo'shish|O'chirish|#6|#7/);
+    assert.match(els.hwSummary.innerHTML, /Bajariladi: <b>7<\/b> ta — <span[^>]*>\+1 qo'shish<\/span>, <span[^>]*>~4 o'zgartirish<\/span>, <span[^>]*>−2 o'chirish<\/span>\. O'tkaziladi: 2 ta/);
+    assert.match(els.hwSummary.innerHTML, /bugungi darslar: qo'shish\/o'chirish faqat belgilanmagan \(davomat\/baho yo'q\) darslar uchun; davomat olingan yoki baho qo'yilgan darsga tegilmaydi/);
+    assert.match(els.hwList.textContent, /Qo'shish · p\/st26-01a · 2099-11-02 12:00–13:20/);
+    assert.match(els.hwList.textContent, /O'chirish · p\/st26-01a · 2099-11-02 12:00–13:20 .* #5/);
+    assert.doesNotMatch(els.hwList.textContent, /#6|#7/);
+    // Ro'yxat tartibi: avval o'chirish, so'ng o'zgartirish, oxirida qo'shish.
+    assert.deepEqual(els.hwList.textContent.split('\n').map(l => l.trim().split(' · ')[0]),
+        ["O'chirish", "O'chirish", "O'zgartirish", "O'zgartirish", "O'zgartirish", "O'zgartirish", "Qo'shish"]);
 
-    // Yozish: 3 — tekshiruvdan o'tdi (HEMIS formasi so'raldi); 4 — shu orada davomat olindi; 8 — tekshirib bo'lmadi.
+    // Yozish: 3 — tekshiruvdan o'tdi (HEMIS formasi so'raldi); 4 — shu orada davomat olindi; 8 — tekshirib bo'lmadi;
+    // 5 — o'chirish (tekshiruvdan o'tdi, HEMIS'da allaqachon yo'q); 15 — baho qo'yilgan, o'chirilmaydi; qo'shish — tekshiruvsiz.
     const fetched = [];
     ctx.fetch = async (url, opt) => {
         fetched.push([url, opt && opt.credentials]);
         if (url.startsWith(LOCK)) {
             const id = url.split('ids=')[1];
             if (id === '8') throw new Error('Failed to fetch');
-            return { ok: true, status: 200, json: async () => ({ locked: id === '4' ? { 4: 'davomat olingan' } : {}, failed: id === '9' ? [9] : [] }) };
+            const locked = { 4: { 4: 'davomat olingan' }, 15: { 15: 'baho qo\'yilgan' } }[id] || {};
+            return { ok: true, status: 200, json: async () => ({ locked, failed: id === '9' ? [9] : [] }) };
         }
         return { status: 404 };
     };
     els.hwApply.onclick();
     while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
-    // Tasdiq: "N ta dars o'zgartiriladi" (bugungi rejim).
-    assert.match(confirms[0], /^4 ta dars o'zgartiriladi \(bugun, \d+ ta guruh\)\. Har biridan oldin davomat\/baho HEMIS'dan qayta tekshiriladi/);
-    // Tartib — vaqt bo'yicha (10:00 lar oldin).
+    // Tasdiq: amal turlari bo'yicha soni (bugungi rejim).
+    assert.match(confirms[0], /^4 ta dars o'zgartiriladi, 1 ta qo'shiladi, 2 ta o'chiriladi \(bugun, 1 ta guruh\)\. O'zgartirish va o'chirishdan oldin davomat\/baho HEMIS'dan qayta tekshiriladi — belgilangan darsga tegilmaydi\./);
+    // Tartib: o'chirish (vaqt bo'yicha), o'zgartirish (10:00 lar oldin), qo'shish — oxirida, davomat/baho tekshiruvisiz.
     assert.deepEqual(fetched, [
+        [LOCK + '&ids=15', 'omit'],
+        [LOCK + '&ids=5', 'omit'], ['/curriculum/schedule-edit?id=5', undefined],
         [LOCK + '&ids=4', 'omit'],
         [LOCK + '&ids=8', 'omit'],
         [LOCK + '&ids=9', 'omit'],
         [LOCK + '&ids=3', 'omit'], ['/curriculum/schedule-edit?id=3', undefined],
+        ['/curriculum/schedule-create?date=2099-11-02&curriculum=250&education_year=2026&semester=11&group=1596', undefined],
     ]);
+    assert.match(els.hwList.textContent, /#15  — belgilandi — tegilmadi \(baho qo'yilgan\)/);
+    assert.match(els.hwList.textContent, /✓ O'chirish .* #5  — HEMIS'da allaqachon yo'q/);
     assert.match(els.hwList.textContent, /#9 \(xona: 73 → 74\)  — davomat\/baho tekshirib bo'lmadi \(HEMIS javob bermadi\) — tegilmadi/);
     assert.match(els.hwList.textContent, /#4 \(xona: 73 → 74\)  — belgilandi — tegilmadi \(davomat olingan\)/);
     assert.match(els.hwList.textContent, /#8 \(xona: 73 → 74\)  — davomat\/baho tekshirib bo'lmadi \(Failed to fetch\) — tegilmadi/);
@@ -97,10 +113,11 @@ const rep = {
     els.hwLog.onclick();
     const reason = id => (blob.results.find(r => r.hemis_id === id) || {}).reason;
     assert.equal(reason(4), 'belgilandi — tegilmadi (davomat olingan)');
+    assert.equal(reason(15), 'belgilandi — tegilmadi (baho qo\'yilgan)');
+    assert.equal(blob.results.find(r => r.hemis_id === 5).status, 'ok');
     assert.equal(blob.results.find(r => r.hemis_id === 3).status, 'error');   // forma 404 — yozishga urinildi
+    assert.equal(blob.results.find(r => r.op === 'create').status, 'error');   // forma 404 — yozishga urinildi (tekshiruvsiz)
     assert.deepEqual(blob.skipped.map(s => s.op + ' ' + (s.hemis_id || '') + ' ' + s.skip), [
-        "create  bugungi darsga faqat o'zgartirish — qo'shish/o'chirish rad etildi",
-        "delete 5 bugungi darsga faqat o'zgartirish — qo'shish/o'chirish rad etildi",
         'update 6 bugungi kun emas',
         "update 7 bugun yoki o'tgan kun",
     ]);
@@ -115,8 +132,10 @@ const rep = {
     };
     els.hwApply.onclick();
     while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
-    assert.deepEqual(fetched, [[LOCK + '&ids=4', 'omit']]);
+    assert.deepEqual(fetched, [[LOCK + '&ids=15', 'omit']]);
     assert.match(els.hwList.textContent, /#8 \(xona: 73 → 74\)  — bugungi kun emas, yozilmadi/);
+    assert.match(els.hwList.textContent, /#5  — bugungi kun emas, yozilmadi/);
+    assert.match(els.hwList.textContent, /Qo'shish · .*  — bugungi kun emas, yozilmadi/);
     ctx.fetch = fetchBefore;
 
     // Ertasi kun (oyna ochiq qolgan) — bugungi amallar endi yozilmaydi.
@@ -164,7 +183,7 @@ const rep = {
     assert.match(els.hwList.textContent, /#21 .* avval #20 ko'chishi kerak edi/);
     // A haqiqatan yozilsa — B ham yoziladi (HEMIS formasining kichik soxtasi: tahrirlash sahifasi va saqlash).
     const opt = v => ({ value: String(v), selected: false, removeAttribute() {}, setAttribute() {} });
-    const select = () => ({ options: ['13', '12', '74', '1', '2', '141', '1596', '1597'].map(opt), appendChild(o) { this.options.push(o); } });
+    const select = () => ({ options: ['13', '12', '11', '74', '1', '2', '141', '1596', '1597'].map(opt), appendChild(o) { this.options.push(o); } });
     const form = { querySelector: q => (q.startsWith('select') ? select() : {}), getAttribute: () => null };
     ctx.DOMParser = class { parseFromString(html) {
         return html === 'FORM' ? { querySelectorAll: q => (q === 'form' ? [form] : []), createElement: () => opt('') }
@@ -183,5 +202,42 @@ const rep = {
     while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
     assert.deepEqual(posted, ['/curriculum/schedule-edit?id=20', '/curriculum/schedule-edit?id=21']);
     assert.match(els.hwList.textContent, /Yozildi: 2 ta muvaffaqiyatli, 0 ta xato/);
-    console.log('HEMIS writer: bugungi darslar — faqat o\'zgartirish, davomat/baho qayta tekshiruvi, navbat (after)');
+
+    // Bugungi qo'shish va o'chirish — dars boshlangan / o'tgan bo'lsa ham (soat 10:00, darslar 08:30 da): avval o'chirish, so'ng
+    // uning joyiga qo'shish (after). O'chiriladigan dars shu orada belgilansa — o'chirilmaydi, qo'shish ham yozilmaydi.
+    const swap = { mode: 'today', today: '2099-11-02', hemis_pairs: rep.hemis_pairs, lock_check_url: LOCK, groups: [
+        { group: 'p/st26-01a', group_hemis_id: 1596, curriculum_hemis_id: 250, education_year: 2026, semester_code: '11', units: [
+            { subject_id: 1, subject_name: 'Tarix', code_names: { 13: 'Amaliy' }, actions: [act({ op: 'delete', hemis_id: 30, gseq: 1, start: '08:30', end: '09:50', changes: [] })] },
+            { subject_id: 2, subject_name: 'Kimyo', code_names: { 13: 'Amaliy' }, actions: [act({ op: 'create', gseq: 2, after: [30], start: '08:30', end: '09:50', changes: [] })] },
+        ] },
+    ] };
+    await els.hwFile.onchange.call({ files: [{ text: async () => JSON.stringify(swap) }] });
+    assert.match(els.hwSummary.innerHTML, /Bajariladi: <b>2<\/b> ta — <span[^>]*>\+1 qo'shish<\/span>, <span[^>]*>~0 o'zgartirish<\/span>, <span[^>]*>−1 o'chirish<\/span>/);
+    const swapLock = { 30: { 30: 'davomat olingan' } };
+    posted.length = 0;
+    fetched.length = 0;
+    ctx.fetch = async (url, o) => {
+        fetched.push([url, o && o.credentials]);
+        if (url.startsWith(LOCK)) return { ok: true, status: 200, json: async () => ({ locked: swapLock[url.split('ids=')[1]] || {}, failed: [] }) };
+        if (o && o.method === 'POST') { posted.push(url); return { ok: true, url: '/curriculum/schedule', text: async () => 'DONE' }; }
+        return { status: 200, ok: true, text: async () => 'FORM' };
+    };
+    confirms.length = 0;
+    els.hwApply.onclick();
+    while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
+    assert.match(confirms[0], /^1 ta dars qo'shiladi, 1 ta o'chiriladi \(bugun, 1 ta guruh\)/);
+    assert.deepEqual(fetched, [[LOCK + '&ids=30', 'omit']]);
+    assert.deepEqual(posted, []);
+    assert.match(els.hwList.textContent, /#30  — belgilandi — tegilmadi \(davomat olingan\)/);
+    assert.match(els.hwList.textContent, /Qo'shish .*  — avval #30 ko'chishi kerak edi — u yozilmadi, tegilmadi/);
+    delete swapLock[30];
+    fetched.length = 0;
+    els.hwApply.onclick();
+    while (!/Yozildi:/.test(els.hwList.textContent)) await new Promise(r => setTimeout(r, 20));
+    const createUrl = '/curriculum/schedule-create?date=2099-11-02&curriculum=250&education_year=2026&semester=11&group=1596';
+    assert.deepEqual(fetched, [[LOCK + '&ids=30', 'omit'], ['/curriculum/schedule-edit?id=30', undefined],
+        ['/curriculum/schedule-edit?id=30&delete=1', undefined], [createUrl, undefined], [createUrl, undefined]]);
+    assert.deepEqual(posted, ['/curriculum/schedule-edit?id=30&delete=1', createUrl]);
+    assert.match(els.hwList.textContent, /Yozildi: 2 ta muvaffaqiyatli, 0 ta xato/);
+    console.log('HEMIS writer: bugungi darslar — o\'zgartirish, qo\'shish va o\'chirish (bugun), davomat/baho qayta tekshiruvi, navbat (after)');
 })().catch(e => { console.error(e); process.exit(1); });

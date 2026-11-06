@@ -1595,7 +1595,7 @@ it('umumiy darsni almashtirish kerak bo\'lsa — uning hamma guruhlari birga, o\
     expect($got)->toBe(['p/st26-01a' => '9001 · 71', 'p/st26-01b' => '9001 · 71']);
 });
 
-// ---- "Bugungi darslar (HEMIS)": faqat bugun, faqat o'zgartirish ----
+// ---- "Bugungi darslar (HEMIS)": faqat bugun — o'zgartirish, qo'shish va o'chirish (faqat belgilanmagan darslar) ----
 
 /** HEMIS schedule-list javobidagi yozuv (ScheduleImportService::map uchun to'liq). */
 function htItem(int $id, string $date, string $start, string $end, array $o = []): array
@@ -1699,7 +1699,7 @@ it('bugungi darslar: davomat yoki baho bor darsga tegilmaydi; farqli xona — o\
         ->and(DB::table('schedules')->where('schedule_hemis_id', 3)->value('auditorium_code'))->toBe('73');
     expect($res['counts'])->toMatchArray(['lessons' => 4, 'updates' => 1, 'locked' => 2, 'blocked' => 0, 'info' => 1]);
 
-    // JSON: faqat o'zgartirish, bugungi (today: true).
+    // JSON: bugungi amallar (today: true) — bu yerda faqat o'zgartirish (Fizika — fan topilmadi, qo'shilmaydi).
     $actions = collect($res['json']['groups'])->flatMap(fn ($g) => collect($g['units'])->flatMap(fn ($u) => $u['actions']))->all();
     expect($res['json']['mode'])->toBe('today')->and($actions)->toHaveCount(1)
         ->and($actions[0])->toMatchArray(['op' => 'update', 'today' => true, 'date' => '2026-09-14', 'hemis_id' => 3, 'start' => '12:00', 'end' => '13:20',
@@ -1828,17 +1828,22 @@ it('bugungi darslar: xatcho\'p yozishdan oldin davomat/bahoni HEMIS\'dan qayta t
     test()->getJson($url . '&ids=1', ['Origin' => 'https://evil.example'])->assertOk()->assertHeaderMissing('Access-Control-Allow-Origin');
 });
 
-it('bugungi darslar: sikl fani — bugungi kun rejasi (o\'qituvchi o\'zgaradi), HEMIS\'da yo\'qlari ma\'lumot', function () {
+it('bugungi darslar: sikl fani — bugungi kun rejasi (o\'qituvchi o\'zgaradi), HEMIS\'da yo\'qlari qo\'shiladi (o\'quv rejadagi tur bilan)', function () {
     $s = hsSetup();
     hsCycleTwoSubgroups($s);
     htFake([2500 => [htItem(10, '2026-09-21', '10:00', '11:20', ['group' => 2500, 'group_name' => 'g5-01a', 'subject_id' => 900, 'subject' => 'Pediatriya', 'emp' => 6006])]]);
     $res = htCall($s, ['specialty_names' => ['davolash ishi'], 'courses' => [5], 'today' => '2026-09-21', 'groups' => ['g5-01a']])->assertOk()->json();
     $rows = collect($res['rows'])->map(fn ($r) => $r['start'] . ' ' . $r['type'] . ' ' . $r['status'] . ' ' . implode('; ', $r['changes']))->all();
     expect($rows)->toBe([
-        "08:30 Ma'ruza info ",
+        "08:30 Ma'ruza create ",
         "10:00 Amaliy update o'qituvchi: E6006 → USTOZ",
-        '12:00 Amaliy info ',
+        '12:00 Amaliy create ',
     ]);
+    // Qo'shish: o'quv rejadagi fan (900) va qism turi (ma'ruza — 11, amaliy — 13); oqim ma'ruzasi — kartadagi o'qituvchi va xona.
+    $acts = collect($res['json']['groups'][0]['units'][0]['actions'])->map(fn ($a) => [$a['op'], $a['start'], $a['code'], $a['employee_id'], $a['auditorium_code']])->all();
+    expect($res['json']['groups'][0])->toMatchArray(['group_hemis_id' => 2500, 'curriculum_hemis_id' => 260])
+        ->and($res['json']['groups'][0]['units'][0]['subject_id'])->toBe(900)
+        ->and($acts)->toBe([['update', '10:00', '13', 5001, '71'], ['create', '08:30', '11', 9001, 'Y1'], ['create', '12:00', '13', 5001, '71']]);
     \Illuminate\Support\Facades\Http::assertNotSent(fn ($req) => (int) ($req->data()['_group'] ?? 0) !== 2500);
 });
 
@@ -1903,7 +1908,8 @@ it('bugungi darslar: juftlash — aynan mos vaqt ustun, yarim paralar para chega
         htItem(5, '2026-09-14', '13:30', '14:50', ['subject_id' => 476, 'subject' => 'Kimyo (a)', 'code' => '11', 'type' => "Ma'ruza", 'room' => '73']),
     ]]);
     $st = collect(htCall($s)->assertOk()->json('rows'))->mapWithKeys(fn ($r) => [$r['hemis_id'] => $r['status']])->sortKeys()->all();
-    expect($st)->toBe([1 => 'ok', 2 => 'ok', 3 => 'info', 4 => 'ok', 5 => 'ok']);
+    // 12:00–12:40 — ortiqcha (LMS'da Biologiya kartasi bor): o'chiriladi.
+    expect($st)->toBe([1 => 'ok', 2 => 'ok', 3 => 'delete', 4 => 'ok', 5 => 'ok']);
 });
 
 it('bugungi darslar: ikki o\'zgartirish bir-biri bilan to\'qnashsa (o\'zgartirishdan keyingi holat) — ikkalasi ham to\'siqli', function () {
@@ -2134,10 +2140,12 @@ it('bugungi darslar: ma\'ruza HEMIS\'da 08:30, LMS\'da 12:00 — update (bo\'lak
     $rows = collect(htCall($s)->assertOk()->json('rows'))->keyBy('hemis_id');
     expect($rows[1]['status'])->toBe('update')->and($rows[1]['changes'])->toBe(['vaqt: 08:30–09:50 → 12:00–13:20'])
         ->and($rows[2]['status'])->toBe('ok')
-        ->and($rows[3]['status'])->toBe('info')->and($rows[3]['reason'])->toContain('ortiqcha dars')
+        ->and($rows[3]['status'])->toBe('delete')->and($rows[3]['reason'])->toContain('ortiqcha dars')
         ->and($rows[4]['status'])->toBe('ok');
-    $new = collect(htCall($s)->assertOk()->json('rows'))->where('status', 'info')->whereNull('hemis_id')->values();
-    expect($new->map(fn ($r) => $r['subject'] . ' ' . $r['start'])->all())->toBe(['Kimyo 15:00'])->and($new[0]['reason'])->toContain('yangi dars kerak');
+    // Yangi dars — qo'shiladi (fan va tur — guruhning bugungi HEMIS jadvalidagi Kimyo yozuvidan).
+    $new = collect(htCall($s)->assertOk()->json('rows'))->whereNull('hemis_id')->values();
+    expect($new->map(fn ($r) => $r['subject'] . ' ' . $r['start'] . ' ' . $r['status'])->all())->toBe(['Kimyo 15:00 create'])
+        ->and($new[0]['reason'])->toContain('yangi dars');
 });
 
 it('bugungi darslar: joy almashish — avval yangi vaqti bo\'sh amal, so\'ng uning joyiga; sof almashinuvda ikkalasi to\'siqli', function () {
@@ -2289,8 +2297,105 @@ it('bugungi darslar: juftlashda avval aynan bir xil vaqtdagi dars (bo\'lakli nom
     htFake([1596 => $items]);
     $rows = collect(htCall($s)->assertOk()->json('rows'))->keyBy('hemis_id');
     expect($rows[2]['status'])->toBe('ok')
-        ->and($rows[3]['status'])->toBe('info')->and($rows[3]['reason'])->toContain('ortiqcha dars')
+        ->and($rows[3]['status'])->toBe('delete')->and($rows[3]['reason'])->toContain('ortiqcha dars')
         ->and(collect($rows)->pluck('blocked')->flatten()->filter(fn ($b) => str_contains($b, 'Klinik farmakologiya (b)'))->all())->toBe([]);
+});
+
+/** O'quv rejaga fan (1-kurs, 11-semestr, amaliy — 13). */
+function htPlanSubject(int $subjectId, string $name, int $dept = 501): void
+{
+    hsInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 1000 + $subjectId, 'curricula_hemis_id' => 250, 'subject_id' => $subjectId, 'subject_name' => $name,
+        'semester_code' => '11', 'semester_name' => '1', 'subject_details' => json_encode([['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 8]]),
+        'department_id' => $dept, 'department_name' => 'Anatomiya', 'at_semester' => 1]);
+}
+
+it('bugungi darslar: qo\'shish va o\'chirish — vaqtidan qat\'iy nazar, faqat belgilanmagan darslar; belgilangan va kartochkasi yo\'q fanning ortiqcha darsi o\'chirilmaydi', function () {
+    $s = hsSetup();   // Odam anatomiyasi: dushanba 10:00–11:20, USTOZ (5001), xona 71
+    htCard($s, 'Biologiya', 1, '72');   // 08:30–09:50 — HEMIS'da yo'q
+    htPlanSubject(475, 'Biologiya');
+    htFake([1596 => [
+        htItem(1, '2026-09-14', '10:00', '11:20'),
+        htItem(2, '2026-09-14', '13:30', '14:50'),   // ortiqcha, belgilanmagan — o'chiriladi
+        htItem(3, '2026-09-14', '15:00', '16:20'),   // ortiqcha, davomat olingan — o'chirilmaydi
+        htItem(4, '2026-09-14', '12:00', '13:20', ['subject_id' => 1, 'subject' => 'Tarix', 'emp' => 7007, 'room' => '90']),   // LMS'da kartochkasi yo'q
+    ]], [1596 => [3]]);
+    // Kun oxiri: hamma darslar o'tgan — qo'shish / o'chirish baribir taklif qilinadi.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-14 17:00'));
+
+    $res = htCall($s)->assertOk()->json();
+    $rows = collect($res['rows']);
+    $by = $rows->keyBy('hemis_id');
+    $new = $rows->firstWhere('subject', 'Biologiya');
+    expect($by[1]['status'])->toBe('ok')
+        ->and([$by[2]['status'], $by[2]['reason']])->toBe(['delete', "ortiqcha dars (LMS'da bugun yo'q) — o'chiriladi"])
+        ->and([$by[3]['status'], $by[3]['reason']])->toBe(['info', "belgilangan (davomat olingan) — o'chirilmaydi"])
+        ->and([$by[4]['status'], $by[4]['reason']])->toBe(['info', "ortiqcha dars (LMS doskasida shu fan kartochkasi yo'q) — o'chirilmaydi"])
+        ->and($new)->toMatchArray(['status' => 'create', 'hemis_id' => null, 'start' => '08:30', 'end' => '09:50', 'type' => 'Amaliy',
+            'new_employee_name' => 'USTOZ', 'new_auditorium_code' => '72', 'employee_name' => null, 'blocked' => []])
+        ->and($res['counts'])->toMatchArray(['lessons' => 5, 'updates' => 0, 'creates' => 1, 'deletes' => 1, 'info' => 2, 'ok' => 1]);
+
+    // JSON: o'chirish va qo'shish (today: true) — navbat: avval o'chirish; belgilangan va kartochkasiz darslar tushmaydi.
+    $g = $res['json']['groups'][0];
+    $actions = collect($g['units'])->flatMap(fn ($u) => collect($u['actions'])->map(fn ($a) => $a + ['subject_id' => $u['subject_id']]))->sortBy('gseq')->values();
+    expect($g)->toMatchArray(['group_hemis_id' => 1596, 'curriculum_hemis_id' => 250, 'education_year' => 2026, 'semester_code' => '11'])
+        ->and($actions->map(fn ($a) => $a['op'] . ' ' . ($a['hemis_id'] ?? '-'))->all())->toBe(['delete 2', 'create -'])
+        ->and($actions[0])->toMatchArray(['today' => true, 'date' => '2026-09-14', 'start' => '13:30', 'end' => '14:50', 'code' => '13', 'subject_id' => 474])
+        ->and($actions[1])->toMatchArray(['today' => true, 'date' => '2026-09-14', 'start' => '08:30', 'end' => '09:50', 'code' => '13', 'subject_id' => 475,
+            'employee_id' => 5001, 'employee_name' => 'USTOZ', 'auditorium_code' => '72', 'after' => [], 'key' => $new['key']]);
+
+    // Davomat qo'yilsa — o'chirish ham taklif qilinmaydi.
+    htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20'), htItem(2, '2026-09-14', '13:30', '14:50')]], [], [1596 => [2]]);
+    $res = htCall($s)->assertOk()->json();
+    expect(collect($res['rows'])->firstWhere('hemis_id', 2))->toMatchArray(['status' => 'info', 'reason' => "belgilangan (baho qo'yilgan) — o'chirilmaydi"])
+        ->and(collect($res['json']['groups'])->flatMap(fn ($g) => collect($g['units'])->flatMap(fn ($u) => $u['actions']))->pluck('op')->all())->toBe(['create']);
+
+    // HEMIS jadvali yangilanmasa — bugungi holat noma'lum: qo'shish ham, o'chirish ham to'siqli.
+    \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory(app('events')));
+    \Illuminate\Support\Sleep::fake();
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    \Illuminate\Support\Facades\Http::fake(['*schedule-list*' => \Illuminate\Support\Facades\Http::response('', 502)]);
+    $res = htCall($s)->assertOk()->json();
+    expect(collect($res['rows'])->firstWhere('subject', 'Biologiya')['blocked'])->toBe(["HEMIS jadvali yangilanmadi (javob bermadi) — bugungi holat noma'lum"])
+        ->and(collect($res['rows'])->firstWhere('hemis_id', 2)['status'])->toBe('blocked')
+        ->and($res['json']['groups'])->toBe([]);
+});
+
+it('bugungi darslar: qo\'shishda o\'qituvchi/xona biriktirilmagan — kafedra mudiri va «Kafedra mudiri xonasi»; band o\'qituvchi — to\'siqli; o\'chiriladigan dars joyiga — undan keyin', function () {
+    $s = hsSetup();
+    htCard($s, 'Biologiya', 5, '72');                // 12:00–13:20, USTOZ — boshqa guruhda band
+    htCard($s, 'Kimyo', 7, '73');                    // 13:30–14:50 — guruhda Fizika (o'chiriladi) o'rniga
+    htCard($s, 'Fizika', 7, '75', ['day' => 2]);     // Fizika kartasi bor, lekin bugun emas
+    // Odam anatomiyasi 10:00: LMS'da o'qituvchi va xona biriktirilmagan, HEMIS'da yo'q.
+    $s['card']->update(['teacher_id' => null, 'teacher_name' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
+    htPlanSubject(475, 'Biologiya');
+    htPlanSubject(476, 'Kimyo');
+    hsInsert('schedules', ['schedule_hemis_id' => 500, 'subject_id' => 1, 'subject_name' => 'Tarix', 'semester_code' => '11', 'group_id' => 2000,
+        'group_name' => 'x-01', 'training_type_code' => '13', 'training_type_name' => 'Amaliy', 'lesson_date' => '2026-09-14 00:00:00',
+        'lesson_pair_start_time' => '12:00', 'lesson_pair_end_time' => '13:20', 'employee_id' => 5001, 'employee_name' => 'USTOZ',
+        'auditorium_code' => '90', 'auditorium_name' => '90']);
+    htFake([1596 => [htItem(5, '2026-09-14', '13:30', '14:50', ['subject_id' => 480, 'subject' => 'Fizika', 'emp' => 7007, 'room' => '91'])]]);
+
+    $res = htCall($s)->assertOk()->json();
+    $rows = collect($res['rows'])->keyBy(fn ($r) => $r['subject'] . ' ' . $r['start']);
+    expect($rows['Odam anatomiyasi 10:00'])->toMatchArray(['status' => 'create', 'new_employee_name' => 'MUDIR', 'new_auditorium_code' => 'KM1',
+            'new_auditorium_name' => 'Kafedra mudiri xonasi', 'fallback_teacher' => true, 'fallback_room' => true, 'flags' => ['mudir_xonasi'],
+            'fallback_reason' => "LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri qo'yiladi; LMS kartochkasida xona biriktirilmagan — «Kafedra mudiri xonasi» qo'yiladi"])
+        ->and($rows['Biologiya 12:00']['status'])->toBe('blocked')
+        ->and($rows['Biologiya 12:00']['blocked'])->toBe(["o'qituvchi band: USTOZ — x-01 · Tarix 12:00–13:20"])
+        ->and($rows['Fizika 13:30']['status'])->toBe('delete')
+        // Guruhning shu vaqtdagi darsi o'chiriladi — to'siq emas, navbat.
+        ->and($rows['Kimyo 13:30']['status'])->toBe('create')->and($rows['Kimyo 13:30']['blocked'])->toBe([]);
+
+    $actions = collect($res['json']['groups'][0]['units'])->flatMap(fn ($u) => $u['actions'])->sortBy('gseq')->values();
+    expect($actions->map(fn ($a) => $a['op'] . ' ' . $a['start'] . ' ' . implode(',', $a['after']))->all())
+        ->toBe(['delete 13:30 ', 'create 10:00 ', 'create 13:30 5'])
+        ->and($actions[1])->toMatchArray(['employee_id' => 9001, 'auditorium_code' => 'KM1', 'missing_room' => true, 'flags' => ['mudir_xonasi']]);
+
+    // Kafedra mudiri topilmasa — qo'shilmaydi (ma'lumot, sababi bilan).
+    DB::table('curriculum_subjects')->where('subject_id', 474)->update(['department_id' => 9999]);
+    $row = collect(htCall($s)->assertOk()->json('rows'))->firstWhere('subject', 'Odam anatomiyasi');
+    expect($row)->toMatchArray(['status' => 'info',
+        'reason' => "yangi dars kerak — LMS kartochkasida o'qituvchi biriktirilmagan — kafedra mudiri topilmadi — qo'shilmaydi"]);
 });
 
 it('bugungi darslar: specialty_names (va boshqa ro\'yxatlar) bo\'sh bo\'lsa — fakultetdagi hamma yo\'nalishlar', function () {

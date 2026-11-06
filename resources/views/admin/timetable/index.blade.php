@@ -255,7 +255,7 @@
                             <button type="button" id="suggestWeekBtn" class="tt-ktr-weeks-btn tt-compact-btn hidden" title="Shu haftada joylanmagan kartalarni sig'dirish takliflari: bo'sh vaqt, boshqa xona, to'sib turgan darsni surish, boshqa kun, boshqa hafta va eng oxirida boshqa o'qituvchi. Hech narsa o'zi yozilmaydi — har bir taklif «Qo'llash» bilan bajariladi.">Takliflar</button>
                             @if($timetableCanApprove)
                             <button type="button" id="hemisSyncBtn" class="tt-ktr-weeks-btn" title="Tanlangan qamrov: LMS ichki jadvali va KTR ↔ HEMIS dars jadvali. Bugungacha o'tilgan darslar balansi (soat va soni), ertadan boshlab tuzatish takliflari va HEMIS'da qilinadigan amallar">HEMIS solishtirish</button>
-                            <button type="button" id="hemisTodayBtn" class="tt-ktr-weeks-btn" title="Faqat bugungi darslar (tanlangan qamrov): LMS ↔ HEMIS — o'qituvchi, xona va para vaqti. Faqat o'zgartirish: bugun dars qo'shilmaydi va o'chirilmaydi; davomat olingan yoki baho qo'yilgan darsga tegilmaydi">Bugungi darslar (HEMIS)</button>
+                            <button type="button" id="hemisTodayBtn" class="tt-ktr-weeks-btn" title="Faqat bugungi darslar (tanlangan qamrov): LMS ↔ HEMIS — o'qituvchi, xona va para vaqti; bugun qo'shish/o'chirish faqat belgilanmagan (davomat/baho yo'q) darslar uchun; davomat olingan yoki baho qo'yilgan darsga tegilmaydi">Bugungi darslar (HEMIS)</button>
                             @endif
                             @if(in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'kafedra_mudiri', 'oqituvchi'], true))
                             <button type="button" id="blockTicketsBtn" class="tt-ktr-weeks-btn" title="HEMIS to'siqlari bo'yicha so'rovlar: javob berish va (kafedra mudiri) hal qilish">To'siq so'rovlari</button>
@@ -4973,10 +4973,11 @@
                 // Eng birinchi — joylanmagan kartalar (bo'lsa qizil oyna), so'ng odatdagi hemisSyncAsk().
                 try { await hemisUnplacedGate(); } finally { this.disabled = false; }
             };
-            // ===== "Bugungi darslar (HEMIS)": faqat bugun, faqat o'zgartirish (o'qituvchi, xona, para vaqti) =====
-            // Bugun qo'shilmaydi va o'chirilmaydi; davomat olingan / baho qo'yilgan darsga tegilmaydi (kulrang).
+            // ===== "Bugungi darslar (HEMIS)": faqat bugun — o'zgartirish (o'qituvchi, xona, para vaqti), qo'shish va o'chirish =====
+            // Bugun qo'shish/o'chirish faqat belgilanmagan (davomat/baho yo'q) darslar uchun; davomat olingan / baho qo'yilgan darsga
+            // tegilmaydi (kulrang), belgilangan ortiqcha dars o'chirilmaydi (ma'lumot).
             const HT_STATUS = {
-                update: ['O\'zgartiriladi', 'text-amber-700'], locked: ['Tegilmaydi', 'text-gray-500'], blocked: ['To\'siqli', 'text-red-700'],
+                update: ['O\'zgartiriladi', 'text-amber-700'], create: ['Qo\'shiladi', 'text-teal-700'], delete: ['O\'chiriladi', 'text-rose-700'], locked: ['Tegilmaydi', 'text-gray-500'], blocked: ['To\'siqli', 'text-red-700'],
                 info: ['Ma\'lumot', 'text-sky-700'], ok: ['Mos', 'text-emerald-700'],
             };
             let hemisTodayLast = null;
@@ -4996,7 +4997,7 @@
                 const groups = htGroups(rep, subject);
                 const subjects = htSubjects(rep, group);
                 const head = '<div class="flex flex-wrap items-center gap-2 mb-2"><h3 class="font-semibold text-[14px] flex-1">Bugun (' + hsEsc(htDate(rep.today)) + '): ' +
-                    rows.length + ' ta dars · ' + n('update') + ' ta o\'zgartiriladi · ' + n('locked') + ' ta davomat/baho bor — tegilmaydi · ' + n('blocked') + ' ta to\'siqli</h3>' +
+                    rows.length + ' ta dars · ' + n('update') + ' ta o\'zgartiriladi · ' + n('create') + ' ta qo\'shiladi · ' + n('delete') + ' ta o\'chiriladi · ' + n('locked') + ' ta davomat/baho bor — tegilmaydi · ' + n('blocked') + ' ta to\'siqli</h3>' +
                     '<span class="text-violet-700">Xonasi bo‘sh: ' + (rep.rows || []).filter(r => (!group || r.group === group) && (!subject || r.subject === subject) && r.missing_room).length
                         + ' ta dars (mudir xonasi qo‘yiladi)</span>' +
                     '<label><input id="htMissingRooms" type="checkbox"' + (hemisTodayMissingRooms ? ' checked' : '') + '> Faqat xonasi bo‘sh</label>' +
@@ -5004,15 +5005,16 @@
                     groups.map(g => '<option value="' + hsEsc(g) + '"' + (g === group ? ' selected' : '') + '>' + hsEsc(g) + '</option>').join('') + '</select>' +
                     '<select id="htSubject" class="border rounded px-1 py-0.5"><option value="">Barcha fanlar</option>' +
                     subjects.map(x => '<option value="' + hsEsc(x) + '"' + (x === subject ? ' selected' : '') + '>' + hsEsc(x) + '</option>').join('') + '</select>' +
-                    '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
-                    // Xatcho'p: HEMIS sahifasida bosiladi, yuklangan JSON'dagi faqat bugungi to'siqsiz o'zgartirishlarni yozadi (har biridan oldin
-                    // davomat/baho jonli tekshiriladi, boshida "N ta dars o'zgartiriladi" tasdig'i, natija har dars bo'yicha).
+                    '<button type="button" id="htJson" class="tt-ktr-weeks-btn"' + (n('update') + n('create') + n('delete') ? '' : ' disabled') + '>JSON (HEMIS\'ga yozish uchun)</button>' +
+                    // Xatcho'p: HEMIS sahifasida bosiladi, yuklangan JSON'dagi faqat bugungi to'siqsiz amallarni yozadi (o'zgartirish va
+                    // o'chirishdan oldin davomat/baho jonli tekshiriladi, boshida "N ta dars o'zgartiriladi, M ta qo'shiladi..." tasdig'i,
+                    // natija har dars bo'yicha).
                     '<a id="htWriter" href="' + hsEsc("javascript:(function(){var s=document.createElement('script');s.charset='utf-8';s.src='" + HS_WRITER_URL + "?v='+Date.now();document.body.appendChild(s);})();") + '"' +
                     ' onclick="alert(\'Bu xatcho\\\'p: uni sichqoncha bilan brauzerning xatcho\\\'plar paneliga torting. Avval «JSON» tugmasi bilan faylni yuklab oling, keyin HEMIS sahifasida (kirib turgan holda) xatcho\\\'pni bosing va shu faylni tanlang.\'); return false;"' +
                     ' title="Sichqoncha bilan xatcho\'plar paneliga torting, so\'ng HEMIS sahifasida bosing" class="px-2 py-1 rounded border border-indigo-400 bg-indigo-50 text-indigo-700 cursor-move">⭐ Bugungi o\'zgarishlarni yozish (xatcho\'p)</a>' +
                     '<button type="button" id="htExcel" class="tt-weekly-excel">Excel</button>' +
                     '<button type="button" id="htClose" class="px-2 py-1 border rounded">Yopish</button></div>' +
-                    '<div class="text-gray-500 text-[11px] mb-2">Faqat o\'zgartirish (o\'qituvchi, xona, para vaqti): bugun HEMIS\'ga dars qo\'shilmaydi va o\'chirilmaydi. ' +
+                    '<div class="text-gray-500 text-[11px] mb-2">O\'zgartirish (o\'qituvchi, xona, para vaqti), qo\'shish va o\'chirish: bugun qo\'shish/o\'chirish faqat belgilanmagan (davomat/baho yo\'q) darslar uchun. ' +
                     'Davomat olingan yoki baho qo\'yilgan darsga tegilmaydi — xatcho\'p yozishdan oldin HEMIS\'dan yana tekshiradi.' +
                     (rep.timing ? ' <span title="HEMIS\'ni kutish / jami">· ' + rep.timing.groups + ' guruh, HEMIS ' + (rep.timing.hemis_ms / 1000).toFixed(1) +
                         ' s / jami ' + (rep.timing.total_ms / 1000).toFixed(1) + ' s</span>' : '') + '</div>' +
@@ -5043,16 +5045,18 @@
                     ['Guruh', 'Fan', 'Vaqt', 'O\'qituvchi', 'Xona', 'Holat'].map(h => '<th class="border px-1">' + h + '</th>').join('') + '</tr></thead><tbody>' + body + '</tbody></table></div>'
                     : '<div class="text-gray-500">Bugun qamrovda dars yo\'q.</div>');
             }
-            // Xatcho'p uchun JSON: faqat to'siqsiz o'zgartirishlar (server tayyorlagan, today: true), tanlangan guruh va fan bo'yicha.
-            // Filtr (fan yoki "faqat xonasi bo'sh") bo'lsa — aynan jadvalda ko'ringan qatorlar (htRows hemis_id lari); amali qolmagan
-            // birlik va guruh tushib qoladi.
+            // Xatcho'p uchun JSON: faqat to'siqsiz amallar — o'zgartirish, qo'shish, o'chirish (server tayyorlagan, today: true), tanlangan
+            // guruh va fan bo'yicha. Filtr (fan yoki "faqat xonasi bo'sh") bo'lsa — aynan jadvalda ko'ringan qatorlar (o'zgartirish/o'chirish —
+            // hemis_id, qo'shish — key); amali qolmagan birlik va guruh tushib qoladi.
             function hemisTodayJson(rep, group, subject) {
                 const out = JSON.parse(JSON.stringify(rep.json || {}));
-                const ids = new Set(htRows(rep, group, subject).filter(r => r.status === 'update').map(r => +r.hemis_id));
+                const HT_OPS = ['update', 'create', 'delete'];
+                const keyOf = (op, x) => op === 'create' ? 'c:' + x.key : 'h:' + (+x.hemis_id);
+                const ids = new Set(htRows(rep, group, subject).filter(r => HT_OPS.includes(r.status)).map(r => keyOf(r.status, r)));
                 const byRows = Boolean(subject) || hemisTodayMissingRooms;
                 out.groups = (out.groups || []).filter(g => !group || g.group === group)
-                    .map(g => Object.assign(g, { units: (g.units || []).map(u => Object.assign(u, { actions: (u.actions || []).filter(a => a.op === 'update' && a.today === true
-                        && (!byRows || ids.has(+a.hemis_id))) })).filter(u => u.actions.length) }))
+                    .map(g => Object.assign(g, { units: (g.units || []).map(u => Object.assign(u, { actions: (u.actions || []).filter(a => HT_OPS.includes(a.op) && a.today === true
+                        && (!byRows || ids.has(keyOf(a.op, a)))) })).filter(u => u.actions.length) }))
                     .filter(g => g.units.length);
                 return out;
             }

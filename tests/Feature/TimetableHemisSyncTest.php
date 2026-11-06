@@ -3076,3 +3076,29 @@ it('balanslash belgisi: HEMIS\'da turgan dars belgisi hisobot uni takrorlamasa h
     $unit();
     expect($marks())->toBe([['2026-09-16', 1]]);
 });
+
+it('boshqa (o\'tkazilgan) fanning HEMIS\'dagi balanslash darsi guruh bandligi emas: dars davomiga soat qo\'shilaveradi', function () {
+    $s = hsSetup();
+    Role::findOrCreate('admin', 'web');
+    $s['reg']->assignRole('admin');
+    // Hafta almashinuvi (hafta limiti yo'q). 1-hafta darsi HEMIS'da 1 soat — 1 soat kam; keyingi darslar dushanba 10:00–11:20.
+    \App\Models\TimetableSubjectSetting::create(['board_id' => $s['board']->id, 'specialty_name' => 'stomatologiya', 'course' => 1,
+        'subject_name' => 'Odam anatomiyasi', 'mode' => 'alternate']);
+    hsSchedule(1, '2026-09-14', '10:00:00', '10:40:00');
+    // 21.09 12:00–13:20 — LMS'da kartasi yo'q fanning HEMIS'dagi balanslash darsi.
+    hsInsert('schedules', ['schedule_hemis_id' => 950, 'subject_id' => 888, 'subject_name' => 'Eski fan', 'semester_code' => '11', 'group_id' => 1596,
+        'group_name' => 'p/st26-01a', 'training_type_code' => '13', 'training_type_name' => 'Amaliy', 'lesson_date' => '2026-09-21 00:00:00',
+        'lesson_pair_start_time' => '12:00:00', 'lesson_pair_end_time' => '13:20:00', 'employee_id' => 5001, 'employee_name' => 'USTOZ',
+        'auditorium_code' => '99', 'auditorium_name' => '99']);
+    $first = fn () => collect(collect(test()->withoutVite()->actingAs($s['reg'], 'teacher')->withSession(['active_role' => 'admin'])
+        ->postJson(route('admin.timetable.hemis-sync', $s['board']), ['courses' => [1], 'today' => '2026-09-19', 'until_week' => 4])
+        ->assertOk()->json('groups.0.units'))->firstWhere('subject_name', 'Odam anatomiyasi')['actions'])
+        ->where('date', '2026-09-21')->map(fn ($a) => $a['start'] . '-' . $a['end'])->values()->all();
+
+    // Oddiy dars — band: soat oldinga (09:10) qo'shiladi.
+    expect($first())->toBe(['09:10-09:50', '10:00-11:20']);
+    // Balanslash darsi (belgisi bor) — band emas: soat dars davomiga (12:00).
+    DB::table('hemis_balance_lessons')->insert(['group_hemis_id' => 1596, 'subject_id' => 888, 'lesson_date' => '2026-09-21', 'start_time' => '12:00',
+        'end_time' => '13:20', 'training_type_code' => '13', 'week' => 1]);
+    expect($first())->toBe(['10:00-11:20', '12:00-12:40']);
+});

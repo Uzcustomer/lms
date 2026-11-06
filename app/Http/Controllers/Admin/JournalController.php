@@ -586,6 +586,25 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
+        // NB ustiga asosiy baho maydoniga yozilgan baho (sababli ariza bilan ochilgan katak —
+        // saveOpenedLessonGrade, superadmin tahriri) — jurnalda boshqa NB otrabotkalari kabi
+        // ajralib tursin: otrabotka bahosi sifatida ko'rsatiladi (bazadagi ma'lumot o'zgarmaydi,
+        // JN qiymati ham o'sha). Tasdiqlangan sababli ariza sanani qamrasa — sababli otrabotka.
+        $nbGradedRows = $allGradesRaw->filter(fn($g) => $g->reason === 'absent' && $g->grade !== null && $g->retake_grade === null);
+        if ($nbGradedRows->isNotEmpty()) {
+            $nbExcuseRanges = AbsenceExcuse::where('status', 'approved')
+                ->whereIn('student_hemis_id', $nbGradedRows->pluck('student_hemis_id')->unique()->values()->all())
+                ->get(['student_hemis_id', 'start_date', 'end_date'])
+                ->groupBy('student_hemis_id');
+            foreach ($nbGradedRows as $g) {
+                $day = substr((string) $g->lesson_date, 0, 10);
+                $g->retake_grade = $g->grade;
+                $g->grade = null;
+                $g->retake_was_sababli = ($nbExcuseRanges[$g->student_hemis_id] ?? collect())
+                    ->contains(fn($e) => $e->start_date->format('Y-m-d') <= $day && $e->end_date->format('Y-m-d') >= $day);
+            }
+        }
+
         // Helper function to get effective grade based on status
         // Returns array: ['grade' => value, 'is_retake' => bool] or null
         $getEffectiveGrade = function ($row) {

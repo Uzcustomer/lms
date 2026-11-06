@@ -3,8 +3,10 @@
  * mark (LMS) "HEMIS solishtirish" oynasidan yuklangan JSON'dagi amallarni HEMIS'ning o'z
  * qo'shish / tahrirlash / o'chirish formalari orqali bajaradi — tools/hemis-sync/hemis-write.mjs bilan bir xil mantiq:
  * bugun va o'tgan kunlarga yozilmaydi, to'siqli amallar o'tkaziladi, boshida bir marta tasdiq so'raladi.
- * Istisno — «Bugungi darslar (HEMIS)» JSON'i (amalda today: true): faqat bugungi kun va faqat o'zgartirish (qo'shish/o'chirish
- * rad etiladi); har biridan oldin davomat/baho HEMIS'dan qayta tekshiriladi (mark'dagi imzolangan havola) — belgilangan bo'lsa tegilmaydi.
+ * Istisno — «Bugungi darslar (HEMIS)» JSON'i (amalda today: true): faqat bugungi kun (j.date === shu kompyuterdagi bugun) —
+ * o'zgartirish, qo'shish va o'chirish (vaqtidan qat'iy nazar). O'zgartirish va o'chirishdan oldin davomat/baho HEMIS'dan qayta
+ * tekshiriladi (mark'dagi imzolangan havola) — belgilangan yoki tekshirib bo'lmasa tegilmaydi; qo'shishda HEMIS yozuvi yo'q — tekshirilmaydi.
+ * Tartib — OP_ORDER: avval o'chirish, so'ng o'zgartirish, oxirida qo'shish (bo'shagan joyga).
  * Ogohlantirish bilan o'chiriladigan darslar — LMS'da joylanmagani uchun (reason_code lms_unplaced) va guruh o'qimaydigan bo'lak darslari
  * (not_studied) — bo'lsa, "HEMIS'ga yozish"da, birinchi amaldan oldin BIR MARTA oyna (ikki sabab alohida soni bilan): "Ha, hammasini
  * bajar" / "O'chirishlarsiz bajar" (ikkalasini ham o'tkazib yuboradi) / "Bekor"; tanlovdan keyin jarayon oxirigacha savolsiz ishlaydi.
@@ -159,6 +161,14 @@
         $('hwAskCancel').onclick = () => done('cancel');
     });
 
+    // Bugungi rejim tasdig'i: amal turlari bo'yicha soni (nolinchilari yozilmaydi).
+    const todayConfirm = (batch, nGroups) => {
+        const n = op => batch.filter(j => j.op === op).length;
+        const parts = [[n('update'), 'o\'zgartiriladi'], [n('create'), 'qo\'shiladi'], [n('delete'), 'o\'chiriladi']].filter(p => p[0]).map(p => p[0] + ' ta ' + p[1]);
+        return parts.join(', ').replace(/^(\d+ ta)/, '$1 dars') + ' (bugun, ' + nGroups + ' ta guruh).'
+            + (n('update') + n('delete') ? ' O\'zgartirish va o\'chirishdan oldin davomat/baho HEMIS\'dan qayta tekshiriladi — belgilangan darsga tegilmaydi.' : '');
+    };
+
     const line = j => OP_NAME[j.op] + ' · ' + j.group + ' · ' + j.date + ' ' + j.start + '–' + j.end + ' · ' + j.subject + ' · ' + j.type
         + ' · ' + (j.employee_name || '—') + ' · ' + (j.auditorium_name || '—') + (j.hemis_id ? ' · #' + j.hemis_id : '')
         + (j.changes && j.changes.length ? ' (' + j.changes.join('; ') + ')' : '');
@@ -179,8 +189,8 @@
                 for (const a of u.actions || []) {
                     const base = Object.assign({ group: g.group, subject: u.subject_name, type: (u.code_names || {})[a.code] || a.code }, a);
                     if (a.today === true) {
-                        // Bugungi dars: faqat o'zgartirish va faqat bugun (JSON kecha olingan bo'lsa — o'tgan kun).
-                        if (a.op !== 'update') { skipped.push(Object.assign(base, { skip: 'bugungi darsga faqat o\'zgartirish — qo\'shish/o\'chirish rad etildi' })); continue; }
+                        // Bugungi dars: o'zgartirish, qo'shish va o'chirish — faqat bugun (JSON kecha olingan bo'lsa — o'tgan kun).
+                        if (!Object.prototype.hasOwnProperty.call(OP_ORDER, a.op)) { skipped.push(Object.assign(base, { skip: 'noma\'lum amal' })); continue; }
                         if (a.date !== localToday()) { skipped.push(Object.assign(base, { skip: 'bugungi kun emas' })); continue; }
                     } else if (a.date <= today) { skipped.push(Object.assign(base, { skip: 'bugun yoki o\'tgan kun' })); continue; }
                     if (f.until && a.date > f.until) { skipped.push(Object.assign(base, { skip: 'chegaradan keyin' })); continue; }
@@ -205,13 +215,15 @@
                 return false;
             });
         }
-        jobs.sort((x, y) => (x.gseq || 0) - (y.gseq || 0) || String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
+        // Bugungi amallar: avval o'chirish, so'ng o'zgartirish, oxirida qo'shish (guruhlararo ham — bo'shagan joyga), so'ng navbat (gseq).
+        const todayRank = j => j.today === true ? OP_ORDER[j.op] : 0;
+        jobs.sort((x, y) => todayRank(x) - todayRank(y) || (x.gseq || 0) - (y.gseq || 0) || String(x.group).localeCompare(String(y.group)) || x.group_id - y.group_id
             || OP_ORDER[x.op] - OP_ORDER[y.op] || x.date.localeCompare(y.date) || (x.seq || 0) - (y.seq || 0) || x.start.localeCompare(y.start));
         const c = { create: 0, update: 0, delete: 0 };
         jobs.forEach(j => c[j.op]++);
         const blk = skipped.filter(s => s.skip.startsWith('to\'siq')).length;
         $('hwSummary').innerHTML = 'Bugun: <b>' + esc(today) + '</b> (' + (rep.mode === 'today'
-            ? 'bugungi darslar: faqat o\'zgartirish; davomat olingan yoki baho qo\'yilgan darsga tegilmaydi'
+            ? 'bugungi darslar: qo\'shish/o\'chirish faqat belgilanmagan (davomat/baho yo\'q) darslar uchun; davomat olingan yoki baho qo\'yilgan darsga tegilmaydi'
             : 'bugun va undan oldingi kunlarga yozilmaydi') + '). Bajariladi: <b>' + jobs.length + '</b> ta — '
             + '<span style="color:#047857">+' + c.create + ' qo\'shish</span>, <span style="color:#b45309">~' + c.update + ' o\'zgartirish</span>, '
             + '<span style="color:#b91c1c">−' + c.delete + ' o\'chirish</span>. O\'tkaziladi: ' + skipped.length + ' ta' + (blk ? ' (shundan to\'siqli ' + blk + ')' : '') + '.';
@@ -278,7 +290,7 @@
                 batch = batch.filter(j => !isUnplacedDelete(j));
             }
         } else if (apply && !confirm((rep.mode === 'today'
-            ? batch.length + ' ta dars o\'zgartiriladi (bugun, ' + nGroups + ' ta guruh). Har biridan oldin davomat/baho HEMIS\'dan qayta tekshiriladi — belgilangan darsga tegilmaydi.'
+            ? todayConfirm(batch, nGroups)
             : batch.length + ' ta amal (' + nGroups + ' ta guruh) HEMIS\'ga yoziladi.')
             + ' Guruhlar orasida qayta so\'ralmaydi — kerak bo\'lsa "To\'xtatish" tugmasini bosing.\n\nBoshlaymizmi?')) return;
         running = true; stop = false; results = preSkipped.slice(); lastMode = apply ? 'apply' : 'check';
@@ -291,7 +303,7 @@
         for (const j of batch) {
             if (stop) { results.push(Object.assign({}, j, { status: 'skipped', reason: 'to\'xtatildi' })); continue; }
             // Yozish yarim tundan o'tib ketsa — endi bugun bo'lib qolgan darslar yozilmaydi (bugungi dars — kun almashsa).
-            const late = j.today === true ? (j.op !== 'update' || j.date !== localToday()) : j.date <= cutoff();
+            const late = j.today === true ? j.date !== localToday() : j.date <= cutoff();
             if (late) {
                 const why = j.today === true ? 'bugungi kun emas' : 'bugun yoki o\'tgan kun';
                 results.push(Object.assign({}, j, { status: 'skipped', reason: why }));
@@ -306,7 +318,9 @@
                 list.textContent += '  – ' + line(j) + '  — ' + why + '\n';
                 continue;
             }
-            if (j.today === true) {
+            // O'zgartirish va o'chirishdan oldin — majburiy (davomat/baho bo'lsa yoki tekshirib bo'lmasa — tegilmaydi); qo'shishda HEMIS
+            // yozuvi yo'q — tekshirilmaydi.
+            if (j.today === true && j.op !== 'create') {
                 const lock = await todayLock(j);
                 const why = lock.error ? 'davomat/baho tekshirib bo\'lmadi (' + lock.error + ') — tegilmadi' : lock.locked ? 'belgilandi — tegilmadi (' + lock.locked + ')' : null;
                 if (why) {

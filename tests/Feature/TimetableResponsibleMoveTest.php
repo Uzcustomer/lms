@@ -340,7 +340,12 @@ it('xona nomidan bino / bo\'lim / qavat: "N-bino", "… klasteri", "… bo\'limi
         ->and(rmLocate('3-bino, revmakardiologiya bo‘limi, 2-qavat')[1])->toBe("s:revmakardiologiya bo'limi")
         ->and(rmLocate('3-bino, revmakardiologiya bo’limi, 2-qavat')[1])->toBe("s:revmakardiologiya bo'limi")
         ->and(rmLocate('1-bo`lim, 2-qavat')[1])->toBe('n:1')
-        ->and(rmLocate('101-xona'))->toBe([null, null, 1, 1]);
+        ->and(rmLocate('101-xona'))->toBe([null, null, 1, 1])
+        // Vergulsiz nom: bino — faqat bino qismi (xonaga oid matnsiz), shu binodagi xonalar bir xil (Codex).
+        ->and(rmLocate('3-bino 2-qavat 201-xona'))->toBe(['3-bino', null, 2, 2])
+        ->and(rmLocate('3-bino 2-qavat 202-xona')[0])->toBe('3-bino')
+        ->and(rmLocate("Tibbiyot klasteri 8 ma'ruza zali")[0])->toBe('tibbiyot klasteri')
+        ->and(rmLocate('Bosh o‘quv binosi, 3-qavat, 310')[0])->toBe("bosh o'quv binosi");
     $short = fn (?string $n) => (new ReflectionMethod(TimetableController::class, 'teacherShortName'))->invoke(null, $n);
     expect($short('UMAROV JASUR AKMALOVICH'))->toBe('UMAROV J. A.')->and($short('UMAROV J. A.'))->toBe('UMAROV J. A.')
         ->and($short("KARIMOV ALI VALI O'G'LI"))->toBe('KARIMOV A. V.')->and($short('  '))->toBeNull();
@@ -358,6 +363,8 @@ it('fan mas\'uli oynasida xonalar tartibi — yaqinlik birinchi (bino → bo\'li
     // Boshqa bino: nomlar farq qiladi — building_id bir xil bo'lsa ham (nom ustun); bo'lim va qavati bir xil bo'lsa ham.
     $mk('S5', "7-bino, revmakardiologiya bo'limi, 2-qavat, 2-amaliyot xonasi", 'B1');
     $mk('S6', "Tibbiyot klasteri, kardioxirurgiya bo'limi, 2-qavat, 2-xona");
+    // Vergulsiz nom, shu bino va qavat — "shu qavat" (bino nomi xonaga oid matnsiz solishtiriladi).
+    $mk('S7', '3-bino 2-qavat 201-xona');
     $mk('X1', '1-qavat, 9-xona', 'B5');
     $mk('X2', '9-bino, 2-qavat, 1-xona', 'B5');
     $s['a']->update(['auditorium_code' => 'S0', 'auditorium_name' => $s0->name]);
@@ -366,10 +373,11 @@ it('fan mas\'uli oynasida xonalar tartibi — yaqinlik birinchi (bino → bo\'li
         TimetableCardOverride::create(['card_id' => $s['a']->id, 'week' => $w, 'day' => 4, 'pair' => 7, 'auditorium_code' => $code, 'auditorium_name' => $code]);
     }
     $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->assertOk()->json('rooms'))->keyBy('code');
-    $order = $rooms->keys()->filter(fn ($c) => str_starts_with($c, 'S'))->values()->all();
+    $order = $rooms->keys()->filter(fn ($c) => str_starts_with($c, 'S') && $c !== 'S7')->values()->all();
 
     // Boshqa binolar: qavat farqi hisobga olinmaydi (X2 — 2-qavat, hozirgidek; X1 — 1-qavat): nomi bo'yicha.
-    expect($rooms->keys()->search('X1'))->toBeLessThan($rooms->keys()->search('X2'))
+    expect($rooms['S7']['why'])->toBe('shu qavat')
+        ->and($rooms->keys()->search('X1'))->toBeLessThan($rooms->keys()->search('X2'))
         ->and($order)->toBe(['S0', 'S1', 'S2', 'S3', 'S4', 'S6', 'S5'])
         ->and($rooms['S0']['current'])->toBeTrue()
         ->and([$rooms['S1']['why'], $rooms['S2']['why'], $rooms['S3']['why'], $rooms['S4']['why'], $rooms['S6']['why'], $rooms['S5']['why']])

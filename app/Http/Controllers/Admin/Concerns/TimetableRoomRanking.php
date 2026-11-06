@@ -238,12 +238,18 @@ trait TimetableRoomRanking
         return array_values(array_filter(array_map('trim', explode(',', KafedraResolver::nameKey($name))), fn ($p) => $p !== ''));
     }
 
-    /** Bino — nomdagi "N-bino", "… binosi" yoki "… klasteri" bo'lagi (normallashtirilgan); yo'q bo'lsa — null (building_id ishlatiladi). */
+    /**
+     * Bino — nomdagi "N-bino" yoki bo'lak boshidan "… binosi" / "… klasteri" gacha (normallashtirilgan; xonaga oid qolgan matnsiz — vergulsiz
+     * "3-bino 2-qavat 201-xona" → "3-bino", "Tibbiyot klasteri 8 ma'ruza zali" → "tibbiyot klasteri"); yo'q bo'lsa — null (building_id ishlatiladi).
+     */
     private static function roomBuilding(?string $name): ?string
     {
         foreach (self::roomParts($name) as $p) {
-            if (preg_match('/(?:^|\s)\d+\s*-\s*bino(?:\s|$)|binosi|klasteri/u', $p)) {
-                return $p;
+            if (preg_match('/(?:^|\s)(\d+)\s*-\s*bino(?:\s|$)/u', $p, $m)) {
+                return $m[1] . '-bino';
+            }
+            if (preg_match('/^(.*?(?:binosi|klasteri))(?:\s|$)/u', $p, $m)) {
+                return trim($m[1]);
             }
         }
 

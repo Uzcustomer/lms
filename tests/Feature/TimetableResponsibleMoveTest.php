@@ -471,13 +471,34 @@ it('fan mas\'uli: boshqa o\'qituvchiga biriktirilgan xona — tekshiruv va saqla
     DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id, 'auditorium_id' => $s['r2']->id, 'teacher_id' => $owner->id,
         'is_general' => false, 'created_at' => now(), 'updated_at' => now()]);
     $msg = 'Bu xona OSTANAQULOV SH. F. ga biriktirilgan.';
-    // Ro'yxatda yo'q (dars o'qituvchisiga ruxsat etilmagan), qo'lda yuborilsa — tekshiruvda ham, saqlashda ham 422.
+    // Ro'yxatda bor — kulrang, kimga biriktirilgani bilan, tanlab bo'lmaydi (free: false), ro'yxat oxirida (band / sig'maydiganlardan ham
+    // keyin); qo'lda yuborilsa — tekshiruvda ham, saqlashda ham 422.
+    $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->json('rooms'));
+    expect($rooms->firstWhere('code', 'R2'))->toMatchArray(['kind' => 'assigned', 'free' => false, 'current' => false, 'why' => null,
+            'note' => 'Biriktirilgan: OSTANAQULOV SH. F.', 'note_full' => 'Biriktirilgan: OSTANAQULOV SHAXBOZ FARXODOVICH', 'busy_items' => [], 'cap' => null])
+        ->and($rooms->last()['code'])->toBe('R2')
+        // Hozirgi 101, bo'sh 103, sig'maydigan 104, biriktirilgan 102 (nofaol 105 — yo'q).
+        ->and($rooms->map(fn ($r) => $r['code'] . ':' . ($r['kind'] ?? 'free'))->all())->toBe(['R1:free', 'R3:free', 'RS:capacity', 'R2:assigned'])
+        ->and($rooms->pluck('code')->all())->not->toContain('RX');
     $chk = rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertUnprocessable()->json();
     expect($chk['message'])->toBe($msg)->and($chk['conflicts'])->toBe([$msg])
-        ->and(collect($chk['rooms'])->pluck('code')->all())->not->toContain('R2');
+        ->and(collect($chk['rooms'])->firstWhere('code', 'R2')['kind'])->toBe('assigned');
     rmMove($s, $s['a'], ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertUnprocessable()->assertJson(['ok' => false, 'error' => $msg, 'message' => $msg]);
     expect(TimetableCardOverride::where('card_id', $s['a']->id)->where('week', $s['week'])->value('auditorium_code'))->not->toBe('R2');
     // Umumiy (is_general) xona — biriktirilgan bo'lsa ham hammaga ochiq.
     DB::table('auditorium_teacher')->where('auditorium_id', $s['r2']->id)->update(['is_general' => true]);
     expect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertOk()->json('mode'))->toBe('fix');
+});
+
+it('band xona busy_items: ma\'ruza (ko\'p guruh) bilan band — subject faqat fan nomi, guruhlar groups\'da', function () {
+    $s = rmSetup();
+    // 102-xona seshanba 10:00–11:20 da boshqa yo'nalish ma'ruzasi bilan band: guruhlar vergul bilan ("p/p25-01b (o'z), p/p25-01c, …").
+    $s['card']('', rmTeacher('UMAROV JASUR AKMALOVICH'), 2, 3, $s['r2'], ['faculty_name' => 'F1', 'specialty_name' => 'davolash', 'course' => 1,
+        'training_type' => 'lecture', 'group_name' => null, 'group_names' => ["p/p25-01b (o'z)", 'p/p25-01c', 'p/p25-02a'], 'subject_name' => 'Normal fiziologiya',
+        'kafedra_name' => 'Fiziologiya kafedrasi']);
+    $r2 = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->json('rooms'))->firstWhere('code', 'R2');
+    expect($r2)->toMatchArray(['free' => false, 'kind' => 'busy'])
+        ->and($r2['busy_items'])->toHaveCount(1)
+        ->and($r2['busy_items'][0])->toMatchArray(['teacher' => 'UMAROV J. A.', 'subject' => 'Normal fiziologiya',
+            'groups' => ["p/p25-01b (o'z)", 'p/p25-01c', 'p/p25-02a'], 'time' => '10:00–11:20']);
 });

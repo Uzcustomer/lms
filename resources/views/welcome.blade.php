@@ -291,7 +291,7 @@
                     </div>
                 </div>
                 <div style="font-size:13px; color:#64748b; line-height:1.5; max-width:280px; margin:0 auto 22px;">
-                    O'qituvchi va xodimlar LMS'ga HEMIS akkaunti orqali kiradi
+                    O'qituvchi va xodimlar Mark platformasiga HEMIS akkaunti orqali kiradi
                 </div>
                 <a href="{{ route('auth.hemis-staff.redirect') }}"
                    style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:14px 0; background:linear-gradient(135deg, #065f46 0%, #047857 100%); color:#fff; font-size:15px; font-weight:700; border-radius:14px; text-decoration:none; letter-spacing:0.3px; transition:all .25s ease;"

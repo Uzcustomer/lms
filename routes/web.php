@@ -523,6 +523,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/fetch-yn-results', [JournalController::class, 'fetchYnResults'])->name('fetch-yn-results');
             Route::post('/generate-yakuniy-qaydnoma', [JournalController::class, 'generateYakuniyQaydnoma'])->name('generate-yakuniy-qaydnoma');
             Route::post('/export-yn-qaydnoma', [JournalController::class, 'exportYnQaydnoma'])->name('export-yn-qaydnoma');
+            // YN qaydnoma sahifada (Excel'siz) — amaliy o'qituvchi uchun
+            Route::get('/view-yn-qaydnoma', [JournalController::class, 'viewYnQaydnoma'])->name('view-yn-qaydnoma');
         });
 
         // Vedomost tekshirish

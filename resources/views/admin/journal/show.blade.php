@@ -3225,7 +3225,8 @@
                                 </button>
                             @endif
 
-                            @if(is_active_registrator() || auth()->user()?->hasAnyRole(['admin', 'superadmin']))
+                            {{-- Admin/registrator — Excel; amaliy o'qituvchi — qaydnoma sahifada ochiladi --}}
+                            @if(is_active_registrator() || auth()->user()?->hasAnyRole(['admin', 'superadmin']) || ($isAmaliyTeacher ?? false))
                                 <button type="button" id="btn-export-yn-qaydnoma"
                                     class="relative px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
                                     onclick="openYnWeightsModal()"
@@ -7206,6 +7207,18 @@
             }
 
             closeYnWeightsModal();
+
+            // Amaliy o'qituvchi: Excel emas — qaydnoma yangi oynada sahifa bo'lib ochiladi
+            @if(!(is_active_registrator() || auth()->user()?->hasAnyRole(['admin', 'superadmin'])))
+            window.open('{{ route("admin.journal.view-yn-qaydnoma") }}?' + new URLSearchParams({
+                subject_id: '{{ $subjectId }}',
+                semester_code: '{{ $semesterCode }}',
+                group_hemis_id: '{{ $group->group_hemis_id }}',
+                shakl: parseInt(document.getElementById('yn-shakl').value) || 1,
+                weight_jn: jn, weight_mt: mt, weight_on: on, weight_oski: oski, weight_test: test,
+            }).toString(), '_blank');
+            return;
+            @endif
 
             var btn = document.getElementById('btn-export-yn-qaydnoma');
             if (!btn) return;

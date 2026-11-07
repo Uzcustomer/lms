@@ -1844,6 +1844,8 @@ class JournalController extends Controller
                 $canSubmitYn = $isAssignedByCST || $isAssignedBySchedule;
             }
         }
+        // Amaliy o'qituvchi: YN yuborilgandan keyin "YN qaydnoma yaratish" — sahifada ko'radi
+        $isAmaliyTeacher = $canSubmitYn && $this->isAmaliyTeacherFor((string) $subjectId, (string) $group->group_hemis_id);
 
         // Dars jadvaldagi barcha darslar tugaganmi tekshirish
         $allLessonsCompleted = true;
@@ -2556,6 +2558,7 @@ class JournalController extends Controller
             'ynSubmission',
             'examSchedule',
             'canSubmitYn',
+            'isAmaliyTeacher',
             'allLessonsCompleted',
             'remainingLessonsCount',
             'lastLessonDate',
@@ -9988,6 +9991,122 @@ class JournalController extends Controller
         $spreadsheet->disconnectWorksheets();
 
         return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * YN qaydnomani Excel'siz — sahifada ko'rsatish (Excel bilan aynan bir xil workbook,
+     * barcha varaqlar). Admin/superadmin/registrator yoki shu fan+guruhning amaliy
+     * o'qituvchisi (YN yuborilgandan keyin).
+     */
+    public function viewYnQaydnoma(Request $request)
+    {
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'weight_jn' => 'nullable|integer|min:0|max:100',
+            'weight_mt' => 'nullable|integer|min:0|max:100',
+            'weight_on' => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+            'shakl' => 'nullable|integer|min:1|max:7',
+        ]);
+        $subjectId = (string) $request->subject_id;
+        $semesterCode = (string) $request->semester_code;
+        $groupHemisId = (string) $request->group_hemis_id;
+
+        $isPrivileged = is_active_registrator() || (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
+        if (!$isPrivileged) {
+            $ynSubmitted = YnSubmission::where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('group_hemis_id', $groupHemisId)
+                ->exists();
+            abort_unless(is_active_oqituvchi() && $ynSubmitted && $this->isAmaliyTeacherFor($subjectId, $groupHemisId), 403,
+                "YN qaydnomani shu fanning amaliy o'qituvchisi YN yuborilgandan keyin ko'ra oladi.");
+        }
+
+        $weightJn = (int) ($request->weight_jn ?? 30);
+        $weightMt = (int) ($request->weight_mt ?? 10);
+        $weightOn = (int) ($request->weight_on ?? 0);
+        $weightOski = (int) ($request->weight_oski ?? 0);
+        $weightTest = (int) ($request->weight_test ?? 60);
+        abort_if($weightJn + $weightMt + $weightOn + $weightOski + $weightTest !== 100, 422, "Vaznlar jami 100 bo'lishi kerak");
+
+        $built = $this->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
+            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1));
+        if (is_string($built)) {
+            abort(422, $built);
+        }
+        [$spreadsheet, $fileName] = $built;
+
+        $html = self::qaydnomaHtml($spreadsheet, pathinfo($fileName, PATHINFO_FILENAME));
+        $spreadsheet->disconnectWorksheets();
+
+        return response($html)->header('Content-Type', 'text/html; charset=UTF-8');
+    }
+
+    /**
+     * Workbook'ni (barcha varaqlari bilan) to'liq HTML sahifaga aylantiradi: sarlavha va
+     * chop etish tugmasi bilan (chop etishda yashirinadi).
+     */
+    public static function qaydnomaHtml(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $title): string
+    {
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Html($spreadsheet);
+        $writer->writeAllSheets();
+        $writer->setEmbedImages(true);
+        // PhpSpreadsheet 1.29 Html writer butun kenglik bo'yicha birlashtirilgan qatorlarda
+        // (qaydnoma sarlavhalari) ortiqcha ogohlantirish beradi — natija to'g'ri, lekin Laravel
+        // uni xatoga aylantiradi. Faqat kutubxona ogohlantirishlari yutiladi, qolgani o'tadi.
+        $previous = set_error_handler(function (...$args) use (&$previous) {
+            [$level, , $file] = $args + [null, null, ''];
+            if (in_array($level, [E_WARNING, E_NOTICE], true) && str_contains(str_replace('\\', '/', (string) $file), 'phpoffice/phpspreadsheet')) {
+                return true;
+            }
+
+            return $previous ? $previous(...$args) : false;
+        });
+        try {
+            $html = $writer->generateHtmlAll();
+        } finally {
+            restore_error_handler();
+        }
+
+        // Sahifa sarlavhasi va chop etish tugmasi (chop etishda yashirinadi)
+        $title = e($title);
+        $toolbar = '<div class="ynq-bar"><b>' . $title . '</b><button type="button" onclick="window.print()">Chop etish</button></div>'
+            . '<style>.ynq-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;'
+            . 'padding:10px 16px;margin:-8px -8px 12px;background:#1e3a8a;color:#fff;font:600 14px system-ui,sans-serif}'
+            . '.ynq-bar button{padding:6px 14px;border:0;border-radius:6px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer}'
+            . '@media print{.ynq-bar{display:none}}</style>';
+        $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $toolbar, $html, 1);
+        $html = preg_replace('/<title>.*?<\/title>/is', '<title>' . $title . '</title>', $html, 1);
+
+        return $html;
+    }
+
+    /**
+     * Shu fan+guruhda amaliy (ma'ruzadan boshqa) mashg'ulot olib boradigan o'qituvchimi —
+     * dars jadvali yoki biriktirish (curriculum_subject_teachers) bo'yicha.
+     */
+    private function isAmaliyTeacherFor(string $subjectId, string $groupHemisId): bool
+    {
+        $teacherHemisId = get_teacher_hemis_id();
+        if (!$teacherHemisId) {
+            return false;
+        }
+
+        return DB::table('schedules')
+                ->where('employee_id', $teacherHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('group_id', $groupHemisId)
+                ->where('training_type_code', '!=', '11')
+                ->whereNull('deleted_at')
+                ->exists()
+            || CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('group_id', $groupHemisId)
+                ->where('training_type_code', '!=', '11')
+                ->exists();
     }
 
     /**

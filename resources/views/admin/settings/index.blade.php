@@ -794,6 +794,49 @@
                     </div>
                 </div>
 
+                {{-- Xodimlar kirishi: HEMIS / login-parol --}}
+                <div x-data="{ open: true }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                    <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; background: linear-gradient(135deg, #dbeafe, #bfdbfe); border: none; cursor: pointer; border-bottom: 1px solid #93c5fd;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="width: 40px; height: 40px; min-width: 40px; background: linear-gradient(135deg, #2563eb, #1e40af); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(30,64,175,0.3);">
+                                <svg width="20" height="20" style="width: 20px; height: 20px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/></svg>
+                            </div>
+                            <div style="text-align: left;">
+                                <div style="font-size: 16px; font-weight: 700; color: #1e3a8a;">Xodimlar kirishi</div>
+                                <div style="font-size: 12px; color: #1e40af;">HEMIS orqali yoki login va parol bilan</div>
+                            </div>
+                        </div>
+                        <svg width="18" height="18" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 18px; height: 18px; min-width: 18px; color: #1e40af; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div x-show="open" x-transition style="padding: 22px;">
+                        <form method="POST" action="{{ route('admin.settings.update.staff-login') }}">
+                            @csrf
+                            <div style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border-radius: 10px; padding: 14px; margin-bottom: 18px; border: 1px solid #93c5fd; font-size: 12px; color: #1e40af; line-height: 1.7;">
+                                Odatda xodimlar Mark'ga faqat <b>"Hemis orqali kirish"</b> bilan kiradi. HEMIS ishlamay qolganda shu yerda login va parol bilan kirishni yoqing, HEMIS tiklangach o'chiring.
+                                @unless($staffHemisConfigured)
+                                    <br><b style="color: #b45309;">HEMIS orqali kirish hali sozlanmagan (.env) — hozir login va parol baribir ochiq.</b>
+                                @endunless
+                            </div>
+
+                            <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: {{ $staffPasswordLogin ? '#fef3c7' : '#f8fafc' }}; border-radius: 10px; border: 1px solid {{ $staffPasswordLogin ? '#fbbf24' : '#e2e8f0' }}; margin-bottom: 16px; cursor: pointer;">
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Xodimlar login va parol bilan kirishi</div>
+                                    <div style="font-size: 12px; color: #64748b;">
+                                        Hozir: <b style="color: {{ $staffPasswordLogin ? '#b45309' : '#1e40af' }};">{{ $staffPasswordLogin ? 'yoqilgan — login/parol ham ochiq' : 'o\'chiq — faqat HEMIS orqali' }}</b>
+                                    </div>
+                                </div>
+                                <input type="checkbox" name="staff_password_login" value="1" {{ $staffPasswordLogin ? 'checked' : '' }} style="width: 20px; height: 20px; accent-color: #1e40af;">
+                            </label>
+
+                            <button type="submit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: linear-gradient(135deg, #2563eb, #1e40af); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(30,64,175,0.3);">
+                                <svg width="16" height="16" style="width: 16px; height: 16px; min-width: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Saqlash
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
                 {{-- Telegram --}}
                 <div x-data="{ open: true }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                     <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; background: linear-gradient(135deg, #e0f2fe, #bae6fd); border: none; cursor: pointer; border-bottom: 1px solid #7dd3fc;">

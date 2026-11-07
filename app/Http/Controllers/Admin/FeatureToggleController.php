@@ -25,10 +25,6 @@ class FeatureToggleController extends Controller
             'label' => 'Sababli ariza kun chegarasi',
             'description' => 'Yoqilgan bo\'lsa, talaba 10 kunlik muddat tugagandan keyin ham ariza topshira oladi (limit olib tashlanadi). O\'chirilgan bo\'lsa, standart 10 kunlik chegara amal qiladi.',
         ],
-        'staff_password_login' => [
-            'label' => 'Xodimlar login va parol bilan kirishi',
-            'description' => 'O\'chiq bo\'lsa, xodimlar faqat "Hemis orqali kirish" bilan kiradi. HEMIS ishlamay qolganda yoqing — login sahifasida login/parol formasi qaytadi. (HEMIS orqali kirish sozlanmagan bo\'lsa, login/parol har doim ochiq.)',
-        ],
         'superadmin_mt_upload_after_deadline' => [
             'label' => 'Superadmin MT fayl yuklash (muddatdan keyin ham)',
             'description' => 'Yoqilgan bo\'lsa, superadmin talaba nomidan mustaqil ta\'lim faylini muddat tugagan bo\'lsa ham yuklay oladi va u jurnalda o\'sha talabaga ko\'rinadi.',

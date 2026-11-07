@@ -45,6 +45,9 @@ class SettingsController extends Controller
         // Password data
         $data['tempPasswordDays'] = Setting::get('temp_password_days', 3);
         $data['changedPasswordDays'] = Setting::get('changed_password_days', 30);
+        // Xodimlar kirishi: odatda faqat HEMIS orqali; HEMIS ishlamasa login/parol yoqiladi
+        $data['staffPasswordLogin'] = Setting::get('feature_staff_password_login', '0') === '1';
+        $data['staffHemisConfigured'] = (bool) config('services.hemis_staff_oauth.client_id');
 
         // Telegram data
         $data['telegramDeadlineDays'] = Setting::get('telegram_deadline_days', 7);
@@ -269,6 +272,18 @@ class SettingsController extends Controller
         Setting::set('changed_password_days', $request->changed_password_days);
 
         return redirect()->route('admin.settings')->with('success', 'Parol sozlamalari muvaffaqiyatli yangilandi.');
+    }
+
+    /** Xodimlar login/parol bilan kirishi (o'chiq — faqat "Hemis orqali kirish"). */
+    public function updateStaffLogin(Request $request)
+    {
+        $enabled = $request->boolean('staff_password_login');
+        Setting::set('feature_staff_password_login', $enabled ? '1' : '0');
+        \App\Services\ActivityLogService::log('update', 'settings', 'Xodimlar login/parol bilan kirishi: ' . ($enabled ? 'yoqildi' : "o'chirildi"));
+
+        return redirect()->route('admin.settings')->with('success', $enabled
+            ? "Xodimlar login va parol bilan kirishi yoqildi."
+            : "Xodimlar login va parol bilan kirishi o'chirildi — faqat HEMIS orqali.");
     }
 
     public function updateTelegram(Request $request)

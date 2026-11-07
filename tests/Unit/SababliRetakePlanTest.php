@@ -54,6 +54,29 @@ it('lets different subjects share a day but never two retakes of one subject', f
     ], '2026-11-09'))->toBe(['2026-11-09', '2026-11-09', '2026-11-09', '2026-11-10']);
 });
 
+it('puts at most three subjects on one day, earlier lessons first', function () {
+    // 7 fan, 8 ta NB (farmoyishdagi holat) — avval hammasi 05.11 ga tushardi
+    expect(planDates([
+        planItem('Lotin tili va tibbiy terminologiya', 'jn', '2026-10-23'),
+        planItem("O'zbekistonning eng yangi tarixi", 'jn', '2026-10-21'),
+        planItem('Odam anatomiyasi', 'jn', '2026-10-20'),
+        planItem('Tibbiy biologiya. Umumiy genetika', 'jn', '2026-10-22'),
+        planItem('Tibbiy kimyo', 'jn', '2026-10-24'),
+        planItem('Tibbiyotda axborot texnologiyalari', 'jn', '2026-10-26'),
+        planItem('Tibbiyotda xorijiy til', 'jn', '2026-10-23'),
+        planItem('Odam anatomiyasi', 'jn', '2026-10-27'),
+    ], '2026-11-05'))->toBe([
+        '2026-11-06', // 23.10 Lotin — 05.11 to'lgan (20, 21, 22.10)
+        '2026-11-05', // 21.10
+        '2026-11-05', // 20.10
+        '2026-11-05', // 22.10
+        '2026-11-06', // 24.10
+        '2026-11-07', // 26.10 — 06.11 to'lgan
+        '2026-11-06', // 23.10
+        '2026-11-07', // 27.10 Anatomiya — 06.11 to'lgan
+    ]);
+});
+
 it('runs each subject on its own days and skips submitted items', function () {
     $items = [
         planItem('Fiziologiya', 'jn', '2026-10-21'),

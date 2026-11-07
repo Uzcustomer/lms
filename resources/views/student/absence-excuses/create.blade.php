@@ -622,48 +622,48 @@
             },
             // Qayta topshirish kunlari: indeks => 'Y-m-d'.
             // App\Services\SababliRetakePlan::assign bilan bir xil — saqlashda serverda qayta hisoblanadi.
-            // Bir fandan kuniga bitta retake (fanlar parallel, har biri boshlanish kunidan);
-            // OSKI fanning oxirgi retake kunida; test bir kun oraliq bilan.
+            // Bir fandan kuniga bitta retake, bir kunda ko'pi bilan 3 ta fan; navbat dars sanasi
+            // bo'yicha, kun to'lsa — keyingi ish kuni. OSKI fanning oxirgi retake kunida; test bir kun oraliq bilan.
             get plan() {
                 const out = {};
                 if (!this.retakeStart) return out;
-                const TYPE = { jn: 0, mt: 1, oski: 2, test: 3 };
+                const MAX_SUBJECTS_PER_DAY = 3;
+                const first = this._firstDay(this.retakeStart);
                 const cmp = (x, y) => (x < y ? -1 : (x > y ? 1 : 0));
-                const groups = {};
+                const subj = i => String(this.assessments[i].subject_name || '').trim().toLowerCase();
+                const pending = { jn: [], oski: [], test: [], mt: [] };
                 this.assessments.forEach((a, i) => {
                     if (!this._isPending(a)) return;
-                    const k = String(a.subject_name || '').trim().toLowerCase();
-                    (groups[k] = groups[k] || []).push(i);
+                    (pending[a.assessment_type] || pending.jn).push(i);
                 });
+                const byDate = keys => keys.slice().sort((x, y) =>
+                    cmp(String(this.assessments[x].original_date), String(this.assessments[y].original_date)) || cmp(subj(x), subj(y)));
 
-                Object.keys(groups).forEach(k => {
-                    let day = this._firstDay(this.retakeStart);
-                    const keys = groups[k].slice().sort((x, y) => {
-                        const a = this.assessments[x], b = this.assessments[y];
-                        return ((TYPE[a.assessment_type] ?? 9) - (TYPE[b.assessment_type] ?? 9))
-                            || cmp(String(a.original_date), String(b.original_date));
-                    });
-                    let lastRetake = null, last = null, oskiShared = false;
-                    keys.forEach(i => {
-                        const type = this.assessments[i].assessment_type;
-                        if (type === 'mt') return;
-                        let date;
-                        if (type === 'jn') {
-                            date = day; lastRetake = date; day = this._nextDay(date);
-                        } else if (type === 'oski' && lastRetake && !oskiShared) {
-                            date = lastRetake; oskiShared = true;
-                        } else if (type === 'test' && last) {
-                            date = this._nextDay(this._nextDay(last)); day = this._nextDay(date);
-                        } else {
-                            date = day; day = this._nextDay(date);
-                        }
-                        last = date;
-                        out[i] = date;
-                    });
-                    keys.forEach(i => {
-                        if (this.assessments[i].assessment_type === 'mt') out[i] = lastRetake || last || day;
-                    });
+                const busy = {}, next = {}, lastRetake = {}, last = {}, oskiShared = {};
+                // from dan boshlab shu fan yo'q va to'lmagan birinchi kunga joylaydi
+                const place = (s, from) => {
+                    let d = from;
+                    while (!(busy[d] && busy[d][s]) && Object.keys(busy[d] || {}).length >= MAX_SUBJECTS_PER_DAY) d = this._nextDay(d);
+                    (busy[d] = busy[d] || {})[s] = true;
+                    return d;
+                };
+
+                byDate(pending.jn).forEach(i => {
+                    const s = subj(i), d = place(s, next[s] || first);
+                    lastRetake[s] = last[s] = d; next[s] = this._nextDay(d); out[i] = d;
                 });
+                byDate(pending.oski).forEach(i => {
+                    const s = subj(i);
+                    let d;
+                    if (lastRetake[s] && !oskiShared[s]) { d = lastRetake[s]; oskiShared[s] = true; }
+                    else { d = place(s, next[s] || first); next[s] = this._nextDay(d); }
+                    last[s] = d; out[i] = d;
+                });
+                byDate(pending.test).forEach(i => {
+                    const s = subj(i), d = place(s, last[s] ? this._nextDay(this._nextDay(last[s])) : (next[s] || first));
+                    last[s] = d; next[s] = this._nextDay(d); out[i] = d;
+                });
+                pending.mt.forEach(i => { const s = subj(i); out[i] = lastRetake[s] || last[s] || next[s] || first; });
                 return out;
             },
             // Sana tartibidagi jadval (farmoyishdagi kabi)

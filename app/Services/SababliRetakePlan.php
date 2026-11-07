@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
  * Sababli ariza bo'yicha qayta topshirish jadvali.
  *
  * Bir fandan bir kunda faqat bitta retake: fanning NB olgan har bir dars kuni uchun
- * alohida kun ajratiladi (turli fanlarning retake lari bir kunga tushishi mumkin).
+ * alohida kun ajratiladi; bir kunda ko'pi bilan 3 ta fan (MAX_SUBJECTS_PER_DAY).
  * Fanning OSKI si shu fanning oxirgi retake kuniga, yakuniy testi esa bir kun
  * oraliq bilan undan keyin qo'yiladi. Yakshanba ish kuni hisoblanmaydi.
  *
@@ -20,8 +20,6 @@ use Illuminate\Support\Facades\DB;
  */
 class SababliRetakePlan
 {
-    private const TYPE_ORDER = ['jn' => 0, 'mt' => 1, 'oski' => 2, 'test' => 3];
-
     /**
      * Sababli davrda talaba jurnalda NB olgan darslar (ma'ruza va nazoratlardan tashqari,
      * otrabotkasi hali qo'yilmagan): har bir fan + kun — bitta JN retake.
@@ -94,58 +92,77 @@ class SababliRetakePlan
             || filter_var($item['already_submitted'] ?? false, FILTER_VALIDATE_BOOLEAN);
     }
 
+    /** Bir kunda qayta topshiriladigan fanlar soni chegarasi. */
+    public const MAX_SUBJECTS_PER_DAY = 3;
+
     /**
-     * Topshirilmagan har bir nazoratga qayta topshirish kunini (makeup_date, Y-m-d) belgilaydi.
-     * Har bir fan boshlanish kunidan o'z kunlarini oladi — fanlar bir-biriga bog'liq emas,
-     * bir kunda turli fanlarning retake lari bo'lishi mumkin.
-     * MT kun band qilmaydi — muddati fanning oxirgi retake kuni.
+     * Topshirilmagan har bir nazoratga qayta topshirish kunini (makeup_date, Y-m-d) belgilaydi:
+     * bir fandan kuniga bitta retake, bir kunda ko'pi bilan MAX_SUBJECTS_PER_DAY ta fan.
+     * Navbat dars sanasi bo'yicha (oldingi NB oldin joylanadi), kun to'lsa — keyingi ish kuni.
+     * OSKI fanning oxirgi retake kunida (fan o'sha kuni allaqachon bor — joy olmaydi), test undan
+     * bir kun oraliq bilan. MT kun band qilmaydi — muddati fanning oxirgi retake kuni.
      */
     public static function assign(array $items, Carbon $start): array
     {
-        $bySubject = [];
+        $first = self::firstDay($start->toDateString());
+        $pending = ['jn' => [], 'oski' => [], 'test' => [], 'mt' => []];
         foreach ($items as $key => $item) {
             $items[$key]['makeup_date'] = null;
             if (!self::isSubmitted($item)) {
-                $bySubject[mb_strtolower(trim((string) ($item['subject_name'] ?? '')))][] = $key;
+                $type = $item['assessment_type'] ?? 'jn';
+                $pending[isset($pending[$type]) ? $type : 'jn'][] = $key;
             }
         }
+        $subject = fn ($k) => mb_strtolower(trim((string) ($items[$k]['subject_name'] ?? '')));
+        $byDate = fn (array $keys) => collect($keys)
+            ->sortBy(fn ($k) => [(string) $items[$k]['original_date'], $subject($k)])->values()->all();
 
-        foreach ($bySubject as $keys) {
-            $day = self::firstDay($start->toDateString());
-            usort($keys, fn ($a, $b) => [self::TYPE_ORDER[$items[$a]['assessment_type']] ?? 9, (string) $items[$a]['original_date']]
-                <=> [self::TYPE_ORDER[$items[$b]['assessment_type']] ?? 9, (string) $items[$b]['original_date']]);
-
-            $lastRetake = null;
-            $last = null;
-            $oskiShared = false;
-            foreach ($keys as $k) {
-                $type = $items[$k]['assessment_type'];
-                if ($type === 'mt') {
-                    continue;
-                }
-                if ($type === 'jn') {
-                    $date = $day;
-                    $lastRetake = $date;
-                    $day = self::nextDay($date);
-                } elseif ($type === 'oski' && $lastRetake && !$oskiShared) {
-                    $date = $lastRetake;
-                    $oskiShared = true;
-                } elseif ($type === 'test' && $last) {
-                    $date = self::nextDay(self::nextDay($last));
-                    $day = self::nextDay($date);
-                } else {
-                    $date = $day;
-                    $day = self::nextDay($date);
-                }
-                $last = $date;
-                $items[$k]['makeup_date'] = $date->format('Y-m-d');
+        $busy = [];        // Y-m-d => [fan => true]
+        $next = [];        // fan => keyingi bo'sh kuni (fan bo'yicha)
+        $lastRetake = [];  // fan => oxirgi JN retake kuni
+        $last = [];        // fan => oxirgi band kuni
+        $oskiShared = [];
+        // $from dan boshlab shu fan yo'q va to'lmagan birinchi kunga joylaydi
+        $place = function (string $s, Carbon $from) use (&$busy): Carbon {
+            $day = $from->copy();
+            while (!isset($busy[$day->toDateString()][$s])
+                && count($busy[$day->toDateString()] ?? []) >= self::MAX_SUBJECTS_PER_DAY) {
+                $day = self::nextDay($day);
             }
+            $busy[$day->toDateString()][$s] = true;
 
-            foreach ($keys as $k) {
-                if ($items[$k]['assessment_type'] === 'mt') {
-                    $items[$k]['makeup_date'] = ($lastRetake ?? $last ?? $day)->format('Y-m-d');
-                }
+            return $day;
+        };
+
+        foreach ($byDate($pending['jn']) as $k) {
+            $s = $subject($k);
+            $date = $place($s, $next[$s] ?? $first);
+            $lastRetake[$s] = $last[$s] = $date;
+            $next[$s] = self::nextDay($date);
+            $items[$k]['makeup_date'] = $date->format('Y-m-d');
+        }
+        foreach ($byDate($pending['oski']) as $k) {
+            $s = $subject($k);
+            if (isset($lastRetake[$s]) && empty($oskiShared[$s])) {
+                $date = $lastRetake[$s];
+                $oskiShared[$s] = true;
+            } else {
+                $date = $place($s, $next[$s] ?? $first);
+                $next[$s] = self::nextDay($date);
             }
+            $last[$s] = $date;
+            $items[$k]['makeup_date'] = $date->format('Y-m-d');
+        }
+        foreach ($byDate($pending['test']) as $k) {
+            $s = $subject($k);
+            $date = $place($s, isset($last[$s]) ? self::nextDay(self::nextDay($last[$s])) : ($next[$s] ?? $first));
+            $last[$s] = $date;
+            $next[$s] = self::nextDay($date);
+            $items[$k]['makeup_date'] = $date->format('Y-m-d');
+        }
+        foreach ($pending['mt'] as $k) {
+            $s = $subject($k);
+            $items[$k]['makeup_date'] = ($lastRetake[$s] ?? $last[$s] ?? $next[$s] ?? $first)->format('Y-m-d');
         }
 
         return $items;

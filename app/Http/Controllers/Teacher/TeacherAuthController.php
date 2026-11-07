@@ -36,6 +36,13 @@ class TeacherAuthController extends Controller
             return redirect()->intended(route('teacher.dashboard'));
         }
 
+        // Xodimlar faqat HEMIS orqali kiradi — login/parol sozlamadan yoqilgandagina
+        if (!HemisStaffOAuthController::passwordLoginAllowed()) {
+            return redirect('/')
+                ->withErrors(['login' => "Xodimlar Mark platformasiga HEMIS orqali kiradi. \"Hemis orqali kirish\" tugmasini bosing."])
+                ->withInput(['_profile' => 'teacher']);
+        }
+
         $credentials = $request->validate([
             'login' => ['required'],
             'password' => ['required'],

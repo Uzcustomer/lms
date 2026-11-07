@@ -59,6 +59,7 @@
                 <p style="font-size:13px; color:rgba(255,255,255,0.7); margin-top:6px;">O'qituvchi yoki xodim sifatida kiring</p>
             </div>
 
+            @if(\App\Http\Controllers\Teacher\HemisStaffOAuthController::passwordLoginAllowed())
             <form method="POST" action="{{ route('teacher.login.post') }}" style="width:100%; max-width:320px; position:relative; z-index:2;">
                 @csrf
                 <div class="login-input-group">
@@ -82,6 +83,7 @@
 
                 <button type="submit" class="btn-outline-login" style="padding:14px; font-size:15px; font-weight:600; border-width:2px;">Kirish</button>
             </form>
+            @endif
             {{-- Xodimlar HEMIS (hemis.ttatf.uz) orqali — .env da sozlangandagina ko'rinadi --}}
             @if(config('services.hemis_staff_oauth.client_id'))
                 <a href="{{ route('auth.hemis-staff.redirect') }}" class="btn-outline-login" style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; max-width:320px; margin-top:12px; padding:12px; font-size:14px; font-weight:600; text-decoration:none; position:relative; z-index:2;">
@@ -155,6 +157,7 @@
                 <p style="font-size:13px; color:#64748b; margin-top:4px;">Login va parol bilan kiring</p>
             </div>
 
+            @if(\App\Http\Controllers\Teacher\HemisStaffOAuthController::passwordLoginAllowed())
             <form method="POST" action="{{ route('teacher.login.post') }}">
                 @csrf
                 <div class="login-input-group">
@@ -178,6 +181,7 @@
 
                 <button type="submit" class="btn-primary-login">Kirish</button>
             </form>
+            @endif
 
             @if(config('services.hemis_staff_oauth.client_id'))
                 <div class="divider"><span>yoki</span></div>

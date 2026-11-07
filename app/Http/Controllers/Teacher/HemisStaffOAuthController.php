@@ -19,6 +19,16 @@ use Illuminate\Support\Str;
  */
 class HemisStaffOAuthController extends Controller
 {
+    /**
+     * Xodimlar login/parol bilan kira oladimi: HEMIS orqali kirish sozlanmagan bo'lsa — doim,
+     * aks holda faqat superadmin "Xodimlar login va parol bilan kirishi" ni yoqqanda (HEMIS ishlamay qolsa).
+     */
+    public static function passwordLoginAllowed(): bool
+    {
+        return !config('services.hemis_staff_oauth.client_id')
+            || \App\Models\Setting::get('feature_staff_password_login', '0') === '1';
+    }
+
     public function redirect(Request $request)
     {
         $config = config('services.hemis_staff_oauth');

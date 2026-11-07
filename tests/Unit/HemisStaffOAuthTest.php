@@ -23,6 +23,7 @@ beforeEach(function () {
     Schema::create('roles', fn ($t) => [$t->id(), $t->string('name'), $t->string('guard_name'), $t->timestamps()]);
     Schema::create('model_has_roles', fn ($t) => [$t->unsignedBigInteger('role_id'), $t->string('model_type'), $t->unsignedBigInteger('model_id')]);
     Schema::create('activity_logs', fn ($t) => [$t->id(), $t->timestamps()]);
+    Schema::create('settings', fn ($t) => [$t->id(), $t->string('key'), $t->text('value')->nullable(), $t->timestamps()]);
 
     config()->set('services.hemis_staff_oauth', [
         'base_url' => 'https://hemis.test', 'client_id' => '55', 'client_secret' => 'secret',
@@ -110,4 +111,22 @@ it('sends HEMIS users to the HEMIS logout page, others to the home page', functi
     // Chiqish manzili sozlanmagan — avvalgidek bosh sahifa
     config()->set('services.hemis_staff_oauth.logout_url', null);
     expect(logoutTeacher('hemis_staff')->headers->get('Location'))->toBe(url('/'));
+});
+
+it('allows staff password login only when HEMIS is off or the setting is on', function () {
+    // HEMIS sozlangan, sozlama o'chiq — faqat HEMIS orqali
+    expect(\App\Http\Controllers\Teacher\HemisStaffOAuthController::passwordLoginAllowed())->toBeFalse();
+    $this->post('/teacher/login', ['login' => 'kaxxarov', 'password' => 'x'])
+        ->assertRedirect('/')
+        ->assertSessionHasErrors('login');
+    expect(Auth::guard('teacher')->check())->toBeFalse();
+
+    // Superadmin "Xodimlar login va parol bilan kirishi" ni yoqdi
+    \App\Models\Setting::set('feature_staff_password_login', '1');
+    expect(\App\Http\Controllers\Teacher\HemisStaffOAuthController::passwordLoginAllowed())->toBeTrue();
+
+    // HEMIS umuman sozlanmagan — login/parol doim ochiq
+    \App\Models\Setting::set('feature_staff_password_login', '0');
+    config()->set('services.hemis_staff_oauth.client_id', null);
+    expect(\App\Http\Controllers\Teacher\HemisStaffOAuthController::passwordLoginAllowed())->toBeTrue();
 });

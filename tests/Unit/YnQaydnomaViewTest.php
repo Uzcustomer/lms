@@ -119,6 +119,26 @@ describe('teacher confirmation', function () {
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
     });
 
+    it('lets the teacher revoke the confirmation, removing the QR and its verification', function () {
+        ($this->confirm)(1);
+        $c = \App\Models\YnQaydnomaConfirmation::sole();
+        $path = $c->verification->document_path;
+
+        $request = \Illuminate\Http\Request::create('/admin/journal/revoke-yn-qaydnoma', 'POST',
+            ['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77']);
+        $request->setLaravelSession(app('session')->driver());
+        $this->controller->revokeYnQaydnoma($request);
+
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
+            ->and(\App\Models\DocumentVerification::count())->toBe(0);
+        Storage::disk('public')->assertMissing($path);
+        [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
+        expect($sheet->getSheet(0)->getDrawingCollection())->toHaveCount(0);
+
+        ($this->confirm)(1);   // qayta tasdiqlash mumkin
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
+    });
+
     it('does not let the lecturer confirm', function () {
         expect(fn () => ($this->confirm)(2))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0);

@@ -10056,6 +10056,16 @@ class JournalController extends Controller
         } else {
             $actions = $confirmations->map(fn ($c) => '<span class="ynq-ok">✓ ' . e($c->teacher_name) . ' tasdiqlagan — '
                 . $c->confirmed_at->format('d.m.Y H:i') . '</span>')->implode('');
+            // O'qituvchi o'z tasdig'ini qaytara oladi (QR o'chadi, qayta tasdiqlash mumkin)
+            if ($mine) {
+                $actions .= '<form method="POST" action="' . e(route('admin.journal.revoke-yn-qaydnoma')) . '"'
+                    . ' onsubmit="return confirm(\'Tasdiqni qaytarasizmi? QR kodingiz qaydnomadan olib tashlanadi.\')">'
+                    . csrf_field();
+                foreach ($request->only(['subject_id', 'semester_code', 'group_hemis_id', 'weight_jn', 'weight_mt', 'weight_on', 'weight_oski', 'weight_test', 'shakl']) as $k => $v) {
+                    $actions .= '<input type="hidden" name="' . e($k) . '" value="' . e($v) . '">';
+                }
+                $actions .= '<button type="submit" class="ynq-revoke">Tasdiqni qaytarish</button></form>';
+            }
         }
         if ($flash = session('ynq_flash')) {
             $actions = '<span class="ynq-note">' . e($flash) . '</span>' . $actions;
@@ -10142,6 +10152,53 @@ class JournalController extends Controller
         return redirect($back)->with('ynq_flash', 'Qaydnoma tasdiqlandi — QR kodingiz bosildi.');
     }
 
+    /**
+     * O'qituvchi o'z tasdig'ini qaytaradi: tasdiq, uning unikal QR yozuvi (eski QR endi
+     * topilmaydi) va tasdiqlangan nusxa o'chadi — qaydnomadan QR yo'qoladi.
+     */
+    public function revokeYnQaydnoma(Request $request)
+    {
+        $data = $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'weight_jn' => 'nullable|integer|min:0|max:100',
+            'weight_mt' => 'nullable|integer|min:0|max:100',
+            'weight_on' => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+            'shakl' => 'nullable|integer|min:1|max:7',
+        ]);
+        $back = route('admin.journal.view-yn-qaydnoma', $request->only(array_keys($data)));
+        $teacher = $this->currentTeacher();
+        abort_unless($teacher, 403);
+
+        $mine = \App\Models\YnQaydnomaConfirmation::with('verification')
+            ->where('subject_id', (string) $data['subject_id'])
+            ->where('semester_code', (string) $data['semester_code'])
+            ->where('group_hemis_id', (string) $data['group_hemis_id'])
+            ->where('teacher_id', $teacher->id)
+            ->get();
+        if ($mine->isEmpty()) {
+            return redirect($back)->with('ynq_flash', 'Sizning tasdig\'ingiz topilmadi.');
+        }
+
+        DB::transaction(function () use ($mine) {
+            foreach ($mine as $c) {
+                if ($v = $c->verification) {
+                    if ($v->document_path) {
+                        Storage::disk('public')->delete($v->document_path);
+                    }
+                    $v->delete();
+                }
+                \App\Services\ActivityLogService::log('revoke', 'yn_qaydnoma', "YN qaydnoma tasdig'i qaytarildi: {$c->teacher_name}", $c);
+                $c->delete();
+            }
+        });
+
+        return redirect($back)->with('ynq_flash', 'Tasdiq qaytarildi — QR kodingiz olib tashlandi.');
+    }
+
     /** Joriy o'qituvchi (teacher guard yoki web guard'dagi xodimning teachers yozuvi). */
     private function currentTeacher(): ?Teacher
     {
@@ -10194,7 +10251,7 @@ class JournalController extends Controller
             . 'padding:10px 16px;margin:-8px -8px 12px;background:#1e3a8a;color:#fff;font:600 14px system-ui,sans-serif}'
             . '.ynq-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.ynq-actions form{margin:0}'
             . '.ynq-bar button{padding:6px 14px;border:0;border-radius:6px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer;font-size:13px}'
-            . '.ynq-bar .ynq-confirm{background:#16a34a;color:#fff}.ynq-bar .ynq-note{font-weight:500;font-size:12px;color:#c7d2fe}'
+            . '.ynq-bar .ynq-confirm{background:#16a34a;color:#fff}.ynq-bar .ynq-revoke{background:#fee2e2;color:#b91c1c}.ynq-bar .ynq-note{font-weight:500;font-size:12px;color:#c7d2fe}'
             . '.ynq-bar .ynq-ok{padding:4px 10px;border-radius:6px;background:#dcfce7;color:#166534;font-size:12px}'
             . '@media print{.ynq-bar{display:none}}</style>';
         $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $bar, $html, 1);

@@ -527,6 +527,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/view-yn-qaydnoma', [JournalController::class, 'viewYnQaydnoma'])->name('view-yn-qaydnoma');
             // Amaliy o'qituvchi qaydnomani tasdiqlaydi — unikal QR bosiladi
             Route::post('/confirm-yn-qaydnoma', [JournalController::class, 'confirmYnQaydnoma'])->name('confirm-yn-qaydnoma');
+            Route::post('/revoke-yn-qaydnoma', [JournalController::class, 'revokeYnQaydnoma'])->name('revoke-yn-qaydnoma');
         });
 
         // Vedomost tekshirish

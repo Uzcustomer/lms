@@ -277,19 +277,20 @@
 
             {{-- Xodim: HEMIS (hemis.ttatf.uz) sozlangan bo'lsa — faqat "Hemis orqali kirish", aks holda login/parol --}}
             @if(config('services.hemis_staff_oauth.client_id'))
-            <div x-show="tab === 'teacher'" style="display:flex; flex-direction:column; align-items:center; text-align:center; padding-top:12px;">
+            <div x-show="tab === 'teacher'">
+            {{-- x-show tashqi blokning display'ini boshqaradi — flex ichki blokda, aks holda markazlash yo'qoladi --}}
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center; padding-top:12px;">
                 {{-- Xodim belgisi --}}
-                <div style="position:relative; width:112px; height:112px; margin-bottom:18px;">
+                <div style="position:relative; width:140px; height:140px; margin:0 auto 20px;">
                     <div style="position:absolute; inset:0; border-radius:50%; background:linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);"></div>
-                    <div style="position:absolute; inset:10px; border-radius:50%; background:#fff; box-shadow:0 6px 20px rgba(6,95,70,0.18); display:flex; align-items:center; justify-content:center;">
-                        <svg width="56" height="56" fill="none" viewBox="0 0 24 24" stroke-width="1.4" stroke="#047857" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+                    <div style="position:absolute; inset:12px; border-radius:50%; background:#fff; box-shadow:0 6px 20px rgba(6,95,70,0.18); display:flex; align-items:center; justify-content:center;">
+                        <svg width="72" height="72" fill="none" viewBox="0 0 24 24" stroke-width="1.3" stroke="#047857" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
                     </div>
-                    <div style="position:absolute; right:2px; bottom:4px; width:32px; height:32px; border-radius:50%; background:#047857; border:3px solid #fff; display:flex; align-items:center; justify-content:center;">
-                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="#fff" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
+                    <div style="position:absolute; right:4px; bottom:6px; width:38px; height:38px; border-radius:50%; background:#047857; border:3px solid #fff; display:flex; align-items:center; justify-content:center;">
+                        <svg width="19" height="19" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="#fff" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" /></svg>
                     </div>
                 </div>
-                <div style="font-size:18px; font-weight:700; color:#0f172a; margin-bottom:6px;">Xodimlar uchun kirish</div>
-                <div style="font-size:13px; color:#64748b; line-height:1.5; max-width:280px; margin-bottom:22px;">
+                <div style="font-size:13px; color:#64748b; line-height:1.5; max-width:280px; margin:0 auto 22px;">
                     O'qituvchi va xodimlar LMS'ga HEMIS akkaunti orqali kiradi
                 </div>
                 <a href="{{ route('auth.hemis-staff.redirect') }}"
@@ -299,6 +300,7 @@
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
                     Hemis orqali kirish
                 </a>
+            </div>
             </div>
             @else
             {{-- Xodim forma --}}

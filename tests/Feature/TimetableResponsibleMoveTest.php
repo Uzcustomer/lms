@@ -348,7 +348,10 @@ it('xona nomidan bino / bo\'lim / qavat: "N-bino", "… klasteri", "… bo\'limi
         ->and(rmLocate('Bosh o‘quv binosi, 3-qavat, 310')[0])->toBe("bosh o'quv binosi");
     $short = fn (?string $n) => (new ReflectionMethod(TimetableController::class, 'teacherShortName'))->invoke(null, $n);
     expect($short('UMAROV JASUR AKMALOVICH'))->toBe('UMAROV J. A.')->and($short('UMAROV J. A.'))->toBe('UMAROV J. A.')
-        ->and($short("KARIMOV ALI VALI O'G'LI"))->toBe('KARIMOV A. V.')->and($short('  '))->toBeNull();
+        ->and($short("KARIMOV ALI VALI O'G'LI"))->toBe('KARIMOV A. V.')->and($short('  '))->toBeNull()
+        // O'zbek qo'sh harflari — bitta bosh harf: Sh, Ch, O', G' (tutuq belgisi bir xil "'").
+        ->and($short('OSTANAQULOV SHAXBOZ FARXODOVICH'))->toBe('OSTANAQULOV SH. F.')->and($short('OSTANAQULOV SH. F.'))->toBe('OSTANAQULOV SH. F.')
+        ->and($short('RAHIMOV CHORI O‘TKIROVICH'))->toBe("RAHIMOV CH. O'.")->and($short("ALIYEVA G'ULOMJON SAIDOVNA"))->toBe("ALIYEVA G'. S.");
 });
 
 it('fan mas\'uli oynasida xonalar tartibi — yaqinlik birinchi (bino → bo\'lim → qavat); sabab — eng yaqin pog\'ona + ball; boshqa oynalar tartibi o\'zgarmaydi', function () {
@@ -434,15 +437,17 @@ it('ko\'p bo\'lakli dars (2 + 2) bo\'laklari har xil xonada: part_rooms holati b
     rmMove($s, $p1, ['day' => 3, 'pair' => 1, 'auditorium_code' => 'R1'])->assertOk();
     expect(TimetableCardOverride::whereIn('card_id', [$p1->id, $p2->id])->orderBy('card_id')->pluck('auditorium_code')->all())->toBe(['R1', 'R1']);
 
-    // 2-bo'lak xonasi boshqa o'qituvchiga biriktirilgan — ro'yxatda kulrang, sababi bilan (tanlab bo'lmaydi); sig'maydigani — o'z holati bilan.
+    // 2-bo'lak xonasi boshqa o'qituvchiga biriktirilgan — ro'yxatda kulrang, kimga biriktirilgani bilan (qisqa nomi; to'liq F.I.Sh. —
+    // note_full, title uchun), tanlab bo'lmaydi; part_rooms holatida ham shu; sig'maydigani — o'z holati bilan.
     TimetableCardOverride::query()->delete();
-    DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id, 'auditorium_id' => $s['r3']->id, 'teacher_id' => $s['t']->id,
+    $owner = rmTeacher('OSTANAQULOV SHAXBOZ FARXODOVICH', 'oqituvchi');
+    DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id, 'auditorium_id' => $s['r3']->id, 'teacher_id' => $owner->id,
         'is_general' => false, 'created_at' => now(), 'updated_at' => now()]);
     $p2->update(['auditorium_code' => 'R3', 'auditorium_name' => '103-xona']);
     $res = rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->json();
-    expect($res['part_rooms'][1])->toBe(['code' => 'R3', 'name' => '103-xona', 'problem' => "boshqa o'qituvchiga biriktirilgan"])
+    expect($res['part_rooms'][1])->toBe(['code' => 'R3', 'name' => '103-xona', 'problem' => 'Biriktirilgan: OSTANAQULOV SH. F.'])
         ->and(collect($res['rooms'])->firstWhere('code', 'R3'))->toMatchArray(['free' => false, 'kind' => 'assigned',
-            'note' => "Boshqa o'qituvchiga biriktirilgan", 'why' => null]);
+            'note' => 'Biriktirilgan: OSTANAQULOV SH. F.', 'note_full' => 'Biriktirilgan: OSTANAQULOV SHAXBOZ FARXODOVICH', 'why' => null]);
     $p2->update(['auditorium_code' => 'RS', 'auditorium_name' => '104-xona']);
     expect(rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->json('part_rooms.1'))->toBe(['code' => 'RS', 'name' => '104-xona', 'problem' => "sig'maydi"]);
 });
@@ -458,4 +463,21 @@ it('ko\'p bo\'lakli dars bitta xonada: hozirgi xona birinchi qator, ro\'yxatda t
     expect($res['part_rooms'])->toBe([['code' => 'R2', 'name' => '102-xona', 'problem' => null]])
         ->and($rooms->where('code', 'R2')->count())->toBe(1)
         ->and($rooms->first())->toMatchArray(['code' => 'R2', 'current' => true]);
+});
+
+it('fan mas\'uli: boshqa o\'qituvchiga biriktirilgan xona — tekshiruv va saqlashda 422, kimga biriktirilgani bilan; umumiy xona — ruxsat', function () {
+    $s = rmSetup();
+    $owner = rmTeacher('OSTANAQULOV SHAXBOZ FARXODOVICH', 'oqituvchi');
+    DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id, 'auditorium_id' => $s['r2']->id, 'teacher_id' => $owner->id,
+        'is_general' => false, 'created_at' => now(), 'updated_at' => now()]);
+    $msg = 'Bu xona OSTANAQULOV SH. F. ga biriktirilgan.';
+    // Ro'yxatda yo'q (dars o'qituvchisiga ruxsat etilmagan), qo'lda yuborilsa — tekshiruvda ham, saqlashda ham 422.
+    $chk = rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertUnprocessable()->json();
+    expect($chk['message'])->toBe($msg)->and($chk['conflicts'])->toBe([$msg])
+        ->and(collect($chk['rooms'])->pluck('code')->all())->not->toContain('R2');
+    rmMove($s, $s['a'], ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertUnprocessable()->assertJson(['ok' => false, 'error' => $msg, 'message' => $msg]);
+    expect(TimetableCardOverride::where('card_id', $s['a']->id)->where('week', $s['week'])->value('auditorium_code'))->not->toBe('R2');
+    // Umumiy (is_general) xona — biriktirilgan bo'lsa ham hammaga ochiq.
+    DB::table('auditorium_teacher')->where('auditorium_id', $s['r2']->id)->update(['is_general' => true]);
+    expect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertOk()->json('mode'))->toBe('fix');
 });

@@ -5968,10 +5968,11 @@
                 return String(v == null ? '' : v).toLowerCase().replace(/[ʼʻ‘’`´]/g, "'").replace(/[а-яёўқғҳ]/g, ch => UZ_CYR_LAT[ch] ?? ch);
             }
             // Xona so'z bo'yicha: so'rov so'zlarga bo'linadi, har so'z kod, nom, bino yoki xona turidan birida bo'lishi kerak (tartib muhim emas).
-            function roomMatches(room, q) {
+            // nameOnly — faqat xona nomi bo'yicha (fan mas'uli oynasi: "510" kodi 510 bo'lgan boshqa xonani topmasin); boshqa oynalar — hammasi.
+            function roomMatches(room, q, nameOnly = false) {
                 const words = searchNorm(q).split(/\s+/).filter(Boolean);
                 if (!words.length) return true;
-                const fields = [room.code, room.name, room.building_name, room.auditorium_type_name].map(searchNorm);
+                const fields = (nameOnly ? [room.name] : [room.code, room.name, room.building_name, room.auditorium_type_name]).map(searchNorm);
                 return words.every(w => fields.some(f => f.includes(w)));
             }
             // Ma'ruza yorlig'i: "Ma'ruza · 1-oqim (02a, 02b, 03a …)" — guruhchalar umumiy prefiksisiz ("p/st24-"), 8 tadan ko'p
@@ -13958,7 +13959,8 @@
                     auditorium_code: form.elements.room.value || undefined });
                 // Xonalar (check javobidan, tanlangan vaqt uchun — hammasi): qidiruvli ro'yxat. Birinchi qator — "hozirgi xona" (holati bilan),
                 // so'ng bo'shlari (yaqinlik sababi bilan), so'ng band / sig'maydiganlari kulrang — tanlab bo'lmaydi (aria-disabled). Avval 50 ta,
-                // "Ko'proq ko'rsatish"; qidiruv — hammasidan (nom / kod / bino, harf va tutuq belgisi farqsiz). Klaviatura: ↑/↓, Enter, Esc.
+                // "Ko'proq ko'rsatish"; qidiruv — hammasidan, faqat xona nomi bo'yicha (kod / bino emas; harf va tutuq belgisi farqsiz).
+                // Biriktirilgan xona — "Biriktirilgan: OSTANAQULOV SH. F.", to'liq F.I.Sh. — title'da. Klaviatura: ↑/↓, Enter, Esc.
                 const roomInput = form.elements.room, pick = m.querySelector('[data-rmv-pick]'), panel = m.querySelector('[data-rmv-panel]');
                 const qEl = m.querySelector('[data-rmv-q]'), freeEl = m.querySelector('[data-rmv-free]'), listEl = m.querySelector('[data-rmv-list]');
                 const ROOM_PAGE = 50;
@@ -13982,7 +13984,8 @@
                             + (r.cap ? '<span class="rm-cap">' + esc(capLine(r)) + '</span>' : '')
                         : '<span class="rm-cap">' + esc(capLine(r) || r.busy || "Xona sig'maydi") + '</span>';
                 };
-                const roomTitle = r => r && !r.free ? [...(r.busy_items || []).map(busyTitle), capLine(r)].filter(Boolean).join('\n') : '';
+                const roomTitle = r => r && !r.free ? [r.kind === 'assigned' ? r.note_full : '', ...(r.busy_items || []).map(busyTitle), capLine(r)]
+                    .filter(Boolean).join('\n') : '';
                 const roomRow = (r, code, label) => {
                     const off = r && !r.free && code !== '';
                     return '<div role="option" class="rm-row' + (code === '' ? ' is-current' : '') + '" data-code="' + esc(code) + '"'
@@ -13996,7 +13999,7 @@
                 const roomRows = () => Array.from(listEl.querySelectorAll('.rm-row'));
                 const renderRooms = () => {
                     const q = qEl.value, cur = roomsAll.find(r => r.current);
-                    const rest = roomsAll.filter(r => !r.current && (!freeEl.checked || r.free) && roomMatches(r, q));
+                    const rest = roomsAll.filter(r => !r.current && (!freeEl.checked || r.free) && roomMatches(r, q, true));
                     listEl.innerHTML = roomRow(cur, '', keepText())
                         + rest.slice(0, roomShown).map(r => roomRow(r, r.code, r.name)).join('')
                         + (rest.length > roomShown ? '<button type="button" class="rmv-more" data-rmv-more>Ko‘proq ko‘rsatish (yana ' + (rest.length - roomShown) + ' ta)</button>' : '')

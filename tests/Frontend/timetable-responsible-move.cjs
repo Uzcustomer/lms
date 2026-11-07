@@ -110,10 +110,12 @@ const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.m
     await page.click('#respMove .rm-row[data-code="R3"]', { force: true });
     assert.equal((await calls()).length, n0);
     assert.equal(await page.inputValue('#respMove input[name="room"]'), '');
-    // Qidiruv: harf va tutuq belgisi farqsiz (o' ↔ o‘), kod bo'yicha ham; topilmasa — xabar.
+    // Qidiruv: harf va tutuq belgisi farqsiz (o' ↔ o‘), faqat xona nomi bo'yicha (kod bo'yicha emas); topilmasa — xabar.
     await page.fill('#respMove [data-rmv-q]', "BO'LIM");
     assert.deepEqual((await rows(page)).map(r => r[0]), ['', 'R2']);
     await page.fill('#respMove [data-rmv-q]', 'r4');
+    assert.match(await page.innerText('#respMove [data-rmv-list]'), /Xona topilmadi/);
+    await page.fill('#respMove [data-rmv-q]', '104');
     assert.deepEqual((await rows(page)).map(r => r[0]), ['', 'R4']);
     await page.fill('#respMove [data-rmv-q]', 'yo‘q-xona');
     assert.match(await page.innerText('#respMove [data-rmv-list]'), /Xona topilmadi/);
@@ -210,9 +212,11 @@ const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.m
     await page.setViewportSize({ width: 1280, height: 800 });
 
     // 5c) Ko'p bo'lakli dars, bo'laklar har xil xonada (101 va nofaol 105): birinchi qator "har bo'lak o'z xonasida (…)" qizil izoh bilan,
-    // bu tanlovda tugma o'chiq (server "fix" desa ham); 101 — oddiy qator, tanlansa yuboriladi; biriktirilgani — kulrang, sababi bilan.
+    // bu tanlovda tugma o'chiq (server "fix" desa ham); 101 — oddiy qator, tanlansa yuboriladi; biriktirilgani — kulrang, kimga
+    // biriktirilgani bilan (qisqa nomi — qatorda, to'liq F.I.Sh. — title'da).
     const mixedRooms = [{ code: 'R1', name: '101-xona', volume: 30, free: true, current: false, why: 'shu qavat', kind: null, busy_items: [] },
-        { code: 'R7', name: '107-xona', volume: 30, free: false, current: false, why: null, kind: 'assigned', note: "Boshqa o'qituvchiga biriktirilgan", busy_items: [] }];
+        { code: 'R7', name: '107-xona', volume: 30, free: false, current: false, why: null, kind: 'assigned', note: 'Biriktirilgan: OSTANAQULOV SH. F.',
+            note_full: 'Biriktirilgan: OSTANAQULOV SHAXBOZ FARXODOVICH', busy_items: [] }];
     const mixedParts = [{ code: 'R1', name: '101-xona', problem: null }, { code: 'RX', name: '105-xona', problem: 'nofaol' }];
     await page.evaluate(([rooms, parts]) => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms, part_rooms: parts } }]; },
         [mixedRooms, mixedParts]);
@@ -225,7 +229,8 @@ const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.m
     let mr = await rows(page);
     assert.deepEqual(mr.map(r => r.slice(0, 2)), [['', false], ['R1', false], ['R7', true]]);
     assert.match(mr[0][2], /har bo‘lak o‘z xonasida \(101-xona, 105-xona\).*105-xona — nofaol, xona tanlang/);
-    assert.match(mr[2][2], /Boshqa o'qituvchiga biriktirilgan/);
+    assert.match(mr[2][2], /Biriktirilgan: OSTANAQULOV SH\. F\./);
+    assert.equal(await page.getAttribute('#respMove .rm-row[data-code="R7"]', 'title'), 'Biriktirilgan: OSTANAQULOV SHAXBOZ FARXODOVICH');
     await page.evaluate(([rooms, parts]) => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms, part_rooms: parts } }]; },
         [mixedRooms, mixedParts]);
     await page.click('#respMove .rm-row[data-code="R1"]');
@@ -240,6 +245,26 @@ const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.m
     await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llash');
     assert.equal(await page.innerText('#respMove [data-rmv-pick]'), '— har bo‘lak o‘z xonasida (101-xona, 102-xona) —');
     await page.click('#respMove [data-close]');
+
+    // 5d) "510" qidiruvi — faqat nomida 510 bo'lgan xona; kodi 510 bo'lgan boshqa xona (205-xona) chiqmaydi.
+    const r510 = [{ code: 'R1', name: '101-xona', volume: 30, free: true, current: true, why: null, kind: null, busy_items: [] },
+        { code: '510', name: '205-xona', volume: 30, free: true, why: null, kind: null, busy_items: [] },
+        { code: 'R9', name: '3-bino, 510-xona', volume: 30, free: true, why: null, kind: null, busy_items: [] }];
+    await page.evaluate(rooms => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms } }]; }, r510);
+    await page.evaluate(c => window.openResponsibleMove(c), card);
+    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llash');
+    await page.click('#respMove [data-rmv-pick]');
+    await page.fill('#respMove [data-rmv-q]', '510');
+    assert.deepEqual((await rows(page)).map(r => r[0]), ['', 'R9']);
+    await page.fill('#respMove [data-rmv-q]', '205');
+    assert.deepEqual((await rows(page)).map(r => r[0]), ['', '510']);
+    await page.click('#respMove [data-close]');
+    // Boshqa oynalar (umumiy roomMatches) — kod bo'yicha ham izlaydi; faqat fan mas'uli oynasi nameOnly bilan.
+    const matches = new Function(search + '\nreturn roomMatches;')();
+    assert.equal(matches({ code: '510', name: '205-xona' }, '510'), true);
+    assert.equal(matches({ code: '510', name: '205-xona' }, '510', true), false);
+    assert.equal(matches({ code: 'R9', name: '3-bino, 510-xona' }, '510', true), true);
+    assert.equal((source.match(/roomMatches\([^)]*, true\)/g) || []).length, 1);
 
     // 6) openModal: fan mas'uli — shu oyna (kafedra mudiri oynasi emas).
     assert.match(source, /if \(TIMETABLE_ROLE === 'fan_masuli'\) \{ openResponsibleMove\(c\); return; \}/);

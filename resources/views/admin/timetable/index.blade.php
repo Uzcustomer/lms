@@ -14379,8 +14379,9 @@
                     try {
                         const sent = await api(BASE + '/cards/' + c.id + '/responsible-move', 'POST', Object.assign(body(), { reason: form.elements.reason.value }));
                         m.remove();
-                        // Joylash rejimi tugaydi: karta paneldan yo'qoladi, kataklar keshi eskirdi (panel va jadval qayta yuklanadi).
-                        if (pickMode) { fmGridCache.clear(); fmPick = null; }
+                        // Joylash rejimi tugaydi (so'rov bo'lsa ham): kataklar keshi eskirdi; fmPickStop — "Faqat shu guruh" ustunlari tiklanadi,
+                        // panel va jadval qayta chiziladi (darhol joylanganda — doska ham qayta yuklanadi).
+                        if (pickMode) { fmGridCache.clear(); fmPickStop(); }
                         if (sent && sent.mode === 'fix') {
                             ttToast('<b>' + esc(pickMode ? 'Joylandi (faqat shu hafta)' : (sent.message || 'Joylandi.')) + '</b>', 'ok');
                             await loadBoard(board.id);

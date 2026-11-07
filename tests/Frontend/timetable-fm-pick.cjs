@@ -310,6 +310,23 @@ const card = { id: 1, subject_name: 'Farmakologiya', group_name: 'pp/2024-01g', 
     assert.match(await barText(), /Bu haftada bo‘sh joy yo‘q — keyingi 3 haftada ham bo‘sh joy yo‘q/);
     await page.evaluate(() => window.fmPickStop());
 
+    // 11) So'rov rejimi (to'qnashuvsiz joylashgan dars): yuborilgach ham rejim tugaydi — ustunlar qayta quriladi ("Faqat shu guruh" tiklanadi),
+    // holat qatori yashiriladi (Codex: avval fmPick shunchaki null bo'lardi, filtr qolib ketardi).
+    await page.evaluate(([g, c]) => { window.clearCache(); window.next = [{ status: 200, j: g }]; window.fmPickStart(c); }, [GRID, card]);
+    await page.waitForFunction(() => window.state().pick && window.state().pick.loaded);
+    await page.evaluate(rooms => { window.next = [{ status: 200, j: { ok: true, mode: 'request', message: "So'rov yuboriladi.", new: 'Seshanba, 17.11.2026 08:30–11:20', rooms } }]; }, CHECK_ROOMS);
+    await page.click('#grid td[data-day="2"][data-pair="1"]');
+    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]') && document.querySelector('#respMove [type="submit"]').textContent === 'So‘rov yuborish');
+    assert.equal(await page.isVisible('#respMove textarea[name="reason"]'), true);
+    await page.fill('#respMove textarea[name="reason"]', 'Kafedra kelishuvi');
+    await page.evaluate(() => { window.log = []; window.next = [{ status: 200, j: { ok: true, mode: 'request', pending_approval: true } }]; });
+    await page.click('#respMove [type="submit"]');
+    await page.waitForFunction(() => !document.getElementById('respMove'));
+    assert.equal((await state()).pick, null);
+    assert.equal(await page.isHidden('#ttFmPick'), true);
+    assert.deepEqual(await page.evaluate(() => window.log.slice(0, 3)), ['rows', 'panel', 'grid']);
+    assert.equal(await page.evaluate(() => window.log.includes('loadBoard')), false);
+
     await browser.close();
     console.log('timetable fm pick: rejim, grid ranglari (bitta so\'rov, kesh), avtomatik surish, tasdiq oynasi, sariq — xona majburiy, sudrab tashlash, eng yaxshi joylar, keyingi haftalar');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -413,3 +413,49 @@ it('fan mas\'uli oynasida xonalar tartibi — yaqinlik birinchi (bino → bo\'li
         ->and([$rooms['T4']['why'], $rooms['T1']['why'], $rooms['T3']['why'], $rooms['T2']['why'], $rooms['T5']['why']])
         ->toBe(['shu qavat', 'shu qavat', 'shu qavat', 'shu bino', null]);
 });
+
+it('ko\'p bo\'lakli dars (2 + 2) bo\'laklari har xil xonada: part_rooms holati bilan, har bo\'lak xonasi — oddiy qator; tanlansa — ikkala bo\'lak shu xonaga', function () {
+    $s = rmSetup();
+    $who = rmTeacher('BESHINCHI B.');
+    // 1-bo'lak — 101 (faol), 2-bo'lak — 105 (nofaol); shablonda joylanmagan birlik (darhol rejim).
+    $p1 = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);
+    $p2 = $s['card']('pp/2024-01g', $who, null, null, $s['off']);
+    $res = rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->assertUnprocessable()->json();
+    $rooms = collect($res['rooms']);
+
+    expect($res['message'])->toBe('Xona tanlang: hozirgi xona 105-xona — nofaol.')
+        ->and($res['part_rooms'])->toBe([['code' => 'R1', 'name' => '101-xona', 'problem' => null], ['code' => 'RX', 'name' => '105-xona', 'problem' => 'nofaol']])
+        // "Hozirgi xona" qatori yo'q — 101 ro'yxatda oddiy (tanlanadigan) qator, nofaol 105 — chiqmaydi.
+        ->and($rooms->where('current', true)->count())->toBe(0)
+        ->and($rooms->firstWhere('code', 'R1'))->toMatchArray(['free' => true, 'kind' => null, 'current' => false])
+        ->and($rooms->pluck('code')->all())->not->toContain('RX');
+    // 101 tanlansa — ikkala bo'lak shu xonaga.
+    expect(rmCheck($s, $p1, ['day' => 3, 'pair' => 1, 'auditorium_code' => 'R1'])->assertOk()->json('mode'))->toBe('fix');
+    rmMove($s, $p1, ['day' => 3, 'pair' => 1, 'auditorium_code' => 'R1'])->assertOk();
+    expect(TimetableCardOverride::whereIn('card_id', [$p1->id, $p2->id])->orderBy('card_id')->pluck('auditorium_code')->all())->toBe(['R1', 'R1']);
+
+    // 2-bo'lak xonasi boshqa o'qituvchiga biriktirilgan — ro'yxatda kulrang, sababi bilan (tanlab bo'lmaydi); sig'maydigani — o'z holati bilan.
+    TimetableCardOverride::query()->delete();
+    DB::table('auditorium_teacher')->insert(['board_id' => $s['board']->id, 'auditorium_id' => $s['r3']->id, 'teacher_id' => $s['t']->id,
+        'is_general' => false, 'created_at' => now(), 'updated_at' => now()]);
+    $p2->update(['auditorium_code' => 'R3', 'auditorium_name' => '103-xona']);
+    $res = rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->json();
+    expect($res['part_rooms'][1])->toBe(['code' => 'R3', 'name' => '103-xona', 'problem' => "boshqa o'qituvchiga biriktirilgan"])
+        ->and(collect($res['rooms'])->firstWhere('code', 'R3'))->toMatchArray(['free' => false, 'kind' => 'assigned',
+            'note' => "Boshqa o'qituvchiga biriktirilgan", 'why' => null]);
+    $p2->update(['auditorium_code' => 'RS', 'auditorium_name' => '104-xona']);
+    expect(rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->json('part_rooms.1'))->toBe(['code' => 'RS', 'name' => '104-xona', 'problem' => "sig'maydi"]);
+});
+
+it('ko\'p bo\'lakli dars bitta xonada: hozirgi xona birinchi qator, ro\'yxatda takrorlanmaydi', function () {
+    $s = rmSetup();
+    $who = rmTeacher('OLTINCHI O.');
+    $p1 = $s['card']('pp/2024-01g', $who, null, null, $s['r2']);
+    $s['card']('pp/2024-01g', $who, null, null, $s['r2']);
+    $res = rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->assertOk()->json();
+    $rooms = collect($res['rooms']);
+
+    expect($res['part_rooms'])->toBe([['code' => 'R2', 'name' => '102-xona', 'problem' => null]])
+        ->and($rooms->where('code', 'R2')->count())->toBe(1)
+        ->and($rooms->first())->toMatchArray(['code' => 'R2', 'current' => true]);
+});

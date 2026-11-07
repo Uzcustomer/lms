@@ -163,7 +163,13 @@ trait TimetableResponsibleMove
         $labels = $this->responsibleMoveLabels($board, $moves, $week, $day);
         $info = ['old' => $labels['old'], 'new' => $labels['new'], 'date' => $date,
             'parts' => array_map(fn ($m) => ['card_id' => (int) $m[0]->id, 'pair' => $m[1], 'len_half' => $m[0]->lenHalf()], $moves)];
-        $rooms = $withRooms ? $this->responsibleMoveRooms($board, $moves, $week, $day, $date) : [];
+        $rooms = [];
+        if ($withRooms) {
+            // Bo'laklarning shu haftadagi xonalari (har xil bo'lsa — "har bo'lak o'z xonasida" va har biri ro'yxatda oddiy qator).
+            $this->roomRankReset();
+            $info['part_rooms'] = $this->responsiblePartRooms($board, $parts, $week);
+            $rooms = $this->responsibleMoveRooms($board, $moves, $week, $day, $date, $info['part_rooms']);
+        }
 
         // Xona: berilgan — faol, sig'adi, o'qituvchiga ruxsat; berilmagan — har bo'lak o'z (shu haftadagi) xonasida, u yaroqli bo'lishi kerak.
         $room = null;
@@ -319,15 +325,19 @@ trait TimetableResponsibleMove
      * Har band xonada tuzilgan ro'yxat busy_items: [{teacher ("UMAROV J. A."), teacher_full, groups[], subject, time ("08:30–11:20"), date,
      * dates, card_ids, view, week}] — front matnni parse qilmaydi; cap: {volume, students, over}.
      */
-    private function responsibleMoveRooms(TimetableBoard $board, array $moves, int $week, int $day, string $date): array
+    private function responsibleMoveRooms(TimetableBoard $board, array $moves, int $week, int $day, string $date, array $partRooms = []): array
     {
-        $this->roomRankReset();
         $base = $this->roomRankBase();
         $parts = collect(array_map(fn ($m) => $m[0], $moves));
         $first = $parts->first();
         $ov = TimetableCardOverride::where('card_id', $first->id)->where('week', $week)->first();
         $current = (string) ($ov?->auditorium_code ?: $first->auditorium_code);
-        $allowed = $base['active']->filter(fn ($r) => $parts->every(fn (TimetableCard $c) => $this->auditoriumAllowedForCard($r, $c, $base['teacher'])));
+        // Bo'laklar har xil xonada: "hozirgi xona" qatori yo'q (birinchi qator — "har bo'lak o'z xonasida"), har bo'lak xonasi — oddiy qator,
+        // boshqa o'qituvchiga biriktirilgani ham (kulrang, sababi bilan); tanlansa — barcha bo'laklar shu xonaga.
+        $mixed = count($partRooms) > 1;
+        $partCodes = array_flip(array_column($partRooms, 'code'));
+        $ok = fn ($r) => $parts->every(fn (TimetableCard $c) => $this->auditoriumAllowedForCard($r, $c, $base['teacher']));
+        $allowed = $base['active']->filter(fn ($r) => $ok($r) || ($mixed && isset($partCodes[(string) $r->code])));
         $busy = ['rooms' => [], 'items' => ['rooms' => []]];
         DB::beginTransaction();
         try {
@@ -361,15 +371,40 @@ trait TimetableResponsibleMove
                 'time' => $this->responsibleBusyTime($times, $it), 'date' => $it['dates'][0] ?? null, 'dates' => $it['dates'] ?? [],
                 'card_ids' => $it['card_ids'] ?? [], 'view' => $it['view'] ?? 'week', 'week' => $it['week'] ?? null,
             ], $b !== null ? (array) ($busy['items']['rooms'][$code] ?? []) : []);
-            $kind = $b !== null ? 'busy' : ($cap ? 'capacity' : null);
-            $out[] = ['code' => $code, 'name' => (string) ($r->name ?: $r->code), 'volume' => (int) $r->volume, 'why' => $why,
+            $kind = !$ok($r) ? 'assigned' : ($b !== null ? 'busy' : ($cap ? 'capacity' : null));
+            $out[] = ['code' => $code, 'name' => (string) ($r->name ?: $r->code), 'volume' => (int) $r->volume, 'why' => $kind === null ? $why : null,
                 'building_name' => (string) ($r->building_name ?? ''), 'auditorium_type_name' => (string) ($r->auditorium_type_name ?? ''),
-                'current' => $code === $current, 'free' => $kind === null, 'kind' => $kind,
+                'current' => !$mixed && $code === $current, 'free' => $kind === null, 'kind' => $kind,
+                'note' => $kind === 'assigned' ? "Boshqa o'qituvchiga biriktirilgan" : null,
                 'busy' => $b !== null ? self::roomBusyText('Band: ', (string) $b) : null, 'busy_items' => $items, 'cap' => $cap];
         }
         usort($out, fn ($a, $b) => [$a['current'] ? 0 : 1, $a['free'] ? 0 : 1] <=> [$b['current'] ? 0 : 1, $b['free'] ? 0 : 1]);
 
         return $out;
+    }
+
+    /**
+     * Bo'laklarning shu haftadagi xonalari (takrorsiz, bo'laklar tartibida): [{code, name, problem}]; problem — o'z bo'lagi uchun yaroqsizligi
+     * ("nofaol", "sig'maydi", "boshqa o'qituvchiga biriktirilgan", "ro'yxatda yo'q") yoki null. Xonasiz bo'lak — kirmaydi.
+     */
+    private function responsiblePartRooms(TimetableBoard $board, $parts, int $week): array
+    {
+        $base = $this->roomRankBase();
+        $out = [];
+        foreach ($parts as $c) {
+            $ov = TimetableCardOverride::where('card_id', $c->id)->where('week', $week)->first();
+            $code = (string) ($ov?->auditorium_code ?: $c->auditorium_code);
+            if ($code === '' || isset($out[$code]) && $out[$code]['problem'] !== null) {
+                continue;
+            }
+            $r = $base['all'][$code] ?? null;
+            $problem = !$r ? "ro'yxatda yo'q" : (!$r->active ? 'nofaol'
+                : (!$this->auditoriumAllowedForCard($r, $c, $base['teacher']) ? "boshqa o'qituvchiga biriktirilgan"
+                    : ($this->suggestionRoomProblem($board, $c, $r) !== null ? "sig'maydi" : null)));
+            $out[$code] = ['code' => $code, 'name' => $r ? (string) ($r->name ?: $code) : $code, 'problem' => $problem];
+        }
+
+        return array_values($out);
     }
 
     /** Bandlik vaqti jadvallari: row — qo'ng'iroq jadvali qatori (haftalik dars), hour — kunning akademik soati (sikl darsi, hemisSlotTimes). */

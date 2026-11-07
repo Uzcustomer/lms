@@ -2022,6 +2022,7 @@
         #respMove .rm-row .rm-why { color: #047857; font-weight: 600; font-size: 11px; background: #ecfdf5; border-radius: 6px; padding: 1px 6px; }
         #respMove .rm-row .rm-busy, #respMove .rm-row .rm-cap { flex-basis: 100%; font-size: 11px; }
         #respMove .rm-row .rm-cap { color: #b45309; }
+        #respMove .rm-row .rm-err { flex-basis: 100%; font-size: 11px; color: #dc2626; font-weight: 600; }
         #respMove .rmv-more { width: 100%; padding: 7px; font-size: 12px; color: #2563eb; background: #fff; border: 0; }
         #respMove .rmv-off { background: #cbd5e1 !important; color: #475569 !important; cursor: not-allowed; }
         .tt-modal-body { min-height: 100%; display: flex; align-items: center; justify-content: center;
@@ -13961,8 +13962,13 @@
                 const roomInput = form.elements.room, pick = m.querySelector('[data-rmv-pick]'), panel = m.querySelector('[data-rmv-panel]');
                 const qEl = m.querySelector('[data-rmv-q]'), freeEl = m.querySelector('[data-rmv-free]'), listEl = m.querySelector('[data-rmv-list]');
                 const ROOM_PAGE = 50;
-                let roomsAll = [], roomShown = ROOM_PAGE, roomActive = -1;
-                const curText = '— hozirgi xona' + (room ? ' (' + room + ')' : '') + ' —';
+                let roomsAll = [], partRooms = [], roomShown = ROOM_PAGE, roomActive = -1;
+                // Bo'laklar har xil xonada (server: part_rooms) — birinchi qator "har bo'lak o'z xonasida", har bo'lak xonasi ro'yxatda oddiy qator;
+                // biror bo'lak xonasi yaroqsiz bo'lsa — shu qatorda qizil izoh va bu tanlovda tugma o'chiq.
+                const mixedRooms = () => partRooms.length > 1;
+                const curText0 = '— hozirgi xona' + (room ? ' (' + room + ')' : '') + ' —';
+                const keepText = () => mixedRooms() ? '— har bo‘lak o‘z xonasida (' + partRooms.map(p => p.name).join(', ') + ') —' : curText0;
+                const keepProblem = () => mixedRooms() ? partRooms.filter(p => p.problem).map(p => p.name + ' — ' + p.problem + ', xona tanlang').join('; ') : '';
                 const busyLine = it => 'Band: ' + [it.teacher, (it.groups || []).join(', '), it.subject, it.time].filter(Boolean).join(' · ');
                 const busyTitle = it => [it.teacher_full || it.teacher, (it.groups || []).join(', '), it.subject,
                     (it.dates || []).filter((d, i, a) => a.indexOf(d) === i).map(d => String(d).slice(8, 10) + '.' + String(d).slice(5, 7)).join('–'), it.time].filter(Boolean).join(' · ');
@@ -13970,7 +13976,8 @@
                 const roomState = r => {
                     if (!r || r.free) return '';
                     const items = r.busy_items || [];
-                    return r.kind === 'busy'
+                    return r.kind === 'assigned' ? '<span class="rm-busy">' + esc(r.note || 'Boshqa o‘qituvchiga biriktirilgan') + '</span>'
+                        : r.kind === 'busy'
                         ? '<span class="rm-busy">' + esc(items.length ? busyLine(items[0]) + (items.length > 1 ? ' +' + (items.length - 1) : '') : (r.busy || 'Band')) + '</span>'
                             + (r.cap ? '<span class="rm-cap">' + esc(capLine(r)) + '</span>' : '')
                         : '<span class="rm-cap">' + esc(capLine(r) || r.busy || "Xona sig'maydi") + '</span>';
@@ -13984,13 +13991,13 @@
                         + '<b>' + esc(label) + '</b>'
                         + (r && r.free && r.why ? '<span class="rm-why">' + esc(r.why) + '</span>' : '')
                         + (r && code !== '' ? '<span class="rm-vol">' + (r.volume ? r.volume + ' o‘rin' : 'sig‘imi kiritilmagan') + '</span>' : '')
-                        + roomState(r) + '</div>';
+                        + roomState(r) + (code === '' && keepProblem() ? '<span class="rm-err">' + esc(keepProblem()) + '</span>' : '') + '</div>';
                 };
                 const roomRows = () => Array.from(listEl.querySelectorAll('.rm-row'));
                 const renderRooms = () => {
                     const q = qEl.value, cur = roomsAll.find(r => r.current);
                     const rest = roomsAll.filter(r => !r.current && (!freeEl.checked || r.free) && roomMatches(r, q));
-                    listEl.innerHTML = roomRow(cur, '', curText)
+                    listEl.innerHTML = roomRow(cur, '', keepText())
                         + rest.slice(0, roomShown).map(r => roomRow(r, r.code, r.name)).join('')
                         + (rest.length > roomShown ? '<button type="button" class="rmv-more" data-rmv-more>Ko‘proq ko‘rsatish (yana ' + (rest.length - roomShown) + ' ta)</button>' : '')
                         + (!rest.length && (q || freeEl.checked) ? '<div class="p-3 text-sm text-slate-400">Xona topilmadi</div>' : '');
@@ -13998,7 +14005,7 @@
                 };
                 const pickLabel = () => {
                     const r = roomsAll.find(x => x.code === roomInput.value);
-                    pick.textContent = r ? r.name + (r.volume ? ' (' + r.volume + ' o‘rin)' : '') + (r.why ? ' — ' + r.why : '') : curText;
+                    pick.textContent = r ? r.name + (r.volume ? ' (' + r.volume + ' o‘rin)' : '') + (r.why ? ' — ' + r.why : '') : keepText();
                 };
                 const openRooms = open => {
                     panel.hidden = !open;
@@ -14034,8 +14041,9 @@
                     chooseRoom(ev.target.closest('.rm-row'));
                 };
                 // Tanlov saqlanadi; tanlangan xona yangi vaqtda bo'sh bo'lmasa — "hozirgi xona"ga qaytadi.
-                const fillRooms = list => {
+                const fillRooms = (list, parts) => {
                     roomsAll = list || [];
+                    partRooms = parts || [];
                     if (roomInput.value && !roomsAll.some(r => r.code === roomInput.value && r.free)) roomInput.value = '';
                     pickLabel();
                     if (!panel.hidden) renderRooms();
@@ -14053,9 +14061,12 @@
                     try { j = await api(BASE + '/cards/' + c.id + '/responsible-move/check', 'POST', body()); }
                     catch (e) { j = e.data || { message: e.message }; ok = false; }
                     if (my !== seq || !m.isConnected) return;
-                    if (j.rooms) fillRooms(j.rooms);
+                    if (j.rooms) fillRooms(j.rooms, j.part_rooms);
                     mode = ok ? j.mode : null;
-                    const msg = j.message || j.error || 'Tekshirib bo‘lmadi.';
+                    // "Har bo'lak o'z xonasida" tanlangan, biror bo'lak xonasi yaroqsiz — qo'llab bo'lmaydi (xona tanlash kerak).
+                    const blocked = !roomInput.value && keepProblem();
+                    if (blocked) mode = null;
+                    const msg = blocked || j.message || j.error || 'Tekshirib bo‘lmadi.';
                     status.className = 'text-sm ' + (mode === 'fix' ? 'text-emerald-700' : mode === 'request' ? 'text-amber-700' : 'text-red-600');
                     status.textContent = (mode ? (j.new ? j.new + ' — ' : '') : '') + msg;
                     // Joylab bo'lmaydi — tugma o'chiq, kulrang: "Qo'llab bo'lmaydi" (sababi — yuqoridagi qizil matnda).

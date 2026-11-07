@@ -209,6 +209,38 @@ const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.m
     await page.click('#respMove [data-close]');
     await page.setViewportSize({ width: 1280, height: 800 });
 
+    // 5c) Ko'p bo'lakli dars, bo'laklar har xil xonada (101 va nofaol 105): birinchi qator "har bo'lak o'z xonasida (…)" qizil izoh bilan,
+    // bu tanlovda tugma o'chiq (server "fix" desa ham); 101 — oddiy qator, tanlansa yuboriladi; biriktirilgani — kulrang, sababi bilan.
+    const mixedRooms = [{ code: 'R1', name: '101-xona', volume: 30, free: true, current: false, why: 'shu qavat', kind: null, busy_items: [] },
+        { code: 'R7', name: '107-xona', volume: 30, free: false, current: false, why: null, kind: 'assigned', note: "Boshqa o'qituvchiga biriktirilgan", busy_items: [] }];
+    const mixedParts = [{ code: 'R1', name: '101-xona', problem: null }, { code: 'RX', name: '105-xona', problem: 'nofaol' }];
+    await page.evaluate(([rooms, parts]) => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms, part_rooms: parts } }]; },
+        [mixedRooms, mixedParts]);
+    await page.evaluate(c => window.openResponsibleMove(c), { ...card, id: 2, day: 3, pair: 1 });
+    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llab bo‘lmaydi');
+    assert.equal(await page.isDisabled('#respMove [type="submit"]'), true);
+    assert.match(await page.locator('#respMove [role="alert"]').innerText(), /105-xona — nofaol, xona tanlang/);
+    assert.equal(await page.innerText('#respMove [data-rmv-pick]'), '— har bo‘lak o‘z xonasida (101-xona, 105-xona) —');
+    await page.click('#respMove [data-rmv-pick]');
+    let mr = await rows(page);
+    assert.deepEqual(mr.map(r => r.slice(0, 2)), [['', false], ['R1', false], ['R7', true]]);
+    assert.match(mr[0][2], /har bo‘lak o‘z xonasida \(101-xona, 105-xona\).*105-xona — nofaol, xona tanlang/);
+    assert.match(mr[2][2], /Boshqa o'qituvchiga biriktirilgan/);
+    await page.evaluate(([rooms, parts]) => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms, part_rooms: parts } }]; },
+        [mixedRooms, mixedParts]);
+    await page.click('#respMove .rm-row[data-code="R1"]');
+    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llash');
+    assert.deepEqual((await calls()).at(-1).body, { week: 10, day: 3, pair: 1, auditorium_code: 'R1' });
+    assert.equal(await page.isDisabled('#respMove [type="submit"]'), false);
+    // Bo'laklar xonasi yaroqli (izohsiz) — "har bo'lak o'z xonasida" tanlovi ham qo'llanadi.
+    await page.evaluate(([rooms]) => { window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms,
+        part_rooms: [{ code: 'R1', name: '101-xona', problem: null }, { code: 'R2', name: '102-xona', problem: null }] } }]; }, [mixedRooms]);
+    await page.click('#respMove [data-rmv-pick]');
+    await page.click('#respMove .rm-row[data-code=""]');
+    await page.waitForFunction(() => document.querySelector('#respMove [type="submit"]').textContent === 'Qo‘llash');
+    assert.equal(await page.innerText('#respMove [data-rmv-pick]'), '— har bo‘lak o‘z xonasida (101-xona, 102-xona) —');
+    await page.click('#respMove [data-close]');
+
     // 6) openModal: fan mas'uli — shu oyna (kafedra mudiri oynasi emas).
     assert.match(source, /if \(TIMETABLE_ROLE === 'fan_masuli'\) \{ openResponsibleMove\(c\); return; \}/);
 

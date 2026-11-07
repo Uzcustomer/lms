@@ -301,13 +301,13 @@ class RetakeBookingService
 
     /**
      * Bitta bahoning qayta topshirish muddati: saqlangan student_grades.deadline,
-     * bo'sh bo'lsa — dars sanasi + sozlamadagi kunlar (import va jurnal yozganidek).
+     * bo'sh bo'lsa — dars sanasi + sozlamadagi kunlar, yakshanbasiz (import va jurnal yozganidek).
      */
     public static function rowDeadline($deadline, $lessonDate, int $days): Carbon
     {
         return $deadline
             ? Carbon::parse($deadline)
-            : Carbon::parse($lessonDate)->addDays($days)->endOfDay();
+            : Deadline::retakeDeadline($lessonDate, $days);
     }
 
     /** Mavzu (talaba + fan + kun) muddati LMS bo'yicha: shu kundagi juftliklarning eng yaqini */

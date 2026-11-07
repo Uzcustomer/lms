@@ -316,12 +316,12 @@ it('allows two subjects in one slot, refuses a third and a second topic of the s
 it('takes the deadline from LMS: stored grade deadline, else lesson date + level days', function () {
     DB::table('deadlines')->insert(['level_code' => '13', 'deadline_days' => 6]);
 
-    // Saqlangan muddat yo'q — 24.10 + 6 kun
+    // Saqlangan muddat yo'q — 24.10 + 6 kun, yakshanbasiz
     DB::table('student_grades')->insert(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24 00:00:00', 'reason' => 'absent']);
-    expect(RetakeBookingService::lmsDeadline(5531, '13', 181, '2026-10-24')->toDateString())->toBe('2026-10-30');
+    expect(RetakeBookingService::lmsDeadline(5531, '13', 181, '2026-10-24')->toDateString())->toBe('2026-10-31');
 
-    // Sozlama yo'q kurs — 7 kun
-    expect(RetakeBookingService::lmsDeadline(5531, '99', 181, '2026-10-24')->toDateString())->toBe('2026-10-31');
+    // Sozlama yo'q kurs — 7 kun (01.11 yakshanba sanalmaydi)
+    expect(RetakeBookingService::lmsDeadline(5531, '99', 181, '2026-10-24')->toDateString())->toBe('2026-11-02');
 
     // Bir kunda ikki juftlik — saqlangan eng yaqin muddat
     DB::table('student_grades')->insert(['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24 00:00:00', 'reason' => 'absent', 'deadline' => '2026-10-28 23:59:59']);
@@ -357,7 +357,7 @@ it('sends the student a Telegram message with a booking link per debt', function
 
         return $r['chat_id'] == '111'
             && str_contains($text, 'Tibbiy fizika')
-            && str_contains($text, 'Muddat: 30.10.2026 gacha')
+            && str_contains($text, 'Muddat: 31.10.2026 gacha')
             && str_contains($text, 'retake-booking?subject_id=181&amp;lesson_date=2026-10-24')
             && substr_count($text, '📌') === 1;
     });
@@ -445,14 +445,14 @@ it('opens booking until the excuse deadline even when the settings deadline pass
     $student = (object) ['hemis_id' => 5531, 'level_code' => '13'];
     $service = app(RetakeBookingService::class);
 
-    // Sozlama bo'yicha 24.10 + 3 kun = 27.10 — o'tgan; Moodle ham "expired" degan
+    // Sozlama bo'yicha 24.10 + 3 kun (25.10 yakshanba sanalmaydi) = 28.10 — o'tgan; Moodle ham "expired" degan
     [$excused, $plain] = $service->withLmsDeadline([
         svcDebt(['state' => 'expired', 'can_book' => false]),
         svcDebt(['subject_id' => 200, 'state' => 'expired', 'can_book' => false]),
     ], $student);
 
     expect($excused)->toMatchArray(['deadline' => '2026-11-07', 'book_from' => '2026-11-02', 'excused' => true, 'state' => 'start', 'can_book' => true])
-        ->and($plain)->toMatchArray(['deadline' => '2026-10-27', 'state' => 'expired', 'can_book' => false]);
+        ->and($plain)->toMatchArray(['deadline' => '2026-10-28', 'state' => 'expired', 'can_book' => false]);
 
     expect(RetakeBookingService::validateSlot(Carbon::parse('2026-10-31 10:00'), Carbon::parse('2026-10-31 11:00'), '2026-11-07', '2026-11-02'))
         ->toContain('02.11.2026 dan boshlanadi')
@@ -538,7 +538,7 @@ it('gives Moodle the LMS deadlines over the X-SYNC-SECRET API', function () {
         ->assertOk()
         ->assertExactJson(['ok' => true, 'items' => [
             ['student_hemis_id' => 5531, 'subject_id' => 181, 'lesson_date' => '2026-10-24', 'found' => true, 'deadline' => '2026-11-07', 'book_from' => '2026-11-02', 'excused' => true],
-            ['student_hemis_id' => 5531, 'subject_id' => 200, 'lesson_date' => '2026-10-24', 'found' => true, 'deadline' => '2026-10-30', 'book_from' => null, 'excused' => false],
+            ['student_hemis_id' => 5531, 'subject_id' => 200, 'lesson_date' => '2026-10-24', 'found' => true, 'deadline' => '2026-10-31', 'book_from' => null, 'excused' => false],
             ['student_hemis_id' => 999, 'subject_id' => 181, 'lesson_date' => '2026-10-24', 'found' => false, 'deadline' => null, 'book_from' => null, 'excused' => false],
         ]]);
 });

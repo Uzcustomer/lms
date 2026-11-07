@@ -2910,7 +2910,7 @@ class JournalController extends Controller
                                 'lesson_date' => $lessonDate,
                                 'created_at_api' => now(),
                                 'reason' => 'absent',
-                                'deadline' => $lessonDate->copy()->addDays($deadlineDays)->endOfDay(),
+                                'deadline' => Deadline::retakeDeadline($lessonDate, (int) $deadlineDays),
                                 'status' => 'pending',
                                 'is_final' => !$lessonDate->isToday(),
                                 'created_at' => now(),
@@ -3220,7 +3220,7 @@ class JournalController extends Controller
                         if ($isLowGrade && !$existingGrade->deadline) {
                             $deadline = DB::table('deadlines')->where('level_code', $student->level_code)->first();
                             $deadlineDays = $deadline ? $deadline->deadline_days : 7;
-                            $updateData['deadline'] = $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
+                            $updateData['deadline'] = Deadline::retakeDeadline($lessonDate, (int) $deadlineDays);
                         }
                     }
 
@@ -3238,7 +3238,7 @@ class JournalController extends Controller
                         $reason = 'low_grade';
                         $deadlineRow = DB::table('deadlines')->where('level_code', $student->level_code)->first();
                         $deadlineDays = $deadlineRow ? $deadlineRow->deadline_days : 7;
-                        $deadline = $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
+                        $deadline = Deadline::retakeDeadline($lessonDate, (int) $deadlineDays);
                     }
 
                     DB::table('student_grades')->insert([

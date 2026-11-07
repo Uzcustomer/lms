@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -15,6 +16,23 @@ class Deadline extends Model
         'retake_by_test_markazi' => 'boolean',
         'retake_by_oqituvchi' => 'boolean',
     ];
+
+    /**
+     * NB / past bahoni qayta topshirish muddati: dars kunidan keyingi $days kun,
+     * yakshanbalar sanalmaydi (dam olish kuni). Shu kun oxirigacha.
+     */
+    public static function retakeDeadline($lessonDate, int $days): Carbon
+    {
+        $date = Carbon::parse($lessonDate)->startOfDay();
+        for ($left = max(0, $days); $left > 0;) {
+            $date->addDay();
+            if (!$date->isSunday()) {
+                $left--;
+            }
+        }
+
+        return $date->endOfDay();
+    }
 
     /**
      * Semestr kurs darajasida o'qituvchi otrabotka / sababli bahosini qo'ya oladimi

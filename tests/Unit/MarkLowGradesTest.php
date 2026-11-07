@@ -61,6 +61,6 @@ it('marks current-semester grades below the new limit as low grades', function (
     $this->artisan('grades:mark-low', ['--force' => true])->assertSuccessful();
 
     $row = DB::table('student_grades')->find($target);
-    expect([$row->reason, $row->status, substr($row->deadline, 0, 10)])->toBe(['low_grade', 'pending', '2026-11-11'])
+    expect([$row->reason, $row->status, substr($row->deadline, 0, 10)])->toBe(['low_grade', 'pending', '2026-11-12'])   // 04.11 + 7 kun, 08.11 yakshanba sanalmaydi
         ->and(DB::table('student_grades')->where('reason', 'low_grade')->orderBy('id')->pluck('id')->all())->toBe([$target, $already]);
 });

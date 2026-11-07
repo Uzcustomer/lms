@@ -1022,9 +1022,7 @@ class ImportGrades extends Command
             $deadline = null;
             if ($isLowGrade) {
                 $dl = $deadlinesMap->get($student->level_code);
-                $deadline = $dl
-                    ? $lessonDate->copy()->addDays($dl->deadline_days)->endOfDay()
-                    : $lessonDate->copy()->addWeek()->endOfDay();
+                $deadline = Deadline::retakeDeadline($lessonDate, $dl ? (int) $dl->deadline_days : 7);
             }
 
             $insertRows[] = [
@@ -1227,9 +1225,7 @@ class ImportGrades extends Command
             $deadline = null;
             if ($isLowGrade) {
                 $dl = $deadlinesMap->get($student->level_code);
-                $deadline = $dl
-                    ? $lessonDate->copy()->addDays($dl->deadline_days)->endOfDay()
-                    : $lessonDate->copy()->addWeek()->endOfDay();
+                $deadline = Deadline::retakeDeadline($lessonDate, $dl ? (int) $dl->deadline_days : 7);
             }
 
             $insertRows[] = [
@@ -1633,10 +1629,7 @@ class ImportGrades extends Command
     private function getDeadline($levelCode, $lessonDate)
     {
         $deadline = Deadline::where('level_code', $levelCode)->first();
-        if ($deadline) {
-            return $lessonDate->copy()->addDays($deadline->deadline_days)->endOfDay();
-        }
-        return $lessonDate->copy()->addWeek()->endOfDay();
+        return Deadline::retakeDeadline($lessonDate, $deadline ? (int) $deadline->deadline_days : 7);
     }
 
     // =========================================================================

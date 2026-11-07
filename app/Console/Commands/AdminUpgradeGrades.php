@@ -155,7 +155,7 @@ class AdminUpgradeGrades extends Command
                 $update = [$column => $old, 'upgraded_by_admin' => false, 'admin_original_grade' => null, 'admin_upgraded_at' => null];
                 if ($lowGradeDebt && $column === 'grade' && $old < $limit && $r->reason === null && $r->retake_grade === null) {
                     $update += ['reason' => 'low_grade', 'status' => 'pending',
-                        'deadline' => Carbon::parse($r->lesson_date)->addDays((int) ($deadlineDays[$students[$r->student_hemis_id] ?? ''] ?? 7))->endOfDay()];
+                        'deadline' => Deadline::retakeDeadline($r->lesson_date, (int) ($deadlineDays[$students[$r->student_hemis_id] ?? ''] ?? 7))];
                 }
                 $changed++;
                 $samples[] = [$groupName, $r->student_hemis_id, substr((string) $r->lesson_date, 0, 10), self::num($r->{$column}), self::num($old)];

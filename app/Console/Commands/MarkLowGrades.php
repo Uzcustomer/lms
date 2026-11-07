@@ -48,9 +48,7 @@ class MarkLowGrades extends Command
         $expired = 0;
         foreach ($rows as $r) {
             $days = $deadlines->get($r->level_code)?->deadline_days;
-            $deadline = $days !== null
-                ? Carbon::parse($r->lesson_date)->addDays($days)->endOfDay()
-                : Carbon::parse($r->lesson_date)->addWeek()->endOfDay();
+            $deadline = Deadline::retakeDeadline($r->lesson_date, $days !== null ? (int) $days : 7);
             if ($deadline->lt($today)) {
                 $expired++;   // muddati o'tgan — qayta topshirib bo'lmaydi, tegilmaydi
                 continue;

@@ -306,6 +306,23 @@
                     Kirish
                 </button>
 
+                {{-- Xodimlar HEMIS (hemis.ttatf.uz) orqali — .env da sozlangandagina ko'rinadi --}}
+                @if(config('services.hemis_staff_oauth.client_id'))
+                    <div style="display:flex; align-items:center; margin:14px 0;">
+                        <div style="flex:1; height:1px; background:#e5e7eb;"></div>
+                        <span style="padding:0 10px; font-size:11px; color:#9ca3af;">yoki</span>
+                        <div style="flex:1; height:1px; background:#e5e7eb;"></div>
+                    </div>
+
+                    <a href="{{ route('auth.hemis-staff.redirect') }}"
+                       style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:12px 0; background:linear-gradient(135deg, #065f46 0%, #047857 100%); color:#fff; font-size:14px; font-weight:700; border-radius:14px; text-decoration:none; letter-spacing:0.3px; transition:all .25s ease;"
+                       onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 24px rgba(6,95,70,0.4)'"
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                        Hemis orqali kirish
+                    </a>
+                @endif
+
             </form>
 
             {{-- Admin forma (yashirin) --}}

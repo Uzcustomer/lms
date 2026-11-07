@@ -185,7 +185,7 @@
                                         <div style="display: flex; flex-wrap: wrap; gap: 3px;">
                                             @forelse($teacher->roles as $role)
                                                 <span class="badge badge-indigo">
-                                                    {{ \App\Enums\ProjectRole::tryFrom($role->name)?->label() ?? $role->name }}
+                                                    {{ \App\Enums\ProjectRole::tryFrom($role->name)?->label() ?? $role->name }}@if($role->name === 'kafedra_mudiri' && $teacher->is_primary_head) (asosiy)@endif
                                                 </span>
                                             @empty
                                                 <span style="color: #cbd5e1; font-size: 12px;">-</span>

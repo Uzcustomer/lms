@@ -78,7 +78,7 @@
                                 @endif
                                 @foreach($teacher->roles as $role)
                                     <span class="badge badge-indigo">
-                                        {{ \App\Enums\ProjectRole::tryFrom($role->name)?->label() ?? $role->name }}
+                                        {{ \App\Enums\ProjectRole::tryFrom($role->name)?->label() ?? $role->name }}@if($role->name === 'kafedra_mudiri' && $teacher->is_primary_head) (asosiy)@endif
                                     </span>
                                 @endforeach
                                 @if($teacher->hasRole('dekan'))

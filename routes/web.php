@@ -1373,6 +1373,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Fan mas'uli: mas'ul fani kartasini shu haftaga (vaqt + xona) — to'qnashuvdagi dars toza joyga darhol, aks holda so'rov.
                 Route::post('/cards/{card}/responsible-move/check', [\App\Http\Controllers\Admin\TimetableController::class, 'responsibleMoveCheck'])->name('cards.responsible-move.check');
                 Route::post('/cards/{card}/responsible-move', [\App\Http\Controllers\Admin\TimetableController::class, 'responsibleMove'])->name('cards.responsible-move');
+                // Fan mas'uli: "Joylash uchun tanlash" — shu hafta kataklari holati (ok / teacher / group / room / closed) va eng yaxshi joylar, bitta so'rov.
+                Route::get('/cards/{card}/responsible-move/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'responsibleMoveGrid'])->name('cards.responsible-move.grid');
                 Route::post('/boards/{board}/cycle-time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkCycleTime'])->name('cycle-time-proposal.check');
                 Route::post('/boards/{board}/cycle-time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeCycleTime'])->name('cycle-time-proposal');
                 Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');

@@ -96,7 +96,7 @@ ${capText}
         for (let p = 1; p <= 4; p++) {
             h += '<tr>';
             for (let d = 1; d <= 2; d++) {
-                let cls = 'tt-cell', clickable = '';
+                let cls = 'tt-cell tt-course-2', clickable = '';   // haqiqiy jadvaldagidek kurs foni (2-kurs — #f0fdf4)
                 const grp = 'F|S|2¦pp/2024-01g';
                 if (fmPick && cardGKeys(fmPick.card).includes(grp)) {
                     const fc = fmCell(d, p);
@@ -170,8 +170,15 @@ const card = { id: 1, subject_name: 'Farmakologiya', group_name: 'pp/2024-01g', 
     assert.equal(await page.evaluate(() => window.log.at(-2)), 'rows');
     await page.check('#ttFmPick [data-fm-own]');
     assert.equal((await state()).own, true);
-    assert.match(await cellCls(2, 1), /tt-ok/);
+    assert.match(await cellCls(2, 1), /tt-ok tt-fm-ok/);
     assert.equal(await cellAttr(2, 1, 'title'), 'Joylash mumkin · xona: 400-amaliyot (shu bino)');
+    // Yashil katak kurs fonidan aniq ajraladi: to'qroq yashil + 2px ichki ramka; hover — kuchliroq (3px, to'qroq).
+    const look = (d, p) => page.$eval('#grid td[data-day="' + d + '"][data-pair="' + p + '"]', el => { const cs = getComputedStyle(el); return [cs.backgroundColor, cs.boxShadow]; });
+    assert.deepEqual(await look(2, 1), ['rgb(134, 239, 172)', 'rgb(22, 163, 74) 0px 0px 0px 2px inset']);
+    assert.equal((await look(1, 1))[0], 'rgb(229, 231, 235)');   // kulrang (yopiq) — o'zgarmagan
+    await page.hover('#grid td[data-day="2"][data-pair="1"]');
+    assert.deepEqual(await look(2, 1), ['rgb(74, 222, 128)', 'rgb(21, 128, 61) 0px 0px 0px 3px inset']);
+    await page.mouse.move(0, 0);
     assert.match(await cellCls(2, 2), /tt-bad tt-bad-teacher/);
     assert.equal(await cellAttr(2, 2, 'data-bad-ids'), '41:teacher');
     assert.match(await cellAttr(2, 2, 'title'), /O'qituvchi band: USTOZ/);

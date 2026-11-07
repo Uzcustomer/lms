@@ -1136,6 +1136,9 @@
         #grid .tt-cause-room { outline: 3px dashed #ca8a04 !important; outline-offset: -2px; }
         /* Fan mas'uli "Joylash": kulrang — bugun / o'tgan kun yoki dars kun oxiriga sig'maydi (tanlab bo'lmaydi). */
         #grid td.tt-closed { background: #e5e7eb; cursor: not-allowed; }
+        /* Fan mas'uli "Joylash": yashil katak kurs fonidan (2-kurs — #f0fdf4) aniq ajralsin — to'qroq yashil va ichki ramka; hover — kuchliroq. */
+        #grid td.tt-cell.tt-fm-ok { background: #86efac; box-shadow: inset 0 0 0 2px #16a34a; }
+        #grid td.tt-cell.tt-fm-ok:hover { background: #4ade80; box-shadow: inset 0 0 0 3px #15803d; }
         #grid td.drag-bad-closed { outline-color: #6b7280; background: rgba(229, 231, 235, .9); }
         #ttFmPick[hidden] { display: none; }
         #ttFmPick { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 5px 10px; font-size: 11px; color: #334155;
@@ -13984,7 +13987,7 @@
                 const at = d + '-' + p;
                 if (fc.state === 'ok') {
                     const r = fc.best_room;
-                    return { cls: ' tt-ok', attrs: ' data-fm-place="' + at + '" title="' + esc('Joylash mumkin' + (r ? ' · xona: ' + r.name + (r.why ? ' (' + r.why + ')' : '') : '')) + '"' };
+                    return { cls: ' tt-ok tt-fm-ok', attrs: ' data-fm-place="' + at + '" title="' + esc('Joylash mumkin' + (r ? ' · xona: ' + r.name + (r.why ? ' (' + r.why + ')' : '') : '')) + '"' };
                 }
                 if (fc.state === 'closed') return { cls: ' tt-closed', attrs: ' title="' + esc(fc.reason || '') + '"' };
                 const causes = Object.entries(fc.causes || {}).map(([id, k]) => id + ':' + k).join(',');
@@ -14082,7 +14085,7 @@
                 bar.hidden = false;
                 bar.innerHTML = '<b>Joylash:</b> <span>' + esc(c.subject_name + ' · ' + (c.group_name || '') + ' · ' + len + ' soat'
                         + (unit.length > 1 ? ' (' + unit.map(cardLen).join(' + ') + ')' : '') + ' · ' + curWeek + '-hafta') + '</span> — ' + status
-                    + '<span><i style="background:#dcfce7"></i>yashil — butun dars sig‘adi, bo‘sh xona bor</span>'
+                    + '<span><i style="background:#86efac;box-shadow:inset 0 0 0 2px #16a34a"></i>yashil — butun dars sig‘adi, bo‘sh xona bor</span>'
                     + '<span><i style="background:#f87171"></i>to‘q qizil — o‘qituvchi band</span>'
                     + '<span><i style="background:#fecaca"></i>och qizil — guruh band</span>'
                     + '<span><i style="background:#fde68a"></i>sariq — vaqt bo‘sh, mos bo‘sh xona yo‘q (xona tanlab)</span>'

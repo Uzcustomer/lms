@@ -62,7 +62,9 @@ class TimetableAssignmentAccess
                 'admin.timetable.cycle-shift-advice', 'admin.timetable.teacher-agenda',
                 // Fan mas'uli: mas'ul fani kartasini shu haftaga ko'chirish (vaqt + xona; huquq, rejim va tarix — controller ichida).
                 // Xonalar ro'yxati shu javobda — admin.timetable.auditoriums / teachers ochilmaydi.
-                'admin.timetable.cards.responsible-move.check', 'admin.timetable.cards.responsible-move'])) {
+                'admin.timetable.cards.responsible-move.check', 'admin.timetable.cards.responsible-move',
+                // "Joylash uchun tanlash": shu hafta kataklari holati (faqat o'qiydi; huquq — controller ichida, check bilan bir xil).
+                'admin.timetable.cards.responsible-move.grid'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 

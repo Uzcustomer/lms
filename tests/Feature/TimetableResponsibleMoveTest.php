@@ -502,3 +502,147 @@ it('band xona busy_items: ma\'ruza (ko\'p guruh) bilan band — subject faqat fa
         ->and($r2['busy_items'][0])->toMatchArray(['teacher' => 'UMAROV J. A.', 'subject' => 'Normal fiziologiya',
             'groups' => ["p/p25-01b (o'z)", 'p/p25-01c', 'p/p25-02a'], 'time' => '10:00–11:20']);
 });
+
+// ---- "Joylash uchun tanlash" (fan mas'uli): responsible-move/grid — bitta so'rov bilan kataklar holati ----
+
+function rmGrid(array $s, TimetableCard $card, ?Teacher $who = null, string $role = 'fan_masuli', ?int $week = null)
+{
+    return rmAs($who ?? $s['fm'], $role)->getJson(route('admin.timetable.cards.responsible-move.grid', ['card' => $card, 'week' => $week ?? $s['week']]));
+}
+
+it('grid: holatlar — ok (eng yaqin bo\'sh xona), teacher, group, room, closed (kun oxiri); sabab va sabab bo\'lgan darslar', function () {
+    $s = rmSetup();
+    $who = rmTeacher('YETTINCHI Y.');
+    $x = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);   // joylanmagan, xonasi 101
+    // Guruh band: chorshanba 5-qator (12:00); o'qituvchi band: juma 3-qator (boshqa guruh).
+    $g = $s['card']('pp/2024-01g', $s['other'], 3, 5, $s['r3'], ['subject_name' => 'Anatomiya']);
+    $t = $s['card']('pp/2024-01h', $who, 5, 3, $s['r3'], ['subject_name' => 'Anatomiya']);
+    // Shanba 1-qator: barcha mos xonalar band (101, 102, 103); 104 — kichik, 105 — nofaol.
+    foreach (['R1' => 'pp/2024-02a', 'R2' => 'pp/2024-02b', 'R3' => 'pp/2024-02c'] as $code => $grp) {
+        $s['card']($grp, rmTeacher('B-' . $code), 6, 1, Auditorium::where('code', $code)->first(), ['subject_name' => 'Tarix']);
+    }
+    $res = rmGrid($s, $x)->assertOk()->json();
+    $c = fn (int $d, int $p) => $res['cells'][$d . '-' . $p];
+
+    expect($res)->toMatchArray(['ok' => true, 'week' => $s['week'], 'days' => 6, 'pairs' => 12, 'len' => 2, 'closed' => null])
+        ->and($res['parts'])->toBe([['card_id' => $x->id, 'len_half' => 2, 'offset' => 0]])
+        ->and($c(2, 3))->toMatchArray(['state' => 'ok', 'reason' => null])
+        ->and($c(2, 3)['best_room'])->toMatchArray(['code' => 'R1', 'name' => '101-xona', 'why' => 'hozirgi xona'])
+        // 12:00 dagi guruh darsi bilan ustma-ust (shu va oldingi qatordan boshlab — 2 soat), sababi va ramka uchun karta.
+        ->and($c(3, 5))->toMatchArray(['state' => 'group', 'causes' => [$g->id => 'group']])->and($c(3, 5)['reason'])->toContain('Guruh band')
+        ->and($c(3, 4)['state'])->toBe('group')->and($c(3, 6)['state'])->toBe('group')->and($c(3, 7)['state'])->toBe('ok')
+        ->and($c(5, 3))->toMatchArray(['state' => 'teacher', 'causes' => [$t->id => 'teacher']])->and($c(5, 3)['reason'])->toContain("O'qituvchi band: YETTINCHI Y.")
+        ->and($c(6, 1))->toMatchArray(['state' => 'room'])->and($c(6, 1)['reason'])->toContain("mos bo'sh xona yo'q")
+        ->and($c(6, 1)['reason'])->toContain('hozirgi xona band')
+        ->and($c(2, 12))->toMatchArray(['state' => 'closed', 'reason' => "Kun oxiri: 2 soat sig'maydi."])
+        ->and(count($res['cells']))->toBe(6 * 12);
+    // Sariq katakdan keyingi qatorda — 101 bo'sh (shanba 1-qatordagi dars 2 soat: 1–2), 3-qatordan — yashil.
+    expect($c(6, 3)['state'])->toBe('ok');
+});
+
+it('grid: guruh / o\'qituvchi holati unitPlanAt bilan mos (har katak); ko\'p bo\'lakli dars — butun birlik bo\'yicha', function () {
+    $s = rmSetup();
+    $who = rmTeacher('SAKKIZINCHI S.');
+    $p1 = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);
+    $p2 = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);
+    $s['card']('pp/2024-01g', $s['other'], 3, 5, $s['r3'], ['subject_name' => 'Anatomiya']);
+    $s['card']('pp/2024-01h', $who, 5, 3, $s['r3'], ['subject_name' => 'Anatomiya']);
+    $res = rmGrid($s, $p1)->assertOk()->json();
+    expect($res['len'])->toBe(4)->and(array_column($res['parts'], 'offset'))->toBe([0, 2]);
+
+    $ctl = app(TimetableController::class);
+    $plan = new ReflectionMethod($ctl, 'unitPlanAt');
+    $unit = (new ReflectionMethod($ctl, 'weeklyUnitCards'))->invoke($ctl, $p1)->each(fn ($c) => $c->setRelation('board', $s['board']));
+    $p1->setRelation('board', $s['board']);
+    $checked = 0;
+    foreach ($res['cells'] as $key => $cell) {
+        [$d, $p] = array_map('intval', explode('-', $key));
+        if ($cell['state'] === 'closed') {
+            continue;
+        }
+        [$errors] = $plan->invoke($ctl, $p1, $unit, $s['week'], $d, $p);
+        $text = implode(' ', $errors);
+        $want = str_contains($text, "O'qituvchi band") ? 'teacher' : (str_contains($text, 'Guruh band') ? 'group' : 'free');
+        expect([$key, in_array($cell['state'], ['ok', 'room'], true) ? 'free' : $cell['state']])->toBe([$key, $want]);
+        $checked++;
+    }
+    // Dushanba (16.11) — bugun (beforeEach), har kunning 10–12-qatorlari — 4 soat sig'maydi: 5 kun × 9 boshlanish tekshirildi.
+    // 12:00 dagi guruh darsi: 4 soatlik dars 2-, 3-, 4-, 5-, 6-qatordan boshlab ustma-ust.
+    expect($checked)->toBe(45)
+        ->and(collect([2, 3, 4, 5, 6])->map(fn ($p) => $res['cells']['3-' . $p]['state'])->unique()->values()->all())->toBe(['group'])
+        ->and($res['cells']['3-1']['state'])->toBe('ok')->and($res['cells']['3-7']['state'])->toBe('ok')
+        ->and($res['cells']['2-10']['state'])->toBe('closed');
+});
+
+it('grid: bugungi va o\'tgan kunlar — closed; huquq — mas\'ul bo\'lmagan fan, ma\'ruza va boshqa rol — 403', function () {
+    $s = rmSetup();
+    $who = rmTeacher('TO\'QQIZINCHI T.');
+    $x = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);
+    // Shu haftaning chorshanbasi (18.11) — bugun: dushanba–chorshanba yopiq, payshanbadan — ochiq.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-18 08:00', 'Asia/Tashkent'));
+    $res = rmGrid($s, $x)->assertOk()->json();
+    expect(collect(range(1, 3))->map(fn ($d) => $res['cells'][$d . '-3']['state'])->all())->toBe(['closed', 'closed', 'closed'])
+        ->and($res['cells']['3-3']['reason'])->toBe("Bugungi va o'tgan kunlar — yopiq (18.11).")
+        ->and($res['cells']['4-1']['state'])->toBe('ok');
+    // Butun hafta o'tgan — hamma katak yopiq, sababi bilan.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-23 08:00', 'Asia/Tashkent'));
+    $res = rmGrid($s, $x)->assertOk()->json();
+    expect($res['closed'])->toContain("ochiq kun yo'q")->and(collect($res['cells'])->pluck('state')->unique()->all())->toBe(['closed']);
+    $this->travelBack();
+
+    $other = $s['card']('pp/2024-01g', $who, null, null, $s['r1'], ['subject_name' => 'Anatomiya']);
+    rmGrid($s, $other)->assertForbidden()->assertJson(['message' => "Faqat mas'ul faningizdagi darsni o'zgartira olasiz."]);
+    $lec = $s['card']('pp/2024-01g', $who, null, null, $s['r1'], ['training_type' => 'lecture']);
+    rmGrid($s, $lec)->assertForbidden()->assertJson(['message' => "Ma'ruzani surish — faqat kafedra mudiri va adminlar."]);
+    rmGrid($s, $x, $s['t'], 'oqituvchi')->assertForbidden();
+    rmGrid($s, $x, null, 'fan_masuli', 99)->assertUnprocessable();
+});
+
+it('grid: yashil katakka joylash — override yoziladi (darhol, faqat shu hafta); sariq katakda xona tanlamasdan — rad', function () {
+    $s = rmSetup();
+    $who = rmTeacher('O\'NINCHI O.');
+    $x = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);
+    foreach (['R1' => 'pp/2024-02a', 'R2' => 'pp/2024-02b', 'R3' => 'pp/2024-02c'] as $code => $grp) {
+        $s['card']($grp, rmTeacher('B-' . $code), 6, 1, Auditorium::where('code', $code)->first(), ['subject_name' => 'Tarix']);
+    }
+    $grid = rmGrid($s, $x)->assertOk()->json('cells');
+    expect($grid['2-3']['state'])->toBe('ok')->and($grid['6-1']['state'])->toBe('room');
+
+    // Yashil: best_room bilan — darhol (joylanmagan dars — fix), shu haftaning override'i, shablon o'zgarmaydi.
+    $res = rmMove($s, $x, ['day' => 2, 'pair' => 3, 'auditorium_code' => $grid['2-3']['best_room']['code']])->assertOk()->json();
+    expect($res)->toMatchArray(['ok' => true, 'mode' => 'fix', 'fixed' => true]);
+    $ov = TimetableCardOverride::where('card_id', $x->id)->where('week', $s['week'])->sole();
+    expect([$ov->day, $ov->pair, $ov->auditorium_code, (bool) $ov->cancelled])->toBe([2, 3, 'R1', false])
+        ->and($x->fresh()->only(['day', 'pair']))->toBe(['day' => null, 'pair' => null]);
+
+    // Sariq (hozirgi xona band, boshqa mos xona yo'q): xonasiz — rad, hech narsa yozilmaydi.
+    TimetableCardOverride::query()->delete();
+    rmMove($s, $x, ['day' => 6, 'pair' => 1])->assertUnprocessable();
+    expect(TimetableCardOverride::where('card_id', $x->id)->count())->toBe(0);
+    // Xonasiz dars: bo'sh vaqtda ham xona tanlanmasa — rad ("Xona tanlang"); tanlansa — joylanadi.
+    $y = $s['card']('pp/2024-01h', $who, null, null, null);
+    expect(rmGrid($s, $y)->json('cells.2-3.best_room.code'))->toBeIn(['R1', 'R2', 'R3']);
+    rmMove($s, $y, ['day' => 2, 'pair' => 3])->assertUnprocessable()->assertJson(['message' => 'Xona tanlang: darsga xona biriktirilmagan.']);
+    rmMove($s, $y, ['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertOk()->assertJson(['mode' => 'fix']);
+});
+
+it('grid: eng yaxshi 5 joy — guruh darsiga yaqin (oraliq kam), o\'qituvchi bandligi kam, yaqin xona; vaqti ustma-ust tushmaydi', function () {
+    $s = rmSetup();
+    $who = rmTeacher('O\'N BIRINCHI O.');
+    $x = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);
+    $s['card']('pp/2024-01g', $s['other'], 3, 5, $s['r3'], ['subject_name' => 'Anatomiya']);   // guruh darsi: chorshanba 12:00–13:20
+    $best = rmGrid($s, $x)->assertOk()->json('best');
+    expect($best)->toHaveCount(5)
+        ->and([$best[0]['day'], $best[0]['pair']])->toBe([3, 3])->and([$best[1]['day'], $best[1]['pair']])->toBe([3, 7])
+        ->and($best[0]['why'])->toContain('guruhning shu kungi darsiga ulashgan')->and($best[0]['why'])->toContain("o'qituvchi shu kuni bo'sh")
+        ->and($best[0]['label'])->toBe('Chorshanba, 18.11 10:00–11:20')
+        ->and($best[0]['room'])->toMatchArray(['code' => 'R1', 'why' => 'hozirgi xona'])
+        ->and($best[2]['why'])->toContain('oraliq');
+    // Bir kunda tanlangan joylar vaqti ustma-ust emas.
+    foreach (collect($best)->groupBy('day') as $list) {
+        $ps = $list->pluck('pair')->sort()->values();
+        for ($i = 1; $i < $ps->count(); $i++) {
+            expect($ps[$i] - $ps[$i - 1])->toBeGreaterThanOrEqual(2);
+        }
+    }
+});

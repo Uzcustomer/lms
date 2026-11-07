@@ -1395,6 +1395,7 @@ class KtrController extends Controller
                 // Kafedra mudiri - Spatie role orqali
                 $mudiri = Teacher::headsOfDepartment($kafedra->department_hemis_id)
                     ->where('is_active', true)
+                    ->primaryHeadFirst()
                     ->first();
                 // Fallback: role ustuni orqali
                 if (!$mudiri) {

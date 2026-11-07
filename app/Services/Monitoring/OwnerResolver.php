@@ -83,7 +83,7 @@ class OwnerResolver
             $this->heads[$departmentHemisId] = Teacher::query()
                 ->headsOfDepartment($departmentHemisId)
                 ->orderByDesc('is_active')
-                ->orderBy('id')
+                ->primaryHeadFirst()
                 ->first();
         }
 

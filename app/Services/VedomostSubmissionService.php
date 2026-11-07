@@ -1607,6 +1607,7 @@ class VedomostSubmissionService
 
         $mudiri = Teacher::headsOfDepartment($departmentHemisId)
             ->where('is_active', true)
+            ->primaryHeadFirst()
             ->first();
         if (!$mudiri) {
             $mudiri = Teacher::where('role', 'kafedra_mudiri')

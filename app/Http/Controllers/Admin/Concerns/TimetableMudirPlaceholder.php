@@ -44,7 +44,7 @@ trait TimetableMudirPlaceholder
         if (!$deptId) {
             return null;
         }
-        $q = Teacher::headsOfDepartment($deptId)->where('is_active', true);
+        $q = Teacher::headsOfDepartment($deptId)->where('is_active', true)->primaryHeadFirst();
 
         return (clone $q)->whereNotNull('hemis_id')->where('hemis_id', '>', 0)->first() ?? $q->first();
     }

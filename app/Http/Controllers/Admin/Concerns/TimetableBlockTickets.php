@@ -49,20 +49,23 @@ trait TimetableBlockTickets
         return $t->lesson_date->copy()->startOfWeek(\Carbon\Carbon::MONDAY)->addDays($day - 1)->toDateString();
     }
 
-    /** Kartaning kafedrasi mudiri (mark'dagi "kafedra_mudiri" roli, shu kafedraga biriktirilgan). */
-    private function ticketHeadFor(TimetableCard $card): ?Teacher
+    /**
+     * Kartaning kafedrasi mudirlari (mark'dagi "kafedra_mudiri" roli, shu kafedraga biriktirilgan) — asosiy mudir birinchi.
+     * Bir nechta mudir bo'lsa — so'rov hammasiga boradi.
+     */
+    private function ticketHeadsFor(TimetableCard $card)
     {
         $name = trim((string) $card->kafedra_name);
         if ($name === '') {
-            return null;
+            return collect();
         }
         $dept = Department::where('name', $name)->where('structure_type_code', '!=', 11)->first()
             ?? Department::where('name', 'like', '%' . $name . '%')->where('structure_type_code', '!=', 11)->first();
         if (!$dept) {
-            return null;
+            return collect();
         }
 
-        return Teacher::headsOfDepartment($dept->department_hemis_id)->where('is_active', true)->first();
+        return Teacher::headsOfDepartment($dept->department_hemis_id)->where('is_active', true)->primaryHeadFirst()->get();
     }
 
     private function ticketTeacherByName(?string $name): ?Teacher
@@ -188,7 +191,8 @@ trait TimetableBlockTickets
             }
             $blocker = array_intersect_key((array) ($it['blocker'] ?? []), array_flip(['source', 'group', 'subject', 'teacher', 'room', 'time', 'text']));
             $teacher = $card->teacher_id ? Teacher::find($card->teacher_id) : null;
-            $head = $this->ticketHeadFor($card);
+            $heads = $this->ticketHeadsFor($card);
+            $head = $heads->first();
             $people = [];
             $add = function (?Teacher $t, string $role) use (&$people) {
                 if ($t && !isset($people[$t->id])) {
@@ -197,7 +201,9 @@ trait TimetableBlockTickets
                 }
             };
             $add($teacher, 'teacher');
-            $add($head, 'head');
+            foreach ($heads as $h) {
+                $add($h, 'head');
+            }
             if ($it['type'] === 'room') {
                 $add($this->ticketTeacherByName($blocker['teacher'] ?? null), 'blocker');
             }

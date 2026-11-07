@@ -99,6 +99,7 @@ class VedomostSubmissionNotifier
 
     /**
      * Xabar oluvchi o'qituvchilar: o'qituvchi + fan mas'uli + kafedra mudiri.
+     * Kafedrada bir nechta mudir bo'lsa — hammasi (vedomostda yozilgani asosiy mudir).
      */
     private function recipientTeachers(VedomostSubmission $v)
     {
@@ -108,11 +109,14 @@ class VedomostSubmissionNotifier
             $v->kafedra_mudiri_hemis_id,
         ])));
 
-        if (empty($ids)) {
-            return collect();
+        $teachers = empty($ids) ? collect() : Teacher::whereIn('hemis_id', $ids)->get();
+
+        if ($v->department_hemis_id) {
+            $heads = Teacher::headsOfDepartment($v->department_hemis_id)->where('is_active', true)->get();
+            $teachers = $teachers->concat($heads)->unique('id')->values();
         }
 
-        return Teacher::whereIn('hemis_id', $ids)->get();
+        return $teachers;
     }
 
     private function statusText(VedomostSubmission $v): array

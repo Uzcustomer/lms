@@ -2157,7 +2157,7 @@ trait TimetableHemisSync
             return null;
         }
         if (!array_key_exists((string) $deptId, $this->hemisMudirMemo)) {
-            $q = Teacher::headsOfDepartment($deptId)->where('is_active', true);
+            $q = Teacher::headsOfDepartment($deptId)->where('is_active', true)->primaryHeadFirst();
             $t = (clone $q)->whereNotNull('hemis_id')->where('hemis_id', '>', 0)->first() ?? $q->first();
             $this->hemisMudirMemo[(string) $deptId] = $t ? [$t->hemis_id ? (int) $t->hemis_id : null, $t->full_name] : null;
         }

@@ -472,6 +472,16 @@
                                     <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
                                         Xodim HEMIS da boshqa bo'limda (masalan o'rindosh) bo'lsa, mudir bo'lgan kafedrasini tanlang.
                                     </div>
+                                    <label style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; font-weight: 600; color: #166534; cursor: pointer;">
+                                        <input type="checkbox" name="is_primary_head" value="1" style="accent-color: #16a34a;"
+                                            {{ old('is_primary_head', $teacher->is_primary_head) ? 'checked' : '' }}>
+                                        Asosiy mudir
+                                    </label>
+                                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                                        Kafedrada bir nechta mudir bo'lishi mumkin — ruxsatlari bir xil, xabarlar hammasiga boradi.
+                                        Vedomost, KTR, jurnal hujjatlarida va HEMIS'da asosiy mudir ismi chiqadi.
+                                        Asosiy belgilansa, shu kafedraning boshqa mudiridan belgi olinadi; kafedrada asosiy mudir bo'lmasa — avtomatik asosiy bo'ladi.
+                                    </div>
                                 </div>
                             </div>
 

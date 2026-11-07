@@ -281,6 +281,17 @@ class TeacherController extends Controller
         $teacher->head_department_hemis_id = $isDepartmentHead
             ? ($request->input('head_department_hemis_id') ?: null)
             : null;
+        // Asosiy mudir — kafedrada bittasi: belgilansa boshqalaridan olinadi; kafedrada asosiy
+        // mudir umuman bo'lmasa (masalan birinchi mudir) — shu xodim asosiy bo'ladi.
+        $headDeptId = $isDepartmentHead ? $teacher->headDepartmentHemisId() : null;
+        $otherHeads = $headDeptId
+            ? Teacher::headsOfDepartment($headDeptId)->whereKeyNot($teacher->id)
+            : null;
+        $teacher->is_primary_head = $headDeptId
+            && ($request->boolean('is_primary_head') || !(clone $otherHeads)->where('is_primary_head', true)->exists());
+        if ($teacher->is_primary_head) {
+            (clone $otherHeads)->where('is_primary_head', true)->update(['is_primary_head' => false]);
+        }
         if ($isFirmResponsible) {
             $firmValue = $request->input('assigned_firm');
             // Agar "other" tanlangan va yangi firma nomi kiritilgan bo'lsa

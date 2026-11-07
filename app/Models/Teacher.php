@@ -44,6 +44,7 @@ class Teacher extends Authenticatable
         'is_active',
         'department_hemis_id',
         'head_department_hemis_id',
+        'is_primary_head',
         'role',
         'must_change_password',
         'phone',
@@ -67,6 +68,7 @@ class Teacher extends Authenticatable
         'password' => 'hashed',
         'telegram_verified_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
+        'is_primary_head' => 'boolean',
     ];
 
     /**
@@ -112,6 +114,24 @@ class Teacher extends Authenticatable
                             ->where('department_hemis_id', $departmentHemisId);
                     });
             });
+    }
+
+    /**
+     * Kafedrada bir nechta mudir bo'lsa — asosiy mudir birinchi (hujjatdagi ism, HEMIS'dagi
+     * "kafedra mudiri" o'rinbosari bitta odam bo'lishi kerak bo'lgan joylar uchun),
+     * keyin HEMIS lavozimi "mudir" bo'lgan, keyin eng avval qo'shilgan.
+     */
+    public function scopePrimaryHeadFirst($query)
+    {
+        static $hasColumn = null;
+        $hasColumn ??= \Illuminate\Support\Facades\Schema::hasColumn('teachers', 'is_primary_head');
+        if ($hasColumn) {
+            $query->orderByDesc('is_primary_head');
+        }
+
+        return $query
+            ->orderByRaw("CASE WHEN COALESCE(lavozim, '') LIKE '%mudir%' OR COALESCE(staff_position, '') LIKE '%mudir%' THEN 0 ELSE 1 END")
+            ->orderBy('id');
     }
 
     public function isProfileComplete(): bool

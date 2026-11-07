@@ -10464,6 +10464,7 @@ class JournalController extends Controller
         if ($kafedra) {
             $mudiri = Teacher::headsOfDepartment($kafedra->department_hemis_id)
                 ->where('is_active', true)
+                ->primaryHeadFirst()
                 ->first();
             if (!$mudiri) {
                 $mudiri = Teacher::where('role', 'kafedra_mudiri')

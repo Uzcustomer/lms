@@ -1104,6 +1104,7 @@ class RetakeJournalService
                 $mudiri = \App\Models\Teacher::query()
                     ->headsOfDepartment($teacher->department_hemis_id)
                     ->where('is_active', true)
+                    ->primaryHeadFirst()
                     ->first();
                 if (!$mudiri) {
                     $mudiri = \App\Models\Teacher::query()

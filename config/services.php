@@ -55,6 +55,8 @@ return [
         'client_id' => env('HEMIS_STAFF_OAUTH_CLIENT_ID'),
         'client_secret' => env('HEMIS_STAFF_OAUTH_CLIENT_SECRET'),
         'redirect_uri' => env('HEMIS_STAFF_OAUTH_REDIRECT_URI'),
+        // Mark'dan chiqqanda HEMIS sessiyasini ham yopish uchun HEMIS chiqish sahifasi (bo'sh — o'chiq)
+        'logout_url' => env('HEMIS_STAFF_OAUTH_LOGOUT_URL'),
     ],
 
     'telegram' => [

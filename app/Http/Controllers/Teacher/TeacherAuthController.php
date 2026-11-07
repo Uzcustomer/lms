@@ -239,6 +239,7 @@ class TeacherAuthController extends Controller
     public function logout(Request $request)
     {
         ActivityLogService::logLogout('teacher');
+        $viaHemis = $request->session()->get('login_via') === 'hemis_staff';
 
         // Barcha guardlardan logout qilish (session qoldiqlarini to'liq tozalash)
         Auth::guard('web')->logout();
@@ -247,6 +248,14 @@ class TeacherAuthController extends Controller
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        // HEMIS orqali kirgan bo'lsa — HEMIS sessiyasi ham yopilsin, aks holda keyingi
+        // "Hemis orqali kirish" parol so'ramay oldingi akkauntga kiradi (hemis.ttatf.uz
+        // cookie'sini Mark o'chira olmaydi — HEMIS'ning o'z chiqish sahifasiga yuboriladi)
+        $hemisLogout = config('services.hemis_staff_oauth.logout_url');
+        if ($viaHemis && $hemisLogout) {
+            return redirect()->away($hemisLogout);
+        }
 
         return redirect('/');
     }

@@ -150,6 +150,8 @@ class HemisStaffOAuthController extends Controller
 
         Auth::guard('teacher')->login($teacher);
         $request->session()->regenerate();
+        // Logout'da HEMIS sessiyasi ham yopilishi uchun (TeacherAuthController::logout)
+        $request->session()->put('login_via', 'hemis_staff');
 
         $roles = $teacher->getRoleNames()->toArray();
         if (in_array('oqituvchi', $roles)) {

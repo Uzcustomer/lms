@@ -78,3 +78,36 @@ it('rejects employees missing from LMS', function () {
         ->assertRedirect('/');
     expect(Auth::guard('teacher')->check())->toBeFalse();
 });
+
+function logoutTeacher(?string $loginVia): \Symfony\Component\HttpFoundation\Response
+{
+    $request = \Illuminate\Http\Request::create('/teacher/logout', 'POST');
+    $request->setLaravelSession($session = app('session')->driver());
+    $session->start();
+    if ($loginVia) {
+        $session->put('login_via', $loginVia);
+    }
+    app()->instance('request', $request);
+    Auth::guard('teacher')->login(\App\Models\Teacher::find(1));
+
+    return app(\App\Http\Controllers\Teacher\TeacherAuthController::class)->logout($request);
+}
+
+it('marks HEMIS logins so logout can close the HEMIS session too', function () {
+    fakeHemis(['id' => 999, 'login' => '3682111026']);
+    $this->withSession(['hemis_staff_oauth_state' => 'st'])
+        ->get('/auth/hemis-staff/callback?code=c&state=st')
+        ->assertSessionHas('login_via', 'hemis_staff');
+});
+
+it('sends HEMIS users to the HEMIS logout page, others to the home page', function () {
+    config()->set('services.hemis_staff_oauth.logout_url', 'https://hemis.test/dashboard/logout');
+
+    expect(logoutTeacher('hemis_staff')->headers->get('Location'))->toBe('https://hemis.test/dashboard/logout')
+        ->and(Auth::guard('teacher')->check())->toBeFalse()
+        ->and(logoutTeacher(null)->headers->get('Location'))->toBe(url('/'));
+
+    // Chiqish manzili sozlanmagan — avvalgidek bosh sahifa
+    config()->set('services.hemis_staff_oauth.logout_url', null);
+    expect(logoutTeacher('hemis_staff')->headers->get('Location'))->toBe(url('/'));
+});

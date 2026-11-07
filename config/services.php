@@ -49,6 +49,14 @@ return [
         'redirect_uri' => env('HEMIS_OAUTH_REDIRECT_URI'),
     ],
 
+    // Xodimlar HEMIS orqali kirishi (hemis.ttatf.uz dagi alohida OAuth ilova)
+    'hemis_staff_oauth' => [
+        'base_url' => env('HEMIS_STAFF_OAUTH_BASE_URL', 'https://hemis.ttatf.uz'),
+        'client_id' => env('HEMIS_STAFF_OAUTH_CLIENT_ID'),
+        'client_secret' => env('HEMIS_STAFF_OAUTH_CLIENT_SECRET'),
+        'redirect_uri' => env('HEMIS_STAFF_OAUTH_REDIRECT_URI'),
+    ],
+
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),

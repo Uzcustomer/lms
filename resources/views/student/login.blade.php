@@ -88,6 +88,13 @@
 
                 <button type="submit" class="btn-outline-login" style="padding:14px; font-size:15px; font-weight:600; border-width:2px;">Kirish</button>
             </form>
+            {{-- Xodimlar HEMIS (hemis.ttatf.uz) orqali — .env da sozlangandagina ko'rinadi --}}
+            @if(config('services.hemis_staff_oauth.client_id'))
+                <a href="{{ route('auth.hemis-staff.redirect') }}" class="btn-outline-login" style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; max-width:320px; margin-top:12px; padding:12px; font-size:14px; font-weight:600; text-decoration:none; position:relative; z-index:2;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                    HEMIS orqali kirish
+                </a>
+            @endif
         </div>
     </div>
 
@@ -177,6 +184,14 @@
 
                 <button type="submit" class="btn-primary-login">Kirish</button>
             </form>
+
+            @if(config('services.hemis_staff_oauth.client_id'))
+                <div class="divider"><span>yoki</span></div>
+                <a href="{{ route('auth.hemis-staff.redirect') }}" class="btn-social" style="width:100%;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:18px;height:18px;color:#059669;"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                    HEMIS orqali kirish
+                </a>
+            @endif
         </div>
     </div>
 

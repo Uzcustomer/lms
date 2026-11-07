@@ -1804,6 +1804,10 @@ Route::middleware('auth')->group(function () {
 Route::get('/auth/hemis/redirect', [HemisOAuthController::class, 'redirect'])->name('auth.hemis.redirect');
 Route::get('/auth/oauth-callback', [HemisOAuthController::class, 'callback'])->name('auth.hemis.callback');
 
+// HEMIS OAuth — xodimlar (hemis.ttatf.uz)
+Route::get('/auth/hemis-staff/redirect', [\App\Http\Controllers\Teacher\HemisStaffOAuthController::class, 'redirect'])->name('auth.hemis-staff.redirect');
+Route::get('/auth/hemis-staff/callback', [\App\Http\Controllers\Teacher\HemisStaffOAuthController::class, 'callback'])->name('auth.hemis-staff.callback');
+
 
 Route::prefix('student')->name('student.')->group(function () {
 

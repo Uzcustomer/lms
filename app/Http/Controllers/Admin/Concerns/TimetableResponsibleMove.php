@@ -183,7 +183,10 @@ trait TimetableResponsibleMove
                 $map = $this->auditoriumTeacherMap();
                 foreach ($parts as $c) {
                     if (!$this->auditoriumAllowedForCard($room, $c, $map)) {
-                        $roomErrors[] = 'Bu xona darsning o‘qituvchisiga biriktirilmagan: ' . ($room->name ?: $room->code) . '.';
+                        // Boshqa o'qituvchiga biriktirilgan xona — kimga biriktirilgani bilan ("Bu xona OSTANAQULOV SH. F. ga biriktirilgan.").
+                        $owner = $this->responsibleRoomOwner($room, $map, $this->responsibleRoomOwnerNames($map, [$room]));
+                        $roomErrors[] = $owner ? 'Bu xona ' . $owner['short'] . ' ga biriktirilgan.'
+                            : 'Bu xona darsning o‘qituvchisiga biriktirilmagan: ' . ($room->name ?: $room->code) . '.';
                         break;
                     }
                     if ($msg = $this->suggestionRoomProblem($board, $c, $room)) {
@@ -352,6 +355,8 @@ trait TimetableResponsibleMove
             DB::rollBack();
         }
         $times = $this->responsibleBusyTimes($board);
+        // Biriktirilgan xonalar egalari (kimga biriktirilgani — note va title uchun): faqat ro'yxatdagi tanlab bo'lmaydiganlari.
+        $ownerNames = $this->responsibleRoomOwnerNames($base['teacher'], $allowed->reject($ok)->all());
         $out = [];
         foreach ($this->rankRooms($first, $allowed, $current !== '' ? $current : null, $this->roomHabitForCard($board, $first), true) as [$r, $why]) {
             $code = (string) $r->code;
@@ -372,10 +377,13 @@ trait TimetableResponsibleMove
                 'card_ids' => $it['card_ids'] ?? [], 'view' => $it['view'] ?? 'week', 'week' => $it['week'] ?? null,
             ], $b !== null ? (array) ($busy['items']['rooms'][$code] ?? []) : []);
             $kind = !$ok($r) ? 'assigned' : ($b !== null ? 'busy' : ($cap ? 'capacity' : null));
+            // Biriktirilgan: qisqa nomi — qatorda ("Biriktirilgan: OSTANAQULOV SH. F."), to'liq F.I.Sh. — title'da (note_full).
+            $owner = $kind === 'assigned' ? $this->responsibleRoomOwner($r, $base['teacher'], $ownerNames) : null;
             $out[] = ['code' => $code, 'name' => (string) ($r->name ?: $r->code), 'volume' => (int) $r->volume, 'why' => $kind === null ? $why : null,
                 'building_name' => (string) ($r->building_name ?? ''), 'auditorium_type_name' => (string) ($r->auditorium_type_name ?? ''),
                 'current' => !$mixed && $code === $current, 'free' => $kind === null, 'kind' => $kind,
-                'note' => $kind === 'assigned' ? "Boshqa o'qituvchiga biriktirilgan" : null,
+                'note' => $kind === 'assigned' ? ($owner ? 'Biriktirilgan: ' . $owner['short'] : "Boshqa o'qituvchiga biriktirilgan") : null,
+                'note_full' => $owner ? 'Biriktirilgan: ' . $owner['full'] : null,
                 'busy' => $b !== null ? self::roomBusyText('Band: ', (string) $b) : null, 'busy_items' => $items, 'cap' => $cap];
         }
         usort($out, fn ($a, $b) => [$a['current'] ? 0 : 1, $a['free'] ? 0 : 1] <=> [$b['current'] ? 0 : 1, $b['free'] ? 0 : 1]);
@@ -385,7 +393,8 @@ trait TimetableResponsibleMove
 
     /**
      * Bo'laklarning shu haftadagi xonalari (takrorsiz, bo'laklar tartibida): [{code, name, problem}]; problem — o'z bo'lagi uchun yaroqsizligi
-     * ("nofaol", "sig'maydi", "boshqa o'qituvchiga biriktirilgan", "ro'yxatda yo'q") yoki null. Xonasiz bo'lak — kirmaydi.
+     * ("nofaol", "sig'maydi", "Biriktirilgan: OSTANAQULOV SH. F." — kimga biriktirilgani (nomi topilmasa — "boshqa o'qituvchiga
+     * biriktirilgan"), "ro'yxatda yo'q") yoki null. Xonasiz bo'lak — kirmaydi.
      */
     private function responsiblePartRooms(TimetableBoard $board, $parts, int $week): array
     {
@@ -398,8 +407,10 @@ trait TimetableResponsibleMove
                 continue;
             }
             $r = $base['all'][$code] ?? null;
+            $owner = $r && !$this->auditoriumAllowedForCard($r, $c, $base['teacher'])
+                ? ($this->responsibleRoomOwner($r, $base['teacher'], $this->responsibleRoomOwnerNames($base['teacher'], [$r])) ?? ['short' => null]) : null;
             $problem = !$r ? "ro'yxatda yo'q" : (!$r->active ? 'nofaol'
-                : (!$this->auditoriumAllowedForCard($r, $c, $base['teacher']) ? "boshqa o'qituvchiga biriktirilgan"
+                : ($owner !== null ? ($owner['short'] ? 'Biriktirilgan: ' . $owner['short'] : "boshqa o'qituvchiga biriktirilgan")
                     : ($this->suggestionRoomProblem($board, $c, $r) !== null ? "sig'maydi" : null)));
             $out[$code] = ['code' => $code, 'name' => $r ? (string) ($r->name ?: $code) : $code, 'problem' => $problem];
         }
@@ -429,7 +440,10 @@ trait TimetableResponsibleMove
         return isset($t[$from], $t[$to]) ? $t[$from][0] . '–' . $t[$to][1] : '';
     }
 
-    /** "UMAROV JASUR AKMALOVICH" → "UMAROV J. A." (familiya + bosh harflar; "o'g'li" / "qizi" tashlanadi); bo'sh — null. */
+    /**
+     * "UMAROV JASUR AKMALOVICH" → "UMAROV J. A." (familiya + bosh harflar; "o'g'li" / "qizi" tashlanadi); bo'sh — null. O'zbek qo'sh
+     * harflari — bitta harf: "OSTANAQULOV SHAXBOZ FARXODOVICH" → "OSTANAQULOV SH. F." (Sh, Ch; O', G' — tutuq belgisi bilan).
+     */
     private static function teacherShortName(?string $full): ?string
     {
         $w = preg_split('/\s+/u', trim((string) $full), -1, PREG_SPLIT_NO_EMPTY);
@@ -437,8 +451,36 @@ trait TimetableResponsibleMove
             return null;
         }
         $rest = array_filter(array_slice($w, 1), fn ($x) => !preg_match("/^(o['ʻ‘’`]?g['ʻ‘’`]?li|ugli|qizi|kizi)$/iu", $x));
+        $initial = fn (string $x) => preg_match("/^(sh|ch|[og]['ʻ‘’`])/iu", $x, $m)
+            ? mb_strtoupper(preg_replace("/['ʻ‘’`]/u", "'", $m[1])) : mb_strtoupper(mb_substr($x, 0, 1));
 
-        return trim($w[0] . ' ' . implode(' ', array_map(fn ($x) => mb_strtoupper(mb_substr($x, 0, 1)) . '.', $rest)));
+        return trim($w[0] . ' ' . implode(' ', array_map(fn ($x) => $initial($x) . '.', $rest)));
+    }
+
+    /**
+     * Xonalar egalari (auditorium_teacher, umumiy emas): [o'qituvchi id => to'liq F.I.Sh.] — faqat $rooms xonalariga biriktirilganlar,
+     * bitta so'rov. $map — auditoriumTeacherMap (roomRankBase()['teacher']).
+     */
+    private function responsibleRoomOwnerNames(array $map, iterable $rooms): array
+    {
+        $ids = [];
+        foreach ($rooms as $r) {
+            $a = $map[(string) $r->id] ?? null;
+            if ($a && !$a['is_general'] && $a['teacher_id']) {
+                $ids[(int) $a['teacher_id']] = true;
+            }
+        }
+
+        return $ids ? Teacher::whereIn('id', array_keys($ids))->pluck('full_name', 'id')->map(fn ($n) => trim((string) $n))->all() : [];
+    }
+
+    /** Xona biriktirilgan o'qituvchi: ['short' => "OSTANAQULOV SH. F.", 'full' => to'liq F.I.Sh.]; umumiy / biriktirilmagan / nomi yo'q — null. */
+    private function responsibleRoomOwner(Auditorium $r, array $map, array $names): ?array
+    {
+        $a = $map[(string) $r->id] ?? null;
+        $full = $a && !$a['is_general'] && $a['teacher_id'] ? ($names[(int) $a['teacher_id']] ?? '') : '';
+
+        return $full !== '' ? ['short' => self::teacherShortName($full), 'full' => $full] : null;
     }
 
     /** Eski va yangi joy matni: "Seshanba, 10.11.2026 10:00–11:20" (ko'p bo'lakli — birinchi bo'lak boshidan oxirgisi oxirigacha). */

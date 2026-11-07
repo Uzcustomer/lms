@@ -10039,18 +10039,130 @@ class JournalController extends Controller
         }
         [$spreadsheet, $fileName] = $built;
 
-        $html = self::qaydnomaHtml($spreadsheet, pathinfo($fileName, PATHINFO_FILENAME));
+        // Tugmalar: amaliy o'qituvchi — "Tasdiqlash" (yoki tasdiqlangani); admin — kimlar tasdiqlagani
+        $confirmations = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')
+            ? \App\Models\YnQaydnomaConfirmation::latestFor($subjectId, $semesterCode, $groupHemisId) : collect();
+        $teacher = $isPrivileged ? null : $this->currentTeacher();
+        $mine = $teacher ? $confirmations->firstWhere('teacher_id', $teacher->id) : null;
+        if ($teacher && !$mine) {
+            $actions = '<form method="POST" action="' . e(route('admin.journal.confirm-yn-qaydnoma')) . '"'
+                . ' onsubmit="return confirm(\'Baholarni tekshirdingizmi? Tasdiqlagach qaydnomaga sizning QR kodingiz bosiladi.\')">'
+                . csrf_field();
+            foreach ($request->only(['subject_id', 'semester_code', 'group_hemis_id', 'weight_jn', 'weight_mt', 'weight_on', 'weight_oski', 'weight_test', 'shakl']) as $k => $v) {
+                $actions .= '<input type="hidden" name="' . e($k) . '" value="' . e($v) . '">';
+            }
+            $actions .= '<span class="ynq-note">Baholarni tekshiring, hammasi to\'g\'ri bo\'lsa:</span>'
+                . '<button type="submit" class="ynq-confirm">Tasdiqlash</button></form>';
+        } else {
+            $actions = $confirmations->map(fn ($c) => '<span class="ynq-ok">✓ ' . e($c->teacher_name) . ' tasdiqlagan — '
+                . $c->confirmed_at->format('d.m.Y H:i') . '</span>')->implode('');
+        }
+        if ($flash = session('ynq_flash')) {
+            $actions = '<span class="ynq-note">' . e($flash) . '</span>' . $actions;
+        }
+
+        $html = self::qaydnomaHtml($spreadsheet, pathinfo($fileName, PATHINFO_FILENAME), $actions);
         $spreadsheet->disconnectWorksheets();
 
         return response($html)->header('Content-Type', 'text/html; charset=UTF-8');
     }
 
     /**
-     * Workbook'ni (barcha varaqlari bilan) to'liq HTML sahifaga aylantiradi: sarlavha va
-     * chop etish tugmasi bilan (chop etishda yashirinadi).
+     * Amaliy o'qituvchi YN qaydnomani tekshirib tasdiqlaydi: unikal QR (tekshirish sahifasi)
+     * yaratiladi, qaydnomada uning ismi yoniga bosiladi; tasdiqlangan paytdagi sahifa nusxasi
+     * saqlanadi — QR skanerlansa o'sha qaydnoma ko'rinadi.
      */
-    public static function qaydnomaHtml(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $title): string
+    public function confirmYnQaydnoma(Request $request)
     {
+        $data = $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'weight_jn' => 'nullable|integer|min:0|max:100',
+            'weight_mt' => 'nullable|integer|min:0|max:100',
+            'weight_on' => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+            'shakl' => 'nullable|integer|min:1|max:7',
+        ]);
+        $subjectId = (string) $data['subject_id'];
+        $semesterCode = (string) $data['semester_code'];
+        $groupHemisId = (string) $data['group_hemis_id'];
+        $back = route('admin.journal.view-yn-qaydnoma', $request->only(array_keys($data)));
+
+        $teacher = $this->currentTeacher();
+        $ynSubmitted = YnSubmission::where('subject_id', $subjectId)->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)->exists();
+        abort_unless($teacher && is_active_oqituvchi() && $ynSubmitted && $this->isAmaliyTeacherFor($subjectId, $groupHemisId), 403,
+            "YN qaydnomani shu fanning amaliy o'qituvchisi YN yuborilgandan keyin tasdiqlaydi.");
+
+        if (\App\Models\YnQaydnomaConfirmation::latestFor($subjectId, $semesterCode, $groupHemisId)->firstWhere('teacher_id', $teacher->id)) {
+            return redirect($back)->with('ynq_flash', 'Siz bu qaydnomani allaqachon tasdiqlagansiz.');
+        }
+
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        $subject = CurriculumSubject::where('curricula_hemis_id', $group?->curriculum_hemis_id)
+            ->where('subject_id', $subjectId)->where('semester_code', $semesterCode)->first();
+        $weights = [
+            'jn' => (int) ($data['weight_jn'] ?? 30), 'mt' => (int) ($data['weight_mt'] ?? 10), 'on' => (int) ($data['weight_on'] ?? 0),
+            'oski' => (int) ($data['weight_oski'] ?? 0), 'test' => (int) ($data['weight_test'] ?? 60),
+        ];
+        abort_if(array_sum($weights) !== 100, 422, "Vaznlar jami 100 bo'lishi kerak");
+
+        $confirmation = DB::transaction(function () use ($teacher, $group, $subject, $subjectId, $semesterCode, $groupHemisId, $weights) {
+            $verification = DocumentVerification::createForDocument([
+                'document_type' => 'yn_qaydnoma',
+                'subject_name' => $subject?->subject_name,
+                'group_names' => $group?->name,
+                'semester_name' => $subject?->semester_name,
+                'department_name' => $group?->department_name,
+                'generated_by' => $teacher->full_name,
+                'meta' => compact('subjectId', 'semesterCode', 'groupHemisId', 'weights') + ['teacher_id' => $teacher->id],
+            ]);
+
+            return \App\Models\YnQaydnomaConfirmation::create([
+                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId,
+                'teacher_id' => $teacher->id, 'teacher_name' => $teacher->full_name,
+                'document_verification_id' => $verification->id, 'weights' => $weights, 'confirmed_at' => now(),
+            ]);
+        });
+
+        // Tasdiqlangan paytdagi qaydnoma nusxasi (QR bilan) — QR skanerlansa shu ko'rinadi
+        $built = $this->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
+            $weights['jn'], $weights['mt'], $weights['on'], $weights['oski'], $weights['test'], (int) ($data['shakl'] ?? 1));
+        if (!is_string($built)) {
+            [$spreadsheet, $fileName] = $built;
+            $path = 'yn_qaydnoma_tasdiq/' . $confirmation->verification->token . '.html';
+            Storage::disk('public')->put($path, self::qaydnomaHtml($spreadsheet, pathinfo($fileName, PATHINFO_FILENAME)));
+            $spreadsheet->disconnectWorksheets();
+            $confirmation->verification->update(['document_path' => $path]);
+        }
+        \App\Services\ActivityLogService::log('confirm', 'yn_qaydnoma', "YN qaydnoma tasdiqlandi: {$group?->name}, {$subject?->subject_name}", $confirmation);
+
+        return redirect($back)->with('ynq_flash', 'Qaydnoma tasdiqlandi — QR kodingiz bosildi.');
+    }
+
+    /** Joriy o'qituvchi (teacher guard yoki web guard'dagi xodimning teachers yozuvi). */
+    private function currentTeacher(): ?Teacher
+    {
+        $teacher = auth()->guard('teacher')->user();
+        if ($teacher instanceof Teacher) {
+            return $teacher;
+        }
+        $hemisId = get_teacher_hemis_id();
+
+        return $hemisId ? Teacher::where('hemis_id', $hemisId)->first() : null;
+    }
+
+    /**
+     * Workbook'ni (barcha varaqlari bilan) Excel'dagidek HTML sahifaga aylantiradi: har varaq
+     * chop etish maydoniga qirqiladi (shablonda Y dan keyin minglab yordamchi ustunlar bor),
+     * burilgan sarlavhalar gorizontal; yuqorida nom va $actions (tugmalar), chop etishda yashirin.
+     */
+    public static function qaydnomaHtml(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $title, string $actions = ''): string
+    {
+        self::trimToPrintArea($spreadsheet);
+
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Html($spreadsheet);
         $writer->writeAllSheets();
         $writer->setEmbedImages(true);
@@ -10071,17 +10183,73 @@ class JournalController extends Controller
             restore_error_handler();
         }
 
-        // Sahifa sarlavhasi va chop etish tugmasi (chop etishda yashirinadi)
+        // Burilgan sarlavhalar ("O'zlashtirish ko'rsatkichi", "ECTS"): HTML'da transform katak
+        // o'lchamini o'zgartirmaydi va matn qo'shni katakka chiqadi — gorizontal, qatorlarga bo'lib
+        $html = str_replace(['transform:rotate(90deg);', 'transform:rotate(-90deg);'], 'white-space:normal; word-break:break-word;', $html);
+
         $title = e($title);
-        $toolbar = '<div class="ynq-bar"><b>' . $title . '</b><button type="button" onclick="window.print()">Chop etish</button></div>'
-            . '<style>.ynq-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;'
+        $bar = '<div class="ynq-bar"><b>' . $title . '</b><div class="ynq-actions">' . $actions
+            . '<button type="button" onclick="window.print()">Chop etish</button></div></div>'
+            . '<style>.ynq-bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;'
             . 'padding:10px 16px;margin:-8px -8px 12px;background:#1e3a8a;color:#fff;font:600 14px system-ui,sans-serif}'
-            . '.ynq-bar button{padding:6px 14px;border:0;border-radius:6px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer}'
+            . '.ynq-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.ynq-actions form{margin:0}'
+            . '.ynq-bar button{padding:6px 14px;border:0;border-radius:6px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer;font-size:13px}'
+            . '.ynq-bar .ynq-confirm{background:#16a34a;color:#fff}.ynq-bar .ynq-note{font-weight:500;font-size:12px;color:#c7d2fe}'
+            . '.ynq-bar .ynq-ok{padding:4px 10px;border-radius:6px;background:#dcfce7;color:#166534;font-size:12px}'
             . '@media print{.ynq-bar{display:none}}</style>';
-        $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $toolbar, $html, 1);
+        $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $bar, $html, 1);
         $html = preg_replace('/<title>.*?<\/title>/is', '<title>' . $title . '</title>', $html, 1);
 
         return $html;
+    }
+
+    /**
+     * Har varaqni chop etish maydoniga (bo'lmasa — ma'lumotli qismiga) qirqadi: maydon shu
+     * workbook ichida yangi varaqqa ko'chiriladi (qiymat, uslub, birlashtirish, o'lcham, rasmlar)
+     * — Html writer yordamchi ustunlarni ham chiqarib, sahifani buzmasligi uchun.
+     */
+    private static function trimToPrintArea(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet): void
+    {
+        $idx = fn (string $coord) => \PhpOffice\PhpSpreadsheet\Cell\Coordinate::indexesFromString($coord);
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            $area = explode(',', $sheet->getPageSetup()->getPrintArea() ?: $sheet->calculateWorksheetDataDimension())[0];
+            [$from, $to] = array_pad(explode(':', str_replace('$', '', $area)), 2, null);
+            [$c1, $r1] = $idx($from);
+            [$c2, $r2] = $idx($to ?? $from);
+
+            $copy = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, 'tmp' . substr(uniqid(), -8));
+            $spreadsheet->addSheet($copy);
+            for ($c = $c1; $c <= $c2; $c++) {
+                $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
+                $dim = $sheet->getColumnDimension($col);
+                $copy->getColumnDimension($col)->setWidth($dim->getWidth())->setVisible($dim->getVisible());
+            }
+            for ($r = $r1; $r <= $r2; $r++) {
+                $copy->getRowDimension($r)->setRowHeight($sheet->getRowDimension($r)->getRowHeight());
+                for ($c = $c1; $c <= $c2; $c++) {
+                    $src = $sheet->getCell([$c, $r]);
+                    // Formulalar hisoblangan qiymat bilan (ko'chirilgan varaqda havolalar buzilmasin)
+                    $value = $src->getDataType() === \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_FORMULA
+                        ? $src->getCalculatedValue() : $src->getValue();
+                    $copy->getCell([$c, $r])->setValue($value)->setXfIndex($src->getXfIndex());
+                }
+            }
+            foreach ($sheet->getMergeCells() as $range) {
+                [$a, $b] = array_pad(explode(':', $range), 2, null);
+                [$ac, $ar] = $idx($a);
+                [$bc, $br] = $idx($b ?? $a);
+                if ($ac >= $c1 && $bc <= $c2 && $ar >= $r1 && $br <= $r2) {
+                    $copy->mergeCells($range);
+                }
+            }
+            foreach ($sheet->getDrawingCollection() as $drawing) {
+                $drawing->setWorksheet($copy, true);
+            }
+
+            $title = $sheet->getTitle();
+            $spreadsheet->removeSheetByIndex($spreadsheet->getIndex($sheet));
+            $copy->setTitle($title);
+        }
     }
 
     /**
@@ -11194,7 +11362,47 @@ class JournalController extends Controller
         $subjectName = str_replace(['/', '\\', ' '], '_', $subject->subject_name ?? 'fan');
         $fileName = 'YN_qaydnoma_' . $groupName . '_' . $subjectName . '.xlsx';
 
+        // Amaliy o'qituvchi tasdiqlagan bo'lsa — unikal QR o'qituvchi ismi yoniga
+        self::stampConfirmationQrs($spreadsheet, $subjectId, $semesterCode, $groupHemisId);
+
         return [$spreadsheet, $fileName];
+    }
+
+    /**
+     * Tasdiqlagan har bir amaliy o'qituvchining unikal QR kodini (tekshirish sahifasiga havola)
+     * qaydnoma varaqlariga — o'qituvchi ismi (U10) yonidagi Y ustuniga — bosadi.
+     */
+    private static function stampConfirmationQrs(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $subjectId, string $semesterCode, string $groupHemisId): void
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')) {
+            return;
+        }
+        $confirmations = \App\Models\YnQaydnomaConfirmation::latestFor($subjectId, $semesterCode, $groupHemisId)
+            ->filter(fn ($c) => $c->verification)
+            ->take(2)
+            ->values();
+        if ($confirmations->isEmpty()) {
+            return;
+        }
+
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            // Faqat qaydnoma shakllari (chop etish maydoni bor), tarix varag'i emas
+            if (!$sheet->getPageSetup()->getPrintArea()) {
+                continue;
+            }
+            foreach ($confirmations as $i => $c) {
+                $qr = \PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing::fromString(
+                    \App\Services\QrPng::make($c->verification->getVerificationUrl(), 5, 1)
+                );
+                $qr->setName('Tasdiq QR: ' . $c->teacher_name);
+                $qr->setDescription($c->teacher_name . ' — ' . $c->confirmed_at->format('d.m.Y H:i'));
+                $qr->setCoordinates('Y8');
+                $qr->setOffsetX(6 + $i * 78);
+                $qr->setOffsetY(2);
+                $qr->setHeight(74);
+                $qr->setWorksheet($sheet);
+            }
+        }
     }
 
     public function adminEditGrade(Request $request)

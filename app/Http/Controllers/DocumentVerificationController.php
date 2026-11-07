@@ -32,8 +32,9 @@ class DocumentVerificationController extends Controller
             abort(404);
         }
 
+        // YN qaydnoma tasdig'i — o'qituvchi tasdiqlagan paytdagi sahifa nusxasi (HTML)
         return response()->file($filePath, [
-            'Content-Type' => 'application/pdf',
+            'Content-Type' => str_ends_with($filePath, '.html') ? 'text/html; charset=UTF-8' : 'application/pdf',
         ]);
     }
 }

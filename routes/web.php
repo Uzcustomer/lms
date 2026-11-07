@@ -525,6 +525,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/export-yn-qaydnoma', [JournalController::class, 'exportYnQaydnoma'])->name('export-yn-qaydnoma');
             // YN qaydnoma sahifada (Excel'siz) — amaliy o'qituvchi uchun
             Route::get('/view-yn-qaydnoma', [JournalController::class, 'viewYnQaydnoma'])->name('view-yn-qaydnoma');
+            // Amaliy o'qituvchi qaydnomani tasdiqlaydi — unikal QR bosiladi
+            Route::post('/confirm-yn-qaydnoma', [JournalController::class, 'confirmYnQaydnoma'])->name('confirm-yn-qaydnoma');
         });
 
         // Vedomost tekshirish

@@ -4,53 +4,123 @@ use App\Http\Controllers\Admin\JournalController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 /**
- * YN qaydnoma sahifada: workbook (barcha varaqlar) HTML ga aylanadi — butun kenglik bo'yicha
- * birlashtirilgan sarlavha qatorlari Laravel'da xato bermaydi; amaliy o'qituvchi ma'ruzachidan ajratiladi.
+ * YN qaydnoma sahifada: workbook chop etish maydoniga qirqilib HTML ga aylanadi (birlashtirilgan
+ * sarlavhalar xato bermaydi); amaliy o'qituvchi tasdiqlasa unikal QR uning ismi yoniga bosiladi.
  */
 
 uses(Tests\TestCase::class);
 
-it('renders every sheet of the qaydnoma workbook as a page without errors', function () {
+function qaydnomaSheet(): \PhpOffice\PhpSpreadsheet\Spreadsheet
+{
     $s = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
     $w = $s->getActiveSheet()->setTitle('d1_d22-01b (rus)');
-    $w->setCellValue('A1', 'BAHOLASH QAYDNOMASI')->mergeCells('A1:D1');   // butun kenglik — kutubxonada ogohlantirish
-    $w->fromArray([[1, 'ABDULLAYEV', 96.0, 'a\'lo']], null, 'A2');
+    $w->setCellValue('A1', 'BAHOLASH QAYDNOMASI')->mergeCells('A1:Y1');      // butun kenglik — kutubxonada ogohlantirish
+    $w->setCellValue('U10', 'IZZATULLAYEV O.Sh.');
+    $w->fromArray([[1, 'ABDULLAYEV', 96.0]], null, 'A20');
+    $w->setCellValue('M20', '=C20/2');
+    $w->setCellValue('AB1', 'Topshiriq bilan');                               // chop etish maydonidan tashqari
+    $w->getPageSetup()->setPrintArea('A1:Y61');
     $s->createSheet()->setTitle('12a-shakl')->setCellValue('A1', '12a');
 
-    $html = JournalController::qaydnomaHtml($s, 'YN qaydnoma <d1/d22-01b>');
+    return $s;
+}
+
+it('renders the print area of every sheet as a page without errors', function () {
+    $html = JournalController::qaydnomaHtml(qaydnomaSheet(), 'YN qaydnoma <d1/d22-01b>', '<button>X</button>');
 
     expect($html)
-        ->toContain('colspan="4"')
+        ->toContain('colspan="25"')
         ->toContain('ABDULLAYEV')
+        ->toContain('>48<')                       // formula hisoblangan
         ->toContain('12a')
         ->toContain('Chop etish')
-        ->toContain('<title>YN qaydnoma &lt;d1/d22-01b&gt;</title>');
+        ->toContain('<button>X</button>')
+        ->toContain('<title>YN qaydnoma &lt;d1/d22-01b&gt;</title>')
+        ->not->toContain('Topshiriq bilan');      // Y dan keyingi yordamchi ustunlar chiqmaydi
 });
 
-it('treats only non-lecture teachers of the group and subject as practical teachers', function () {
-    config()->set('database.default', 'sqlite');
-    config()->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
-    DB::purge('sqlite');
-    Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(), $t->rememberToken(), $t->timestamps()]);
-    Schema::create('schedules', fn ($t) => [$t->id(), $t->unsignedBigInteger('employee_id'), $t->unsignedBigInteger('subject_id'),
-        $t->unsignedBigInteger('group_id'), $t->string('training_type_code'), $t->softDeletes()]);
-    Schema::create('curriculum_subject_teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('employee_id'), $t->unsignedBigInteger('subject_id'),
-        $t->unsignedBigInteger('group_id'), $t->string('training_type_code')->nullable(), $t->timestamps()]);
-    DB::table('teachers')->insert([['id' => 1, 'hemis_id' => 501], ['id' => 2, 'hemis_id' => 502]]);
-    DB::table('schedules')->insert([
-        ['employee_id' => 501, 'subject_id' => 435, 'group_id' => 77, 'training_type_code' => '13'],  // amaliy
-        ['employee_id' => 502, 'subject_id' => 435, 'group_id' => 77, 'training_type_code' => '11'],  // ma'ruza
-    ]);
+describe('teacher confirmation', function () {
+    beforeEach(function () {
+        config()->set('database.default', 'sqlite');
+        config()->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
+        DB::purge('sqlite');
+        Storage::fake('public');
+        Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(), $t->rememberToken(), $t->timestamps()]);
+        Schema::create('roles', fn ($t) => [$t->id(), $t->string('name'), $t->string('guard_name'), $t->timestamps()]);
+        Schema::create('model_has_roles', fn ($t) => [$t->unsignedBigInteger('role_id'), $t->string('model_type'), $t->unsignedBigInteger('model_id')]);
+        Schema::create('activity_logs', fn ($t) => [$t->id(), $t->timestamps()]);
+        Schema::create('schedules', fn ($t) => [$t->id(), $t->unsignedBigInteger('employee_id'), $t->unsignedBigInteger('subject_id'),
+            $t->unsignedBigInteger('group_id'), $t->string('training_type_code'), $t->softDeletes()]);
+        Schema::create('curriculum_subject_teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('employee_id'), $t->unsignedBigInteger('subject_id'),
+            $t->unsignedBigInteger('group_id'), $t->string('training_type_code')->nullable(), $t->timestamps()]);
+        Schema::create('yn_submissions', fn ($t) => [$t->id(), $t->string('subject_id'), $t->string('semester_code'), $t->string('group_hemis_id'), $t->timestamps()]);
+        Schema::create('groups', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('name'), $t->string('curriculum_hemis_id')->nullable(), $t->string('department_name')->nullable()]);
+        Schema::create('curriculum_subjects', fn ($t) => [$t->id(), $t->string('curricula_hemis_id')->nullable(), $t->string('subject_id'),
+            $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable()]);
+        Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->string('document_type'), $t->string('subject_name')->nullable(),
+            $t->string('group_names')->nullable(), $t->string('semester_name')->nullable(), $t->string('department_name')->nullable(),
+            $t->string('generated_by')->nullable(), $t->timestamp('generated_at')->nullable(), $t->string('document_path')->nullable(), $t->json('meta')->nullable(), $t->timestamps()]);
+        (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
 
-    $check = fn (int $teacherId) => (function () use ($teacherId) {
-        Auth::guard('teacher')->login(\App\Models\Teacher::find($teacherId));
+        DB::table('teachers')->insert([['id' => 1, 'hemis_id' => 501, 'full_name' => 'IZZATULLAYEV OYBEK'], ['id' => 2, 'hemis_id' => 502, 'full_name' => 'IKROMOVA SH']]);
+        DB::table('schedules')->insert([
+            ['employee_id' => 501, 'subject_id' => 435, 'group_id' => 77, 'training_type_code' => '13'],  // amaliy
+            ['employee_id' => 502, 'subject_id' => 435, 'group_id' => 77, 'training_type_code' => '11'],  // ma'ruza
+        ]);
+        DB::table('yn_submissions')->insert(['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77']);
+        DB::table('groups')->insert(['group_hemis_id' => '77', 'name' => 'd1/d22-01b (rus)', 'curriculum_hemis_id' => '9']);
+        DB::table('curriculum_subjects')->insert(['curricula_hemis_id' => '9', 'subject_id' => '435', 'semester_code' => '19', 'subject_name' => 'Pediatriya']);
 
-        return (new ReflectionMethod(JournalController::class, 'isAmaliyTeacherFor'))
-            ->invoke(app(JournalController::class), '435', '77');
-    })();
+        // Excel quruvchi o'rniga soxta varaq — QR bosish asl mantiq bilan (stampConfirmationQrs)
+        $this->controller = new class extends JournalController {
+            public function __construct() {}
 
-    expect($check(1))->toBeTrue()
-        ->and($check(2))->toBeFalse();
+            public function buildYnQaydnomaSpreadsheet(string $subjectId, string $semesterCode, string $groupHemisId,
+                int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1): array|string
+            {
+                $s = qaydnomaSheet();
+                (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $s, $subjectId, $semesterCode, $groupHemisId);
+
+                return [$s, 'YN_qaydnoma_test.xlsx'];
+            }
+        };
+        $this->confirm = function (int $teacherId) {
+            $request = \Illuminate\Http\Request::create('/admin/journal/confirm-yn-qaydnoma', 'POST', [
+                'subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77',
+                'weight_jn' => 30, 'weight_mt' => 10, 'weight_on' => 0, 'weight_oski' => 0, 'weight_test' => 60,
+            ]);
+            $request->setLaravelSession($session = app('session')->driver());
+            $session->start();
+            app()->instance('request', $request);
+            Auth::guard('teacher')->login(\App\Models\Teacher::find($teacherId));
+
+            return $this->controller->confirmYnQaydnoma($request);
+        };
+    });
+
+    it('lets the practical teacher confirm once and stamps a unique QR next to the name', function () {
+        ($this->confirm)(1);
+        ($this->confirm)(1);   // takroriy — yangi tasdiq yaratilmaydi
+
+        $c = \App\Models\YnQaydnomaConfirmation::sole();
+        expect($c->teacher_name)->toBe('IZZATULLAYEV OYBEK')
+            ->and($c->weights['test'])->toBe(60)
+            ->and($c->verification->document_type)->toBe('yn_qaydnoma')
+            ->and(strlen($c->verification->token))->toBe(48);
+        Storage::disk('public')->assertExists($c->verification->document_path);
+
+        [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
+        $drawings = $sheet->getSheet(0)->getDrawingCollection();
+        expect($drawings)->toHaveCount(1)
+            ->and($drawings[0]->getCoordinates())->toBe('Y8')
+            ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
+    });
+
+    it('does not let the lecturer confirm', function () {
+        expect(fn () => ($this->confirm)(2))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0);
+    });
 });

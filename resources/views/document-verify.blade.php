@@ -165,6 +165,9 @@
                             @case('retake_certificate')
                                 Qayta o'qish tasdiqnomasi
                                 @break
+                            @case('yn_qaydnoma')
+                                YN baholash qaydnomasi (o'qituvchi tasdig'i)
+                                @break
                             @default
                                 {{ $verification->document_type }}
                         @endswitch
@@ -225,7 +228,7 @@
                 </div>
                 @if($verification->generated_by)
                 <div class="info-row">
-                    <span class="info-label">Yaratgan</span>
+                    <span class="info-label">{{ $verification->document_type === 'yn_qaydnoma' ? 'Tasdiqlagan' : 'Yaratgan' }}</span>
                     <span class="info-value">{{ $verification->generated_by }}</span>
                 </div>
                 @endif
@@ -233,7 +236,11 @@
 
             @if($documentUrl)
             <div class="card-body pdf-section" style="padding-top: 0;">
-                <embed src="{{ $documentUrl }}" type="application/pdf" class="pdf-embed">
+                @if(str_ends_with((string) $verification->document_path, '.html'))
+                    <iframe src="{{ $documentUrl }}" class="pdf-embed" style="border:1px solid #e5e7eb; background:#fff;"></iframe>
+                @else
+                    <embed src="{{ $documentUrl }}" type="application/pdf" class="pdf-embed">
+                @endif
                 <div style="text-align: center;">
                     <a href="{{ $documentUrl }}" target="_blank" class="pdf-download-btn">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>

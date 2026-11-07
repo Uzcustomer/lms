@@ -67,6 +67,8 @@ const ctx = {
     CROSS_MODES: ['teacher', 'subject', 'room'], crossCycleShown: [],
     // Akademik soatlar (sahifadagi cycHourTimes kabi): to'liq parada bir qatorda ikki soat.
     cycHourTimes: () => [null, ['08:30', '09:10'], ['09:10', '09:50'], ['10:00', '10:40'], ['10:40', '11:20']],
+    // Fan mas'uli "Joylash" rejimi yoqilmagan (buildGroupRows ustunlarni faqat rejimda toraytiradi).
+    fmPick: null, fmOwnOnly: true,
 };
 els.wkLayerInternal = node('wkLayerInternal');
 els.cycLayerInternal = node('cycLayerInternal');

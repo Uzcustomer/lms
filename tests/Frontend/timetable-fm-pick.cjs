@@ -30,6 +30,12 @@ const panel = cut('            function renderPanel() {', '            // Ko\'ri
 assert.match(panel, /const fmMine = c => TIMETABLE_ROLE === 'fan_masuli' && mySubjectCardIds\.has\(\+c\.id\) \? 1 : 0;/);
 assert.match(panel, /const bySubject = \(a, b\) => \(fmMine\(b\) - fmMine\(a\)\) \|\|/);   // mas'ul fan kartalari tepada
 assert.match(panel, /data-fm-place-btn="' \+ c\.id \+ '"[^>]*>Joylash<\/button>/);
+// "Joylash" tugmasi — faqat amaliy (ma'ruzada yo'q).
+assert.match(panel, /\(!skip && fmMine\(c\) && c\.training_type !== 'lecture' \? '<button type="button" class="pn-fm-place" data-fm-place-btn=/);
+// "Faqat shu guruh": rejimda ustunlar — kartaning fakulteti / yo'nalishi / kursi (buildGroupRows).
+const rowsFn = cut('            function buildGroupRows() {', '            // Karta uzunligi yarim-slot birligida');
+assert.match(rowsFn, /if \(fmPick && fmOwnOnly\) \{\n\s+const fc = fmPick\.card;\n\s+groupRows = groupRows\.filter\(r => r\.faculty === \(fc\.faculty_name \|\| ''\) && r\.specialty === \(fc\.specialty_name \|\| ''\) && \+r\.course === \+fc\.course\);/);
+assert.match(source, /let fmOwnOnly = true;/);
 assert.match(panel, /if \(fmMine\(c\)\) \{ fmPickStart\(c\); return; \}/);
 assert.match(panel, /if \(TIMETABLE_ROLE === 'fan_masuli'\) \{ fmDragStart\(c, ev\); return; \}/);
 // "Mas'ul fanlarim" panel filtri — fan mas'ulida sukut bo'yicha yoqilgan.
@@ -38,6 +44,7 @@ assert.match(source, /const pnFilter = \{ subject: '', oqim: '', groups: new Set
 assert.match(source, /\(!pnFilter\.mine \|\| mySubjectCardIds\.has\(\+c\.id\)\) &&/);
 
 const page0 = `<!doctype html><html><head><style>${css}</style></head><body>
+<select id="weekSel"><option value="10">10</option><option value="11">11</option><option value="12">12</option></select>
 <div id="ttFmPick" hidden></div><table id="grid"><tbody></tbody></table><script>
     const BASE = '/admin/timetable';
     const board = { id: 7, days: 6, pairs_per_day: 12 };
@@ -45,7 +52,11 @@ const page0 = `<!doctype html><html><head><style>${css}</style></head><body>
     const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const $ = id => document.getElementById(id);
     let curWeek = 10, weeklyLayer = 'internal', viewMode = 'teacher';
-    let fmPick = null, fmDragCard = null;
+    let fmPick = null, fmDragCard = null, fmOwnOnly = true;
+    // Avtomatik surish: qaysi katakka (kun-qator) va qanday.
+    window.scrolls = [];
+    Element.prototype.scrollIntoView = function (o) { window.scrolls.push([this.dataset.day + '-' + this.dataset.pair, o && o.block, o && o.inline]); };
+    document.getElementById('weekSel').onchange = function () { curWeek = +this.value; window.log.push('week:' + curWeek); renderAll(); };
     const fmGridCache = new Map();
     const mySubjectCardIds = new Set([1, 2, 5]);
     const selectedFaculties = new Set(), selectedDirs = new Set(), selectedCourses = new Set();
@@ -110,8 +121,8 @@ ${fm}
 ${move}
     Object.assign(window, { fmPickStart, fmPickStop, fmDragStart, renderGrid, openResponsibleMove,
         state: () => ({ pick: fmPick ? { id: fmPick.card.id, week: fmPick.week, loaded: !!fmPick.data } : null, view: viewMode, cache: [...fmGridCache.keys()],
-            dirs: [...selectedDirs], drag: fmDragCard ? fmDragCard.id : null }),
-        setWeek: w => { curWeek = w; } });
+            dirs: [...selectedDirs], drag: fmDragCard ? fmDragCard.id : null, own: fmOwnOnly }),
+        setWeek: w => { curWeek = w; }, clearCache: () => fmGridCache.clear() });
 </script></body></html>`;
 
 const ROOM = { code: 'R400', name: '400-amaliyot', why: 'shu bino' };
@@ -150,6 +161,15 @@ const card = { id: 1, subject_name: 'Farmakologiya', group_name: 'pp/2024-01g', 
     assert.equal(st.view, 'group');
     assert.deepEqual(st.dirs, ['pediatriya']);
     assert.deepEqual((await calls()).map(x => [x.method, x.url]), [['GET', '/admin/timetable/cards/1/responsible-move/grid?week=10']]);
+    // Grid kelgach — birinchi yashil katakka (kartaning guruh ustunida) avtomatik surildi, markazga.
+    assert.deepEqual(await page.evaluate(() => window.scrolls), [['2-1', 'center', 'center']]);
+    // "Faqat shu guruh" — sukut bo'yicha yoqiq; o'chirilsa — ustunlar qayta quriladi.
+    assert.equal(await page.isChecked('#ttFmPick [data-fm-own]'), true);
+    await page.uncheck('#ttFmPick [data-fm-own]');
+    assert.equal((await state()).own, false);
+    assert.equal(await page.evaluate(() => window.log.at(-2)), 'rows');
+    await page.check('#ttFmPick [data-fm-own]');
+    assert.equal((await state()).own, true);
     assert.match(await cellCls(2, 1), /tt-ok/);
     assert.equal(await cellAttr(2, 1, 'title'), 'Joylash mumkin · xona: 400-amaliyot (shu bino)');
     assert.match(await cellCls(2, 2), /tt-bad tt-bad-teacher/);
@@ -266,6 +286,30 @@ const card = { id: 1, subject_name: 'Farmakologiya', group_name: 'pp/2024-01g', 
     }
     assert.equal((await calls()).length, before);
 
+    // 10) Bo'sh joy yo'q: "Bu haftada bo'sh joy yo'q — keyingi haftalar: 11-hafta (5 joy), 12-hafta (3 joy)"; jadval guruh ustunining
+    // birinchi qatoriga suriladi; havola bosilsa — shu haftaga o'tiladi, rejim davom etadi (shu hafta grid'i so'raladi).
+    await page.evaluate(() => { window.setWeek(10); document.getElementById('weekSel').value = '10'; window.scrolls = []; window.clearCache(); });
+    const none = Object.assign({}, GRID, { cells: Object.fromEntries(Object.keys(cells).map(k => [k, { state: 'teacher', reason: "O'qituvchi band", causes: {} }])),
+        best: [], ahead: [{ week: 11, ok: 5 }, { week: 12, ok: 3 }, { week: 13, ok: 0 }] });
+    await page.evaluate(([g, c]) => { window.next = [{ status: 200, j: g }]; window.fmPickStart(c); }, [none, card]);
+    await page.waitForFunction(() => window.state().pick && window.state().pick.loaded);
+    assert.match(await barText(), /Bu haftada bo‘sh joy yo‘q — keyingi haftalar: 11-hafta \(5 joy\), 12-hafta \(3 joy\)/);
+    assert.doesNotMatch(await barText(), /13-hafta/);
+    assert.deepEqual(await page.$$eval('#ttFmPick [data-fm-week]', xs => xs.map(x => x.dataset.fmWeek)), ['11', '12']);
+    assert.deepEqual(await page.evaluate(() => window.scrolls), [['1-1', 'center', 'center']]);
+    await page.evaluate(g => { window.next = [{ status: 200, j: Object.assign({}, g, { week: 11 }) }]; }, GRID);
+    await page.click('#ttFmPick [data-fm-week="11"]');
+    await page.waitForFunction(() => window.state().pick && window.state().pick.week === 11 && window.state().pick.loaded);
+    assert.equal(await page.evaluate(() => window.log.includes('week:11')), true);
+    assert.equal((await calls()).at(-1).url, '/admin/timetable/cards/1/responsible-move/grid?week=11');
+    assert.deepEqual(await page.evaluate(() => window.scrolls.at(-1)), ['2-1', 'center', 'center']);
+    // Keyingi haftalarda ham yo'q — shunchaki xabar.
+    await page.evaluate(([g, c]) => { window.fmPickStop(); window.setWeek(10); window.clearCache(); window.next = [{ status: 200, j: g }]; window.fmPickStart(c); },
+        [Object.assign({}, none, { ahead: [{ week: 11, ok: 0 }, { week: 12, ok: 0 }, { week: 13, ok: 0 }] }), card]);
+    await page.waitForFunction(() => window.state().pick && window.state().pick.loaded);
+    assert.match(await barText(), /Bu haftada bo‘sh joy yo‘q — keyingi 3 haftada ham bo‘sh joy yo‘q/);
+    await page.evaluate(() => window.fmPickStop());
+
     await browser.close();
-    console.log('timetable fm pick: rejim, grid ranglari (bitta so\'rov, kesh), tasdiq oynasi, sariq — xona majburiy, sudrab tashlash, eng yaxshi joylar');
+    console.log('timetable fm pick: rejim, grid ranglari (bitta so\'rov, kesh), avtomatik surish, tasdiq oynasi, sariq — xona majburiy, sudrab tashlash, eng yaxshi joylar, keyingi haftalar');
 })().catch(e => { console.error(e); process.exit(1); });

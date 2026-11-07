@@ -319,12 +319,13 @@ trait TimetableResponsibleMove
     }
 
     /**
-     * Tanlangan vaqt uchun xonalar (check oynasi) — cheklovsiz (~650 xona; front avval 50 tasini chizadi, qidiruv — hammasidan): faol va har
-     * bo'lak o'qituvchisiga ruxsat etilgan xonalar (nofaol / ruxsatsiz — chiqmaydi). Tartib — hozirgi (shu haftadagi) xona eng tepada, so'ng
-     * bo'shlari, so'ng tanlab bo'lmaydiganlari; har guruh ichida yaqinlik (rankRooms, $proximity: bino → bo'lim → qavat, so'ng ballar).
-     * Tanlab bo'lmaydigan xona turi (kind): busy — boshqa dars bilan band (bandlik — barcha bo'laklar shu vaqtga ko'chgan holatda, sinab:
-     * unitBusy, haftalik va sikl darslari bilan; haftalik dars xonani to'liq band qiladi), capacity — sig'maydi (talabalar xona sig'imidan ko'p);
-     * ikkalasi bo'lsa — busy, cap bilan.
+     * Tanlangan vaqt uchun xonalar (check oynasi) — cheklovsiz (~650 xona; front avval 50 tasini chizadi, qidiruv — hammasidan): barcha faol
+     * xonalar (nofaol — chiqmaydi). Tartib — hozirgi (shu haftadagi) xona eng tepada, so'ng bo'shlari, so'ng band / sig'maydiganlari, oxirida —
+     * boshqa o'qituvchiga biriktirilganlari; har guruh ichida yaqinlik (rankRooms, $proximity: bino → bo'lim → qavat, so'ng ballar).
+     * Tanlab bo'lmaydigan xona turi (kind): assigned — bo'lak o'qituvchisiga ruxsat etilmagan (auditorium_teacher: boshqa o'qituvchiga
+     * biriktirilgan, umumiy emas; note — "Biriktirilgan: OSTANAQULOV SH. F.", note_full — to'liq F.I.Sh.), busy — boshqa dars bilan band
+     * (bandlik — barcha bo'laklar shu vaqtga ko'chgan holatda, sinab: unitBusy, haftalik va sikl darslari bilan; haftalik dars xonani to'liq
+     * band qiladi), capacity — sig'maydi (talabalar xona sig'imidan ko'p); band va sig'maydigan — busy, cap bilan.
      * Har band xonada tuzilgan ro'yxat busy_items: [{teacher ("UMAROV J. A."), teacher_full, groups[], subject, time ("08:30–11:20"), date,
      * dates, card_ids, view, week}] — front matnni parse qilmaydi; cap: {volume, students, over}.
      */
@@ -338,9 +339,9 @@ trait TimetableResponsibleMove
         // Bo'laklar har xil xonada: "hozirgi xona" qatori yo'q (birinchi qator — "har bo'lak o'z xonasida"), har bo'lak xonasi — oddiy qator,
         // boshqa o'qituvchiga biriktirilgani ham (kulrang, sababi bilan); tanlansa — barcha bo'laklar shu xonaga.
         $mixed = count($partRooms) > 1;
-        $partCodes = array_flip(array_column($partRooms, 'code'));
         $ok = fn ($r) => $parts->every(fn (TimetableCard $c) => $this->auditoriumAllowedForCard($r, $c, $base['teacher']));
-        $allowed = $base['active']->filter(fn ($r) => $ok($r) || ($mixed && isset($partCodes[(string) $r->code])));
+        // Barcha faol xonalar: ruxsatsizlari ham ro'yxatda (kimga biriktirilgani bilan, tanlab bo'lmaydi) — "nega yo'q" degan savol qolmasin.
+        $rooms = $base['active'];
         $busy = ['rooms' => [], 'items' => ['rooms' => []]];
         DB::beginTransaction();
         try {
@@ -356,14 +357,16 @@ trait TimetableResponsibleMove
         }
         $times = $this->responsibleBusyTimes($board);
         // Biriktirilgan xonalar egalari (kimga biriktirilgani — note va title uchun): faqat ro'yxatdagi tanlab bo'lmaydiganlari.
-        $ownerNames = $this->responsibleRoomOwnerNames($base['teacher'], $allowed->reject($ok)->all());
+        $ownerNames = $this->responsibleRoomOwnerNames($base['teacher'], $rooms->reject($ok)->all());
         $out = [];
-        foreach ($this->rankRooms($first, $allowed, $current !== '' ? $current : null, $this->roomHabitForCard($board, $first), true) as [$r, $why]) {
+        foreach ($this->rankRooms($first, $rooms, $current !== '' ? $current : null, $this->roomHabitForCard($board, $first), true) as [$r, $why]) {
             $code = (string) $r->code;
-            $b = $busy['rooms'][$code] ?? null;
+            $assigned = !$ok($r);
+            // Biriktirilgan xona — faqat shu holat (bandlik va sig'im ko'rsatilmaydi: tanlab bo'lmaydi).
+            $b = $assigned ? null : ($busy['rooms'][$code] ?? null);
             // Sig'im: xona talabalarga kichik (har bo'lak bo'yicha; umumiy xona va bandlik tekshirilmaydigan karta — tekshirilmaydi).
             $cap = null;
-            foreach ($parts as $c) {
+            foreach ($assigned ? [] : $parts as $c) {
                 if ($this->suggestionRoomProblem($board, $c, $r) !== null) {
                     $n = $this->cardStudents($c);
                     $cap = ['volume' => (int) $r->volume, 'students' => $n, 'over' => $n - (int) $r->volume];
@@ -376,7 +379,7 @@ trait TimetableResponsibleMove
                 'time' => $this->responsibleBusyTime($times, $it), 'date' => $it['dates'][0] ?? null, 'dates' => $it['dates'] ?? [],
                 'card_ids' => $it['card_ids'] ?? [], 'view' => $it['view'] ?? 'week', 'week' => $it['week'] ?? null,
             ], $b !== null ? (array) ($busy['items']['rooms'][$code] ?? []) : []);
-            $kind = !$ok($r) ? 'assigned' : ($b !== null ? 'busy' : ($cap ? 'capacity' : null));
+            $kind = $assigned ? 'assigned' : ($b !== null ? 'busy' : ($cap ? 'capacity' : null));
             // Biriktirilgan: qisqa nomi — qatorda ("Biriktirilgan: OSTANAQULOV SH. F."), to'liq F.I.Sh. — title'da (note_full).
             $owner = $kind === 'assigned' ? $this->responsibleRoomOwner($r, $base['teacher'], $ownerNames) : null;
             $out[] = ['code' => $code, 'name' => (string) ($r->name ?: $r->code), 'volume' => (int) $r->volume, 'why' => $kind === null ? $why : null,
@@ -386,7 +389,9 @@ trait TimetableResponsibleMove
                 'note_full' => $owner ? 'Biriktirilgan: ' . $owner['full'] : null,
                 'busy' => $b !== null ? self::roomBusyText('Band: ', (string) $b) : null, 'busy_items' => $items, 'cap' => $cap];
         }
-        usort($out, fn ($a, $b) => [$a['current'] ? 0 : 1, $a['free'] ? 0 : 1] <=> [$b['current'] ? 0 : 1, $b['free'] ? 0 : 1]);
+        // Barqaror saralash (yaqinlik tartibi guruh ichida saqlanadi): hozirgi → bo'sh → band / sig'maydigan → biriktirilgan.
+        $rank = fn (array $x) => [$x['current'] ? 0 : 1, $x['free'] ? 0 : ($x['kind'] === 'assigned' ? 2 : 1)];
+        usort($out, fn ($a, $b) => $rank($a) <=> $rank($b));
 
         return $out;
     }

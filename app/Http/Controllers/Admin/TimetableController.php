@@ -7426,7 +7426,7 @@ class TimetableController extends Controller
                             'date' => $date, 'load_key' => 'l' . $card->id . '|' . $ui, 'load' => $students, 'students' => $students,
                             'teacher_id' => (int) $lph['teacher_id'], 'teacher' => (string) $lph['teacher_name'], 'room' => $lph['room_code'] ?: null,
                             'room_name' => (string) ($lph['room_name'] ?: $lph['room_code']), 'free_room' => true, 'ph' => true,
-                            'ph_orig' => (string) ($lph['orig_teacher_name'] ?? $card->teacher_name), 'label' => $u['group'] . ', ' . $u['subject']]
+                            'ph_orig' => (string) ($lph['orig_teacher_name'] ?? $card->teacher_name), 'label' => $u['group'] . ', ' . $u['subject'], 'subject' => (string) $u['subject']]
                             + ($withPlan ? ['dp' => $d !== null ? array_intersect_key($d, array_flip(['k', 'lec', 'prc', 'start', 'ps', 'tl', 'tp', 'ktr'])) : null] : []);
                         continue;
                     }
@@ -7435,7 +7435,7 @@ class TimetableController extends Controller
                             'date' => $date, 'load_key' => 'c' . $card->id, 'load' => $this->cardStudents($card), 'students' => $students,
                             'teacher_id' => (int) $ph['teacher_id'], 'teacher' => (string) $ph['teacher_name'], 'room' => $ph['room_code'] ?: null,
                             'room_name' => (string) ($ph['room_name'] ?: $ph['room_code']), 'free_room' => true, 'ph' => true,
-                            'ph_orig' => (string) ($ph['orig_teacher_name'] ?? $card->teacher_name), 'label' => $u['group'] . ', ' . $u['subject']]
+                            'ph_orig' => (string) ($ph['orig_teacher_name'] ?? $card->teacher_name), 'label' => $u['group'] . ', ' . $u['subject'], 'subject' => (string) $u['subject']]
                             + ($withPlan ? ['dp' => $d !== null ? array_intersect_key($d, array_flip(['k', 'lec', 'prc', 'start', 'ps', 'tl', 'tp', 'ktr'])) : null] : []);
                         continue;
                     }
@@ -7445,7 +7445,7 @@ class TimetableController extends Controller
                         'room' => $card->auditorium_code ?: null, 'room_name' => $roomName ?: (string) $card->auditorium_code,
                         // "Kafedra mudiri xonasi" va umumiy (raqamsiz) xonalar band hisoblanmaydi.
                         'free_room' => $this->isSharedRoom($roomName) || preg_match('/kafedra\s+mudiri/iu', $roomName) === 1,
-                        'label' => $u['group'] . ', ' . $u['subject']]
+                        'label' => $u['group'] . ', ' . $u['subject'], 'subject' => (string) $u['subject']]
                         // Kun rejasi (cycleWeek: kun oynasi va "Vaqtini o'zgartirishni so'rash" uchun) — faqat so'ralganda (xotira).
                         + ($withPlan ? ['dp' => $d !== null ? array_intersect_key($d, array_flip(['k', 'lec', 'prc', 'start', 'ps', 'tl', 'tp', 'ktr'])) : null] : []);
                 }
@@ -7821,7 +7821,7 @@ class TimetableController extends Controller
                     'teacher' => $c->teacher_name ? (string) $c->teacher_name : null,
                     'room' => $room ?: null, 'room_name' => $roomName ?: (string) $room,
                     'free_room' => $this->isSharedRoom($roomName) || preg_match('/kafedra\s+mudiri/iu', $roomName) === 1,
-                    'groups' => $groups, 'students' => (int) $c->students, 'label' => $label];
+                    'groups' => $groups, 'students' => (int) $c->students, 'label' => $label, 'subject' => (string) $c->subject_name];
             }
         }
 
@@ -8325,8 +8325,9 @@ class TimetableController extends Controller
         $acc = ['teachers' => [], 'rooms' => []];
         $note = function (string $type, string $id, array $m, array $o) use (&$acc, $units) {
             $x = &$acc[$type][$id][$o['label']];
+            // subject — band qilgan darsning faqat fan nomi (yorliq "guruh1, guruh2, …, fan" — ma'ruzada guruhlar ko'p, vergul bilan).
             $x ??= ['groups' => [], 'by_groups' => [], 'dates' => [], 'cards' => [], 'span' => [], 'kinds' => [], 'week' => null,
-                'teacher' => $o['teacher'] ?? null, 'label' => $o['label']];
+                'teacher' => $o['teacher'] ?? null, 'label' => $o['label'], 'subject' => $o['subject'] ?? null];
             foreach (array_merge($this->focusEntryGroups($m, $units), $this->focusEntryGroups($o, $units)) as $g) {
                 $x['groups'][mb_strtolower($g['faculty'] . '|' . $g['specialty'] . '|' . $g['course'] . '|' . $g['group'])] = $g;
             }
@@ -8431,7 +8432,8 @@ class TimetableController extends Controller
                     $hits['items'][$type][$id][] = $this->focusShow([
                         'kind' => $type === 'teachers' ? 'teacher_busy' : 'room_busy', 'teacher_id' => $type === 'teachers' ? $id : null,
                         'teacher_name' => $type === 'teachers' ? $x['teacher'] : null, 'room_code' => $type === 'rooms' ? $id : null,
-                        'groups' => array_values($x['groups']), 'subject' => explode(', ', (string) $x['label'], 2)[1] ?? $x['label'],
+                        'groups' => array_values($x['groups']),
+                        'subject' => $x['subject'] ?? (string) preg_replace('/^.*, /u', '', (string) $x['label']),
                         'dates' => array_keys($x['dates']), 'hour_from' => $x['span'][$unit][0], 'hour_to' => $x['span'][$unit][1],
                         'hour_unit' => $unit, 'card_ids' => array_keys($x['cards']),
                         // Ikkalasi haftalik — haftalik jadval; ikkalasi sikl — sikl jadvali; aralash — haftalik o'qituvchi/xona kesimi

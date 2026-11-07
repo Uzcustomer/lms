@@ -3103,6 +3103,7 @@
             let fmPick = null;
             const fmGridCache = new Map();   // "karta|hafta" => grid javobi (doska qayta yuklanganda va joylangandan keyin tozalanadi)
             let fmDragCard = null;           // paneldan sudralayotgan mas'ul fan kartasi (tashlansa — tasdiq oynasi, darhol yozilmaydi)
+            let fmOwnOnly = true;            // "Faqat shu guruh": rejimda faqat kartaning fakulteti / yo'nalishi / kursi ustunlari (sukut — yoqiq)
             // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
             // Ko'rinish qamrovi: 'all' — butun doska, 'kafedra' — kafedra mudirining o'z kafedrasi
             // fanlari, 'mine' — faqat o'ziga biriktirilganlar. mineOnly = qamrov toraytirilgan.
@@ -11471,6 +11472,11 @@
                 groupRows.sort((a, b) => sk(a).localeCompare(sk(b), undefined, { numeric: true }));
                 // "Ko'rsatish": vaqtincha — faqat to'qnashuvdagi guruhlar ustunlari.
                 groupRows = focusWeekColumns(groupRows);
+                // Fan mas'uli "Joylash" + "Faqat shu guruh": faqat joylanayotgan kartaning fakulteti / yo'nalishi / kursi ustunlari.
+                if (fmPick && fmOwnOnly) {
+                    const fc = fmPick.card;
+                    groupRows = groupRows.filter(r => r.faculty === (fc.faculty_name || '') && r.specialty === (fc.specialty_name || '') && +r.course === +fc.course);
+                }
             }
 
             // Karta uzunligi yarim-slot birligida (1=0.5 para, 2=1 para ...). Sukut 2.
@@ -12746,7 +12752,7 @@
                     (!skip && effPlace(c) ? '<div class="pn-placed" data-pn-placed style="font-size:9px;font-weight:600;color:#0f766e">joylangan · to\'qnashuv — ' + esc(placedSlotText(c)) + '</div>' : '') +
                     parallelBadgeHtml(c) + (!skip && partialUnits.has(unitKey(c)) ? partialBadgeHtml(partialUnits.get(unitKey(c)), unitFixErr[unitKey(c)]) : '') + (conflict ? '<div class="pn-conflict" role="button" tabindex="0" data-wcf="' + c.id + '" title="Bosing — tafsilot">⚠ ' + esc(cfBadgeText(curWeek && weeklyConflictItems[c.id] ? weeklyConflictItems[c.id][curWeek] : null) || ('To\'qnashuv: ' + conflict)) + '</div>' : '') +
                     // Fan mas'uli: mas'ul fani kartasi — "Joylash" (jadval kataklari rang bilan; ma'ruza — ko'rish oynasi, sababi bilan).
-                    (!skip && fmMine(c) ? '<button type="button" class="pn-fm-place" data-fm-place-btn="' + c.id + '" title="Jadvalda bo\'sh joyni tanlab joylash (faqat shu hafta)">Joylash</button>' : '') + '</div>';
+                    (!skip && fmMine(c) && c.training_type !== 'lecture' ? '<button type="button" class="pn-fm-place" data-fm-place-btn="' + c.id + '" title="Jadvalda bo\'sh joyni tanlab joylash (faqat shu hafta)">Joylash</button>' : '') + '</div>';
 
                 // Qisman joylangan birliklar (ichki jadval, tanlangan hafta): ro'yxat (nomi bosilsa — shu kartaga) va hammasi uchun tugmalar.
                 const partialHead = partialUnits.size && curWeek && weeklyLayer === 'internal'
@@ -14002,16 +14008,34 @@
                 if (!fmCanPlace(c)) { if (!drag) openResponsibleMove(c); return; }   // ko'rish oynasi — sababi bilan (ma'ruza, hafta tanlanmagan…)
                 const first = unitOf(c)[0] || c;
                 if (fmPick && +fmPick.card.id === +first.id && fmPick.week === curWeek) { if (!drag) fmPickStop(); return; }
-                fmPick = { card: first, week: curWeek, data: fmGridCache.get(first.id + '|' + curWeek) || null, error: null };
+                fmPick = { card: first, week: curWeek, data: fmGridCache.get(first.id + '|' + curWeek) || null, error: null, scrolled: false };
                 const moved = fmEnsureColumn(first);
-                if (drag) { if (moved) buildGroupRows(); renderGrid(); }
-                else if (moved) renderAll(); else { renderPanel(); renderGrid(); }
-                if (!fmPick.data) fmPickLoad();
+                if (drag) { buildGroupRows(); renderGrid(); }
+                else if (moved) renderAll(); else { buildGroupRows(); renderPanel(); renderGrid(); }
+                if (!fmPick.data) fmPickLoad(); else if (!drag) fmScrollToTarget();
             }
             function fmPickStop() {
                 if (!fmPick) return;
                 fmPick = null;
-                renderPanel(); renderGrid();
+                buildGroupRows(); renderPanel(); renderGrid();
+            }
+            // Grid kelgach — jadval kartaning guruh ustunidagi birinchi yashil katakka (yashil yo'q bo'lsa — ustunning birinchi bo'sh qatoriga)
+            // suriladi (markazga). Har hafta / har yoqilishda bir marta.
+            function fmScrollToTarget() {
+                if (!fmPick || fmPick.scrolled) return;
+                fmPick.scrolled = true;
+                const keys = cardGKeys(fmPick.card);
+                const mine = [...document.querySelectorAll('#grid td[data-g]')].filter(td => keys.includes(td.dataset.g));
+                const target = mine.find(td => td.classList.contains('tt-ok')) || mine[0];
+                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', inline: 'center' });
+            }
+            // Keyingi haftaga o'tish (bo'sh joy yo'q holatidagi havola) — rejim davom etadi (fmSync shu hafta grid'ini so'raydi).
+            function fmGoWeek(w) {
+                const sel = $('weekSel');
+                if (!fmPick || !sel) return;
+                sel.value = String(w);
+                if (sel.value !== String(w)) return;
+                sel.onchange.call(sel);
             }
             async function fmPickLoad() {
                 const pick = fmPick;
@@ -14027,14 +14051,15 @@
                     pick.error = (e.data && (e.data.message || e.data.error)) || e.message;
                 }
                 renderGrid();
+                if (fmPick === pick && pick.data) fmScrollToTarget();
             }
             // Hafta / qatlam / kesim almashdi: shu hafta uchun qayta (keshdan yoki serverdan); ichki jadval va guruh kesimidan chiqilsa — rejim tugaydi.
             function fmSync() {
                 if (!fmPick) return;
-                if (weeklyLayer !== 'internal' || !curWeek || viewMode !== 'group') { fmPick = null; return; }
+                if (weeklyLayer !== 'internal' || !curWeek || viewMode !== 'group') { fmPick = null; buildGroupRows(); return; }
                 if (fmPick.week !== curWeek) {
-                    Object.assign(fmPick, { week: curWeek, data: fmGridCache.get(fmPick.card.id + '|' + curWeek) || null, error: null });
-                    if (!fmPick.data) fmPickLoad();
+                    Object.assign(fmPick, { week: curWeek, data: fmGridCache.get(fmPick.card.id + '|' + curWeek) || null, error: null, scrolled: false });
+                    if (!fmPick.data) fmPickLoad(); else setTimeout(fmScrollToTarget, 0);
                 }
             }
             // Panel ostidagi holat qatori: nima joylanmoqda, yuklanish / sabab, ranglar izohi, "Eng yaxshi joylar" va "Bekor".
@@ -14045,10 +14070,15 @@
                 const c = fmPick.card, unit = unitOf(c), len = unitLen(unit), j = fmPick.data;
                 const okN = j ? Object.values(j.cells || {}).filter(x => x.state === 'ok').length : 0;
                 const best = (j && j.best) || [];
+                // Bo'sh joy yo'q — keyingi haftalar (server: ahead — faqat bo'sh joylar soni), bosilsa shu haftaga o'tiladi (rejim davom etadi).
+                const ahead = ((j && j.ahead) || []).filter(a => +a.ok > 0);
+                const aheadHtml = !j || okN ? '' : ahead.length
+                    ? ' — keyingi haftalar: ' + ahead.map(a => '<a href="#" data-fm-week="' + a.week + '" style="text-decoration:underline">' + a.week + '-hafta (' + a.ok + ' joy)</a>').join(', ')
+                    : ((j.ahead || []).length ? ' — keyingi ' + j.ahead.length + ' haftada ham bo‘sh joy yo‘q' : '');
                 const status = fmPick.error ? '<span class="text-red-600" data-fm-status>' + esc(fmPick.error) + '</span>'
                     : !j ? '<span class="text-slate-500" data-fm-status>Joylar hisoblanmoqda…</span>'
-                    : j.closed ? '<span class="text-red-600" data-fm-status>' + esc(j.closed) + '</span>'
-                    : '<span data-fm-status>' + (okN ? 'yashil kataklardan birini bosing yoki kartani unga sudrang — <b>' + okN + '</b> ta joy' : 'bu haftada bo‘sh joy yo‘q') + '</span>';
+                    : okN ? '<span data-fm-status>yashil kataklardan birini bosing yoki kartani unga sudrang — <b>' + okN + '</b> ta joy</span>'
+                    : '<span class="' + (j.closed ? 'text-red-600' : 'text-amber-700') + '" data-fm-status>' + esc(j.closed || 'Bu haftada bo‘sh joy yo‘q') + aheadHtml + '</span>';
                 bar.hidden = false;
                 bar.innerHTML = '<b>Joylash:</b> <span>' + esc(c.subject_name + ' · ' + (c.group_name || '') + ' · ' + len + ' soat'
                         + (unit.length > 1 ? ' (' + unit.map(cardLen).join(' + ') + ')' : '') + ' · ' + curWeek + '-hafta') + '</span> — ' + status
@@ -14057,11 +14087,14 @@
                     + '<span><i style="background:#fecaca"></i>och qizil — guruh band</span>'
                     + '<span><i style="background:#fde68a"></i>sariq — vaqt bo‘sh, mos bo‘sh xona yo‘q (xona tanlab)</span>'
                     + '<span><i style="background:#e5e7eb"></i>kulrang — bugun / o‘tgan kun yoki sig‘maydi</span>'
+                    + '<label title="Faqat shu kartaning fakulteti, yo‘nalishi va kursi ustunlari"><input type="checkbox" data-fm-own' + (fmOwnOnly ? ' checked' : '') + '> Faqat shu guruh</label>'
                     + '<button type="button" class="fm-btn" data-fm-best-toggle aria-expanded="false"' + (best.length ? '' : ' disabled') + '>Eng yaxshi joylar ▾</button>'
                     + '<button type="button" class="fm-btn" data-fm-cancel>Bekor (Esc)</button>'
                     + '<div class="fm-best" data-fm-best hidden role="menu">' + best.map((b, i) => '<button type="button" role="menuitem" data-fm-best-go="' + i + '"><b>'
                         + esc(b.label) + '</b> · xona: ' + esc(b.room ? b.room.name : '—') + '<small>' + esc(b.why || '') + '</small></button>').join('') + '</div>';
                 bar.querySelector('[data-fm-cancel]').onclick = fmPickStop;
+                bar.querySelector('[data-fm-own]').onchange = ev => { fmOwnOnly = ev.target.checked; buildGroupRows(); renderGrid(); };
+                bar.querySelectorAll('[data-fm-week]').forEach(a => a.onclick = ev => { ev.preventDefault(); fmGoWeek(+a.dataset.fmWeek); });
                 const list = bar.querySelector('[data-fm-best]'), toggle = bar.querySelector('[data-fm-best-toggle]');
                 toggle.onclick = () => { list.hidden = !list.hidden; toggle.setAttribute('aria-expanded', String(!list.hidden)); };
                 list.querySelectorAll('[data-fm-best-go]').forEach(b => b.onclick = () => { list.hidden = true; fmGoBest(best[+b.dataset.fmBestGo]); });
@@ -14346,8 +14379,9 @@
                     try {
                         const sent = await api(BASE + '/cards/' + c.id + '/responsible-move', 'POST', Object.assign(body(), { reason: form.elements.reason.value }));
                         m.remove();
-                        // Joylash rejimi tugaydi: karta paneldan yo'qoladi, kataklar keshi eskirdi (panel va jadval qayta yuklanadi).
-                        if (pickMode) { fmGridCache.clear(); fmPick = null; }
+                        // Joylash rejimi tugaydi (so'rov bo'lsa ham): kataklar keshi eskirdi; fmPickStop — "Faqat shu guruh" ustunlari tiklanadi,
+                        // panel va jadval qayta chiziladi (darhol joylanganda — doska ham qayta yuklanadi).
+                        if (pickMode) { fmGridCache.clear(); fmPickStop(); }
                         if (sent && sent.mode === 'fix') {
                             ttToast('<b>' + esc(pickMode ? 'Joylandi (faqat shu hafta)' : (sent.message || 'Joylandi.')) + '</b>', 'ok');
                             await loadBoard(board.id);

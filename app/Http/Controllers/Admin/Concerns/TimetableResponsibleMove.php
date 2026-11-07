@@ -48,6 +48,7 @@ trait TimetableResponsibleMove
      * teacher — o'qituvchi band (haftalik dars — unitPlanAt / weekClashes bilan bir xil, sikl darsi ham); group — guruh band; room — vaqt
      * bo'sh, lekin mos bo'sh xona yo'q (xona tanlash majburiy); closed — bugun / o'tgan kun, kun oxiriga sig'maydi yoki dars umuman
      * o'zgartirilmaydi (huquq, kutilayotgan so'rov, hozirgi joyi o'tgan kunda — Takliflar qoidasi). best — 5 ta eng yaxshi bo'sh joy.
+     * Shu haftada bo'sh (ok) joy yo'q bo'lsa — ahead: keyingi 3 hafta uchun faqat bo'sh joylar soni [{week, ok}] (yengil hisob).
      * Huquq — check / saqlash bilan bir xil (responsibleMoveAuth). Yakuniy tekshiruv (bronlar, blok qoidasi va h.k.) — saqlashda.
      */
     public function responsibleMoveGrid(Request $request, TimetableCard $card)
@@ -61,14 +62,19 @@ trait TimetableResponsibleMove
         return response()->json($out, isset($out['error']) ? 422 : 200);
     }
 
-    /** responsibleMoveGrid hisobi (yuqoridagi tavsif). */
-    private function responsibleGridFor(TimetableBoard $board, TimetableCard $card, \Illuminate\Support\Collection $cards, int $week, Teacher $actor, array $keys): array
+    /**
+     * responsibleMoveGrid hisobi (yuqoridagi tavsif). $light — faqat bo'sh (ok) joylar soni: ['ok_count' => n] (keyingi haftalar uchun;
+     * eng yaxshi joylar va keyingi haftalar hisoblanmaydi).
+     */
+    private function responsibleGridFor(TimetableBoard $board, TimetableCard $card, \Illuminate\Support\Collection $cards, int $week, Teacher $actor, array $keys,
+        bool $light = false): array
     {
         $grid = $this->cardGrid($board, $card);
         [$days, $rows] = [(int) $grid['days'], (int) $grid['pairs']];
         [$chain, $total] = $this->unitChain($this->unitPieces($cards, $week));
         if (!$chain) {
-            return ['ok' => false, 'error' => "Bu haftada bu dars o'tilmaydi.", 'message' => "Bu haftada bu dars o'tilmaydi."];
+            return $light ? ['ok_count' => 0]
+                : ['ok' => false, 'error' => "Bu haftada bu dars o'tilmaydi.", 'message' => "Bu haftada bu dars o'tilmaydi."];
         }
         $first = $chain[0][0];
         $monday = $this->weekStartDate($board, $card, $week);
@@ -203,9 +209,20 @@ trait TimetableResponsibleMove
             }
         }
 
+        if ($light) {
+            return ['ok_count' => count($okCells)];
+        }
+        // Bo'sh joy yo'q — keyingi 3 hafta (semestr ichida) bo'sh joylari soni: "11-hafta (5 joy), 12-hafta (3 joy)".
+        $ahead = [];
+        if (!$okCells) {
+            for ($w = $week + 1; $w <= min($week + 3, (int) $grid['weeks']); $w++) {
+                $ahead[] = ['week' => $w, 'ok' => $this->responsibleGridFor($board, $card, $cards, $w, $actor, $keys, true)['ok_count']];
+            }
+        }
+
         return ['ok' => true, 'week' => $week, 'days' => $days, 'pairs' => $rows, 'len' => $total,
             'parts' => array_map(fn ($x) => ['card_id' => (int) $x[0]->id, 'len_half' => $x[0]->lenHalf(), 'offset' => $x[1]], $chain),
-            'closed' => $closedAll, 'cells' => $cells,
+            'closed' => $closedAll, 'cells' => $cells, 'ahead' => $ahead,
             'best' => $this->responsibleBestPlaces($board, $first, $chain, $okCells, $byDate, $dates, $groupKeys, $names, $total)];
     }
 

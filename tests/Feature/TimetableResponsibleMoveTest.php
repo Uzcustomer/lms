@@ -646,3 +646,21 @@ it('grid: eng yaxshi 5 joy — guruh darsiga yaqin (oraliq kam), o\'qituvchi ban
         }
     }
 });
+
+it('grid: shu haftada bo\'sh joy yo\'q — keyingi 3 hafta uchun faqat bo\'sh joylar soni (ahead); bo\'sh joy bor — ahead bo\'sh', function () {
+    $s = rmSetup();
+    $who = rmTeacher('O\'N IKKINCHI O.');
+    $x = $s['card']('pp/2024-01g', $who, null, null, $s['r1']);
+    expect(rmGrid($s, $x)->assertOk()->json('ahead'))->toBe([]);
+    // Shanba (21.11) — haftaning hamma kuni bugun yoki o'tgan: bo'sh joy yo'q, keyingi haftalar — 6 kun × 11 boshlanish (2 soatlik dars).
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-21 08:00', 'Asia/Tashkent'));
+    $res = rmGrid($s, $x)->assertOk()->json();
+    expect(collect($res['cells'])->where('state', 'ok')->count())->toBe(0)
+        ->and($res['ahead'])->toBe([['week' => $s['week'] + 1, 'ok' => 66], ['week' => $s['week'] + 2, 'ok' => 66], ['week' => $s['week'] + 3, 'ok' => 66]])
+        ->and($res['best'])->toBe([]);
+    // Keyingi hafta grid'i — ahead dagi son bilan bir xil.
+    expect(collect(rmGrid($s, $x, null, 'fan_masuli', $s['week'] + 1)->json('cells'))->where('state', 'ok')->count())->toBe(66);
+    // Semestr oxirida — faqat mavjud haftalar (15 haftalik doska): 14-hafta o'tgan (19.12, shanba) — faqat 15-hafta.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-19 08:00', 'Asia/Tashkent'));
+    expect(rmGrid($s, $x, null, 'fan_masuli', $s['week'] + 4)->json('ahead'))->toBe([['week' => 15, 'ok' => 66]]);
+});

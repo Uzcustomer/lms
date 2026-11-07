@@ -3207,3 +3207,34 @@ it('boshqa (o\'tkazilgan) fanning HEMIS\'dagi balanslash darsi guruh bandligi em
         'end_time' => '13:20', 'training_type_code' => '13', 'week' => 1]);
     expect($first())->toBe(['10:00-11:20', '12:00-12:40']);
 });
+
+it('bugungi darslar: qo\'shiladigan amaliy darsning turi — bir nechta tur bo\'lsa shu hafta KTR\'ida soati bori; KTR\'da yo\'q — avvalgidek', function () {
+    $s = hsSetup();   // Odam anatomiyasi: dushanba 10:00–11:20 (HEMIS'da bor)
+    htCard($s, 'Biologiya', 1, '72');   // dushanba 08:30–09:50 — HEMIS'da yo'q (qo'shiladi)
+    hsInsert('curriculum_subjects', ['curriculum_subject_hemis_id' => 1475, 'curricula_hemis_id' => 250, 'subject_id' => 475, 'subject_name' => 'Biologiya',
+        'semester_code' => '11', 'semester_name' => '1', 'department_id' => 501, 'department_name' => 'Anatomiya', 'at_semester' => 1,
+        'subject_details' => json_encode([['trainingType' => ['code' => '13', 'name' => 'Amaliy'], 'academic_load' => 8],
+            ['trainingType' => ['code' => '14', 'name' => 'Seminar'], 'academic_load' => 20]])]);
+    $csId = DB::table('curriculum_subjects')->where('subject_id', 475)->value('id');
+    $create = function () use ($s) {
+        htFake([1596 => [htItem(1, '2026-09-14', '10:00', '11:20')]]);
+        $res = htCall($s)->assertOk()->json();
+        $row = collect($res['rows'])->firstWhere('subject', 'Biologiya');
+        $act = collect($res['json']['groups'][0]['units'])->firstWhere('subject_id', 475)['actions'][0] ?? null;
+
+        return [$row['status'], $row['type'], $act['code'] ?? null];
+    };
+
+    // KTR yo'q — avvalgidek: HEMIS'da ishlatilmagan, yuklamasi ko'pi (Seminar).
+    expect($create())->toBe(['create', 'Seminar', '14']);
+    // Shu hafta (1-hafta, 14.09) KTR'ida faqat amaliy soati — Amaliy.
+    DB::table('ktr_plans')->insert(['curriculum_subject_id' => $csId, 'week_count' => 2,
+        'plan_data' => json_encode(['hours' => ['1' => ['13' => 2, '14' => 0], '2' => ['14' => 2]]]), 'created_at' => now(), 'updated_at' => now()]);
+    expect($create())->toBe(['create', 'Amaliy', '13']);
+    // Shu haftada ikkala turda ham soat — ular orasida avvalgi tartib (yuklamasi ko'pi).
+    DB::table('ktr_plans')->where('curriculum_subject_id', $csId)->update(['plan_data' => json_encode(['hours' => ['1' => ['13' => 2, '14' => 2]]])]);
+    expect($create())->toBe(['create', 'Seminar', '14']);
+    // Shu hafta KTR'ida soat yo'q (qator bo'sh) — avvalgidek.
+    DB::table('ktr_plans')->where('curriculum_subject_id', $csId)->update(['plan_data' => json_encode(['hours' => ['2' => ['13' => 2]]])]);
+    expect($create())->toBe(['create', 'Seminar', '14']);
+});

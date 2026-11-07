@@ -1219,3 +1219,66 @@ it('kutilayotgan xona so\'rovi: tasdiqlashgacha xona nofaol bo\'lib qolsa — qa
         ->and((string) $req->fresh()->error)->toBe('Xona nofaol — boshqa xona tanlang («2-xona»).')
         ->and($card->fresh()->auditorium_code)->toBe('R1');
 });
+
+// "Joylash uchun tanlash" — sariq katak: shablonga xona bilan joylash (cards/{id}/place + auditorium_code, faqat ichki qatlam).
+function placeRoomSetup(bool $approval): array
+{
+    $s = approvalSetup($approval);
+    $s['r1'] = \App\Models\Auditorium::create(['code' => 'R1', 'name' => '101-xona', 'volume' => 30, 'active' => true]);
+    $s['r2'] = \App\Models\Auditorium::create(['code' => 'R2', 'name' => '102-xona', 'volume' => 30, 'active' => true]);
+    $base = $s['card']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students', 'len_half', 'start_half',
+        'subject_name', 'training_type', 'kafedra_name']);
+    // Boshqa guruh va o'qituvchining darsi R2 da (seshanba, 3-para); shu darsning boshqa bo'lagi — R2 xonada (o'zgarmasligi kerak).
+    $s['other'] = TimetableCard::create(array_merge($base, ['subject_name' => 'Anatomiya', 'group_name' => 'd/d25-02a', 'teacher_id' => null,
+        'teacher_name' => null, 'day' => 2, 'pair' => 3, 'auditorium_code' => 'R2', 'auditorium_name' => '102-xona']));
+    $s['sibling'] = TimetableCard::create(array_merge($base, ['group_name' => $s['card']->group_name, 'teacher_id' => $s['teacher']->id,
+        'teacher_name' => 'OQITUVCHI A.', 'len_half' => 1, 'day' => 1, 'pair' => 3, 'auditorium_code' => 'R2', 'auditorium_name' => '102-xona']));
+
+    return $s;
+}
+
+it('xona bilan joylash (ichki): joy va faqat shu kartaning xonasi bitta amalda; band xona va tashqi qatlam rad etiladi', function () {
+    ['reg' => $reg, 'card' => $card, 'sibling' => $sibling] = placeRoomSetup(false);
+    $place = fn (array $body) => asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.cards.place', $card), $body);
+
+    // Band xona (R2 seshanba 3-parada boshqa darsda) — rad etiladi, hech narsa o'zgarmaydi.
+    $place(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertStatus(422)->assertJsonFragment(['error' => 'Auditoriya band: 102-xona — F1, 2-kurs · d/d25-02a · Anatomiya (amaliy)']);
+    expect($card->fresh()->only(['day', 'pair', 'auditorium_code']))->toBe(['day' => 1, 'pair' => 1, 'auditorium_code' => null]);
+    // Tashqi qatlamda xona yo'q; noma'lum xona; kunsiz — rad etiladi.
+    $place(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R1', 'layer' => 'external'])->assertStatus(422)
+        ->assertJsonFragment(['error' => 'Xona bilan joylash — faqat ichki jadvalda.']);
+    $place(['day' => 2, 'pair' => 3, 'auditorium_code' => 'NOPE'])->assertStatus(422)->assertJsonFragment(['error' => 'Auditoriya topilmadi']);
+    $place(['auditorium_code' => 'R1'])->assertStatus(422);
+    expect($card->fresh()->only(['day', 'pair', 'auditorium_code']))->toBe(['day' => 1, 'pair' => 1, 'auditorium_code' => null]);
+
+    // Bo'sh xona (R1) bilan — joy va xona birga; shu darsning boshqa bo'lagi (R2) va boshqa kartalar o'zgarmaydi.
+    $place(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R1'])->assertOk()->assertJson(['ok' => true, 'auditorium_code' => 'R1', 'auditorium_name' => '101-xona']);
+    expect($card->fresh()->only(['day', 'pair', 'auditorium_code', 'auditorium_name']))->toBe(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R1', 'auditorium_name' => '101-xona'])
+        ->and($sibling->fresh()->auditorium_code)->toBe('R2');
+    // Xonasiz joylash — avvalgidek (xona o'zgarmaydi).
+    $place(['day' => 4, 'pair' => 1])->assertOk();
+    expect($card->fresh()->only(['day', 'pair', 'auditorium_code']))->toBe(['day' => 4, 'pair' => 1, 'auditorium_code' => 'R1']);
+});
+
+it('xona bilan joylash: tasdiq talab qilinadigan doskada kafedra mudiri — bitta so\'rov (yo joy ham xona ham, yo hech biri)', function () {
+    ['head' => $head, 'reg' => $reg, 'card' => $card] = placeRoomSetup(true);
+    $place = fn (array $body) => asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $card), $body);
+
+    // Band xona — sinov bajarishda rad etiladi: so'rov yaratilmaydi.
+    $place(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R2'])->assertStatus(422);
+    expect(TimetableChangeRequest::count())->toBe(0);
+
+    // Bo'sh xona — bitta so'rov; jadval va xona tasdiqlanguncha o'zgarmaydi.
+    $place(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R1'])->assertOk()->assertJson(['pending_approval' => true]);
+    $req = TimetableChangeRequest::sole();
+    expect($req->status)->toBe('pending')
+        ->and($req->payload['auditorium_code'])->toBe('R1')
+        ->and($req->summary)->toContain('Dushanba, 1-para → Seshanba, 3-para, xona: 101-xona')
+        ->and($card->fresh()->only(['day', 'pair', 'auditorium_code']))->toBe(['day' => 1, 'pair' => 1, 'auditorium_code' => null]);
+
+    // Tasdiqlansa — joy va xona birga qo'llanadi.
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk()->assertJson(['ok' => true]);
+    expect($card->fresh()->only(['day', 'pair', 'auditorium_code']))->toBe(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R1'])
+        ->and($req->fresh()->status)->toBe('approved')
+        ->and(TimetableChangeRequest::count())->toBe(1);
+});

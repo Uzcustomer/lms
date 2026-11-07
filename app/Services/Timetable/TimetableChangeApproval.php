@@ -796,6 +796,10 @@ class TimetableChangeApproval
                 $to = (!empty($p['day']) && !empty($p['pair'])) ? $slot($p['day'], $p['pair']) : 'jadvaldan olib tashlash';
                 $from = $ext ? $slot($card->ext_day ?? null, $card->ext_pair ?? null) : $slot($card->day, $card->pair);
                 $text = ($ext ? 'Tashqi jadval · ' : '') . $head . ': ' . $from . ' → ' . $to;
+                // Xona bilan joylash ("Joylash uchun tanlash" — sariq katak): yangi xona.
+                if (!$ext && !empty($p['auditorium_code'])) {
+                    $text .= ', xona: ' . (\App\Models\Auditorium::where('code', $p['auditorium_code'])->value('name') ?: $p['auditorium_code']);
+                }
                 break;
             case 'admin.timetable.cards.week-override':
                 $act = ($p['action'] ?? '') === 'cancel' ? 'dars bekor qilinadi'

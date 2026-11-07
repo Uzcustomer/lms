@@ -277,6 +277,14 @@
                 <div id="gridWrap" class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="flex: 1 1 auto; min-height: 0; max-width: 100%;">
                     <table id="grid" class="border-collapse text-[11px]"></table>
                 </div>
+                {{-- "Joylash uchun tanlash": bo'sh kataklar ranglari izohi (karta tanlanganda) --}}
+                <div id="ttPlaceLegend" hidden>
+                    <span><i style="background:#dcfce7"></i>yashil — joylash mumkin</span>
+                    <span><i style="background:#f87171"></i>to‘q qizil — o‘qituvchi band</span>
+                    <span><i style="background:#fecaca"></i>och qizil — guruh band</span>
+                    <span><i style="background:#fde68a"></i>sariq — faqat xona band (bosing: boshqa xona bilan joylash)</span>
+                    <span class="text-slate-400">· sababi — katak ustida; sabab bo‘lgan dars ramka bilan belgilanadi</span>
+                </div>
                 {{-- Sikl (4-6 kurs) kalendar ko'rinishi — sana × guruh bloklari --}}
                 <div id="cycleArea" class="hidden bg-white shadow-sm sm:rounded-lg overflow-auto" style="flex: 1 1 auto; min-height: 0; max-width: 100%;">
                     <div class="flex flex-wrap items-center gap-3 px-3 py-2 border-b border-gray-100 sticky top-0 bg-white z-10">
@@ -1107,6 +1115,24 @@
         #grid td.tt-cell { width: 52px; min-width: 52px; max-width: 52px; height: 34px; vertical-align: middle; text-align: center; cursor: default; padding: 1px; overflow: hidden; }
         #grid td.tt-ok { background: #dcfce7; cursor: pointer; }
         #grid td.tt-bad { background: #fee2e2; }
+        /* "Joylash uchun tanlash" va sudrash: band turi rang tusi bilan — o'qituvchi (to'q qizil), guruh (och qizil), faqat xona (sariq —
+           xonani almashtirib joylash mumkin, bosiladi). Sichqoncha band katakda — sabab bo'lgan dars ramka bilan (tt-cause-*). */
+        #grid td.tt-bad-teacher { background: #f87171; }
+        #grid td.tt-bad-group { background: #fecaca; }
+        #grid td.tt-bad-room { background: #fde68a; cursor: pointer; }
+        #grid td.drag-bad-teacher { outline-color: #991b1b; background: rgba(248, 113, 113, .55); }
+        #grid td.drag-bad-group { outline-color: #f87171; background: rgba(254, 202, 202, .7); }
+        #grid td.drag-bad-room { outline-color: #ca8a04; background: rgba(253, 230, 138, .75); }
+        .tt-bolak-drop.drag-bad-teacher { background: rgba(248, 113, 113, .55) !important; outline-color: #991b1b; }
+        .tt-bolak-drop.drag-bad-group { background: rgba(254, 202, 202, .7) !important; outline-color: #f87171; }
+        .tt-bolak-drop.drag-bad-room { background: rgba(253, 230, 138, .75) !important; outline-color: #ca8a04; }
+        #grid .tt-cause-teacher { outline: 3px solid #991b1b !important; outline-offset: -2px; }
+        #grid .tt-cause-group { outline: 3px solid #f87171 !important; outline-offset: -2px; }
+        #grid .tt-cause-room { outline: 3px dashed #ca8a04 !important; outline-offset: -2px; }
+        #ttPlaceLegend[hidden] { display: none; }
+        #ttPlaceLegend { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 4px 10px; font-size: 11px; color: #475569;
+            background: #fff; border-top: 1px solid #e2e8f0; }
+        #ttPlaceLegend i { display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; border-radius: 3px; border: 1px solid #0002; }
         /* Drag-and-drop: sudralayotgan katak ustidan o'tganda */
         #grid td.drag-ok { outline: 3px solid #16a34a; outline-offset: -3px; }
         #grid td.drag-bad { outline: 3px solid #ef4444; outline-offset: -3px; }
@@ -11448,12 +11474,18 @@
                     + (gText ? ' · ' + gText : '') + ' · ' + o.subject_name + ' (' + (o.training_type === 'lecture' ? "ma'ruza" : 'amaliy') + ')';
             }
             function conflictsAt(card, day, pair, ignoredIds = []) {
+                return conflictsAtDetail(card, day, pair, ignoredIds).map(x => x.text);
+            }
+            // conflictsAt tafsiloti: [{ kind: 'group' | 'teacher' | 'room', text, cardId (band qilgan dars) }] — tartib va matn conflictsAt bilan bir xil.
+            // opts.room — boshqa xona bilan sinash ({ code, name }: "sariq" katakda xona tanlash).
+            function conflictsAtDetail(card, day, pair, ignoredIds = [], opts = {}) {
                 if (isNonBlocking(card)) return [];
                 const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
                 // Vaqtincha kafedra mudirida — to'qnashuv tekshirilmaydi va boshqalarni ham to'qnashuvli qilmaydi (serverdagi clashWith).
                 if (phOf(card)) return errs;
-                const effectiveSource = effectiveCard(card);
+                const effectiveSource = opts.room ? Object.assign({}, effectiveCard(card), { auditorium_code: opts.room.code, auditorium_name: opts.room.name })
+                    : effectiveCard(card);
                 const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
                     if (o.id === card.id || ignoredIds.includes(o.id) || phOf(o) || isNonBlocking(o)) return;
@@ -11469,14 +11501,35 @@
                     const ov = cardGKeys(o).filter(k => my.includes(k));
                     // Tashqi jadval — umumiy shablon: hech qachon bir haftaga tushmaydigan kartalar
                     // bitta katakni bo'lisha oladi (serverdagi findExternalConflicts kabi).
-                    if (ov.length && !bolakSiblings(card, o) && !(weeklyLayer === 'external' && !weeksIntersect(card, o))) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(',') + ' — ' + describeCardBrief(o));
-                    if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name + ' — ' + describeCardBrief(o));
+                    if (ov.length && !bolakSiblings(card, o) && !(weeklyLayer === 'external' && !weeksIntersect(card, o)))
+                        errs.push({ kind: 'group', cardId: o.id, text: 'Guruh band: ' + ov.map(k => k.split('¦').pop()).join(',') + ' — ' + describeCardBrief(o) });
+                    if (card.teacher_id && o.teacher_id === card.teacher_id)
+                        errs.push({ kind: 'teacher', cardId: o.id, text: "O'qituvchi band: " + o.teacher_name + ' — ' + describeCardBrief(o) });
                     // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
                     if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code
-                        && !isSharedRoomName(effectiveOther.auditorium_name)) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name + ' — ' + describeCardBrief(o));
+                        && !isSharedRoomName(effectiveOther.auditorium_name))
+                        errs.push({ kind: 'room', cardId: o.id, text: 'Auditoriya band: ' + effectiveOther.auditorium_name + ' — ' + describeCardBrief(o) });
                 });
                 return errs;
             }
+            // Joylash hukmi — "Joylash uchun tanlash" kataklari va sudrash uchun umumiy: tone — ok (yashil), teacher (to'q qizil: o'qituvchi band
+            // yoki kun oxiriga sig'maydi), group (och qizil: guruh band), room (sariq: faqat xona band — xonani almashtirib joylash mumkin).
+            // title — har sabab alohida qatorda (takrorlarsiz, 10 tadan ortig'i "… yana N ta"); causes — sabab bo'lgan darslar: id => eng og'ir tur.
+            const PLACE_ROOM_HINT = 'Kartaning xonasini almashtirsangiz, shu vaqtga joylash mumkin.';
+            const PLACE_RANK = { teacher: 3, other: 3, group: 2, room: 1 };
+            function placeVerdict(items) {
+                if (!items || !items.length) return { tone: 'ok', items: [], title: '', causes: {} };
+                const top = items.reduce((a, x) => (PLACE_RANK[x.kind] > PLACE_RANK[a] ? x.kind : a), 'room');
+                const tone = top === 'other' ? 'teacher' : top;
+                const texts = [...new Set(items.map(x => x.text))];
+                const causes = {};
+                items.forEach(x => { if (x.cardId && (!causes[x.cardId] || PLACE_RANK[x.kind] > PLACE_RANK[causes[x.cardId]])) causes[x.cardId] = x.kind; });
+                return { tone, items, causes,
+                    title: texts.slice(0, 10).join('\n') + (texts.length > 10 ? '\n… yana ' + (texts.length - 10) + ' ta' : '') + (tone === 'room' ? '\n' + PLACE_ROOM_HINT : '') };
+            }
+            // Katak atributlari: rang sinfi (tt-bad + tur), title va sabab darslar (sichqoncha turganda ramka).
+            const placeCauseAttr = v => ' data-bad-ids="' + Object.entries(v.causes).map(([id, k]) => id + ':' + k).join(',') + '" data-bad-tone="' + v.tone + '"';
+            const placeBadCls = v => ' tt-bad tt-bad-' + v.tone;
 
             // ===== Joylash (bosish yoki drag-and-drop uchun umumiy) =====
             // Kartani joyidan olib tashlash — modal tugmasi va panelga sudrash uchun umumiy.
@@ -11532,6 +11585,122 @@
                 try { await placeOneCard(card, d, p); selected = null; renderAll(); }
                 catch (e) { alert('Konflikt: ' + e.message); }
             }
+            // ===== Sariq katak (faqat xona band): boshqa xona bilan joylash =====
+            // Xonalar: faol, hozirgisidan boshqa, sig'imi talabalar sonidan kam emas (sig'imi kiritilmagani — yo'q), shu vaqtda bo'sh
+            // (conflictsAtDetail shu xona bilan — xona sababi yo'q). Tartib — server reytingi (unit-busy room_rank: odatdagi, o'qituvchiniki,
+            // kafedraniki, shu bino, sig'imi yaqin) sabab yorlig'i bilan; reyting kelmasa — sig'imi yaqini. Tanlansa — bitta so'rov (placeCardWithRoom):
+            // tanlangan hafta — shu hafta istisnosi shu xona bilan, shablon — kartaning o'zi shu xona bilan. Tashqi jadvalda xona yo'q — sariq katak
+            // oddiy joylashdek. Bekor / Esc / fon — hech narsa.
+            let placeRoomsAll = null;
+            function placeRoomCandidates(card, d, p, rooms, rank) {
+                const cur = effectiveCard(card).auditorium_code || '';
+                const need = +card.students || 0;
+                const pos = {};
+                ((rank && rank.order) || []).forEach((code, i) => { pos[code] = i; });
+                return rooms.filter(r => r.code && r.code !== cur && +r.volume > 0 && (!need || +r.volume >= need)
+                        && !conflictsAtDetail(card, d, p, [], { room: { code: r.code, name: r.name || r.code } }).some(x => x.kind === 'room'))
+                    .map(r => ({ r, at: r.code in pos ? pos[r.code] : Infinity }))
+                    .sort((a, b) => a.at - b.at || (+a.r.volume - +b.r.volume) || String(a.r.name || a.r.code).localeCompare(String(b.r.name || b.r.code), undefined, { numeric: true }))
+                    .map(x => x.r);
+            }
+            async function openPlaceRoomPick(card, d, p) {
+                // Tashqi jadval: server faqat guruh bandligini tekshiradi (xona bu qatlamda yo'q) — oddiy joylash.
+                if (weeklyLayer === 'external') { placeCardAt(card, d, p); return; }
+                const prior = document.getElementById('ttPlaceRoom');
+                if (prior) prior.remove();
+                const m = document.createElement('div');
+                m.id = 'ttPlaceRoom';
+                m.className = 'cr-proposal-overlay';
+                const week = curWeek && weeklyLayer !== 'external';
+                const when = (boardDayNames()[d - 1] || d + '-kun') + ' ' + (slotRangeText(p, cardLen(card)) || '');
+                const why = [...new Set(conflictsAtDetail(card, d, p).map(x => x.text))];
+                m.innerHTML = '<div class="cr-proposal-form" role="dialog" aria-modal="true" aria-label="Boshqa xona bilan joylash">'
+                    + '<h3 class="font-bold text-lg">Boshqa xona bilan joylash</h3>'
+                    + '<p>' + esc(card.subject_name) + ' · ' + esc(card.training_type === 'lecture' ? (card.oqim_label || '') : (card.group_name || '')) + ' → ' + esc(when)
+                    + (week ? ' · ' + curWeek + '-hafta (faqat shu hafta)' : ' · barcha haftalar (shu kartaning xonasi almashtiriladi)') + '</p>'
+                    + '<p class="text-sm text-amber-700" style="white-space:pre-line" data-pr-why>' + esc(why.join('\n')) + '</p>'
+                    + '<p class="text-sm">Shu vaqtda bo‘sh va sig‘adigan xonalar' + (+card.students ? ' (' + +card.students + ' talaba)' : '') + ':</p>'
+                    + '<input type="search" data-pr-q placeholder="Xona qidirish…" aria-label="Xona qidirish" autocomplete="off">'
+                    + '<div class="rm-list" role="listbox" aria-label="Xonalar" data-pr-list><div class="p-3 text-sm text-slate-400">Yuklanmoqda…</div></div>'
+                    + '<p class="text-sm" role="alert" data-pr-msg></p>'
+                    + '<div class="flex justify-end gap-2"><button type="button" data-close>Bekor</button></div></div>';
+                document.body.appendChild(m);
+                let busy = false;
+                const onKey = e => { if (e.key === 'Escape' && !busy) { e.preventDefault(); e.stopPropagation(); close(); } };
+                const close = () => { m.remove(); document.removeEventListener('keydown', onKey, true); };
+                document.addEventListener('keydown', onKey, true);
+                m.onclick = ev => { if (ev.target === m && !busy) close(); };
+                m.querySelector('[data-close]').onclick = () => { if (!busy) close(); };
+                const list = m.querySelector('[data-pr-list]'), msg = m.querySelector('[data-pr-msg]'), q = m.querySelector('[data-pr-q]');
+                let rooms = [], rank = null;
+                try {
+                    const [all, ub] = await Promise.all([
+                        placeRoomsAll || api(AUDS_URL).then(x => (placeRoomsAll = (x || []).filter(r => r.active !== false))),
+                        api(BASE + '/boards/' + board.id + '/unit-busy?' + new URLSearchParams(asgUnitParams(card))).catch(() => null)]);
+                    rooms = all;
+                    rank = ub && ub.room_rank;
+                } catch (e) {
+                    if (document.body.contains(m)) list.innerHTML = '<div class="p-3 text-sm text-red-600">' + esc(e.message) + '</div>';
+                    return;
+                }
+                if (!document.body.contains(m)) return;
+                const rankWhy = (rank && rank.why) || {};
+                const cands = placeRoomCandidates(card, d, p, rooms, rank);
+                const render = () => {
+                    const shown = cands.filter(r => roomMatches(r, q.value || ''));
+                    list.innerHTML = shown.map(r => '<button type="button" class="rm-row" data-pr-code="' + esc(r.code) + '">'
+                        + '<b>' + esc(r.name || r.code) + '</b><span>' + esc([r.building_name, r.auditorium_type_name].filter(Boolean).join(' · ')) + '</span>'
+                        + (rankWhy[r.code] ? '<span class="rm-why">' + esc(rankWhy[r.code]) + '</span>' : '')
+                        + '<span class="rm-vol">' + r.volume + ' o‘rin</span></button>').join('')
+                        || '<div class="p-3 text-sm text-slate-400" data-pr-none>' + (cands.length ? 'Qidiruv bo‘yicha xona topilmadi' : 'Shu vaqtda bo‘sh va sig‘adigan xona topilmadi') + '</div>';
+                };
+                render();
+                q.oninput = render;
+                q.focus();
+                const run = async room => {
+                    busy = true;
+                    m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = true; });
+                    msg.className = 'text-sm text-slate-600';
+                    msg.textContent = 'Joylanmoqda…';
+                    try {
+                        const r = await placeCardWithRoom(card, d, p, room);
+                        close();
+                        selected = null;
+                        renderAll();
+                        // Tasdiqqa ketgan bo'lsa — xabar onPendingApproval'da (doska qayta yuklanadi).
+                        if (!(r && r.pending_approval)) ttToast(esc('Joylandi: ' + (room.name || room.code) + ' xonasi bilan.'), 'ok');
+                    } catch (e) {
+                        busy = false;
+                        m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = false; });
+                        msg.className = 'text-sm text-red-600';
+                        msg.textContent = 'Joylanmadi: ' + e.message;
+                    }
+                };
+                list.onclick = ev => {
+                    const row = ev.target.closest ? ev.target.closest('[data-pr-code]') : null;
+                    if (row && !busy) run(cands.find(r => r.code === row.dataset.prCode));
+                };
+            }
+            // Kartani (d, p) ga shu xona bilan joylash — bitta so'rov (yo xona ham, joy ham, yo hech biri; kafedra mudirida — bitta tasdiq
+            // so'rovi): tanlangan hafta (ichki) — shu hafta istisnosi xona bilan (week-override); shablon (ichki) — kartaning o'zi shu xona bilan
+            // (place + auditorium_code; faqat shu kartaning xonasi o'zgaradi). Qaytaradi: server javobi (pending_approval — tasdiqqa ketdi).
+            async function placeCardWithRoom(card, d, p, room) {
+                weeklyEditGuard();
+                if (curWeek) {
+                    const r = await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'move', day: d, pair: p, auditorium_code: room.code });
+                    if (r && r.pending_approval) return r;
+                    const key = card.id + '|' + curWeek;
+                    overrides[key] = Object.assign({}, overrides[key] || {}, { day: d, pair: p, cancelled: false,
+                        auditorium_code: room.code, auditorium_name: room.name || room.code, auditorium_volume: +room.volume || null });
+                    return r;
+                }
+                const r = await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p, layer: 'internal', auditorium_code: room.code });
+                if (r && r.pending_approval) return r;
+                card.day = d; card.pair = p;
+                card.auditorium_code = room.code; card.auditorium_name = room.name || room.code;
+                rememberLayerPlace(card, d, p);
+                return r;
+            }
             // ===== Parallel bo'laklar ("Fan (a)", "(b)", "(c)" — guruhning turli talabalari, bir vaqtda yonma-yon) =====
             const bolakLetter = c => { const m = BOLAK_RX.exec(String(c.subject_name || '').trim()); return m ? m[2].toLowerCase() : ''; };
             const parallelSet = c => (c && c.training_type !== 'lecture' && BOLAK_RX.test(String(c.subject_name || '').trim())
@@ -11552,6 +11721,25 @@
                 b.dataset.parIds.split(',').forEach(id => document.querySelectorAll('.pn-card[data-id="' + id + '"], #grid [data-chip="' + id + '"]')
                     .forEach(x => x.classList.add('tt-par-hl')));
             });
+            // "Joylash uchun tanlash": sichqoncha band katakda — sabab bo'lgan dars(lar) jadvalda shu sabab rangidagi ramka bilan (ekranda bo'lsa;
+            // bitta dars ikki sababga — og'irrog'i). Birlashtirilgan chip (data-merge-ids) — qismlaridan biri sabab bo'lsa ham.
+            let placeCauseCell = null;
+            const PLACE_CAUSE_CLS = ['tt-cause-teacher', 'tt-cause-group', 'tt-cause-room'];
+            function placeCauseMark(td) {
+                if (td === placeCauseCell) return;
+                placeCauseCell = td;
+                document.querySelectorAll('#grid .tt-cause-teacher, #grid .tt-cause-group, #grid .tt-cause-room').forEach(x => x.classList.remove(...PLACE_CAUSE_CLS));
+                if (!td) return;
+                const want = {};
+                String(td.dataset.badIds || '').split(',').forEach(x => { const [id, k] = x.split(':'); if (id && k) want[id] = k; });
+                document.querySelectorAll('#grid [data-chip]').forEach(el => {
+                    const kinds = [el.dataset.chip, ...String(el.dataset.mergeIds || '').split(',')].map(id => want[id]).filter(Boolean);
+                    if (!kinds.length) return;
+                    const k = kinds.sort((a, b) => PLACE_RANK[b] - PLACE_RANK[a])[0];
+                    el.classList.add('tt-cause-' + (k === 'other' ? 'teacher' : k));
+                });
+            }
+            document.addEventListener('mouseover', ev => placeCauseMark(ev.target && ev.target.closest ? ev.target.closest('#grid td[data-bad-ids]') : null));
             // Bittasi ko'chirilgach — qolganlarini ham shu vaqtga ko'chirish taklifi (sahifa ichida; o'zi ko'chirilmaydi).
             function parallelMoveOffer(moved, others, d, p) {
                 let box = document.getElementById('ttParOffer');
@@ -11654,15 +11842,23 @@
                     const start = p - unitLen(list.slice(0, Math.max(0, list.indexOf(first))));
                     const mine = list.map(x => x.id);
                     let at = start;
-                    const errs = [];
-                    list.forEach(x => { errs.push(...conflictsAt(x, d, at, mine)); at += cardLen(x); });
+                    const items = [];
+                    list.forEach(x => { items.push(...conflictsAtDetail(x, d, at, mine)); at += cardLen(x); });
                     const maxRow = boardSchedule().filter(it => it.type === 'pair').length || 12;
-                    if (start < 1 || start + unitLen(list) - 1 > maxRow) errs.push('kun oxiri');
-                    return { start, len: unitLen(list), errs };
+                    if (start < 1 || start + unitLen(list) - 1 > maxRow) items.push({ kind: 'other', cardId: null, text: 'kun oxiri' });
+                    return { start, len: unitLen(list), items, errs: items.map(x => x.text) };
                 }
                 const len = parallel ? Math.max(...ids.map(id => { const x = cards.find(c => c.id === id); return x ? cardLen(x) : 1; }))
                     : ids.reduce((n, id) => { const x = cards.find(c => c.id === id); return n + (x ? cardLen(x) : 1); }, 0);
-                return { start: p, len, errs: conflictsAt(first, d, p, ids) };
+                const items = conflictsAtDetail(first, d, p, ids);
+                return { start: p, len, items, errs: items.map(x => x.text) };
+            }
+            // Sudrash nishoni rangi (tanlashdagi bilan bir xil hukm): drag-ok | drag-bad + drag-bad-<tur>.
+            const DRAG_TONES = ['drag-ok', 'drag-bad', 'drag-bad-teacher', 'drag-bad-group', 'drag-bad-room'];
+            function dragPaint(el, items) {
+                el.classList.remove(...DRAG_TONES);
+                const v = placeVerdict(items);
+                if (v.tone === 'ok') el.classList.add('drag-ok'); else el.classList.add('drag-bad', 'drag-bad-' + v.tone);
             }
             // Sudrash paytida tushadigan vaqt oralig'i ("12:40–15:00") — sichqoncha yonida.
             function dragTip(ev, plan) {
@@ -11705,7 +11901,7 @@
                 dragOffsets = null;
                 const gEl = document.getElementById('grid');
                 if (gEl) gEl.classList.remove('tt-dragging');
-                document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
+                document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove(...DRAG_TONES));
                 const panel = document.getElementById('cardPanel');
                 if (panel) panel.classList.remove('pn-drop');
                 dragTip(null, null);
@@ -13428,9 +13624,12 @@
                                 && selected.course === o.course) {
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
-                                    const bad = conflictsAt(selected, d, p).length > 0;
-                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + courseCls(o.course) + colBorder(oi, 0, o.groups) + rowEndCls(p) + '" colspan="' + o.groups.length + '"' + dp +
-                                        (bad ? '' : ' data-place="' + d + '-' + p + '"') + '></td>';
+                                    // Band bo'lsa — turi rang bilan, sababi title da; faqat xona band (sariq) — bosilsa boshqa xona bilan joylash.
+                                    const v = placeVerdict(conflictsAtDetail(selected, d, p));
+                                    const bad = v.tone !== 'ok';
+                                    h += '<td class="tt-cell' + (bad ? placeBadCls(v) : ' tt-ok') + courseCls(o.course) + colBorder(oi, 0, o.groups) + rowEndCls(p) + '" colspan="' + o.groups.length + '"' + dp +
+                                        (bad ? ' title="' + esc(v.title) + '"' + placeCauseAttr(v) + (v.tone === 'room' ? ' data-room-place="' + d + '-' + p + '"' : '')
+                                            : ' data-place="' + d + '-' + p + '"') + '></td>';
                                     return;
                                 }
                             }
@@ -13514,8 +13713,11 @@
                                         // "Vaqtincha kafedra mudiriga yozish": har qanday bo'sh katak (to'qnashuv tekshirilmaydi).
                                         cls += ' tt-ok'; clickable = ' data-mudir-place="' + d + '-' + p + '"';
                                     } else if (selected && selected.training_type === 'practice' && cardGKeys(selected).includes(grp)) {
-                                        if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
-                                        else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
+                                        const v = placeVerdict(conflictsAtDetail(selected, d, p));
+                                        if (v.tone !== 'ok') {
+                                            cls += placeBadCls(v);
+                                            clickable = ' title="' + esc(v.title) + '"' + placeCauseAttr(v) + (v.tone === 'room' ? ' data-room-place="' + d + '-' + p + '"' : '');
+                                        } else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
                                     }
                                     h += '<td class="' + cls + '"' + dp + ' data-g="' + esc(grp) + '"' + clickable + '></td>';
                                     gi++;
@@ -13543,6 +13745,15 @@
                     const [d, p] = td.dataset.place.split('-').map(Number);
                     placeCardAt(selected, d, p);
                 });
+                // Sariq (faqat xona band) — boshqa (bo'sh, sig'adigan) xona tanlab joylash.
+                document.querySelectorAll('[data-room-place]').forEach(td => td.onclick = () => {
+                    if (!selected) return;
+                    const [d, p] = td.dataset.roomPlace.split('-').map(Number);
+                    openPlaceRoomPick(selected, d, p);
+                });
+                // Ranglar izohi — karta joylash uchun tanlanganda.
+                const legend = document.getElementById('ttPlaceLegend');
+                if (legend) legend.hidden = !(selected && !mudirPick && !TIMETABLE_READ_ONLY);
 
                 document.querySelectorAll('[data-ask-time]').forEach(el => el.onclick = (ev) => {
                     ev.stopPropagation();
@@ -13582,14 +13793,13 @@
                         // Yarim para qadami: bir necha qatorli katakda sichqoncha turgan yarim-slot; bandlik — shu yarim-slot bo'yicha.
                         const d = +td.dataset.day, p = dropSlotAt(td, ev);
                         const plan = dragPlan(dragCardIds, d, p, dragParallel);
-                        td.classList.remove('drag-ok', 'drag-bad');
-                        td.classList.add(plan && plan.errs.length ? 'drag-bad' : 'drag-ok');
+                        dragPaint(td, plan ? plan.items : []);
                         dragTip(ev, plan);
                     });
-                    td.addEventListener('dragleave', () => { td.classList.remove('drag-ok', 'drag-bad'); dragTip(null, null); });
+                    td.addEventListener('dragleave', () => { td.classList.remove(...DRAG_TONES); dragTip(null, null); });
                     td.addEventListener('drop', ev => {
                         ev.preventDefault();
-                        td.classList.remove('drag-ok', 'drag-bad');
+                        td.classList.remove(...DRAG_TONES);
                         dragTip(null, null);
                         if (!dragCardIds) return;
                         const ids = dragCardIds, parallel = dragParallel, offs = dragOffsets;
@@ -13608,12 +13818,12 @@
                         ev.dataTransfer.dropEffect = 'move';
                         const card = cards.find(x => x.id === dragCardIds[0]);
                         const d = +z.dataset.dropDay, p = +z.dataset.dropPair;
-                        z.classList.add(card && conflictsAt(card, d, p, dragCardIds).length ? 'drag-bad' : 'drag-ok');
+                        dragPaint(z, card ? conflictsAtDetail(card, d, p, dragCardIds) : []);
                     });
-                    z.addEventListener('dragleave', () => z.classList.remove('drag-ok', 'drag-bad'));
+                    z.addEventListener('dragleave', () => z.classList.remove(...DRAG_TONES));
                     z.addEventListener('drop', ev => {
                         ev.preventDefault(); ev.stopPropagation();
-                        z.classList.remove('drag-ok', 'drag-bad');
+                        z.classList.remove(...DRAG_TONES);
                         if (!dragCardIds) return;
                         const ids = dragCardIds, parallel = dragParallel, offs = dragOffsets;
                         dragCardIds = null; dragParallel = false; dragOffsets = null;

@@ -66,7 +66,7 @@ it('rejects a wrong state without calling HEMIS', function () {
     fakeHemis(['id' => 1, 'login' => '3682111026']);
     $this->withSession(['hemis_staff_oauth_state' => 'st'])
         ->get('/auth/hemis-staff/callback?code=c&state=other')
-        ->assertRedirect(route('teacher.login'));
+        ->assertRedirect('/');
     expect(Auth::guard('teacher')->check())->toBeFalse();
     Http::assertNothingSent();
 });
@@ -75,6 +75,6 @@ it('rejects employees missing from LMS', function () {
     fakeHemis(['id' => 2, 'login' => '9999999999']);
     $this->withSession(['hemis_staff_oauth_state' => 'st'])
         ->get('/auth/hemis-staff/callback?code=c&state=st')
-        ->assertRedirect(route('teacher.login'));
+        ->assertRedirect('/');
     expect(Auth::guard('teacher')->check())->toBeFalse();
 });

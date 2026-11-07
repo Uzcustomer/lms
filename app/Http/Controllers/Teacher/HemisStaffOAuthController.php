@@ -23,8 +23,7 @@ class HemisStaffOAuthController extends Controller
     {
         $config = config('services.hemis_staff_oauth');
         if (empty($config['client_id']) || empty($config['client_secret']) || empty($config['base_url'])) {
-            return redirect()->route('teacher.login')
-                ->withErrors(['login' => "HEMIS orqali kirish hali sozlanmagan. Login va parol bilan kiring."]);
+            return $this->failed("HEMIS orqali kirish hali sozlanmagan. Administratorga murojaat qiling.");
         }
 
         $state = Str::random(40);
@@ -52,14 +51,13 @@ class HemisStaffOAuthController extends Controller
             ]);
 
             // Texnik xato matni foydalanuvchiga ko'rsatilmaydi — faqat logda
-            return redirect()->route('teacher.login')
-                ->withErrors(['login' => "HEMIS orqali kirishda xatolik yuz berdi. Qaytadan urinib ko'ring yoki login va parol bilan kiring."]);
+            return $this->failed("HEMIS orqali kirishda xatolik yuz berdi. Qaytadan urinib ko'ring.");
         }
     }
 
     private function handleCallback(Request $request)
     {
-        $fail = fn (string $message) => redirect()->route('teacher.login')->withErrors(['login' => $message]);
+        $fail = fn (string $message) => $this->failed($message);
 
         // State tekshiruvi (CSRF himoya)
         $savedState = $request->session()->pull('hemis_staff_oauth_state');
@@ -176,6 +174,12 @@ class HemisStaffOAuthController extends Controller
         }
 
         return redirect()->intended(route('teacher.dashboard'));
+    }
+
+    /** Xato — bosh sahifaga, "Xodim" tabi ochilgan holda (u yerda faqat "Hemis orqali kirish" bor). */
+    private function failed(string $message)
+    {
+        return redirect('/')->withErrors(['login' => $message])->withInput(['_profile' => 'teacher']);
     }
 
     /** HEMIS'dagi OAuth ilovaga yozilgan manzil bilan harfma-harf bir xil bo'lishi kerak. */

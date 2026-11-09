@@ -151,18 +151,18 @@ describe('teacher confirmation', function () {
         $drawings = $sheet->getSheet(0)->getDrawingCollection();
         // Imzo ustuni talabalar qatorlarida bitta katak; QR uning o'rtasida (10 × 20px, QR 90px:
         // yuqori cheti 55px — 22-qatorda 15px), ustun 207px — chapdan 58px
-        expect($sheet->getSheet(0)->getMergeCells())->toHaveKey('X20:X29')
-            ->and($sheet->getSheet(0)->getStyle('X20')->getFill()->getFillType())->toBe(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE)
+        expect($sheet->getSheet(0)->getMergeCells())->toHaveKey('Y20:Y29')
+            ->and($sheet->getSheet(0)->getStyle('Y20')->getFill()->getFillType())->toBe(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE)
             ->and($sheet->getSheet(0)->getStyle('W20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
             // Shartli formatlash imzo ustunisiz: A–W va Y
-            ->and(array_keys($sheet->getSheet(0)->getConditionalStylesCollection()))->toEqualCanonicalizing(['A20:W49', 'Y20:Y49'])
+            ->and(array_keys($sheet->getSheet(0)->getConditionalStylesCollection()))->toEqualCanonicalizing(['A20:X49'])   // imzo ustuni (Y) chiqarilgan
             ->and($drawings)->toHaveCount(1)
-            ->and($drawings[0]->getCoordinates())->toBe('X22')
+            ->and($drawings[0]->getCoordinates())->toBe('Y22')
             ->and([$drawings[0]->getOffsetY(), $drawings[0]->getHeight()])->toBe([15, 90])
             ->and($drawings[0]->getOffsetX())->toBeGreaterThan(50)->toBeLessThan(65)
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
 
-        // Sahifada QR birlashtirilgan katakning (X20) o'zida, katak o'rtasida (flex markaz)
+        // Sahifada QR birlashtirilgan katakning (Y20) o'zida, katak o'rtasida (flex markaz)
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
         expect($html)->toContain('rowspan="10"')
             ->toMatch('/<td[^>]*rowspan="10"[^>]*><div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV[^"]*" src="data:image\/png;base64,[^"]+" style="width:90px;height:90px" \/><\/div>/');

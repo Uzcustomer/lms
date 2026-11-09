@@ -53,7 +53,9 @@ class JournalController extends Controller
     /** YN qaydnoma shablonida talabalar qatorlari va imzo ustuni */
     private const YNQ_FIRST_ROW = 20;
     private const YNQ_LAST_ROW = 49;
-    private const YNQ_SIGN_COL = 'X';
+    /** Imzo (QR) ustuni — shablonda X, so'z bilan baho Y; qaydnomada o'rni almashtiriladi */
+    private const YNQ_SIGN_COL = 'Y';
+    private const YNQ_GRADE_WORD_COL = 'X';
     private const YNQ_QR_ALT = 'Tasdiq QR: ';
     private const YNQ_DEAN_QR_ALT = 'Dekan QR: ';
     /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
@@ -11822,6 +11824,7 @@ class JournalController extends Controller
             if (!$sheet->getPageSetup()->getPrintArea()) {
                 continue;
             }
+            self::swapSignatureColumn($sheet);
             $first = self::YNQ_FIRST_ROW;
             $last = $first - 1;
             while ($last < self::YNQ_LAST_ROW && trim((string) $sheet->getCell('B' . ($last + 1))->getValue()) !== '') {
@@ -11883,6 +11886,42 @@ class JournalController extends Controller
                 $qr->setOffsetX(max(0, intdiv($colPx($sheet, $col) - $size, 2)));
                 $qr->setOffsetY(max(0, intdiv(self::rowPx($sheet, $row) + self::rowPx($sheet, $row + 1) - $size, 2)));
                 $qr->setWorksheet($sheet);
+            }
+        }
+    }
+
+    /**
+     * Shablonda imzo ustuni (X) so'z bilan baho (Y) dan oldin — o'rni almashtiriladi: jadval
+     * qatorlaridagi qiymat, formula va uslub, ustun kengligi, hamda so'z bilan bahoni sanaydigan
+     * formulalar (COUNTIF(Y20:Y49, …) → X20:X49).
+     */
+    private static function swapSignatureColumn(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): void
+    {
+        [$sign, $word] = [self::YNQ_SIGN_COL, self::YNQ_GRADE_WORD_COL];
+        if (trim((string) $sheet->getCell($word . '15')->getValue()) === '') {
+            return;   // allaqachon almashtirilgan
+        }
+        [$tableFrom, $tableTo] = self::YNQ_TABLE_ROWS;
+        for ($r = $tableFrom; $r <= $tableTo; $r++) {
+            // Kutubxona bir vaqtda bitta katak obyektini ushlaydi — har biri qayta olinadi
+            [$av, $ax] = [$sheet->getCell($word . $r)->getValue(), $sheet->getCell($word . $r)->getXfIndex()];
+            [$bv, $bx] = [$sheet->getCell($sign . $r)->getValue(), $sheet->getCell($sign . $r)->getXfIndex()];
+            $sheet->getCell($word . $r)->setValue($bv)->setXfIndex($bx);
+            $sheet->getCell($sign . $r)->setValue($av)->setXfIndex($ax);
+        }
+        $wa = $sheet->getColumnDimension($word)->getWidth();
+        $sheet->getColumnDimension($word)->setWidth($sheet->getColumnDimension($sign)->getWidth());
+        $sheet->getColumnDimension($sign)->setWidth($wa);
+
+        $from = $sign . self::YNQ_FIRST_ROW . ':' . $sign . self::YNQ_LAST_ROW;
+        $to = $word . self::YNQ_FIRST_ROW . ':' . $word . self::YNQ_LAST_ROW;
+        for ($r = $tableTo + 1; $r <= 61; $r++) {
+            foreach (range('A', 'Y') as $col) {
+                $cell = $sheet->getCell($col . $r);
+                $v = $cell->getValue();
+                if (is_string($v) && str_starts_with($v, '=') && str_contains($v, $from)) {
+                    $cell->setValue(str_replace($from, $to, $v));
+                }
             }
         }
     }

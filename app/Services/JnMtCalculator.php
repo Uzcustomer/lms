@@ -16,10 +16,15 @@ class JnMtCalculator
     /**
      * Guruh+fan+semestr bo'yicha har bir talabaning JN va MT bahosini hisoblaydi.
      *
+     * $beforeUpgrade — admin ko'targan baholar o'rniga ularning asl qiymati (admin_original_grade)
+     * bilan: ko'tarishdan oldingi JN/MT.
+     *
      * @return array<string,array{jn:int,mt:int}> hemis_id => ['jn' => x, 'mt' => y]
      */
-    public function computeForGroup(string $groupHemisId, int $subjectId, string $semesterCode): array
+    public function computeForGroup(string $groupHemisId, int $subjectId, string $semesterCode, bool $beforeUpgrade = false): array
     {
+        $beforeUpgrade = $beforeUpgrade && \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'admin_original_grade');
+        $upgradeColumns = $beforeUpgrade ? ['upgraded_by_admin', 'admin_original_grade'] : [];
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $excludedTrainingTypeNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
@@ -100,8 +105,11 @@ class JnMtCalculator
             ->where('semester_code', $semesterCode)
             ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select(array_merge(['student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason'], $upgradeColumns))
             ->get();
+        if ($beforeUpgrade) {
+            $gradesRaw = $gradesRaw->map(fn ($g) => self::originalRow($g));
+        }
 
         // 4. Manual MT (training_type_code=99)
         $manualMtGrades = DB::table('student_grades')
@@ -112,8 +120,9 @@ class JnMtCalculator
             ->where('training_type_code', 99)
             ->whereNull('lesson_date')
             ->whereNotNull('grade')
-            ->select('student_hemis_id', 'grade')
+            ->select(array_merge(['student_hemis_id', 'grade', 'retake_grade'], $upgradeColumns))
             ->get()
+            ->map(fn ($g) => $beforeUpgrade ? self::originalRow($g) : $g)
             ->keyBy('student_hemis_id');
 
         // 5. Baholar xaritasini qurish (jurnal getEffectiveGrade mantig'i)
@@ -146,6 +155,19 @@ class JnMtCalculator
         }
 
         return $result;
+    }
+
+    /** Admin ko'targan qator — ko'tarilgan ustunga (grade yoki retake_grade) asl qiymati qaytariladi */
+    private static function originalRow(object $row): object
+    {
+        if (empty($row->upgraded_by_admin) || $row->admin_original_grade === null) {
+            return $row;
+        }
+        $row = clone $row;
+        $column = \App\Console\Commands\AdminUpgradeGrades::targetColumn($row, \App\Models\MarkingSystemScore::lowGradeLimit());
+        $row->{$column} = $row->admin_original_grade;
+
+        return $row;
     }
 
     /**

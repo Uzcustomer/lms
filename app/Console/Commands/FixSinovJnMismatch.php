@@ -253,7 +253,7 @@ class FixSinovJnMismatch extends Command
      * bulkCopySinovFromJn::computeAbsenceForGroup bilan bir xil mantiq.
      * hemis_id => sababsiz davomat foizi (0..100)
      */
-    private function computeAbsence(string $subjectId, string $semesterCode, string $groupHemisId): array
+    public function computeAbsence(string $subjectId, string $semesterCode, string $groupHemisId): array
     {
         $studentHemisIds = DB::table('students')
             ->where('group_id', $groupHemisId)

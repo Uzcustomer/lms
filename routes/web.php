@@ -528,6 +528,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             // Amaliy o'qituvchi qaydnomani tasdiqlaydi — unikal QR bosiladi
             Route::post('/confirm-yn-qaydnoma', [JournalController::class, 'confirmYnQaydnoma'])->name('confirm-yn-qaydnoma');
             Route::post('/revoke-yn-qaydnoma', [JournalController::class, 'revokeYnQaydnoma'])->name('revoke-yn-qaydnoma');
+            Route::post('/reject-yn-qaydnoma', [JournalController::class, 'rejectYnQaydnoma'])->name('reject-yn-qaydnoma');
         });
 
         // Vedomost tekshirish
@@ -1213,6 +1214,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|dekan|registrator_ofisi'])
             ->get('/yn-qaydnomalar', [\App\Http\Controllers\Admin\YnQaydnomaListController::class, 'index'])
             ->name('yn-qaydnomalar.index');
+        // O'qituvchi: "Vedomostlarim" — o'z guruh × fanlari, topshirilgan / rad etilgan / dekan tasdiqlagan
+        Route::get('/vedomostlarim', [\App\Http\Controllers\Admin\YnQaydnomaListController::class, 'mine'])
+            ->name('yn-qaydnomalar.mine');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

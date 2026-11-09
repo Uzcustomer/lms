@@ -10088,6 +10088,19 @@ class JournalController extends Controller
                     . ' onsubmit="return confirm(\'' . e(addslashes($question)) . '\')">' . csrf_field() . $hidden
                     . ($isDean ? '' : '<span class="ynq-note">Baholarni tekshiring, hammasi to\'g\'ri bo\'lsa:</span>')
                     . '<button type="submit" class="ynq-confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Tasdiqlash</button></form>';
+                // Dekan rad etsa — sababi so'raladi, o'qituvchi tasdig'i bekor bo'ladi
+                if ($isDean) {
+                    $actions .= '<form method="POST" action="' . e(route('admin.journal.reject-yn-qaydnoma')) . '"'
+                        . ' onsubmit="var r=prompt(\'Rad etish sababini yozing (o\\\'qituvchiga ko\\\'rinadi):\');'
+                        . 'if(!r||!r.trim())return false;this.reason.value=r.trim();return true;">'
+                        . csrf_field() . $hidden . '<input type="hidden" name="reason" value="">'
+                        . '<button type="submit" class="ynq-revoke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>Rad etish</button></form>';
+                }
+            }
+            $rejection = $isDean ? null : \App\Models\YnQaydnomaRejection::openFor($subjectId, $semesterCode, $groupHemisId);
+            if ($rejection) {
+                $actions = '<span class="ynq-rejected">Dekan rad etgan (' . e($rejection->dean_name) . ', '
+                    . $rejection->rejected_at->format('d.m.Y H:i') . '): «' . e($rejection->reason) . '». Ko\'rib chiqib, qayta tasdiqlang.</span>' . $actions;
             }
         } elseif ($mine) {
             $actions .= '<form method="POST" action="' . e(route('admin.journal.revoke-yn-qaydnoma')) . '"'
@@ -10172,11 +10185,57 @@ class JournalController extends Controller
             ]);
         });
 
+        if ($role === $Confirmation::ROLE_TEACHER && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_rejections')) {
+            \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $groupHemisId)
+                ->whereNull('resolved_at')->update(['resolved_at' => now()]);
+        }
         $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId);
         \App\Services\ActivityLogService::log('confirm', 'yn_qaydnoma',
             "YN qaydnoma tasdiqlandi ({$confirmation->roleLabel()}): {$group?->name}, {$subject?->subject_name}", $confirmation);
 
         return redirect($back)->with('ynq_flash', 'Qaydnoma tasdiqlandi — QR kodingiz bosildi.');
+    }
+
+    /**
+     * Dekan qaydnomani rad etadi (sababi bilan): o'qituvchi(lar) tasdig'i va QR lari bekor bo'ladi,
+     * o'qituvchi "Vedomostlarim" da sababini ko'rib, qayta ko'rib chiqib tasdiqlaydi.
+     */
+    public function rejectYnQaydnoma(Request $request)
+    {
+        $data = $request->validate(self::YNQ_RULES + ['reason' => 'required|string|min:3|max:1000']);
+        $subjectId = (string) $data['subject_id'];
+        $semesterCode = (string) $data['semester_code'];
+        $groupHemisId = (string) $data['group_hemis_id'];
+        $back = route('admin.journal.view-yn-qaydnoma', $request->only(array_keys(self::YNQ_RULES)));
+        $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
+
+        $dean = $this->currentTeacher();
+        abort_unless($dean && is_active_dekan() && self::deanSeesGroup($groupHemisId), 403, 'Qaydnomani faqat fakultet dekani rad eta oladi.');
+        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId);
+        $teachers = $vedomost()->where('role', $Confirmation::ROLE_TEACHER)->get();
+        if ($teachers->isEmpty()) {
+            return redirect($back)->with('ynq_flash', 'Rad etiladigan tasdiq yo\'q — o\'qituvchi hali topshirmagan.');
+        }
+        if ($vedomost()->where('role', $Confirmation::ROLE_DEAN)->exists()) {
+            return redirect($back)->with('ynq_flash', 'Avval o\'z tasdig\'ingizni qaytaring.');
+        }
+
+        $stale = $teachers->pluck('verification.document_path')->filter()->all();
+        DB::transaction(function () use ($teachers, $dean, $data, $subjectId, $semesterCode, $groupHemisId) {
+            $rejection = \App\Models\YnQaydnomaRejection::create([
+                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId,
+                'dean_id' => $dean->id, 'dean_name' => $dean->full_name, 'reason' => trim($data['reason']),
+                'weights' => $teachers->sortByDesc('confirmed_at')->first()->weights, 'rejected_at' => now(),
+            ]);
+            foreach ($teachers as $c) {
+                $c->verification?->delete();
+                $c->delete();
+            }
+            \App\Services\ActivityLogService::log('reject', 'yn_qaydnoma', "YN qaydnoma rad etildi: {$data['reason']}", $rejection);
+        });
+        $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, $stale);
+
+        return redirect($back)->with('ynq_flash', 'Qaydnoma rad etildi — o\'qituvchi sababini ko\'rib, qayta topshiradi.');
     }
 
     /**
@@ -10304,6 +10363,7 @@ class JournalController extends Controller
             . '.ynq-dock .ynq-confirm:hover{background:#15803d}'
             . '.ynq-dock .ynq-revoke{background:#fff;border-color:#fecaca;color:#b91c1c}.ynq-dock .ynq-revoke:hover{background:#fef2f2}'
             . '.ynq-dock .ynq-note{color:#475569;font-size:13px}'
+            . '.ynq-dock .ynq-rejected{flex-basis:100%;padding:8px 12px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:600}'
             . '.ynq-dock .ynq-ok{padding:6px 12px;border-radius:999px;background:#dcfce7;color:#166534;font-size:13px;font-weight:600}'
             . 'body{padding-bottom:110px}'
             . '.ynq-qr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px}'

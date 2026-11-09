@@ -31,10 +31,13 @@ beforeEach(function () {
     Schema::create('exam_schedules', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('subject_id'), $t->string('semester_code'), $t->string('subject_name')->nullable(),
         $t->unsignedBigInteger('student_hemis_id')->nullable(), $t->date('oski_date')->nullable(), $t->date('test_date')->nullable(),
         $t->boolean('oski_na')->default(false), $t->boolean('test_na')->default(false)]);
-    Schema::create('schedules', fn ($t) => [$t->id(), $t->string('group_id'), $t->string('subject_id'), $t->string('training_type_code'), $t->string('employee_name')->nullable(), $t->softDeletes()]);
+    Schema::create('schedules', fn ($t) => [$t->id(), $t->string('group_id'), $t->string('subject_id'), $t->string('semester_code')->nullable(), $t->string('subject_name')->nullable(),
+        $t->string('training_type_code'), $t->unsignedBigInteger('employee_id')->nullable(), $t->string('employee_name')->nullable(), $t->boolean('education_year_current')->default(true), $t->softDeletes()]);
     Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->timestamps()]);
     (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
     (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
+    (require base_path('database/migrations/2026_11_09_160000_create_yn_qaydnoma_rejections_table.php'))->up();
+    Schema::create('yn_submissions', fn ($t) => [$t->id(), $t->string('subject_id'), $t->string('semester_code'), $t->string('group_hemis_id'), $t->timestamps()]);
 
     DB::table('teachers')->insert(['id' => 9, 'hemis_id' => 900, 'full_name' => 'DEKAN']);
     DB::table('roles')->insert(['id' => 1, 'name' => 'dekan', 'guard_name' => 'web']);
@@ -119,6 +122,46 @@ it('lists a submitted vedomost even before its exams finish or when it has no ex
     expect($rows->map(fn ($r) => $r->group . ' ' . $r->subject)->sort()->values()->all())->toBe(['d1/d22-01a Pediatriya', 'd1/d22-02a Fan #41'])
         ->and($rows->firstWhere('subject_id', '30')->test_date)->toBe('2026-11-12')
         ->and($rows->firstWhere('subject_id', '41')->level_name)->toBe('5-kurs');
+});
+
+it('shows a rejected vedomost to the dean with the reason', function () {
+    DB::table('yn_qaydnoma_rejections')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '78', 'dean_id' => 9,
+        'dean_name' => 'DEKAN', 'reason' => 'MT xato', 'weights' => json_encode(['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15]),
+        'rejected_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+
+    $data = ($this->page)();
+    $row = collect($data['rows']->items())->firstWhere('group', 'd1/d22-02a');
+    expect($row->status)->toBe('rejected')
+        ->and($row->rejection->reason)->toBe('MT xato')
+        ->and($data['counts'])->toMatchArray(['none' => 0, 'rejected' => 1, 'dean' => 1]);
+});
+
+it('gives the teacher their own groups and subjects with status', function () {
+    DB::table('teachers')->insert(['id' => 1, 'hemis_id' => 501, 'full_name' => 'ALLAMURATOVA U.D.']);
+    DB::table('roles')->insert(['id' => 3, 'name' => 'oqituvchi', 'guard_name' => 'web']);
+    DB::table('model_has_roles')->insert(['role_id' => 3, 'model_type' => \App\Models\Teacher::class, 'model_id' => 1]);
+    DB::table('schedules')->insert([
+        ['group_id' => '77', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik', 'training_type_code' => '13', 'employee_id' => 501, 'employee_name' => 'ALLAMURATOVA U.D.'],
+        ['group_id' => '78', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik', 'training_type_code' => '13', 'employee_id' => 501, 'employee_name' => 'ALLAMURATOVA U.D.'],
+        ['group_id' => '78', 'subject_id' => '30', 'semester_code' => '19', 'subject_name' => 'Pediatriya', 'training_type_code' => '11', 'employee_id' => 501, 'employee_name' => 'ALLAMURATOVA U.D.'],   // ma'ruza
+    ]);
+    DB::table('yn_submissions')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '78']);
+    DB::table('yn_qaydnoma_rejections')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '78', 'dean_id' => 9,
+        'dean_name' => 'DEKAN', 'reason' => 'MT xato', 'weights' => json_encode(['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15]),
+        'rejected_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+    Auth::guard('teacher')->login(\App\Models\Teacher::find(1));
+    session(['active_role' => 'oqituvchi']);
+
+    $data = (new YnQaydnomaListController())->mine(\Illuminate\Http\Request::create('/admin/vedomostlarim'))->getData();
+    $rows = collect($data['rows']->items())->keyBy('group');
+
+    expect($data['isTeacher'])->toBeTrue()
+        ->and($rows->keys()->all())->toBe(['d1/d22-02a', 'd1/d22-01a'])                  // rad etilgan birinchi; ma'ruza yo'q
+        ->and($rows['d1/d22-02a']->status)->toBe('rejected')
+        ->and($rows['d1/d22-02a']->yn_submitted)->toBeTrue()
+        ->and($rows['d1/d22-02a']->params)->toMatchArray(['group_hemis_id' => '78', 'weight_oski' => 15])   // qayta ko'rib chiqish — rad etilgan vaznlar
+        ->and($rows['d1/d22-01a']->status)->toBe('dean')
+        ->and($rows['d1/d22-01a']->group_pk)->not->toBeNull();
 });
 
 it('filters by status and group', function () {

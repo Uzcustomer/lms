@@ -79,6 +79,7 @@ describe('teacher confirmation', function () {
             $t->string('generated_by')->nullable(), $t->timestamp('generated_at')->nullable(), $t->string('document_path')->nullable(), $t->json('meta')->nullable(), $t->timestamps()]);
         (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
         (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
+        (require base_path('database/migrations/2026_11_09_160000_create_yn_qaydnoma_rejections_table.php'))->up();
         Schema::create('departments', fn ($t) => [$t->id(), $t->unsignedBigInteger('department_hemis_id'), $t->string('name')]);
         Schema::create('dean_faculties', fn ($t) => [$t->id(), $t->unsignedBigInteger('teacher_id'), $t->unsignedBigInteger('department_hemis_id'), $t->timestamps()]);
 
@@ -122,7 +123,11 @@ describe('teacher confirmation', function () {
             Auth::guard('teacher')->login(\App\Models\Teacher::find($teacherId));
             session(['active_role' => $teacherId === 3 ? 'dekan' : 'oqituvchi']);
 
-            return $action === 'confirm' ? $this->controller->confirmYnQaydnoma($request) : $this->controller->revokeYnQaydnoma($request);
+            return match ($action) {
+                'confirm' => $this->controller->confirmYnQaydnoma($request),
+                'reject' => $this->controller->rejectYnQaydnoma($request->merge(['reason' => 'MT baholari xato'])),
+                default => $this->controller->revokeYnQaydnoma($request),
+            };
         };
     });
 
@@ -213,6 +218,32 @@ describe('teacher confirmation', function () {
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
             ->and(\App\Models\DocumentVerification::count())->toBe(0);
         Storage::disk('public')->assertMissing($paths->first());
+    });
+
+    it('lets the dean reject with a reason and the teacher re-confirm', function () {
+        ($this->confirm)(1);
+        $path = \App\Models\YnQaydnomaConfirmation::sole()->verification->document_path;
+
+        ($this->confirm)(3, 'reject');
+        $rejection = \App\Models\YnQaydnomaRejection::sole();
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)                  // o'qituvchi tasdig'i va QR bekor
+            ->and(\App\Models\DocumentVerification::count())->toBe(0)
+            ->and($rejection->reason)->toBe('MT baholari xato')
+            ->and($rejection->dean_name)->toBe('SAGIRAYEV NURALI')
+            ->and($rejection->weights['test'])->toBe(60)
+            ->and($rejection->resolved_at)->toBeNull();
+        Storage::disk('public')->assertMissing($path);
+        expect(fn () => ($this->confirm)(3))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // tasdiqlaydigan narsa yo'q
+
+        ($this->confirm)(1);   // o'qituvchi qayta ko'rib chiqib tasdiqlaydi
+        expect($rejection->fresh()->resolved_at)->not->toBeNull()
+            ->and(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
+    });
+
+    it('does not let a teacher reject', function () {
+        ($this->confirm)(1);
+        expect(fn () => ($this->confirm)(1, 'reject'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
     });
 
     it('does not let the lecturer confirm', function () {

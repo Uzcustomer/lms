@@ -63,7 +63,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 require('./helpers/timetable-info-only.cjs')(ctx);
-vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { phRevertErrSet: (c, v) => { phRevertErr[unitKey(c)] = v; }, openMudirPhConfirm, mudirPhSectionHtml, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop, placedSlotText });', ctx);
+vm.runInContext(helpers + source.slice(a, b) + '; Object.assign(this, { phRevertErrSet: (c, v) => { phRevertErr[unitKey(c)] = v; }, openMudirPhConfirm, mudirPhSectionHtml, weeklyPhCards, mudirPhRevert, panelPopPlace, panelPopSplitError, panelPopMsgHtml, openPanelCardPop, partialBadgeHtml, runUnitFix, gotoGridSlot, unitState, unitFixErr, closePanelCardPop, placedSlotText });', ctx);
 // dragPlan — haqiqiy (bo'sh joy).
 vm.runInContext(source.slice(source.indexOf('            function dragPlan('), source.indexOf('            // Sudrash paytida tushadigan vaqt oralig')), ctx);
 
@@ -204,6 +204,14 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     assert.match(sec, /\(asl o'qituvchi: ALIYEV SH\. N\.\)/);
     assert.match(sec, /data-ph-revert="30" data-ph-mode="original"[^>]*>Asl holatga qaytarish<\/button>/);
     assert.match(sec, /data-ph-revert="30" data-ph-mode="here"[^>]*>Shu joyda asl o'qituvchiga<\/button>/);
+    // Bo'lim ro'yxati panelning joylanmagan / to'qnashuvli ro'yxatidan mustaqil (sikl panelidagi xato bu yerda yo'q): to'qnashuvsiz
+    // joylangan mudir belgili dars (30) kiradi; belgisi boshqa haftada (31 — 9-hafta) yoki belgisiz (1) — yo'q; tashqi qatlamda — bo'sh.
+    ctx.overrides['31|9'] = { day: 3, pair: 3, cancelled: false, mudir_placeholder: { teacher_name: 'XOLMATOV A. B.', orig_teacher_name: 'X' } };
+    ctx.weekActiveCards = () => [cards[0], phCard, Object.assign({}, cards[2], { id: 31 })];
+    assert.deepEqual([...ctx.weeklyPhCards().map(c => c.id)], [30]);
+    ctx.weeklyLayer = 'external';
+    assert.equal(ctx.weeklyPhCards().length, 0);
+    ctx.weeklyLayer = 'internal';
     // Asosiy — asl holatga, barcha haftalar (week yuborilmaydi).
     await ctx.mudirPhRevert(phCard, { disabled: false });
     assert.deepEqual(calls.filter(c => c[0].endsWith('/revert')).pop(), ['/cards/30/mudir-placeholder/revert', { mode: 'original' }]);

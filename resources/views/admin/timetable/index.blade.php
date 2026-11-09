@@ -1754,7 +1754,10 @@
         #cycDayPop .cyc-acts button:disabled { opacity: .45; cursor: not-allowed; }
         #cycDayPop .cyc-confirm { margin-top: 6px; padding: 6px; border: 1px dashed #cbd5e1; border-radius: 6px; }
         #cycDayPop .cyc-confirm ul { margin: 2px 0 4px 16px; list-style: disc; }
-        .cyc-ph-sec { margin-top: 8px; font-size: 11px; }
+        .cyc-ph-sec { margin-top: 8px; font-size: 11px; flex-basis: 100%; border-radius: 6px; }
+        .cyc-ph-sec.cyc-ph-flash { animation: cyc-ph-flash 1.2s ease-out; }
+        @keyframes cyc-ph-flash { from { box-shadow: 0 0 0 3px #facc15; } to { box-shadow: 0 0 0 3px transparent; } }
+        .cyc-wk-head .cyc-ph-go { font-weight: 600; color: #854d0e; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; }
         .cyc-ph-sec > b { display: block; color: #854d0e; }
         #cycDayPop .dp-head { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
         #cycDayPop .dp-title { font-weight: 800; line-height: 1.25; }
@@ -10676,6 +10679,16 @@
                 const b = items.map(i => i.date_to || i.to || i.date_from || i.from).filter(Boolean).sort().pop();
                 return 'joylangan · to\u2018qnashuv' + (a ? ' ' + cfDate(a) + (b && b !== a ? '–' + cfDate(b) : '') : '');
             }
+            // "Vaqtincha kafedra mudirida" belgisi shu haftadami: belgi sanalari (amaliy — mudir_ph, oqim ma'ruzasi — mudir_ph_lec) hafta
+            // oralig'ida; sanasiz belgi (butun blok) — blok sanalari (start_index–end_index) hafta bilan kesishsa. Joylangan va to'qnashuvsiz
+            // karta ham (panel ro'yxatidagi cycleCardInWeek mezonidan farqli).
+            function cyclePhInWeek(card, wk, dates) {
+                if (!wk) return true;
+                const a = (dates || [])[card.start_index], b = (dates || [])[card.end_index ?? card.start_index] || a;
+                return [card.mudir_ph, card.mudir_ph_lec].filter(Boolean).some(ph => (ph.dates && ph.dates.length
+                    ? ph.dates.some(d => d >= wk.from && d <= wk.to)
+                    : !a || (a.iso <= wk.to && b.iso >= wk.from)));
+            }
             // Panel guruh filtri: jadvaldagi ko'p tanlov (cycleRowFilters — bo'lak qatorlari bilan) va oqim tanlovi.
             function cycleCardGroupMatch(card, rowKeys) {
                 return (!rowKeys || (card.row_keys || [card.row_key]).some(k => rowKeys.has(k))) && (!cycleGroupFilter || card.group === cycleGroupFilter);
@@ -10716,14 +10729,17 @@
                 wrap.scrollLeft = Math.round(wrap.scrollLeft + th.getBoundingClientRect().left - edge);   // brauzer 0..max oralig'iga o'zi cheklaydi
             }
             // Panel qamrovi (guruh filtri va tanlangan hafta; "Butun semestr" — butun semestr): panel ro'yxati ham, "Sikl bloklari"
-            // hisoblagichi ham shu to'plamdan. Hafta bo'yicha — to'qnashuvlar ro'yxati ham shu haftaniki.
+            // hisoblagichi ham shu to'plamdan. Hafta bo'yicha — to'qnashuvlar ro'yxati ham shu haftaniki. ph — "Vaqtincha kafedra mudirida"
+            // bo'limi: shu guruh filtri, hafta bo'yicha esa belgi sanalari (joylangan va to'qnashuvsiz bo'lsa ham).
             function cycleScopedCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];
                 const wk = cycleSelWeek(), wkOn = Boolean(wk && !(cyclePanelWeek === curWeek && cyclePanelAll));
                 const rowKeys = cycleRowFilters.length ? new Set(cycleVisibleRows((j && j.rows) || []).map(r => r.row_key)) : null;
                 const scoped = cycleCards.filter(card => cycleCardGroupMatch(card, rowKeys) && (!wkOn || cycleCardInWeek(card, wk)))
                     .map(card => (wkOn && card.placed ? Object.assign({}, card, { conflicts: (card.conflicts || []).filter(i => cfItemInWeek(i, wk)) }) : card));
-                return { wk, wkOn, scoped };
+                const dates = (j && j.dates) || (cyclePlanData && cyclePlanData.dates) || [];
+                const ph = cycleCards.filter(card => (card.mudir_ph || card.mudir_ph_lec) && cycleCardGroupMatch(card, rowKeys) && (!wkOn || cyclePhInWeek(card, wk, dates)));
+                return { wk, wkOn, scoped, ph };
             }
             // "Vaqtincha kafedra mudirida" bo'limi (panel ostida): qamrovdagi belgili bloklar — mudir, sanalar, sabab va "Asl holatga qaytarish".
             function cycPhSectionHtml(cards) {
@@ -10767,13 +10783,14 @@
                 $('cardPanelHint').classList.remove('hidden');
                 // Hafta tanlovi: boshqa hafta tanlansa — yana shu hafta bo'yicha ("Butun semestr" o'chadi).
                 if (cyclePanelWeek !== curWeek) { cyclePanelWeek = curWeek; cyclePanelAll = false; }
-                const { wk, wkOn, scoped } = cycleScopedCards(j);
+                const { wk, wkOn, scoped, ph } = cycleScopedCards(j);
                 // To'qnashuvli blok (joyida, lekin o'qituvchi yoki xona band) ham joylanmaganlar qatorida — sababi bilan.
                 const unplaced = scoped.filter(card => (!card.placed || card.conflict) && (!cycleCfFilter || cfMatchesFilter(card, cycleCfFilter))).sort((a, b) =>
                     (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
                 $('unplacedCount').textContent = unplaced.length + ' ta';
-                // Sarlavha: "8-hafta (02.11–07.11): N ta" va "Butun semestr" almashtirgichi.
-                const wkHead = wk ? '<div class="cyc-wk-head"><span>' + esc((wkOn ? wk.label : 'Butun semestr') + ': ' + unplaced.length + ' ta') + '</span>' +
+                // Sarlavha: "8-hafta (02.11–07.11): N ta · vaqtincha kafedra mudirida: M ta" (bosilsa — bo'limga) va "Butun semestr" almashtirgichi.
+                const phGo = ph.length ? ' <button type="button" class="cyc-ph-go" data-cyc-ph-go title="Bosing — «Vaqtincha kafedra mudirida» bo\u2018limiga">· vaqtincha kafedra mudirida: ' + ph.length + ' ta</button>' : '';
+                const wkHead = wk ? '<div class="cyc-wk-head"><span>' + esc((wkOn ? wk.label : 'Butun semestr') + ': ' + unplaced.length + ' ta') + phGo + '</span>' +
                     '<label class="cyc-wk-all"><input type="checkbox" data-cyc-all' + (cyclePanelAll ? ' checked' : '') + '> Butun semestr</label></div>' : '';
                 // Yig'indi: kelgusi to'qnashuvlar turlari bo'yicha (tanlov — hafta va guruhlar); bosilsa — shu turdagi kartalar.
                 const cfN = cfSummaryCounts(scoped);
@@ -10806,7 +10823,7 @@
                         split.elsewhere.map(id => '<span class="cf-lecture-link" role="button" tabindex="0" data-cf-lecture="' + id + '" title="Oqim ma\'ruzasi to\'qnashuvi — bir marta, ma\'ruza egasi blokida">ma\'ruzada muammo bor ↗</span>').join('') +
                         '</div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">' + (wkOn ? 'Bu haftada joylanmagan yoki to\u2018qnashuvli sikl kartasi yo\u2018q.'
-                    : 'Barcha sikl fan kartalari joylashgan.') + '</div>') + cycPhSectionHtml(scoped);
+                    : 'Barcha sikl fan kartalari joylashgan.') + '</div>') + cycPhSectionHtml(ph);
                 $('cardPanel').querySelectorAll('[data-cf-filter]').forEach(b => b.onclick = () => {
                     cycleCfFilter = cycleCfFilter === b.dataset.cfFilter ? '' : b.dataset.cfFilter;
                     renderCycleCards(j);
@@ -10818,6 +10835,16 @@
                 });
                 const allBox = $('cardPanel').querySelector('[data-cyc-all]');
                 if (allBox) allBox.onchange = () => { cyclePanelAll = allBox.checked; renderCycleCards(j); };
+                // Sarlavhadagi "vaqtincha kafedra mudirida: N ta" — panel ichida bo'limga suriladi (sahifa siljimaydi) va bir lahza ajraladi.
+                const phGoBtn = $('cardPanel').querySelector('[data-cyc-ph-go]');
+                if (phGoBtn) phGoBtn.onclick = () => {
+                    const pn = $('cardPanel'), sec = pn.querySelector('[data-cyc-ph-sec]');
+                    if (!sec) return;
+                    pn.scrollTop = Math.max(0, Math.round(pn.scrollTop + sec.getBoundingClientRect().top - pn.getBoundingClientRect().top));
+                    sec.classList.remove('cyc-ph-flash');
+                    void sec.offsetWidth;   // animatsiya qayta boshlansin
+                    sec.classList.add('cyc-ph-flash');
+                };
                 cycleWeekHighlight();
                 if (typeof renderStats === 'function') renderStats();   // "Sikl bloklari" — shu qamrov bo'yicha (guruh, hafta, "Butun semestr")
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
@@ -12368,6 +12395,12 @@
                     (rest.length ? ' <details style="display:inline"><summary style="display:inline;cursor:pointer;text-decoration:underline dotted">yana ' + rest.length + ' ta</summary>' +
                         rest.map(esc).join(' · ') + '</details>' : '') + '</div>';
             }
+            // Bo'lim ro'yxati: shu haftada mudir belgili joylangan darslar (birlik bo'yicha bittadan) — panelning joylanmagan / to'qnashuvli
+            // ro'yxatidan mustaqil, to'qnashuvsiz dars ham kiradi.
+            function weeklyPhCards() {
+                return curWeek && weeklyLayer === 'internal' ? [...new Map(weekActiveCards().filter(c => phOf(c) && effPlace(c))
+                    .map(c => [unitKey(c), c])).values()] : [];
+            }
             // Panel bo'limi: "Vaqtincha kafedra mudirida: N ta" — har birida "Asl o'qituvchiga qaytarish" (bandlik tekshiriladi).
             function mudirPhSectionHtml(list) {
                 if (!list.length) return '';
@@ -12766,9 +12799,7 @@
                         (unitEditable() ? '<div style="margin-top:3px"><button type="button" data-unit-fix="complete" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 6px">hammasini yaxlit joylash</button>' +
                             ' <button type="button" data-unit-fix="clear" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 6px">hammasini yaxlit bo\'shatish</button></div>' : '') + '</div>'
                     : '';
-                const phList = curWeek && weeklyLayer === 'internal' ? [...new Map(weekActiveCards().filter(c => phOf(c) && effPlace(c))
-                    .map(c => [unitKey(c), c])).values()] : [];
-                $('cardPanel').innerHTML = mudirPhSectionHtml(phList) + partialHead +
+                $('cardPanel').innerHTML = mudirPhSectionHtml(weeklyPhCards()) + partialHead +
                     unShown.map(c => panelCard(c, false)).join('') +
                     (showSkipped ? skippedShown.map(c => panelCard(c, true)).join('') : '')
                     || (filtering && un.length

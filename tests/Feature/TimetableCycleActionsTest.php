@@ -125,7 +125,9 @@ it('"Vaqtincha kafedra mudiriga yozish" (sikl): to\'qnashuv yo\'qoladi, "vaqtinc
     expect(caConflicts($s['board']))->toBe([])
         ->and($s['cards']['d2/d22-09b']->fresh()->only(['teacher_id', 'auditorium_code']))->toBe(['teacher_id' => $s['tosh']->id, 'auditorium_code' => 'R305']);
     $card = caCard($s['board'], 'd2/d22-09b');
-    expect($card['conflict'])->toBeNull()
+    // Blok sanalari (03.11–07.11): panel sanasiz (butun blok) belgini tanlangan hafta bilan shu oraliq bo'yicha solishtiradi.
+    expect([$card['start_index'], $card['end_index']])->toBe([50, 54])
+        ->and($card['conflict'])->toBeNull()
         ->and($card['mudir_ph'])->toMatchArray(['teacher_id' => $s['mudir']->id, 'mudir_name' => 'XOLMATOV AZIZ BAXTIYOROVICH', 'room_code' => 'KM1',
             'room_name' => 'Kafedra mudiri xonasi', 'orig_teacher_name' => "TOSHPO'LATOV B. A.", 'reason' => "TOSHPO'LATOV band"]);
     $log = \App\Models\TimetableChangeRequest::where('route_name', 'admin.timetable.cycle-mudir-placeholder')->latest('id')->first();

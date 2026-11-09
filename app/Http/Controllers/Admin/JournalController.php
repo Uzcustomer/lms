@@ -10523,7 +10523,7 @@ class JournalController extends Controller
             "/<td([^>]*?) style='position: relative;'([^>]*)>((?:\s*<img alt=\"(?:" . preg_quote(self::YNQ_QR_ALT, '/') . '|' . preg_quote(self::YNQ_DEAN_QR_ALT, '/') . ")[^>]*\/>)+)/u",
             fn ($m) => '<td' . $m[1] . " style='vertical-align:middle;text-align:center'" . $m[2] . '>' . preg_replace(
                 '/style="[^"]*?width:(\d+)px[^"]*"/', 'style="width:$1px;height:$1px;margin:0 2px"', $m[3]
-            ),
+            ) . '<br>',   // QR ostida o'qituvchi ismi
             $html
         );
         $html = $scale($html, $fit($pageW, $pageH));
@@ -10535,7 +10535,9 @@ class JournalController extends Controller
         // (dompdf tr balandligini emas, td nikini hisobga oladi)
         $borders = '';
         for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
-            $borders .= "table.sheet{$i}{margin-left:auto;margin-right:auto}table.sheet{$i} td{border-width:.5pt !important}"
+            // Yozuv katak chizig'iga yopishmasin — ikki yonida kichik chekinish
+            $borders .= "table.sheet{$i}{margin-left:auto;margin-right:auto}"
+                . "table.sheet{$i} td{border-width:.5pt !important;padding-left:2pt !important;padding-right:2pt !important}"
                 . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}';
         }
         $fontDir = str_replace('\\', '/', resource_path('fonts/liberation'));
@@ -10555,19 +10557,25 @@ class JournalController extends Controller
         // baland sahifada bir marta chiziladi, haqiqiy balandligi bo'yicha masshtab aniqlanadi
         $probe = preg_replace("/<div style='page: page[1-9]\d*'>.*?(?=<div style='page: page|<\/body>)/s", '', $html);
         $measured = 0;
+        $measuredWidth = 0;
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($withPage($probe))->setPaper([0, 0, $pageW, 20000]);
         // Chizilgach freymlar tozalanadi — o'lcham chizish paytida olinadi
-        $pdf->getDomPDF()->setCallbacks([['event' => 'end_frame', 'f' => function ($frame) use (&$measured) {
+        $pdf->getDomPDF()->setCallbacks([['event' => 'end_frame', 'f' => function ($frame) use (&$measured, &$measuredWidth) {
             $node = $frame->get_node();
             if ($node->nodeName === 'table' && $node->getAttribute('id') === 'sheet0') {
                 $box = $frame->get_border_box();
                 $measured = max($measured, (float) ($box['h'] ?? $box[3] ?? 0));
+                $measuredWidth = max($measuredWidth, (float) ($box['w'] ?? $box[2] ?? 0));
             }
         }]]);
         $pdf->render();
-        $available = $pageH - 2 * $margin;
-        if ($measured > $available) {
-            $html = $scale($html, $available / $measured * 0.97);
+        // Balandlik ham, kenglik ham (chekinishlar jadvalni kengaytiradi) sahifaga sig'sin
+        $ratio = min(
+            $measured > 0 ? ($pageH - 2 * $margin) / $measured : 1,
+            $measuredWidth > 0 ? ($pageW - 2 * $margin) / $measuredWidth : 1,
+        );
+        if ($ratio < 1) {
+            $html = $scale($html, $ratio * 0.97);
         }
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($withPage($html))
@@ -11126,22 +11134,7 @@ class JournalController extends Controller
 
         // FISH qisqartirish funksiyasi: "Rasulov Shomurod Maxmudovich" -> "Rasulov Sh.M."
         // Sh, Ch digraflar to'liq saqlanadi
-        $abbreviateName = function ($fullName) {
-            $parts = preg_split('/\s+/', trim($fullName));
-            if (count($parts) <= 1) return $fullName;
-            $surname = $parts[0];
-            $initials = '';
-            for ($i = 1; $i < count($parts); $i++) {
-                $word = $parts[$i];
-                $upper2 = mb_strtoupper(mb_substr($word, 0, 2));
-                if ($upper2 === 'SH' || $upper2 === 'CH') {
-                    $initials .= mb_substr($word, 0, 1) . mb_strtolower(mb_substr($word, 1, 1)) . '.';
-                } else {
-                    $initials .= mb_strtoupper(mb_substr($word, 0, 1)) . '.';
-                }
-            }
-            return $surname . ' ' . $initials;
-        };
+        $abbreviateName = fn ($fullName) => self::abbreviateName((string) $fullName);
 
         // O'qituvchi ismlarini qisqartirish
         $abbreviatedPracticeTeachers = array_map($abbreviateName, $practiceTeacherNames);
@@ -11880,6 +11873,11 @@ class JournalController extends Controller
             self::excludeColumnFromConditionals($sheet, self::YNQ_SIGN_COL);
 
             if ($confirmations->isNotEmpty()) {
+                // QR ostida — tasdiqlagan o'qituvchi(lar), qaydnoma tepasidagidek ("FAMILIYA I.O.")
+                $sheet->setCellValue(self::YNQ_SIGN_COL . $first, $confirmations->map(fn ($c) => self::abbreviateName($c->teacher_name))->implode("\n"));
+                $sheet->getStyle(self::YNQ_SIGN_COL . $first)->getAlignment()->setWrapText(true)
+                    ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
+                    ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_BOTTOM);
                 // Katak o'lchami (px) va QR lar bloki — markazda
                 $heights = [];
                 for ($r = $first; $r <= $last; $r++) {
@@ -11986,6 +11984,24 @@ class JournalController extends Controller
                     array_map(fn ($c) => clone $c, $styles));
             }
         }
+    }
+
+    /** "ALLAMURATOVA UMIDA DAVRONOVNA" → "ALLAMURATOVA U.D." (Sh / Ch — ikki harf) */
+    private static function abbreviateName(string $fullName): string
+    {
+        $parts = preg_split('/\s+/', trim($fullName));
+        if (count($parts) <= 1) {
+            return $fullName;
+        }
+        $initials = '';
+        foreach (array_slice($parts, 1) as $word) {
+            $upper2 = mb_strtoupper(mb_substr($word, 0, 2));
+            $initials .= $upper2 === 'SH' || $upper2 === 'CH'
+                ? mb_substr($word, 0, 1) . mb_strtolower(mb_substr($word, 1, 1)) . '.'
+                : mb_strtoupper(mb_substr($word, 0, 1)) . '.';
+        }
+
+        return $parts[0] . ' ' . $initials;
     }
 
     /** Qator balandligi pikselda (o'rnatilmagan — standart 15pt) */

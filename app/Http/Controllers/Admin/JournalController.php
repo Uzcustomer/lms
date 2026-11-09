@@ -10303,7 +10303,7 @@ class JournalController extends Controller
         }, $html);
         $html = preg_replace_callback('/<img alt="' . preg_quote(self::YNQ_DEAN_QR_ALT, '/') . '[^>]*\/>/u', fn ($m) => preg_replace_callback(
             '/style="[^"]*?width:(\d+)px[^"]*"/',
-            fn ($s) => 'style="position:absolute;left:50%;bottom:3px;transform:translateX(-50%);width:' . $s[1] . 'px;height:' . $s[1] . 'px;z-index:1"',
+            fn ($s) => 'style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:' . $s[1] . 'px;height:' . $s[1] . 'px;z-index:1"',
             $m[0]
         ), $html);
 
@@ -10367,7 +10367,7 @@ class JournalController extends Controller
             foreach ($sheet->getDrawingCollection()->getArrayCopy() as $drawing) {
                 // Sahifada birlashtirilgan katakning faqat birinchisi chiqadi: ichidagi rasm
                 // shu katakka ko'chiriladi, oraliq qatorlar balandligi offsetga qo'shiladi
-                // Dekan QR — sahifada imzo katagining o'zida (pastki chiziq ustida, qaydnomaHtml)
+                // Dekan QR — sahifada imzo katagining o'zida (birlashtirilgan katak o'rtasida, qaydnomaHtml)
                 if (str_starts_with((string) $drawing->getDescription(), self::YNQ_DEAN_QR_ALT)) {
                     $drawing->setCoordinates(self::YNQ_DEAN_CELL);
                 }
@@ -11576,8 +11576,10 @@ class JournalController extends Controller
             if ($last > $first) {
                 $sheet->mergeCells($signRange);
             }
-            // Qator rangi (kelmadi / qoniqarsiz) imzo katagiga o'tmasin
+            // Qator rangi (kelmadi / qoniqarsiz) imzo katagiga o'tmasin: to'g'ridan-to'g'ri fon va
+            // shablonning shartli formatlashi (A20:Y49) — imzo ustunisiz ikki oraliqqa bo'linadi
             $sheet->getStyle($signRange)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE);
+            self::excludeColumnFromConditionals($sheet, self::YNQ_SIGN_COL);
 
             if ($confirmations->isNotEmpty()) {
                 // Katak o'lchami (px) va QR lar bloki — markazda
@@ -11607,20 +11609,47 @@ class JournalController extends Controller
             }
 
             if ($dean) {
-                // Imzo chizig'i (katak pastki cheti) ustida, ustun o'rtasida: pastdan yuqoriga qatorlar
+                // "Fakultet dekani" ro'parasida: imzo chizig'i va "imzo" yozuvi o'rniga — shu ikki
+                // qatorli bitta katak, QR uning o'rtasida
                 $size = 56;
                 [$col, $row] = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString(self::YNQ_DEAN_CELL);
                 $row = (int) $row;
-                $rest = $size + 3;
-                while ($row > 1 && $rest > self::rowPx($sheet, $row)) {
-                    $rest -= self::rowPx($sheet, $row);
-                    $row--;
-                }
+                $range = $col . $row . ':' . $col . ($row + 1);
+                $sheet->setCellValue($col . ($row + 1), null);
+                $sheet->getStyle($col . $row)->getBorders()->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                $sheet->getStyle($col . ($row + 1))->getBorders()->getTop()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                $sheet->mergeCells($range);
+
                 $qr = $makeQr($dean, self::YNQ_DEAN_QR_ALT, $size);
                 $qr->setCoordinates($col . $row);
                 $qr->setOffsetX(max(0, intdiv($colPx($sheet, $col) - $size, 2)));
-                $qr->setOffsetY(self::rowPx($sheet, $row) - $rest);
+                $qr->setOffsetY(max(0, intdiv(self::rowPx($sheet, $row) + self::rowPx($sheet, $row + 1) - $size, 2)));
                 $qr->setWorksheet($sheet);
+            }
+        }
+    }
+
+    /** Shartli formatlash oraliqlaridan ustunni chiqaradi (A20:Y49 → A20:W49 + Y20:Y49) */
+    private static function excludeColumnFromConditionals(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, string $column): void
+    {
+        $Coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class;
+        $x = $Coordinate::columnIndexFromString($column);
+        foreach ($sheet->getConditionalStylesCollection() as $range => $styles) {
+            if (!preg_match('/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/', $range, $m)) {
+                continue;
+            }
+            [$c1, $c2] = [$Coordinate::columnIndexFromString($m[1]), $Coordinate::columnIndexFromString($m[3])];
+            if ($x < $c1 || $x > $c2) {
+                continue;
+            }
+            $sheet->removeConditionalStyles($range);
+            if ($x > $c1) {
+                $sheet->setConditionalStyles($m[1] . $m[2] . ':' . $Coordinate::stringFromColumnIndex($x - 1) . $m[4], $styles);
+            }
+            if ($x < $c2) {
+                // Ifodalar ($V20) oraliqning birinchi qatoriga nisbiy — qatorlar o'zgarmaydi
+                $sheet->setConditionalStyles($Coordinate::stringFromColumnIndex($x + 1) . $m[2] . ':' . $m[3] . $m[4],
+                    array_map(fn ($c) => clone $c, $styles));
             }
         }
     }

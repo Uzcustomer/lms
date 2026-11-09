@@ -28,6 +28,11 @@ function qaydnomaSheet(): \PhpOffice\PhpSpreadsheet\Spreadsheet
     // Kelmagan talaba qatori pushti — imzo katagiga o'tmasligi kerak
     $w->getStyle('A20:Y20')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('FFC7CE');
     $w->setCellValue('B60', 'Fakultet dekani')->setCellValue('C61', 'imzo');
+    $w->getStyle('C60')->getBorders()->getBottom()->setBorderStyle('thin');
+    // Shablondagi shartli formatlash: kelmagan (V = -1) qator pushti
+    $kelmadi = (new \PhpOffice\PhpSpreadsheet\Style\Conditional())->setConditionType('expression')->addCondition('$V20=-1');
+    $kelmadi->getStyle()->getFill()->setFillType('solid')->getEndColor()->setRGB('FEC2F1');
+    $w->setConditionalStyles('A20:Y49', [$kelmadi]);
     $w->setCellValue('M20', '=C20/2');
     $w->setCellValue('AB1', 'Topshiriq bilan');                               // chop etish maydonidan tashqari
     $w->getPageSetup()->setPrintArea('A1:Y61');
@@ -142,6 +147,8 @@ describe('teacher confirmation', function () {
         expect($sheet->getSheet(0)->getMergeCells())->toHaveKey('X20:X29')
             ->and($sheet->getSheet(0)->getStyle('X20')->getFill()->getFillType())->toBe(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE)
             ->and($sheet->getSheet(0)->getStyle('W20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
+            // Shartli formatlash imzo ustunisiz: A–W va Y
+            ->and(array_keys($sheet->getSheet(0)->getConditionalStylesCollection()))->toEqualCanonicalizing(['A20:W49', 'Y20:Y49'])
             ->and($drawings)->toHaveCount(1)
             ->and($drawings[0]->getCoordinates())->toBe('X22')
             ->and([$drawings[0]->getOffsetY(), $drawings[0]->getHeight()])->toBe([15, 90])
@@ -191,10 +198,15 @@ describe('teacher confirmation', function () {
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
         $deanQr = collect($sheet->getSheet(0)->getDrawingCollection())->first(fn ($d) => str_starts_with($d->getDescription(), 'Dekan QR: SAGIRAYEV'));
         // 56px QR pastki cheti C60 chizig'idan 3px yuqorida: 58-qator (1px) + 59 + 60
-        expect([$deanQr->getCoordinates(), $deanQr->getOffsetY(), $deanQr->getHeight()])->toBe(['C58', 1, 56]);
+        // "Fakultet dekani" ro'parasida: imzo chizig'i va "imzo" yozuvi o'rniga ikki qatorli katak, QR o'rtada
+        expect($deanQr->getCoordinates())->toBe('C60')
+            ->and($deanQr->getHeight())->toBe(56)
+            ->and($sheet->getSheet(0)->getMergeCells())->toHaveKey('C60:C61')
+            ->and($sheet->getSheet(0)->getCell('C61')->getValue())->toBeNull()
+            ->and($sheet->getSheet(0)->getStyle('C60')->getBorders()->getBottom()->getBorderStyle())->toBe('none');
 
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
-        expect($html)->toMatch('/<img alt="Dekan QR: SAGIRAYEV[^"]*" src="[^"]+" style="position:absolute;left:50%;bottom:3px;[^"]*" \/>/');
+        expect($html)->toMatch('/<img alt="Dekan QR: SAGIRAYEV[^"]*" src="[^"]+" style="position:absolute;left:50%;top:50%;[^"]*" \/>/');
 
         // O'qituvchi tasdig'ini qaytarsa — dekan tasdig'i ham bekor
         ($this->confirm)(1, 'revoke');

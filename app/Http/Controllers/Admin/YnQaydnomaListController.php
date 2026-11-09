@@ -144,10 +144,11 @@ class YnQaydnomaListController extends Controller
             : DB::table('groups')->whereIn('department_hemis_id', $facultyHemisIds ?: [-1])->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->all();
         [$confirmations, $rejections] = $this->statusData($facultyGroups);
 
-        // Topshirilgan yoki rad etilgan qaydnoma — imtihon hali tugamagan / jadvalda yo'q bo'lsa ham
+        // Topshirilgan yoki rad etilgan qaydnoma — imtihon tugamagan, jadvalda yo'q yoki o'tgan
+        // semestrniki bo'lsa ham doim ko'rinadi ("Joriy semestr" faqat topshirilmaganlarni toraytiradi)
         $refs = $confirmations->map->first()->union($rejections)->diffKeys($exams);
         if ($refs->isNotEmpty()) {
-            $exams = $exams->union($this->entries($refs, $currentSemester));
+            $exams = $exams->union($this->entries($refs));
         }
 
         return $exams->map(fn ($r) => $this->makeRow($r, $confirmations, $rejections))->sortByDesc('finished_at')->values();
@@ -170,8 +171,13 @@ class YnQaydnomaListController extends Controller
             ->get()
             ->unique($key)
             ->keyBy($key);
+        // O'zi topshirgan va o'zi topshirib rad etilganlari — semestridan qat'i nazar
         $own = YnQaydnomaConfirmation::where('teacher_id', $teacher->id)->where('role', YnQaydnomaConfirmation::ROLE_TEACHER)
             ->get(['group_hemis_id', 'subject_id', 'semester_code'])->keyBy($key);
+        if (Schema::hasTable('yn_qaydnoma_rejections') && Schema::hasColumn('yn_qaydnoma_rejections', 'teacher_ids')) {
+            $own = $own->union(YnQaydnomaRejection::whereNull('resolved_at')->get()
+                ->filter(fn ($r) => in_array($teacher->id, $r->teacher_ids ?? []))->keyBy($key));
+        }
         $refs = $refs->union($own->diffKeys($refs));
 
         $groups = $refs->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->values()->all();
@@ -181,7 +187,9 @@ class YnQaydnomaListController extends Controller
             : collect();
         $today = Carbon::today()->toDateString();
 
-        return $this->entries($refs, $currentSemester)
+        return $this->entries($refs)
+            // "Joriy semestr" — faqat hali topshirilmaganlarga
+            ->filter(fn ($r, $k) => !$currentSemester || $r->current || $confirmations->has($k) || $rejections->has($k))
             ->map(function ($r, $k) use ($confirmations, $rejections, $submitted, $today) {
                 $row = $this->makeRow($r, $confirmations, $rejections);
                 $row->yn_submitted = $submitted->has($k);
@@ -266,9 +274,9 @@ class YnQaydnomaListController extends Controller
     /**
      * Kalit → {group_hemis_id, subject_id, semester_code, [subject_name], [verification]} bo'yicha
      * qator ma'lumoti (guruh, semestr, fan nomlari — jadvallardan, bo'lmasa tasdiq / dars jadvalidan,
-     * imtihon sanalari). Joriy semestr filtri semestr yozuvi bo'lsagina qo'llanadi.
+     * imtihon sanalari); "current" — semestr joriymi (yozuvi bo'lmasa — ha).
      */
-    private function entries(Collection $refs, bool $currentSemester): Collection
+    private function entries(Collection $refs): Collection
     {
         $groups = DB::table('groups as g')
             ->leftJoin('departments as dep', 'dep.department_hemis_id', '=', 'g.department_hemis_id')
@@ -314,7 +322,7 @@ class YnQaydnomaListController extends Controller
                 'level_code' => $sem->level_code ?? '', 'level_name' => $sem->level_name ?? '',
                 'current' => $sem ? (bool) $sem->current : true,
             ];
-        })->filter(fn ($r) => $r && (!$currentSemester || $r->current));
+        })->filter();
     }
 
     /**

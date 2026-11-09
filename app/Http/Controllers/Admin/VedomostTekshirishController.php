@@ -307,7 +307,8 @@ class VedomostTekshirishController extends Controller
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
 
         // Ro'yxat tasdiqlarning o'zidan quriladi (siklli fanlar curriculum_subjects da bo'lmasligi
-        // mumkin — qidiruvdagi fallback kabi); filtrlar guruh / semestr / o'quv reja bo'yicha
+        // mumkin — qidiruvdagi fallback kabi); filtrlar guruh / semestr / o'quv reja bo'yicha.
+        // "Joriy semestr" qo'llanmaydi — tasdiqlangan qaydnoma o'tgan semestrniki bo'lsa ham ko'rinadi
         $deans = $Confirmation::with('verification')->where('role', $Confirmation::ROLE_DEAN)
             ->orderByDesc('confirmed_at')->get()->unique($key)->values();
         $groups = Group::whereIn('group_hemis_id', $deans->pluck('group_hemis_id')->unique()->values())->get()->keyBy(fn ($g) => (string) $g->group_hemis_id);
@@ -326,7 +327,6 @@ class VedomostTekshirishController extends Controller
         $dekanFacultyIds = get_dekan_faculty_ids();
         $allowedFaculties = $dekanFacultyIds ? Department::whereIn('id', $dekanFacultyIds)->pluck('department_hemis_id')->map(fn ($v) => (string) $v)->all() : null;
         $facultyFilter = $request->filled('faculty_id') ? (string) Department::find($request->faculty_id)?->department_hemis_id : null;
-        $currentOnly = $request->input('current_semester', '1') == '1';
         $groupIds = array_map('strval', (array) $request->input('group_ids', []));
         $subjectIds = array_map('strval', (array) $request->input('subject_ids', []));
 
@@ -343,7 +343,7 @@ class VedomostTekshirishController extends Controller
                 'subject' => $subjects->get($g->curriculum_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code),
                 'education_type' => (string) ($educationTypes[$g->curriculum_hemis_id] ?? ''),
             ];
-        })->filter()->filter(function ($r) use ($request, $allowedFaculties, $facultyFilter, $currentOnly, $groupIds, $subjectIds) {
+        })->filter()->filter(function ($r) use ($request, $allowedFaculties, $facultyFilter, $groupIds, $subjectIds) {
             $g = $r->group;
             $c = $r->confirmation;
 
@@ -354,7 +354,6 @@ class VedomostTekshirishController extends Controller
                 && (!$request->filled('level_code') || (string) ($r->semester->level_code ?? '') === (string) $request->level_code)
                 && (!$request->filled('semester_code') || (string) $c->semester_code === (string) $request->semester_code)
                 && (!$request->filled('department_id') || (string) ($r->subject->department_id ?? '') === (string) $request->department_id)
-                && (!$currentOnly || !empty($r->semester?->current))
                 && (!$groupIds || in_array((string) $g->id, $groupIds, true))
                 && (!$subjectIds || in_array((string) $c->subject_id, $subjectIds, true));
         });

@@ -90,6 +90,12 @@ it('lists a cycle subject that is missing from curriculum_subjects, with the nam
     expect(($this->list)(['education_type' => '12']))->toBe([]);
 });
 
+it('lists dean-confirmed vedomosts of a past semester too', function () {
+    DB::table('semesters')->where('code', '19')->update(['current' => false]);
+
+    expect(($this->list)(['current_semester' => '1']))->toHaveCount(2);
+});
+
 it('hides vedomosts the dean has not confirmed yet', function () {
     DB::table('yn_qaydnoma_confirmations')->where('role', 'dekan')->where('group_hemis_id', '88')->delete();
 

@@ -37,6 +37,7 @@ beforeEach(function () {
     (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
     (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
     (require base_path('database/migrations/2026_11_09_160000_create_yn_qaydnoma_rejections_table.php'))->up();
+    (require base_path('database/migrations/2026_11_09_180000_add_teacher_ids_to_yn_qaydnoma_rejections.php'))->up();
     Schema::create('yn_submissions', fn ($t) => [$t->id(), $t->string('subject_id'), $t->string('semester_code'), $t->string('group_hemis_id'), $t->timestamps()]);
 
     DB::table('teachers')->insert(['id' => 9, 'hemis_id' => 900, 'full_name' => 'DEKAN']);
@@ -162,6 +163,31 @@ it('gives the teacher their own groups and subjects with status', function () {
         ->and($rows['d1/d22-02a']->params)->toMatchArray(['group_hemis_id' => '78', 'weight_oski' => 15])   // qayta ko'rib chiqish — rad etilgan vaznlar
         ->and($rows['d1/d22-01a']->status)->toBe('dean')
         ->and($rows['d1/d22-01a']->group_pk)->not->toBeNull();
+});
+
+it('keeps submitted and rejected vedomosts of a past semester visible with the current-semester filter on', function () {
+    // O'tgan o'quv yili semestri (joriy emas)
+    DB::table('semesters')->insert(['curriculum_hemis_id' => '5', 'code' => '17', 'current' => false, 'level_code' => '14', 'level_name' => '4-kurs']);
+    DB::table('teachers')->insert(['id' => 1, 'hemis_id' => 501, 'full_name' => 'ALLAMURATOVA U.D.']);
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '17', 'group_hemis_id' => '77', 'teacher_id' => 1,
+        'teacher_name' => 'ALLAMURATOVA U.D.', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);
+    DB::table('yn_qaydnoma_rejections')->insert(['subject_id' => '30', 'semester_code' => '17', 'group_hemis_id' => '78', 'dean_id' => 9,
+        'dean_name' => 'DEKAN', 'teacher_ids' => json_encode([1]), 'reason' => 'Qayta tekshiring', 'weights' => '{}',
+        'rejected_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+    // Joriy emas, topshirilmagan — ko'rinmaydi
+    DB::table('exam_schedules')->insert(['group_hemis_id' => '78', 'subject_id' => '27', 'semester_code' => '17', 'oski_date' => '2026-01-10', 'test_date' => '2026-01-12']);
+
+    $dean = collect(($this->page)()['rows']->items());
+    expect($dean->where('semester_code', '17')->map(fn ($r) => $r->group . ' ' . $r->status)->sort()->values()->all())
+        ->toBe(['d1/d22-01a teacher', 'd1/d22-02a rejected']);
+
+    DB::table('roles')->insert(['id' => 3, 'name' => 'oqituvchi', 'guard_name' => 'web']);
+    DB::table('model_has_roles')->insert(['role_id' => 3, 'model_type' => \App\Models\Teacher::class, 'model_id' => 1]);
+    Auth::guard('teacher')->login(\App\Models\Teacher::find(1));
+    session(['active_role' => 'oqituvchi']);
+    $mine = collect((new YnQaydnomaListController())->mine(\Illuminate\Http\Request::create('/admin/vedomostlarim'))->getData()['rows']->items());
+    expect($mine->map(fn ($r) => $r->group . ' ' . $r->semester_code . ' ' . $r->status)->sort()->values()->all())
+        ->toBe(['d1/d22-01a 17 teacher', 'd1/d22-01a 19 dean', 'd1/d22-02a 17 rejected']);   // 19 — sozlamadagi tasdiq
 });
 
 it('filters by status and group', function () {

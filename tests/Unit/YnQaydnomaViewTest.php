@@ -80,6 +80,7 @@ describe('teacher confirmation', function () {
         (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
         (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
         (require base_path('database/migrations/2026_11_09_160000_create_yn_qaydnoma_rejections_table.php'))->up();
+        (require base_path('database/migrations/2026_11_09_180000_add_teacher_ids_to_yn_qaydnoma_rejections.php'))->up();
         Schema::create('departments', fn ($t) => [$t->id(), $t->unsignedBigInteger('department_hemis_id'), $t->string('name')]);
         Schema::create('dean_faculties', fn ($t) => [$t->id(), $t->unsignedBigInteger('teacher_id'), $t->unsignedBigInteger('department_hemis_id'), $t->timestamps()]);
 
@@ -231,6 +232,7 @@ describe('teacher confirmation', function () {
             ->and($rejection->reason)->toBe('MT baholari xato')
             ->and($rejection->dean_name)->toBe('SAGIRAYEV NURALI')
             ->and($rejection->weights['test'])->toBe(60)
+            ->and($rejection->teacher_ids)->toBe([1])
             ->and($rejection->resolved_at)->toBeNull();
         Storage::disk('public')->assertMissing($path);
         expect(fn () => ($this->confirm)(3))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // tasdiqlaydigan narsa yo'q

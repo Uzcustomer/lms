@@ -10225,6 +10225,7 @@ class JournalController extends Controller
             $rejection = \App\Models\YnQaydnomaRejection::create([
                 'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId,
                 'dean_id' => $dean->id, 'dean_name' => $dean->full_name, 'reason' => trim($data['reason']),
+                'teacher_ids' => $teachers->pluck('teacher_id')->unique()->values()->all(),
                 'weights' => $teachers->sortByDesc('confirmed_at')->first()->weights, 'rejected_at' => now(),
             ]);
             foreach ($teachers as $c) {

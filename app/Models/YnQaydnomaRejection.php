@@ -8,12 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 class YnQaydnomaRejection extends Model
 {
     protected $fillable = [
-        'subject_id', 'semester_code', 'group_hemis_id', 'dean_id', 'dean_name', 'reason', 'weights',
+        'subject_id', 'semester_code', 'group_hemis_id', 'dean_id', 'dean_name', 'teacher_ids', 'reason', 'weights',
         'rejected_at', 'resolved_at',
     ];
 
     protected $casts = [
         'weights' => 'array',
+        'teacher_ids' => 'array',
         'rejected_at' => 'datetime',
         'resolved_at' => 'datetime',
     ];

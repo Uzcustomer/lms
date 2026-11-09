@@ -79,6 +79,7 @@ describe('teacher confirmation', function () {
             $t->string('generated_by')->nullable(), $t->timestamp('generated_at')->nullable(), $t->string('document_path')->nullable(), $t->json('meta')->nullable(), $t->timestamps()]);
         (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
         (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
+        (require base_path('database/migrations/2026_11_09_200000_add_pdf_path_to_yn_qaydnoma_confirmations.php'))->up();
         (require base_path('database/migrations/2026_11_09_160000_create_yn_qaydnoma_rejections_table.php'))->up();
         (require base_path('database/migrations/2026_11_09_180000_add_teacher_ids_to_yn_qaydnoma_rejections.php'))->up();
         Schema::create('departments', fn ($t) => [$t->id(), $t->unsignedBigInteger('department_hemis_id'), $t->string('name')]);
@@ -240,6 +241,47 @@ describe('teacher confirmation', function () {
         ($this->confirm)(1);   // o'qituvchi qayta ko'rib chiqib tasdiqlaydi
         expect($rejection->fresh()->resolved_at)->not->toBeNull()
             ->and(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
+    });
+
+    it('makes the PDF once the dean confirms and removes it when the dean revokes', function () {
+        ($this->confirm)(1);
+        expect($this->controller->generateYnQaydnomaPdf('435', '19', '77'))->toBeNull();   // dekan tasdiqlamagan
+
+        ($this->confirm)(3);
+        $path = $this->controller->generateYnQaydnomaPdf('435', '19', '77');
+        expect($path)->toStartWith('yn_qaydnoma_pdf/')
+            ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->value('pdf_path'))->toBe($path)
+            ->and(Storage::disk('public')->get($path))->toStartWith('%PDF');
+
+        ($this->confirm)(3, 'revoke');
+        Storage::disk('public')->assertMissing($path);
+    });
+
+    it('lets only the superadmin delete a vedomost completely', function () {
+        ($this->confirm)(1);
+        ($this->confirm)(3);
+        $pdf = $this->controller->generateYnQaydnomaPdf('435', '19', '77');
+        $xlsx = \App\Models\DocumentVerification::value('document_path');
+        $delete = function () {
+            $request = \Illuminate\Http\Request::create('/admin/journal/delete-yn-qaydnoma', 'POST',
+                ['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77']);
+            $request->headers->set('Accept', 'application/json');
+            app()->instance('request', $request);
+
+            return $this->controller->deleteYnQaydnoma($request);
+        };
+
+        expect($delete)->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // dekan — yo'q
+
+        DB::table('roles')->insert(['id' => 2, 'name' => 'superadmin', 'guard_name' => 'web']);
+        DB::table('model_has_roles')->insert(['role_id' => 2, 'model_type' => \App\Models\Teacher::class, 'model_id' => 2]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        Auth::guard('teacher')->login(\App\Models\Teacher::find(2));
+        expect($delete()->getData(true)['ok'])->toBeTrue()
+            ->and(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
+            ->and(\App\Models\DocumentVerification::count())->toBe(0);
+        Storage::disk('public')->assertMissing($pdf);
+        Storage::disk('public')->assertMissing($xlsx);
     });
 
     it('does not let a teacher reject', function () {

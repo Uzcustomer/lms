@@ -293,6 +293,16 @@
                                             @else
                                                 <div class="yq-actions yq-muted" style="font-size:12px;">{{ $row->status === 'rejected' ? 'Qayta topshirilishi kutilmoqda' : 'O\'qituvchi topshirgach' }}</div>
                                             @endif
+                                            @if($canDelete && ($row->teachers->isNotEmpty() || $row->rejection))
+                                                <form method="POST" action="{{ route('admin.journal.delete-yn-qaydnoma') }}" class="yq-actions" style="margin-top:6px;"
+                                                      onsubmit="return confirm('Qaydnoma butunlay o\'chirilsinmi? Tasdiqlar, QR kodlar va fayllar o\'chadi; o\'qituvchi qaytadan shakllantiradi.')">
+                                                    @csrf
+                                                    <input type="hidden" name="subject_id" value="{{ $row->subject_id }}">
+                                                    <input type="hidden" name="semester_code" value="{{ $row->semester_code }}">
+                                                    <input type="hidden" name="group_hemis_id" value="{{ $row->group_hemis_id }}">
+                                                    <button type="submit" class="yq-btn yq-btn--sm" style="color:#b91c1c !important;border-color:#fecaca;">O'chirish</button>
+                                                </form>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach

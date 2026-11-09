@@ -399,10 +399,14 @@ class VedomostTekshirishController extends Controller
                 'pdf_url' => route('admin.vedomost-tekshirish.qaydnoma-pdf', [
                     'subject_id' => $c->subject_id, 'semester_code' => $c->semester_code, 'group_hemis_id' => $c->group_hemis_id,
                 ]),
+                'pdf_ready' => (bool) $c->pdf_path,
+                'key' => ['subject_id' => (string) $c->subject_id, 'semester_code' => (string) $c->semester_code, 'group_hemis_id' => (string) $c->group_hemis_id],
             ];
         })->values();
 
-        return response()->json(['items' => $items, 'more' => $more, 'limit' => $limit]);
+        return response()->json(['items' => $items, 'more' => $more, 'limit' => $limit,
+            // Superadmin — qaydnomani butunlay o'chirishi mumkin
+            'can_delete' => auth()->user()->hasRole('superadmin') && !session('impersonating')]);
     }
 
     /**
@@ -420,23 +424,20 @@ class VedomostTekshirishController extends Controller
         abort_unless($base && $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_DEAN)->isNotEmpty(), 404,
             'Qaydnoma hali dekan tomonidan tasdiqlanmagan.');
 
-        @set_time_limit(300);
-        $w = $base->weights;
-        $built = app(JournalController::class)->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
-            (int) $w['jn'], (int) $w['mt'], (int) $w['on'], (int) $w['oski'], (int) $w['test']);
-        abort_if(is_string($built), 422, is_string($built) ? $built : '');
-        [$spreadsheet, $fileName] = $built;
-        $pdf = JournalController::qaydnomaPdf($spreadsheet);
-        $spreadsheet->disconnectWorksheets();
+        // Dekan tasdiqlaganda avtomatik tayyorlangan PDF; yo'q bo'lsa (eski tasdiq) — hozir tayyorlanadi
+        $dean = $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId)->where('role', $Confirmation::ROLE_DEAN)
+            ->latest('confirmed_at')->first();
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        $path = $dean->pdf_path && $disk->exists($dean->pdf_path)
+            ? $dean->pdf_path
+            : app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId);
+        abort_unless($path, 422, 'PDF tayyorlab bo\'lmadi.');
 
-        $name = pathinfo($fileName, PATHINFO_FILENAME) . '.pdf';
+        $group = Group::where('group_hemis_id', $groupHemisId)->value('name') ?? $groupHemisId;
+        $subject = $base->verification->subject_name ?? $subjectId;
+        $name = str_replace(['/', '\\', ' '], '_', 'YN_qaydnoma_' . $group . '_' . $subject) . '.pdf';
 
-        return response($pdf, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => \Symfony\Component\HttpFoundation\HeaderUtils::makeDisposition(
-                'attachment', $name, preg_replace('/[^A-Za-z0-9._-]/', '_', \Illuminate\Support\Str::ascii($name))
-            ),
-        ]);
+        return response()->download($disk->path($path), $name, ['Content-Type' => 'application/pdf']);
     }
 
     private function parseDate(string $value): ?string

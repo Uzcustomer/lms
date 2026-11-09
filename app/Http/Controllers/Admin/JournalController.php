@@ -56,6 +56,8 @@ class JournalController extends Controller
     private const YNQ_SIGN_COL = 'X';
     private const YNQ_QR_ALT = 'Tasdiq QR: ';
     private const YNQ_DEAN_QR_ALT = 'Dekan QR: ';
+    /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
+    private const YNQ_TABLE_ROWS = [15, 50];
     /** "Fakultet dekani … imzo" — dekan QR kodi shu katak chizig'i ustida */
     private const YNQ_DEAN_CELL = 'C60';
     private const YNQ_RULES = [
@@ -10261,7 +10263,8 @@ class JournalController extends Controller
             return redirect($back)->with('ynq_flash', 'Sizning tasdig\'ingiz topilmadi.');
         }
 
-        $stale = $vedomost()->get()->pluck('verification.document_path')->filter()->all();
+        $existing = $vedomost()->get();
+        $stale = $existing->pluck('verification.document_path')->concat($existing->pluck('pdf_path'))->filter()->all();
         DB::transaction(function () use ($mine, $vedomost, $Confirmation) {
             $drop = $mine;
             if (!$vedomost()->where('role', $Confirmation::ROLE_TEACHER)->whereNotIn('id', $mine->pluck('id'))->exists()) {
@@ -10307,6 +10310,85 @@ class JournalController extends Controller
         foreach ($old->reject(fn ($f) => $f === $path) as $file) {
             Storage::disk('public')->delete($file);
         }
+
+        // Dekan tasdiqlagan qaydnoma — PDF avtomatik (javob yuborilgach, foydalanuvchi kutmaydi)
+        if ($all->contains('role', \App\Models\YnQaydnomaConfirmation::ROLE_DEAN)) {
+            app()->terminating(fn () => $this->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId));
+        }
+    }
+
+    /**
+     * Dekan tasdiqlagan qaydnoma PDF i (barcha shakllar, QR lari bilan) — public diskka yoziladi,
+     * yo'li dekan tasdig'ida (pdf_path); eskisi o'chiriladi. Tayyorlab bo'lmasa — null.
+     */
+    public function generateYnQaydnomaPdf(string $subjectId, string $semesterCode, string $groupHemisId): ?string
+    {
+        $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
+        $dean = $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId)->where('role', $Confirmation::ROLE_DEAN)
+            ->latest('confirmed_at')->first();
+        $base = $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId)->first();
+        if (!$dean || !$base) {
+            return null;
+        }
+        @set_time_limit(300);
+        try {
+            $w = $base->weights;
+            $built = $this->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
+                (int) $w['jn'], (int) $w['mt'], (int) $w['on'], (int) $w['oski'], (int) $w['test']);
+            if (is_string($built)) {
+                return null;
+            }
+            [$spreadsheet] = $built;
+            $pdf = self::qaydnomaPdf($spreadsheet);
+            $spreadsheet->disconnectWorksheets();
+        } catch (\Throwable $e) {
+            Log::error('YN qaydnoma PDF: ' . $e->getMessage(), compact('subjectId', 'semesterCode', 'groupHemisId'));
+
+            return null;
+        }
+        $path = 'yn_qaydnoma_pdf/' . \Illuminate\Support\Str::random(40) . '.pdf';
+        Storage::disk('public')->put($path, $pdf);
+        $old = $dean->pdf_path;
+        $dean->update(['pdf_path' => $path]);
+        if ($old && $old !== $path) {
+            Storage::disk('public')->delete($old);
+        }
+
+        return $path;
+    }
+
+    /**
+     * Superadmin: qaydnomani butunlay o'chiradi — barcha tasdiqlar (o'qituvchi, dekan), QR yozuvlari,
+     * Excel / PDF fayllari va rad etishlar. O'qituvchi qaydnomani jurnalda qaytadan shakllantiradi.
+     */
+    public function deleteYnQaydnoma(Request $request)
+    {
+        abort_unless(auth()->user()?->hasRole('superadmin') && !session('impersonating'), 403);
+        $data = $request->validate(['subject_id' => 'required', 'semester_code' => 'required', 'group_hemis_id' => 'required']);
+        [$subjectId, $semesterCode, $groupHemisId] = [(string) $data['subject_id'], (string) $data['semester_code'], (string) $data['group_hemis_id']];
+
+        $confirmations = \App\Models\YnQaydnomaConfirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId)->get();
+        $files = $confirmations->pluck('verification.document_path')->concat($confirmations->pluck('pdf_path'))->filter()->unique();
+        DB::transaction(function () use ($confirmations, $subjectId, $semesterCode, $groupHemisId) {
+            foreach ($confirmations as $c) {
+                $c->verification?->delete();
+                $c->delete();
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_rejections')) {
+                \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $groupHemisId)->delete();
+            }
+        });
+        foreach ($files as $file) {
+            Storage::disk('public')->delete($file);
+        }
+        \App\Services\ActivityLogService::log('delete', 'yn_qaydnoma',
+            "YN qaydnoma o'chirildi (fan {$subjectId}, semestr {$semesterCode}, guruh {$groupHemisId}): {$confirmations->count()} ta tasdiq");
+
+        $message = "Qaydnoma o'chirildi — o'qituvchi uni qaytadan shakllantiradi.";
+
+        return $request->expectsJson()
+            ? response()->json(['ok' => true, 'message' => $message])
+            : back()->with('success', $message);
     }
 
     /** Joriy o'qituvchi (teacher guard yoki web guard'dagi xodimning teachers yozuvi). */
@@ -10428,9 +10510,20 @@ class JournalController extends Controller
             $html
         );
         $html = $scale($html, $fit($pageW, $pageH));
+        // Chiziqlar faqat talabalar jadvalida (15–50-qatorlar) va ingichka; qolgan joyda chiziq yo'q,
+        // yozuvlar joyida. Excel to'r chiziqlari (gridlines) olib tashlanadi
+        $html = str_replace(" gridlines'", "'", $html);
+        [$tableFrom, $tableTo] = self::YNQ_TABLE_ROWS;
+        $borders = '';
+        for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
+            for ($row = 1; $row <= 61; $row++) {
+                $borders .= "table.sheet{$i} tr.row" . ($row - 1) . ' td{'
+                    . ($row >= $tableFrom && $row <= $tableTo ? 'border-width:.5pt !important' : 'border:none !important') . '}';
+            }
+        }
         $withPage = fn (string $html) => str_replace('</head>', '<style>@page{margin:' . $margin . 'pt}body{margin:0}'
             // Qator balandligi Excel'dagidek qolsin: dompdf shrift balandligi (line-height) bilan cho'zadi
-            . 'td,th{line-height:1;padding-top:0;padding-bottom:0}</style></head>', $html);
+            . 'td,th{line-height:1;padding-top:0;padding-bottom:0}' . $borders . '</style></head>', $html);
 
         // dompdf qatorlarni hisobdagidan balandroq chizadi (shrift, uzun matn) — birinchi varaq juda
         // baland sahifada bir marta chiziladi, haqiqiy balandligi bo'yicha masshtab aniqlanadi

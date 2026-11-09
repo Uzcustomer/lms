@@ -34,6 +34,7 @@ beforeEach(function () {
         $t->string('semester_name')->nullable(), $t->string('department_name')->nullable(), $t->timestamps()]);
     (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
     (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
+    (require base_path('database/migrations/2026_11_09_200000_add_pdf_path_to_yn_qaydnoma_confirmations.php'))->up();
 
     DB::table('teachers')->insert(['id' => 5, 'hemis_id' => 500, 'full_name' => 'REGISTRATOR']);
     DB::table('roles')->insert(['id' => 1, 'name' => 'registrator_ofisi', 'guard_name' => 'web']);

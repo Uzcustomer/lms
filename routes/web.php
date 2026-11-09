@@ -529,6 +529,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/confirm-yn-qaydnoma', [JournalController::class, 'confirmYnQaydnoma'])->name('confirm-yn-qaydnoma');
             Route::post('/revoke-yn-qaydnoma', [JournalController::class, 'revokeYnQaydnoma'])->name('revoke-yn-qaydnoma');
             Route::post('/reject-yn-qaydnoma', [JournalController::class, 'rejectYnQaydnoma'])->name('reject-yn-qaydnoma');
+            Route::post('/delete-yn-qaydnoma', [JournalController::class, 'deleteYnQaydnoma'])->name('delete-yn-qaydnoma');
         });
 
         // Vedomost tekshirish

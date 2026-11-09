@@ -42,6 +42,8 @@ class YnQaydnomaListController extends Controller
             'isTeacher' => false,
             // PDF — Vedomost tekshirish yo'li (registrator, admin); dekanga emas
             'canPdf' => !$isDean,
+            // Superadmin — qaydnomani butunlay o'chiradi
+            'canDelete' => (auth()->user()?->hasRole('superadmin') ?? false) && !session('impersonating'),
         ]);
     }
 
@@ -57,6 +59,7 @@ class YnQaydnomaListController extends Controller
             'isDean' => false,
             'isTeacher' => true,
             'canPdf' => false,
+            'canDelete' => false,
         ]);
     }
 

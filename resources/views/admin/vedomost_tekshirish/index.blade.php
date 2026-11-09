@@ -217,6 +217,7 @@
                                 <th style="min-width:160px;">Amaliy o'qituvchi</th>
                                 <th style="min-width:170px;">Dekan</th>
                                 <th style="width:90px;text-align:center;">PDF</th>
+                                <th id="cq-del-head" style="width:70px;display:none;"></th>
                             </tr>
                         </thead>
                         <tbody id="cq-body"></tbody>
@@ -580,9 +581,11 @@
                             + '<td>' + (r.teachers || []).map(esc).join('<br>') + '</td>'
                             + '<td><span class="cq-ok">✓</span> ' + esc(r.dean_name) + '<div class="cq-small">' + esc(r.dean_at) + '</div></td>'
                             + '<td style="text-align:center;"><a class="cq-pdf" href="' + escAttr(r.pdf_url) + '" onclick="return cqPdf(this)">PDF</a></td>'
+                            + (res.can_delete ? '<td style="text-align:center;"><button type="button" class="cq-del" data-key="' + escAttr(JSON.stringify(r.key)) + '" onclick="cqDelete(this)">O\'chirish</button></td>' : '')
                             + '</tr>';
                     });
                     $('#cq-body').html(html);
+                    $('#cq-del-head').toggle(!!res.can_delete);
                     $('#cq-wrap').show();
                     if (res.more) $('#cq-more').text('Eng so\'nggi ' + res.limit + ' tasi ko\'rsatilgan — aniq qaydnomani topish uchun filtrlardan foydalaning').show();
                 },
@@ -590,6 +593,18 @@
                     if (status === 'abort') return;
                     $('#cq-loading').hide(); $('#cq-empty').text('Ro\'yxatni yuklab bo\'lmadi. Qayta urinib ko\'ring.').show();
                 }
+            });
+        }
+        // Superadmin: qaydnomani butunlay o'chirish (tasdiqlar, QR lar, fayllar) — o'qituvchi qaytadan shakllantiradi
+        function cqDelete(btn) {
+            if (!confirm('Qaydnoma butunlay o\'chirilsinmi? O\'qituvchi va dekan tasdiqlari, QR kodlar va fayllar o\'chadi; o\'qituvchi qaydnomani qaytadan shakllantiradi.')) return;
+            btn.disabled = true; btn.textContent = '…';
+            $.ajax({
+                url: '{{ route("admin.journal.delete-yn-qaydnoma") }}', type: 'POST',
+                data: $.extend({ _token: '{{ csrf_token() }}' }, JSON.parse(btn.getAttribute('data-key'))),
+                headers: { 'Accept': 'application/json' },
+                success: function() { loadConfirmed(collectParams()); },
+                error: function() { btn.disabled = false; btn.textContent = 'O\'chirish'; alert('O\'chirib bo\'lmadi.'); }
             });
         }
         // PDF tayyorlanishi bir necha soniya oladi — tugma holati
@@ -829,6 +844,9 @@
         .cq-pdf:hover { background:#991b1b; }
         .cq-pdf:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
         .cq-pdf.cq-busy { background:#94a3b8; pointer-events:none; }
+        .cq-del { padding:6px 10px; border-radius:8px; border:1px solid #fecaca; background:#fff; color:#b91c1c; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+        .cq-del:hover { background:#fef2f2; }
+        .cq-del:disabled { opacity:.6; cursor:default; }
         .filter-container { padding:16px 20px 12px; background:linear-gradient(135deg,#f0f4f8,#e8edf5); border-bottom:2px solid #dbe4ef; }
         .filter-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
         .filter-row:last-child { margin-bottom:0; }

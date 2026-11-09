@@ -15,7 +15,7 @@ class YnQaydnomaConfirmation extends Model
 
     protected $fillable = [
         'subject_id', 'semester_code', 'group_hemis_id', 'teacher_id', 'teacher_name', 'role',
-        'document_verification_id', 'weights', 'confirmed_at',
+        'document_verification_id', 'pdf_path', 'weights', 'confirmed_at',
     ];
 
     protected $casts = [

@@ -56,6 +56,8 @@ class JournalController extends Controller
     /** Imzo (QR) ustuni — shablonda X, so'z bilan baho Y; qaydnomada o'rni almashtiriladi */
     private const YNQ_SIGN_COL = 'Y';
     private const YNQ_GRADE_WORD_COL = 'X';
+    /** "Semestrda … soat … kredit" qatoridagi chiziq (K13:W13) — YN o'tkazilgan sana */
+    private const YNQ_EXAM_DATE_CELL = 'K13';
     private const YNQ_QR_ALT = 'Tasdiq QR: ';
     private const YNQ_DEAN_QR_ALT = 'Dekan QR: ';
     /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
@@ -10537,12 +10539,19 @@ class JournalController extends Controller
         for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
             // Yozuv katak chizig'iga yopishmasin — ikki yonida kichik chekinish
             $borders .= "table.sheet{$i}{margin-left:auto;margin-right:auto}"
-                . "table.sheet{$i} td{border-width:.25pt !important;padding-left:3.5pt !important;padding-right:3.5pt !important}"
-                // Ism-familiya ustuni (B) — yonlarida kengroq
-                . "table.sheet{$i} td.column1{padding-left:6pt !important;padding-right:6pt !important}"
+                // Gorizontal chiziqlar juda ingichka, vertikal (ustunlar) — sezilarli qalinroq
+                . "table.sheet{$i} td{border-top-width:.15pt !important;border-bottom-width:.15pt !important;"
+                . "border-left-width:.6pt !important;border-right-width:.6pt !important;padding-left:3.5pt !important;padding-right:3.5pt !important}"
+                // Talabalar ism-familiyasi (B, 20–49-qatorlar) — bitta qatorda, chapda kichik, o'ngda kengroq chekinish
+                . implode('', array_map(fn ($r) => "table.sheet{$i} tr.row" . ($r - 1) . ' td.column1{padding-left:2pt !important;padding-right:6pt !important;white-space:nowrap}',
+                    range(self::YNQ_FIRST_ROW, self::YNQ_LAST_ROW)))
                 . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}'
                 // "Fakultet dekani … imzo" qatori (60) ustidagi bo'sh qator (59) — imzolar hisob jadvalchasiga yopishmasin
-                . "table.sheet{$i} tr.row58 td{height:14pt}";
+                . "table.sheet{$i} tr.row58 td{height:14pt}"
+                // Jadval ustidagi bo'sh qator (14) — jadval "Semestrda … soat" qatoriga yopishmasin
+                . "table.sheet{$i} tr.row" . (self::YNQ_TABLE_ROWS[0] - 2) . ' td{height:12pt}'
+                // Sarlavha qismi (1–13) yozuvlari bir qatorda — ustun kengliklari o'zgarsa ham cho'zilmasin
+                . implode('', array_map(fn ($r) => "table.sheet{$i} tr.row{$r} td{white-space:nowrap}", range(0, self::YNQ_TABLE_ROWS[0] - 3)));
         }
         $fontDir = str_replace('\\', '/', resource_path('fonts/liberation'));
         foreach (['normal normal' => 'Regular', 'bold normal' => 'Bold', 'normal italic' => 'Italic', 'bold italic' => 'BoldItalic'] as $style => $file) {
@@ -11846,6 +11855,13 @@ class JournalController extends Controller
 
             return $qr;
         };
+        // "YaN o'tkazilgan sana" — guruhning YN jadvalidagi oxirgi imtihon (test, bo'lmasa OSKI)
+        $exam = \Illuminate\Support\Facades\Schema::hasTable('exam_schedules')
+            ? DB::table('exam_schedules')->whereNull('student_hemis_id')->where('group_hemis_id', $groupHemisId)
+                ->where('subject_id', $subjectId)->where('semester_code', $semesterCode)
+                ->first(['oski_date', 'test_date', 'oski_na', 'test_na'])
+            : null;
+        $ynDate = $exam ? (($exam->test_na ? null : $exam->test_date) ?: ($exam->oski_na ? null : $exam->oski_date)) : null;
         $font = $spreadsheet->getDefaultStyle()->getFont();
         $colPx = function ($sheet, string $col) use ($font) {
             $width = $sheet->getColumnDimension($col)->getWidth();
@@ -11859,6 +11875,13 @@ class JournalController extends Controller
                 continue;
             }
             self::swapSignatureColumn($sheet);
+            // Jadval tepasidagi chiziq (K13:W13) ustida, o'ngda — asl qaydnomadagidek
+            $sheet->setCellValue(self::YNQ_EXAM_DATE_CELL, "YaN o‘tkazilgan sana: "
+                . ($ynDate ? \Carbon\Carbon::parse($ynDate)->format('d.m.Y') : '____________') . ' yil');
+            $sheet->getStyle(self::YNQ_EXAM_DATE_CELL)->getFont()->setBold(false);
+            $sheet->getStyle(self::YNQ_EXAM_DATE_CELL)->getAlignment()
+                ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT)
+                ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_BOTTOM);
             $first = self::YNQ_FIRST_ROW;
             $last = $first - 1;
             while ($last < self::YNQ_LAST_ROW && trim((string) $sheet->getCell('B' . ($last + 1))->getValue()) !== '') {

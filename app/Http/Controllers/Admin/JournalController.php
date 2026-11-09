@@ -10268,31 +10268,7 @@ class JournalController extends Controller
      */
     public static function qaydnomaHtml(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $title, string $actions = ''): string
     {
-        self::trimToPrintArea($spreadsheet);
-
-        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Html($spreadsheet);
-        $writer->writeAllSheets();
-        $writer->setEmbedImages(true);
-        // PhpSpreadsheet 1.29 Html writer butun kenglik bo'yicha birlashtirilgan qatorlarda
-        // (qaydnoma sarlavhalari) ortiqcha ogohlantirish beradi — natija to'g'ri, lekin Laravel
-        // uni xatoga aylantiradi. Faqat kutubxona ogohlantirishlari yutiladi, qolgani o'tadi.
-        $previous = set_error_handler(function (...$args) use (&$previous) {
-            [$level, , $file] = $args + [null, null, ''];
-            if (in_array($level, [E_WARNING, E_NOTICE], true) && str_contains(str_replace('\\', '/', (string) $file), 'phpoffice/phpspreadsheet')) {
-                return true;
-            }
-
-            return $previous ? $previous(...$args) : false;
-        });
-        try {
-            $html = $writer->generateHtmlAll();
-        } finally {
-            restore_error_handler();
-        }
-
-        // Burilgan sarlavhalar ("O'zlashtirish ko'rsatkichi", "ECTS"): HTML'da transform katak
-        // o'lchamini o'zgartirmaydi va matn qo'shni katakka chiqadi — gorizontal, qatorlarga bo'lib
-        $html = str_replace(['transform:rotate(90deg);', 'transform:rotate(-90deg);'], 'white-space:normal; word-break:break-word;', $html);
+        $html = self::sheetsHtml($spreadsheet);
 
         // Tasdiq QR lari sahifada imzo katagining aniq o'rtasida (brauzerda qator balandligi
         // Excel'dagidan farq qiladi — offset emas, flex bilan)
@@ -10320,6 +10296,120 @@ class JournalController extends Controller
             . '@media print{.ynq-bar{display:none}}</style>';
         $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $bar, $html, 1);
         $html = preg_replace('/<title>.*?<\/title>/is', '<title>' . $title . '</title>', $html, 1);
+
+        return $html;
+    }
+
+    /**
+     * Workbook'ni PDF ga: har varaq (12-shakl, 12a, ...) — bitta A4 sahifa (chop etish maydoni
+     * sahifaga sig'diriladi), hammasi bitta faylda. QR lar o'z kataklarining o'rtasida.
+     */
+    public static function qaydnomaPdf(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet): string
+    {
+        // Eng katta varaq o'lchami (pt) — hamma varaqlar bir shablondan, bitta masshtab
+        $width = $height = 0;
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            $area = explode(',', $sheet->getPageSetup()->getPrintArea() ?: $sheet->calculateWorksheetDataDimension())[0];
+            [$from, $to] = array_pad(explode(':', str_replace('$', '', $area)), 2, null);
+            [$c1, $r1] = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::indexesFromString($from);
+            [$c2, $r2] = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::indexesFromString($to ?? $from);
+            $w = 0;
+            for ($c = $c1; $c <= $c2; $c++) {
+                $dim = $sheet->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c));
+                $w += $dim->getVisible() ? \PhpOffice\PhpSpreadsheet\Shared\Drawing::pixelsToPoints(
+                    \PhpOffice\PhpSpreadsheet\Shared\Drawing::cellDimensionToPixels(max(0, $dim->getWidth() < 0 ? 8.43 : $dim->getWidth()), $spreadsheet->getDefaultStyle()->getFont())) : 0;
+            }
+            $h = 0;
+            for ($r = $r1; $r <= $r2; $r++) {
+                $h += self::rowPx($sheet, $r) * 0.75;
+            }
+            [$width, $height] = [max($width, $w), max($height, $h)];
+        }
+        // A4 — qaysi yo'nalishda katta bo'lsa (10 mm hoshiya)
+        $margin = 28;
+        $fit = fn (float $pw, float $ph) => min(($pw - 2 * $margin) / max($width, 1), ($ph - 2 * $margin) / max($height, 1), 1);
+        $landscape = $fit(842, 595) >= $fit(595, 842);
+        [$pageW, $pageH] = $landscape ? [842, 595] : [595, 842];
+
+        // O'lchamlar (ustun, qator, shrift — pt; QR — px) masshtab bilan kichraytiriladi
+        $scale = fn (string $html, float $f) => preg_replace_callback(
+            '/width:(\d+(?:\.\d+)?)px;height:(\d+(?:\.\d+)?)px;margin:0 2px/',
+            fn ($v) => 'width:' . round($v[1] * $f, 1) . 'px;height:' . round($v[2] * $f, 1) . 'px;margin:0 2px',
+            preg_replace_callback('/<style[^>]*>.*?<\/style>/s', fn ($m) => preg_replace_callback(
+                '/(\d+(?:\.\d+)?)pt\b/', fn ($v) => round($v[1] * $f, 2) . 'pt', $m[0]
+            ), $html)
+        );
+        $html = self::sheetsHtml($spreadsheet, false);
+        // Kirill/lotin maxsus belgilar (‘ ʼ) — DejaVu shriftida bor
+        $html = preg_replace("/font-family:[^;}\"]+/", "font-family:'DejaVu Serif'", $html);
+        // Har varaq yangi sahifadan — writer o'zi qo'yadi (div + div); uning @page qoidalari o'rniga o'zimizniki
+        $html = preg_replace('/@page[^{]*\{[^}]*\}/', '', $html);
+        // QR lar: dompdf flex/absolute'ni bilmaydi — katakda o'rtada, oddiy rasm
+        $html = preg_replace_callback(
+            "/<td([^>]*?) style='position: relative;'([^>]*)>((?:\s*<img alt=\"(?:" . preg_quote(self::YNQ_QR_ALT, '/') . '|' . preg_quote(self::YNQ_DEAN_QR_ALT, '/') . ")[^>]*\/>)+)/u",
+            fn ($m) => '<td' . $m[1] . " style='vertical-align:middle;text-align:center'" . $m[2] . '>' . preg_replace(
+                '/style="[^"]*?width:(\d+)px[^"]*"/', 'style="width:$1px;height:$1px;margin:0 2px"', $m[3]
+            ),
+            $html
+        );
+        $html = $scale($html, $fit($pageW, $pageH));
+        $withPage = fn (string $html) => str_replace('</head>', '<style>@page{margin:' . $margin . 'pt}body{margin:0}'
+            // Qator balandligi Excel'dagidek qolsin: dompdf shrift balandligi (line-height) bilan cho'zadi
+            . 'td,th{line-height:1;padding-top:0;padding-bottom:0}</style></head>', $html);
+
+        // dompdf qatorlarni hisobdagidan balandroq chizadi (shrift, uzun matn) — birinchi varaq juda
+        // baland sahifada bir marta chiziladi, haqiqiy balandligi bo'yicha masshtab aniqlanadi
+        $probe = preg_replace("/<div style='page: page[1-9]\d*'>.*?(?=<div style='page: page|<\/body>)/s", '', $html);
+        $measured = 0;
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($withPage($probe))->setPaper([0, 0, $pageW, 20000]);
+        // Chizilgach freymlar tozalanadi — o'lcham chizish paytida olinadi
+        $pdf->getDomPDF()->setCallbacks([['event' => 'end_frame', 'f' => function ($frame) use (&$measured) {
+            $node = $frame->get_node();
+            if ($node->nodeName === 'table' && $node->getAttribute('id') === 'sheet0') {
+                $box = $frame->get_border_box();
+                $measured = max($measured, (float) ($box['h'] ?? $box[3] ?? 0));
+            }
+        }]]);
+        $pdf->render();
+        $available = $pageH - 2 * $margin;
+        if ($measured > $available) {
+            $html = $scale($html, $available / $measured * 0.97);
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($withPage($html))
+            ->setPaper('a4', $landscape ? 'landscape' : 'portrait')
+            ->output();
+    }
+
+    /** Varaqlar chop etish maydoniga qirqilib, Html writer bilan (kutubxona ogohlantirishlarisiz) */
+    private static function sheetsHtml(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, bool $navigation = true): string
+    {
+        self::trimToPrintArea($spreadsheet);
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Html($spreadsheet);
+        $writer->writeAllSheets();
+        $writer->setEmbedImages(true);
+        $writer->setGenerateSheetNavigationBlock($navigation);
+        // PhpSpreadsheet 1.29 Html writer butun kenglik bo'yicha birlashtirilgan qatorlarda
+        // (qaydnoma sarlavhalari) ortiqcha ogohlantirish beradi — natija to'g'ri, lekin Laravel
+        // uni xatoga aylantiradi. Faqat kutubxona ogohlantirishlari yutiladi, qolgani o'tadi.
+        $previous = set_error_handler(function (...$args) use (&$previous) {
+            [$level, , $file] = $args + [null, null, ''];
+            if (in_array($level, [E_WARNING, E_NOTICE], true) && str_contains(str_replace('\\', '/', (string) $file), 'phpoffice/phpspreadsheet')) {
+                return true;
+            }
+
+            return $previous ? $previous(...$args) : false;
+        });
+        try {
+            $html = $writer->generateHtmlAll();
+        } finally {
+            restore_error_handler();
+        }
+
+        // Burilgan sarlavhalar ("O'zlashtirish ko'rsatkichi", "ECTS"): HTML'da transform katak
+        // o'lchamini o'zgartirmaydi va matn qo'shni katakka chiqadi — gorizontal, qatorlarga bo'lib
+        $html = str_replace(['transform:rotate(90deg);', 'transform:rotate(-90deg);'], 'white-space:normal; word-break:break-word;', $html);
 
         return $html;
     }

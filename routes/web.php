@@ -534,6 +534,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('vedomost-tekshirish')->name('vedomost-tekshirish.')->group(function () {
             Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
             Route::get('/search', [VedomostTekshirishController::class, 'search'])->name('search');
+            Route::get('/confirmed', [VedomostTekshirishController::class, 'confirmed'])->name('confirmed');
+            Route::get('/qaydnoma-pdf', [VedomostTekshirishController::class, 'qaydnomaPdf'])->name('qaydnoma-pdf');
             Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
             Route::post('/sync-hemis', [VedomostTekshirishController::class, 'syncHemis'])->name('sync-hemis');
         });

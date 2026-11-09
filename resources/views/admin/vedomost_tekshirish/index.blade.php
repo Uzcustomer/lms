@@ -182,6 +182,38 @@
                     <p style="color:#94a3b8;font-size:14px;">Mos ma'lumot topilmadi</p>
                 </div>
             </div>
+
+            <!-- TASDIQLANGAN QAYDNOMALAR: o'qituvchi va dekan tasdiqlagan, yuqoridagi filtrlar bo'yicha -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cq-card">
+                <div class="cq-head">
+                    <div>
+                        <h3 class="cq-title">Tasdiqlangan qaydnomalar</h3>
+                        <p class="cq-sub">Amaliy o'qituvchi va fakultet dekani tasdiqlagan YN qaydnomalar. Yuqoridagi filtrlar bilan "Qidirish" bosilsa, ro'yxat ham shu bo'yicha toraytiriladi.</p>
+                    </div>
+                    <span id="cq-count" class="cq-count">—</span>
+                </div>
+                <div id="cq-loading" class="cq-note">Yuklanmoqda…</div>
+                <div id="cq-empty" class="cq-note" style="display:none;">Tanlangan filtrlar bo'yicha tasdiqlangan qaydnoma yo'q</div>
+                <div id="cq-wrap" style="display:none;max-height:520px;overflow:auto;">
+                    <table class="result-table">
+                        <thead>
+                            <tr>
+                                <th style="width:36px;">#</th>
+                                <th style="min-width:140px;">Fakultet</th>
+                                <th style="min-width:130px;">Yo'nalish</th>
+                                <th style="width:70px;text-align:center;">Kurs</th>
+                                <th style="min-width:100px;">Guruh</th>
+                                <th style="min-width:240px;">Fan nomi</th>
+                                <th style="min-width:160px;">Amaliy o'qituvchi</th>
+                                <th style="min-width:170px;">Dekan</th>
+                                <th style="width:90px;text-align:center;">PDF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cq-body"></tbody>
+                    </table>
+                </div>
+                <div id="cq-more" class="cq-note" style="display:none;"></div>
+            </div>
         </div>
     </div>
 
@@ -495,7 +527,7 @@
             reloadAllDependentFilters({ keepSpecialty:false, keepLevel:false, keepSemester:false });
         });
 
-        function doSearch() {
+        function collectParams() {
             var df=document.getElementById('dekan_faculty_id');
             var params = {
                 education_type:  $('#education_type').val()||'',
@@ -510,6 +542,58 @@
             };
             var gv=getCbValues('groups'); if(gv.length) params.group_ids=gv;
             var sv=getCbValues('subjects'); if(sv.length) params.subject_ids=sv;
+            return params;
+        }
+
+        // Tasdiqlangan qaydnomalar — sahifa ochilganda (joriy filtrlar) va har qidiruvda
+        var cqRequest = null;
+        function loadConfirmed(params) {
+            if (cqRequest) cqRequest.abort();
+            $('#cq-loading').show(); $('#cq-empty, #cq-wrap, #cq-more').hide();
+            cqRequest = $.ajax({
+                url: '{{ route("admin.vedomost-tekshirish.confirmed") }}',
+                type: 'GET', data: params, timeout: 60000,
+                success: function(res) {
+                    $('#cq-loading').hide();
+                    var items = (res && res.items) || [];
+                    $('#cq-count').text(items.length + (res.more ? '+' : '') + ' ta');
+                    if (!items.length) { $('#cq-empty').show(); return; }
+                    var html = '';
+                    items.forEach(function(r, i) {
+                        html += '<tr>'
+                            + '<td style="color:#94a3b8;">' + (i + 1) + '</td>'
+                            + '<td>' + esc(r.faculty_name) + '</td>'
+                            + '<td>' + esc(r.specialty_name) + '</td>'
+                            + '<td style="text-align:center;">' + esc(r.level_name) + '</td>'
+                            + '<td style="font-weight:700;white-space:nowrap;">' + esc(r.group_name) + '</td>'
+                            + '<td>' + esc(r.subject_name) + '<div class="cq-small">' + esc(r.semester_name) + '</div></td>'
+                            + '<td>' + (r.teachers || []).map(esc).join('<br>') + '</td>'
+                            + '<td><span class="cq-ok">✓</span> ' + esc(r.dean_name) + '<div class="cq-small">' + esc(r.dean_at) + '</div></td>'
+                            + '<td style="text-align:center;"><a class="cq-pdf" href="' + escAttr(r.pdf_url) + '" onclick="return cqPdf(this)">PDF</a></td>'
+                            + '</tr>';
+                    });
+                    $('#cq-body').html(html);
+                    $('#cq-wrap').show();
+                    if (res.more) $('#cq-more').text('Eng so\'nggi ' + res.limit + ' tasi ko\'rsatilgan — aniq qaydnomani topish uchun filtrlardan foydalaning').show();
+                },
+                error: function(xhr, status) {
+                    if (status === 'abort') return;
+                    $('#cq-loading').hide(); $('#cq-empty').text('Ro\'yxatni yuklab bo\'lmadi. Qayta urinib ko\'ring.').show();
+                }
+            });
+        }
+        // PDF tayyorlanishi bir necha soniya oladi — tugma holati
+        function cqPdf(a) {
+            if (a.classList.contains('cq-busy')) return false;
+            a.classList.add('cq-busy'); a.textContent = 'Tayyorlanmoqda…';
+            setTimeout(function(){ a.classList.remove('cq-busy'); a.textContent = 'PDF'; }, 15000);
+            return true;
+        }
+        $(function(){ setTimeout(function(){ loadConfirmed(collectParams()); }, 300); });
+
+        function doSearch() {
+            var params = collectParams();
+            loadConfirmed(params);
 
             $('#empty-state').hide(); $('#no-results').hide(); $('#results-area').hide();
             $('#search-loading').css('display','flex');
@@ -723,6 +807,18 @@
     </script>
 
     <style>
+        .cq-card { margin-top:16px; }
+        .cq-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:16px 20px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+        .cq-title { margin:0; font-size:16px; font-weight:700; color:#0f172a; }
+        .cq-sub { margin:4px 0 0; font-size:12.5px; color:#64748b; max-width:80ch; }
+        .cq-count { flex-shrink:0; padding:4px 12px; border-radius:999px; background:#dcfce7; color:#166534; font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; }
+        .cq-note { padding:28px 20px; text-align:center; color:#94a3b8; font-size:13.5px; }
+        .cq-small { font-size:11.5px; color:#64748b; margin-top:2px; }
+        .cq-ok { display:inline-flex; width:16px; height:16px; align-items:center; justify-content:center; border-radius:999px; background:#dcfce7; color:#15803d; font-size:10px; }
+        .cq-pdf { display:inline-flex; align-items:center; justify-content:center; min-width:64px; padding:6px 12px; border-radius:8px; background:#b91c1c; color:#fff !important; font-size:12px; font-weight:700; text-decoration:none !important; white-space:nowrap; }
+        .cq-pdf:hover { background:#991b1b; }
+        .cq-pdf:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+        .cq-pdf.cq-busy { background:#94a3b8; pointer-events:none; }
         .filter-container { padding:16px 20px 12px; background:linear-gradient(135deg,#f0f4f8,#e8edf5); border-bottom:2px solid #dbe4ef; }
         .filter-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
         .filter-row:last-child { margin-bottom:0; }

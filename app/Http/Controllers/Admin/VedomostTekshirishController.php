@@ -79,66 +79,9 @@ class VedomostTekshirishController extends Controller
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
         try {
-        $dekanFacultyIds = get_dekan_faculty_ids();
-        $currentSemester = $request->input('current_semester', '1') == '1';
         $excludedCodes   = [11, 99, 100, 101, 102, 103];
 
-        // --- Base query: curriculum_subjects × groups × semesters ---
-        $query = DB::table('curriculum_subjects as cs')
-            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
-            ->join('semesters as s', function ($j) {
-                $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
-                  ->on('s.code', '=', 'cs.semester_code');
-            })
-            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
-            ->leftJoin('departments as dep', 'dep.department_hemis_id', '=', 'g.department_hemis_id')
-            ->where('g.department_active', true)
-            ->where('g.active', true);
-
-        if ($currentSemester) {
-            $query->where('s.current', true);
-        }
-
-        // Education type
-        if ($request->filled('education_type')) {
-            $et = $request->education_type;
-            $query->whereExists(function ($sub) use ($et) {
-                $sub->select(DB::raw(1))->from('curricula as c')
-                    ->whereColumn('c.curricula_hemis_id', 'cs.curricula_hemis_id')
-                    ->where('c.education_type_code', $et);
-            });
-        }
-
-        // Faculty
-        if ($request->filled('faculty_id')) {
-            $dh = Department::find($request->faculty_id)?->department_hemis_id;
-            if ($dh) $query->where('g.department_hemis_id', $dh);
-        }
-
-        // Dekan restriction
-        if (!empty($dekanFacultyIds)) {
-            $dhs = Department::whereIn('id', $dekanFacultyIds)->pluck('department_hemis_id');
-            $query->whereIn('g.department_hemis_id', $dhs);
-        }
-
-        if ($request->filled('specialty_id')) {
-            $query->where('g.specialty_hemis_id', $request->specialty_id);
-        }
-        if ($request->filled('level_code')) {
-            $query->where('s.level_code', $request->level_code);
-        }
-        if ($request->filled('semester_code')) {
-            $query->where('cs.semester_code', $request->semester_code);
-        }
-        if ($request->filled('department_id')) {
-            $query->where('cs.department_id', $request->department_id);
-        }
-        if ($request->filled('group_ids')) {
-            $query->whereIn('g.id', (array) $request->group_ids);
-        }
-        if ($request->filled('subject_ids')) {
-            $query->whereIn('cs.subject_id', (array) $request->subject_ids);
-        }
+        $query = $this->filteredQuery($request);
 
         $rows = $query
             ->select('g.id as group_pk', 'g.group_hemis_id', 'g.name as group_name',
@@ -282,6 +225,196 @@ class VedomostTekshirishController extends Controller
             \Log::error('VedomostTekshirish search error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Sahifa filtrlari bo'yicha guruh × fan (curriculum_subjects × groups × semesters) so'rovi —
+     * qidiruv va tasdiqlangan qaydnomalar ro'yxati uchun umumiy. Dekan — o'z fakulteti.
+     */
+    private function filteredQuery(Request $request)
+    {
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        $currentSemester = $request->input('current_semester', '1') == '1';
+
+        // --- Base query: curriculum_subjects × groups × semesters ---
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('semesters as s', function ($j) {
+                $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+                  ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+            ->leftJoin('departments as dep', 'dep.department_hemis_id', '=', 'g.department_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+
+        if ($currentSemester) {
+            $query->where('s.current', true);
+        }
+
+        // Education type
+        if ($request->filled('education_type')) {
+            $et = $request->education_type;
+            $query->whereExists(function ($sub) use ($et) {
+                $sub->select(DB::raw(1))->from('curricula as c')
+                    ->whereColumn('c.curricula_hemis_id', 'cs.curricula_hemis_id')
+                    ->where('c.education_type_code', $et);
+            });
+        }
+
+        // Faculty
+        if ($request->filled('faculty_id')) {
+            $dh = Department::find($request->faculty_id)?->department_hemis_id;
+            if ($dh) $query->where('g.department_hemis_id', $dh);
+        }
+
+        // Dekan restriction
+        if (!empty($dekanFacultyIds)) {
+            $dhs = Department::whereIn('id', $dekanFacultyIds)->pluck('department_hemis_id');
+            $query->whereIn('g.department_hemis_id', $dhs);
+        }
+
+        if ($request->filled('specialty_id')) {
+            $query->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($request->filled('level_code')) {
+            $query->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('semester_code')) {
+            $query->where('cs.semester_code', $request->semester_code);
+        }
+        if ($request->filled('department_id')) {
+            $query->where('cs.department_id', $request->department_id);
+        }
+        if ($request->filled('group_ids')) {
+            $query->whereIn('g.id', (array) $request->group_ids);
+        }
+        if ($request->filled('subject_ids')) {
+            $query->whereIn('cs.subject_id', (array) $request->subject_ids);
+        }
+        return $query;
+    }
+
+    /**
+     * Dekan tasdiqlagan YN qaydnomalar — sahifa filtrlari bo'yicha (filtrsiz ham: sukut bo'yicha
+     * joriy semestr), eng so'nggi tasdiqlanganlari birinchi.
+     */
+    public function confirmed(Request $request)
+    {
+        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
+        $limit = 500;
+
+        $query = $this->filteredQuery($request)
+            ->join('yn_qaydnoma_confirmations as yc', function ($j) {
+                $j->on('yc.group_hemis_id', '=', 'g.group_hemis_id')
+                  ->on('yc.subject_id', '=', 'cs.subject_id')
+                  ->on('yc.semester_code', '=', 'cs.semester_code');
+            })
+            ->where('yc.role', \App\Models\YnQaydnomaConfirmation::ROLE_DEAN);
+
+        // YN sanasi (OSKI yoki test) oralig'i — qidiruvdagidek
+        $from = $request->filled('yn_date_from') ? $this->parseDate($request->yn_date_from) : null;
+        $to = $request->filled('yn_date_to') ? $this->parseDate($request->yn_date_to) : null;
+        if ($from || $to) {
+            $query->whereExists(function ($sub) use ($from, $to) {
+                $sub->select(DB::raw(1))->from('exam_schedules as es')
+                    ->whereNull('es.student_hemis_id')
+                    ->whereColumn('es.group_hemis_id', 'g.group_hemis_id')
+                    ->whereColumn('es.subject_id', 'cs.subject_id')
+                    ->whereColumn('es.semester_code', 'cs.semester_code')
+                    ->where(function ($w) use ($from, $to) {
+                        foreach (['es.oski_date', 'es.test_date'] as $col) {
+                            $w->orWhere(fn ($d) => $d->whereNotNull($col)
+                                ->when($from, fn ($q) => $q->whereDate($col, '>=', $from))
+                                ->when($to, fn ($q) => $q->whereDate($col, '<=', $to)));
+                        }
+                    });
+            });
+        }
+
+        $rows = $query
+            ->select('g.group_hemis_id', 'g.name as group_name', 'dep.name as faculty_name', 'sp.name as specialty_name',
+                     's.level_name', 'cs.subject_id', 'cs.subject_name', 'cs.semester_code', 'cs.semester_name',
+                     'yc.teacher_name as dean_name', 'yc.confirmed_at as dean_at')
+            ->distinct()
+            ->orderByDesc('yc.confirmed_at')
+            ->limit($limit + 1)
+            ->get();
+        $more = $rows->count() > $limit;
+        $rows = $rows->take($limit);
+
+        // Amaliy o'qituvchi(lar) — shu qaydnomalar bo'yicha
+        $teachers = \App\Models\YnQaydnomaConfirmation::where('role', \App\Models\YnQaydnomaConfirmation::ROLE_TEACHER)
+            ->whereIn('group_hemis_id', $rows->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->values())
+            ->whereIn('subject_id', $rows->pluck('subject_id')->map(fn ($v) => (string) $v)->unique()->values())
+            ->get(['group_hemis_id', 'subject_id', 'semester_code', 'teacher_id', 'teacher_name'])
+            ->groupBy(fn ($c) => $c->group_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code);
+
+        $items = $rows->unique(fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code)->map(function ($r) use ($teachers) {
+            $params = ['subject_id' => $r->subject_id, 'semester_code' => $r->semester_code, 'group_hemis_id' => $r->group_hemis_id];
+
+            return [
+                'faculty_name' => $r->faculty_name ?? '',
+                'specialty_name' => $r->specialty_name ?? '',
+                'level_name' => $r->level_name ?? '',
+                'group_name' => $r->group_name,
+                'subject_name' => $r->subject_name,
+                'semester_name' => $r->semester_name ?? '',
+                'teachers' => ($teachers[$r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] ?? collect())
+                    ->unique('teacher_id')->pluck('teacher_name')->values(),
+                'dean_name' => $r->dean_name,
+                'dean_at' => Carbon::parse($r->dean_at)->format('d.m.Y H:i'),
+                'pdf_url' => route('admin.vedomost-tekshirish.qaydnoma-pdf', $params),
+            ];
+        })->values();
+
+        return response()->json(['items' => $items, 'more' => $more, 'limit' => $limit]);
+    }
+
+    /**
+     * Tasdiqlangan YN qaydnoma PDF da: har varaq (12-shakl, 12a, ...) — bitta sahifa, bitta fayl.
+     * O'qituvchi tasdiqlagan vaznlar bilan, barcha QR lari bilan.
+     */
+    public function qaydnomaPdf(Request $request)
+    {
+        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
+        $data = $request->validate(['subject_id' => 'required', 'semester_code' => 'required', 'group_hemis_id' => 'required']);
+        [$subjectId, $semesterCode, $groupHemisId] = [(string) $data['subject_id'], (string) $data['semester_code'], (string) $data['group_hemis_id']];
+
+        $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
+        $base = $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId)->first();
+        abort_unless($base && $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_DEAN)->isNotEmpty(), 404,
+            'Qaydnoma hali dekan tomonidan tasdiqlanmagan.');
+
+        @set_time_limit(300);
+        $w = $base->weights;
+        $built = app(JournalController::class)->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
+            (int) $w['jn'], (int) $w['mt'], (int) $w['on'], (int) $w['oski'], (int) $w['test']);
+        abort_if(is_string($built), 422, is_string($built) ? $built : '');
+        [$spreadsheet, $fileName] = $built;
+        $pdf = JournalController::qaydnomaPdf($spreadsheet);
+        $spreadsheet->disconnectWorksheets();
+
+        $name = pathinfo($fileName, PATHINFO_FILENAME) . '.pdf';
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => \Symfony\Component\HttpFoundation\HeaderUtils::makeDisposition(
+                'attachment', $name, preg_replace('/[^A-Za-z0-9._-]/', '_', \Illuminate\Support\Str::ascii($name))
+            ),
+        ]);
+    }
+
+    private function parseDate(string $value): ?string
+    {
+        foreach (['Y-m-d', 'd.m.Y'] as $format) {
+            try {
+                return Carbon::createFromFormat($format, trim($value))->format('Y-m-d');
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return null;
     }
 
     /**

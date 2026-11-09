@@ -26,6 +26,7 @@ beforeEach(function () {
         $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable()]);
     Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->timestamps()]);
     (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
+    (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
 
     DB::table('teachers')->insert(['id' => 9, 'hemis_id' => 900, 'full_name' => 'DEKAN']);
     DB::table('roles')->insert(['id' => 1, 'name' => 'dekan', 'guard_name' => 'web']);
@@ -38,10 +39,10 @@ beforeEach(function () {
     ]);
     DB::table('curriculum_subjects')->insert(['curricula_hemis_id' => '5', 'subject_id' => '27', 'semester_code' => '19',
         'subject_name' => 'Akusherlik va ginekologiya', 'semester_name' => '9-semestr']);
-    foreach ([['77', 1, 'ALLAMURATOVA U.D.'], ['77', 2, 'KARIMOV A.'], ['88', 3, 'BOSHQA F.']] as [$group, $teacher, $name]) {
+    foreach ([['77', 1, 'ALLAMURATOVA U.D.', 'oqituvchi'], ['77', 2, 'KARIMOV A.', 'oqituvchi'], ['88', 3, 'BOSHQA F.', 'oqituvchi'], ['77', 9, 'DEKAN', 'dekan']] as [$group, $teacher, $name, $role]) {
         $v = DB::table('document_verifications')->insertGetId(['token' => str_repeat((string) $teacher, 48)]);
         DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => $group,
-            'teacher_id' => $teacher, 'teacher_name' => $name, 'document_verification_id' => $v,
+            'teacher_id' => $teacher, 'teacher_name' => $name, 'role' => $role, 'document_verification_id' => $v,
             'weights' => json_encode(['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15]), 'confirmed_at' => now()]);
     }
 });
@@ -58,6 +59,7 @@ it('shows the dean only the confirmed vedomosts of their faculty, one row per ve
     expect($row->group)->toBe('d1/d22-01a (rus)')
         ->and($row->subject)->toBe('Akusherlik va ginekologiya')
         ->and($row->teachers->pluck('teacher_name')->sort()->values()->all())->toBe(['ALLAMURATOVA U.D.', 'KARIMOV A.'])
+        ->and($row->dean?->teacher_name)->toBe('DEKAN')
         ->and($row->params)->toMatchArray(['group_hemis_id' => '77', 'weight_jn' => 50, 'weight_oski' => 15, 'weight_test' => 15]);
     expect(\App\Http\Controllers\Admin\JournalController::deanSeesGroup('77'))->toBeTrue()
         ->and(\App\Http\Controllers\Admin\JournalController::deanSeesGroup('88'))->toBeFalse();

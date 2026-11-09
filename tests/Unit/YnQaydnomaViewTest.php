@@ -25,6 +25,9 @@ function qaydnomaSheet(): \PhpOffice\PhpSpreadsheet\Spreadsheet
     }
     $w->setCellValue('X15', "YAN o'tkazuvchi o'qituvchi imzosi");
     $w->getColumnDimension('X')->setWidth(28.81640625);
+    // Kelmagan talaba qatori pushti — imzo katagiga o'tmasligi kerak
+    $w->getStyle('A20:Y20')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('FFC7CE');
+    $w->setCellValue('B60', 'Fakultet dekani')->setCellValue('C61', 'imzo');
     $w->setCellValue('M20', '=C20/2');
     $w->setCellValue('AB1', 'Topshiriq bilan');                               // chop etish maydonidan tashqari
     $w->getPageSetup()->setPrintArea('A1:Y61');
@@ -62,21 +65,31 @@ describe('teacher confirmation', function () {
         Schema::create('curriculum_subject_teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('employee_id'), $t->unsignedBigInteger('subject_id'),
             $t->unsignedBigInteger('group_id'), $t->string('training_type_code')->nullable(), $t->timestamps()]);
         Schema::create('yn_submissions', fn ($t) => [$t->id(), $t->string('subject_id'), $t->string('semester_code'), $t->string('group_hemis_id'), $t->timestamps()]);
-        Schema::create('groups', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('name'), $t->string('curriculum_hemis_id')->nullable(), $t->string('department_name')->nullable()]);
+        Schema::create('groups', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('name'), $t->string('curriculum_hemis_id')->nullable(),
+            $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->string('department_name')->nullable(), $t->string('specialty_name')->nullable()]);
         Schema::create('curriculum_subjects', fn ($t) => [$t->id(), $t->string('curricula_hemis_id')->nullable(), $t->string('subject_id'),
             $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable()]);
         Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->string('document_type'), $t->string('subject_name')->nullable(),
             $t->string('group_names')->nullable(), $t->string('semester_name')->nullable(), $t->string('department_name')->nullable(),
             $t->string('generated_by')->nullable(), $t->timestamp('generated_at')->nullable(), $t->string('document_path')->nullable(), $t->json('meta')->nullable(), $t->timestamps()]);
         (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
+        (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
+        Schema::create('departments', fn ($t) => [$t->id(), $t->unsignedBigInteger('department_hemis_id'), $t->string('name')]);
+        Schema::create('dean_faculties', fn ($t) => [$t->id(), $t->unsignedBigInteger('teacher_id'), $t->unsignedBigInteger('department_hemis_id'), $t->timestamps()]);
 
-        DB::table('teachers')->insert([['id' => 1, 'hemis_id' => 501, 'full_name' => 'IZZATULLAYEV OYBEK'], ['id' => 2, 'hemis_id' => 502, 'full_name' => 'IKROMOVA SH']]);
+        DB::table('teachers')->insert([['id' => 1, 'hemis_id' => 501, 'full_name' => 'IZZATULLAYEV OYBEK'], ['id' => 2, 'hemis_id' => 502, 'full_name' => 'IKROMOVA SH'],
+            ['id' => 3, 'hemis_id' => 503, 'full_name' => 'SAGIRAYEV NURALI']]);
+        DB::table('roles')->insert(['id' => 1, 'name' => 'dekan', 'guard_name' => 'web']);
+        DB::table('model_has_roles')->insert(['role_id' => 1, 'model_type' => \App\Models\Teacher::class, 'model_id' => 3]);
+        DB::table('departments')->insert(['department_hemis_id' => 11, 'name' => '1-son davolash']);
+        DB::table('dean_faculties')->insert(['teacher_id' => 3, 'department_hemis_id' => 11]);
         DB::table('schedules')->insert([
             ['employee_id' => 501, 'subject_id' => 435, 'group_id' => 77, 'training_type_code' => '13'],  // amaliy
             ['employee_id' => 502, 'subject_id' => 435, 'group_id' => 77, 'training_type_code' => '11'],  // ma'ruza
         ]);
         DB::table('yn_submissions')->insert(['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77']);
-        DB::table('groups')->insert(['group_hemis_id' => '77', 'name' => 'd1/d22-01b (rus)', 'curriculum_hemis_id' => '9']);
+        DB::table('groups')->insert(['group_hemis_id' => '77', 'name' => 'd1/d22-01b (rus)', 'curriculum_hemis_id' => '9',
+            'department_hemis_id' => 11, 'department_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi']);
         DB::table('curriculum_subjects')->insert(['curricula_hemis_id' => '9', 'subject_id' => '435', 'semester_code' => '19', 'subject_name' => 'Pediatriya']);
 
         // Excel quruvchi o'rniga soxta varaq — QR bosish asl mantiq bilan (stampConfirmationQrs)
@@ -92,17 +105,19 @@ describe('teacher confirmation', function () {
                 return [$s, 'YN_qaydnoma_test.xlsx'];
             }
         };
-        $this->confirm = function (int $teacherId) {
-            $request = \Illuminate\Http\Request::create('/admin/journal/confirm-yn-qaydnoma', 'POST', [
+        $this->confirm = function (int $teacherId, string $action = 'confirm') {
+            $request = \Illuminate\Http\Request::create('/admin/journal/' . $action . '-yn-qaydnoma', 'POST', [
                 'subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77',
                 'weight_jn' => 30, 'weight_mt' => 10, 'weight_on' => 0, 'weight_oski' => 0, 'weight_test' => 60,
             ]);
             $request->setLaravelSession($session = app('session')->driver());
             $session->start();
             app()->instance('request', $request);
+            Auth::shouldUse('teacher');
             Auth::guard('teacher')->login(\App\Models\Teacher::find($teacherId));
+            session(['active_role' => $teacherId === 3 ? 'dekan' : 'oqituvchi']);
 
-            return $this->controller->confirmYnQaydnoma($request);
+            return $action === 'confirm' ? $this->controller->confirmYnQaydnoma($request) : $this->controller->revokeYnQaydnoma($request);
         };
     });
 
@@ -112,6 +127,9 @@ describe('teacher confirmation', function () {
 
         $c = \App\Models\YnQaydnomaConfirmation::sole();
         expect($c->teacher_name)->toBe('IZZATULLAYEV OYBEK')
+            ->and($c->role)->toBe('oqituvchi')
+            ->and($c->verification->meta['specialty_name'])->toBe('Davolash ishi')
+            ->and($c->verification->document_path)->toEndWith('.xlsx')
             ->and($c->weights['test'])->toBe(60)
             ->and($c->verification->document_type)->toBe('yn_qaydnoma')
             ->and(strlen($c->verification->token))->toBe(48);
@@ -122,6 +140,8 @@ describe('teacher confirmation', function () {
         // Imzo ustuni talabalar qatorlarida bitta katak; QR uning o'rtasida (10 × 20px, QR 90px:
         // yuqori cheti 55px — 22-qatorda 15px), ustun 207px — chapdan 58px
         expect($sheet->getSheet(0)->getMergeCells())->toHaveKey('X20:X29')
+            ->and($sheet->getSheet(0)->getStyle('X20')->getFill()->getFillType())->toBe(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE)
+            ->and($sheet->getSheet(0)->getStyle('W20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
             ->and($drawings)->toHaveCount(1)
             ->and($drawings[0]->getCoordinates())->toBe('X22')
             ->and([$drawings[0]->getOffsetY(), $drawings[0]->getHeight()])->toBe([15, 90])
@@ -152,6 +172,35 @@ describe('teacher confirmation', function () {
 
         ($this->confirm)(1);   // qayta tasdiqlash mumkin
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
+    });
+
+    it('lets the dean confirm after the teacher and stamps the dean QR on the signature line', function () {
+        expect(fn () => ($this->confirm)(3))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // o'qituvchidan oldin — yo'q
+
+        ($this->confirm)(1);
+        ($this->confirm)(3);
+        $dean = \App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->sole();
+        expect($dean->teacher_name)->toBe('SAGIRAYEV NURALI')
+            ->and($dean->weights['test'])->toBe(60)                                   // o'qituvchi vaznlari
+            ->and($dean->verification->meta['role'])->toBe('dekan');
+        // Ikkala QR bitta (eng so'nggi) Excel fayliga havola qiladi
+        $paths = \App\Models\DocumentVerification::pluck('document_path')->unique();
+        expect($paths)->toHaveCount(1);
+        Storage::disk('public')->assertExists($paths->first());
+
+        [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
+        $deanQr = collect($sheet->getSheet(0)->getDrawingCollection())->first(fn ($d) => str_starts_with($d->getDescription(), 'Dekan QR: SAGIRAYEV'));
+        // 56px QR pastki cheti C60 chizig'idan 3px yuqorida: 58-qator (1px) + 59 + 60
+        expect([$deanQr->getCoordinates(), $deanQr->getOffsetY(), $deanQr->getHeight()])->toBe(['C58', 1, 56]);
+
+        $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
+        expect($html)->toMatch('/<img alt="Dekan QR: SAGIRAYEV[^"]*" src="[^"]+" style="position:absolute;left:50%;bottom:3px;[^"]*" \/>/');
+
+        // O'qituvchi tasdig'ini qaytarsa — dekan tasdig'i ham bekor
+        ($this->confirm)(1, 'revoke');
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
+            ->and(\App\Models\DocumentVerification::count())->toBe(0);
+        Storage::disk('public')->assertMissing($paths->first());
     });
 
     it('does not let the lecturer confirm', function () {

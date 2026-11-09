@@ -34,6 +34,9 @@
         .yq-check { display: inline-flex; width: 18px; height: 18px; border-radius: 999px; background: var(--yq-green-bg); color: var(--yq-green);
             align-items: center; justify-content: center; font-size: 11px; border: 1px solid var(--yq-green-line); flex-shrink: 0; }
         .yq-date { font-variant-numeric: tabular-nums; }
+        .yq-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;
+            background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+        .yq-badge--ok { background: var(--yq-green-bg); color: var(--yq-green); border-color: var(--yq-green-line); }
         .yq-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
         .yq-actions form { margin: 0; }
         .yq-empty { padding: 48px 16px; text-align: center; color: var(--yq-muted); }
@@ -47,7 +50,7 @@
                 <div>
                     <h1 class="yq-title">Vedomostlar</h1>
                     <p class="yq-sub">
-                        Amaliy o'qituvchi baholarni tekshirib tasdiqlagan YN qaydnomalar{{ $isDean ? " — fakultetingiz guruhlari" : '' }}.
+                        Amaliy o'qituvchi baholarni tekshirib tasdiqlagan YN qaydnomalar{{ $isDean ? " — fakultetingiz guruhlari. «Ko'rish» orqali qaydnomani ochib, tasdiqlaysiz" : '' }}.
                         Jami: <b style="color:var(--yq-ink)">{{ $rows->total() }}</b>
                     </p>
                 </div>
@@ -73,6 +76,7 @@
                                     <th>Fan</th>
                                     <th>Tasdiqlagan o'qituvchi</th>
                                     <th>Sana</th>
+                                    <th>Dekan</th>
                                     <th style="text-align:right">Amallar</th>
                                 </tr>
                             </thead>
@@ -96,6 +100,14 @@
                                         <td class="yq-date">
                                             {{ $row->confirmed_at->format('d.m.Y') }}
                                             <span class="yq-small">{{ $row->confirmed_at->format('H:i') }}</span>
+                                        </td>
+                                        <td>
+                                            @if($row->dean)
+                                                <span class="yq-badge yq-badge--ok">✓ Tasdiqlangan</span>
+                                                <span class="yq-small yq-date">{{ $row->dean->confirmed_at->format('d.m.Y H:i') }}</span>
+                                            @else
+                                                <span class="yq-badge">Kutilmoqda</span>
+                                            @endif
                                         </td>
                                         <td>
                                             <div class="yq-actions">

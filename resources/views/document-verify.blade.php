@@ -154,8 +154,41 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                     </svg>
                 </div>
-                <span class="status-badge">Haqiqiy hujjat</span>
+                <span class="status-badge">{{ $verification->document_type === 'yn_qaydnoma' ? 'Tasdiqlangan' : 'Haqiqiy hujjat' }}</span>
             </div>
+
+            @if($verification->document_type === 'yn_qaydnoma')
+                @php
+                    $ynqRole = ($verification->meta['role'] ?? 'oqituvchi') === 'dekan' ? 'Fakultet dekani' : "Amaliyot o'qituvchisi";
+                    $ynqRows = [
+                        'Hujjat turi' => 'YN baholash qaydnomasi',
+                        'Tasdiqlagan' => $ynqRole,
+                        'F.I.Sh.' => $verification->generated_by,
+                        'Fakultet' => $verification->department_name,
+                        "Yo'nalish" => $verification->meta['specialty_name'] ?? null,
+                        'Guruh' => $verification->group_names,
+                        'Fan' => $verification->subject_name,
+                        'Semestr' => $verification->semester_name,
+                        'Tasdiqlangan sana' => $verification->generated_at?->format('d.m.Y H:i'),
+                    ];
+                @endphp
+                <div class="card-body" style="padding-top: 0;">
+                    @foreach(array_filter($ynqRows) as $label => $value)
+                        <div class="info-row">
+                            <span class="info-label">{{ $label }}</span>
+                            <span class="info-value">{{ $value }}</span>
+                        </div>
+                    @endforeach
+                </div>
+                @if($documentUrl)
+                    <div class="card-body" style="padding-top: 0; text-align: center;">
+                        <a href="{{ $documentUrl }}" class="pdf-download-btn" download>
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Qaydnomani yuklab olish (Excel)
+                        </a>
+                    </div>
+                @endif
+            @else
 
             <div class="card-body" style="padding-top: 0;">
                 <div class="info-row">
@@ -248,6 +281,8 @@
                     </a>
                 </div>
             </div>
+            @endif
+
             @endif
 
             <div class="card-footer">

@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * "Vedomostlar": amaliy o'qituvchi tasdiqlagan YN qaydnomalar ro'yxati. Dekan — faqat o'z
- * fakulteti guruhlari; admin/superadmin — hammasi. Har qaydnomani sahifada ko'rish,
- * Excel yuklab olish va tasdiqlangan nusxani (QR havolasi) ochish mumkin.
+ * fakulteti guruhlari; admin/superadmin — hammasi. Har qaydnomani sahifada ko'rish (dekan
+ * shu yerda tasdiqlaydi) va Excel yuklab olish mumkin.
  */
 class YnQaydnomaListController extends Controller
 {
@@ -47,8 +47,11 @@ class YnQaydnomaListController extends Controller
         // Bitta qaydnoma (fan + semestr + guruh) — bitta qator, tasdiqlagan o'qituvchilar bilan
         $rows = $confirmations
             ->groupBy(fn ($c) => $c->subject_id . '|' . $c->semester_code . '|' . $c->group_hemis_id)
+            // O'qituvchi tasdig'i bor qaydnomalar; dekan tasdig'i — alohida ustunda
+            ->filter(fn ($items) => $items->contains('role', YnQaydnomaConfirmation::ROLE_TEACHER))
             ->map(function ($items) use ($groups, $subjects) {
-                $c = $items->first();
+                $teachers = $items->where('role', YnQaydnomaConfirmation::ROLE_TEACHER)->unique('teacher_id')->values();
+                $c = $teachers->first();
                 $group = $groups->get((string) $c->group_hemis_id);
                 $subject = $group ? $subjects->get($group->curriculum_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code) : null;
                 $w = $c->weights ?? [];
@@ -59,7 +62,8 @@ class YnQaydnomaListController extends Controller
                     'subject' => $subject->subject_name ?? ('Fan #' . $c->subject_id),
                     'semester' => $subject->semester_name ?? $c->semester_code,
                     'confirmed_at' => $c->confirmed_at,
-                    'teachers' => $items->unique('teacher_id')->values(),
+                    'teachers' => $teachers,
+                    'dean' => $items->firstWhere('role', YnQaydnomaConfirmation::ROLE_DEAN),
                     'params' => [
                         'subject_id' => $c->subject_id, 'semester_code' => $c->semester_code, 'group_hemis_id' => $c->group_hemis_id,
                         'weight_jn' => $w['jn'] ?? 30, 'weight_mt' => $w['mt'] ?? 10, 'weight_on' => $w['on'] ?? 0,

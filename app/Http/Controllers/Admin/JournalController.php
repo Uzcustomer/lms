@@ -10537,7 +10537,9 @@ class JournalController extends Controller
         for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
             // Yozuv katak chizig'iga yopishmasin — ikki yonida kichik chekinish
             $borders .= "table.sheet{$i}{margin-left:auto;margin-right:auto}"
-                . "table.sheet{$i} td{border-width:.5pt !important;padding-left:2pt !important;padding-right:2pt !important}"
+                . "table.sheet{$i} td{border-width:.25pt !important;padding-left:3.5pt !important;padding-right:3.5pt !important}"
+                // Ism-familiya ustuni (B) — yonlarida kengroq
+                . "table.sheet{$i} td.column1{padding-left:6pt !important;padding-right:6pt !important}"
                 . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}';
         }
         $fontDir = str_replace('\\', '/', resource_path('fonts/liberation'));

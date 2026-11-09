@@ -10516,7 +10516,14 @@ class JournalController extends Controller
         // Excel to'r chiziqlari (gridlines) olib tashlanadi — faqat shablonning o'z chiziqlari
         // (jadval, ism / imzo ostidagi chiziqlar, pastki abc–% jadvalchalari), hammasi ingichka
         $html = str_replace(" gridlines'", "'", $html);
-        $borders = 'td{border-width:.5pt !important}';
+        // Katak uslublaridagi chiziqlar (td.styleN, !important) dan ustun bo'lishi uchun — jadval sinfi bilan;
+        // jadval tagidagi bo'sh qator (51) balandroq — pastki hisob / imzo qismi jadvalga yopishmasin
+        // (dompdf tr balandligini emas, td nikini hisobga oladi)
+        $borders = '';
+        for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
+            $borders .= "table.sheet{$i} td{border-width:.5pt !important}"
+                . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}';
+        }
         $fontDir = str_replace('\\', '/', resource_path('fonts/liberation'));
         foreach (['normal normal' => 'Regular', 'bold normal' => 'Bold', 'normal italic' => 'Italic', 'bold italic' => 'BoldItalic'] as $style => $file) {
             [$weight, $fontStyle] = explode(' ', $style);

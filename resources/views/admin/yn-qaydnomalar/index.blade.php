@@ -41,6 +41,9 @@
         .yq-btn--sm { height: 32px; padding: 0 11px; font-size: 12.5px; }
         .yq-btn--excel { color: var(--yq-green) !important; border-color: var(--yq-green-line); background: var(--yq-green-bg); }
         .yq-btn--excel:hover { background: #dcfce7; border-color: #86efac; }
+        .yq-btn--pdf { color: #fff !important; border-color: #b91c1c; background: #b91c1c; }
+        .yq-btn--pdf:hover { background: #991b1b; border-color: #991b1b; }
+        .yq-btn--pdf.is-busy { background: #94a3b8; border-color: #94a3b8; pointer-events: none; }
         .yq-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
 
         /* Jadval */
@@ -84,6 +87,9 @@
         <div class="max-w-full mx-auto" style="padding-inline: 16px;">
             <div class="yq-head">
                 <div>
+                    @if($canPdf)
+                        <a href="{{ route('admin.vedomost-tekshirish.index') }}" class="yq-small" style="text-decoration:none;margin:0 0 4px;">← Vedomost tekshirish</a>
+                    @endif
                     <h1 class="yq-title">Vedomostlar</h1>
                     <p class="yq-sub">
                         YN imtihonlari (OSKI / test) tugagan fanlar{{ $isDean ? ' — fakultetingiz guruhlari' : '' }}: amaliy o'qituvchi YN qaydnomani
@@ -226,6 +232,13 @@
                                         <td>
                                             @if($row->params)
                                                 <div class="yq-actions">
+                                                    @if($canPdf && $row->status === 'dean')
+                                                        <a class="yq-btn yq-btn--sm yq-btn--pdf" onclick="return yqPdf(this)"
+                                                           href="{{ route('admin.vedomost-tekshirish.qaydnoma-pdf', ['subject_id' => $row->subject_id, 'semester_code' => $row->semester_code, 'group_hemis_id' => $row->group_hemis_id]) }}">
+                                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                            PDF
+                                                        </a>
+                                                    @endif
                                                     <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">
                                                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                                         {{ $isDean && $row->status === 'teacher' ? 'Ko\'rish va tasdiqlash' : 'Ko\'rish' }}
@@ -257,4 +270,14 @@
             </div>
         </div>
     </div>
+    <script>
+        // PDF bir necha soniyada tayyorlanadi — takroriy bosishning oldini olish
+        function yqPdf(a) {
+            if (a.classList.contains('is-busy')) return false;
+            var label = a.lastChild;
+            a.classList.add('is-busy'); label.textContent = ' Tayyorlanmoqda…';
+            setTimeout(function () { a.classList.remove('is-busy'); label.textContent = ' PDF'; }, 15000);
+            return true;
+        }
+    </script>
 </x-app-layout>

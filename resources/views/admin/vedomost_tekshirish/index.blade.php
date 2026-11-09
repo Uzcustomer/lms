@@ -13,6 +13,16 @@
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
 
+                <!-- Vedomostlar holati: YN tugagan fanlar — kim topshirgan / tasdiqlagan, PDF -->
+                <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid #e2e8f0;background:#fff;">
+                    <span style="font-size:13px;color:#64748b;">YN imtihonlari tugagan fanlar bo'yicha qaydnomani kim topshirgan, kim topshirmagan va dekan tasdiqlaganlari (PDF)</span>
+                    <a href="{{ route('admin.yn-qaydnomalar.index') }}"
+                       style="display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 18px;border-radius:9px;background:#1e3a8a;color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;box-shadow:0 2px 6px rgba(30,58,138,.25);">
+                        <svg style="width:17px;height:17px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Vedomostlar holati
+                    </a>
+                </div>
+
                 <!-- FILTERS -->
                 <div class="filter-container">
                     <!-- Row 1 -->

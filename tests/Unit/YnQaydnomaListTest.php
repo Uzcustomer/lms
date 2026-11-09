@@ -90,6 +90,20 @@ it('shows the dean every finished vedomost of their faculty with who submitted a
         ->and($rows['d1/d22-02a']->params)->toBeNull();
 });
 
+it('shows the registrar every faculty, with PDF for dean-confirmed ones', function () {
+    DB::table('teachers')->insert(['id' => 5, 'hemis_id' => 500, 'full_name' => 'REGISTRATOR']);
+    DB::table('roles')->insert(['id' => 2, 'name' => 'registrator_ofisi', 'guard_name' => 'web']);
+    DB::table('model_has_roles')->insert(['role_id' => 2, 'model_type' => \App\Models\Teacher::class, 'model_id' => 5]);
+    Auth::guard('teacher')->login(\App\Models\Teacher::find(5));
+    session(['active_role' => 'registrator_ofisi']);
+
+    $data = ($this->page)();
+    expect(collect($data['rows']->items())->pluck('group')->sort()->values()->all())->toBe(['d1/d22-01a', 'd1/d22-02a', 'p/22-01'])
+        ->and($data['canPdf'])->toBeTrue()
+        ->and(collect(($this->page)(['faculty' => '22'])['rows']->items())->pluck('group')->all())->toBe(['p/22-01']);
+    expect(($this->page)()['isDean'])->toBeFalse();
+});
+
 it('filters by status and group', function () {
     expect(collect(($this->page)(['status' => 'none'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-02a'])
         ->and(collect(($this->page)(['group' => '77'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-01a']);

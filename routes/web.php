@@ -1208,8 +1208,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                     ->name('dean-exam-reschedule.store');
             });
 
-        // Vedomostlar — amaliy o'qituvchi tasdiqlagan YN qaydnomalar (dekan — o'z fakulteti)
-        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|dekan'])
+        // Vedomostlar — YN tugagan fanlar: kim topshirgan / tasdiqlagan (dekan — o'z fakulteti;
+        // registrator — Vedomost tekshirishdan, hamma fakultet, PDF bilan)
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|dekan|registrator_ofisi'])
             ->get('/yn-qaydnomalar', [\App\Http\Controllers\Admin\YnQaydnomaListController::class, 'index'])
             ->name('yn-qaydnomalar.index');
 

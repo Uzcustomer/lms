@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * "Vedomostlar": YN (OSKI / test) imtihonlari tugagan fanlar bo'yicha qaydnoma kimlar tomonidan
  * topshirilgani (amaliy o'qituvchi tasdiqlagani) va dekan tasdiqlagani. Dekan — faqat o'z
- * fakulteti guruhlari; admin/superadmin — hammasi (fakultet filtri bilan).
+ * fakulteti guruhlari; admin/superadmin/registrator — hammasi (fakultet filtri bilan), dekan
+ * tasdiqlaganlari PDF da yuklab olinadi (Vedomost tekshirish).
  */
 class YnQaydnomaListController extends Controller
 {
@@ -69,6 +70,8 @@ class YnQaydnomaListController extends Controller
         return view('admin.yn-qaydnomalar.index', [
             'rows' => $paginator, 'counts' => $counts, 'options' => $options, 'filters' => $f + ['current' => $current ? '1' : '0'],
             'isDean' => $isDean,
+            // PDF — Vedomost tekshirish yo'li (registrator, admin); dekanga emas
+            'canPdf' => !$isDean,
         ]);
     }
 

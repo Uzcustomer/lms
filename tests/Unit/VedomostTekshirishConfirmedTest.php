@@ -29,7 +29,9 @@ beforeEach(function () {
         $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('department_id')->nullable()]);
     Schema::create('exam_schedules', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('subject_id'), $t->string('semester_code'),
         $t->unsignedBigInteger('student_hemis_id')->nullable(), $t->date('oski_date')->nullable(), $t->date('test_date')->nullable()]);
-    Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->timestamps()]);
+    Schema::create('curricula', fn ($t) => [$t->id(), $t->unsignedBigInteger('curricula_hemis_id'), $t->string('education_type_code')]);
+    Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->string('subject_name')->nullable(),
+        $t->string('semester_name')->nullable(), $t->string('department_name')->nullable(), $t->timestamps()]);
     (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
     (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();
 
@@ -38,6 +40,7 @@ beforeEach(function () {
     DB::table('model_has_roles')->insert(['role_id' => 1, 'model_type' => \App\Models\Teacher::class, 'model_id' => 5]);
     DB::table('departments')->insert([['department_hemis_id' => 11, 'name' => '1-son davolash'], ['department_hemis_id' => 22, 'name' => 'Pediatriya']]);
     DB::table('specialties')->insert(['specialty_hemis_id' => 7, 'name' => 'Davolash ishi']);
+    DB::table('curricula')->insert(['curricula_hemis_id' => 5, 'education_type_code' => '11']);
     DB::table('groups')->insert([
         ['group_hemis_id' => '77', 'name' => 'd1/d22-01a', 'curriculum_hemis_id' => '5', 'department_hemis_id' => 11, 'specialty_hemis_id' => 7],
         ['group_hemis_id' => '88', 'name' => 'p/22-01', 'curriculum_hemis_id' => '5', 'department_hemis_id' => 22, 'specialty_hemis_id' => 7],
@@ -73,6 +76,18 @@ it('lists dean-confirmed vedomosts without filters and narrows them with the pag
     $byDate = ($this->list)(['yn_date_from' => '2026-11-15']);
     expect($byDate)->toHaveCount(1)
         ->and($byDate[0]['group_name'])->toBe('p/22-01');
+});
+
+it('lists a cycle subject that is missing from curriculum_subjects, with the name from the confirmation', function () {
+    $v = DB::table('document_verifications')->insertGetId(['token' => str_repeat('c', 48), 'subject_name' => 'Ichki kasalliklar', 'semester_name' => '9-semestr']);
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '31', 'semester_code' => '19', 'group_hemis_id' => '77', 'teacher_id' => 9,
+        'teacher_name' => 'SAGIRAYEV N.J.', 'role' => 'dekan', 'document_verification_id' => $v, 'weights' => '{}', 'confirmed_at' => now()->addMinute()]);
+
+    $items = ($this->list)(['education_type' => '11', 'level_code' => '15']);
+    expect($items)->toHaveCount(3)
+        ->and($items[0]['subject_name'])->toBe('Ichki kasalliklar')     // eng so'nggi tasdiq birinchi
+        ->and($items[0]['level_name'])->toBe('5-kurs');
+    expect(($this->list)(['education_type' => '12']))->toBe([]);
 });
 
 it('hides vedomosts the dean has not confirmed yet', function () {

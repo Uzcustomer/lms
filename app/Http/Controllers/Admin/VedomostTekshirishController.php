@@ -303,68 +303,103 @@ class VedomostTekshirishController extends Controller
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
         $limit = 500;
+        $key = fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+        $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
 
-        $query = $this->filteredQuery($request)
-            ->join('yn_qaydnoma_confirmations as yc', function ($j) {
-                $j->on('yc.group_hemis_id', '=', 'g.group_hemis_id')
-                  ->on('yc.subject_id', '=', 'cs.subject_id')
-                  ->on('yc.semester_code', '=', 'cs.semester_code');
-            })
-            ->where('yc.role', \App\Models\YnQaydnomaConfirmation::ROLE_DEAN);
+        // Ro'yxat tasdiqlarning o'zidan quriladi (siklli fanlar curriculum_subjects da bo'lmasligi
+        // mumkin — qidiruvdagi fallback kabi); filtrlar guruh / semestr / o'quv reja bo'yicha
+        $deans = $Confirmation::with('verification')->where('role', $Confirmation::ROLE_DEAN)
+            ->orderByDesc('confirmed_at')->get()->unique($key)->values();
+        $groups = Group::whereIn('group_hemis_id', $deans->pluck('group_hemis_id')->unique()->values())->get()->keyBy(fn ($g) => (string) $g->group_hemis_id);
+        $curricula = $groups->pluck('curriculum_hemis_id')->filter()->unique()->values();
+        $semesters = DB::table('semesters')->whereIn('curriculum_hemis_id', $curricula)
+            ->get(['curriculum_hemis_id', 'code', 'current', 'level_code', 'level_name'])
+            ->keyBy(fn ($s) => $s->curriculum_hemis_id . '|' . $s->code);
+        $subjects = DB::table('curriculum_subjects')->whereIn('curricula_hemis_id', $curricula)
+            ->whereIn('subject_id', $deans->pluck('subject_id')->unique()->values())
+            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name', 'department_id'])
+            ->keyBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code);
+        $educationTypes = DB::table('curricula')->whereIn('curricula_hemis_id', $curricula)->pluck('education_type_code', 'curricula_hemis_id');
+        $faculties = Department::whereIn('department_hemis_id', $groups->pluck('department_hemis_id')->unique()->values())->pluck('name', 'department_hemis_id');
+        $specialties = \App\Models\Specialty::whereIn('specialty_hemis_id', $groups->pluck('specialty_hemis_id')->unique()->values())->pluck('name', 'specialty_hemis_id');
+
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        $allowedFaculties = $dekanFacultyIds ? Department::whereIn('id', $dekanFacultyIds)->pluck('department_hemis_id')->map(fn ($v) => (string) $v)->all() : null;
+        $facultyFilter = $request->filled('faculty_id') ? (string) Department::find($request->faculty_id)?->department_hemis_id : null;
+        $currentOnly = $request->input('current_semester', '1') == '1';
+        $groupIds = array_map('strval', (array) $request->input('group_ids', []));
+        $subjectIds = array_map('strval', (array) $request->input('subject_ids', []));
+
+        $rows = $deans->map(function ($c) use ($groups, $semesters, $subjects, $educationTypes) {
+            $g = $groups->get((string) $c->group_hemis_id);
+            if (!$g) {
+                return null;
+            }
+
+            return (object) [
+                'confirmation' => $c,
+                'group' => $g,
+                'semester' => $semesters->get($g->curriculum_hemis_id . '|' . $c->semester_code),
+                'subject' => $subjects->get($g->curriculum_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code),
+                'education_type' => (string) ($educationTypes[$g->curriculum_hemis_id] ?? ''),
+            ];
+        })->filter()->filter(function ($r) use ($request, $allowedFaculties, $facultyFilter, $currentOnly, $groupIds, $subjectIds) {
+            $g = $r->group;
+            $c = $r->confirmation;
+
+            return (!$request->filled('education_type') || $r->education_type === (string) $request->education_type)
+                && ($allowedFaculties === null || in_array((string) $g->department_hemis_id, $allowedFaculties, true))
+                && ($facultyFilter === null || (string) $g->department_hemis_id === $facultyFilter)
+                && (!$request->filled('specialty_id') || (string) $g->specialty_hemis_id === (string) $request->specialty_id)
+                && (!$request->filled('level_code') || (string) ($r->semester->level_code ?? '') === (string) $request->level_code)
+                && (!$request->filled('semester_code') || (string) $c->semester_code === (string) $request->semester_code)
+                && (!$request->filled('department_id') || (string) ($r->subject->department_id ?? '') === (string) $request->department_id)
+                && (!$currentOnly || !empty($r->semester?->current))
+                && (!$groupIds || in_array((string) $g->id, $groupIds, true))
+                && (!$subjectIds || in_array((string) $c->subject_id, $subjectIds, true));
+        });
 
         // YN sanasi (OSKI yoki test) oralig'i — qidiruvdagidek
         $from = $request->filled('yn_date_from') ? $this->parseDate($request->yn_date_from) : null;
         $to = $request->filled('yn_date_to') ? $this->parseDate($request->yn_date_to) : null;
-        if ($from || $to) {
-            $query->whereExists(function ($sub) use ($from, $to) {
-                $sub->select(DB::raw(1))->from('exam_schedules as es')
-                    ->whereNull('es.student_hemis_id')
-                    ->whereColumn('es.group_hemis_id', 'g.group_hemis_id')
-                    ->whereColumn('es.subject_id', 'cs.subject_id')
-                    ->whereColumn('es.semester_code', 'cs.semester_code')
-                    ->where(function ($w) use ($from, $to) {
-                        foreach (['es.oski_date', 'es.test_date'] as $col) {
-                            $w->orWhere(fn ($d) => $d->whereNotNull($col)
-                                ->when($from, fn ($q) => $q->whereDate($col, '>=', $from))
-                                ->when($to, fn ($q) => $q->whereDate($col, '<=', $to)));
-                        }
-                    });
-            });
+        if (($from || $to) && $rows->isNotEmpty()) {
+            $exams = DB::table('exam_schedules')
+                ->whereNull('student_hemis_id')
+                ->whereIn('group_hemis_id', $rows->map(fn ($r) => (string) $r->confirmation->group_hemis_id)->unique()->values())
+                ->whereIn('subject_id', $rows->map(fn ($r) => (string) $r->confirmation->subject_id)->unique()->values())
+                ->get(['group_hemis_id', 'subject_id', 'semester_code', 'oski_date', 'test_date'])
+                ->keyBy($key);
+            $inRange = fn ($d) => $d && (!$from || substr($d, 0, 10) >= $from) && (!$to || substr($d, 0, 10) <= $to);
+            $rows = $rows->filter(fn ($r) => ($e = $exams->get($key($r->confirmation))) && ($inRange($e->oski_date) || $inRange($e->test_date)));
         }
 
-        $rows = $query
-            ->select('g.group_hemis_id', 'g.name as group_name', 'dep.name as faculty_name', 'sp.name as specialty_name',
-                     's.level_name', 'cs.subject_id', 'cs.subject_name', 'cs.semester_code', 'cs.semester_name',
-                     'yc.teacher_name as dean_name', 'yc.confirmed_at as dean_at')
-            ->distinct()
-            ->orderByDesc('yc.confirmed_at')
-            ->limit($limit + 1)
-            ->get();
         $more = $rows->count() > $limit;
-        $rows = $rows->take($limit);
+        $rows = $rows->take($limit)->values();
 
         // Amaliy o'qituvchi(lar) — shu qaydnomalar bo'yicha
-        $teachers = \App\Models\YnQaydnomaConfirmation::where('role', \App\Models\YnQaydnomaConfirmation::ROLE_TEACHER)
-            ->whereIn('group_hemis_id', $rows->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->values())
-            ->whereIn('subject_id', $rows->pluck('subject_id')->map(fn ($v) => (string) $v)->unique()->values())
+        $teachers = $Confirmation::where('role', $Confirmation::ROLE_TEACHER)
+            ->whereIn('group_hemis_id', $rows->map(fn ($r) => (string) $r->confirmation->group_hemis_id)->unique()->values())
+            ->whereIn('subject_id', $rows->map(fn ($r) => (string) $r->confirmation->subject_id)->unique()->values())
             ->get(['group_hemis_id', 'subject_id', 'semester_code', 'teacher_id', 'teacher_name'])
-            ->groupBy(fn ($c) => $c->group_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code);
+            ->groupBy($key);
 
-        $items = $rows->unique(fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code)->map(function ($r) use ($teachers) {
-            $params = ['subject_id' => $r->subject_id, 'semester_code' => $r->semester_code, 'group_hemis_id' => $r->group_hemis_id];
+        $items = $rows->map(function ($r) use ($teachers, $key, $faculties, $specialties) {
+            $c = $r->confirmation;
+            $v = $c->verification;
 
             return [
-                'faculty_name' => $r->faculty_name ?? '',
-                'specialty_name' => $r->specialty_name ?? '',
-                'level_name' => $r->level_name ?? '',
-                'group_name' => $r->group_name,
-                'subject_name' => $r->subject_name,
-                'semester_name' => $r->semester_name ?? '',
-                'teachers' => ($teachers[$r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] ?? collect())
-                    ->unique('teacher_id')->pluck('teacher_name')->values(),
-                'dean_name' => $r->dean_name,
-                'dean_at' => Carbon::parse($r->dean_at)->format('d.m.Y H:i'),
-                'pdf_url' => route('admin.vedomost-tekshirish.qaydnoma-pdf', $params),
+                'faculty_name' => $faculties[$r->group->department_hemis_id] ?? ($v->department_name ?? ''),
+                'specialty_name' => $specialties[$r->group->specialty_hemis_id] ?? '',
+                'level_name' => $r->semester->level_name ?? '',
+                'group_name' => $r->group->name,
+                'subject_name' => $r->subject->subject_name ?? ($v->subject_name ?? ''),
+                'semester_name' => $r->subject->semester_name ?? ($v->semester_name ?? ''),
+                'teachers' => ($teachers[$key($c)] ?? collect())->unique('teacher_id')->pluck('teacher_name')->values(),
+                'dean_name' => $c->teacher_name,
+                'dean_at' => $c->confirmed_at->format('d.m.Y H:i'),
+                'pdf_url' => route('admin.vedomost-tekshirish.qaydnoma-pdf', [
+                    'subject_id' => $c->subject_id, 'semester_code' => $c->semester_code, 'group_hemis_id' => $c->group_hemis_id,
+                ]),
             ];
         })->values();
 

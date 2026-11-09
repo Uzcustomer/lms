@@ -20,6 +20,11 @@ function qaydnomaSheet(): \PhpOffice\PhpSpreadsheet\Spreadsheet
     $w->setCellValue('A1', 'BAHOLASH QAYDNOMASI')->mergeCells('A1:Y1');      // butun kenglik — kutubxonada ogohlantirish
     $w->setCellValue('U10', 'IZZATULLAYEV O.Sh.');
     $w->fromArray([[1, 'ABDULLAYEV', 96.0]], null, 'A20');
+    foreach (range(2, 10) as $n) {                                             // 10 talaba: 20–29 qatorlar
+        $w->fromArray([[$n, 'TALABA ' . $n, 80.0]], null, 'A' . (19 + $n));
+    }
+    $w->setCellValue('X15', "YAN o'tkazuvchi o'qituvchi imzosi");
+    $w->getColumnDimension('X')->setWidth(28.81640625);
     $w->setCellValue('M20', '=C20/2');
     $w->setCellValue('AB1', 'Topshiriq bilan');                               // chop etish maydonidan tashqari
     $w->getPageSetup()->setPrintArea('A1:Y61');
@@ -114,9 +119,19 @@ describe('teacher confirmation', function () {
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
         $drawings = $sheet->getSheet(0)->getDrawingCollection();
-        expect($drawings)->toHaveCount(1)
-            ->and($drawings[0]->getCoordinates())->toBe('Y8')
+        // Imzo ustuni talabalar qatorlarida bitta katak; QR uning o'rtasida (10 × 20px, QR 90px:
+        // yuqori cheti 55px — 22-qatorda 15px), ustun 207px — chapdan 58px
+        expect($sheet->getSheet(0)->getMergeCells())->toHaveKey('X20:X29')
+            ->and($drawings)->toHaveCount(1)
+            ->and($drawings[0]->getCoordinates())->toBe('X22')
+            ->and([$drawings[0]->getOffsetY(), $drawings[0]->getHeight()])->toBe([15, 90])
+            ->and($drawings[0]->getOffsetX())->toBeGreaterThan(50)->toBeLessThan(65)
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
+
+        // Sahifada QR birlashtirilgan katakning (X20) o'zida, katak o'rtasida (flex markaz)
+        $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
+        expect($html)->toContain('rowspan="10"')
+            ->toMatch('/<td[^>]*rowspan="10"[^>]*><div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV[^"]*" src="data:image\/png;base64,[^"]+" style="width:90px;height:90px" \/><\/div>/');
     });
 
     it('lets the teacher revoke the confirmation, removing the QR and its verification', function () {

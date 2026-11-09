@@ -1206,6 +1206,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
                     ->name('dean-exam-reschedule.store');
             });
 
+        // Vedomostlar — amaliy o'qituvchi tasdiqlagan YN qaydnomalar (dekan — o'z fakulteti)
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|dekan'])
+            ->get('/yn-qaydnomalar', [\App\Http\Controllers\Admin\YnQaydnomaListController::class, 'index'])
+            ->name('yn-qaydnomalar.index');
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');

@@ -50,6 +50,12 @@ use PhpOffice\PhpWord\SimpleType\Jc;
 
 class JournalController extends Controller
 {
+    /** YN qaydnoma shablonida talabalar qatorlari va imzo ustuni */
+    private const YNQ_FIRST_ROW = 20;
+    private const YNQ_LAST_ROW = 49;
+    private const YNQ_SIGN_COL = 'X';
+    private const YNQ_QR_ALT = 'Tasdiq QR: ';
+
     public function index(Request $request)
     {
         // Dekan uchun fakultet cheklovi
@@ -10016,7 +10022,9 @@ class JournalController extends Controller
         $groupHemisId = (string) $request->group_hemis_id;
 
         $isPrivileged = is_active_registrator() || (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
-        if (!$isPrivileged) {
+        // Dekan — o'z fakulteti guruhlari qaydnomasini ko'radi va yuklab oladi (tasdiqlamaydi)
+        $isDean = !$isPrivileged && is_active_dekan() && self::deanSeesGroup($groupHemisId);
+        if (!$isPrivileged && !$isDean) {
             $ynSubmitted = YnSubmission::where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->where('group_hemis_id', $groupHemisId)
@@ -10042,7 +10050,7 @@ class JournalController extends Controller
         // Tugmalar: amaliy o'qituvchi — "Tasdiqlash" (yoki tasdiqlangani); admin — kimlar tasdiqlagani
         $confirmations = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')
             ? \App\Models\YnQaydnomaConfirmation::latestFor($subjectId, $semesterCode, $groupHemisId) : collect();
-        $teacher = $isPrivileged ? null : $this->currentTeacher();
+        $teacher = $isPrivileged || $isDean ? null : $this->currentTeacher();
         $mine = $teacher ? $confirmations->firstWhere('teacher_id', $teacher->id) : null;
         if ($teacher && !$mine) {
             $actions = '<form method="POST" action="' . e(route('admin.journal.confirm-yn-qaydnoma')) . '"'
@@ -10066,6 +10074,13 @@ class JournalController extends Controller
                 }
                 $actions .= '<button type="submit" class="ynq-revoke">Tasdiqni qaytarish</button></form>';
             }
+        }
+        if ($isPrivileged || $isDean) {
+            $actions .= '<form method="POST" action="' . e(route('admin.journal.export-yn-qaydnoma')) . '">' . csrf_field();
+            foreach ($request->only(['subject_id', 'semester_code', 'group_hemis_id', 'weight_jn', 'weight_mt', 'weight_on', 'weight_oski', 'weight_test', 'shakl']) as $k => $v) {
+                $actions .= '<input type="hidden" name="' . e($k) . '" value="' . e($v) . '">';
+            }
+            $actions .= '<button type="submit">Excel yuklab olish</button></form>';
         }
         if ($flash = session('ynq_flash')) {
             $actions = '<span class="ynq-note">' . e($flash) . '</span>' . $actions;
@@ -10244,6 +10259,14 @@ class JournalController extends Controller
         // o'lchamini o'zgartirmaydi va matn qo'shni katakka chiqadi — gorizontal, qatorlarga bo'lib
         $html = str_replace(['transform:rotate(90deg);', 'transform:rotate(-90deg);'], 'white-space:normal; word-break:break-word;', $html);
 
+        // Tasdiq QR lari sahifada imzo katagining aniq o'rtasida (brauzerda qator balandligi
+        // Excel'dagidan farq qiladi — offset emas, flex bilan)
+        $html = preg_replace_callback('/(?:\s*<img alt="' . preg_quote(self::YNQ_QR_ALT, '/') . '[^>]*\/>)+/u', function ($m) {
+            $imgs = preg_replace_callback('/style="[^"]*?width:(\d+)px[^"]*"/', fn ($s) => 'style="width:' . $s[1] . 'px;height:' . $s[1] . 'px"', $m[0]);
+
+            return '<div class="ynq-qr">' . trim($imgs) . '</div>';
+        }, $html);
+
         $title = e($title);
         $bar = '<div class="ynq-bar"><b>' . $title . '</b><div class="ynq-actions">' . $actions
             . '<button type="button" onclick="window.print()">Chop etish</button></div></div>'
@@ -10253,6 +10276,7 @@ class JournalController extends Controller
             . '.ynq-bar button{padding:6px 14px;border:0;border-radius:6px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer;font-size:13px}'
             . '.ynq-bar .ynq-confirm{background:#16a34a;color:#fff}.ynq-bar .ynq-revoke{background:#fee2e2;color:#b91c1c}.ynq-bar .ynq-note{font-weight:500;font-size:12px;color:#c7d2fe}'
             . '.ynq-bar .ynq-ok{padding:4px 10px;border-radius:6px;background:#dcfce7;color:#166534;font-size:12px}'
+            . '.ynq-qr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px}'
             . '@media print{.ynq-bar{display:none}}</style>';
         $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $bar, $html, 1);
         $html = preg_replace('/<title>.*?<\/title>/is', '<title>' . $title . '</title>', $html, 1);
@@ -10300,6 +10324,19 @@ class JournalController extends Controller
                 }
             }
             foreach ($sheet->getDrawingCollection() as $drawing) {
+                // Sahifada birlashtirilgan katakning faqat birinchisi chiqadi: ichidagi rasm
+                // shu katakka ko'chiriladi, oraliq qatorlar balandligi offsetga qo'shiladi
+                [$dc, $dr] = $idx($drawing->getCoordinates());
+                foreach ($copy->getMergeCells() as $range) {
+                    [[$mc1, $mr1], [$mc2, $mr2]] = array_map($idx, explode(':', $range));
+                    if ($dc >= $mc1 && $dc <= $mc2 && $dr >= $mr1 && $dr <= $mr2 && [$dc, $dr] !== [$mc1, $mr1]) {
+                        for ($r = $mr1; $r < $dr; $r++) {
+                            $drawing->setOffsetY($drawing->getOffsetY() + self::rowPx($sheet, $r));
+                        }
+                        $drawing->setCoordinates(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($mc1) . $mr1);
+                        break;
+                    }
+                }
                 $drawing->setWorksheet($copy, true);
             }
 
@@ -10307,6 +10344,25 @@ class JournalController extends Controller
             $spreadsheet->removeSheetByIndex($spreadsheet->getIndex($sheet));
             $copy->setTitle($title);
         }
+    }
+
+    /** Faol dekan rolidagi foydalanuvchi fakultetiga tegishli guruh guruhmi */
+    public static function deanSeesGroup(string $groupHemisId): bool
+    {
+        $facultyIds = self::deanFacultyHemisIds();
+
+        return $facultyIds && Group::where('group_hemis_id', $groupHemisId)->whereIn('department_hemis_id', $facultyIds)->exists();
+    }
+
+    /** Dekan fakultetlari (departments.department_hemis_id); dekan bo'lmasa — bo'sh */
+    public static function deanFacultyHemisIds(): array
+    {
+        $teacher = auth('teacher')->user();
+        if (!is_active_dekan() || !$teacher || !method_exists($teacher, 'deanFaculties')) {
+            return [];
+        }
+
+        return $teacher->deanFaculties()->pluck('departments.department_hemis_id')->filter()->unique()->values()->all();
     }
 
     /**
@@ -11426,40 +11482,82 @@ class JournalController extends Controller
     }
 
     /**
-     * Tasdiqlagan har bir amaliy o'qituvchining unikal QR kodini (tekshirish sahifasiga havola)
-     * qaydnoma varaqlariga — o'qituvchi ismi (U10) yonidagi Y ustuniga — bosadi.
+     * "YAN o'tkazuvchi o'qituvchi imzosi" ustuni (X): talabalar qatorlari bitta katakka
+     * birlashtiriladi (ichki chiziqlar yo'q) va o'qituvchi tasdiqlagan bo'lsa, unikal QR
+     * kodlari shu katakning o'rtasiga bosiladi — Excelda ham, sahifada ham.
      */
     private static function stampConfirmationQrs(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $subjectId, string $semesterCode, string $groupHemisId): void
     {
-        if (!\Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')) {
-            return;
-        }
-        $confirmations = \App\Models\YnQaydnomaConfirmation::latestFor($subjectId, $semesterCode, $groupHemisId)
-            ->filter(fn ($c) => $c->verification)
-            ->take(2)
-            ->values();
-        if ($confirmations->isEmpty()) {
-            return;
-        }
+        $confirmations = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')
+            ? \App\Models\YnQaydnomaConfirmation::latestFor($subjectId, $semesterCode, $groupHemisId)
+                ->filter(fn ($c) => $c->verification)->take(2)->values()
+            : collect();
 
         foreach ($spreadsheet->getAllSheets() as $sheet) {
             // Faqat qaydnoma shakllari (chop etish maydoni bor), tarix varag'i emas
             if (!$sheet->getPageSetup()->getPrintArea()) {
                 continue;
             }
+            $first = self::YNQ_FIRST_ROW;
+            $last = $first - 1;
+            while ($last < self::YNQ_LAST_ROW && trim((string) $sheet->getCell('B' . ($last + 1))->getValue()) !== '') {
+                $last++;
+            }
+            if ($last < $first) {
+                continue;
+            }
+            if ($last > $first) {
+                $sheet->mergeCells(self::YNQ_SIGN_COL . $first . ':' . self::YNQ_SIGN_COL . $last);
+            }
+            if ($confirmations->isEmpty()) {
+                continue;
+            }
+
+            // Katak o'lchami (px) va QR lar bloki — markazda
+            $heights = [];
+            for ($r = $first; $r <= $last; $r++) {
+                $heights[$r] = self::rowPx($sheet, $r);
+            }
+            $width = $sheet->getColumnDimension(self::YNQ_SIGN_COL)->getWidth();
+            $colPx = \PhpOffice\PhpSpreadsheet\Shared\Drawing::cellDimensionToPixels(
+                $width < 0 ? 8.43 : $width, $spreadsheet->getDefaultStyle()->getFont());
+            $size = max(56, min(90, array_sum($heights) - 6));
+            $gap = 8;
+            $count = $confirmations->count();
+            $left = max(0, intdiv($colPx - ($count * $size + ($count - 1) * $gap), 2));
+            $top = max(0, intdiv(array_sum($heights) - $size, 2));
+
+            // Excel rasm offsetini o'z qatori ichida kutadi: QR yuqori cheti tushgan qatorga bog'lanadi
+            $row = $first;
+            while ($row < $last && $top >= $heights[$row]) {
+                $top -= $heights[$row];
+                $row++;
+            }
+
             foreach ($confirmations as $i => $c) {
                 $qr = \PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing::fromString(
                     \App\Services\QrPng::make($c->verification->getVerificationUrl(), 5, 1)
                 );
                 $qr->setName('Tasdiq QR: ' . $c->teacher_name);
-                $qr->setDescription($c->teacher_name . ' — ' . $c->confirmed_at->format('d.m.Y H:i'));
-                $qr->setCoordinates('Y8');
-                $qr->setOffsetX(6 + $i * 78);
-                $qr->setOffsetY(2);
-                $qr->setHeight(74);
+                $qr->setDescription(self::YNQ_QR_ALT . $c->teacher_name . ' — ' . $c->confirmed_at->format('d.m.Y H:i'));
+                $qr->setCoordinates(self::YNQ_SIGN_COL . $row);
+                $qr->setOffsetX($left + $i * ($size + $gap));
+                $qr->setOffsetY($top);
+                $qr->setHeight($size);
                 $qr->setWorksheet($sheet);
             }
         }
+    }
+
+    /** Qator balandligi pikselda (o'rnatilmagan — standart 15pt) */
+    private static function rowPx(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, int $row): int
+    {
+        $pt = $sheet->getRowDimension($row)->getRowHeight();
+        if ($pt < 0) {
+            $pt = $sheet->getDefaultRowDimension()->getRowHeight();
+        }
+
+        return (int) round(($pt < 0 ? 15 : $pt) * 96 / 72);
     }
 
     public function adminEditGrade(Request $request)

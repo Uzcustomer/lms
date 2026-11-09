@@ -10087,16 +10087,16 @@ class JournalController extends Controller
                 $actions .= '<form method="POST" action="' . e(route('admin.journal.confirm-yn-qaydnoma')) . '"'
                     . ' onsubmit="return confirm(\'' . e(addslashes($question)) . '\')">' . csrf_field() . $hidden
                     . ($isDean ? '' : '<span class="ynq-note">Baholarni tekshiring, hammasi to\'g\'ri bo\'lsa:</span>')
-                    . '<button type="submit" class="ynq-confirm">Tasdiqlash</button></form>';
+                    . '<button type="submit" class="ynq-confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Tasdiqlash</button></form>';
             }
         } elseif ($mine) {
             $actions .= '<form method="POST" action="' . e(route('admin.journal.revoke-yn-qaydnoma')) . '"'
                 . ' onsubmit="return confirm(\'Tasdiqni qaytarasizmi? QR kodingiz qaydnomadan olib tashlanadi.\')">'
-                . csrf_field() . $hidden . '<button type="submit" class="ynq-revoke">Tasdiqni qaytarish</button></form>';
+                . csrf_field() . $hidden . '<button type="submit" class="ynq-revoke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 015 5v2M3 10l5-5M3 10l5 5"/></svg>Tasdiqni qaytarish</button></form>';
         }
         if ($isPrivileged || $isDean) {
             $actions .= '<form method="POST" action="' . e(route('admin.journal.export-yn-qaydnoma')) . '">' . csrf_field() . $hidden
-                . '<button type="submit">Excel yuklab olish</button></form>';
+                . '<button type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel yuklab olish</button></form>';
         }
         if ($flash = session('ynq_flash')) {
             $actions = '<span class="ynq-note">' . e($flash) . '</span>' . $actions;
@@ -10283,17 +10283,31 @@ class JournalController extends Controller
             $m[0]
         ), $html);
 
+        // Tepada — nom; tugmalar va holatlar — pastki o'ng burchakda (doim ko'rinadi)
         $title = e($title);
-        $bar = '<div class="ynq-bar"><b>' . $title . '</b><div class="ynq-actions">' . $actions
-            . '<button type="button" onclick="window.print()">Chop etish</button></div></div>'
-            . '<style>.ynq-bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;'
-            . 'padding:10px 16px;margin:-8px -8px 12px;background:#1e3a8a;color:#fff;font:600 14px system-ui,sans-serif}'
-            . '.ynq-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.ynq-actions form{margin:0}'
-            . '.ynq-bar button{padding:6px 14px;border:0;border-radius:6px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer;font-size:13px}'
-            . '.ynq-bar .ynq-confirm{background:#16a34a;color:#fff}.ynq-bar .ynq-revoke{background:#fee2e2;color:#b91c1c}.ynq-bar .ynq-note{font-weight:500;font-size:12px;color:#c7d2fe}'
-            . '.ynq-bar .ynq-ok{padding:4px 10px;border-radius:6px;background:#dcfce7;color:#166534;font-size:12px}'
+        $bar = '<div class="ynq-bar"><b>' . $title . '</b></div>'
+            . '<div class="ynq-dock">' . $actions
+            . '<button type="button" class="ynq-print" onclick="window.print()">'
+            . '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>'
+            . 'Chop etish</button></div>'
+            . '<style>.ynq-bar{position:sticky;top:0;z-index:5;padding:14px 20px;margin:-8px -8px 12px;background:#1e3a8a;color:#fff;font:700 18px/1.3 system-ui,sans-serif;letter-spacing:.01em}'
+            . '.ynq-dock{position:fixed;right:20px;bottom:20px;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;'
+            . 'max-width:calc(100vw - 40px);padding:12px;border-radius:14px;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;'
+            . 'box-shadow:0 10px 30px rgba(15,23,42,.18);font:500 14px system-ui,sans-serif}'
+            . '.ynq-dock form{margin:0;display:flex;align-items:center;gap:10px}'
+            . '.ynq-dock button{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:10px;border:1px solid #cbd5e1;'
+            . 'background:#fff;color:#1e3a8a;font:700 15px system-ui,sans-serif;cursor:pointer;transition:background .15s,box-shadow .15s,transform .05s}'
+            . '.ynq-dock button:hover{background:#f1f5f9}.ynq-dock button:active{transform:translateY(1px)}'
+            . '.ynq-dock button:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}'
+            . '.ynq-dock button svg{width:18px;height:18px;flex-shrink:0}'
+            . '.ynq-dock .ynq-confirm{background:#16a34a;border-color:#16a34a;color:#fff;box-shadow:0 4px 12px rgba(22,163,74,.35)}'
+            . '.ynq-dock .ynq-confirm:hover{background:#15803d}'
+            . '.ynq-dock .ynq-revoke{background:#fff;border-color:#fecaca;color:#b91c1c}.ynq-dock .ynq-revoke:hover{background:#fef2f2}'
+            . '.ynq-dock .ynq-note{color:#475569;font-size:13px}'
+            . '.ynq-dock .ynq-ok{padding:6px 12px;border-radius:999px;background:#dcfce7;color:#166534;font-size:13px;font-weight:600}'
+            . 'body{padding-bottom:110px}'
             . '.ynq-qr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px}'
-            . '@media print{.ynq-bar{display:none}}</style>';
+            . '@media print{.ynq-bar,.ynq-dock{display:none}body{padding-bottom:0}}</style>';
         $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $bar, $html, 1);
         $html = preg_replace('/<title>.*?<\/title>/is', '<title>' . $title . '</title>', $html, 1);
 

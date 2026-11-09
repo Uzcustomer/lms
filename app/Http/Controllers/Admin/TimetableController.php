@@ -5027,6 +5027,8 @@ class TimetableController extends Controller
                         'mudir_ph_lec' => $block['mudir_ph_lec'] ?? null,
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
+                        // Blok oxiri (sana indeksi) — panelda sanasiz (butun blok) mudir belgisini hafta bilan solishtirish uchun.
+                        'end_index' => $block['to'] ?? null,
                         // Vaqt so'rovi tugmasi (o'qituvchi: o'z darsi; fan mas'uli: mas'ul fani).
                         'ask' => $cardType === 'practice' && !empty($g['req'][$subject . '|practice']['ask']),
                         'ask_lec' => !empty($g['req'][$subject . '|lecture']['ask']),

@@ -77,7 +77,8 @@ class YnQaydnomaListController extends Controller
 
     /**
      * YN imtihonlari tugagan guruh × fan lar (yopilish shakli talab qilgan OSKI / test sanasi
-     * bugungacha o'tgan), tasdiq holati bilan; eng so'nggi imtihon birinchi.
+     * bugungacha o'tgan) va o'qituvchi topshirgan barcha qaydnomalar (imtihoni tugamagan bo'lsa
+     * ham), tasdiq holati bilan; eng so'nggisi birinchi.
      */
     public function finishedVedomosts(?array $facultyHemisIds, bool $currentSemester = true): Collection
     {
@@ -107,14 +108,26 @@ class YnQaydnomaListController extends Controller
             ->unique(fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code)
             ->filter(fn ($r) => self::examsFinished($r, $today));
 
+        $key = fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+        $exams = $exams->keyBy($key);
+
+        // Tasdiqlar — fakultet guruhlari bo'yicha (imtihon jadvalidagi guruhlar bilan cheklanmaydi)
+        $facultyGroups = $facultyHemisIds === null ? null
+            : DB::table('groups')->whereIn('department_hemis_id', $facultyHemisIds ?: [-1])->pluck('group_hemis_id')->map(fn ($v) => (string) $v);
         $confirmations = YnQaydnomaConfirmation::with('verification')
-            ->whereIn('group_hemis_id', $exams->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->values())
+            ->when($facultyGroups !== null, fn ($q) => $q->whereIn('group_hemis_id', $facultyGroups->all() ?: ['-']))
             ->orderByDesc('confirmed_at')
             ->get()
-            ->groupBy(fn ($c) => $c->group_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code);
+            ->groupBy($key);
 
-        return $exams->map(function ($r) use ($confirmations) {
-            $all = $confirmations->get($r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code, collect());
+        // O'qituvchi topshirgan qaydnoma — imtihon hali tugamagan / jadvalda yo'q bo'lsa ham ro'yxatda
+        $extraKeys = $confirmations->keys()->diff($exams->keys());
+        if ($extraKeys->isNotEmpty()) {
+            $exams = $exams->union($this->entriesForConfirmations($extraKeys, $confirmations, $currentSemester));
+        }
+
+        return $exams->map(function ($r) use ($confirmations, $key) {
+            $all = $confirmations->get($key($r), collect());
             $teachers = $all->where('role', YnQaydnomaConfirmation::ROLE_TEACHER)->unique('teacher_id')->values();
             $dean = $teachers->isNotEmpty() ? $all->firstWhere('role', YnQaydnomaConfirmation::ROLE_DEAN) : null;
             $w = $teachers->first()->weights ?? [];
@@ -134,7 +147,7 @@ class YnQaydnomaListController extends Controller
                 'semester' => $r->semester_name ?? $r->semester_code,
                 'oski_date' => $r->oski_na ? null : $r->oski_date,
                 'test_date' => $r->test_na ? null : $r->test_date,
-                'finished_at' => max((string) $r->oski_date, (string) $r->test_date),
+                'finished_at' => max((string) $r->oski_date, (string) $r->test_date, (string) ($all->first()?->confirmed_at)),
                 'teachers' => $teachers,
                 'dean' => $dean,
                 'pending_teachers' => collect(),
@@ -146,6 +159,58 @@ class YnQaydnomaListController extends Controller
                 ],
             ];
         })->sortByDesc('finished_at')->values();
+    }
+
+    /**
+     * Tasdiqlangan, lekin imtihoni tugaganlar ro'yxatida yo'q qaydnomalar uchun qator ma'lumoti
+     * (guruh, semestr, fan nomlari — jadvallardan, bo'lmasa tasdiq yozuvidan). Joriy semestr
+     * filtri semestr yozuvi bo'lsagina qo'llanadi.
+     */
+    private function entriesForConfirmations(Collection $keys, Collection $confirmations, bool $currentSemester): Collection
+    {
+        $first = $keys->mapWithKeys(fn ($k) => [$k => $confirmations[$k]->first()]);
+        $groups = DB::table('groups as g')
+            ->leftJoin('departments as dep', 'dep.department_hemis_id', '=', 'g.department_hemis_id')
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+            ->whereIn('g.group_hemis_id', $first->pluck('group_hemis_id')->unique()->values())
+            ->get(['g.group_hemis_id', 'g.name', 'g.curriculum_hemis_id', 'g.department_hemis_id', 'g.specialty_hemis_id', 'dep.name as faculty_name', 'sp.name as specialty_name'])
+            ->keyBy(fn ($g) => (string) $g->group_hemis_id);
+        $curricula = $groups->pluck('curriculum_hemis_id')->filter()->unique()->values();
+        $semesters = DB::table('semesters')->whereIn('curriculum_hemis_id', $curricula)
+            ->get(['curriculum_hemis_id', 'code', 'current', 'level_code', 'level_name'])
+            ->keyBy(fn ($s) => $s->curriculum_hemis_id . '|' . $s->code);
+        $subjects = DB::table('curriculum_subjects')->whereIn('curricula_hemis_id', $curricula)
+            ->whereIn('subject_id', $first->pluck('subject_id')->unique()->values())
+            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name'])
+            ->keyBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code);
+        $exams = DB::table('exam_schedules')->whereNull('student_hemis_id')
+            ->whereIn('group_hemis_id', $first->pluck('group_hemis_id')->unique()->values())
+            ->whereIn('subject_id', $first->pluck('subject_id')->unique()->values())
+            ->get(['group_hemis_id', 'subject_id', 'semester_code', 'oski_date', 'test_date', 'oski_na', 'test_na'])
+            ->keyBy(fn ($e) => $e->group_hemis_id . '|' . $e->subject_id . '|' . $e->semester_code);
+
+        return $first->map(function ($c, $k) use ($groups, $semesters, $subjects, $exams) {
+            $g = $groups->get((string) $c->group_hemis_id);
+            if (!$g) {
+                return null;
+            }
+            $sem = $semesters->get($g->curriculum_hemis_id . '|' . $c->semester_code);
+            $subject = $subjects->get($g->curriculum_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code);
+            $exam = $exams->get($k);
+
+            return (object) [
+                'group_hemis_id' => $c->group_hemis_id, 'subject_id' => $c->subject_id, 'semester_code' => $c->semester_code,
+                'oski_date' => $exam->oski_date ?? null, 'test_date' => $exam->test_date ?? null,
+                'oski_na' => $exam->oski_na ?? false, 'test_na' => $exam->test_na ?? false,
+                'exam_subject_name' => $c->verification->subject_name ?? ('Fan #' . $c->subject_id),
+                'subject_name' => $subject->subject_name ?? null,
+                'semester_name' => $subject->semester_name ?? ($c->verification->semester_name ?? null),
+                'group_name' => $g->name, 'department_hemis_id' => $g->department_hemis_id, 'specialty_hemis_id' => $g->specialty_hemis_id,
+                'faculty_name' => $g->faculty_name, 'specialty_name' => $g->specialty_name,
+                'level_code' => $sem->level_code ?? '', 'level_name' => $sem->level_name ?? '',
+                'current' => $sem ? (bool) $sem->current : true,
+            ];
+        })->filter(fn ($r) => $r && (!$currentSemester || $r->current));
     }
 
     /**

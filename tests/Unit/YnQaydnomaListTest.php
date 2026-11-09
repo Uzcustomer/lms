@@ -104,6 +104,23 @@ it('shows the registrar every faculty, with PDF for dean-confirmed ones', functi
     expect(($this->page)()['isDean'])->toBeFalse();
 });
 
+it('lists a submitted vedomost even before its exams finish or when it has no exam schedule', function () {
+    foreach ([['77', '30'], ['78', '41']] as [$group, $subject]) {
+        $v = DB::table('document_verifications')->insertGetId(['token' => str_repeat($subject, 24)]);
+        DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => $subject, 'semester_code' => '19', 'group_hemis_id' => $group,
+            'teacher_id' => 3, 'teacher_name' => 'TOSHEV B.', 'role' => 'oqituvchi', 'document_verification_id' => $v,
+            'weights' => json_encode(['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 0, 'test' => 60]), 'confirmed_at' => now()]);
+    }
+    // Boshqa fakultet guruhidagi tasdiq dekanga chiqmaydi
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '30', 'semester_code' => '19', 'group_hemis_id' => '88',
+        'teacher_id' => 4, 'teacher_name' => 'BOSHQA', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);
+
+    $rows = collect(($this->page)(['status' => 'teacher'])['rows']->items());
+    expect($rows->map(fn ($r) => $r->group . ' ' . $r->subject)->sort()->values()->all())->toBe(['d1/d22-01a Pediatriya', 'd1/d22-02a Fan #41'])
+        ->and($rows->firstWhere('subject_id', '30')->test_date)->toBe('2026-11-12')
+        ->and($rows->firstWhere('subject_id', '41')->level_name)->toBe('5-kurs');
+});
+
 it('filters by status and group', function () {
     expect(collect(($this->page)(['status' => 'none'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-02a'])
         ->and(collect(($this->page)(['group' => '77'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-01a']);

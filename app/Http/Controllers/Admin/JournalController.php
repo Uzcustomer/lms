@@ -10540,7 +10540,9 @@ class JournalController extends Controller
                 . "table.sheet{$i} td{border-width:.25pt !important;padding-left:3.5pt !important;padding-right:3.5pt !important}"
                 // Ism-familiya ustuni (B) — yonlarida kengroq
                 . "table.sheet{$i} td.column1{padding-left:6pt !important;padding-right:6pt !important}"
-                . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}';
+                . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}'
+                // "Fakultet dekani … imzo" qatori (60) ustidagi bo'sh qator (59) — imzolar hisob jadvalchasiga yopishmasin
+                . "table.sheet{$i} tr.row58 td{height:14pt}";
         }
         $fontDir = str_replace('\\', '/', resource_path('fonts/liberation'));
         foreach (['normal normal' => 'Regular', 'bold normal' => 'Bold', 'normal italic' => 'Italic', 'bold italic' => 'BoldItalic'] as $style => $file) {

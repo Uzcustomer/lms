@@ -168,7 +168,14 @@ describe('teacher confirmation', function () {
             ->toMatch('/<td[^>]*rowspan="10"[^>]*><div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV[^"]*" src="data:image\/png;base64,[^"]+" style="width:90px;height:90px" \/><\/div>/');
     });
 
-    it('lets the teacher revoke the confirmation, removing the QR and its verification', function () {
+    it('does not let the teacher revoke their own confirmation', function () {
+        ($this->confirm)(1);
+        expect(fn () => ($this->confirm)(1, 'revoke'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
+    });
+
+    it('lets a superadmin acting as the teacher revoke the confirmation, removing the QR and its verification', function () {
+        session(['impersonating' => true]);
         ($this->confirm)(1);
         $c = \App\Models\YnQaydnomaConfirmation::sole();
         $path = $c->verification->document_path;
@@ -215,7 +222,8 @@ describe('teacher confirmation', function () {
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
         expect($html)->toMatch('/<img alt="Dekan QR: SAGIRAYEV[^"]*" src="[^"]+" style="position:absolute;left:50%;top:50%;[^"]*" \/>/');
 
-        // O'qituvchi tasdig'ini qaytarsa — dekan tasdig'i ham bekor
+        // O'qituvchi tasdig'i qaytarilsa (superadmin sinov rejimi) — dekan tasdig'i ham bekor
+        session(['impersonating' => true]);
         ($this->confirm)(1, 'revoke');
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
             ->and(\App\Models\DocumentVerification::count())->toBe(0);

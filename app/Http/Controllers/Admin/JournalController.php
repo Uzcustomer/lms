@@ -1870,6 +1870,15 @@ class JournalController extends Controller
         }
         // Amaliy o'qituvchi: YN yuborilgandan keyin "YN qaydnoma yaratish" — sahifada ko'radi
         $isAmaliyTeacher = $canSubmitYn && $this->isAmaliyTeacherFor((string) $subjectId, (string) $group->group_hemis_id);
+        // O'zi tasdiqlagan qaydnoma qayta yaratilmaydi — dekan rad etsa (tasdiq o'chadi) yana ochiladi
+        $myYnConfirmation = null;
+        if ($isAmaliyTeacher && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations') && ($me = $this->currentTeacher())) {
+            $myYnConfirmation = \App\Models\YnQaydnomaConfirmation::forVedomost((string) $subjectId, (string) $semesterCode, (string) $group->group_hemis_id)
+                ->where('role', \App\Models\YnQaydnomaConfirmation::ROLE_TEACHER)
+                ->where('teacher_id', $me->id)
+                ->latest('confirmed_at')
+                ->first();
+        }
 
         // Dars jadvaldagi barcha darslar tugaganmi tekshirish
         $allLessonsCompleted = true;
@@ -2583,6 +2592,7 @@ class JournalController extends Controller
             'examSchedule',
             'canSubmitYn',
             'isAmaliyTeacher',
+            'myYnConfirmation',
             'allLessonsCompleted',
             'remainingLessonsCount',
             'lastLessonDate',
@@ -10106,7 +10116,7 @@ class JournalController extends Controller
                 $actions = '<span class="ynq-rejected">Dekan rad etgan (' . e($rejection->dean_name) . ', '
                     . $rejection->rejected_at->format('d.m.Y H:i') . '): «' . e($rejection->reason) . '». Ko\'rib chiqib, qayta tasdiqlang.</span>' . $actions;
             }
-        } elseif ($mine) {
+        } elseif ($mine && ($isDean || session('impersonating'))) {
             $actions .= '<form method="POST" action="' . e(route('admin.journal.revoke-yn-qaydnoma')) . '"'
                 . ' onsubmit="return confirm(\'Tasdiqni qaytarasizmi? QR kodingiz qaydnomadan olib tashlanadi.\')">'
                 . csrf_field() . $hidden . '<button type="submit" class="ynq-revoke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 015 5v2M3 10l5-5M3 10l5 5"/></svg>Tasdiqni qaytarish</button></form>';
@@ -10258,6 +10268,10 @@ class JournalController extends Controller
         abort_unless($teacher, 403);
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
         $role = is_active_dekan() ? $Confirmation::ROLE_DEAN : $Confirmation::ROLE_TEACHER;
+        // O'qituvchi o'z tasdig'ini qaytarmaydi (qaydnoma qayta yaratilmaydi) — faqat dekan rad etsa ochiladi;
+        // superadmin o'qituvchi sifatida kirgan bo'lsa (sinov) — mumkin
+        abort_if($role === $Confirmation::ROLE_TEACHER && !session('impersonating'), 403,
+            "Tasdiqlangan qaydnoma qaytarilmaydi — faqat dekan rad etsa qayta topshiriladi.");
 
         $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId);
         $mine = $vedomost()->where('teacher_id', $teacher->id)->where('role', $role)->get();
@@ -10521,7 +10535,7 @@ class JournalController extends Controller
         // (dompdf tr balandligini emas, td nikini hisobga oladi)
         $borders = '';
         for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
-            $borders .= "table.sheet{$i} td{border-width:.5pt !important}"
+            $borders .= "table.sheet{$i}{margin-left:auto;margin-right:auto}table.sheet{$i} td{border-width:.5pt !important}"
                 . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}';
         }
         $fontDir = str_replace('\\', '/', resource_path('fonts/liberation'));

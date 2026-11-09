@@ -3225,8 +3225,20 @@
                                 </button>
                             @endif
 
-                            {{-- Admin/registrator — Excel; amaliy o'qituvchi — qaydnoma sahifada ochiladi --}}
-                            @if(is_active_registrator() || auth()->user()?->hasAnyRole(['admin', 'superadmin']) || ($isAmaliyTeacher ?? false))
+                            {{-- Admin/registrator — Excel; amaliy o'qituvchi — qaydnoma sahifada ochiladi.
+                                 O'qituvchi tasdiqlagan bo'lsa — qayta yaratilmaydi (dekan rad etsa yana ochiladi) --}}
+                            @php $ynqPrivileged = is_active_registrator() || auth()->user()?->hasAnyRole(['admin', 'superadmin']); @endphp
+                            @if(!$ynqPrivileged && ($isAmaliyTeacher ?? false) && ($myYnConfirmation ?? null))
+                                @php $ynqW = $myYnConfirmation->weights ?? []; @endphp
+                                <span class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold"
+                                      style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;"
+                                      title="Qaydnomani {{ $myYnConfirmation->confirmed_at->format('d.m.Y H:i') }} da tasdiqlagansiz. Dekan rad etsa qayta yaratish ochiladi.">
+                                    ✓ Qaydnoma allaqachon yaratilgan
+                                    <a href="{{ route('admin.journal.view-yn-qaydnoma', ['subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $group->group_hemis_id,
+                                        'weight_jn' => $ynqW['jn'] ?? 30, 'weight_mt' => $ynqW['mt'] ?? 10, 'weight_on' => $ynqW['on'] ?? 0, 'weight_oski' => $ynqW['oski'] ?? 0, 'weight_test' => $ynqW['test'] ?? 60]) }}"
+                                       target="_blank" rel="noopener" style="color:#166534;text-decoration:underline;">ko'rish</a>
+                                </span>
+                            @elseif($ynqPrivileged || ($isAmaliyTeacher ?? false))
                                 <button type="button" id="btn-export-yn-qaydnoma"
                                     class="relative px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
                                     onclick="openYnWeightsModal()"

@@ -10499,8 +10499,9 @@ class JournalController extends Controller
             ), $html)
         );
         $html = self::sheetsHtml($spreadsheet, false);
-        // Kirill/lotin maxsus belgilar (‘ ʼ) — DejaVu shriftida bor
-        $html = preg_replace("/font-family:[^;}\"]+/", "font-family:'DejaVu Serif'", $html);
+        // Asl qaydnomadagidek Times New Roman o'lchamidagi shrift (Liberation Serif, SIL OFL —
+        // resources/fonts/liberation), o'zbek belgilari (ʻ ʼ ‘ №) bilan
+        $html = preg_replace("/font-family:[^;}\"]+/", "font-family:'Liberation Serif'", $html);
         // Har varaq yangi sahifadan — writer o'zi qo'yadi (div + div); uning @page qoidalari o'rniga o'zimizniki
         $html = preg_replace('/@page[^{]*\{[^}]*\}/', '', $html);
         // QR lar: dompdf flex/absolute'ni bilmaydi — katakda o'rtada, oddiy rasm
@@ -10512,16 +10513,18 @@ class JournalController extends Controller
             $html
         );
         $html = $scale($html, $fit($pageW, $pageH));
-        // Chiziqlar faqat talabalar jadvalida (15–50-qatorlar) va ingichka; qolgan joyda chiziq yo'q,
-        // yozuvlar joyida. Excel to'r chiziqlari (gridlines) olib tashlanadi
+        // Excel to'r chiziqlari (gridlines) olib tashlanadi — faqat shablonning o'z chiziqlari
+        // (jadval, ism / imzo ostidagi chiziqlar, pastki abc–% jadvalchalari), hammasi ingichka
         $html = str_replace(" gridlines'", "'", $html);
-        [$tableFrom, $tableTo] = self::YNQ_TABLE_ROWS;
-        $borders = '';
-        for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
-            for ($row = 1; $row <= 61; $row++) {
-                $borders .= "table.sheet{$i} tr.row" . ($row - 1) . ' td{'
-                    . ($row >= $tableFrom && $row <= $tableTo ? 'border-width:.5pt !important' : 'border:none !important') . '}';
-            }
+        $borders = 'td{border-width:.5pt !important}';
+        $fontDir = str_replace('\\', '/', resource_path('fonts/liberation'));
+        foreach (['normal normal' => 'Regular', 'bold normal' => 'Bold', 'normal italic' => 'Italic', 'bold italic' => 'BoldItalic'] as $style => $file) {
+            [$weight, $fontStyle] = explode(' ', $style);
+            $borders .= "@font-face{font-family:'Liberation Serif';font-weight:{$weight};font-style:{$fontStyle};"
+                . "src:url('{$fontDir}/LiberationSerif-{$file}.ttf') format('truetype')}";
+        }
+        if (!is_dir(storage_path('fonts'))) {
+            @mkdir(storage_path('fonts'), 0755, true);   // dompdf shrift keshi
         }
         $withPage = fn (string $html) => str_replace('</head>', '<style>@page{margin:' . $margin . 'pt}body{margin:0}'
             // Qator balandligi Excel'dagidek qolsin: dompdf shrift balandligi (line-height) bilan cho'zadi
@@ -10555,6 +10558,17 @@ class JournalController extends Controller
     private static function sheetsHtml(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, bool $navigation = true): string
     {
         self::trimToPrintArea($spreadsheet);
+        // Asl qaydnomadagidek: talabasi yo'q qatorlarda "0,0" / "0%" ko'rinmaydi (raqam va uslub qoladi)
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            for ($r = self::YNQ_FIRST_ROW; $r <= self::YNQ_LAST_ROW; $r++) {
+                if (trim((string) $sheet->getCell('B' . $r)->getValue()) !== '') {
+                    continue;
+                }
+                foreach (range('C', 'Y') as $col) {
+                    $sheet->getCell($col . $r)->setValue(null);
+                }
+            }
+        }
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Html($spreadsheet);
         $writer->writeAllSheets();
@@ -10576,6 +10590,8 @@ class JournalController extends Controller
         } finally {
             restore_error_handler();
         }
+        // O'nlik ajratgich — vergul (44,0), asl qaydnomadagidek: faqat butun katak matni son bo'lsa
+        $html = preg_replace('/>(-?\d+)\.(\d+)</', '>$1,$2<', $html);
 
         // Burilgan sarlavhalar ("O'zlashtirish ko'rsatkichi", "ECTS"): HTML'da transform katak
         // o'lchamini o'zgartirmaydi va matn qo'shni katakka chiqadi — gorizontal, qatorlarga bo'lib

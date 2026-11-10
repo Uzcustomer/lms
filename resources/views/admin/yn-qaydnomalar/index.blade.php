@@ -12,8 +12,9 @@
         .yq-sub { margin: 4px 0 0; font-size: 13px; color: var(--yq-muted); max-width: 80ch; }
 
         /* Holat kartalari — bosilsa shu holat bo'yicha filtr */
-        .yq-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
-        @media (max-width: 900px) { .yq-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        .yq-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+        @media (max-width: 1100px) { .yq-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 640px) { .yq-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         .yq-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px 14px 20px; border-radius: 12px; background: #fff; border: 1px solid var(--yq-line);
             text-decoration: none !important; color: inherit !important; transition: border-color .15s, box-shadow .15s; position: relative; overflow: hidden; }
         .yq-stat::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--yq-c, #94a3b8); }
@@ -23,7 +24,7 @@
         .yq-stat-num { font-size: 26px; font-weight: 800; color: var(--yq-ink); font-variant-numeric: tabular-nums; line-height: 1.1; }
         .yq-stat-label { font-size: 12.5px; font-weight: 600; color: var(--yq-muted); }
         .yq-stat--rejected { --yq-c: #9333ea; }
-        .yq-stat--none { --yq-c: #dc2626; } .yq-stat--teacher { --yq-c: #d97706; } .yq-stat--dean { --yq-c: #16a34a; } .yq-stat--all { --yq-c: var(--yq-navy); }
+        .yq-stat--none { --yq-c: #dc2626; } .yq-stat--teacher { --yq-c: #d97706; } .yq-stat--head { --yq-c: #0284c7; } .yq-stat--dean { --yq-c: #16a34a; } .yq-stat--all { --yq-c: var(--yq-navy); }
 
         /* Filtrlar */
         .yq-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 14px 16px; margin-bottom: 16px; border-radius: 12px; background: #fff; border: 1px solid var(--yq-line); }
@@ -69,6 +70,7 @@
         .yq-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid; }
         .yq-badge--none { background: var(--yq-red-bg); color: var(--yq-red); border-color: var(--yq-red-line); }
         .yq-badge--teacher { background: var(--yq-amber-bg); color: var(--yq-amber); border-color: var(--yq-amber-line); }
+        .yq-badge--head { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
         .yq-badge--rejected { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
         .yq-reason { margin-top: 4px; padding: 6px 9px; border-radius: 8px; background: #faf5ff; border: 1px solid #e9d5ff; color: #6b21a8; font-size: 12px; max-width: 34ch; }
         .yq-btn--warn { color: #fff !important; border-color: #7e22ce; background: #7e22ce; }
@@ -85,7 +87,11 @@
     @php
         $statusUrl = fn ($s) => request()->fullUrlWithQuery(['status' => $s, 'page' => null]);
         $active = $filters['status'] ?? '';
-        $statusLabels = ['none' => 'Topshirilmagan', 'teacher' => 'Dekan tasdig\'i kutilmoqda', 'rejected' => 'Dekan rad etgan', 'dean' => 'Dekan tasdiqlagan'];
+        $statusLabels = ['none' => 'Topshirilmagan', 'teacher' => 'Kafedra tasdig\'i kutilmoqda', 'head' => 'Dekan tasdig\'i kutilmoqda',
+            'rejected' => 'Rad etilgan', 'dean' => 'Dekan tasdiqlagan'];
+        $isHead = $isHead ?? false;
+        // Shu foydalanuvchi tasdiqlashi kutilayotgan holat
+        $myTurn = $isHead ? 'teacher' : ($isDean ? 'head' : null);
         $listRoute = $isTeacher ? route('admin.yn-qaydnomalar.mine') : route('admin.yn-qaydnomalar.index');
     @endphp
 
@@ -100,10 +106,13 @@
                     <p class="yq-sub">
                         @if($isTeacher)
                             Siz amaliy mashg'ulot o'tadigan guruh va fanlar. YN yuborilgach jurnalda «YN qaydnoma yaratish» orqali qaydnomani tekshirib
-                            tasdiqlaysiz; dekan rad etsa — sababini ko'rib, qayta tasdiqlab yuborasiz.
+                            tasdiqlaysiz; kafedra mudiri yoki dekan rad etsa — sababini ko'rib, qayta tasdiqlab yuborasiz.
                         @else
-                            YN imtihonlari (OSKI / test) tugagan fanlar{{ $isDean ? ' — fakultetingiz guruhlari' : '' }}: amaliy o'qituvchi YN qaydnomani
-                            tasdiqlab topshirganmi va dekan tasdiqlaganmi.{{ $isDean ? " O'qituvchi topshirgan qaydnomani «Ko'rish» orqali ochib tasdiqlaysiz yoki rad etasiz." : '' }}
+                            YN imtihonlari (OSKI / test) tugagan fanlar{{ $isDean ? ' — fakultetingiz guruhlari' : ($isHead ? ' — kafedrangiz fanlari' : '') }}:
+                            amaliy o'qituvchi YN qaydnomani topshirganmi, kafedra mudiri va dekan tasdiqlaganmi.
+                            @if($isHead) O'qituvchi topshirgan qaydnomani «Ko'rish» orqali ochib tasdiqlaysiz yoki rad etasiz; keyin dekan tasdiqlaydi.
+                            @elseif($isDean) Kafedra mudiri tasdiqlagan qaydnomani «Ko'rish» orqali ochib tasdiqlaysiz yoki rad etasiz.
+                            @endif
                         @endif
                     </p>
                 </div>
@@ -117,10 +126,13 @@
                     <span class="yq-stat-num">{{ $counts['none'] }}</span><span class="yq-stat-label">{{ $isTeacher ? 'Topshirilmagan' : 'O\'qituvchi topshirmagan' }}</span>
                 </a>
                 <a href="{{ $statusUrl('teacher') }}" class="yq-stat yq-stat--teacher {{ $active === 'teacher' ? 'is-active' : '' }}">
-                    <span class="yq-stat-num">{{ $counts['teacher'] }}</span><span class="yq-stat-label">Topshirgan, dekan tasdig'i kutilmoqda</span>
+                    <span class="yq-stat-num">{{ $counts['teacher'] }}</span><span class="yq-stat-label">Kafedra tasdig'i kutilmoqda</span>
+                </a>
+                <a href="{{ $statusUrl('head') }}" class="yq-stat yq-stat--head {{ $active === 'head' ? 'is-active' : '' }}">
+                    <span class="yq-stat-num">{{ $counts['head'] }}</span><span class="yq-stat-label">Dekan tasdig'i kutilmoqda</span>
                 </a>
                 <a href="{{ $statusUrl('rejected') }}" class="yq-stat yq-stat--rejected {{ $active === 'rejected' ? 'is-active' : '' }}">
-                    <span class="yq-stat-num">{{ $counts['rejected'] }}</span><span class="yq-stat-label">Dekan rad etgan</span>
+                    <span class="yq-stat-num">{{ $counts['rejected'] }}</span><span class="yq-stat-label">Rad etilgan</span>
                 </a>
                 <a href="{{ $statusUrl('dean') }}" class="yq-stat yq-stat--dean {{ $active === 'dean' ? 'is-active' : '' }}">
                     <span class="yq-stat-num">{{ $counts['dean'] }}</span><span class="yq-stat-label">Dekan tasdiqlagan</span>
@@ -203,6 +215,7 @@
                                     <th>Fan</th>
                                     <th>YN sanasi</th>
                                     @unless($isTeacher)<th>Amaliy o'qituvchi</th>@endunless
+                                    <th>Kafedra mudiri</th>
                                     <th>Dekan</th>
                                     <th>Holat</th>
                                     <th style="text-align:right">Amallar</th>
@@ -238,6 +251,14 @@
                                             @endforelse
                                         </td>
                                         @endunless
+                                        <td>
+                                            @if($row->head)
+                                                <div class="yq-person"><span class="yq-dot yq-dot--ok" aria-hidden="true">✓</span>
+                                                    <span>{{ $row->head->teacher_name }}<span class="yq-small">{{ $row->head->confirmed_at->format('d.m.Y H:i') }}</span></span></div>
+                                            @else
+                                                <span class="yq-muted">—</span>
+                                            @endif
+                                        </td>
                                         <td>
                                             @if($row->dean)
                                                 <div class="yq-person"><span class="yq-dot yq-dot--ok" aria-hidden="true">✓</span>
@@ -277,7 +298,7 @@
                                                     @endif
                                                     <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">
                                                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                                        {{ $isDean && $row->status === 'teacher' ? 'Ko\'rish va tasdiqlash' : 'Ko\'rish' }}
+                                                        {{ $myTurn && $row->status === $myTurn ? 'Ko\'rish va tasdiqlash' : 'Ko\'rish' }}
                                                     </a>
                                                     <form method="POST" action="{{ route('admin.journal.export-yn-qaydnoma') }}">
                                                         @csrf

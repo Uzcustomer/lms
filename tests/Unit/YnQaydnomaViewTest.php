@@ -61,7 +61,8 @@ describe('teacher confirmation', function () {
         config()->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
         DB::purge('sqlite');
         Storage::fake('public');
-        Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(), $t->rememberToken(), $t->timestamps()]);
+        Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(),
+            $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->unsignedBigInteger('head_department_hemis_id')->nullable(), $t->rememberToken(), $t->timestamps()]);
         Schema::create('roles', fn ($t) => [$t->id(), $t->string('name'), $t->string('guard_name'), $t->timestamps()]);
         Schema::create('model_has_roles', fn ($t) => [$t->unsignedBigInteger('role_id'), $t->string('model_type'), $t->unsignedBigInteger('model_id')]);
         Schema::create('activity_logs', fn ($t) => [$t->id(), $t->timestamps()]);
@@ -73,7 +74,7 @@ describe('teacher confirmation', function () {
         Schema::create('groups', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('name'), $t->string('curriculum_hemis_id')->nullable(),
             $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->string('department_name')->nullable(), $t->string('specialty_name')->nullable()]);
         Schema::create('curriculum_subjects', fn ($t) => [$t->id(), $t->string('curricula_hemis_id')->nullable(), $t->string('subject_id'),
-            $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable()]);
+            $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('department_id')->nullable()]);
         Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->string('document_type'), $t->string('subject_name')->nullable(),
             $t->string('group_names')->nullable(), $t->string('semester_name')->nullable(), $t->string('department_name')->nullable(),
             $t->string('generated_by')->nullable(), $t->timestamp('generated_at')->nullable(), $t->string('document_path')->nullable(), $t->json('meta')->nullable(), $t->timestamps()]);
@@ -86,9 +87,11 @@ describe('teacher confirmation', function () {
         Schema::create('dean_faculties', fn ($t) => [$t->id(), $t->unsignedBigInteger('teacher_id'), $t->unsignedBigInteger('department_hemis_id'), $t->timestamps()]);
 
         DB::table('teachers')->insert([['id' => 1, 'hemis_id' => 501, 'full_name' => 'IZZATULLAYEV OYBEK'], ['id' => 2, 'hemis_id' => 502, 'full_name' => 'IKROMOVA SH'],
-            ['id' => 3, 'hemis_id' => 503, 'full_name' => 'SAGIRAYEV NURALI']]);
-        DB::table('roles')->insert(['id' => 1, 'name' => 'dekan', 'guard_name' => 'web']);
-        DB::table('model_has_roles')->insert(['role_id' => 1, 'model_type' => \App\Models\Teacher::class, 'model_id' => 3]);
+            ['id' => 3, 'hemis_id' => 503, 'full_name' => 'SAGIRAYEV NURALI'], ['id' => 4, 'hemis_id' => 504, 'full_name' => 'XURMATOVA DILNOZA AKMALOVNA']]);
+        DB::table('teachers')->where('id', 4)->update(['department_hemis_id' => 55]);   // kafedra mudiri — 55-kafedra
+        DB::table('roles')->insert([['id' => 1, 'name' => 'dekan', 'guard_name' => 'web'], ['id' => 5, 'name' => 'kafedra_mudiri', 'guard_name' => 'web']]);
+        DB::table('model_has_roles')->insert([['role_id' => 1, 'model_type' => \App\Models\Teacher::class, 'model_id' => 3],
+            ['role_id' => 5, 'model_type' => \App\Models\Teacher::class, 'model_id' => 4]]);
         DB::table('departments')->insert(['department_hemis_id' => 11, 'name' => '1-son davolash']);
         DB::table('dean_faculties')->insert(['teacher_id' => 3, 'department_hemis_id' => 11]);
         DB::table('schedules')->insert([
@@ -98,7 +101,7 @@ describe('teacher confirmation', function () {
         DB::table('yn_submissions')->insert(['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77']);
         DB::table('groups')->insert(['group_hemis_id' => '77', 'name' => 'd1/d22-01b (rus)', 'curriculum_hemis_id' => '9',
             'department_hemis_id' => 11, 'department_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi']);
-        DB::table('curriculum_subjects')->insert(['curricula_hemis_id' => '9', 'subject_id' => '435', 'semester_code' => '19', 'subject_name' => 'Pediatriya']);
+        DB::table('curriculum_subjects')->insert(['curricula_hemis_id' => '9', 'subject_id' => '435', 'semester_code' => '19', 'subject_name' => 'Pediatriya', 'department_id' => '55']);
 
         // Excel quruvchi o'rniga soxta varaq — QR bosish asl mantiq bilan (stampConfirmationQrs)
         $this->controller = new class extends JournalController {
@@ -123,7 +126,7 @@ describe('teacher confirmation', function () {
             app()->instance('request', $request);
             Auth::shouldUse('teacher');
             Auth::guard('teacher')->login(\App\Models\Teacher::find($teacherId));
-            session(['active_role' => $teacherId === 3 ? 'dekan' : 'oqituvchi']);
+            session(['active_role' => [3 => 'dekan', 4 => 'kafedra_mudiri'][$teacherId] ?? 'oqituvchi']);
 
             return match ($action) {
                 'confirm' => $this->controller->confirmYnQaydnoma($request),
@@ -133,7 +136,7 @@ describe('teacher confirmation', function () {
         };
     });
 
-    it('lets the practical teacher confirm once and stamps a unique QR next to the name', function () {
+    it('lets the practical teacher confirm once and stamps a unique QR in the bottom teachers block', function () {
         ($this->confirm)(1);
         ($this->confirm)(1);   // takroriy — yangi tasdiq yaratilmaydi
 
@@ -149,23 +152,26 @@ describe('teacher confirmation', function () {
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
         $drawings = $sheet->getSheet(0)->getDrawingCollection();
-        // Imzo ustuni talabalar qatorlarida bitta katak; QR uning o'rtasida (10 × 20px, QR 90px:
-        // yuqori cheti 55px — 22-qatorda 15px), ustun 207px — chapdan 58px
+        // Imzo ustuni talabalar qatorlarida bitta bo'sh katak; o'qituvchi QR i pastda (dekan / kafedra
+        // mudiri yozuvlari o'rnida) — 1-joy E60:H60, ostida ismi
         expect($sheet->getSheet(0)->getMergeCells())->toHaveKey('Y20:Y29')
             ->and($sheet->getSheet(0)->getStyle('Y20')->getFill()->getFillType())->toBe(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE)
             ->and($sheet->getSheet(0)->getStyle('W20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
             // Shartli formatlash imzo ustunisiz: A–W va Y
             ->and(array_keys($sheet->getSheet(0)->getConditionalStylesCollection()))->toEqualCanonicalizing(['A20:X49'])   // imzo ustuni (Y) chiqarilgan
             ->and($drawings)->toHaveCount(1)
-            ->and($drawings[0]->getCoordinates())->toBe('Y22')
-            ->and([$drawings[0]->getOffsetY(), $drawings[0]->getHeight()])->toBe([15, 90])
-            ->and($drawings[0]->getOffsetX())->toBeGreaterThan(50)->toBeLessThan(65)
+            ->and($drawings[0]->getCoordinates())->toBe('E60')
+            ->and($drawings[0]->getHeight())->toBe(56)
+            ->and($sheet->getSheet(0)->getMergeCells())->toHaveKeys(['E60:H60', 'E61:H61'])
+            ->and($sheet->getSheet(0)->getCell('E61')->getValue())->toBe('IZZATULLAYEV O.')
+            ->and($sheet->getSheet(0)->getCell('B60')->getValue())->toBe('Amaliyot o‘qituvchilari:')
+            ->and($sheet->getSheet(0)->getCell('Y20')->getValue())->toBeNull()
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
 
-        // Sahifada QR birlashtirilgan katakning (Y20) o'zida, katak o'rtasida (flex markaz)
+        // Sahifada QR o'z katagining o'rtasida (flex markaz); imzo ustuni bo'sh
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
         expect($html)->toContain('rowspan="10"')
-            ->toMatch('/<td[^>]*rowspan="10"[^>]*><div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV[^"]*" src="data:image\/png;base64,[^"]+" style="width:90px;height:90px" \/><\/div>/');
+            ->toMatch('/<div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV O\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:56px;height:56px" \/><\/div>/');
     });
 
     it('does not let the teacher revoke their own confirmation', function () {
@@ -195,34 +201,35 @@ describe('teacher confirmation', function () {
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
     });
 
-    it('lets the dean confirm after the teacher and stamps the dean QR on the signature line', function () {
-        expect(fn () => ($this->confirm)(3))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // o'qituvchidan oldin — yo'q
+    it('goes teacher → kafedra mudiri → dean and stamps their QRs in the top corners', function () {
+        expect(fn () => ($this->confirm)(4))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // o'qituvchidan oldin — yo'q
 
         ($this->confirm)(1);
+        expect(fn () => ($this->confirm)(3))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // kafedradan oldin dekan — yo'q
+        ($this->confirm)(4);
         ($this->confirm)(3);
+        $head = \App\Models\YnQaydnomaConfirmation::where('role', 'kafedra_mudiri')->sole();
         $dean = \App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->sole();
-        expect($dean->teacher_name)->toBe('SAGIRAYEV NURALI')
+        expect($head->teacher_name)->toBe('XURMATOVA DILNOZA AKMALOVNA')
+            ->and($dean->teacher_name)->toBe('SAGIRAYEV NURALI')
             ->and($dean->weights['test'])->toBe(60)                                   // o'qituvchi vaznlari
             ->and($dean->verification->meta['role'])->toBe('dekan');
-        // Ikkala QR bitta (eng so'nggi) Excel fayliga havola qiladi
+        // Hamma QR bitta (eng so'nggi) Excel fayliga havola qiladi
         $paths = \App\Models\DocumentVerification::pluck('document_path')->unique();
         expect($paths)->toHaveCount(1);
         Storage::disk('public')->assertExists($paths->first());
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
-        $deanQr = collect($sheet->getSheet(0)->getDrawingCollection())->first(fn ($d) => str_starts_with($d->getDescription(), 'Dekan QR: SAGIRAYEV'));
-        // 56px QR pastki cheti C60 chizig'idan 3px yuqorida: 58-qator (1px) + 59 + 60
-        // "Fakultet dekani" ro'parasida: imzo chizig'i va "imzo" yozuvi o'rniga ikki qatorli katak, QR o'rtada
-        expect($deanQr->getCoordinates())->toBe('C60')
-            ->and($deanQr->getHeight())->toBe(56)
-            ->and($sheet->getSheet(0)->getMergeCells())->toHaveKey('C60:C61')
-            ->and($sheet->getSheet(0)->getCell('C61')->getValue())->toBeNull()
-            ->and($sheet->getSheet(0)->getStyle('C60')->getBorders()->getBottom()->getBorderStyle())->toBe('none');
+        $find = fn ($prefix) => collect($sheet->getSheet(0)->getDrawingCollection())->first(fn ($d) => str_starts_with($d->getDescription(), $prefix));
+        // Dekan — chap yuqori, kafedra mudiri — o'ng yuqori burchak
+        expect($find('Dekan QR: SAGIRAYEV N.')->getCoordinates())->toBe('A2')
+            ->and($find('Kafedra QR: XURMATOVA D.A.')->getCoordinates())->toBe('Y2');
 
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
-        expect($html)->toMatch('/<img alt="Dekan QR: SAGIRAYEV[^"]*" src="[^"]+" style="position:absolute;left:50%;top:50%;[^"]*" \/>/');
+        expect($html)->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;left:0;[^']*'><img src='data:image\\/png;base64,[^']+'[^>]*><div[^>]*>SAGIRAYEV N\\.<br>\\(Fakultet dekani\\)/")
+            ->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;right:0;[^']*'><img[^>]*><div[^>]*>XURMATOVA D\\.A\\.<br>\\(Kafedra mudiri\\)/");
 
-        // O'qituvchi tasdig'i qaytarilsa (superadmin sinov rejimi) — dekan tasdig'i ham bekor
+        // O'qituvchi tasdig'i qaytarilsa (superadmin sinov rejimi) — kafedra va dekan tasdig'i ham bekor
         session(['impersonating' => true]);
         ($this->confirm)(1, 'revoke');
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
@@ -253,6 +260,7 @@ describe('teacher confirmation', function () {
 
     it('makes the PDF once the dean confirms and removes it when the dean revokes', function () {
         ($this->confirm)(1);
+        ($this->confirm)(4);
         expect($this->controller->generateYnQaydnomaPdf('435', '19', '77'))->toBeNull();   // dekan tasdiqlamagan
 
         ($this->confirm)(3);
@@ -267,6 +275,7 @@ describe('teacher confirmation', function () {
 
     it('lets only the superadmin delete a vedomost completely', function () {
         ($this->confirm)(1);
+        ($this->confirm)(4);
         ($this->confirm)(3);
         $pdf = $this->controller->generateYnQaydnomaPdf('435', '19', '77');
         $xlsx = \App\Models\DocumentVerification::value('document_path');
@@ -290,6 +299,18 @@ describe('teacher confirmation', function () {
             ->and(\App\Models\DocumentVerification::count())->toBe(0);
         Storage::disk('public')->assertMissing($pdf);
         Storage::disk('public')->assertMissing($xlsx);
+    });
+
+    it('lets the kafedra mudiri reject, and a dean rejection drops the kafedra confirmation too', function () {
+        ($this->confirm)(1);
+        ($this->confirm)(4, 'reject');
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
+            ->and(\App\Models\YnQaydnomaRejection::sole()->dean_name)->toBe('XURMATOVA DILNOZA AKMALOVNA');
+
+        ($this->confirm)(1);
+        ($this->confirm)(4);
+        ($this->confirm)(3, 'reject');
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0);
     });
 
     it('does not let a teacher reject', function () {

@@ -15,9 +15,9 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * "Vedomostlar": YN (OSKI / test) imtihonlari tugagan fanlar bo'yicha qaydnoma kimlar tomonidan
- * topshirilgani (amaliy o'qituvchi tasdiqlagani), dekan tasdiqlagani yoki rad etgani. Dekan —
- * faqat o'z fakulteti guruhlari; admin/superadmin/registrator — hammasi (fakultet filtri bilan),
- * dekan tasdiqlaganlari PDF da yuklab olinadi (Vedomost tekshirish).
+ * topshirilgani (amaliy o'qituvchi), kafedra mudiri va dekan tasdiqlagani yoki rad etilgani.
+ * Kafedra mudiri — faqat o'z kafedrasi fanlari; dekan — o'z fakulteti guruhlari;
+ * admin/superadmin/registrator — hammasi (fakultet filtri bilan), dekan tasdiqlaganlari PDF da.
  * "Vedomostlarim": o'qituvchining o'z guruh × fanlari.
  */
 class YnQaydnomaListController extends Controller
@@ -25,23 +25,27 @@ class YnQaydnomaListController extends Controller
     private const PER_PAGE = 30;
 
     public const STATUS_NONE = 'none';           // o'qituvchi hali tasdiqlamagan
-    public const STATUS_TEACHER = 'teacher';     // o'qituvchi tasdiqlagan, dekan kutilmoqda
+    public const STATUS_TEACHER = 'teacher';     // o'qituvchi tasdiqlagan, kafedra mudiri kutilmoqda
+    public const STATUS_HEAD = 'head';           // kafedra mudiri tasdiqlagan, dekan kutilmoqda
     public const STATUS_REJECTED = 'rejected';   // dekan rad etgan, o'qituvchi qayta topshirishi kerak
     public const STATUS_DEAN = 'dean';           // dekan ham tasdiqlagan
 
-    private const STATUSES = [self::STATUS_NONE, self::STATUS_TEACHER, self::STATUS_REJECTED, self::STATUS_DEAN];
+    private const STATUSES = [self::STATUS_NONE, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_REJECTED, self::STATUS_DEAN];
 
     public function index(Request $request)
     {
         $isDean = is_active_dekan();
+        $isHead = !$isDean && JournalController::isActiveHead();
         $current = $request->input('current', '1') === '1';
-        $rows = $this->finishedVedomosts($isDean ? JournalController::deanFacultyHemisIds() : null, $current);
+        $rows = $this->finishedVedomosts($isDean ? JournalController::deanFacultyHemisIds() : null, $current,
+            $isHead ? JournalController::headKafedraHemisIds() : null);
 
         return $this->listView($request, $rows, $current, [
             'isDean' => $isDean,
+            'isHead' => $isHead,
             'isTeacher' => false,
-            // PDF — Vedomost tekshirish yo'li (registrator, admin); dekanga emas
-            'canPdf' => !$isDean,
+            // PDF — Vedomost tekshirish yo'li (registrator, admin); dekan va kafedra mudiriga emas
+            'canPdf' => !$isDean && !$isHead,
             // Superadmin — qaydnomani butunlay o'chiradi
             'canDelete' => (auth()->user()?->hasRole('superadmin') ?? false) && !session('impersonating'),
         ]);
@@ -57,6 +61,7 @@ class YnQaydnomaListController extends Controller
 
         return $this->listView($request, $this->teacherVedomosts($teacher, $current), $current, [
             'isDean' => false,
+            'isHead' => false,
             'isTeacher' => true,
             'canPdf' => false,
             'canDelete' => false,
@@ -112,7 +117,7 @@ class YnQaydnomaListController extends Controller
      * bugungacha o'tgan) va o'qituvchi topshirgan yoki dekan rad etgan barcha qaydnomalar
      * (imtihoni tugamagan bo'lsa ham), holati bilan; eng so'nggisi birinchi.
      */
-    public function finishedVedomosts(?array $facultyHemisIds, bool $currentSemester = true): Collection
+    public function finishedVedomosts(?array $facultyHemisIds, bool $currentSemester = true, ?array $kafedraHemisIds = null): Collection
     {
         $today = Carbon::today()->toDateString();
         $key = self::keyFn();
@@ -132,9 +137,10 @@ class YnQaydnomaListController extends Controller
             ->whereNull('es.student_hemis_id')
             ->when($facultyHemisIds !== null, fn ($q) => $q->whereIn('g.department_hemis_id', $facultyHemisIds ?: [-1]))
             ->when($currentSemester, fn ($q) => $q->where('s.current', true))
+            ->when($kafedraHemisIds !== null, fn ($q) => $q->whereIn('cs.department_id', $kafedraHemisIds ?: ['-']))
             ->where(fn ($q) => $q->where('es.oski_date', '<=', $today)->orWhere('es.test_date', '<=', $today))
             ->select('es.group_hemis_id', 'es.subject_id', 'es.semester_code', 'es.oski_date', 'es.test_date', 'es.oski_na', 'es.test_na',
-                'es.subject_name as exam_subject_name', 'cs.subject_name', 'cs.semester_name', 'cs.closing_form', 'g.id as group_pk',
+                'es.subject_name as exam_subject_name', 'cs.subject_name', 'cs.semester_name', 'cs.closing_form', 'cs.department_id as kafedra_id', 'g.id as group_pk',
                 'g.name as group_name', 'g.department_hemis_id', 'g.specialty_hemis_id', 'dep.name as faculty_name',
                 'sp.name as specialty_name', 's.level_code', 's.level_name')
             ->get()
@@ -154,7 +160,10 @@ class YnQaydnomaListController extends Controller
             $exams = $exams->union($this->entries($refs));
         }
 
-        return $exams->map(fn ($r) => $this->makeRow($r, $confirmations, $rejections))->sortByDesc('finished_at')->values();
+        return $exams->map(fn ($r) => $this->makeRow($r, $confirmations, $rejections))
+            // Kafedra mudiri — faqat o'z kafedrasi fanlari
+            ->when($kafedraHemisIds !== null, fn ($c) => $c->whereIn('kafedra_id', $kafedraHemisIds))
+            ->sortByDesc('finished_at')->values();
     }
 
     /**
@@ -235,17 +244,25 @@ class YnQaydnomaListController extends Controller
         $k = self::keyFn()($r);
         $all = $confirmations->get($k, collect());
         $teachers = $all->where('role', YnQaydnomaConfirmation::ROLE_TEACHER)->unique('teacher_id')->values();
-        $dean = $teachers->isNotEmpty() ? $all->firstWhere('role', YnQaydnomaConfirmation::ROLE_DEAN) : null;
+        $head = $teachers->isNotEmpty() ? $all->firstWhere('role', YnQaydnomaConfirmation::ROLE_HEAD) : null;
+        $dean = $head ? $all->firstWhere('role', YnQaydnomaConfirmation::ROLE_DEAN) : null;
         // Rad etish — o'qituvchi hali qayta topshirmagan bo'lsa amalda
         $rejection = $teachers->isEmpty() ? $rejections->get($k) : null;
         $w = $teachers->first()->weights ?? ($rejection->weights ?? null);
-        $status = $dean ? self::STATUS_DEAN : ($teachers->isNotEmpty() ? self::STATUS_TEACHER : ($rejection ? self::STATUS_REJECTED : self::STATUS_NONE));
+        $status = match (true) {
+            (bool) $dean => self::STATUS_DEAN,
+            (bool) $head => self::STATUS_HEAD,
+            $teachers->isNotEmpty() => self::STATUS_TEACHER,
+            (bool) $rejection => self::STATUS_REJECTED,
+            default => self::STATUS_NONE,
+        };
 
         return (object) [
             'group_hemis_id' => (string) $r->group_hemis_id,
             'group_pk' => $r->group_pk ?? null,
             'group' => $r->group_name,
             'faculty_id' => (string) $r->department_hemis_id,
+            'kafedra_id' => (string) ($r->kafedra_id ?? ''),
             'faculty' => $r->faculty_name ?? '',
             'specialty_id' => (string) $r->specialty_hemis_id,
             'specialty' => $r->specialty_name ?? '',
@@ -259,6 +276,7 @@ class YnQaydnomaListController extends Controller
             'test_date' => $r->test_na ? null : $r->test_date,
             'finished_at' => max((string) $r->oski_date, (string) $r->test_date, (string) ($all->first()?->confirmed_at), (string) ($rejection?->rejected_at)),
             'teachers' => $teachers,
+            'head' => $head,
             'dean' => $dean,
             'rejection' => $rejection,
             'pending_teachers' => collect(),
@@ -294,7 +312,7 @@ class YnQaydnomaListController extends Controller
             ->keyBy(fn ($s) => $s->curriculum_hemis_id . '|' . $s->code);
         $subjects = DB::table('curriculum_subjects')->whereIn('curricula_hemis_id', $curricula)
             ->whereIn('subject_id', $subjectIds)
-            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name', 'closing_form'])
+            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name', 'closing_form', 'department_id'])
             ->keyBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code);
         $exams = DB::table('exam_schedules')->whereNull('student_hemis_id')
             ->whereIn('group_hemis_id', $groups->keys())
@@ -317,6 +335,7 @@ class YnQaydnomaListController extends Controller
                 'oski_date' => $exam->oski_date ?? null, 'test_date' => $exam->test_date ?? null,
                 'oski_na' => $exam->oski_na ?? false, 'test_na' => $exam->test_na ?? false,
                 'closing_form' => $subject->closing_form ?? null,
+                'kafedra_id' => $subject->department_id ?? null,
                 'exam_subject_name' => $exam->subject_name ?? ($c->subject_name ?? ($verification->subject_name ?? ('Fan #' . $c->subject_id))),
                 'subject_name' => $subject->subject_name ?? null,
                 'semester_name' => $subject->semester_name ?? ($verification->semester_name ?? null),

@@ -159,7 +159,7 @@
 
             @if($verification->document_type === 'yn_qaydnoma')
                 @php
-                    $ynqRole = ($verification->meta['role'] ?? 'oqituvchi') === 'dekan' ? 'Fakultet dekani' : "Amaliyot o'qituvchisi";
+                    $ynqRole = \App\Models\YnQaydnomaConfirmation::labelFor($verification->meta['role'] ?? null);
                     $ynqRows = [
                         'Hujjat turi' => 'YN baholash qaydnomasi',
                         'Tasdiqlagan' => $ynqRole,

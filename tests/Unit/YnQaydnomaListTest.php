@@ -17,7 +17,8 @@ beforeEach(function () {
     config()->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
     DB::purge('sqlite');
     \Carbon\Carbon::setTestNow('2026-11-09 10:00:00');
-    Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(), $t->rememberToken(), $t->timestamps()]);
+    Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(),
+        $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->unsignedBigInteger('head_department_hemis_id')->nullable(), $t->rememberToken(), $t->timestamps()]);
     Schema::create('roles', fn ($t) => [$t->id(), $t->string('name'), $t->string('guard_name'), $t->timestamps()]);
     Schema::create('model_has_roles', fn ($t) => [$t->unsignedBigInteger('role_id'), $t->string('model_type'), $t->unsignedBigInteger('model_id')]);
     Schema::create('departments', fn ($t) => [$t->id(), $t->unsignedBigInteger('department_hemis_id'), $t->string('name')]);
@@ -27,7 +28,8 @@ beforeEach(function () {
         $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->unsignedBigInteger('specialty_hemis_id')->nullable(), $t->string('department_name')->nullable()]);
     Schema::create('semesters', fn ($t) => [$t->id(), $t->string('curriculum_hemis_id'), $t->string('code'), $t->boolean('current'), $t->string('level_code'), $t->string('level_name')]);
     Schema::create('curriculum_subjects', fn ($t) => [$t->id(), $t->string('curricula_hemis_id')->nullable(), $t->string('subject_id'),
-        $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('closing_form')->nullable()]);
+        $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('closing_form')->nullable(),
+        $t->string('department_id')->nullable()]);
     Schema::create('exam_schedules', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('subject_id'), $t->string('semester_code'), $t->string('subject_name')->nullable(),
         $t->unsignedBigInteger('student_hemis_id')->nullable(), $t->date('oski_date')->nullable(), $t->date('test_date')->nullable(),
         $t->boolean('oski_na')->default(false), $t->boolean('test_na')->default(false)]);
@@ -54,8 +56,8 @@ beforeEach(function () {
     ]);
     DB::table('semesters')->insert(['curriculum_hemis_id' => '5', 'code' => '19', 'current' => true, 'level_code' => '15', 'level_name' => '5-kurs']);
     DB::table('curriculum_subjects')->insert([
-        ['curricula_hemis_id' => '5', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test'],
-        ['curricula_hemis_id' => '5', 'subject_id' => '30', 'semester_code' => '19', 'subject_name' => 'Pediatriya', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test'],
+        ['curricula_hemis_id' => '5', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '55'],
+        ['curricula_hemis_id' => '5', 'subject_id' => '30', 'semester_code' => '19', 'subject_name' => 'Pediatriya', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '66'],
     ]);
     DB::table('exam_schedules')->insert([
         ['group_hemis_id' => '77', 'subject_id' => '27', 'semester_code' => '19', 'oski_date' => '2026-11-03', 'test_date' => '2026-11-05'],   // tugagan, dekan tasdiqlagan
@@ -67,7 +69,7 @@ beforeEach(function () {
         ['group_id' => '78', 'subject_id' => '27', 'training_type_code' => '13', 'employee_name' => 'KARIMOV A.'],
         ['group_id' => '78', 'subject_id' => '27', 'training_type_code' => '11', 'employee_name' => "MA'RUZACHI"],
     ]);
-    foreach ([['77', 1, 'ALLAMURATOVA U.D.', 'oqituvchi'], ['77', 9, 'DEKAN', 'dekan']] as [$group, $teacher, $name, $role]) {
+    foreach ([['77', 1, 'ALLAMURATOVA U.D.', 'oqituvchi'], ['77', 6, 'MUDIR', 'kafedra_mudiri'], ['77', 9, 'DEKAN', 'dekan']] as [$group, $teacher, $name, $role]) {
         $v = DB::table('document_verifications')->insertGetId(['token' => str_repeat((string) $teacher, 48)]);
         DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => $group,
             'teacher_id' => $teacher, 'teacher_name' => $name, 'role' => $role, 'document_verification_id' => $v,
@@ -189,6 +191,26 @@ it('keeps submitted and rejected vedomosts of a past semester visible with the c
     $mine = collect((new YnQaydnomaListController())->mine(\Illuminate\Http\Request::create('/admin/vedomostlarim'))->getData()['rows']->items());
     expect($mine->map(fn ($r) => $r->group . ' ' . $r->semester_code . ' ' . $r->status)->sort()->values()->all())
         ->toBe(['d1/d22-01a 17 teacher', 'd1/d22-01a 19 dean', 'd1/d22-02a 17 rejected']);   // 19 — sozlamadagi tasdiq
+});
+
+it('shows the kafedra mudiri only their kafedra subjects, waiting ones as their turn', function () {
+    DB::table('teachers')->insert(['id' => 6, 'hemis_id' => 600, 'full_name' => 'MUDIR', 'department_hemis_id' => 55]);
+    DB::table('roles')->insert(['id' => 4, 'name' => 'kafedra_mudiri', 'guard_name' => 'web']);
+    DB::table('model_has_roles')->insert(['role_id' => 4, 'model_type' => \App\Models\Teacher::class, 'model_id' => 6]);
+    // 78-guruh: o'qituvchi topshirgan, kafedra kutilmoqda
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '78', 'teacher_id' => 2,
+        'teacher_name' => 'KARIMOV A.', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);
+    Auth::guard('teacher')->login(\App\Models\Teacher::find(6));
+    session(['active_role' => 'kafedra_mudiri']);
+
+    $data = ($this->page)();
+    $rows = collect($data['rows']->items())->keyBy('group');
+    expect($data['isHead'])->toBeTrue()
+        ->and($data['canPdf'])->toBeFalse()
+        ->and($rows->keys()->sort()->values()->all())->toBe(['d1/d22-01a', 'd1/d22-02a', 'p/22-01'])   // 55-kafedra fani — hamma fakultetda
+        ->and($rows['d1/d22-02a']->status)->toBe('teacher')
+        ->and($rows['d1/d22-01a']->status)->toBe('dean')
+        ->and($rows['d1/d22-01a']->head->teacher_name)->toBe('MUDIR');
 });
 
 it('filters by status and group', function () {

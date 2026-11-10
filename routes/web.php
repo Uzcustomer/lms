@@ -1212,7 +1212,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // Vedomostlar — YN tugagan fanlar: kim topshirgan / tasdiqlagan (dekan — o'z fakulteti;
         // registrator — Vedomost tekshirishdan, hamma fakultet, PDF bilan)
-        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|dekan|registrator_ofisi'])
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|dekan|kafedra_mudiri|registrator_ofisi'])
             ->get('/yn-qaydnomalar', [\App\Http\Controllers\Admin\YnQaydnomaListController::class, 'index'])
             ->name('yn-qaydnomalar.index');
         // O'qituvchi: "Vedomostlarim" — o'z guruh × fanlari, topshirilgan / rad etilgan / dekan tasdiqlagan

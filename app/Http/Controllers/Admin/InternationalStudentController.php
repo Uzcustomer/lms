@@ -1199,7 +1199,7 @@ class InternationalStudentController extends Controller
      */
     private function addIjrochi($section): void
     {
-        $section->addText('Ijrochi: Ş.Temirov', ['size' => 10, 'italic' => true]);
+        $section->addText('Ijroçi: Ş.Temirov', ['size' => 10, 'italic' => true]);
         $section->addText('Tel: +998995721774', ['size' => 10, 'italic' => true]);
     }
 

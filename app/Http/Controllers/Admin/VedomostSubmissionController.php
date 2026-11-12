@@ -149,15 +149,11 @@ class VedomostSubmissionController extends Controller
             ->get();
         $selectedEducationType = $this->resolveSelectedEducationType($request, $educationTypes);
 
-        // Joriy semestrda — faqat FAOL guruhlar (vedomost faol guruh uchun olinadi). «Barcha semestrlar»da
-        // bitirgan / faolsizlangan guruhlar ham: o'tgan semestr vedomostini keyin yuklash kerak bo'ladi
-        $onlyActive = $request->get('current_semester', '1') === '1';
         $query = DB::table('vedomost_submissions as vs')
-            ->join('groups as g', function ($join) use ($onlyActive) {
-                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id');
-                if ($onlyActive) {
-                    $join->where('g.active', true);
-                }
+            // MUHIM: faqat FAOL guruhlar — vedomost faol guruh uchun olinadi.
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
             })
             ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
@@ -409,13 +405,10 @@ class VedomostSubmissionController extends Controller
 
         // Yo'nalishlar — nom bo'yicha distinct (bir xil nomlilar bitta ko'rinadi).
         // Tanlangan ta'lim turi/fakultetga qarab cheklanadi.
-        $onlyActive = $request->get('current_semester', '1') === '1';
         $specialtyQuery = DB::table('vedomost_submissions as vs')
-            ->join('groups as g', function ($join) use ($onlyActive) {
-                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id');
-                if ($onlyActive) {
-                    $join->where('g.active', true);
-                }
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
             })
             ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')

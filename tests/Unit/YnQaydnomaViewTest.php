@@ -368,9 +368,23 @@ describe('teacher confirmation', function () {
         expect(\App\Services\YnqFamily::members('435', '19', '77'))->toBe(['78', '77'])
             ->and(\App\Services\YnqFamily::label('d1/d22-01a (rus)', 2))->toBe('d1/d22-01 (rus)');
 
+        Schema::table('schedules', fn ($t) => [$t->string('semester_code')->nullable(), $t->string('subject_name')->nullable(), $t->boolean('education_year_current')->default(true)]);
+        DB::table('schedules')->update(['semester_code' => '19', 'subject_name' => 'Pediatriya']);
+        expect(\App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(5)))->toBe([]);          // hali hech kim tasdiqlamagan
+
         ($this->confirm)(1);                                                   // 01b o'qituvchisi
+        // 01a o'qituvchisiga modal: 01b tasdiqladi, sizniki kutilmoqda
+        \Illuminate\Support\Facades\Cache::flush();
+        $pending = \App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(5));
+        expect($pending)->toHaveCount(1)
+            ->and($pending[0]['group'])->toBe('d1/d22-01a (rus)')
+            ->and($pending[0]['by'])->toBe(['d1/d22-01b (rus) — IZZATULLAYEV OYBEK'])
+            ->and($pending[0]['ready'])->toBeTrue()
+            ->and($pending[0]['url'])->toContain('group_hemis_id=78')
+            ->and(\App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(1)))->toBe([]);   // o'zi tasdiqlagan
         expect(fn () => ($this->confirm)(4))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // 01a hali topshirmagan
         ($this->confirm)(5, 'confirm', '78');                                  // 01a o'qituvchisi
+        expect(\App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(5)))->toBe([]);   // tasdiqlagach modal yo'q
         ($this->confirm)(4);
         ($this->confirm)(3, 'confirm', '78');
         expect(\App\Models\YnQaydnomaConfirmation::where('role', 'kafedra_mudiri')->value('group_hemis_id'))->toBe('78')   // asosiy guruh

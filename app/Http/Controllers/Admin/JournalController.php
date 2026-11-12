@@ -10239,6 +10239,7 @@ class JournalController extends Controller
             \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $chain['members'])
                 ->whereNull('resolved_at')->update(['resolved_at' => now()]);
         }
+        \App\Services\YnqPending::forget($teacher->id);
         $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId);
         \App\Services\ActivityLogService::log('confirm', 'yn_qaydnoma',
             "YN qaydnoma tasdiqlandi ({$confirmation->roleLabel()}): {$group?->name}, {$subject?->subject_name}", $confirmation);

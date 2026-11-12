@@ -45,9 +45,18 @@ class YnqPending
         return 'ynq-pending:' . $teacherId;
     }
 
-    private static function compute(Teacher $teacher): array
+    /** Tekshiruv uchun (ynq:pending buyrug'i): keshsiz, har qadam $trace ga yoziladi */
+    public static function debug(Teacher $teacher, \Closure $trace): array
     {
+        return self::compute($teacher, $trace);
+    }
+
+    private static function compute(Teacher $teacher, ?\Closure $trace = null): array
+    {
+        $trace ??= fn (string $line) => null;
         if (!Schema::hasTable('yn_qaydnoma_confirmations') || !$teacher->hemis_id) {
+            $trace("O'qituvchida hemis_id yo'q yoki jadval yo'q");
+
             return [];
         }
         // O'qituvchining joriy amaliy (ma'ruza va nazoratlardan tashqari) kichik guruh × fanlari
@@ -59,22 +68,29 @@ class YnqPending
             ->where('sc.education_year_current', true)
             ->select('sc.group_id', 'sc.subject_id', 'sc.semester_code', 'sc.subject_name', 'g.id as group_pk', 'g.name as group_name', 'g.curriculum_hemis_id')
             ->distinct()
-            ->get()
-            ->filter(fn ($r) => YnqFamily::stem($r->group_name) !== null);
+            ->get();
+        $trace("Joriy amaliy guruh × fanlar (dars jadvali): {$own->count()}");
+        $own = $own->filter(fn ($r) => YnqFamily::stem($r->group_name) !== null);
+        $trace("Shulardan kichik guruh (nomi harf bilan tugaydi): {$own->count()}");
 
         $items = [];
         foreach ($own as $r) {
             [$subjectId, $semesterCode, $groupId] = [(string) $r->subject_id, (string) $r->semester_code, (string) $r->group_id];
             $members = YnqFamily::membersFor($subjectId, $semesterCode, $groupId, $r->group_name, $r->curriculum_hemis_id);
+            $label = "{$r->group_name} ({$groupId}) · {$r->subject_name} ({$subjectId}) · semestr {$semesterCode}";
             if (count($members) < 2) {
+                $trace("{$label}: kichik guruhlar oilasi topilmadi (talabasi va bahosi bor boshqa guruh yo'q)");
                 continue;
             }
             $confirmations = YnQaydnomaConfirmation::forVedomost($subjectId, $semesterCode, $members)
                 ->where('role', YnQaydnomaConfirmation::ROLE_TEACHER)->orderBy('confirmed_at')->get();
             // Hali hech kim tasdiqlamagan yoki shu guruh tasdiqlangan — kutilmaydi
             if ($confirmations->isEmpty() || $confirmations->contains(fn ($c) => (string) $c->group_hemis_id === $groupId)) {
+                $trace("{$label}: oila [" . implode(', ', $members) . '] — ' . ($confirmations->isEmpty()
+                    ? 'hali hech kim tasdiqlamagan' : "bu guruh allaqachon tasdiqlangan"));
                 continue;
             }
+            $trace("{$label}: MODAL — tasdiqlagan guruhlar [" . $confirmations->pluck('group_hemis_id')->unique()->implode(', ') . ']');
             $names = DB::table('groups')->whereIn('group_hemis_id', $confirmations->pluck('group_hemis_id')->unique()->values())->pluck('name', 'group_hemis_id');
             $ready = Schema::hasTable('yn_submissions') && DB::table('yn_submissions')
                 ->where('subject_id', $subjectId)->where('semester_code', $semesterCode)->where('group_hemis_id', $groupId)->exists();

@@ -10576,6 +10576,7 @@ class JournalController extends Controller
             ), $html)
         );
         $html = self::sheetsHtml($spreadsheet, false);
+        $html = self::fixedColumnWidths($html);
         // Asl qaydnomadagidek Times New Roman o'lchamidagi shrift (Liberation Serif, SIL OFL —
         // resources/fonts/liberation), o'zbek belgilari (ʻ ʼ ‘ №) bilan
         $html = preg_replace("/font-family:[^;}\"]+/", "font-family:'Liberation Serif'", $html);
@@ -10665,6 +10666,41 @@ class JournalController extends Controller
         return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($withPage($html))
             ->setPaper('a4', $landscape ? 'landscape' : 'portrait')
             ->output();
+    }
+
+    /**
+     * dompdf <col> kengliklarini bilmaydi: ustunlar matnga qarab cho'ziladi (birlashtirilgan katakdagi
+     * uzun yozuv — masalan pastdagi "Guruhning o'zlashtirish ko'rsatkichi" — tor bo'sh ustunlarni ham
+     * kengaytiradi). Shu uchun jadvalning birinchi qatori — ko'rinmas o'lcham qatori: har katakda Excel
+     * ustun kengligi (dompdf ustunni shu kenglikka qotiradi; table-layout:fixed da kengliklarni e'tiborsiz
+     * qoldiradi), kengliklar <style> da — masshtab bilan kichrayadi.
+     */
+    private static function fixedColumnWidths(string $html): string
+    {
+        preg_match_all('/table\.sheet(\d+) col\.col(\d+) \{ width:(\d+(?:\.\d+)?)pt \}/', $html, $m, PREG_SET_ORDER);
+        $widths = [];
+        foreach ($m as [, $sheet, $col, $width]) {
+            $widths[(int) $sheet][(int) $col] = (float) $width;
+        }
+        if (!$widths) {
+            return $html;
+        }
+        $css = '';
+        foreach ($widths as $sheet => $cols) {
+            $css .= "table.sheet{$sheet} tr.ynq-cols td{padding:0 !important;border:0 !important;height:0 !important;font-size:0;line-height:0}";
+            foreach ($cols as $col => $width) {
+                $css .= "table.sheet{$sheet} td.ynqw{$col}{width:{$width}pt}";
+            }
+        }
+        $html = preg_replace_callback("/(<table[^>]*id='sheet(\\d+)'[^>]*>)((?:\\s*<col[^>]*>)*)/", function ($t) use ($widths) {
+            $cols = $widths[(int) $t[2]] ?? [];
+            ksort($cols);
+
+            return $t[1] . $t[3] . '<tr class="ynq-cols">'
+                . implode('', array_map(fn ($c) => "<td class=\"ynqw{$c}\"></td>", array_keys($cols))) . '</tr>';
+        }, $html);
+
+        return str_replace('</head>', '<style>' . $css . '</style></head>', $html);
     }
 
     /**

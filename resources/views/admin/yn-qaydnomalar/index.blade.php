@@ -31,7 +31,7 @@
         .yq-field { display: flex; flex-direction: column; gap: 4px; min-width: 150px; flex: 1 1 150px; }
         .yq-field--wide { flex: 2 1 220px; }
         .yq-field label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--yq-muted); }
-        .yq-field select, .yq-field input[type=search] { height: 38px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; color: var(--yq-ink); background: #fff; width: 100%; }
+        .yq-field select, .yq-field input[type=search], .yq-field input[type=date] { height: 38px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; color: var(--yq-ink); background: #fff; width: 100%; }
         .yq-field select:focus, .yq-field input:focus { outline: 2px solid #93c5fd; outline-offset: 0; border-color: #60a5fa; }
         .yq-check { display: inline-flex; align-items: center; gap: 6px; height: 38px; font-size: 13px; font-weight: 600; color: var(--yq-ink); white-space: nowrap; }
         .yq-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
@@ -140,46 +140,39 @@
                 </a>
             </div>
 
+            @php
+                // Filtr maydoni (select): nomi, yorlig'i, variantlari
+                $select = fn (string $name, string $label, $items) => ['name' => $name, 'label' => $label, 'items' => $items];
+                $selects = array_filter([
+                    $isTeacher ? null : $select('education_type', "Ta'lim turi", $options['educationTypes']),
+                    ($isDean || $isTeacher) ? null : $select('faculty', 'Fakultet', $options['faculties']),
+                    $isTeacher ? null : $select('specialty', "Yo'nalish", $options['specialties']),
+                    $isTeacher ? null : $select('level', 'Kurs', $options['levels']),
+                    $select('semester', 'Semestr', $options['semesters']),
+                    $select('group', 'Guruh', $options['groups']),
+                    $isTeacher ? null : $select('kafedra', 'Kafedra', $options['kafedras']),
+                    $select('subject', 'Fan', $options['subjects']),
+                ]);
+            @endphp
             <form method="GET" action="{{ $listRoute }}" class="yq-filters">
-                @if(!$isDean && !$isTeacher)
+                @foreach($selects as $sel)
                     <div class="yq-field">
-                        <label for="yq-faculty">Fakultet</label>
-                        <select id="yq-faculty" name="faculty">
+                        <label for="yq-{{ $sel['name'] }}">{{ $sel['label'] }}</label>
+                        <select id="yq-{{ $sel['name'] }}" name="{{ $sel['name'] }}">
                             <option value="">Barchasi</option>
-                            @foreach($options['faculties'] as $id => $name)
-                                <option value="{{ $id }}" @selected(($filters['faculty'] ?? '') == $id)>{{ $name }}</option>
+                            @foreach($sel['items'] as $id => $name)
+                                <option value="{{ $id }}" @selected(($filters[$sel['name']] ?? '') == $id)>{{ $name }}</option>
                             @endforeach
                         </select>
                     </div>
-                @endif
-                @if(!$isTeacher)
-                <div class="yq-field">
-                    <label for="yq-specialty">Yo'nalish</label>
-                    <select id="yq-specialty" name="specialty">
-                        <option value="">Barchasi</option>
-                        @foreach($options['specialties'] as $id => $name)
-                            <option value="{{ $id }}" @selected(($filters['specialty'] ?? '') == $id)>{{ $name }}</option>
-                        @endforeach
-                    </select>
+                @endforeach
+                <div class="yq-field" style="flex:0 1 160px;min-width:140px;">
+                    <label for="yq-yn-from">YN sanasi (dan)</label>
+                    <input type="date" id="yq-yn-from" name="yn_from" value="{{ $filters['yn_from'] ?? '' }}">
                 </div>
-                <div class="yq-field" style="flex:0 1 130px;min-width:120px;">
-                    <label for="yq-level">Kurs</label>
-                    <select id="yq-level" name="level">
-                        <option value="">Barchasi</option>
-                        @foreach($options['levels'] as $code => $name)
-                            <option value="{{ $code }}" @selected(($filters['level'] ?? '') == $code)>{{ $name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                @endif
-                <div class="yq-field">
-                    <label for="yq-group">Guruh</label>
-                    <select id="yq-group" name="group">
-                        <option value="">Barchasi</option>
-                        @foreach($options['groups'] as $id => $name)
-                            <option value="{{ $id }}" @selected(($filters['group'] ?? '') == $id)>{{ $name }}</option>
-                        @endforeach
-                    </select>
+                <div class="yq-field" style="flex:0 1 160px;min-width:140px;">
+                    <label for="yq-yn-to">YN sanasi (gacha)</label>
+                    <input type="date" id="yq-yn-to" name="yn_to" value="{{ $filters['yn_to'] ?? '' }}">
                 </div>
                 <div class="yq-field" style="flex:0 1 200px;">
                     <label for="yq-status">Holat</label>

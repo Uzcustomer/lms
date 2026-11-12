@@ -30,7 +30,7 @@ beforeEach(function () {
     Schema::create('semesters', fn ($t) => [$t->id(), $t->string('curriculum_hemis_id'), $t->string('code'), $t->boolean('current'), $t->string('level_code'), $t->string('level_name')]);
     Schema::create('curriculum_subjects', fn ($t) => [$t->id(), $t->string('curricula_hemis_id')->nullable(), $t->string('subject_id'),
         $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('closing_form')->nullable(),
-        $t->string('department_id')->nullable()]);
+        $t->string('department_id')->nullable(), $t->string('department_name')->nullable()]);
     Schema::create('exam_schedules', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('subject_id'), $t->string('semester_code'), $t->string('subject_name')->nullable(),
         $t->unsignedBigInteger('student_hemis_id')->nullable(), $t->date('oski_date')->nullable(), $t->date('test_date')->nullable(),
         $t->boolean('oski_na')->default(false), $t->boolean('test_na')->default(false)]);
@@ -57,8 +57,8 @@ beforeEach(function () {
     ]);
     DB::table('semesters')->insert(['curriculum_hemis_id' => '5', 'code' => '19', 'current' => true, 'level_code' => '15', 'level_name' => '5-kurs']);
     DB::table('curriculum_subjects')->insert([
-        ['curricula_hemis_id' => '5', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '55'],
-        ['curricula_hemis_id' => '5', 'subject_id' => '30', 'semester_code' => '19', 'subject_name' => 'Pediatriya', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '66'],
+        ['curricula_hemis_id' => '5', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '55', 'department_name' => 'Akusherlik kafedrasi'],
+        ['curricula_hemis_id' => '5', 'subject_id' => '30', 'semester_code' => '19', 'subject_name' => 'Pediatriya', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '66', 'department_name' => 'Pediatriya kafedrasi'],
     ]);
     DB::table('exam_schedules')->insert([
         ['group_hemis_id' => '77', 'subject_id' => '27', 'semester_code' => '19', 'oski_date' => '2026-11-03', 'test_date' => '2026-11-05'],   // tugagan, dekan tasdiqlagan
@@ -246,6 +246,21 @@ it('shows subgroups a/b as one vedomost that waits for every subgroup teacher', 
 it('filters by status and group', function () {
     expect(collect(($this->page)(['status' => 'none'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-02a'])
         ->and(collect(($this->page)(['group' => '77'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-01a']);
+});
+
+it('filters by education type, kafedra, subject and YN date, and offers only the options of the list', function () {
+    Schema::create('curricula', fn ($t) => [$t->id(), $t->string('curricula_hemis_id'), $t->string('education_type_code')->nullable(), $t->string('education_type_name')->nullable()]);
+    DB::table('curricula')->insert(['curricula_hemis_id' => '5', 'education_type_code' => '11', 'education_type_name' => 'Bakalavr']);
+    $groups = fn (array $q) => collect(($this->page)($q)['rows']->items())->pluck('group')->sort()->values()->all();
+
+    $data = ($this->page)();
+    expect($data['options']['kafedras']->all())->toBe(['55' => 'Akusherlik kafedrasi'])
+        ->and($data['options']['educationTypes']->all())->toBe(['11' => 'Bakalavr'])
+        ->and($data['options']['subjects']->all())->toBe(['27' => 'Akusherlik']);
+    expect($groups(['education_type' => '11', 'kafedra' => '55', 'subject' => '27', 'semester' => '19']))->toBe(['d1/d22-01a', 'd1/d22-02a'])
+        ->and($groups(['education_type' => '12']))->toBe([])
+        ->and($groups(['yn_from' => '2026-11-06']))->toBe(['d1/d22-02a'])            // 01a ning testi 05.11 da
+        ->and($groups(['yn_to' => '2026-11-05', 'status' => 'dean']))->toBe(['d1/d22-01a']);
 });
 
 it('decides finished exams by the closing form', function () {

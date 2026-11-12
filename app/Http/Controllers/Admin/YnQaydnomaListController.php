@@ -73,19 +73,41 @@ class YnQaydnomaListController extends Controller
 
     private function listView(Request $request, Collection $rows, bool $current, array $context)
     {
+        // Ta'lim turi — o'quv rejadan
+        $types = Schema::hasTable('curricula')
+            ? DB::table('curricula')->whereIn('curricula_hemis_id', $rows->pluck('curriculum_hemis_id')->filter()->unique()->values())
+                ->get(['curricula_hemis_id', 'education_type_code', 'education_type_name'])->keyBy('curricula_hemis_id')
+            : collect();
+        foreach ($rows as $r) {
+            $type = $types->get($r->curriculum_hemis_id);
+            $r->education_type = (string) ($type->education_type_code ?? '');
+            $r->education_type_name = (string) ($type->education_type_name ?? '');
+        }
+
         // Filtr variantlari — faqat shu foydalanuvchiga tegishli qatorlardan
         $options = [
+            'educationTypes' => $rows->pluck('education_type_name', 'education_type')->filter()->sort(),
             'faculties' => $rows->pluck('faculty', 'faculty_id')->filter()->sort(),
             'levels' => $rows->pluck('level_name', 'level_code')->filter()->sortKeys(),
+            'semesters' => $rows->pluck('semester', 'semester_code')->filter()->sortKeys(),
             'specialties' => $rows->pluck('specialty', 'specialty_id')->filter()->sort(),
             'groups' => $rows->pluck('group', 'group_hemis_id')->filter()->sort(),
+            'kafedras' => $rows->pluck('kafedra', 'kafedra_id')->filter()->sort(),
+            'subjects' => $rows->pluck('subject', 'subject_id')->filter()->sort(),
         ];
 
-        $f = $request->only(['faculty', 'level', 'specialty', 'group', 'q', 'status']);
+        $f = $request->only(['education_type', 'faculty', 'level', 'semester', 'specialty', 'group', 'kafedra', 'subject', 'yn_from', 'yn_to', 'q', 'status']);
         $filtered = $rows
+            ->when(!empty($f['education_type']), fn ($c) => $c->where('education_type', (string) $f['education_type']))
             ->when(!$context['isDean'] && !$context['isTeacher'] && !empty($f['faculty']), fn ($c) => $c->where('faculty_id', (string) $f['faculty']))
             ->when(!empty($f['level']), fn ($c) => $c->where('level_code', (string) $f['level']))
+            ->when(!empty($f['semester']), fn ($c) => $c->where('semester_code', (string) $f['semester']))
             ->when(!empty($f['specialty']), fn ($c) => $c->where('specialty_id', (string) $f['specialty']))
+            ->when(!empty($f['kafedra']), fn ($c) => $c->where('kafedra_id', (string) $f['kafedra']))
+            ->when(!empty($f['subject']), fn ($c) => $c->where('subject_id', (string) $f['subject']))
+            // YN sanasi — fanning oxirgi YN imtihoni (test yoki OSKI) shu oraliqda
+            ->when(!empty($f['yn_from']), fn ($c) => $c->filter(fn ($r) => $r->yn_date && $r->yn_date >= (string) $f['yn_from']))
+            ->when(!empty($f['yn_to']), fn ($c) => $c->filter(fn ($r) => $r->yn_date && $r->yn_date <= (string) $f['yn_to']))
             ->when(!empty($f['group']), fn ($c) => $c->filter(fn ($r) => in_array((string) $f['group'], $r->members, true)))
             ->when(trim($f['q'] ?? '') !== '', function ($c) use ($f) {
                 $q = mb_strtolower(trim($f['q']));
@@ -145,7 +167,8 @@ class YnQaydnomaListController extends Controller
             ->when($kafedraHemisIds !== null, fn ($q) => $q->whereIn('cs.department_id', $kafedraHemisIds ?: ['-']))
             ->where(fn ($q) => $q->where('es.oski_date', '<=', $today)->orWhere('es.test_date', '<=', $today))
             ->select('es.group_hemis_id', 'es.subject_id', 'es.semester_code', 'es.oski_date', 'es.test_date', 'es.oski_na', 'es.test_na',
-                'es.subject_name as exam_subject_name', 'cs.subject_name', 'cs.semester_name', 'cs.closing_form', 'cs.department_id as kafedra_id', 'g.id as group_pk',
+                'es.subject_name as exam_subject_name', 'cs.subject_name', 'cs.semester_name', 'cs.closing_form', 'cs.department_id as kafedra_id',
+                'cs.department_name as kafedra_name', 'g.id as group_pk',
                 'g.name as group_name', 'g.department_hemis_id', 'g.specialty_hemis_id', 'dep.name as faculty_name',
                 'sp.name as specialty_name', 's.level_code', 's.level_name', 'g.curriculum_hemis_id')
             ->get()
@@ -305,6 +328,8 @@ class YnQaydnomaListController extends Controller
             'group' => $r->group_name,
             'faculty_id' => (string) $r->department_hemis_id,
             'kafedra_id' => (string) ($r->kafedra_id ?? ''),
+            'kafedra' => (string) ($r->kafedra_name ?? ''),
+            'curriculum_hemis_id' => $r->curriculum_hemis_id ?? null,
             'faculty' => $r->faculty_name ?? '',
             'specialty_id' => (string) $r->specialty_hemis_id,
             'specialty' => $r->specialty_name ?? '',
@@ -316,6 +341,8 @@ class YnQaydnomaListController extends Controller
             'semester' => $r->semester_name ?? $r->semester_code,
             'oski_date' => $r->oski_na ? null : $r->oski_date,
             'test_date' => $r->test_na ? null : $r->test_date,
+            'yn_date' => collect([$r->oski_na ? null : $r->oski_date, $r->test_na ? null : $r->test_date])->filter()
+                ->map(fn ($d) => substr((string) $d, 0, 10))->max(),
             'finished_at' => max((string) $r->oski_date, (string) $r->test_date, (string) ($all->first()?->confirmed_at), (string) ($rejection?->rejected_at)),
             'members' => $members,
             'member_names' => $r->member_names ?? [],
@@ -357,7 +384,7 @@ class YnQaydnomaListController extends Controller
             ->keyBy(fn ($s) => $s->curriculum_hemis_id . '|' . $s->code);
         $subjects = DB::table('curriculum_subjects')->whereIn('curricula_hemis_id', $curricula)
             ->whereIn('subject_id', $subjectIds)
-            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name', 'closing_form', 'department_id'])
+            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name', 'closing_form', 'department_id', 'department_name'])
             ->keyBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code);
         $exams = DB::table('exam_schedules')->whereNull('student_hemis_id')
             ->whereIn('group_hemis_id', $groups->keys())
@@ -381,6 +408,7 @@ class YnQaydnomaListController extends Controller
                 'oski_na' => $exam->oski_na ?? false, 'test_na' => $exam->test_na ?? false,
                 'closing_form' => $subject->closing_form ?? null,
                 'kafedra_id' => $subject->department_id ?? null,
+                'kafedra_name' => $subject->department_name ?? null,
                 'exam_subject_name' => $exam->subject_name ?? ($c->subject_name ?? ($verification->subject_name ?? ('Fan #' . $c->subject_id))),
                 'subject_name' => $subject->subject_name ?? null,
                 'semester_name' => $subject->semester_name ?? ($verification->semester_name ?? null),

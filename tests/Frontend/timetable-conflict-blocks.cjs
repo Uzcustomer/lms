@@ -273,6 +273,20 @@ const data = {
         assert.deepEqual((await p.evaluate(() => focus.pop())).card_ids, [708676, 708662]);
         await p.evaluate(() => T.set({ allCards: [], wci: {} }));
 
+        // 7h) Codex: band qilgan dars boshqa kalendarli dasturda (25.11 — uning 10-haftasi): vaqti va xonasi server yozuvidagi o'z haftasidan
+        //     (with_week/with_pair/with_room), tanlangan 11-hafta shabloni (juma 15:00, 200-xona) emas.
+        const otherCal = Object.assign({}, data.blocker, { teacher_id: 44, teacher_name: 'BOSHQA', specialty_name: 'pediatriya', day: 5, pair: 9,
+            auditorium_code: 'R200', auditorium_name: '200-xona' });
+        await p.evaluate(([sc, oo]) => T.set({ cards: [sc], ov: {}, allCards: [sc, oo], wci: { __week: 11, 708676: { 11: [{ kind: 'room_busy', type: 'room',
+            room: 'R123', room_name: '123-amaliyot xonasi', groups: ['d1/d26-01a'], with_card: 708662, with_week: 10, with_day: 3, with_pair: 3,
+            with_room: 'R123', with_room_name: '123-amaliyot xonasi', date_from: '2026-11-25', date_to: '2026-11-25', past: false,
+            show: { kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', groups: [], dates: ['2026-11-25'], hour_from: 3, hour_to: 5,
+                hour_unit: 'row', card_ids: [708676, 708662], view: 'week', week: 11 } }] } } }), [scopedCard, otherCal]);
+        await p.click('#cardPanel [data-wcf]');
+        await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-agenda]');
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-line]'), ['10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · BOSHQA · 123-amaliyot xonasi']);
+        await p.evaluate(() => T.set({ allCards: [], wci: {} }));
+
         // 8) Fokus bannerida xona NOMI (kodi emas); sikl karta oynasi — turlarga ajratilgan bloklar.
         assert.equal(await p.evaluate(() => T.focusBannerText({ kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', dates: ['2026-11-25'] }, [{ group: 'd1/d26-03a' }, { group: 'd1/d26-01a' }])),
             "To'qnashuvni ko'rish: Xona 123-amaliyot xonasi — d1/d26-03a va d1/d26-01a, 25.11");

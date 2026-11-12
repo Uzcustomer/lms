@@ -12898,18 +12898,24 @@
             }
             // Server to'qnashuv yozuvi (weeklyConflictItems — butun doska bo'yicha, ko'rish qamrovidan qat'i nazar) → sabab: band qilgan dars
             // ma'lumoti — barcha yuklangan kartalardan (allCards), topilmasa yozuvning o'zidan; fokus — yozuvning show'i.
+            // Band qilgan darsning vaqti va xonasi — to'qnashuv sanasidagi o'z haftasi bo'yicha (with_week/with_day/with_pair/with_room: boshqa
+            // kalendarli dasturda hafta raqami boshqa), tanlangan hafta (curWeek) bo'yicha emas.
             function cbItemFromServer(i, piece) {
                 const kind = { teacher_busy: 'teacher', room_busy: 'room', group_busy: 'group' }[i && i.kind];
                 if (!kind) return null;
                 const o = (typeof allCards !== 'undefined' && allCards || []).find(x => +x.id === +i.with_card) || (cards || []).find(x => +x.id === +i.with_card) || null;
-                const eo = o ? effectiveCard(o) : null, pl = o ? effPlace(o) : null;
+                const W = +i.with_week || curWeek, ov = o && W ? overrides[o.id + '|' + W] : null;
+                const pl = +i.with_pair ? { day: +i.with_day, pair: +i.with_pair } : (o ? placeInWeek(o, W) : null);
+                const ovRoom = ov && !ov.cancelled && ov.auditorium_code ? ov : null;
+                const oRoomCode = i.with_room || (ovRoom ? ovRoom.auditorium_code : o ? o.auditorium_code || '' : '');
+                const oRoomName = i.with_room_name || (ovRoom ? ovRoom.auditorium_name || ovRoom.auditorium_code : o ? o.auditorium_name || o.auditorium_code || '' : '');
                 const date = i.date_from || ((i.show || {}).dates || [])[0] || '';
                 const mineG = cardGroups(piece), overlap = (i.groups || []).filter(g => mineG.includes(g));
                 return { kind, who: kind === 'teacher' ? (i.teacher_name || piece.teacher_name || '') : kind === 'room' ? (i.room_name || i.room || '')
                         : (overlap.length ? overlap : (i.groups || [])).join(','),
                     card_id: +i.with_card || null, piece_id: piece.id, groups: o ? cardGroups(o) : (i.groups || []), subject: o ? o.subject_name : '',
                     training_type: o ? o.training_type : '', teacher: o ? (o.teacher_name || '') : '', teacher_id: +(i.teacher_id || (o && o.teacher_id)) || null,
-                    room_name: eo ? (eo.auditorium_name || eo.auditorium_code || '') : (i.room_name || i.room || ''), room_code: i.room || (eo ? eo.auditorium_code || '' : ''),
+                    room_name: oRoomName || i.room_name || i.room || '', room_code: i.room || oRoomCode || '',
                     date, day: date ? ((new Date(date + 'T00:00:00').getDay() + 6) % 7) + 1 : 0, time: pl && o ? slotRangeText(pl.pair, cardLen(o)) : '',
                     pair: pl ? pl.pair : 0, piece_pair: +((i.show || {}).hour_from) || ((effPlace(piece) || {}).pair) || 0, show: i.show || null };
             }

@@ -147,3 +147,24 @@ it('Codex: xona kunlik ro\'yxati — birlashgan ma\'ruzada o\'qituvchi faqat qam
         ->and(json_encode($entries->all()))->not->toContain('BEGONA');
     expect($entries->firstWhere('start', '08:30'))->toMatchArray(['hidden' => true, 'label' => 'band: boshqa fakultet']);
 });
+
+it('Codex: band qilgan dars boshqa kalendarli dasturda — yozuvda uning shu sanadagi haftasi, kuni, parasi va xonasi (with_*)', function () {
+    $s = ciSetup();
+    $s['card']->update(['day' => 3, 'pair' => 3]);
+    // Pediatriya kalendari bir hafta kech boshlanadi: 25.11 — uning 10-haftasi. Shablonda juma 15:00, 200-xona; 10-haftada — chorshanba 10:00, 123-xona.
+    TimetableGridSetting::create(['board_id' => $s['board']->id, 'faculty_name' => '1-son davolash', 'specialty_name' => 'pediatriya', 'course' => 1,
+        'days' => 6, 'pairs_per_day' => 12, 'weeks' => 15, 'start_date' => '2026-09-21']);
+    Auditorium::create(['code' => 'R200', 'name' => '200-xona', 'volume' => 30, 'active' => true]);
+    $other = TimetableCard::create(array_replace($s['base'], ['specialty_name' => 'pediatriya', 'group_name' => 'p1/p26-01a', 'day' => 5, 'pair' => 9,
+        'auditorium_code' => 'R200', 'auditorium_name' => '200-xona']));
+    TimetableCardOverride::create(['card_id' => $other->id, 'week' => 10, 'day' => 3, 'pair' => 3, 'start_half' => 0, 'cancelled' => false,
+        'auditorium_code' => 'R123', 'auditorium_name' => '123-amaliyot xonasi']);
+    $s['blocker']->delete();
+    $j = ciAs()->getJson(route('admin.timetable.boards.conflicts', $s['board']) . '?items=1&week=11')->assertOk()->json();
+    $items = collect(data_get($j, 'weekly_items.' . $s['card']->id . '.11', []));
+    $room = $items->firstWhere('kind', 'room_busy');
+    expect($room)->not->toBeNull()
+        ->and($room)->toMatchArray(['with_card' => $other->id, 'with_week' => 10, 'with_day' => 3, 'with_pair' => 3, 'with_room' => 'R123',
+            'with_room_name' => '123-amaliyot xonasi', 'date_from' => '2026-11-25'])
+        ->and($items->firstWhere('kind', 'teacher_busy'))->toMatchArray(['with_week' => 10, 'with_pair' => 3]);
+});

@@ -62,6 +62,9 @@ class JournalController extends Controller
     private const YNQ_LAST_COL = 'X';
     /** Shu ustunga qo'shimcha kenglik (Excel birligi) */
     private const YNQ_WORD_COL_EXTRA = 6;
+    /** Jadvaldagi baho guruhlari orasidagi bo'sh (ajratuvchi) ustunlar — hammasi bir xil, tor */
+    private const YNQ_SPACER_COLS = ['F', 'I', 'L', 'O', 'R', 'U'];
+    private const YNQ_SPACER_WIDTH = 1.0;
     /** "Semestrda … soat … kredit" qatoridagi chiziq (K13:W13) — YN o'tkazilgan sana */
     private const YNQ_EXAM_DATE_CELL = 'K13';
     private const YNQ_QR_ALT = 'Tasdiq QR: ';
@@ -10605,6 +10608,9 @@ class JournalController extends Controller
                 // Gorizontal chiziqlar juda ingichka, vertikal (ustunlar) — sezilarli qalinroq
                 . "table.sheet{$i} td{border-top-width:.15pt !important;border-bottom-width:.15pt !important;"
                 . "border-left-width:.6pt !important;border-right-width:.6pt !important;padding-left:3.5pt !important;padding-right:3.5pt !important}"
+                // Ajratuvchi (bo'sh) ustunlar chekinishsiz — tor, hammasi bir xil
+                . implode(',', array_map(fn ($col) => "table.sheet{$i} td.column" . (\PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($col) - 1),
+                    self::YNQ_SPACER_COLS)) . '{padding-left:0 !important;padding-right:0 !important}'
                 // Talabalar ism-familiyasi (B, 20–49-qatorlar) — bitta qatorda, chapda kichik, o'ngda kengroq chekinish
                 . implode('', array_map(fn ($r) => "table.sheet{$i} tr.row" . ($r - 1) . ' td.column1{padding-left:2pt !important;padding-right:6pt !important;white-space:nowrap}',
                     range(self::YNQ_FIRST_ROW, self::YNQ_LAST_ROW + $extra)))
@@ -12290,9 +12296,16 @@ class JournalController extends Controller
         $freed = max(0, (float) $sheet->getColumnDimension($sign)->getWidth());
         $sheet->removeColumn($sign);
         $lastIndex = $Coordinate::columnIndexFromString(self::YNQ_LAST_COL);
-        for ($ci = 1; $ci <= $lastIndex; $ci++) {
-            $dim = $sheet->getColumnDimension($Coordinate::stringFromColumnIndex($ci));
-            $dim->setWidth(($dim->getWidth() < 0 ? 8.43 : $dim->getWidth()) + $freed / $lastIndex);
+        $width = fn (string $col) => ($w = $sheet->getColumnDimension($col)->getWidth()) < 0 ? 8.43 : $w;
+        // Ajratuvchi ustunlar bir xil va tor; ulardan bo'shagan kenglik ham qolgan ustunlarga teng bo'linadi
+        foreach (self::YNQ_SPACER_COLS as $col) {
+            $freed += $width($col) - self::YNQ_SPACER_WIDTH;
+            $sheet->getColumnDimension($col)->setWidth(self::YNQ_SPACER_WIDTH);
+        }
+        $others = array_values(array_diff(
+            array_map(fn ($ci) => $Coordinate::stringFromColumnIndex($ci), range(1, $lastIndex)), self::YNQ_SPACER_COLS));
+        foreach ($others as $col) {
+            $sheet->getColumnDimension($col)->setWidth($width($col) + $freed / count($others));
         }
         // So'z bilan baho ("aʼlo", "kelmadi", "qoʻyilmadi") ustuni kengroq — o'ng yuqori burchakda kafedra mudiri QR i ham shu ustun ustida
         $wordCol = $sheet->getColumnDimension(self::YNQ_LAST_COL);

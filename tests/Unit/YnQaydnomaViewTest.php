@@ -193,11 +193,13 @@ describe('teacher confirmation', function () {
             ->and($w->getPageSetup()->getPrintArea())->toBe('A1:X61')
             ->and(array_keys($w->getConditionalStylesCollection()))->toBe(['A20:X49'])
             ->and($w->getStyle('X20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
-            ->and(round($w->getColumnDimension('A')->getWidth(), 2))->toBe(round(8.43 + 28.81640625 / 24, 2))
+            // Ajratuvchi ustunlar bir xil va tor; bo'shagan kenglik qolganlariga teng
+            ->and(collect(['F', 'I', 'L', 'O', 'R', 'U'])->map(fn ($c) => $w->getColumnDimension($c)->getWidth())->unique()->all())->toBe([1.0])
+            ->and(round($w->getColumnDimension('A')->getWidth(), 2))->toBe(round(8.43 + (28.81640625 + 6 * 7.43) / 18, 2))
             ->and($drawings)->toHaveCount(1)
             ->and($drawings[0]->getCoordinates())->toBe('C60')
             ->and($drawings[0]->getHeight())->toBe(56)
-            ->and($w->getMergeCells())->toHaveKeys(['C60:F60', 'C61:F61'])   // QR va ism sig'adigan, oralari kengroq
+            ->and($w->getMergeCells())->toHaveKeys(['C60:E60', 'C61:E61'])   // QR va ism sig'adigan, oralari kengroq
             ->and($w->getCell('C61')->getValue())->toBe('IZZATULLAYEV O.')
             ->and($w->getCell('B60')->getValue())->toBe('Amaliyot o‘qituvchilari:')
             ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe($w->getStyle('B57')->getAlignment()->getHorizontal())   // "Jami talabalar soni" bilan bir chiziqda
@@ -400,11 +402,11 @@ describe('teacher confirmation', function () {
         expect(\App\Models\YnQaydnomaConfirmation::where('role', 'kafedra_mudiri')->value('group_hemis_id'))->toBe('78')   // asosiy guruh
             ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->count())->toBe(1);
 
-        // Pastda ikkala o'qituvchi QR i yonma-yon (C:F, G:…), tepada kafedra va dekan
+        // Pastda ikkala o'qituvchi QR i yonma-yon (C:E, F:…), tepada kafedra va dekan
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '78', 30, 10, 0, 0, 60);
         $teacherQrs = collect($sheet->getSheet(0)->getDrawingCollection())->filter(fn ($d) => str_starts_with($d->getDescription(), 'Tasdiq QR: '));
-        expect($teacherQrs->map->getCoordinates()->values()->all())->toBe(['C60', 'G60'])
-            ->and($sheet->getSheet(0)->getCell('G61')->getValue())->toBe('KARIMOVA L.')
+        expect($teacherQrs->map->getCoordinates()->values()->all())->toBe(['C60', 'F60'])
+            ->and($sheet->getSheet(0)->getCell('F61')->getValue())->toBe('KARIMOVA L.')
             ->and(collect($sheet->getSheet(0)->getDrawingCollection())->map->getCoordinates()->values()->all())->toContain('A2', 'X2');
 
         // Rad etilsa ikkala o'qituvchi tasdig'i bekor; ikkalasi qayta topshirgach rad etish yopiladi

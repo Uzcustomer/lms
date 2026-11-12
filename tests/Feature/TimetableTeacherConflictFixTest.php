@@ -330,7 +330,7 @@ it('Codex: ko\'p kartali amaliy blok (to\'qnashuvdagi) butunlay toza joyga — s
     // Ikkala bo'lak bir kunga, lekin oraliq bilan (I va III para) — yakuniy holatda blok bo'linadi: rad.
     $gap = $both;
     $gap['actions'][1]['pair'] = 5;
-    tfApply($s, $gap)->assertForbidden()->assertJsonPath('why', fn ($w) => str_contains($w, "amaliy soatlar bo'linadi"));
+    tfApply($s, $gap)->assertForbidden()->assertJsonPath('why', fn ($w) => str_contains($w, "Amaliy dars bo'linmaydi: 4 soat (2+2) bir kunda ketma-ket bo'lishi kerak"));
     // Butun blok seshanba I–II paraga — toza: so'rovsiz.
     tfApply($s, $both)->assertOk()->assertJsonPath('fixed', true);
     expect(TimetableCardOverride::where('week', $s['week'])->whereIn('card_id', [$p1->id, $p2->id])->orderBy('card_id')->get(['day', 'pair'])->toArray())

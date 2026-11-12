@@ -533,7 +533,7 @@ trait TimetableResponsibleMove
         return $code !== '' && (!$room || $this->suggestionRoomProblem($board, $card, $room) !== null);
     }
 
-    /** Yangi joy xatolari: barcha bo'laklar ko'chgan holatda (sinab — rollback) agendaWeekErrors, blok yaxlitligi (eski va yangi kun). */
+    /** Yangi joy xatolari: barcha bo'laklar ko'chgan holatda (sinab — rollback) agendaWeekErrors, amaliy dars yaxlitligi (birlik). */
     private function responsibleMoveErrors(TimetableBoard $board, array $moves, int $week, int $day, ?Auditorium $room): array
     {
         $orig = [];
@@ -548,6 +548,7 @@ trait TimetableResponsibleMove
             }
         }
         $errors = [];
+        $snap = $this->unitSnapshot(array_map(fn ($m) => [$m[0], $week], $moves));
         DB::beginTransaction();
         try {
             foreach ($moves as [$c, $p]) {
@@ -555,15 +556,16 @@ trait TimetableResponsibleMove
                     ['day' => $day, 'pair' => $p, 'start_half' => 0, 'cancelled' => false]
                         + ($room ? ['auditorium_code' => $room->code, 'auditorium_name' => $room->name] : []));
             }
+            // Amaliy dars yaxlit (birlik): yakuniy holatda bo'laklar bitta kunda, ketma-ket.
+            $errors = $snap ? $this->unitIntegrityErrors($snap) : [];
             foreach ($moves as [$c, $p]) {
-                [$e, $roomCode] = $this->agendaWeekErrors($board, $c, $week, $day, $p, $room, false);
+                [$e, $roomCode] = $this->agendaWeekErrors($board, $c, $week, $day, $p, $room);
                 // Umumiy (raqamsiz) xona — sig'im tekshirilmaydi (umumiy bajaruvchidagi suggestionRoomProblem bilan bir xil).
                 $eff = $room ?? ($roomCode !== '' ? Auditorium::where('code', $roomCode)->first() : null);
                 if ($eff && $this->isSharedRoom((string) $eff->name)) {
                     $e = array_values(array_filter($e, fn ($m) => !str_starts_with((string) $m, "Xona sig'maydi")));
                 }
-                $errors = array_merge($errors, $e,
-                    $this->practiceDaySplits($c, $week, array_values(array_unique(array_filter([$orig[(int) $c->id][0] ?? null, $day])))));
+                $errors = array_merge($errors, $e);
             }
         } finally {
             DB::rollBack();

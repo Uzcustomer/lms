@@ -8279,7 +8279,7 @@ class TimetableController extends Controller
      * darslari to'qnashuv hisoblanmaydi; hammasi o'tgan bo'lsa — bandlik yo'q). Qaytaradi: ['teachers' => [id => "guruh, fan, 30.10–10.11; ..."],
      * 'rooms' => [kod => matn]].
      */
-    protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false): array
+    protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false, array $alsoExclude = []): array
     {
         $unitCards = $unitCards->reject(fn ($c) => $this->isNonBlocking($c, $board));
         $hits = ['teachers' => [], 'rooms' => []];
@@ -8287,6 +8287,9 @@ class TimetableController extends Controller
         if (!$ids) {
             return $hits;
         }
+        // $alsoExclude — "boshqa dars" hisoblanmaydigan qo'shimcha kartalar (birlikning qolgan bo'laklari: bo'lak alohida tekshirilganda).
+        $skip = $ids + array_fill_keys(array_map('intval', $alsoExclude), true);
+        ksort($skip);
         // Butun doska model sifatida yuklanmaydi (128 MB): avval shu birlik darslarining sanalari va vaqtlari, so'ng faqat shu
         // sanalarga (hafta kuni, kalendar haftasi) va vaqtgacha tushadigan boshqa darslar — yengil qatorlar. Sikl birliklari so'rov
         // davomida bir marta olinadi.
@@ -8304,13 +8307,13 @@ class TimetableController extends Controller
             return $hits;
         }
         $dates = array_flip(array_column($mine, 'date'));
-        $collect = function (int $maxTo) use ($board, $dates, $ids, $units, $calendar): array {
+        $collect = function (int $maxTo) use ($board, $dates, $skip, $units, $calendar): array {
             $others = [];
-            foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), $maxTo, $ids), $dates),
+            foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), $maxTo, $skip), $dates),
                 $this->cycleOccupancy($board, $units, $calendar, $dates)] as $entries) {
                 foreach ($entries as $e) {
                     // Vaqtincha kafedra mudirida darslar hech kimni band qilmaydi.
-                    if (!isset($ids[$e['card']]) && empty($e['ph'])) {
+                    if (!isset($skip[$e['card']]) && empty($e['ph'])) {
                         $others[$e['date']][] = $e;
                     }
                 }
@@ -8321,7 +8324,7 @@ class TimetableController extends Controller
         // O'qituvchi jadvalidagi haftalik ko'chirish variantlari (weeklyProposalBusy, agendaMemo — timetable.agenda_others): boshqa darslar
         // (shu birliksiz) har bo'sh para uchun bir xil — sana bo'yicha bir marta, vaqt chegarasisiz (kesishuv quyida aniq tekshiriladi — natija bir xil).
         $others = request()->attributes->get('timetable.agenda_others')
-            ? $this->agendaMemo('others|' . $board->id . '|' . md5(json_encode([array_keys($dates), array_keys($ids)])), fn () => $collect(PHP_INT_MAX))
+            ? $this->agendaMemo('others|' . $board->id . '|' . md5(json_encode([array_keys($dates), array_keys($skip)])), fn () => $collect(PHP_INT_MAX))
             : $collect(max(array_column($mine, 'to')));
         // "Ko'rsatish" uchun tuzilgan ma'lumot: tur => kim => boshqa dars yorlig'i => guruhlar, sanalar, kartalar, soatlar.
         $acc = ['teachers' => [], 'rooms' => []];
@@ -10539,54 +10542,27 @@ class TimetableController extends Controller
     }
 
     /**
-     * Bir kunda bir fandan amaliy soatlar bo'linmaydi (haftaning shu kunidagi bitta amaliy blok): shu guruhning shu fandan
-     * (bo'lakli nomi bilan ham) boshqa amaliy kartasi hozir yonma-yon bo'lsa — bu dars blokning bir qismi, yolg'iz ko'chmaydi;
-     * yangi kunda shu fandan amaliy dars bor va yangi joy unga yopishmasa — kun ichida bo'linib qoladi.
+     * Bitta bo'lakni (kun, para) ga ko'chirish amaliy darsni bo'ladimi (birlik — weeklyUnitKey: guruh, fan, tur, o'qituvchi): sinab
+     * (rollback) — yakuniy holatda birlikning shu haftadagi bo'laklari bitta kunda, ketma-ket bo'lmasa — sababi. Butun birlikni ko'chirish —
+     * unit-place (jadval) yoki o'qituvchi jadvalidagi ko'chirish (barcha bo'laklar birga).
      */
-    private function practiceSplitConflicts(TimetableCard $card, int $week, int $day, int $pair): array
+    private function weeklyMoveSplitErrors(TimetableCard $card, int $week, int $day, int $pair): array
     {
-        if ($this->isNonBlocking($card, $card->board)) return [];
-        if ($card->training_type === 'lecture') {
+        if ($card->training_type === 'lecture' || $this->isNonBlocking($card, $card->board)) {
             return [];
         }
-        $base = fn (TimetableCard $c) => $this->normSubject((string) ($this->cycleSubjectVariantBase((string) $c->subject_name) ?? $c->subject_name));
-        $groups = fn (TimetableCard $c) => collect($c->occupiedGroups())->map(fn ($g) => $this->groupNameKey((string) $g))->sort()->values()->all();
-        // O'qituvchi jadvalidagi ko'chirish variantlarida (agendaMemo) — karta va hafta bo'yicha bir marta.
-        $sibs = $this->agendaMemo('split_sibs|' . $card->id, fn () => TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)
-            ->where('training_type', '!=', 'lecture')->where('faculty_name', $card->faculty_name)->where('specialty_name', $card->specialty_name)
-            ->where('course', $card->course)->get()->filter(fn (TimetableCard $o) => $base($o) === $base($card) && $groups($o) === $groups($card)));
-        if ($sibs->isEmpty()) {
+        $snap = $this->unitSnapshot([[$card, $week]]);
+        if (!$snap) {
             return [];
         }
-        $ovs = $this->agendaMemo('split_ovs|' . $card->id . '|' . $week, fn () => TimetableCardOverride::whereIn('card_id', $sibs->pluck('id')->push($card->id))
-            ->where('week', $week)->get()->keyBy('card_id'));
-        $place = function (TimetableCard $c) use ($ovs): ?array {
-            $o = $ovs[$c->id] ?? null;
-            if ($o && $o->cancelled) {
-                return null;
-            }
-            [$d, $p, $sh] = $o && $o->day && $o->pair ? [(int) $o->day, (int) $o->pair, (int) $o->start_half] : [(int) $c->day, (int) $c->pair, (int) $c->start_half];
+        DB::beginTransaction();
+        try {
+            TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $week], ['day' => $day, 'pair' => $pair, 'start_half' => 0, 'cancelled' => false]);
 
-            return $d && $p ? [$d, $this->rangeFor($c, $p, $sh)] : null;
-        };
-        $touch = fn (array $a, array $b) => $a[1] === $b[0] || $b[1] === $a[0];
-        $mine = $place($card);
-        $new = $this->rangeFor($card, $pair, 0);
-        $errors = [];
-        foreach ($sibs as $o) {
-            if (!($op = $place($o))) {
-                continue;
-            }
-            $label = '«' . $o->subject_name . '» ' . $this->halfRangeTime($card->board, $op[1]);
-            if ($mine && $op[0] === $mine[0] && $touch($op[1], $mine[1])) {
-                $errors[] = "Bu dars shu kungi amaliy blokning bir qismi ({$label}) — bir kunda bir fandan amaliy soatlar bo'linmaydi. "
-                    . "Butun blokni ko'chirish uchun kafedra mudiriga murojaat qiling.";
-            } elseif ($op[0] === $day && !$touch($op[1], $new) && !$this->halfOverlap($op[1], $new)) {
-                $errors[] = "Yangi kunda shu fandan boshqa amaliy dars bor ({$label}) — bir kunda bir fandan amaliy soatlar bo'linmaydi.";
-            }
+            return $this->unitIntegrityErrors($snap);
+        } finally {
+            DB::rollBack();
         }
-
-        return array_values(array_unique($errors));
     }
 
     /**
@@ -11301,7 +11277,7 @@ class TimetableController extends Controller
         $conflicts = array_merge($conflicts, $this->pendingTimeConflicts($card, $data, $ignorePendingIds));
         // Guruh / o'qituvchi / xona to'qnashuvi bo'lmasa — amaliy blok qoidasi va sikl darslari bilan bandlik ham.
         if (!$conflicts) {
-            $conflicts = $this->practiceSplitConflicts($card, (int) $data['week'], (int) $data['day'], (int) $data['pair']);
+            $conflicts = $this->weeklyMoveSplitErrors($card, (int) $data['week'], (int) $data['day'], (int) $data['pair']);
         }
         if (!$conflicts) {
             $conflicts = $this->weeklyProposalBusy($card, (int) $data['week'], (int) $data['day'], (int) $data['pair'], $newDate);
@@ -11478,14 +11454,17 @@ class TimetableController extends Controller
         $week = (int) $data['week'];
         if ($week > $this->cardGrid($card->board, $card)['weeks']) return response()->json(['error' => 'Bu dasturda ushbu o‘quv haftasi yo‘q.'], 422);
         $startHalf = (int) ($data['start_half'] ?? 0);
+        // Amaliy dars yaxlit (birlik): yakuniy holatda birlikning shu haftadagi bo'laklari bitta kunda, ketma-ket — bo'linsa 422,
+        // hech narsa yozilmaydi (butun birlikni surish — unit-place).
+        $splitFail = fn (array $errors) => response()->json(['error' => implode(' · ', $errors), 'unit_split' => true], 422);
 
         if ($data['action'] === 'reset') {
-            TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->delete();
-            return response()->json(['ok' => true]);
+            $errors = $this->unitGuardedWrite([[$card, $week]], fn () => TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->delete());
+            return $errors ? $splitFail($errors) : response()->json(['ok' => true]);
         }
 
         if ($data['action'] === 'cancel') {
-            TimetableCardOverride::updateOrCreate(
+            $errors = $this->unitGuardedWrite([[$card, $week]], fn () => TimetableCardOverride::updateOrCreate(
                 ['card_id' => $card->id, 'week' => $week],
                 [
                     'day' => null,
@@ -11494,8 +11473,8 @@ class TimetableController extends Controller
                     'auditorium_code' => null,
                     'auditorium_name' => null,
                 ]
-            );
-            return response()->json(['ok' => true]);
+            ));
+            return $errors ? $splitFail($errors) : response()->json(['ok' => true]);
         }
 
         // move — tanlangan haftadagi konfliktni tekshiramiz
@@ -11519,11 +11498,14 @@ class TimetableController extends Controller
         if (!empty($conflicts)) {
             return response()->json(['error' => implode(' · ', $conflicts)], 422);
         }
-        TimetableCardOverride::updateOrCreate(
+        $errors = $this->unitGuardedWrite([[$card, $week]], fn () => TimetableCardOverride::updateOrCreate(
             ['card_id' => $card->id, 'week' => $week],
             ['day' => $day, 'pair' => $pair, 'start_half' => $startHalf, 'cancelled' => false]
                 + ($room ? ['auditorium_code' => $room->code, 'auditorium_name' => $room->name] : [])
-        );
+        ));
+        if ($errors) {
+            return $splitFail($errors);
+        }
         $ovRoom = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->value('auditorium_code');
         $warnings = $this->weeklyCycleWarnings($card, $week, (int) $day, (int) $pair, $ovRoom);
         return response()->json(['ok' => true] + ($warnings ? ['warnings' => $warnings] : []));

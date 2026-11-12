@@ -338,14 +338,34 @@ trait TimetableSuggestionApply
 
     /**
      * Amallarni bajaradi (chaqiruvchining tranzaksiyasi ichida; huquq tekshirilmaydi). Har ko'chirish shu haftadagi guruh,
-     * o'qituvchi va xona to'qnashuviga tekshiriladi; oxirida yakuniy holat — amaliy blok bo'linmasligi (eski va yangi kun),
+     * o'qituvchi va xona to'qnashuviga tekshiriladi; oxirida yakuniy holat — amaliy dars bo'linmasligi (birlik: bitta kunda, ketma-ket),
      * sikl darslari bilan bandlik (unit-busy) va almashgan o'qituvchining boshqa haftalari. Xato — matni, aks holda null.
      */
     private function runSuggestionActions(TimetableBoard $board, array $acts): ?string
     {
         $moved = [];
-        $days = [];
         $teacherChanged = [];
+        // Amaliy dars yaxlit (birlik): yozishdan oldingi holat; oxirida — joyi o'zgargan birlik bo'linmaganmi. Bir amallar to'plamida
+        // birga ko'chayotgan bo'laklar oraliq qadamda bir-birini "band" qilmaydi (yakuniy holat oxirida to'liq tekshiriladi).
+        $touch = [];
+        $batch = [];
+        foreach ($acts as $a) {
+            if (in_array((string) ($a['op'] ?? ''), ['move', 'reset', 'cancel'], true)
+                && ($c = TimetableCard::where('board_id', $board->id)->find((int) ($a['card_id'] ?? 0)))) {
+                $touch[] = [$c, (int) ($a['week'] ?? 0)];
+                $batch[(int) ($a['week'] ?? 0)][(int) $c->id] = true;
+            }
+        }
+        $snap = $this->unitSnapshot($touch);
+        $mates = function (TimetableCard $card, int $w) use ($snap, $batch): array {
+            foreach ($snap as $u) {
+                if ($u['week'] === $w && $u['cards']->contains('id', $card->id)) {
+                    return array_intersect_key($batch[$w] ?? [], array_flip($u['cards']->pluck('id')->map(fn ($id) => (int) $id)->all()));
+                }
+            }
+
+            return [];
+        };
         foreach ($acts as $a) {
             $card = TimetableCard::where('board_id', $board->id)->find((int) ($a['card_id'] ?? 0));
             if (!$card) {
@@ -355,9 +375,6 @@ trait TimetableSuggestionApply
             $op = (string) ($a['op'] ?? '');
             if ($op !== 'teacher' && ($w < 1 || $w > $this->cardGrid($board, $card)['weeks'])) {
                 return 'Bu dasturda ushbu o‘quv haftasi yo‘q.';
-            }
-            if ($op !== 'teacher' && ($cur = $this->suggestionPlace($card, $w))) {
-                $days[$card->id . '|' . $w][$cur[0]] = true;
             }
             if ($op === 'reset') {
                 TimetableCardOverride::where('card_id', $card->id)->where('week', $w)->delete();
@@ -391,7 +408,8 @@ trait TimetableSuggestionApply
                         return '«' . $card->subject_name . '»: ' . $msg;
                     }
                 }
-                if ($conflicts = $this->findWeekConflicts($card, $w, $day, $pair, 0, null, $room?->code)) {
+                $state = ($ign = $mates($card, $w)) ? $this->calendarConflictState($card, $room?->code) + ['ignore' => $ign] : null;
+                if ($conflicts = $this->findWeekConflicts($card, $w, $day, $pair, 0, $state, $room?->code)) {
                     return '«' . $card->subject_name . '»: ' . implode(' · ', $conflicts);
                 }
                 TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $w],
@@ -416,7 +434,6 @@ trait TimetableSuggestionApply
                 continue;
             }
             [$d, $p] = $pl;
-            $days[$key][$d] = true;
             // Yakuniy joy (oxirgi amal "reset" bo'lsa — shablon joyi) yakuniy holatga nisbatan: guruh, o'qituvchi, xona.
             if ($c = $this->findWeekConflicts($card, $w, $d, $p)) {
                 return '«' . $card->subject_name . '»: ' . implode(' · ', $c);
@@ -426,10 +443,8 @@ trait TimetableSuggestionApply
                 return '«' . $card->subject_name . '»: ' . implode(' · ', $errs);
             }
         }
-        foreach ($moved as $key => [$card, $w]) {
-            if ($errs = $this->practiceDaySplits($card, $w, array_keys($days[$key] ?? []))) {
-                return implode(' · ', $errs);
-            }
+        if ($snap && ($errs = $this->unitIntegrityErrors($snap))) {
+            return implode(' · ', $errs);
         }
         // Almashgan o'qituvchi butun semestr uchun: boshqa haftalarda faqat uning bandligi (takliflar hisobidagidek) — kartaning boshqa
         // haftadagi o'z (xona/guruh) to'qnashuvi bu almashtirishni to'smaydi; ko'chirilgan hafta yuqorida to'liq tekshirilgan.
@@ -457,43 +472,6 @@ trait TimetableSuggestionApply
         }
 
         return $card->day && $card->pair ? [(int) $card->day, (int) $card->pair] : null;
-    }
-
-    /**
-     * Yakuniy holatda bir kunda bir fanning (bo'lak harfisiz) shu guruh amaliy soatlari bitta yaxlit blokmi — berilgan kunlarda
-     * (kartaning eski va yangi kuni). Bo'lingan bo'lsa — sababi.
-     */
-    private function practiceDaySplits(TimetableCard $card, int $w, array $days): array
-    {
-        if ($card->training_type === 'lecture' || !$days) {
-            return [];
-        }
-        $base = fn (TimetableCard $c) => $this->normSubject((string) ($this->cycleSubjectVariantBase((string) $c->subject_name) ?? $c->subject_name));
-        $groups = fn (TimetableCard $c) => collect($c->occupiedGroups())->map(fn ($g) => $this->groupNameKey((string) $g))->sort()->values()->all();
-        $sibs = TimetableCard::where('board_id', $card->board_id)->where('training_type', '!=', 'lecture')
-            ->where('faculty_name', $card->faculty_name)->where('specialty_name', $card->specialty_name)->where('course', $card->course)->get()
-            ->filter(fn (TimetableCard $o) => $base($o) === $base($card) && $groups($o) === $groups($card));
-        $errors = [];
-        foreach ($days as $d) {
-            $ranges = [];
-            foreach ($sibs as $o) {
-                $ov = TimetableCardOverride::where('card_id', $o->id)->where('week', $w)->first();
-                [$od, $op, $sh] = $ov ? ($ov->cancelled || !$ov->day || !$ov->pair ? [0, 0, 0] : [(int) $ov->day, (int) $ov->pair, (int) $ov->start_half])
-                    : [(int) $o->day, (int) $o->pair, (int) $o->start_half];
-                if ($od === (int) $d && $op) {
-                    $ranges[] = $this->rangeFor($o, $op, $sh);
-                }
-            }
-            usort($ranges, fn ($a, $b) => $a[0] <=> $b[0]);
-            for ($i = 1; $i < count($ranges); $i++) {
-                if ($ranges[$i][0] > max(array_column(array_slice($ranges, 0, $i), 1))) {
-                    $errors[] = '«' . $card->subject_name . "»: bir kunda bir fandan amaliy soatlar bo'linadi — blok yaxlit qolishi kerak.";
-                    break;
-                }
-            }
-        }
-
-        return array_values(array_unique($errors));
     }
 
     /** Darsning shu haftadagi tavsifi: kun, sana, vaqt, xona, o'qituvchi (talabalar xabari uchun). */

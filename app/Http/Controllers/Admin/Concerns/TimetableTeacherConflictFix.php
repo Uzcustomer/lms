@@ -137,18 +137,21 @@ trait TimetableTeacherConflictFix
             }
         }
         $why = null;
+        $snap = $this->unitSnapshot(array_map(fn ($m) => [$m[0], $m[1]], $moves));
         DB::beginTransaction();
         try {
             foreach ($moves as [$card, $w, $d, $p]) {
                 TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $w], ['day' => $d, 'pair' => $p, 'start_half' => 0, 'cancelled' => false]);
             }
-            foreach ($moves as [$card, $w, $d, $p]) {
+            // Amaliy dars yaxlit (birlik): yakuniy holatda bo'laklar bitta kunda, ketma-ket.
+            if ($snap && ($split = $this->unitIntegrityErrors($snap))) {
+                $why = 'Yangi joy toza emas: ' . implode(' · ', $split);
+            }
+            foreach ($why === null ? $moves : [] as [$card, $w, $d, $p]) {
                 $grid = $this->cardGrid($board, $card);
-                // Bitta kartani surish qoidasi (practiceSplitConflicts) o'rniga — yakuniy holatda blok yaxlitligi (eski va yangi kun):
-                // bo'laklar birga ko'chganda ular bir-biriga tegib turadi, bu bo'linish emas.
+                // Bo'laklar birga ko'chganda bir-biriga tegib turadi — bu bo'linish emas (yaxlitlik yuqorida, yakuniy holat bo'yicha).
                 [$errors] = $d < 1 || $p < 1 || $d > (int) $grid['days'] || $p + $card->lenHalf() - 1 > (int) $grid['pairs']
-                    ? [['Tanlangan vaqt jadval chegarasidan tashqarida.']] : $this->agendaWeekErrors($board, $card, $w, $d, $p, null, false);
-                $errors = array_merge($errors, $this->practiceDaySplits($card, $w, array_values(array_unique(array_filter([$orig[$card->id . '|' . $w][0] ?? null, $d])))));
+                    ? [['Tanlangan vaqt jadval chegarasidan tashqarida.']] : $this->agendaWeekErrors($board, $card, $w, $d, $p, null);
                 if ($errors) {
                     $why = 'Yangi joy toza emas: ' . implode(' · ', array_values(array_unique($errors)));
                     break;

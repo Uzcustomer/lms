@@ -194,7 +194,7 @@ describe('teacher confirmation', function () {
             ->and($drawings)->toHaveCount(1)
             ->and($drawings[0]->getCoordinates())->toBe('C60')
             ->and($drawings[0]->getHeight())->toBe(56)
-            ->and($w->getMergeCells())->toHaveKeys(['C60:E60', 'C61:E61'])   // QR va ism sig'adigan, oralari kengroq
+            ->and($w->getMergeCells())->toHaveKeys(['C60:F60', 'C61:F61'])   // QR va ism sig'adigan, oralari kengroq
             ->and($w->getCell('C61')->getValue())->toBe('IZZATULLAYEV O.')
             ->and($w->getCell('B60')->getValue())->toBe('Amaliyot o‘qituvchilari:')
             ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe('right')
@@ -397,11 +397,11 @@ describe('teacher confirmation', function () {
         expect(\App\Models\YnQaydnomaConfirmation::where('role', 'kafedra_mudiri')->value('group_hemis_id'))->toBe('78')   // asosiy guruh
             ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->count())->toBe(1);
 
-        // Pastda ikkala o'qituvchi QR i yonma-yon (C:E, F:…), tepada kafedra va dekan
+        // Pastda ikkala o'qituvchi QR i yonma-yon (C:F, G:…), tepada kafedra va dekan
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '78', 30, 10, 0, 0, 60);
         $teacherQrs = collect($sheet->getSheet(0)->getDrawingCollection())->filter(fn ($d) => str_starts_with($d->getDescription(), 'Tasdiq QR: '));
-        expect($teacherQrs->map->getCoordinates()->values()->all())->toBe(['C60', 'F60'])
-            ->and($sheet->getSheet(0)->getCell('F61')->getValue())->toBe('KARIMOVA L.')
+        expect($teacherQrs->map->getCoordinates()->values()->all())->toBe(['C60', 'G60'])
+            ->and($sheet->getSheet(0)->getCell('G61')->getValue())->toBe('KARIMOVA L.')
             ->and(collect($sheet->getSheet(0)->getDrawingCollection())->map->getCoordinates()->values()->all())->toContain('A2', 'X2');
 
         // Rad etilsa ikkala o'qituvchi tasdig'i bekor; ikkalasi qayta topshirgach rad etish yopiladi
@@ -427,6 +427,14 @@ describe('teacher confirmation', function () {
         ($this->confirm)(1);
         ($this->confirm)(4, 'view');
         expect($this->controller->withFamily)->toBeTrue();
+    });
+
+    it('keeps the top right corner free for the kafedra mudiri: teacher name lines stop before the last column', function () {
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(public_path('templates/yn_qaydnoma (1).xlsx'));
+        (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $book->getActiveSheet(), 5);
+        (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $book, '435', '19', '77');
+        expect($book->getActiveSheet()->getMergeCells())->toHaveKeys(['U10:W10', 'U11:W11', 'U12:W12'])
+            ->not->toHaveKey('U10:X10');
     });
 
     it('does not let the lecturer confirm', function () {

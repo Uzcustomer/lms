@@ -431,13 +431,9 @@ class VedomostTekshirishController extends Controller
         abort_unless($base && $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_DEAN)->isNotEmpty(), 404,
             'Qaydnoma hali dekan tomonidan tasdiqlanmagan.');
 
-        // Dekan tasdiqlaganda avtomatik tayyorlangan PDF; yo'q bo'lsa (eski tasdiq) — hozir tayyorlanadi
-        $dean = $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId)->where('role', $Confirmation::ROLE_DEAN)
-            ->latest('confirmed_at')->first();
+        // Har bosilganda — eskisi o'chirilib, joriy ko'rinish va baholar bo'yicha yangisi tayyorlanadi
         $disk = \Illuminate\Support\Facades\Storage::disk('public');
-        $path = $dean->pdf_path && $disk->exists($dean->pdf_path)
-            ? $dean->pdf_path
-            : app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId);
+        $path = app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId);
         abort_unless($path, 422, 'PDF tayyorlab bo\'lmadi.');
 
         // Kichik guruhlar qaydnomasi — umumiy (harfsiz) nomi tasdiqda saqlangan

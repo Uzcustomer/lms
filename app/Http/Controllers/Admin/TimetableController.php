@@ -7978,6 +7978,10 @@ class TimetableController extends Controller
                             'room' => $kind === 'room_busy' ? ($x['room'] ?: null) : null,
                             'room_name' => $kind === 'room_busy' ? ($x['room_name'] ?: $x['room'] ?: null) : null, 'groups' => array_values($x['card']->occupiedGroups()),
                             'with_card' => (int) $x['card']->id, 'date_from' => $date, 'date_to' => $date, 'past' => $date < self::proposalToday(),
+                            // Band qilgan darsning shu sanadagi joyi — o'z dasturi hafta raqami bo'yicha (calendarWeekAt): boshqa kalendarli
+                            // dasturda hafta raqami boshqa, front uning vaqti va xonasini tanlangan hafta (curWeek) bo'yicha emas, shundan oladi.
+                            'with_week' => (int) $x['week'], 'with_day' => (int) $x['day'], 'with_pair' => (int) $x['pair'],
+                            'with_room' => $x['room'] ?: null, 'with_room_name' => ($x['room_name'] ?: $x['room']) ?: null,
                             'detail' => $m,
                             // "Ko'rsatish": ikkala dars guruhlari (qamrovi bilan), shu hafta, kun va para.
                             'show' => $this->focusShow(['kind' => $kind, 'teacher_id' => $kind === 'teacher_busy' ? $models[$id]->teacher_id : null,

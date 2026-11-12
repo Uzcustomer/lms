@@ -44,7 +44,7 @@ const ctx = {
     cards, overrides: { '3|8': { day: 2, pair: 3, cancelled: false } }, curWeek: 8, weeklyLayer: 'internal', BASE: '', board: { id: 7 },
     TIMETABLE_READ_ONLY: false, TIMETABLE_ROLE: 'kafedra_mudiri', WEEKLY_ADMIN: false, effPlace: c => vm.runInContext('placeInWeek', ctx)(c, 8), $: () => null, teacherFullNames: { 5: 'CHORIYEVA GULNORA YUSUPOVNA' }, teacherPhones: { 5: { text: '+998 90 123 45 67', tel: '+998901234567' } }, audCache: null,
     esc: s => String(s), cardLen: c => c.len_half, cardGKeys: c => ['F|S|1|' + c.group_name], cardGroups: c => [c.group_name], isCycleCardAny: () => false,
-    isSharedRoomName: () => false, inactiveRooms: { R404: '404' }, roomInactive: code => !!code && code in ctx.inactiveRooms, ROOM_OFF_TEXT: 'Xona nofaol — almashtiring',
+    isSharedRoomName: () => false, weeklyConflictItems: {}, allCards: [], inactiveRooms: { R404: '404' }, roomInactive: code => !!code && code in ctx.inactiveRooms, ROOM_OFF_TEXT: 'Xona nofaol — almashtiring',
     effectiveCard: c => c, weeklyCanEdit: () => true, boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
     boardSchedule: () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i], abbr: ab[i] })),
     weekMonday: () => new Date(2026, 9, 26), weeklyEditGuard() {}, rememberLayerPlace() {},

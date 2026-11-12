@@ -12,7 +12,9 @@ const cut = (from, to) => {
 const css = cut('<style>', '</style>').slice('<style>'.length);
 const code = cut("            // ===== To'qnashuvlar: qisqa belgi, rang", '            // Ichki jadval: kun ustunini tanlash, kun oynasi va soatni surish.')
     + cut('            function openCfPop(el) {', "            // Panel (sikl va haftalik kartalar) to'qnashuv belgisi")
-    + cut("            // \"Vaqtincha kafedra mudirida\" bo'limi", '            function renderCycleCards(j) {');
+    + cut("            // \"Vaqtincha kafedra mudirida\" bo'limi", '            function renderCycleCards(j) {')
+    // To'qnashuv bloklari va [Ko'rsatish] (haftalik oyna bilan umumiy).
+    + cut("            // ===== To'qnashuv sababi: turlarga ajratilgan bloklar", '            function panelPopOutside(ev) {');
 
 const KEY = 'davolash ishi|5|d2/d22-09b|Epidemiologiya|practice';
 const stubs = (role, advice) => `
@@ -27,6 +29,7 @@ const stubs = (role, advice) => `
     const cycleCardStateText = c => c.placed ? 'joylangan' : 'joylanmagan';
     const ttToast = (h) => calls.push(['toast', h]);
     const ttAgendaOpen = i => calls.push(['agenda', i]);
+    const curWeek = 0, boardDayNames = () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
     const openCycleAssign = k => calls.push(['assign', k]);
     const placeCycleCardAt = (c, i, p) => calls.push(['place', c.key, i, p]);
     const loadCyclePlan = async () => calls.push(['reload']);
@@ -35,6 +38,18 @@ const stubs = (role, advice) => `
     async function api(url, method, body) {
         calls.push([url.replace(BASE + '/boards/7/', ''), body]);
         if (url.endsWith('cycle-shift-advice')) return { advice: ADVICE };
+        // O'qituvchining 03.11 kuni: ertalab 09a (to'qnashgan) va 09b (shu birlik); tushdan keyin — 09b boshqa fani va 09a boshqa darsi
+        // (to'qnashuv vaqtidan tashqarida: "shu dars" ham, qizil ham emas).
+        // Ma'ruzachi (32): 08:30 da o'z ma'ruzasi (dars 555) va boshqa ma'ruza (556) — bir vaqtda.
+        if (url.includes('/teacher-agenda?teacher_id=32')) return { entries: [
+            { from: 1, to: 3, start: '08:30', end: '09:50', groups: ['d2/d22-12a'], subject: 'Farmakologiya', type: 'M', room: 'Zal', card_ids: [90], key: 'l|555|2026-11-03|1' },
+            { from: 1, to: 3, start: '08:30', end: '09:50', groups: ['d2/d22-13a'], subject: 'Gistologiya', type: 'M', room: 'Zal', card_ids: [91], key: 'l|556|2026-11-03|1' }] };
+        if (url.includes('/teacher-agenda?')) return { entries: [
+            { from: 1, to: 7, start: '08:30', end: '13:20', groups: ['d2/d22-09a'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [77], key: 'c|u9|2026-11-03' },
+            { from: 1, to: 7, start: '08:30', end: '13:20', groups: ['d2/d22-09b'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [78],
+              key: 'c|' + ${JSON.stringify(KEY)} + '|2026-11-03' },
+            { from: 8, to: 10, start: '14:00', end: '15:20', groups: ['d2/d22-09b'], subject: 'Gigiyena', type: 'A', room: '306', card_ids: [79], key: 'c|u5|2026-11-03' },
+            { from: 10, to: 12, start: '15:30', end: '16:50', groups: ['d2/d22-09a'], subject: 'Anatomiya', type: 'A', room: '307', card_ids: [80], key: 'c|u6|2026-11-03' }] };
         if (url.endsWith('cycle-assign-options')) return { current: { teacher_id: 31, auditorium_code: 'R305' } };
         if (url.endsWith('cycle-plan')) return { rows: [{ group: 'F1 / 1-oqim', subgroups: ['d2/d22-09b'], blocks: [{ subject: 'Epidemiologiya', from: 50 }] }] };
         return { ok: true };
@@ -158,7 +173,45 @@ const settle = p => p.evaluate(() => new Promise(r => setTimeout(r, 30)));
         box = await p.evaluate(() => { const e = document.getElementById('cycDayPop'); const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, sh: e.scrollHeight, ch: e.clientHeight }; });
         assert.ok(box.top >= 8 && box.bottom <= 792 && box.sh > box.ch, 'max-height / scroll: ' + JSON.stringify(box));
         await p.close();
-        console.log('timetable cycle actions: 6 scenarios passed');
+        // 7) Sikl to'qnashuv oynasi (panel belgisi / jadval bloki): turlarga ajratilgan blok va [Ko'rsatish] — o'qituvchining to'qnashuv
+        //    sanasidagi (03.11) kunlik ro'yxati: to'qnashgan guruhcha (09a) qizil, shu dars (09b) belgilangan; haftalik jadval havolasi.
+        p = await page(browser, 'admin', partial, 40);
+        await p.evaluate(k => { const a = document.getElementById('anchor'); a.dataset.cfKey = k; T.openCfPop(a); }, KEY);
+        await settle(p);
+        assert.equal(await p.locator('#cycDayPop [data-cb-title]').textContent(), "To'qnashuv — sabab: o'qituvchi band");
+        assert.equal(await p.locator('#cycDayPop [data-cb-head]').textContent(), "O'qituvchi band: TOSHPO'LATOV B. A.");
+        await p.locator('#cycDayPop [data-cyc-cb-show]').click();
+        await p.waitForSelector('#cycDayPop [data-cyc-cb-detail] [data-cb-row]');
+        const agendaCall = (await p.evaluate(() => T.calls)).find(c => /teacher-agenda/.test(c[0]));
+        assert.match(agendaCall[0], /teacher-agenda\?teacher_id=31&date=2026-11-03&range=day&layer=internal/);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-detail-head]').textContent(), "TOSHPO'LATOV B. A. · Seshanba, 03.11");
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-hit]', xs => xs.map(x => x.textContent)), ['08:30–13:20 · d2/d22-09a · Epidemiologiya (amaliy) · 305']);
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-mine]', xs => xs.map(x => x.textContent)),
+            ['08:30–13:20 · d2/d22-09b · Epidemiologiya (amaliy) · 305 — shu dars']);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-row]').count(), 4);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-agenda]').textContent(), "O'qituvchining haftalik jadvali");
+        // Smena maslahati — o'z qatorida (bloklarda ham).
+        assert.match(await p.locator('#cycDayPop .cf-list > li[data-cf-i="0"] .cf-todo').textContent(), /13:30 ga o'tkazilsa/);
+        await p.close();
+
+        // 7b) Codex: sikl ma'ruzasi to'qnashuvi — kun ro'yxatida o'z ma'ruzasi (kaliti "l|555|…", yozuvning lecture_id si) "shu dars",
+        //     qizil emas (karta raqami ikkala tomon show.card_ids ichida bo'lsa ham); qizil — faqat boshqa ma'ruza.
+        p = await page(browser, 'admin', partial, 40);
+        await p.evaluate(() => cyclePlanData.cycle_cards.push({ key: 'u4', group: 'd2/d22-12a', placement_group: 'd2/d22-12a', specialty: 'davolash ishi', course: 5,
+            subject: 'Farmakologiya', type: 'lecture', placed: true, start_index: 50, conflict: "O'qituvchi band", teacher: { id: 32, name: "MA'RUZACHI" },
+            room: { code: 'Z1', name: 'Zal' }, mudir_ph: null,
+            conflicts: [{ kind: 'teacher_busy', type: 'teacher', who: "MA'RUZACHI", teacher_id: 32, groups: ['d2/d22-13a'], date_from: '2026-11-03',
+                date_to: '2026-11-03', past: false, lecture: true, lecture_id: 555, todo: "ma'ruza o'qituvchisini yoki vaqtini o'zgartiring",
+                show: { kind: 'teacher_busy', card_ids: [90, 91], hour_from: 1, hour_to: 3, hour_unit: 'hour', dates: ['2026-11-03', '2026-11-03'] } }] }));
+        await p.evaluate(() => { cfOwners[555] = 'u4'; const a = document.getElementById('anchor'); a.dataset.cfKey = 'u4'; T.openCfPop(a); });
+        await p.locator('#cycDayPop [data-cyc-cb-show]').click();
+        await p.waitForSelector('#cycDayPop [data-cyc-cb-detail] [data-cb-row]');
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-mine]', xs => xs.map(x => x.textContent)),
+            ["08:30–09:50 · d2/d22-12a · Farmakologiya (ma'ruza) · Zal — shu dars"]);
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-hit]', xs => xs.map(x => x.textContent)),
+            ["08:30–09:50 · d2/d22-13a · Gistologiya (ma'ruza) · Zal"]);
+        await p.close();
+        console.log('timetable cycle actions: 8 scenarios passed');
     } finally {
         await browser.close();
     }

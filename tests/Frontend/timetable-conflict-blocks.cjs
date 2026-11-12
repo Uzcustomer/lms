@@ -12,7 +12,9 @@ const code = cut('            // ===== Birlik: dars yaxlit joylanadi =====', "  
     + cut('            function conflictsAtDetail(card, day, pair, ignoredIds = [], opts = {}) {', '            // Joylash hukmi — ')
     + cut('            // ===== "Vaqtincha kafedra mudiriga yozish"', '            function renderPanel() {')
     + cut("            // Uzun guruh ro'yxati: avval 4 tasi", '            // "O\'qituvchi band": o\'qituvchi nomi')
-    + cut('            function focusBannerText(show, groups) {', '            function renderFocusBar() {');
+    + cut('            function focusBannerText(show, groups) {', '            function renderFocusBar() {')
+    // Panel kartasidagi to'qnashuv belgisi ([data-wcf]) — sahifadagi asl ishlovchi.
+    + cut("            // Panel (sikl va haftalik kartalar) to'qnashuv belgisi", "            // Haftalik panel kartasining to'qnashuvlari");
 const cycCode = cut("            // Sikl karta oynasi: to'qnashuvlar turlarga ajratilgan bloklarda", "            // Panel kartasi oynasi: to'qnashuvlar (bo'lsa), havolalar va amallar.");
 
 const stubs = `
@@ -26,7 +28,7 @@ const stubs = `
     const boardSchedule = () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i], abbr: ab[i] }));
     const boardDayNames = () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
     const weekMonday = () => new Date(2026, 10, 23);
-    const $ = () => null, cardLen = c => +c.len_half || 1, cardGroups = c => [c.group_name], cardGKeys = c => ['F¦S¦1¦' + c.group_name], isCycleCardAny = () => false;
+    const $ = id => document.getElementById(id), cardLen = c => +c.len_half || 1, cardGroups = c => [c.group_name], cardGKeys = c => ['F¦S¦1¦' + c.group_name], isCycleCardAny = () => false;
     const isNonBlocking = () => false, bolakSiblings = () => false, isSharedRoomName = () => false, weeksIntersect = () => true, describeCardBrief = c => c.subject_name;
     const effectiveCard = c => c, teacherFullNames = {}, teacherPhones = {}, inactiveRooms = {}, roomInactive = () => false, ROOM_OFF_TEXT = '';
     const weeklyCanEdit = () => !TIMETABLE_READ_ONLY && (WEEKLY_ADMIN || (weeklyLayer === 'external' ? false : TIMETABLE_ROLE === 'kafedra_mudiri'));
@@ -44,7 +46,9 @@ const stubs = `
         if (r && r.status >= 400) { const e = new Error(r.j.error); e.status = r.status; e.data = r.j; throw e; }
         return r;
     }
-    let cards = [], overrides = {};
+    let cards = [], overrides = {}, allCards = [], weeklyConflictItems = {};
+    window.oldCfPop = 0;
+    const openWeekCfPop = () => { window.oldCfPop++; }, openCfPop = () => {};
     const effPlace = c => placeInWeek(c, curWeek);
 `;
 const base = { faculty_name: '1-son davolash', specialty_name: 'davolash ishi', course: 1, training_type: 'practice', len_half: 2, students: 15,
@@ -65,11 +69,12 @@ const data = {
         const p = await (await browser.newContext({ viewport: { width: 1200, height: 900 } })).newPage();
         const errs = [];
         p.on('pageerror', e => errs.push(e.message));
-        await p.setContent('<!doctype html><html><body></body></html>');
+        await p.setContent('<!doctype html><html><body><div id="cardPanel"></div></body></html>');
         await p.addScriptTag({ content: stubs + code + cycCode + `
             window.T = {
                 set: o => { if ('role' in o) { TIMETABLE_ROLE = o.role; WEEKLY_ADMIN = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'].includes(o.role); }
-                    if ('layer' in o) weeklyLayer = o.layer; if ('week' in o) curWeek = o.week; if ('cards' in o) cards = o.cards; if ('ov' in o) overrides = o.ov; },
+                    if ('layer' in o) weeklyLayer = o.layer; if ('week' in o) curWeek = o.week; if ('cards' in o) cards = o.cards; if ('ov' in o) overrides = o.ov;
+                    if ('allCards' in o) allCards = o.allCards; if ('wci' in o) weeklyConflictItems = o.wci; },
                 open: id => openPanelCardPop(cards.find(c => c.id === id), document.body),
                 cbBlocks, cbTitle, cbBlockHead, cbLineText, cycCfBlocksHtml, focusBannerText, getSelected: () => selected,
             };` });
@@ -231,6 +236,56 @@ const data = {
         await p.click('#pnCardPop [data-cb-block="room"] [data-cb-show]');
         await p.waitForSelector('#pnCardPop [data-cb-block="room"] [data-cb-row]');
         assert.deepEqual(await txt('[data-cb-block="room"] [data-cb-mine]'), ['12:00–13:20 · d1/d26-03a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A. — shu dars (joylanmoqchi)']);
+
+        // 7f) Panel kartasidagi "⚠ Xona band (1)" belgisi ([data-wcf]): karta oynasi yangi bloklar bilan, [Ko'rsatish] o'zi ochiq — xona kunlik
+        //     ro'yxati, "Jadvalda ko'rsatish" va "Xonaning haftalik jadvali"; eski qisqa oyna ochilmaydi.
+        await setCards([Object.assign({}, data.card, { day: 3, pair: 3 }), Object.assign({}, data.blocker, { teacher_id: 44, teacher_name: 'BOSHQA' })]);
+        await p.evaluate(() => { document.getElementById('cardPanel').innerHTML = '<div class="pn-conflict" role="button" data-wcf="708676">⚠ Xona band (1)</div>'; });
+        await p.click('#cardPanel [data-wcf]');
+        await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-agenda]');
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-head]'), ['Xona band: 123-amaliyot xonasi']);
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-block="room"] [data-cb-agenda]'), ['Xonaning haftalik jadvali']);
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-block="room"] [data-cb-focus]'), ["Jadvalda ko'rsatish"]);
+        assert.ok((await txt('[data-pop-cf] [data-cb-block="room"] [data-cb-row]')).length >= 2);
+        assert.equal(await p.evaluate(() => window.oldCfPop), 0);
+        await p.click('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-agenda]');
+        assert.deepEqual(await p.evaluate(() => agenda.pop()), { room_code: 'R123', room_name: '123-amaliyot xonasi', date: '2026-11-25', range: 'week' });
+        // Hafta tanlanmagan (yoki tashqi jadval) — eski qisqa oyna.
+        await p.evaluate(() => { T.set({ week: 0 }); });
+        await p.click('#cardPanel [data-wcf]');
+        assert.equal(await p.evaluate(() => window.oldCfPop), 1);
+        await p.evaluate(() => { T.set({ week: 11 }); });
+
+        // 7g) Codex: cheklangan ko'rinish (kafedra / mas'ul fanlar) — band qilgan dars ko'rinadigan ro'yxatda (cards) yo'q, faqat server
+        //     yozuvida (weeklyConflictItems) bor: belgi bosilganda blok server yozuvidan quriladi — "Xona band: 123-amaliyot xonasi" va xona havolalari.
+        const scopedCard = Object.assign({}, data.card, { day: 3, pair: 3 });
+        const outOfScope = Object.assign({}, data.blocker, { teacher_id: 44, teacher_name: 'BOSHQA' });
+        await p.evaluate(([sc, oo]) => T.set({ cards: [sc], ov: {}, allCards: [sc, oo], wci: { __week: 11, 708676: { 11: [{ kind: 'room_busy', type: 'room',
+            room: 'R123', room_name: '123-amaliyot xonasi', groups: ['d1/d26-01a'], with_card: 708662, date_from: '2026-11-25', date_to: '2026-11-25', past: false,
+            show: { kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', groups: [], dates: ['2026-11-25', '2026-11-25'], hour_from: 3, hour_to: 5,
+                hour_unit: 'row', card_ids: [708676, 708662], view: 'week', week: 11 } }] } } }), [scopedCard, outOfScope]);
+        await p.click('#cardPanel [data-wcf]');
+        await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-agenda]');
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-head]'), ['Xona band: 123-amaliyot xonasi']);
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-block="room"] [data-cb-agenda]'), ['Xonaning haftalik jadvali']);
+        assert.equal(await p.evaluate(() => window.oldCfPop), 1);
+        await p.click('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-focus]');
+        assert.deepEqual((await p.evaluate(() => focus.pop())).card_ids, [708676, 708662]);
+        await p.evaluate(() => T.set({ allCards: [], wci: {} }));
+
+        // 7h) Codex: band qilgan dars boshqa kalendarli dasturda (25.11 — uning 10-haftasi): vaqti va xonasi server yozuvidagi o'z haftasidan
+        //     (with_week/with_pair/with_room), tanlangan 11-hafta shabloni (juma 15:00, 200-xona) emas.
+        const otherCal = Object.assign({}, data.blocker, { teacher_id: 44, teacher_name: 'BOSHQA', specialty_name: 'pediatriya', day: 5, pair: 9,
+            auditorium_code: 'R200', auditorium_name: '200-xona' });
+        await p.evaluate(([sc, oo]) => T.set({ cards: [sc], ov: {}, allCards: [sc, oo], wci: { __week: 11, 708676: { 11: [{ kind: 'room_busy', type: 'room',
+            room: 'R123', room_name: '123-amaliyot xonasi', groups: ['d1/d26-01a'], with_card: 708662, with_week: 10, with_day: 3, with_pair: 3,
+            with_room: 'R123', with_room_name: '123-amaliyot xonasi', date_from: '2026-11-25', date_to: '2026-11-25', past: false,
+            show: { kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', groups: [], dates: ['2026-11-25'], hour_from: 3, hour_to: 5,
+                hour_unit: 'row', card_ids: [708676, 708662], view: 'week', week: 11 } }] } } }), [scopedCard, otherCal]);
+        await p.click('#cardPanel [data-wcf]');
+        await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-agenda]');
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-line]'), ['10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · BOSHQA · 123-amaliyot xonasi']);
+        await p.evaluate(() => T.set({ allCards: [], wci: {} }));
 
         // 8) Fokus bannerida xona NOMI (kodi emas); sikl karta oynasi — turlarga ajratilgan bloklar.
         assert.equal(await p.evaluate(() => T.focusBannerText({ kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', dates: ['2026-11-25'] }, [{ group: 'd1/d26-03a' }, { group: 'd1/d26-01a' }])),

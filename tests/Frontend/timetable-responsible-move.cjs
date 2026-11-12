@@ -16,6 +16,8 @@ const code = cut("            // ===== Fan mas'uli: mas'ul fani darsining vaqti 
 // Xona qidiruvi (harf, tutuq belgisi, kirill-lotin farqsiz) va sig'im matni — sahifadagi asl funksiyalar.
 const search = cut('            const UZ_CYR_LAT = {', '            // Ma\'ruza yorlig\'i:');
 const capText = cut('            const cfCapText = ', '            const cfDate = ');
+// "Amaldagi" — butun dars (ko'p bo'lakli: kunlar bo'yicha oraliq; bo'lingan — "(bo'lingan)") — sahifadagi asl funksiyalar.
+const unitDays = cut('            function unitIsSplit(list, W = curWeek) {', "            // Ko'p bo'lakli amaliy dars shu haftada:");
 
 const page0 = `<!doctype html><html><head><style>${css}</style></head><body><script>
     const BASE = '/admin/timetable';
@@ -37,6 +39,8 @@ const page0 = `<!doctype html><html><head><style>${css}</style></head><body><scr
     window.next = [];
 ${search}
 ${capText}
+    const placeInWeek = c => effPlace(c);
+${unitDays}
     const ttToast = (h, t) => window.toasts.push([h, t]);
     const loadBoard = async () => { window.reloaded++; };
     const loadChangeRequests = async () => { window.reqLoaded++; };
@@ -178,9 +182,18 @@ const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.m
     const startOpts = await page.$$eval('#respMove select[name="pair"] option', xs => xs.map(o => o.value));
     assert.equal(startOpts.length, 12 - 4 + 1);   // 4 soatlik dars — 1..9
     assert.match(await page.locator('#respMove').innerText(), /2 \+ 2 soatlik bo‘laklar/);
+    // Amaldagi — butun dars: birinchi bo'lak boshidan oxirgisi oxirigacha (avval faqat birinchi bo'lak oralig'i).
+    assert.match(await page.locator('#respMove [data-rmv-now]').innerText(), /^Amaldagi: Chorshanba 08:00–12:00, xona 101-xona/);
     await page.click('#respMove [type="submit"]');
     await page.waitForFunction(() => !document.getElementById('respMove'));
     assert.deepEqual(await page.evaluate(() => [window.reloaded, window.toasts.at(-1)[1]]), [1, 'ok']);
+
+    // 5a) Bo'laklar turli kunlarda (bo'lingan) — amaldagi har kun alohida.
+    await page.evaluate(() => { window.units[2][1] = { id: 3, len_half: 2, day: 5, pair: 3 }; window.next = [{ status: 200, j: { ok: true, mode: 'fix', message: 'Darhol.', rooms: [] } }]; });
+    await page.evaluate(c => window.openResponsibleMove(c), { ...card, id: 2, day: 3, pair: 1 });
+    assert.match(await page.locator('#respMove [data-rmv-now]').innerText(), /^Amaldagi: Chorshanba 08:00–10:00; Juma 10:00–12:00 \(bo‘lingan\)/);
+    await page.click('#respMove [data-close]');
+    await page.evaluate(() => { window.units[2][1] = { id: 3, len_half: 2, day: 3, pair: 3 }; });
 
     // 5b) Ko'p xona (~650): avval 50 ta, "Ko'proq ko'rsatish" — yana 50; qidiruv — hammasidan (ro'yxatdan tashqaridagi ham topiladi).
     // Tanlangan xona yangi vaqtda band bo'lib qolsa — "hozirgi xona"ga qaytadi. Mobil kenglikda ro'yxat sahifadan chiqib ketmaydi.

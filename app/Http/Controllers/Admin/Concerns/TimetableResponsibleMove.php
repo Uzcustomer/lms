@@ -492,9 +492,11 @@ trait TimetableResponsibleMove
             return $no(422, implode(' · ', $errors), $errors, $info + ['rooms' => $rooms]);
         }
         $mode = $needsFix ? 'fix' : 'request';
+        // Joylanmagan dars (shu haftada birorta bo'lagi joyida emas) — "joylanadi", to'qnashuvdagi — "qo'llanadi (to'qnashuvni tuzatish)".
+        $unplaced = $parts->every(fn (TimetableCard $c) => $this->suggestionPlace($c, $week) === null);
 
         return ['status' => 200, 'body' => ['ok' => true, 'mode' => $mode, 'conflicts' => [], 'rooms' => $rooms,
-            'message' => $mode === 'fix' ? "Darhol qo'llanadi (to'qnashuvni tuzatish, faqat shu hafta)."
+            'message' => $mode === 'fix' ? ($unplaced ? 'Darhol joylanadi (faqat shu hafta).' : "Darhol qo'llanadi (to'qnashuvni tuzatish, faqat shu hafta).")
                 : "So'rov kafedra mudiri va registrator ofisiga yuboriladi (dars to'qnashuvsiz joylashgan)."] + $info,
             'ctx' => ['board' => $board, 'week' => $week, 'acts' => $acts]];
     }
@@ -750,6 +752,20 @@ trait TimetableResponsibleMove
         $first = $moves[0][0];
         $old = $this->suggestionSlot($board, $first, $week);
         $names = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
+        // Amaldagi joy — butun dars (ko'p bo'lakli: birinchi bo'lak boshidan oxirgisi oxirigacha, kunlar bo'yicha; turli kunda — "bo'lingan").
+        $byDay = [];
+        foreach ($moves as [$piece]) {
+            if ($pl = $this->suggestionPlace($piece, $week)) {
+                $r = $this->rangeFor($piece, $pl[1], 0);
+                $byDay[$pl[0]] = isset($byDay[$pl[0]]) ? [min($byDay[$pl[0]][0], $r[0]), max($byDay[$pl[0]][1], $r[1])] : $r;
+            }
+        }
+        ksort($byDay);
+        if (count($moves) > 1 && $byDay) {
+            $old['text'] = implode('; ', array_map(fn ($d, $r) => ($names[$d - 1] ?? $d . '-kun') . ', '
+                . $this->weekStartDate($board, $first, $week)->addDays($d - 1)->format('d.m.Y') . ' ' . $this->halfRangeTime($board, $r), array_keys($byDay), $byDay))
+                . (count($byDay) > 1 ? " (bo'lingan)" : '');
+        }
         $last = end($moves);
         $from = $this->rangeFor($first, $moves[0][1], 0);
         $to = $this->rangeFor($last[0], $last[1], 0);

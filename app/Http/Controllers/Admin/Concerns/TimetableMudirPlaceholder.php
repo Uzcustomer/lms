@@ -138,7 +138,7 @@ trait TimetableMudirPlaceholder
         if ($pair + $total - 1 > (int) $grid['pairs']) {
             return response()->json(['error' => $total . " soat sig'maydi: kun oxiri."], 422);
         }
-        $admin = in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'], true);
+        $admin = in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true);
         $today = self::proposalToday();
         $weeks = ($data['scope'] ?? 'one') === 'rest' ? range($W, (int) $grid['weeks']) : [$W];
         $weeks = array_values(array_filter($weeks, fn ($w) => $admin || $this->weekStartDate($card->board, $card, $w)->addDays($day - 1)->toDateString() > $today));
@@ -359,7 +359,7 @@ trait TimetableMudirPlaceholder
     private function cycleMudirUnit(Request $request, $board, string $key)
     {
         $role = $this->timetableActiveRole($request);
-        if ($this->timetableActor($request) && !in_array($role, ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin', 'kafedra_mudiri'], true)) {
+        if ($this->timetableActor($request) && !in_array($role, array_merge(self::TIMETABLE_FULL_EDIT_ROLES, ['kafedra_mudiri']), true)) {
             return response()->json(['error' => "Vaqtincha kafedra mudiriga yozish — admin, registrator va kafedra mudiri uchun."], 403);
         }
         [$units, $calendar] = $this->placedCycleUnits($board);

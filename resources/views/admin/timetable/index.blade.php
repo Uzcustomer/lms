@@ -11,7 +11,10 @@
     if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
         $timetableActiveRole = $timetableRoles[0];
     }
-    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    // Jadval administratorlari (JADVAL_ADMIN: admin, superadmin, registrator ofisi, kichik admin, o'quv bo'limi) — shu modulda teng huquqli.
+    $timetableJadvalAdmin = in_array($timetableActiveRole, \App\Http\Controllers\Admin\TimetableController::TIMETABLE_FULL_EDIT_ROLES, true);
+    // O'quv bo'limi endi jadval administratori — "faqat auditoriya biriktirish" rejimi hech kimga qo'llanmaydi (o'zgaruvchi qoldirilgan).
+    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true) && !$timetableJadvalAdmin;
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
     // O'qituvchi: jadvalni bevosita tahrirlamaydi, o'z darsiga vaqt taklifini yuboradi.
     $timetableReadOnly = in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli'], true);
@@ -24,7 +27,7 @@
     } catch (\Throwable $e) { /* Biriktirishsiz fan mas'uli uchun ham bo'sh filtr saqlanadi. */ }
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead || $timetableReadOnly;
     // Joylashtirish (kafedra mudiri — ichki qatlamda o'z kafedrasi kartalari: joyi, o'qituvchisi, xonasi).
-    $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
+    $timetableCanPlace = $timetableActiveRole === 'kafedra_mudiri';
     // Bo'shatish va sikl kalendari ("+ qo'shish") — kartalar ro'yxati/doska sozlamasini o'zgartiradi: kafedra mudiriga yopiq.
     $timetableCanUnplace = $timetableAuditoriumAssignmentOnly;
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchi, fan mas'uli va kafedra mudiriga yopiq.
@@ -54,9 +57,9 @@
     }
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
-    $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
+    $timetableCanApprove = in_array($timetableActiveRole, \App\Services\Timetable\TimetableChangeApproval::APPROVER_ROLES, true);
     // Butun doska bo'yicha joylanmagan kartalar hisoboti (Excel) — serverdagi ruxsat bilan bir xil rollar.
-    $timetableCanBoardReport = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    $timetableCanBoardReport = $timetableJadvalAdmin;
     $timetableUsesChangeRequests = $timetableCanApprove
         || in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
@@ -257,7 +260,7 @@
                             <button type="button" id="hemisSyncBtn" class="tt-ktr-weeks-btn" title="Tanlangan qamrov: LMS ichki jadvali va KTR ↔ HEMIS dars jadvali. Bugungacha o'tilgan darslar balansi (soat va soni), ertadan boshlab tuzatish takliflari va HEMIS'da qilinadigan amallar">HEMIS solishtirish</button>
                             <button type="button" id="hemisTodayBtn" class="tt-ktr-weeks-btn" title="Faqat bugungi darslar (tanlangan qamrov): LMS ↔ HEMIS — o'qituvchi, xona va para vaqti; bugun qo'shish/o'chirish faqat belgilanmagan (davomat/baho yo'q) darslar uchun; davomat olingan yoki baho qo'yilgan darsga tegilmaydi">Bugungi darslar (HEMIS)</button>
                             @endif
-                            @if(in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'kafedra_mudiri', 'oqituvchi'], true))
+                            @if($timetableJadvalAdmin || in_array($timetableActiveRole, ['kafedra_mudiri', 'oqituvchi'], true))
                             <button type="button" id="blockTicketsBtn" class="tt-ktr-weeks-btn" title="HEMIS to'siqlari bo'yicha so'rovlar: javob berish va (kafedra mudiri) hal qilish">To'siq so'rovlari</button>
                             @endif
                         </div>
@@ -1020,7 +1023,7 @@
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgCount" class="text-xs text-slate-400"></span>
-                                    @if(in_array($timetableActiveRole, ['admin', 'superadmin', 'registrator_ofisi'], true))
+                                    @if($timetableJadvalAdmin)
                                         {{-- Kafedralar kesimida o'qituvchi va xona biriktirish hisoboti (admin, registrator ofisi) --}}
                                         <button type="button" id="asgReportBtn" class="asc-btn text-xs" style="background:#059669;color:#fff;border-color:#059669"
                                                 title="Har bir kafedra bo'yicha o'qituvchi va xona biriktirilgan / biriktirilmagan darslar">
@@ -3637,15 +3640,15 @@
                 const approver = Boolean(changeReqs.can_approve);
                 const modeHtml = approver
                     ? '<label class="cr-mode"><input type="checkbox" id="crModeChk"' + (changeReqs.approval_required ? ' checked' : '') + '> ' +
-                      'Kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tsin</label>'
+                      'Kafedra mudirlari o\'zgarishlari registrator ofisi / o\'quv bo\'limi tasdig\'idan o\'tsin</label>'
                     : '<div class="cr-mode-info">' + (TIMETABLE_ROLE === 'oqituvchi' || TIMETABLE_ROLE === 'fan_masuli'
-                        ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi tasdiqlagach jadvalga tushadi.'
+                        ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi yoki o\'quv bo\'limi tasdiqlagach jadvalga tushadi.'
                         : TIMETABLE_DEPARTMENT_HEAD
                         ? (changeReqs.approval_required
-                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi. Bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish — darhol.'
+                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi yoki o\'quv bo\'limi tasdiqlagandan keyin jadvalga tushadi. Bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish — darhol.'
                             : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')
                         : (changeReqs.approval_required
-                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi (bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish bundan mustasno).'
+                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi yoki o\'quv bo\'limi tasdig\'idan o\'tadi (bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish bundan mustasno).'
                             : 'Bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')) + '</div>';
                 const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
@@ -5317,7 +5320,7 @@
                         else { if (!$('tkPair').value) return alert('Vaqt tanlang.'); body.pair = +$('tkPair').value; if (k === 'day') body.day = +$('tkDay').value; }
                         try {
                             const r = await api(BASE + '/block-tickets/' + t.id + '/resolve', 'POST', body);
-                            alert(r.status === 'pending_registrar' ? 'Kunni o\'zgartirish so\'rovi registrator ofisiga yuborildi.' : 'Saqlandi: o\'zgarish LMS ichki jadvalida qo\'llandi.');
+                            alert(r.status === 'pending_registrar' ? 'Kunni o\'zgartirish so\'rovi registrator ofisi va o\'quv bo\'limiga yuborildi.' : 'Saqlandi: o\'zgarish LMS ichki jadvalida qo\'llandi.');
                             hsTicketOpen(t.id);
                         } catch (e) { alert(hsErrText(e)); }
                     };
@@ -8858,7 +8861,8 @@
             const CYC_PARTS = ['lecture', 'practice'];
             const CYC_LOOK_LABEL = { both: 'Birga', lecture: 'Faqat ma\'ruza', practice: 'Faqat amaliy' };
             // Bugungi kun — faqat shu rollar (dars boshlangan, hatto tugagan bo'lsa ham; server ham tekshiradi — TimetableStaffToday).
-            const CYC_TODAY_ROLES = ['admin', 'superadmin', 'registrator_ofisi'];
+            // Server TODAY_STAFF_ROLES (= TIMETABLE_FULL_EDIT_ROLES) bilan bir xil.
+            const CYC_TODAY_ROLES = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
             // Kunni tanlab bo'ladimi: darsi bor, kelgusi kun; bugungi — admin / registrator ofisi (har qanday holatda); o'tgan — hech kim.
             function cycSelEligible(block, offset) {
                 const dp = block && block.day_plan ? block.day_plan[offset] : null;
@@ -9405,7 +9409,7 @@
                     '<p>' + esc(card.subject) + ' · ' + esc(card.group) + ' · ' + (lecture ? 'ma’ruza' : 'amaliy') + ' (sikl)</p>' +
                     (lecture ? '<p class="text-sm font-semibold text-amber-700" data-flow>Ma’ruza butun oqim uchun o‘zgaradi.</p>' : '') +
                     '<p class="text-sm">' + esc(date.d) + ' (' + dp.k + '-kun) · hozir: ' + esc(label(cur)) + '</p>' +
-                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Kun, guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
+                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi yoki o‘quv bo‘limi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Kun, guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
                     // Sudrab ochilganda (opts.start) — yangi vaqt oldindan tanlangan; aks holda hozirgi.
                     '<label>Yangi boshlanish vaqti<select name="start_hour" required>' + Array.from({ length: maxStart }, (_, i) => i + 1)
                         .map(h => '<option value="' + h + '"' + (h === (opts.start >= 1 && opts.start <= maxStart ? +opts.start : cur) ? ' selected' : '') + '>'
@@ -14417,7 +14421,7 @@
                 m.innerHTML = '<form class="cr-proposal-form"><h3 class="font-bold text-lg">Vaqtini o‘zgartirishni so‘rash</h3>' +
                     '<p>' + esc(c.subject_name) + ' · ' + curWeek + '-hafta</p>' +
                     '<p class="text-sm">Amaldagi vaqt: ' + esc(pl ? (days[pl.day - 1] + ' · ' + (slots[pl.pair - 1]?.start || pl.pair + '-katak')) : 'Joylashmagan') + '</p>' +
-                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Faqat ertangi va keyingi kunlardagi darslar; guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
+                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi yoki o‘quv bo‘limi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Faqat ertangi va keyingi kunlardagi darslar; guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
                     '<label>Yangi kun<select name="day" required>' + days.map((d, i) => '<option value="' + (i + 1) + '"' + (pl?.day === i + 1 ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select></label>' +
                     '<label>Yangi boshlanish vaqti<select name="pair" required>' + slots.map((s, i) => '<option value="' + (i + 1) + '"' + (pl?.pair === i + 1 ? ' selected' : '') + '>' + esc(s.start || (i + 1) + '-katak') + '</option>').join('') + '</select></label>' +
                     '<label>O‘zgarish sababi<textarea name="reason" required maxlength="1000" rows="3"></textarea></label>' +

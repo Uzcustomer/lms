@@ -21,7 +21,7 @@ use Illuminate\Validation\ValidationException;
  * Huquq foydalanuvchining BARCHA rollaridan eng kengi bo'yicha (suggestionRights): admin, superadmin, registrator ofisi,
  * kichik admin — hammasi, darhol; kafedra mudiri — o'z kafedrasi fanlari, so'rov → registrator ofisi; fan mas'uli — mas'ul
  * fanlari (shu fanlarning barcha o'qituvchilari), o'qituvchi — o'z darslari, so'rov → kafedra mudiri → registrator ofisi;
- * o'quv bo'limi — hammasini ko'radi, qo'llamaydi.
+ * o'quv bo'limi — jadval administratori (SUGGESTION_ADMIN_ROLES): ko'radi va qo'llaydi.
  *
  * Taklif yaxlit: barcha amallari bitta tranzaksiyada (runSuggestionActions) — yo hammasi, yo hech biri; so'rov ham bitta.
  */
@@ -30,7 +30,7 @@ trait TimetableSuggestionApply
     /** Taklif amallarini yaxlit bajaruvchi route (tasdiqlangan so'rov ham shu bilan qayta bajariladi). */
     public const SUGGESTION_ROUTE = 'admin.timetable.week-suggestions.apply';
 
-    private const SUGGESTION_ADMIN_ROLES = ['superadmin', 'admin', 'registrator_ofisi', 'kichik_admin'];
+    private const SUGGESTION_ADMIN_ROLES = \App\Http\Controllers\Admin\TimetableController::TIMETABLE_FULL_EDIT_ROLES;
 
     /**
      * @return array{level: ?string, view: bool, tid: int, kafedra: ?array, keys: array}

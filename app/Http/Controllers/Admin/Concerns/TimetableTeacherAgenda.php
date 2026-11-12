@@ -146,7 +146,7 @@ trait TimetableTeacherAgenda
             return true;   // ichki chaqiruv (konsol/test)
         }
         $role = $this->timetableActiveRole($request);
-        if (in_array($role, ['admin', 'superadmin', 'registrator_ofisi', 'fan_masuli'], true)) {
+        if (in_array($role, array_merge(self::TIMETABLE_FULL_EDIT_ROLES, ['fan_masuli']), true)) {
             return true;
         }
         if ($role === 'kafedra_mudiri') {

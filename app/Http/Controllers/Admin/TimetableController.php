@@ -39,7 +39,9 @@ class TimetableController extends Controller
      * cycleLayerEditable; mijozda — WEEKLY_ADMIN). Boshqalar: o'quv bo'limi — tashqi, kafedra mudiri — ichki (o'z kafedrasi), qolganlari
      * faqat ko'radi.
      */
-    public const TIMETABLE_FULL_EDIT_ROLES = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'];
+    // Jadval administratorlari (JADVAL_ADMIN): "Dars jadvali tuzish" modulida registrator ofisi huquqlari bilan teng — admin, superadmin,
+    // registrator ofisi, kichik admin, o'quv bo'limi (boshlig'i). Boshqa modullarga ta'sir qilmaydi.
+    public const TIMETABLE_FULL_EDIT_ROLES = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
 
     private function isNonBlocking($card, TimetableBoard $board): bool
     {
@@ -1633,7 +1635,7 @@ class TimetableController extends Controller
      */
     public function addMissingGroupCards(Request $request, TimetableBoard $board)
     {
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
         $this->snapshotBefore($request, $board, 'before_add_groups');
@@ -2537,7 +2539,7 @@ class TimetableController extends Controller
             'courses.*'         => 'integer|min:1|max:7',
             'dry_run'           => 'nullable|boolean',
         ]);
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
         $this->snapshotBefore($request, $board, 'before_merge_lectures');
@@ -2684,7 +2686,7 @@ class TimetableController extends Controller
      */
     public function separatePracticeGroups(Request $request, TimetableBoard $board)
     {
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             abort(403);
         }
         $data = $request->validate([
@@ -2779,7 +2781,7 @@ class TimetableController extends Controller
             'courses.*'         => 'integer|min:1|max:7',
             'dry_run'           => 'nullable|boolean',
         ]);
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
         $this->snapshotBefore($request, $board, 'before_split_practice');
@@ -2840,7 +2842,7 @@ class TimetableController extends Controller
             'courses.*'         => 'integer|min:1|max:7',
             'dry_run'           => 'nullable|boolean',
         ]);
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
         // Aralash karta faqat HEMIS doskada (biriktiruv bo'yicha) yig'iladi; ishchi reja doskasida
@@ -4407,7 +4409,8 @@ class TimetableController extends Controller
         // baribir ochiladi, faqat belgilash saqlanmaydi.
         $hasLectureSlots = Schema::hasTable('timetable_cycle_placements')
             && Schema::hasColumn('timetable_cycle_placements', 'lecture_slots');
-        $cycleSimple = $cycleMark || in_array($cycleRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+        // O'quv bo'limi — jadval administratori: ichki qatlamda registrator kabi to'liq ko'rinish (tashqi qatlam — hammaga sodda).
+        $cycleSimple = $cycleMark;
         // Tashqi (o'quv bo'limi, tavsiyaviy) / ichki (kafedra, KTR bo'yicha) jadval.
         // Tashqi: fanga bitta blok, ma'ruza/amaliy ajratilmaydi (sodda ko'rinish).
         // Ichki: ma'ruza/amaliy alohida; kafedra mudiri uchun belgilash rejimi.
@@ -9585,7 +9588,7 @@ class TimetableController extends Controller
     }
 
     /** Butun doska bo'yicha joylanmagan kartalar hisobotiga ruxsati bor rollar. */
-    private const UNPLACED_REPORT_ROLES = ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
+    private const UNPLACED_REPORT_ROLES = self::TIMETABLE_FULL_EDIT_ROLES;
 
     /** Butun doska hisobotining Yig'ma varag'idagi izoh (ichki qatlam). */
     public const UNPLACED_REPORT_CONFLICT_NOTE = 'To\'qnashuvlar — faqat bugungi va kelgusi kunlar (doskadagi kabi)';
@@ -11662,7 +11665,7 @@ class TimetableController extends Controller
         if (!Schema::hasColumn('timetable_cards', 'ext_day')) {
             return response()->json(['error' => 'Migratsiya hali ishga tushirilmagan (php artisan migrate).'], 503);
         }
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
         $this->snapshotBefore($request, $board, 'before_layer_copy');
@@ -12830,7 +12833,7 @@ class TimetableController extends Controller
      */
     private function cycleDayEditor(string $role): bool
     {
-        return $role === 'registrator_ofisi';
+        return in_array($role, self::TIMETABLE_FULL_EDIT_ROLES, true);
     }
 
     private function cycleLayerDenied(string $layer)
@@ -13149,7 +13152,7 @@ class TimetableController extends Controller
      */
     public function assignmentReport(Request $request, TimetableBoard $board)
     {
-        abort_unless(in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true), 403, 'Hisobot faqat admin va registrator ofisi uchun.');
+        abort_unless(in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true), 403, 'Hisobot faqat jadval administratorlari (admin, registrator ofisi, o\'quv bo\'limi) uchun.');
 
         $units = [];
         $approved = $this->approvedOqimGroupKeys($board);

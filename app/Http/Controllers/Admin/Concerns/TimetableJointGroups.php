@@ -142,7 +142,7 @@ trait TimetableJointGroups
 
     private function jointDenied(Request $request)
     {
-        return in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)
+        return in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)
             ? null : response()->json(['error' => 'Bu amal faqat admin va registrator ofisi uchun.'], 403);
     }
 

@@ -6,7 +6,9 @@ const source = fs.readFileSync(path.join(__dirname, '../../resources/views/admin
 
 // "Butun doska (Excel)": faqat ruxsati bor rollarga ko'rinadi; hisobot fonda tayyorlanadi — bosilganda oyna (progress bar,
 // foiz, bosqich nomi), holat so'rab turiladi, tayyor bo'lsa fayl o'zi yuklanadi; xato oynada chiqadi (alert yo'q).
-assert.match(source, /\$timetableCanBoardReport = in_array\(\$timetableActiveRole, \['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'\], true\);/);
+// Hisobot — jadval administratorlari (TIMETABLE_FULL_EDIT_ROLES, server UNPLACED_REPORT_ROLES bilan bir xil).
+assert.match(source, /\$timetableJadvalAdmin = in_array\(\$timetableActiveRole, \\App\\Http\\Controllers\\Admin\\TimetableController::TIMETABLE_FULL_EDIT_ROLES, true\);/);
+assert.match(source, /\$timetableCanBoardReport = \$timetableJadvalAdmin;/);
 assert.match(source, /@if \(\$timetableCanBoardReport\)\s*<button type="button" id="unplacedReportBtn"[\s\S]*?Butun doska \(Excel\)\s*<\/button>\s*@endif/);
 
 const a = source.indexOf("            // Butun doska bo'yicha joylanmagan kartalar hisoboti — tanlangan fakultetga");

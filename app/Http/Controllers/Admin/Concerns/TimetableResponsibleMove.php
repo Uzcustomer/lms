@@ -497,7 +497,7 @@ trait TimetableResponsibleMove
 
         return ['status' => 200, 'body' => ['ok' => true, 'mode' => $mode, 'conflicts' => [], 'rooms' => $rooms,
             'message' => $mode === 'fix' ? ($unplaced ? 'Darhol joylanadi (faqat shu hafta).' : "Darhol qo'llanadi (to'qnashuvni tuzatish, faqat shu hafta).")
-                : "So'rov kafedra mudiri va registrator ofisiga yuboriladi (dars to'qnashuvsiz joylashgan)."] + $info,
+                : "So'rov kafedra mudiri, registrator ofisi va o'quv bo'limiga yuboriladi (dars to'qnashuvsiz joylashgan)."] + $info,
             'ctx' => ['board' => $board, 'week' => $week, 'acts' => $acts]];
     }
 

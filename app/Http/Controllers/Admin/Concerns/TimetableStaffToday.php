@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 trait TimetableStaffToday
 {
     /** Bugungi darsni ko'chira oladigan rollar (faol rol). */
-    public const TODAY_STAFF_ROLES = ['admin', 'superadmin', 'registrator_ofisi'];
+    public const TODAY_STAFF_ROLES = \App\Http\Controllers\Admin\TimetableController::TIMETABLE_FULL_EDIT_ROLES;
 
     /** Bugun ochiqmi: faol rol — admin / superadmin / registrator ofisi yoki xodim tasdiqlagan so'rovni qayta bajarish. */
     private function staffTodayOk(Request $request): bool

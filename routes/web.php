@@ -1293,7 +1293,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // HEMIS to'siqlari bo'yicha so'rovlar (registrator → o'qituvchi / kafedra mudiri, Telegram). Ruxsat kontrollerda.
         Route::prefix('dars-jadvali-tuzish')->name('timetable.')
-            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|kafedra_mudiri|oqituvchi', \App\Http\Middleware\TimetableActiveRoom::class])
+            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|kafedra_mudiri|oqituvchi', \App\Http\Middleware\TimetableActiveRoom::class])
             ->group(function () {
                 Route::post('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsSend'])->name('block-tickets.send');
                 Route::get('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsIndex'])->name('block-tickets.index');

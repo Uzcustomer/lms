@@ -990,11 +990,14 @@ it('joylanmagan kartalar xulosasi (HEMIS\'siz): haftalik va sikl — "Guruh bo\'
     expect($summary(['until_week' => 2, 'courses' => [1]])->json('cycle.count'))->toBe(0)
         ->and($summary(['until_week' => 2, 'groups' => ['g5-01a']])->json())->toMatchArray(['weekly' => ['count' => 0, 'items' => []]])
         ->and($summary(['until_week' => 2, 'groups' => ['g5-01a']])->json('cycle.count'))->toBe(1);
-    // Ruxsat — solishtirish bilan bir xil rollar (dars jadvaliga kira oladigan boshqa rol — yo'q)
+    // Ruxsat — solishtirish bilan bir xil rollar (jadval administratorlari: kichik admin ham); kafedra mudiri — yo'q.
     Role::findOrCreate('kichik_admin', 'web');
     $other = Teacher::where('full_name', 'MUDIR')->first();
     $other->assignRole('kichik_admin');
-    $summary(['until_week' => 2], 'kichik_admin', $other)->assertForbidden();
+    $summary(['until_week' => 2], 'kichik_admin', $other)->assertOk();
+    Role::findOrCreate('kafedra_mudiri', 'web');
+    $other->assignRole('kafedra_mudiri');
+    $summary(['until_week' => 2], 'kafedra_mudiri', $other)->assertForbidden();
 });
 
 it('joylanmagan kartalar: unplaced-summary va hemis-sync javobidagi unplaced bir xil', function () {

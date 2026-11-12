@@ -628,15 +628,16 @@ it('ruxsat: registrator ofisi va kichik admin sikl jadvalining ikkala qatlamini 
     TimetableCard::where('board_id', $s['board']->id)->update(['kafedra_name' => 'Jarrohlik kafedrasi']);
     $place($s, $head, 'kafedra_mudiri', 'internal')->assertForbidden()->assertJsonPath('error', 'Bu fan sizning kafedrangizga tegishli emas.');
     $place($s, dmTeacher('REG2', 'registrator_ofisi'), 'registrator_ofisi', 'internal')->assertOk();
-    // O'quv bo'limi: tashqi — ha, ichki — yo'q.
-    $s = dmSetup();
-    $oquv = dmTeacher('OQUV', 'oquv_bolimi');
-    expect($canEdit($s, $oquv, 'oquv_bolimi', 'external'))->toBeTrue()->and($canEdit($s, $oquv, 'oquv_bolimi', 'internal'))->toBeFalse();
-    $place($s, $oquv, 'oquv_bolimi', 'internal')->assertForbidden()->assertJsonPath('error', 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.');
-    $place($s, $oquv, 'oquv_bolimi', 'external')->assertOk();
+    // O'quv bo'limi — jadval administratori: ikkala qatlam (registrator ofisi kabi).
+    foreach (['internal', 'external'] as $layer) {
+        $s = dmSetup();
+        $oquv = dmTeacher('OQUV' . $layer, 'oquv_bolimi');
+        expect($canEdit($s, $oquv, 'oquv_bolimi', $layer))->toBeTrue();
+        $place($s, $oquv, 'oquv_bolimi', $layer)->assertOk();
+    }
     // Mijoz (haftalik qatlam) — server bilan bitta ro'yxat.
     expect(dmAs(dmTeacher('REG3', 'registrator_ofisi'), 'registrator_ofisi')->get(route('admin.timetable.index'))->assertOk()->getContent())
-        ->toContain('const WEEKLY_ADMIN = ["admin","superadmin","registrator_ofisi","kichik_admin"].includes(TIMETABLE_ROLE);');
+        ->toContain('const WEEKLY_ADMIN = ["admin","superadmin","registrator_ofisi","kichik_admin","oquv_bolimi","oquv_bolimi_boshligi"].includes(TIMETABLE_ROLE);');
     // O'qituvchi — faqat ko'radi.
     $s = dmSetup();
     $s['ustoz']->assignRole('oqituvchi');

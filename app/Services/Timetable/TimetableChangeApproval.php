@@ -81,10 +81,13 @@ class TimetableChangeApproval
     }
 
     /** Tasdiqlay oladigan rollar. */
-    public const APPROVER_ROLES = ['superadmin', 'admin', 'registrator_ofisi'];
+    // Tasdiqlovchilar — jadval administratorlari (registrator ofisi va o'quv bo'limi parallel: kim birinchi tasdiqlasa / rad etsa).
+    public const APPROVER_ROLES = TimetableController::TIMETABLE_FULL_EDIT_ROLES;
+    // "Tasdiq kutilmoqda" xabari (LMS + Telegram) — registrator ofisi va o'quv bo'limi.
+    public const NOTIFY_APPROVER_ROLES = ['registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
 
     /** Doskaning butun o'zgarishlar tarixini ko'radigan (lekin tasdiqlamaydigan) rollar. */
-    public const HISTORY_ROLES = ['kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
+    public const HISTORY_ROLES = [];
 
     /** Tasdiqdan o'tishi kerak bo'lgan rollar. */
     public const GATED_ROLES = ['kafedra_mudiri'];
@@ -136,7 +139,7 @@ class TimetableChangeApproval
                 'approval_stage' => 'registrar', 'head_reviewer_id' => $actor->id,
                 'head_reviewer_name' => $actor->full_name, 'head_reviewed_at' => now(),
             ]);
-            $this->step($locked, "Kafedra mudiri tasdiqladi — registrator ofisiga yuborildi", $actor);
+            $this->step($locked, "Kafedra mudiri tasdiqladi — registrator ofisi va o'quv bo'limiga yuborildi", $actor);
             $this->notifyRegistrars($locked);
 
             return ['ok' => true, 'error' => null, 'req' => $locked];
@@ -227,7 +230,7 @@ class TimetableChangeApproval
             return;
         }
         [$title, $tail] = match ($outcome) {
-            'endorsed' => ["Vaqt o'zgarishi: kafedra mudiri tasdiqladi", "Endi registrator ofisi tasdiqlaydi; jadval hali o'zgarmadi."],
+            'endorsed' => ["Vaqt o'zgarishi: kafedra mudiri tasdiqladi", "Endi registrator ofisi yoki o'quv bo'limi tasdiqlaydi; jadval hali o'zgarmadi."],
             TimetableChangeRequest::EXPIRED => ["Vaqt o'zgarishi so'rovi muddati o'tgan", 'Sabab: ' . $req->error],
             TimetableChangeRequest::FAILED => ["Vaqt o'zgarishi qo'llanmadi", 'Sabab: ' . $req->error],
             default => [null, null],
@@ -452,7 +455,7 @@ class TimetableChangeApproval
             ? ucfirst(self::proposerLabel($req)) . " darsingizga oid o'zgarishni so'radi (Takliflar)"
             : ($req->requester_role === 'fan_masuli' ? "Fan mas'uli darsingiz vaqtini o'zgartirishni so'radi"
                 : ucfirst(self::proposerLabel($req) ?: 'xodim') . " darsingizga oid o'zgarishni so'radi"),
-            ($req->approval_stage === 'department' ? 'Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi.' : 'Registrator ofisi tasdiqlaydi.')
+            ($req->approval_stage === 'department' ? 'Avval kafedra mudiri, keyin registrator ofisi yoki o\'quv bo\'limi tasdiqlaydi.' : 'Registrator ofisi yoki o\'quv bo\'limi tasdiqlaydi.')
             . " Shu vaqtgacha jadval o'zgarmaydi.");
 
         return $req;
@@ -967,8 +970,8 @@ class TimetableChangeApproval
             if (!$req || $req->status !== TimetableChangeRequest::PENDING || $req->approval_stage === 'department') {
                 return;
             }
-            $role = [\App\Enums\ProjectRole::REGISTRAR_OFFICE->value];
-            $this->notifyNow($this->teachersWithRoles($role)->concat($this->usersWithRoles($role)), $title, $body, $req, 'registrator ofisi');
+            $role = self::NOTIFY_APPROVER_ROLES;
+            $this->notifyNow($this->teachersWithRoles($role)->concat($this->usersWithRoles($role)), $title, $body, $req, "registrator ofisi va o'quv bo'limi");
         });
     }
 

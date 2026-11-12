@@ -533,15 +533,17 @@ function sapBody(array $card, array $sug): array
     return ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $card['id'], 'type' => $sug['type'], 'title' => $sug['title'], 'actions' => $sug['actions'], 'reason' => 'Sinov sababi'];
 }
 
-it('takliflar: o\'quv bo\'limi ko\'radi, qo\'llashda 403; o\'qituvchi faqat o\'z darsini ko\'radi', function () {
+it('takliflar: o\'quv bo\'limi — jadval administratori, taklifni darhol qo\'llaydi; o\'qituvchi faqat o\'z darsini ko\'radi', function () {
     $s = sapSetup();
     $res = sapGet($s['oquv'], 'oquv_bolimi', $s);
     $card = collect($res['cards'])->firstWhere('id', $s['own']->id);
-    expect($res['apply_mode'])->toBeNull()->and($card['suggestions'])->not->toBeEmpty()
-        ->and(collect($card['suggestions'])->pluck('can_apply')->unique()->all())->toBe([false]);
+    expect($res['apply_mode'])->toBe('direct')->and($card['suggestions'])->not->toBeEmpty()
+        ->and(collect($card['suggestions'])->pluck('can_apply')->unique()->all())->toBe([true]);
     $sug = $card['suggestions'][0];
-    sugAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertForbidden();
-    sugAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), sapBody($card, $sug))->assertForbidden();
+    // So'rov emas — darhol qo'llash (admin kabi).
+    sugAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.week-suggestions.propose', $s['board']), sapBody($card, $sug))->assertStatus(422);
+    sugAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.week-suggestions.apply', $s['board']), sapBody($card, $sug))->assertOk();
+    TimetableCardOverride::where('week', 3)->delete();
     // O'qituvchi: faqat o'z darsi (boshqa o'qituvchining unplaced kartasi ko'rinmaydi).
     $other = sugCard($s, ['subject_name' => 'Biologiya', 'group_name' => 'g-01b', 'teacher_id' => sugTeacher('BOSHQA')->id, 'ext_day' => 3, 'ext_pair' => 1,
         'kafedra_name' => 'Gigiyena kafedrasi']);

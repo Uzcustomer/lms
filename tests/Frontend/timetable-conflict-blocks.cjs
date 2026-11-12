@@ -220,6 +220,18 @@ const data = {
         const f3 = await p.evaluate(() => focus.pop());
         assert.deepEqual([f3.card_ids, f3.hour_from, f3.dates], [[708677, 708663], 5, ['2026-11-26', '2026-11-26']]);
 
+        // 7e) Codex: joylanmagan dars bo'laklari turli xonada (708676 — 123-xona, 708678 — 117-xona), 10:00 dan: 117-xona [Ko'rsatish]da
+        //     "joylanmoqchi" qatori faqat shu xonadagi bo'lak (12:00–13:20), butun dars emas.
+        await setCards([data.card, Object.assign({}, data.card, { id: 708678, auditorium_code: 'R117', auditorium_name: '117-xona' }),
+            Object.assign({}, data.groupBusy, { group_name: 'd1/d26-09a', teacher_id: 55, teacher_name: 'BOSHQA', day: 3, pair: 5 })]);
+        await p.evaluate(() => { window.reply['teacher-agenda?room_code=R117'] = { room: { code: 'R117', volume: 20 }, entries: [
+            { start: '12:00', end: '13:20', groups: ['d1/d26-09a'], subject: 'Anatomiya', type: 'A', teacher: 'BOSHQA', card_ids: [9001] }] }; T.open(708676); });
+        await p.click('#pnCardPop [data-pop-place]');
+        assert.deepEqual(await txt('[data-cb-head]'), ['Xona band: 117-xona']);
+        await p.click('#pnCardPop [data-cb-block="room"] [data-cb-show]');
+        await p.waitForSelector('#pnCardPop [data-cb-block="room"] [data-cb-row]');
+        assert.deepEqual(await txt('[data-cb-block="room"] [data-cb-mine]'), ['12:00–13:20 · d1/d26-03a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A. — shu dars (joylanmoqchi)']);
+
         // 8) Fokus bannerida xona NOMI (kodi emas); sikl karta oynasi — turlarga ajratilgan bloklar.
         assert.equal(await p.evaluate(() => T.focusBannerText({ kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', dates: ['2026-11-25'] }, [{ group: 'd1/d26-03a' }, { group: 'd1/d26-01a' }])),
             "To'qnashuvni ko'rish: Xona 123-amaliyot xonasi — d1/d26-03a va d1/d26-01a, 25.11");

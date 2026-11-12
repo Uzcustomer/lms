@@ -12690,7 +12690,7 @@
                 // To'qnashuv sababi bloklari (cbRender): yechimlar — boshqa xona (faqat xona band), vaqtincha kafedra mudiri (o'qituvchi band),
                 // joylash uchun tanlash (har doim, tahrir huquqi bo'lsa).
                 const ids = list.map(x => x.id);
-                const cbCtx = (d, p, isPlaced, roomCard = list[0]) => ({ card: c, ids, day: d, pair: p, len, placed: isPlaced, close: closePanelCardPop, reposition,
+                const cbCtx = (d, p, isPlaced, roomCard = list[0]) => ({ card: c, list, ids, day: d, pair: p, len, placed: isPlaced, close: closePanelCardPop, reposition,
                     solutions: {
                         // Boshqa xona: kun va para — bitta bo'lakdan (joylangan darsda — bosilgan kartaning o'z joyi). Bo'lingan (turli kunda / oraliq bilan)
                         // joylangan darsda yo'q: xona almashtirish butun birlikni qayta joylaydi — avval "Yaxlitlash".
@@ -12937,8 +12937,23 @@
                     ? { start: e.start, end: e.end, groups: [], subject: e.label || 'band: boshqa fakultet', type: null, who: '', hit: false, mine: false, hidden: true }
                     : { start: e.start, end: e.end, groups: e.groups || [], subject: e.subject, type: e.type,
                         who: b.kind === 'room' ? (e.teacher || '') : (e.room || ''), hit: (e.card_ids || []).some(id => hit.has(+id)), mine: (e.card_ids || []).some(id => mine.has(+id)) }));
-                if (!ctx.placed) rows.push({ start: slotStart(ctx.pair), end: slotEnd(ctx.pair + ctx.len - 1), groups: cardGroups(ctx.card), subject: ctx.card.subject_name,
-                    type: ctx.card.training_type === 'lecture' ? 'M' : 'A', who: b.kind === 'room' ? (ctx.card.teacher_name || '') : (b.who || ''), hit: false, mine: true, pending: true });
+                // Joylanmoqchi dars: bo'laklar o'z tartibida ketma-ket (ctx.pair dan); xona ro'yxatida — faqat shu xonadagi bo'laklar (bo'laklar
+                // turli xonada bo'lishi mumkin), ketma-ketlari — bitta qator.
+                if (!ctx.placed) {
+                    const room = b.kind === 'room' ? (b.items[0] || {}).room_code || '' : null;
+                    const segs = [];
+                    let at = ctx.pair;
+                    (ctx.list || [ctx.card]).forEach(x => {
+                        const len = cardLen(x);
+                        if (room === null || (effectiveCard(x).auditorium_code || '') === room) {
+                            const l = segs[segs.length - 1];
+                            if (l && l[1] === at) l[1] = at + len; else segs.push([at, at + len]);
+                        }
+                        at += len;
+                    });
+                    segs.forEach(([a, z]) => rows.push({ start: slotStart(a), end: slotEnd(z - 1), groups: cardGroups(ctx.card), subject: ctx.card.subject_name,
+                        type: ctx.card.training_type === 'lecture' ? 'M' : 'A', who: b.kind === 'room' ? (ctx.card.teacher_name || '') : (b.who || ''), hit: false, mine: true, pending: true }));
+                }
                 rows.sort((x, y) => String(x.start).localeCompare(String(y.start)) || (x.pending ? 1 : 0) - (y.pending ? 1 : 0));
                 return rows;
             }

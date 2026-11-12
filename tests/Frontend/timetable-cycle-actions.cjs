@@ -40,6 +40,10 @@ const stubs = (role, advice) => `
         if (url.endsWith('cycle-shift-advice')) return { advice: ADVICE };
         // O'qituvchining 03.11 kuni: ertalab 09a (to'qnashgan) va 09b (shu birlik); tushdan keyin — 09b boshqa fani va 09a boshqa darsi
         // (to'qnashuv vaqtidan tashqarida: "shu dars" ham, qizil ham emas).
+        // Ma'ruzachi (32): 08:30 da o'z ma'ruzasi (dars 555) va boshqa ma'ruza (556) — bir vaqtda.
+        if (url.includes('/teacher-agenda?teacher_id=32')) return { entries: [
+            { from: 1, to: 3, start: '08:30', end: '09:50', groups: ['d2/d22-12a'], subject: 'Farmakologiya', type: 'M', room: 'Zal', card_ids: [90], key: 'l|555|2026-11-03|1' },
+            { from: 1, to: 3, start: '08:30', end: '09:50', groups: ['d2/d22-13a'], subject: 'Gistologiya', type: 'M', room: 'Zal', card_ids: [91], key: 'l|556|2026-11-03|1' }] };
         if (url.includes('/teacher-agenda?')) return { entries: [
             { from: 1, to: 7, start: '08:30', end: '13:20', groups: ['d2/d22-09a'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [77], key: 'c|u9|2026-11-03' },
             { from: 1, to: 7, start: '08:30', end: '13:20', groups: ['d2/d22-09b'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [78],
@@ -189,7 +193,25 @@ const settle = p => p.evaluate(() => new Promise(r => setTimeout(r, 30)));
         // Smena maslahati — o'z qatorida (bloklarda ham).
         assert.match(await p.locator('#cycDayPop .cf-list > li[data-cf-i="0"] .cf-todo').textContent(), /13:30 ga o'tkazilsa/);
         await p.close();
-        console.log('timetable cycle actions: 7 scenarios passed');
+
+        // 7b) Codex: sikl ma'ruzasi to'qnashuvi — kun ro'yxatida o'z ma'ruzasi (kaliti "l|555|…", yozuvning lecture_id si) "shu dars",
+        //     qizil emas (karta raqami ikkala tomon show.card_ids ichida bo'lsa ham); qizil — faqat boshqa ma'ruza.
+        p = await page(browser, 'admin', partial, 40);
+        await p.evaluate(() => cyclePlanData.cycle_cards.push({ key: 'u4', group: 'd2/d22-12a', placement_group: 'd2/d22-12a', specialty: 'davolash ishi', course: 5,
+            subject: 'Farmakologiya', type: 'lecture', placed: true, start_index: 50, conflict: "O'qituvchi band", teacher: { id: 32, name: "MA'RUZACHI" },
+            room: { code: 'Z1', name: 'Zal' }, mudir_ph: null,
+            conflicts: [{ kind: 'teacher_busy', type: 'teacher', who: "MA'RUZACHI", teacher_id: 32, groups: ['d2/d22-13a'], date_from: '2026-11-03',
+                date_to: '2026-11-03', past: false, lecture: true, lecture_id: 555, todo: "ma'ruza o'qituvchisini yoki vaqtini o'zgartiring",
+                show: { kind: 'teacher_busy', card_ids: [90, 91], hour_from: 1, hour_to: 3, hour_unit: 'hour', dates: ['2026-11-03', '2026-11-03'] } }] }));
+        await p.evaluate(() => { cfOwners[555] = 'u4'; const a = document.getElementById('anchor'); a.dataset.cfKey = 'u4'; T.openCfPop(a); });
+        await p.locator('#cycDayPop [data-cyc-cb-show]').click();
+        await p.waitForSelector('#cycDayPop [data-cyc-cb-detail] [data-cb-row]');
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-mine]', xs => xs.map(x => x.textContent)),
+            ["08:30–09:50 · d2/d22-12a · Farmakologiya (ma'ruza) · Zal — shu dars"]);
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-hit]', xs => xs.map(x => x.textContent)),
+            ["08:30–09:50 · d2/d22-13a · Gistologiya (ma'ruza) · Zal"]);
+        await p.close();
+        console.log('timetable cycle actions: 8 scenarios passed');
     } finally {
         await browser.close();
     }

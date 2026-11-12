@@ -9870,6 +9870,8 @@
                 const day = date ? ((new Date(date + 'T00:00:00').getDay() + 6) % 7) + 1 : 0;
                 return { kind, who: kind === 'room' ? ((i.show && i.show.room_name) || cfWho(i) || '') : (cfWho(i) || ''), date, day,
                     room_code: i.room || (i.show || {}).room_code || '', teacher_id: +i.teacher_id || null, groups: i.groups || [], hit_groups: i.groups || [],
+                    // Shu birlikning ma'ruzasi to'qnashgan bo'lsa — uning darsi (agenda kaliti "l|<dars>|<sana>|<soat>"): kun ro'yxatida "shu dars".
+                    lecture_id: i.lecture ? (+i.lecture_id || null) : null,
                     subject: i.with || '', time: i.time || '', show: i.show || null };
             }
             // Bloklardagi [Ko'rsatish]: xona / o'qituvchi — shu kungi darslar (teacher-agenda), guruh — to'qnashgan darslar; fokus — yozuvning show'i.
@@ -13016,8 +13018,11 @@
                 const hitG = new Set(b.items.flatMap(it => it.hit_groups || []));
                 const mineG = new Set(ctx.mineGroups || []);
                 const cycIds = new Set(b.items.flatMap(it => (it.hit_groups && it.show && it.show.card_ids) || []).map(Number));
+                // Shu birlik ma'ruzasi (sikl ma'ruzasi to'qnashuvi): agenda kaliti "l|<dars>|…" — yozuvning lecture_id si bilan.
+                const mineLec = new Set(b.items.map(it => (it.hit_groups ? +it.lecture_id : 0)).filter(Boolean));
+                const lecOf = e => { const k = String(e.key || '').split('|'); return k[0] === 'l' ? +k[1] : 0; };
                 const mineBy = e => (e.card_ids || []).some(id => mine.has(+id)) || (ctx.cycKey
-                    ? String(e.key || '').startsWith('c|' + ctx.cycKey + '|') : (e.groups || []).some(g => mineG.has(g)));
+                    ? String(e.key || '').startsWith('c|' + ctx.cycKey + '|') || mineLec.has(lecOf(e)) : (e.groups || []).some(g => mineG.has(g)));
                 // To'qnashuv oralig'i (akademik soat): shu birlikning o'sha kungi yozuvlari; topilmasa — yozuvning show soatlari.
                 const mineSpans = ctx.cycKey ? (entries || []).filter(e => !e.hidden && mineBy(e)).map(e => [+e.from, +e.to]) : [];
                 const spans = mineSpans.length ? mineSpans : b.items.map(it => (it.hit_groups && it.show && it.show.hour_unit === 'hour' && +it.show.hour_from

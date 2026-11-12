@@ -396,7 +396,7 @@ it('takliflar: to\'qnashuvli karta (bir xonada bir vaqtda) — ro\'yxatda, birin
     expect($card['id'])->toBe($a->id)->and($card['conflict'])->toBeTrue()
         ->and($card['reason'])->toBe('Xona 215 band: p/p25-02b · Odam anatomiyasi · Juma V para');
     // "Ko'rsatish": ikkala tomon guruhi (boshqa fakultet/yo'nalish/kurs bo'lsa ham — qamrovi bilan), xona, o'sha hafta / juma / V para.
-    expect($card['clashes'])->toBe([['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215',
+    expect($card['clashes'])->toBe([['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215', 'room_name' => 'R215',
         'groups' => [['group' => 'd1/d26-06b', 'faculty' => '1-son davolash', 'specialty' => 'Davolash ishi', 'course' => 1],
             ['group' => 'p/p25-02b', 'faculty' => 'Pediatriya', 'specialty' => 'Pediatriya', 'course' => 2]],
         'subject' => 'Odam anatomiyasi', 'dates' => ['2026-10-16', '2026-10-16'], 'hour_from' => 9, 'hour_to' => 11, 'hour_unit' => 'row',

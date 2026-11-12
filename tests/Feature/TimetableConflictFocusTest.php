@@ -33,7 +33,7 @@ it('ko\'rsatish: yagona ko\'rinish — guruhlar va kartalar takrorlanmaydi, sana
             ['group' => 'D2-01A', 'faculty' => 'f1', 'specialty' => 'davolash ishi', 'course' => 2],
             ['group' => 'd2-01a', 'faculty' => 'F1', 'specialty' => 'Davolash ishi', 'course' => 3]],
         'dates' => ['2026-09-18', '2026-09-16', '2026-09-17'], 'hour_from' => '3', 'card_ids' => ['7', 5, 7, null], 'view' => 'x']);
-    expect($show)->toBe(['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215',
+    expect($show)->toBe(['kind' => 'room_busy', 'teacher_id' => null, 'teacher_name' => null, 'room_code' => 'R215', 'room_name' => 'R215',
         'groups' => [['group' => 'd2-01a', 'faculty' => 'F1', 'specialty' => 'Davolash ishi', 'course' => 2],
             ['group' => 'd2-01a', 'faculty' => 'F1', 'specialty' => 'Davolash ishi', 'course' => 3]],
         'subject' => null, 'dates' => ['2026-09-16', '2026-09-18'], 'hour_from' => 3, 'hour_to' => null, 'hour_unit' => 'row', 'card_ids' => [7, 5],

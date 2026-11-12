@@ -342,6 +342,8 @@ trait TimetableTeacherAgenda
                 'past' => self::pastFor($staff, $x['date'])];
             $out[] = $visible
                 ? $base + ['hidden' => false, 'type' => $x['lecture'] ? 'M' : 'A', 'subject' => $x['subject'], 'groups' => $x['groups'],
+                    // O'qituvchi(lar) — xona kunlik ro'yxatida ("Ko'rsatish").
+                    'teacher' => implode(', ', array_values(array_unique(array_filter(array_map(fn ($c) => (string) ($c->teacher_name ?? ''), (array) ($x['cards'] ?? [])))))) ?: null,
                     'room' => $x['room'], 'room_code' => $x['room_code'], 'key' => $x['key'], 'card_ids' => $x['card_ids'], 'week' => $x['week'],
                     'unit' => $x['unit'], 'flow_size' => count($x['all_ids']),
                 'label' => $x['subject'] . ' (' . ($x['lecture'] ? 'M' : 'A') . ') — ' . implode(', ', $x['groups'])]
@@ -772,10 +774,10 @@ trait TimetableTeacherAgenda
         return ['ok' => !$why, 'why' => $why ? implode("\n", $why) : null, 'bad' => $bad];
     }
 
-    /** Sabab matni: "Auditoriya band: X — …" → "Xona band: X — …"; "Xona 215 band: …" → "Xona band: 215 — …" ("Xona sig'maydi: …" — o'zgarmaydi). */
+    /** Sabab matni: "Auditoriya band: X — …" → "Xona band: X — …"; "Xona 215-xona band: …" → "Xona band: 215-xona — …" ("Xona sig'maydi: …" — o'zgarmaydi). */
     private function agendaReasonText(string $m): string
     {
-        if (preg_match('/^Xona (\S+) band: (.*)$/u', $m, $x)) {
+        if (preg_match('/^Xona (.+?) band: (.*)$/u', $m, $x)) {
             return 'Xona band: ' . $x[1] . ' — ' . $x[2];
         }
 

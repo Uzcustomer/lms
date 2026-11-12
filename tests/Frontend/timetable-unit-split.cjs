@@ -47,7 +47,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 require('./helpers/timetable-info-only.cjs')(ctx);
-vm.runInContext(code + '\nObject.assign(this, { unitState, unitIsSplit, unitDaysText, unitMovePlan, weeklySplitUnits, splitHeadHtml, runUnitFix, placeOneCard, placeCardWithRoom, placeRoomCandidates, unitFixErr });', ctx);
+vm.runInContext(code + '\nObject.assign(this, { placeUnitAt, unitState, unitIsSplit, unitDaysText, unitMovePlan, weeklySplitUnits, splitHeadHtml, runUnitFix, placeOneCard, placeCardWithRoom, placeRoomCandidates, unitFixErr });', ctx);
 ctx.weekActiveCards = () => ctx.cards;
 const W = 11;
 const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, cancelled: false }; };
@@ -109,6 +109,13 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
     ctx.order = [708676, 708674, 708675];
     await ctx.placeOneCard(b, 3, 7);
     assert.deepEqual(calls[0], ['/cards/708674/unit-place', { layer: 'internal', week: 11, day: 3, pair: 5 }]);
+    // Codex: 2-bo'lak 2-qatorga — birinchi bo'lak 0-qatorga tushadi: xato, so'rov yuborilmaydi ("olib tashlash" bo'lib ketmasin).
+    calls.length = 0;
+    await assert.rejects(ctx.placeOneCard(b, 3, 2), /jadval chegarasidan tashqarida/);
+    assert.equal(calls.length, 0);
+    // Ataylab olib tashlash (d = p = null) — avvalgidek.
+    await ctx.placeUnitAt(a, null, null);
+    assert.deepEqual(calls[0], ['/cards/708676/unit-place', { layer: 'internal', week: 11 }]);
     // Bitta bo'lakli dars — avvalgidek week-override.
     const solo = mk(5001, 4, 1, { group_name: 'd1/d26-04a' });
     ctx.cards.push(solo);

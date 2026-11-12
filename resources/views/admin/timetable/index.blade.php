@@ -6135,14 +6135,17 @@
                     else delete overrides[k];
                 });
             }
-            // Birlikni yaxlit joylash / surish (d, p — birinchi bo'lak boshlanishi) yoki olib tashlash (d = null). Sig'masa — xato
-            // (server sababi: "4 soat sig'maydi: 13:30 dan keyin 3 soat bo'sh — …"), hech narsa o'zgarmaydi.
+            // Birlikni yaxlit joylash / surish (d, p — birinchi bo'lak boshlanishi) yoki olib tashlash (d = p = null). Sig'masa — xato
+            // (server sababi: "4 soat sig'maydi: 13:30 dan keyin 3 soat bo'sh — …"), hech narsa o'zgarmaydi. Boshlanish jadvaldan tashqarida
+            // (masalan 2-bo'lak 2-qatorga — birinchi bo'lak 0-qatorga tushadi) — xato: so'rov "olib tashlash" bo'lib ketmasin.
             async function placeUnitAt(c, d, p, W = curWeek) {
                 weeklyEditGuard();
+                const remove = d == null && p == null;
+                if (!remove && !(+d >= 1 && +p >= 1)) throw new Error('Tanlangan vaqt jadval chegarasidan tashqarida.');
                 const week = weeklyLayer === 'external' ? 0 : (W || 0);
                 const body = { layer: weeklyLayer };
                 if (week) body.week = week;
-                if (d && p) { body.day = d; body.pair = p; }
+                if (!remove) { body.day = d; body.pair = p; }
                 const j = await api(BASE + '/cards/' + c.id + '/unit-place', 'POST', body);
                 applyUnitPayload(j && j.unit, week);
                 return j;

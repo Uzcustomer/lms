@@ -258,7 +258,10 @@ describe('teacher confirmation', function () {
 
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
         expect($html)->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;left:0;[^']*'><img src='data:image\\/png;base64,[^']+'[^>]*><div[^>]*>SAGIRAYEV N\\.<br>\\(Fakultet dekani\\)/")
-            ->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;right:0;[^']*'><img[^>]*><div[^>]*>XURMATOVA D\\.A\\.<br>\\(Kafedra mudiri\\)/");
+            ->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;right:0;[^']*'><img[^>]*><div[^>]*>XURMATOVA D\\.A\\.<br>\\(Kafedra mudiri\\)/")
+            // QR lar uchun varaq chetlarida joy — sarlavha yozuvlari ustiga chiqmaydi
+            ->toContain("position:relative;padding:0 100px'>")
+            ->toContain('right:0;width:100px;');
 
         // O'qituvchi tasdig'i qaytarilsa (superadmin sinov rejimi) — kafedra va dekan tasdig'i ham bekor
         session(['impersonating' => true]);

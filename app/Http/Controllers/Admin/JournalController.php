@@ -10486,7 +10486,7 @@ class JournalController extends Controller
             return '<div class="ynq-qr">' . trim($imgs) . '</div>';
         }, $html);
         // Dekan (chap) va kafedra mudiri (o'ng) QR lari — varaqning yuqori burchaklarida, ostida ismi
-        $html = self::placeCornerQrs($html, 'width:64px;height:64px', 'top:24px', 'font:11px/1.25 serif');
+        $html = self::placeCornerQrs($html, 'width:64px;height:64px', 'top:24px', 'font:11px/1.25 serif', '100px');
 
         // Tepada — nom; tugmalar va holatlar — o'ng tomondagi qotirilgan panelda (doim ko'rinadi)
         $title = e($title);
@@ -10551,7 +10551,9 @@ class JournalController extends Controller
         }
         // A4 — qaysi yo'nalishda katta bo'lsa (10 mm hoshiya)
         $margin = 28;
-        $fit = fn (float $pw, float $ph) => min(($pw - 2 * $margin) / max($width, 1), ($ph - 2 * $margin) / max($height, 1), 1);
+        // Dekan / kafedra mudiri QR lari uchun varaq chetlaridagi joy (pt) — masshtablanmaydi
+        $gutter = 66;
+        $fit = fn (float $pw, float $ph) => min(($pw - 2 * $margin - 2 * $gutter) / max($width, 1), ($ph - 2 * $margin) / max($height, 1), 1);
         $landscape = $fit(842, 595) >= $fit(595, 842);
         [$pageW, $pageH] = $landscape ? [842, 595] : [595, 842];
 
@@ -10570,7 +10572,7 @@ class JournalController extends Controller
         // Har varaq yangi sahifadan — writer o'zi qo'yadi (div + div); uning @page qoidalari o'rniga o'zimizniki
         $html = preg_replace('/@page[^{]*\{[^}]*\}/', '', $html);
         // Dekan (chap) va kafedra mudiri (o'ng) QR lari — varaq yuqori burchaklarida
-        $html = self::placeCornerQrs($html, 'width:46pt;height:46pt', 'top:14pt', 'font-size:7pt;line-height:1.2');
+        $html = self::placeCornerQrs($html, 'width:46pt;height:46pt', 'top:14pt', 'font-size:7pt;line-height:1.2', $gutter . 'pt');
         // O'qituvchilar QR lari: dompdf flex/absolute'ni bilmaydi — katakda o'rtada, oddiy rasm
         $html = preg_replace_callback(
             "/<td([^>]*?) style='position: relative;'([^>]*)>((?:\s*<img alt=\"" . preg_quote(self::YNQ_QR_ALT, '/') . "[^>]*\/>)+)/u",
@@ -10641,7 +10643,7 @@ class JournalController extends Controller
         // Balandlik ham, kenglik ham (chekinishlar jadvalni kengaytiradi) sahifaga sig'sin
         $ratio = min(
             $measured > 0 ? ($pageH - 2 * $margin) / $measured : 1,
-            $measuredWidth > 0 ? ($pageW - 2 * $margin) / $measuredWidth : 1,
+            $measuredWidth > 0 ? ($pageW - 2 * $margin - 2 * $gutter) / $measuredWidth : 1,
         );
         if ($ratio < 1) {
             $html = $scale($html, $ratio * 0.97);
@@ -10654,11 +10656,12 @@ class JournalController extends Controller
 
     /**
      * Har varaqda dekan va kafedra mudiri QR lari katakdan olinib, varaqning chap / o'ng yuqori
-     * burchagiga (absolute) qo'yiladi — ostida ismi va lavozimi.
+     * burchagiga (absolute) qo'yiladi — ostida ismi va lavozimi. Ular uchun varaqning ikki chetida
+     * $gutter kenglikda joy qoldiriladi — sarlavha yozuvlari (amaliyot o'qituvchilari) ustiga chiqmaydi.
      */
-    private static function placeCornerQrs(string $html, string $imgStyle, string $top, string $textStyle): string
+    private static function placeCornerQrs(string $html, string $imgStyle, string $top, string $textStyle, string $gutter): string
     {
-        return preg_replace_callback("/<div style='page: page(\\d+)'>(.*?)(?=<div style='page: page|<\\/body>)/s", function ($m) use ($imgStyle, $top, $textStyle) {
+        return preg_replace_callback("/<div style='page: page(\\d+)'>(.*?)(?=<div style='page: page|<\\/body>)/s", function ($m) use ($imgStyle, $top, $textStyle, $gutter) {
             $block = $m[2];
             $corners = '';
             foreach ([[self::YNQ_DEAN_QR_ALT, 'left', 'Fakultet dekani'], [self::YNQ_HEAD_QR_ALT, 'right', 'Kafedra mudiri']] as [$alt, $side, $label]) {
@@ -10667,12 +10670,12 @@ class JournalController extends Controller
                 }
                 $block = str_replace($img[0], '', $block);
                 $name = trim(explode(' — ', html_entity_decode($img[1], ENT_QUOTES, 'UTF-8'))[0]);
-                $corners .= "<div class='ynq-corner' style='position:absolute;{$top};{$side}:0;text-align:center;z-index:2'>"
+                $corners .= "<div class='ynq-corner' style='position:absolute;{$top};{$side}:0;width:{$gutter};text-align:center;z-index:2'>"
                     . "<img src='{$img[2]}' style='{$imgStyle}' alt='" . e($alt . $name) . "'>"
                     . "<div style='{$textStyle}'>" . e($name) . "<br>(" . $label . ')</div></div>';
             }
 
-            return "<div style='page: page{$m[1]};position:relative'>" . $corners . $block;
+            return "<div style='page: page{$m[1]};position:relative;padding:0 {$gutter}'>" . $corners . $block;
         }, $html);
     }
 

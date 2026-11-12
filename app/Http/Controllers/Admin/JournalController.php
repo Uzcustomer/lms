@@ -70,7 +70,7 @@ class JournalController extends Controller
     /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — o'qituvchilar bloki */
     private const YNQ_SIGN_ROW = 60;
     /** O'qituvchi joyining eng kichik kengligi (px) — QR va ostidagi qisqa ism sig'adi */
-    private const YNQ_TEACHER_SLOT_PX = 130;
+    private const YNQ_TEACHER_SLOT_PX = 200;
     private const YNQ_RULES = [
         'subject_id' => 'required',
         'semester_code' => 'required',
@@ -11750,7 +11750,13 @@ class JournalController extends Controller
             $s->setCellValue('W8', $groupLabel);
             $s->setCellValue(self::YNQ_LAST_COL . '1', $shaklLabel);
             $s->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
-            $s->setCellValue('U10', implode(', ', $abbreviatedPracticeTeachers));
+            // Amaliyot o'qituvchilari — har biri o'z qatorida (shablonda 3 ta "Amaliyot o'qituvchisi" qatori:
+            // U10, U11, U12); ko'p bo'lsa qolganlari oxirgi qatorda
+            $practiceRows = array_slice($abbreviatedPracticeTeachers, 0, 2);
+            $practiceRows[] = implode(', ', array_slice($abbreviatedPracticeTeachers, 2));
+            foreach ($practiceRows as $i => $name) {
+                $s->setCellValue('U' . (10 + $i), $name);
+            }
             $s->setCellValue('A11', "Ma'ruzachi:");
             $s->setCellValue('C11', '         ' . $abbreviatedMaruza);
             $s->setCellValue('D13', $subject->total_acload ?? 0);

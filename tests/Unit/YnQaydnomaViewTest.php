@@ -200,7 +200,7 @@ describe('teacher confirmation', function () {
             ->and($w->getMergeCells())->toHaveKeys(['C60:F60', 'C61:F61'])   // QR va ism sig'adigan, oralari kengroq
             ->and($w->getCell('C61')->getValue())->toBe('IZZATULLAYEV O.')
             ->and($w->getCell('B60')->getValue())->toBe('Amaliyot o‘qituvchilari:')
-            ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe('right')
+            ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe($w->getStyle('B57')->getAlignment()->getHorizontal())   // "Jami talabalar soni" bilan bir chiziqda
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
 
         // Sahifada QR o'z katagining o'rtasida (flex markaz)
@@ -438,6 +438,7 @@ describe('teacher confirmation', function () {
         (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 5);
         $w->setCellValue('U10', 'ALLAMURATOVA U.D.')->setCellValue('W8', 'd1/d22-01 (rus)');
         (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $book, '435', '19', '77');
+        expect($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe('center');   // shablonda "Jami talabalar soni:" (B57) kabi
         expect($w->getMergeCells())->toHaveKeys(['N10:R10', 'S10:U10', 'N12:R12', 'S12:U12', 'U8:V8', 'K13:U13'])
             ->not->toHaveKey('U10:X10')
             ->and($w->getCell('S10')->getValue())->toBe('ALLAMURATOVA U.D.')

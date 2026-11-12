@@ -12232,9 +12232,10 @@ class JournalController extends Controller
         $sheet->getStyle($area)->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
         $sheet->getRowDimension($row)->setRowHeight(48);
 
+        // "Jami talabalar soni:" bilan bir chiziqda — o'sha uslubda (B ustunida, markazda)
         $sheet->setCellValue('B' . $row, "Amaliyot o‘qituvchilari:");
         $sheet->getStyle('B' . $row)->getAlignment()
-            ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT)
+            ->setHorizontal($sheet->getStyle('B' . ($row - 3))->getAlignment()->getHorizontal())
             ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
 
         // Joylar: C dan boshlab, har biri kamida YNQ_TEACHER_SLOT_PX kenglikdagi qo'shni ustunlar

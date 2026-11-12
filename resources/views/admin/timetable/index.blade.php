@@ -1502,6 +1502,9 @@
         #ttAgendaModal .ag-e.ag-moving { outline: 2px solid #2563eb; outline-offset: 1px; }
         #ttAgendaModal .ag-e.ag-hidden { color: #64748b; font-style: italic; }
         #ttAgendaModal .ag-e.ag-cont { opacity: .7; }
+        /* Hafta ko'rinishida katak tor — bitta qator, oxiri "…"; to'liq matn — sichqoncha ustida (title), mobil — bosilganda (ag-open). */
+        #ttAgendaModal .ag-week .ag-e { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+        #ttAgendaModal .ag-e.ag-open { white-space: normal; overflow: visible; max-width: none; }
         #ttAgendaModal .ag-tag { font-size: 10px; border-radius: 4px; padding: 0 4px; background: #dc2626; color: #fff; }
         #ttAgendaModal .ag-tag-mv { background: #2563eb; }
         #ttAgendaModal .ag-free { color: #16a34a; }
@@ -8009,17 +8012,28 @@
             // Oynada (ko'chiriladigandan boshqa) ko'chirsa bo'ladigan dars bormi — sarlavhadagi "boshqa darsni tanlash" ko'rsatmasi uchun.
             const agendaOtherMovable = (j, moveKey) => ((j && j.entries) || []).some(e => e.key && e.movable && e.key !== moveKey);
             // Dars: vaqt, fan (M/A), guruhlar, xona; qamrovdan tashqari — faqat "band: boshqa fakultet"; davomi (keyingi para) — "↳".
+            // Katak tooltipi (to'liq): vaqt, fan (M/A), barcha guruhlar, o'qituvchi to'liq F.I.Sh., xona, to'qnashuv sababi.
+            function agendaEntryTip(e) {
+                if (e.hidden) return [(e.start || '') + '–' + (e.end || ''), e.label].filter(Boolean).join('\n');
+                return [(e.start || '') + '–' + (e.end || '') + ' ' + e.subject + ' (' + (e.type === 'M' ? "M — ma'ruza" : 'A — amaliy') + ')',
+                    'Guruh: ' + (e.groups || []).join(', '), e.teacher_full || e.teacher ? "O'qituvchi: " + (e.teacher_full || e.teacher) : '',
+                    e.room ? 'Xona: ' + e.room : '', e.conflict ? "To'qnashuv: " + (e.conflict_with || 'bir vaqtda boshqa dars') : '',
+                    e.out_of_scope ? "Qamrovdan tashqari dars — faqat ko'rish" : ''].filter(Boolean).join('\n');
+            }
             function agendaEntryHtml(e, moveKey, cont, compact) {
                 const moving = !!(e.key && e.key === moveKey);
                 const cls = 'ag-e' + (e.info_only ? ' tt-info-only' : '') + (e.conflict ? ' ag-conf' : '') + (moving ? ' ag-moving' : '') + (e.hidden ? ' ag-hidden' : '') + (cont ? ' ag-cont' : '');
-                // Sudrash: ko'chirsa bo'ladigan dars (server — movable); bo'lmasa — sababi sarlavhada (title).
-                const drag = e.key && e.movable ? ' data-ag-drag="' + esc(e.key) + '" title="Bosing yoki sudrab bo\u2018sh paraga ko\u2018chiring"'
-                    : (e.key && e.movable_why ? ' title="' + esc(e.movable_why) + '"' : '');
+                // Sudrash: ko'chirsa bo'ladigan dars (server — movable); bo'lmasa — sababi. Tooltip — to'liq ma'lumot va (bo'lsa) ko'chirish izohi.
+                const hint = e.key && e.movable ? 'Bosing yoki sudrab bo\u2018sh paraga ko\u2018chiring' : (e.key && e.movable_why ? e.movable_why : '');
+                const tip = ' data-ag-tip title="' + esc(agendaEntryTip(e) + (hint && hint !== "Qamrovdan tashqari dars — faqat ko'rish." ? '\n' + hint : '')) + '"';
+                const drag = (e.key && e.movable ? ' data-ag-drag="' + esc(e.key) + '"' : '') + tip;
                 if (cont) return '<div class="' + cls + '"' + drag + '>↳ ' + esc(e.hidden ? e.label : e.subject + ' (' + e.type + ')') + '</div>';
                 // To'qnashuvdagi katakda ko'chirsa bo'ladigan dars — "↕" (ko'chirib bo'lmaydiganida yo'q; sababi — title).
                 const icon = e.conflict && e.key && e.movable ? '<span class="ag-mvicon" aria-hidden="true">↕</span>' : '';
+                // Xona jadvalida — o'qituvchi, o'qituvchi jadvalida — xona nomi (katak tor bo'lsa — "…", to'liqi tooltipda).
+                const who = ttAgenda && ttAgenda.room_code ? (e.teacher || '') : (e.room || '');
                 const text = e.hidden ? e.label : e.subject + ' (' + e.type + ') — ' + (compact ? cfGroups(e.groups) : (e.groups || []).join(', ')) +
-                    (e.room && !compact ? ' · ' + e.room : '') + (e.info_only && infoOnlyText(e) ? ' · ' + infoOnlyText(e) : '');
+                    (who ? ' · ' + who : '') + (e.info_only && infoOnlyText(e) ? ' · ' + infoOnlyText(e) : '');
                 return '<div class="' + cls + '"' + drag + '>' + icon + '<span class="ag-time">' + esc((e.start || '') + '–' + (e.end || '')) + '</span> ' + esc(text) +
                     (e.conflict ? ' <span class="ag-tag">to‘qnashuv</span>' : '') + (moving ? ' <span class="ag-tag ag-tag-mv">ko‘chiriladi</span>' : '') + '</div>';
             }
@@ -8366,6 +8380,9 @@
                 if (agDragSuppress) { e.preventDefault(); e.stopPropagation(); return; }
                 if (e.target === e.currentTarget) { ttAgendaClose(); return; }
                 const t = e.target.closest ? e.target : null;
+                // Mobil (tooltip yo'q): ko'chirilmaydigan darsni bosish — to'liq matn ochiladi / yopiladi.
+                const tipEl = t && t.closest('[data-ag-tip]');
+                if (tipEl && !tipEl.hasAttribute('data-ag-drag')) { tipEl.classList.toggle('ag-open'); return; }
                 const pick = t && t.closest('[data-ag-pick]');
                 if (pick && !pick.disabled) {
                     const [date, pair] = pick.dataset.agPick.split('|');

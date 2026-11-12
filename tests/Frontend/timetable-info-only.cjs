@@ -16,7 +16,7 @@ const ctx = { board: { id: 7 }, esc, cardGroups: c => c.group_names || [c.group_
 vm.createContext(ctx);
 require('./helpers/timetable-info-only.cjs')(ctx);
 vm.runInContext(cut('            function agendaOpt(', '            function agendaHtml(')
-    + cut('            function agendaEntryHtml(', '            function agendaDayHtml(')
+    + cut('            function agendaEntryTip(', '            function agendaDayHtml(')
     + cut('            const sameCrossLesson =', '            // Sikl darsining zal')
     + cut('            function cardLabel(', '            // Karta ustiga kursor')
     + cut('            function describeCardBrief(', '            // ===== Joylash (bosish'), ctx);

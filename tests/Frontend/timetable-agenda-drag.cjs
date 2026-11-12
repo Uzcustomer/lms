@@ -109,7 +109,8 @@ const stubs = role => `
         await a.evaluate(m => { window.MOVE = m; }, MOVE_W);
         await a.evaluate(() => T.ttAgendaOpen({ teacher_id: 7, teacher_name: 'MUX', date: '2026-11-19' }));
         assert.equal(await a.$eval('#ttAgendaModal .ag-e[data-ag-drag="w|5|10"]', el => getComputedStyle(el).cursor), 'grab');
-        assert.equal(await a.$eval('#ttAgendaModal .ag-e:not([data-ag-drag])', el => el.title), M.movable_why);
+        // Tooltip: to'liq ma'lumot (vaqt, fan, guruh, xona) va oxirida ko'chirib bo'lmaslik sababi.
+        assert.ok((await a.$eval('#ttAgendaModal .ag-e:not([data-ag-drag])', el => el.title)).endsWith('\n' + M.movable_why));
         assert.equal(await a.$$eval('#ttAgendaModal [data-ag-free]', els => els.length), 4);
 
         // 2) Oddiy bosish (siljimasdan) — darsni ko'chiriladigan dars qiladi (variantlar so'raladi); 5px gacha siljish — sudrash emas,

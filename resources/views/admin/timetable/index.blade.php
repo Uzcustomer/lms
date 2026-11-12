@@ -12866,17 +12866,18 @@
                 if (cap) items.push(cap);
                 return items;
             }
-            // Bloklar: tur + kim bo'yicha (bitta dars ikki turda band qilsa — har blokda o'z sababi bilan), tartib — CB_ORDER.
+            // Bloklar: tur + kim + kun bo'yicha (bitta dars ikki turda band qilsa — har blokda o'z sababi bilan; bo'lingan darsda bir o'qituvchi /
+            // xona bilan turli kunlardagi to'qnashuv — har kun alohida blok, "Ko'rsatish" o'sha kuniniki), tartib — CB_ORDER, keyin sana.
             function cbBlocks(items) {
                 const m = new Map();
                 (items || []).forEach(it => {
                     if (!it || !CB_HEAD[it.kind]) return;
-                    const k = it.kind + '|' + (it.who || '');
-                    if (!m.has(k)) m.set(k, { kind: it.kind, who: it.who || '', items: [] });
+                    const k = it.kind + '|' + (it.who || '') + '|' + (it.date || '');
+                    if (!m.has(k)) m.set(k, { kind: it.kind, who: it.who || '', date: it.date || '', day: +it.day || 0, items: [] });
                     const b = m.get(k);
                     if (!b.items.some(x => x.card_id && x.card_id === it.card_id && x.piece_id === it.piece_id)) b.items.push(it);
                 });
-                return [...m.values()].sort((a, b) => CB_ORDER.indexOf(a.kind) - CB_ORDER.indexOf(b.kind));
+                return [...m.values()].sort((a, b) => CB_ORDER.indexOf(a.kind) - CB_ORDER.indexOf(b.kind) || String(a.date).localeCompare(String(b.date)));
             }
             const cbBlocking = blocks => blocks.filter(b => b.kind !== 'capacity');
             // "Joylab bo'lmadi — sabab: o'qituvchi band va xona band" (joylangan, to'qnashuvdagi dars — "To'qnashuv — sabab: …").
@@ -12899,10 +12900,13 @@
             // Bloklar HTML: sarlavha, har blok — sarlavhasi, [Ko'rsatish], band qilgan darslar (hammasi, yashirilmaydi), "Ko'rsatish" joyi.
             function cbHtml(blocks, placed, opts = {}) {
                 if (!blocks.length) return '';
+                // To'qnashuvlar bir necha kunda (bo'lingan dars) — blok sarlavhasida kun va sana.
+                const multiDay = new Set(blocks.map(b => b.date).filter(Boolean)).size > 1;
+                const dayTag = b => (multiDay && b.date ? ' (' + (boardDayNames()[b.day - 1] || b.day + '-kun') + ', ' + cfDate(b.date) + ')' : '');
                 const tone = { teacher: '#fee2e2', group: '#ffe4e6', room: '#fef9c3', day_end: '#fee2e2', capacity: '#fff7ed' };
                 return '<div class="cb-title" data-cb-title style="font-weight:600;color:' + (cbBlocking(blocks).length ? '#991b1b' : '#9a3412') + '">' + esc(cbTitle(blocks, placed)) + '</div>' +
                     blocks.map((b, i) => '<div class="cb-block" data-cb-block="' + b.kind + '" style="margin-top:4px;padding:3px 6px;border-radius:6px;background:' + (tone[b.kind] || '#f1f5f9') + ';color:#1f2937">' +
-                        '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cbBlockHead(b)) + '</b>' +
+                        '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cbBlockHead(b) + dayTag(b)) + '</b>' +
                         (CB_SHOWABLE.includes(b.kind) && !opts.compact ? '<a href="#" data-cb-show="' + i + '" style="white-space:nowrap;text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</div>' +
                         (CB_SHOWABLE.includes(b.kind) && b.items.some(it => it.subject) ? '<ul style="margin:1px 0 0;padding-left:16px">' +
                             b.items.map(it => '<li data-cb-line>' + esc(cbLineText(it)) + '</li>').join('') + '</ul>' : '') +

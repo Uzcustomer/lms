@@ -206,6 +206,20 @@ const data = {
         assert.deepEqual(await txt('[data-pop-cf] [data-cb-head]'), ['Xona band: 123-amaliyot xonasi']);
         assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), ['Joylash uchun tanlash']);
 
+        // 7d) Codex: bo'lingan dars bir o'qituvchi bilan ikki kunda to'qnashadi — har kun alohida blok (kun va sana bilan), har birining
+        //     [Ko'rsatish] / fokusi o'z kuniniki.
+        await setCards([Object.assign({}, data.card, { day: 1, pair: 1 }), Object.assign({}, data.card, { id: 708677, day: 4, pair: 5 }),
+            Object.assign({}, data.blocker, { day: 1, pair: 1, auditorium_code: 'R900', auditorium_name: '900-xona' }),
+            Object.assign({}, data.blocker, { id: 708663, day: 4, pair: 5, auditorium_code: 'R901', auditorium_name: '901-xona' })]);
+        await p.evaluate(() => T.open(708676));
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-head]'), ["O'qituvchi band: NUROVA Z. A. (Dushanba, 23.11)", "O'qituvchi band: NUROVA Z. A. (Payshanba, 26.11)"]);
+        await p.click('#pnCardPop [data-pop-cf] [data-cb-block="teacher"]:nth-of-type(3) [data-cb-show]');
+        await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-block="teacher"]:nth-of-type(3) [data-cb-detail-head]');
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-block="teacher"]:nth-of-type(3) [data-cb-detail-head]'), ['NUROVA Z. A. · Payshanba, 26.11']);
+        await p.click('#pnCardPop [data-pop-cf] [data-cb-block="teacher"]:nth-of-type(3) [data-cb-focus]');
+        const f3 = await p.evaluate(() => focus.pop());
+        assert.deepEqual([f3.card_ids, f3.hour_from, f3.dates], [[708677, 708663], 5, ['2026-11-26', '2026-11-26']]);
+
         // 8) Fokus bannerida xona NOMI (kodi emas); sikl karta oynasi — turlarga ajratilgan bloklar.
         assert.equal(await p.evaluate(() => T.focusBannerText({ kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', dates: ['2026-11-25'] }, [{ group: 'd1/d26-03a' }, { group: 'd1/d26-01a' }])),
             "To'qnashuvni ko'rish: Xona 123-amaliyot xonasi — d1/d26-03a va d1/d26-01a, 25.11");

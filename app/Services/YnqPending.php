@@ -16,7 +16,7 @@ class YnqPending
 {
     private const TTL = 120;
 
-    /** @return array<int, array{group: string, subject: string, by: array<int, string>, url: string, ready: bool}> */
+    /** @return array<int, array{group: string, subject: string, by: array<int, string>, url: string, ready: bool, done: int, total: int}> */
     public static function forTeacher(Teacher $teacher): array
     {
         return Cache::remember(self::cacheKey($teacher->id), self::TTL, fn () => self::compute($teacher));
@@ -26,6 +26,18 @@ class YnqPending
     public static function forget(int $teacherId): void
     {
         Cache::forget(self::cacheKey($teacherId));
+    }
+
+    /** Kichik guruhlar qaydnomasi o'zgardi (tasdiq / rad / qaytarish) — shu guruhlar o'qituvchilari ro'yxati darhol yangilansin */
+    public static function forgetFamily(string $subjectId, array $members): void
+    {
+        $hemisIds = DB::table('schedules')->whereNull('deleted_at')
+            ->whereIn('group_id', $members)->where('subject_id', $subjectId)
+            ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
+            ->distinct()->pluck('employee_id');
+        foreach (Teacher::whereIn('hemis_id', $hemisIds)->pluck('id') as $id) {
+            self::forget((int) $id);
+        }
     }
 
     private static function cacheKey(int $teacherId): string
@@ -59,8 +71,8 @@ class YnqPending
             }
             $confirmations = YnQaydnomaConfirmation::forVedomost($subjectId, $semesterCode, $members)
                 ->where('role', YnQaydnomaConfirmation::ROLE_TEACHER)->orderBy('confirmed_at')->get();
-            // Hali hech kim tasdiqlamagan yoki shu guruh / shu o'qituvchi tasdiqlagan — kutilmaydi
-            if ($confirmations->isEmpty() || $confirmations->contains(fn ($c) => (string) $c->group_hemis_id === $groupId || (int) $c->teacher_id === (int) $teacher->id)) {
+            // Hali hech kim tasdiqlamagan yoki shu guruh tasdiqlangan — kutilmaydi
+            if ($confirmations->isEmpty() || $confirmations->contains(fn ($c) => (string) $c->group_hemis_id === $groupId)) {
                 continue;
             }
             $names = DB::table('groups')->whereIn('group_hemis_id', $confirmations->pluck('group_hemis_id')->unique()->values())->pluck('name', 'group_hemis_id');
@@ -70,8 +82,11 @@ class YnqPending
             $items[$groupId . '|' . $subjectId . '|' . $semesterCode] = [
                 'group' => (string) $r->group_name,
                 'subject' => (string) $r->subject_name,
-                'by' => $confirmations->unique('teacher_id')
-                    ->map(fn ($c) => ($names[$c->group_hemis_id] ?? '') . ' — ' . $c->teacher_name)->values()->all(),
+                'by' => $confirmations->unique(fn ($c) => $c->group_hemis_id . '|' . $c->teacher_id)
+                    ->map(fn ($c) => ['group' => (string) ($names[$c->group_hemis_id] ?? ''), 'teacher' => (string) $c->teacher_name])->values()->all(),
+                // Kichik guruhlardan nechtasi tasdiqlangan
+                'done' => $confirmations->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->count(),
+                'total' => count($members),
                 // YN yuborilgan — qaydnomani ko'rib tasdiqlaydi; yo'q bo'lsa — avval jurnalda YN yuboradi
                 'ready' => $ready,
                 'url' => $ready

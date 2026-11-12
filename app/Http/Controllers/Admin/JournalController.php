@@ -1882,7 +1882,8 @@ class JournalController extends Controller
         // O'zi tasdiqlagan qaydnoma qayta yaratilmaydi — dekan rad etsa (tasdiq o'chadi) yana ochiladi
         $myYnConfirmation = null;
         if ($isAmaliyTeacher && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations') && ($me = $this->currentTeacher())) {
-            $myYnConfirmation = \App\Models\YnQaydnomaConfirmation::forVedomost((string) $subjectId, (string) $semesterCode, (string) $group->group_hemis_id)
+            // Aynan shu (kichik) guruh bo'yicha — boshqa kichik guruhdagi tasdig'i bu yerni yopmaydi
+            $myYnConfirmation = \App\Models\YnQaydnomaConfirmation::forVedomost((string) $subjectId, (string) $semesterCode, [(string) $group->group_hemis_id])
                 ->where('role', \App\Models\YnQaydnomaConfirmation::ROLE_TEACHER)
                 ->where('teacher_id', $me->id)
                 ->latest('confirmed_at')
@@ -10094,7 +10095,9 @@ class JournalController extends Controller
         $byRole = $chain['byRole'];
         $myRole = $approverRole ?? $Confirmation::ROLE_TEACHER;
         $teacher = $isPrivileged ? null : $this->currentTeacher();
-        $mine = $teacher ? $byRole[$myRole]->firstWhere('teacher_id', $teacher->id) : null;
+        // O'qituvchining tasdig'i — shu kichik guruh bo'yicha (boshqa guruhida tasdiqlagan bo'lsa ham bu yerda alohida)
+        $mine = $teacher ? $chain['all']->where('role', $myRole)->where('teacher_id', $teacher->id)
+            ->first(fn ($c) => $approverRole || (string) $c->group_hemis_id === $groupHemisId) : null;
         $previousRole = $Confirmation::CHAIN[array_search($myRole, $Confirmation::CHAIN, true) - 1] ?? null;
         $hidden = '';
         foreach ($request->only(['subject_id', 'semester_code', 'group_hemis_id', 'weight_jn', 'weight_mt', 'weight_on', 'weight_oski', 'weight_test', 'shakl']) as $k => $v) {
@@ -10192,12 +10195,14 @@ class JournalController extends Controller
                 'oski' => (int) ($data['weight_oski'] ?? 0), 'test' => (int) ($data['weight_test'] ?? 60),
             ];
             abort_if(array_sum($weights) !== 100, 422, "Vaznlar jami 100 bo'lishi kerak");
-            // O'qituvchi o'zi dars beradigan (YN yuborilgan) barcha kichik guruhlar uchun bir marta tasdiqlaydi
-            $groups = collect($chain['members'])->filter(fn ($g) => $g === $groupHemisId
-                || ($this->isAmaliyTeacherFor($subjectId, $g) && $ynSubmitted($g)))->values()->all();
+            // O'qituvchi faqat o'zi ochgan kichik guruh uchun tasdiqlaydi (boshqa guruhda ham darsi bo'lsa —
+            // o'sha guruh jurnalidan alohida); har kichik guruhni o'z o'qituvchisi tasdiqlashi kerak
+            $groups = [$groupHemisId];
         }
 
-        if ($chain['byRole'][$role]->firstWhere('teacher_id', $teacher->id)) {
+        $mineAlready = $chain['all']->where('role', $role)->where('teacher_id', $teacher->id)
+            ->when($role === $Confirmation::ROLE_TEACHER, fn ($c) => $c->filter(fn ($x) => (string) $x->group_hemis_id === $groupHemisId));
+        if ($mineAlready->isNotEmpty()) {
             return redirect($back)->with('ynq_flash', 'Siz bu qaydnomani allaqachon tasdiqlagansiz.');
         }
 
@@ -10239,7 +10244,7 @@ class JournalController extends Controller
             \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $chain['members'])
                 ->whereNull('resolved_at')->update(['resolved_at' => now()]);
         }
-        \App\Services\YnqPending::forget($teacher->id);
+        \App\Services\YnqPending::forgetFamily($subjectId, $chain['members']);
         $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId);
         \App\Services\ActivityLogService::log('confirm', 'yn_qaydnoma',
             "YN qaydnoma tasdiqlandi ({$confirmation->roleLabel()}): {$group?->name}, {$subject?->subject_name}", $confirmation);
@@ -10291,6 +10296,7 @@ class JournalController extends Controller
             \App\Services\ActivityLogService::log('reject', 'yn_qaydnoma', "YN qaydnoma rad etildi: {$data['reason']}", $rejection);
         });
         $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, $stale);
+        \App\Services\YnqPending::forgetFamily($subjectId, $members);
 
         return redirect($back)->with('ynq_flash', 'Qaydnoma rad etildi — o\'qituvchi sababini ko\'rib, qayta topshiradi.');
     }
@@ -10343,6 +10349,7 @@ class JournalController extends Controller
             }
         });
         $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, $stale);
+        \App\Services\YnqPending::forgetFamily($subjectId, $members);
 
         return redirect($back)->with('ynq_flash', 'Tasdiq qaytarildi — QR kodingiz olib tashlandi.');
     }

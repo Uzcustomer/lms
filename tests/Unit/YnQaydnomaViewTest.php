@@ -366,6 +366,8 @@ describe('teacher confirmation', function () {
         DB::table('student_grades')->insert([['student_hemis_id' => 's1', 'subject_id' => '435', 'semester_code' => '19'],
             ['student_hemis_id' => 's2', 'subject_id' => '435', 'semester_code' => '19'], ['student_hemis_id' => 's3', 'subject_id' => '1', 'semester_code' => '19']]);
         DB::table('schedules')->insert(['employee_id' => 505, 'subject_id' => 435, 'group_id' => 78, 'training_type_code' => '13']);
+        // 01b o'qituvchisining 01a da ham bitta darsi bor (almashtirish) — uning tasdig'i 01a ni yopmaydi
+        DB::table('schedules')->insert(['employee_id' => 501, 'subject_id' => 435, 'group_id' => 78, 'training_type_code' => '13']);
         DB::table('yn_submissions')->insert(['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '78']);
         \App\Services\YnqFamily::flush();
         expect(\App\Services\YnqFamily::members('435', '19', '77'))->toBe(['78', '77'])
@@ -381,10 +383,12 @@ describe('teacher confirmation', function () {
         $pending = \App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(5));
         expect($pending)->toHaveCount(1)
             ->and($pending[0]['group'])->toBe('d1/d22-01a (rus)')
-            ->and($pending[0]['by'])->toBe(['d1/d22-01b (rus) — IZZATULLAYEV OYBEK'])
+            ->and($pending[0]['by'])->toBe([['group' => 'd1/d22-01b (rus)', 'teacher' => 'IZZATULLAYEV OYBEK']])
+            ->and([$pending[0]['done'], $pending[0]['total']])->toBe([1, 2])
             ->and($pending[0]['ready'])->toBeTrue()
             ->and($pending[0]['url'])->toContain('group_hemis_id=78')
-            ->and(\App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(1)))->toBe([]);   // o'zi tasdiqlagan
+            ->and(\App\Models\YnQaydnomaConfirmation::pluck('group_hemis_id')->all())->toBe(['77'])            // faqat o'z guruhi
+            ->and(array_column(\App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(1)), 'group'))->toBe(['d1/d22-01a (rus)']);
         expect(fn () => ($this->confirm)(4))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // 01a hali topshirmagan
         ($this->confirm)(5, 'confirm', '78');                                  // 01a o'qituvchisi
         expect(\App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(5)))->toBe([]);   // tasdiqlagach modal yo'q

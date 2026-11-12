@@ -67,15 +67,15 @@ class JournalController extends Controller
     private const YNQ_SPACER_WIDTH = 1.55;   // PDF da ~4pt
     /** "Semestrda … soat … kredit" qatoridagi chiziq (K13:W13) — YN o'tkazilgan sana */
     private const YNQ_EXAM_DATE_CELL = 'K13';
-    private const YNQ_QR_ALT = 'Tasdiq QR: ';
-    private const YNQ_DEAN_QR_ALT = 'Dekan QR: ';
+    /** Hujjatning yagona QR i (dekan tasdig'i) — pastda dekan ismidan keyin, qizil */
+    private const YNQ_QR_ALT = 'Hujjat QR: ';
+    private const YNQ_QR_COLOR = [192, 0, 0];
+    /** "— tasdiqlagan" yozuvi rangi */
+    private const YNQ_CONFIRMED_COLOR = 'FF1D4ED8';
     /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
     private const YNQ_TABLE_ROWS = [15, 50];
-    private const YNQ_HEAD_QR_ALT = 'Kafedra QR: ';
-    /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — o'qituvchilar bloki */
+    /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — tasdiqlar va hujjat QR i */
     private const YNQ_SIGN_ROW = 60;
-    /** O'qituvchi joyining eng kichik kengligi (px) — QR va ostidagi qisqa ism sig'adi */
-    private const YNQ_TEACHER_SLOT_PX = 240;
     private const YNQ_RULES = [
         'subject_id' => 'required',
         'semester_code' => 'required',
@@ -10490,15 +10490,13 @@ class JournalController extends Controller
     {
         $html = self::sheetsHtml($spreadsheet);
 
-        // Tasdiq QR lari sahifada imzo katagining aniq o'rtasida (brauzerda qator balandligi
-        // Excel'dagidan farq qiladi — offset emas, flex bilan)
+        // Hujjat QR i sahifada o'z katagining (dekan ismidan keyin) aniq o'rtasida (brauzerda qator
+        // balandligi Excel'dagidan farq qiladi — offset emas, flex bilan)
         $html = preg_replace_callback('/(?:\s*<img alt="' . preg_quote(self::YNQ_QR_ALT, '/') . '[^>]*\/>)+/u', function ($m) {
             $imgs = preg_replace_callback('/style="[^"]*?width:(\d+)px[^"]*"/', fn ($s) => 'style="width:' . $s[1] . 'px;height:' . $s[1] . 'px"', $m[0]);
 
             return '<div class="ynq-qr">' . trim($imgs) . '</div>';
         }, $html);
-        // Dekan (chap) va kafedra mudiri (o'ng) QR lari — varaqning yuqori burchaklarida, ostida ismi
-        $html = self::placeCornerQrs($html, 'width:64px;height:64px', 'top:24px', 'font:11px/1.25 serif', '100px');
 
         // Tepada — nom; tugmalar va holatlar — o'ng tomondagi qotirilgan panelda (doim ko'rinadi)
         $title = e($title);
@@ -10582,14 +10580,12 @@ class JournalController extends Controller
         $html = preg_replace("/font-family:[^;}\"]+/", "font-family:'Liberation Serif'", $html);
         // Har varaq yangi sahifadan — writer o'zi qo'yadi (div + div); uning @page qoidalari o'rniga o'zimizniki
         $html = preg_replace('/@page[^{]*\{[^}]*\}/', '', $html);
-        // Dekan (chap) va kafedra mudiri (o'ng) QR lari — varaq yuqori burchaklarida
-        $html = self::placeCornerQrs($html, 'width:46pt;height:46pt', 'top:14pt', 'font-size:7pt;line-height:1.2');
-        // O'qituvchilar QR lari: dompdf flex/absolute'ni bilmaydi — katakda o'rtada, oddiy rasm
+        // Hujjat QR i: dompdf flex/absolute'ni bilmaydi — katakda o'rtada, oddiy rasm
         $html = preg_replace_callback(
             "/<td([^>]*?) style='position: relative;'([^>]*)>((?:\s*<img alt=\"" . preg_quote(self::YNQ_QR_ALT, '/') . "[^>]*\/>)+)/u",
             fn ($m) => '<td' . $m[1] . " style='vertical-align:middle;text-align:center'" . $m[2] . '>' . preg_replace(
-                // Masshtabdan qat'i nazar skanerlanadigan o'lcham (~14 mm)
-                '/style="[^"]*"/', 'style="width:40pt;height:40pt;margin:0 2pt"', $m[3]
+                // Masshtabdan qat'i nazar oson skanerlanadigan o'lcham (~21 mm)
+                '/style="[^"]*"/', 'style="width:60pt;height:60pt;margin:0 2pt"', $m[3]
             ),
             $html
         );
@@ -10701,32 +10697,6 @@ class JournalController extends Controller
         }, $html);
 
         return str_replace('</head>', '<style>' . $css . '</style></head>', $html);
-    }
-
-    /**
-     * Har varaqda dekan va kafedra mudiri QR lari katakdan olinib, varaqning chap / o'ng yuqori
-     * burchagiga (absolute) qo'yiladi — ostida ismi va lavozimi. $gutter berilsa (sahifada) — ular uchun
-     * varaqning ikki chetida shuncha joy qoldiriladi; PDF da — jadval chetlarida (o'ng burchak ostidagi
-     * X ustuni sarlavha qatorlarida bo'sh, stampConfirmationQrs).
-     */
-    private static function placeCornerQrs(string $html, string $imgStyle, string $top, string $textStyle, string $gutter = ''): string
-    {
-        return preg_replace_callback("/<div style='page: page(\\d+)'>(.*?)(?=<div style='page: page|<\\/body>)/s", function ($m) use ($imgStyle, $top, $textStyle, $gutter) {
-            $block = $m[2];
-            $corners = '';
-            foreach ([[self::YNQ_DEAN_QR_ALT, 'left', 'Fakultet dekani'], [self::YNQ_HEAD_QR_ALT, 'right', 'Kafedra mudiri']] as [$alt, $side, $label]) {
-                if (!preg_match('/<img alt="' . preg_quote($alt, '/') . '([^"]*)" src="([^"]+)"[^>]*\/>/u', $block, $img)) {
-                    continue;
-                }
-                $block = str_replace($img[0], '', $block);
-                $name = trim(explode(' — ', html_entity_decode($img[1], ENT_QUOTES, 'UTF-8'))[0]);
-                $corners .= "<div class='ynq-corner' style='position:absolute;{$top};{$side}:0;" . ($gutter ? "width:{$gutter};" : '') . "text-align:center;z-index:2'>"
-                    . "<img src='{$img[2]}' style='{$imgStyle}' alt='" . e($alt . $name) . "'>"
-                    . "<div style='{$textStyle}'>" . e($name) . "<br>(" . $label . ')</div></div>';
-            }
-
-            return "<div style='page: page{$m[1]};position:relative" . ($gutter ? ";padding:0 {$gutter}" : '') . "'>" . $corners . $block;
-        }, $html);
     }
 
     /** Varaqlar chop etish maydoniga qirqilib, Html writer bilan (kutubxona ogohlantirishlarisiz) */
@@ -12120,30 +12090,19 @@ class JournalController extends Controller
     }
 
     /**
-     * Qaydnomaga tasdiq QR lari: tepada chap burchakda — fakultet dekani, o'ng burchakda — kafedra
-     * mudiri; pastda (dekan / kafedra mudiri yozuvlari o'rnida) — barcha kichik guruhlarning
-     * tasdiqlagan amaliyot o'qituvchilari, yonma-yon, QR ostida ismi. Kafedra mudiri QR i — barcha
-     * kichik guruhlar o'qituvchilari tasdiqlagach, dekanniki — undan keyin. Excelda ham, sahifada ham.
+     * Qaydnomaga tasdiqlar: sarlavhada tasdiqlagan amaliyot o'qituvchilari ismidan keyin ko'k
+     * "— tasdiqlagan"; pastda (shablondagi "Fakultet dekani … / Kafedra mudiri …" qatori) kafedra
+     * mudiri ismidan keyin ko'k "— Tasdiqlagan", dekan ismidan keyin — hujjatning yagona (qizil) QR i:
+     * skanerlansa barcha tasdiqlaganlar va PDF. Kafedra mudiri — barcha kichik guruhlar o'qituvchilari
+     * tasdiqlagach, dekan — undan keyin. Excelda ham, sahifada ham.
      */
     private static function stampConfirmationQrs(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $subjectId, string $semesterCode, string $groupHemisId): void
     {
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
         $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
-        $withQr = fn (string $role) => $chain['byRole'][$role]->filter(fn ($c) => $c->verification)->values();
-        $teachers = $withQr($Confirmation::ROLE_TEACHER)->sortBy('confirmed_at')->values();
-        $head = self::ynqStepDone($chain, $Confirmation::ROLE_TEACHER) ? $withQr($Confirmation::ROLE_HEAD)->first() : null;
-        $dean = $head ? $withQr($Confirmation::ROLE_DEAN)->first() : null;
-        $makeQr = function ($c, string $alt, int $size) {
-            $qr = \PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing::fromString(
-                \App\Services\QrPng::make($c->verification->getVerificationUrl(), 5, 1)
-            );
-            $name = self::abbreviateName($c->teacher_name);
-            $qr->setName($alt . $name);
-            $qr->setDescription($alt . $name . ' — ' . $c->confirmed_at->format('d.m.Y H:i'));
-            $qr->setHeight($size);
-
-            return $qr;
-        };
+        $teachers = $chain['byRole'][$Confirmation::ROLE_TEACHER];
+        $head = self::ynqStepDone($chain, $Confirmation::ROLE_TEACHER) ? $chain['byRole'][$Confirmation::ROLE_HEAD]->first() : null;
+        $dean = $head ? $chain['byRole'][$Confirmation::ROLE_DEAN]->first(fn ($c) => $c->verification) : null;
         // "YaN o'tkazilgan sana" — asosiy guruhning YN jadvalidagi oxirgi imtihon (test, bo'lmasa OSKI)
         $exam = \Illuminate\Support\Facades\Schema::hasTable('exam_schedules')
             ? DB::table('exam_schedules')->whereNull('student_hemis_id')->where('group_hemis_id', $chain['members'][0])
@@ -12151,12 +12110,6 @@ class JournalController extends Controller
                 ->first(['oski_date', 'test_date', 'oski_na', 'test_na'])
             : null;
         $ynDate = $exam ? (($exam->test_na ? null : $exam->test_date) ?: ($exam->oski_na ? null : $exam->oski_date)) : null;
-        $font = $spreadsheet->getDefaultStyle()->getFont();
-        $colPx = function ($sheet, string $col) use ($font) {
-            $width = $sheet->getColumnDimension($col)->getWidth();
-
-            return \PhpOffice\PhpSpreadsheet\Shared\Drawing::cellDimensionToPixels($width < 0 ? 8.43 : $width, $font);
-        };
 
         foreach ($spreadsheet->getAllSheets() as $sheet) {
             // Faqat qaydnoma shakllari (chop etish maydoni bor), tarix varag'i emas
@@ -12171,30 +12124,104 @@ class JournalController extends Controller
                 ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT)
                 ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_BOTTOM);
 
-            // Pastda: tasdiqlagan amaliyot o'qituvchilari — QR va ostida ismi, yonma-yon
-            if ($teachers->isNotEmpty()) {
-                self::teacherSignatureBlock($sheet, $teachers, $makeQr, $colPx);
-            }
-
             self::shiftHeaderTeachersLeft($sheet);
+            self::markHeaderTeachers($sheet, $teachers);
+            self::signatureRow($sheet, $head, $dean);
+        }
+    }
 
-            // Tepada: chap burchakda — dekan, o'ng burchakda — kafedra mudiri
-            $size = 56;
-            if ($dean) {
-                $qr = $makeQr($dean, self::YNQ_DEAN_QR_ALT, $size);
-                $qr->setCoordinates('A2');
-                $qr->setOffsetX(2);
-                $qr->setOffsetY(2);
-                $qr->setWorksheet($sheet);
-            }
-            if ($head) {
-                $qr = $makeQr($head, self::YNQ_HEAD_QR_ALT, $size);
-                $qr->setCoordinates(self::YNQ_LAST_COL . '2');
-                $qr->setOffsetX(max(0, $colPx($sheet, self::YNQ_LAST_COL) - $size - 2));
-                $qr->setOffsetY(2);
-                $qr->setWorksheet($sheet);
+    /** Matn va undan keyin ko'k qo'shimcha ("— tasdiqlagan") — katak shrifti bilan */
+    private static function withConfirmedMark(\PhpOffice\PhpSpreadsheet\Style\Font $font, array $parts): \PhpOffice\PhpSpreadsheet\RichText\RichText
+    {
+        $text = new \PhpOffice\PhpSpreadsheet\RichText\RichText();
+        foreach ($parts as $i => [$value, $mark]) {
+            $text->createTextRun(($i ? ', ' : '') . $value)->setFont(clone $font);
+            if ($mark !== null) {
+                $markFont = (clone $font)->setBold(true);
+                $markFont->getColor()->setARGB(self::YNQ_CONFIRMED_COLOR);
+                $text->createTextRun(' — ' . $mark)->setFont($markFont);
             }
         }
+
+        return $text;
+    }
+
+    /** Sarlavhadagi amaliyot o'qituvchilari (S10–S12): tasdiqlaganlari ismidan keyin ko'k "— tasdiqlagan" */
+    private static function markHeaderTeachers(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, \Illuminate\Support\Collection $teachers): void
+    {
+        $confirmed = $teachers->map(fn ($c) => self::abbreviateName($c->teacher_name))->all();
+        if (!$confirmed) {
+            return;
+        }
+        foreach ([10, 11, 12] as $r) {
+            $value = $sheet->getCell("S{$r}")->getValue();
+            if (!is_string($value) || trim($value) === '') {
+                continue;
+            }
+            $parts = array_map(fn ($name) => [$name, in_array(trim($name), $confirmed, true) ? 'tasdiqlagan' : null], explode(', ', $value));
+            if (array_filter(array_column($parts, 1))) {
+                $sheet->getCell("S{$r}")->setValue(self::withConfirmedMark($sheet->getStyle("S{$r}")->getFont(), $parts));
+            }
+        }
+    }
+
+    /**
+     * Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …"): kafedra mudiri tasdiqlasa —
+     * ismi va ko'k "— Tasdiqlagan"; dekan tasdiqlasa — ismi va undan keyin hujjatning qizil QR i.
+     */
+    private static function signatureRow(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, $head, $dean): void
+    {
+        $row = self::YNQ_SIGN_ROW + self::ynqExtraRows($sheet);
+        $merges = $sheet->getMergeCells();
+        if ($head) {
+            if (isset($merges["U{$row}:W{$row}"])) {
+                $sheet->unmergeCells("U{$row}:W{$row}");
+                $sheet->mergeCells("U{$row}:" . self::YNQ_LAST_COL . $row);
+            }
+            $sheet->getCell("U{$row}")->setValue(self::withConfirmedMark($sheet->getStyle("U{$row}")->getFont(),
+                [[self::initialsName($head->teacher_name), 'Tasdiqlagan']]));
+        }
+        if (!$dean) {
+            return;
+        }
+        $sheet->getCell("E{$row}")->setValue(self::initialsName($dean->teacher_name));
+
+        // Dekan ismidan keyin (I:M) — hujjatning yagona QR i, kattaroq, qizil
+        $size = 84;
+        if (!isset($merges["I{$row}:M{$row}"])) {
+            $sheet->mergeCells("I{$row}:M{$row}");
+        }
+        $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 66));
+        $width = 0;
+        foreach (['I', 'J', 'K', 'L', 'M'] as $col) {
+            $w = $sheet->getColumnDimension($col)->getWidth();
+            $width += \PhpOffice\PhpSpreadsheet\Shared\Drawing::cellDimensionToPixels($w < 0 ? 8.43 : $w, $sheet->getParent()->getDefaultStyle()->getFont());
+        }
+        $qr = \PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing::fromString(
+            \App\Services\QrPng::make($dean->verification->getVerificationUrl(), 5, 1, self::YNQ_QR_COLOR)
+        );
+        $qr->setName(self::YNQ_QR_ALT . self::abbreviateName($dean->teacher_name));
+        $qr->setDescription(self::YNQ_QR_ALT . self::abbreviateName($dean->teacher_name) . ' — ' . $dean->confirmed_at->format('d.m.Y H:i'));
+        $qr->setHeight($size);
+        $qr->setCoordinates("I{$row}");
+        $qr->setOffsetX(max(0, intdiv((int) $width - $size, 2)));
+        $qr->setOffsetY(max(0, intdiv(self::rowPx($sheet, $row) - $size, 2)));
+        $qr->setWorksheet($sheet);
+    }
+
+    /** "SAGIRAYEV NURALI JUMAYEVICH" → "N.J.Sagirayev" (shablondagi dekan / kafedra mudiri yozuvidek) */
+    private static function initialsName(string $fullName): string
+    {
+        $parts = preg_split('/\s+/', trim($fullName));
+        if (count($parts) < 2) {
+            return $fullName;
+        }
+        $initials = '';
+        foreach (array_slice($parts, 1) as $word) {
+            $initials .= mb_strtoupper(mb_substr($word, 0, 1)) . '.';
+        }
+
+        return $initials . mb_strtoupper(mb_substr($parts[0], 0, 1)) . mb_strtolower(mb_substr($parts[0], 1));
     }
 
     /**
@@ -12251,69 +12278,6 @@ class JournalController extends Controller
         $sheet->mergeCells('V8:W8');
         $sheet->getCell('V8')->setValue($group[0]);
         $sheet->getStyle('V8')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-    }
-
-    /**
-     * Shablon pastidagi "Fakultet dekani … / Kafedra mudiri …" qatorlari (60–61) o'rniga:
-     * "Amaliyot o'qituvchilari:" (o'ngga tekislangan) va darhol yonida ketma-ket o'qituvchilar
-     * joylari — har birida QR (60-qator) va ostida ism (61); joy — QR va ism sig'adigan eng tor kataklar.
-     */
-    private static function teacherSignatureBlock(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, \Illuminate\Support\Collection $teachers, \Closure $makeQr, \Closure $colPx): void
-    {
-        $row = self::YNQ_SIGN_ROW + self::ynqExtraRows($sheet);
-        $Coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class;
-        foreach ($sheet->getMergeCells() as $range) {
-            if (preg_match('/^[A-Z]+(\d+):[A-Z]+(\d+)$/', $range, $m) && (int) $m[1] >= $row && (int) $m[2] <= $row + 1) {
-                $sheet->unmergeCells($range);
-            }
-        }
-        $area = 'B' . $row . ':' . self::YNQ_LAST_COL . ($row + 1);
-        foreach ($sheet->rangeToArray($area, null, false, false, true) as $r => $cols) {
-            foreach (array_keys($cols) as $col) {
-                $sheet->getCell($col . $r)->setValue(null);
-            }
-        }
-        $sheet->getStyle($area)->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-        $sheet->getRowDimension($row)->setRowHeight(48);
-
-        // "Jami talabalar soni:" bilan bir chiziqda — o'sha uslubda (B ustunida, markazda)
-        $sheet->setCellValue('B' . $row, "Amaliyot o‘qituvchilari:");
-        $sheet->getStyle('B' . $row)->getAlignment()
-            ->setHorizontal($sheet->getStyle('B' . ($row - 3))->getAlignment()->getHorizontal())
-            ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
-
-        // Joylar: C dan boshlab, har biri kamida YNQ_TEACHER_SLOT_PX kenglikdagi qo'shni ustunlar
-        $slots = [];
-        $lastIndex = $Coordinate::columnIndexFromString(self::YNQ_LAST_COL);
-        for ($ci = $Coordinate::columnIndexFromString('C'); $ci <= $lastIndex && count($slots) < $teachers->count(); ) {
-            $from = $ci;
-            $width = 0;
-            while ($ci <= $lastIndex && $width < self::YNQ_TEACHER_SLOT_PX) {
-                $width += $colPx($sheet, $Coordinate::stringFromColumnIndex($ci));
-                $ci++;
-            }
-            $slots[] = [$Coordinate::stringFromColumnIndex($from), $Coordinate::stringFromColumnIndex($ci - 1), $width];
-        }
-
-        $size = 56;
-        foreach ($teachers->values()->take(count($slots)) as $i => $c) {
-            [$from, $to, $width] = $slots[$i];
-            if ($from !== $to) {
-                $sheet->mergeCells($from . $row . ':' . $to . $row);
-                $sheet->mergeCells($from . ($row + 1) . ':' . $to . ($row + 1));
-            }
-            $sheet->setCellValue($from . ($row + 1), self::abbreviateName($c->teacher_name));
-            $sheet->getStyle($from . ($row + 1))->getFont()->setBold(false);
-            $sheet->getStyle($from . ($row + 1))->getAlignment()
-                ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
-                ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
-
-            $qr = $makeQr($c, self::YNQ_QR_ALT, $size);
-            $qr->setCoordinates($from . $row);
-            $qr->setOffsetX(max(0, intdiv($width - $size, 2)));
-            $qr->setOffsetY(max(0, intdiv(self::rowPx($sheet, $row) - $size, 2)));
-            $qr->setWorksheet($sheet);
-        }
     }
 
     /**

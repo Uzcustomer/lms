@@ -171,8 +171,15 @@ describe('teacher confirmation', function () {
                 int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true): array|string
             {
                 $this->withFamily = $withFamily;
-                $s = qaydnomaSheet();
-                (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $s->getSheet(0), 10);
+                // Asl shablon: 10 talaba, sarlavhada amaliyot o'qituvchilari (fillSheet kabi U10, U11)
+                $s = \PhpOffice\PhpSpreadsheet\IOFactory::load(public_path('templates/yn_qaydnoma (1).xlsx'));
+                $w = $s->getActiveSheet();
+                (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 10);
+                $w->setCellValue('U10', 'IZZATULLAYEV O.')->setCellValue('U11', 'KARIMOVA L.')->setCellValue('W8', 'd1/d22-01b (rus)');
+                foreach (range(20, 29) as $r) {
+                    $w->setCellValue("B{$r}", 'TALABA ' . $r);
+                }
+                $s->createSheet()->setTitle('Tarix')->setCellValue('A1', 'tarix');
                 (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $s, $subjectId, $semesterCode, $groupHemisId);
 
                 return [$s, 'YN_qaydnoma_test.xlsx'];
@@ -200,7 +207,7 @@ describe('teacher confirmation', function () {
         };
     });
 
-    it('lets the practical teacher confirm once and stamps a unique QR in the bottom teachers block', function () {
+    it('lets the practical teacher confirm once and marks their name as confirmed, without a QR', function () {
         ($this->confirm)(1);
         ($this->confirm)(1);   // takroriy — yangi tasdiq yaratilmaydi
 
@@ -215,29 +222,19 @@ describe('teacher confirmation', function () {
         Storage::disk('public')->assertExists($c->verification->document_path);
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
-        $drawings = $sheet->getSheet(0)->getDrawingCollection();
         $w = $sheet->getSheet(0);
-        // Imzo ustuni olib tashlangan (kengligi qolganlariga bo'lingan); o'qituvchi QR i pastda — yozuvdan
-        // darhol keyin (C dan), ostida ismi
-        expect($w->getCell('X15')->getValue())->toBeNull()
-            ->and($w->getPageSetup()->getPrintArea())->toBe('A1:X61')
-            ->and(array_keys($w->getConditionalStylesCollection()))->toBe(['A20:X49'])
-            ->and($w->getStyle('X20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
-            // Ajratuvchi ustunlar bir xil va tor; bo'shagan kenglik qolganlariga teng
-            ->and(collect(['F', 'I', 'L', 'O', 'R', 'U'])->map(fn ($c) => $w->getColumnDimension($c)->getWidth())->unique()->all())->toBe([1.55])
-            ->and(round($w->getColumnDimension('A')->getWidth(), 2))->toBe(round(8.43 + (28.81640625 + 6 * (8.43 - 1.55)) / 18, 2))
-            ->and($drawings)->toHaveCount(1)
-            ->and($drawings[0]->getCoordinates())->toBe('C60')
-            ->and($drawings[0]->getHeight())->toBe(56)
-            ->and($w->getMergeCells())->toHaveKeys(['C60:E60', 'C61:E61'])   // QR va ism sig'adigan, oralari kengroq
-            ->and($w->getCell('C61')->getValue())->toBe('IZZATULLAYEV O.')
-            ->and($w->getCell('B60')->getValue())->toBe('Amaliyot o‘qituvchilari:')
-            ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe($w->getStyle('B57')->getAlignment()->getHorizontal())   // "Jami talabalar soni" bilan bir chiziqda
-            ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
+        $header = $w->getCell('S10')->getValue();
+        // Sarlavhada tasdiqlagan o'qituvchi ismidan keyin ko'k "— tasdiqlagan"; QR yo'q (faqat dekandan keyin)
+        expect($header)->toBeInstanceOf(\PhpOffice\PhpSpreadsheet\RichText\RichText::class)
+            ->and($header->getPlainText())->toBe('IZZATULLAYEV O. — tasdiqlagan')
+            ->and($header->getRichTextElements()[1]->getFont()->getColor()->getARGB())->toBe('FF1D4ED8')
+            ->and($w->getCell('S11')->getValue())->toBe('KARIMOVA L.')
+            ->and($w->getCell('B60')->getValue())->toContain('Fakultet dekani')
+            ->and($w->getDrawingCollection())->toHaveCount(0)
+            ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);
 
-        // Sahifada QR o'z katagining o'rtasida (flex markaz)
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
-        expect($html)->toMatch('/<div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV O\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:56px;height:56px" \/><\/div>/');
+        expect($html)->toContain('— tasdiqlagan')->toContain('#1D4ED8')->not->toContain('<img alt=');
     });
 
     it('does not let the teacher revoke their own confirmation', function () {
@@ -286,17 +283,35 @@ describe('teacher confirmation', function () {
         Storage::disk('public')->assertExists($paths->first());
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
-        $find = fn ($prefix) => collect($sheet->getSheet(0)->getDrawingCollection())->first(fn ($d) => str_starts_with($d->getDescription(), $prefix));
-        // Dekan — chap yuqori, kafedra mudiri — o'ng yuqori burchak
-        expect($find('Dekan QR: SAGIRAYEV N.')->getCoordinates())->toBe('A2')
-            ->and($find('Kafedra QR: XURMATOVA D.A.')->getCoordinates())->toBe('X2');
+        $w = $sheet->getSheet(0);
+        $drawings = collect($w->getDrawingCollection());
+        // Pastda: kafedra mudiri — ismi va "— Tasdiqlagan"; dekan — ismi va undan keyin yagona qizil QR
+        expect($w->getCell('U60')->getValue()->getPlainText())->toBe('D.A.Xurmatova — Tasdiqlagan')
+            ->and($w->getCell('E60')->getValue())->toBe('N.Sagirayev')
+            ->and($drawings)->toHaveCount(1)
+            ->and($drawings[0]->getDescription())->toStartWith('Hujjat QR: SAGIRAYEV N.')
+            ->and($drawings[0]->getCoordinates())->toBe('I60')
+            ->and($drawings[0]->getHeight())->toBe(84)
+            ->and($w->getMergeCells())->toHaveKey('I60:M60');
+        $png = imagecreatefromstring($drawings[0]->getImageResource() ? (function ($img) { ob_start(); imagepng($img); return ob_get_clean(); })($drawings[0]->getImageResource()) : '');
+        $red = false;
+        for ($x = 0; $x < imagesx($png) && !$red; $x++) {
+            for ($y = 0; $y < imagesy($png) && !$red; $y++) {
+                $red = imagecolorat($png, $x, $y) === (192 << 16);
+            }
+        }
+        expect($red)->toBeTrue();                                                   // QR qizil
 
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
-        expect($html)->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;left:0;[^']*'><img src='data:image\\/png;base64,[^']+'[^>]*><div[^>]*>SAGIRAYEV N\\.<br>\\(Fakultet dekani\\)/")
-            ->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;right:0;[^']*'><img[^>]*><div[^>]*>XURMATOVA D\\.A\\.<br>\\(Kafedra mudiri\\)/")
-            // QR lar uchun varaq chetlarida joy — sarlavha yozuvlari ustiga chiqmaydi
-            ->toContain("position:relative;padding:0 100px'>")
-            ->toContain('right:0;width:100px;');
+        expect($html)->toMatch('/<div class="ynq-qr"><img alt="Hujjat QR: SAGIRAYEV N\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:84px;height:84px" \/><\/div>/')
+            ->not->toContain('ynq-corner');
+
+        // QR skanerlansa — hujjatning barcha tasdiqlari va PDF havolasi
+        $page = (new \App\Http\Controllers\DocumentVerificationController())->verify($dean->verification->token);
+        expect($page->getData()['ynqConfirmations']->map(fn ($c) => $c->role . ':' . $c->teacher_name)->all())
+            ->toBe(['oqituvchi:IZZATULLAYEV OYBEK', 'kafedra_mudiri:XURMATOVA DILNOZA AKMALOVNA', 'dekan:SAGIRAYEV NURALI'])
+            ->and($page->getData()['ynqPdfUrl'])->toContain($dean->verification->token)
+            ->and($page->render())->toContain('Tasdiqlaganlar')->toContain('Qaydnomani ochish (PDF)');
 
         // O'qituvchi tasdig'i qaytarilsa (superadmin sinov rejimi) — kafedra va dekan tasdig'i ham bekor
         session(['impersonating' => true]);
@@ -449,12 +464,11 @@ describe('teacher confirmation', function () {
         expect(\App\Models\YnQaydnomaConfirmation::where('role', 'kafedra_mudiri')->value('group_hemis_id'))->toBe('78')   // asosiy guruh
             ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->count())->toBe(1);
 
-        // Pastda ikkala o'qituvchi QR i yonma-yon (C:E, F:…), tepada kafedra va dekan
+        // Sarlavhada ikkala o'qituvchi "— tasdiqlagan"; hujjatda yagona QR — dekandan keyin
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '78', 30, 10, 0, 0, 60);
-        $teacherQrs = collect($sheet->getSheet(0)->getDrawingCollection())->filter(fn ($d) => str_starts_with($d->getDescription(), 'Tasdiq QR: '));
-        expect($teacherQrs->map->getCoordinates()->values()->all())->toBe(['C60', 'F60'])
-            ->and($sheet->getSheet(0)->getCell('F61')->getValue())->toBe('KARIMOVA L.')
-            ->and(collect($sheet->getSheet(0)->getDrawingCollection())->map->getCoordinates()->values()->all())->toContain('A2', 'X2');
+        expect($sheet->getSheet(0)->getCell('S10')->getValue()->getPlainText())->toBe('IZZATULLAYEV O. — tasdiqlagan')
+            ->and($sheet->getSheet(0)->getCell('S11')->getValue()->getPlainText())->toBe('KARIMOVA L. — tasdiqlagan')
+            ->and(collect($sheet->getSheet(0)->getDrawingCollection())->map->getCoordinates()->values()->all())->toBe(['I60']);
 
         // Rad etilsa ikkala o'qituvchi tasdig'i bekor; ikkalasi qayta topshirgach rad etish yopiladi
         // Dekan tasdig'ini qaytarib rad etadi — kafedra va ikkala o'qituvchi tasdig'i bekor

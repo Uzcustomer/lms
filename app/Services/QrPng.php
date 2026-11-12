@@ -11,7 +11,8 @@ use BaconQrCode\Encoder\Encoder;
  */
 class QrPng
 {
-    public static function make(string $text, int $scale = 6, int $margin = 2): string
+    /** @param array{0:int,1:int,2:int} $color QR nuqtalari rangi (RGB), sukut — qora */
+    public static function make(string $text, int $scale = 6, int $margin = 2, array $color = [0, 0, 0]): string
     {
         $matrix = Encoder::encode($text, ErrorCorrectionLevel::M(), 'UTF-8')->getMatrix();
         $size = $matrix->getWidth();
@@ -19,7 +20,7 @@ class QrPng
 
         $img = imagecreatetruecolor($px, $px);
         $white = imagecolorallocate($img, 255, 255, 255);
-        $black = imagecolorallocate($img, 0, 0, 0);
+        $black = imagecolorallocate($img, ...$color);
         imagefill($img, 0, 0, $white);
         for ($y = 0; $y < $size; $y++) {
             for ($x = 0; $x < $size; $x++) {

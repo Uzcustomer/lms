@@ -126,6 +126,12 @@
         .pdf-download-btn:hover {
             opacity: 0.9;
         }
+        .ynq-signers-title { font-size: 13px; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+        .ynq-signer { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #edf2f7; text-align: left; }
+        .ynq-signer:last-child { border-bottom: 0; }
+        .ynq-signer-check { flex-shrink: 0; width: 22px; height: 22px; border-radius: 999px; background: #c6f6d5; color: #22543d; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; }
+        .ynq-signer-name { font-size: 14px; font-weight: 600; color: #1a202c; }
+        .ynq-signer-meta { font-size: 12.5px; color: #718096; }
         .pdf-download-btn svg {
             width: 16px;
             height: 16px;
@@ -159,17 +165,13 @@
 
             @if($verification->document_type === 'yn_qaydnoma')
                 @php
-                    $ynqRole = \App\Models\YnQaydnomaConfirmation::labelFor($verification->meta['role'] ?? null);
                     $ynqRows = [
                         'Hujjat turi' => 'YN baholash qaydnomasi',
-                        'Tasdiqlagan' => $ynqRole,
-                        'F.I.Sh.' => $verification->generated_by,
                         'Fakultet' => $verification->department_name,
                         "Yo'nalish" => $verification->meta['specialty_name'] ?? null,
                         'Guruh' => $verification->group_names,
                         'Fan' => $verification->subject_name,
                         'Semestr' => $verification->semester_name,
-                        'Tasdiqlangan sana' => $verification->generated_at?->format('d.m.Y H:i'),
                     ];
                 @endphp
                 <div class="card-body" style="padding-top: 0;">
@@ -180,7 +182,30 @@
                         </div>
                     @endforeach
                 </div>
-                @if($documentUrl)
+                {{-- Hujjatning barcha tasdiqlari: amaliyot o'qituvchilari, kafedra mudiri, dekan --}}
+                <div class="card-body" style="padding-top: 0;">
+                    <div class="ynq-signers-title">Tasdiqlaganlar</div>
+                    @forelse($ynqConfirmations as $c)
+                        <div class="ynq-signer">
+                            <span class="ynq-signer-check" aria-hidden="true">✓</span>
+                            <div>
+                                <div class="ynq-signer-name">{{ $c->teacher_name }}</div>
+                                <div class="ynq-signer-meta">{{ $c->roleLabel() }} · {{ $c->confirmed_at->format('d.m.Y H:i') }}</div>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="ynq-signer-meta">Tasdiqlar topilmadi — qaydnoma qaytarilgan yoki rad etilgan bo'lishi mumkin.</div>
+                    @endforelse
+                </div>
+                @if($ynqPdfUrl)
+                    <div class="card-body" style="padding-top: 0; text-align: center;">
+                        <a href="{{ $ynqPdfUrl }}" class="pdf-download-btn" target="_blank" rel="noopener">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Qaydnomani ochish (PDF)
+                        </a>
+                        <div class="ynq-signer-meta" style="margin-top:8px;word-break:break-all;">{{ $ynqPdfUrl }}</div>
+                    </div>
+                @elseif($documentUrl)
                     <div class="card-body" style="padding-top: 0; text-align: center;">
                         <a href="{{ $documentUrl }}" class="pdf-download-btn" download>
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>

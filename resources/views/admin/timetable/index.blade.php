@@ -14577,7 +14577,10 @@
                         + '<p class="text-sm font-semibold" data-rmv-when>' + esc((days[at.day - 1] || at.day + '-kun') + ' ' + slotRangeText(at.pair, len)) + '</p>'
                     : '<h3 class="font-bold text-lg">Vaqt va xonani o‘zgartirish</h3>'
                     + '<p>' + esc(c.subject_name) + ' · ' + esc(lecture ? (c.oqim_label || '') : (c.group_name || '')) + (curWeek ? ' · ' + curWeek + '-hafta' : '') + '</p>'
-                    + '<p class="text-sm">Amaldagi: ' + esc(pl ? (days[pl.day - 1] || pl.day + '-kun') + ' ' + slotRangeText(+pl.pair, len) : 'joylanmagan')
+                    // Amaldagi — butun dars: ko'p bo'lakli darsda birinchi bo'lak boshidan oxirgisi oxirigacha ("Shanba 10:00–13:20"); turli kunlarda —
+                    // har kun alohida va "(bo'lingan)".
+                    + '<p class="text-sm" data-rmv-now>Amaldagi: ' + esc(pl ? (unit.length > 1 ? unitDaysText(unit) + (unitIsSplit(unit) ? ' (bo‘lingan)' : '')
+                        : (days[pl.day - 1] || pl.day + '-kun') + ' ' + slotRangeText(+pl.pair, len)) : 'joylanmagan')
                     + (room ? ', xona ' + esc(room) : '') + (unit.length > 1 ? ' · ' + unit.map(cardLen).join(' + ') + ' soatlik bo‘laklar' : '') + '</p>';
                 const why = !mySubjectCardIds.has(+c.id) ? "Bu fan sizning mas'ul fanlaringizda emas — faqat ko'rish."
                     : lecture ? "Ma'ruzani surish — faqat kafedra mudiri va adminlar."

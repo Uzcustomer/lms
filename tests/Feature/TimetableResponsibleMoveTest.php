@@ -664,3 +664,21 @@ it('grid: shu haftada bo\'sh joy yo\'q — keyingi 3 hafta uchun faqat bo\'sh jo
     $this->travelTo(\Illuminate\Support\Carbon::parse('2026-12-19 08:00', 'Asia/Tashkent'));
     expect(rmGrid($s, $x, null, 'fan_masuli', $s['week'] + 4)->json('ahead'))->toBe([['week' => 15, 'ok' => 66]]);
 });
+
+it('3.1/3.2: joylanmagan dars — "Darhol joylanadi (faqat shu hafta)."; ko\'p bo\'lakli darsda amaldagi joy — butun oraliq (bo\'lingan — kunlar bilan)', function () {
+    $s = rmSetup();
+    // Joylanmagan birlik (2 + 2): "joylanadi", "to'qnashuvni tuzatish" emas.
+    $p1 = $s['card']('pp/2024-01g', $s['other'], null, null, $s['r1']);
+    $p2 = $s['card']('pp/2024-01g', $s['other'], null, null, $s['r1']);
+    expect(rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->assertOk()->json('message'))->toBe('Darhol joylanadi (faqat shu hafta).');
+    // To'qnashuvdagi (joylangan) dars — avvalgidek.
+    expect(rmCheck($s, $s['a'], ['day' => 6, 'pair' => 1])->assertOk()->json('message'))->toBe("Darhol qo'llanadi (to'qnashuvni tuzatish, faqat shu hafta).");
+    // Ko'p bo'lakli joylangan dars: shanba 10:00 va 12:00 — amaldagi "Shanba, 21.11.2026 10:00–13:20" (avval faqat birinchi bo'lak: 10:00–11:20).
+    $p1->update(['day' => 6, 'pair' => 3]);
+    $p2->update(['day' => 6, 'pair' => 5]);
+    expect(rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->assertOk()->json('old'))->toStartWith('Shanba, 21.11.2026 10:00–13:20');
+    // Turli kunlarda (bo'lingan) — har kun alohida.
+    $p2->update(['day' => 5, 'pair' => 1]);
+    expect(rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->assertOk()->json('old'))
+        ->toStartWith("Juma, 20.11.2026 08:30–09:50; Shanba, 21.11.2026 10:00–11:20 (bo'lingan)");
+});

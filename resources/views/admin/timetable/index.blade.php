@@ -12692,7 +12692,13 @@
                 const ids = list.map(x => x.id);
                 const cbCtx = (d, p, isPlaced, roomCard = list[0]) => ({ card: c, ids, day: d, pair: p, len, placed: isPlaced, close: closePanelCardPop, reposition,
                     solutions: {
-                        room: edit && W && weeklyLayer === 'internal' ? () => { closePanelCardPop(); openPlaceRoomPick(roomCard, d, isPlaced ? (effPlace(roomCard) || { pair: p }).pair : p); } : null,
+                        // Boshqa xona: kun va para — bitta bo'lakdan (joylangan darsda — bosilgan kartaning o'z joyi). Bo'lingan (turli kunda / oraliq bilan)
+                        // joylangan darsda yo'q: xona almashtirish butun birlikni qayta joylaydi — avval "Yaxlitlash".
+                        room: edit && W && weeklyLayer === 'internal' && !(isPlaced && unitIsSplit(list)) ? () => {
+                            closePanelCardPop();
+                            const at = isPlaced ? effPlace(roomCard) : null;
+                            openPlaceRoomPick(roomCard, at ? at.day : d, at ? at.pair : p);
+                        } : null,
                         mudir: mudirPhAllowed() && !phOf(c) ? () => { const mb = pop.querySelector('[data-pop-mudir]'); if (mb && !mb.disabled) openMudirPhConfirm(c, mudirPhSlot(c)); } : null,
                         select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); } : null,
                     } });

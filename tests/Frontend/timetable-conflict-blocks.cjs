@@ -193,6 +193,19 @@ const data = {
         const f2 = await p.evaluate(() => focus.pop());
         assert.deepEqual([f2.card_ids, f2.hour_from, f2.hour_to, f2.dates], [[708677, 708662], 5, 7, ['2026-11-26', '2026-11-26']]);
 
+        // 7c) Codex: joylangan dars, faqat xona band — "Boshqa xona bilan joylash" bosilgan bo'lakning o'z kuni va parasi bilan (birinchi bo'lak kuni
+        //     emas); bo'lingan joylangan darsda bu yechim yo'q.
+        const busyRoom = Object.assign({}, data.blocker, { teacher_id: 44, teacher_name: 'BOSHQA', day: 3, pair: 5 });
+        await setCards([Object.assign({}, data.card, { day: 3, pair: 3 }), Object.assign({}, data.card, { id: 708677, day: 3, pair: 5 }), busyRoom]);
+        await p.evaluate(() => T.open(708677));
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), ['Boshqa xona bilan joylash', 'Joylash uchun tanlash']);
+        await p.click('#pnCardPop [data-pop-cf] [data-cb-sol="room"]');
+        assert.deepEqual(await p.evaluate(() => roomPick.pop()), [708677, 3, 5]);
+        await setCards([Object.assign({}, data.card, { day: 1, pair: 1 }), Object.assign({}, data.card, { id: 708677, day: 3, pair: 5 }), busyRoom]);
+        await p.evaluate(() => T.open(708677));
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-head]'), ['Xona band: 123-amaliyot xonasi']);
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), ['Joylash uchun tanlash']);
+
         // 8) Fokus bannerida xona NOMI (kodi emas); sikl karta oynasi — turlarga ajratilgan bloklar.
         assert.equal(await p.evaluate(() => T.focusBannerText({ kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', dates: ['2026-11-25'] }, [{ group: 'd1/d26-03a' }, { group: 'd1/d26-01a' }])),
             "To'qnashuvni ko'rish: Xona 123-amaliyot xonasi — d1/d26-03a va d1/d26-01a, 25.11");

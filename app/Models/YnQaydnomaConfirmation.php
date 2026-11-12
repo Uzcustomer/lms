@@ -32,15 +32,18 @@ class YnQaydnomaConfirmation extends Model
         return $this->belongsTo(DocumentVerification::class, 'document_verification_id');
     }
 
-    public function scopeForVedomost($query, string $subjectId, string $semesterCode, string $groupHemisId)
+    /** Qaydnoma bo'yicha: guruh berilsa — uning kichik guruhlari oilasi (a/b/c) bilan, ro'yxat berilsa — aynan shular */
+    public function scopeForVedomost($query, string $subjectId, string $semesterCode, string|array $groupHemisIds)
     {
+        $groups = is_array($groupHemisIds) ? $groupHemisIds : \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisIds);
+
         return $query->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->where('group_hemis_id', $groupHemisId);
+            ->whereIn('group_hemis_id', array_map('strval', $groups));
     }
 
     /** Vedomost bo'yicha har kishining oxirgi tasdig'i (sukut bo'yicha — o'qituvchilarniki). */
-    public static function latestFor(string $subjectId, string $semesterCode, string $groupHemisId, string $role = self::ROLE_TEACHER)
+    public static function latestFor(string $subjectId, string $semesterCode, string|array $groupHemisId, string $role = self::ROLE_TEACHER)
     {
         return static::with('verification')
             ->forVedomost($subjectId, $semesterCode, $groupHemisId)

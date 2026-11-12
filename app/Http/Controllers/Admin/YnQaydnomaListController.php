@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Teacher;
 use App\Models\YnQaydnomaConfirmation;
 use App\Models\YnQaydnomaRejection;
+use App\Services\YnqFamily;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -18,19 +19,21 @@ use Illuminate\Support\Facades\Schema;
  * topshirilgani (amaliy o'qituvchi), kafedra mudiri va dekan tasdiqlagani yoki rad etilgani.
  * Kafedra mudiri — faqat o'z kafedrasi fanlari; dekan — o'z fakulteti guruhlari;
  * admin/superadmin/registrator — hammasi (fakultet filtri bilan), dekan tasdiqlaganlari PDF da.
- * "Vedomostlarim": o'qituvchining o'z guruh × fanlari.
+ * "Vedomostlarim": o'qituvchining o'z guruh × fanlari. Kichik guruhlar (a/b/c) — bitta qator
+ * (bitta umumiy qaydnoma, YnqFamily): hammasining o'qituvchilari topshirgach kafedra mudiriga o'tadi.
  */
 class YnQaydnomaListController extends Controller
 {
     private const PER_PAGE = 30;
 
     public const STATUS_NONE = 'none';           // o'qituvchi hali tasdiqlamagan
+    public const STATUS_PARTIAL = 'partial';     // kichik guruhlarning bir qismi o'qituvchilari tasdiqlagan
     public const STATUS_TEACHER = 'teacher';     // o'qituvchi tasdiqlagan, kafedra mudiri kutilmoqda
     public const STATUS_HEAD = 'head';           // kafedra mudiri tasdiqlagan, dekan kutilmoqda
     public const STATUS_REJECTED = 'rejected';   // dekan rad etgan, o'qituvchi qayta topshirishi kerak
     public const STATUS_DEAN = 'dean';           // dekan ham tasdiqlagan
 
-    private const STATUSES = [self::STATUS_NONE, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_REJECTED, self::STATUS_DEAN];
+    private const STATUSES = [self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_REJECTED, self::STATUS_DEAN];
 
     public function index(Request $request)
     {
@@ -83,19 +86,21 @@ class YnQaydnomaListController extends Controller
             ->when(!$context['isDean'] && !$context['isTeacher'] && !empty($f['faculty']), fn ($c) => $c->where('faculty_id', (string) $f['faculty']))
             ->when(!empty($f['level']), fn ($c) => $c->where('level_code', (string) $f['level']))
             ->when(!empty($f['specialty']), fn ($c) => $c->where('specialty_id', (string) $f['specialty']))
-            ->when(!empty($f['group']), fn ($c) => $c->where('group_hemis_id', (string) $f['group']))
+            ->when(!empty($f['group']), fn ($c) => $c->filter(fn ($r) => in_array((string) $f['group'], $r->members, true)))
             ->when(trim($f['q'] ?? '') !== '', function ($c) use ($f) {
                 $q = mb_strtolower(trim($f['q']));
 
-                return $c->filter(fn ($r) => str_contains(mb_strtolower($r->group . ' ' . $r->subject . ' '
+                return $c->filter(fn ($r) => str_contains(mb_strtolower($r->group . ' ' . implode(' ', $r->member_names) . ' ' . $r->subject . ' '
                     . $r->teachers->pluck('teacher_name')->implode(' ') . ' ' . ($r->dean->teacher_name ?? '')), $q));
             });
         $counts = ['all' => $filtered->count()];
         foreach (self::STATUSES as $status) {
             $counts[$status] = $filtered->where('status', $status)->count();
         }
+        // "Topshirilmagan" — qisman topshirilganlar bilan (kafedra mudiriga hali o'tmagan)
+        $counts[self::STATUS_NONE] += $counts[self::STATUS_PARTIAL];
         if (in_array($f['status'] ?? '', self::STATUSES, true)) {
-            $filtered = $filtered->where('status', $f['status']);
+            $filtered = $filtered->whereIn('status', $f['status'] === self::STATUS_NONE ? [self::STATUS_NONE, self::STATUS_PARTIAL] : [$f['status']]);
         }
         $filtered = $filtered->values();
 
@@ -142,13 +147,14 @@ class YnQaydnomaListController extends Controller
             ->select('es.group_hemis_id', 'es.subject_id', 'es.semester_code', 'es.oski_date', 'es.test_date', 'es.oski_na', 'es.test_na',
                 'es.subject_name as exam_subject_name', 'cs.subject_name', 'cs.semester_name', 'cs.closing_form', 'cs.department_id as kafedra_id', 'g.id as group_pk',
                 'g.name as group_name', 'g.department_hemis_id', 'g.specialty_hemis_id', 'dep.name as faculty_name',
-                'sp.name as specialty_name', 's.level_code', 's.level_name')
+                'sp.name as specialty_name', 's.level_code', 's.level_name', 'g.curriculum_hemis_id')
             ->get()
             ->unique($key)
             ->filter(fn ($r) => self::examsFinished($r, $today))
             ->keyBy($key);
 
-        // Tasdiq va rad etishlar — fakultet guruhlari bo'yicha (imtihon jadvali bilan cheklanmaydi)
+        // Tasdiq va rad etishlar — fakultet guruhlari bo'yicha (imtihon jadvali bilan cheklanmaydi;
+        // kichik guruhlar bir fakultetda)
         $facultyGroups = $facultyHemisIds === null ? null
             : DB::table('groups')->whereIn('department_hemis_id', $facultyHemisIds ?: [-1])->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->all();
         [$confirmations, $rejections] = $this->statusData($facultyGroups);
@@ -160,7 +166,7 @@ class YnQaydnomaListController extends Controller
             $exams = $exams->union($this->entries($refs));
         }
 
-        return $exams->map(fn ($r) => $this->makeRow($r, $confirmations, $rejections))
+        return $this->withFamilies($exams)->map(fn ($r) => $this->makeRow($r, $confirmations, $rejections))
             // Kafedra mudiri — faqat o'z kafedrasi fanlari
             ->when($kafedraHemisIds !== null, fn ($c) => $c->whereIn('kafedra_id', $kafedraHemisIds))
             ->sortByDesc('finished_at')->values();
@@ -193,23 +199,26 @@ class YnQaydnomaListController extends Controller
         $refs = $refs->union($own->diffKeys($refs));
 
         $groups = $refs->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->values()->all();
-        [$confirmations, $rejections] = $this->statusData($groups);
         $submitted = Schema::hasTable('yn_submissions')
             ? DB::table('yn_submissions')->whereIn('group_hemis_id', $groups)->get(['group_hemis_id', 'subject_id', 'semester_code'])->keyBy($key)
             : collect();
         $today = Carbon::today()->toDateString();
+        // Holat — kichik guruhlar oilasining barcha tasdiqlari bo'yicha (boshqa o'qituvchilarniki ham)
+        $entries = $this->withFamilies($this->entries($refs));
+        [$confirmations, $rejections] = $this->statusData($entries->flatMap(fn ($r) => $r->members)->unique()->values()->all());
 
-        return $this->entries($refs)
-            // "Joriy semestr" — faqat hali topshirilmaganlarga
-            ->filter(fn ($r, $k) => !$currentSemester || $r->current || $confirmations->has($k) || $rejections->has($k))
-            ->map(function ($r, $k) use ($confirmations, $rejections, $submitted, $today) {
+        return $entries
+            ->map(function ($r) use ($confirmations, $rejections, $submitted, $today, $key) {
                 $row = $this->makeRow($r, $confirmations, $rejections);
-                $row->yn_submitted = $submitted->has($k);
+                $row->yn_submitted = $submitted->has($key($r));
                 $row->exams_finished = self::examsFinished($r, $today);
+                $row->current = $r->current;
 
                 return $row;
             })
-            ->sortBy(fn ($r) => [array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_TEACHER, self::STATUS_DEAN]), $r->group, $r->subject])
+            // "Joriy semestr" — faqat hali topshirilmaganlarga
+            ->filter(fn ($row) => !$currentSemester || $row->current || $row->status !== self::STATUS_NONE)
+            ->sortBy(fn ($r) => [array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_DEAN]), $r->group, $r->subject])
             ->values();
     }
 
@@ -239,21 +248,54 @@ class YnQaydnomaListController extends Controller
         return [$confirmations, $rejections];
     }
 
+    /**
+     * Kichik guruhlar (a/b/c) — bitta qaydnoma: har qatorga oila guruhlari (members), bir oilaning
+     * qatorlari bittaga (asosiy guruhniki, bo'lmasa birinchisi) birlashadi, nomi — harfsiz umumiy.
+     */
+    private function withFamilies(Collection $rows): Collection
+    {
+        foreach ($rows as $r) {
+            $r->members = YnqFamily::membersFor((string) $r->subject_id, (string) $r->semester_code, (string) $r->group_hemis_id,
+                $r->group_name, $r->curriculum_hemis_id ?? null);
+        }
+        $names = DB::table('groups')
+            ->whereIn('group_hemis_id', $rows->filter(fn ($r) => count($r->members) > 1)->flatMap(fn ($r) => $r->members)->unique()->values())
+            ->pluck('name', 'group_hemis_id');
+
+        return $rows->groupBy(fn ($r) => $r->members[0] . '|' . $r->subject_id . '|' . $r->semester_code)
+            ->map(function (Collection $family) use ($names) {
+                $r = $family->first(fn ($x) => (string) $x->group_hemis_id === $x->members[0]) ?? $family->first();
+                $r->member_names = [];
+                if (count($r->members) > 1) {
+                    $r->member_names = array_map(fn ($g) => (string) ($names[$g] ?? $g), $r->members);
+                    $r->group_name = YnqFamily::label($r->group_name, count($r->members));
+                }
+
+                return $r;
+            });
+    }
+
     private function makeRow(object $r, Collection $confirmations, Collection $rejections): object
     {
-        $k = self::keyFn()($r);
-        $all = $confirmations->get($k, collect());
-        $teachers = $all->where('role', YnQaydnomaConfirmation::ROLE_TEACHER)->unique('teacher_id')->values();
-        $head = $teachers->isNotEmpty() ? $all->firstWhere('role', YnQaydnomaConfirmation::ROLE_HEAD) : null;
+        $members = $r->members ?? [(string) $r->group_hemis_id];
+        $keys = array_map(fn ($g) => $g . '|' . $r->subject_id . '|' . $r->semester_code, $members);
+        $all = collect($keys)->flatMap(fn ($k) => $confirmations->get($k, collect()))->sortByDesc('confirmed_at')->values();
+        $teacherRows = $all->where('role', YnQaydnomaConfirmation::ROLE_TEACHER);
+        $teachers = $teacherRows->unique('teacher_id')->values();
+        // Kichik guruhlardan hali hech bir o'qituvchisi topshirmaganlari
+        $uncovered = array_values(array_diff($members, $teacherRows->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->all()));
+        $complete = $teachers->isNotEmpty() && $uncovered === [];
+        $head = $complete ? $all->firstWhere('role', YnQaydnomaConfirmation::ROLE_HEAD) : null;
         $dean = $head ? $all->firstWhere('role', YnQaydnomaConfirmation::ROLE_DEAN) : null;
-        // Rad etish — o'qituvchi hali qayta topshirmagan bo'lsa amalda
-        $rejection = $teachers->isEmpty() ? $rejections->get($k) : null;
+        // Rad etish — o'qituvchi(lar) hali qayta topshirmagan bo'lsa amalda
+        $rejection = $complete ? null : collect($keys)->map(fn ($k) => $rejections->get($k))->filter()->sortByDesc('rejected_at')->first();
         $w = $teachers->first()->weights ?? ($rejection->weights ?? null);
         $status = match (true) {
             (bool) $dean => self::STATUS_DEAN,
             (bool) $head => self::STATUS_HEAD,
-            $teachers->isNotEmpty() => self::STATUS_TEACHER,
+            $complete => self::STATUS_TEACHER,
             (bool) $rejection => self::STATUS_REJECTED,
+            $teachers->isNotEmpty() => self::STATUS_PARTIAL,
             default => self::STATUS_NONE,
         };
 
@@ -275,6 +317,9 @@ class YnQaydnomaListController extends Controller
             'oski_date' => $r->oski_na ? null : $r->oski_date,
             'test_date' => $r->test_na ? null : $r->test_date,
             'finished_at' => max((string) $r->oski_date, (string) $r->test_date, (string) ($all->first()?->confirmed_at), (string) ($rejection?->rejected_at)),
+            'members' => $members,
+            'member_names' => $r->member_names ?? [],
+            'uncovered' => $uncovered,
             'teachers' => $teachers,
             'head' => $head,
             'dean' => $dean,
@@ -340,7 +385,7 @@ class YnQaydnomaListController extends Controller
                 'subject_name' => $subject->subject_name ?? null,
                 'semester_name' => $subject->semester_name ?? ($verification->semester_name ?? null),
                 'group_pk' => $g->id, 'group_name' => $g->name, 'department_hemis_id' => $g->department_hemis_id, 'specialty_hemis_id' => $g->specialty_hemis_id,
-                'faculty_name' => $g->faculty_name, 'specialty_name' => $g->specialty_name,
+                'faculty_name' => $g->faculty_name, 'specialty_name' => $g->specialty_name, 'curriculum_hemis_id' => $g->curriculum_hemis_id,
                 'level_code' => $sem->level_code ?? '', 'level_name' => $sem->level_name ?? '',
                 'current' => $sem ? (bool) $sem->current : true,
             ];
@@ -365,16 +410,16 @@ class YnQaydnomaListController extends Controller
         return $required !== [] && collect($required)->every(fn ($date) => $date && substr((string) $date, 0, 10) <= $today);
     }
 
-    /** Topshirmaganlar uchun — shu guruhda fandan amaliy mashg'ulot o'tgan o'qituvchilar (dars jadvali) */
+    /** Topshirmaganlar uchun — hali topshirilmagan (kichik) guruhlarda fandan amaliy mashg'ulot o'tgan o'qituvchilar (dars jadvali) */
     private function attachPendingTeachers(Collection $items): void
     {
-        $pending = $items->whereIn('status', [self::STATUS_NONE, self::STATUS_REJECTED]);
+        $pending = $items->whereIn('status', [self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_REJECTED]);
         if ($pending->isEmpty()) {
             return;
         }
         $names = DB::table('schedules')
             ->whereNull('deleted_at')
-            ->whereIn('group_id', $pending->pluck('group_hemis_id')->unique()->values())
+            ->whereIn('group_id', $pending->flatMap(fn ($r) => $r->uncovered)->unique()->values())
             ->whereIn('subject_id', $pending->pluck('subject_id')->unique()->values())
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
             ->whereNotNull('employee_name')
@@ -383,7 +428,8 @@ class YnQaydnomaListController extends Controller
             ->get()
             ->groupBy(fn ($s) => $s->group_id . '|' . $s->subject_id);
         foreach ($pending as $row) {
-            $row->pending_teachers = $names->get($row->group_hemis_id . '|' . $row->subject_id, collect())->pluck('employee_name')->unique()->values();
+            $row->pending_teachers = collect($row->uncovered)->flatMap(fn ($g) => $names->get($g . '|' . $row->subject_id, collect())->pluck('employee_name'))
+                ->unique()->values();
         }
     }
 }

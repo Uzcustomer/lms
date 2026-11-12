@@ -41,6 +41,30 @@ function qaydnomaSheet(): \PhpOffice\PhpSpreadsheet\Spreadsheet
     return $s;
 }
 
+it('drops the signature column from the template and adds rows for more than 30 students', function () {
+    $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(public_path('templates/yn_qaydnoma (1).xlsx'));
+    $w = $book->getActiveSheet();
+    $total = 0;
+    foreach (range('A', 'Y') as $col) {
+        $total += $w->getColumnDimension($col)->getWidth();
+    }
+    (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 33);
+    $after = 0;
+    foreach (range('A', 'X') as $col) {
+        $after += $w->getColumnDimension($col)->getWidth();
+    }
+    $extra = (new ReflectionMethod(JournalController::class, 'ynqExtraRows'))->invoke(null, $w);
+
+    expect((string) $w->getCell('X15')->getValue())->not->toContain('imzo')
+        ->and(round($after, 4))->toBe(round($total, 4))                       // kenglik saqlangan — teng bo'lingan
+        ->and($w->getCell('X1')->getValue())->toContain('shakl')
+        ->and($extra)->toBe(3)
+        ->and($w->getCell('A52')->getValue())->toBe(33)
+        ->and($w->getCell('B53')->getValue())->toBe('O‘rtacha foiz')
+        ->and($w->getCell('F60')->getValue())->toBe('=COUNTIF(X20:X52,"aʼlo")')
+        ->and($w->getCell('C60')->getValue())->toBe('=COUNTA(B20:B52)');
+});
+
 it('renders the print area of every sheet as a page without errors', function () {
     $html = JournalController::qaydnomaHtml(qaydnomaSheet(), 'YN qaydnoma <d1/d22-01b>', '<button>X</button>');
 
@@ -60,6 +84,7 @@ describe('teacher confirmation', function () {
         config()->set('database.default', 'sqlite');
         config()->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
         DB::purge('sqlite');
+        \App\Services\YnqFamily::flush();
         Storage::fake('public');
         Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(),
             $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->unsignedBigInteger('head_department_hemis_id')->nullable(), $t->rememberToken(), $t->timestamps()]);
@@ -111,14 +136,15 @@ describe('teacher confirmation', function () {
                 int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1): array|string
             {
                 $s = qaydnomaSheet();
+                (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $s->getSheet(0), 10);
                 (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $s, $subjectId, $semesterCode, $groupHemisId);
 
                 return [$s, 'YN_qaydnoma_test.xlsx'];
             }
         };
-        $this->confirm = function (int $teacherId, string $action = 'confirm') {
+        $this->confirm = function (int $teacherId, string $action = 'confirm', string $group = '77') {
             $request = \Illuminate\Http\Request::create('/admin/journal/' . $action . '-yn-qaydnoma', 'POST', [
-                'subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77',
+                'subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => $group,
                 'weight_jn' => 30, 'weight_mt' => 10, 'weight_on' => 0, 'weight_oski' => 0, 'weight_test' => 60,
             ]);
             $request->setLaravelSession($session = app('session')->driver());
@@ -127,6 +153,7 @@ describe('teacher confirmation', function () {
             Auth::shouldUse('teacher');
             Auth::guard('teacher')->login(\App\Models\Teacher::find($teacherId));
             session(['active_role' => [3 => 'dekan', 4 => 'kafedra_mudiri'][$teacherId] ?? 'oqituvchi']);
+            \App\Services\YnqFamily::flush();
 
             return match ($action) {
                 'confirm' => $this->controller->confirmYnQaydnoma($request),
@@ -152,26 +179,26 @@ describe('teacher confirmation', function () {
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
         $drawings = $sheet->getSheet(0)->getDrawingCollection();
-        // Imzo ustuni talabalar qatorlarida bitta bo'sh katak; o'qituvchi QR i pastda (dekan / kafedra
-        // mudiri yozuvlari o'rnida) — 1-joy E60:H60, ostida ismi
-        expect($sheet->getSheet(0)->getMergeCells())->toHaveKey('Y20:Y29')
-            ->and($sheet->getSheet(0)->getStyle('Y20')->getFill()->getFillType())->toBe(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE)
-            ->and($sheet->getSheet(0)->getStyle('W20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
-            // Shartli formatlash imzo ustunisiz: A–W va Y
-            ->and(array_keys($sheet->getSheet(0)->getConditionalStylesCollection()))->toEqualCanonicalizing(['A20:X49'])   // imzo ustuni (Y) chiqarilgan
+        $w = $sheet->getSheet(0);
+        // Imzo ustuni olib tashlangan (kengligi qolganlariga bo'lingan); o'qituvchi QR i pastda — yozuvdan
+        // darhol keyin (C dan), ostida ismi
+        expect($w->getCell('X15')->getValue())->toBeNull()
+            ->and($w->getPageSetup()->getPrintArea())->toBe('A1:X61')
+            ->and(array_keys($w->getConditionalStylesCollection()))->toBe(['A20:X49'])
+            ->and($w->getStyle('X20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
+            ->and(round($w->getColumnDimension('A')->getWidth(), 2))->toBe(round(8.43 + 28.81640625 / 24, 2))
             ->and($drawings)->toHaveCount(1)
-            ->and($drawings[0]->getCoordinates())->toBe('E60')
+            ->and($drawings[0]->getCoordinates())->toBe('C60')
             ->and($drawings[0]->getHeight())->toBe(56)
-            ->and($sheet->getSheet(0)->getMergeCells())->toHaveKeys(['E60:H60', 'E61:H61'])
-            ->and($sheet->getSheet(0)->getCell('E61')->getValue())->toBe('IZZATULLAYEV O.')
-            ->and($sheet->getSheet(0)->getCell('B60')->getValue())->toBe('Amaliyot o‘qituvchilari:')
-            ->and($sheet->getSheet(0)->getCell('Y20')->getValue())->toBeNull()
+            ->and($w->getMergeCells())->toHaveKeys(['C60:D60', 'C61:D61'])
+            ->and($w->getCell('C61')->getValue())->toBe('IZZATULLAYEV O.')
+            ->and($w->getCell('B60')->getValue())->toBe('Amaliyot o‘qituvchilari:')
+            ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe('right')
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);   // chop etish maydoni yo'q varaq
 
-        // Sahifada QR o'z katagining o'rtasida (flex markaz); imzo ustuni bo'sh
+        // Sahifada QR o'z katagining o'rtasida (flex markaz)
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
-        expect($html)->toContain('rowspan="10"')
-            ->toMatch('/<div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV O\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:56px;height:56px" \/><\/div>/');
+        expect($html)->toMatch('/<div class="ynq-qr"><img alt="Tasdiq QR: IZZATULLAYEV O\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:56px;height:56px" \/><\/div>/');
     });
 
     it('does not let the teacher revoke their own confirmation', function () {
@@ -223,7 +250,7 @@ describe('teacher confirmation', function () {
         $find = fn ($prefix) => collect($sheet->getSheet(0)->getDrawingCollection())->first(fn ($d) => str_starts_with($d->getDescription(), $prefix));
         // Dekan — chap yuqori, kafedra mudiri — o'ng yuqori burchak
         expect($find('Dekan QR: SAGIRAYEV N.')->getCoordinates())->toBe('A2')
-            ->and($find('Kafedra QR: XURMATOVA D.A.')->getCoordinates())->toBe('Y2');
+            ->and($find('Kafedra QR: XURMATOVA D.A.')->getCoordinates())->toBe('X2');
 
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
         expect($html)->toMatch("/<div class='ynq-corner' style='position:absolute;top:24px;left:0;[^']*'><img src='data:image\\/png;base64,[^']+'[^>]*><div[^>]*>SAGIRAYEV N\\.<br>\\(Fakultet dekani\\)/")
@@ -317,6 +344,53 @@ describe('teacher confirmation', function () {
         ($this->confirm)(1);
         expect(fn () => ($this->confirm)(1, 'reject'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(1);
+    });
+
+    it('makes one vedomost for subgroups a/b: the kafedra mudiri confirms only after every subgroup teacher', function () {
+        Schema::create('students', fn ($t) => [$t->id(), $t->string('hemis_id'), $t->string('group_id'), $t->string('student_status_code')->nullable()]);
+        Schema::create('student_grades', fn ($t) => [$t->id(), $t->string('student_hemis_id'), $t->string('subject_id'), $t->string('semester_code'), $t->softDeletes()]);
+        DB::table('teachers')->insert(['id' => 5, 'hemis_id' => 505, 'full_name' => 'KARIMOVA LOLA']);
+        DB::table('groups')->insert([
+            ['group_hemis_id' => '78', 'name' => 'd1/d22-01a (rus)', 'curriculum_hemis_id' => '9', 'department_hemis_id' => 11, 'department_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi'],
+            ['group_hemis_id' => '79', 'name' => 'd1/d22-01c (rus)', 'curriculum_hemis_id' => '9', 'department_hemis_id' => 11, 'department_name' => '1-son davolash', 'specialty_name' => 'Davolash ishi'],
+        ]);
+        // 01c — talabasi bor, lekin shu fandan bahosi yo'q: qaydnomaga kirmaydi
+        DB::table('students')->insert([['hemis_id' => 's1', 'group_id' => '77'], ['hemis_id' => 's2', 'group_id' => '78'], ['hemis_id' => 's3', 'group_id' => '79']]);
+        DB::table('student_grades')->insert([['student_hemis_id' => 's1', 'subject_id' => '435', 'semester_code' => '19'],
+            ['student_hemis_id' => 's2', 'subject_id' => '435', 'semester_code' => '19'], ['student_hemis_id' => 's3', 'subject_id' => '1', 'semester_code' => '19']]);
+        DB::table('schedules')->insert(['employee_id' => 505, 'subject_id' => 435, 'group_id' => 78, 'training_type_code' => '13']);
+        DB::table('yn_submissions')->insert(['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '78']);
+        \App\Services\YnqFamily::flush();
+        expect(\App\Services\YnqFamily::members('435', '19', '77'))->toBe(['78', '77'])
+            ->and(\App\Services\YnqFamily::label('d1/d22-01a (rus)', 2))->toBe('d1/d22-01 (rus)');
+
+        ($this->confirm)(1);                                                   // 01b o'qituvchisi
+        expect(fn () => ($this->confirm)(4))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);   // 01a hali topshirmagan
+        ($this->confirm)(5, 'confirm', '78');                                  // 01a o'qituvchisi
+        ($this->confirm)(4);
+        ($this->confirm)(3, 'confirm', '78');
+        expect(\App\Models\YnQaydnomaConfirmation::where('role', 'kafedra_mudiri')->value('group_hemis_id'))->toBe('78')   // asosiy guruh
+            ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->count())->toBe(1);
+
+        // Pastda ikkala o'qituvchi QR i yonma-yon (C:D, E:…), tepada kafedra va dekan
+        [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '78', 30, 10, 0, 0, 60);
+        $teacherQrs = collect($sheet->getSheet(0)->getDrawingCollection())->filter(fn ($d) => str_starts_with($d->getDescription(), 'Tasdiq QR: '));
+        expect($teacherQrs->map->getCoordinates()->values()->all())->toBe(['C60', 'E60'])
+            ->and($sheet->getSheet(0)->getCell('E61')->getValue())->toBe('KARIMOVA L.')
+            ->and(collect($sheet->getSheet(0)->getDrawingCollection())->map->getCoordinates()->values()->all())->toContain('A2', 'X2');
+
+        // Rad etilsa ikkala o'qituvchi tasdig'i bekor; ikkalasi qayta topshirgach rad etish yopiladi
+        // Dekan tasdig'ini qaytarib rad etadi — kafedra va ikkala o'qituvchi tasdig'i bekor
+        ($this->confirm)(3, 'revoke', '78');
+        ($this->confirm)(3, 'reject', '78');
+        $rejection = \App\Models\YnQaydnomaRejection::sole();
+        expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0)
+            ->and($rejection->group_hemis_id)->toBe('78')
+            ->and($rejection->teacher_ids)->toEqualCanonicalizing([1, 5]);
+        ($this->confirm)(1);
+        expect($rejection->fresh()->resolved_at)->toBeNull();
+        ($this->confirm)(5, 'confirm', '78');
+        expect($rejection->fresh()->resolved_at)->not->toBeNull();
     });
 
     it('does not let the lecturer confirm', function () {

@@ -69,6 +69,7 @@
         .yq-dot--wait { background: var(--yq-red-bg); color: var(--yq-red); border-color: var(--yq-red-line); }
         .yq-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid; }
         .yq-badge--none { background: var(--yq-red-bg); color: var(--yq-red); border-color: var(--yq-red-line); }
+        .yq-badge--partial { background: var(--yq-amber-bg); color: var(--yq-amber); border-color: var(--yq-amber-line); border-style: dashed; }
         .yq-badge--teacher { background: var(--yq-amber-bg); color: var(--yq-amber); border-color: var(--yq-amber-line); }
         .yq-badge--head { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
         .yq-badge--rejected { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
@@ -87,7 +88,7 @@
     @php
         $statusUrl = fn ($s) => request()->fullUrlWithQuery(['status' => $s, 'page' => null]);
         $active = $filters['status'] ?? '';
-        $statusLabels = ['none' => 'Topshirilmagan', 'teacher' => 'Kafedra tasdig\'i kutilmoqda', 'head' => 'Dekan tasdig\'i kutilmoqda',
+        $statusLabels = ['none' => 'Topshirilmagan', 'partial' => 'Qisman topshirilgan', 'teacher' => 'Kafedra tasdig\'i kutilmoqda', 'head' => 'Dekan tasdig\'i kutilmoqda',
             'rejected' => 'Rad etilgan', 'dean' => 'Dekan tasdiqlagan'];
         $isHead = $isHead ?? false;
         // Shu foydalanuvchi tasdiqlashi kutilayotgan holat
@@ -227,6 +228,9 @@
                                         <td class="yq-num">{{ $rows->firstItem() + $i }}</td>
                                         <td>
                                             <span class="yq-group">{{ $row->group }}</span>
+                                            @if($row->member_names)
+                                                <span class="yq-small">Kichik guruhlar: {{ implode(', ', $row->member_names) }}</span>
+                                            @endif
                                             <span class="yq-small">{{ collect([$isDean ? null : $row->faculty, $row->specialty, $row->level_name])->filter()->implode(' · ') }}</span>
                                         </td>
                                         <td>
@@ -239,16 +243,17 @@
                                         </td>
                                         @unless($isTeacher)
                                         <td>
-                                            @forelse($row->teachers as $t)
+                                            @foreach($row->teachers as $t)
                                                 <div class="yq-person"><span class="yq-dot yq-dot--ok" aria-hidden="true">✓</span>
                                                     <span>{{ $t->teacher_name }}<span class="yq-small">topshirdi · {{ $t->confirmed_at->format('d.m.Y H:i') }}</span></span></div>
-                                            @empty
-                                                @forelse($row->pending_teachers as $name)
-                                                    <div class="yq-person yq-person--pending"><span class="yq-dot yq-dot--wait" aria-hidden="true">!</span><span>{{ $name }}</span></div>
-                                                @empty
-                                                    <span class="yq-muted">—</span>
-                                                @endforelse
-                                            @endforelse
+                                            @endforeach
+                                            {{-- Hali topshirmagan (kichik) guruhlar o'qituvchilari --}}
+                                            @foreach($row->pending_teachers as $name)
+                                                <div class="yq-person yq-person--pending"><span class="yq-dot yq-dot--wait" aria-hidden="true">!</span><span>{{ $name }}</span></div>
+                                            @endforeach
+                                            @if($row->teachers->isEmpty() && $row->pending_teachers->isEmpty())
+                                                <span class="yq-muted">—</span>
+                                            @endif
                                         </td>
                                         @endunless
                                         <td>

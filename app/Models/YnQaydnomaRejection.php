@@ -19,15 +19,18 @@ class YnQaydnomaRejection extends Model
         'resolved_at' => 'datetime',
     ];
 
-    public function scopeForVedomost($query, string $subjectId, string $semesterCode, string $groupHemisId)
+    /** Qaydnoma bo'yicha: guruh berilsa — uning kichik guruhlari oilasi (a/b/c) bilan, ro'yxat berilsa — aynan shular */
+    public function scopeForVedomost($query, string $subjectId, string $semesterCode, string|array $groupHemisIds)
     {
+        $groups = is_array($groupHemisIds) ? $groupHemisIds : \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisIds);
+
         return $query->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->where('group_hemis_id', $groupHemisId);
+            ->whereIn('group_hemis_id', array_map('strval', $groups));
     }
 
     /** Hali yopilmagan (o'qituvchi qayta tasdiqlamagan) eng so'nggi rad etish */
-    public static function openFor(string $subjectId, string $semesterCode, string $groupHemisId): ?self
+    public static function openFor(string $subjectId, string $semesterCode, string|array $groupHemisId): ?self
     {
         if (!\Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_rejections')) {
             return null;

@@ -16,6 +16,7 @@ beforeEach(function () {
     config()->set('database.default', 'sqlite');
     config()->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
     DB::purge('sqlite');
+    \App\Services\YnqFamily::flush();
     \Carbon\Carbon::setTestNow('2026-11-09 10:00:00');
     Schema::create('teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('hemis_id'), $t->string('full_name')->nullable(),
         $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->unsignedBigInteger('head_department_hemis_id')->nullable(), $t->rememberToken(), $t->timestamps()]);
@@ -211,6 +212,35 @@ it('shows the kafedra mudiri only their kafedra subjects, waiting ones as their 
         ->and($rows['d1/d22-02a']->status)->toBe('teacher')
         ->and($rows['d1/d22-01a']->status)->toBe('dean')
         ->and($rows['d1/d22-01a']->head->teacher_name)->toBe('MUDIR');
+});
+
+it('shows subgroups a/b as one vedomost that waits for every subgroup teacher', function () {
+    Schema::create('students', fn ($t) => [$t->id(), $t->string('hemis_id'), $t->string('group_id'), $t->string('student_status_code')->nullable()]);
+    Schema::create('student_grades', fn ($t) => [$t->id(), $t->string('student_hemis_id'), $t->string('subject_id'), $t->string('semester_code'), $t->softDeletes()]);
+    DB::table('groups')->insert(['group_hemis_id' => '79', 'name' => 'd1/d22-02b', 'curriculum_hemis_id' => '5', 'department_hemis_id' => 11, 'specialty_hemis_id' => 7, 'department_name' => '1-son davolash']);
+    DB::table('students')->insert([['hemis_id' => 's1', 'group_id' => '78'], ['hemis_id' => 's2', 'group_id' => '79']]);
+    DB::table('student_grades')->insert([['student_hemis_id' => 's1', 'subject_id' => '27', 'semester_code' => '19'], ['student_hemis_id' => 's2', 'subject_id' => '27', 'semester_code' => '19']]);
+    DB::table('exam_schedules')->insert(['group_hemis_id' => '79', 'subject_id' => '27', 'semester_code' => '19', 'oski_date' => '2026-11-04', 'test_date' => '2026-11-06']);
+    DB::table('schedules')->insert(['group_id' => '79', 'subject_id' => '27', 'training_type_code' => '13', 'employee_name' => 'SOBIROV B.']);
+    // 02a o'qituvchisi topshirgan, 02b — hali yo'q
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '78', 'teacher_id' => 2,
+        'teacher_name' => 'KARIMOV A.', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);
+    \App\Services\YnqFamily::flush();
+
+    $data = ($this->page)();
+    $row = collect($data['rows']->items())->firstWhere('group', 'd1/d22-02');
+    expect($row->status)->toBe('partial')
+        ->and($row->member_names)->toBe(['d1/d22-02a', 'd1/d22-02b'])
+        ->and($row->teachers->pluck('teacher_name')->all())->toBe(['KARIMOV A.'])
+        ->and($row->pending_teachers->all())->toBe(['SOBIROV B.'])
+        ->and(collect($data['rows']->items())->pluck('group')->sort()->values()->all())->toBe(['d1/d22-01a', 'd1/d22-02'])
+        ->and($data['counts'])->toMatchArray(['all' => 2, 'none' => 1, 'teacher' => 0]);
+
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '79', 'teacher_id' => 3,
+        'teacher_name' => 'SOBIROV B.', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);
+    $row = collect(($this->page)()['rows']->items())->firstWhere('group', 'd1/d22-02');
+    expect($row->status)->toBe('teacher')                                   // endi kafedra mudiri navbati
+        ->and($row->teachers->pluck('teacher_name')->sort()->values()->all())->toBe(['KARIMOV A.', 'SOBIROV B.']);
 });
 
 it('filters by status and group', function () {

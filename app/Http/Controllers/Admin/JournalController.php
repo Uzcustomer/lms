@@ -50,12 +50,16 @@ use PhpOffice\PhpWord\SimpleType\Jc;
 
 class JournalController extends Controller
 {
-    /** YN qaydnoma shablonida talabalar qatorlari va imzo ustuni */
+    /**
+     * YN qaydnoma shablonida talabalar qatorlari (30 ta joy; ko'p bo'lsa 49-qatordan oldin qo'shiladi —
+     * undan pastdagi qatorlar shuncha suriladi, ynqExtraRows) va imzo ustuni
+     */
     private const YNQ_FIRST_ROW = 20;
     private const YNQ_LAST_ROW = 49;
-    /** Imzo (QR) ustuni — shablonda X, so'z bilan baho Y; qaydnomada o'rni almashtiriladi */
-    private const YNQ_SIGN_COL = 'Y';
-    private const YNQ_GRADE_WORD_COL = 'X';
+    /** "YAN o'tkazuvchi o'qituvchi imzosi" ustuni — qaydnomada olib tashlanadi, kengligi qolganlariga teng bo'linadi */
+    private const YNQ_TEMPLATE_SIGN_COL = 'X';
+    /** Ustun olib tashlangach oxirgi ustun — so'z bilan baho ("aʼlo", …) */
+    private const YNQ_LAST_COL = 'X';
     /** "Semestrda … soat … kredit" qatoridagi chiziq (K13:W13) — YN o'tkazilgan sana */
     private const YNQ_EXAM_DATE_CELL = 'K13';
     private const YNQ_QR_ALT = 'Tasdiq QR: ';
@@ -65,8 +69,8 @@ class JournalController extends Controller
     private const YNQ_HEAD_QR_ALT = 'Kafedra QR: ';
     /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — o'qituvchilar bloki */
     private const YNQ_SIGN_ROW = 60;
-    /** O'qituvchilar joylari (a, b, c) — shablondagi keng birlashtirilgan kataklar */
-    private const YNQ_TEACHER_SLOTS = [['E', 'H'], ['N', 'Q'], ['U', 'W']];
+    /** O'qituvchi joyining eng kichik kengligi (px) — QR va ostidagi qisqa ism sig'adi */
+    private const YNQ_TEACHER_SLOT_PX = 130;
     private const YNQ_RULES = [
         'subject_id' => 'required',
         'semester_code' => 'required',
@@ -10083,11 +10087,9 @@ class JournalController extends Controller
         // Tugmalar: amaliy o'qituvchi → kafedra mudiri → dekan, har biri oldingisidan keyin tasdiqlaydi;
         // kafedra mudiri va dekan rad eta oladi; admin — kimlar tasdiqlagani
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
-        $hasTable = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations');
-        $byRole = [];
-        foreach ($Confirmation::CHAIN as $role) {
-            $byRole[$role] = $hasTable ? $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $role) : collect();
-        }
+        // Kichik guruhlar (a/b/c) — bitta qaydnoma: kafedra mudiri hammasining o'qituvchilari tasdiqlagach
+        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
+        $byRole = $chain['byRole'];
         $myRole = $approverRole ?? $Confirmation::ROLE_TEACHER;
         $teacher = $isPrivileged ? null : $this->currentTeacher();
         $mine = $teacher ? $byRole[$myRole]->firstWhere('teacher_id', $teacher->id) : null;
@@ -10099,9 +10101,14 @@ class JournalController extends Controller
 
         $actions = collect($byRole)->flatten()->map(fn ($c) => '<span class="ynq-ok">✓ ' . e($c->roleLabel()) . ': '
             . e($c->teacher_name) . ' — ' . $c->confirmed_at->format('d.m.Y H:i') . '</span>')->implode('');
+        if ($pendingNote = self::ynqPendingGroupsNote($chain)) {
+            $actions .= '<span class="ynq-note">' . e($pendingNote) . '</span>';
+        }
         if ($teacher && !$mine) {
-            if ($previousRole && $byRole[$previousRole]->isEmpty()) {
-                $actions .= '<span class="ynq-note">' . e($Confirmation::labelFor($previousRole)) . ' hali tasdiqlamagan</span>';
+            if ($previousRole && !self::ynqStepDone($chain, $previousRole)) {
+                if ($byRole[$previousRole]->isEmpty()) {
+                    $actions .= '<span class="ynq-note">' . e($Confirmation::labelFor($previousRole)) . ' hali tasdiqlamagan</span>';
+                }
             } else {
                 $question = $approverRole
                     ? 'Qaydnomani tasdiqlaysizmi? Tasdiqlagach qaydnomaga sizning QR kodingiz bosiladi.'
@@ -10159,18 +10166,23 @@ class JournalController extends Controller
 
         $teacher = $this->currentTeacher();
         $approverRole = $teacher ? self::approverRoleFor($subjectId, $semesterCode, $groupHemisId) : null;
-        $teacherConfirmations = $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId);
+        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
+        $canonical = $chain['members'][0];
         if ($approverRole) {
             $role = $approverRole;
             $previous = $Confirmation::CHAIN[array_search($role, $Confirmation::CHAIN, true) - 1];
-            abort_if($Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $previous)->isEmpty(), 403,
-                $Confirmation::labelFor($role) . ' qaydnomani ' . mb_strtolower($Confirmation::labelFor($previous)) . ' tasdiqlagandan keyin tasdiqlaydi.');
+            abort_unless(self::ynqStepDone($chain, $previous), 403,
+                $Confirmation::labelFor($role) . ' qaydnomani ' . ($previous === $Confirmation::ROLE_TEACHER
+                    ? "barcha kichik guruhlarning amaliyot o'qituvchilari" : mb_strtolower($Confirmation::labelFor($previous)))
+                . ' tasdiqlagandan keyin tasdiqlaydi.');
             // O'qituvchi tasdiqlagan vaznlar bilan (qaydnoma aynan shu)
-            $weights = $teacherConfirmations->first()->weights;
+            $weights = $chain['byRole'][$Confirmation::ROLE_TEACHER]->first()->weights;
+            // Kafedra mudiri / dekan tasdig'i — qaydnomaning asosiy guruhida
+            $groups = [$canonical];
         } else {
-            $ynSubmitted = YnSubmission::where('subject_id', $subjectId)->where('semester_code', $semesterCode)
-                ->where('group_hemis_id', $groupHemisId)->exists();
-            abort_unless($teacher && is_active_oqituvchi() && $ynSubmitted && $this->isAmaliyTeacherFor($subjectId, $groupHemisId), 403,
+            $ynSubmitted = fn (string $g) => YnSubmission::where('subject_id', $subjectId)->where('semester_code', $semesterCode)
+                ->where('group_hemis_id', $g)->exists();
+            abort_unless($teacher && is_active_oqituvchi() && $ynSubmitted($groupHemisId) && $this->isAmaliyTeacherFor($subjectId, $groupHemisId), 403,
                 "YN qaydnomani shu fanning amaliy o'qituvchisi YN yuborilgandan keyin tasdiqlaydi.");
             $role = $Confirmation::ROLE_TEACHER;
             $weights = [
@@ -10178,21 +10190,25 @@ class JournalController extends Controller
                 'oski' => (int) ($data['weight_oski'] ?? 0), 'test' => (int) ($data['weight_test'] ?? 60),
             ];
             abort_if(array_sum($weights) !== 100, 422, "Vaznlar jami 100 bo'lishi kerak");
+            // O'qituvchi o'zi dars beradigan (YN yuborilgan) barcha kichik guruhlar uchun bir marta tasdiqlaydi
+            $groups = collect($chain['members'])->filter(fn ($g) => $g === $groupHemisId
+                || ($this->isAmaliyTeacherFor($subjectId, $g) && $ynSubmitted($g)))->values()->all();
         }
 
-        if ($Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $role)->firstWhere('teacher_id', $teacher->id)) {
+        if ($chain['byRole'][$role]->firstWhere('teacher_id', $teacher->id)) {
             return redirect($back)->with('ynq_flash', 'Siz bu qaydnomani allaqachon tasdiqlagansiz.');
         }
 
-        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        $group = Group::where('group_hemis_id', $canonical)->first();
         $subject = CurriculumSubject::where('curricula_hemis_id', $group?->curriculum_hemis_id)
             ->where('subject_id', $subjectId)->where('semester_code', $semesterCode)->first();
+        $groupName = \App\Services\YnqFamily::label($group?->name, count($chain['members']));
 
-        $confirmation = DB::transaction(function () use ($Confirmation, $teacher, $role, $group, $subject, $subjectId, $semesterCode, $groupHemisId, $weights) {
+        $confirmation = DB::transaction(function () use ($Confirmation, $teacher, $role, $group, $groupName, $subject, $subjectId, $semesterCode, $groupHemisId, $groups, $weights) {
             $verification = DocumentVerification::createForDocument([
                 'document_type' => 'yn_qaydnoma',
                 'subject_name' => $subject?->subject_name,
-                'group_names' => $group?->name,
+                'group_names' => $groupName,
                 'semester_name' => $subject?->semester_name,
                 'department_name' => $group?->department_name,
                 'generated_by' => $teacher->full_name,
@@ -10202,15 +10218,23 @@ class JournalController extends Controller
                 ],
             ]);
 
-            return $Confirmation::create([
-                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId,
-                'teacher_id' => $teacher->id, 'teacher_name' => $teacher->full_name, 'role' => $role,
-                'document_verification_id' => $verification->id, 'weights' => $weights, 'confirmed_at' => now(),
-            ]);
+            // Bir nechta kichik guruh — bitta QR (tasdiq yozuvlari bitta tekshiruvga havola qiladi)
+            $created = null;
+            foreach ($groups as $g) {
+                $created = $Confirmation::create([
+                    'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $g,
+                    'teacher_id' => $teacher->id, 'teacher_name' => $teacher->full_name, 'role' => $role,
+                    'document_verification_id' => $verification->id, 'weights' => $weights, 'confirmed_at' => now(),
+                ]);
+            }
+
+            return $created;
         });
 
-        if ($role === $Confirmation::ROLE_TEACHER && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_rejections')) {
-            \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $groupHemisId)
+        // Rad etish — barcha kichik guruhlar o'qituvchilari qayta tasdiqlagach yopiladi
+        if ($role === $Confirmation::ROLE_TEACHER && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_rejections')
+            && self::ynqChain($subjectId, $semesterCode, $groupHemisId)['uncovered'] === []) {
+            \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $chain['members'])
                 ->whereNull('resolved_at')->update(['resolved_at' => now()]);
         }
         $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId);
@@ -10237,7 +10261,8 @@ class JournalController extends Controller
         $approver = $this->currentTeacher();
         $role = $approver ? self::approverRoleFor($subjectId, $semesterCode, $groupHemisId) : null;
         abort_unless($role, 403, 'Qaydnomani fan kafedrasining mudiri yoki fakultet dekani rad eta oladi.');
-        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId);
+        $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members);
         $teachers = $vedomost()->where('role', $Confirmation::ROLE_TEACHER)->get();
         if ($teachers->isEmpty()) {
             return redirect($back)->with('ynq_flash', 'Rad etiladigan tasdiq yo\'q — o\'qituvchi hali topshirmagan.');
@@ -10249,9 +10274,9 @@ class JournalController extends Controller
         // O'qituvchi(lar) va undan keyingi (kafedra mudiri) tasdiqlari bekor
         $drop = $vedomost()->whereIn('role', [$Confirmation::ROLE_TEACHER, $Confirmation::ROLE_HEAD])->get();
         $stale = $drop->pluck('verification.document_path')->concat($drop->pluck('pdf_path'))->filter()->all();
-        DB::transaction(function () use ($teachers, $drop, $approver, $data, $subjectId, $semesterCode, $groupHemisId) {
+        DB::transaction(function () use ($teachers, $drop, $approver, $data, $subjectId, $semesterCode, $members) {
             $rejection = \App\Models\YnQaydnomaRejection::create([
-                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId,
+                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $members[0],
                 'dean_id' => $approver->id, 'dean_name' => $approver->full_name, 'reason' => trim($data['reason']),
                 'teacher_ids' => $teachers->pluck('teacher_id')->unique()->values()->all(),
                 'weights' => $teachers->sortByDesc('confirmed_at')->first()->weights, 'rejected_at' => now(),
@@ -10288,7 +10313,8 @@ class JournalController extends Controller
         abort_if($role === $Confirmation::ROLE_TEACHER && !session('impersonating'), 403,
             "Tasdiqlangan qaydnoma qaytarilmaydi — faqat rad etilsa qayta topshiriladi.");
 
-        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId);
+        $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members);
         $mine = $vedomost()->where('teacher_id', $teacher->id)->where('role', $role)->get();
         if ($mine->isEmpty()) {
             return redirect($back)->with('ynq_flash', 'Sizning tasdig\'ingiz topilmadi.');
@@ -10296,9 +10322,14 @@ class JournalController extends Controller
 
         $existing = $vedomost()->get();
         $stale = $existing->pluck('verification.document_path')->concat($existing->pluck('pdf_path'))->filter()->all();
-        DB::transaction(function () use ($mine, $vedomost, $Confirmation, $role) {
+        DB::transaction(function () use ($mine, $vedomost, $Confirmation, $role, $members) {
             $drop = $mine;
-            if (!$vedomost()->where('role', $role)->whereNotIn('id', $mine->pluck('id'))->exists()) {
+            $rest = $vedomost()->where('role', $role)->whereNotIn('id', $mine->pluck('id'))->get();
+            // Bosqich to'liq qolmasa (o'qituvchilarda — biror kichik guruh tasdiqsiz qolsa) keyingilar ham bekor
+            $stepBroken = $role === $Confirmation::ROLE_TEACHER
+                ? array_diff($members, $rest->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->all()) !== []
+                : $rest->isEmpty();
+            if ($stepBroken) {
                 $later = array_slice($Confirmation::CHAIN, array_search($role, $Confirmation::CHAIN, true) + 1);
                 $drop = $drop->concat($vedomost()->whereIn('role', $later)->get());
             }
@@ -10551,6 +10582,8 @@ class JournalController extends Controller
         // (dompdf tr balandligini emas, td nikini hisobga oladi)
         $borders = '';
         for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
+            // Talabalar 30 tadan ko'p bo'lsa jadvaldan keyingi qatorlar shuncha pastda
+            $extra = self::ynqExtraRows($spreadsheet->getSheet($i));
             // Yozuv katak chizig'iga yopishmasin — ikki yonida kichik chekinish
             $borders .= "table.sheet{$i}{margin-left:auto;margin-right:auto}"
                 // Gorizontal chiziqlar juda ingichka, vertikal (ustunlar) — sezilarli qalinroq
@@ -10558,12 +10591,12 @@ class JournalController extends Controller
                 . "border-left-width:.6pt !important;border-right-width:.6pt !important;padding-left:3.5pt !important;padding-right:3.5pt !important}"
                 // Talabalar ism-familiyasi (B, 20–49-qatorlar) — bitta qatorda, chapda kichik, o'ngda kengroq chekinish
                 . implode('', array_map(fn ($r) => "table.sheet{$i} tr.row" . ($r - 1) . ' td.column1{padding-left:2pt !important;padding-right:6pt !important;white-space:nowrap}',
-                    range(self::YNQ_FIRST_ROW, self::YNQ_LAST_ROW)))
-                . "table.sheet{$i} tr.row" . self::YNQ_TABLE_ROWS[1] . ' td{height:14pt}'
-                // "Fakultet dekani … imzo" qatori (60) ustidagi bo'sh qator (59) — imzolar hisob jadvalchasiga yopishmasin
-                . "table.sheet{$i} tr.row58 td{height:14pt}"
+                    range(self::YNQ_FIRST_ROW, self::YNQ_LAST_ROW + $extra)))
+                . "table.sheet{$i} tr.row" . (self::YNQ_TABLE_ROWS[1] + $extra) . ' td{height:14pt}'
+                // "Amaliyot o'qituvchilari" qatori (60) ustidagi bo'sh qator (59) — imzolar hisob jadvalchasiga yopishmasin
+                . "table.sheet{$i} tr.row" . (self::YNQ_SIGN_ROW - 2 + $extra) . ' td{height:14pt}'
                 // O'qituvchilar ismlari (QR lar ostida) — bitta qatorda
-                . "table.sheet{$i} tr.row" . self::YNQ_SIGN_ROW . ' td{white-space:nowrap}'
+                . "table.sheet{$i} tr.row" . (self::YNQ_SIGN_ROW + $extra) . ' td{white-space:nowrap}'
                 // Jadval ustidagi bo'sh qator (14) — jadval "Semestrda … soat" qatoriga yopishmasin
                 . "table.sheet{$i} tr.row" . (self::YNQ_TABLE_ROWS[0] - 2) . ' td{height:12pt}'
                 // Sarlavha qismi (1–13) yozuvlari bir qatorda — ustun kengliklari o'zgarsa ham cho'zilmasin
@@ -10642,11 +10675,11 @@ class JournalController extends Controller
         self::trimToPrintArea($spreadsheet);
         // Asl qaydnomadagidek: talabasi yo'q qatorlarda "0,0" / "0%" ko'rinmaydi (raqam va uslub qoladi)
         foreach ($spreadsheet->getAllSheets() as $sheet) {
-            for ($r = self::YNQ_FIRST_ROW; $r <= self::YNQ_LAST_ROW; $r++) {
+            for ($r = self::YNQ_FIRST_ROW, $last = self::YNQ_LAST_ROW + self::ynqExtraRows($sheet); $r <= $last; $r++) {
                 if (trim((string) $sheet->getCell('B' . $r)->getValue()) !== '') {
                     continue;
                 }
-                foreach (range('C', 'Y') as $col) {
+                foreach (range('C', self::YNQ_LAST_COL) as $col) {
                     $sheet->getCell($col . $r)->setValue(null);
                 }
             }
@@ -10749,6 +10782,46 @@ class JournalController extends Controller
      * Qaydnomani shu foydalanuvchi qaysi rolda tasdiqlaydi: fan kafedrasining mudiri (faol rol
      * kafedra_mudiri) yoki guruh fakultetining dekani; aks holda null (o'qituvchi / boshqa).
      */
+    /**
+     * Qaydnoma tasdiqlari (kichik guruhlar oilasi — a/b/c — bo'yicha): har rolda har kishining oxirgi
+     * tasdig'i; "uncovered" — hali hech bir amaliyot o'qituvchisi tasdiqlamagan kichik guruhlar.
+     *
+     * @return array{members: string[], all: \Illuminate\Support\Collection, byRole: array<string, \Illuminate\Support\Collection>, uncovered: string[]}
+     */
+    public static function ynqChain(string $subjectId, string $semesterCode, string $groupHemisId): array
+    {
+        $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
+        $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+        $all = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')
+            ? $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members)->orderByDesc('confirmed_at')->get()
+            : collect();
+        $byRole = [];
+        foreach ($Confirmation::CHAIN as $role) {
+            $byRole[$role] = $all->where('role', $role)->unique('teacher_id')->values();
+        }
+        $covered = $all->where('role', $Confirmation::ROLE_TEACHER)->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->all();
+
+        return ['members' => $members, 'all' => $all, 'byRole' => $byRole, 'uncovered' => array_values(array_diff($members, $covered))];
+    }
+
+    /** Zanjirda shu bosqich yakunlanganmi: o'qituvchilar — har kichik guruhdan kamida bittasi, qolganlari — bittasi */
+    private static function ynqStepDone(array $chain, string $role): bool
+    {
+        return $chain['byRole'][$role]->isNotEmpty()
+            && ($role !== \App\Models\YnQaydnomaConfirmation::ROLE_TEACHER || $chain['uncovered'] === []);
+    }
+
+    /** Kichik guruhlar qaydnomasida hali tasdiqlanmagan guruhlar — izoh; hammasi tasdiqlagan yoki bitta guruh — null */
+    private static function ynqPendingGroupsNote(array $chain): ?string
+    {
+        if (count($chain['members']) < 2 || $chain['uncovered'] === []) {
+            return null;
+        }
+        $names = Group::whereIn('group_hemis_id', $chain['uncovered'])->orderBy('name')->pluck('name')->implode(', ');
+
+        return "Kichik guruhlar o'qituvchilari tasdig'i kutilmoqda: " . $names;
+    }
+
     public static function approverRoleFor(string $subjectId, string $semesterCode, string $groupHemisId): ?string
     {
         if (is_active_dekan() && self::deanSeesGroup($groupHemisId)) {
@@ -10889,6 +10962,11 @@ class JournalController extends Controller
         int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId, bool $formsOnly
     ): array|string {
         $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+
+        // Kichik guruhlar (d1/d22-01a, 01b, 01c) — bitta umumiy qaydnoma: asosiysi birinchi guruh,
+        // qolganlarining talabalari o'z dars jadvali bo'yicha hisoblanib qo'shiladi (formsOnly — faqat o'zi)
+        $family = $formsOnly ? [$groupHemisId] : \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+        $groupHemisId = $family[0];
 
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         if (!$group) {
@@ -11247,6 +11325,14 @@ class JournalController extends Controller
         $teacherData = $this->getTeachersByType($groupHemisId, $subjectId, $semesterCode);
         $lectureTeacherName = $teacherData['lecture_teacher']['name'] ?? '';
         $practiceTeacherNames = array_map(fn($t) => $t['name'], $teacherData['practice_teachers']);
+        // Kichik guruhlar qaydnomasi — umumiy nom (harfsiz) va barcha guruhlarning amaliyot o'qituvchilari
+        $groupLabel = \App\Services\YnqFamily::label($group->name, count($family));
+        foreach (array_slice($family, 1) as $memberHemisId) {
+            foreach ($this->getTeachersByType($memberHemisId, $subjectId, $semesterCode)['practice_teachers'] as $t) {
+                $practiceTeacherNames[] = $t['name'];
+            }
+        }
+        $practiceTeacherNames = array_values(array_unique($practiceTeacherNames));
 
         // FISH qisqartirish funksiyasi: "Rasulov Shomurod Maxmudovich" -> "Rasulov Sh.M."
         // Sh, Ch digraflar to'liq saqlanadi
@@ -11516,6 +11602,22 @@ class JournalController extends Controller
             $studentScenarios[$h] = compact('main', 'qoshimcha', 'a', 'aQoshimcha', 'b', 'bQoshimcha');
         }
 
+        // Qolgan kichik guruhlar: talabalar, bosqichlar, davomat va har shakl baholari (o'z jadvali bo'yicha)
+        $familyForms = [];
+        foreach (array_slice($family, 1) as $memberHemisId) {
+            $part = $this->ynQaydnoma($subjectId, $semesterCode, $memberHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, true);
+            if (is_string($part)) {
+                continue;
+            }
+            $familyForms[] = $part['forms'];
+            $students = $students->concat($part['students']);
+            $stages += $part['stages'];
+            $davomatByStudent += $part['davomat'];
+        }
+        if ($familyForms) {
+            $students = $students->sortBy(fn ($s) => mb_strtolower((string) $s->full_name))->values();
+        }
+
         $activeForms = \App\Services\YnAttemptStatusService::activeFormsInGroup(
             array_map(fn($s) => ['stage' => $s], $stages)
         );
@@ -11556,6 +11658,24 @@ class JournalController extends Controller
             }
             return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
         };
+        if ($familyForms) {
+            $ownGradeMaps = $gradeMapsFor;
+            $gradeMapsFor = function (string $form) use ($ownGradeMaps, $familyForms) {
+                [$jnMap, $mtMap, $otherMap] = $ownGradeMaps($form);
+                foreach ($familyForms as $forms) {
+                    if (!isset($forms[$form])) {
+                        continue;
+                    }
+                    $jnMap += $forms[$form]['jn'];
+                    $mtMap += $forms[$form]['mt'];
+                    foreach ([100, 101, 102] as $tc) {
+                        $otherMap[$tc] = ($otherMap[$tc] ?? []) + ($forms[$form]['other'][$tc] ?? []);
+                    }
+                }
+
+                return [$jnMap, $mtMap, $otherMap];
+            };
+        }
 
         if ($formsOnly) {
             $forms = [];
@@ -11572,7 +11692,7 @@ class JournalController extends Controller
                 $forms[$form] = ['students' => $list, 'jn' => $jnMap, 'mt' => $mtMap, 'other' => $otherMap];
             }
 
-            return ['forms' => $forms];
+            return ['forms' => $forms, 'students' => $students, 'stages' => $stages, 'davomat' => $davomatByStudent];
         }
 
         // Shablon yuklash — har shakl uchun alohida sheet
@@ -11615,7 +11735,7 @@ class JournalController extends Controller
         // shakl uchun bir xil shablondan foydalanadi, ma'lumotlarni parametr
         // sifatida oladi.
         $fillSheet = function ($s, $studentsList, array $jnMap, array $mtMap, array $otherMap, string $sheetTitle, string $shaklLabel)
-            use ($facultyName, $specialty, $kurs, $semesterInYear, $group, $subject,
+            use ($facultyName, $specialty, $kurs, $semesterInYear, $groupLabel, $subject,
                  $abbreviatedPracticeTeachers, $abbreviatedMaruza, $dekanExcelName, $kafedraMudiriName,
                  $weightJn, $weightMt, $weightOn, $weightOski, $weightTest,
                  $davomatByStudent, $levelCodeForRounding)
@@ -11627,16 +11747,17 @@ class JournalController extends Controller
             $s->setCellValue('C8', '         ' . ($specialty->name ?? ''));
             $s->setCellValue('N8', $kurs);
             $s->setCellValue('Q8', $semesterInYear);
-            $s->setCellValue('W8', $group->name ?? '');
-            $s->setCellValue('Y1', $shaklLabel);
+            $s->setCellValue('W8', $groupLabel);
+            $s->setCellValue(self::YNQ_LAST_COL . '1', $shaklLabel);
             $s->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
             $s->setCellValue('U10', implode(', ', $abbreviatedPracticeTeachers));
             $s->setCellValue('A11', "Ma'ruzachi:");
             $s->setCellValue('C11', '         ' . $abbreviatedMaruza);
             $s->setCellValue('D13', $subject->total_acload ?? 0);
             $s->setCellValue('G13', $subject->credit ?? 0);
-            $s->setCellValue('E60', $dekanExcelName);
-            $s->setCellValue('U60', $kafedraMudiriName);
+            // Talabalar 30 tadan ko'p bo'lsa pastki qism shuncha surilgan (prepareYnqSheet)
+            $s->setCellValue('E' . (self::YNQ_SIGN_ROW + self::ynqExtraRows($s)), $dekanExcelName);
+            $s->setCellValue('U' . (self::YNQ_SIGN_ROW + self::ynqExtraRows($s)), $kafedraMudiriName);
 
             // Vaznlar
             $s->setCellValue('V18', 'Yakuniy ball');
@@ -11646,12 +11767,10 @@ class JournalController extends Controller
             $s->setCellValue('P19', $weightOski);
             $s->setCellValue('S19', $weightTest);
 
-            $startRow = 20;
-            $maxRow = 49;
+            $startRow = self::YNQ_FIRST_ROW;
 
             foreach ($studentsList as $index => $student) {
                 $row = $startRow + $index;
-                if ($row > $maxRow) break;
 
                 $hemisId = $student->hemis_id;
                 $davomatPct = (float) ($davomatByStudent[$hemisId] ?? 0);
@@ -11799,16 +11918,16 @@ class JournalController extends Controller
                 }
                 $s->setCellValue('V' . $row, $v);
                 $s->setCellValue('W' . $row, $w);
-                $s->setCellValue('Y' . $row, $y);
+                $s->setCellValue(self::YNQ_LAST_COL . $row, $y);
 
                 if ($davomatFailed) {
-                    $s->getStyle('A' . $row . ':Y' . $row)
+                    $s->getStyle('A' . $row . ':' . self::YNQ_LAST_COL . $row)
                         ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
                 }
             }
         };
 
-        $cleanGroupName = str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet');
+        $cleanGroupName = str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $groupLabel ?: 'Sheet');
         $sheetTitleFor = function (string $form) use ($cleanGroupName) {
             $suffixMap = [
                 \App\Services\YnAttemptStatusService::FORM_12             => '',
@@ -11837,6 +11956,7 @@ class JournalController extends Controller
             $studentsList = $form === \App\Services\YnAttemptStatusService::FORM_12
                 ? $students  // 12-shakl har doim hammasini ko'rsatadi
                 : $studentsForForm($form);
+            self::prepareYnqSheet($targetSheet, $studentsList->count());
             if ($form !== \App\Services\YnAttemptStatusService::FORM_12 && $studentsList->isEmpty()) {
                 // Bo'sh sheet'larni qo'shmaymiz (template default holida qoladi — keyin tozalanadi)
                 continue;
@@ -11862,7 +11982,7 @@ class JournalController extends Controller
                     ->leftJoin('absence_excuses as ae', 'ae.id', '=', 'c.absence_excuse_id')
                     ->where('c.subject_id', $subjectId)
                     ->where('c.semester_code', $semesterCode)
-                    ->where('c.group_hemis_id', $groupHemisId)
+                    ->whereIn('c.group_hemis_id', $family)
                     ->orderBy('c.performed_at')
                     ->select([
                         'c.performed_at', 'c.correction_type', 'c.attempt',
@@ -11875,7 +11995,7 @@ class JournalController extends Controller
                 if ($corrections->isNotEmpty()) {
                     $historySheet = $spreadsheet->createSheet();
                     $historySheet->setTitle(mb_substr('Tarix ' . $cleanGroupName, 0, 31));
-                    $historySheet->setCellValue('A1', 'O\'zgarishlar tarixi — ' . ($subject->subject_name ?? '') . ' / ' . ($group->name ?? ''));
+                    $historySheet->setCellValue('A1', 'O\'zgarishlar tarixi — ' . ($subject->subject_name ?? '') . ' / ' . $groupLabel);
                     $historySheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
                     $historySheet->mergeCells('A1:I1');
 
@@ -11922,7 +12042,7 @@ class JournalController extends Controller
             \Log::warning('Tarix sheet generatsiyada xatolik: ' . $e->getMessage());
         }
 
-        $groupName = str_replace(['/', '\\', ' '], '_', $group->name ?? 'guruh');
+        $groupName = str_replace(['/', '\\', ' '], '_', $groupLabel ?: 'guruh');
         $subjectName = str_replace(['/', '\\', ' '], '_', $subject->subject_name ?? 'fan');
         $fileName = 'YN_qaydnoma_' . $groupName . '_' . $subjectName . '.xlsx';
 
@@ -11934,20 +12054,18 @@ class JournalController extends Controller
 
     /**
      * Qaydnomaga tasdiq QR lari: tepada chap burchakda — fakultet dekani, o'ng burchakda — kafedra
-     * mudiri; pastda (dekan / kafedra mudiri yozuvlari o'rnida) — tasdiqlagan amaliy o'qituvchilar
-     * (3 tagacha, a/b/c), QR ostida ismi. "YAN o'tkazuvchi o'qituvchi imzosi" ustuni (talabalar
-     * qatorlari) bitta oq katak — ichki chiziqlar va qator rangisiz. Excelda ham, sahifada ham.
+     * mudiri; pastda (dekan / kafedra mudiri yozuvlari o'rnida) — barcha kichik guruhlarning
+     * tasdiqlagan amaliyot o'qituvchilari, yonma-yon, QR ostida ismi. Kafedra mudiri QR i — barcha
+     * kichik guruhlar o'qituvchilari tasdiqlagach, dekanniki — undan keyin. Excelda ham, sahifada ham.
      */
     private static function stampConfirmationQrs(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $subjectId, string $semesterCode, string $groupHemisId): void
     {
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
-        $hasTable = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations');
-        $latest = fn (string $role) => $hasTable
-            ? $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $role)->filter(fn ($c) => $c->verification)->values()
-            : collect();
-        $teachers = $latest($Confirmation::ROLE_TEACHER)->sortBy('confirmed_at')->take(3)->values();
-        $head = $teachers->isNotEmpty() ? $latest($Confirmation::ROLE_HEAD)->first() : null;
-        $dean = $head ? $latest($Confirmation::ROLE_DEAN)->first() : null;
+        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
+        $withQr = fn (string $role) => $chain['byRole'][$role]->filter(fn ($c) => $c->verification)->values();
+        $teachers = $withQr($Confirmation::ROLE_TEACHER)->sortBy('confirmed_at')->values();
+        $head = self::ynqStepDone($chain, $Confirmation::ROLE_TEACHER) ? $withQr($Confirmation::ROLE_HEAD)->first() : null;
+        $dean = $head ? $withQr($Confirmation::ROLE_DEAN)->first() : null;
         $makeQr = function ($c, string $alt, int $size) {
             $qr = \PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing::fromString(
                 \App\Services\QrPng::make($c->verification->getVerificationUrl(), 5, 1)
@@ -11959,9 +12077,9 @@ class JournalController extends Controller
 
             return $qr;
         };
-        // "YaN o'tkazilgan sana" — guruhning YN jadvalidagi oxirgi imtihon (test, bo'lmasa OSKI)
+        // "YaN o'tkazilgan sana" — asosiy guruhning YN jadvalidagi oxirgi imtihon (test, bo'lmasa OSKI)
         $exam = \Illuminate\Support\Facades\Schema::hasTable('exam_schedules')
-            ? DB::table('exam_schedules')->whereNull('student_hemis_id')->where('group_hemis_id', $groupHemisId)
+            ? DB::table('exam_schedules')->whereNull('student_hemis_id')->where('group_hemis_id', $chain['members'][0])
                 ->where('subject_id', $subjectId)->where('semester_code', $semesterCode)
                 ->first(['oski_date', 'test_date', 'oski_na', 'test_na'])
             : null;
@@ -11978,7 +12096,6 @@ class JournalController extends Controller
             if (!$sheet->getPageSetup()->getPrintArea()) {
                 continue;
             }
-            self::swapSignatureColumn($sheet);
             // Jadval tepasidagi chiziq (K13:W13) ustida, o'ngda — asl qaydnomadagidek
             $sheet->setCellValue(self::YNQ_EXAM_DATE_CELL, "YaN o‘tkazilgan sana: "
                 . ($ynDate ? \Carbon\Carbon::parse($ynDate)->format('d.m.Y') : '____________') . ' yil');
@@ -11987,23 +12104,7 @@ class JournalController extends Controller
                 ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT)
                 ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_BOTTOM);
 
-            $first = self::YNQ_FIRST_ROW;
-            $last = $first - 1;
-            while ($last < self::YNQ_LAST_ROW && trim((string) $sheet->getCell('B' . ($last + 1))->getValue()) !== '') {
-                $last++;
-            }
-            if ($last >= $first) {
-                $signRange = self::YNQ_SIGN_COL . $first . ':' . self::YNQ_SIGN_COL . $last;
-                if ($last > $first) {
-                    $sheet->mergeCells($signRange);
-                }
-                // Qator rangi (kelmadi / qoniqarsiz) imzo katagiga o'tmasin: to'g'ridan-to'g'ri fon va
-                // shablonning shartli formatlashi (A20:Y49) — imzo ustunisiz ikki oraliqqa bo'linadi
-                $sheet->getStyle($signRange)->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_NONE);
-                self::excludeColumnFromConditionals($sheet, self::YNQ_SIGN_COL);
-            }
-
-            // Pastda: tasdiqlagan amaliy o'qituvchilar — QR va ostida ismi, yonma-yon
+            // Pastda: tasdiqlagan amaliyot o'qituvchilari — QR va ostida ismi, yonma-yon
             if ($teachers->isNotEmpty()) {
                 self::teacherSignatureBlock($sheet, $teachers, $makeQr, $colPx);
             }
@@ -12019,8 +12120,8 @@ class JournalController extends Controller
             }
             if ($head) {
                 $qr = $makeQr($head, self::YNQ_HEAD_QR_ALT, $size);
-                $qr->setCoordinates(self::YNQ_SIGN_COL . '2');
-                $qr->setOffsetX(max(0, $colPx($sheet, self::YNQ_SIGN_COL) - $size - 2));
+                $qr->setCoordinates(self::YNQ_LAST_COL . '2');
+                $qr->setOffsetX(max(0, $colPx($sheet, self::YNQ_LAST_COL) - $size - 2));
                 $qr->setOffsetY(2);
                 $qr->setWorksheet($sheet);
             }
@@ -12029,18 +12130,19 @@ class JournalController extends Controller
 
     /**
      * Shablon pastidagi "Fakultet dekani … / Kafedra mudiri …" qatorlari (60–61) o'rniga:
-     * "Amaliyot o'qituvchilari:" va 3 tagacha joy — har birida QR (60-qator) va ostida ism (61).
+     * "Amaliyot o'qituvchilari:" (o'ngga tekislangan) va darhol yonida ketma-ket o'qituvchilar
+     * joylari — har birida QR (60-qator) va ostida ism (61); joy — QR va ism sig'adigan eng tor kataklar.
      */
     private static function teacherSignatureBlock(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, \Illuminate\Support\Collection $teachers, \Closure $makeQr, \Closure $colPx): void
     {
-        $row = self::YNQ_SIGN_ROW;
+        $row = self::YNQ_SIGN_ROW + self::ynqExtraRows($sheet);
         $Coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class;
         foreach ($sheet->getMergeCells() as $range) {
             if (preg_match('/^[A-Z]+(\d+):[A-Z]+(\d+)$/', $range, $m) && (int) $m[1] >= $row && (int) $m[2] <= $row + 1) {
                 $sheet->unmergeCells($range);
             }
         }
-        $area = 'B' . $row . ':' . self::YNQ_SIGN_COL . ($row + 1);
+        $area = 'B' . $row . ':' . self::YNQ_LAST_COL . ($row + 1);
         foreach ($sheet->rangeToArray($area, null, false, false, true) as $r => $cols) {
             foreach (array_keys($cols) as $col) {
                 $sheet->getCell($col . $r)->setValue(null);
@@ -12050,23 +12152,36 @@ class JournalController extends Controller
         $sheet->getRowDimension($row)->setRowHeight(48);
 
         $sheet->setCellValue('B' . $row, "Amaliyot o‘qituvchilari:");
-        $sheet->getStyle('B' . $row)->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('B' . $row)->getAlignment()
+            ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT)
+            ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+
+        // Joylar: C dan boshlab, har biri kamida YNQ_TEACHER_SLOT_PX kenglikdagi qo'shni ustunlar
+        $slots = [];
+        $lastIndex = $Coordinate::columnIndexFromString(self::YNQ_LAST_COL);
+        for ($ci = $Coordinate::columnIndexFromString('C'); $ci <= $lastIndex && count($slots) < $teachers->count(); ) {
+            $from = $ci;
+            $width = 0;
+            while ($ci <= $lastIndex && $width < self::YNQ_TEACHER_SLOT_PX) {
+                $width += $colPx($sheet, $Coordinate::stringFromColumnIndex($ci));
+                $ci++;
+            }
+            $slots[] = [$Coordinate::stringFromColumnIndex($from), $Coordinate::stringFromColumnIndex($ci - 1), $width];
+        }
 
         $size = 56;
-        foreach ($teachers->values() as $i => $c) {
-            [$from, $to] = self::YNQ_TEACHER_SLOTS[$i];
-            $sheet->mergeCells($from . $row . ':' . $to . $row);
-            $sheet->mergeCells($from . ($row + 1) . ':' . $to . ($row + 1));
+        foreach ($teachers->values()->take(count($slots)) as $i => $c) {
+            [$from, $to, $width] = $slots[$i];
+            if ($from !== $to) {
+                $sheet->mergeCells($from . $row . ':' . $to . $row);
+                $sheet->mergeCells($from . ($row + 1) . ':' . $to . ($row + 1));
+            }
             $sheet->setCellValue($from . ($row + 1), self::abbreviateName($c->teacher_name));
             $sheet->getStyle($from . ($row + 1))->getFont()->setBold(false);
             $sheet->getStyle($from . ($row + 1))->getAlignment()
                 ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
                 ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
 
-            $width = 0;
-            for ($ci = $Coordinate::columnIndexFromString($from); $ci <= $Coordinate::columnIndexFromString($to); $ci++) {
-                $width += $colPx($sheet, $Coordinate::stringFromColumnIndex($ci));
-            }
             $qr = $makeQr($c, self::YNQ_QR_ALT, $size);
             $qr->setCoordinates($from . $row);
             $qr->setOffsetX(max(0, intdiv($width - $size, 2)));
@@ -12076,64 +12191,50 @@ class JournalController extends Controller
     }
 
     /**
-     * Shablonda imzo ustuni (X) so'z bilan baho (Y) dan oldin — o'rni almashtiriladi: jadval
-     * qatorlaridagi qiymat, formula va uslub, ustun kengligi, hamda so'z bilan bahoni sanaydigan
-     * formulalar (COUNTIF(Y20:Y49, …) → X20:X49).
+     * Shablon varag'ini qaydnomaga tayyorlaydi: "YAN o'tkazuvchi o'qituvchi imzosi" ustuni olib
+     * tashlanadi (kengligi qolgan ustunlarga teng bo'linadi; formulalar, birlashtirishlar, shartli
+     * formatlash va chop etish maydoni suriladi); talabalar 30 tadan ko'p bo'lsa — 49-qatordan
+     * oldin yetishmagan qatorlar qo'shiladi (uslubi bilan), tartib raqamlari qayta yoziladi.
      */
-    private static function swapSignatureColumn(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): void
+    private static function prepareYnqSheet(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, int $studentCount): void
     {
-        [$sign, $word] = [self::YNQ_SIGN_COL, self::YNQ_GRADE_WORD_COL];
-        if (trim((string) $sheet->getCell($word . '15')->getValue()) === '') {
-            return;   // allaqachon almashtirilgan
+        $Coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class;
+        $sign = self::YNQ_TEMPLATE_SIGN_COL;
+        if (!str_contains(mb_strtolower((string) $sheet->getCell($sign . self::YNQ_TABLE_ROWS[0])->getValue()), 'imzo')) {
+            return;   // allaqachon tayyorlangan
         }
-        [$tableFrom, $tableTo] = self::YNQ_TABLE_ROWS;
-        for ($r = $tableFrom; $r <= $tableTo; $r++) {
-            // Kutubxona bir vaqtda bitta katak obyektini ushlaydi — har biri qayta olinadi
-            [$av, $ax] = [$sheet->getCell($word . $r)->getValue(), $sheet->getCell($word . $r)->getXfIndex()];
-            [$bv, $bx] = [$sheet->getCell($sign . $r)->getValue(), $sheet->getCell($sign . $r)->getXfIndex()];
-            $sheet->getCell($word . $r)->setValue($bv)->setXfIndex($bx);
-            $sheet->getCell($sign . $r)->setValue($av)->setXfIndex($ax);
+        $freed = max(0, (float) $sheet->getColumnDimension($sign)->getWidth());
+        $sheet->removeColumn($sign);
+        $lastIndex = $Coordinate::columnIndexFromString(self::YNQ_LAST_COL);
+        for ($ci = 1; $ci <= $lastIndex; $ci++) {
+            $dim = $sheet->getColumnDimension($Coordinate::stringFromColumnIndex($ci));
+            $dim->setWidth(($dim->getWidth() < 0 ? 8.43 : $dim->getWidth()) + $freed / $lastIndex);
         }
-        $wa = $sheet->getColumnDimension($word)->getWidth();
-        $sheet->getColumnDimension($word)->setWidth($sheet->getColumnDimension($sign)->getWidth());
-        $sheet->getColumnDimension($sign)->setWidth($wa);
 
-        $from = $sign . self::YNQ_FIRST_ROW . ':' . $sign . self::YNQ_LAST_ROW;
-        $to = $word . self::YNQ_FIRST_ROW . ':' . $word . self::YNQ_LAST_ROW;
-        for ($r = $tableTo + 1; $r <= 61; $r++) {
-            foreach (range('A', 'Y') as $col) {
-                $cell = $sheet->getCell($col . $r);
-                $v = $cell->getValue();
-                if (is_string($v) && str_starts_with($v, '=') && str_contains($v, $from)) {
-                    $cell->setValue(str_replace($from, $to, $v));
-                }
+        $extra = $studentCount - (self::YNQ_LAST_ROW - self::YNQ_FIRST_ROW + 1);
+        if ($extra > 0) {
+            $height = $sheet->getRowDimension(self::YNQ_LAST_ROW - 1)->getRowHeight();
+            $sheet->insertNewRowBefore(self::YNQ_LAST_ROW, $extra);
+            for ($r = self::YNQ_LAST_ROW; $r < self::YNQ_LAST_ROW + $extra; $r++) {
+                $sheet->getRowDimension($r)->setRowHeight($height);
+            }
+            for ($r = self::YNQ_FIRST_ROW; $r <= self::YNQ_LAST_ROW + $extra; $r++) {
+                $sheet->setCellValue('A' . $r, $r - self::YNQ_FIRST_ROW + 1);
             }
         }
     }
 
-    /** Shartli formatlash oraliqlaridan ustunni chiqaradi (A20:Y49 → A20:W49 + Y20:Y49) */
-    private static function excludeColumnFromConditionals(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, string $column): void
+    /** Talabalar uchun qo'shilgan qatorlar soni — "O'rtacha foiz" qatori shablondagidan (50) qanchalik pastda */
+    private static function ynqExtraRows(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): int
     {
-        $Coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::class;
-        $x = $Coordinate::columnIndexFromString($column);
-        foreach ($sheet->getConditionalStylesCollection() as $range => $styles) {
-            if (!preg_match('/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/', $range, $m)) {
-                continue;
-            }
-            [$c1, $c2] = [$Coordinate::columnIndexFromString($m[1]), $Coordinate::columnIndexFromString($m[3])];
-            if ($x < $c1 || $x > $c2) {
-                continue;
-            }
-            $sheet->removeConditionalStyles($range);
-            if ($x > $c1) {
-                $sheet->setConditionalStyles($m[1] . $m[2] . ':' . $Coordinate::stringFromColumnIndex($x - 1) . $m[4], $styles);
-            }
-            if ($x < $c2) {
-                // Ifodalar ($V20) oraliqning birinchi qatoriga nisbiy — qatorlar o'zgarmaydi
-                $sheet->setConditionalStyles($Coordinate::stringFromColumnIndex($x + 1) . $m[2] . ':' . $m[3] . $m[4],
-                    array_map(fn ($c) => clone $c, $styles));
+        $base = self::YNQ_TABLE_ROWS[1];
+        for ($r = $base, $max = $sheet->getHighestRow(); $r <= $max; $r++) {
+            if ($sheet->cellExists('B' . $r) && str_contains((string) $sheet->getCell('B' . $r)->getValue(), 'rtacha foiz')) {
+                return $r - $base;
             }
         }
+
+        return 0;
     }
 
     /** "ALLAMURATOVA UMIDA DAVRONOVNA" → "ALLAMURATOVA U.D." (Sh / Ch — ikki harf) */

@@ -375,14 +375,20 @@ class VedomostTekshirishController extends Controller
         $more = $rows->count() > $limit;
         $rows = $rows->take($limit)->values();
 
+        // Kichik guruhlar (a/b/c) — bitta qaydnoma: barcha guruhlarining o'qituvchilari, nomi — harfsiz
+        foreach ($rows as $r) {
+            $c = $r->confirmation;
+            $r->members = \App\Services\YnqFamily::membersFor((string) $c->subject_id, (string) $c->semester_code,
+                (string) $c->group_hemis_id, $r->group->name, $r->group->curriculum_hemis_id);
+        }
         // Amaliy o'qituvchi(lar) — shu qaydnomalar bo'yicha
         $teachers = $Confirmation::where('role', $Confirmation::ROLE_TEACHER)
-            ->whereIn('group_hemis_id', $rows->map(fn ($r) => (string) $r->confirmation->group_hemis_id)->unique()->values())
+            ->whereIn('group_hemis_id', $rows->flatMap(fn ($r) => $r->members)->unique()->values())
             ->whereIn('subject_id', $rows->map(fn ($r) => (string) $r->confirmation->subject_id)->unique()->values())
             ->get(['group_hemis_id', 'subject_id', 'semester_code', 'teacher_id', 'teacher_name'])
             ->groupBy($key);
 
-        $items = $rows->map(function ($r) use ($teachers, $key, $faculties, $specialties) {
+        $items = $rows->map(function ($r) use ($teachers, $faculties, $specialties) {
             $c = $r->confirmation;
             $v = $c->verification;
 
@@ -390,10 +396,11 @@ class VedomostTekshirishController extends Controller
                 'faculty_name' => $faculties[$r->group->department_hemis_id] ?? ($v->department_name ?? ''),
                 'specialty_name' => $specialties[$r->group->specialty_hemis_id] ?? '',
                 'level_name' => $r->semester->level_name ?? '',
-                'group_name' => $r->group->name,
+                'group_name' => \App\Services\YnqFamily::label($r->group->name, count($r->members)),
                 'subject_name' => $r->subject->subject_name ?? ($v->subject_name ?? ''),
                 'semester_name' => $r->subject->semester_name ?? ($v->semester_name ?? ''),
-                'teachers' => ($teachers[$key($c)] ?? collect())->unique('teacher_id')->pluck('teacher_name')->values(),
+                'teachers' => collect($r->members)->flatMap(fn ($g) => $teachers[$g . '|' . $c->subject_id . '|' . $c->semester_code] ?? collect())
+                    ->unique('teacher_id')->pluck('teacher_name')->values(),
                 'dean_name' => $c->teacher_name,
                 'dean_at' => $c->confirmed_at->format('d.m.Y H:i'),
                 'pdf_url' => route('admin.vedomost-tekshirish.qaydnoma-pdf', [
@@ -433,7 +440,8 @@ class VedomostTekshirishController extends Controller
             : app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId);
         abort_unless($path, 422, 'PDF tayyorlab bo\'lmadi.');
 
-        $group = Group::where('group_hemis_id', $groupHemisId)->value('name') ?? $groupHemisId;
+        // Kichik guruhlar qaydnomasi — umumiy (harfsiz) nomi tasdiqda saqlangan
+        $group = $base->verification->group_names ?? Group::where('group_hemis_id', $groupHemisId)->value('name') ?? $groupHemisId;
         $subject = $base->verification->subject_name ?? $subjectId;
         $name = str_replace(['/', '\\', ' '], '_', 'YN_qaydnoma_' . $group . '_' . $subject) . '.pdf';
 

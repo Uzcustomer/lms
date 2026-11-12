@@ -12750,11 +12750,15 @@
                         select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); } : null,
                     } });
                 if (placed && W && weeklyLayer === 'internal') {
-                    // Joylangan, to'qnashuvdagi dars: har bo'lak o'z joyida (birlikning o'z bo'laklari hisobga olinmaydi) va xona sig'imi.
-                    const cfItems = list.flatMap(x => {
+                    // Joylangan, to'qnashuvdagi dars: sabablar — server yozuvlaridan (butun doska; belgi ham shulardan — ko'rish qamrovidan tashqaridagi
+                    // dars bilan to'qnashuv ham ko'rinadi); yuklanmagan / bo'sh bo'lsa — front tekshiruvi (har bo'lak o'z joyida). Xona sig'imi — alohida.
+                    const srv = weeklyConflictItems.__week === curWeek
+                        ? list.flatMap(x => (((weeklyConflictItems[x.id] || {})[curWeek]) || []).map(i => cbItemFromServer(i, x)).filter(Boolean)) : [];
+                    const front = list.flatMap(x => {
                         const at = effPlace(x);
                         return at ? conflictsAtDetail(x, at.day, at.pair, ids).map(k => cbItemFromDetail(k, x, at.day, at.pair)).filter(Boolean) : [];
-                    }).concat([cbCapItem(c)].filter(Boolean));
+                    });
+                    const cfItems = (srv.length ? srv : front).concat([cbCapItem(c)].filter(Boolean));
                     const first = effPlace(list[0]) || placed;
                     cbRender(pop.querySelector('[data-pop-cf]'), cfItems, cbCtx(first.day, first.pair, true, c));
                     // To'qnashuv belgisidan ochilgan: bloklar [Ko'rsatish] bilan ochiq.
@@ -12889,6 +12893,23 @@
                     training_type: o.training_type, teacher: o.teacher_name || '', teacher_id: +o.teacher_id || null,
                     room_name: eo.auditorium_name || eo.auditorium_code || '', room_code: eo.auditorium_code || '', date: weekDayIso(W, d),
                     time: pl ? slotRangeText(pl.pair, cardLen(o)) : '', day: d, pair: pl ? pl.pair : at, piece_pair: at };
+            }
+            // Server to'qnashuv yozuvi (weeklyConflictItems — butun doska bo'yicha, ko'rish qamrovidan qat'i nazar) → sabab: band qilgan dars
+            // ma'lumoti — barcha yuklangan kartalardan (allCards), topilmasa yozuvning o'zidan; fokus — yozuvning show'i.
+            function cbItemFromServer(i, piece) {
+                const kind = { teacher_busy: 'teacher', room_busy: 'room', group_busy: 'group' }[i && i.kind];
+                if (!kind) return null;
+                const o = (typeof allCards !== 'undefined' && allCards || []).find(x => +x.id === +i.with_card) || (cards || []).find(x => +x.id === +i.with_card) || null;
+                const eo = o ? effectiveCard(o) : null, pl = o ? effPlace(o) : null;
+                const date = i.date_from || ((i.show || {}).dates || [])[0] || '';
+                const mineG = cardGroups(piece), overlap = (i.groups || []).filter(g => mineG.includes(g));
+                return { kind, who: kind === 'teacher' ? (i.teacher_name || piece.teacher_name || '') : kind === 'room' ? (i.room_name || i.room || '')
+                        : (overlap.length ? overlap : (i.groups || [])).join(','),
+                    card_id: +i.with_card || null, piece_id: piece.id, groups: o ? cardGroups(o) : (i.groups || []), subject: o ? o.subject_name : '',
+                    training_type: o ? o.training_type : '', teacher: o ? (o.teacher_name || '') : '', teacher_id: +(i.teacher_id || (o && o.teacher_id)) || null,
+                    room_name: eo ? (eo.auditorium_name || eo.auditorium_code || '') : (i.room_name || i.room || ''), room_code: i.room || (eo ? eo.auditorium_code || '' : ''),
+                    date, day: date ? ((new Date(date + 'T00:00:00').getDay() + 6) % 7) + 1 : 0, time: pl && o ? slotRangeText(pl.pair, cardLen(o)) : '',
+                    pair: pl ? pl.pair : 0, piece_pair: +((i.show || {}).hour_from) || ((effPlace(piece) || {}).pair) || 0, show: i.show || null };
             }
             // Xona sig'imi (ogohlantirish, rad sababi emas): shu haftadagi xona sig'imi talabalar sonidan kam.
             function cbCapItem(c) {

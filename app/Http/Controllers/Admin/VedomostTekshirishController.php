@@ -37,6 +37,12 @@ class VedomostTekshirishController extends Controller
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
+        return view('admin.vedomost_tekshirish.index', $this->filterViewData());
+    }
+
+    /** Filtrlar uchun boshlang'ich ro'yxatlar — Vedomost tekshirish va Vedomostlar holati sahifalarida */
+    public function filterViewData(): array
+    {
         $dekanFacultyIds = get_dekan_faculty_ids();
 
         $facultyQuery = Department::where('structure_type_code', 11)
@@ -69,9 +75,7 @@ class VedomostTekshirishController extends Controller
             ->orderBy('cs.department_name')
             ->get();
 
-        return view('admin.vedomost_tekshirish.index', compact(
-            'faculties', 'educationTypes', 'kafedras', 'dekanFacultyIds', 'defaultEducationType'
-        ));
+        return compact('faculties', 'educationTypes', 'kafedras', 'dekanFacultyIds', 'defaultEducationType');
     }
 
     public function search(Request $request)
@@ -79,6 +83,72 @@ class VedomostTekshirishController extends Controller
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
         try {
+            return response()->json($this->searchRows($request));
+        } catch (\Throwable $e) {
+            \Log::error('VedomostTekshirish search error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Vedomostlar holati (registrator / admin): sahifa filtrlari bo'yicha guruh × fanlar (qidiruvdagi
+     * kabi) va har birining YN qaydnoma holati — topshirilgan / topshirilishi kerak / jarayonda;
+     * kichik guruhlar (a/b/c) — bitta qatorda.
+     */
+    public function holat(Request $request)
+    {
+        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
+
+        $refs = collect($this->searchRows($request))->map(fn ($r) => (object) [
+            'group_hemis_id' => (string) $r['group_hemis_id'], 'subject_id' => (string) $r['subject_id'],
+            'semester_code' => (string) $r['semester_code'], 'subject_name' => $r['subject_name'],
+        ]);
+        $canDelete = (auth()->user()?->hasRole('superadmin') ?? false) && !session('impersonating');
+        $rows = app(YnQaydnomaListController::class)->statusFor($refs);
+
+        return response()->json([
+            'items' => $rows->map(fn ($r) => $this->holatItem($r, $canDelete))->values(),
+            'can_delete' => $canDelete,
+        ]);
+    }
+
+    /** Vedomostlar holati jadvali qatori (sahifa JS i chizadi) */
+    private function holatItem(object $r, bool $canDelete): array
+    {
+        $person = fn ($c) => $c ? ['name' => $c->teacher_name, 'at' => $c->confirmed_at->format('d.m.Y H:i')] : null;
+        $key = ['subject_id' => $r->subject_id, 'semester_code' => $r->semester_code, 'group_hemis_id' => $r->group_hemis_id];
+        $status = $r->status === YnQaydnomaListController::STATUS_NONE && !$r->exams_finished ? 'waiting' : $r->status;
+
+        return [
+            'group' => $r->group,
+            'member_names' => $r->member_names,
+            'faculty' => $r->faculty,
+            'specialty' => $r->specialty,
+            'level' => $r->level_name,
+            'subject' => $r->subject,
+            'semester' => $r->semester,
+            'oski_date' => $r->oski_date ? Carbon::parse($r->oski_date)->format('d.m.Y') : null,
+            'test_date' => $r->test_date ? Carbon::parse($r->test_date)->format('d.m.Y') : null,
+            // waiting — YN imtihonlari hali tugamagan; none — tugagan, topshirilishi kerak
+            'status' => $status,
+            'teachers' => $r->teachers->map($person)->values(),
+            'pending_teachers' => $r->pending_teachers->values(),
+            'head' => $person($r->head),
+            'dean' => $person($r->dean),
+            'rejection' => $r->rejection ? ['by' => $r->rejection->dean_name, 'at' => $r->rejection->rejected_at->format('d.m.Y H:i'),
+                'reason' => $r->rejection->reason] : null,
+            'view_url' => $r->params ? route('admin.journal.view-yn-qaydnoma', $r->params) : null,
+            'excel' => $r->params,
+            'pdf_url' => $r->status === YnQaydnomaListController::STATUS_DEAN ? route('admin.vedomost-tekshirish.qaydnoma-pdf', $key) : null,
+            'pdf_view_url' => $r->status === YnQaydnomaListController::STATUS_DEAN ? route('admin.vedomost-tekshirish.qaydnoma-pdf', $key + ['inline' => 1]) : null,
+            'journal_url' => $r->group_pk ? route('admin.journal.show', [$r->group_pk, $r->subject_id, $r->semester_code]) : null,
+            'delete_key' => $canDelete && ($r->teachers->isNotEmpty() || $r->rejection) ? $key : null,
+        ];
+    }
+
+    /** Qidiruv natijalari: sahifa filtrlari bo'yicha guruh × fanlar, dars va YN sanalari bilan */
+    protected function searchRows(Request $request): array
+    {
         $excludedCodes   = [11, 99, 100, 101, 102, 103];
 
         $query = $this->filteredQuery($request);
@@ -132,7 +202,7 @@ class VedomostTekshirishController extends Controller
         }
 
         if ($rows->isEmpty()) {
-            return response()->json([]);
+            return [];
         }
 
         // --- Batch schedule date queries ---
@@ -219,12 +289,7 @@ class VedomostTekshirishController extends Controller
             ];
         }
 
-        return response()->json($result);
-
-        } catch (\Throwable $e) {
-            \Log::error('VedomostTekshirish search error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+        return $result;
     }
 
     /**

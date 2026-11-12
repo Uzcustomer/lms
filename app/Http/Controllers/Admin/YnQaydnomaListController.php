@@ -39,6 +39,13 @@ class YnQaydnomaListController extends Controller
     {
         $isDean = is_active_dekan();
         $isHead = !$isDean && JournalController::isActiveHead();
+        // Registrator / admin — Vedomost tekshirishdagi filtrlar bilan: guruh × fanlar va qaydnoma holati
+        // (ma'lumot sahifadan AJAX bilan — VedomostTekshirishController::holat)
+        if (!$isDean && !$isHead) {
+            return view('admin.yn-qaydnomalar.holat', app(VedomostTekshirishController::class)->filterViewData() + [
+                'canDelete' => (auth()->user()?->hasRole('superadmin') ?? false) && !session('impersonating'),
+            ]);
+        }
         $current = $request->input('current', '1') === '1';
         $rows = $this->finishedVedomosts($isDean ? JournalController::deanFacultyHemisIds() : null, $current,
             $isHead ? JournalController::headKafedraHemisIds() : null);
@@ -47,10 +54,8 @@ class YnQaydnomaListController extends Controller
             'isDean' => $isDean,
             'isHead' => $isHead,
             'isTeacher' => false,
-            // PDF — Vedomost tekshirish yo'li (registrator, admin); dekan va kafedra mudiriga emas
-            'canPdf' => !$isDean && !$isHead,
-            // Superadmin — qaydnomani butunlay o'chiradi
-            'canDelete' => (auth()->user()?->hasRole('superadmin') ?? false) && !session('impersonating'),
+            'canPdf' => false,
+            'canDelete' => false,
         ]);
     }
 
@@ -71,75 +76,19 @@ class YnQaydnomaListController extends Controller
         ]);
     }
 
+    /** Dekan, kafedra mudiri, o'qituvchi: holat kartochkalari (status filtri) va ro'yxat */
     private function listView(Request $request, Collection $rows, bool $current, array $context)
     {
-        // Ta'lim turi — o'quv rejadan
-        $types = Schema::hasTable('curricula')
-            ? DB::table('curricula')->whereIn('curricula_hemis_id', $rows->pluck('curriculum_hemis_id')->filter()->unique()->values())
-                ->get(['curricula_hemis_id', 'education_type_code', 'education_type_name'])->keyBy('curricula_hemis_id')
-            : collect();
-        foreach ($rows as $r) {
-            $type = $types->get($r->curriculum_hemis_id);
-            $r->education_type = (string) ($type->education_type_code ?? '');
-            $r->education_type_name = (string) ($type->education_type_name ?? '');
-        }
-
-        // Filtrlar (registrator / admin — Vedomost tekshirishdagidek): bir-biriga bog'langan — har ro'yxat
-        // variantlari oldingi filtrlar bo'yicha qolgan qatorlardan; ta'lim turi sukut bo'yicha — bakalavr;
-        // ro'yxat "Ko'rsatish" bosilgach chiqadi. Dekan, kafedra mudiri, o'qituvchi — filtrsiz, faqat kartochkalar.
-        $filterMode = !$context['isDean'] && !$context['isHead'] && !$context['isTeacher'];
-        $f = $request->only(['education_type', 'faculty', 'level', 'semester', 'specialty', 'group', 'kafedra', 'subject', 'yn_from', 'yn_to', 'q', 'status']);
-        if ($filterMode && !$request->has('education_type')) {
-            $f['education_type'] = (string) $rows->first(fn ($r) => str_contains(mb_strtolower($r->education_type_name), 'bakalavr'))?->education_type;
-        }
-        $options = [];
-        $filtered = $rows;
-        // [filtr, variantlar kaliti, nomi, qiymati, qatorni tekshirish]
-        $steps = [
-            ['education_type', 'educationTypes', 'education_type_name', 'education_type'],
-            ['faculty', 'faculties', 'faculty', 'faculty_id'],
-            ['specialty', 'specialties', 'specialty', 'specialty_id'],
-            ['level', 'levels', 'level_name', 'level_code'],
-            ['semester', 'semesters', 'semester', 'semester_code'],
-            ['group', 'groups', 'group', 'group_hemis_id'],
-            ['kafedra', 'kafedras', 'kafedra', 'kafedra_id'],
-            ['subject', 'subjects', 'subject', 'subject_id'],
-        ];
-        foreach ($steps as [$filter, $key, $label, $value]) {
-            $options[$key] = $filtered->pluck($label, $value)->filter()
-                ->pipe(fn ($c) => in_array($filter, ['level', 'semester'], true) ? $c->sortKeys() : $c->sort());
-            $selected = (string) ($f[$filter] ?? '');
-            if ($selected === '' || ($filter === 'faculty' && ($context['isDean'] || $context['isTeacher']))) {
-                continue;
-            }
-            $filtered = $filter === 'group'
-                ? $filtered->filter(fn ($r) => in_array($selected, $r->members, true))
-                : $filtered->where($value, $selected);
-        }
-        $filtered = $filtered
-            // YN sanasi — fanning oxirgi YN imtihoni (test yoki OSKI) shu oraliqda
-            ->when(!empty($f['yn_from']), fn ($c) => $c->filter(fn ($r) => $r->yn_date && $r->yn_date >= (string) $f['yn_from']))
-            ->when(!empty($f['yn_to']), fn ($c) => $c->filter(fn ($r) => $r->yn_date && $r->yn_date <= (string) $f['yn_to']))
-            ->when(trim($f['q'] ?? '') !== '', function ($c) use ($f) {
-                $q = mb_strtolower(trim($f['q']));
-
-                return $c->filter(fn ($r) => str_contains(mb_strtolower($r->group . ' ' . implode(' ', $r->member_names) . ' ' . $r->subject . ' '
-                    . $r->teachers->pluck('teacher_name')->implode(' ') . ' ' . ($r->dean->teacher_name ?? '')), $q));
-            });
-        $searched = !$filterMode || $request->boolean('search');
-        if (!$searched) {
-            $filtered = collect();
-        }
-        $counts = ['all' => $filtered->count()];
-        foreach (self::STATUSES as $status) {
-            $counts[$status] = $filtered->where('status', $status)->count();
+        $status = (string) $request->input('status', '');
+        $counts = ['all' => $rows->count()];
+        foreach (self::STATUSES as $s) {
+            $counts[$s] = $rows->where('status', $s)->count();
         }
         // "Topshirilmagan" — qisman topshirilganlar bilan (kafedra mudiriga hali o'tmagan)
         $counts[self::STATUS_NONE] += $counts[self::STATUS_PARTIAL];
-        if (in_array($f['status'] ?? '', self::STATUSES, true)) {
-            $filtered = $filtered->whereIn('status', $f['status'] === self::STATUS_NONE ? [self::STATUS_NONE, self::STATUS_PARTIAL] : [$f['status']]);
-        }
-        $filtered = $filtered->values();
+        $filtered = in_array($status, self::STATUSES, true)
+            ? $rows->whereIn('status', $status === self::STATUS_NONE ? [self::STATUS_NONE, self::STATUS_PARTIAL] : [$status])->values()
+            : $rows->values();
 
         $page = LengthAwarePaginator::resolveCurrentPage();
         $items = $filtered->forPage($page, self::PER_PAGE)->values();
@@ -150,8 +99,7 @@ class YnQaydnomaListController extends Controller
             ['path' => $request->url(), 'query' => $request->query()]);
 
         return view('admin.yn-qaydnomalar.index', $context + [
-            'rows' => $paginator, 'counts' => $counts, 'options' => $options, 'filters' => $f + ['current' => $current ? '1' : '0'],
-            'searched' => $searched,
+            'rows' => $paginator, 'counts' => $counts, 'filters' => ['status' => $status, 'current' => $current ? '1' : '0'],
         ]);
     }
 
@@ -183,8 +131,7 @@ class YnQaydnomaListController extends Controller
             ->when($kafedraHemisIds !== null, fn ($q) => $q->whereIn('cs.department_id', $kafedraHemisIds ?: ['-']))
             ->where(fn ($q) => $q->where('es.oski_date', '<=', $today)->orWhere('es.test_date', '<=', $today))
             ->select('es.group_hemis_id', 'es.subject_id', 'es.semester_code', 'es.oski_date', 'es.test_date', 'es.oski_na', 'es.test_na',
-                'es.subject_name as exam_subject_name', 'cs.subject_name', 'cs.semester_name', 'cs.closing_form', 'cs.department_id as kafedra_id',
-                'cs.department_name as kafedra_name', 'g.id as group_pk',
+                'es.subject_name as exam_subject_name', 'cs.subject_name', 'cs.semester_name', 'cs.closing_form', 'cs.department_id as kafedra_id', 'g.id as group_pk',
                 'g.name as group_name', 'g.department_hemis_id', 'g.specialty_hemis_id', 'dep.name as faculty_name',
                 'sp.name as specialty_name', 's.level_code', 's.level_name', 'g.curriculum_hemis_id')
             ->get()
@@ -259,6 +206,31 @@ class YnQaydnomaListController extends Controller
             ->filter(fn ($row) => !$currentSemester || $row->current || $row->status !== self::STATUS_NONE)
             ->sortBy(fn ($r) => [array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_DEAN]), $r->group, $r->subject])
             ->values();
+    }
+
+    /**
+     * Berilgan guruh × fanlar (group_hemis_id, subject_id, semester_code) ning qaydnoma holati —
+     * kichik guruhlar bitta qatorda; topshirmaganlarga — hali topshirmagan o'qituvchilar
+     * (Vedomost tekshirish → Vedomostlar holati).
+     */
+    public function statusFor(Collection $refs): Collection
+    {
+        if ($refs->isEmpty()) {
+            return collect();
+        }
+        $key = self::keyFn();
+        $entries = $this->withFamilies($this->entries($refs->keyBy($key)));
+        [$confirmations, $rejections] = $this->statusData($entries->flatMap(fn ($r) => $r->members)->unique()->values()->all());
+        $today = Carbon::today()->toDateString();
+        $rows = $entries->map(function ($r) use ($confirmations, $rejections, $today) {
+            $row = $this->makeRow($r, $confirmations, $rejections);
+            $row->exams_finished = self::examsFinished($r, $today);
+
+            return $row;
+        })->sortBy(fn ($r) => [$r->group, $r->subject])->values();
+        $this->attachPendingTeachers($rows);
+
+        return $rows;
     }
 
     private static function keyFn(): \Closure
@@ -344,8 +316,6 @@ class YnQaydnomaListController extends Controller
             'group' => $r->group_name,
             'faculty_id' => (string) $r->department_hemis_id,
             'kafedra_id' => (string) ($r->kafedra_id ?? ''),
-            'kafedra' => (string) ($r->kafedra_name ?? ''),
-            'curriculum_hemis_id' => $r->curriculum_hemis_id ?? null,
             'faculty' => $r->faculty_name ?? '',
             'specialty_id' => (string) $r->specialty_hemis_id,
             'specialty' => $r->specialty_name ?? '',
@@ -357,8 +327,6 @@ class YnQaydnomaListController extends Controller
             'semester' => $r->semester_name ?? $r->semester_code,
             'oski_date' => $r->oski_na ? null : $r->oski_date,
             'test_date' => $r->test_na ? null : $r->test_date,
-            'yn_date' => collect([$r->oski_na ? null : $r->oski_date, $r->test_na ? null : $r->test_date])->filter()
-                ->map(fn ($d) => substr((string) $d, 0, 10))->max(),
             'finished_at' => max((string) $r->oski_date, (string) $r->test_date, (string) ($all->first()?->confirmed_at), (string) ($rejection?->rejected_at)),
             'members' => $members,
             'member_names' => $r->member_names ?? [],
@@ -400,7 +368,7 @@ class YnQaydnomaListController extends Controller
             ->keyBy(fn ($s) => $s->curriculum_hemis_id . '|' . $s->code);
         $subjects = DB::table('curriculum_subjects')->whereIn('curricula_hemis_id', $curricula)
             ->whereIn('subject_id', $subjectIds)
-            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name', 'closing_form', 'department_id', 'department_name'])
+            ->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'semester_name', 'closing_form', 'department_id'])
             ->keyBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code);
         $exams = DB::table('exam_schedules')->whereNull('student_hemis_id')
             ->whereIn('group_hemis_id', $groups->keys())
@@ -424,7 +392,6 @@ class YnQaydnomaListController extends Controller
                 'oski_na' => $exam->oski_na ?? false, 'test_na' => $exam->test_na ?? false,
                 'closing_form' => $subject->closing_form ?? null,
                 'kafedra_id' => $subject->department_id ?? null,
-                'kafedra_name' => $subject->department_name ?? null,
                 'exam_subject_name' => $exam->subject_name ?? ($c->subject_name ?? ($verification->subject_name ?? ('Fan #' . $c->subject_id))),
                 'subject_name' => $subject->subject_name ?? null,
                 'semester_name' => $subject->semester_name ?? ($verification->semester_name ?? null),

@@ -98,26 +98,49 @@ it('shows the dean every finished vedomost of their faculty with who submitted a
         ->and($rows['d1/d22-02a']->params)->toBeNull();
 });
 
-it('shows the registrar every faculty, with PDF for dean-confirmed ones', function () {
+it('gives the registrar the Vedomost tekshirish filters and the status of any group and subject', function () {
     DB::table('teachers')->insert(['id' => 5, 'hemis_id' => 500, 'full_name' => 'REGISTRATOR']);
     DB::table('roles')->insert(['id' => 2, 'name' => 'registrator_ofisi', 'guard_name' => 'web']);
     DB::table('model_has_roles')->insert(['role_id' => 2, 'model_type' => \App\Models\Teacher::class, 'model_id' => 5]);
     Auth::guard('teacher')->login(\App\Models\Teacher::find(5));
     session(['active_role' => 'registrator_ofisi']);
+    $this->app->instance(\App\Http\Controllers\Admin\VedomostTekshirishController::class, new class extends \App\Http\Controllers\Admin\VedomostTekshirishController {
+        public function filterViewData(): array
+        {
+            return ['faculties' => collect(), 'educationTypes' => collect(), 'kafedras' => collect(), 'dekanFacultyIds' => [], 'defaultEducationType' => ''];
+        }
+    });
 
-    // Filtrsiz — ro'yxat yo'q, "Ko'rsatish" (search) bosilgach chiqadi
-    $empty = ($this->page)();
-    expect($empty['searched'])->toBeFalse()
-        ->and($empty['rows']->total())->toBe(0)
-        ->and($empty['options']['faculties']->all())->toBe(['11' => '1-son davolash', '22' => 'Pediatriya']);
+    $view = (new YnQaydnomaListController())->index(\Illuminate\Http\Request::create('/admin/yn-qaydnomalar'));
+    expect($view->name())->toBe('admin.yn-qaydnomalar.holat');
 
-    $data = ($this->page)(['search' => 1]);
-    expect(collect($data['rows']->items())->pluck('group')->sort()->values()->all())->toBe(['d1/d22-01a', 'd1/d22-02a', 'p/22-01'])
-        ->and($data['canPdf'])->toBeTrue()
-        ->and(collect(($this->page)(['faculty' => '22', 'search' => 1])['rows']->items())->pluck('group')->all())->toBe(['p/22-01']);
-    // Bog'langan filtrlar: fakultet tanlansa — guruhlar faqat shu fakultetniki
-    expect(($this->page)(['faculty' => '22'])['options']['groups']->values()->all())->toBe(['p/22-01'])
-        ->and(($this->page)()['isDean'])->toBeFalse();
+    // Filtr natijasidagi guruh × fanlar holati: tasdiqlangan, topshirilishi kerak, YN hali tugamagan
+    $rows = (new YnQaydnomaListController())->statusFor(collect([['77', '27'], ['78', '27'], ['77', '30'], ['88', '27']])
+        ->map(fn ($x) => (object) ['group_hemis_id' => $x[0], 'subject_id' => $x[1], 'semester_code' => '19']))
+        ->keyBy(fn ($r) => $r->group . '|' . $r->subject_id);
+    expect($rows['d1/d22-01a|27']->status)->toBe('dean')
+        ->and($rows['d1/d22-02a|27']->status)->toBe('none')
+        ->and($rows['d1/d22-02a|27']->exams_finished)->toBeTrue()
+        ->and($rows['d1/d22-02a|27']->pending_teachers->all())->toBe(['KARIMOV A.'])
+        ->and($rows['d1/d22-01a|30']->status)->toBe('none')
+        ->and($rows['d1/d22-01a|30']->exams_finished)->toBeFalse()                    // test 12.11 da — hali tugamagan
+        ->and($rows['p/22-01|27']->status)->toBe('none');
+
+    // Sahifa uchun JSON: holat, PDF havolalari (faqat dekan tasdiqlaganida), YN tugamagani — "waiting"
+    $vt = new class extends \App\Http\Controllers\Admin\VedomostTekshirishController {
+        protected function searchRows(\Illuminate\Http\Request $request): array
+        {
+            return array_map(fn ($x) => ['group_hemis_id' => $x[0], 'subject_id' => $x[1], 'semester_code' => '19', 'subject_name' => 'Fan'],
+                [['77', '27'], ['78', '27'], ['77', '30']]);
+        }
+    };
+    $items = collect($vt->holat(\Illuminate\Http\Request::create('/x'))->getData(true)['items'])->keyBy(fn ($i) => $i['group'] . '|' . $i['subject']);
+    expect($items['d1/d22-01a|Akusherlik']['status'])->toBe('dean')
+        ->and($items['d1/d22-01a|Akusherlik']['pdf_view_url'])->toContain('inline=1')
+        ->and($items['d1/d22-01a|Akusherlik']['dean']['name'])->toBe('DEKAN')
+        ->and($items['d1/d22-02a|Akusherlik']['status'])->toBe('none')
+        ->and($items['d1/d22-02a|Akusherlik']['pdf_url'])->toBeNull()
+        ->and($items['d1/d22-01a|Pediatriya']['status'])->toBe('waiting');
 });
 
 it('lists a submitted vedomost even before its exams finish or when it has no exam schedule', function () {
@@ -251,24 +274,9 @@ it('shows subgroups a/b as one vedomost that waits for every subgroup teacher', 
         ->and($row->teachers->pluck('teacher_name')->sort()->values()->all())->toBe(['KARIMOV A.', 'SOBIROV B.']);
 });
 
-it('filters by status and group', function () {
+it('filters by status', function () {
     expect(collect(($this->page)(['status' => 'none'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-02a'])
-        ->and(collect(($this->page)(['group' => '77'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-01a']);
-});
-
-it('filters by education type, kafedra, subject and YN date, and offers only the options of the list', function () {
-    Schema::create('curricula', fn ($t) => [$t->id(), $t->string('curricula_hemis_id'), $t->string('education_type_code')->nullable(), $t->string('education_type_name')->nullable()]);
-    DB::table('curricula')->insert(['curricula_hemis_id' => '5', 'education_type_code' => '11', 'education_type_name' => 'Bakalavr']);
-    $groups = fn (array $q) => collect(($this->page)($q)['rows']->items())->pluck('group')->sort()->values()->all();
-
-    $data = ($this->page)();
-    expect($data['options']['kafedras']->all())->toBe(['55' => 'Akusherlik kafedrasi'])
-        ->and($data['options']['educationTypes']->all())->toBe(['11' => 'Bakalavr'])
-        ->and($data['options']['subjects']->all())->toBe(['27' => 'Akusherlik']);
-    expect($groups(['education_type' => '11', 'kafedra' => '55', 'subject' => '27', 'semester' => '19']))->toBe(['d1/d22-01a', 'd1/d22-02a'])
-        ->and($groups(['education_type' => '12']))->toBe([])
-        ->and($groups(['yn_from' => '2026-11-06']))->toBe(['d1/d22-02a'])            // 01a ning testi 05.11 da
-        ->and($groups(['yn_to' => '2026-11-05', 'status' => 'dean']))->toBe(['d1/d22-01a']);
+        ->and(collect(($this->page)(['status' => 'dean'])['rows']->items())->pluck('group')->all())->toBe(['d1/d22-01a']);
 });
 
 it('decides finished exams by the closing form', function () {
@@ -281,11 +289,13 @@ it('decides finished exams by the closing form', function () {
         ->and(YnQaydnomaListController::examsFinished($row([]), '2026-11-09'))->toBeFalse();
 });
 
-it('compiles the page template', function () {
-    $php = \Illuminate\Support\Facades\Blade::compileString(file_get_contents(resource_path('views/admin/yn-qaydnomalar/index.blade.php')));
-    $file = tempnam(sys_get_temp_dir(), 'blade') . '.php';
-    file_put_contents($file, $php);
-    exec('php -l ' . escapeshellarg($file), $out, $code);
-    unlink($file);
-    expect($code)->toBe(0);
+it('compiles the page templates', function () {
+    foreach (['admin/yn-qaydnomalar/index', 'admin/yn-qaydnomalar/holat', 'admin/vedomost_tekshirish/index'] as $view) {
+        $php = \Illuminate\Support\Facades\Blade::compileString(file_get_contents(resource_path("views/{$view}.blade.php")));
+        $file = tempnam(sys_get_temp_dir(), 'blade') . '.php';
+        file_put_contents($file, $php);
+        exec('php -l ' . escapeshellarg($file), $out, $code);
+        unlink($file);
+        expect($code)->toBe(0);
+    }
 });

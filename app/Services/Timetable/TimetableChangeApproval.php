@@ -336,9 +336,20 @@ class TimetableChangeApproval
         // Takliflarning o'z oqimi bor (week-suggestions/propose) — umumiy ushlash ularga tegmaydi.
         return in_array($activeRole, self::GATED_ROLES, true)
             && (string) optional($request->route())->getName() !== TimetableController::SUGGESTION_ROUTE
+            && !self::isUnitMerge($request)
             && isset(self::GATED[(string) optional($request->route())->getName()])
             && self::isChange($request)
             && self::boardRequiresApproval($board);
+    }
+
+    /**
+     * "Yaxlitlash" (unit-fix action=merge) — bo'lingan amaliy darsni bir kunga ketma-ket yig'ish: tuzatish, yangi joy tanlash emas.
+     * Kafedra mudiri (o'z kafedrasi fanlari — controller tekshiradi) uchun ham tasdiq rejimida darhol qo'llanadi; bandlik tekshiruvi
+     * qoladi (sig'masa — 422, hech narsa o'zgarmaydi), natija tarixga yoziladi (runRecorded).
+     */
+    public static function isUnitMerge(Request $request): bool
+    {
+        return (string) optional($request->route())->getName() === 'admin.timetable.boards.unit-fix' && (string) $request->input('action') === 'merge';
     }
 
     /** O'qituvchi/xona birinchi marta biriktirilmoqda (bo'sh joyga) — tasdiq kerak emas. */

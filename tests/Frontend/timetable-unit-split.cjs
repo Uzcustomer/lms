@@ -47,7 +47,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 require('./helpers/timetable-info-only.cjs')(ctx);
-vm.runInContext(code + '\nObject.assign(this, { placeUnitAt, unitState, unitIsSplit, unitDaysText, unitMovePlan, weeklySplitUnits, splitHeadHtml, runUnitFix, placeOneCard, placeCardWithRoom, placeRoomCandidates, unitFixErr });', ctx);
+vm.runInContext(code + '\nObject.assign(this, { placeUnitAt, unitState, unitIsSplit, unitDaysText, unitMovePlan, weeklySplitUnits, splitHeadHtml, runUnitFix, placeOneCard, placeCardWithRoom, placeRoomCandidates, unitFixErr, unitFixPending });', ctx);
 ctx.weekActiveCards = () => ctx.cards;
 const W = 11;
 const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, cancelled: false }; };
@@ -96,6 +96,22 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
     assert.deepEqual(calls.find(x => x[0] === '/boards/7/unit-fix'), ['/boards/7/unit-fix', { week: 11, action: 'merge', card_ids: [708676, 708674, 708675] }]);
     assert.ok(calls.some(x => x[0] === 'reload'));
     assert.match(ctx.splitHeadHtml(units), /pn-split-err[^>]*>✖ 6 soat sig'maydi: 13:30 dan keyin bo'sh joy yo'q — Guruh band/);
+
+    // 3b) Sig'madi — server 422 (failed + sabab): xato tashlanadi, lekin sabab kartada (umumiy "Xatolik" emas).
+    const api0 = ctx.api;
+    ctx.api = async () => { const e = new Error("Yaxlitlab bo'lmadi: 6 soat sig'maydi"); e.status = 422;
+        e.data = { ok: false, done: 0, failed: [{ group: 'd1/d26-03a', subject: base.subject_name, card_ids: [708676], error: "6 soat sig'maydi (422)" }] }; throw e; };
+    await ctx.runUnitFix(null, 'merge', [units.get(key)]);
+    assert.match(ctx.splitHeadHtml(units), /✖ 6 soat sig'maydi \(422\)/);
+    // 3c) Tasdiq rejimi (pending_approval): "Yaxlitlandi: 0 ta" oynasi chiqmaydi; qatorda "tasdiq kutilmoqda (№130513)", tugma o'chiq.
+    ctx.api = api0;
+    ctx.fixReply = { ok: true, pending_approval: true, change_request_id: 130513, message: "O'zgarish registrator ofisi va o'quv bo'limiga tasdiqlash uchun yuborildi." };
+    const shown = doc.body.children.length;
+    await ctx.runUnitFix(null, 'merge', [units.get(key)]);
+    assert.equal(doc.body.children.length, shown);
+    assert.match(ctx.splitHeadHtml(units), /data-unit-merge="[^"]*" disabled/);
+    assert.match(ctx.splitHeadHtml(units), /⏳ tasdiq kutilmoqda \(№130513\)/);
+    for (const k in ctx.unitFixPending) delete ctx.unitFixPending[k];
 
     // 4) Bitta bo'lakni katakka qo'yish (tanlash → katak, sudrash emas): butun birlik unit-place bilan — 708676 chorshanba 08:30 da,
     //    birinchi bo'lak boshi 1-qator; week-override (bitta bo'lak) yuborilmaydi.

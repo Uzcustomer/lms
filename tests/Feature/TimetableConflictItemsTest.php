@@ -99,7 +99,7 @@ it('week-override 422 va unit-fix (Yaxlitlash) natijasi ham conflict_items bilan
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09a', 'day' => 4, 'pair' => 7]));
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09b', 'day' => 4, 'pair' => 1]));
     $f = ciAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['card']->id]])
-        ->assertOk()->json('failed.0');
+        ->assertUnprocessable()->json('failed.0');
     expect($f['conflict_items'][0])->toMatchArray(['kind' => 'teacher', 'who' => 'NUROVA Z. A.', 'groups' => ['d1/d26-09a']]);
 });
 

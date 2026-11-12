@@ -593,6 +593,8 @@ trait TimetableWeeklyUnits
         $only = !empty($data['card_ids']) ? array_flip(array_map('intval', $data['card_ids'])) : null;
         $done = 0;
         $failed = [];
+        $merged = [];
+        $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
         foreach ($this->partialUnitList($board, [$week], $scope, $merge ? ['split'] : ['partial']) as $u) {
             if ($only !== null && !array_intersect_key(array_flip($u['card_ids']), $only)) {
                 continue;
@@ -627,9 +629,22 @@ trait TimetableWeeklyUnits
             }
             $this->unitWrite($cards, $week, $result[2], $result[1]);
             $done++;
+            if ($merge && $result[1]) {
+                // "Yaxlitlandi: d1/d26-03a — Chorshanba 08:30–13:20" (yangi joy: kun va birlikning boshidan oxirigacha vaqti).
+                $from = min($result[1]);
+                $to = max(array_map(fn ($c) => isset($result[1][$c->id]) ? (int) $result[1][$c->id] + $c->lenHalf() : 0, $cards->all()));
+                $when = ($dayNames[(int) $result[2] - 1] ?? $result[2] . '-kun') . ' ' . $this->halfRangeTime($board, [(int) $from - 1, $to - 1]);
+                $merged[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => (int) $result[2], 'when' => $when,
+                    'text' => $u['group'] . ' — ' . $when];
+            }
+        }
+        if ($merge && !$done && $failed) {
+            // Sig'madi — hech narsa o'zgarmadi: 422, sababi tuzilgan bloklar (conflict_items) bilan.
+            return response()->json(['error' => 'Yaxlitlab bo\'lmadi: ' . $failed[0]['error'], 'ok' => false, 'done' => 0, 'failed' => $failed], 422);
         }
 
-        return response()->json(['ok' => true, 'done' => $done, 'failed' => $failed]);
+        return response()->json(['ok' => true, 'done' => $done, 'failed' => $failed]
+            + ($merge && $merged ? ['merged' => $merged, 'message' => 'Yaxlitlandi: ' . implode('; ', array_column($merged, 'text'))] : []));
     }
 
     /**

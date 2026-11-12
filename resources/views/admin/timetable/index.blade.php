@@ -3514,8 +3514,13 @@
                 box.appendChild(t);
                 setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 6500);
             }
+            // Umumiy qoida (barcha tugmalar): pending_approval — server xabari ("So'rov … yuborildi") va so'rov raqami (№…), so'rovlar ro'yxati
+            // qayta yuklanadi; tugma egasi qatorda "tasdiq kutilmoqda" ko'rsatadi (masalan unitFixPending).
+            function pendingApprovalText(j) {
+                return (j && j.message ? j.message : "So'rov tasdiqqa yuborildi.") + (j && j.change_request_id ? ' (№' + j.change_request_id + ')' : '');
+            }
             function onPendingApproval(j) {
-                ttToast('<b>&#9203; Tasdiqqa yuborildi</b><div>' + esc(j.summary || '') + '</div><div class="tt-toast-sub">' + esc(j.message || '') + '</div>', 'warn');
+                ttToast('<b>&#9203; Tasdiqqa yuborildi</b><div>' + esc(j.summary || '') + '</div><div class="tt-toast-sub" data-pending-msg>' + esc(pendingApprovalText(j)) + '</div>', 'warn');
                 clearTimeout(pendingReloadTimer);
                 pendingReloadTimer = setTimeout(async () => {
                     if (!board) return;
@@ -12558,6 +12563,7 @@
             // ===== "Joylanmagan kartalar" paneli: qisman joylangan birlik belgisi, yaxlit joylash natijasi, karta oynasi =====
             const unitFixErr = {};   // birlik kaliti → oxirgi "yaxlit joylanmadi" sababi (kartada qizil izoh)
             const unitFixItems = {};   // birlik kaliti → tuzilgan sabablar (server conflict_items) — turlarga ajratilgan bloklar
+            const unitFixPending = {};   // birlik kaliti → tasdiqqa yuborilgan so'rov raqami (tasdiq rejimi: "tasdiq kutilmoqda", tugma o'chiq)
             const unitEditable = () => weeklyCanEdit() && !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek;
             // Shu haftadagi bo'lingan birliklar (birlik kaliti → unitState + card): faqat amaliy, qamrovdagi (weekActiveCards).
             function weeklySplitUnits(uIdx = buildUnitIndex()) {
@@ -12575,11 +12581,12 @@
                 return '<div class="pn-split" data-pn-split style="border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
                     'Bo\'lingan: <b>' + units.size + ' ta</b> <span style="color:#b91c1c">(bir kunda bir fandan amaliy soatlar bo\'linmaydi)</span>' +
                     [...units.entries()].map(([k, st]) => {
-                        const err = unitFixErr[k], errItems = unitFixItems[k];
+                        const err = unitFixErr[k], errItems = unitFixItems[k], pend = unitFixPending[k];
                         return '<div class="pn-split-item" data-split-key="' + esc(k) + '" style="margin-top:3px;border-top:1px dotted #fecaca;padding-top:3px">' +
                             '<a href="#" data-split-go="' + esc(k) + '" style="text-decoration:underline dotted">' + esc(cardGroups(st.card).join(', ') + ' · ' + st.card.subject_name) + '</a>' +
                             ' — ' + st.len + ' soat (' + st.list.map(cardLen).join('+') + '): <span data-split-days>' + esc(unitDaysText(st.list)) + '</span>' +
-                            (unitEditable() ? ' <button type="button" data-unit-merge="' + esc(k) + '" title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
+                            (unitEditable() ? ' <button type="button" data-unit-merge="' + esc(k) + '"' + (pend ? ' disabled' : '') + ' title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
+                            (pend ? ' <span data-unit-pending style="color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend !== true ? ' (№' + esc(pend) + ')' : '') + '</span>' : '') +
                             (err ? (errItems && errItems.length
                                 ? '<div class="pn-split-err" style="margin-top:2px">' + cbHtml(cbBlocks(errItems), false, { compact: true }) + '</div>'
                                 : '<div class="pn-split-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>') : '') + '</div>';
@@ -12587,14 +12594,16 @@
             }
             // "Qisman: 3 soatdan 2 soati joylangan (Seshanba 10:00); qolgani 1 soat" + shu birlik tugmalari (+ qizil izoh).
             function partialBadgeHtml(st, err) {
+                const pend = unitFixPending[unitKey(st.card)];
                 const placed = st.placed.slice().sort((a, b) => placeInWeek(a, curWeek).pair - placeInWeek(b, curWeek).pair);
                 const at = placed.length ? placeInWeek(placed[0], curWeek) : null;
                 const placedLen = unitLen(placed);
                 const when = at ? ' (' + ((boardDayNames()[at.day - 1]) || (at.day + '-kun')) + ' ' + slotStart(at.pair) + ')' : '';
                 return '<div class="pn-partial-badge" style="margin-top:3px;font-size:10px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:2px 4px">' +
                     'Qisman: ' + st.len + ' soatdan ' + placedLen + ' soati joylangan' + esc(when) + '; qolgani ' + (st.len - placedLen) + ' soat' +
-                    (unitEditable() ? '<div style="margin-top:2px"><button type="button" data-unit-fix="complete" data-unit-card="' + st.card.id + '" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">yaxlit joylash</button> ' +
-                        '<button type="button" data-unit-fix="clear" data-unit-card="' + st.card.id + '" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 5px">yaxlit bo\'shatish</button></div>' : '') +
+                    (unitEditable() ? '<div style="margin-top:2px"><button type="button" data-unit-fix="complete" data-unit-card="' + st.card.id + '"' + (pend ? ' disabled' : '') + ' style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">yaxlit joylash</button> ' +
+                        '<button type="button" data-unit-fix="clear" data-unit-card="' + st.card.id + '"' + (pend ? ' disabled' : '') + ' style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 5px">yaxlit bo\'shatish</button></div>' : '') +
+                    (pend ? '<div data-unit-pending style="margin-top:2px;color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend !== true ? ' (№' + esc(pend) + ')' : '') + '</div>' : '') +
                     (err ? '<div class="pn-partial-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>' : '') + '</div>';
             }
             // unit-fix: faqat berilgan birliklar (card_ids); natija — sahifa ichidagi oynada, sig'maganlari kartada qizil izoh bilan.
@@ -12607,8 +12616,21 @@
                 let r;
                 try {
                     r = await api(BASE + '/boards/' + board.id + '/unit-fix', 'POST', { week: curWeek, action, card_ids: units.flatMap(st => st.list.map(x => x.id)) });
-                } catch (e) { if (btn) btn.disabled = false; showUnitFixResult({ error: e.message }, action, units); return; }
+                } catch (e) {
+                    if (btn) btn.disabled = false;
+                    // Sig'madi (422) — hech narsa o'zgarmadi: sababi tuzilgan bloklar bilan (failed + conflict_items).
+                    if (e && e.data && Array.isArray(e.data.failed) && e.data.failed.length) r = e.data;
+                    else { showUnitFixResult({ error: e.message }, action, units); return; }
+                }
                 units.forEach(st => { delete unitFixErr[unitKey(st.card)]; delete unitFixItems[unitKey(st.card)]; });
+                // Tasdiq rejimi (so'rov yuborildi): "Yaxlitlandi: 0 ta" emas — qatorda "tasdiq kutilmoqda", tugma o'chiq (onPendingApproval —
+                // xabar va so'rovlar ro'yxati).
+                if (r && r.pending_approval) {
+                    units.forEach(st => { unitFixPending[unitKey(st.card)] = r.change_request_id || true; });
+                    if (btn) btn.disabled = true;
+                    renderPanel();
+                    return;
+                }
                 (r && r.failed || []).forEach(f => {
                     const st = units.find(u => u.list.some(x => (f.card_ids || []).includes(x.id)));
                     if (st) { unitFixErr[unitKey(st.card)] = f.error; unitFixItems[unitKey(st.card)] = Array.isArray(f.conflict_items) ? f.conflict_items : null; }
@@ -12625,8 +12647,8 @@
                 m.setAttribute('role', 'dialog');
                 m.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
                 const failed = (r && r.failed) || [];
-                const head = r.error ? 'Xatolik: ' + r.error
-                    : action === 'merge' ? (failed.length ? 'Yaxlitlab bo\'lmadi — hech narsa o\'zgarmadi' : 'Yaxlitlandi: ' + (r.done || 0) + ' ta')
+                const head = r.error && !failed.length ? 'Xatolik: ' + r.error
+                    : action === 'merge' ? (failed.length ? 'Yaxlitlab bo\'lmadi — hech narsa o\'zgarmadi' : (r.message || 'Yaxlitlandi: ' + (r.done || 0) + ' ta'))
                     : (action === 'clear' ? 'Yaxlit bo\'shatildi: ' : 'Yaxlit joylandi: ') + (r.done || 0) + ' ta' + (failed.length ? ' · joylanmadi: ' + failed.length + ' ta' : '');
                 m.innerHTML = '<div style="background:#fff;border-radius:10px;max-width:560px;width:100%;max-height:80vh;overflow:auto;padding:12px 16px;box-shadow:0 20px 60px #0004;font-size:12px">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>' + esc(head) + '</b>' +

@@ -12130,23 +12130,28 @@ class JournalController extends Controller
         }
     }
 
-    /** Matn va undan keyin ko'k qo'shimcha ("— tasdiqlagan") — katak shrifti bilan */
-    private static function withConfirmedMark(\PhpOffice\PhpSpreadsheet\Style\Font $font, array $parts): \PhpOffice\PhpSpreadsheet\RichText\RichText
+    /**
+     * Ism yonidagi katakka ko'k "— tasdiqlagan" — oddiy katak uslubi bilan (RichText emas: uning shrifti
+     * HTML da katakning ichki uslubiga yoziladi va PDF masshtabida kichraymaydi), o'lchami ism katagidek.
+     */
+    private static function confirmedMark(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, string $cell, string $nameCell, string $text): void
     {
-        $text = new \PhpOffice\PhpSpreadsheet\RichText\RichText();
-        foreach ($parts as $i => [$value, $mark]) {
-            $text->createTextRun(($i ? ', ' : '') . $value)->setFont(clone $font);
-            if ($mark !== null) {
-                $markFont = (clone $font)->setBold(true);
-                $markFont->getColor()->setARGB(self::YNQ_CONFIRMED_COLOR);
-                $text->createTextRun(' — ' . $mark)->setFont($markFont);
-            }
-        }
-
-        return $text;
+        // Avval ism katagi shrifti o'qiladi: getStyle() varaqning tanlangan katagini almashtiradi
+        $nameFont = $sheet->getStyle($nameCell)->getFont();
+        [$fontName, $fontSize] = [$nameFont->getName(), $nameFont->getSize()];
+        $sheet->setCellValue($cell, '— ' . $text);
+        $style = $sheet->getStyle($cell);
+        $style->getFont()->setName($fontName)->setSize($fontSize)->setBold(true)->setItalic(false)
+            ->getColor()->setARGB(self::YNQ_CONFIRMED_COLOR);
+        $style->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT)
+            ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_BOTTOM)->setWrapText(false);
+        $style->getBorders()->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
     }
 
-    /** Sarlavhadagi amaliyot o'qituvchilari (S10–S12): tasdiqlaganlari ismidan keyin ko'k "— tasdiqlagan" */
+    /**
+     * Sarlavhadagi amaliyot o'qituvchilari (ismlar S10–S12, S:U): tasdiqlagan bo'lsa yonida (V) ko'k
+     * "— tasdiqlagan"; bir katakda bir nechta ism bo'lsa — hammasi tasdiqlaganda.
+     */
     private static function markHeaderTeachers(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, \Illuminate\Support\Collection $teachers): void
     {
         $confirmed = $teachers->map(fn ($c) => self::abbreviateName($c->teacher_name))->all();
@@ -12158,9 +12163,9 @@ class JournalController extends Controller
             if (!is_string($value) || trim($value) === '') {
                 continue;
             }
-            $parts = array_map(fn ($name) => [$name, in_array(trim($name), $confirmed, true) ? 'tasdiqlagan' : null], explode(', ', $value));
-            if (array_filter(array_column($parts, 1))) {
-                $sheet->getCell("S{$r}")->setValue(self::withConfirmedMark($sheet->getStyle("S{$r}")->getFont(), $parts));
+            $names = array_map('trim', explode(', ', $value));
+            if (!array_diff($names, $confirmed)) {
+                self::confirmedMark($sheet, "V{$r}", "S{$r}", 'tasdiqlagan');
             }
         }
     }
@@ -12174,12 +12179,8 @@ class JournalController extends Controller
         $row = self::YNQ_SIGN_ROW + self::ynqExtraRows($sheet);
         $merges = $sheet->getMergeCells();
         if ($head) {
-            if (isset($merges["U{$row}:W{$row}"])) {
-                $sheet->unmergeCells("U{$row}:W{$row}");
-                $sheet->mergeCells("U{$row}:" . self::YNQ_LAST_COL . $row);
-            }
-            $sheet->getCell("U{$row}")->setValue(self::withConfirmedMark($sheet->getStyle("U{$row}")->getFont(),
-                [[self::initialsName($head->teacher_name), 'Tasdiqlagan']]));
+            $sheet->getCell("U{$row}")->setValue(self::initialsName($head->teacher_name));
+            self::confirmedMark($sheet, self::YNQ_LAST_COL . $row, "U{$row}", 'Tasdiqlagan');
         }
         if (!$dean) {
             return;

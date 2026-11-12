@@ -223,18 +223,21 @@ describe('teacher confirmation', function () {
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
         $w = $sheet->getSheet(0);
-        $header = $w->getCell('S10')->getValue();
-        // Sarlavhada tasdiqlagan o'qituvchi ismidan keyin ko'k "— tasdiqlagan"; QR yo'q (faqat dekandan keyin)
-        expect($header)->toBeInstanceOf(\PhpOffice\PhpSpreadsheet\RichText\RichText::class)
-            ->and($header->getPlainText())->toBe('IZZATULLAYEV O. — tasdiqlagan')
-            ->and($header->getRichTextElements()[1]->getFont()->getColor()->getARGB())->toBe('FF1D4ED8')
+        // Sarlavhada tasdiqlagan o'qituvchi ismidan keyin (alohida katakda) ko'k "— tasdiqlagan", ism shriftida;
+        // QR yo'q (faqat dekandan keyin)
+        expect($w->getCell('S10')->getValue())->toBe('IZZATULLAYEV O.')
+            ->and($w->getCell('V10')->getValue())->toBe('— tasdiqlagan')
+            ->and($w->getStyle('V10')->getFont()->getColor()->getARGB())->toBe('FF1D4ED8')
+            ->and($w->getStyle('V10')->getFont()->getSize())->toBe($w->getStyle('S10')->getFont()->getSize())
+            ->and($w->getCell('V11')->getValue())->toBeNull()
             ->and($w->getCell('S11')->getValue())->toBe('KARIMOVA L.')
             ->and($w->getCell('B60')->getValue())->toContain('Fakultet dekani')
             ->and($w->getDrawingCollection())->toHaveCount(0)
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);
 
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
-        expect($html)->toContain('— tasdiqlagan')->toContain('#1D4ED8')->not->toContain('<img alt=');
+        expect($html)->toContain('— tasdiqlagan')->toContain('#1D4ED8')->not->toContain('<img alt=')
+            ->not->toContain('<span style="');                                  // RichText emas — PDF da kichrayadi
     });
 
     it('does not let the teacher revoke their own confirmation', function () {
@@ -286,7 +289,8 @@ describe('teacher confirmation', function () {
         $w = $sheet->getSheet(0);
         $drawings = collect($w->getDrawingCollection());
         // Pastda: kafedra mudiri — ismi va "— Tasdiqlagan"; dekan — ismi va undan keyin yagona qizil QR
-        expect($w->getCell('U60')->getValue()->getPlainText())->toBe('D.A.Xurmatova — Tasdiqlagan')
+        expect($w->getCell('U60')->getValue())->toBe('D.A.Xurmatova')
+            ->and($w->getCell('X60')->getValue())->toBe('— Tasdiqlagan')
             ->and($w->getCell('E60')->getValue())->toBe('N.Sagirayev')
             ->and($drawings)->toHaveCount(1)
             ->and($drawings[0]->getDescription())->toStartWith('Hujjat QR: SAGIRAYEV N.')
@@ -305,6 +309,8 @@ describe('teacher confirmation', function () {
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
         expect($html)->toMatch('/<div class="ynq-qr"><img alt="Hujjat QR: SAGIRAYEV N\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:84px;height:84px" \/><\/div>/')
             ->not->toContain('ynq-corner');
+        // PDF: har varaq bitta sahifa (sarlavha cho'zilib, pastki qism keyingi sahifaga o'tmaydi)
+        expect(preg_match_all('/\/Type\s*\/Page\b(?!s)/', JournalController::qaydnomaPdf($sheet)))->toBe(2);
 
         // QR skanerlansa — hujjatning barcha tasdiqlari va PDF havolasi
         $page = (new \App\Http\Controllers\DocumentVerificationController())->verify($dean->verification->token);
@@ -466,8 +472,8 @@ describe('teacher confirmation', function () {
 
         // Sarlavhada ikkala o'qituvchi "— tasdiqlagan"; hujjatda yagona QR — dekandan keyin
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '78', 30, 10, 0, 0, 60);
-        expect($sheet->getSheet(0)->getCell('S10')->getValue()->getPlainText())->toBe('IZZATULLAYEV O. — tasdiqlagan')
-            ->and($sheet->getSheet(0)->getCell('S11')->getValue()->getPlainText())->toBe('KARIMOVA L. — tasdiqlagan')
+        expect($sheet->getSheet(0)->getCell('V10')->getValue())->toBe('— tasdiqlagan')
+            ->and($sheet->getSheet(0)->getCell('V11')->getValue())->toBe('— tasdiqlagan')
             ->and(collect($sheet->getSheet(0)->getDrawingCollection())->map->getCoordinates()->values()->all())->toBe(['I60']);
 
         // Rad etilsa ikkala o'qituvchi tasdig'i bekor; ikkalasi qayta topshirgach rad etish yopiladi

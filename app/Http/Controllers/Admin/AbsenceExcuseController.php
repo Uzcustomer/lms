@@ -167,7 +167,7 @@ class AbsenceExcuseController extends Controller
         try {
             // Tasdiqlash uchun ma'lumotlarni oldindan o'rnatish
             if ($excuse->isPending()) {
-                // Kechikib tasdiqlansa, o'tib ketgan retake kunlari ertangi kundan qayta
+                // Kechikib tasdiqlansa, o'tib ketgan retake kunlari tasdiqlangan kundan qayta
                 // taqsimlanadi (farmoyish va Moodle broni yangi kunlar bo'yicha)
                 SababliRetakePlan::rescheduleIfLate($excuse, SababliRetakePlan::firstDay());
 

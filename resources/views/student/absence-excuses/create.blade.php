@@ -85,20 +85,22 @@
 
         /* ======= QAYTA TOPSHIRISH JADVALI (bir fandan kuniga bitta retake) ======= */
         .ae-plan-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
-        .ae-plan-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .ae-plan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .ae-plan-table th {
-            text-align: left; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;
-            letter-spacing: .04em; background: #f8fafc; padding: 8px 12px; border-bottom: 1px solid #e2e8f0;
+            text-align: left; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;
+            letter-spacing: .04em; background: #f8fafc; padding: 6px 10px; border-bottom: 1px solid #e2e8f0;
         }
-        .ae-plan-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: middle; }
+        .ae-plan-table td { padding: 5px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: middle; }
+        .ae-plan-table tbody:last-child tr:last-child td { border-bottom: none; }
+        .ae-plan-table td.ae-plan-act { width: 1%; padding-left: 4px; text-align: right; }
         .ae-plan-table tr:last-child td { border-bottom: none; }
         .ae-plan-table td.ae-plan-date { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .ae-plan-wd { font-weight: 500; color: #94a3b8; font-size: 12px; margin-left: 4px; }
-        .ae-plan-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+        .ae-plan-wd { font-weight: 500; color: #94a3b8; font-size: 11px; margin-left: 4px; }
+        .ae-plan-badge { display: inline-block; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 700; }
         .ae-plan-moved { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e; }
-        .ae-plan-move { padding: 4px 10px; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 12px; font-weight: 700; color: #4f46e5; background: #fff; }
-        .ae-plan-move:hover { background: #eef2ff; }
-        .ae-plan-day { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 13px; font-weight: 600; color: #1e293b; background: #fff; }
+        .ae-plan-move { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid #c7d2fe; border-radius: 7px; color: #4f46e5; background: #fff; }
+        .ae-plan-move:hover, .ae-plan-move.is-open { background: #eef2ff; }
+        .ae-plan-day { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid #c7d2fe; border-radius: 7px; font-size: 12px; font-weight: 600; color: #1e293b; background: #fff; }
         .ae-plan-day:hover { border-color: #4f46e5; background: #eef2ff; }
         .ae-plan-day-load { font-size: 11px; font-weight: 700; color: #4f46e5; }
 
@@ -195,7 +197,8 @@
 
             /* Qayta topshirish jadvali */
             .ae-plan-table { font-size: 12px; }
-            .ae-plan-table th, .ae-plan-table td { padding: 6px 8px; }
+            .ae-plan-table th, .ae-plan-table td { padding: 5px 6px; }
+            .ae-plan-wd { display: block; margin-left: 0; }
 
             /* Fan grid mobile */
 
@@ -486,7 +489,7 @@
                         </div>
                         <div class="ae-card-body">
                             <div x-show="schedule.length > 0" class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                                <p class="text-sm text-gray-500">{{ __('Kunni o\'zgartirish uchun «Ko\'chirish» ni bosing — faqat bo\'sh kunlar ko\'rsatiladi (bir kunda ko\'pi bilan 3 ta fan).') }}</p>
+                                <p class="text-xs text-gray-500">{{ __('Kunni o\'zgartirish uchun qator oxiridagi taqvim belgisini bosing — faqat bo\'sh kunlar ko\'rsatiladi (bir kunda ko\'pi bilan 3 ta fan).') }}</p>
                                 <button type="button" x-show="manual" x-cloak @click="resetPlan()"
                                         class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">{{ __('Avtomatik jadvalga qaytarish') }}</button>
                             </div>
@@ -509,18 +512,18 @@
                                                     <span x-show="row.moved" class="ae-plan-moved">{{ __('ko\'chirildi') }}</span>
                                                 </td>
                                                 <td><span class="ae-plan-badge" :class="'badge-' + row.type" x-text="row.label"></span></td>
-                                                <td class="text-right whitespace-nowrap">
+                                                <td class="ae-plan-act">
                                                     <button type="button" x-show="row.type !== 'mt'" @click="moving = moving === row.idx ? null : row.idx"
-                                                            class="ae-plan-move">
-                                                        <span x-show="moving !== row.idx">{{ __('Ko\'chirish') }}</span>
-                                                        <span x-show="moving === row.idx">{{ __('Yopish') }}</span>
+                                                            class="ae-plan-move" :class="moving === row.idx ? 'is-open' : ''" title="{{ __('Boshqa kunga ko\'chirish') }}">
+                                                        <svg x-show="moving !== row.idx" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                        <svg x-show="moving === row.idx" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                                     </button>
                                                 </td>
                                             </tr>
                                             <tr x-show="moving === row.idx" class="bg-indigo-50">
                                                 <td colspan="4">
-                                                    <p class="text-xs font-semibold text-gray-600 mb-2">{{ __('Bo\'sh kunlar (shu kuni retake qiladigan fanlar soni):') }}</p>
-                                                    <div class="flex flex-wrap gap-2">
+                                                    <p class="text-xs font-semibold text-gray-600 mb-1.5">{{ __('Bo\'sh kunlar (shu kuni retake qiladigan fanlar soni):') }}</p>
+                                                    <div class="flex flex-wrap gap-1.5">
                                                         <template x-for="c in (moving === row.idx ? candidateDays(row.idx) : [])" :key="c.date">
                                                             <button type="button" @click="moveTo(row.idx, c.date)" class="ae-plan-day">
                                                                 <span x-text="fmtDate(c.date)"></span>
@@ -799,9 +802,8 @@
                     this.calYear = today.getFullYear();
                 }
                 if (!this.retakeStart) {
-                    // Ertangi kundan (yakshanba bo'lsa — dushanbadan)
-                    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-                    this.retakeStart = this._firstDay(this._toStr(tomorrow));
+                    // Ariza topshirilgan kundan (yakshanba bo'lsa — dushanbadan)
+                    this.retakeStart = this._firstDay(this._toStr(new Date()));
                 }
                 this.checkDeadline();
                 if (this.startDate && this.endDate) {
@@ -964,21 +966,24 @@
                 }
                 return null;
             },
-            // Nazoratni ko'chirish mumkin bo'lgan kunlar: jadval qoidalari buzilmaydigan ish kunlari —
-            // avtomatik jadvalning oxirgi kunidan keyin ko'pi bilan 12 ish kuni (2 hafta);
-            // load — shu kuni retake qiladigan fanlar soni (ko'chirilgandan keyin)
+            // Nazoratni ko'chirish mumkin bo'lgan kunlar: avtomatik jadval oralig'idagi (birinchi — oxirgi
+            // retake kuni) qoidalar buzilmaydigan bo'sh kunlar; oraliqda bo'sh kun qolmagan bo'lsa —
+            // undan keyingi birinchi mos kun. load — shu kuni retake qiladigan fanlar soni (ko'chirilgandan keyin)
             candidateDays(idx) {
                 const base = this.manual || this._withoutMt(this.autoPlan);
                 const subj = this._subj(this.assessments[idx]);
-                let limit = Object.values(this._withoutMt(this.autoPlan)).reduce((m, d) => (d > m ? d : m), this._firstDay(this.retakeStart));
-                for (let n = 0; n < 12; n++) limit = this._nextDay(limit);
+                const first = this._firstDay(this.retakeStart);
+                const limit = Object.values(this._withoutMt(this.autoPlan)).reduce((m, d) => (d > m ? d : m), first);
+                const fits = d => d !== base[idx] && !this.planError({ ...base, [idx]: d });
+                const load = d => new Set(Object.keys(base)
+                    .filter(i => base[i] === d && this._subj(this.assessments[i]) !== subj)
+                    .map(i => this._subj(this.assessments[i]))).size + 1;
                 const out = [];
-                for (let d = this._firstDay(this.retakeStart); d <= limit; d = this._nextDay(d)) {
-                    if (d === base[idx] || this.planError({ ...base, [idx]: d })) continue;
-                    const load = new Set(Object.keys(base)
-                        .filter(i => base[i] === d && this._subj(this.assessments[i]) !== subj)
-                        .map(i => this._subj(this.assessments[i]))).size;
-                    out.push({ date: d, load: load + 1 });
+                for (let d = first; d <= limit; d = this._nextDay(d)) {
+                    if (fits(d)) out.push({ date: d, load: load(d) });
+                }
+                for (let d = this._nextDay(limit), n = 0; !out.length && n < 10; d = this._nextDay(d), n++) {
+                    if (fits(d)) out.push({ date: d, load: load(d) });
                 }
                 return out;
             },

@@ -77,10 +77,13 @@ class SababliRetakePlan
         })->values();
     }
 
-    /** Retake boshlanadigan kun: berilgan sana yoki ertangi kun; yakshanba bo'lsa dushanba */
+    /**
+     * Retake boshlanadigan kun: berilgan sana yoki bugun (ariza topshirilgan kunning o'ziga
+     * ham retake qo'yiladi); yakshanba bo'lsa dushanba
+     */
     public static function firstDay(?string $date = null): Carbon
     {
-        $day = $date ? Carbon::parse($date)->startOfDay() : Carbon::tomorrow();
+        $day = $date ? Carbon::parse($date)->startOfDay() : Carbon::today();
 
         return $day->isSunday() ? $day->addDay() : $day;
     }

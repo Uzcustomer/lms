@@ -9574,7 +9574,7 @@
                 // Joy: pastda sig'masa — yuqoriga; kontent (maslahat, forma) o'zgarsa qayta hisoblanadi.
                 const reposition = cycPopWatch(pop, el);
                 cycActionsBind(pop, cycCardOf(key), own, reposition);
-                cycCfBlocksBind(pop, own, cycCardOf(key) || pc, reposition);
+                cycCfBlocksBind(pop, own, cycCardOf(key) || pc, reposition, key);
                 loadShiftAdvice(pop, key, own);
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
@@ -9873,7 +9873,8 @@
                     subject: i.with || '', time: i.time || '', show: i.show || null };
             }
             // Bloklardagi [Ko'rsatish]: xona / o'qituvchi — shu kungi darslar (teacher-agenda), guruh — to'qnashgan darslar; fokus — yozuvning show'i.
-            function cycCfBlocksBind(pop, own, card, reposition) {
+            // key — sikl birligi kaliti: kun ro'yxatida "shu dars" — aynan shu birlik yozuvi (agenda kaliti "c|<key>|<sana>"), guruhi emas.
+            function cycCfBlocksBind(pop, own, card, reposition, key) {
                 const blocks = cycCfBlocks(own);
                 pop.querySelectorAll('[data-cyc-cb-show]').forEach(a => a.onclick = ev => {
                     ev.preventDefault(); ev.stopPropagation();
@@ -9885,7 +9886,8 @@
                         const items = blk.items.map(cbFromCycleItem).filter(Boolean);
                         const b = { kind: CYC_CB_KIND[blk.kind], who: items[0] ? items[0].who : blk.who, date: items[0] ? items[0].date : '', day: items[0] ? items[0].day : 0, items };
                         const ctx = { card: { id: 0, teacher_id: card && card.teacher ? +card.teacher.id : null, subject_name: card ? card.subject : '' }, ids: [],
-                            mineGroups: card ? [card.group] : [], day: b.day, pair: 1, len: 1, placed: true, close: closeCycDayPop, reposition };
+                            mineGroups: card ? [card.group] : [], cycKey: key || (card && card.key) || null, day: b.day, pair: 1, len: 1, placed: true,
+                            close: closeCycDayPop, reposition };
                         cbShowDetail(el, b, ctx).then(() => reposition && reposition());
                     }
                     if (reposition) reposition();
@@ -9919,7 +9921,7 @@
                 document.body.appendChild(pop);
                 const reposition = cycPopWatch(pop, el);
                 cycActionsBind(pop, card, own, reposition);
-                if (own.length) cycCfBlocksBind(pop, own, card, reposition);
+                if (own.length) cycCfBlocksBind(pop, own, card, reposition, key);
                 if (own.length) loadShiftAdvice(pop, key, own);
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
@@ -13002,11 +13004,21 @@
             function cbDayRows(entries, b, ctx) {
                 const hit = new Set(b.items.map(it => +it.card_id).filter(Boolean));
                 const mine = new Set(ctx.ids);
-                // Sikl yozuvlari: to'qnashgan / shu dars — guruhlar bo'yicha (kartalar ajratilmagan).
+                // Sikl yozuvlari (kartasi ajratilmagan): shu dars — aynan shu birlik yozuvi (agenda kaliti "c|<birlik>|<sana>"; birlik kaliti
+                // bo'lmasa — guruhi); to'qnashgan — shu dars vaqti bilan kesishgan boshqa yozuv: to'qnashgan birliklar kartasi yoki guruhi
+                // (shu guruhning boshqa vaqtdagi darsi yoki boshqa fani "shu dars" / qizil bo'lmaydi).
                 const hitG = new Set(b.items.flatMap(it => it.hit_groups || []));
                 const mineG = new Set(ctx.mineGroups || []);
-                const hitBy = e => (e.card_ids || []).some(id => hit.has(+id)) || (e.groups || []).some(g => hitG.has(g) && !mineG.has(g));
-                const mineBy = e => (e.card_ids || []).some(id => mine.has(+id)) || (e.groups || []).some(g => mineG.has(g));
+                const cycIds = new Set(b.items.flatMap(it => (it.hit_groups && it.show && it.show.card_ids) || []).map(Number));
+                const mineBy = e => (e.card_ids || []).some(id => mine.has(+id)) || (ctx.cycKey
+                    ? String(e.key || '').startsWith('c|' + ctx.cycKey + '|') : (e.groups || []).some(g => mineG.has(g)));
+                // To'qnashuv oralig'i (akademik soat): shu birlikning o'sha kungi yozuvlari; topilmasa — yozuvning show soatlari.
+                const mineSpans = ctx.cycKey ? (entries || []).filter(e => !e.hidden && mineBy(e)).map(e => [+e.from, +e.to]) : [];
+                const spans = mineSpans.length ? mineSpans : b.items.map(it => (it.hit_groups && it.show && it.show.hour_unit === 'hour' && +it.show.hour_from
+                    ? [+it.show.hour_from, +it.show.hour_to] : null)).filter(Boolean);
+                const inSpan = e => !spans.length || spans.some(([a, z]) => +e.from < z && a < +e.to);
+                const hitBy = e => (e.card_ids || []).some(id => hit.has(+id)) || (!mineBy(e) && inSpan(e)
+                    && ((e.card_ids || []).some(id => cycIds.has(+id)) || (e.groups || []).some(g => hitG.has(g) && !mineG.has(g))));
                 // Qamrovdan tashqari dars (hidden) — vaqti band, tafsiloti yashirin: "band: boshqa fakultet".
                 const rows = (entries || []).map(e => (e.hidden
                     ? { start: e.start, end: e.end, groups: [], subject: e.label || 'band: boshqa fakultet', type: null, who: '', hit: false, mine: false, hidden: true }

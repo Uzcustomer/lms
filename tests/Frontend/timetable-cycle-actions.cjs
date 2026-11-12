@@ -38,9 +38,14 @@ const stubs = (role, advice) => `
     async function api(url, method, body) {
         calls.push([url.replace(BASE + '/boards/7/', ''), body]);
         if (url.endsWith('cycle-shift-advice')) return { advice: ADVICE };
+        // O'qituvchining 03.11 kuni: ertalab 09a (to'qnashgan) va 09b (shu birlik); tushdan keyin — 09b boshqa fani va 09a boshqa darsi
+        // (to'qnashuv vaqtidan tashqarida: "shu dars" ham, qizil ham emas).
         if (url.includes('/teacher-agenda?')) return { entries: [
-            { start: '08:30', end: '13:20', groups: ['d2/d22-09a'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [77] },
-            { start: '08:30', end: '13:20', groups: ['d2/d22-09b'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [78] }] };
+            { from: 1, to: 7, start: '08:30', end: '13:20', groups: ['d2/d22-09a'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [77], key: 'c|u9|2026-11-03' },
+            { from: 1, to: 7, start: '08:30', end: '13:20', groups: ['d2/d22-09b'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [78],
+              key: 'c|' + ${JSON.stringify(KEY)} + '|2026-11-03' },
+            { from: 8, to: 10, start: '14:00', end: '15:20', groups: ['d2/d22-09b'], subject: 'Gigiyena', type: 'A', room: '306', card_ids: [79], key: 'c|u5|2026-11-03' },
+            { from: 10, to: 12, start: '15:30', end: '16:50', groups: ['d2/d22-09a'], subject: 'Anatomiya', type: 'A', room: '307', card_ids: [80], key: 'c|u6|2026-11-03' }] };
         if (url.endsWith('cycle-assign-options')) return { current: { teacher_id: 31, auditorium_code: 'R305' } };
         if (url.endsWith('cycle-plan')) return { rows: [{ group: 'F1 / 1-oqim', subgroups: ['d2/d22-09b'], blocks: [{ subject: 'Epidemiologiya', from: 50 }] }] };
         return { ok: true };
@@ -177,7 +182,9 @@ const settle = p => p.evaluate(() => new Promise(r => setTimeout(r, 30)));
         assert.match(agendaCall[0], /teacher-agenda\?teacher_id=31&date=2026-11-03&range=day&layer=internal/);
         assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-detail-head]').textContent(), "TOSHPO'LATOV B. A. · Seshanba, 03.11");
         assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-hit]', xs => xs.map(x => x.textContent)), ['08:30–13:20 · d2/d22-09a · Epidemiologiya (amaliy) · 305']);
-        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-mine]').count(), 1);
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-mine]', xs => xs.map(x => x.textContent)),
+            ['08:30–13:20 · d2/d22-09b · Epidemiologiya (amaliy) · 305 — shu dars']);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-row]').count(), 4);
         assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-agenda]').textContent(), "O'qituvchining haftalik jadvali");
         // Smena maslahati — o'z qatorida (bloklarda ham).
         assert.match(await p.locator('#cycDayPop .cf-list > li[data-cf-i="0"] .cf-todo').textContent(), /13:30 ga o'tkazilsa/);

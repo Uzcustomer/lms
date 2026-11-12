@@ -9968,7 +9968,10 @@
                         '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cfLabel(b.kind) + (b.who ? ': ' + b.who : '')) + '</b>' +
                         '<span style="white-space:nowrap">' +
                         // Sikl: "Xona band" — "Boshqa xona tanlash" (sikl biriktirish oynasi, xona tanlovi: bandlik va sig'im serverda tekshiriladi).
-                        (kindAttr[b.kind] === 'room' && typeof cycActAllowed === 'function' && cycActAllowed() ? '<a href="#" data-cyc-room-pick style="text-decoration:underline dotted;margin-right:8px">Boshqa xona tanlash</a>' : '') +
+                        // Faqat biriktirish oynasi aynan shu darsni o'zgartirsa: amaliy to'qnashuv (blok — amaliy) yoki kartaning o'zi ma'ruza; birlashgan
+                        // blokdagi ma'ruza xonasi to'qnashuvi — amaliy biriktirish ma'ruzaga tegmaydi, havola yo'q.
+                        (kindAttr[b.kind] === 'room' && typeof cycActAllowed === 'function' && cycActAllowed()
+                            && (b.items.every(i => !i.lecture) || ((typeof cycCardOf === 'function' && cycCardOf(key)) || {}).type === 'lecture') ? '<a href="#" data-cyc-room-pick style="text-decoration:underline dotted;margin-right:8px">Boshqa xona tanlash</a>' : '') +
                         (['room', 'teacher', 'group'].includes(kindAttr[b.kind]) ? '<a href="#" data-cyc-cb-show="' + bi + '" style="text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</span></div>' +
                         '<ul class="cf-list">' + b.items.map((i, n) => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null, idx: b.idx[n] })).join('') + '</ul>' +
                         '<div data-cyc-cb-detail="' + bi + '" hidden style="margin-top:3px"></div></div>').join('');

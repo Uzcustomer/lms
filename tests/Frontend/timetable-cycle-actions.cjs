@@ -221,6 +221,12 @@ const settle = p => p.evaluate(() => new Promise(r => setTimeout(r, 30)));
         assert.equal(await p.locator('#cycDayPop [data-cb-block="room"] [data-cyc-room-pick]').textContent(), 'Boshqa xona tanlash');
         await p.locator('#cycDayPop [data-cyc-room-pick]').click();
         assert.ok((await p.evaluate(() => T.calls)).some(c => c[0] === 'assign' && c[1] === 'u5'));
+        // Codex: birlashgan (amaliy) blokdagi ma'ruza xonasi to'qnashuvi — amaliy biriktirish ma'ruzaga tegmaydi: havola yo'q.
+        await p.evaluate(() => { const c = cyclePlanData.cycle_cards.find(x => x.key === 'u5');
+            c.conflicts = [Object.assign({}, c.conflicts[0], { lecture: true, lecture_id: 777, kind: 'room_lectures' })]; cfOwners[777] = 'u5';
+            const a = document.getElementById('anchor'); a.dataset.cfKey = 'u5'; T.openCfPop(a); });
+        assert.equal(await p.locator('#cycDayPop [data-cb-block="room"]').count(), 1);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-room-pick]').count(), 0);
         await p.close();
         console.log('timetable cycle actions: 9 scenarios passed');
     } finally {

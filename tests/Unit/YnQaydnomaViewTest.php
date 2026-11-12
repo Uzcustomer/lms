@@ -338,6 +338,23 @@ describe('teacher confirmation', function () {
             ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->value('pdf_path'))->toBe($path)
             ->and(Storage::disk('public')->get($path))->toStartWith('%PDF');
 
+        // Registrator: "Ko'rish" — mavjud PDF brauzerda (inline), "PDF" — eskisi o'chib, yangisi yuklanadi
+        DB::table('roles')->insert(['id' => 3, 'name' => 'registrator_ofisi', 'guard_name' => 'web']);
+        DB::table('model_has_roles')->insert(['role_id' => 3, 'model_type' => \App\Models\Teacher::class, 'model_id' => 2]);
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        Auth::guard('teacher')->login(\App\Models\Teacher::find(2));
+        app()->instance(JournalController::class, $this->controller);
+        $pdf = fn (array $extra = []) => (new \App\Http\Controllers\Admin\VedomostTekshirishController())->qaydnomaPdf(
+            \Illuminate\Http\Request::create('/x', 'GET', ['subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => '77'] + $extra));
+        $view = $pdf(['inline' => 1]);
+        expect($view->headers->get('Content-Disposition'))->toStartWith('inline')
+            ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->value('pdf_path'))->toBe($path);   // mavjudi
+        expect($pdf()->headers->get('Content-Disposition'))->toStartWith('attachment');
+        $fresh = \App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->value('pdf_path');
+        expect($fresh)->not->toBe($path);
+        Storage::disk('public')->assertMissing($path);
+        $path = $fresh;
+
         ($this->confirm)(3, 'revoke');
         Storage::disk('public')->assertMissing($path);
     });

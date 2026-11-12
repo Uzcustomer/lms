@@ -431,15 +431,28 @@ class VedomostTekshirishController extends Controller
         abort_unless($base && $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_DEAN)->isNotEmpty(), 404,
             'Qaydnoma hali dekan tomonidan tasdiqlanmagan.');
 
-        // Har bosilganda — eskisi o'chirilib, joriy ko'rinish va baholar bo'yicha yangisi tayyorlanadi
+        // "PDF" (yuklab olish) — har bosilganda eskisi o'chirilib, joriy ko'rinish va baholar bo'yicha yangisi;
+        // "Ko'rish" (inline) — mavjud PDF brauzerda ochiladi (yo'q bo'lsa — tayyorlanadi)
+        $inline = $request->boolean('inline');
         $disk = \Illuminate\Support\Facades\Storage::disk('public');
-        $path = app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId);
+        $stored = $inline ? $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId)
+            ->where('role', $Confirmation::ROLE_DEAN)->latest('confirmed_at')->value('pdf_path') : null;
+        $path = $stored && $disk->exists($stored)
+            ? $stored
+            : app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId);
         abort_unless($path, 422, 'PDF tayyorlab bo\'lmadi.');
 
         // Kichik guruhlar qaydnomasi — umumiy (harfsiz) nomi tasdiqda saqlangan
         $group = $base->verification->group_names ?? Group::where('group_hemis_id', $groupHemisId)->value('name') ?? $groupHemisId;
         $subject = $base->verification->subject_name ?? $subjectId;
         $name = str_replace(['/', '\\', ' '], '_', 'YN_qaydnoma_' . $group . '_' . $subject) . '.pdf';
+
+        if ($inline) {
+            return response()->file($disk->path($path), [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $name . '"',
+            ]);
+        }
 
         return response()->download($disk->path($path), $name, ['Content-Type' => 'application/pdf']);
     }

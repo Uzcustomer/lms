@@ -238,11 +238,18 @@ class AbsenceExcuseController extends Controller
         ]);
 
         // Qayta topshirish kunlari: kuniga bitta retake, OSKI oxirgi retake kuni,
-        // test bir kun oraliq bilan — sanalar mijozdan emas, shu yerda hisoblanadi.
-        $makeupDates = SababliRetakePlan::assign(
-            $request->input('makeup_dates', []),
-            SababliRetakePlan::firstDay($request->input('retake_start'))
-        );
+        // test bir kun oraliq bilan — avtomatik jadval shu yerda hisoblanadi. Talaba
+        // formada kunlarni ko'chirgan bo'lsa — uning jadvali shu qoidalar bo'yicha tekshiriladi.
+        $retakeStart = SababliRetakePlan::firstDay($request->input('retake_start'));
+        $items = $request->input('makeup_dates', []);
+        if ($request->boolean('retake_manual')) {
+            if ($planError = SababliRetakePlan::validate($items, $retakeStart)) {
+                return back()->withErrors(['makeup_dates' => 'Qayta topshirish kunlari: ' . $planError])->withInput();
+            }
+            $makeupDates = SababliRetakePlan::manual($items, $retakeStart);
+        } else {
+            $makeupDates = SababliRetakePlan::assign($items, $retakeStart);
+        }
         uasort($makeupDates, fn ($a, $b) => [$a['makeup_date'] ?? '9999-12-31', $a['original_date']]
             <=> [$b['makeup_date'] ?? '9999-12-31', $b['original_date']]);
 

@@ -95,6 +95,12 @@
         .ae-plan-table td.ae-plan-date { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
         .ae-plan-wd { font-weight: 500; color: #94a3b8; font-size: 12px; margin-left: 4px; }
         .ae-plan-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+        .ae-plan-moved { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e; }
+        .ae-plan-move { padding: 4px 10px; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 12px; font-weight: 700; color: #4f46e5; background: #fff; }
+        .ae-plan-move:hover { background: #eef2ff; }
+        .ae-plan-day { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 13px; font-weight: 600; color: #1e293b; background: #fff; }
+        .ae-plan-day:hover { border-color: #4f46e5; background: #eef2ff; }
+        .ae-plan-day-load { font-size: 11px; font-weight: 700; color: #4f46e5; }
 
         /* ======= CARD STYLES ======= */
         .ae-card {
@@ -479,6 +485,11 @@
                             </div>
                         </div>
                         <div class="ae-card-body">
+                            <div x-show="schedule.length > 0" class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <p class="text-sm text-gray-500">{{ __('Kunni o\'zgartirish uchun «Ko\'chirish» ni bosing — faqat bo\'sh kunlar ko\'rsatiladi (bir kunda ko\'pi bilan 3 ta fan).') }}</p>
+                                <button type="button" x-show="manual" x-cloak @click="resetPlan()"
+                                        class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">{{ __('Avtomatik jadvalga qaytarish') }}</button>
+                            </div>
                             <div class="ae-plan-table-wrap" x-show="schedule.length > 0">
                                 <table class="ae-plan-table">
                                     <thead>
@@ -486,17 +497,43 @@
                                             <th>{{ __('Sana') }}</th>
                                             <th>{{ __('Fan') }}</th>
                                             <th>{{ __('Nazorat') }}</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        <template x-for="row in schedule" :key="row.key">
-                                            <tr>
+                                    <template x-for="row in schedule" :key="row.key">
+                                        <tbody>
+                                            <tr :class="moving === row.idx ? 'bg-indigo-50' : ''">
                                                 <td class="ae-plan-date"><span x-text="fmtDate(row.date)"></span><span class="ae-plan-wd" x-text="weekdayName(row.date)"></span></td>
-                                                <td x-text="row.subject_name"></td>
+                                                <td>
+                                                    <span x-text="row.subject_name"></span>
+                                                    <span x-show="row.moved" class="ae-plan-moved">{{ __('ko\'chirildi') }}</span>
+                                                </td>
                                                 <td><span class="ae-plan-badge" :class="'badge-' + row.type" x-text="row.label"></span></td>
+                                                <td class="text-right whitespace-nowrap">
+                                                    <button type="button" x-show="row.type !== 'mt'" @click="moving = moving === row.idx ? null : row.idx"
+                                                            class="ae-plan-move">
+                                                        <span x-show="moving !== row.idx">{{ __('Ko\'chirish') }}</span>
+                                                        <span x-show="moving === row.idx">{{ __('Yopish') }}</span>
+                                                    </button>
+                                                </td>
                                             </tr>
-                                        </template>
-                                    </tbody>
+                                            <tr x-show="moving === row.idx" class="bg-indigo-50">
+                                                <td colspan="4">
+                                                    <p class="text-xs font-semibold text-gray-600 mb-2">{{ __('Bo\'sh kunlar (shu kuni retake qiladigan fanlar soni):') }}</p>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        <template x-for="c in (moving === row.idx ? candidateDays(row.idx) : [])" :key="c.date">
+                                                            <button type="button" @click="moveTo(row.idx, c.date)" class="ae-plan-day">
+                                                                <span x-text="fmtDate(c.date)"></span>
+                                                                <span class="text-gray-400" x-text="weekdayName(c.date).slice(0, 3)"></span>
+                                                                <span class="ae-plan-day-load" x-text="c.load + '/' + MAX_PER_DAY"></span>
+                                                            </button>
+                                                        </template>
+                                                        <p x-show="moving === row.idx && candidateDays(row.idx).length === 0" class="text-sm text-gray-500">{{ __('Bo\'sh kun topilmadi.') }}</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </template>
                                 </table>
                             </div>
                         </div>
@@ -516,6 +553,8 @@
                             <input type="hidden" :name="'makeup_dates['+i+'][already_submitted]'" :value="item.already_submitted ? '1' : '0'">
                         </div>
                     </template>
+                    {{-- Talaba kunlarni ko'chirgan — server shu jadvalni qoidalar bo'yicha tekshiradi --}}
+                    <input type="hidden" name="retake_manual" :value="manual ? '1' : '0'">
                 </div>
 
                 {{-- ===== SUBMIT ===== --}}
@@ -580,6 +619,12 @@
 
             // Qayta topshirish boshlanadigan kun (Y-m-d)
             retakeStart: '',
+            // Bir kunda ko'pi bilan nechta fan (SababliRetakePlan::MAX_SUBJECTS_PER_DAY)
+            MAX_PER_DAY: @js(\App\Services\SababliRetakePlan::MAX_SUBJECTS_PER_DAY),
+            // Talaba ko'chirgan jadval (indeks => 'Y-m-d', MT siz); null — avtomatik
+            manual: null,
+            // Kuni ko'chirilayotgan nazorat indeksi
+            moving: null,
 
             // Submit state (loading modal uchun)
             submitting: false,
@@ -624,10 +669,10 @@
             // App\Services\SababliRetakePlan::assign bilan bir xil — saqlashda serverda qayta hisoblanadi.
             // Bir fandan kuniga bitta retake, bir kunda ko'pi bilan 3 ta fan; navbat dars sanasi
             // bo'yicha, kun to'lsa — keyingi ish kuni. OSKI fanning oxirgi retake kunida; test bir kun oraliq bilan.
-            get plan() {
+            get autoPlan() {
                 const out = {};
                 if (!this.retakeStart) return out;
-                const MAX_SUBJECTS_PER_DAY = 3;
+                const MAX_SUBJECTS_PER_DAY = this.MAX_PER_DAY;
                 const first = this._firstDay(this.retakeStart);
                 const cmp = (x, y) => (x < y ? -1 : (x > y ? 1 : 0));
                 const subj = i => String(this.assessments[i].subject_name || '').trim().toLowerCase();
@@ -666,14 +711,21 @@
                 pending.mt.forEach(i => { const s = subj(i); out[i] = lastRetake[s] || last[s] || next[s] || first; });
                 return out;
             },
+            // Amaldagi jadval: talaba ko'chirgan bo'lsa — uniki (MT muddati qayta hisoblanadi), aks holda avtomatik
+            get plan() {
+                return this.manual ? this._withMt(this.manual) : this.autoPlan;
+            },
             // Sana tartibidagi jadval (farmoyishdagi kabi)
             get schedule() {
                 const plan = this.plan;
+                const auto = this.manual ? this.autoPlan : plan;
                 const order = { jn: 0, oski: 1, mt: 2, test: 3 };
                 return Object.keys(plan).map(i => {
                     const a = this.assessments[i];
                     return {
                         key: 'p' + i,
+                        idx: +i,
+                        moved: a.assessment_type !== 'mt' && plan[i] !== auto[i],
                         date: plan[i],
                         subject_name: a.subject_name,
                         type: a.assessment_type,
@@ -856,6 +908,95 @@
             _isPending(a) {
                 return !a.already_submitted && !a.jn_submitted;
             },
+            _subj(a) {
+                return String(a.subject_name || '').trim().toLowerCase();
+            },
+            // MT muddati — fanning oxirgi retake kuni (SababliRetakePlan::manual bilan bir xil)
+            _withMt(p) {
+                const out = { ...p }, lastJn = {}, lastAny = {};
+                Object.keys(p).forEach(i => {
+                    const a = this.assessments[i], s = this._subj(a), d = p[i];
+                    if (!lastAny[s] || d > lastAny[s]) lastAny[s] = d;
+                    if (a.assessment_type === 'jn' && (!lastJn[s] || d > lastJn[s])) lastJn[s] = d;
+                });
+                const first = this._firstDay(this.retakeStart);
+                this.assessments.forEach((a, i) => {
+                    if (a.assessment_type === 'mt' && this._isPending(a)) {
+                        const s = this._subj(a);
+                        out[i] = lastJn[s] || lastAny[s] || first;
+                    }
+                });
+                return out;
+            },
+            // Jadval qoidalari (SababliRetakePlan::validate bilan bir xil): xato matni yoki null
+            planError(p) {
+                const first = this._firstDay(this.retakeStart);
+                const days = {}, subs = {};
+                for (const i of Object.keys(p)) {
+                    const a = this.assessments[i];
+                    if (!a || !this._isPending(a) || a.assessment_type === 'mt') continue;
+                    const t = a.assessment_type === 'oski' || a.assessment_type === 'test' ? a.assessment_type : 'jn';
+                    const s = this._subj(a), d = p[i];
+                    if (!d) return a.subject_name + ': kun tanlanmagan';
+                    if (this._parse(d).getDay() === 0 || d < first) return a.subject_name + ': ' + this.fmtDate(d) + ' — mumkin emas';
+                    days[d] = days[d] || {};
+                    days[d][s] = days[d][s] || { jn: 0, oski: 0, test: 0 };
+                    days[d][s][t]++;
+                    subs[s] = subs[s] || { name: a.subject_name, jn: [], oski: [], test: [] };
+                    subs[s][t].push(d);
+                }
+                for (const d of Object.keys(days)) {
+                    if (Object.keys(days[d]).length > this.MAX_PER_DAY) return this.fmtDate(d) + ' kuni ' + this.MAX_PER_DAY + ' tadan ortiq fan';
+                    for (const s of Object.keys(days[d])) {
+                        const c = days[d][s];
+                        if (c.jn + c.test > 1 || c.oski > 1) return subs[s].name + ': ' + this.fmtDate(d) + ' kuni bittadan ortiq retake';
+                    }
+                }
+                const maxOf = list => list.reduce((m, d) => (d > m ? d : m), '');
+                for (const x of Object.values(subs)) {
+                    const lastJn = maxOf(x.jn);
+                    if (x.oski.some(d => lastJn && d < lastJn)) return x.name + ': OSKI oxirgi retake kunidan oldin';
+                    const before = maxOf([...x.jn, ...x.oski]);
+                    if (before) {
+                        const min = this._nextDay(this._nextDay(before));
+                        if (x.test.some(d => d < min)) return x.name + ': test retake/OSKI dan bir kun oraliq bilan';
+                    }
+                }
+                return null;
+            },
+            // Nazoratni ko'chirish mumkin bo'lgan kunlar: jadval qoidalari buzilmaydigan ish kunlari —
+            // avtomatik jadvalning oxirgi kunidan keyin ko'pi bilan 12 ish kuni (2 hafta);
+            // load — shu kuni retake qiladigan fanlar soni (ko'chirilgandan keyin)
+            candidateDays(idx) {
+                const base = this.manual || this._withoutMt(this.autoPlan);
+                const subj = this._subj(this.assessments[idx]);
+                let limit = Object.values(this._withoutMt(this.autoPlan)).reduce((m, d) => (d > m ? d : m), this._firstDay(this.retakeStart));
+                for (let n = 0; n < 12; n++) limit = this._nextDay(limit);
+                const out = [];
+                for (let d = this._firstDay(this.retakeStart); d <= limit; d = this._nextDay(d)) {
+                    if (d === base[idx] || this.planError({ ...base, [idx]: d })) continue;
+                    const load = new Set(Object.keys(base)
+                        .filter(i => base[i] === d && this._subj(this.assessments[i]) !== subj)
+                        .map(i => this._subj(this.assessments[i]))).size;
+                    out.push({ date: d, load: load + 1 });
+                }
+                return out;
+            },
+            _withoutMt(p) {
+                const out = {};
+                Object.keys(p).forEach(i => { if (this.assessments[i].assessment_type !== 'mt') out[i] = p[i]; });
+                return out;
+            },
+            moveTo(idx, date) {
+                const next = { ...(this.manual || this._withoutMt(this.autoPlan)), [idx]: date };
+                if (this.planError(next)) return;
+                this.manual = next;
+                this.moving = null;
+            },
+            resetPlan() {
+                this.manual = null;
+                this.moving = null;
+            },
             weekdayName(ds) {
                 if (!ds) return '';
                 return ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'][this._parse(ds).getDay()];
@@ -895,6 +1036,7 @@
 
             async fetchAssessments() {
                 this.loading = true; this.searched = false; this.assessments = []; this.overlapError = '';
+                this.manual = null; this.moving = null;
                 try {
                     const resp = await fetch('{{ route("student.absence-excuses.missed-assessments") }}', {
                         method: 'POST',

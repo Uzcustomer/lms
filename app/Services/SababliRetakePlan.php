@@ -169,6 +169,106 @@ class SababliRetakePlan
     }
 
     /**
+     * Talaba formada ko'chirgan jadvalni assign() qoidalari bo'yicha tekshiradi: yakshanba emas,
+     * $start dan oldin emas, bir kunda ko'pi bilan MAX_SUBJECTS_PER_DAY ta fan, bir fandan kuniga
+     * bitta retake (OSKI shu fanning retake kuni bilan bir kunda bo'lishi mumkin), OSKI fanning
+     * oxirgi retake kunidan oldin emas, test esa ulardan bir kun oraliq bilan.
+     * create.blade.php dagi planError() bilan bir xil. Xato matni yoki null.
+     */
+    public static function validate(array $items, Carbon $start): ?string
+    {
+        $first = self::firstDay($start->toDateString())->toDateString();
+        $fmt = fn (string $d) => Carbon::parse($d)->format('d.m.Y');
+        $days = [];      // Y-m-d => [fan => [tur => soni]]
+        $subjects = [];  // fan => ['name' => ..., 'jn' => [...], 'oski' => [...], 'test' => [...]]
+        foreach ($items as $item) {
+            $type = $item['assessment_type'] ?? 'jn';
+            if (self::isSubmitted($item) || $type === 'mt') {
+                continue;
+            }
+            $type = in_array($type, ['oski', 'test'], true) ? $type : 'jn';
+            $name = trim((string) ($item['subject_name'] ?? ''));
+            $s = mb_strtolower($name);
+            $date = (string) ($item['makeup_date'] ?? '');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                return "{$name}: qayta topshirish kuni tanlanmagan.";
+            }
+            if (Carbon::parse($date)->isSunday()) {
+                return "{$name}: {$fmt($date)} — yakshanba.";
+            }
+            if ($date < $first) {
+                return "{$name}: {$fmt($date)} — qayta topshirish {$fmt($first)} dan boshlanadi.";
+            }
+            $days[$date][$s][$type] = ($days[$date][$s][$type] ?? 0) + 1;
+            $subjects[$s]['name'] = $name;
+            $subjects[$s][$type][] = $date;
+        }
+
+        foreach ($days as $date => $bySubject) {
+            if (count($bySubject) > self::MAX_SUBJECTS_PER_DAY) {
+                return "{$fmt($date)} kuni " . count($bySubject) . ' ta fan — bir kunda ko\'pi bilan ' . self::MAX_SUBJECTS_PER_DAY . ' ta fan.';
+            }
+            foreach ($bySubject as $s => $c) {
+                if (($c['jn'] ?? 0) + ($c['test'] ?? 0) > 1 || ($c['oski'] ?? 0) > 1) {
+                    return "{$subjects[$s]['name']}: {$fmt($date)} kuni bir fandan bittadan ortiq retake.";
+                }
+            }
+        }
+
+        foreach ($subjects as $sub) {
+            $lastJn = ($sub['jn'] ?? []) ? max($sub['jn']) : null;
+            foreach ($sub['oski'] ?? [] as $d) {
+                if ($lastJn && $d < $lastJn) {
+                    return "{$sub['name']}: OSKI ({$fmt($d)}) oxirgi retake kunidan ({$fmt($lastJn)}) oldin bo'lmasligi kerak.";
+                }
+            }
+            $before = array_merge($sub['jn'] ?? [], $sub['oski'] ?? []);
+            if ($before) {
+                $min = self::nextDay(self::nextDay(Carbon::parse(max($before))))->toDateString();
+                foreach ($sub['test'] ?? [] as $d) {
+                    if ($d < $min) {
+                        return "{$sub['name']}: test ({$fmt($d)}) {$fmt($min)} dan oldin bo'lmasligi kerak — retake/OSKI dan keyin bir kun oraliq.";
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Talaba ko'chirgan (validate() dan o'tgan) jadval: topshirilganlarga kun yo'q, MT muddati —
+     * fanning oxirgi retake kuni (assign() dagi kabi).
+     */
+    public static function manual(array $items, Carbon $start): array
+    {
+        $first = self::firstDay($start->toDateString())->toDateString();
+        $subject = fn (array $i) => mb_strtolower(trim((string) ($i['subject_name'] ?? '')));
+        $lastJn = $lastAny = [];
+        foreach ($items as $key => $item) {
+            $type = $item['assessment_type'] ?? 'jn';
+            if (self::isSubmitted($item) || $type === 'mt') {
+                $items[$key]['makeup_date'] = null;
+                continue;
+            }
+            $s = $subject($item);
+            $d = (string) $item['makeup_date'];
+            $lastAny[$s] = max($lastAny[$s] ?? $d, $d);
+            if (!in_array($type, ['oski', 'test'], true)) {
+                $lastJn[$s] = max($lastJn[$s] ?? $d, $d);
+            }
+        }
+        foreach ($items as $key => $item) {
+            if (($item['assessment_type'] ?? '') === 'mt' && !self::isSubmitted($item)) {
+                $s = $subject($item);
+                $items[$key]['makeup_date'] = $lastJn[$s] ?? $lastAny[$s] ?? $first;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
      * Ariza kechikib tasdiqlansa rejadagi retake kunlari o'tib ketgan bo'ladi (talaba
      * Moodle'da bron qila olmaydi): bajarilmagan retake'lar shu qoida bo'yicha $start
      * dan qayta taqsimlanadi. Birinchi retake kuni hali kelmagan bo'lsa — o'zgarmaydi.

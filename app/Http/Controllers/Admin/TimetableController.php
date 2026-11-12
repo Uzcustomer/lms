@@ -8279,7 +8279,7 @@ class TimetableController extends Controller
      * darslari to'qnashuv hisoblanmaydi; hammasi o'tgan bo'lsa — bandlik yo'q). Qaytaradi: ['teachers' => [id => "guruh, fan, 30.10–10.11; ..."],
      * 'rooms' => [kod => matn]].
      */
-    protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false): array
+    protected function unitBusy(TimetableBoard $board, $unitCards, ?array $onlyDates = null, bool $withItems = false, array $alsoExclude = []): array
     {
         $unitCards = $unitCards->reject(fn ($c) => $this->isNonBlocking($c, $board));
         $hits = ['teachers' => [], 'rooms' => []];
@@ -8287,6 +8287,9 @@ class TimetableController extends Controller
         if (!$ids) {
             return $hits;
         }
+        // $alsoExclude — "boshqa dars" hisoblanmaydigan qo'shimcha kartalar (birlikning qolgan bo'laklari: bo'lak alohida tekshirilganda).
+        $skip = $ids + array_fill_keys(array_map('intval', $alsoExclude), true);
+        ksort($skip);
         // Butun doska model sifatida yuklanmaydi (128 MB): avval shu birlik darslarining sanalari va vaqtlari, so'ng faqat shu
         // sanalarga (hafta kuni, kalendar haftasi) va vaqtgacha tushadigan boshqa darslar — yengil qatorlar. Sikl birliklari so'rov
         // davomida bir marta olinadi.
@@ -8304,13 +8307,13 @@ class TimetableController extends Controller
             return $hits;
         }
         $dates = array_flip(array_column($mine, 'date'));
-        $collect = function (int $maxTo) use ($board, $dates, $ids, $units, $calendar): array {
+        $collect = function (int $maxTo) use ($board, $dates, $skip, $units, $calendar): array {
             $others = [];
-            foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), $maxTo, $ids), $dates),
+            foreach ([$this->weeklyOccupancy($board, $this->weeklyStateOn($board, array_keys($dates), $maxTo, $skip), $dates),
                 $this->cycleOccupancy($board, $units, $calendar, $dates)] as $entries) {
                 foreach ($entries as $e) {
                     // Vaqtincha kafedra mudirida darslar hech kimni band qilmaydi.
-                    if (!isset($ids[$e['card']]) && empty($e['ph'])) {
+                    if (!isset($skip[$e['card']]) && empty($e['ph'])) {
                         $others[$e['date']][] = $e;
                     }
                 }
@@ -8321,7 +8324,7 @@ class TimetableController extends Controller
         // O'qituvchi jadvalidagi haftalik ko'chirish variantlari (weeklyProposalBusy, agendaMemo — timetable.agenda_others): boshqa darslar
         // (shu birliksiz) har bo'sh para uchun bir xil — sana bo'yicha bir marta, vaqt chegarasisiz (kesishuv quyida aniq tekshiriladi — natija bir xil).
         $others = request()->attributes->get('timetable.agenda_others')
-            ? $this->agendaMemo('others|' . $board->id . '|' . md5(json_encode([array_keys($dates), array_keys($ids)])), fn () => $collect(PHP_INT_MAX))
+            ? $this->agendaMemo('others|' . $board->id . '|' . md5(json_encode([array_keys($dates), array_keys($skip)])), fn () => $collect(PHP_INT_MAX))
             : $collect(max(array_column($mine, 'to')));
         // "Ko'rsatish" uchun tuzilgan ma'lumot: tur => kim => boshqa dars yorlig'i => guruhlar, sanalar, kartalar, soatlar.
         $acc = ['teachers' => [], 'rooms' => []];

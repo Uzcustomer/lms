@@ -150,8 +150,8 @@ trait TimetableWeeklyUnits
     }
 
     /**
-     * Yaxlitlik nazorati — yozishdan OLDIN: tegadigan (karta, hafta) lar birliklarining holati (ko'p bo'lakli amaliy birliklar; ma'ruza va
-     * bitta bo'lakli birlik — bo'linmaydi). Yozilgandan keyin unitIntegrityErrors bilan solishtiriladi.
+     * Yaxlitlik nazorati — yozishdan OLDIN: tegadigan (karta, hafta) lar birliklarining holati (ma'ruza — bo'linmaydi; bitta bo'lakli birlik
+     * ham yoziladi: o'qituvchisi almashsa, karta boshqa birlikka qo'shilishi mumkin). Yozilgandan keyin unitIntegrityErrors bilan solishtiriladi.
      * @param iterable<array{0: ?TimetableCard, 1: int}> $touch
      * @return array<string, array{cards: Collection, week: int, pos: array}>
      */
@@ -167,9 +167,6 @@ trait TimetableWeeklyUnits
                 continue;
             }
             $cards = $this->weeklyUnitCards($card);
-            if ($cards->count() < 2) {
-                continue;
-            }
             $out[$k] = ['cards' => $cards, 'week' => (int) $week, 'pos' => $this->unitPositions($cards, (int) $week)];
         }
 
@@ -177,20 +174,42 @@ trait TimetableWeeklyUnits
     }
 
     /**
-     * Yaxlitlik nazorati — yozilgandan KEYIN (yakuniy holat): joyi o'zgargan birlik bo'lingan bo'lsa (turli kunda yoki oraliq bilan) —
-     * sababi. Avvaldan bo'lingan, lekin joyi o'zgarmagan birlik (masalan faqat xona almashdi) — to'siq emas.
+     * Yaxlitlik nazorati — yozilgandan KEYIN (yakuniy holat): birliklar YAKUNIY tarkibi bo'yicha (o'qituvchi almashgan bo'lak — yangi
+     * o'qituvchisining birligida, eski birlikda emas; yangi birlikning boshqa bo'laklari ham), a'zolaridan birining joyi o'zgargan va
+     * bo'lingan birlik (turli kunda yoki oraliq bilan) — sababi. Avvaldan bo'lingan, lekin joyi o'zgarmagan birlik (masalan faqat xona yoki
+     * faqat o'qituvchi almashdi) — to'siq emas.
      */
     private function unitIntegrityErrors(array $snap): array
     {
-        $errors = [];
+        $byWeek = [];
         foreach ($snap as $s) {
-            $cards = TimetableCard::whereIn('id', $s['cards']->pluck('id'))->orderBy('id')->get();
-            $pieces = $this->unitPieces($cards, $s['week']);
-            if (array_map(fn ($p) => [$p['active'], $p['day'], $p['pair']], $pieces) === $s['pos']) {
-                continue;
+            foreach ($s['pos'] as $id => $p) {
+                $byWeek[$s['week']][(int) $id] = $p;
             }
-            if ($this->unitSplitInfo($pieces)) {
-                $errors[] = $this->unitSplitText($cards->first(), $pieces, $s['week']);
+        }
+        $errors = [];
+        foreach ($byWeek as $week => $pos) {
+            $units = [];
+            foreach (TimetableCard::whereIn('id', array_keys($pos))->orderBy('id')->get() as $c) {
+                if ($c->training_type !== 'lecture') {
+                    $units[$c->board_id . '#' . $this->weeklyUnitKey($c)] ??= $this->weeklyUnitCards($c);
+                }
+            }
+            foreach ($units as $cards) {
+                if ($cards->count() < 2) {
+                    continue;
+                }
+                $pieces = $this->unitPieces($cards, (int) $week);
+                $changed = false;
+                foreach ($pieces as $id => $p) {
+                    if (isset($pos[(int) $id]) && [$p['active'], $p['day'], $p['pair']] !== $pos[(int) $id]) {
+                        $changed = true;
+                        break;
+                    }
+                }
+                if ($changed && $this->unitSplitInfo($pieces)) {
+                    $errors[] = $this->unitSplitText($cards->first(), $pieces, (int) $week);
+                }
             }
         }
 

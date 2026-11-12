@@ -218,3 +218,36 @@ it('unit-place auditorium_code ("Boshqa xona bilan joylash"): butun birlik shu h
     uiAs()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['layer' => 'internal', 'day' => 4, 'pair' => 1, 'auditorium_code' => 'R117'])
         ->assertUnprocessable();
 });
+
+it('Codex: Takliflar "o\'qituvchi + ko\'chirish" — bo\'lak yangi o\'qituvchi birligida tekshiriladi (eski birlik bo\'lingan deb rad etilmaydi)', function () {
+    $s = uiSetup();
+    $s['a']->update(['day' => 3, 'pair' => 1]);   // yaxlit: chorshanba 08:30–13:20 (a, b, c — NUROVA)
+    $t2 = uiTeacher('SHARIPOVA F. S.');
+    $apply = fn (array $acts) => uiAs()->postJson(route('admin.timetable.week-suggestions.apply', $s['board']),
+        ['week' => 11, 'card_id' => $s['c']->id, 'actions' => $acts]);
+    // c — SHARIPOVA ga va juma 08:30 ga: NUROVA birligi (a, b) joyida, SHARIPOVA birligi — faqat c: rad etilmaydi.
+    $apply([['op' => 'teacher', 'card_id' => $s['c']->id, 'teacher_id' => $t2->id],
+        ['op' => 'move', 'card_id' => $s['c']->id, 'week' => 11, 'day' => 5, 'pair' => 1]])->assertOk();
+    expect(uiAt($s['c']))->toBe([5, 1])->and($s['c']->fresh()->teacher_id)->toBe($t2->id);
+    // SHARIPOVA ning shu guruh, shu fandagi boshqa bo'lagi payshanbada — yangi birlik bo'linadi: rad.
+    $y = TimetableCard::create(array_merge($s['base'], ['teacher_id' => $t2->id, 'teacher_name' => 'SHARIPOVA F. S.', 'day' => 4, 'pair' => 1]));
+    $apply([['op' => 'move', 'card_id' => $s['c']->id, 'week' => 11, 'day' => 5, 'pair' => 3]])->assertUnprocessable()
+        ->assertJsonPath('error', fn ($m) => str_contains($m, "Amaliy dars bo'linmaydi: 4 soat (2+2)"));
+    expect($y->id)->toBeGreaterThan(0);
+});
+
+it('Codex: agenda — bo\'laklar turli xonada: bir xonaning bandligi boshqa bo\'lak vaqtiga yozilmaydi', function () {
+    $s = uiSetup();
+    $s['c']->delete();
+    Auditorium::create(['code' => 'R117', 'name' => '117-xona', 'volume' => 20, 'active' => true]);
+    // a — 123-amaliyot xonasida, b — 117-xonada (seshanba 08:30, 10:00 — yaxlit).
+    $s['b']->update(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R117', 'auditorium_name' => '117-xona']);
+    // Payshanba 10:00 da 123-amaliyot xonasi boshqa guruhda band — bu b ning vaqti (b esa 117-xonada): a (08:30, 123) uchun to'siq emas.
+    $t2 = uiTeacher('BOSHQA B.');
+    TimetableCard::create(array_merge($s['base'], ['group_name' => 'd1/d26-09a', 'teacher_id' => $t2->id, 'teacher_name' => 'BOSHQA B.', 'day' => 4, 'pair' => 3]));
+    $mv = test()->withoutVite()->actingAs(uiTeacher('ADMIN2', 'admin'), 'teacher')->withSession(['active_role' => 'admin'])
+        ->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?' . http_build_query(['teacher_id' => $s['nurova']->id, 'date' => '2026-11-26',
+            'range' => 'week', 'move' => 'w|' . $s['a']->id . '|11']))->assertOk()->json('move');
+    expect($mv['unit_note'])->toBe("4 soat (2+2) birga ko'chiriladi")
+        ->and($mv['options']['2026-11-26'][1])->toMatchArray(['ok' => true, 'why' => null]);
+});

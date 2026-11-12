@@ -695,7 +695,9 @@ trait TimetableTeacherAgenda
             array_push($errors, ...$this->findWeekConflicts($piece, $week, $day, $pp, 0, ['ignore' => $ignore] + $state, $proposed),
                 ...$this->pendingTimeConflicts($piece, ['week' => $week, 'day' => $day, 'pair' => $pp] + ($proposed ? ['auditorium_code' => $proposed] : []), []));
         }
-        // Sikl darslari va boshqa haftalik darslar bilan bandlik — hamma bo'lak yangi joyda (sinab, rollback); birlik o'zi "boshqa dars" emas.
+        // Sikl darslari va boshqa haftalik darslar bilan bandlik — hamma bo'lak yangi joyda (sinab, rollback). Har bo'lak alohida: o'z vaqti,
+        // o'z o'qituvchisi va o'z xonasi bilan (bo'laklar turli xonada bo'lsa, bir xonaning bandligi boshqa bo'lak vaqtiga yozilmasin);
+        // birlikning qolgan bo'laklari yangi joyida ketma-ket — bu bo'lak vaqti bilan kesishmaydi.
         DB::beginTransaction();
         try {
             foreach ($plan as [$piece, $pp]) {
@@ -707,14 +709,18 @@ trait TimetableTeacherAgenda
                 request()->attributes->set('timetable.agenda_others', true);
             }
             try {
-                $busy = $this->unitBusy($board, collect(array_map(fn ($x) => $x[0], $plan)), [$date => true]);
+                $allIds = array_map(fn ($x) => (int) $x[0]->id, $plan);
+                foreach ($plan as [$piece]) {
+                    // Qolgan bo'laklar "boshqa dars" emas (ular ham shu yerda, ketma-ket) — boshqa darslar keshi bo'laklar joyiga bog'liq emas.
+                    $busy = $this->unitBusy($board, collect([$piece]), [$date => true], false, $allIds);
+                    array_push($errors, ...$this->ownBusyTexts($busy, [(int) $piece->teacher_id], [$rooms[(int) $piece->id]]));
+                }
             } finally {
                 request()->attributes->remove('timetable.agenda_others');
             }
         } finally {
             DB::rollBack();
         }
-        array_push($errors, ...$this->ownBusyTexts($busy, array_map(fn ($x) => (int) $x[0]->teacher_id, $plan), array_values(array_unique($rooms))));
         foreach ($plan as [$piece]) {
             $r = $room ?? ($rooms[(int) $piece->id] !== '' ? $this->agendaMemo('room|' . $rooms[(int) $piece->id], fn () => Auditorium::where('code', $rooms[(int) $piece->id])->first()) : null);
             $students = $this->agendaMemo('students|' . $piece->id, fn () => $this->cardStudents($piece));

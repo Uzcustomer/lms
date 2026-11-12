@@ -235,7 +235,8 @@ const data = {
         assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), ['Joylash uchun tanlash']);
         await p.click('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-room-pick]');
         await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-room-code="R117"]');
-        assert.ok((await p.evaluate(() => calls.map(c => c[0]))).includes('/cards/708677/room-options?week=11&day=3&pair=5'));
+        // Codex: bosilgan — ikkinchi bo'lak (12:00), ro'yxat esa birlik boshidan (10:00, 3-qator) — joylash (unitMovePlan) bilan bir xil.
+        assert.ok((await p.evaluate(() => calls.map(c => c[0]))).includes('/cards/708677/room-options?week=11&day=3&pair=3'));
         await p.click('#pnCardPop [data-pop-cf] [data-cb-room-code="R117"]');
         assert.deepEqual(await txt('[data-pop-cf] [data-cb-room-apply]'), ['Xonani almashtirish (shu hafta)']);
         await p.click('#pnCardPop [data-pop-cf] [data-cb-room-apply]');

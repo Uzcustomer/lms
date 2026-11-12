@@ -12850,7 +12850,9 @@
                         roomPick: edit && W && weeklyLayer === 'internal' && !(isPlaced && unitIsSplit(list)) ? (() => {
                             const at = isPlaced ? effPlace(roomCard) : null;
                             const day = at ? at.day : d, pair = at ? at.pair : p;
-                            return { card: roomCard, day, pair, placed: !!isPlaced, apply: async room => {
+                            // Xonalar ro'yxati — birlik boshidan (bosilgan bo'lak keyingisi bo'lsa ham): placeCardWithRoom (unitMovePlan) bilan bir xil.
+                            const plan = unitMovePlan(roomCard, pair);
+                            return { card: roomCard, day, pair: plan ? plan[0][1] : pair, placed: !!isPlaced, apply: async room => {
                                 const r = await placeCardWithRoom(roomCard, day, pair, room);
                                 closePanelCardPop();
                                 selected = null;

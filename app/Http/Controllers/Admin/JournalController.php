@@ -10150,6 +10150,12 @@ class JournalController extends Controller
             $actions .= '<form method="POST" action="' . e(route('admin.journal.export-yn-qaydnoma')) . '">' . csrf_field() . $hidden
                 . '<button type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel yuklab olish</button></form>';
         }
+        // Dekan tasdiqlagan — PDF: bosilganda eskisi o'chirilib, joriy ko'rinish va baholar bo'yicha yangisi
+        if ($isPrivileged && $byRole[$Confirmation::ROLE_DEAN]->isNotEmpty()) {
+            $actions .= '<a class="ynq-pdf" href="' . e(route('admin.vedomost-tekshirish.qaydnoma-pdf', [
+                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId,
+            ])) . '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>PDF (yangisini yaratish)</a>';
+        }
         if ($flash = session('ynq_flash')) {
             $actions = '<span class="ynq-note">' . e($flash) . '</span>' . $actions;
         }
@@ -10523,6 +10529,10 @@ class JournalController extends Controller
             . '.ynq-dock .ynq-rejected{padding:8px 12px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:600}'
             . '.ynq-dock .ynq-ok{padding:8px 12px;border-radius:10px;background:#dcfce7;color:#166534;font-size:13px;font-weight:600;line-height:1.35}'
             . '.ynq-dock .ynq-print{margin-top:auto}'
+            . '.ynq-dock .ynq-pdf{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;border-radius:10px;'
+            . 'background:#b91c1c;color:#fff;font:700 15px system-ui,sans-serif;text-decoration:none}'
+            . '.ynq-dock .ynq-pdf:hover{background:#991b1b}.ynq-dock .ynq-pdf svg{width:18px;height:18px;flex-shrink:0}'
+            . '.ynq-dock .ynq-pdf:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}'
             . 'body{margin-right:300px}.ynq-bar{margin-right:0}'
             // Jadval kichikroq — panel yonida to'liq sig'sin; burchak QR lari jadval chetida
             . "[style*='page: page']{zoom:.8;width:max-content;margin:0 auto}"

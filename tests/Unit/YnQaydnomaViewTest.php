@@ -58,6 +58,9 @@ it('drops the signature column from the template and adds rows for more than 30 
     expect((string) $w->getCell('X15')->getValue())->not->toContain('imzo')
         ->and(round($after, 4))->toBe(round($total, 4))                       // kenglik saqlangan — teng bo'lingan
         ->and($w->getCell('X1')->getValue())->toContain('shakl')
+        // Shakl raqami ko'rinadi: 1-qatordagi birlashtirish oxirgi ustungacha emas
+        ->and($w->getMergeCells())->toHaveKey('C1:W1')->not->toHaveKey('C1:X1')
+        ->and($w->getStyle('X1')->getAlignment()->getHorizontal())->toBe('right')
         ->and($extra)->toBe(3)
         ->and($w->getCell('A52')->getValue())->toBe(33)
         ->and($w->getCell('B53')->getValue())->toBe('O‘rtacha foiz')

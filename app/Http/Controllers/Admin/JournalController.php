@@ -12292,6 +12292,18 @@ class JournalController extends Controller
             $dim->setWidth(($dim->getWidth() < 0 ? 8.43 : $dim->getWidth()) + $freed / $lastIndex);
         }
 
+        // Shakl raqami ("12-shakl", …) — o'ng yuqori burchakda (1-qator, oxirgi ustun): shablonda u
+        // C1 dan oxirigacha birlashtirilgan katak ichida qolib, ko'rinmas edi
+        $last = self::YNQ_LAST_COL;
+        if (isset($sheet->getMergeCells()["C1:{$last}1"])) {
+            $sheet->unmergeCells("C1:{$last}1");
+            $sheet->mergeCells('C1:' . $Coordinate::stringFromColumnIndex($lastIndex - 1) . '1');
+        }
+        $shakl = $sheet->getStyle($last . '1');
+        $shakl->getFont()->setBold(true);
+        $shakl->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT)
+            ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+
         $extra = $studentCount - (self::YNQ_LAST_ROW - self::YNQ_FIRST_ROW + 1);
         if ($extra > 0) {
             $height = $sheet->getRowDimension(self::YNQ_LAST_ROW - 1)->getRowHeight();

@@ -140,6 +140,8 @@
                 </a>
             </div>
 
+            {{-- Filtrlar — registrator / admin uchun; dekan, kafedra mudiri va o'qituvchida faqat kartochkalar --}}
+            @if(!$isDean && !$isHead && !$isTeacher)
             @php
                 // Filtr maydoni (select): nomi, yorlig'i, variantlari
                 $select = fn (string $name, string $label, $items) => ['name' => $name, 'label' => $label, 'items' => $items];
@@ -192,12 +194,13 @@
                 <button type="submit" class="yq-btn yq-btn--primary">Ko'rsatish</button>
                 <a href="{{ $listRoute }}" class="yq-btn">Tozalash</a>
             </form>
+            @endif
 
             <div class="yq-card">
                 @if($rows->isEmpty())
                     <div class="yq-empty">
                         <b>Mos vedomost topilmadi</b>
-                        {{ $isTeacher ? "Joriy dars jadvalingizdagi guruh va fanlar shu yerda ko'rinadi." : "YN imtihonlari tugagan fanlar shu yerda ko'rinadi." }} Filtrlarni o'zgartirib ko'ring.
+                        {{ $isTeacher ? "Joriy dars jadvalingizdagi guruh va fanlar shu yerda ko'rinadi." : "YN imtihonlari tugagan fanlar shu yerda ko'rinadi." }}{{ ($isDean || $isHead || $isTeacher) ? '' : " Filtrlarni o'zgartirib ko'ring." }}
                     </div>
                 @else
                     <div class="yq-scroll">

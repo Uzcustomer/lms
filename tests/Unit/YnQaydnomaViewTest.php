@@ -130,11 +130,14 @@ describe('teacher confirmation', function () {
 
         // Excel quruvchi o'rniga soxta varaq — QR bosish asl mantiq bilan (stampConfirmationQrs)
         $this->controller = new class extends JournalController {
+            public ?bool $withFamily = null;
+
             public function __construct() {}
 
             public function buildYnQaydnomaSpreadsheet(string $subjectId, string $semesterCode, string $groupHemisId,
-                int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1): array|string
+                int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true): array|string
             {
+                $this->withFamily = $withFamily;
                 $s = qaydnomaSheet();
                 (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $s->getSheet(0), 10);
                 (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $s, $subjectId, $semesterCode, $groupHemisId);
@@ -158,6 +161,7 @@ describe('teacher confirmation', function () {
             return match ($action) {
                 'confirm' => $this->controller->confirmYnQaydnoma($request),
                 'reject' => $this->controller->rejectYnQaydnoma($request->merge(['reason' => 'MT baholari xato'])),
+                'view' => $this->controller->viewYnQaydnoma($request),
                 default => $this->controller->revokeYnQaydnoma($request),
             };
         };
@@ -391,6 +395,17 @@ describe('teacher confirmation', function () {
         expect($rejection->fresh()->resolved_at)->toBeNull();
         ($this->confirm)(5, 'confirm', '78');
         expect($rejection->fresh()->resolved_at)->not->toBeNull();
+    });
+
+    it('shows the subgroup teacher only their own group, the kafedra mudiri the whole vedomost, with a side panel', function () {
+        $html = ($this->confirm)(1, 'view')->getContent();
+        expect($this->controller->withFamily)->toBeFalse()
+            ->and($html)->toContain('<aside class="ynq-dock" aria-label="Tasdiqlash">')
+            ->toContain('Tasdiqlash</button>');
+
+        ($this->confirm)(1);
+        ($this->confirm)(4, 'view');
+        expect($this->controller->withFamily)->toBeTrue();
     });
 
     it('does not let the lecturer confirm', function () {

@@ -10077,8 +10077,10 @@ class JournalController extends Controller
         $weightTest = (int) ($request->weight_test ?? 60);
         abort_if($weightJn + $weightMt + $weightOn + $weightOski + $weightTest !== 100, 422, "Vaznlar jami 100 bo'lishi kerak");
 
+        // Kichik guruhlar qaydnomasi: amaliyot o'qituvchisi — faqat o'z guruhi talabalari; kafedra mudiri,
+        // dekan va boshqalar — umumiy jadval (hamma kichik guruhlar)
         $built = $this->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
-            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1));
+            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1), $isPrivileged || $approverRole);
         if (is_string($built)) {
             abort(422, $built);
         }
@@ -10485,19 +10487,20 @@ class JournalController extends Controller
         // Dekan (chap) va kafedra mudiri (o'ng) QR lari — varaqning yuqori burchaklarida, ostida ismi
         $html = self::placeCornerQrs($html, 'width:64px;height:64px', 'top:24px', 'font:11px/1.25 serif');
 
-        // Tepada — nom; tugmalar va holatlar — pastki o'ng burchakda (doim ko'rinadi)
+        // Tepada — nom; tugmalar va holatlar — o'ng tomondagi qotirilgan panelda (doim ko'rinadi)
         $title = e($title);
         $bar = '<div class="ynq-bar"><b>' . $title . '</b></div>'
-            . '<div class="ynq-dock">' . $actions
+            . '<aside class="ynq-dock" aria-label="Tasdiqlash"><div class="ynq-dock-title">Tasdiqlash</div>' . $actions
             . '<button type="button" class="ynq-print" onclick="window.print()">'
             . '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>'
-            . 'Chop etish</button></div>'
+            . 'Chop etish</button></aside>'
             . '<style>.ynq-bar{position:sticky;top:0;z-index:5;padding:14px 20px;margin:-8px -8px 12px;background:#1e3a8a;color:#fff;font:700 18px/1.3 system-ui,sans-serif;letter-spacing:.01em}'
-            . '.ynq-dock{position:fixed;right:20px;bottom:20px;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;'
-            . 'max-width:calc(100vw - 40px);padding:12px;border-radius:14px;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;'
-            . 'box-shadow:0 10px 30px rgba(15,23,42,.18);font:500 14px system-ui,sans-serif}'
-            . '.ynq-dock form{margin:0;display:flex;align-items:center;gap:10px}'
-            . '.ynq-dock button{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:10px;border:1px solid #cbd5e1;'
+            . '.ynq-dock{position:fixed;top:0;right:0;bottom:0;width:300px;z-index:20;display:flex;flex-direction:column;align-items:stretch;gap:10px;'
+            . 'padding:20px 16px;overflow-y:auto;box-sizing:border-box;background:#f8fafc;border-left:1px solid #e2e8f0;'
+            . 'box-shadow:-6px 0 20px rgba(15,23,42,.08);font:500 14px system-ui,sans-serif}'
+            . '.ynq-dock-title{font:700 13px system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin-bottom:2px}'
+            . '.ynq-dock form{margin:0;display:flex;flex-direction:column;align-items:stretch;gap:8px}'
+            . '.ynq-dock button{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;border-radius:10px;border:1px solid #cbd5e1;'
             . 'background:#fff;color:#1e3a8a;font:700 15px system-ui,sans-serif;cursor:pointer;transition:background .15s,box-shadow .15s,transform .05s}'
             . '.ynq-dock button:hover{background:#f1f5f9}.ynq-dock button:active{transform:translateY(1px)}'
             . '.ynq-dock button:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}'
@@ -10506,11 +10509,14 @@ class JournalController extends Controller
             . '.ynq-dock .ynq-confirm:hover{background:#15803d}'
             . '.ynq-dock .ynq-revoke{background:#fff;border-color:#fecaca;color:#b91c1c}.ynq-dock .ynq-revoke:hover{background:#fef2f2}'
             . '.ynq-dock .ynq-note{color:#475569;font-size:13px}'
-            . '.ynq-dock .ynq-rejected{flex-basis:100%;padding:8px 12px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:600}'
-            . '.ynq-dock .ynq-ok{padding:6px 12px;border-radius:999px;background:#dcfce7;color:#166534;font-size:13px;font-weight:600}'
-            . 'body{padding-bottom:110px}'
+            . '.ynq-dock .ynq-rejected{padding:8px 12px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:13px;font-weight:600}'
+            . '.ynq-dock .ynq-ok{padding:8px 12px;border-radius:10px;background:#dcfce7;color:#166534;font-size:13px;font-weight:600;line-height:1.35}'
+            . '.ynq-dock .ynq-print{margin-top:auto}'
+            . 'body{margin-right:300px}.ynq-bar{margin-right:0}'
+            // Jadval kichikroq — panel yonida to'liq sig'sin; burchak QR lari jadval chetida
+            . "[style*='page: page']{zoom:.8;width:max-content;margin:0 auto}"
             . '.ynq-qr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px}'
-            . '@media print{.ynq-bar,.ynq-dock{display:none}body{padding-bottom:0}}</style>';
+            . "@media print{.ynq-bar,.ynq-dock{display:none}body{margin-right:0}[style*='page: page']{zoom:1}}</style>";
         $html = preg_replace('/<body([^>]*)>/i', '<body$1>' . $bar, $html, 1);
         $html = preg_replace('/<title>.*?<\/title>/is', '<title>' . $title . '</title>', $html, 1);
 
@@ -10937,9 +10943,9 @@ class JournalController extends Controller
      */
     public function buildYnQaydnomaSpreadsheet(
         string $subjectId, string $semesterCode, string $groupHemisId,
-        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1
+        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true
     ): array|string {
-        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, false);
+        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, false, $withFamily);
     }
 
     /**
@@ -10959,13 +10965,14 @@ class JournalController extends Controller
 
     private function ynQaydnoma(
         string $subjectId, string $semesterCode, string $groupHemisId,
-        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId, bool $formsOnly
+        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId, bool $formsOnly, bool $withFamily = true
     ): array|string {
         $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
 
         // Kichik guruhlar (d1/d22-01a, 01b, 01c) — bitta umumiy qaydnoma: asosiysi birinchi guruh,
-        // qolganlarining talabalari o'z dars jadvali bo'yicha hisoblanib qo'shiladi (formsOnly — faqat o'zi)
-        $family = $formsOnly ? [$groupHemisId] : \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+        // qolganlarining talabalari o'z dars jadvali bo'yicha hisoblanib qo'shiladi (formsOnly yoki
+        // !$withFamily — faqat shu guruh: o'qituvchi o'z kichik guruhini ko'radi)
+        $family = ($formsOnly || !$withFamily) ? [$groupHemisId] : \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
         $groupHemisId = $family[0];
 
         $group = Group::where('group_hemis_id', $groupHemisId)->first();

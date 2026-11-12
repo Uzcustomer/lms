@@ -1485,7 +1485,15 @@
         .tt-par-hl { outline: 3px solid #6366f1 !important; outline-offset: -2px; }
         .tt-chip.tt-mudir-ph { outline: 2px dashed #ca8a04; outline-offset: -2px; background-image: linear-gradient(135deg, rgba(234,179,8,.18), rgba(148,163,184,.18)) !important; }
         .tt-mudir-ph-tag { font-size: 9px; font-weight: 700; color: #854d0e; background: #fef9c3; border-radius: 3px; padding: 0 3px; display: inline-block; }
-        .pn-card.pn-flash, td.tt-slot-flash { outline: 3px solid #f59e0b !important; outline-offset: -2px; transition: outline-color .3s; }
+.pn-card.pn-flash, td.tt-slot-flash { outline: 3px solid #f59e0b !important; outline-offset: -2px; transition: outline-color .3s; }
+        /* "Joylash uchun tanlash": tanlangan karta guruh ustuni (kataklar va sarlavha) — chap va o'ngda qalin ikki chiziq (3px ko'k + 1px oq). */
+        #grid td.tt-pick-col, #grid th.tt-pick-colh { box-shadow: inset 3px 0 0 #2563eb, inset 4px 0 0 #fff, inset -3px 0 0 #2563eb, inset -4px 0 0 #fff; }
+        #grid th.tt-pick-colh { background: #dbeafe; }
+        #ttPickColMsg { position: sticky; left: 0; top: 0; z-index: 30; margin: 4px; padding: 4px 8px; border: 1px solid #93c5fd; border-radius: 6px;
+            background: #eff6ff; color: #1e3a8a; font-size: 12px; }
+        #ttPickColMsg button { margin-left: 6px; border: 1px solid #2563eb; border-radius: 5px; padding: 0 8px; color: #1d4ed8; background: #fff; }
+        /* Sikl: tanlangan karta guruh qatori — yuqori va pastda qalin ikki chiziq. */
+        #cycleGrid .cyc-cell.cyc-pick-row { box-shadow: inset 0 3px 0 #2563eb, inset 0 4px 0 #fff, inset 0 -3px 0 #2563eb, inset 0 -4px 0 #fff !important; }
         #ttAgendaModal { position: fixed; inset: 0; z-index: 10030; background: rgba(15,23,42,.35); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; }
         #ttAgendaModal .ag-box { background: #fff; border-radius: 10px; width: min(980px, 100%); padding: 12px 14px; box-shadow: 0 20px 60px #0005; font-size: 12px; }
         #ttAgendaModal .ag-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -7010,10 +7018,12 @@
                     ? ((cyclePlanData && cyclePlanData.cycle_cards) || []).find(item => item.key === cardKey)
                     : null;
                 $('cycleGrid').querySelectorAll('[data-cycle-row]').forEach(cell => {
-                    cell.classList.remove('cycle-row-target', 'cycle-row-muted');
+                    cell.classList.remove('cycle-row-target', 'cycle-row-muted', 'cyc-pick-row');
                     if (!card) return;
-                    cell.classList.add(cycCardRowOk(card, cell.dataset.cycleRow)
-                        ? 'cycle-row-target' : 'cycle-row-muted');
+                    const ok = cycCardRowOk(card, cell.dataset.cycleRow);
+                    cell.classList.add(ok ? 'cycle-row-target' : 'cycle-row-muted');
+                    // "Joylash uchun tanlash" (tanlangan karta) — guruh qatori qalin ikki chiziq bilan, tanlov bekor bo'lguncha.
+                    if (ok && cycleDragKey === cardKey) cell.classList.add('cyc-pick-row');
                 });
             }
             // Kun chiziqlari va dam olish ustunlari jadval fonida chiziladi:
@@ -9742,6 +9752,21 @@
                 cycleDragKey = key;
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(o => o.classList.toggle('cycle-pn-selected', o.dataset.cycleKey === key));
                 highlightCycleRow(key);
+                // Jadval guruh qatoriga suriladi (gorizontal + vertikal): birinchi bo'sh (blok emas) katak, bo'lmasa qatorning birinchi katagi.
+                const rows = [...$('cycleGrid').querySelectorAll('.cyc-pick-row')];
+                const target = rows.find(x => !x.classList.contains('cyc-block')) || rows[0];
+                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', inline: 'center' });
+                // Qatori hozirgi filtrda (oqim filtri) yo'q — "Guruhni ko'rsatish": filtr tozalanib qayta chiziladi.
+                if (!rows.length && typeof cycleGroupFilter !== 'undefined' && cycleGroupFilter) {
+                    $('cycleMsg').innerHTML = 'Bu guruh hozirgi filtrda ko\'rinmaydi — <button type="button" data-cyc-pick-show style="border:1px solid #2563eb;border-radius:5px;padding:0 8px;color:#1d4ed8;background:#fff">Guruhni ko\'rsatish</button>';
+                    $('cycleMsg').querySelector('[data-cyc-pick-show]').onclick = async () => {
+                        cycleGroupFilter = '';
+                        if ($('cycleGroupFilter')) $('cycleGroupFilter').value = '';
+                        await loadCyclePlan();
+                        cycSelectForPlace(key);
+                    };
+                    return;
+                }
                 $('cycleMsg').textContent = 'Endi shu oqim qatoridagi boshlanish kunini bosing.';
             }
             async function cycPhRevert(card, btn) {
@@ -12794,7 +12819,7 @@
                             openPlaceRoomPick(roomCard, at ? at.day : d, at ? at.pair : p);
                         } : null,
                         mudir: mudirPhAllowed() && !phOf(c) ? () => { const mb = pop.querySelector('[data-pop-mudir]'); if (mb && !mb.disabled) openMudirPhConfirm(c, mudirPhSlot(c)); } : null,
-                        select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); } : null,
+                        select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); scrollToPickColumn(c); } : null,
                     } });
                 if (placed && W && weeklyLayer === 'internal') {
                     // Joylangan, to'qnashuvdagi dars: sabablar — server yozuvlaridan (butun doska; belgi ham shulardan — ko'rish qamrovidan tashqaridagi
@@ -12850,6 +12875,8 @@
                         closePanelCardPop();
                         selected = (selected && selected.id === c.id) ? null : c;
                         renderPanel(); renderGrid();
+                        // Guruh ustuni belgilanadi (renderGrid → markPickColumns) va jadval shu ustunga suriladi.
+                        if (selected) scrollToPickColumn(selected);
                         return;
                     }
                     // Shu joyga joylash: oldindan tekshiruv (birlik bilan), keyin server (unit-place) — band bo'lsa sababi turlarga ajratilgan
@@ -14065,7 +14092,7 @@
                 h += '</tr><tr>';
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => {
                     const n = grpCount(o, gr);
-                    h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') +
+                    h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '" data-gh="' + esc(gr) + '">' + esc(gName[gr] || '') +
                         (n != null ? '<div class="tt-grp-count"><em class="tt-stu-count" title="' + n + ' ta faol talaba">' + n + '</em></div>' : '') + '</th>';
                 }));
                 h += '</tr></thead><tbody>';
@@ -14279,7 +14306,7 @@
                                     // Bir katakda bir necha almashinuvchi fan — diagonal ajratgich
                                     const lecSplit = lecEx.length ? ' tt-split' : '';
                                     const lecExtras = lecEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
-                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(o.groups[gi], d, p, ids)]) + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' data-gs="' + esc(o.groups.slice(gi, gi + span).join('§')) + '" style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(o.groups[gi], d, p, ids)]) + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
@@ -14302,7 +14329,7 @@
                                     const prcSplit = prcEx.length ? ' tt-split' : '';
                                     const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
                                     const cs = span > 1 ? ' colspan="' + span + '"' : '';
-                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(grp, d, p, ids)]) + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
+                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' data-gs="' + esc(o.groups.slice(gi, gi + span).join('§')) + '" style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(grp, d, p, ids)]) + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
                                     gi += span;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
@@ -14335,6 +14362,7 @@
                 stickGridHead();
                 activeCell = null;   // qayta render — eski faol katak eskirdi
                 focusHighlight();
+                markPickColumns();
 
                 // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)
                 document.querySelectorAll('[data-mudir-place]').forEach(td => td.onclick = () => {
@@ -14529,6 +14557,48 @@
                     attrs: ' title="' + esc((fc.reason || '') + (fc.state === 'room' ? '\nBosing: xona tanlab joylash' : '')) + '"'
                         + (causes ? ' data-bad-ids="' + causes + '" data-bad-tone="' + fc.state + '"' : '') + (fc.state === 'room' ? ' data-fm-place="' + at + '"' : '') };
             }
+            // ── Tanlangan kartaning guruh ustuni ("Joylash uchun tanlash" va fan mas'uli joylash rejimi — umumiy) ──
+            // Ustun kataklari: bo'sh katak (data-g) va dars katagi (data-gs — qamragan guruh ustunlari, "§" bilan); sarlavha — th[data-gh].
+            function pickColumnTargets(c) {
+                const grid = document.getElementById('grid');
+                if (!grid || !c) return { cells: [], heads: [] };
+                const keys = cardGKeys(c);
+                const has = el => (el.dataset.g && keys.includes(el.dataset.g)) || (el.dataset.gs && el.dataset.gs.split('§').some(k => keys.includes(k)));
+                return { cells: [...grid.querySelectorAll('td[data-g],td[data-gs]')].filter(has),
+                    heads: [...grid.querySelectorAll('th[data-gh]')].filter(th => keys.includes(th.dataset.gh)) };
+            }
+            const pickColumnCard = () => (typeof fmPick !== 'undefined' && fmPick && fmPick.card) || (viewMode === 'group' && selected) || null;
+            // Belgi — tanlov bekor bo'lguncha (har render). Guruh ustuni filtrda yo'q — "Guruhni ko'rsatish" (filtrga qo'shib qayta chizish).
+            function markPickColumns() {
+                const grid = document.getElementById('grid');
+                if (!grid) return;
+                grid.querySelectorAll('.tt-pick-col,.tt-pick-colh').forEach(x => x.classList.remove('tt-pick-col', 'tt-pick-colh'));
+                const c = pickColumnCard();
+                const t = c ? pickColumnTargets(c) : { cells: [], heads: [] };
+                t.cells.forEach(td => td.classList.add('tt-pick-col'));
+                t.heads.forEach(th => th.classList.add('tt-pick-colh'));
+                pickColumnMsg(c && !t.heads.length ? c : null);
+            }
+            function pickColumnMsg(c) {
+                let m = document.getElementById('ttPickColMsg');
+                if (!c) { if (m) m.remove(); return; }
+                const wrap = document.getElementById('gridWrap');
+                if (!wrap) return;
+                if (!m) { m = document.createElement('div'); m.id = 'ttPickColMsg'; wrap.insertBefore(m, wrap.firstChild); }
+                m.innerHTML = 'Bu guruh hozirgi filtrda ko\'rinmaydi — <button type="button" data-pick-show>Guruhni ko\'rsatish</button>';
+                m.querySelector('[data-pick-show]').onclick = () => {
+                    const moved = fmEnsureColumn(c);
+                    if (moved) renderAll(); else { buildGroupRows(); renderPanel(); renderGrid(); }
+                    scrollToPickColumn(c);
+                };
+            }
+            // Jadval ustunga suriladi (gorizontal + vertikal, markazga): birinchi yashil (tt-ok) katak, bo'lmasa ustunning birinchi qatori.
+            function scrollToPickColumn(c) {
+                const t = pickColumnTargets(c);
+                const target = t.cells.find(td => td.classList.contains('tt-ok')) || t.cells[0] || t.heads[0];
+                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', inline: 'center' });
+                return !!target;
+            }
             // Kesim guruh bo'lmasa — guruh kesimiga o'tiladi va kartaning yo'nalishi/kursi tanlanadi (uning guruh ustuni ko'rinsin).
             function fmEnsureColumn(c) {
                 let moved = false;
@@ -14561,10 +14631,7 @@
             function fmScrollToTarget() {
                 if (!fmPick || fmPick.scrolled) return;
                 fmPick.scrolled = true;
-                const keys = cardGKeys(fmPick.card);
-                const mine = [...document.querySelectorAll('#grid td[data-g]')].filter(td => keys.includes(td.dataset.g));
-                const target = mine.find(td => td.classList.contains('tt-ok')) || mine[0];
-                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', inline: 'center' });
+                scrollToPickColumn(fmPick.card);
             }
             // Keyingi haftaga o'tish (bo'sh joy yo'q holatidagi havola) — rejim davom etadi (fmSync shu hafta grid'ini so'raydi).
             function fmGoWeek(w) {

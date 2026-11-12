@@ -8537,7 +8537,7 @@
                     ? (who ? ' ' + whoHtml : '') + (cap ? ' — <span class="cf-cap">' + esc(cap) + '</span>' : '') +
                         ((i.groups || []).length ? ' — ' + esc(cfGroups(i.groups)) : '')
                     : ' ' + esc(String(i.detail || '').replace(/^[^:]*:\s*/, ''));
-                return '<li class="cf-line cf-' + (i.past ? 'past' : cfKindLevel(i.kind)) + '"><b>' + esc(cfLabel(i.kind)) + ':</b>' + body +
+                return '<li class="cf-line cf-' + (i.past ? 'past' : cfKindLevel(i.kind)) + '"' + (ctx.idx != null ? ' data-cf-i="' + ctx.idx + '"' : '') + '><b>' + esc(cfLabel(i.kind)) + ':</b>' + body +
                     (when ? ', ' + esc(when) : '') + (i.past ? ' <span class="cf-past-tag">o\u2018tgan</span>'
                         : ' <span class="cf-todo">→ ' + esc(i.todo || CF_TODO[i.kind] || '') + '</span>') + focusLinkHtml(i.show) + '</li>';
             }
@@ -9564,15 +9564,17 @@
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML = '<div class="dp-head"><div><div class="dp-title">' + esc(b.subject) + '</div><div class="dp-sub">' + esc(b.group) + ' · to\u2018qnashuvlar</div></div>' +
-                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div><ul class="cf-list">' +
-                    // O'qituvchi jadvali: ko'chiriladigan dars — shu blokning to'qnashuv sanasidagi amaliyoti (ma'ruza — yo'q).
-                    own.map(i => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null })).join('') + '</ul>' +
+                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div>' +
+                    // Turlarga ajratilgan bloklar (haftalik oynadagidek): [Ko'rsatish] — xona / o'qituvchining shu kungi darslari, guruh darslari;
+                    // qatorlarda o'qituvchi jadvali havolasi (ko'chiriladigan dars — shu blokning to'qnashuv sanasidagi amaliyoti).
+                    cycCfBlocksHtml(own, key) +
                     // Amallar: bo'sh smenaga o'tkazish, boshqa o'qituvchi, vaqtincha kafedra mudiri; o'qituvchi / xona havolalari.
                     cycActionsHtml(cycCardOf(key), own);
                 document.body.appendChild(pop);
                 // Joy: pastda sig'masa — yuqoriga; kontent (maslahat, forma) o'zgarsa qayta hisoblanadi.
                 const reposition = cycPopWatch(pop, el);
                 cycActionsBind(pop, cycCardOf(key), own, reposition);
+                cycCfBlocksBind(pop, own, cycCardOf(key) || pc, reposition);
                 loadShiftAdvice(pop, key, own);
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
@@ -9581,8 +9583,10 @@
             // tekshiriladi — oyna ochilganda bir marta (har chizishda emas); javob kelguncha server ko'rsatmasi turadi.
             const cfWantsShiftAdvice = i => i.kind === 'teacher_busy' && !i.lecture && !i.past;
             async function loadShiftAdvice(pop, key, items) {
-                const lis = pop.querySelectorAll('.cf-list > li');
-                const spans = (items || []).map((i, n) => (cfWantsShiftAdvice(i) && lis[n] ? lis[n].querySelector('.cf-todo') : null)).filter(Boolean);
+                // Qator — to'qnashuv tartib raqami bo'yicha (data-cf-i; bloklarda qatorlar turi bo'yicha guruhlangan — joyi boshqacha).
+                const lis = [...pop.querySelectorAll('.cf-list > li')];
+                const liOf = n => lis.find(li => li.dataset && li.dataset.cfI === String(n)) || lis[n];
+                const spans = (items || []).map((i, n) => (cfWantsShiftAdvice(i) && liOf(n) ? liOf(n).querySelector('.cf-todo') : null)).filter(Boolean);
                 if (!spans.length || !key) return;
                 spans.forEach(sp => sp.classList.add('cf-checking'));
                 try {
@@ -9845,23 +9849,59 @@
             // Sikl karta oynasi: to'qnashuvlar turlarga ajratilgan bloklarda — har blok tur va kim bo'yicha ("O'qituvchi band: X", "Xona band:
             // 123-amaliyot xonasi", "Xona sig'maydi: …"), sarlavha "To'qnashuv — sabab: o'qituvchi band va xona band"; qatorlar — tuzilgan
             // ro'yxatdan (cfLineHtml, "Ko'rsatish" bilan), yashirilmaydi.
-            function cycCfBlocksHtml(own, key) {
+            function cycCfBlocks(own) {
                 const m = new Map();
-                own.forEach(i => {
+                own.forEach((i, n) => {
                     const who = cfWho(i) || '';
                     const k = i.kind + '|' + who;
-                    if (!m.has(k)) m.set(k, { kind: i.kind, who, items: [] });
+                    if (!m.has(k)) m.set(k, { kind: i.kind, who, items: [], idx: [] });
                     m.get(k).items.push(i);
+                    m.get(k).idx.push(n);
                 });
                 const order = Object.keys(CF_LABEL), at = k => (order.includes(k) ? order.indexOf(k) : order.length);
-                const blocks = [...m.values()].sort((a, b) => at(a.kind) - at(b.kind));
+                return [...m.values()].sort((a, b) => at(a.kind) - at(b.kind));
+            }
+            // Sikl to'qnashuv yozuvi → haftalik bloklar bilan bir xil sabab (cbShowDetail uchun): sana — birinchi kelgusi (bo'lmasa birinchi) sana.
+            const CYC_CB_KIND = { teacher_busy: 'teacher', room_busy: 'room', room_lectures: 'room', group_busy: 'group', lecture_overlap: 'group', room_capacity: 'capacity' };
+            function cbFromCycleItem(i) {
+                const kind = CYC_CB_KIND[i.kind];
+                if (!kind) return null;
+                const date = i.date_from || i.from || ((i.show || {}).dates || [])[0] || '';
+                const day = date ? ((new Date(date + 'T00:00:00').getDay() + 6) % 7) + 1 : 0;
+                return { kind, who: kind === 'room' ? ((i.show && i.show.room_name) || cfWho(i) || '') : (cfWho(i) || ''), date, day,
+                    room_code: i.room || (i.show || {}).room_code || '', teacher_id: +i.teacher_id || null, groups: i.groups || [], hit_groups: i.groups || [],
+                    subject: i.with || '', time: i.time || '', show: i.show || null };
+            }
+            // Bloklardagi [Ko'rsatish]: xona / o'qituvchi — shu kungi darslar (teacher-agenda), guruh — to'qnashgan darslar; fokus — yozuvning show'i.
+            function cycCfBlocksBind(pop, own, card, reposition) {
+                const blocks = cycCfBlocks(own);
+                pop.querySelectorAll('[data-cyc-cb-show]').forEach(a => a.onclick = ev => {
+                    ev.preventDefault(); ev.stopPropagation();
+                    const i = +a.dataset.cycCbShow, el = pop.querySelector('[data-cyc-cb-detail="' + i + '"]'), blk = blocks[i];
+                    if (!el || !blk) return;
+                    el.hidden = !el.hidden;
+                    if (!el.hidden && !el.dataset.loaded) {
+                        el.dataset.loaded = '1';
+                        const items = blk.items.map(cbFromCycleItem).filter(Boolean);
+                        const b = { kind: CYC_CB_KIND[blk.kind], who: items[0] ? items[0].who : blk.who, date: items[0] ? items[0].date : '', day: items[0] ? items[0].day : 0, items };
+                        const ctx = { card: { id: 0, teacher_id: card && card.teacher ? +card.teacher.id : null, subject_name: card ? card.subject : '' }, ids: [],
+                            mineGroups: card ? [card.group] : [], day: b.day, pair: 1, len: 1, placed: true, close: closeCycDayPop, reposition };
+                        cbShowDetail(el, b, ctx).then(() => reposition && reposition());
+                    }
+                    if (reposition) reposition();
+                });
+            }
+            function cycCfBlocksHtml(own, key) {
+                const blocks = cycCfBlocks(own);
                 const kinds = [...new Set(blocks.filter(b => b.items.some(i => !i.past)).map(b => cfLabel(b.kind).toLowerCase()))];
                 const title = "To'qnashuv" + (kinds.length ? ' — sabab: ' + (kinds.length > 1 ? kinds.slice(0, -1).join(', ') + ' va ' + kinds[kinds.length - 1] : kinds[0]) : '');
                 const kindAttr = { teacher_busy: 'teacher', group_busy: 'group', room_busy: 'room', room_capacity: 'capacity', lecture_overlap: 'group', room_lectures: 'room' };
                 return '<div class="cb-title" data-cb-title style="font-weight:600;color:#991b1b;margin-top:4px">' + esc(title) + '</div>' +
-                    blocks.map(b => '<div class="cb-block" data-cb-block="' + (kindAttr[b.kind] || 'other') + '" style="margin-top:3px">' +
-                        '<b data-cb-head>' + esc(cfLabel(b.kind) + (b.who ? ': ' + b.who : '')) + '</b>' +
-                        '<ul class="cf-list">' + b.items.map(i => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null })).join('') + '</ul></div>').join('');
+                    blocks.map((b, bi) => '<div class="cb-block" data-cb-block="' + (kindAttr[b.kind] || 'other') + '" style="margin-top:3px">' +
+                        '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cfLabel(b.kind) + (b.who ? ': ' + b.who : '')) + '</b>' +
+                        (['room', 'teacher', 'group'].includes(kindAttr[b.kind]) ? '<a href="#" data-cyc-cb-show="' + bi + '" style="white-space:nowrap;text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</div>' +
+                        '<ul class="cf-list">' + b.items.map((i, n) => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null, idx: b.idx[n] })).join('') + '</ul>' +
+                        '<div data-cyc-cb-detail="' + bi + '" hidden style="margin-top:3px"></div></div>').join('');
             }
             // Panel kartasi oynasi: to'qnashuvlar (bo'lsa), havolalar va amallar.
             function openCycCardPop(key, el) {
@@ -9879,6 +9919,7 @@
                 document.body.appendChild(pop);
                 const reposition = cycPopWatch(pop, el);
                 cycActionsBind(pop, card, own, reposition);
+                if (own.length) cycCfBlocksBind(pop, own, card, reposition);
                 if (own.length) loadShiftAdvice(pop, key, own);
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
@@ -9890,7 +9931,13 @@
                 if (!cf) return;
                 ev.preventDefault();
                 ev.stopPropagation();
-                if (cf.dataset.wcf) openWeekCfPop(cf); else openCfPop(cf);
+                if (cf.dataset.wcf) {
+                    // Haftalik panel kartasi: karta oynasi, to'qnashuv bloklari [Ko'rsatish] bilan ochiq (xona / o'qituvchi kunlik ro'yxati, haftalik
+                    // jadval havolalari); ichki jadval va hafta tanlanmagan bo'lsa — eski qisqa oyna.
+                    const c = (cards || []).find(x => +x.id === +cf.dataset.wcf) || (allCards || []).find(x => +x.id === +cf.dataset.wcf);
+                    if (c && curWeek && weeklyLayer === 'internal' && effPlace(c)) openPanelCardPop(c, cf, { cfOpen: true });
+                    else openWeekCfPop(cf);
+                } else openCfPop(cf);
             }, true);
             // Haftalik panel kartasining to'qnashuvlari (joriy hafta, /conflicts?items=1&week=N) — har biri alohida qatorda.
             function openWeekCfPop(el) {
@@ -12620,7 +12667,7 @@
             // Panel kartasi oynasi: o'qituvchi (to'liq F.I.Sh. → kun/hafta jadvali, shu karta ko'chiriladigan dars), xona (sig'imi →
             // xona bandligi), tashqi jadval joyi (→ ichki jadvalda shu joy; "Shu joyga joylash"), "Joylash uchun tanlash".
             // Tahrir huquqi yo'q — faqat ko'rish (havolalar ishlaydi). O'qituvchi roli — vaqt so'rovi tugmasi.
-            function openPanelCardPop(c, el) {
+            function openPanelCardPop(c, el, opts = {}) {
                 closePanelCardPop();
                 const W = curWeek || 0;
                 const list = c.training_type === 'lecture' ? [c] : unitOf(c);
@@ -12710,6 +12757,8 @@
                     }).concat([cbCapItem(c)].filter(Boolean));
                     const first = effPlace(list[0]) || placed;
                     cbRender(pop.querySelector('[data-pop-cf]'), cfItems, cbCtx(first.day, first.pair, true, c));
+                    // To'qnashuv belgisidan ochilgan: bloklar [Ko'rsatish] bilan ochiq.
+                    if (opts.cfOpen) pop.querySelectorAll('[data-pop-cf] [data-cb-show]').forEach(a => a.click());
                 }
                 // Rad etilgan joylash: sabab bloklari (front oldindan tekshiruvi yoki server conflict_items — bir xil shakl).
                 const showBlocks = items => {
@@ -12930,13 +12979,18 @@
             // Kun ro'yxati qatorlari (agenda yozuvlari): vaqt, guruh(lar), fan (ma'ruza/amaliy), o'qituvchi (xona) yoki xona (o'qituvchi);
             // band qilgan dars — qizil, shu dars — belgilangan; joylanmagan dars — joylanmoqchi bo'lgan vaqtida qo'shimcha qator.
             function cbDayRows(entries, b, ctx) {
-                const hit = new Set(b.items.map(it => +it.card_id));
+                const hit = new Set(b.items.map(it => +it.card_id).filter(Boolean));
                 const mine = new Set(ctx.ids);
+                // Sikl yozuvlari: to'qnashgan / shu dars — guruhlar bo'yicha (kartalar ajratilmagan).
+                const hitG = new Set(b.items.flatMap(it => it.hit_groups || []));
+                const mineG = new Set(ctx.mineGroups || []);
+                const hitBy = e => (e.card_ids || []).some(id => hit.has(+id)) || (e.groups || []).some(g => hitG.has(g) && !mineG.has(g));
+                const mineBy = e => (e.card_ids || []).some(id => mine.has(+id)) || (e.groups || []).some(g => mineG.has(g));
                 // Qamrovdan tashqari dars (hidden) — vaqti band, tafsiloti yashirin: "band: boshqa fakultet".
                 const rows = (entries || []).map(e => (e.hidden
                     ? { start: e.start, end: e.end, groups: [], subject: e.label || 'band: boshqa fakultet', type: null, who: '', hit: false, mine: false, hidden: true }
                     : { start: e.start, end: e.end, groups: e.groups || [], subject: e.subject, type: e.type,
-                        who: b.kind === 'room' ? (e.teacher || '') : (e.room || ''), hit: (e.card_ids || []).some(id => hit.has(+id)), mine: (e.card_ids || []).some(id => mine.has(+id)) }));
+                        who: b.kind === 'room' ? (e.teacher || '') : (e.room || ''), hit: hitBy(e), mine: mineBy(e) }));
                 // Joylanmoqchi dars: bo'laklar o'z tartibida ketma-ket (ctx.pair dan); xona ro'yxatida — faqat shu xonadagi bo'laklar (bo'laklar
                 // turli xonada bo'lishi mumkin), ketma-ketlari — bitta qator.
                 if (!ctx.placed) {
@@ -12972,13 +13026,13 @@
                     (info ? '<a href="#" data-cb-agenda style="text-decoration:underline dotted">' + esc(info.label) + '</a>' : '') + '</div>';
                 const bind = info => {
                     const f = el.querySelector('[data-cb-focus]');
-                    if (f) f.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); if (ctx.close) ctx.close(); ttFocusStart(cbFocusShow(b, ctx)); };
+                    if (f) f.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); if (ctx.close) ctx.close(); ttFocusStart(it.show || cbFocusShow(b, ctx)); };
                     const a = el.querySelector('[data-cb-agenda]');
                     if (a && info) a.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); if (ctx.close) ctx.close(); ttAgendaOpen(info.open); };
                 };
                 if (b.kind === 'group') {
                     el.innerHTML = '<div data-cb-detail-head style="font-weight:600">Guruh ' + esc(b.who) + ' · ' + esc(dow) + '</div><ul style="margin:1px 0 0;padding-left:16px">' +
-                        b.items.map(x => '<li data-cb-row data-cb-hit style="color:#b91c1c">' + esc([x.time, (x.subject || '') + ' (' + cbTypeText(x.training_type) + ')', x.teacher, x.room_name].filter(Boolean).join(' · ')) + '</li>').join('') +
+                        b.items.map(x => '<li data-cb-row data-cb-hit style="color:#b91c1c">' + esc([x.time, (x.subject || '') + (x.training_type ? ' (' + cbTypeText(x.training_type) + ')' : ''), x.teacher, x.room_name].filter(Boolean).join(' · ')) + '</li>').join('') +
                         '</ul>' + links(null);
                     bind(null);
                     return;

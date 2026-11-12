@@ -12,7 +12,9 @@ const cut = (from, to) => {
 const css = cut('<style>', '</style>').slice('<style>'.length);
 const code = cut("            // ===== To'qnashuvlar: qisqa belgi, rang", '            // Ichki jadval: kun ustunini tanlash, kun oynasi va soatni surish.')
     + cut('            function openCfPop(el) {', "            // Panel (sikl va haftalik kartalar) to'qnashuv belgisi")
-    + cut("            // \"Vaqtincha kafedra mudirida\" bo'limi", '            function renderCycleCards(j) {');
+    + cut("            // \"Vaqtincha kafedra mudirida\" bo'limi", '            function renderCycleCards(j) {')
+    // To'qnashuv bloklari va [Ko'rsatish] (haftalik oyna bilan umumiy).
+    + cut("            // ===== To'qnashuv sababi: turlarga ajratilgan bloklar", '            function panelPopOutside(ev) {');
 
 const KEY = 'davolash ishi|5|d2/d22-09b|Epidemiologiya|practice';
 const stubs = (role, advice) => `
@@ -27,6 +29,7 @@ const stubs = (role, advice) => `
     const cycleCardStateText = c => c.placed ? 'joylangan' : 'joylanmagan';
     const ttToast = (h) => calls.push(['toast', h]);
     const ttAgendaOpen = i => calls.push(['agenda', i]);
+    const curWeek = 0, boardDayNames = () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
     const openCycleAssign = k => calls.push(['assign', k]);
     const placeCycleCardAt = (c, i, p) => calls.push(['place', c.key, i, p]);
     const loadCyclePlan = async () => calls.push(['reload']);
@@ -35,6 +38,9 @@ const stubs = (role, advice) => `
     async function api(url, method, body) {
         calls.push([url.replace(BASE + '/boards/7/', ''), body]);
         if (url.endsWith('cycle-shift-advice')) return { advice: ADVICE };
+        if (url.includes('/teacher-agenda?')) return { entries: [
+            { start: '08:30', end: '13:20', groups: ['d2/d22-09a'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [77] },
+            { start: '08:30', end: '13:20', groups: ['d2/d22-09b'], subject: 'Epidemiologiya', type: 'A', room: '305', card_ids: [78] }] };
         if (url.endsWith('cycle-assign-options')) return { current: { teacher_id: 31, auditorium_code: 'R305' } };
         if (url.endsWith('cycle-plan')) return { rows: [{ group: 'F1 / 1-oqim', subgroups: ['d2/d22-09b'], blocks: [{ subject: 'Epidemiologiya', from: 50 }] }] };
         return { ok: true };
@@ -158,7 +164,25 @@ const settle = p => p.evaluate(() => new Promise(r => setTimeout(r, 30)));
         box = await p.evaluate(() => { const e = document.getElementById('cycDayPop'); const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, sh: e.scrollHeight, ch: e.clientHeight }; });
         assert.ok(box.top >= 8 && box.bottom <= 792 && box.sh > box.ch, 'max-height / scroll: ' + JSON.stringify(box));
         await p.close();
-        console.log('timetable cycle actions: 6 scenarios passed');
+        // 7) Sikl to'qnashuv oynasi (panel belgisi / jadval bloki): turlarga ajratilgan blok va [Ko'rsatish] — o'qituvchining to'qnashuv
+        //    sanasidagi (03.11) kunlik ro'yxati: to'qnashgan guruhcha (09a) qizil, shu dars (09b) belgilangan; haftalik jadval havolasi.
+        p = await page(browser, 'admin', partial, 40);
+        await p.evaluate(k => { const a = document.getElementById('anchor'); a.dataset.cfKey = k; T.openCfPop(a); }, KEY);
+        await settle(p);
+        assert.equal(await p.locator('#cycDayPop [data-cb-title]').textContent(), "To'qnashuv — sabab: o'qituvchi band");
+        assert.equal(await p.locator('#cycDayPop [data-cb-head]').textContent(), "O'qituvchi band: TOSHPO'LATOV B. A.");
+        await p.locator('#cycDayPop [data-cyc-cb-show]').click();
+        await p.waitForSelector('#cycDayPop [data-cyc-cb-detail] [data-cb-row]');
+        const agendaCall = (await p.evaluate(() => T.calls)).find(c => /teacher-agenda/.test(c[0]));
+        assert.match(agendaCall[0], /teacher-agenda\?teacher_id=31&date=2026-11-03&range=day&layer=internal/);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-detail-head]').textContent(), "TOSHPO'LATOV B. A. · Seshanba, 03.11");
+        assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-hit]', xs => xs.map(x => x.textContent)), ['08:30–13:20 · d2/d22-09a · Epidemiologiya (amaliy) · 305']);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-mine]').count(), 1);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-cb-detail] [data-cb-agenda]').textContent(), "O'qituvchining haftalik jadvali");
+        // Smena maslahati — o'z qatorida (bloklarda ham).
+        assert.match(await p.locator('#cycDayPop .cf-list > li[data-cf-i="0"] .cf-todo').textContent(), /13:30 ga o'tkazilsa/);
+        await p.close();
+        console.log('timetable cycle actions: 7 scenarios passed');
     } finally {
         await browser.close();
     }

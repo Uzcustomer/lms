@@ -114,16 +114,20 @@ const data = {
         // 3) [Ko'rsatish] — xona: shu kunning barcha darslari (server: teacher-agenda, xona), to'qnashgani qizil, shu dars (joylanmoqchi) belgilangan.
         await p.evaluate(() => { window.reply['teacher-agenda?room_code=R123'] = { room: { code: 'R123', volume: 17 }, entries: [
             { start: '08:30', end: '09:50', groups: ['d1/d26-02a'], subject: 'Gistologiya', type: 'A', teacher: 'SHARIPOVA F. S.', card_ids: [5] },
+            // Qamrovdan tashqari (boshqa fakultet) — vaqti band, tafsiloti yashirin.
+            { start: '09:00', end: '09:40', hidden: true, label: 'band: boshqa fakultet', groups: [], subject: null, type: null, card_ids: [] },
             { start: '10:00', end: '11:20', groups: ['d1/d26-01a'], subject: 'Tibbiy biologiya. Umumiy genetika', type: 'A', teacher: 'NUROVA Z. A.', card_ids: [708662] }] }; });
         await p.click('#pnCardPop [data-cb-block="room"] [data-cb-show]');
         await p.waitForSelector('#pnCardPop [data-cb-block="room"] [data-cb-row]');
         assert.deepEqual(await txt('[data-cb-block="room"] [data-cb-detail-head]'), ["123-amaliyot xonasi · 17 o'rin · Chorshanba, 25.11"]);
         assert.deepEqual(await txt('[data-cb-block="room"] [data-cb-row]'), [
             '08:30–09:50 · d1/d26-02a · Gistologiya (amaliy) · SHARIPOVA F. S.',
+            '09:00–09:40 · band: boshqa fakultet',
             '10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A.',
             '10:00–11:20 · d1/d26-03a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A. — shu dars (joylanmoqchi)']);
         assert.deepEqual(await txt('[data-cb-block="room"] [data-cb-hit]'), ['10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A.']);
         assert.equal((await txt('[data-cb-block="room"] [data-cb-mine]')).length, 1);
+        assert.deepEqual(await txt('[data-cb-block="room"] [data-cb-hidden]'), ['09:00–09:40 · band: boshqa fakultet']);
         const q = await p.evaluate(() => calls.find(c => /teacher-agenda/.test(c[0]))[0]);
         assert.match(q, /room_code=R123&date=2026-11-25&range=day&layer=internal/);
         // Havolalar: xonaning haftalik jadvali; jadvalda ko'rsatish (to'qnashuvni ko'rish rejimi — xona NOMI bilan).

@@ -12918,8 +12918,11 @@
             function cbDayRows(entries, b, ctx) {
                 const hit = new Set(b.items.map(it => +it.card_id));
                 const mine = new Set(ctx.ids);
-                const rows = (entries || []).filter(e => !e.hidden).map(e => ({ start: e.start, end: e.end, groups: e.groups || [], subject: e.subject, type: e.type,
-                    who: b.kind === 'room' ? (e.teacher || '') : (e.room || ''), hit: (e.card_ids || []).some(id => hit.has(+id)), mine: (e.card_ids || []).some(id => mine.has(+id)) }));
+                // Qamrovdan tashqari dars (hidden) — vaqti band, tafsiloti yashirin: "band: boshqa fakultet".
+                const rows = (entries || []).map(e => (e.hidden
+                    ? { start: e.start, end: e.end, groups: [], subject: e.label || 'band: boshqa fakultet', type: null, who: '', hit: false, mine: false, hidden: true }
+                    : { start: e.start, end: e.end, groups: e.groups || [], subject: e.subject, type: e.type,
+                        who: b.kind === 'room' ? (e.teacher || '') : (e.room || ''), hit: (e.card_ids || []).some(id => hit.has(+id)), mine: (e.card_ids || []).some(id => mine.has(+id)) }));
                 if (!ctx.placed) rows.push({ start: slotStart(ctx.pair), end: slotEnd(ctx.pair + ctx.len - 1), groups: cardGroups(ctx.card), subject: ctx.card.subject_name,
                     type: ctx.card.training_type === 'lecture' ? 'M' : 'A', who: b.kind === 'room' ? (ctx.card.teacher_name || '') : (b.who || ''), hit: false, mine: true, pending: true });
                 rows.sort((x, y) => String(x.start).localeCompare(String(y.start)) || (x.pending ? 1 : 0) - (y.pending ? 1 : 0));
@@ -12927,7 +12930,8 @@
             }
             function cbDayRowHtml(r) {
                 return '<li data-cb-row' + (r.hit ? ' data-cb-hit' : '') + (r.mine ? ' data-cb-mine' : '') + ' style="' + (r.hit ? 'color:#b91c1c;font-weight:600;' : '') +
-                    (r.mine ? 'background:#e0f2fe;' : '') + '">' + esc([(r.start || '') + '–' + (r.end || ''), r.groups.join(', '), (r.subject || '') + ' (' + cbTypeText(r.type) + ')', r.who]
+                    (r.mine ? 'background:#e0f2fe;' : '') + (r.hidden ? 'color:#64748b;' : '') + '"' + (r.hidden ? ' data-cb-hidden' : '') + '>' +
+                    esc([(r.start || '') + '–' + (r.end || ''), r.groups.join(', '), (r.subject || '') + (r.type ? ' (' + cbTypeText(r.type) + ')' : ''), r.who]
                         .filter(Boolean).join(' · ')) + (r.pending ? ' — <i>shu dars (joylanmoqchi)</i>' : r.mine ? ' — <i>shu dars</i>' : '') + '</li>';
             }
             // "Ko'rsatish": xona / o'qituvchi — shu kunning barcha darslari (server: teacher-agenda, sikl darslari bilan); guruh — shu vaqtdagi darsi.

@@ -306,9 +306,10 @@ trait TimetableTeacherAgenda
             $k = (!empty($x['info_only']) ? 'info|' : '') . $k;
             $m = &$merged[$k];
             if ($m === null) {
-                $m = ['visible' => false, 'groups' => [], 'card_ids' => [], 'all_ids' => []] + $x;
+                $m = ['visible' => false, 'groups' => [], 'card_ids' => [], 'all_ids' => [], 'teachers' => []] + $x;
                 $m['groups'] = [];
                 $m['card_ids'] = [];
+                $m['teachers'] = [];
             }
             $m['all_ids'] = array_values(array_unique(array_merge($m['all_ids'], $x['card_ids'])));
             if ($vis) {
@@ -319,6 +320,12 @@ trait TimetableTeacherAgenda
                 $m['visible'] = true;
                 $m['groups'] = array_values(array_unique(array_merge($m['groups'], $x['groups'])));
                 $m['card_ids'] = array_values(array_unique(array_merge($m['card_ids'], $x['card_ids'])));
+                // O'qituvchi(lar) — faqat qamrovdagi qismlardan (boshqa fakultet o'qituvchisi ko'rinmaydi).
+                foreach ((array) ($x['cards'] ?? []) as $c) {
+                    if ($this->suggestionInScope($rights, $c) && (string) ($c->teacher_name ?? '') !== '') {
+                        $m['teachers'][(string) $c->teacher_name] = true;
+                    }
+                }
             }
             unset($m);
         }
@@ -343,7 +350,7 @@ trait TimetableTeacherAgenda
             $out[] = $visible
                 ? $base + ['hidden' => false, 'type' => $x['lecture'] ? 'M' : 'A', 'subject' => $x['subject'], 'groups' => $x['groups'],
                     // O'qituvchi(lar) — xona kunlik ro'yxatida ("Ko'rsatish").
-                    'teacher' => implode(', ', array_values(array_unique(array_filter(array_map(fn ($c) => (string) ($c->teacher_name ?? ''), (array) ($x['cards'] ?? [])))))) ?: null,
+                    'teacher' => implode(', ', array_keys($x['teachers'] ?? [])) ?: null,
                     'room' => $x['room'], 'room_code' => $x['room_code'], 'key' => $x['key'], 'card_ids' => $x['card_ids'], 'week' => $x['week'],
                     'unit' => $x['unit'], 'flow_size' => count($x['all_ids']),
                 'label' => $x['subject'] . ' (' . ($x['lecture'] ? 'M' : 'A') . ') — ' . implode(', ', $x['groups'])]

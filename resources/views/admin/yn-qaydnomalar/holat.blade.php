@@ -77,6 +77,8 @@
         var VH_ORDER = ['none', 'rejected', 'partial', 'teacher', 'head', 'dean', 'waiting'];
 
         function esc(s){ return $('<span>').text(s == null ? '' : s).html(); }
+        // Atribut qiymati uchun — qo'shtirnoq ham (JSON data-* atributlarda)
+        function escA(s){ return esc(s).replace(/"/g, '&quot;'); }
 
         function doSearch() {
             $('#empty-state, #no-results, #results-area').hide();
@@ -150,18 +152,18 @@
         function vhActions(r) {
             var a = '';
             if (r.pdf_url) {
-                a += '<a class="vh-btn vh-btn--pdf" href="' + esc(r.pdf_url) + '" onclick="return vhPdf(this)">PDF</a>'
-                   + '<a class="vh-btn" target="_blank" rel="noopener" href="' + esc(r.pdf_view_url) + '">Ko\'rish</a>';
+                a += '<a class="vh-btn vh-btn--pdf" href="' + escA(r.pdf_url) + '" onclick="return vhPdf(this)">PDF</a>'
+                   + '<a class="vh-btn" target="_blank" rel="noopener" href="' + escA(r.pdf_view_url) + '">Ko\'rish</a>';
             } else if (r.view_url) {
-                a += '<a class="vh-btn" target="_blank" rel="noopener" href="' + esc(r.view_url) + '">Ko\'rish</a>';
+                a += '<a class="vh-btn" target="_blank" rel="noopener" href="' + escA(r.view_url) + '">Ko\'rish</a>';
             } else if (r.journal_url) {
-                a += '<a class="vh-btn" href="' + esc(r.journal_url) + '">Jurnal</a>';
+                a += '<a class="vh-btn" href="' + escA(r.journal_url) + '">Jurnal</a>';
             }
             if (r.excel) {
-                a += '<button type="button" class="vh-btn vh-btn--excel" data-params="' + esc(JSON.stringify(r.excel)) + '" onclick="vhExcel(this)">Excel</button>';
+                a += '<button type="button" class="vh-btn vh-btn--excel" data-params="' + escA(JSON.stringify(r.excel)) + '" onclick="vhExcel(this)">Excel</button>';
             }
             if (vhCanDelete && r.delete_key) {
-                a += '<button type="button" class="vh-btn vh-btn--del" data-key="' + esc(JSON.stringify(r.delete_key)) + '" onclick="vhDelete(this)">O\'chirish</button>';
+                a += '<button type="button" class="vh-btn vh-btn--del" data-key="' + escA(JSON.stringify(r.delete_key)) + '" onclick="vhDelete(this)">O\'chirish</button>';
             }
             return a;
         }

@@ -105,11 +105,19 @@ it('shows the registrar every faculty, with PDF for dean-confirmed ones', functi
     Auth::guard('teacher')->login(\App\Models\Teacher::find(5));
     session(['active_role' => 'registrator_ofisi']);
 
-    $data = ($this->page)();
+    // Filtrsiz — ro'yxat yo'q, "Ko'rsatish" (search) bosilgach chiqadi
+    $empty = ($this->page)();
+    expect($empty['searched'])->toBeFalse()
+        ->and($empty['rows']->total())->toBe(0)
+        ->and($empty['options']['faculties']->all())->toBe(['11' => '1-son davolash', '22' => 'Pediatriya']);
+
+    $data = ($this->page)(['search' => 1]);
     expect(collect($data['rows']->items())->pluck('group')->sort()->values()->all())->toBe(['d1/d22-01a', 'd1/d22-02a', 'p/22-01'])
         ->and($data['canPdf'])->toBeTrue()
-        ->and(collect(($this->page)(['faculty' => '22'])['rows']->items())->pluck('group')->all())->toBe(['p/22-01']);
-    expect(($this->page)()['isDean'])->toBeFalse();
+        ->and(collect(($this->page)(['faculty' => '22', 'search' => 1])['rows']->items())->pluck('group')->all())->toBe(['p/22-01']);
+    // Bog'langan filtrlar: fakultet tanlansa — guruhlar faqat shu fakultetniki
+    expect(($this->page)(['faculty' => '22'])['options']['groups']->values()->all())->toBe(['p/22-01'])
+        ->and(($this->page)()['isDean'])->toBeFalse();
 });
 
 it('lists a submitted vedomost even before its exams finish or when it has no exam schedule', function () {

@@ -119,6 +119,9 @@
                 </div>
             </div>
 
+            @php $filterMode = !$isDean && !$isHead && !$isTeacher; @endphp
+            {{-- Kartochkalar — dekan, kafedra mudiri va o'qituvchiga; registrator / admin — filtrlar --}}
+            @unless($filterMode)
             <div class="yq-stats">
                 <a href="{{ $statusUrl(null) }}" class="yq-stat yq-stat--all {{ $active === '' ? 'is-active' : '' }}">
                     <span class="yq-stat-num">{{ $counts['all'] }}</span><span class="yq-stat-label">{{ $isTeacher ? 'Jami' : 'Jami vedomost' }}</span>
@@ -139,9 +142,11 @@
                     <span class="yq-stat-num">{{ $counts['dean'] }}</span><span class="yq-stat-label">Dekan tasdiqlagan</span>
                 </a>
             </div>
+            @endunless
 
-            {{-- Filtrlar — registrator / admin uchun; dekan, kafedra mudiri va o'qituvchida faqat kartochkalar --}}
-            @if(!$isDean && !$isHead && !$isTeacher)
+            {{-- Filtrlar — registrator / admin uchun (Vedomost tekshirishdagidek, bir-biriga bog'langan):
+                 tanlov o'zgarsa variantlar yangilanadi, ro'yxat "Ko'rsatish" bosilgach chiqadi --}}
+            @if($filterMode)
             @php
                 // Filtr maydoni (select): nomi, yorlig'i, variantlari
                 $select = fn (string $name, string $label, $items) => ['name' => $name, 'label' => $label, 'items' => $items];
@@ -156,11 +161,12 @@
                     $select('subject', 'Fan', $options['subjects']),
                 ]);
             @endphp
-            <form method="GET" action="{{ $listRoute }}" class="yq-filters">
+            <form method="GET" action="{{ $listRoute }}" class="yq-filters" id="yq-filter-form">
+                <input type="hidden" name="search" value="{{ $searched ? '1' : '' }}">
                 @foreach($selects as $sel)
                     <div class="yq-field">
                         <label for="yq-{{ $sel['name'] }}">{{ $sel['label'] }}</label>
-                        <select id="yq-{{ $sel['name'] }}" name="{{ $sel['name'] }}">
+                        <select id="yq-{{ $sel['name'] }}" name="{{ $sel['name'] }}" onchange="this.form.submit()">
                             <option value="">Barchasi</option>
                             @foreach($sel['items'] as $id => $name)
                                 <option value="{{ $id }}" @selected(($filters[$sel['name']] ?? '') == $id)>{{ $name }}</option>
@@ -191,13 +197,18 @@
                 </div>
                 <input type="hidden" name="current" value="0">
                 <label class="yq-check"><input type="checkbox" name="current" value="1" @checked(($filters['current'] ?? '1') === '1')> Joriy semestr</label>
-                <button type="submit" class="yq-btn yq-btn--primary">Ko'rsatish</button>
+                <button type="submit" name="search" value="1" class="yq-btn yq-btn--primary">Ko'rsatish</button>
                 <a href="{{ $listRoute }}" class="yq-btn">Tozalash</a>
             </form>
             @endif
 
             <div class="yq-card">
-                @if($rows->isEmpty())
+                @if(!$searched)
+                    <div class="yq-empty">
+                        <b>Filtrlarni tanlang va «Ko'rsatish» tugmasini bosing</b>
+                        YN imtihonlari tugagan fanlar — vedomost topshirilgani va dekan tasdiqlagani (PDF) shu yerda ko'rinadi.
+                    </div>
+                @elseif($rows->isEmpty())
                     <div class="yq-empty">
                         <b>Mos vedomost topilmadi</b>
                         {{ $isTeacher ? "Joriy dars jadvalingizdagi guruh va fanlar shu yerda ko'rinadi." : "YN imtihonlari tugagan fanlar shu yerda ko'rinadi." }}{{ ($isDean || $isHead || $isTeacher) ? '' : " Filtrlarni o'zgartirib ko'ring." }}

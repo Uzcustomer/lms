@@ -84,37 +84,52 @@ class YnQaydnomaListController extends Controller
             $r->education_type_name = (string) ($type->education_type_name ?? '');
         }
 
-        // Filtr variantlari — faqat shu foydalanuvchiga tegishli qatorlardan
-        $options = [
-            'educationTypes' => $rows->pluck('education_type_name', 'education_type')->filter()->sort(),
-            'faculties' => $rows->pluck('faculty', 'faculty_id')->filter()->sort(),
-            'levels' => $rows->pluck('level_name', 'level_code')->filter()->sortKeys(),
-            'semesters' => $rows->pluck('semester', 'semester_code')->filter()->sortKeys(),
-            'specialties' => $rows->pluck('specialty', 'specialty_id')->filter()->sort(),
-            'groups' => $rows->pluck('group', 'group_hemis_id')->filter()->sort(),
-            'kafedras' => $rows->pluck('kafedra', 'kafedra_id')->filter()->sort(),
-            'subjects' => $rows->pluck('subject', 'subject_id')->filter()->sort(),
-        ];
-
+        // Filtrlar (registrator / admin — Vedomost tekshirishdagidek): bir-biriga bog'langan — har ro'yxat
+        // variantlari oldingi filtrlar bo'yicha qolgan qatorlardan; ta'lim turi sukut bo'yicha — bakalavr;
+        // ro'yxat "Ko'rsatish" bosilgach chiqadi. Dekan, kafedra mudiri, o'qituvchi — filtrsiz, faqat kartochkalar.
+        $filterMode = !$context['isDean'] && !$context['isHead'] && !$context['isTeacher'];
         $f = $request->only(['education_type', 'faculty', 'level', 'semester', 'specialty', 'group', 'kafedra', 'subject', 'yn_from', 'yn_to', 'q', 'status']);
-        $filtered = $rows
-            ->when(!empty($f['education_type']), fn ($c) => $c->where('education_type', (string) $f['education_type']))
-            ->when(!$context['isDean'] && !$context['isTeacher'] && !empty($f['faculty']), fn ($c) => $c->where('faculty_id', (string) $f['faculty']))
-            ->when(!empty($f['level']), fn ($c) => $c->where('level_code', (string) $f['level']))
-            ->when(!empty($f['semester']), fn ($c) => $c->where('semester_code', (string) $f['semester']))
-            ->when(!empty($f['specialty']), fn ($c) => $c->where('specialty_id', (string) $f['specialty']))
-            ->when(!empty($f['kafedra']), fn ($c) => $c->where('kafedra_id', (string) $f['kafedra']))
-            ->when(!empty($f['subject']), fn ($c) => $c->where('subject_id', (string) $f['subject']))
+        if ($filterMode && !$request->has('education_type')) {
+            $f['education_type'] = (string) $rows->first(fn ($r) => str_contains(mb_strtolower($r->education_type_name), 'bakalavr'))?->education_type;
+        }
+        $options = [];
+        $filtered = $rows;
+        // [filtr, variantlar kaliti, nomi, qiymati, qatorni tekshirish]
+        $steps = [
+            ['education_type', 'educationTypes', 'education_type_name', 'education_type'],
+            ['faculty', 'faculties', 'faculty', 'faculty_id'],
+            ['specialty', 'specialties', 'specialty', 'specialty_id'],
+            ['level', 'levels', 'level_name', 'level_code'],
+            ['semester', 'semesters', 'semester', 'semester_code'],
+            ['group', 'groups', 'group', 'group_hemis_id'],
+            ['kafedra', 'kafedras', 'kafedra', 'kafedra_id'],
+            ['subject', 'subjects', 'subject', 'subject_id'],
+        ];
+        foreach ($steps as [$filter, $key, $label, $value]) {
+            $options[$key] = $filtered->pluck($label, $value)->filter()
+                ->pipe(fn ($c) => in_array($filter, ['level', 'semester'], true) ? $c->sortKeys() : $c->sort());
+            $selected = (string) ($f[$filter] ?? '');
+            if ($selected === '' || ($filter === 'faculty' && ($context['isDean'] || $context['isTeacher']))) {
+                continue;
+            }
+            $filtered = $filter === 'group'
+                ? $filtered->filter(fn ($r) => in_array($selected, $r->members, true))
+                : $filtered->where($value, $selected);
+        }
+        $filtered = $filtered
             // YN sanasi — fanning oxirgi YN imtihoni (test yoki OSKI) shu oraliqda
             ->when(!empty($f['yn_from']), fn ($c) => $c->filter(fn ($r) => $r->yn_date && $r->yn_date >= (string) $f['yn_from']))
             ->when(!empty($f['yn_to']), fn ($c) => $c->filter(fn ($r) => $r->yn_date && $r->yn_date <= (string) $f['yn_to']))
-            ->when(!empty($f['group']), fn ($c) => $c->filter(fn ($r) => in_array((string) $f['group'], $r->members, true)))
             ->when(trim($f['q'] ?? '') !== '', function ($c) use ($f) {
                 $q = mb_strtolower(trim($f['q']));
 
                 return $c->filter(fn ($r) => str_contains(mb_strtolower($r->group . ' ' . implode(' ', $r->member_names) . ' ' . $r->subject . ' '
                     . $r->teachers->pluck('teacher_name')->implode(' ') . ' ' . ($r->dean->teacher_name ?? '')), $q));
             });
+        $searched = !$filterMode || $request->boolean('search');
+        if (!$searched) {
+            $filtered = collect();
+        }
         $counts = ['all' => $filtered->count()];
         foreach (self::STATUSES as $status) {
             $counts[$status] = $filtered->where('status', $status)->count();
@@ -136,6 +151,7 @@ class YnQaydnomaListController extends Controller
 
         return view('admin.yn-qaydnomalar.index', $context + [
             'rows' => $paginator, 'counts' => $counts, 'options' => $options, 'filters' => $f + ['current' => $current ? '1' : '0'],
+            'searched' => $searched,
         ]);
     }
 

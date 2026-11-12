@@ -243,7 +243,13 @@ class AbsenceExcuseController extends Controller
         $retakeStart = SababliRetakePlan::firstDay($request->input('retake_start'));
         $items = $request->input('makeup_dates', []);
         if ($request->boolean('retake_manual')) {
-            if ($planError = SababliRetakePlan::validate($items, $retakeStart)) {
+            // Necha kun dars qoldirilgan bo'lsa, shuncha retake kuni (avtomatik jadval uzunroq bo'lsa — uning oxirigacha)
+            $until = SababliRetakePlan::lastAllowedDay(
+                SababliRetakePlan::assign($items, $retakeStart),
+                $retakeStart,
+                $this->countNonSundays(Carbon::parse($request->start_date), Carbon::parse($request->end_date))
+            );
+            if ($planError = SababliRetakePlan::validate($items, $retakeStart, $until)) {
                 return back()->withErrors(['makeup_dates' => 'Qayta topshirish kunlari: ' . $planError])->withInput();
             }
             $makeupDates = SababliRetakePlan::manual($items, $retakeStart);

@@ -531,7 +531,7 @@
                                                                 <span class="ae-plan-day-load" x-text="c.load + '/' + MAX_PER_DAY"></span>
                                                             </button>
                                                         </template>
-                                                        <p x-show="moving === row.idx && candidateDays(row.idx).length === 0" class="text-sm text-gray-500">{{ __('Bo\'sh kun topilmadi.') }}</p>
+                                                        <p x-show="moving === row.idx && candidateDays(row.idx).length === 0" class="text-sm text-gray-500">{{ __('Ko\'chirish uchun bo\'sh kun yo\'q — retake kunlari soni dars qoldirilgan kunlar soniga teng, ular to\'lgan.') }}</p>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -738,6 +738,14 @@
                     };
                 }).sort((x, y) => (x.date < y.date ? -1 : (x.date > y.date ? 1 : x.order - y.order)));
             },
+            // Retake kunlarining oxirgi chegarasi (SababliRetakePlan::lastAllowedDay bilan bir xil): necha kun
+            // dars qoldirilgan bo'lsa, birinchi retake kunidan shuncha ish kuni; avtomatik jadval uzunroq
+            // bo'lsa (kuniga ko'pi bilan 3 ta fan) — uning oxirgi kuni
+            get retakeLimit() {
+                let d = this._firstDay(this.retakeStart);
+                for (let n = 1; n < this.totalDays; n++) d = this._nextDay(d);
+                return Object.values(this._withoutMt(this.autoPlan)).reduce((m, x) => (x > m ? x : m), d);
+            },
             get retakeDaysCount() {
                 return new Set(Object.values(this.plan)).size;
             },
@@ -940,7 +948,7 @@
                     const t = a.assessment_type === 'oski' || a.assessment_type === 'test' ? a.assessment_type : 'jn';
                     const s = this._subj(a), d = p[i];
                     if (!d) return a.subject_name + ': kun tanlanmagan';
-                    if (this._parse(d).getDay() === 0 || d < first) return a.subject_name + ': ' + this.fmtDate(d) + ' — mumkin emas';
+                    if (this._parse(d).getDay() === 0 || d < first || d > this.retakeLimit) return a.subject_name + ': ' + this.fmtDate(d) + ' — mumkin emas';
                     days[d] = days[d] || {};
                     days[d][s] = days[d][s] || { jn: 0, oski: 0, test: 0 };
                     days[d][s][t]++;
@@ -972,17 +980,12 @@
             candidateDays(idx) {
                 const base = this.manual || this._withoutMt(this.autoPlan);
                 const subj = this._subj(this.assessments[idx]);
-                const first = this._firstDay(this.retakeStart);
-                const limit = Object.values(this._withoutMt(this.autoPlan)).reduce((m, d) => (d > m ? d : m), first);
                 const fits = d => d !== base[idx] && !this.planError({ ...base, [idx]: d });
                 const load = d => new Set(Object.keys(base)
                     .filter(i => base[i] === d && this._subj(this.assessments[i]) !== subj)
                     .map(i => this._subj(this.assessments[i]))).size + 1;
                 const out = [];
-                for (let d = first; d <= limit; d = this._nextDay(d)) {
-                    if (fits(d)) out.push({ date: d, load: load(d) });
-                }
-                for (let d = this._nextDay(limit), n = 0; !out.length && n < 10; d = this._nextDay(d), n++) {
+                for (let d = this._firstDay(this.retakeStart); d <= this.retakeLimit; d = this._nextDay(d)) {
                     if (fits(d)) out.push({ date: d, load: load(d) });
                 }
                 return out;

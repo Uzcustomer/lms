@@ -172,13 +172,35 @@ class SababliRetakePlan
     }
 
     /**
+     * Retake kunlarining oxirgi chegarasi: necha kun (yakshanbasiz) dars qoldirilgan bo'lsa,
+     * birinchi retake kunidan shuncha ish kuni. Avtomatik jadval (kuniga ko'pi bilan 3 ta fan
+     * sababli) undan uzun bo'lsa — jadvalning oxirgi kuni. Y-m-d.
+     */
+    public static function lastAllowedDay(array $autoPlan, Carbon $start, int $absentDays): string
+    {
+        $day = self::firstDay($start->toDateString());
+        for ($i = 1; $i < $absentDays; $i++) {
+            $day = self::nextDay($day);
+        }
+        $last = $day->toDateString();
+        foreach ($autoPlan as $p) {
+            if (($p['assessment_type'] ?? '') !== 'mt' && !empty($p['makeup_date']) && $p['makeup_date'] > $last) {
+                $last = $p['makeup_date'];
+            }
+        }
+
+        return $last;
+    }
+
+    /**
      * Talaba formada ko'chirgan jadvalni assign() qoidalari bo'yicha tekshiradi: yakshanba emas,
      * $start dan oldin emas, bir kunda ko'pi bilan MAX_SUBJECTS_PER_DAY ta fan, bir fandan kuniga
      * bitta retake (OSKI shu fanning retake kuni bilan bir kunda bo'lishi mumkin), OSKI fanning
-     * oxirgi retake kunidan oldin emas, test esa ulardan bir kun oraliq bilan.
+     * oxirgi retake kunidan oldin emas, test esa ulardan bir kun oraliq bilan; $until (lastAllowedDay)
+     * berilsa — undan keyin emas.
      * create.blade.php dagi planError() bilan bir xil. Xato matni yoki null.
      */
-    public static function validate(array $items, Carbon $start): ?string
+    public static function validate(array $items, Carbon $start, ?string $until = null): ?string
     {
         $first = self::firstDay($start->toDateString())->toDateString();
         $fmt = fn (string $d) => Carbon::parse($d)->format('d.m.Y');
@@ -201,6 +223,9 @@ class SababliRetakePlan
             }
             if ($date < $first) {
                 return "{$name}: {$fmt($date)} — qayta topshirish {$fmt($first)} dan boshlanadi.";
+            }
+            if ($until && $date > $until) {
+                return "{$name}: {$fmt($date)} — qayta topshirish {$fmt($until)} gacha (necha kun dars qoldirilgan bo'lsa, shuncha kun).";
             }
             $days[$date][$s][$type] = ($days[$date][$s][$type] ?? 0) + 1;
             $subjects[$s]['name'] = $name;

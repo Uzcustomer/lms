@@ -12132,15 +12132,7 @@ class JournalController extends Controller
                 self::teacherSignatureBlock($sheet, $teachers, $makeQr, $colPx);
             }
 
-            // O'ng yuqori burchak (kafedra mudiri QR i va ismi) ostida — X ustuni: amaliyot o'qituvchilari
-            // ismlari chiziqlari (U10:X10 …) W gacha, mudir ismi ustidan chiziq o'tmasin
-            foreach ([10, 11, 12] as $r) {
-                if (isset($sheet->getMergeCells()["U{$r}:" . self::YNQ_LAST_COL . $r])) {
-                    $sheet->unmergeCells("U{$r}:" . self::YNQ_LAST_COL . $r);
-                    $sheet->mergeCells("U{$r}:W{$r}");
-                    $sheet->getStyle(self::YNQ_LAST_COL . $r)->getBorders()->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-                }
-            }
+            self::shiftHeaderTeachersLeft($sheet);
 
             // Tepada: chap burchakda — dekan, o'ng burchakda — kafedra mudiri
             $size = 56;
@@ -12159,6 +12151,53 @@ class JournalController extends Controller
                 $qr->setWorksheet($sheet);
             }
         }
+    }
+
+    /**
+     * O'ng yuqori burchak (kafedra mudiri QR i va ismi) bo'sh qolishi uchun sarlavhaning o'ng qismi bir
+     * ustun chapga: "Amaliyot o'qituvchisi" (P:T → P:S) va ismlar chizig'i (U:X → T:V), guruh nomi
+     * (W8 → U8:V8). W–X ustunlari 8–12-qatorlarda bo'sh — mudir ismi ustidan chiziq yoki yozuv o'tmaydi.
+     */
+    private static function shiftHeaderTeachersLeft(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): void
+    {
+        if (!str_contains((string) $sheet->getCell('P10')->getValue(), 'Amaliyot')) {
+            return;   // shablon emas yoki allaqachon surilgan
+        }
+        $merges = $sheet->getMergeCells();
+        $unmerge = function (string $range) use ($sheet, $merges) {
+            if (isset($merges[$range])) {
+                $sheet->unmergeCells($range);
+            }
+        };
+        $last = self::YNQ_LAST_COL;
+        foreach ([10, 11, 12] as $r) {
+            $label = [$sheet->getCell("P{$r}")->getValue(), $sheet->getCell("P{$r}")->getXfIndex()];
+            $name = [$sheet->getCell("U{$r}")->getValue(), $sheet->getCell("U{$r}")->getXfIndex()];
+            $unmerge("P{$r}:T{$r}");
+            $unmerge("U{$r}:{$last}{$r}");
+            foreach (range('P', $last) as $col) {
+                // Kutubxona bitta katak obyektini ushlaydi — har biri qayta olinadi
+                $sheet->getCell($col . $r)->setValue(null)->setXfIndex(0);
+            }
+            foreach (range('P', 'S') as $col) {
+                $sheet->getCell($col . $r)->setXfIndex($label[1]);
+            }
+            foreach (range('T', 'V') as $col) {
+                $sheet->getCell($col . $r)->setXfIndex($name[1]);
+            }
+            $sheet->mergeCells("P{$r}:S{$r}");
+            $sheet->mergeCells("T{$r}:V{$r}");
+            $sheet->getCell("P{$r}")->setValue($label[0]);
+            $sheet->getCell("T{$r}")->setValue($name[0]);
+        }
+        $group = [$sheet->getCell('W8')->getValue(), $sheet->getCell('W8')->getXfIndex()];
+        $sheet->getCell('W8')->setValue(null);
+        foreach (['U', 'V'] as $col) {
+            $sheet->getCell($col . '8')->setXfIndex($group[1]);
+        }
+        $unmerge('U8:V8');
+        $sheet->mergeCells('U8:V8');
+        $sheet->getCell('U8')->setValue($group[0]);
     }
 
     /**

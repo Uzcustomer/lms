@@ -431,10 +431,19 @@ describe('teacher confirmation', function () {
 
     it('keeps the top right corner free for the kafedra mudiri: teacher name lines stop before the last column', function () {
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(public_path('templates/yn_qaydnoma (1).xlsx'));
-        (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $book->getActiveSheet(), 5);
+        $w = $book->getActiveSheet();
+        (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 5);
+        $w->setCellValue('U10', 'ALLAMURATOVA U.D.')->setCellValue('W8', 'd1/d22-01 (rus)');
         (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $book, '435', '19', '77');
-        expect($book->getActiveSheet()->getMergeCells())->toHaveKeys(['U10:W10', 'U11:W11', 'U12:W12'])
-            ->not->toHaveKey('U10:X10');
+        expect($w->getMergeCells())->toHaveKeys(['P10:S10', 'T10:V10', 'P12:S12', 'T12:V12', 'U8:V8'])
+            ->not->toHaveKey('U10:X10')
+            ->and($w->getCell('T10')->getValue())->toBe('ALLAMURATOVA U.D.')
+            ->and($w->getCell('P11')->getValue())->toContain('Amaliyot')
+            ->and($w->getCell('U8')->getValue())->toBe('d1/d22-01 (rus)')
+            ->and($w->getCell('W8')->getValue())->toBeNull()
+            ->and($w->getStyle('V10')->getBorders()->getBottom()->getBorderStyle())->toBe('thin')
+            ->and($w->getStyle('W10')->getBorders()->getBottom()->getBorderStyle())->toBe('none')
+            ->and($w->getStyle('X11')->getBorders()->getTop()->getBorderStyle())->toBe('none');
     });
 
     it('does not let the lecturer confirm', function () {

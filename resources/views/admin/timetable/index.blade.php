@@ -6078,10 +6078,38 @@
                 });
             }
             const unitLen = list => list.reduce((s, c) => s + cardLen(c), 0);
-            // Qisman joylangan: bir qismi joylangan, qolgani joylanmagan.
+            // Qisman joylangan: bir qismi joylangan, qolgani joylanmagan. Bo'lingan (split): hamma bo'lak joylangan, lekin turli kunlarda
+            // yoki bir kunda oraliq bilan (serverdagi unitSplitInfo).
             function unitState(c, W = curWeek, index = null) {
                 const list = unitOf(c, W, index), placed = list.filter(x => placeInWeek(x, W));
-                return { list, placed, len: unitLen(list), partial: placed.length > 0 && placed.length < list.length };
+                return { list, placed, len: unitLen(list), partial: placed.length > 0 && placed.length < list.length,
+                    split: placed.length > 1 && placed.length === list.length && unitIsSplit(list, W) };
+            }
+            function unitIsSplit(list, W = curWeek) {
+                const pl = list.map(x => [x, placeInWeek(x, W)]).filter(([, at]) => at);
+                if (pl.length < 2) return false;
+                if (new Set(pl.map(([, at]) => at.day)).size > 1) return true;
+                pl.sort((a, b) => a[1].pair - b[1].pair || a[0].id - b[0].id);
+                return pl.some(([, at], i) => i > 0 && at.pair !== pl[i - 1][1].pair + cardLen(pl[i - 1][0]));
+            }
+            // Joylangan bo'laklar kunlar bo'yicha: "Seshanba 08:30–09:50; Chorshanba 10:00–13:20" (kun ichida ketma-ketlari — bitta oraliq).
+            function unitDaysText(list, W = curWeek) {
+                const byDay = {};
+                list.forEach(x => { const at = placeInWeek(x, W); if (at) (byDay[at.day] = byDay[at.day] || []).push([at.pair, at.pair + cardLen(x)]); });
+                return Object.keys(byDay).map(Number).sort((a, b) => a - b).map(d => {
+                    const segs = [];
+                    byDay[d].sort((a, b) => a[0] - b[0]).forEach(r => { const l = segs[segs.length - 1]; if (l && l[1] === r[0]) l[1] = r[1]; else segs.push(r.slice()); });
+                    return (boardDayNames()[d - 1] || d + '-kun') + ' ' + segs.map(r => slotRangeText(r[0], r[1] - r[0])).join(', ');
+                }).join('; ');
+            }
+            // Ko'p bo'lakli amaliy dars shu haftada: bo'lak (d, p) ga tushadigan qilib butun birlik — [[bo'lak, para], ...] (birinchi bo'lak
+            // boshidan, o'z tartibida ketma-ket); ma'ruza / bitta bo'lakli dars — null.
+            function unitMovePlan(c, p, W = curWeek) {
+                if (!c || c.training_type === 'lecture' || !W || !activeInWeek(c, W)) return null;
+                const list = unitOf(c, W);
+                if (list.length < 2) return null;
+                let at = p - unitLen(list.slice(0, list.indexOf(c)));
+                return list.map(x => { const r = [x, at]; at += cardLen(x); return r; });
             }
             // Yarim-slot (qator) vaqti: boshlanishi / tugashi.
             const slotStart = p => { const it = boardSchedule().filter(x => x.type === 'pair')[p - 1]; return it ? (it.start || '') : ''; };
@@ -8050,6 +8078,8 @@
                 const today = j.today && (pk.date === j.today || mv.date === j.today) && mv.via === 'apply';
                 return '<div class="ag-pick"><div><b>' + esc(mv.label || '') + '</b> → ' + esc(cfDate(pk.date) + ', ' + (pair.label || '') +
                     ' (' + (pair.start || '') + '–' + (pair.end || '') + ')') + (one && one.room ? ', xona: ' + esc(one.room.name) : '') + '</div>' +
+                    // Ko'p bo'lakli amaliy dars — barcha bo'laklari birga: "6 soat (2+2+2) birga ko'chiriladi".
+                    (mv.unit_note ? '<div class="ag-unit-note" data-ag-unit style="font-size:11px;color:#1d4ed8">' + esc(mv.unit_note) + '</div>' : '') +
                     (fixNow ? '<div class="ag-fix-note" data-ag-fix>To‘qnashuvdagi dars — so‘rovsiz joylanadi</div>' : '') +
                     (today ? '<div class="ag-hemis" data-ag-hemis>' + esc(j.hemis_hint || TT_HEMIS_HINT) + '</div>' : '') +
                     choices.map(([v, label, o]) => '<label class="ag-ch"><input type="radio" name="agChoice" value="' + v + '"' + (pk.choice === v ? ' checked' : '') +
@@ -11653,6 +11683,9 @@
                     card.day = d; card.pair = p;
                     rememberLayerPlace(card, d, p);
                 } else {
+                    // Amaliy dars yaxlit: ko'p bo'lakli dars — butun birlik (shu bo'lak (d, p) da, qolganlari o'z tartibida ketma-ket).
+                    const plan = unitMovePlan(card, p);
+                    if (plan) { await placeUnitAt(card, d, plan[0][1]); return; }
                     await api(BASE + '/cards/' + card.id + '/week-override', 'POST',
                         { week: curWeek, action: 'move', day: d, pair: p });
                     const key = card.id + '|' + curWeek;
@@ -11675,8 +11708,11 @@
                 const need = +card.students || 0;
                 const pos = {};
                 ((rank && rank.order) || []).forEach((code, i) => { pos[code] = i; });
+                // Ko'p bo'lakli amaliy dars — xona butun birlik oralig'ida bo'sh bo'lsin (hamma bo'lak shu xonaga).
+                const plan = (curWeek && weeklyLayer === 'internal' && unitMovePlan(card, p)) || [[card, p]];
+                const mine = plan.map(([x]) => x.id);
                 return rooms.filter(r => r.code && r.code !== cur && +r.volume > 0 && (!need || +r.volume >= need)
-                        && !conflictsAtDetail(card, d, p, [], { room: { code: r.code, name: r.name || r.code } }).some(x => x.kind === 'room'))
+                        && !plan.some(([x, at]) => conflictsAtDetail(x, d, at, mine, { room: { code: r.code, name: r.name || r.code } }).some(k => k.kind === 'room')))
                     .map(r => ({ r, at: r.code in pos ? pos[r.code] : Infinity }))
                     .sort((a, b) => a.at - b.at || (+a.r.volume - +b.r.volume) || String(a.r.name || a.r.code).localeCompare(String(b.r.name || b.r.code), undefined, { numeric: true }))
                     .map(x => x.r);
@@ -11764,6 +11800,18 @@
             // (place + auditorium_code; faqat shu kartaning xonasi o'zgaradi). Qaytaradi: server javobi (pending_approval — tasdiqqa ketdi).
             async function placeCardWithRoom(card, d, p, room) {
                 weeklyEditGuard();
+                // Ko'p bo'lakli amaliy dars — butun birlik shu xona bilan (unit-place; hamma bo'lak shu haftada shu xonada).
+                const plan = curWeek ? unitMovePlan(card, p) : null;
+                if (plan) {
+                    const r = await api(BASE + '/cards/' + card.id + '/unit-place', 'POST', { week: curWeek, layer: 'internal', day: d, pair: plan[0][1], auditorium_code: room.code });
+                    if (r && r.pending_approval) return r;
+                    applyUnitPayload(r && r.unit, curWeek);
+                    plan.forEach(([x]) => {
+                        const k = x.id + '|' + curWeek;
+                        if (overrides[k] && !overrides[k].cancelled) Object.assign(overrides[k], { auditorium_code: room.code, auditorium_name: room.name || room.code, auditorium_volume: +room.volume || null });
+                    });
+                    return r;
+                }
                 if (curWeek) {
                     const r = await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'move', day: d, pair: p, auditorium_code: room.code });
                     if (r && r.pending_approval) return r;
@@ -12424,6 +12472,30 @@
             // ===== "Joylanmagan kartalar" paneli: qisman joylangan birlik belgisi, yaxlit joylash natijasi, karta oynasi =====
             const unitFixErr = {};   // birlik kaliti → oxirgi "yaxlit joylanmadi" sababi (kartada qizil izoh)
             const unitEditable = () => weeklyCanEdit() && !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek;
+            // Shu haftadagi bo'lingan birliklar (birlik kaliti → unitState + card): faqat amaliy, qamrovdagi (weekActiveCards).
+            function weeklySplitUnits(uIdx = buildUnitIndex()) {
+                const out = new Map();
+                weekActiveCards().forEach(c => {
+                    if (c.training_type === 'lecture' || out.has(unitKey(c))) return;
+                    const st = unitState(c, curWeek, uIdx);
+                    if (st.split) out.set(unitKey(c), Object.assign({ card: st.list[0] }, st));
+                });
+                return out;
+            }
+            // Panel bo'limi: "Bo'lingan: N ta" — har birida guruh · fan, soat (2+2+2), kunlar va "Yaxlitlash" (+ sig'masa — qizil sabab).
+            function splitHeadHtml(units) {
+                if (!units.size) return '';
+                return '<div class="pn-split" data-pn-split style="border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
+                    'Bo\'lingan: <b>' + units.size + ' ta</b> <span style="color:#b91c1c">(bir kunda bir fandan amaliy soatlar bo\'linmaydi)</span>' +
+                    [...units.entries()].map(([k, st]) => {
+                        const err = unitFixErr[k];
+                        return '<div class="pn-split-item" data-split-key="' + esc(k) + '" style="margin-top:3px;border-top:1px dotted #fecaca;padding-top:3px">' +
+                            '<a href="#" data-split-go="' + esc(k) + '" style="text-decoration:underline dotted">' + esc(cardGroups(st.card).join(', ') + ' · ' + st.card.subject_name) + '</a>' +
+                            ' — ' + st.len + ' soat (' + st.list.map(cardLen).join('+') + '): <span data-split-days>' + esc(unitDaysText(st.list)) + '</span>' +
+                            (unitEditable() ? ' <button type="button" data-unit-merge="' + esc(k) + '" title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
+                            (err ? '<div class="pn-split-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>' : '') + '</div>';
+                    }).join('') + '</div>';
+            }
             // "Qisman: 3 soatdan 2 soati joylangan (Seshanba 10:00); qolgani 1 soat" + shu birlik tugmalari (+ qizil izoh).
             function partialBadgeHtml(st, err) {
                 const placed = st.placed.slice().sort((a, b) => placeInWeek(a, curWeek).pair - placeInWeek(b, curWeek).pair);
@@ -12465,11 +12537,12 @@
                 m.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
                 const failed = (r && r.failed) || [];
                 const head = r.error ? 'Xatolik: ' + r.error
+                    : action === 'merge' ? (failed.length ? 'Yaxlitlab bo\'lmadi — hech narsa o\'zgarmadi' : 'Yaxlitlandi: ' + (r.done || 0) + ' ta')
                     : (action === 'clear' ? 'Yaxlit bo\'shatildi: ' : 'Yaxlit joylandi: ') + (r.done || 0) + ' ta' + (failed.length ? ' · joylanmadi: ' + failed.length + ' ta' : '');
                 m.innerHTML = '<div style="background:#fff;border-radius:10px;max-width:560px;width:100%;max-height:80vh;overflow:auto;padding:12px 16px;box-shadow:0 20px 60px #0004;font-size:12px">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>' + esc(head) + '</b>' +
                     '<button type="button" data-close style="font-size:18px;line-height:1">&times;</button></div>' +
-                    (failed.length ? '<div style="color:#991b1b;margin-bottom:4px">Yaxlit joylanmadi:</div><ul style="margin:0;padding-left:16px">' + failed.map(f =>
+                    (failed.length ? '<div style="color:#991b1b;margin-bottom:4px">' + (action === 'merge' ? 'Sababi:' : 'Yaxlit joylanmadi:') + '</div><ul style="margin:0;padding-left:16px">' + failed.map(f =>
                         '<li><b>' + esc(f.group + ' · ' + f.subject) + '</b> (' + esc(f.day || '') + '): ' + esc(f.error) + '</li>').join('') + '</ul>' : '') + '</div>';
                 m.addEventListener('click', ev => { if (ev.target === m || ev.target.closest('[data-close]')) m.remove(); });
                 document.body.appendChild(m);
@@ -12743,8 +12816,11 @@
                     }
                     return st.list[0] === c;
                 }).sort(bySubject);
-                // Eskirgan "yaxlit joylanmadi" izohlari (birlik endi qisman emas) tozalanadi.
-                Object.keys(unitFixErr).forEach(k => { if (!partialUnits.has(k)) delete unitFixErr[k]; });
+                // Bo'lingan birliklar (hamma bo'lak joylangan, lekin turli kunda yoki oraliq bilan) — panel tepasida "Bo'lingan: N ta",
+                // har biriga alohida "Yaxlitlash" (ommaviy yaxlitlash yo'q).
+                const splitUnits = curWeek && weeklyLayer === 'internal' ? weeklySplitUnits(uIdx) : new Map();
+                // Eskirgan "yaxlit joylanmadi" izohlari (birlik endi qisman / bo'lingan emas) tozalanadi.
+                Object.keys(unitFixErr).forEach(k => { if (!partialUnits.has(k) && !splitUnits.has(k)) delete unitFixErr[k]; });
                 unitPanelLen = {};
                 un.forEach(c => { if (c.training_type !== 'lecture' && !effPlace(c)) { const l = unitOf(c, curWeek, uIdx); if (l.length > 1) unitPanelLen[c.id] = l.map(cardLen); } });
                 // Shu haftada o'tilmaydigan kartalar — odatda yashirin. Ular joylashgan,
@@ -12799,7 +12875,7 @@
                         (unitEditable() ? '<div style="margin-top:3px"><button type="button" data-unit-fix="complete" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 6px">hammasini yaxlit joylash</button>' +
                             ' <button type="button" data-unit-fix="clear" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 6px">hammasini yaxlit bo\'shatish</button></div>' : '') + '</div>'
                     : '';
-                $('cardPanel').innerHTML = mudirPhSectionHtml(weeklyPhCards()) + partialHead +
+                $('cardPanel').innerHTML = mudirPhSectionHtml(weeklyPhCards()) + partialHead + splitHeadHtml(splitUnits) +
                     unShown.map(c => panelCard(c, false)).join('') +
                     (showSkipped ? skippedShown.map(c => panelCard(c, true)).join('') : '')
                     || (filtering && un.length
@@ -12835,6 +12911,19 @@
                     if (el.scrollIntoView) el.scrollIntoView({ block: 'center' });
                     el.classList.remove('pn-flash'); void el.offsetWidth; el.classList.add('pn-flash');
                     setTimeout(() => el.classList.remove('pn-flash'), 2400);
+                });
+                // Yaxlitlash — faqat shu bo'lingan birlik (card_ids).
+                document.querySelectorAll('#cardPanel [data-unit-merge]').forEach(btn => btn.onclick = ev => {
+                    ev.stopPropagation();
+                    const st = splitUnits.get(btn.dataset.unitMerge);
+                    if (st) runUnitFix(btn, 'merge', [st]);
+                });
+                // Bo'lingan birlik nomi — jadvaldagi birinchi bo'lagi katagiga.
+                document.querySelectorAll('#cardPanel [data-split-go]').forEach(a => a.onclick = ev => {
+                    ev.preventDefault();
+                    const st = splitUnits.get(a.dataset.splitGo);
+                    const at = st && placeInWeek(st.list[0], curWeek);
+                    if (at) gotoGridSlot(st.list[0], at.day, at.pair);
                 });
                 // Yaxlit joylash / bo'shatish: kartadagi tugma — faqat shu birlik (card_ids), tepadagi — hammasi.
                 document.querySelectorAll('#cardPanel [data-unit-fix]').forEach(btn => btn.onclick = ev => {

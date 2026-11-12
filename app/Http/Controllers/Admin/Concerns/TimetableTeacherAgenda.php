@@ -421,6 +421,8 @@ trait TimetableTeacherAgenda
                 $out['via'] = 'apply_fix';
             }
             $out['rest_weeks'] = $this->agendaRestWeeks($card, (int) $entry['week']);
+            // Ko'p bo'lakli amaliy dars — barcha bo'laklari birga ko'chadi: "6 soat (2+2+2) birga ko'chiriladi".
+            $out['unit_note'] = $this->agendaUnitNote($card, (int) $entry['week']) ?: null;
             foreach ($days as $d) {
                 if (self::pastFor($staff, $d) || $this->calendarWeekAt($board, $card, $d) !== (int) $entry['week']) {
                     continue;
@@ -580,15 +582,18 @@ trait TimetableTeacherAgenda
 
     /**
      * Haftalik darsni shu haftada (kun, para) ga ko'chirish: guruh, o'qituvchi, xona (haftalik va sikl), kutilayotgan so'rovlar,
-     * amaliy blok qoidasi va xona sig'imi. Faqat xona muammosi bo'lsa — reyting bo'yicha shu vaqtda bo'sh va sig'adigan xona.
+     * xona sig'imi; ko'p bo'lakli amaliy dars (birlik) — barcha bo'laklari birga (shu vaqtdan ketma-ket). Faqat xona muammosi bo'lsa — reyting
+     * bo'yicha shu vaqtda (birlikning butun oralig'ida) bo'sh va sig'adigan xona.
      */
     private function agendaWeeklyOption(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair): array
     {
         $grid = $this->cardGrid($board, $card);
-        if ($pair + $card->lenHalf() - 1 > (int) $grid['pairs']) {
-            return ['ok' => false, 'why' => 'Tanlangan vaqt jadval chegarasidan tashqarida.', 'room' => null];
+        $plan = $this->agendaUnitPlan($card, $week, $pair);
+        $last = $plan ? end($plan) : [$card, $pair];
+        if (($plan ? $plan[0][1] : $pair) < 1 || $last[1] + $last[0]->lenHalf() - 1 > (int) $grid['pairs']) {
+            return ['ok' => false, 'why' => 'Tanlangan vaqt jadval chegarasidan tashqarida.' . ($plan ? ' ' . $this->agendaUnitNote($card, $week) : ''), 'room' => null];
         }
-        [$errors, $roomCode, $students] = $this->agendaWeekErrors($board, $card, $week, $day, $pair);
+        [$errors, $roomCode, $students] = $this->agendaMoveErrors($board, $card, $week, $day, $pair);
         if (!$errors) {
             return ['ok' => true, 'why' => null, 'room' => null];
         }
@@ -603,10 +608,10 @@ trait TimetableTeacherAgenda
     /**
      * Haftalik darsni shu haftada (kun, para) ga ko'chirish sabablari — barchasi (bittasi topilsa ham qolganlari: xona muammosida boshqa
      * xona faqat xonadan boshqa sabab bo'lmasa taklif qilinadi): guruh, o'qituvchi, xona (haftalik va sikl), kutilayotgan so'rovlar,
-     * amaliy blok qoidasi, xona sig'imi. $room — boshqa xona bilan. Qaytaradi: [sabablar, xona kodi, talabalar].
+     * xona sig'imi. $room — boshqa xona bilan. Qaytaradi: [sabablar, xona kodi, talabalar]. Bitta karta bo'yicha — ko'p bo'lakli amaliy
+     * dars (birlik) agendaMoveErrors'da butunligicha tekshiriladi; boshqa chaqiruvchilar (bo'laklar birga ko'chgan holatda) — yaxlitlik o'zida.
      */
-    private function agendaWeekErrors(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, ?Auditorium $room = null,
-        bool $splitCheck = true): array
+    private function agendaWeekErrors(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, ?Auditorium $room = null): array
     {
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
         $ov = $this->agendaMemo('ov|' . $card->id . '|' . $week, fn () => TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first());
@@ -615,10 +620,8 @@ trait TimetableTeacherAgenda
         // To'qnashuv holati (findWeekConflicts) — karta va sinalayotgan xona bo'yicha (ko'chirish variantlarida bir marta).
         $proposed = $room ? $roomCode : null;
         $state = $this->agendaMemo('cstate|' . $card->id . '|' . $proposed, fn () => $this->calendarConflictState($card, $proposed));
-        // $splitCheck = false — bir nechta bo'lak birga ko'chiriladi (blok yaxlitligi chaqiruvchida, yakuniy holat bo'yicha).
         $errors = array_merge($this->findWeekConflicts($card, $week, $day, $pair, 0, $state, $proposed),
-            $this->pendingTimeConflicts($card, $data, []), $splitCheck ? $this->practiceSplitConflicts($card, $week, $day, $pair) : [],
-            $this->weeklyProposalBusy($card, $week, $day, $pair, $date, $room));
+            $this->pendingTimeConflicts($card, $data, []), $this->weeklyProposalBusy($card, $week, $day, $pair, $date, $room));
         $room ??= $roomCode !== '' ? $this->agendaMemo('room|' . $roomCode, fn () => Auditorium::where('code', $roomCode)->first()) : null;
         $students = $this->agendaMemo('students|' . $card->id, fn () => $this->cardStudents($card));
         if (!$this->isNonBlocking($card, $board) && $room && (int) $room->volume > 0 && $students > (int) $room->volume) {
@@ -626,6 +629,102 @@ trait TimetableTeacherAgenda
         }
 
         return [array_values(array_unique(array_map(fn ($m) => $this->agendaReasonText($m), $errors))), $roomCode, $students];
+    }
+
+    /**
+     * Ko'p bo'lakli amaliy dars (birlik — weeklyUnitKey) shu haftada: barcha faol bo'laklari ko'chiriladigan kartaning yangi joyiga nisbatan
+     * o'z tartibida ketma-ket — [[bo'lak, para], ...] (birinchi bo'lak boshidan). Ma'ruza, bitta bo'lakli dars — null. Front ham shunday
+     * ko'chiradi (agendaApplyRequest: unitOf tartibi, unitChain bilan bir xil).
+     */
+    private function agendaUnitPlan(TimetableCard $card, int $week, int $pair): ?array
+    {
+        if ($card->training_type === 'lecture' || $this->isNonBlocking($card, $card->board)) {
+            return null;
+        }
+        $cards = $this->agendaMemo('unit|' . $card->id, fn () => $this->weeklyUnitCards($card));
+        if ($cards->count() < 2) {
+            return null;
+        }
+        [$chain] = $this->agendaMemo('unitchain|' . $card->id . '|' . $week, fn () => $this->unitChain($this->unitPieces($cards, $week)));
+        $at = collect($chain)->first(fn ($x) => (int) $x[0]->id === (int) $card->id);
+        if (count($chain) < 2 || !$at) {
+            return null;
+        }
+
+        return array_map(fn ($x) => [$x[0], $pair - $at[1] + $x[1]], $chain);
+    }
+
+    /** "6 soat (2+2+2) birga ko'chiriladi" — ko'p bo'lakli amaliy dars (birlik) uchun, aks holda ''. */
+    private function agendaUnitNote(TimetableCard $card, int $week): string
+    {
+        if ($card->training_type === 'lecture' || ($cards = $this->weeklyUnitCards($card))->count() < 2) {
+            return '';
+        }
+        $pieces = array_filter($this->unitPieces($cards, $week), fn ($p) => $p['active']);
+
+        return count($pieces) > 1 ? $this->unitHoursText($pieces) . " birga ko'chiriladi" : '';
+    }
+
+    /**
+     * Ko'chirish sabablari (o'qituvchi jadvali): bitta bo'lakli dars — agendaWeekErrors; ko'p bo'lakli amaliy dars (birlik) — barcha
+     * bo'laklari yangi joyda ketma-ket (agendaUnitPlan) turgan holatda: har bo'lak guruh / o'qituvchi / xona (birlikning o'z bo'laklari
+     * hisobga olinmaydi — birga ko'chadi), kutilayotgan so'rovlar, sikl darslari bilan bandlik (hamma bo'lak sinab ko'chgan holatda,
+     * rollback) va xona sig'imi. Qaytaradi: [sabablar, xona kodi, talabalar] (kartaniki).
+     */
+    private function agendaMoveErrors(TimetableBoard $board, TimetableCard $card, int $week, int $day, int $pair, ?Auditorium $room = null): array
+    {
+        $plan = $this->agendaUnitPlan($card, $week, $pair);
+        if (!$plan) {
+            return $this->agendaWeekErrors($board, $card, $week, $day, $pair, $room);
+        }
+        $grid = $this->cardGrid($board, $card);
+        $last = end($plan);
+        if ($plan[0][1] < 1 || $last[1] + $last[0]->lenHalf() - 1 > (int) $grid['pairs']) {
+            return [['Tanlangan vaqt jadval chegarasidan tashqarida.'], (string) $card->auditorium_code, 0];
+        }
+        $ignore = array_fill_keys(array_map(fn ($x) => (int) $x[0]->id, $plan), true);
+        $proposed = $room ? (string) $room->code : null;
+        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
+        $errors = [];
+        $rooms = [];
+        foreach ($plan as [$piece, $pp]) {
+            $piece->setRelation('board', $board);
+            $ov = $this->agendaMemo('ov|' . $piece->id . '|' . $week, fn () => TimetableCardOverride::where('card_id', $piece->id)->where('week', $week)->first());
+            $rooms[(int) $piece->id] = $proposed ?? (string) ($ov?->auditorium_code ?: $piece->auditorium_code);
+            $state = $this->agendaMemo('cstate|' . $piece->id . '|' . $proposed, fn () => $this->calendarConflictState($piece, $proposed));
+            array_push($errors, ...$this->findWeekConflicts($piece, $week, $day, $pp, 0, ['ignore' => $ignore] + $state, $proposed),
+                ...$this->pendingTimeConflicts($piece, ['week' => $week, 'day' => $day, 'pair' => $pp] + ($proposed ? ['auditorium_code' => $proposed] : []), []));
+        }
+        // Sikl darslari va boshqa haftalik darslar bilan bandlik — hamma bo'lak yangi joyda (sinab, rollback); birlik o'zi "boshqa dars" emas.
+        DB::beginTransaction();
+        try {
+            foreach ($plan as [$piece, $pp]) {
+                TimetableCardOverride::updateOrCreate(['card_id' => $piece->id, 'week' => $week], ['day' => $day, 'pair' => $pp, 'start_half' => 0, 'cancelled' => false]
+                    + ($room ? ['auditorium_code' => $room->code, 'auditorium_name' => $room->name] : []));
+            }
+            $memoOthers = (bool) request()->attributes->get('timetable.agenda_memo');
+            if ($memoOthers) {
+                request()->attributes->set('timetable.agenda_others', true);
+            }
+            try {
+                $busy = $this->unitBusy($board, collect(array_map(fn ($x) => $x[0], $plan)), [$date => true]);
+            } finally {
+                request()->attributes->remove('timetable.agenda_others');
+            }
+        } finally {
+            DB::rollBack();
+        }
+        array_push($errors, ...$this->ownBusyTexts($busy, array_map(fn ($x) => (int) $x[0]->teacher_id, $plan), array_values(array_unique($rooms))));
+        foreach ($plan as [$piece]) {
+            $r = $room ?? ($rooms[(int) $piece->id] !== '' ? $this->agendaMemo('room|' . $rooms[(int) $piece->id], fn () => Auditorium::where('code', $rooms[(int) $piece->id])->first()) : null);
+            $students = $this->agendaMemo('students|' . $piece->id, fn () => $this->cardStudents($piece));
+            if ($r && (int) $r->volume > 0 && $students > (int) $r->volume) {
+                $errors[] = self::capacityLine((string) ($r->name ?: $r->code), (int) $r->volume, $students);
+            }
+        }
+        $errors = array_values(array_unique(array_map(fn ($m) => $this->agendaReasonText($m), $errors)));
+
+        return [$errors, $rooms[(int) $card->id] ?? (string) $card->auditorium_code, $this->agendaMemo('students|' . $card->id, fn () => $this->cardStudents($card))];
     }
 
     /** "Shu va keyingi haftalar": shu kun/para (va taklif qilingan xona) har keyingi haftada; birinchi to'siq — sababi bilan. */
@@ -636,7 +735,7 @@ trait TimetableTeacherAgenda
             if ((int) $w === $selected) {
                 continue;
             }
-            [$errors] = $this->agendaWeekErrors($board, $card, (int) $w, (int) $opt['day'], (int) $opt['pair'], $room);
+            [$errors] = $this->agendaMoveErrors($board, $card, (int) $w, (int) $opt['day'], (int) $opt['pair'], $room);
             if ($errors) {
                 $date = $this->weekStartDate($board, $card, (int) $w)->addDays((int) $opt['day'] - 1)->format('d.m');
 
@@ -657,7 +756,7 @@ trait TimetableTeacherAgenda
             if ((int) $w === $selected) {
                 continue;
             }
-            [$errors] = $this->agendaWeekErrors($board, $card, (int) $w, (int) $opt['day'], (int) $opt['pair'], $room);
+            [$errors] = $this->agendaMoveErrors($board, $card, (int) $w, (int) $opt['day'], (int) $opt['pair'], $room);
             if ($errors) {
                 $bad[] = (int) $w;
                 $why[] = $w . '-hafta (' . $this->weekStartDate($board, $card, (int) $w)->addDays((int) $opt['day'] - 1)->format('d.m') . '): ' . implode(' · ', $errors);
@@ -685,9 +784,17 @@ trait TimetableTeacherAgenda
             && $this->auditoriumAllowedForCard($r, $card, $base['teacher']));
         $tries = 0;
         $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
+        // Ko'p bo'lakli amaliy dars: xona barcha bo'laklarga (butun oralig'ida) bo'sh va hamma bo'lakka sig'ishi kerak.
+        $unit = $this->agendaUnitPlan($card, $week, $pair) !== null;
         foreach ($this->rankRooms($card, $fit, $current, $this->roomHabitForCard($board, $card)) as [$r, $why]) {
             if (++$tries > 15) {
                 break;
+            }
+            if ($unit) {
+                if (!$this->agendaMoveErrors($board, $card, $week, $day, $pair, $r)[0]) {
+                    return ['code' => (string) $r->code, 'name' => (string) $r->name, 'volume' => (int) $r->volume, 'why' => $why];
+                }
+                continue;
             }
             // Haftalik darslar bilan (findWeekConflicts), kutilayotgan so'rovlardagi xona broni va sikl darslari bilan
             // (weeklyProposalBusy — shu xona bilan sinab).

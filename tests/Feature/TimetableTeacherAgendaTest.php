@@ -291,9 +291,9 @@ it('agenda: muqobil xona sikl darsi bilan band bo\'lsa taklif qilinmaydi (haftal
     expect($opt['ok'])->toBeTrue()->and($opt['room']['code'])->toBe('R3');
 });
 
-it('agenda: xona band bo\'lsa ham amaliy blok qoidasi tekshiriladi — boshqa xona taklifi blokni bo\'lmaydi', function () {
+it('agenda: boshqa o\'qituvchining shu fan bo\'lagi — alohida birlik (faqat xona band — boshqa xona taklifi); bir o\'qituvchida — birga ko\'chadi', function () {
     $s = agSetup();
-    // pp/2024-01b Farmakologiya amaliy bloki: IV para (MUXAMMADIYEV) + V para (boshqa o'qituvchi) — yonma-yon.
+    // pp/2024-01b Farmakologiya: IV para (MUXAMMADIYEV) + V para (boshqa o'qituvchi) — yonma-yon, lekin ikki birlik (o'qituvchi boshqa).
     $mk = fn (array $o) => TimetableCard::create($o + ['board_id' => $s['board']->id, 'faculty_name' => 'F2', 'specialty_name' => 'pediatriya',
         'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 12, 'training_type' => 'practice', 'len_half' => 2, 'weeks' => 15,
         'kafedra_name' => 'Farmakologiya kafedrasi', 'day' => 4]);
@@ -302,9 +302,20 @@ it('agenda: xona band bo\'lsa ham amaliy blok qoidasi tekshiriladi — boshqa xo
     // VI parada 102-xona boshqa guruhga band (xona muammosi) — 101-xona bo'sh.
     $mk(['subject_name' => 'Fizika', 'group_name' => 'p-09', 'teacher_id' => $other->id, 'teacher_name' => 'YORDAMCHI Y.', 'pair' => 11,
         'auditorium_code' => 'R2', 'auditorium_name' => '102-xona']);
-    $opt = agGet($s, $s['admin'], 'admin', ['move' => 'w|' . $s['ppB']->id . '|' . $s['week']])['move']['options']['2026-11-19'][6];
-    expect($opt['ok'])->toBeFalse()->and($opt['room'])->toBeNull()
-        ->and($opt['why'])->toContain('Xona band: 102-xona')->toContain("amaliy blokning bir qismi");
+    $mv = agGet($s, $s['admin'], 'admin', ['move' => 'w|' . $s['ppB']->id . '|' . $s['week']])['move'];
+    $opt = $mv['options']['2026-11-19'][6];
+    expect($opt['ok'])->toBeTrue()->and($opt['room']['code'])->toBe('R1')
+        ->and($opt['why'])->toContain('Xona band: 102-xona')->not->toContain("bo'lin")
+        ->and($mv['unit_note'])->toBeNull();
+    // Shu o'qituvchining ikkinchi bo'lagi (V para) — bitta birlik: VI paraga 4 soat sig'maydi (jadval chegarasidan tashqarida), "birga ko'chiriladi".
+    $tail = $mk(['subject_name' => 'Farmakologiya', 'group_name' => 'pp/2024-01b', 'teacher_id' => $s['mux']->id, 'teacher_name' => 'MUXAMMADIYEV S. B.',
+        'pair' => 9, 'auditorium_code' => 'R2', 'auditorium_name' => '102-xona']);
+    TimetableCard::where('group_name', 'pp/2024-01b')->where('subject_name', 'Farmakologiya')->where('teacher_id', '!=', $s['mux']->id)->delete();
+    $mv = agGet($s, $s['admin'], 'admin', ['move' => 'w|' . $s['ppB']->id . '|' . $s['week']])['move'];
+    expect($mv['unit_note'])->toBe("4 soat (2+2) birga ko'chiriladi")
+        ->and($mv['options']['2026-11-19'][6]['ok'])->toBeFalse()
+        ->and($mv['options']['2026-11-19'][6]['why'])->toContain('Tanlangan vaqt jadval chegarasidan tashqarida.');
+    expect($tail->id)->toBeGreaterThan(0);
 });
 
 it('agenda: bir nechta kartali haftalik ma\'ruza oqimi — bitta yozuv, istalgan karta kaliti bilan topiladi, ko\'chirilmaydi (oqim bo\'linmaydi)', function () {

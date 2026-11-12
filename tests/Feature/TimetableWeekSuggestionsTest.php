@@ -792,10 +792,13 @@ it('takliflar: sana — boshidagi va yakuniy joy bo\'yicha; blokni qayta qo\'yis
     sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b1->id, 'actions' => [['op' => 'reset', 'card_id' => $b1->id, 'week' => 3]]])
         ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "O'tgan kunga tegadi"));
     TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->update(['day' => 2]);
+    // Bitta bo'lak boshqa kunga (6-kun, b1 — 5-kunda) — amaliy dars bo'linadi: rad; b1 ga yopishtirib (5-kun, 3-qator) — yaxlit: o'tadi.
     sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b2->id, 'actions' => [['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => 6, 'pair' => 3]]])
+        ->assertUnprocessable()->assertJsonPath('error', fn ($m) => str_contains($m, "Amaliy dars bo'linmaydi"));
+    sugAs($s['admin'], 'superadmin')->postJson($url, ['reason' => 'Sinov sababi', 'week' => 3, 'card_id' => $b2->id, 'actions' => [['op' => 'move', 'card_id' => $b2->id, 'week' => 3, 'day' => 5, 'pair' => 3]]])
         ->assertOk()->assertJsonPath('today_moved', true);
     expect(TimetableCardOverride::where('card_id', $b1->id)->where('week', 3)->value('day'))->toBe(5)
-        ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(6);
+        ->and(TimetableCardOverride::where('card_id', $b2->id)->where('week', 3)->value('day'))->toBe(5);
 });
 
 it('takliflar: kutilayotgan so\'rovdagi yangi xona ham bron — boshqa guruh va o\'qituvchi shu vaqtda shu xonani so\'ray olmaydi', function () {

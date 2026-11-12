@@ -47,6 +47,8 @@ const page0 = `<!doctype html><html><head><style>${css}</style></head><body><tab
     const ttToast = (h, t) => window.toasts.push([h, t]);
     const renderAll = () => { window.renders++; };
     const weeklyEditGuard = () => {};
+    // Bitta bo'lakli kartalar (birlik surish — timetable-unit-split.cjs).
+    const unitMovePlan = () => null, applyUnitPayload = () => {};
     const rememberLayerPlace = () => {};
     const placeCardAt = (card, d, p) => window.calls.push({ placeAt: [card.id, d, p] });
     window.setLayer = l => { weeklyLayer = l; };

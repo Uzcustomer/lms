@@ -719,7 +719,7 @@ it('o\'qituvchi so\'rovi: tasdiq kechiksa (dars sanasi o\'tib ketsa) — "Muddat
         ->and(collect($req->fresh()->details['steps'])->last()['action'])->toBe("Muddati o'tgan");
 })->with(['department', 'registrar']);
 
-it('o\'qituvchi so\'rovi: to\'qnashuv (guruh, o\'qituvchi, amaliy blok bo\'linishi) bo\'lsa yuborilmaydi; kafedra mudiri bosqichida paydo bo\'lsa — qo\'llanmaydi', function () {
+it('o\'qituvchi so\'rovi: to\'qnashuv (guruh, o\'qituvchi, amaliy dars bo\'linishi) bo\'lsa yuborilmaydi; kafedra mudiri bosqichida paydo bo\'lsa — qo\'llanmaydi', function () {
     ['head' => $head, 'teacher' => $teacher, 'card' => $card] = approvalSetup();
     $move = ['week' => 2, 'day' => 3, 'pair' => 3, 'reason' => 'Sabab'];
     // Boshqa fanning o'qituvchisi shu o'qituvchi (boshqa guruh) — yangi vaqtda band.
@@ -730,16 +730,19 @@ it('o\'qituvchi so\'rovi: to\'qnashuv (guruh, o\'qituvchi, amaliy blok bo\'linis
     $other->update(['teacher_id' => $head->id, 'auditorium_code' => '999', 'auditorium_name' => '999']);
     asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $card), $move)->assertOk();
     $other->delete();
-    // Bir kunlik amaliy blok (08:30 va 10:00 — ketma-ket) — bittasini yolg'iz ko'chirib bo'lmaydi.
-    $tail = $card->replicate(); $tail->pair = 3; $tail->teacher_id = $head->id; $tail->save();
+    // Bir kunlik amaliy dars (08:30 va 10:00 — ketma-ket, bitta o'qituvchi: birlik) — bittasini yolg'iz ko'chirib bo'lmaydi.
+    $tail = $card->replicate(); $tail->pair = 3; $tail->save();
     $r = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertUnprocessable();
-    expect($r->json('message'))->toContain('amaliy blokning bir qismi')->toContain("bir kunda bir fandan amaliy soatlar bo'linmaydi");
-    // Yangi kunda shu fandan amaliy bor (yopishmaydi) — ham rad.
+    expect($r->json('message'))->toContain("Amaliy dars bo'linmaydi: 4 soat (2+2) bir kunda ketma-ket bo'lishi kerak");
+    // Yangi kunda shu darsning bo'lagi bor, lekin yopishmaydi (oraliq) — ham rad.
     $tail->update(['day' => 3, 'pair' => 7]);
     $r = asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertUnprocessable();
-    expect($r->json('message'))->toContain('Yangi kunda shu fandan boshqa amaliy dars bor');
+    expect($r->json('message'))->toContain("Amaliy dars bo'linmaydi");
+    // Boshqa o'qituvchining shu fan bo'lagi — alohida birlik: to'siq emas.
+    $tail->update(['teacher_id' => $head->id]);
+    asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal.check', $card), $move)->assertOk();
     // Yopishib turadigan joyga (bitta blok bo'ladi) — mumkin.
-    $tail->update(['day' => 3, 'pair' => 5]);
+    $tail->update(['day' => 3, 'pair' => 5, 'teacher_id' => $card->teacher_id]);
     asRole($teacher, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $card), $move)->assertOk();
     // Kafedra mudiri tasdiqlayotganda shu vaqtni boshqa dars egallagan — qayta tekshiruv: qo'llanmaydi, o'qituvchiga xabar.
     $busy = $card->replicate(); $busy->subject_name = 'Band fan'; $busy->teacher_id = $head->id; $busy->day = 3; $busy->pair = 3; $busy->save();

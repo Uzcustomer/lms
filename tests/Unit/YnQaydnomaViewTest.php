@@ -71,8 +71,8 @@ it('drops the signature column from the template and adds rows for more than 30 
 it('keeps the Excel column widths in the PDF: narrow equal spacer columns', function () {
     $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(public_path('templates/yn_qaydnoma (1).xlsx'));
     $w = $book->getActiveSheet();
-    (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 3);
-    foreach ([20, 21, 22] as $r) {
+    (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 29);
+    foreach (range(20, 48) as $r) {
         $w->setCellValue("B{$r}", 'ABDULLAYEV NEMATJON NODIRJON OGLI')->setCellValue("D{$r}", 87)->setCellValue("V{$r}", 91);
     }
     $widths = [];
@@ -93,6 +93,7 @@ it('keeps the Excel column widths in the PDF: narrow equal spacer columns', func
     // F, I, L, O, R, U — bir xil va eng tor (matn uzunligi ularni kengaytirmaydi)
     $spacers = array_map(fn ($c) => $widths[$c], [5, 8, 11, 14, 17, 20]);
     expect(array_unique($spacers))->toHaveCount(1)
+        ->and($spacers[0])->toBeGreaterThan(3.5)->toBeLessThan(4.5)              // ~4pt
         ->and($spacers[0])->toBeLessThan(min(array_diff_key($widths, array_flip([5, 8, 11, 14, 17, 20]))) / 3)
         ->and($widths[21])->toBeLessThan($widths[23]);                       // "O'zlashtirish" ustuni so'z bilan bahodan torroq
 });
@@ -223,8 +224,8 @@ describe('teacher confirmation', function () {
             ->and(array_keys($w->getConditionalStylesCollection()))->toBe(['A20:X49'])
             ->and($w->getStyle('X20')->getFill()->getStartColor()->getRGB())->toBe('FFC7CE')
             // Ajratuvchi ustunlar bir xil va tor; bo'shagan kenglik qolganlariga teng
-            ->and(collect(['F', 'I', 'L', 'O', 'R', 'U'])->map(fn ($c) => $w->getColumnDimension($c)->getWidth())->unique()->all())->toBe([1.0])
-            ->and(round($w->getColumnDimension('A')->getWidth(), 2))->toBe(round(8.43 + (28.81640625 + 6 * 7.43) / 18, 2))
+            ->and(collect(['F', 'I', 'L', 'O', 'R', 'U'])->map(fn ($c) => $w->getColumnDimension($c)->getWidth())->unique()->all())->toBe([1.55])
+            ->and(round($w->getColumnDimension('A')->getWidth(), 2))->toBe(round(8.43 + (28.81640625 + 6 * (8.43 - 1.55)) / 18, 2))
             ->and($drawings)->toHaveCount(1)
             ->and($drawings[0]->getCoordinates())->toBe('C60')
             ->and($drawings[0]->getHeight())->toBe(56)

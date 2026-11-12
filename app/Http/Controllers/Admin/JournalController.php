@@ -64,7 +64,7 @@ class JournalController extends Controller
     private const YNQ_WORD_COL_EXTRA = 6;
     /** Jadvaldagi baho guruhlari orasidagi bo'sh (ajratuvchi) ustunlar — hammasi bir xil, tor */
     private const YNQ_SPACER_COLS = ['F', 'I', 'L', 'O', 'R', 'U'];
-    private const YNQ_SPACER_WIDTH = 1.0;
+    private const YNQ_SPACER_WIDTH = 1.55;   // PDF da ~4pt
     /** "Semestrda … soat … kredit" qatoridagi chiziq (K13:W13) — YN o'tkazilgan sana */
     private const YNQ_EXAM_DATE_CELL = 'K13';
     private const YNQ_QR_ALT = 'Tasdiq QR: ';

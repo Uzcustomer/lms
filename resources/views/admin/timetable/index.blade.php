@@ -9725,7 +9725,8 @@
                     if ((own || []).some(cfWantsShiftAdvice)) btns += '<button type="button" data-cyc-shift disabled title="tekshirilmoqda…">Bo‘sh smenaga o‘tkazish</button>';
                     btns += '<button type="button" data-cyc-teacher>Boshqa o‘qituvchi</button>';
                     // Amaliy yoki ma'ruza to'qnashuvi hali mudirga yozilmagan bo'lsa.
-                    if ((own || []).some(i => !i.past && (i.lecture ? !card.mudir_ph_lec : !card.mudir_ph))) btns += '<button type="button" data-cyc-mudir>Vaqtincha kafedra mudiriga yozish</button>';
+                    // Yozish — faqat jadval administratorlari (kafedra mudiri — yo'q; qaytarish — bor).
+                    if (typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN && (own || []).some(i => !i.past && (i.lecture ? !card.mudir_ph_lec : !card.mudir_ph))) btns += '<button type="button" data-cyc-mudir>Vaqtincha kafedra mudiriga yozish</button>';
                 }
                 return '<div class="cyc-links"><div><span class="dp-sub">O‘qituvchi:</span> ' +
                     (t && t.id ? '<a href="#" class="tt-agenda-link" data-cyc-agenda="t">' + esc(t.name) + '</a>' : '<i>biriktirilmagan</i>') + '</div>' +
@@ -12486,7 +12487,10 @@
                 const who = (res && Array.isArray(res.notified) ? res.notified : []).filter(Boolean);
                 return who.length ? 'Kafedra mudiriga yozildi va xabar yuborildi: ' + esc(who.join(', ')) : 'Kafedra mudiriga yozildi (xabar yuborilmadi — kafedra mudiri topilmadi)';
             }
-            const mudirPhAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek
+            // "Vaqtincha kafedra mudiriga yozish" — faqat jadval administratorlari (registrator ofisi, o'quv bo'limi, adminlar); kafedra mudiri
+            // yozmaydi (server 403). "Asl holatga qaytarish" — kafedra mudirida qoladi (o'z kafedrasi fanlari — server tekshiradi).
+            const mudirPhAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek && typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN;
+            const mudirPhRevertAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek
                 && (typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN || TIMETABLE_ROLE === 'kafedra_mudiri');
             let mudirPick = null;   // tashqi joyi yo'q karta — jadvaldan katak kutilmoqda
             const phRevertErr = {};   // birlik kaliti → "asl o'qituvchiga qaytarib bo'lmadi" sababi
@@ -12607,7 +12611,7 @@
                         return '<div class="pn-mudir-ph-item" data-ph-card="' + c.id + '" style="margin-top:3px;border-top:1px dotted #fde68a;padding-top:3px">' +
                             esc(cardGroups(c).join(', ') + ' · ' + c.subject_name) + ' <span style="color:#a16207">(asl o\'qituvchi: ' + esc(ph.orig_teacher_name || 'biriktirilmagan') + ')</span>' +
                             (weeks.length > 1 ? ' <span style="color:#a16207">· haftalar: ' + esc(weeks.join(', ')) + '</span>' : '') +
-                            (mudirPhAllowed() ? '<div style="margin-top:2px">' +
+                            (mudirPhRevertAllowed() ? '<div style="margin-top:2px">' +
                                 '<button type="button" data-ph-revert="' + c.id + '" data-ph-mode="original" title="Mudirga yozilishidan oldingi joy, o\'qituvchi va xona (bandlik tekshirilmaydi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Asl holatga qaytarish</button> ' +
                                 '<button type="button" data-ph-revert="' + c.id + '" data-ph-mode="here" title="Dars shu joyda qoladi — asl o\'qituvchi va xona (bandlik tekshiriladi)" style="border:1px solid #94a3b8;color:#334155;background:#fff;border-radius:4px;padding:0 5px">Shu joyda asl o\'qituvchiga</button>' +
                                 weekSel + '</div>' : '') +
@@ -12843,7 +12847,7 @@
                                 if (!(r && r.pending_approval)) ttToast(esc((isPlaced ? 'Xona almashtirildi (shu hafta): ' : 'Joylandi: ') + (room.name || room.code)), 'ok');
                             } };
                         })() : null,
-                        mudir: mudirPhAllowed() && !phOf(c) ? () => { const mb = pop.querySelector('[data-pop-mudir]'); if (mb && !mb.disabled) openMudirPhConfirm(c, mudirPhSlot(c)); } : null,
+                        // "Vaqtincha kafedra mudiriga yozish" — oynada bitta tugma (pastki qatorda, data-pop-mudir); yechimlarda takrorlanmaydi.
                         select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); scrollToPickColumn(c); } : null,
                     } });
                 if (placed && W && weeklyLayer === 'internal') {
@@ -12918,18 +12922,10 @@
                     } catch (err) {
                         const ci = err && err.data && err.data.conflict_items;
                         if (Array.isArray(ci) && ci.length) showBlocks(ci);
-                        else { const pe = panelPopSplitError(err.message); msg(pe.title, true, pe.items); mudirInMsg(); }
+                        else { const pe = panelPopSplitError(err.message); msg(pe.title, true, pe.items); }
                         t.disabled = false;
                     }
                 });
-                // Rad etilgan "Shu joyga joylash" xabari ichida ham — "Vaqtincha kafedra mudiriga yozish".
-                function mudirInMsg() {
-                    const btn = pop.querySelector('[data-pop-mudir]');
-                    const m = pop.querySelector('[data-pop-msg]');
-                    if (!btn || !m || btn.disabled) return;
-                    m.insertAdjacentHTML('beforeend', '<div style="margin-top:3px"><button type="button" data-pop-mudir style="border:1px solid #ca8a04;color:#854d0e;background:#fefce8;border-radius:5px;padding:1px 8px">Vaqtincha kafedra mudiriga yozish</button></div>');
-                    reposition();
-                }
                 // Tugma holati (kech keladi): mudir / xona topilmasa — o'chiq, sababi bilan; tashqi joyi yo'q — katak tanlanadi.
                 if (pop.querySelector('[data-pop-mudir]')) {
                     mudirPhInfo(c, mudirPhSlot(c)).then(info => {
@@ -13250,18 +13246,17 @@
                 bind(info);
             }
             // Bloklarni joyiga chizadi va "Ko'rsatish" / yechim tugmalarini bog'laydi. ctx: {card, ids (birlik), day, pair, len, placed, close,
-            // reposition, solutions: {room: fn, select: fn, mudir: fn}}.
+            // reposition, solutions: {room: fn, roomPick: {...}, select: fn}} ("Vaqtincha kafedra mudiriga yozish" — oynaning pastki qatorida, bitta).
             function cbRender(host, items, ctx) {
                 const blocks = cbBlocks(items);
                 if (!host) return blocks;
                 const kinds = new Set(cbBlocking(blocks).map(b => b.kind));
-                // Yechimlar: faqat xona band — "Boshqa xona bilan joylash"; o'qituvchi band — "Vaqtincha kafedra mudiriga yozish"; har doim — "Joylash uchun tanlash".
+                // Yechimlar: faqat xona band — "Boshqa xona bilan joylash" (roomPick bo'lmasa); har doim — "Joylash uchun tanlash". "Vaqtincha kafedra mudiriga yozish" — pastki qatorda (bitta).
                 const sol = ctx.solutions || {};
                 const btn = (attr, text, color) => '<button type="button" ' + attr + ' style="border:1px solid ' + color + ';color:' + color + ';background:#fff;border-radius:5px;padding:1px 8px">' + text + '</button>';
                 const sols = [
                     // Xona tanlash — "Xona band" blokining o'zida (roomPick); u yo'q joyda — eski "Boshqa xona bilan joylash" (faqat xona band).
                     !sol.roomPick && kinds.has('room') && !kinds.has('teacher') && !kinds.has('group') && !kinds.has('day_end') && sol.room ? btn('data-cb-sol="room"', 'Boshqa xona bilan joylash', '#a16207') : '',
-                    kinds.has('teacher') && sol.mudir ? btn('data-cb-sol="mudir"', 'Vaqtincha kafedra mudiriga yozish', '#854d0e') : '',
                     sol.select ? btn('data-cb-sol="select"', 'Joylash uchun tanlash', '#1d4ed8') : '',
                 ].filter(Boolean);
                 host.innerHTML = cbHtml(blocks, ctx.placed, { roomPick: !!sol.roomPick }) + (blocks.length && sols.length ? '<div data-cb-sols style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + sols.join('') + '</div>' : '');

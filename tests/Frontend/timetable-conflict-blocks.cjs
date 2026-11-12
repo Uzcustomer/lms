@@ -114,9 +114,10 @@ const data = {
         assert.deepEqual(await txt('[data-cb-line]'), ['10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A. · 123-amaliyot xonasi',
             '10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A. · 123-amaliyot xonasi']);
         assert.ok(!(await p.evaluate(() => calls.some(c => /unit-place/.test(c[0])))), 'oldindan tekshiruvda rad — serverga yuborilmadi');
-        // Yechimlar: o'qituvchi band — "Vaqtincha kafedra mudiriga yozish"; o'qituvchi ham band bo'lgani uchun "Boshqa xona bilan joylash" yo'q;
-        // "Joylash uchun tanlash" — har doim.
-        assert.deepEqual(await txt('[data-cb-sol]'), ['Vaqtincha kafedra mudiriga yozish', 'Joylash uchun tanlash']);
+        // Yechimlar: "Joylash uchun tanlash" — har doim; "Vaqtincha kafedra mudiriga yozish" — oynada bitta (pastki qatorda), yechimlarda
+        // takrorlanmaydi (6-bo'lim); xona tanlash — "Xona band" blokida.
+        assert.deepEqual(await txt('[data-cb-sol]'), ['Joylash uchun tanlash']);
+        assert.ok(((await html()).match(/Vaqtincha kafedra mudiriga yozish/g) || []).length <= 1);
         assert.doesNotMatch(await html(), /yana \d+ ta/);
 
         // 3) [Ko'rsatish] — xona: shu kunning barcha darslari (server: teacher-agenda, xona), to'qnashgani qizil, shu dars (joylanmoqchi) belgilangan.

@@ -117,6 +117,10 @@ trait TimetableMudirPlaceholder
         $data = $request->validate(['week' => 'required|integer|min:1|max:' . max(1, (int) $grid['weeks']), 'scope' => 'nullable|in:one,rest',
             'day' => 'nullable|integer|min:1|max:' . $grid['days'], 'pair' => 'nullable|integer|min:1|max:' . max(1, (int) $grid['pairs']),
             'reason' => 'nullable|string|max:500']);
+        // Yozish — faqat jadval administratorlari (kafedra mudiri — yo'q; "Asl holatga qaytarish" unda qoladi).
+        if ($denied = $this->mudirPlaceholderWriteDenied($request)) {
+            return $denied;
+        }
         $cards = $this->weeklyUnitCards($card);
         if ($denied = $this->mudirPlaceholderDenied($request, $cards)) {
             return $denied;
@@ -381,9 +385,22 @@ trait TimetableMudirPlaceholder
         return [$units, $calendar, $i, $cards];
     }
 
+    /** Yozish huquqi: jadval administratorlari (admin, registrator ofisi, kichik admin, o'quv bo'limi); kafedra mudiri — 403. */
+    private function mudirPlaceholderWriteDenied(Request $request)
+    {
+        if ($this->timetableActor($request) && !in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
+            return response()->json(['error' => 'Vaqtincha kafedra mudiriga yozish — faqat registrator ofisi, o\'quv bo\'limi va adminlar.'], 403);
+        }
+
+        return null;
+    }
+
     /** POST boards/{board}/cycle-mudir-placeholder {key, scope: all|conflicts, reason?}. */
     public function cycleMudirPlaceholder(Request $request, \App\Models\TimetableBoard $board)
     {
+        if ($denied = $this->mudirPlaceholderWriteDenied($request)) {
+            return $denied;
+        }
         $data = $request->validate(['key' => 'required|string|max:500', 'scope' => 'nullable|in:all,conflicts', 'reason' => 'nullable|string|max:500']);
         $r = $this->cycleMudirUnit($request, $board, $data['key']);
         if (!is_array($r)) {

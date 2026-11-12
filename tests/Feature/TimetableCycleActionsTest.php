@@ -159,8 +159,12 @@ it('sikl mudir belgisi: butun blok; huquq — boshqa kafedra mudiri va o\'qituvc
         'created_at' => now(), 'updated_at' => now()]);
     caAs('kafedra_mudiri', $other)->postJson(route('admin.timetable.cycle-mudir-placeholder', $s['board']), ['key' => CA_KEY])->assertStatus(403);
     caAs('oqituvchi', $s['tosh'])->postJson(route('admin.timetable.cycle-mudir-placeholder', $s['board']), ['key' => CA_KEY])->assertStatus(403);
-    // O'z kafedrasi mudiri — darhol, butun blok (dates = null).
+    // O'z kafedrasi mudiri ham yozmaydi (6-bo'lim: faqat jadval administratorlari) — 403.
     caAs('kafedra_mudiri', $s['mudir'])->postJson(route('admin.timetable.cycle-mudir-placeholder', $s['board']), ['key' => CA_KEY, 'scope' => 'all'])
+        ->assertStatus(403)->assertJsonPath('error', "Vaqtincha kafedra mudiriga yozish — faqat registrator ofisi, o'quv bo'limi va adminlar.");
+    // O'quv bo'limi — darhol, butun blok (dates = null); kafedra mudiri — qaytaradi.
+    caAs('oquv_bolimi')->postJson(route('admin.timetable.cycle-mudir-placeholder', $s['board']), ['key' => CA_KEY, 'scope' => 'all'])
         ->assertOk()->assertJson(['dates' => null]);
     expect(caConflicts($s['board']))->toBe([]);
+    caAs('kafedra_mudiri', $s['mudir'])->postJson(route('admin.timetable.cycle-mudir-placeholder.revert', $s['board']), ['key' => CA_KEY])->assertOk();
 });

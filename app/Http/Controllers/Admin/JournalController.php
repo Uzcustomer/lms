@@ -60,6 +60,8 @@ class JournalController extends Controller
     private const YNQ_TEMPLATE_SIGN_COL = 'X';
     /** Ustun olib tashlangach oxirgi ustun — so'z bilan baho ("aʼlo", …) */
     private const YNQ_LAST_COL = 'X';
+    /** Shu ustunga qo'shimcha kenglik (Excel birligi) */
+    private const YNQ_WORD_COL_EXTRA = 6;
     /** "Semestrda … soat … kredit" qatoridagi chiziq (K13:W13) — YN o'tkazilgan sana */
     private const YNQ_EXAM_DATE_CELL = 'K13';
     private const YNQ_QR_ALT = 'Tasdiq QR: ';
@@ -12155,7 +12157,7 @@ class JournalController extends Controller
 
     /**
      * O'ng yuqori burchak (kafedra mudiri QR i va ismi) bo'sh qolishi uchun sarlavhaning o'ng qismi
-     * chapga: "Amaliyot o'qituvchisi" (P:T → N:R), ismlar chizig'i (U:X → S:U), guruh nomi (W8 → U8:V8),
+     * chapga: "Amaliyot o'qituvchisi" (P:T → N:R), ismlar chizig'i (U:X → S:U), guruh nomi (W8 → V8:W8),
      * "YaN o'tkazilgan sana" chizig'i (K13:W13 → K13:U13). V–X ustunlari 10–13-qatorlarda bo'sh —
      * mudir ismi ustidan chiziq yoki yozuv o'tmaydi.
      */
@@ -12199,14 +12201,14 @@ class JournalController extends Controller
         $sheet->mergeCells('K13:U13');
         $sheet->getCell('K13')->setValue($date[0]);
 
+        // Guruh nomi — V:W da, chapdan (tor U ustuniga kirmasin: PDF da sig'magan matn ustunni kengaytiradi)
         $group = [$sheet->getCell('W8')->getValue(), $sheet->getCell('W8')->getXfIndex()];
-        $sheet->getCell('W8')->setValue(null);
-        foreach (['U', 'V'] as $col) {
-            $sheet->getCell($col . '8')->setXfIndex($group[1]);
+        foreach (['V', 'W'] as $col) {
+            $sheet->getCell($col . '8')->setValue(null)->setXfIndex($group[1]);
         }
-        $unmerge('U8:V8');
-        $sheet->mergeCells('U8:V8');
-        $sheet->getCell('U8')->setValue($group[0]);
+        $sheet->mergeCells('V8:W8');
+        $sheet->getCell('V8')->setValue($group[0]);
+        $sheet->getStyle('V8')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
     }
 
     /**
@@ -12292,6 +12294,9 @@ class JournalController extends Controller
             $dim = $sheet->getColumnDimension($Coordinate::stringFromColumnIndex($ci));
             $dim->setWidth(($dim->getWidth() < 0 ? 8.43 : $dim->getWidth()) + $freed / $lastIndex);
         }
+        // So'z bilan baho ("aʼlo", "kelmadi", "qoʻyilmadi") ustuni kengroq — o'ng yuqori burchakda kafedra mudiri QR i ham shu ustun ustida
+        $wordCol = $sheet->getColumnDimension(self::YNQ_LAST_COL);
+        $wordCol->setWidth($wordCol->getWidth() + self::YNQ_WORD_COL_EXTRA);
 
         // Shakl raqami ("12-shakl", …) — o'ng yuqori burchakda (1-qator, oxirgi ustun): shablonda u
         // C1 dan oxirigacha birlashtirilgan katak ichida qolib, ko'rinmas edi

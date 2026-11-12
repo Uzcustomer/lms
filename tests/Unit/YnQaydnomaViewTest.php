@@ -56,7 +56,7 @@ it('drops the signature column from the template and adds rows for more than 30 
     $extra = (new ReflectionMethod(JournalController::class, 'ynqExtraRows'))->invoke(null, $w);
 
     expect((string) $w->getCell('X15')->getValue())->not->toContain('imzo')
-        ->and(round($after, 4))->toBe(round($total, 4))                       // kenglik saqlangan — teng bo'lingan
+        ->and(round($after, 4))->toBe(round($total + 6, 4))                   // imzo ustuni kengligi teng bo'lingan, so'z bilan baho ustuni +6
         ->and($w->getCell('X1')->getValue())->toContain('shakl')
         // Shakl raqami ko'rinadi: 1-qatordagi birlashtirish oxirgi ustungacha emas
         ->and($w->getMergeCells())->toHaveKey('C1:W1')->not->toHaveKey('C1:X1')
@@ -439,12 +439,12 @@ describe('teacher confirmation', function () {
         $w->setCellValue('U10', 'ALLAMURATOVA U.D.')->setCellValue('W8', 'd1/d22-01 (rus)');
         (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $book, '435', '19', '77');
         expect($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe('center');   // shablonda "Jami talabalar soni:" (B57) kabi
-        expect($w->getMergeCells())->toHaveKeys(['N10:R10', 'S10:U10', 'N12:R12', 'S12:U12', 'U8:V8', 'K13:U13'])
+        expect($w->getMergeCells())->toHaveKeys(['N10:R10', 'S10:U10', 'N12:R12', 'S12:U12', 'V8:W8', 'K13:U13'])
             ->not->toHaveKey('U10:X10')
             ->and($w->getCell('S10')->getValue())->toBe('ALLAMURATOVA U.D.')
             ->and($w->getCell('N11')->getValue())->toContain('Amaliyot')
             ->and($w->getCell('K13')->getValue())->toContain('YaN o‘tkazilgan sana')
-            ->and($w->getCell('U8')->getValue())->toBe('d1/d22-01 (rus)')
+            ->and($w->getCell('V8')->getValue())->toBe('d1/d22-01 (rus)')
             ->and($w->getCell('W8')->getValue())->toBeNull()
             ->and($w->getStyle('U10')->getBorders()->getBottom()->getBorderStyle())->toBe('thin')
             ->and($w->getStyle('V10')->getBorders()->getBottom()->getBorderStyle())->toBe('none')

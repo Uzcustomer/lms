@@ -69,7 +69,7 @@ it('unit-place 422 conflict_items: bitta dars ikki turda (o\'qituvchi va xona) b
     expect($items->pluck('kind')->all())->toBe(['teacher', 'room', 'capacity'])
         ->and($teacher)->toMatchArray(['who' => 'NUROVA Z. A.', 'card_id' => $s['blocker']->id, 'piece_id' => $s['card']->id, 'groups' => ['d1/d26-01a'],
             'subject' => 'Tibbiy biologiya. Umumiy genetika', 'training_type' => 'practice', 'teacher' => 'NUROVA Z. A.', 'teacher_id' => $s['nurova']->id,
-            'room_name' => '123-amaliyot xonasi', 'room_code' => 'R123', 'date' => '2026-11-25', 'time' => '10:00–11:20'])
+            'room_name' => '123-amaliyot xonasi', 'room_code' => 'R123', 'date' => '2026-11-25', 'time' => '10:00–11:20', 'piece_pair' => 3])
         ->and($items->firstWhere('kind', 'room'))->toMatchArray(['who' => '123-amaliyot xonasi', 'card_id' => $s['blocker']->id])
         ->and($items->firstWhere('kind', 'capacity'))->toMatchArray(['who' => '123-amaliyot xonasi', 'volume' => 17, 'students' => 40, 'over' => 23, 'blocking' => false]);
 });

@@ -180,6 +180,19 @@ const data = {
         assert.deepEqual(await txt('[data-pop-cf] [data-cb-title]'), ["To'qnashuv — sabab: o'qituvchi band va xona band"]);
         assert.doesNotMatch(await html(), /data-pop-place[ >=]/);
 
+        // 7b) Codex: bo'laklari turli kunda turgan joylangan birlik — payshanbadagi bo'lak (708677) to'qnashuvi: "Jadvalda ko'rsatish" shu bo'lak
+        //     vaqti va kartasi bilan (bosilgan kartaniki emas), kunlik ro'yxat sarlavhasi — payshanba.
+        await setCards([Object.assign({}, data.card, { day: 1, pair: 1 }), Object.assign({}, data.card, { id: 708677, day: 4, pair: 5 }),
+            Object.assign({}, data.blocker, { day: 4, pair: 5, auditorium_code: 'R900', auditorium_name: '900-xona' })]);
+        await p.evaluate(() => T.open(708676));
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-head]'), ["O'qituvchi band: NUROVA Z. A."]);
+        await p.click('#pnCardPop [data-pop-cf] [data-cb-block="teacher"] [data-cb-show]');
+        await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-block="teacher"] [data-cb-detail-head]');
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-block="teacher"] [data-cb-detail-head]'), ['NUROVA Z. A. · Payshanba, 26.11']);
+        await p.click('#pnCardPop [data-pop-cf] [data-cb-block="teacher"] [data-cb-focus]');
+        const f2 = await p.evaluate(() => focus.pop());
+        assert.deepEqual([f2.card_ids, f2.hour_from, f2.hour_to, f2.dates], [[708677, 708662], 5, 7, ['2026-11-26', '2026-11-26']]);
+
         // 8) Fokus bannerida xona NOMI (kodi emas); sikl karta oynasi — turlarga ajratilgan bloklar.
         assert.equal(await p.evaluate(() => T.focusBannerText({ kind: 'room_busy', room_code: 'R123', room_name: '123-amaliyot xonasi', dates: ['2026-11-25'] }, [{ group: 'd1/d26-03a' }, { group: 'd1/d26-01a' }])),
             "To'qnashuvni ko'rish: Xona 123-amaliyot xonasi — d1/d26-03a va d1/d26-01a, 25.11");

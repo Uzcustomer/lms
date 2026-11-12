@@ -12833,7 +12833,7 @@
                 return { kind: x.kind, who: x.who != null ? String(x.who) : '', card_id: o.id, piece_id: piece.id, groups: cardGroups(o), subject: o.subject_name,
                     training_type: o.training_type, teacher: o.teacher_name || '', teacher_id: +o.teacher_id || null,
                     room_name: eo.auditorium_name || eo.auditorium_code || '', room_code: eo.auditorium_code || '', date: weekDayIso(W, d),
-                    time: pl ? slotRangeText(pl.pair, cardLen(o)) : '', day: d, pair: pl ? pl.pair : at };
+                    time: pl ? slotRangeText(pl.pair, cardLen(o)) : '', day: d, pair: pl ? pl.pair : at, piece_pair: at };
             }
             // Xona sig'imi (ogohlantirish, rad sababi emas): shu haftadagi xona sig'imi talabalar sonidan kam.
             function cbCapItem(c) {
@@ -12903,15 +12903,19 @@
                         '<div data-cb-detail="' + i + '" hidden style="margin-top:3px"></div></div>').join('');
             }
             // "Ko'rsatish" tafsiloti uchun fokus (jadvalda to'qnashuvni ko'rish rejimi): ikkala dars guruhlari, sana, vaqt.
+            // Bo'lak — to'qnashuvga aynan tegishli bo'lagi (piece_id) va uning shu yozuvdagi joyi (piece_pair): bo'laklari turli kunda yoki oraliq
+            // bilan turgan birlikda ham fokus vaqti va belgilanadigan kartalar shu bo'lakniki.
             function cbFocusShow(b, ctx) {
                 const it = b.items[0] || {};
                 const kind = b.kind === 'teacher' ? 'teacher_busy' : b.kind === 'room' ? 'room_busy' : 'group_busy';
                 const other = cards.find(x => x.id === it.card_id);
+                const piece = cards.find(x => x.id === +it.piece_id) || ctx.card;
+                const from = +it.piece_pair || ctx.pair, len = piece === ctx.card && !it.piece_pair ? ctx.len : cardLen(piece);
                 const fg = x => cardGroups(x).map(g => ({ group: g, faculty: x.faculty_name || '', specialty: x.specialty_name || '', course: +x.course }));
-                return { kind, teacher_id: b.kind === 'teacher' ? (+ctx.card.teacher_id || null) : null, teacher_name: b.kind === 'teacher' ? b.who : null,
+                return { kind, teacher_id: b.kind === 'teacher' ? (+piece.teacher_id || null) : null, teacher_name: b.kind === 'teacher' ? b.who : null,
                     room_code: b.kind === 'room' ? (it.room_code || null) : null, room_name: b.kind === 'room' ? b.who : null,
-                    groups: fg(ctx.card).concat(other ? fg(other) : []), subject: it.subject, dates: [it.date, it.date], hour_from: ctx.pair, hour_to: ctx.pair + ctx.len,
-                    hour_unit: 'row', card_ids: [ctx.card.id].concat(it.card_id ? [it.card_id] : []), view: 'week', week: curWeek };
+                    groups: fg(piece).concat(other ? fg(other) : []), subject: it.subject, dates: [it.date, it.date], hour_from: from, hour_to: from + len,
+                    hour_unit: 'row', card_ids: [piece.id].concat(it.card_id ? [it.card_id] : []), view: 'week', week: curWeek };
             }
             // Kun ro'yxati qatorlari (agenda yozuvlari): vaqt, guruh(lar), fan (ma'ruza/amaliy), o'qituvchi (xona) yoki xona (o'qituvchi);
             // band qilgan dars — qizil, shu dars — belgilangan; joylanmagan dars — joylanmoqchi bo'lgan vaqtida qo'shimcha qator.
@@ -12937,7 +12941,8 @@
             // "Ko'rsatish": xona / o'qituvchi — shu kunning barcha darslari (server: teacher-agenda, sikl darslari bilan); guruh — shu vaqtdagi darsi.
             async function cbShowDetail(el, b, ctx) {
                 const it = b.items[0] || {};
-                const dow = (boardDayNames()[+ctx.day - 1] || ctx.day + '-kun') + ', ' + cfDate(it.date || weekDayIso(curWeek, ctx.day));
+                const day = +it.day || ctx.day;   // to'qnashuv kuni (bo'laklari turli kunda bo'lsa — shu yozuv kuni)
+                const dow = (boardDayNames()[day - 1] || day + '-kun') + ', ' + cfDate(it.date || weekDayIso(curWeek, day));
                 const links = info => '<div style="margin-top:3px;display:flex;gap:8px;flex-wrap:wrap"><a href="#" data-cb-focus style="text-decoration:underline dotted">Jadvalda ko\'rsatish</a>' +
                     (info ? '<a href="#" data-cb-agenda style="text-decoration:underline dotted">' + esc(info.label) + '</a>' : '') + '</div>';
                 const bind = info => {

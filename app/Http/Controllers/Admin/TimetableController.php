@@ -12229,7 +12229,7 @@ class TimetableController extends Controller
     /**
      * Tuzilgan to'qnashuv sabablari (422 conflict_items; front oldindan tekshiruvi bilan bir xil shakl): $card ni shu haftada (kun, para)
      * ga qo'yganda band qiladigan har dars × tur — {kind: room|teacher|group, who, card_id (band qilgan dars), piece_id (shu karta), groups,
-     * subject, training_type, teacher, teacher_id, room_name, room_code, date, time ("10:00–11:20"), day, pair}.
+     * subject, training_type, teacher, teacher_id, room_name, room_code, date, time ("10:00–11:20"), day, pair, piece_pair (shu bo'lak joyi)}.
      */
     private function weekClashItems(TimetableCard $card, int $week, int $day, int $pair, ?array $state = null, ?string $roomCode = null): array
     {
@@ -12246,7 +12246,9 @@ class TimetableController extends Controller
                     'groups' => array_values($o->occupiedGroups()), 'subject' => (string) $o->subject_name, 'training_type' => (string) $o->training_type,
                     'teacher' => $o->teacher_name, 'teacher_id' => $o->teacher_id ? (int) $o->teacher_id : null,
                     'room_name' => $x['room_name'] ?: $x['room'], 'room_code' => $x['room'], 'date' => $date,
-                    'time' => $this->halfRangeTime($board, $this->rangeFor($o, (int) $x['pair'], 0)), 'day' => (int) $x['day'], 'pair' => (int) $x['pair']];
+                    'time' => $this->halfRangeTime($board, $this->rangeFor($o, (int) $x['pair'], 0)), 'day' => (int) $x['day'], 'pair' => (int) $x['pair'],
+                    // Shu kartaning (bo'lakning) shu yozuvdagi joyi — fokus vaqti va belgilanadigan karta uchun.
+                    'piece_pair' => $pair];
             }
         }
 

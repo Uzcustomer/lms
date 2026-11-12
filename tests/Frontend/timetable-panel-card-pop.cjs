@@ -44,7 +44,7 @@ const ctx = {
     cards, overrides: { '3|8': { day: 2, pair: 3, cancelled: false } }, curWeek: 8, weeklyLayer: 'internal', BASE: '', board: { id: 7 },
     TIMETABLE_READ_ONLY: false, TIMETABLE_ROLE: 'kafedra_mudiri', WEEKLY_ADMIN: false, effPlace: c => vm.runInContext('placeInWeek', ctx)(c, 8), $: () => null, teacherFullNames: { 5: 'CHORIYEVA GULNORA YUSUPOVNA' }, teacherPhones: { 5: { text: '+998 90 123 45 67', tel: '+998901234567' } }, audCache: null,
     esc: s => String(s), cardLen: c => c.len_half, cardGKeys: c => ['F|S|1|' + c.group_name], cardGroups: c => [c.group_name], isCycleCardAny: () => false,
-    inactiveRooms: { R404: '404' }, roomInactive: code => !!code && code in ctx.inactiveRooms, ROOM_OFF_TEXT: 'Xona nofaol — almashtiring',
+    isSharedRoomName: () => false, inactiveRooms: { R404: '404' }, roomInactive: code => !!code && code in ctx.inactiveRooms, ROOM_OFF_TEXT: 'Xona nofaol — almashtiring',
     effectiveCard: c => c, weeklyCanEdit: () => true, boardDayNames: () => ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'],
     boardSchedule: () => times.map((t, i) => ({ type: 'pair', start: t, end: ends[i], abbr: ab[i] })),
     weekMonday: () => new Date(2026, 9, 26), weeklyEditGuard() {}, rememberLayerPlace() {},
@@ -158,10 +158,11 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     ctx.closePanelCardPop();
     assert.equal(ctx.window.ev.scroll, undefined);
 
-    // 6) "Band: …": takrorlar olib tashlanadi, dastlabki 3 tasi, qolgani "yana N ta ▾"; server xatosi sarlavha va ro'yxatga.
+    // 6) "Band: …": takrorlar olib tashlanadi, hammasi ko'rinadi ("yana N ta" ostiga yashirilmaydi); server xatosi sarlavha va ro'yxatga.
     const html6 = ctx.panelPopMsgHtml('Band:', ['Auditoriya band: 428 — A', 'Auditoriya band: 428 — A', 'B', 'C', 'D', 'E']);
     assert.equal((html6.match(/Auditoriya band: 428/g) || []).length, 1);
-    assert.match(html6, /<li>C<\/li><\/ul><ul data-pop-rest hidden[^>]*><li>D<\/li><li>E<\/li><\/ul><a href="#" data-pop-more data-label="yana 2 ta ▾"/);
+    assert.match(html6, /<li>C<\/li><li>D<\/li><li>E<\/li><\/ul>$/);
+    assert.doesNotMatch(html6, /yana \d+ ta|data-pop-rest/);
     assert.deepEqual(JSON.parse(JSON.stringify(ctx.panelPopSplitError("4 soat sig'maydi: 13:30 dan keyin 2 soat bo'sh — Guruh band: x — y · O'qituvchi band: z"))),
         { title: "4 soat sig'maydi: 13:30 dan keyin 2 soat bo'sh", items: ['Guruh band: x — y', "O'qituvchi band: z"] });
     // 7) "Vaqtincha kafedra mudiriga yozish": tugma (kech kelgan holat), sahifa ichidagi tasdiq matni, so'rov; mudir topilmasa — o'chiq.

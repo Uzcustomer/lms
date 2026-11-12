@@ -7975,13 +7975,15 @@ class TimetableController extends Controller
                         $items[] = ['kind' => $kind, 'type' => $kind === 'teacher_busy' ? 'teacher' : ($kind === 'room_busy' ? 'room' : 'group'),
                             'teacher_id' => $kind === 'teacher_busy' ? (int) $models[$id]->teacher_id : null,
                             'teacher_name' => $kind === 'teacher_busy' ? (string) $models[$id]->teacher_name : null,
-                            'room' => $kind === 'room_busy' ? ($x['room'] ?: null) : null, 'groups' => array_values($x['card']->occupiedGroups()),
+                            'room' => $kind === 'room_busy' ? ($x['room'] ?: null) : null,
+                            'room_name' => $kind === 'room_busy' ? ($x['room_name'] ?: $x['room'] ?: null) : null, 'groups' => array_values($x['card']->occupiedGroups()),
                             'with_card' => (int) $x['card']->id, 'date_from' => $date, 'date_to' => $date, 'past' => $date < self::proposalToday(),
                             'detail' => $m,
                             // "Ko'rsatish": ikkala dars guruhlari (qamrovi bilan), shu hafta, kun va para.
                             'show' => $this->focusShow(['kind' => $kind, 'teacher_id' => $kind === 'teacher_busy' ? $models[$id]->teacher_id : null,
                                 'teacher_name' => $kind === 'teacher_busy' ? $models[$id]->teacher_name : null,
                                 'room_code' => $kind === 'room_busy' ? ($x['room'] ?: null) : null,
+                                'room_name' => $kind === 'room_busy' ? ($x['room_name'] ?: null) : null,
                                 'groups' => array_merge($this->focusCardGroups($models[$id]), $this->focusCardGroups($x['card'])),
                                 'subject' => $x['card']->subject_name, 'dates' => [$date], 'hour_from' => $p, 'hour_to' => $p + $models[$id]->lenHalf(),
                                 'card_ids' => [$id, $x['card']->id], 'view' => 'week', 'week' => $w])];
@@ -11247,8 +11249,12 @@ class TimetableController extends Controller
         $teacherIds = array_flip(array_map('intval', array_filter($teacherIds)));
         $rooms = array_flip(array_map('strval', array_filter($rooms)));
 
+        // Xona — NOMI bilan (kodi emas): "Xona 123-amaliyot xonasi band: …".
+        $codes = array_keys(array_intersect_key($busy['rooms'], $rooms));
+        $names = $codes ? Auditorium::whereIn('code', $codes)->pluck('name', 'code')->all() : [];
+
         return array_merge(array_values(array_map(fn ($t) => "O'qituvchi band: {$t}", array_intersect_key($busy['teachers'], $teacherIds))),
-            array_map(fn ($code) => self::roomBusyText("Xona {$code} band: ", (string) $busy['rooms'][$code]), array_keys(array_intersect_key($busy['rooms'], $rooms))));
+            array_map(fn ($code) => self::roomBusyText('Xona ' . ($names[$code] ?? $code) . ' band: ', (string) $busy['rooms'][$code]), $codes));
     }
 
     public function validateTimeProposal(TimetableCard $card, array $data, array $ignorePendingIds = [], bool $staff = false): void
@@ -11496,7 +11502,8 @@ class TimetableController extends Controller
         // Berilgan xona bilan tekshiriladi (haftalik yozuvdagi eski xona emas); rad etilsa hech narsa o'zgarmaydi.
         $conflicts = $this->findWeekConflicts($card, $week, $day, $pair, $startHalf, null, $room?->code);
         if (!empty($conflicts)) {
-            return response()->json(['error' => implode(' · ', $conflicts)], 422);
+            return response()->json(['error' => implode(' · ', $conflicts),
+                'conflict_items' => $this->weekClashItems($card, $week, (int) $day, (int) $pair, null, $room?->code)], 422);
         }
         $errors = $this->unitGuardedWrite([[$card, $week]], fn () => TimetableCardOverride::updateOrCreate(
             ['card_id' => $card->id, 'week' => $week],
@@ -12187,25 +12194,65 @@ class TimetableController extends Controller
     /** Ikki dars bir vaqtda: guruh (bir yo'nalish+kurs ichida, bo'lak qo'shnilaridan tashqari), o'qituvchi va xona bandligi. */
     private function clashWith(TimetableCard $card, ?string $myRoom, TimetableCard $o, ?string $oRoom, ?string $oRoomName): array
     {
+        $prefix = ['group' => 'Guruh band: ', 'teacher' => "O'qituvchi band: ", 'room' => 'Auditoriya band: '];
+
+        return array_map(fn ($k) => $prefix[$k[0]] . $k[1] . ' — ' . $this->describeCard($o), $this->clashKinds($card, $myRoom, $o, $oRoom, $oRoomName));
+    }
+
+    /**
+     * clashWith tafsiloti (bir xil qoida): [[tur, kim], ...] — group (kesishgan guruhlar, vergul bilan), teacher (o'qituvchi), room (xona
+     * nomi). Matn shundan yasaladi; tuzilgan sabab (conflict_items) ham shundan — front matnni parse qilmaydi.
+     */
+    private function clashKinds(TimetableCard $card, ?string $myRoom, TimetableCard $o, ?string $oRoom, ?string $oRoomName): array
+    {
         if ($this->isNonBlocking($card, $card->board) || $this->isNonBlocking($o, $card->board)) return [];
-        $errors = [];
+        $out = [];
         // Guruh konflikti — bir yo'nalish+kurs ichida
         if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
             $overlap = array_intersect($card->occupiedGroups(), $o->occupiedGroups());
             if (!empty($overlap)) {
-                $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' — ' . $this->describeCard($o);
+                $out[] = ['group', implode(',', $overlap)];
             }
         }
         // O'qituvchi konflikti — butun doska bo'ylab
         if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
-            $errors[] = "O'qituvchi band: " . $o->teacher_name . ' — ' . $this->describeCard($o);
+            $out[] = ['teacher', (string) $o->teacher_name];
         }
         // Auditoriya konflikti — butun doska bo'ylab
         if ($myRoom && $oRoom === $myRoom && !$this->isSharedRoom($oRoomName)) {
-            $errors[] = 'Auditoriya band: ' . $oRoomName . ' — ' . $this->describeCard($o);
+            $out[] = ['room', (string) $oRoomName];
         }
 
-        return $errors;
+        return $out;
+    }
+
+    /**
+     * Tuzilgan to'qnashuv sabablari (422 conflict_items; front oldindan tekshiruvi bilan bir xil shakl): $card ni shu haftada (kun, para)
+     * ga qo'yganda band qiladigan har dars × tur — {kind: room|teacher|group, who, card_id (band qilgan dars), piece_id (shu karta), groups,
+     * subject, training_type, teacher, teacher_id, room_name, room_code, date, time ("10:00–11:20"), day, pair, piece_pair (shu bo'lak joyi)}.
+     */
+    private function weekClashItems(TimetableCard $card, int $week, int $day, int $pair, ?array $state = null, ?string $roomCode = null): array
+    {
+        if ($this->isNonBlocking($card, $card->board)) return [];
+        $board = $card->board;
+        $state ??= $this->calendarConflictState($card, $roomCode);
+        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
+        $myRoom = $roomCode ?: (($state['ov'][$card->id][$week] ?? null)?->auditorium_code ?: $card->auditorium_code);
+        $items = [];
+        foreach ($this->weekClashes($card, $week, $day, $pair, 0, $state, $roomCode, $date, $myRoom) as $x) {
+            $o = $x['card'];
+            foreach ($this->clashKinds($card, $myRoom, $o, $x['room'], $x['room_name']) as [$kind, $who]) {
+                $items[] = ['kind' => $kind, 'who' => $who, 'card_id' => (int) $o->id, 'piece_id' => (int) $card->id,
+                    'groups' => array_values($o->occupiedGroups()), 'subject' => (string) $o->subject_name, 'training_type' => (string) $o->training_type,
+                    'teacher' => $o->teacher_name, 'teacher_id' => $o->teacher_id ? (int) $o->teacher_id : null,
+                    'room_name' => $x['room_name'] ?: $x['room'], 'room_code' => $x['room'], 'date' => $date,
+                    'time' => $this->halfRangeTime($board, $this->rangeFor($o, (int) $x['pair'], 0)), 'day' => (int) $x['day'], 'pair' => (int) $x['pair'],
+                    // Shu kartaning (bo'lakning) shu yozuvdagi joyi — fokus vaqti va belgilanadigan karta uchun.
+                    'piece_pair' => $pair];
+            }
+        }
+
+        return $items;
     }
 
     /**

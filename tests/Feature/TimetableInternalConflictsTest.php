@@ -434,7 +434,7 @@ it('to\'qnashuvlar: tuzilgan ro\'yxat (kind, teacher_id, groups, sanalar), o\'tg
     // "Ko'rsatish": ikkala guruhcha (qamrovi bilan), kesishgan sanalar, kun soatlari, ikkala karta — sikl jadvalida.
     $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 5];
     expect($a['items'][0]['show'])->toBe(['kind' => 'teacher_busy', 'teacher_id' => $sharipov->id, 'teacher_name' => 'SHARIPOV K. SH.',
-        'room_code' => null, 'groups' => [$g('d22-05a'), $g('d22-05b')], 'subject' => 'Klinik farmakologiya', 'dates' => ['2026-09-16', '2026-09-18'],
+        'room_code' => null, 'room_name' => null, 'groups' => [$g('d22-05a'), $g('d22-05b')], 'subject' => 'Klinik farmakologiya', 'dates' => ['2026-09-16', '2026-09-18'],
         'hour_from' => 1, 'hour_to' => 7, 'hour_unit' => 'hour', 'card_ids' => [$s['cards']['d22-05a']->id, $s['cards']['d22-05b']->id],
         'view' => 'cycle', 'week' => null])
         ->and($c['davolash ishi|5|d22-05c|Klinik farmakologiya|practice']['items'][0]['show'])->toMatchArray(['kind' => 'room_capacity',
@@ -616,7 +616,7 @@ it('haftalik: /conflicts?items=1&week=N — shu hafta tuzilgan ro\'yxati (o\'tga
         ->and($w2['detail'])->toContain('USTOZ');
     // "Ko'rsatish": ikkala guruh (qamrovi bilan), shu hafta, kun/para (yarim-slotlar 3–5), ikkala karta — matnni parse qilmasdan.
     $g = fn ($name) => ['group' => $name, 'faculty' => 'F1', 'specialty' => 'davolash ishi', 'course' => 2];
-    expect($w2['show'])->toBe(['kind' => 'teacher_busy', 'teacher_id' => $t->id, 'teacher_name' => 'USTOZ', 'room_code' => null,
+    expect($w2['show'])->toBe(['kind' => 'teacher_busy', 'teacher_id' => $t->id, 'teacher_name' => 'USTOZ', 'room_code' => null, 'room_name' => null,
         'groups' => [$g('d2-01a'), $g('d2-01b')], 'subject' => 'Anatomiya', 'dates' => ['2026-09-22', '2026-09-22'], 'hour_from' => 3,
         'hour_to' => 5, 'hour_unit' => 'row', 'card_ids' => [$a->id, $b->id], 'view' => 'week', 'week' => 2]);
     // Oddiy so'rov: faqat kelgusi haftalar matni.

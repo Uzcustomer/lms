@@ -68,6 +68,18 @@ trait TimetableConflictFocus
     }
 
     /** Yagona ko'rinish: guruhlar va kartalar takrorlanmaydi, sanalar tartiblangan. */
+    /** Xona nomi (kodi bo'yicha, so'rov ichida bir marta); topilmasa — kodi. */
+    private function focusRoomName(?string $code): ?string
+    {
+        if ($code === null || $code === '') {
+            return null;
+        }
+        static $memo = [];
+        $memo = count($memo) > 2000 ? [] : $memo;
+
+        return $memo[$code] ??= (string) (\App\Models\Auditorium::where('code', $code)->value('name') ?: $code);
+    }
+
     private function focusShow(array $x): array
     {
         $groups = [];
@@ -83,6 +95,8 @@ trait TimetableConflictFocus
             'teacher_id' => !empty($x['teacher_id']) ? (int) $x['teacher_id'] : null,
             'teacher_name' => $x['teacher_name'] ?? null,
             'room_code' => !empty($x['room_code']) ? (string) $x['room_code'] : null,
+            // Bannerda xona KODI emas, NOMI ("To'qnashuvni ko'rish: Xona 123-amaliyot xonasi — …").
+            'room_name' => !empty($x['room_name']) ? (string) $x['room_name'] : $this->focusRoomName($x['room_code'] ?? null),
             'groups' => array_values($groups),
             'subject' => $x['subject'] ?? null,
             'dates' => $dates ? [$dates[0], end($dates)] : [],

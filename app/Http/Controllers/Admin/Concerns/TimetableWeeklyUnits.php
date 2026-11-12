@@ -327,7 +327,43 @@ trait TimetableWeeklyUnits
         $head = $this->unitHours($total) . " sig'maydi: " . $this->unitRowTime($board, $pair) . ' dan keyin ' . ($free ? $this->unitHours($free) . ' bo\'sh' : 'bo\'sh joy yo\'q');
         $why = array_values(array_unique(array_filter($errors, fn ($e) => $e !== 'kun oxiri')));
 
-        return [[$head . ($why ? ' — ' . implode(' · ', $why) : '')], []];
+        return [[$head . ($why ? ' — ' . implode(' · ', $why) : '')], [],
+            $this->unitPlanItems($card, $chain, $total, $free, $week, $day, $pair, $rows, $ignore, $external, $roomCode, in_array('kun oxiri', $errors, true))];
+    }
+
+    /**
+     * Rad etilgan joylashning tuzilgan sabablari (conflict_items — front bloklari: "Xona band: …", "O'qituvchi band: …", "Guruh band: …",
+     * "Kun oxiri: 4 soat sig'maydi", "Xona sig'maydi: 17 o'rin, 40 talaba (+23)" — ogohlantirish, rad sababi emas): har bo'lak o'z joyida
+     * (weekClashItems; birlikning o'z bo'laklari hisobga olinmaydi).
+     */
+    private function unitPlanItems(TimetableCard $card, array $chain, int $total, int $free, int $week, int $day, int $pair, int $rows, array $ignore,
+        bool $external, ?string $roomCode, bool $dayEnd): array
+    {
+        $items = [];
+        if (!$external && $week) {
+            foreach ($chain as [$piece, $off]) {
+                if ($pair + $off + $piece->lenHalf() - 1 > $rows) {
+                    break;
+                }
+                $state = $this->calendarConflictState($piece, $roomCode);
+                $state['ignore'] = $ignore;
+                array_push($items, ...$this->weekClashItems($piece, $week, $day, $pair + $off, $state, $roomCode));
+            }
+        }
+        if ($dayEnd) {
+            $items[] = ['kind' => 'day_end', 'who' => '', 'hours' => $total, 'free' => $free, 'from' => $this->unitRowTime($card->board, $pair)];
+        }
+        // Xona sig'imi (ogohlantirish): shu haftadagi (yoki berilgan) xona va talabalar soni.
+        $ov = $week ? TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first() : null;
+        $code = $roomCode ?: (string) ($ov?->auditorium_code ?: $card->auditorium_code);
+        $room = $code !== '' && !$this->isNonBlocking($card, $card->board) ? \App\Models\Auditorium::where('code', $code)->first() : null;
+        $students = $room ? $this->cardStudents($card) : 0;
+        if ($room && (int) $room->volume > 0 && $students > (int) $room->volume && !$this->isSharedRoom((string) $room->name)) {
+            $items[] = ['kind' => 'capacity', 'who' => (string) ($room->name ?: $room->code), 'room_code' => (string) $room->code,
+                'volume' => (int) $room->volume, 'students' => $students, 'over' => $students - (int) $room->volume, 'blocking' => false];
+        }
+
+        return $items;
     }
 
     /** Birlik bo'laklarini yozish: [id => pair|null] (null — joydan olish). $room — shu haftada barcha bo'laklarga shu xona. */
@@ -418,9 +454,9 @@ trait TimetableWeeklyUnits
                 return response()->json(['error' => 'Bu auditoriya tanlangan o\'qituvchiga biriktirilmagan.'], 422);
             }
         }
-        [$errors, $plan] = $this->unitPlanAt($card, $cards, $week, (int) $data['day'], (int) $data['pair'], $external, $room?->code);
+        [$errors, $plan, $items] = $this->unitPlanAt($card, $cards, $week, (int) $data['day'], (int) $data['pair'], $external, $room?->code) + [2 => []];
         if ($errors) {
-            return response()->json(['error' => implode(' · ', $errors)], 422);
+            return response()->json(['error' => implode(' · ', $errors), 'conflict_items' => $items], 422);
         }
         $this->unitWrite($cards, $week, (int) $data['day'], $plan, $external, $room);
 
@@ -586,7 +622,7 @@ trait TimetableWeeklyUnits
             $result = $merge ? $this->unitMergePlan($card, $cards, $week) : $this->unitCompletePlan($card, $cards, $week);
             if ($result[0]) {
                 $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'], 'error' => implode(' · ', $result[0]),
-                    'card_ids' => $u['card_ids'], 'unit' => $u['unit']];
+                    'card_ids' => $u['card_ids'], 'unit' => $u['unit'], 'conflict_items' => $result[3] ?? []];
                 continue;
             }
             $this->unitWrite($cards, $week, $result[2], $result[1]);
@@ -613,14 +649,14 @@ trait TimetableWeeklyUnits
             if ($at < 1) {
                 continue;
             }
-            [$errors, $plan] = $this->unitPlanAt($card, $cards, $week, $day, $at);
+            [$errors, $plan, $items] = $this->unitPlanAt($card, $cards, $week, $day, $at) + [2 => []];
             if (!$errors) {
                 return [[], $plan, $day];
             }
-            $first ??= $errors;
+            $first ??= [$errors, $items];
         }
 
-        return [$first ?? ['joy topilmadi'], [], $day];
+        return [$first[0] ?? ['joy topilmadi'], [], $day, $first[1] ?? []];
     }
 
     /**
@@ -650,13 +686,13 @@ trait TimetableWeeklyUnits
             if ($at < 1) {
                 continue;
             }
-            [$errors, $plan] = $this->unitPlanAt($card, $cards, $week, $day, $at, false, null, $order);
+            [$errors, $plan, $items] = $this->unitPlanAt($card, $cards, $week, $day, $at, false, null, $order) + [2 => []];
             if (!$errors) {
                 return [[], $plan, $day];
             }
-            $first ??= $errors;
+            $first ??= [$errors, $items];
         }
 
-        return [$first ?? ['joy topilmadi'], [], $day];
+        return [$first[0] ?? ['joy topilmadi'], [], $day, $first[1] ?? []];
     }
 }

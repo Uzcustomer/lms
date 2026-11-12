@@ -3573,6 +3573,8 @@
                 badge.textContent = n; badge.classList.toggle('hidden', !n);
                 markPendingChanges();
                 renderCyclePendingBar();
+                // Qatordagi "tasdiq kutilmoqda" — faqat hali kutilayotgan so'rovlar (bekor / rad / tasdiqlangan — tugma qayta ochiladi).
+                if (typeof unitFixPendingSync === 'function' && unitFixPendingSync() && viewMode !== 'cycle') renderPanel();
                 if (document.getElementById('crModal') && document.getElementById('crModal').classList.contains('open')) renderChangeReqModal();
             }
             // Tarix sahifalab yuklanadi (eng yangisidan): reset — boshidan.
@@ -12621,7 +12623,16 @@
             // ===== "Joylanmagan kartalar" paneli: qisman joylangan birlik belgisi, yaxlit joylash natijasi, karta oynasi =====
             const unitFixErr = {};   // birlik kaliti → oxirgi "yaxlit joylanmadi" sababi (kartada qizil izoh)
             const unitFixItems = {};   // birlik kaliti → tuzilgan sabablar (server conflict_items) — turlarga ajratilgan bloklar
-            const unitFixPending = {};   // birlik kaliti → tasdiqqa yuborilgan so'rov raqami (tasdiq rejimi: "tasdiq kutilmoqda", tugma o'chiq)
+            // Tasdiqqa yuborilgan unit-fix so'rovlari: "doska|hafta|birlik" → so'rov raqami (tasdiq rejimi: "tasdiq kutilmoqda", tugma o'chiq).
+            // Boshqa hafta / doskada ko'rinmaydi; so'rov kutilayotganlar ro'yxatidan chiqsa (bekor qilindi, rad etildi, tasdiqlandi) — olinadi.
+            const unitFixPending = {};
+            const unitPendKey = c => (board ? board.id : 0) + '|' + curWeek + '|' + unitKey(c);
+            function unitFixPendingSync() {
+                const live = new Set(pendingReqs().map(r => +r.id));
+                let gone = false;
+                Object.keys(unitFixPending).forEach(k => { if (!live.has(+unitFixPending[k])) { delete unitFixPending[k]; gone = true; } });
+                return gone;
+            }
             const unitEditable = () => weeklyCanEdit() && !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek;
             // Shu haftadagi bo'lingan birliklar (birlik kaliti → unitState + card): faqat amaliy, qamrovdagi (weekActiveCards).
             function weeklySplitUnits(uIdx = buildUnitIndex()) {
@@ -12639,12 +12650,12 @@
                 return '<div class="pn-split" data-pn-split style="border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
                     'Bo\'lingan: <b>' + units.size + ' ta</b> <span style="color:#b91c1c">(bir kunda bir fandan amaliy soatlar bo\'linmaydi)</span>' +
                     [...units.entries()].map(([k, st]) => {
-                        const err = unitFixErr[k], errItems = unitFixItems[k], pend = unitFixPending[k];
+                        const err = unitFixErr[k], errItems = unitFixItems[k], pend = unitFixPending[unitPendKey(st.card)];
                         return '<div class="pn-split-item" data-split-key="' + esc(k) + '" style="margin-top:3px;border-top:1px dotted #fecaca;padding-top:3px">' +
                             '<a href="#" data-split-go="' + esc(k) + '" style="text-decoration:underline dotted">' + esc(cardGroups(st.card).join(', ') + ' · ' + st.card.subject_name) + '</a>' +
                             ' — ' + st.len + ' soat (' + st.list.map(cardLen).join('+') + '): <span data-split-days>' + esc(unitDaysText(st.list)) + '</span>' +
                             (unitEditable() ? ' <button type="button" data-unit-merge="' + esc(k) + '"' + (pend ? ' disabled' : '') + ' title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
-                            (pend ? ' <span data-unit-pending style="color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend !== true ? ' (№' + esc(pend) + ')' : '') + '</span>' : '') +
+                            (pend ? ' <span data-unit-pending style="color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend > 0 ? ' (№' + esc(pend) + ')' : '') + '</span>' : '') +
                             (err ? (errItems && errItems.length
                                 ? '<div class="pn-split-err" style="margin-top:2px">' + cbHtml(cbBlocks(errItems), false, { compact: true }) + '</div>'
                                 : '<div class="pn-split-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>') : '') + '</div>';
@@ -12652,7 +12663,7 @@
             }
             // "Qisman: 3 soatdan 2 soati joylangan (Seshanba 10:00); qolgani 1 soat" + shu birlik tugmalari (+ qizil izoh).
             function partialBadgeHtml(st, err) {
-                const pend = unitFixPending[unitKey(st.card)];
+                const pend = unitFixPending[unitPendKey(st.card)];
                 const placed = st.placed.slice().sort((a, b) => placeInWeek(a, curWeek).pair - placeInWeek(b, curWeek).pair);
                 const at = placed.length ? placeInWeek(placed[0], curWeek) : null;
                 const placedLen = unitLen(placed);
@@ -12661,7 +12672,7 @@
                     'Qisman: ' + st.len + ' soatdan ' + placedLen + ' soati joylangan' + esc(when) + '; qolgani ' + (st.len - placedLen) + ' soat' +
                     (unitEditable() ? '<div style="margin-top:2px"><button type="button" data-unit-fix="complete" data-unit-card="' + st.card.id + '"' + (pend ? ' disabled' : '') + ' style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">yaxlit joylash</button> ' +
                         '<button type="button" data-unit-fix="clear" data-unit-card="' + st.card.id + '"' + (pend ? ' disabled' : '') + ' style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 5px">yaxlit bo\'shatish</button></div>' : '') +
-                    (pend ? '<div data-unit-pending style="margin-top:2px;color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend !== true ? ' (№' + esc(pend) + ')' : '') + '</div>' : '') +
+                    (pend ? '<div data-unit-pending style="margin-top:2px;color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend > 0 ? ' (№' + esc(pend) + ')' : '') + '</div>' : '') +
                     (err ? '<div class="pn-partial-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>' : '') + '</div>';
             }
             // unit-fix: faqat berilgan birliklar (card_ids); natija — sahifa ichidagi oynada, sig'maganlari kartada qizil izoh bilan.
@@ -12684,7 +12695,7 @@
                 // Tasdiq rejimi (so'rov yuborildi): "Yaxlitlandi: 0 ta" emas — qatorda "tasdiq kutilmoqda", tugma o'chiq (onPendingApproval —
                 // xabar va so'rovlar ro'yxati).
                 if (r && r.pending_approval) {
-                    units.forEach(st => { unitFixPending[unitKey(st.card)] = r.change_request_id || true; });
+                    units.forEach(st => { unitFixPending[unitPendKey(st.card)] = +r.change_request_id || -1; });
                     if (btn) btn.disabled = true;
                     renderPanel();
                     return;

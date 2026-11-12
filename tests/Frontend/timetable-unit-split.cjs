@@ -47,7 +47,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 require('./helpers/timetable-info-only.cjs')(ctx);
-vm.runInContext(code + '\nObject.assign(this, { placeUnitAt, unitState, unitIsSplit, unitDaysText, unitMovePlan, weeklySplitUnits, splitHeadHtml, runUnitFix, placeOneCard, placeCardWithRoom, placeRoomCandidates, unitFixErr, unitFixPending });', ctx);
+vm.runInContext(code + '\nObject.assign(this, { placeUnitAt, unitState, unitIsSplit, unitDaysText, unitMovePlan, weeklySplitUnits, splitHeadHtml, runUnitFix, placeOneCard, placeCardWithRoom, placeRoomCandidates, unitFixErr, unitFixPending, unitFixPendingSync });', ctx);
 ctx.weekActiveCards = () => ctx.cards;
 const W = 11;
 const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, cancelled: false }; };
@@ -111,7 +111,16 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
     assert.equal(doc.body.children.length, shown);
     assert.match(ctx.splitHeadHtml(units), /data-unit-merge="[^"]*" disabled/);
     assert.match(ctx.splitHeadHtml(units), /⏳ tasdiq kutilmoqda \(№130513\)/);
-    for (const k in ctx.unitFixPending) delete ctx.unitFixPending[k];
+    // Codex: belgi hafta (va doska) bo'yicha — boshqa haftada shu birlik o'chiq emas; so'rov kutilmay qolsa (bekor / rad) — olinadi.
+    ctx.curWeek = 12;
+    assert.doesNotMatch(ctx.splitHeadHtml(units), /tasdiq kutilmoqda/);
+    ctx.curWeek = 11;
+    ctx.pendingReqs = () => [{ id: 130513, status: 'pending' }];
+    assert.equal(ctx.unitFixPendingSync(), false);
+    assert.match(ctx.splitHeadHtml(units), /tasdiq kutilmoqda/);
+    ctx.pendingReqs = () => [];
+    assert.equal(ctx.unitFixPendingSync(), true);
+    assert.doesNotMatch(ctx.splitHeadHtml(units), /tasdiq kutilmoqda/);
 
     // 4) Bitta bo'lakni katakka qo'yish (tanlash → katak, sudrash emas): butun birlik unit-place bilan — 708676 chorshanba 08:30 da,
     //    birinchi bo'lak boshi 1-qator; week-override (bitta bo'lak) yuborilmaydi.

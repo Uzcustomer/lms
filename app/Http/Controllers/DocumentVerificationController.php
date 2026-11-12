@@ -21,8 +21,19 @@ class DocumentVerificationController extends Controller
         $ynqConfirmations = collect();
         $ynqPdfUrl = null;
         if ($verification->document_type === 'yn_qaydnoma' && ($vedomost = $this->ynqVedomost($verification))) {
-            $ynqConfirmations = YnQaydnomaConfirmation::forVedomost(...$vedomost)->orderBy('confirmed_at')->get()
-                ->unique(fn ($c) => $c->role . '|' . $c->teacher_id)
+            $all = YnQaydnomaConfirmation::forVedomost(...$vedomost)->orderBy('confirmed_at')->get();
+            $groupNames = \Illuminate\Support\Facades\DB::table('groups')
+                ->whereIn('group_hemis_id', $all->pluck('group_hemis_id')->unique()->values())->pluck('name', 'group_hemis_id');
+            // Har kishi bir marta; o'qituvchida — qaysi (kichik) guruh(lar)ni tasdiqlagani
+            $ynqConfirmations = $all->groupBy(fn ($c) => $c->role . '|' . $c->teacher_id)
+                ->map(function ($rows) use ($groupNames) {
+                    $c = $rows->first();
+                    $c->group_label = $c->role === YnQaydnomaConfirmation::ROLE_TEACHER
+                        ? $rows->map(fn ($r) => $groupNames[$r->group_hemis_id] ?? $r->group_hemis_id)->unique()->implode(', ')
+                        : null;
+
+                    return $c;
+                })
                 ->sortBy(fn ($c) => array_search($c->role, YnQaydnomaConfirmation::CHAIN, true))->values();
             if ($ynqConfirmations->contains('role', YnQaydnomaConfirmation::ROLE_DEAN)) {
                 $ynqPdfUrl = route('document.verify.pdf', $verification->token);

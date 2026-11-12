@@ -190,7 +190,8 @@
                             <span class="ynq-signer-check" aria-hidden="true">✓</span>
                             <div>
                                 <div class="ynq-signer-name">{{ $c->teacher_name }}</div>
-                                <div class="ynq-signer-meta">{{ $c->roleLabel() }} · {{ $c->confirmed_at->format('d.m.Y H:i') }}</div>
+                                <div class="ynq-signer-meta">{{ $c->roleLabel() }}{{ $c->group_label ? ' · ' . $c->group_label . ' guruhi' : '' }}</div>
+                                <div class="ynq-signer-meta">Tasdiqlagan: {{ $c->confirmed_at->format('d.m.Y H:i') }}</div>
                             </div>
                         </div>
                     @empty

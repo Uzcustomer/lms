@@ -67,11 +67,9 @@ class JournalController extends Controller
     private const YNQ_SPACER_WIDTH = 1.55;   // PDF da ~4pt
     /** "Semestrda … soat … kredit" qatoridagi chiziq (K13:W13) — YN o'tkazilgan sana */
     private const YNQ_EXAM_DATE_CELL = 'K13';
-    /** Hujjatning yagona QR i (dekan tasdig'i) — pastda dekan ismidan keyin, qizil */
+    /** Hujjatning yagona QR i (dekan tasdig'i) — pastda dekan ismidan keyin; PDF da qat'iy o'lchami (pt) */
     private const YNQ_QR_ALT = 'Hujjat QR: ';
-    private const YNQ_QR_COLOR = [192, 0, 0];
-    /** "— tasdiqlagan" yozuvi rangi */
-    private const YNQ_CONFIRMED_COLOR = 'FF1D4ED8';
+    private const YNQ_PDF_QR_PT = 60;
     /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
     private const YNQ_TABLE_ROWS = [15, 50];
     /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — tasdiqlar va hujjat QR i */
@@ -10595,7 +10593,7 @@ class JournalController extends Controller
             "/<td([^>]*?) style='position: relative;'([^>]*)>((?:\s*<img alt=\"" . preg_quote(self::YNQ_QR_ALT, '/') . "[^>]*\/>)+)/u",
             fn ($m) => '<td' . $m[1] . " style='vertical-align:middle;text-align:center'" . $m[2] . '>' . preg_replace(
                 // Masshtabdan qat'i nazar oson skanerlanadigan o'lcham (~21 mm)
-                '/style="[^"]*"/', 'style="width:60pt;height:60pt;margin:0 2pt"', $m[3]
+                '/style="[^"]*"/', 'style="width:' . self::YNQ_PDF_QR_PT . 'pt;height:' . self::YNQ_PDF_QR_PT . 'pt;margin:0 2pt"', $m[3]
             ),
             $html
         );
@@ -10660,9 +10658,11 @@ class JournalController extends Controller
             }
         }]]);
         $pdf->render();
-        // Balandlik ham, kenglik ham (chekinishlar jadvalni kengaytiradi) sahifaga sig'sin
+        // Balandlik ham, kenglik ham (chekinishlar jadvalni kengaytiradi) sahifaga sig'sin. Hujjat QR i
+        // masshtabsiz (o'lchami qat'iy) — uning qatori kichraymaydi, qolgan balandlik kichraytiriladi
+        $fixed = str_contains($probe, self::YNQ_QR_ALT) ? self::YNQ_PDF_QR_PT + 4 : 0;
         $ratio = min(
-            $measured > 0 ? ($pageH - 2 * $margin) / $measured : 1,
+            $measured > $fixed ? ($pageH - 2 * $margin - $fixed) / ($measured - $fixed) : 1,
             $measuredWidth > 0 ? ($pageW - 2 * $margin) / $measuredWidth : 1,
         );
         if ($ratio < 1) {
@@ -11784,7 +11784,7 @@ class JournalController extends Controller
             $s->setTitle($sheetTitle);
 
             // Header
-            $s->setCellValue('A4', $facultyName . ' FAKULTETI');
+            $s->setCellValue('A4', mb_strtoupper($facultyName) . ' FAKULTETI');
             $s->setCellValue('C8', '         ' . ($specialty->name ?? ''));
             $s->setCellValue('N8', $kurs);
             $s->setCellValue('Q8', $semesterInYear);
@@ -12100,17 +12100,15 @@ class JournalController extends Controller
     }
 
     /**
-     * Qaydnomaga tasdiqlar: sarlavhada tasdiqlagan amaliyot o'qituvchilari ismidan keyin ko'k
-     * "— tasdiqlagan"; pastda (shablondagi "Fakultet dekani … / Kafedra mudiri …" qatori) kafedra
-     * mudiri ismidan keyin ko'k "— Tasdiqlagan", dekan ismidan keyin — hujjatning yagona (qizil) QR i:
-     * skanerlansa barcha tasdiqlaganlar va PDF. Kafedra mudiri — barcha kichik guruhlar o'qituvchilari
-     * tasdiqlagach, dekan — undan keyin. Excelda ham, sahifada ham.
+     * Qaydnomaga tasdiqlar: pastda (shablondagi "Fakultet dekani … / Kafedra mudiri …" qatori) — tasdiqlagan
+     * kafedra mudiri va dekan ismlari, dekan ismidan keyin hujjatning yagona QR i: skanerlansa barcha
+     * tasdiqlaganlar (lavozimi, o'qituvchilarda — guruhi) va PDF. Kafedra mudiri — barcha kichik guruhlar
+     * o'qituvchilari tasdiqlagach, dekan — undan keyin. Excelda ham, sahifada ham.
      */
     private static function stampConfirmationQrs(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $subjectId, string $semesterCode, string $groupHemisId): void
     {
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
         $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
-        $teachers = $chain['byRole'][$Confirmation::ROLE_TEACHER];
         $head = self::ynqStepDone($chain, $Confirmation::ROLE_TEACHER) ? $chain['byRole'][$Confirmation::ROLE_HEAD]->first() : null;
         $dean = $head ? $chain['byRole'][$Confirmation::ROLE_DEAN]->first(fn ($c) => $c->verification) : null;
         // "YaN o'tkazilgan sana" — asosiy guruhning YN jadvalidagi oxirgi imtihon (test, bo'lmasa OSKI)
@@ -12135,69 +12133,39 @@ class JournalController extends Controller
                 ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_BOTTOM);
 
             self::shiftHeaderTeachersLeft($sheet);
-            self::markHeaderTeachers($sheet, $teachers);
             self::signatureRow($sheet, $head, $dean);
         }
     }
 
     /**
-     * Ism yonidagi katakka ko'k "— tasdiqlagan" — oddiy katak uslubi bilan (RichText emas: uning shrifti
-     * HTML da katakning ichki uslubiga yoziladi va PDF masshtabida kichraymaydi), o'lchami ism katagidek.
-     */
-    private static function confirmedMark(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, string $cell, string $nameCell, string $text): void
-    {
-        // Avval ism katagi shrifti o'qiladi: getStyle() varaqning tanlangan katagini almashtiradi
-        $nameFont = $sheet->getStyle($nameCell)->getFont();
-        [$fontName, $fontSize] = [$nameFont->getName(), $nameFont->getSize()];
-        $sheet->setCellValue($cell, '— ' . $text);
-        $style = $sheet->getStyle($cell);
-        $style->getFont()->setName($fontName)->setSize($fontSize)->setBold(true)->setItalic(false)
-            ->getColor()->setARGB(self::YNQ_CONFIRMED_COLOR);
-        $style->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT)
-            ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_BOTTOM)->setWrapText(false);
-        $style->getBorders()->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-    }
-
-    /**
-     * Sarlavhadagi amaliyot o'qituvchilari (ismlar S10–S12, S:U): tasdiqlagan bo'lsa yonida (V) ko'k
-     * "— tasdiqlagan"; bir katakda bir nechta ism bo'lsa — hammasi tasdiqlaganda.
-     */
-    private static function markHeaderTeachers(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, \Illuminate\Support\Collection $teachers): void
-    {
-        $confirmed = $teachers->map(fn ($c) => self::abbreviateName($c->teacher_name))->all();
-        if (!$confirmed) {
-            return;
-        }
-        foreach ([10, 11, 12] as $r) {
-            $value = $sheet->getCell("S{$r}")->getValue();
-            if (!is_string($value) || trim($value) === '') {
-                continue;
-            }
-            $names = array_map('trim', explode(', ', $value));
-            if (!array_diff($names, $confirmed)) {
-                self::confirmedMark($sheet, "V{$r}", "S{$r}", 'tasdiqlagan');
-            }
-        }
-    }
-
-    /**
-     * Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …"): kafedra mudiri tasdiqlasa —
-     * ismi va ko'k "— Tasdiqlagan"; dekan tasdiqlasa — ismi va undan keyin hujjatning qizil QR i.
+     * Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …"): "imzo" joylari (chiziq va
+     * yozuv) olib tashlanadi; kafedra mudiri tasdiqlasa — ismi; dekan tasdiqlasa — ismi va undan keyin
+     * hujjatning QR i.
      */
     private static function signatureRow(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, $head, $dean): void
     {
         $row = self::YNQ_SIGN_ROW + self::ynqExtraRows($sheet);
         $merges = $sheet->getMergeCells();
+        // "imzo" — elektron tasdiq bilan kerak emas: ostidagi yozuv va ustidagi chiziq
+        foreach (['B', 'C', 'D', 'R', 'S'] as $col) {
+            if (trim((string) $sheet->getCell($col . ($row + 1))->getValue()) === 'imzo') {
+                $sheet->getCell($col . ($row + 1))->setValue(null);
+                // Chiziq: ustki katakning pastki yoki yozuv katagining ustki chegarasi (R:S — ikki katak)
+                foreach ($col === 'R' ? ['R', 'S'] : [$col] as $c) {
+                    $sheet->getStyle($c . $row)->getBorders()->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                    $sheet->getStyle($c . ($row + 1))->getBorders()->getTop()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                }
+            }
+        }
         if ($head) {
             $sheet->getCell("U{$row}")->setValue(self::initialsName($head->teacher_name));
-            self::confirmedMark($sheet, self::YNQ_LAST_COL . $row, "U{$row}", 'Tasdiqlagan');
         }
         if (!$dean) {
             return;
         }
         $sheet->getCell("E{$row}")->setValue(self::initialsName($dean->teacher_name));
 
-        // Dekan ismidan keyin (I:M) — hujjatning yagona QR i, kattaroq, qizil
+        // Dekan ismidan keyin (I:M) — hujjatning yagona QR i, kattaroq
         $size = 84;
         if (!isset($merges["I{$row}:M{$row}"])) {
             $sheet->mergeCells("I{$row}:M{$row}");
@@ -12209,7 +12177,7 @@ class JournalController extends Controller
             $width += \PhpOffice\PhpSpreadsheet\Shared\Drawing::cellDimensionToPixels($w < 0 ? 8.43 : $w, $sheet->getParent()->getDefaultStyle()->getFont());
         }
         $qr = \PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing::fromString(
-            \App\Services\QrPng::make($dean->verification->getVerificationUrl(), 5, 1, self::YNQ_QR_COLOR)
+            \App\Services\QrPng::make($dean->verification->getVerificationUrl(), 5, 1)
         );
         $qr->setName(self::YNQ_QR_ALT . self::abbreviateName($dean->teacher_name));
         $qr->setDescription(self::YNQ_QR_ALT . self::abbreviateName($dean->teacher_name) . ' — ' . $dean->confirmed_at->format('d.m.Y H:i'));

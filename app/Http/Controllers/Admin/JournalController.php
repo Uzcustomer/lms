@@ -12154,9 +12154,10 @@ class JournalController extends Controller
     }
 
     /**
-     * O'ng yuqori burchak (kafedra mudiri QR i va ismi) bo'sh qolishi uchun sarlavhaning o'ng qismi bir
-     * ustun chapga: "Amaliyot o'qituvchisi" (P:T → P:S) va ismlar chizig'i (U:X → T:V), guruh nomi
-     * (W8 → U8:V8). W–X ustunlari 8–12-qatorlarda bo'sh — mudir ismi ustidan chiziq yoki yozuv o'tmaydi.
+     * O'ng yuqori burchak (kafedra mudiri QR i va ismi) bo'sh qolishi uchun sarlavhaning o'ng qismi
+     * chapga: "Amaliyot o'qituvchisi" (P:T → N:R), ismlar chizig'i (U:X → S:U), guruh nomi (W8 → U8:V8),
+     * "YaN o'tkazilgan sana" chizig'i (K13:W13 → K13:U13). V–X ustunlari 10–13-qatorlarda bo'sh —
+     * mudir ismi ustidan chiziq yoki yozuv o'tmaydi.
      */
     private static function shiftHeaderTeachersLeft(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): void
     {
@@ -12169,27 +12170,35 @@ class JournalController extends Controller
                 $sheet->unmergeCells($range);
             }
         };
+        // Kataklar oralig'i: qiymat va uslub (kutubxona bitta katak obyektini ushlaydi — har biri qayta olinadi)
+        $fill = function (string $from, string $to, int $row, int $xf) use ($sheet) {
+            foreach (range($from, $to) as $col) {
+                $sheet->getCell($col . $row)->setValue(null)->setXfIndex($xf);
+            }
+        };
         $last = self::YNQ_LAST_COL;
         foreach ([10, 11, 12] as $r) {
             $label = [$sheet->getCell("P{$r}")->getValue(), $sheet->getCell("P{$r}")->getXfIndex()];
             $name = [$sheet->getCell("U{$r}")->getValue(), $sheet->getCell("U{$r}")->getXfIndex()];
             $unmerge("P{$r}:T{$r}");
             $unmerge("U{$r}:{$last}{$r}");
-            foreach (range('P', $last) as $col) {
-                // Kutubxona bitta katak obyektini ushlaydi — har biri qayta olinadi
-                $sheet->getCell($col . $r)->setValue(null)->setXfIndex(0);
-            }
-            foreach (range('P', 'S') as $col) {
-                $sheet->getCell($col . $r)->setXfIndex($label[1]);
-            }
-            foreach (range('T', 'V') as $col) {
-                $sheet->getCell($col . $r)->setXfIndex($name[1]);
-            }
-            $sheet->mergeCells("P{$r}:S{$r}");
-            $sheet->mergeCells("T{$r}:V{$r}");
-            $sheet->getCell("P{$r}")->setValue($label[0]);
-            $sheet->getCell("T{$r}")->setValue($name[0]);
+            $fill('N', $last, $r, 0);
+            $fill('N', 'R', $r, $label[1]);
+            $fill('S', 'U', $r, $name[1]);
+            $sheet->mergeCells("N{$r}:R{$r}");
+            $sheet->mergeCells("S{$r}:U{$r}");
+            $sheet->getCell("N{$r}")->setValue($label[0]);
+            $sheet->getCell("S{$r}")->setValue($name[0]);
         }
+
+        // YN sanasi — chiziq U gacha (sana o'ngga tekislangan, U oxirida)
+        $date = [$sheet->getCell('K13')->getValue(), $sheet->getCell('K13')->getXfIndex()];
+        $unmerge('K13:W13');
+        $fill('K', $last, 13, 0);
+        $fill('K', 'U', 13, $date[1]);
+        $sheet->mergeCells('K13:U13');
+        $sheet->getCell('K13')->setValue($date[0]);
+
         $group = [$sheet->getCell('W8')->getValue(), $sheet->getCell('W8')->getXfIndex()];
         $sheet->getCell('W8')->setValue(null);
         foreach (['U', 'V'] as $col) {

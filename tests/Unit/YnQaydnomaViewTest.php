@@ -435,14 +435,17 @@ describe('teacher confirmation', function () {
         (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 5);
         $w->setCellValue('U10', 'ALLAMURATOVA U.D.')->setCellValue('W8', 'd1/d22-01 (rus)');
         (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $book, '435', '19', '77');
-        expect($w->getMergeCells())->toHaveKeys(['P10:S10', 'T10:V10', 'P12:S12', 'T12:V12', 'U8:V8'])
+        expect($w->getMergeCells())->toHaveKeys(['N10:R10', 'S10:U10', 'N12:R12', 'S12:U12', 'U8:V8', 'K13:U13'])
             ->not->toHaveKey('U10:X10')
-            ->and($w->getCell('T10')->getValue())->toBe('ALLAMURATOVA U.D.')
-            ->and($w->getCell('P11')->getValue())->toContain('Amaliyot')
+            ->and($w->getCell('S10')->getValue())->toBe('ALLAMURATOVA U.D.')
+            ->and($w->getCell('N11')->getValue())->toContain('Amaliyot')
+            ->and($w->getCell('K13')->getValue())->toContain('YaN o‘tkazilgan sana')
             ->and($w->getCell('U8')->getValue())->toBe('d1/d22-01 (rus)')
             ->and($w->getCell('W8')->getValue())->toBeNull()
-            ->and($w->getStyle('V10')->getBorders()->getBottom()->getBorderStyle())->toBe('thin')
-            ->and($w->getStyle('W10')->getBorders()->getBottom()->getBorderStyle())->toBe('none')
+            ->and($w->getStyle('U10')->getBorders()->getBottom()->getBorderStyle())->toBe('thin')
+            ->and($w->getStyle('V10')->getBorders()->getBottom()->getBorderStyle())->toBe('none')
+            ->and($w->getStyle('U13')->getBorders()->getBottom()->getBorderStyle())->toBe('thin')
+            ->and($w->getStyle('W13')->getBorders()->getBottom()->getBorderStyle())->toBe('none')
             ->and($w->getStyle('X11')->getBorders()->getTop()->getBorderStyle())->toBe('none');
     });
 

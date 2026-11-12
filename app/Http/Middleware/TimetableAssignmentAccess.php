@@ -126,6 +126,8 @@ class TimetableAssignmentAccess
                     'admin.timetable.cards.place',
                     'admin.timetable.cards.week-override',
                     'admin.timetable.cards.unit-place',
+                    // "Boshqa xona tanlash" — xonalar ro'yxati (faqat o'qiydi; o'z kafedrasi — controller tekshiradi).
+                    'admin.timetable.cards.room-options',
                     'admin.timetable.cards.mudir-placeholder.info',
                     'admin.timetable.cards.mudir-placeholder',
                     'admin.timetable.cards.mudir-placeholder.revert',

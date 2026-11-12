@@ -378,6 +378,44 @@ trait TimetableResponsibleMove
         return [$actor, $board, $keys, $cards];
     }
 
+    /**
+     * GET cards/{card}/room-options {week, day, pair}: "Boshqa xona tanlash" (to'qnashuv blokidagi "Xona band") — shu vaqt uchun xonalar
+     * ro'yxati, fan mas'uli oynasidagi bilan bir xil (responsibleMoveRooms): yaqinlik tartibi (shu bino/bo'lim/qavat), bo'sh — tepada, band —
+     * kim bilan, sig'maydi, biriktirilgan. Birlik (barcha bo'laklar) shu haftada (day, pair) dan ketma-ket. Huquq — ichki jadval tahriri
+     * (jadval administratori; kafedra mudiri — o'z kafedrasi fanlari). Hech narsa yozmaydi (bandlik — tranzaksiyada sinab).
+     */
+    public function cardRoomOptions(Request $request, TimetableCard $card)
+    {
+        $board = TimetableBoard::findOrFail($card->board_id);
+        $card->setRelation('board', $board);
+        $grid = $this->cardGrid($board, $card);
+        $data = $request->validate([
+            'week' => 'required|integer|min:1|max:' . max(1, (int) $grid['weeks']),
+            'day' => 'required|integer|min:1|max:' . max(1, (int) $grid['days']),
+            'pair' => 'required|integer|min:1|max:' . max(1, (int) $grid['pairs']),
+        ]);
+        $week = (int) $data['week'];
+        $day = (int) $data['day'];
+        $pair = (int) $data['pair'];
+        $cards = $this->weeklyUnitCards($card);
+        foreach ($cards as $c) {
+            $c->setRelation('board', $board);
+            if ($denied = $this->weeklyLayerDenied($request, 'internal', $c)) {
+                return $denied;
+            }
+        }
+        [$chain] = $this->unitChain($this->unitPieces($cards, $week));
+        if (!$chain) {
+            return response()->json(['error' => "Bu haftada bu dars o'tilmaydi."], 422);
+        }
+        $moves = array_map(fn ($x) => [$x[0], $pair + $x[1]], $chain);
+        $date = $this->weekStartDate($board, $card, $week)->addDays($day - 1)->toDateString();
+        $this->roomRankReset();
+        $partRooms = $this->responsiblePartRooms($board, collect(array_map(fn ($m) => $m[0], $moves)), $week);
+
+        return response()->json(['date' => $date, 'rooms' => $this->responsibleMoveRooms($board, $moves, $week, $day, $date, $partRooms)]);
+    }
+
     private function responsibleMoveEvaluate(Request $request, TimetableCard $card, bool $withRooms): array
     {
         [$actor, $board, $keys, $cards] = $this->responsibleMoveAuth($request, $card);

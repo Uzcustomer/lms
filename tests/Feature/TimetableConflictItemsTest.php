@@ -196,3 +196,30 @@ it('Codex: band qilgan dars boshqa kalendarli dasturda — yozuvda uning shu san
             'with_room_name' => '123-amaliyot xonasi', 'date_from' => '2026-11-25'])
         ->and($items->firstWhere('kind', 'teacher_busy'))->toMatchArray(['with_week' => 10, 'with_pair' => 3]);
 });
+
+it('"Boshqa xona tanlash" — room-options: shu vaqt uchun xonalar (bo\'sh tepada, band — kim bilan, biriktirilgan); huquq — ichki jadval tahriri', function () {
+    $s = ciSetup();
+    Auditorium::create(['code' => 'R200', 'name' => '200-xona', 'volume' => 60, 'active' => true]);
+    Auditorium::create(['code' => 'R10', 'name' => '10-xona', 'volume' => 5, 'active' => true]);
+    $url = route('admin.timetable.cards.room-options', $s['card']) . '?week=11&day=3&pair=3';
+    $rooms = collect(ciAs()->getJson($url)->assertOk()->json('rooms'))->keyBy('code');
+    expect($rooms['R200'])->toMatchArray(['free' => true, 'kind' => null, 'name' => '200-xona'])
+        ->and($rooms['R123'])->toMatchArray(['free' => false, 'kind' => 'busy'])
+        ->and($rooms['R123']['busy'])->toContain('d1/d26-01a')
+        ->and($rooms['R10'])->toMatchArray(['free' => false, 'kind' => 'capacity']);
+    // Hozirgi xona (R123) — birinchi; keyin bo'sh xonalar, so'ng band / sig'maydiganlar.
+    $order = $rooms->keys()->all();
+    expect($order[0])->toBe('R123')->and($rooms['R123']['current'])->toBeTrue()
+        ->and(array_search('R200', $order))->toBeLessThan(array_search('R10', $order));
+    // Hech narsa yozilmaydi.
+    expect(TimetableCardOverride::count())->toBe(0);
+    // Boshqa kafedra mudiri — rad; o'qituvchi — rad (middleware).
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 777, 'name' => 'Kimyo kafedrasi', 'code' => 'K1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = ciTeacher('BOSHQA MUDIR', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 777, 'department' => 'Kimyo kafedrasi'])->save();
+    test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])->getJson($url)->assertForbidden();
+    $t = ciTeacher('OQ', 'oqituvchi');
+    test()->withoutVite()->actingAs($t, 'teacher')->withSession(['active_role' => 'oqituvchi'])->getJson($url)->assertForbidden();
+});

@@ -9929,6 +9929,15 @@
             // key — sikl birligi kaliti: kun ro'yxatida "shu dars" — aynan shu birlik yozuvi (agenda kaliti "c|<key>|<sana>"), guruhi emas.
             function cycCfBlocksBind(pop, own, card, reposition, key) {
                 const blocks = cycCfBlocks(own);
+                pop.querySelectorAll('[data-cyc-room-pick]').forEach(a => a.onclick = async ev => {
+                    ev.preventDefault(); ev.stopPropagation();
+                    const k = key || (card && card.key);
+                    if (!k) return;
+                    closeCycDayPop();
+                    await openCycleAssign(k);
+                    const sel = document.getElementById('cycAssignRoom');
+                    if (sel && sel.focus) { sel.focus(); if (sel.scrollIntoView) sel.scrollIntoView({ block: 'center' }); }
+                });
                 pop.querySelectorAll('[data-cyc-cb-show]').forEach(a => a.onclick = ev => {
                     ev.preventDefault(); ev.stopPropagation();
                     const i = +a.dataset.cycCbShow, el = pop.querySelector('[data-cyc-cb-detail="' + i + '"]'), blk = blocks[i];
@@ -9954,7 +9963,10 @@
                 return '<div class="cb-title" data-cb-title style="font-weight:600;color:#991b1b;margin-top:4px">' + esc(title) + '</div>' +
                     blocks.map((b, bi) => '<div class="cb-block" data-cb-block="' + (kindAttr[b.kind] || 'other') + '" style="margin-top:3px">' +
                         '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cfLabel(b.kind) + (b.who ? ': ' + b.who : '')) + '</b>' +
-                        (['room', 'teacher', 'group'].includes(kindAttr[b.kind]) ? '<a href="#" data-cyc-cb-show="' + bi + '" style="white-space:nowrap;text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</div>' +
+                        '<span style="white-space:nowrap">' +
+                        // Sikl: "Xona band" — "Boshqa xona tanlash" (sikl biriktirish oynasi, xona tanlovi: bandlik va sig'im serverda tekshiriladi).
+                        (kindAttr[b.kind] === 'room' && typeof cycActAllowed === 'function' && cycActAllowed() ? '<a href="#" data-cyc-room-pick style="text-decoration:underline dotted;margin-right:8px">Boshqa xona tanlash</a>' : '') +
+                        (['room', 'teacher', 'group'].includes(kindAttr[b.kind]) ? '<a href="#" data-cyc-cb-show="' + bi + '" style="text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</span></div>' +
                         '<ul class="cf-list">' + b.items.map((i, n) => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null, idx: b.idx[n] })).join('') + '</ul>' +
                         '<div data-cyc-cb-detail="' + bi + '" hidden style="margin-top:3px"></div></div>').join('');
             }
@@ -12818,6 +12830,19 @@
                             const at = isPlaced ? effPlace(roomCard) : null;
                             openPlaceRoomPick(roomCard, at ? at.day : d, at ? at.pair : p);
                         } : null,
+                        // "Boshqa xona tanlash" — "Xona band" blokida (boshqa sabablar bilan birga ham): xonalar ro'yxati (server), tanlangach qayta
+                        // tekshiruv va joylash / shu hafta xonani almashtirish (placeCardWithRoom: birlik — unit-place, yakka — week-override).
+                        roomPick: edit && W && weeklyLayer === 'internal' && !(isPlaced && unitIsSplit(list)) ? (() => {
+                            const at = isPlaced ? effPlace(roomCard) : null;
+                            const day = at ? at.day : d, pair = at ? at.pair : p;
+                            return { card: roomCard, day, pair, placed: !!isPlaced, apply: async room => {
+                                const r = await placeCardWithRoom(roomCard, day, pair, room);
+                                closePanelCardPop();
+                                selected = null;
+                                renderAll();
+                                if (!(r && r.pending_approval)) ttToast(esc((isPlaced ? 'Xona almashtirildi (shu hafta): ' : 'Joylandi: ') + (room.name || room.code)), 'ok');
+                            } };
+                        })() : null,
                         mudir: mudirPhAllowed() && !phOf(c) ? () => { const mb = pop.querySelector('[data-pop-mudir]'); if (mb && !mb.disabled) openMudirPhConfirm(c, mudirPhSlot(c)); } : null,
                         select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); scrollToPickColumn(c); } : null,
                     } });
@@ -13057,10 +13082,69 @@
                 return '<div class="cb-title" data-cb-title style="font-weight:600;color:' + (cbBlocking(blocks).length ? '#991b1b' : '#9a3412') + '">' + esc(cbTitle(blocks, placed)) + '</div>' +
                     blocks.map((b, i) => '<div class="cb-block" data-cb-block="' + b.kind + '" style="margin-top:4px;padding:3px 6px;border-radius:6px;background:' + (tone[b.kind] || '#f1f5f9') + ';color:#1f2937">' +
                         '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cbBlockHead(b) + dayTag(b)) + '</b>' +
-                        (CB_SHOWABLE.includes(b.kind) && !opts.compact ? '<a href="#" data-cb-show="' + i + '" style="white-space:nowrap;text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</div>' +
+                        (CB_SHOWABLE.includes(b.kind) && !opts.compact ? '<span style="white-space:nowrap">' +
+                            // "Xona band" — har holatda (boshqa sabablar bilan birga ham) shu blokning o'zida "Boshqa xona tanlash".
+                            (b.kind === 'room' && opts.roomPick ? '<a href="#" data-cb-room-pick="' + i + '" style="text-decoration:underline dotted;margin-right:8px">Boshqa xona tanlash</a>' : '') +
+                            '<a href="#" data-cb-show="' + i + '" style="text-decoration:underline dotted">Ko\'rsatish</a></span>' : '') + '</div>' +
                         (CB_SHOWABLE.includes(b.kind) && b.items.some(it => it.subject) ? '<ul style="margin:1px 0 0;padding-left:16px">' +
                             b.items.map(it => '<li data-cb-line>' + esc(cbLineText(it)) + '</li>').join('') + '</ul>' : '') +
+                        (b.kind === 'room' && opts.roomPick ? '<div data-cb-room="' + i + '" hidden style="margin-top:3px"></div>' : '') +
                         '<div data-cb-detail="' + i + '" hidden style="margin-top:3px"></div></div>').join('');
+            }
+            // "Boshqa xona tanlash": shu vaqt uchun xonalar (server room-options — fan mas'uli oynasidagi ro'yxat: yaqinlik tartibi, bo'sh tepada,
+            // band — kulrang kim bilan, sig'maydi, biriktirilgan — kulrang; qidiruv faqat nom bo'yicha). Tanlansa — shu xona bilan qayta tekshiruv:
+            // boshqa sabab qolmasa — "Shu xona bilan joylash" / joylangan-to'qnashuvdagi darsda "Xonani almashtirish (shu hafta)"; o'qituvchi /
+            // guruh ham band bo'lsa — xona tanlanadi, qolgan sabab ko'rsatiladi (joylanmaydi). Xona faqat shu hafta uchun.
+            async function cbRoomPick(el, blocks, ctx) {
+                const rp = ctx.solutions && ctx.solutions.roomPick;
+                if (!el || !rp) return;
+                el.hidden = false;
+                el.innerHTML = '<input type="search" data-cb-room-q placeholder="Xona qidirish (nomi)…" autocomplete="off" style="width:100%;font-size:12px;padding:1px 4px">' +
+                    '<div data-cb-room-list style="max-height:180px;overflow:auto;margin-top:2px">Yuklanmoqda…</div><div data-cb-room-msg style="margin-top:3px"></div>';
+                const list = el.querySelector('[data-cb-room-list]'), msg = el.querySelector('[data-cb-room-msg]'), q = el.querySelector('[data-cb-room-q]');
+                let rooms = [];
+                try {
+                    const j = await api(BASE + '/cards/' + rp.card.id + '/room-options?' + new URLSearchParams({ week: curWeek, day: rp.day, pair: rp.pair }));
+                    rooms = (j && j.rooms) || [];
+                } catch (e) { list.innerHTML = '<div style="color:#b91c1c">' + esc(e.message) + '</div>'; if (ctx.reposition) ctx.reposition(); return; }
+                const note = r => r.kind === 'busy' ? (r.busy || 'band') : r.kind === 'capacity' ? "sig'maydi" + (r.cap ? ' (+' + r.cap.over + ')' : '')
+                    : r.kind === 'assigned' ? (r.note || 'biriktirilgan') : (r.why || '');
+                const render = () => {
+                    const t = String(q.value || '').trim().toLowerCase();
+                    const shown = rooms.filter(r => !t || String(r.name || r.code).toLowerCase().includes(t));
+                    list.innerHTML = shown.map(r => '<button type="button" data-cb-room-code="' + esc(r.code) + '"' + (r.free ? '' : ' disabled') +
+                        (r.note_full ? ' title="' + esc(r.note_full) + '"' : '') + ' style="display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:' +
+                        (r.free ? '#fff;color:#0f172a;cursor:pointer' : '#f8fafc;color:#94a3b8') + ';padding:1px 4px">' +
+                        '<b>' + esc(r.name || r.code) + '</b>' + (r.current ? ' (hozirgi)' : '') + (+r.volume ? ' · ' + +r.volume + " o'rin" : '') +
+                        (note(r) ? ' · <span data-cb-room-note>' + esc(note(r)) + '</span>' : '') + '</button>').join('')
+                        || '<div style="color:#94a3b8">' + (rooms.length ? 'Qidiruv bo\'yicha xona topilmadi' : 'Xona topilmadi') + '</div>';
+                    if (ctx.reposition) ctx.reposition();
+                };
+                render();
+                q.oninput = render;
+                list.onclick = ev => {
+                    const row = ev.target.closest ? ev.target.closest('[data-cb-room-code]') : null;
+                    if (!row || row.disabled) return;
+                    ev.preventDefault(); ev.stopPropagation();
+                    const room = rooms.find(r => r.code === row.dataset.cbRoomCode);
+                    const rest = cbBlocking(blocks).filter(b => b.kind !== 'room' && b.kind !== 'capacity');
+                    if (rest.length) {
+                        msg.innerHTML = '<div data-cb-room-rest style="color:#991b1b">Xona tanlandi: <b>' + esc(room.name || room.code) + '</b>. Qolgan sabab: ' +
+                            esc(rest.map(cbBlockHead).join('; ')) + ' — joylanmaydi.</div>';
+                    } else {
+                        msg.innerHTML = 'Xona: <b>' + esc(room.name || room.code) + '</b> ' +
+                            '<button type="button" data-cb-room-apply style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:5px;padding:1px 8px">' +
+                            (rp.placed ? 'Xonani almashtirish (shu hafta)' : 'Shu xona bilan joylash') + '</button>';
+                        msg.querySelector('[data-cb-room-apply]').onclick = async e2 => {
+                            e2.preventDefault(); e2.stopPropagation();
+                            e2.target.disabled = true;
+                            try { await rp.apply(room); }
+                            catch (er) { e2.target.disabled = false; msg.insertAdjacentHTML('beforeend', '<div style="color:#b91c1c">' + esc(er.message) + '</div>'); }
+                        };
+                    }
+                    if (ctx.reposition) ctx.reposition();
+                };
+                if (ctx.reposition) ctx.reposition();
             }
             // "Ko'rsatish" tafsiloti uchun fokus (jadvalda to'qnashuvni ko'rish rejimi): ikkala dars guruhlari, sana, vaqt.
             // Bo'lak — to'qnashuvga aynan tegishli bo'lagi (piece_id) va uning shu yozuvdagi joyi (piece_pair): bo'laklari turli kunda yoki oraliq
@@ -13175,11 +13259,12 @@
                 const sol = ctx.solutions || {};
                 const btn = (attr, text, color) => '<button type="button" ' + attr + ' style="border:1px solid ' + color + ';color:' + color + ';background:#fff;border-radius:5px;padding:1px 8px">' + text + '</button>';
                 const sols = [
-                    kinds.has('room') && !kinds.has('teacher') && !kinds.has('group') && !kinds.has('day_end') && sol.room ? btn('data-cb-sol="room"', 'Boshqa xona bilan joylash', '#a16207') : '',
+                    // Xona tanlash — "Xona band" blokining o'zida (roomPick); u yo'q joyda — eski "Boshqa xona bilan joylash" (faqat xona band).
+                    !sol.roomPick && kinds.has('room') && !kinds.has('teacher') && !kinds.has('group') && !kinds.has('day_end') && sol.room ? btn('data-cb-sol="room"', 'Boshqa xona bilan joylash', '#a16207') : '',
                     kinds.has('teacher') && sol.mudir ? btn('data-cb-sol="mudir"', 'Vaqtincha kafedra mudiriga yozish', '#854d0e') : '',
                     sol.select ? btn('data-cb-sol="select"', 'Joylash uchun tanlash', '#1d4ed8') : '',
                 ].filter(Boolean);
-                host.innerHTML = cbHtml(blocks, ctx.placed) + (blocks.length && sols.length ? '<div data-cb-sols style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + sols.join('') + '</div>' : '');
+                host.innerHTML = cbHtml(blocks, ctx.placed, { roomPick: !!sol.roomPick }) + (blocks.length && sols.length ? '<div data-cb-sols style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + sols.join('') + '</div>' : '');
                 host.querySelectorAll('[data-cb-show]').forEach(a => a.onclick = ev => {
                     ev.preventDefault(); ev.stopPropagation();
                     const i = +a.dataset.cbShow, el = host.querySelector('[data-cb-detail="' + i + '"]');
@@ -13187,6 +13272,14 @@
                     el.hidden = !el.hidden;
                     if (!el.hidden && !el.dataset.loaded) { el.dataset.loaded = '1'; cbShowDetail(el, blocks[i], ctx).then(() => ctx.reposition && ctx.reposition()); }
                     if (ctx.reposition) ctx.reposition();
+                });
+                host.querySelectorAll('[data-cb-room-pick]').forEach(a => a.onclick = ev => {
+                    ev.preventDefault(); ev.stopPropagation();
+                    const el = host.querySelector('[data-cb-room="' + a.dataset.cbRoomPick + '"]');
+                    if (!el) return;
+                    if (el.dataset.loaded) { el.hidden = !el.hidden; if (ctx.reposition) ctx.reposition(); return; }
+                    el.dataset.loaded = '1';
+                    cbRoomPick(el, blocks, ctx);
                 });
                 host.querySelectorAll('[data-cb-sol]').forEach(x => x.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); const f = sol[x.dataset.cbSol]; if (f) f(); });
                 if (ctx.reposition) ctx.reposition();

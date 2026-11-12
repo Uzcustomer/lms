@@ -12138,41 +12138,71 @@ class JournalController extends Controller
     }
 
     /**
-     * Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …"): "imzo" joylari (chiziq va
-     * yozuv) olib tashlanadi; kafedra mudiri tasdiqlasa — ismi; dekan tasdiqlasa — ismi va undan keyin
-     * hujjatning QR i.
+     * Pastki imzolar qatori: avval kafedra mudiri, keyin fakultet dekani — lavozim va darhol yonida ismi
+     * (tasdiqlagan bo'lsa — tasdiqdagi ism, aks holda shablondagi), dekan ismidan keyin hujjatning QR i
+     * (dekan tasdiqlagach). Shablondagi "imzo" joylari va "F.I.Sh." yozuvlari olib tashlanadi; muhr o'rni
+     * ("M.O'") — dekan ostida.
+     *
+     * Ustunlar: B — "Kafedra mudiri" (o'ngga), C:E — ismi; G:K — "Fakultet dekani" (o'ngga), M:Q — ismi;
+     * S:T — QR.
      */
     private static function signatureRow(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, $head, $dean): void
     {
         $row = self::YNQ_SIGN_ROW + self::ynqExtraRows($sheet);
-        $merges = $sheet->getMergeCells();
-        // "imzo" — elektron tasdiq bilan kerak emas: ostidagi yozuv va ustidagi chiziq
-        foreach (['B', 'C', 'D', 'R', 'S'] as $col) {
-            if (trim((string) $sheet->getCell($col . ($row + 1))->getValue()) === 'imzo') {
-                $sheet->getCell($col . ($row + 1))->setValue(null);
-                // Chiziq: ustki katakning pastki yoki yozuv katagining ustki chegarasi (R:S — ikki katak)
-                foreach ($col === 'R' ? ['R', 'S'] : [$col] as $c) {
-                    $sheet->getStyle($c . $row)->getBorders()->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-                    $sheet->getStyle($c . ($row + 1))->getBorders()->getTop()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-                }
+        $next = $row + 1;
+        if (!str_contains((string) $sheet->getCell("B{$row}")->getValue(), 'dekani')) {
+            return;   // shablon emas yoki allaqachon tuzilgan
+        }
+        // Shablondagi uslublar: lavozim (qalin), ism (qalin, ostida chiziq), muhr o'rni
+        $labelXf = $sheet->getCell("B{$row}")->getXfIndex();
+        $nameXf = $sheet->getCell("E{$row}")->getXfIndex();
+        $stampXf = $sheet->getCell("B{$next}")->getXfIndex();
+        $stamp = $sheet->getCell("B{$next}")->getValue();
+        $headName = $head ? self::initialsName($head->teacher_name) : trim((string) $sheet->getCell("U{$row}")->getValue());
+        $deanName = $dean ? self::initialsName($dean->teacher_name) : trim((string) $sheet->getCell("E{$row}")->getValue());
+
+        foreach ($sheet->getMergeCells() as $range) {
+            if (preg_match('/^[A-Z]+(\d+):[A-Z]+(\d+)$/', $range, $m) && (int) $m[2] >= $row && (int) $m[1] <= $next) {
+                $sheet->unmergeCells($range);
             }
         }
-        if ($head) {
-            $sheet->getCell("U{$row}")->setValue(self::initialsName($head->teacher_name));
+        foreach ([$row, $next] as $r) {
+            foreach (range('B', self::YNQ_LAST_COL) as $col) {
+                // Kutubxona bitta katak obyektini ushlaydi — har biri qayta olinadi
+                $sheet->getCell($col . $r)->setValue(null)->setXfIndex(0);
+            }
+        }
+        $place = function (string $from, string $to, string $value, int $xf, ?string $align = null) use ($sheet, $row) {
+            foreach (range($from, $to) as $col) {
+                $sheet->getCell($col . $row)->setXfIndex($xf);
+            }
+            if ($from !== $to) {
+                $sheet->mergeCells("{$from}{$row}:{$to}{$row}");
+            }
+            $sheet->getCell($from . $row)->setValue($value);
+            if ($align) {
+                $sheet->getStyle($from . $row)->getAlignment()->setHorizontal($align);
+            }
+        };
+        $right = \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT;
+        $place('B', 'B', 'Kafedra mudiri ', $labelXf, $right);
+        $place('C', 'E', $headName, $nameXf);
+        $place('G', 'K', 'Fakultet dekani ', $labelXf, $right);
+        $place('M', 'Q', $deanName, $nameXf);
+        if ($stamp) {
+            $sheet->getCell("K{$next}")->setValue($stamp)->setXfIndex($stampXf);
+            $sheet->getStyle("K{$next}")->getAlignment()->setHorizontal($right);
         }
         if (!$dean) {
             return;
         }
-        $sheet->getCell("E{$row}")->setValue(self::initialsName($dean->teacher_name));
 
-        // Dekan ismidan keyin (I:M) — hujjatning yagona QR i, kattaroq
+        // Dekan ismidan keyin (S:T) — hujjatning yagona QR i, kattaroq
         $size = 84;
-        if (!isset($merges["I{$row}:M{$row}"])) {
-            $sheet->mergeCells("I{$row}:M{$row}");
-        }
+        $sheet->mergeCells("S{$row}:T{$row}");
         $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 66));
         $width = 0;
-        foreach (['I', 'J', 'K', 'L', 'M'] as $col) {
+        foreach (['S', 'T'] as $col) {
             $w = $sheet->getColumnDimension($col)->getWidth();
             $width += \PhpOffice\PhpSpreadsheet\Shared\Drawing::cellDimensionToPixels($w < 0 ? 8.43 : $w, $sheet->getParent()->getDefaultStyle()->getFont());
         }
@@ -12182,7 +12212,7 @@ class JournalController extends Controller
         $qr->setName(self::YNQ_QR_ALT . self::abbreviateName($dean->teacher_name));
         $qr->setDescription(self::YNQ_QR_ALT . self::abbreviateName($dean->teacher_name) . ' — ' . $dean->confirmed_at->format('d.m.Y H:i'));
         $qr->setHeight($size);
-        $qr->setCoordinates("I{$row}");
+        $qr->setCoordinates("S{$row}");
         $qr->setOffsetX(max(0, intdiv((int) $width - $size, 2)));
         $qr->setOffsetY(max(0, intdiv(self::rowPx($sheet, $row) - $size, 2)));
         $qr->setWorksheet($sheet);

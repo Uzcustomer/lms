@@ -2066,6 +2066,9 @@
         #respMove .rm-row[aria-selected="true"] { box-shadow: inset 3px 0 0 #2563eb; }
         #respMove .rm-row span { color: #64748b; font-size: 12px; }
         #respMove .rm-row .rm-vol { margin-left: auto; font-variant-numeric: tabular-nums; }
+        #respMove .rm-group { position: sticky; top: 0; z-index: 1; background: #e2e8f0; color: #334155; font-weight: 600; font-size: 11px; padding: 2px 10px; }
+        #respMove .rmv-head { color: #475569; font-size: 11px; margin: 2px 0; }
+        #respMove .rm-row .rm-bld { font-size: 10px; color: #64748b; background: #f1f5f9; border-radius: 4px; padding: 0 4px; }
         #respMove .rm-row .rm-why { color: #047857; font-weight: 600; font-size: 11px; background: #ecfdf5; border-radius: 6px; padding: 1px 6px; }
         #respMove .rm-row .rm-busy, #respMove .rm-row .rm-cap { flex-basis: 100%; font-size: 11px; }
         #respMove .rm-row .rm-cap { color: #b45309; }
@@ -6036,13 +6039,33 @@
                 return String(v == null ? '' : v).toLowerCase().replace(/[ʼʻ‘’`´]/g, "'").replace(/[а-яёўқғҳ]/g, ch => UZ_CYR_LAT[ch] ?? ch);
             }
             // Xona so'z bo'yicha: so'rov so'zlarga bo'linadi, har so'z kod, nom, bino yoki xona turidan birida bo'lishi kerak (tartib muhim emas).
-            // nameOnly — faqat xona nomi bo'yicha (fan mas'uli oynasi: "510" kodi 510 bo'lgan boshqa xonani topmasin); boshqa oynalar — hammasi.
+            // nameOnly — xona nomi va bino nomi bo'yicha, kod emas (server ro'yxati — "Boshqa xona tanlash", fan mas'uli oynasi: "510" kodi 510
+            // bo'lgan boshqa xonani topmasin); boshqa oynalar — hammasi.
             function roomMatches(room, q, nameOnly = false) {
                 const words = searchNorm(q).split(/\s+/).filter(Boolean);
                 if (!words.length) return true;
-                const fields = (nameOnly ? [room.name] : [room.code, room.name, room.building_name, room.auditorium_type_name]).map(searchNorm);
+                const fields = (nameOnly ? [room.name, room.building, room.building_name] : [room.code, room.name, room.building_name, room.auditorium_type_name]).map(searchNorm);
                 return words.every(w => fields.some(f => f.includes(w)));
             }
+            // Server xonalar ro'yxati (room-options / responsible-move check) — umumiy ko'rinish: sarlavha ("Seshanba, 24.11 15:00–16:20 uchun:
+            // 120 bo'sh, 35 band · 8 sig'maydi · 12 biriktirilgan"), bino guruhlari sarlavhalari (server tartibi: hozirgi → shu bino → boshqa
+            // binolar nomi bo'yicha → "Bino ko'rsatilmagan"; guruh ichida bo'sh tepada) va qatordagi bino yorlig'i.
+            function roomListHeadText(when, rooms) {
+                const n = k => rooms.filter(r => !r.current && (k === 'free' ? r.free : r.kind === k)).length;
+                const extra = [n('capacity') ? n('capacity') + " sig'maydi" : '', n('assigned') ? n('assigned') + ' biriktirilgan' : ''].filter(Boolean);
+                return (when ? when + ' uchun: ' : '') + n('free') + " bo'sh, " + n('busy') + ' band' + (extra.length ? ' · ' + extra.join(' · ') : '');
+            }
+            // Qatorlar orasiga guruh sarlavhasi (r.group o'zgarganda; hozirgi xona — guruhsiz, tepada). rowHtml(r) — qator.
+            function roomListGrouped(rooms, rowHtml, headHtml) {
+                let last = null;
+                return rooms.map(r => {
+                    const g = r.current ? null : (r.group || null);
+                    const head = g && g !== last ? headHtml(g) : '';
+                    if (!r.current) last = g;
+                    return head + rowHtml(r);
+                }).join('');
+            }
+            const roomBuildingTag = r => r && r.building ? r.building : '';
             // Ma'ruza yorlig'i: "Ma'ruza · 1-oqim (02a, 02b, 03a …)" — guruhchalar umumiy prefiksisiz ("p/st24-"), 8 tadan ko'p
             // bo'lsa "… +N"; to'liq ro'yxat — title (sichqoncha ustida).
             function lectureLabel(oqim, groups) {
@@ -11884,8 +11907,8 @@
                     + '<p>' + esc(card.subject_name) + ' · ' + esc(card.training_type === 'lecture' ? (card.oqim_label || '') : (card.group_name || '')) + ' → ' + esc(when)
                     + (week ? ' · ' + curWeek + '-hafta (faqat shu hafta)' : ' · barcha haftalar (shu kartaning xonasi almashtiriladi)') + '</p>'
                     + '<p class="text-sm text-amber-700" style="white-space:pre-line" data-pr-why>' + esc(why.join('\n')) + '</p>'
-                    + '<p class="text-sm">Shu vaqtda bo‘sh va sig‘adigan xonalar' + (+card.students ? ' (' + +card.students + ' talaba)' : '') + ':</p>'
-                    + '<input type="search" data-pr-q placeholder="Xona qidirish…" aria-label="Xona qidirish" autocomplete="off">'
+                    + '<p class="text-sm" data-pr-what>' + (week ? 'Xonalar' : 'Shu vaqtda bo‘sh va sig‘adigan xonalar') + (+card.students ? ' (' + +card.students + ' talaba)' : '') + ':</p>'
+                    + '<input type="search" data-pr-q placeholder="' + (week ? 'Xona yoki bino qidirish…' : 'Xona qidirish…') + '" aria-label="Xona qidirish" autocomplete="off">'
                     + '<div class="rm-list" role="listbox" aria-label="Xonalar" data-pr-list><div class="p-3 text-sm text-slate-400">Yuklanmoqda…</div></div>'
                     + '<p class="text-sm" role="alert" data-pr-msg></p>'
                     + '<div class="flex justify-end gap-2"><button type="button" data-close>Bekor</button></div></div>';
@@ -11898,6 +11921,62 @@
                 m.querySelector('[data-close]').onclick = () => { if (!busy) close(); };
                 const list = m.querySelector('[data-pr-list]'), msg = m.querySelector('[data-pr-msg]'), q = m.querySelector('[data-pr-q]');
                 let rooms = [], rank = null;
+                const run = async room => {
+                    busy = true;
+                    m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = true; });
+                    msg.className = 'text-sm text-slate-600';
+                    msg.textContent = 'Joylanmoqda…';
+                    try {
+                        const r = await placeCardWithRoom(card, d, p, room);
+                        close();
+                        selected = null;
+                        renderAll();
+                        // Tasdiqqa ketgan bo'lsa — xabar onPendingApproval'da (doska qayta yuklanadi).
+                        if (!(r && r.pending_approval)) ttToast(esc('Joylandi: ' + (room.name || room.code) + ' xonasi bilan.'), 'ok');
+                    } catch (e) {
+                        busy = false;
+                        m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = false; });
+                        msg.className = 'text-sm text-red-600';
+                        msg.textContent = 'Joylanmadi: ' + e.message;
+                    }
+                };
+                // Tanlangan hafta (ichki): server ro'yxati (room-options — "Boshqa xona tanlash" bilan bir xil: bino guruhlari, bo'sh tepada, band /
+                // sig'maydi / biriktirilgan — kulrang, sababi bilan); birlik — boshidan (unitMovePlan). Shablon — mijozdagi bo'sh xonalar (pastda).
+                if (week) {
+                    const plan = unitMovePlan(card, p);
+                    let j = null;
+                    try {
+                        j = await api(BASE + '/cards/' + card.id + '/room-options?' + new URLSearchParams({ week: curWeek, day: d, pair: plan ? plan[0][1] : p }));
+                    } catch (e) {
+                        if (document.body.contains(m)) list.innerHTML = '<div class="p-3 text-sm text-red-600">' + esc(e.message) + '</div>';
+                        return;
+                    }
+                    if (!document.body.contains(m)) return;
+                    const all = ((j && j.rooms) || []).filter(r => !r.current);
+                    m.querySelector('[data-pr-what]').textContent = roomListHeadText(j && j.when, all);
+                    const why2 = r => r.kind === 'busy' ? (r.busy || 'band') : r.kind === 'capacity' ? "sig'maydi" + (r.cap ? ' (+' + r.cap.over + ')' : '')
+                        : r.kind === 'assigned' ? (r.note || 'biriktirilgan') : '';
+                    const render2 = () => {
+                        const shown = all.filter(r => roomMatches(r, q.value || '', true));
+                        list.innerHTML = roomListGrouped(shown, r => '<button type="button" class="rm-row" data-pr-code="' + esc(r.code) + '"' + (r.free ? '' : ' disabled aria-disabled="true" style="opacity:.55"')
+                            + (r.note_full ? ' title="' + esc(r.note_full) + '"' : '') + '>'
+                            + '<b>' + esc(r.name || r.code) + '</b>' + (roomBuildingTag(r) ? '<span data-pr-bld>' + esc(roomBuildingTag(r)) + '</span>' : '')
+                            + (r.free && r.why ? '<span class="rm-why">' + esc(r.why) + '</span>' : '')
+                            + (!r.free ? '<span data-pr-note>' + esc(why2(r)) + '</span>' : '')
+                            + '<span class="rm-vol">' + (+r.volume ? r.volume + ' o‘rin' : 'sig‘imi kiritilmagan') + '</span></button>',
+                            g => '<div class="rm-group" data-pr-group style="position:sticky;top:0;background:#e2e8f0;color:#334155;font-weight:600;font-size:11px;padding:2px 10px">' + esc(g) + '</div>')
+                            || '<div class="p-3 text-sm text-slate-400" data-pr-none>' + (all.length ? 'Qidiruv bo‘yicha xona topilmadi' : 'Shu vaqtda xona topilmadi') + '</div>';
+                    };
+                    render2();
+                    q.oninput = render2;
+                    q.focus();
+                    list.onclick = ev => {
+                        const row = ev.target.closest ? ev.target.closest('[data-pr-code]') : null;
+                        const room = row && all.find(r => r.code === row.dataset.prCode);
+                        if (room && room.free && !busy) run(room);
+                    };
+                    return;
+                }
                 try {
                     const [all, ub] = await Promise.all([
                         placeRoomsAll || api(AUDS_URL).then(x => (placeRoomsAll = (x || []).filter(r => r.active !== false))),
@@ -11922,25 +12001,6 @@
                 render();
                 q.oninput = render;
                 q.focus();
-                const run = async room => {
-                    busy = true;
-                    m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = true; });
-                    msg.className = 'text-sm text-slate-600';
-                    msg.textContent = 'Joylanmoqda…';
-                    try {
-                        const r = await placeCardWithRoom(card, d, p, room);
-                        close();
-                        selected = null;
-                        renderAll();
-                        // Tasdiqqa ketgan bo'lsa — xabar onPendingApproval'da (doska qayta yuklanadi).
-                        if (!(r && r.pending_approval)) ttToast(esc('Joylandi: ' + (room.name || room.code) + ' xonasi bilan.'), 'ok');
-                    } catch (e) {
-                        busy = false;
-                        m.querySelectorAll('[data-pr-list] button').forEach(b => { b.disabled = false; });
-                        msg.className = 'text-sm text-red-600';
-                        msg.textContent = 'Joylanmadi: ' + e.message;
-                    }
-                };
                 list.onclick = ev => {
                     const row = ev.target.closest ? ev.target.closest('[data-pr-code]') : null;
                     if (row && !busy) run(cands.find(r => r.code === row.dataset.prCode));
@@ -12626,6 +12686,9 @@
             // ===== "Joylanmagan kartalar" paneli: qisman joylangan birlik belgisi, yaxlit joylash natijasi, karta oynasi =====
             const unitFixErr = {};   // birlik kaliti → oxirgi "yaxlit joylanmadi" sababi (kartada qizil izoh)
             const unitFixItems = {};   // birlik kaliti → tuzilgan sabablar (server conflict_items) — turlarga ajratilgan bloklar
+            // Yaxlitlab bo'lmagan va shu hafta joylanmaganlarga o'tkazilgan birliklar: "doska|hafta|birlik" → {card_id, text, items}.
+            // Panel tepasida xabar va "Joylash uchun tanlang"; birlik qayta joylansa yoki hafta / doska almashsa — ko'rinmaydi.
+            const unitCleared = {};
             // Tasdiqqa yuborilgan unit-fix so'rovlari: "doska|hafta|birlik" → so'rov raqami (tasdiq rejimi: "tasdiq kutilmoqda", tugma o'chiq).
             // Boshqa hafta / doskada ko'rinmaydi; so'rov kutilayotganlar ro'yxatidan chiqsa (bekor qilindi, rad etildi, tasdiqlandi) — olinadi.
             const unitFixPending = {};
@@ -12664,6 +12727,51 @@
                                 : '<div class="pn-split-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>') : '') + '</div>';
                     }).join('') + '</div>';
             }
+            // "Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: …). Joylash uchun tanlang." — shu hafta, joylanmagan birliklar.
+            function unitClearedLive() {
+                const pre = (board ? board.id : 0) + '|' + curWeek + '|';
+                return Object.entries(unitCleared).filter(([k, v]) => {
+                    if (!k.startsWith(pre)) return false;
+                    const c = cards.find(x => x.id === +v.card_id);
+                    return c && !unitOf(c, curWeek).some(x => placeInWeek(x, curWeek));
+                });
+            }
+            function unitClearedHtml() {
+                const live = unitClearedLive();
+                if (!live.length) return '';
+                return '<div data-pn-cleared style="border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
+                    live.map(([k, v]) => '<div data-cleared-key="' + esc(k) + '" style="margin-top:2px"><b>' + esc(v.text) + '</b> ' +
+                        (unitEditable() ? '<button type="button" data-cleared-select="' + +v.card_id + '" style="border:1px solid #2563eb;color:#1d4ed8;background:#eff6ff;border-radius:4px;padding:0 5px">Joylash uchun tanlang</button>' : 'Joylash uchun tanlang.') +
+                        (v.items && v.items.length ? '<div style="margin-top:2px">' + cbHtml(cbBlocks(v.items), false, { compact: true }) + '</div>' : '') +
+                        '</div>').join('') + '</div>';
+            }
+            // "Bir kunga sig'maydi…" — sahifa ichidagi [Ha] / [Yo'q] oynasi (Esc, fon — Yo'q). Promise<boolean>.
+            function ttYesNo(title, body) {
+                return new Promise(resolve => {
+                    const prior = document.getElementById('ttYesNo');
+                    if (prior) prior.remove();
+                    const m = document.createElement('div');
+                    m.id = 'ttYesNo';
+                    m.setAttribute('role', 'dialog');
+                    m.setAttribute('aria-modal', 'true');
+                    m.style.cssText = 'position:fixed;inset:0;z-index:85;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
+                    m.innerHTML = '<div style="background:#fff;border-radius:10px;max-width:480px;width:100%;padding:12px 16px;box-shadow:0 20px 60px #0004;font-size:13px">' +
+                        '<div data-yn-title style="font-weight:700;margin-bottom:6px">' + esc(title) + '</div>' +
+                        (body ? '<div data-yn-body style="color:#991b1b;font-size:12px;white-space:pre-line;margin-bottom:8px">' + esc(body) + '</div>' : '') +
+                        '<div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" data-yn-no style="border:1px solid #94a3b8;border-radius:6px;padding:2px 12px">Yo\'q</button>' +
+                        '<button type="button" data-yn-yes style="border:1px solid #d97706;color:#92400e;background:#fffbeb;border-radius:6px;padding:2px 12px;font-weight:600">Ha</button></div></div>';
+                    const done = v => { m.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+                    const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
+                    document.addEventListener('keydown', onKey, true);
+                    m.addEventListener('click', ev => {
+                        if (ev.target.closest('[data-yn-yes]')) done(true);
+                        else if (ev.target === m || ev.target.closest('[data-yn-no]')) done(false);
+                    });
+                    document.body.appendChild(m);
+                    const yes = m.querySelector('[data-yn-yes]');
+                    if (yes && yes.focus) yes.focus();
+                });
+            }
             // "Qisman: 3 soatdan 2 soati joylangan (Seshanba 10:00); qolgani 1 soat" + shu birlik tugmalari (+ qizil izoh).
             function partialBadgeHtml(st, err) {
                 const pend = unitFixPending[unitPendKey(st.card)];
@@ -12693,6 +12801,30 @@
                     // Sig'madi (422) — hech narsa o'zgarmadi: sababi tuzilgan bloklar bilan (failed + conflict_items).
                     if (e && e.data && Array.isArray(e.data.failed) && e.data.failed.length) r = e.data;
                     else { showUnitFixResult({ error: e.message }, action, units); return; }
+                }
+                // Yaxlitlab bo'lmadi (bitta birlik): tasdiq bilan — shu hafta jadvalidan olib, joylanmaganlarga o'tkazish (unplace_if_no_fit;
+                // server qayta sinaydi — endi sig'sa, oddiy yaxlitlaydi). "Yo'q" — hozirgidek (sabab qatorda va natija oynasida).
+                if (action === 'merge' && units.length === 1 && !(r && r.done) && r && r.failed && r.failed.length && !(r && r.pending_approval)) {
+                    if (await ttYesNo('Bir kunga sig\'maydi. Darsni shu hafta jadvalidan olib, joylanmaganlarga o\'tkazaymi?', r.failed[0].error || '')) {
+                        if (btn) btn.disabled = true;
+                        try {
+                            r = await api(BASE + '/boards/' + board.id + '/unit-fix', 'POST',
+                                { week: curWeek, action, card_ids: units[0].list.map(x => x.id), unplace_if_no_fit: true });
+                        } catch (e) {
+                            if (btn) btn.disabled = false;
+                            showUnitFixResult({ error: e.message }, action, units);
+                            return;
+                        }
+                        delete unitFixErr[unitKey(units[0].card)]; delete unitFixItems[unitKey(units[0].card)];
+                        (r && r.cleared || []).forEach(cl => {
+                            unitCleared[unitPendKey(units[0].card)] = { card_id: units[0].list[0].id, text: cl.text,
+                                items: Array.isArray(cl.conflict_items) ? cl.conflict_items : [] };
+                        });
+                        await loadBoard(board.id);
+                        if (r && r.cleared && r.cleared.length) ttToast(esc(r.message || r.cleared[0].text), 'warn');
+                        else showUnitFixResult(r || {}, action, units);
+                        return;
+                    }
                 }
                 units.forEach(st => { delete unitFixErr[unitKey(st.card)]; delete unitFixItems[unitKey(st.card)]; });
                 // Tasdiq rejimi (so'rov yuborildi): "Yaxlitlandi: 0 ta" emas — qatorda "tasdiq kutilmoqda", tugma o'chiq (onPendingApproval —
@@ -12863,8 +12995,7 @@
                                 if (!(r && r.pending_approval)) ttToast(esc((isPlaced ? 'Xona almashtirildi (shu hafta): ' : 'Joylandi: ') + (room.name || room.code)), 'ok');
                             } };
                         })() : null,
-                        // "Vaqtincha kafedra mudiriga yozish" — oynada bitta tugma (pastki qatorda, data-pop-mudir); yechimlarda takrorlanmaydi.
-                        select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); scrollToPickColumn(c); } : null,
+                        // "Joylash uchun tanlash" va "Vaqtincha kafedra mudiriga yozish" — oynada bittadan (pastki qatorda); yechimlarda takrorlanmaydi.
                     } });
                 if (placed && W && weeklyLayer === 'internal') {
                     // Joylangan, to'qnashuvdagi dars: sabablar — server yozuvlaridan (butun doska; belgi ham shulardan — ko'rish qamrovidan tashqaridagi
@@ -13111,24 +13242,28 @@
                 const rp = ctx.solutions && ctx.solutions.roomPick;
                 if (!el || !rp) return;
                 el.hidden = false;
-                el.innerHTML = '<input type="search" data-cb-room-q placeholder="Xona qidirish (nomi)…" autocomplete="off" style="width:100%;font-size:12px;padding:1px 4px">' +
+                el.innerHTML = '<div data-cb-room-head style="color:#475569;font-size:11px;margin-bottom:2px"></div>' +
+                    '<input type="search" data-cb-room-q placeholder="Xona yoki bino qidirish…" autocomplete="off" style="width:100%;font-size:12px;padding:1px 4px">' +
                     '<div data-cb-room-list style="max-height:180px;overflow:auto;margin-top:2px">Yuklanmoqda…</div><div data-cb-room-msg style="margin-top:3px"></div>';
                 const list = el.querySelector('[data-cb-room-list]'), msg = el.querySelector('[data-cb-room-msg]'), q = el.querySelector('[data-cb-room-q]');
                 let rooms = [];
                 try {
                     const j = await api(BASE + '/cards/' + rp.card.id + '/room-options?' + new URLSearchParams({ week: curWeek, day: rp.day, pair: rp.pair }));
                     rooms = (j && j.rooms) || [];
+                    el.querySelector('[data-cb-room-head]').textContent = roomListHeadText(j && j.when, rooms);
                 } catch (e) { list.innerHTML = '<div style="color:#b91c1c">' + esc(e.message) + '</div>'; if (ctx.reposition) ctx.reposition(); return; }
                 const note = r => r.kind === 'busy' ? (r.busy || 'band') : r.kind === 'capacity' ? "sig'maydi" + (r.cap ? ' (+' + r.cap.over + ')' : '')
                     : r.kind === 'assigned' ? (r.note || 'biriktirilgan') : (r.why || '');
                 const render = () => {
-                    const t = String(q.value || '').trim().toLowerCase();
-                    const shown = rooms.filter(r => !t || String(r.name || r.code).toLowerCase().includes(t));
-                    list.innerHTML = shown.map(r => '<button type="button" data-cb-room-code="' + esc(r.code) + '"' + (r.free ? '' : ' disabled') +
+                    // Qidiruv — xona nomi va bino nomi bo'yicha (kod emas).
+                    const shown = rooms.filter(r => roomMatches(r, q.value || '', true));
+                    list.innerHTML = roomListGrouped(shown, r => '<button type="button" data-cb-room-code="' + esc(r.code) + '"' + (r.free ? '' : ' disabled') +
                         (r.note_full ? ' title="' + esc(r.note_full) + '"' : '') + ' style="display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:' +
                         (r.free ? '#fff;color:#0f172a;cursor:pointer' : '#f8fafc;color:#94a3b8') + ';padding:1px 4px">' +
                         '<b>' + esc(r.name || r.code) + '</b>' + (r.current ? ' (hozirgi)' : '') + (+r.volume ? ' · ' + +r.volume + " o'rin" : '') +
-                        (note(r) ? ' · <span data-cb-room-note>' + esc(note(r)) + '</span>' : '') + '</button>').join('')
+                        (roomBuildingTag(r) ? ' <span data-cb-room-bld style="font-size:10px;color:#64748b;background:#f1f5f9;border-radius:4px;padding:0 4px">' + esc(roomBuildingTag(r)) + '</span>' : '') +
+                        (note(r) ? ' · <span data-cb-room-note>' + esc(note(r)) + '</span>' : '') + '</button>',
+                        g => '<div data-cb-room-group style="position:sticky;top:0;background:#e2e8f0;color:#334155;font-weight:600;font-size:11px;padding:1px 4px">' + esc(g) + '</div>')
                         || '<div style="color:#94a3b8">' + (rooms.length ? 'Qidiruv bo\'yicha xona topilmadi' : 'Xona topilmadi') + '</div>';
                     if (ctx.reposition) ctx.reposition();
                 };
@@ -13262,18 +13397,18 @@
                 bind(info);
             }
             // Bloklarni joyiga chizadi va "Ko'rsatish" / yechim tugmalarini bog'laydi. ctx: {card, ids (birlik), day, pair, len, placed, close,
-            // reposition, solutions: {room: fn, roomPick: {...}, select: fn}} ("Vaqtincha kafedra mudiriga yozish" — oynaning pastki qatorida, bitta).
+            // reposition, solutions: {room: fn, roomPick: {...}}} ("Joylash uchun tanlash", "Vaqtincha kafedra mudiriga yozish" — oynaning pastki qatorida).
             function cbRender(host, items, ctx) {
                 const blocks = cbBlocks(items);
                 if (!host) return blocks;
                 const kinds = new Set(cbBlocking(blocks).map(b => b.kind));
-                // Yechimlar: faqat xona band — "Boshqa xona bilan joylash" (roomPick bo'lmasa); har doim — "Joylash uchun tanlash". "Vaqtincha kafedra mudiriga yozish" — pastki qatorda (bitta).
+                // Yechimlar: faqat xona band — "Boshqa xona bilan joylash" (roomPick bo'lmasa). "Joylash uchun tanlash" va "Vaqtincha kafedra
+                // mudiriga yozish" — oynaning pastki qatorida (bittadan, takrorlanmaydi).
                 const sol = ctx.solutions || {};
                 const btn = (attr, text, color) => '<button type="button" ' + attr + ' style="border:1px solid ' + color + ';color:' + color + ';background:#fff;border-radius:5px;padding:1px 8px">' + text + '</button>';
                 const sols = [
                     // Xona tanlash — "Xona band" blokining o'zida (roomPick); u yo'q joyda — eski "Boshqa xona bilan joylash" (faqat xona band).
                     !sol.roomPick && kinds.has('room') && !kinds.has('teacher') && !kinds.has('group') && !kinds.has('day_end') && sol.room ? btn('data-cb-sol="room"', 'Boshqa xona bilan joylash', '#a16207') : '',
-                    sol.select ? btn('data-cb-sol="select"', 'Joylash uchun tanlash', '#1d4ed8') : '',
                 ].filter(Boolean);
                 host.innerHTML = cbHtml(blocks, ctx.placed, { roomPick: !!sol.roomPick }) + (blocks.length && sols.length ? '<div data-cb-sols style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + sols.join('') + '</div>' : '');
                 host.querySelectorAll('[data-cb-show]').forEach(a => a.onclick = ev => {
@@ -13420,7 +13555,7 @@
                         (unitEditable() ? '<div style="margin-top:3px"><button type="button" data-unit-fix="complete" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 6px">hammasini yaxlit joylash</button>' +
                             ' <button type="button" data-unit-fix="clear" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 6px">hammasini yaxlit bo\'shatish</button></div>' : '') + '</div>'
                     : '';
-                $('cardPanel').innerHTML = mudirPhSectionHtml(weeklyPhCards()) + partialHead + splitHeadHtml(splitUnits) +
+                $('cardPanel').innerHTML = mudirPhSectionHtml(weeklyPhCards()) + (curWeek && weeklyLayer === 'internal' ? unitClearedHtml() : '') + partialHead + splitHeadHtml(splitUnits) +
                     unShown.map(c => panelCard(c, false)).join('') +
                     (showSkipped ? skippedShown.map(c => panelCard(c, true)).join('') : '')
                     || (filtering && un.length
@@ -13462,6 +13597,16 @@
                     ev.stopPropagation();
                     const st = splitUnits.get(btn.dataset.unitMerge);
                     if (st) runUnitFix(btn, 'merge', [st]);
+                });
+                // Joylanmaganlarga o'tkazilgan birlik — "Joylash uchun tanlang": karta tanlanadi, guruh ustuni belgilanadi va jadval unga suriladi.
+                document.querySelectorAll('#cardPanel [data-cleared-select]').forEach(b => b.onclick = ev => {
+                    ev.stopPropagation();
+                    const c = cards.find(x => x.id === +b.dataset.clearedSelect);
+                    if (!c) return;
+                    const first = unitOf(c, curWeek)[0] || c;
+                    selected = first;
+                    renderPanel(); renderGrid();
+                    scrollToPickColumn(first);
                 });
                 // Bo'lingan birlik nomi — jadvaldagi birinchi bo'lagi katagiga.
                 document.querySelectorAll('#cardPanel [data-split-go]').forEach(a => a.onclick = ev => {
@@ -14920,6 +15065,7 @@
                     + '<div class="rmv-panel" data-rmv-panel hidden><div class="rmv-tools">'
                     + '<input type="search" data-rmv-q placeholder="Xona qidirish…" aria-label="Xona qidirish" autocomplete="off">'
                     + '<label><input type="checkbox" data-rmv-free> Faqat bo‘shlar</label></div>'
+                    + '<div class="rmv-head" data-rmv-head></div>'
                     + '<div class="rm-list" role="listbox" aria-label="Xonalar" data-rmv-list></div></div></div>'
                     + '<label data-rmv-reason' + hideSel + '>Sabab (so‘rov uchun majburiy)<textarea name="reason" maxlength="1000" rows="2"></textarea></label>'
                     + '<p role="alert" class="text-sm"></p>'
@@ -14979,6 +15125,7 @@
                         + ' aria-selected="' + (roomInput.value === code) + '"' + (off ? ' aria-disabled="true" style="opacity:.55"' : '')
                         + (roomTitle(r) ? ' title="' + esc(roomTitle(r)) + '"' : '') + '>'
                         + '<b>' + esc(label) + '</b>'
+                        + (code !== '' && roomBuildingTag(r) ? '<span class="rm-bld" data-rmv-bld>' + esc(roomBuildingTag(r)) + '</span>' : '')
                         + (r && r.free && r.why ? '<span class="rm-why">' + esc(r.why) + '</span>' : '')
                         + (r && code !== '' ? '<span class="rm-vol">' + (r.volume ? r.volume + ' o‘rin' : 'sig‘imi kiritilmagan') + '</span>' : '')
                         + roomState(r) + (code === '' && keepProblem() ? '<span class="rm-err">' + esc(keepProblem()) + '</span>' : '') + '</div>';
@@ -14988,7 +15135,7 @@
                     const q = qEl.value, cur = roomsAll.find(r => r.current);
                     const rest = roomsAll.filter(r => !r.current && (!freeEl.checked || r.free) && roomMatches(r, q, true));
                     listEl.innerHTML = roomRow(cur, '', keepText())
-                        + rest.slice(0, roomShown).map(r => roomRow(r, r.code, r.name)).join('')
+                        + roomListGrouped(rest.slice(0, roomShown), r => roomRow(r, r.code, r.name), g => '<div class="rm-group" data-rmv-group>' + esc(g) + '</div>')
                         + (rest.length > roomShown ? '<button type="button" class="rmv-more" data-rmv-more>Ko‘proq ko‘rsatish (yana ' + (rest.length - roomShown) + ' ta)</button>' : '')
                         + (!rest.length && (q || freeEl.checked) ? '<div class="p-3 text-sm text-slate-400">Xona topilmadi</div>' : '');
                     roomActive = -1;
@@ -15035,9 +15182,11 @@
                     chooseRoom(ev.target.closest('.rm-row'));
                 };
                 // Tanlov saqlanadi; tanlangan xona yangi vaqtda bo'sh bo'lmasa — "hozirgi xona"ga qaytadi.
-                const fillRooms = (list, parts) => {
+                const fillRooms = (list, parts, when) => {
                     roomsAll = list || [];
                     partRooms = parts || [];
+                    const h = m.querySelector('[data-rmv-head]');
+                    if (h) h.textContent = roomsAll.length ? roomListHeadText(when, roomsAll) : '';
                     if (roomInput.value && !roomsAll.some(r => r.code === roomInput.value && r.free)) roomInput.value = '';
                     pickLabel();
                     if (!panel.hidden) renderRooms();
@@ -15055,7 +15204,7 @@
                     try { j = await api(BASE + '/cards/' + c.id + '/responsible-move/check', 'POST', body()); }
                     catch (e) { j = e.data || { message: e.message }; ok = false; }
                     if (my !== seq || !m.isConnected) return;
-                    if (j.rooms) fillRooms(j.rooms, j.part_rooms);
+                    if (j.rooms) fillRooms(j.rooms, j.part_rooms, j.when);
                     mode = ok ? j.mode : null;
                     // "Har bo'lak o'z xonasida" tanlangan, biror bo'lak xonasi yaroqsiz — qo'llab bo'lmaydi (xona tanlash kerak).
                     // Pick rejimida sariq katak (mos bo'sh xona yo'q) — xona tanlanmaguncha joylab bo'lmaydi.

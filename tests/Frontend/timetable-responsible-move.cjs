@@ -293,12 +293,14 @@ const rows = page => page.$$eval('#respMove [data-rmv-list] .rm-row', xs => xs.m
     await page.fill('#respMove [data-rmv-q]', '505');
     assert.deepEqual((await rows(page)).map(r => r.slice(0, 2)), [['', false], ['505', true]]);
     await page.click('#respMove [data-close]');
-    // Boshqa oynalar (umumiy roomMatches) — kod bo'yicha ham izlaydi; faqat fan mas'uli oynasi nameOnly bilan.
+    // Boshqa oynalar (umumiy roomMatches) — kod bo'yicha ham izlaydi; server ro'yxatlari (nameOnly) — faqat nom va bino.
     const matches = new Function(search + '\nreturn roomMatches;')();
     assert.equal(matches({ code: '510', name: '205-xona' }, '510'), true);
     assert.equal(matches({ code: '510', name: '205-xona' }, '510', true), false);
     assert.equal(matches({ code: 'R9', name: '3-bino, 510-xona' }, '510', true), true);
-    assert.equal((source.match(/roomMatches\([^)]*, true\)/g) || []).length, 1);
+    // Server ro'yxatlari (fan mas'uli oynasi, "Boshqa xona tanlash", sariq katak — hafta) — nom va bino bo'yicha, kod emas.
+    assert.equal(matches({ code: 'R9', name: '205-xona', building: 'Klinika' }, 'klinika', true), true);
+    assert.equal((source.match(/roomMatches\([^)]*, true\)/g) || []).length, 3);
 
     // 6) openModal: fan mas'uli — shu oyna (kafedra mudiri oynasi emas).
     assert.match(source, /if \(TIMETABLE_ROLE === 'fan_masuli'\) \{ openResponsibleMove\(c\); return; \}/);

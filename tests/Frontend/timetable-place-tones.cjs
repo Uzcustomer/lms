@@ -18,6 +18,7 @@ const verdict = cut('            // Karta uzunligi yarim-slot birligida', '     
 const picker = cut('            // ===== Sariq katak (faqat xona band)', "            // ===== Parallel bo'laklar");
 const drag = cut('            // Sudrash nishoni rangi', "            // Sudrash paytida tushadigan vaqt oralig'i");
 const cause = cut('            // "Joylash uchun tanlash": sichqoncha band katakda', "            // Bittasi ko'chirilgach");
+const roomList = cut("            // Server xonalar ro'yxati (room-options", "            // Ma'ruza yorlig'i");
 
 const page0 = `<!doctype html><html><head><style>${css}</style></head><body><table id="grid"><tbody><tr>
     <td data-day="1" data-pair="1" id="cell"></td>
@@ -64,6 +65,7 @@ const page0 = `<!doctype html><html><head><style>${css}</style></head><body><tab
         if (r && r.status >= 400) { const e = new Error(r.j.error); e.status = r.status; e.data = r.j; throw e; }
         return r ? r.j : { ok: true };
     }
+${roomList}
 ${verdict}
 ${drag}
 ${cause}
@@ -154,17 +156,31 @@ const ROOMS = [
     await page.hover('#grid [data-chip="99"]');
     assert.equal(await page.$$eval('#grid .tt-cause-teacher, #grid .tt-cause-group, #grid .tt-cause-room', els => els.length), 0);
 
-    // 4) Sariq katak (1-kun, 5-katak): bo'sh va sig'adigan xonalar — reyting bo'yicha (R4 band, R3 kichik, R6 sig'imsiz, R1 hozirgisi — yo'q).
+    // 4) Sariq katak (1-kun, 5-katak), tanlangan hafta: server ro'yxati (room-options) — sarlavha (vaqt, bo'sh / band soni), bino guruhlari,
+    //    band / sig'maydi — kulrang, tanlab bo'lmaydi; hozirgi xona ro'yxatda yo'q; qidiruv; tanlansa — shu hafta istisnosi shu xona bilan.
     const setNext = obj => page.evaluate(o => { window.next = o; window.calls = []; window.toasts = []; window.renders = 0; }, obj);
-    await setNext({ '/auds': [{ j: ROOMS }], '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: { order: ['R4', 'R7', 'R2'], why: { R7: 'odatdagi xona' } } } }],
-        '/admin/timetable/cards/1/week-override': [{ j: { ok: true } }] });
+    const OPTS = { when: 'Dushanba, 09.11 12:00–13:20', rooms: [
+        { code: 'R1', name: '101-xona', volume: 30, free: false, kind: 'busy', current: true, group: 'Shu bino: A bino', building: 'A bino' },
+        { code: 'R7', name: '107-xona', volume: 25, free: true, kind: null, why: 'shu qavat', group: 'Shu bino: A bino', building: 'A bino', same_building: true },
+        { code: 'R4', name: '104-xona', volume: 40, free: false, kind: 'busy', busy: 'Band: Fan17', group: 'Shu bino: A bino', building: 'A bino', same_building: true },
+        { code: 'R2', name: '102-xona', volume: 30, free: true, kind: null, group: 'B bino', building: 'B bino' },
+        { code: 'R3', name: '103-xona', volume: 5, free: false, kind: 'capacity', cap: { over: 15 }, group: 'B bino', building: 'B bino' },
+        { code: 'R6', name: '106-xona', volume: 0, free: true, kind: null, group: "Bino ko'rsatilmagan", building: '' }] };
+    await setNext({ '/admin/timetable/cards/1/room-options': [{ j: OPTS }], '/admin/timetable/cards/1/week-override': [{ j: { ok: true } }] });
     await page.evaluate(() => { window.setSelected(window.cards[0]); window.openPlaceRoomPick(window.cards[0], 1, 5); });
     await page.waitForSelector('#ttPlaceRoom [data-pr-code]');
-    assert.deepEqual(await page.$$eval('#ttPlaceRoom [data-pr-code]', els => els.map(el => el.dataset.prCode)), ['R7', 'R2']);
+    assert.deepEqual(await page.$$eval('#ttPlaceRoom [data-pr-code]', els => els.map(el => [el.dataset.prCode, el.disabled])),
+        [['R7', false], ['R4', true], ['R2', false], ['R3', true], ['R6', false]]);
+    assert.deepEqual(await page.$$eval('#ttPlaceRoom [data-pr-group]', els => els.map(el => el.textContent)), ['Shu bino: A bino', 'B bino', "Bino ko'rsatilmagan"]);
+    assert.equal(await page.textContent('#ttPlaceRoom [data-pr-what]'), "Dushanba, 09.11 12:00–13:20 uchun: 3 bo'sh, 1 band · 1 sig'maydi");
     assert.match(await page.textContent('#ttPlaceRoom [data-pr-why]'), /^Auditoriya band: 101-xona/);
     assert.match(await page.textContent('#ttPlaceRoom'), /Farmakologiya · g1 → Dushanba 12:00–14:00 · 10-hafta \(faqat shu hafta\)/);
-    assert.match(await page.textContent('#ttPlaceRoom [data-pr-code="R7"]'), /107-xona.*odatdagi xona.*25 o‘rin/);
-    assert.deepEqual((await page.evaluate(() => window.calls)).map(c => c.url.split('?')[0]), ['/auds', '/admin/timetable/boards/7/unit-busy']);
+    assert.match(await page.textContent('#ttPlaceRoom [data-pr-code="R7"]'), /107-xona.*A bino.*shu qavat.*25 o‘rin/);
+    assert.match(await page.textContent('#ttPlaceRoom [data-pr-code="R4"]'), /Band: Fan17/);
+    assert.deepEqual((await page.evaluate(() => window.calls)).map(c => c.url), ['/admin/timetable/cards/1/room-options?week=10&day=1&pair=5']);
+    // Band qator bosilmaydi.
+    await page.click('#ttPlaceRoom [data-pr-code="R4"]', { force: true });
+    assert.deepEqual((await page.evaluate(() => window.calls)).filter(c => c.method === 'POST'), []);
     // Qidiruv.
     await page.fill('#ttPlaceRoom [data-pr-q]', '102');
     assert.deepEqual(await page.$$eval('#ttPlaceRoom [data-pr-code]', els => els.map(el => el.dataset.prCode)), ['R2']);
@@ -178,7 +194,7 @@ const ROOMS = [
 
     // 5) Shablon (hafta tanlanmagan): bitta so'rov — place + auditorium_code (faqat shu karta); assign-room yo'q.
     await page.evaluate(() => { delete window.overrides['1|10']; window.setWeek(0); });
-    await setNext({ '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: null } }], '/admin/timetable/cards/1/place': [{ j: { ok: true, auditorium_code: 'R2' } }] });
+    await setNext({ '/auds': [{ j: ROOMS }], '/admin/timetable/boards/7/unit-busy': [{ j: { room_rank: null } }], '/admin/timetable/cards/1/place': [{ j: { ok: true, auditorium_code: 'R2' } }] });
     await page.evaluate(() => window.openPlaceRoomPick(window.cards[0], 1, 5));
     await page.waitForSelector('#ttPlaceRoom [data-pr-code]');
     assert.match(await page.textContent('#ttPlaceRoom'), /barcha haftalar \(shu kartaning xonasi almashtiriladi\)/);

@@ -92,7 +92,13 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
     const [key] = [...units.keys()];
     ctx.fixReply = { ok: true, done: 0, failed: [{ group: 'd1/d26-03a', subject: base.subject_name, day: 'Seshanba', card_ids: [708676, 708674, 708675],
         error: "6 soat sig'maydi: 13:30 dan keyin bo'sh joy yo'q — Guruh band: d1/d26-03a — Anatomiya" }] };
+    // "Bir kunga sig'maydi…" tasdig'i — "Yo'q" (hozirgidek: sabab qatorda).
+    const asked = [];
+    ctx.ttYesNo = async (t, b) => { asked.push([t, b]); return false; };
     await ctx.runUnitFix(null, 'merge', [units.get(key)]);
+    assert.deepEqual(asked, [["Bir kunga sig'maydi. Darsni shu hafta jadvalidan olib, joylanmaganlarga o'tkazaymi?",
+        "6 soat sig'maydi: 13:30 dan keyin bo'sh joy yo'q — Guruh band: d1/d26-03a — Anatomiya"]]);
+    assert.equal(calls.filter(x => x[0] === '/boards/7/unit-fix').length, 1);
     assert.deepEqual(calls.find(x => x[0] === '/boards/7/unit-fix'), ['/boards/7/unit-fix', { week: 11, action: 'merge', card_ids: [708676, 708674, 708675] }]);
     assert.ok(calls.some(x => x[0] === 'reload'));
     assert.match(ctx.splitHeadHtml(units), /pn-split-err[^>]*>✖ 6 soat sig'maydi: 13:30 dan keyin bo'sh joy yo'q — Guruh band/);
@@ -103,6 +109,39 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
         e.data = { ok: false, done: 0, failed: [{ group: 'd1/d26-03a', subject: base.subject_name, card_ids: [708676], error: "6 soat sig'maydi (422)" }] }; throw e; };
     await ctx.runUnitFix(null, 'merge', [units.get(key)]);
     assert.match(ctx.splitHeadHtml(units), /✖ 6 soat sig'maydi \(422\)/);
+    // 3b2) "Ha" — ikkinchi so'rov unplace_if_no_fit bilan; birlik joylanmaganlarga o'tdi: panel tepasida xabar, sabab bloklari va
+    //      "Joylash uchun tanlang" (birlik joylanguncha / hafta almashguncha).
+    let n = 0;
+    ctx.api = async (url, method, body) => {
+        calls.push([url, body && JSON.parse(JSON.stringify(body))]);
+        if (!n++) { const e = new Error("Yaxlitlab bo'lmadi"); e.status = 422;
+            e.data = { ok: false, done: 0, failed: [{ group: 'd1/d26-03a', subject: base.subject_name, card_ids: [708676, 708674, 708675], error: "6 soat sig'maydi" }] }; throw e; }
+        ['708676', '708674', '708675'].forEach(id => { ctx.overrides[id + '|11'] = { day: null, pair: null, cancelled: true }; });
+        return { ok: true, done: 1, failed: [], message: "Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: 6 soat sig'maydi). Joylash uchun tanlang.",
+            cleared: [{ group: 'd1/d26-03a', text: "Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: 6 soat sig'maydi).",
+                conflict_items: [{ kind: 'group', who: 'd1/d26-03a', groups: ['d1/d26-03a'], subject: 'Anatomiya', time: '13:30–14:50', day: 3 }] }] };
+    };
+    ctx.ttYesNo = async () => true;
+    ctx.ttToast = (h, t) => calls.push(['toast', h, t]);
+    calls.length = 0;
+    await ctx.runUnitFix(null, 'merge', [units.get(key)]);
+    const fixCalls = calls.filter(x => x[0] === '/boards/7/unit-fix');
+    assert.deepEqual(fixCalls.map(x => x[1]), [{ week: 11, action: 'merge', card_ids: [708676, 708674, 708675] },
+        { week: 11, action: 'merge', card_ids: [708676, 708674, 708675], unplace_if_no_fit: true }]);
+    assert.ok(calls.some(x => x[0] === 'reload'));
+    assert.ok(calls.some(x => x[0] === 'toast' && /joylanmaganlarga o'tkazildi/.test(x[1]) && x[2] === 'warn'));
+    const ch = ctx.unitClearedHtml();
+    assert.match(ch, /data-pn-cleared/);
+    assert.match(ch, /Yaxlitlab bo'lmadi — d1\/d26-03a joylanmaganlarga o'tkazildi \(sabab: 6 soat sig'maydi\)\./);
+    assert.match(ch, /data-cleared-select="708676"[^>]*>Joylash uchun tanlang/);
+    assert.match(ch, /Guruh band/);
+    // Boshqa haftada — ko'rinmaydi; birlik qayta joylansa — yo'qoladi.
+    ctx.curWeek = 12;
+    assert.equal(ctx.unitClearedHtml(), '');
+    ctx.curWeek = 11;
+    ctx.overrides['708676|11'] = { day: 3, pair: 1, cancelled: false };
+    assert.equal(ctx.unitClearedHtml(), '');
+    ['708676', '708674', '708675'].forEach(id => { delete ctx.overrides[id + '|11']; });
     // 3c) Tasdiq rejimi (pending_approval): "Yaxlitlandi: 0 ta" oynasi chiqmaydi; qatorda "tasdiq kutilmoqda (№130513)", tugma o'chiq.
     ctx.api = api0;
     ctx.fixReply = { ok: true, pending_approval: true, change_request_id: 130513, message: "O'zgarish registrator ofisi va o'quv bo'limiga tasdiqlash uchun yuborildi." };

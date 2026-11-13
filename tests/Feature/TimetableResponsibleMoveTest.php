@@ -378,10 +378,14 @@ it('fan mas\'uli oynasida xonalar tartibi — yaqinlik birinchi (bino → bo\'li
     $rooms = collect(rmCheck($s, $s['a'], ['day' => 2, 'pair' => 3])->assertOk()->json('rooms'))->keyBy('code');
     $order = $rooms->keys()->filter(fn ($c) => str_starts_with($c, 'S') && $c !== 'S7')->values()->all();
 
-    // Boshqa binolar: qavat farqi hisobga olinmaydi (X2 — 2-qavat, hozirgidek; X1 — 1-qavat): nomi bo'yicha.
+    // Pog'onalar: shu bo'lim + qavat → shu qavat → shu bo'lim → shu bino; boshqa binolar — bino guruhlari nomi bo'yicha ("7-bino",
+    // "Tibbiyot klasteri"), binosi aniqlanmagan (X1) — "Bino ko'rsatilmagan", oxirida.
     expect($rooms['S7']['why'])->toBe('shu qavat')
-        ->and($rooms->keys()->search('X1'))->toBeLessThan($rooms->keys()->search('X2'))
-        ->and($order)->toBe(['S0', 'S1', 'S2', 'S3', 'S4', 'S6', 'S5'])
+        ->and($rooms->keys()->search('X2'))->toBeLessThan($rooms->keys()->search('X1'))
+        ->and($order)->toBe(['S0', 'S1', 'S3', 'S2', 'S4', 'S5', 'S6'])
+        ->and([$rooms['S0']['group'], $rooms['S4']['group'], $rooms['S5']['group'], $rooms['S6']['group'], $rooms['X2']['group'], $rooms['X1']['group']])
+        ->toBe(['Shu bino: 3-bino', 'Shu bino: 3-bino', '7-bino', 'Tibbiyot klasteri', '9-bino', "Bino ko'rsatilmagan"])
+        ->and([$rooms['S0']['same_building'], $rooms['S5']['same_building'], $rooms['S5']['building']])->toBe([true, false, '7-bino'])
         ->and($rooms['S0']['current'])->toBeTrue()
         ->and([$rooms['S1']['why'], $rooms['S2']['why'], $rooms['S3']['why'], $rooms['S4']['why'], $rooms['S6']['why'], $rooms['S5']['why']])
         ->toBe(['shu qavat', "shu bo'lim", 'shu qavat · shu fan odatda shu yerda', 'shu bino', 'shu fan odatda shu yerda', null]);

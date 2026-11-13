@@ -24,6 +24,9 @@ use Illuminate\Support\Facades\Schema;
  */
 trait TimetableWeeklyUnits
 {
+    /** @var array<string, array>|null Yaxlitlash davomida bo'laklarning to'qnashuv holati ("id|xona"); null — kesh o'chiq. */
+    private ?array $unitStateMemo = null;
+
     /** Birlik kaliti: guruh, fan, tur, o'qituvchi (qamrovi bilan). Ma'ruza — karta o'zi. */
     private function weeklyUnitKey(TimetableCard $c): string
     {
@@ -260,7 +263,7 @@ trait TimetableWeeklyUnits
      * $roomCode — barcha bo'laklar shu xona bilan (shu haftaga; "Boshqa xona bilan joylash").
      */
     private function unitPlanAt(TimetableCard $card, Collection $cards, int $week, int $day, int $pair, bool $external = false, ?string $roomCode = null,
-        ?array $order = null): array
+        ?array $order = null, bool $explain = true): array
     {
         $board = $card->board;
         $pieces = $this->unitPieces($cards, $week, $external);
@@ -294,7 +297,10 @@ trait TimetableWeeklyUnits
             if ($external) {
                 return $this->findExternalConflicts($piece, $day, $at, array_keys($ignore));
             }
-            $state = $this->calendarConflictState($piece, $roomCode) + ['ignore' => $ignore];
+            // Yaxlitlash ko'p variantni sinaydi (hech narsa yozmasdan) — to'qnashuv holati bo'lak bo'yicha bir marta (unitStateMemo).
+            $state = $this->unitStateMemo !== null
+                ? ($this->unitStateMemo[$piece->id . '|' . $roomCode] ??= $this->calendarConflictState($piece, $roomCode))
+                : $this->calendarConflictState($piece, $roomCode);
             $state['ignore'] = $ignore;
 
             return $week ? $this->findWeekConflicts($piece, $week, $day, $at, 0, $state, $roomCode) : $this->findConflicts($piece, $day, $at, 0, $state);
@@ -313,6 +319,9 @@ trait TimetableWeeklyUnits
         }
         if (!$errors) {
             return [[], $plan];
+        }
+        if (!$explain) {
+            return [$errors, []];
         }
         // Qancha soat bo'sh: boshlanishdan birinchi band yarim-slotgacha (birinchi bo'lak bilan 1 soatlik sinov).
         $free = 0;
@@ -580,7 +589,7 @@ trait TimetableWeeklyUnits
     {
         $data = $request->validate(['week' => 'required|integer|min:1|max:30', 'action' => 'required|in:complete,clear,merge',
             'card_ids' => 'nullable|array', 'card_ids.*' => 'integer', 'faculty_names' => 'nullable|array', 'specialty_names' => 'nullable|array',
-            'courses' => 'nullable|array']);
+            'courses' => 'nullable|array', 'unplace_if_no_fit' => 'nullable|boolean']);
         if ($denied = $this->weeklyLayerDenied($request, 'internal')) {
             return $denied;
         }
@@ -591,10 +600,36 @@ trait TimetableWeeklyUnits
         }
         $scope = array_filter([$data['faculty_names'] ?? null, $data['specialty_names'] ?? null, $data['courses'] ?? null]) ? $this->scopeSets($data) : null;
         $only = !empty($data['card_ids']) ? array_flip(array_map('intval', $data['card_ids'])) : null;
+        // Yaxlitlab bo'lmasa — shu haftada joydan olish (foydalanuvchi tasdiqlagan; faqat aniq birlik, merge bilan).
+        $unplace = $merge && $request->boolean('unplace_if_no_fit');
+        // Yaxlitlash — doska qulfi ostida: tekshiruv va yozish orasida parallel o'zgarish kirmasin.
+        return $merge ? DB::transaction(function () use ($request, $board, $data, $week, $merge, $scope, $only, $unplace) {
+            TimetableBoard::whereKey($board->id)->lockForUpdate()->first();
+
+            return $this->unitFixRun($request, $board, $data, $week, $merge, $scope, $only, $unplace);
+        }) : $this->unitFixRun($request, $board, $data, $week, $merge, $scope, $only, false);
+    }
+
+    /**
+     * unitFix bajaruvchisi. $unplace (merge + unplace_if_no_fit): sig'magan birlik shu haftada joydan olinadi ("yaxlit bo'shatish" kabi —
+     * shablon va boshqa haftalar o'zgarmaydi), javobda cleared [{group, subject, reason, conflict_items, card_ids, text}] va tarix belgisi.
+     */
+    private function unitFixRun(Request $request, TimetableBoard $board, array $data, int $week, bool $merge, ?array $scope, ?array $only, bool $unplace)
+    {
         $done = 0;
         $failed = [];
         $merged = [];
+        $cleared = [];
         $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
+        $clear = function (Collection $cards) use ($week) {
+            $plan = [];
+            foreach ($this->unitPieces($cards, $week) as $id => $p) {
+                if ($p['active'] && $p['day']) {
+                    $plan[$id] = null;
+                }
+            }
+            $this->unitWrite($cards, $week, null, $plan);
+        };
         foreach ($this->partialUnitList($board, [$week], $scope, $merge ? ['split'] : ['partial']) as $u) {
             if ($only !== null && !array_intersect_key(array_flip($u['card_ids']), $only)) {
                 continue;
@@ -611,17 +646,21 @@ trait TimetableWeeklyUnits
                 continue;
             }
             if ($data['action'] === 'clear') {
-                $plan = [];
-                foreach ($this->unitPieces($cards, $week) as $id => $p) {
-                    if ($p['active'] && $p['day']) {
-                        $plan[$id] = null;
-                    }
-                }
-                $this->unitWrite($cards, $week, null, $plan);
+                $clear($cards);
                 $done++;
                 continue;
             }
             $result = $merge ? $this->unitMergePlan($card, $cards, $week) : $this->unitCompletePlan($card, $cards, $week);
+            if ($result[0] && $unplace) {
+                // "Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: …)".
+                $clear($cards);
+                $done++;
+                $reason = implode(' · ', $result[0]);
+                $cleared[] = ['group' => $u['group'], 'subject' => $u['subject'], 'reason' => $reason, 'conflict_items' => $result[3] ?? [],
+                    'card_ids' => $u['card_ids'], 'unit' => $u['unit'],
+                    'text' => "Yaxlitlab bo'lmadi — " . $u['group'] . ' joylanmaganlarga o\'tkazildi (sabab: ' . $reason . ').'];
+                continue;
+            }
             if ($result[0]) {
                 $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'], 'error' => implode(' · ', $result[0]),
                     'card_ids' => $u['card_ids'], 'unit' => $u['unit'], 'conflict_items' => $result[3] ?? []];
@@ -643,8 +682,17 @@ trait TimetableWeeklyUnits
             return response()->json(['error' => 'Yaxlitlab bo\'lmadi: ' . $failed[0]['error'], 'ok' => false, 'done' => 0, 'failed' => $failed], 422);
         }
 
+        if ($cleared) {
+            // Tarix yozuvida ham ko'rinsin (TimetableAssignmentAccess::runRecorded — timetable.history_notes).
+            $request->attributes->set('timetable.history_notes', array_merge((array) $request->attributes->get('timetable.history_notes', []),
+                array_map(fn ($c) => "Yaxlitlab bo'lmadi — " . $c['group'] . " joylanmaganlarga o'tkazildi (" . $c['subject'] . ')', $cleared)));
+        }
+        $message = $merged ? 'Yaxlitlandi: ' . implode('; ', array_column($merged, 'text'))
+            : ($cleared ? implode(' ', array_column($cleared, 'text')) . ' Joylash uchun tanlang.' : null);
+
         return response()->json(['ok' => true, 'done' => $done, 'failed' => $failed]
-            + ($merge && $merged ? ['merged' => $merged, 'message' => 'Yaxlitlandi: ' . implode('; ', array_column($merged, 'text'))] : []));
+            + ($merge && $merged ? ['merged' => $merged] : []) + ($cleared ? ['cleared' => $cleared] : [])
+            + ($merge && $message !== null ? ['message' => $message] : []));
     }
 
     /**
@@ -675,9 +723,12 @@ trait TimetableWeeklyUnits
     }
 
     /**
-     * Bo'lingan birlikni yaxlitlash rejasi: kun — bo'laklar eng ko'p soati turgan kun (teng bo'lsa — haftaning oldingi kuni); avval shu
-     * kundagi birinchi bo'lak boshidan (shu kundagi bo'laklar joyida, qolganlari ketidan), sig'masa — blok oxiri shu kundagi oxirgi bo'lak
-     * oxiriga to'g'ri keladigan joydan (qolganlari oldidan). Bandlik unitPlanAt bilan (o'z bo'laklari hisobga olinmaydi). [xatolar, plan, kun].
+     * Bo'lingan birlikni yaxlitlash rejasi. Sinaladi: bo'laklar turgan har kun × shu kunning har para boshlanishi (unitPairStarts) va
+     * bo'laklarning hozirgi boshlanishlari (joyida qoldirish varianti doim sinaladi) × ikki tartib (shu kundagi bo'laklar o'z tartibida,
+     * boshqa kundagilari ulardan keyin yoki oldin). Bandlik — unitPlanAt (o'z bo'laklari hisobga olinmaydi). Toza variantlardan eng kam
+     * surilgani: 1) joyi o'zgaradigan soatlar eng kami; 2) blok boshining shu kundagi birinchi bo'lakdan siljishi kichigi; 3) eng ko'p soatli
+     * kun (teng bo'lsa — haftaning oldingisi); 4) oldingi vaqt. Hech biri toza bo'lmasa — sabab eng ko'p soatli kundagi tabiiy variantdan
+     * (birinchi bo'lak boshidan, shu kundagilar oldin) va sinalgan kunlar. Qaytaradi: [xatolar, plan, kun, conflict_items].
      */
     private function unitMergePlan(TimetableCard $card, Collection $cards, int $week): array
     {
@@ -686,28 +737,115 @@ trait TimetableWeeklyUnits
         foreach ($pieces as $p) {
             $hours[(int) $p['day']] = ($hours[(int) $p['day']] ?? 0) + $p['card']->lenHalf();
         }
-        ksort($hours);
-        $day = (int) array_search(max($hours), $hours, true);
+        // Kunlar tartibi: eng ko'p soatli birinchi, teng bo'lsa — haftaning oldingi kuni.
+        $days = array_keys($hours);
+        usort($days, fn ($a, $b) => [-$hours[$a], $a] <=> [-$hours[$b], $b]);
         $sorted = array_values($pieces);
         usort($sorted, fn ($a, $b) => [(int) $a['day'], (int) $a['pair'], $a['card']->id] <=> [(int) $b['day'], (int) $b['pair'], $b['card']->id]);
+        $ids = fn (array $list) => array_map(fn ($p) => (int) $p['card']->id, $list);
+        $lenOf = [];
+        $was = [];
+        foreach ($sorted as $p) {
+            $lenOf[(int) $p['card']->id] = $p['card']->lenHalf();
+            $was[(int) $p['card']->id] = [(int) $p['day'], (int) $p['pair']];
+        }
+        $total = array_sum($lenOf);
+        $rows = (int) $this->cardGrid($card->board, $card)['pairs'];
+        $starts = $this->unitPairStarts($card->board, $rows);
+        $best = null;
+        $first = null;
+        $names = $card->board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
+        $this->unitStateMemo = [];
+        try {
+            foreach ($days as $rank => $day) {
+                $on = array_values(array_filter($sorted, fn ($p) => (int) $p['day'] === $day));
+                $other = array_values(array_filter($sorted, fn ($p) => (int) $p['day'] !== $day));
+                $firstAt = (int) $on[0]['pair'];
+                $end = max(array_map(fn ($p) => (int) $p['pair'] + $p['card']->lenHalf(), $on));
+                $orders = [array_merge($ids($on), $ids($other)), array_merge($ids($other), $ids($on))];
+                // Boshlanishlar: para chegaralari + hozirgi joylar (birinchi bo'lak boshi, blok oxiri oxirgi bo'lak oxiriga tekislangani).
+                $cands = [];
+                foreach (array_unique(array_merge($starts, [$firstAt, $end - $total])) as $at) {
+                    if ($at >= 1 && $at + $total - 1 <= $rows) {
+                        foreach ($orders as $oi => $order) {
+                            $cost = 0;
+                            $off = 0;
+                            foreach ($order as $id) {
+                                if ($was[$id] !== [$day, $at + $off]) {
+                                    $cost += $lenOf[$id];
+                                }
+                                $off += $lenOf[$id];
+                            }
+                            // Siljish: shu kundagilar oldin — birinchi bo'lak boshidan; keyin — blok oxiri oxirgi bo'lak oxiriga tekislanganidan.
+                            $ref = $oi === 0 ? $firstAt : $end - $total;
+                            $cands[] = [[$cost, abs($at - $ref), $rank, $oi, $at], $at, $order];
+                        }
+                    }
+                }
+                usort($cands, fn ($x, $y) => $x[0] <=> $y[0]);
+                foreach ($cands as [$key, $at, $order]) {
+                    if ($best !== null && ($key <=> $best[0]) >= 0) {
+                        break;   // bu kunda yaxshirog'i qolmadi
+                    }
+                    [$errors, $plan] = $this->unitPlanAt($card, $cards, $week, $day, $at, false, null, $order, false);
+                    if (!$errors) {
+                        $best = [$key, $plan, $day];
+                        break;
+                    }
+                }
+            }
+        } finally {
+            $this->unitStateMemo = null;
+        }
+        if ($best !== null) {
+            return [[], $best[1], $best[2]];
+        }
+        // Sabab: eng ko'p soatli kun, birinchi bo'lak boshidan (shu kundagilar oldin; kun oxiri bo'lsa — oxiriga tekislangani).
+        $day = $days[0];
         $on = array_values(array_filter($sorted, fn ($p) => (int) $p['day'] === $day));
         $other = array_values(array_filter($sorted, fn ($p) => (int) $p['day'] !== $day));
-        $ids = fn (array $list) => array_map(fn ($p) => (int) $p['card']->id, $list);
-        $total = array_sum(array_map(fn ($p) => $p['card']->lenHalf(), $pieces));
-        $start = (int) $on[0]['pair'];
         $end = max(array_map(fn ($p) => (int) $p['pair'] + $p['card']->lenHalf(), $on));
-        $first = null;
-        foreach ([[$start, array_merge($ids($on), $ids($other))], [$end - $total, array_merge($ids($other), $ids($on))]] as [$at, $order]) {
+        foreach ([[(int) $on[0]['pair'], array_merge($ids($on), $ids($other))], [$end - $total, array_merge($ids($other), $ids($on))]] as [$at, $order]) {
             if ($at < 1) {
                 continue;
             }
-            [$errors, $plan, $items] = $this->unitPlanAt($card, $cards, $week, $day, $at, false, null, $order) + [2 => []];
-            if (!$errors) {
-                return [[], $plan, $day];
+            [$errors, , $items] = $this->unitPlanAt($card, $cards, $week, $day, $at, false, null, $order) + [2 => []];
+            if ($errors) {
+                $first ??= [$errors, $items];
             }
-            $first ??= [$errors, $items];
+        }
+        $tried = implode(', ', array_map(fn ($d) => $names[$d - 1] ?? ($d . '-kun'), $days));
+        $errors = $first[0] ?? ['joy topilmadi'];
+        $errors[] = "Bir kunga sig'maydi (sinaldi: {$tried} — har para boshidan).";
+
+        return [$errors, [], $day, $first[1] ?? []];
+    }
+
+    /**
+     * Para boshlanadigan qatorlar (yarim-slot) — qo'ng'iroq jadvalidan, hemisSlotTimes bilan bir xil bo'linish: 40 daqiqadan uzun para — ikki
+     * qator (birinchisi boshlanish), qisqasi — bitta; jadval allaqachon yarim paralardan iborat bo'lsa (10+ element) — toq qatorlar.
+     */
+    private function unitPairStarts(TimetableBoard $board, int $rows): array
+    {
+        $bell = $board->bell_schedule ?: TimetableBoard::defaultBellSchedule((int) $board->pairs_per_day);
+        $pairs = array_values(array_filter((array) $bell, fn ($it) => ($it['type'] ?? 'pair') === 'pair' && !empty($it['start']) && !empty($it['end'])));
+        $toMin = fn ($t) => (int) substr($t, 0, 2) * 60 + (int) substr($t, 3, 2);
+        $out = [];
+        if (count($pairs) >= 10) {
+            for ($r = 1; $r <= $rows; $r += 2) {
+                $out[] = $r;
+            }
+
+            return $out;
+        }
+        $r = 1;
+        foreach ($pairs as $p) {
+            if ($r <= $rows) {
+                $out[] = $r;
+            }
+            $r += $toMin($p['end']) - $toMin($p['start']) <= 45 ? 1 : 2;
         }
 
-        return [$first[0] ?? ['joy topilmadi'], [], $day, $first[1] ?? []];
+        return $out ?: range(1, max(1, $rows));
     }
 }

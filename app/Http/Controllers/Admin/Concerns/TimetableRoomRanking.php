@@ -24,10 +24,11 @@ use Illuminate\Support\Facades\Schema;
  * Har mezon o'zidan pastdagilarning hammasidan ustun (16 / 8 / 4 / 2 / 1). Har daraja ichida xona turi mos kelmagani oxirida
  * (amaliy darsga "Ma'ruza" turidagi zal, ma'ruzaga — boshqa turdagi xona). Xaritalar so'rov davomida bir marta quriladi.
  *
- * Yaqinlik rejimi ($proximity — fan mas'uli "Vaqt va xonani o'zgartirish" oynasi; boshqa oynalar tartibi o'zgarmaydi): avval hozirgi
- * xonaga yaqinlik pog'onasi — shu bino + bo'lim + qavat → shu bino + bo'lim → shu bino + qavat → shu bino → boshqa / noma'lum bino;
- * pog'ona ichida yuqoridagi ballar (odat, o'qituvchi, kafedra, fan), so'ng qavat farqi (faqat shu bino ichida), so'ng sig'im yaqinligi.
- * Bino, bo'lim va qavat — xona nomidan (roomBuilding / roomSection / roomFloor(…, true)); bino nomda bo'lmasa — building_id.
+ * Yaqinlik rejimi ($proximity — fan mas'uli "Vaqt va xonani o'zgartirish" oynasi va "Boshqa xona tanlash"; boshqa oynalar tartibi
+ * o'zgarmaydi): avval hozirgi xonaga yaqinlik pog'onasi — shu bino + bo'lim + qavat → shu bino + qavat → shu bino + bo'lim → shu bino →
+ * boshqa / noma'lum bino; pog'ona ichida yuqoridagi ballar (odat, o'qituvchi, kafedra, fan), so'ng qavat farqi (faqat shu bino ichida),
+ * so'ng sig'im yaqinligi. Bino — roomBuildingKey (building_name, bo'lmasa nomdagi bino; ikkalasi yo'q — building_id); bo'lim va qavat —
+ * xona nomidan (roomSection / roomFloor(…, true)).
  */
 trait TimetableRoomRanking
 {
@@ -273,12 +274,35 @@ trait TimetableRoomRanking
         return null;
     }
 
-    /** Yaqinlik rejimida bir binomi: ikkala nomda bino bo'lsa — nom bo'yicha (building_id bir xil bo'lsa ham); aks holda — building_id (ikkalasida). */
-    private static function roomSameBuilding(?string $curName, string $curId, Auditorium $r): bool
+    /**
+     * Xona binosi kaliti (yaqinlik rejimi va xonalar ro'yxatidagi bino guruhlari — bitta qoida): building_name (HEMIS, normallashtirilgan),
+     * bo'lmasa — nomdagi bino (roomBuilding); ikkalasi ham yo'q — null ("Bino ko'rsatilmagan").
+     */
+    private static function roomBuildingKey(object $r): ?string
     {
-        $rName = self::roomBuilding($r->name);
-        if ($curName !== null && $rName !== null) {
-            return $curName === $rName;
+        $b = KafedraResolver::nameKey((string) ($r->building_name ?? ''));
+
+        return $b !== '' ? $b : self::roomBuilding($r->name ?? null);
+    }
+
+    /** Bino guruhi sarlavhasi: building_name (asl yozilishi), bo'lmasa — nomdagi bino (bosh harf bilan), aks holda — "Bino ko'rsatilmagan". */
+    private static function roomBuildingLabel(object $r): string
+    {
+        $b = trim((string) ($r->building_name ?? ''));
+        if ($b !== '') {
+            return $b;
+        }
+        $n = self::roomBuilding($r->name ?? null);
+
+        return $n !== null ? mb_strtoupper(mb_substr($n, 0, 1)) . mb_substr($n, 1) : "Bino ko'rsatilmagan";
+    }
+
+    /** Yaqinlik rejimida bir binomi: ikkalasida bino kaliti bo'lsa — kalit bo'yicha (roomBuildingKey); biror birida yo'q — building_id (ikkalasida). */
+    private static function roomSameBuilding(?string $curKey, string $curId, Auditorium $r): bool
+    {
+        $rKey = self::roomBuildingKey($r);
+        if ($curKey !== null && $rKey !== null) {
+            return $curKey === $rKey;
         }
 
         return $curId !== '' && (string) $r->building_id !== '' && (string) $r->building_id === $curId;
@@ -301,7 +325,7 @@ trait TimetableRoomRanking
         $curBuilding = $cur && $cur->active && (string) $cur->building_id !== '' ? (string) $cur->building_id : null;
         $curFloor = $cur ? self::roomFloor($cur->name) : null;
         // Yaqinlik rejimi: hozirgi xona — nuqta (faolligidan qat'i nazar); bino nomi / building_id, bo'lim, aniq qavat.
-        $px = $proximity && $cur ? ['b' => self::roomBuilding($cur->name), 'bid' => (string) $cur->building_id, 's' => self::roomSection($cur->name),
+        $px = $proximity && $cur ? ['b' => self::roomBuildingKey($cur), 'bid' => (string) $cur->building_id, 's' => self::roomSection($cur->name),
             'f' => self::roomFloor($cur->name, true)] : null;
         $lesson = ($c->training_type ?? '') === 'lecture' ? 'L' : 'A';
         $students = (int) ($c->students ?? 0);
@@ -333,7 +357,8 @@ trait TimetableRoomRanking
                 $rFloor = $sameB ? self::roomFloor($r->name, true) : null;
                 $sameS = $sameB && $px['s'] !== null && self::roomSection($r->name) === $px['s'];
                 $sameF = $sameB && $px['f'] !== null && $rFloor === $px['f'];
-                $tier = !$sameB ? 4 : ($sameS && $sameF ? 0 : ($sameS ? 1 : ($sameF ? 2 : 3)));
+                // Pog'ona: shu bo'lim + qavat → shu qavat → shu bo'lim → shu bino → boshqa bino.
+                $tier = !$sameB ? 4 : ($sameS && $sameF ? 0 : ($sameF ? 1 : ($sameS ? 2 : 3)));
                 $f['building'] = false;
                 $rows[] = [$r, $f, [
                     $fits ? 0 : 1,
@@ -344,7 +369,7 @@ trait TimetableRoomRanking
                     -(int) ($subjectHere[$code] ?? 0),
                     $rFloor !== null && $px['f'] !== null ? abs($rFloor - $px['f']) : PHP_INT_MAX,
                     $vol > 0 && $students > 0 ? ($vol >= $students ? $vol - $students : PHP_INT_MAX) : PHP_INT_MAX - 1,
-                ], [0 => 'floor', 1 => 'section', 2 => 'floor', 3 => 'building'][$tier] ?? null];
+                ], [0 => 'floor', 1 => 'floor', 2 => 'section', 3 => 'building'][$tier] ?? null];
                 continue;
             }
             $rows[] = [$r, $f, [

@@ -841,7 +841,9 @@ class TimetableChangeApproval
                 $text = $head . ': ' . (!empty($p['week']) ? $p['week'] . '-hafta — ' : '') . 'dars yaxlit (barcha bo\'laklari) → ' . $to;
                 break;
             case 'admin.timetable.boards.unit-fix':
-                $text = ($p['week'] ?? '?') . '-hafta: qisman joylangan darslar ' . (($p['action'] ?? '') === 'clear' ? 'yaxlit bo\'shatiladi' : 'yaxlit joylanadi');
+                $text = ($p['week'] ?? '?') . '-hafta: ' . (($p['action'] ?? '') === 'merge'
+                    ? 'bo\'lingan dars yaxlitlanadi' . (!empty($p['unplace_if_no_fit']) ? ' (sig\'masa — shu hafta joylanmaganlarga o\'tkaziladi)' : '')
+                    : 'qisman joylangan darslar ' . (($p['action'] ?? '') === 'clear' ? 'yaxlit bo\'shatiladi' : 'yaxlit joylanadi'));
                 break;
             case 'admin.timetable.cycle-lecture-slots':
                 // Ko'p kunli surish: "3, 4, 6-kun"; qaytarish — oldingi qiymatlar.

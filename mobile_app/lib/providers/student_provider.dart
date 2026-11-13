@@ -194,14 +194,18 @@ class StudentProvider extends ChangeNotifier {
   // Absence excuse methods
   List<dynamic>? _excuses;
   List<dynamic>? _excuseReasons;
+  bool _excuseNoDayLimit = false;
 
   List<dynamic>? get excuses => _excuses;
   List<dynamic>? get excuseReasons => _excuseReasons;
+  /// Yoqilgan bo'lsa — 10 kunlik topshirish muddati tekshirilmaydi (LMS sozlamasi)
+  bool get excuseNoDayLimit => _excuseNoDayLimit;
 
   Future<void> loadExcuseReasons() async {
     try {
       final response = await _service.getExcuseReasons();
       _excuseReasons = response['data'] as List<dynamic>?;
+      _excuseNoDayLimit = response['no_day_limit'] == true;
     } on ApiException catch (e) {
       _error = e.message;
     }
@@ -233,20 +237,20 @@ class StudentProvider extends ChangeNotifier {
     required String docNumber,
     required String startDate,
     required String endDate,
-    String? description,
     required Uint8List fileBytes,
     required String fileName,
-    List<Map<String, dynamic>>? makeupDates,
+    List<Map<String, String>>? makeupDates,
+    bool retakeManual = false,
   }) async {
     return await _service.submitExcuse(
       reason: reason,
       docNumber: docNumber,
       startDate: startDate,
       endDate: endDate,
-      description: description,
       fileBytes: fileBytes,
       fileName: fileName,
       makeupDates: makeupDates,
+      retakeManual: retakeManual,
     );
   }
 

@@ -1,0 +1,685 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\AbsenceExcuse;
+use App\Models\AbsenceExcuseMakeup;
+use App\Models\ExamSchedule;
+use App\Models\ExamTest;
+use App\Models\Independent;
+use App\Models\IndependentSubmission;
+use App\Models\Notification;
+use App\Models\OraliqNazorat;
+use App\Models\Oski;
+use App\Models\Schedule;
+use App\Models\Setting;
+use App\Models\Student;
+use App\Models\Teacher;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Talaba sababli arizasi: o'tkazib yuborilgan nazoratlar, tekshiruv qoidalari va saqlash.
+ * Veb forma (Student\AbsenceExcuseController) va mobil ilova (Api\V1\AbsenceExcuseApiController)
+ * ikkalasi shu yerdan foydalanadi — ikki tomon bir xil ishlaydi.
+ */
+class AbsenceExcuseSubmission
+{
+    /** "Kun cheklovisiz" rejimi: 10 kunlik topshirish muddati va retake boshlanish cheklovi o'chadi */
+    public static function noDayLimit(): bool
+    {
+        return Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+    }
+
+    /**
+     * Sana oralig'i bo'yicha arizaga tushadigan nazoratlar (forma shu ro'yxatdan jadval tuzadi)
+     */
+    public static function missedAssessments(Student $student, Carbon $startDate, Carbon $endDate): Collection
+    {
+        $groupId = $student->group_id;
+
+        // 1. Sababli kunlar oralig'idagi nazoratlar
+        $missedAssessments = self::findMissedAssessments($groupId, $startDate, $endDate, $student->id);
+
+        // 1.0. NB olgan har bir dars kuni (fan bo'yicha) — alohida JN retake;
+        //      darsda bo'lib baho olgan kunlarga retake ajratilmaydi
+        $missedAssessments = SababliRetakePlan::withoutAttended($missedAssessments, $student->hemis_id, $startDate, $endDate);
+        $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+        foreach (SababliRetakePlan::nbDays($student->hemis_id, $startDate, $endDate) as $day) {
+            $key = $day['subject_name'] . '|jn|' . $day['original_date'];
+            if (!in_array($key, $existingKeys)) {
+                $missedAssessments->push($day);
+                $existingKeys[] = $key;
+            }
+        }
+
+        // 1.1. Avvalgi tasdiqlangan arizadagi rejalashtirilgan lekin bajarilmagan
+        //     retake'lar — agar ularning makeup_date i yangi sababli oraliqqa tushsa.
+        //     (Masalan: avval sababli bo'lgan, 6-kunga retake olgan, lekin 6-kuni
+        //      yana sababli bo'lib testni topshirolmagan — shu test yangi arizada
+        //      ham ko'rinishi va qayta retake qilish imkoni berilishi kerak)
+        $previousMakeups = self::findUncompletedMakeupsInRange($student->id, $startDate, $endDate);
+        $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+
+        foreach ($previousMakeups as $prev) {
+            $key = $prev['subject_name'] . '|' . $prev['assessment_type'] . '|' . $prev['original_date'];
+            if (!in_array($key, $existingKeys)) {
+                $missedAssessments->push($prev);
+                $existingKeys[] = $key;
+            }
+        }
+
+        // Qoldirilgan kunlardagi fanlar ro'yxati (subject_id + subject_name bo'yicha)
+        $scheduledSubjects = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->select('subject_id', 'subject_name')
+            ->distinct()
+            ->get();
+        $missedSubjectIds = array_unique(array_merge(
+            $missedAssessments->pluck('subject_id')->filter()->unique()->toArray(),
+            $scheduledSubjects->pluck('subject_id')->filter()->unique()->toArray()
+        ));
+        $missedSubjectNames = array_unique(array_map('mb_strtolower', array_merge(
+            $missedAssessments->pluck('subject_name')->unique()->toArray(),
+            $scheduledSubjects->pluck('subject_name')->unique()->toArray()
+        )));
+
+        // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan OSKI va testlar —
+        // retake'lardan keyinga suriladi. Faqat qoldirilgan fanlardagilari ko'rsatiladi
+        $totalDays = self::countNonSundays($startDate, $endDate);
+        if ($totalDays > 0) {
+            $makeupEnd = self::addNonSundayDays(Carbon::today()->copy(), $totalDays);
+
+            // endDate dan keyingi kundan makeupEnd gacha qidirish
+            $searchStart = $endDate->copy()->addDay();
+            if ($searchStart->lte($makeupEnd)) {
+                $makeupAssessments = self::findMissedAssessments($groupId, $searchStart, $makeupEnd, $student->id);
+
+                $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+
+                foreach ($makeupAssessments as $ma) {
+                    if (!in_array($ma['assessment_type'], ['oski', 'test'], true)) {
+                        continue;
+                    }
+                    $matchById = !empty($ma['subject_id']) && in_array($ma['subject_id'], $missedSubjectIds);
+                    $matchByName = in_array(mb_strtolower($ma['subject_name']), $missedSubjectNames);
+                    if (!$matchById && !$matchByName) {
+                        continue;
+                    }
+                    $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
+                    if (!in_array($key, $existingKeys)) {
+                        $ma['is_makeup_period'] = true;
+                        $missedAssessments->push($ma);
+                        $existingKeys[] = $key;
+                    }
+                }
+            }
+        }
+
+        return $missedAssessments->values();
+    }
+
+    /** Ariza yuborishdagi tekshiruv qoidalari */
+    public static function rules(Student $student, Request $request): array
+    {
+        $reasonKeys = implode(',', array_keys(AbsenceExcuse::REASONS));
+        $noDayLimit = self::noDayLimit();
+
+        return [
+            'reason' => "required|in:{$reasonKeys}",
+            'doc_number' => 'required|string|max:100',
+            'start_date' => 'required|date|before_or_equal:end_date',
+            'end_date' => [
+                'required',
+                'date',
+                'after_or_equal:start_date',
+                // Bir kun ikkita arizaga tushmasin (kutilayotgan yoki tasdiqlangan ariza bilan)
+                function ($attribute, $value, $fail) use ($request, $student) {
+                    if ($request->start_date && $value
+                        && ($message = AbsenceExcuse::overlapMessage((string) $student->hemis_id, $request->start_date, $value))) {
+                        $fail($message);
+                    }
+                },
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($request->reason && $request->start_date && $value) {
+                        $reasonData = AbsenceExcuse::REASONS[$request->reason] ?? null;
+                        if ($reasonData && $reasonData['max_days']) {
+                            $start = Carbon::parse($request->start_date);
+                            $end = Carbon::parse($value);
+                            $days = self::countNonSundays($start, $end);
+                            if ($days > $reasonData['max_days']) {
+                                $fail("Tanlangan sabab uchun maksimum {$reasonData['max_days']} kun ruxsat etiladi. Siz {$days} kun belgiladingiz.");
+                            }
+                        }
+                    }
+                },
+                function ($attribute, $value, $fail) use ($noDayLimit) {
+                    if ($noDayLimit) {
+                        return;
+                    }
+                    if ($value) {
+                        $endDate = Carbon::parse($value);
+                        $nextDay = $endDate->copy()->addDay();
+
+                        if ($nextDay->isSunday()) {
+                            $nextDay->addDay();
+                        }
+
+                        $today = Carbon::today();
+
+                        if ($today->gte($nextDay)) {
+                            $daysPassed = $nextDay->diffInDays($today);
+                            if ($daysPassed > 10) {
+                                $fail('Hujjatlarni taqdim qilish muddati o\'tgan (10 kundan ko\'p). Tugash sanasidan keyin 10 kun ichida ariza topshirishingiz kerak edi.');
+                            }
+                        }
+                    }
+                },
+            ],
+            'file' => [
+                'required',
+                'file',
+                'max:10240',
+                function ($attribute, $value, $fail) {
+                    $allowedExtensions = ['pdf', 'jpg', 'jpeg'];
+                    $clientExt = strtolower($value->getClientOriginalExtension());
+                    $guessedExt = $value->guessExtension();
+                    if (!in_array($clientExt, $allowedExtensions) && !in_array($guessedExt, $allowedExtensions)) {
+                        $fail('Faqat PDF va JPG formatdagi fayllar qabul qilinadi.');
+                    }
+                },
+            ],
+            'description' => 'nullable|string|max:1000',
+            'makeup_dates' => 'nullable|array',
+            'makeup_dates.*.subject_name' => 'required|string',
+            'makeup_dates.*.subject_id' => 'nullable|string',
+            'makeup_dates.*.assessment_type' => 'required|string|in:jn,mt,oski,test',
+            'makeup_dates.*.assessment_type_code' => 'required|string',
+            'makeup_dates.*.original_date' => 'required|date',
+            'retake_start' => $noDayLimit ? 'nullable|date' : 'nullable|date|after_or_equal:today',
+        ];
+    }
+
+    public static function messages(): array
+    {
+        return [
+            'reason.required' => 'Sababni tanlang',
+            'reason.in' => 'Noto\'g\'ri sabab tanlangan',
+            'doc_number.required' => 'Hujjat raqamini kiriting',
+            'start_date.required' => 'Boshlanish sanasini kiriting',
+            'end_date.required' => 'Tugash sanasini kiriting',
+            'start_date.before_or_equal' => 'Boshlanish sanasi tugash sanasidan keyin bo\'lmasligi kerak',
+            'end_date.after_or_equal' => 'Tugash sanasi boshlanish sanasidan oldin bo\'lmasligi kerak',
+            'file.required' => 'Hujjat yuklash majburiy',
+            'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
+            'retake_start.after_or_equal' => 'Qayta topshirish bugungi kundan oldin boshlanmasligi kerak',
+        ];
+    }
+
+    /**
+     * Qayta topshirish kunlari: kuniga bitta retake, OSKI oxirgi retake kuni,
+     * test bir kun oraliq bilan — avtomatik jadval shu yerda hisoblanadi. Talaba
+     * formada kunlarni ko'chirgan bo'lsa (retake_manual) — uning jadvali shu qoidalar
+     * bo'yicha tekshiriladi. Saqlanadigan jadval yoki xato matni.
+     */
+    public static function makeupPlan(Request $request): array|string
+    {
+        $retakeStart = SababliRetakePlan::firstDay($request->input('retake_start'));
+        $items = $request->input('makeup_dates', []);
+        if ($request->boolean('retake_manual')) {
+            // Necha kun dars qoldirilgan bo'lsa, shuncha retake kuni (avtomatik jadval uzunroq bo'lsa — uning oxirigacha)
+            $until = SababliRetakePlan::lastAllowedDay(
+                SababliRetakePlan::assign($items, $retakeStart),
+                $retakeStart,
+                self::countNonSundays(Carbon::parse($request->start_date), Carbon::parse($request->end_date))
+            );
+            if ($planError = SababliRetakePlan::validate($items, $retakeStart, $until)) {
+                return 'Qayta topshirish kunlari: ' . $planError;
+            }
+            $makeupDates = SababliRetakePlan::manual($items, $retakeStart);
+        } else {
+            $makeupDates = SababliRetakePlan::assign($items, $retakeStart);
+        }
+        uasort($makeupDates, fn ($a, $b) => [$a['makeup_date'] ?? '9999-12-31', $a['original_date']]
+            <=> [$b['makeup_date'] ?? '9999-12-31', $b['original_date']]);
+
+        return $makeupDates;
+    }
+
+    /** Arizani va uning qayta topshirish kunlarini saqlaydi, adminlarga xabar yuboradi */
+    public static function create(Student $student, Request $request, array $makeupDates): AbsenceExcuse
+    {
+        $file = $request->file('file');
+        $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
+
+        $excuse = DB::transaction(function () use ($student, $request, $makeupDates, $file, $filePath) {
+            $excuse = AbsenceExcuse::create([
+                'student_id' => $student->id,
+                'student_hemis_id' => $student->hemis_id,
+                'student_full_name' => $student->full_name,
+                'group_name' => $student->group_name,
+                'department_name' => $student->department_name,
+                'doc_number' => $request->doc_number,
+                'reason' => $request->reason,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'description' => $request->description,
+                'file_path' => $filePath,
+                'file_original_name' => $file->getClientOriginalName(),
+                'status' => 'pending',
+            ]);
+
+            // Makeup sanalarni saqlash
+            foreach ($makeupDates as $makeup) {
+                $isSubmitted = SababliRetakePlan::isSubmitted($makeup);
+
+                // Topshirilgan — qayta topshirish kuni yo'q, original_date saqlanadi.
+                // JN retake bitta kunlik: oralig'i shu kunning o'zi (makeup_end_date = makeup_date).
+                $dateToSave = $isSubmitted ? $makeup['original_date'] : $makeup['makeup_date'];
+                $makeupEndDate = !$isSubmitted && $makeup['assessment_type'] === 'jn' ? $dateToSave : null;
+
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $makeup['subject_id'] ?? null;
+                $matchResult = SubjectMatcherService::resolveSubjectId(
+                    $makeup['subject_name'],
+                    $resolvedSubjectId,
+                    $student
+                );
+                if ($matchResult) {
+                    $resolvedSubjectId = $matchResult['subject_id'];
+                }
+
+                // Avvalgi arizadagi shu testga tegishli (scheduled) makeup'ni topib,
+                // 'missed' ga o'zgartirish — yangi makeup uni almashtiradi.
+                // Bu kelajakda dublikat bo'lmasligi va eski makeup'ni "bajarilmagan" deb belgilash uchun.
+                AbsenceExcuseMakeup::where('student_id', $student->id)
+                    ->where('subject_name', $makeup['subject_name'])
+                    ->where('assessment_type', $makeup['assessment_type'])
+                    ->where('original_date', $makeup['original_date'])
+                    ->where('status', 'scheduled')
+                    ->where('jn_submitted', false)
+                    ->update(['status' => 'missed']);
+
+                AbsenceExcuseMakeup::create([
+                    'absence_excuse_id' => $excuse->id,
+                    'student_id' => $student->id,
+                    'subject_name' => $makeup['subject_name'],
+                    'subject_id' => $resolvedSubjectId,
+                    'assessment_type' => $makeup['assessment_type'],
+                    'assessment_type_code' => $makeup['assessment_type_code'],
+                    'original_date' => $makeup['original_date'],
+                    'makeup_date' => $dateToSave,
+                    'makeup_end_date' => $makeupEndDate,
+                    'jn_submitted' => $isSubmitted,
+                    'status' => $isSubmitted ? 'completed' : 'scheduled',
+                ]);
+            }
+
+            return $excuse;
+        });
+
+        // Barcha admin va registrator_ofisi rollariga xabarnoma jo'natish
+        self::notifyAdmins($excuse, $student);
+
+        return $excuse;
+    }
+
+    /**
+     * Yakshanbalarni hisobdan chiqarib, kunlarni sanash
+     */
+    public static function countNonSundays(Carbon $start, Carbon $end): int
+    {
+        $days = 0;
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            if ($current->dayOfWeek !== Carbon::SUNDAY) {
+                $days++;
+            }
+            $current->addDay();
+        }
+        return $days;
+    }
+
+    /**
+     * Bugundan boshlab N ta yakshanba bo'lmagan kun qo'shish
+     */
+    private static function addNonSundayDays(Carbon $start, int $days): Carbon
+    {
+        $count = 0;
+        $d = $start->copy();
+        while ($count < $days) {
+            if ($d->dayOfWeek !== Carbon::SUNDAY) {
+                $count++;
+            }
+            if ($count < $days) {
+                $d->addDay();
+            }
+        }
+        return $d;
+    }
+
+    /**
+     * Sana oralig'i bo'yicha o'tkazib yuborilgan nazoratlarni topish
+     */
+    public static function findMissedAssessments($groupId, $startDate, $endDate, $studentId = null): Collection
+    {
+        $missedAssessments = collect();
+
+        // 1. Schedules jadvalidan (dars jadvali)
+        $schedules = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->whereIn('training_type_code', [99, 100, 101, 102])
+            ->get();
+
+        foreach ($schedules as $schedule) {
+            $typeMap = [
+                100 => 'jn',
+                99 => 'mt',
+                101 => 'oski',
+                102 => 'test',
+            ];
+            $assessmentType = $typeMap[$schedule->training_type_code] ?? null;
+            if ($assessmentType) {
+                $missedAssessments->push([
+                    'subject_name' => $schedule->subject_name,
+                    'subject_id' => $schedule->subject_id,
+                    'assessment_type' => $assessmentType,
+                    'assessment_type_code' => (string) $schedule->training_type_code,
+                    'original_date' => Carbon::parse($schedule->lesson_date)->format('Y-m-d'),
+                ]);
+            }
+        }
+
+        // 2. Oraliq nazoratlar (JN)
+        $oraliqNazorats = OraliqNazorat::where('group_hemis_id', $groupId)
+            ->whereDate('start_date', '>=', $startDate)
+            ->whereDate('start_date', '<=', $endDate)
+            ->get();
+
+        foreach ($oraliqNazorats as $on) {
+            $missedAssessments->push([
+                'subject_name' => $on->subject_name,
+                'subject_id' => $on->subject_hemis_id,
+                'assessment_type' => 'jn',
+                'assessment_type_code' => '100',
+                'original_date' => Carbon::parse($on->start_date)->format('Y-m-d'),
+            ]);
+        }
+
+        // 2.5. Mustaqil ta'lim — o'z muddati bilan yashaydi (independents jadvali)
+        //      va ko'p hollarda dars jadvalida ko'rinmaydi. Muddati sababli davrga
+        //      tushgan MT arizaga qo'shiladi; fayli yuklangani esa "MT yuklangan"
+        //      deb belgilanadi va qayta yuklash so'ralmaydi.
+        //      Dars jadvalidan (1-blok, kod 99) allaqachon tushgan MT takrorlanmaydi,
+        //      faqat already_submitted holati shu qatorga qo'shiladi.
+        if ($studentId) {
+            $independents = Independent::where('group_hemis_id', $groupId)
+                ->whereDate('deadline', '>=', $startDate)
+                ->whereDate('deadline', '<=', $endDate)
+                ->get();
+
+            if ($independents->isNotEmpty()) {
+                $submittedIds = IndependentSubmission::whereIn('independent_id', $independents->pluck('id'))
+                    ->where('student_id', $studentId)
+                    ->pluck('independent_id')
+                    ->flip();
+
+                foreach ($independents as $independent) {
+                    $deadline = Carbon::parse($independent->deadline)->format('Y-m-d');
+                    $isSubmitted = isset($submittedIds[$independent->id]);
+
+                    // Shu MT dars jadvalidan kelganmi? Fan nomi bo'yicha solishtiramiz —
+                    // MT sanasi jadvalda deadline bilan bir xil bo'lmasligi mumkin.
+                    $existingIndex = $missedAssessments->search(function ($a) use ($independent) {
+                        return $a['assessment_type'] === 'mt'
+                            && mb_strtolower($a['subject_name']) === mb_strtolower($independent->subject_name);
+                    });
+
+                    if ($existingIndex !== false) {
+                        if ($isSubmitted) {
+                            $row = $missedAssessments[$existingIndex];
+                            $row['already_submitted'] = true;
+                            $missedAssessments[$existingIndex] = $row;
+                        }
+                        continue;
+                    }
+
+                    $missedAssessments->push([
+                        'subject_name' => $independent->subject_name,
+                        'subject_id' => $independent->subject_id,
+                        'assessment_type' => 'mt',
+                        'assessment_type_code' => '99',
+                        'original_date' => $deadline,
+                        'already_submitted' => $isSubmitted,
+                    ]);
+                }
+            }
+        }
+
+        // 3. OSKI
+        $oskis = Oski::where('group_hemis_id', $groupId)
+            ->whereDate('start_date', '>=', $startDate)
+            ->whereDate('start_date', '<=', $endDate)
+            ->get();
+
+        foreach ($oskis as $oski) {
+            $missedAssessments->push([
+                'subject_name' => $oski->subject_name,
+                'subject_id' => $oski->subject_hemis_id,
+                'assessment_type' => 'oski',
+                'assessment_type_code' => '101',
+                'original_date' => Carbon::parse($oski->start_date)->format('Y-m-d'),
+            ]);
+        }
+
+        // 4. Yakuniy testlar
+        $examTests = ExamTest::where('group_hemis_id', $groupId)
+            ->whereDate('start_date', '>=', $startDate)
+            ->whereDate('start_date', '<=', $endDate)
+            ->get();
+
+        foreach ($examTests as $et) {
+            $missedAssessments->push([
+                'subject_name' => $et->subject_name,
+                'subject_id' => $et->subject_hemis_id,
+                'assessment_type' => 'test',
+                'assessment_type_code' => '102',
+                'original_date' => Carbon::parse($et->start_date)->format('Y-m-d'),
+            ]);
+        }
+
+        // 5. Imtihon jadvali (OSKI va Test sanalari)
+        $examSchedules = ExamSchedule::where('group_hemis_id', $groupId)
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->where(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('oski_date')
+                        ->whereDate('oski_date', '>=', $startDate)
+                        ->whereDate('oski_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('test_date')
+                        ->whereDate('test_date', '>=', $startDate)
+                        ->whereDate('test_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('oski_resit_date')
+                        ->whereDate('oski_resit_date', '>=', $startDate)
+                        ->whereDate('oski_resit_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('test_resit_date')
+                        ->whereDate('test_resit_date', '>=', $startDate)
+                        ->whereDate('test_resit_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('oski_resit2_date')
+                        ->whereDate('oski_resit2_date', '>=', $startDate)
+                        ->whereDate('oski_resit2_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('test_resit2_date')
+                        ->whereDate('test_resit2_date', '>=', $startDate)
+                        ->whereDate('test_resit2_date', '<=', $endDate);
+                });
+            })->get();
+
+        foreach ($examSchedules as $es) {
+            // 1-urinish OSKI (oski_na NULL yoki false bo'lsa ko'rsatiladi)
+            if (!$es->oski_na && $es->oski_date && $es->oski_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'oski',
+                    'assessment_type_code' => '101',
+                    'original_date' => $es->oski_date->format('Y-m-d'),
+                    'attempt' => 1,
+                ]);
+            }
+            // 1-urinish Test
+            if (!$es->test_na && $es->test_date && $es->test_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'test',
+                    'assessment_type_code' => '102',
+                    'original_date' => $es->test_date->format('Y-m-d'),
+                    'attempt' => 1,
+                ]);
+            }
+            // 2-urinish OSKI (resit) — _na flag bu yerda yo'q, sana mavjudligi bilan ko'rsatamiz
+            if ($es->oski_resit_date && $es->oski_resit_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'oski',
+                    'assessment_type_code' => '101',
+                    'original_date' => $es->oski_resit_date->format('Y-m-d'),
+                    'attempt' => 2,
+                ]);
+            }
+            // 2-urinish Test (resit)
+            if ($es->test_resit_date && $es->test_resit_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'test',
+                    'assessment_type_code' => '102',
+                    'original_date' => $es->test_resit_date->format('Y-m-d'),
+                    'attempt' => 2,
+                ]);
+            }
+            // 3-urinish OSKI (resit2)
+            if ($es->oski_resit2_date && $es->oski_resit2_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'oski',
+                    'assessment_type_code' => '101',
+                    'original_date' => $es->oski_resit2_date->format('Y-m-d'),
+                    'attempt' => 3,
+                ]);
+            }
+            // 3-urinish Test (resit2)
+            if ($es->test_resit2_date && $es->test_resit2_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'test',
+                    'assessment_type_code' => '102',
+                    'original_date' => $es->test_resit2_date->format('Y-m-d'),
+                    'attempt' => 3,
+                ]);
+            }
+        }
+
+        // Duplikatlarni olib tashlash (turli urinishlar turli sanalarda bo'ladi,
+        // shu bois original_date tabiiy ravishda ajratadi)
+        return $missedAssessments->unique(function ($item) {
+            return $item['subject_name'] . '|' . $item['assessment_type'] . '|' . $item['original_date'];
+        })->values();
+    }
+
+    /**
+     * Avvalgi arizalardagi `scheduled` holatdagi (bajarilmagan) retake'larni olish,
+     * agar ularning makeup_date i (yoki makeup oralig'i) berilgan sababli oraliqqa tushsa.
+     * Bu talaba sababli kun tufayli retake sanasida topshirolmagan testlarni
+     * (OSKI, Test, JN) yangi arizada qayta tanlashga imkon beradi.
+     */
+    private static function findUncompletedMakeupsInRange($studentId, $startDate, $endDate): Collection
+    {
+        return AbsenceExcuseMakeup::where('student_id', $studentId)
+            ->where('status', 'scheduled')
+            ->where('jn_submitted', false)
+            // Har ikki holatni qo'llab-quvvatlash:
+            //  1) OSKI/Test uchun: makeup_end_date NULL, faqat makeup_date bor (bitta kun)
+            //     → makeup_date sababli oraliqda bo'lishi kerak
+            //  2) JN uchun: makeup_date va makeup_end_date (oraliq) — agar bu oraliq
+            //     sababli oraliq bilan kesishsa, avvalgi retake'ni ko'rsatish
+            ->where(function ($q) use ($startDate, $endDate) {
+                // Overlap formula: range_start <= B AND COALESCE(range_end, range_start) >= A
+                $q->whereDate('makeup_date', '<=', $endDate)
+                  ->whereRaw('DATE(COALESCE(makeup_end_date, makeup_date)) >= ?', [$startDate->toDateString()]);
+            })
+            ->whereHas('absenceExcuse', function ($q) {
+                $q->whereIn('status', ['approved', 'pending']);
+            })
+            ->get()
+            ->map(fn($m) => [
+                'subject_name' => $m->subject_name,
+                'subject_id' => $m->subject_id,
+                'assessment_type' => $m->assessment_type,
+                'assessment_type_code' => $m->assessment_type_code,
+                'original_date' => Carbon::parse($m->original_date)->format('Y-m-d'),
+                'is_previous_makeup' => true,
+                'previous_makeup_date' => Carbon::parse($m->makeup_date)->format('Y-m-d'),
+                'previous_makeup_end_date' => $m->makeup_end_date ? Carbon::parse($m->makeup_end_date)->format('Y-m-d') : null,
+            ]);
+    }
+
+    /**
+     * Admin va registrator_ofisi rollariga yangi ariza haqida xabarnoma jo'natish
+     */
+    private static function notifyAdmins(AbsenceExcuse $excuse, Student $student): void
+    {
+        $roles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+
+        $reasonLabel = $excuse->reason_label;
+        $url = route('admin.absence-excuses.show', $excuse->id);
+        $subject = "Yangi sababli ariza: {$excuse->student_full_name}";
+        $body = "Talaba: {$excuse->student_full_name}\nGuruh: {$excuse->group_name}\nSabab: {$reasonLabel}\nSana: {$excuse->start_date->format('d.m.Y')} — {$excuse->end_date->format('d.m.Y')}";
+
+        // User modelidagi adminlar
+        $adminUsers = User::role($roles)->get();
+        foreach ($adminUsers as $user) {
+            Notification::create([
+                'sender_id' => $student->id,
+                'sender_type' => Student::class,
+                'recipient_id' => $user->id,
+                'recipient_type' => User::class,
+                'subject' => $subject,
+                'body' => $body,
+                'type' => Notification::TYPE_SYSTEM,
+                'url' => $url,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        }
+
+        // Teacher modelidagi adminlar (registrator_ofisi va boshqalar)
+        $adminTeachers = Teacher::role($roles)->get();
+        foreach ($adminTeachers as $teacher) {
+            Notification::create([
+                'sender_id' => $student->id,
+                'sender_type' => Student::class,
+                'recipient_id' => $teacher->id,
+                'recipient_type' => Teacher::class,
+                'subject' => $subject,
+                'body' => $body,
+                'type' => Notification::TYPE_SYSTEM,
+                'url' => $url,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        }
+    }
+}

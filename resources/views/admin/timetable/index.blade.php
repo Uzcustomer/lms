@@ -3443,11 +3443,14 @@
 
             // So'rov tanasi PHP uslubida: oddiy massiv — key[]=..., obyektlar massivi — key[0][op]=... (Takliflar actions va b.),
             // obyekt — key[field]=...; aks holda obyekt "[object Object]" satri bo'lib ketadi (actions.0.op 422).
+            // Mantiqiy qiymat — '1' / '0' (FormData true ni "true" matniga aylantiradi, Laravel 'boolean' qoidasi uni qabul qilmaydi).
             function appendFormValue(fd, key, v) {
                 if (v === undefined || v === null) return;
+                if (typeof v === 'boolean') { fd.append(key, v ? '1' : '0'); return; }
                 if (Array.isArray(v)) {
                     v.forEach((x, i) => {
                         if (x !== null && typeof x === 'object' && !(typeof Blob !== 'undefined' && x instanceof Blob)) appendFormValue(fd, key + '[' + i + ']', x);
+                        else if (typeof x === 'boolean') fd.append(key + '[]', x ? '1' : '0');
                         else if (x !== undefined && x !== null) fd.append(key + '[]', x);
                     });
                     return;
@@ -12813,7 +12816,7 @@
                         if (btn) btn.disabled = true;
                         try {
                             r = await api(BASE + '/boards/' + board.id + '/unit-fix', 'POST',
-                                { week: curWeek, action, card_ids: units[0].list.map(x => x.id), unplace_if_no_fit: true });
+                                { week: curWeek, action, card_ids: units[0].list.map(x => x.id), unplace_if_no_fit: 1 });
                         } catch (e) {
                             if (btn) btn.disabled = false;
                             showUnitFixResult({ error: e.message }, action, units);

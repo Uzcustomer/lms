@@ -127,7 +127,7 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
     await ctx.runUnitFix(null, 'merge', [units.get(key)]);
     const fixCalls = calls.filter(x => x[0] === '/boards/7/unit-fix');
     assert.deepEqual(fixCalls.map(x => x[1]), [{ week: 11, action: 'merge', card_ids: [708676, 708674, 708675] },
-        { week: 11, action: 'merge', card_ids: [708676, 708674, 708675], unplace_if_no_fit: true }]);
+        { week: 11, action: 'merge', card_ids: [708676, 708674, 708675], unplace_if_no_fit: 1 }]);
     assert.ok(calls.some(x => x[0] === 'reload'));
     assert.ok(calls.some(x => x[0] === 'toast' && /joylanmaganlarga o'tkazildi/.test(x[1]) && x[2] === 'warn'));
     // Codex: "joylanmagan, o'tiladi" — birlik to'liq (3 bo'lak, joyi yo'q), bekor emas: bitta bo'lakni joylash butun birlikni joylaydi.

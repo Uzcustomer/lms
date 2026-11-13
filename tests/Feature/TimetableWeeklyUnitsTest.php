@@ -564,3 +564,24 @@ it('parallel to\'plam: Bolalar xirurgiyasi (a) 03a, (b) 03b, (c) 03a+03b — tal
     $b->update(['students' => 13]);
     expect($weekly())->toBe([]);
 });
+
+it('6-bo\'lim: "Vaqtincha kafedra mudiriga yozish" — faqat jadval administratorlari (o\'quv bo\'limi ham); kafedra mudiri — 403; "Asl holatga qaytarish" — kafedra mudirida qoladi', function () {
+    $s = phSetup();
+    $mudirAs = fn () => test()->withoutVite()->actingAs($s['mudir'], 'teacher')->withSession(['active_role' => 'kafedra_mudiri']);
+    // O'z kafedrasi mudiri ham yoza olmaydi.
+    expect($mudirAs()->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8])->assertForbidden()->json('error'))
+        ->toBe("Vaqtincha kafedra mudiriga yozish — faqat registrator ofisi, o'quv bo'limi va adminlar.");
+    expect(TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->value('mudir_placeholder'))->toBeNull();
+    // O'quv bo'limi — yozadi.
+    $oquv = wuTeacher('OQUV', 'oquv_bolimi');
+    test()->withoutVite()->actingAs($oquv, 'teacher')->withSession(['active_role' => 'oquv_bolimi'])
+        ->postJson(route('admin.timetable.cards.mudir-placeholder', $s['pa']), ['week' => 8, 'scope' => 'one'])->assertOk();
+    expect(TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->value('mudir_placeholder'))->not->toBeNull();
+    // Kafedra mudiri (o'z kafedrasi) — asl holatga qaytaradi.
+    $mudirAs()->postJson(route('admin.timetable.cards.mudir-placeholder.revert', $s['pa']), ['week' => 8])->assertOk();
+    expect(TimetableCardOverride::where('card_id', $s['pa']->id)->where('week', 8)->value('mudir_placeholder'))->toBeNull();
+    // Sahifa: kafedra mudirida yozish yo'q (mudirPhAllowed — faqat WEEKLY_ADMIN), qaytarish bor (mudirPhRevertAllowed).
+    $html = $mudirAs()->get(route('admin.timetable.index'))->assertOk()->getContent();
+    expect($html)->toContain("const mudirPhAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek && typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN;")
+        ->toContain("|| TIMETABLE_ROLE === 'kafedra_mudiri');");
+});

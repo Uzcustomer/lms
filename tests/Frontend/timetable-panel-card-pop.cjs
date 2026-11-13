@@ -169,11 +169,18 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     const tick = () => new Promise(r => setImmediate(r));
     ctx.phInfo = { ok: false, why: "Kafedra mudiri topilmadi (shu kafedraga «kafedra_mudiri» roli berilgan xodim yo'q).", mudir: null, room: null, slot: { day: 2, pair: 3 } };
     const btnEl = { disabled: true, title: '' }, whyEl = { textContent: '' };
+    // 6-bo'lim: kafedra mudirida yozish tugmasi yo'q (faqat jadval administratorlari); oynada — bitta tugma.
+    ctx.openPanelCardPop(cards[0], el());
+    assert.doesNotMatch(doc.getElementById('pnCardPop').innerHTML, /Vaqtincha kafedra mudiriga yozish/);
+    ctx.closePanelCardPop();
+    ctx.TIMETABLE_ROLE = 'registrator_ofisi';
+    ctx.WEEKLY_ADMIN = true;
     doc.nextQs = sel => (sel === '[data-pop-mudir]' ? btnEl : sel === '[data-pop-mudir-why]' ? whyEl : null);
     ctx.openPanelCardPop(cards[0], el());
     doc.nextQs = null;
     let pm = doc.getElementById('pnCardPop');
     assert.match(pm.innerHTML, /<button type="button" data-pop-mudir disabled title="tekshirilmoqda…"[^>]*>Vaqtincha kafedra mudiriga yozish<\/button>/);
+    assert.equal((pm.innerHTML.match(/Vaqtincha kafedra mudiriga yozish/g) || []).length, 1);
     await tick(); await tick();
     assert.equal(btnEl.disabled, true);
     assert.match(whyEl.textContent, /Kafedra mudiri topilmadi/);
@@ -196,7 +203,9 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     assert.match(m2.innerHTML, /data-ph-why[^>]*>Kafedra mudiri topilmadi\./);
     assert.doesNotMatch(m2.innerHTML, /data-ph-ok/);
 
-    // 8) Panel bo'limi: "Vaqtincha kafedra mudirida: N ta", asl o'qituvchi va qaytarish tugmasi; qaytarish band — qizil sabab.
+    // 8) Panel bo'limi: "Vaqtincha kafedra mudirida: N ta", asl o'qituvchi va qaytarish tugmasi (kafedra mudirida ham — 6.3); qaytarish band — qizil sabab.
+    ctx.TIMETABLE_ROLE = 'kafedra_mudiri';
+    ctx.WEEKLY_ADMIN = false;
     // Belgi — shu haftaning yozuvida (karta asosiy o'qituvchisi o'zgarmaydi).
     const phCard = Object.assign({}, cards[2], { id: 30 });
     ctx.overrides['30|8'] = { day: 3, pair: 3, cancelled: false, mudir_placeholder: { teacher_name: 'XOLMATOV A. B.', orig_teacher_name: 'ALIYEV SH. N.', reason: 'xona band' } };

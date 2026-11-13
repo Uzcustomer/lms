@@ -140,7 +140,7 @@ it('to\'qnashuvdagi dars bo\'sh joy va bo\'sh xonaga — darhol; xona faqat shu 
 it('to\'qnashuvsiz darsni ko\'chirish — so\'rov (sabab majburiy), jadval o\'zgarmaydi; kafedra mudiri va registrator tasdig\'idan keyin qo\'llanadi', function () {
     $s = rmSetup();
     $chk = rmCheck($s, $s['c'], ['day' => 3, 'pair' => 5, 'auditorium_code' => 'R2'])->assertOk()->json();
-    expect($chk['mode'])->toBe('request')->and($chk['message'])->toContain('kafedra mudiri va registrator');
+    expect($chk['mode'])->toBe('request')->and($chk['message'])->toContain("kafedra mudiri, registrator ofisi va o'quv bo'limiga");
     rmMove($s, $s['c'], ['day' => 3, 'pair' => 5, 'auditorium_code' => 'R2'])->assertUnprocessable()->assertJsonValidationErrors('reason');
     $res = rmMove($s, $s['c'], ['day' => 3, 'pair' => 5, 'auditorium_code' => 'R2', 'reason' => 'Kafedra yig\'ilishi'])->assertOk()->json();
     expect($res)->toMatchArray(['mode' => 'request', 'pending_approval' => true]);

@@ -1293,7 +1293,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // HEMIS to'siqlari bo'yicha so'rovlar (registrator → o'qituvchi / kafedra mudiri, Telegram). Ruxsat kontrollerda.
         Route::prefix('dars-jadvali-tuzish')->name('timetable.')
-            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|kafedra_mudiri|oqituvchi', \App\Http\Middleware\TimetableActiveRoom::class])
+            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|kafedra_mudiri|oqituvchi', \App\Http\Middleware\TimetableActiveRoom::class])
             ->group(function () {
                 Route::post('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsSend'])->name('block-tickets.send');
                 Route::get('/boards/{board}/block-tickets', [\App\Http\Controllers\Admin\TimetableController::class, 'blockTicketsIndex'])->name('block-tickets.index');
@@ -1394,6 +1394,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/cards/{card}/responsible-move', [\App\Http\Controllers\Admin\TimetableController::class, 'responsibleMove'])->name('cards.responsible-move');
                 // Fan mas'uli: "Joylash uchun tanlash" — shu hafta kataklari holati (ok / teacher / group / room / closed) va eng yaxshi joylar, bitta so'rov.
                 Route::get('/cards/{card}/responsible-move/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'responsibleMoveGrid'])->name('cards.responsible-move.grid');
+                // "Boshqa xona tanlash" (to'qnashuv bloki) — shu vaqt uchun xonalar ro'yxati (faqat o'qiydi; huquq — controller).
+                Route::get('/cards/{card}/room-options', [\App\Http\Controllers\Admin\TimetableController::class, 'cardRoomOptions'])->name('cards.room-options');
                 Route::post('/boards/{board}/cycle-time-proposal/check', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'checkCycleTime'])->name('cycle-time-proposal.check');
                 Route::post('/boards/{board}/cycle-time-proposal', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'proposeCycleTime'])->name('cycle-time-proposal');
                 Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');

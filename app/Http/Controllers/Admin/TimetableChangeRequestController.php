@@ -342,7 +342,7 @@ class TimetableChangeRequestController extends Controller
         $change = $svc->submit($draft);
 
         return response()->json(['ok' => true, 'pending_approval' => true, 'change_request_id' => $change->id, 'summary' => $change->summary,
-            'message' => "Taklif registrator ofisiga yuborildi. Registrator tasdiqlagach jadval o'zgaradi."]);
+            'message' => "Taklif registrator ofisi va o'quv bo'limiga yuborildi. Ulardan biri tasdiqlagach jadval o'zgaradi."]);
     }
 
     /**
@@ -422,8 +422,8 @@ class TimetableChangeRequestController extends Controller
 
         return response()->json(['ok' => true, 'pending_approval' => true, 'change_request_id' => $change->id,
             'summary' => $change->summary, 'message' => $isHead
-                ? "Taklif registrator ofisiga yuborildi (siz shu kafedra mudirisiz). Registrator tasdiqlagach jadval o'zgaradi."
-                : "Taklif kafedra mudiriga yuborildi. Kafedra mudiri va registrator ofisi tasdiqlagach jadval o'zgaradi."]);
+                ? "Taklif registrator ofisi va o'quv bo'limiga yuborildi (siz shu kafedra mudirisiz). Ulardan biri tasdiqlagach jadval o'zgaradi."
+                : "Taklif kafedra mudiriga yuborildi. Kafedra mudiri, so'ng registrator ofisi yoki o'quv bo'limi tasdiqlagach jadval o'zgaradi."]);
     }
 
     private function ensureProposalTable(): void
@@ -497,7 +497,7 @@ class TimetableChangeRequestController extends Controller
     private function ensureApprover(Request $request): void
     {
         if (!in_array($this->activeRole($request), TimetableChangeApproval::APPROVER_ROLES, true)) {
-            abort(403, 'Jadval o\'zgarishlarini faqat registrator ofisi tasdiqlaydi.');
+            abort(403, 'Jadval o\'zgarishlarini faqat registrator ofisi, o\'quv bo\'limi va adminlar tasdiqlaydi.');
         }
     }
 

@@ -99,7 +99,7 @@ it('week-override 422 va unit-fix (Yaxlitlash) natijasi ham conflict_items bilan
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09a', 'day' => 4, 'pair' => 7]));
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09b', 'day' => 4, 'pair' => 1]));
     $f = ciAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['card']->id]])
-        ->assertOk()->json('failed.0');
+        ->assertUnprocessable()->json('failed.0');
     expect($f['conflict_items'][0])->toMatchArray(['kind' => 'teacher', 'who' => 'NUROVA Z. A.', 'groups' => ['d1/d26-09a']]);
 });
 
@@ -122,7 +122,7 @@ it('xona NOMI: "Ko\'rsatish" (show.room_name) va bandlik matni ("Xona 123-amaliy
     expect(collect($a)->pluck('teacher')->unique()->values()->all())->toBe(['NUROVA Z. A.']);
 });
 
-it('Codex: xona kunlik ro\'yxati — birlashgan ma\'ruzada o\'qituvchi faqat qamrovdagi qismdan; qamrovdan tashqari dars yashirin (o\'qituvchisiz)', function () {
+it('xona jadvali — hammaga to\'liq: qamrovdan tashqari dars ham fan, guruh, o\'qituvchi bilan (faqat ko\'rish); birlashgan ma\'ruzada barcha o\'qituvchilar', function () {
     $s = ciSetup();
     \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 601, 'name' => 'Biologiya kafedrasi', 'code' => 'B1',
         'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
@@ -137,15 +137,43 @@ it('Codex: xona kunlik ro\'yxati — birlashgan ma\'ruzada o\'qituvchi faqat qam
         'teacher_name' => $t->full_name, 'day' => 3, 'pair' => 7]));
     $lec('k1/d26-01a', 'kimyo', 'Kimyo kafedrasi', $outT);
     $lec('d1/d26-05a', 'davolash ishi', 'Biologiya kafedrasi', $inT);
-    // Boshqa kafedraning alohida darsi shu xonada (08:30) — yashirin.
+    // Boshqa kafedraning alohida darsi shu xonada (08:30) — xona jadvalida to'liq, lekin ko'chirilmaydi.
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'k1/d26-02a', 'specialty_name' => 'kimyo', 'kafedra_name' => 'Kimyo kafedrasi',
         'subject_name' => 'Kimyo', 'teacher_id' => $outT->id, 'teacher_name' => 'BEGONA O.', 'day' => 3, 'pair' => 1]));
     $entries = collect(test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
         ->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?room_code=R123&date=2026-11-25&range=day&layer=internal')->assertOk()->json('entries'));
     $lecture = $entries->firstWhere('start', '13:30');
-    expect($lecture['hidden'])->toBeFalse()->and($lecture['teacher'])->toBe('ICHKI I.')
-        ->and(json_encode($entries->all()))->not->toContain('BEGONA');
-    expect($entries->firstWhere('start', '08:30'))->toMatchArray(['hidden' => true, 'label' => 'band: boshqa fakultet']);
+    expect($lecture['hidden'])->toBeFalse()->and($lecture['teacher'])->toBe('BEGONA O., ICHKI I.')->and($lecture['out_of_scope'])->toBeFalse();
+    expect($entries->firstWhere('start', '08:30'))->toMatchArray(['hidden' => false, 'subject' => 'Kimyo', 'groups' => ['k1/d26-02a'],
+        'teacher' => 'BEGONA O.', 'teacher_full' => 'BEGONA O.', 'room' => '123-amaliyot xonasi', 'out_of_scope' => true, 'movable' => false,
+        'movable_why' => "Qamrovdan tashqari dars — faqat ko'rish."]);
+    // O'qituvchi roli ham xona jadvalini to'liq ko'radi.
+    $t = ciTeacher('OQITUVCHI', 'oqituvchi');
+    $e2 = collect(test()->withoutVite()->actingAs($t, 'teacher')->withSession(['active_role' => 'oqituvchi'])
+        ->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?room_code=R123&date=2026-11-25&range=day&layer=internal')->assertOk()->json('entries'));
+    expect($e2->where('hidden', true)->count())->toBe(0)->and($e2->firstWhere('start', '08:30')['subject'])->toBe('Kimyo');
+});
+
+it('o\'qituvchi jadvali — kafedra mudiri: o\'z kafedrasi o\'qituvchisining boshqa kafedra darsi ham to\'liq (faqat ko\'rish); begona kafedra o\'qituvchisiniki — "band"', function () {
+    $s = ciSetup();
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 601, 'name' => 'Biologiya kafedrasi', 'code' => 'B1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = ciTeacher('MUDIR', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 601])->save();
+    $own = ciTeacher('OZIMIZNIKI O.');   // Biologiya kafedrasi
+    $foreign = ciTeacher('BEGONA B.');
+    $foreign->forceFill(['department' => 'Kimyo kafedrasi'])->save();
+    $kimyo = fn (Teacher $t, int $pair) => TimetableCard::create(array_replace($s['base'], ['group_name' => 'k1/d26-02a', 'specialty_name' => 'kimyo',
+        'kafedra_name' => 'Kimyo kafedrasi', 'subject_name' => 'Kimyo', 'teacher_id' => $t->id, 'teacher_name' => $t->full_name, 'auditorium_code' => null,
+        'auditorium_name' => null, 'day' => 3, 'pair' => $pair]));
+    $kimyo($own, 9);
+    $kimyo($foreign, 9);
+    $as = fn (Teacher $t) => collect(test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])
+        ->getJson(route('admin.timetable.teacher-agenda', $s['board']) . '?teacher_id=' . $t->id . '&date=2026-11-25&range=day&layer=internal')
+        ->assertOk()->json('entries'));
+    expect($as($own)->sole())->toMatchArray(['hidden' => false, 'subject' => 'Kimyo', 'groups' => ['k1/d26-02a'], 'out_of_scope' => true, 'movable' => false]);
+    expect($as($foreign)->sole())->toMatchArray(['hidden' => true, 'label' => 'band: boshqa fakultet']);
 });
 
 it('Codex: band qilgan dars boshqa kalendarli dasturda — yozuvda uning shu sanadagi haftasi, kuni, parasi va xonasi (with_*)', function () {
@@ -167,4 +195,31 @@ it('Codex: band qilgan dars boshqa kalendarli dasturda — yozuvda uning shu san
         ->and($room)->toMatchArray(['with_card' => $other->id, 'with_week' => 10, 'with_day' => 3, 'with_pair' => 3, 'with_room' => 'R123',
             'with_room_name' => '123-amaliyot xonasi', 'date_from' => '2026-11-25'])
         ->and($items->firstWhere('kind', 'teacher_busy'))->toMatchArray(['with_week' => 10, 'with_pair' => 3]);
+});
+
+it('"Boshqa xona tanlash" — room-options: shu vaqt uchun xonalar (bo\'sh tepada, band — kim bilan, biriktirilgan); huquq — ichki jadval tahriri', function () {
+    $s = ciSetup();
+    Auditorium::create(['code' => 'R200', 'name' => '200-xona', 'volume' => 60, 'active' => true]);
+    Auditorium::create(['code' => 'R10', 'name' => '10-xona', 'volume' => 5, 'active' => true]);
+    $url = route('admin.timetable.cards.room-options', $s['card']) . '?week=11&day=3&pair=3';
+    $rooms = collect(ciAs()->getJson($url)->assertOk()->json('rooms'))->keyBy('code');
+    expect($rooms['R200'])->toMatchArray(['free' => true, 'kind' => null, 'name' => '200-xona'])
+        ->and($rooms['R123'])->toMatchArray(['free' => false, 'kind' => 'busy'])
+        ->and($rooms['R123']['busy'])->toContain('d1/d26-01a')
+        ->and($rooms['R10'])->toMatchArray(['free' => false, 'kind' => 'capacity']);
+    // Hozirgi xona (R123) — birinchi; keyin bo'sh xonalar, so'ng band / sig'maydiganlar.
+    $order = $rooms->keys()->all();
+    expect($order[0])->toBe('R123')->and($rooms['R123']['current'])->toBeTrue()
+        ->and(array_search('R200', $order))->toBeLessThan(array_search('R10', $order));
+    // Hech narsa yozilmaydi.
+    expect(TimetableCardOverride::count())->toBe(0);
+    // Boshqa kafedra mudiri — rad; o'qituvchi — rad (middleware).
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 777, 'name' => 'Kimyo kafedrasi', 'code' => 'K1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'M', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = ciTeacher('BOSHQA MUDIR', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 777, 'department' => 'Kimyo kafedrasi'])->save();
+    test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])->getJson($url)->assertForbidden();
+    $t = ciTeacher('OQ', 'oqituvchi');
+    test()->withoutVite()->actingAs($t, 'teacher')->withSession(['active_role' => 'oqituvchi'])->getJson($url)->assertForbidden();
 });

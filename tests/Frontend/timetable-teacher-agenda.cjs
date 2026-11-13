@@ -101,9 +101,31 @@ const tick = () => new Promise(r => setImmediate(r));
     calls.length = 1;
     assert.match(html, /data-ag="day" class="on">Kun<\/button><button type="button" data-ag="week">Hafta/);
     // To'qnashuvdagilar qizil; ko'chiriladigani — ko'k ramka; qamrovdan tashqarisi — faqat "band: boshqa fakultet".
-    assert.match(html, /<div class="ag-e ag-conf"><span class="ag-time">08:30–13:20<\/span> Klinik farmakologiya \(A\) — d1\/d22-01a/);
-    assert.match(html, /<div class="ag-e ag-conf ag-moving"><span class="ag-time">13:30–14:50<\/span> Farmakologiya \(A\) — pp\/2024-01b · 102-xona/);
-    assert.match(html, /<div class="ag-e ag-conf ag-hidden"><span class="ag-time">13:30–14:50<\/span> band: boshqa fakultet/);
+    assert.match(html, /<div class="ag-e ag-conf"[^>]*><span class="ag-time">08:30–13:20<\/span> Klinik farmakologiya \(A\) — d1\/d22-01a/);
+    assert.match(html, /<div class="ag-e ag-conf ag-moving"[^>]*><span class="ag-time">13:30–14:50<\/span> Farmakologiya \(A\) — pp\/2024-01b · 102-xona/);
+    assert.match(html, /<div class="ag-e ag-conf ag-hidden"[^>]*><span class="ag-time">13:30–14:50<\/span> band: boshqa fakultet/);
+    // 3.1: tooltip (title) — to'liq ma'lumot: vaqt, fan (M/A), guruhlar, xona, to'qnashuv sababi.
+    assert.match(html, /title="13:30–14:50 Farmakologiya \(A — amaliy\)\nGuruh: pp\/2024-01b\nXona: 102-xona\nTo'qnashuv: bir vaqtda boshqa dars/);
+    // Xona jadvali (room_code): katakda o'qituvchi (xona emas), hafta ko'rinishida ham; tooltipda to'liq F.I.Sh. va to'qnashuv sababi;
+    // qamrovdan tashqari dars ham to'liq (out_of_scope — "faqat ko'rish").
+    const roomDay = Object.assign({}, day, { title: '123-amaliyot xonasi — 25.11.2026', move: null, entries: [
+        { date: '2026-11-19', from: 1, to: 3, start: '08:30', end: '09:50', kind: 'weekly', type: 'A', subject: 'Tibbiy biologiya. Umumiy genetika',
+            groups: ["d1/d26-01a (o'z)"], room: '123-amaliyot xonasi', teacher: 'NUROVA Z. A.', teacher_full: 'NUROVA ZUXRA ALIYEVNA', key: 'w|1|11',
+            conflict: true, conflict_with: 'Anatomiya (A) — d1/d26-03a', hidden: false, out_of_scope: true, movable: false,
+            movable_why: "Qamrovdan tashqari dars — faqat ko'rish." }] });
+    responses.push(roomDay);
+    await c2.ttAgendaOpen({ room_code: 'R123', room_name: '123-amaliyot xonasi', date: '2026-11-19', range: 'day' });
+    const rh = mount.innerHTML;
+    assert.match(rh, /<span class="ag-time">08:30–09:50<\/span> Tibbiy biologiya\. Umumiy genetika \(A\) — d1\/d26-01a \(o'z\) · NUROVA Z\. A\./);
+    assert.doesNotMatch(rh, /\(o'z\) · 123-amaliyot xonasi/);
+    assert.match(rh, /title="08:30–09:50 Tibbiy biologiya\. Umumiy genetika \(A — amaliy\)\nGuruh: d1\/d26-01a \(o'z\)\nO'qituvchi: NUROVA ZUXRA ALIYEVNA\nXona: 123-amaliyot xonasi\nTo'qnashuv: Anatomiya \(A\) — d1\/d26-03a\nQamrovdan tashqari dars — faqat ko'rish"/);
+    // Mobil: ko'chirilmaydigan darsni bosish — to'liq matn ochiladi (ag-open).
+    const tipEl = { hasAttribute: () => false, classList: { on: false, toggle() { this.on = !this.on; } } };
+    c2.agendaClick({ target: { closest: s => (s === '[data-ag-tip]' ? tipEl : null) }, currentTarget: mount });
+    assert.equal(tipEl.classList.on, true);
+    responses.push(day);
+    await c2.ttAgendaOpen({ teacher_id: '7', teacher_name: 'MUXAMMADIYEV S. B.', date: '2026-11-19', move: 'w|5|10', range: 'day' });
+    calls.length = 1;
     // 6 soatlik amaliyot — II va III parada davomi.
     assert.equal((html.match(/↳ Klinik farmakologiya \(A\)/g) || []).length, 2);
     // V para — o'chiq, sababi bilan; VI para — xona taklifi bilan.

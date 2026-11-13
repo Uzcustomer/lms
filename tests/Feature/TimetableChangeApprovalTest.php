@@ -682,7 +682,7 @@ it('o\'qituvchi so\'rovi: ertangi dars ikki bosqichdan o\'tadi, jadvalga tushadi
         ->and(\App\Models\TimetableCardOverride::sole()->only(['week', 'day', 'pair']))->toBe(['week' => 2, 'day' => 3, 'pair' => 3])
         ->and(array_column($req->details['steps'], 'action'))->toBe([
             "So'rov yuborildi: " . $req->details['notice']['old'] . ' → ' . $req->details['notice']['new'],
-            'Kafedra mudiri tasdiqladi — registrator ofisiga yuborildi',
+            "Kafedra mudiri tasdiqladi — registrator ofisi va o'quv bo'limiga yuborildi",
             "Registrator ofisi tasdiqladi — jadvalga qo'llandi"])
         ->and($req->details['steps'][0]['note'])->toBe('Konferensiya')
         ->and(TeacherNotification::where('teacher_id', $teacher->id)->latest('id')->value('title'))->toBe('Dars jadvali o\'zgarishi tasdiqlandi');
@@ -767,7 +767,7 @@ it('o\'qituvchi so\'rovi: registrator rad etsa jadval o\'zgarmaydi; o\'qituvchi 
     $head->assignRole('oqituvchi');
     $own = $card->replicate(); $own->teacher_id = $head->id; $own->teacher_name = $head->full_name; $own->group_name = 'MUDIR-GURUH'; $own->save();
     asRole($head, 'oqituvchi')->postJson(route('admin.timetable.cards.time-proposal', $own), array_merge($move, ['pair' => 5]))
-        ->assertOk()->assertJsonPath('message', fn ($m) => str_contains($m, 'registrator ofisiga'));
+        ->assertOk()->assertJsonPath('message', fn ($m) => str_contains($m, "registrator ofisi va o'quv bo'limiga"));
     $mine = TimetableChangeRequest::latest('id')->first();
     expect($mine->approval_stage)->toBe('registrar')->and($mine->details['head_skipped'])->toBeTrue()
         ->and(TeacherNotification::where('teacher_id', $reg->id)->where('title', 'like', '%tasdiq kutilmoqda%')->count())->toBeGreaterThan(0);
@@ -1284,4 +1284,72 @@ it('xona bilan joylash: tasdiq talab qilinadigan doskada kafedra mudiri — bitt
     expect($card->fresh()->only(['day', 'pair', 'auditorium_code']))->toBe(['day' => 2, 'pair' => 3, 'auditorium_code' => 'R1'])
         ->and($req->fresh()->status)->toBe('approved')
         ->and(TimetableChangeRequest::count())->toBe(1);
+});
+
+// ══ 1-bo'lim: o'quv bo'limi (va kichik admin) — "Dars jadvali tuzish" modulida registrator ofisi huquqlari (parallel) ══
+function jadvalAdmin(string $role): Teacher
+{
+    Role::findOrCreate($role, 'web');
+    $t = new Teacher();
+    $t->forceFill([
+        'hemis_id' => random_int(100000, 999999), 'full_name' => strtoupper($role), 'short_name' => $role, 'first_name' => $role, 'second_name' => $role,
+        'employee_id_number' => (string) random_int(100000, 999999), 'birth_date' => '1980-01-01', 'year_of_enter' => 2010,
+        'gender' => 'm', 'department' => 'Boshqa', 'employment_form' => 'x', 'employment_staff' => 'x', 'staff_position' => 'x',
+        'employee_status' => 'x', 'employee_type' => 'x', 'contract_number' => '1', 'decree_number' => '1',
+        'contract_date' => '2020-01-01', 'decree_date' => '2020-01-01', 'status' => true, 'login' => 'u' . random_int(100000, 999999), 'password' => bcrypt('x'),
+    ])->save();
+    $t->assignRole($role);
+
+    return $t;
+}
+
+dataset('jadval_admin_roles', ['registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'kichik_admin']);
+
+it('jadval administratori: ichki va tashqi jadvalni darhol tahrirlaydi (tasdiq rejimida ham), registrator ofisi kabi', function (string $role) {
+    ['card' => $card] = approvalSetup();
+    $who = jadvalAdmin($role);
+    asRole($who, $role)->postJson(route('admin.timetable.cards.place', $card), ['day' => 2, 'pair' => 3, 'layer' => 'internal'])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    asRole($who, $role)->postJson(route('admin.timetable.cards.place', $card), ['day' => 4, 'pair' => 1, 'layer' => 'external'])->assertOk();
+    expect($card->fresh()->only(['day', 'pair', 'ext_day', 'ext_pair']))->toBe(['day' => 2, 'pair' => 3, 'ext_day' => 4, 'ext_pair' => 1])
+        ->and(TimetableChangeRequest::where('status', 'applied')->count())->toBe(2);
+    // To'siq so'rovlari, HEMIS solishtirish, bo'laklar, hisobot — route va controller ruxsati (403 emas).
+    $board = $card->board;
+    expect(asRole($who, $role)->getJson(route('admin.timetable.block-tickets.index', $board))->status())->not->toBe(403)
+        ->and(asRole($who, $role)->postJson(route('admin.timetable.hemis-sync.unplaced-summary', $board), ['until_week' => 2])->status())->not->toBe(403);
+    // Sahifa: WEEKLY_ADMIN, tasdiqlash va HEMIS tugmalari (tugma bor — server ham ruxsat beradi).
+    $html = asRole($who, $role)->get(route('admin.timetable.index'))->assertOk()->getContent();
+    expect($html)->toContain('const TIMETABLE_CAN_APPROVE = true')->toContain('id="hemisSyncBtn"')->toContain('id="blockTicketsBtn"')
+        ->toContain('const TIMETABLE_FORBIDDEN_IDS = []');
+})->with('jadval_admin_roles');
+
+it('jadval administratori: kafedra mudiri so\'rovini tasdiqlaydi yoki rad etadi (kim birinchi qilsa); xabar o\'quv bo\'limiga ham', function (string $role) {
+    ['head' => $head, 'reg' => $reg, 'card' => $card] = approvalSetup();
+    $oquv = jadvalAdmin('oquv_bolimi');
+    $who = $role === 'oquv_bolimi' ? $oquv : jadvalAdmin($role);
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $card), ['day' => 2, 'pair' => 3])
+        ->assertOk()->assertJson(['pending_approval' => true])
+        ->assertJsonPath('message', fn ($m) => str_contains($m, "registrator ofisi va o'quv bo'limiga"));
+    $req = TimetableChangeRequest::sole();
+    // "Tasdiq kutilmoqda" — registrator ofisi va o'quv bo'limiga (kichik admin — tasdiqlaydi, lekin xabar olmaydi).
+    expect(TeacherNotification::where('teacher_id', $reg->id)->count())->toBe(1)
+        ->and(TeacherNotification::where('teacher_id', $oquv->id)->count())->toBe(1);
+    asRole($who, $role)->postJson(route('admin.timetable.change-requests.approve', $req))->assertOk();
+    expect($card->fresh()->only(['day', 'pair']))->toBe(['day' => 2, 'pair' => 3])->and($req->fresh()->status)->toBe('approved');
+    // Ikkinchisi kech qoldi — so'rov endi kutilmayapti.
+    expect(asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.change-requests.reject', $req), ['note' => 'x'])->status())->not->toBe(200);
+    // Rad etish ham.
+    asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $card), ['day' => 3, 'pair' => 5])->assertJson(['pending_approval' => true]);
+    $req2 = TimetableChangeRequest::where('status', 'pending')->sole();
+    asRole($who, $role)->postJson(route('admin.timetable.change-requests.reject', $req2), ['note' => 'Xona yo\'q'])->assertOk();
+    expect($req2->fresh()->status)->toBe('rejected')->and($card->fresh()->only(['day', 'pair']))->toBe(['day' => 2, 'pair' => 3]);
+})->with('jadval_admin_roles');
+
+it('o\'quv bo\'limiga faqat shu modulda huquq berildi: boshqa moduldagi registrator ruxsati (o\'qishni ko\'chirish arizalari) — yo\'q', function () {
+    approvalSetup();
+    $oquv = jadvalAdmin('oquv_bolimi');
+    $reg = jadvalAdmin('registrator_ofisi');
+    // Registrator — sahifa ochiladi; o'quv bo'limi — RoleMiddleware rad etadi (403 yoki orqaga yo'naltirish), sahifa ochilmaydi.
+    expect(asRole($reg, 'registrator_ofisi')->get(route('admin.student-transfer-applications.index'))->status())->toBe(200)
+        ->and(asRole($oquv, 'oquv_bolimi')->get(route('admin.student-transfer-applications.index'))->status())->toBeIn([302, 403]);
 });

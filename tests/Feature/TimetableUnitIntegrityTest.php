@@ -179,14 +179,15 @@ it('"Yaxlitlash" (unit-fix merge): eng ko\'p soatli kun, birinchi bo\'lak boshid
         'auditorium_code' => null, 'auditorium_name' => null, 'day' => 3, 'pair' => $p]));
     $b7 = $blk(7);
     $b1 = $blk(1);
-    $r = $merge()->assertOk()->json();
-    expect($r['done'])->toBe(0)->and($r['failed'])->toHaveCount(1)
+    // Sig'madi — 422 (hech narsa o'zgarmadi), sababi tuzilgan bloklar bilan.
+    $r = $merge()->assertUnprocessable()->json();
+    expect($r['done'])->toBe(0)->and($r['failed'])->toHaveCount(1)->and($r['error'])->toStartWith("Yaxlitlab bo'lmadi: ")
         ->and($r['failed'][0]['error'])->toContain("6 soat sig'maydi")->toContain('Guruh band')
         ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[2, 1], [3, 3], [3, 5]])
         ->and(TimetableCardOverride::count())->toBe(0);
     // 08:30 bo'shadi — oxiriga tekislab: 708676 — 08:30, qolganlari joyida (chorshanba 08:30–13:20).
     $b1->delete();
-    expect($merge()->assertOk()->json('done'))->toBe(1)
+    expect($merge()->assertOk()->json())->toMatchArray(['done' => 1, 'message' => 'Yaxlitlandi: d1/d26-03a — Chorshanba 08:30–13:20'])
         ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[3, 1], [3, 3], [3, 5]]);
     // Birinchi bo'lak boshidan (13:30 bo'sh): chorshanbadagi bo'laklar joyida, seshanbadagisi ketidan — 13:30.
     TimetableCardOverride::query()->delete();
@@ -250,4 +251,40 @@ it('Codex: agenda — bo\'laklar turli xonada: bir xonaning bandligi boshqa bo\'
             'range' => 'week', 'move' => 'w|' . $s['a']->id . '|11']))->assertOk()->json('move');
     expect($mv['unit_note'])->toBe("4 soat (2+2) birga ko'chiriladi")
         ->and($mv['options']['2026-11-26'][1])->toMatchArray(['ok' => true, 'why' => null]);
+});
+
+
+it('Yaxlitlash — kafedra mudiri (o\'z kafedrasi) tasdiq rejimida ham darhol qo\'llanadi va tarixga yoziladi; sig\'masa 422; boshqa kafedra — rad', function () {
+    $s = uiSetup();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'approval_required' => true]]);
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 601, 'name' => 'Biologiya kafedrasi', 'code' => 'B1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'Mahalliy', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = uiTeacher('MUDIR', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 601, 'department' => 'Biologiya kafedrasi'])->save();
+    $as = fn () => test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri']);
+    $merge = fn () => $as()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['a']->id]]);
+    // Chorshanba 08:30 band (boshqa fan, shu guruh) va 13:30 band — sig'maydi: 422, so'rov yaratilmaydi.
+    $t2 = uiTeacher('BOSHQA B.');
+    $blk = fn (int $p) => TimetableCard::create(array_merge($s['base'], ['subject_name' => 'Anatomiya', 'teacher_id' => $t2->id, 'teacher_name' => 'BOSHQA B.',
+        'auditorium_code' => null, 'auditorium_name' => null, 'day' => 3, 'pair' => $p]));
+    $b1 = $blk(1);
+    $blk(7);
+    expect($merge()->assertUnprocessable()->json('failed.0.conflict_items'))->not->toBeEmpty()
+        ->and(\App\Models\TimetableChangeRequest::count())->toBe(0)->and(TimetableCardOverride::count())->toBe(0);
+    // Bo'shadi — darhol (pending_approval emas), natija matni va tarix ("Kiritildi").
+    $b1->delete();
+    $r = $merge()->assertOk()->json();
+    expect($r)->not->toHaveKey('pending_approval')
+        ->and($r['message'])->toBe('Yaxlitlandi: d1/d26-03a — Chorshanba 08:30–13:20')
+        ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[3, 1], [3, 3], [3, 5]])
+        ->and(\App\Models\TimetableChangeRequest::where('status', 'applied')->count())->toBe(1)
+        ->and(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0);
+    // Boshqa amal (oddiy joylash) — hali ham tasdiqqa boradi.
+    $as()->postJson(route('admin.timetable.cards.place', $s['a']), ['day' => 5, 'pair' => 1])->assertOk()->assertJson(['pending_approval' => true]);
+    TimetableCardOverride::query()->delete();
+    // Boshqa kafedra fani — rad (422, sababi bilan), hech narsa o'zgarmaydi.
+    TimetableCard::whereIn('id', [$s['a']->id, $s['b']->id, $s['c']->id])->update(['kafedra_name' => 'Anatomiya kafedrasi', 'day' => 2]);
+    TimetableCard::whereKey($s['b']->id)->update(['day' => 3]);
+    expect($merge()->assertUnprocessable()->json('failed.0.error'))->toBe('Bu fan sizning kafedrangizga tegishli emas.');
 });

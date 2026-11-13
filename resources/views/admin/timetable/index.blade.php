@@ -11,7 +11,10 @@
     if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
         $timetableActiveRole = $timetableRoles[0];
     }
-    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    // Jadval administratorlari (JADVAL_ADMIN: admin, superadmin, registrator ofisi, kichik admin, o'quv bo'limi) — shu modulda teng huquqli.
+    $timetableJadvalAdmin = in_array($timetableActiveRole, \App\Http\Controllers\Admin\TimetableController::TIMETABLE_FULL_EDIT_ROLES, true);
+    // O'quv bo'limi endi jadval administratori — "faqat auditoriya biriktirish" rejimi hech kimga qo'llanmaydi (o'zgaruvchi qoldirilgan).
+    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true) && !$timetableJadvalAdmin;
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
     // O'qituvchi: jadvalni bevosita tahrirlamaydi, o'z darsiga vaqt taklifini yuboradi.
     $timetableReadOnly = in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli'], true);
@@ -24,7 +27,7 @@
     } catch (\Throwable $e) { /* Biriktirishsiz fan mas'uli uchun ham bo'sh filtr saqlanadi. */ }
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead || $timetableReadOnly;
     // Joylashtirish (kafedra mudiri — ichki qatlamda o'z kafedrasi kartalari: joyi, o'qituvchisi, xonasi).
-    $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
+    $timetableCanPlace = $timetableActiveRole === 'kafedra_mudiri';
     // Bo'shatish va sikl kalendari ("+ qo'shish") — kartalar ro'yxati/doska sozlamasini o'zgartiradi: kafedra mudiriga yopiq.
     $timetableCanUnplace = $timetableAuditoriumAssignmentOnly;
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchi, fan mas'uli va kafedra mudiriga yopiq.
@@ -54,9 +57,9 @@
     }
     // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
     // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
-    $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
+    $timetableCanApprove = in_array($timetableActiveRole, \App\Services\Timetable\TimetableChangeApproval::APPROVER_ROLES, true);
     // Butun doska bo'yicha joylanmagan kartalar hisoboti (Excel) — serverdagi ruxsat bilan bir xil rollar.
-    $timetableCanBoardReport = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    $timetableCanBoardReport = $timetableJadvalAdmin;
     $timetableUsesChangeRequests = $timetableCanApprove
         || in_array($timetableActiveRole, ['oqituvchi', 'fan_masuli', 'kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
@@ -257,7 +260,7 @@
                             <button type="button" id="hemisSyncBtn" class="tt-ktr-weeks-btn" title="Tanlangan qamrov: LMS ichki jadvali va KTR ↔ HEMIS dars jadvali. Bugungacha o'tilgan darslar balansi (soat va soni), ertadan boshlab tuzatish takliflari va HEMIS'da qilinadigan amallar">HEMIS solishtirish</button>
                             <button type="button" id="hemisTodayBtn" class="tt-ktr-weeks-btn" title="Faqat bugungi darslar (tanlangan qamrov): LMS ↔ HEMIS — o'qituvchi, xona va para vaqti; bugun qo'shish/o'chirish faqat belgilanmagan (davomat/baho yo'q) darslar uchun; davomat olingan yoki baho qo'yilgan darsga tegilmaydi">Bugungi darslar (HEMIS)</button>
                             @endif
-                            @if(in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi', 'kafedra_mudiri', 'oqituvchi'], true))
+                            @if($timetableJadvalAdmin || in_array($timetableActiveRole, ['kafedra_mudiri', 'oqituvchi'], true))
                             <button type="button" id="blockTicketsBtn" class="tt-ktr-weeks-btn" title="HEMIS to'siqlari bo'yicha so'rovlar: javob berish va (kafedra mudiri) hal qilish">To'siq so'rovlari</button>
                             @endif
                         </div>
@@ -1020,7 +1023,7 @@
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgCount" class="text-xs text-slate-400"></span>
-                                    @if(in_array($timetableActiveRole, ['admin', 'superadmin', 'registrator_ofisi'], true))
+                                    @if($timetableJadvalAdmin)
                                         {{-- Kafedralar kesimida o'qituvchi va xona biriktirish hisoboti (admin, registrator ofisi) --}}
                                         <button type="button" id="asgReportBtn" class="asc-btn text-xs" style="background:#059669;color:#fff;border-color:#059669"
                                                 title="Har bir kafedra bo'yicha o'qituvchi va xona biriktirilgan / biriktirilmagan darslar">
@@ -1482,7 +1485,15 @@
         .tt-par-hl { outline: 3px solid #6366f1 !important; outline-offset: -2px; }
         .tt-chip.tt-mudir-ph { outline: 2px dashed #ca8a04; outline-offset: -2px; background-image: linear-gradient(135deg, rgba(234,179,8,.18), rgba(148,163,184,.18)) !important; }
         .tt-mudir-ph-tag { font-size: 9px; font-weight: 700; color: #854d0e; background: #fef9c3; border-radius: 3px; padding: 0 3px; display: inline-block; }
-        .pn-card.pn-flash, td.tt-slot-flash { outline: 3px solid #f59e0b !important; outline-offset: -2px; transition: outline-color .3s; }
+.pn-card.pn-flash, td.tt-slot-flash { outline: 3px solid #f59e0b !important; outline-offset: -2px; transition: outline-color .3s; }
+        /* "Joylash uchun tanlash": tanlangan karta guruh ustuni (kataklar va sarlavha) — chap va o'ngda qalin ikki chiziq (3px ko'k + 1px oq). */
+        #grid td.tt-pick-col, #grid th.tt-pick-colh { box-shadow: inset 3px 0 0 #2563eb, inset 4px 0 0 #fff, inset -3px 0 0 #2563eb, inset -4px 0 0 #fff; }
+        #grid th.tt-pick-colh { background: #dbeafe; }
+        #ttPickColMsg { position: sticky; left: 0; top: 0; z-index: 30; margin: 4px; padding: 4px 8px; border: 1px solid #93c5fd; border-radius: 6px;
+            background: #eff6ff; color: #1e3a8a; font-size: 12px; }
+        #ttPickColMsg button { margin-left: 6px; border: 1px solid #2563eb; border-radius: 5px; padding: 0 8px; color: #1d4ed8; background: #fff; }
+        /* Sikl: tanlangan karta guruh qatori — yuqori va pastda qalin ikki chiziq. */
+        #cycleGrid .cyc-cell.cyc-pick-row { box-shadow: inset 0 3px 0 #2563eb, inset 0 4px 0 #fff, inset 0 -3px 0 #2563eb, inset 0 -4px 0 #fff !important; }
         #ttAgendaModal { position: fixed; inset: 0; z-index: 10030; background: rgba(15,23,42,.35); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; }
         #ttAgendaModal .ag-box { background: #fff; border-radius: 10px; width: min(980px, 100%); padding: 12px 14px; box-shadow: 0 20px 60px #0005; font-size: 12px; }
         #ttAgendaModal .ag-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -1499,6 +1510,9 @@
         #ttAgendaModal .ag-e.ag-moving { outline: 2px solid #2563eb; outline-offset: 1px; }
         #ttAgendaModal .ag-e.ag-hidden { color: #64748b; font-style: italic; }
         #ttAgendaModal .ag-e.ag-cont { opacity: .7; }
+        /* Hafta ko'rinishida katak tor — bitta qator, oxiri "…"; to'liq matn — sichqoncha ustida (title), mobil — bosilganda (ag-open). */
+        #ttAgendaModal .ag-week .ag-e { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+        #ttAgendaModal .ag-e.ag-open { white-space: normal; overflow: visible; max-width: none; }
         #ttAgendaModal .ag-tag { font-size: 10px; border-radius: 4px; padding: 0 4px; background: #dc2626; color: #fff; }
         #ttAgendaModal .ag-tag-mv { background: #2563eb; }
         #ttAgendaModal .ag-free { color: #16a34a; }
@@ -3511,8 +3525,13 @@
                 box.appendChild(t);
                 setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 6500);
             }
+            // Umumiy qoida (barcha tugmalar): pending_approval — server xabari ("So'rov … yuborildi") va so'rov raqami (№…), so'rovlar ro'yxati
+            // qayta yuklanadi; tugma egasi qatorda "tasdiq kutilmoqda" ko'rsatadi (masalan unitFixPending).
+            function pendingApprovalText(j) {
+                return (j && j.message ? j.message : "So'rov tasdiqqa yuborildi.") + (j && j.change_request_id ? ' (№' + j.change_request_id + ')' : '');
+            }
             function onPendingApproval(j) {
-                ttToast('<b>&#9203; Tasdiqqa yuborildi</b><div>' + esc(j.summary || '') + '</div><div class="tt-toast-sub">' + esc(j.message || '') + '</div>', 'warn');
+                ttToast('<b>&#9203; Tasdiqqa yuborildi</b><div>' + esc(j.summary || '') + '</div><div class="tt-toast-sub" data-pending-msg>' + esc(pendingApprovalText(j)) + '</div>', 'warn');
                 clearTimeout(pendingReloadTimer);
                 pendingReloadTimer = setTimeout(async () => {
                     if (!board) return;
@@ -3554,6 +3573,8 @@
                 badge.textContent = n; badge.classList.toggle('hidden', !n);
                 markPendingChanges();
                 renderCyclePendingBar();
+                // Qatordagi "tasdiq kutilmoqda" — faqat hali kutilayotgan so'rovlar (bekor / rad / tasdiqlangan — tugma qayta ochiladi).
+                if (typeof unitFixPendingSync === 'function' && unitFixPendingSync() && viewMode !== 'cycle') renderPanel();
                 if (document.getElementById('crModal') && document.getElementById('crModal').classList.contains('open')) renderChangeReqModal();
             }
             // Tarix sahifalab yuklanadi (eng yangisidan): reset — boshidan.
@@ -3637,15 +3658,15 @@
                 const approver = Boolean(changeReqs.can_approve);
                 const modeHtml = approver
                     ? '<label class="cr-mode"><input type="checkbox" id="crModeChk"' + (changeReqs.approval_required ? ' checked' : '') + '> ' +
-                      'Kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tsin</label>'
+                      'Kafedra mudirlari o\'zgarishlari registrator ofisi / o\'quv bo\'limi tasdig\'idan o\'tsin</label>'
                     : '<div class="cr-mode-info">' + (TIMETABLE_ROLE === 'oqituvchi' || TIMETABLE_ROLE === 'fan_masuli'
-                        ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi tasdiqlagach jadvalga tushadi.'
+                        ? 'Taklifingiz avval kafedra mudiri, keyin registrator ofisi yoki o\'quv bo\'limi tasdiqlagach jadvalga tushadi.'
                         : TIMETABLE_DEPARTMENT_HEAD
                         ? (changeReqs.approval_required
-                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi. Bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish — darhol.'
+                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi yoki o\'quv bo\'limi tasdiqlagandan keyin jadvalga tushadi. Bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish — darhol.'
                             : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')
                         : (changeReqs.approval_required
-                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi (bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish bundan mustasno).'
+                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi yoki o\'quv bo\'limi tasdig\'idan o\'tadi (bo\'sh darsga birinchi marta o\'qituvchi yoki xona biriktirish bundan mustasno).'
                             : 'Bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')) + '</div>';
                 const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
@@ -5317,7 +5338,7 @@
                         else { if (!$('tkPair').value) return alert('Vaqt tanlang.'); body.pair = +$('tkPair').value; if (k === 'day') body.day = +$('tkDay').value; }
                         try {
                             const r = await api(BASE + '/block-tickets/' + t.id + '/resolve', 'POST', body);
-                            alert(r.status === 'pending_registrar' ? 'Kunni o\'zgartirish so\'rovi registrator ofisiga yuborildi.' : 'Saqlandi: o\'zgarish LMS ichki jadvalida qo\'llandi.');
+                            alert(r.status === 'pending_registrar' ? 'Kunni o\'zgartirish so\'rovi registrator ofisi va o\'quv bo\'limiga yuborildi.' : 'Saqlandi: o\'zgarish LMS ichki jadvalida qo\'llandi.');
                             hsTicketOpen(t.id);
                         } catch (e) { alert(hsErrText(e)); }
                     };
@@ -6999,10 +7020,12 @@
                     ? ((cyclePlanData && cyclePlanData.cycle_cards) || []).find(item => item.key === cardKey)
                     : null;
                 $('cycleGrid').querySelectorAll('[data-cycle-row]').forEach(cell => {
-                    cell.classList.remove('cycle-row-target', 'cycle-row-muted');
+                    cell.classList.remove('cycle-row-target', 'cycle-row-muted', 'cyc-pick-row');
                     if (!card) return;
-                    cell.classList.add(cycCardRowOk(card, cell.dataset.cycleRow)
-                        ? 'cycle-row-target' : 'cycle-row-muted');
+                    const ok = cycCardRowOk(card, cell.dataset.cycleRow);
+                    cell.classList.add(ok ? 'cycle-row-target' : 'cycle-row-muted');
+                    // "Joylash uchun tanlash" (tanlangan karta) — guruh qatori qalin ikki chiziq bilan, tanlov bekor bo'lguncha.
+                    if (ok && cycleDragKey === cardKey) cell.classList.add('cyc-pick-row');
                 });
             }
             // Kun chiziqlari va dam olish ustunlari jadval fonida chiziladi:
@@ -8001,17 +8024,28 @@
             // Oynada (ko'chiriladigandan boshqa) ko'chirsa bo'ladigan dars bormi — sarlavhadagi "boshqa darsni tanlash" ko'rsatmasi uchun.
             const agendaOtherMovable = (j, moveKey) => ((j && j.entries) || []).some(e => e.key && e.movable && e.key !== moveKey);
             // Dars: vaqt, fan (M/A), guruhlar, xona; qamrovdan tashqari — faqat "band: boshqa fakultet"; davomi (keyingi para) — "↳".
+            // Katak tooltipi (to'liq): vaqt, fan (M/A), barcha guruhlar, o'qituvchi to'liq F.I.Sh., xona, to'qnashuv sababi.
+            function agendaEntryTip(e) {
+                if (e.hidden) return [(e.start || '') + '–' + (e.end || ''), e.label].filter(Boolean).join('\n');
+                return [(e.start || '') + '–' + (e.end || '') + ' ' + e.subject + ' (' + (e.type === 'M' ? "M — ma'ruza" : 'A — amaliy') + ')',
+                    'Guruh: ' + (e.groups || []).join(', '), e.teacher_full || e.teacher ? "O'qituvchi: " + (e.teacher_full || e.teacher) : '',
+                    e.room ? 'Xona: ' + e.room : '', e.conflict ? "To'qnashuv: " + (e.conflict_with || 'bir vaqtda boshqa dars') : '',
+                    e.out_of_scope ? "Qamrovdan tashqari dars — faqat ko'rish" : ''].filter(Boolean).join('\n');
+            }
             function agendaEntryHtml(e, moveKey, cont, compact) {
                 const moving = !!(e.key && e.key === moveKey);
                 const cls = 'ag-e' + (e.info_only ? ' tt-info-only' : '') + (e.conflict ? ' ag-conf' : '') + (moving ? ' ag-moving' : '') + (e.hidden ? ' ag-hidden' : '') + (cont ? ' ag-cont' : '');
-                // Sudrash: ko'chirsa bo'ladigan dars (server — movable); bo'lmasa — sababi sarlavhada (title).
-                const drag = e.key && e.movable ? ' data-ag-drag="' + esc(e.key) + '" title="Bosing yoki sudrab bo\u2018sh paraga ko\u2018chiring"'
-                    : (e.key && e.movable_why ? ' title="' + esc(e.movable_why) + '"' : '');
+                // Sudrash: ko'chirsa bo'ladigan dars (server — movable); bo'lmasa — sababi. Tooltip — to'liq ma'lumot va (bo'lsa) ko'chirish izohi.
+                const hint = e.key && e.movable ? 'Bosing yoki sudrab bo\u2018sh paraga ko\u2018chiring' : (e.key && e.movable_why ? e.movable_why : '');
+                const tip = ' data-ag-tip title="' + esc(agendaEntryTip(e) + (hint && hint !== "Qamrovdan tashqari dars — faqat ko'rish." ? '\n' + hint : '')) + '"';
+                const drag = (e.key && e.movable ? ' data-ag-drag="' + esc(e.key) + '"' : '') + tip;
                 if (cont) return '<div class="' + cls + '"' + drag + '>↳ ' + esc(e.hidden ? e.label : e.subject + ' (' + e.type + ')') + '</div>';
                 // To'qnashuvdagi katakda ko'chirsa bo'ladigan dars — "↕" (ko'chirib bo'lmaydiganida yo'q; sababi — title).
                 const icon = e.conflict && e.key && e.movable ? '<span class="ag-mvicon" aria-hidden="true">↕</span>' : '';
+                // Xona jadvalida — o'qituvchi, o'qituvchi jadvalida — xona nomi (katak tor bo'lsa — "…", to'liqi tooltipda).
+                const who = ttAgenda && ttAgenda.room_code ? (e.teacher || '') : (e.room || '');
                 const text = e.hidden ? e.label : e.subject + ' (' + e.type + ') — ' + (compact ? cfGroups(e.groups) : (e.groups || []).join(', ')) +
-                    (e.room && !compact ? ' · ' + e.room : '') + (e.info_only && infoOnlyText(e) ? ' · ' + infoOnlyText(e) : '');
+                    (who ? ' · ' + who : '') + (e.info_only && infoOnlyText(e) ? ' · ' + infoOnlyText(e) : '');
                 return '<div class="' + cls + '"' + drag + '>' + icon + '<span class="ag-time">' + esc((e.start || '') + '–' + (e.end || '')) + '</span> ' + esc(text) +
                     (e.conflict ? ' <span class="ag-tag">to‘qnashuv</span>' : '') + (moving ? ' <span class="ag-tag ag-tag-mv">ko‘chiriladi</span>' : '') + '</div>';
             }
@@ -8358,6 +8392,9 @@
                 if (agDragSuppress) { e.preventDefault(); e.stopPropagation(); return; }
                 if (e.target === e.currentTarget) { ttAgendaClose(); return; }
                 const t = e.target.closest ? e.target : null;
+                // Mobil (tooltip yo'q): ko'chirilmaydigan darsni bosish — to'liq matn ochiladi / yopiladi.
+                const tipEl = t && t.closest('[data-ag-tip]');
+                if (tipEl && !tipEl.hasAttribute('data-ag-drag')) { tipEl.classList.toggle('ag-open'); return; }
                 const pick = t && t.closest('[data-ag-pick]');
                 if (pick && !pick.disabled) {
                     const [date, pair] = pick.dataset.agPick.split('|');
@@ -8858,7 +8895,8 @@
             const CYC_PARTS = ['lecture', 'practice'];
             const CYC_LOOK_LABEL = { both: 'Birga', lecture: 'Faqat ma\'ruza', practice: 'Faqat amaliy' };
             // Bugungi kun — faqat shu rollar (dars boshlangan, hatto tugagan bo'lsa ham; server ham tekshiradi — TimetableStaffToday).
-            const CYC_TODAY_ROLES = ['admin', 'superadmin', 'registrator_ofisi'];
+            // Server TODAY_STAFF_ROLES (= TIMETABLE_FULL_EDIT_ROLES) bilan bir xil.
+            const CYC_TODAY_ROLES = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
             // Kunni tanlab bo'ladimi: darsi bor, kelgusi kun; bugungi — admin / registrator ofisi (har qanday holatda); o'tgan — hech kim.
             function cycSelEligible(block, offset) {
                 const dp = block && block.day_plan ? block.day_plan[offset] : null;
@@ -9405,7 +9443,7 @@
                     '<p>' + esc(card.subject) + ' · ' + esc(card.group) + ' · ' + (lecture ? 'ma’ruza' : 'amaliy') + ' (sikl)</p>' +
                     (lecture ? '<p class="text-sm font-semibold text-amber-700" data-flow>Ma’ruza butun oqim uchun o‘zgaradi.</p>' : '') +
                     '<p class="text-sm">' + esc(date.d) + ' (' + dp.k + '-kun) · hozir: ' + esc(label(cur)) + '</p>' +
-                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Kun, guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
+                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi yoki o‘quv bo‘limi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Kun, guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
                     // Sudrab ochilganda (opts.start) — yangi vaqt oldindan tanlangan; aks holda hozirgi.
                     '<label>Yangi boshlanish vaqti<select name="start_hour" required>' + Array.from({ length: maxStart }, (_, i) => i + 1)
                         .map(h => '<option value="' + h + '"' + (h === (opts.start >= 1 && opts.start <= maxStart ? +opts.start : cur) ? ' selected' : '') + '>'
@@ -9689,7 +9727,8 @@
                     if ((own || []).some(cfWantsShiftAdvice)) btns += '<button type="button" data-cyc-shift disabled title="tekshirilmoqda…">Bo‘sh smenaga o‘tkazish</button>';
                     btns += '<button type="button" data-cyc-teacher>Boshqa o‘qituvchi</button>';
                     // Amaliy yoki ma'ruza to'qnashuvi hali mudirga yozilmagan bo'lsa.
-                    if ((own || []).some(i => !i.past && (i.lecture ? !card.mudir_ph_lec : !card.mudir_ph))) btns += '<button type="button" data-cyc-mudir>Vaqtincha kafedra mudiriga yozish</button>';
+                    // Yozish — faqat jadval administratorlari (kafedra mudiri — yo'q; qaytarish — bor).
+                    if (typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN && (own || []).some(i => !i.past && (i.lecture ? !card.mudir_ph_lec : !card.mudir_ph))) btns += '<button type="button" data-cyc-mudir>Vaqtincha kafedra mudiriga yozish</button>';
                 }
                 return '<div class="cyc-links"><div><span class="dp-sub">O‘qituvchi:</span> ' +
                     (t && t.id ? '<a href="#" class="tt-agenda-link" data-cyc-agenda="t">' + esc(t.name) + '</a>' : '<i>biriktirilmagan</i>') + '</div>' +
@@ -9716,6 +9755,21 @@
                 cycleDragKey = key;
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(o => o.classList.toggle('cycle-pn-selected', o.dataset.cycleKey === key));
                 highlightCycleRow(key);
+                // Jadval guruh qatoriga suriladi (gorizontal + vertikal): birinchi bo'sh (blok emas) katak, bo'lmasa qatorning birinchi katagi.
+                const rows = [...$('cycleGrid').querySelectorAll('.cyc-pick-row')];
+                const target = rows.find(x => !x.classList.contains('cyc-block')) || rows[0];
+                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', inline: 'center' });
+                // Qatori hozirgi filtrda (oqim filtri) yo'q — "Guruhni ko'rsatish": filtr tozalanib qayta chiziladi.
+                if (!rows.length && typeof cycleGroupFilter !== 'undefined' && cycleGroupFilter) {
+                    $('cycleMsg').innerHTML = 'Bu guruh hozirgi filtrda ko\'rinmaydi — <button type="button" data-cyc-pick-show style="border:1px solid #2563eb;border-radius:5px;padding:0 8px;color:#1d4ed8;background:#fff">Guruhni ko\'rsatish</button>';
+                    $('cycleMsg').querySelector('[data-cyc-pick-show]').onclick = async () => {
+                        cycleGroupFilter = '';
+                        if ($('cycleGroupFilter')) $('cycleGroupFilter').value = '';
+                        await loadCyclePlan();
+                        cycSelectForPlace(key);
+                    };
+                    return;
+                }
                 $('cycleMsg').textContent = 'Endi shu oqim qatoridagi boshlanish kunini bosing.';
             }
             async function cycPhRevert(card, btn) {
@@ -9878,6 +9932,15 @@
             // key — sikl birligi kaliti: kun ro'yxatida "shu dars" — aynan shu birlik yozuvi (agenda kaliti "c|<key>|<sana>"), guruhi emas.
             function cycCfBlocksBind(pop, own, card, reposition, key) {
                 const blocks = cycCfBlocks(own);
+                pop.querySelectorAll('[data-cyc-room-pick]').forEach(a => a.onclick = async ev => {
+                    ev.preventDefault(); ev.stopPropagation();
+                    const k = key || (card && card.key);
+                    if (!k) return;
+                    closeCycDayPop();
+                    await openCycleAssign(k);
+                    const sel = document.getElementById('cycAssignRoom');
+                    if (sel && sel.focus) { sel.focus(); if (sel.scrollIntoView) sel.scrollIntoView({ block: 'center' }); }
+                });
                 pop.querySelectorAll('[data-cyc-cb-show]').forEach(a => a.onclick = ev => {
                     ev.preventDefault(); ev.stopPropagation();
                     const i = +a.dataset.cycCbShow, el = pop.querySelector('[data-cyc-cb-detail="' + i + '"]'), blk = blocks[i];
@@ -9903,7 +9966,13 @@
                 return '<div class="cb-title" data-cb-title style="font-weight:600;color:#991b1b;margin-top:4px">' + esc(title) + '</div>' +
                     blocks.map((b, bi) => '<div class="cb-block" data-cb-block="' + (kindAttr[b.kind] || 'other') + '" style="margin-top:3px">' +
                         '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cfLabel(b.kind) + (b.who ? ': ' + b.who : '')) + '</b>' +
-                        (['room', 'teacher', 'group'].includes(kindAttr[b.kind]) ? '<a href="#" data-cyc-cb-show="' + bi + '" style="white-space:nowrap;text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</div>' +
+                        '<span style="white-space:nowrap">' +
+                        // Sikl: "Xona band" — "Boshqa xona tanlash" (sikl biriktirish oynasi, xona tanlovi: bandlik va sig'im serverda tekshiriladi).
+                        // Faqat biriktirish oynasi aynan shu darsni o'zgartirsa: amaliy to'qnashuv (blok — amaliy) yoki kartaning o'zi ma'ruza; birlashgan
+                        // blokdagi ma'ruza xonasi to'qnashuvi — amaliy biriktirish ma'ruzaga tegmaydi, havola yo'q.
+                        (kindAttr[b.kind] === 'room' && typeof cycActAllowed === 'function' && cycActAllowed()
+                            && (b.items.every(i => !i.lecture) || ((typeof cycCardOf === 'function' && cycCardOf(key)) || {}).type === 'lecture') ? '<a href="#" data-cyc-room-pick style="text-decoration:underline dotted;margin-right:8px">Boshqa xona tanlash</a>' : '') +
+                        (['room', 'teacher', 'group'].includes(kindAttr[b.kind]) ? '<a href="#" data-cyc-cb-show="' + bi + '" style="text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</span></div>' +
                         '<ul class="cf-list">' + b.items.map((i, n) => cfLineHtml(i, { move: !i.lecture && i.date_from ? 'c|' + key + '|' + i.date_from : null, idx: b.idx[n] })).join('') + '</ul>' +
                         '<div data-cyc-cb-detail="' + bi + '" hidden style="margin-top:3px"></div></div>').join('');
             }
@@ -12423,7 +12492,10 @@
                 const who = (res && Array.isArray(res.notified) ? res.notified : []).filter(Boolean);
                 return who.length ? 'Kafedra mudiriga yozildi va xabar yuborildi: ' + esc(who.join(', ')) : 'Kafedra mudiriga yozildi (xabar yuborilmadi — kafedra mudiri topilmadi)';
             }
-            const mudirPhAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek
+            // "Vaqtincha kafedra mudiriga yozish" — faqat jadval administratorlari (registrator ofisi, o'quv bo'limi, adminlar); kafedra mudiri
+            // yozmaydi (server 403). "Asl holatga qaytarish" — kafedra mudirida qoladi (o'z kafedrasi fanlari — server tekshiradi).
+            const mudirPhAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek && typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN;
+            const mudirPhRevertAllowed = () => !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek
                 && (typeof WEEKLY_ADMIN !== 'undefined' && WEEKLY_ADMIN || TIMETABLE_ROLE === 'kafedra_mudiri');
             let mudirPick = null;   // tashqi joyi yo'q karta — jadvaldan katak kutilmoqda
             const phRevertErr = {};   // birlik kaliti → "asl o'qituvchiga qaytarib bo'lmadi" sababi
@@ -12544,7 +12616,7 @@
                         return '<div class="pn-mudir-ph-item" data-ph-card="' + c.id + '" style="margin-top:3px;border-top:1px dotted #fde68a;padding-top:3px">' +
                             esc(cardGroups(c).join(', ') + ' · ' + c.subject_name) + ' <span style="color:#a16207">(asl o\'qituvchi: ' + esc(ph.orig_teacher_name || 'biriktirilmagan') + ')</span>' +
                             (weeks.length > 1 ? ' <span style="color:#a16207">· haftalar: ' + esc(weeks.join(', ')) + '</span>' : '') +
-                            (mudirPhAllowed() ? '<div style="margin-top:2px">' +
+                            (mudirPhRevertAllowed() ? '<div style="margin-top:2px">' +
                                 '<button type="button" data-ph-revert="' + c.id + '" data-ph-mode="original" title="Mudirga yozilishidan oldingi joy, o\'qituvchi va xona (bandlik tekshirilmaydi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Asl holatga qaytarish</button> ' +
                                 '<button type="button" data-ph-revert="' + c.id + '" data-ph-mode="here" title="Dars shu joyda qoladi — asl o\'qituvchi va xona (bandlik tekshiriladi)" style="border:1px solid #94a3b8;color:#334155;background:#fff;border-radius:4px;padding:0 5px">Shu joyda asl o\'qituvchiga</button>' +
                                 weekSel + '</div>' : '') +
@@ -12554,6 +12626,16 @@
             // ===== "Joylanmagan kartalar" paneli: qisman joylangan birlik belgisi, yaxlit joylash natijasi, karta oynasi =====
             const unitFixErr = {};   // birlik kaliti → oxirgi "yaxlit joylanmadi" sababi (kartada qizil izoh)
             const unitFixItems = {};   // birlik kaliti → tuzilgan sabablar (server conflict_items) — turlarga ajratilgan bloklar
+            // Tasdiqqa yuborilgan unit-fix so'rovlari: "doska|hafta|birlik" → so'rov raqami (tasdiq rejimi: "tasdiq kutilmoqda", tugma o'chiq).
+            // Boshqa hafta / doskada ko'rinmaydi; so'rov kutilayotganlar ro'yxatidan chiqsa (bekor qilindi, rad etildi, tasdiqlandi) — olinadi.
+            const unitFixPending = {};
+            const unitPendKey = c => (board ? board.id : 0) + '|' + curWeek + '|' + unitKey(c);
+            function unitFixPendingSync() {
+                const live = new Set(pendingReqs().map(r => +r.id));
+                let gone = false;
+                Object.keys(unitFixPending).forEach(k => { if (!live.has(+unitFixPending[k])) { delete unitFixPending[k]; gone = true; } });
+                return gone;
+            }
             const unitEditable = () => weeklyCanEdit() && !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek;
             // Shu haftadagi bo'lingan birliklar (birlik kaliti → unitState + card): faqat amaliy, qamrovdagi (weekActiveCards).
             function weeklySplitUnits(uIdx = buildUnitIndex()) {
@@ -12571,11 +12653,12 @@
                 return '<div class="pn-split" data-pn-split style="border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
                     'Bo\'lingan: <b>' + units.size + ' ta</b> <span style="color:#b91c1c">(bir kunda bir fandan amaliy soatlar bo\'linmaydi)</span>' +
                     [...units.entries()].map(([k, st]) => {
-                        const err = unitFixErr[k], errItems = unitFixItems[k];
+                        const err = unitFixErr[k], errItems = unitFixItems[k], pend = unitFixPending[unitPendKey(st.card)];
                         return '<div class="pn-split-item" data-split-key="' + esc(k) + '" style="margin-top:3px;border-top:1px dotted #fecaca;padding-top:3px">' +
                             '<a href="#" data-split-go="' + esc(k) + '" style="text-decoration:underline dotted">' + esc(cardGroups(st.card).join(', ') + ' · ' + st.card.subject_name) + '</a>' +
                             ' — ' + st.len + ' soat (' + st.list.map(cardLen).join('+') + '): <span data-split-days>' + esc(unitDaysText(st.list)) + '</span>' +
-                            (unitEditable() ? ' <button type="button" data-unit-merge="' + esc(k) + '" title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
+                            (unitEditable() ? ' <button type="button" data-unit-merge="' + esc(k) + '"' + (pend ? ' disabled' : '') + ' title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
+                            (pend ? ' <span data-unit-pending style="color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend > 0 ? ' (№' + esc(pend) + ')' : '') + '</span>' : '') +
                             (err ? (errItems && errItems.length
                                 ? '<div class="pn-split-err" style="margin-top:2px">' + cbHtml(cbBlocks(errItems), false, { compact: true }) + '</div>'
                                 : '<div class="pn-split-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>') : '') + '</div>';
@@ -12583,14 +12666,16 @@
             }
             // "Qisman: 3 soatdan 2 soati joylangan (Seshanba 10:00); qolgani 1 soat" + shu birlik tugmalari (+ qizil izoh).
             function partialBadgeHtml(st, err) {
+                const pend = unitFixPending[unitPendKey(st.card)];
                 const placed = st.placed.slice().sort((a, b) => placeInWeek(a, curWeek).pair - placeInWeek(b, curWeek).pair);
                 const at = placed.length ? placeInWeek(placed[0], curWeek) : null;
                 const placedLen = unitLen(placed);
                 const when = at ? ' (' + ((boardDayNames()[at.day - 1]) || (at.day + '-kun')) + ' ' + slotStart(at.pair) + ')' : '';
                 return '<div class="pn-partial-badge" style="margin-top:3px;font-size:10px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:2px 4px">' +
                     'Qisman: ' + st.len + ' soatdan ' + placedLen + ' soati joylangan' + esc(when) + '; qolgani ' + (st.len - placedLen) + ' soat' +
-                    (unitEditable() ? '<div style="margin-top:2px"><button type="button" data-unit-fix="complete" data-unit-card="' + st.card.id + '" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">yaxlit joylash</button> ' +
-                        '<button type="button" data-unit-fix="clear" data-unit-card="' + st.card.id + '" style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 5px">yaxlit bo\'shatish</button></div>' : '') +
+                    (unitEditable() ? '<div style="margin-top:2px"><button type="button" data-unit-fix="complete" data-unit-card="' + st.card.id + '"' + (pend ? ' disabled' : '') + ' style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">yaxlit joylash</button> ' +
+                        '<button type="button" data-unit-fix="clear" data-unit-card="' + st.card.id + '"' + (pend ? ' disabled' : '') + ' style="border:1px solid #d97706;color:#92400e;background:#fff;border-radius:4px;padding:0 5px">yaxlit bo\'shatish</button></div>' : '') +
+                    (pend ? '<div data-unit-pending style="margin-top:2px;color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend > 0 ? ' (№' + esc(pend) + ')' : '') + '</div>' : '') +
                     (err ? '<div class="pn-partial-err" style="margin-top:2px;color:#b91c1c;font-weight:600">✖ ' + esc(err) + '</div>' : '') + '</div>';
             }
             // unit-fix: faqat berilgan birliklar (card_ids); natija — sahifa ichidagi oynada, sig'maganlari kartada qizil izoh bilan.
@@ -12603,8 +12688,21 @@
                 let r;
                 try {
                     r = await api(BASE + '/boards/' + board.id + '/unit-fix', 'POST', { week: curWeek, action, card_ids: units.flatMap(st => st.list.map(x => x.id)) });
-                } catch (e) { if (btn) btn.disabled = false; showUnitFixResult({ error: e.message }, action, units); return; }
+                } catch (e) {
+                    if (btn) btn.disabled = false;
+                    // Sig'madi (422) — hech narsa o'zgarmadi: sababi tuzilgan bloklar bilan (failed + conflict_items).
+                    if (e && e.data && Array.isArray(e.data.failed) && e.data.failed.length) r = e.data;
+                    else { showUnitFixResult({ error: e.message }, action, units); return; }
+                }
                 units.forEach(st => { delete unitFixErr[unitKey(st.card)]; delete unitFixItems[unitKey(st.card)]; });
+                // Tasdiq rejimi (so'rov yuborildi): "Yaxlitlandi: 0 ta" emas — qatorda "tasdiq kutilmoqda", tugma o'chiq (onPendingApproval —
+                // xabar va so'rovlar ro'yxati).
+                if (r && r.pending_approval) {
+                    units.forEach(st => { unitFixPending[unitPendKey(st.card)] = +r.change_request_id || -1; });
+                    if (btn) btn.disabled = true;
+                    renderPanel();
+                    return;
+                }
                 (r && r.failed || []).forEach(f => {
                     const st = units.find(u => u.list.some(x => (f.card_ids || []).includes(x.id)));
                     if (st) { unitFixErr[unitKey(st.card)] = f.error; unitFixItems[unitKey(st.card)] = Array.isArray(f.conflict_items) ? f.conflict_items : null; }
@@ -12621,8 +12719,8 @@
                 m.setAttribute('role', 'dialog');
                 m.style.cssText = 'position:fixed;inset:0;z-index:80;background:rgba(15,23,42,.35);display:flex;align-items:center;justify-content:center;padding:16px';
                 const failed = (r && r.failed) || [];
-                const head = r.error ? 'Xatolik: ' + r.error
-                    : action === 'merge' ? (failed.length ? 'Yaxlitlab bo\'lmadi — hech narsa o\'zgarmadi' : 'Yaxlitlandi: ' + (r.done || 0) + ' ta')
+                const head = r.error && !failed.length ? 'Xatolik: ' + r.error
+                    : action === 'merge' ? (failed.length ? 'Yaxlitlab bo\'lmadi — hech narsa o\'zgarmadi' : (r.message || 'Yaxlitlandi: ' + (r.done || 0) + ' ta'))
                     : (action === 'clear' ? 'Yaxlit bo\'shatildi: ' : 'Yaxlit joylandi: ') + (r.done || 0) + ' ta' + (failed.length ? ' · joylanmadi: ' + failed.length + ' ta' : '');
                 m.innerHTML = '<div style="background:#fff;border-radius:10px;max-width:560px;width:100%;max-height:80vh;overflow:auto;padding:12px 16px;box-shadow:0 20px 60px #0004;font-size:12px">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>' + esc(head) + '</b>' +
@@ -12750,8 +12848,23 @@
                             const at = isPlaced ? effPlace(roomCard) : null;
                             openPlaceRoomPick(roomCard, at ? at.day : d, at ? at.pair : p);
                         } : null,
-                        mudir: mudirPhAllowed() && !phOf(c) ? () => { const mb = pop.querySelector('[data-pop-mudir]'); if (mb && !mb.disabled) openMudirPhConfirm(c, mudirPhSlot(c)); } : null,
-                        select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); } : null,
+                        // "Boshqa xona tanlash" — "Xona band" blokida (boshqa sabablar bilan birga ham): xonalar ro'yxati (server), tanlangach qayta
+                        // tekshiruv va joylash / shu hafta xonani almashtirish (placeCardWithRoom: birlik — unit-place, yakka — week-override).
+                        roomPick: edit && W && weeklyLayer === 'internal' && !(isPlaced && unitIsSplit(list)) ? (() => {
+                            const at = isPlaced ? effPlace(roomCard) : null;
+                            const day = at ? at.day : d, pair = at ? at.pair : p;
+                            // Xonalar ro'yxati — birlik boshidan (bosilgan bo'lak keyingisi bo'lsa ham): placeCardWithRoom (unitMovePlan) bilan bir xil.
+                            const plan = unitMovePlan(roomCard, pair);
+                            return { card: roomCard, day, pair: plan ? plan[0][1] : pair, placed: !!isPlaced, apply: async room => {
+                                const r = await placeCardWithRoom(roomCard, day, pair, room);
+                                closePanelCardPop();
+                                selected = null;
+                                renderAll();
+                                if (!(r && r.pending_approval)) ttToast(esc((isPlaced ? 'Xona almashtirildi (shu hafta): ' : 'Joylandi: ') + (room.name || room.code)), 'ok');
+                            } };
+                        })() : null,
+                        // "Vaqtincha kafedra mudiriga yozish" — oynada bitta tugma (pastki qatorda, data-pop-mudir); yechimlarda takrorlanmaydi.
+                        select: edit ? () => { closePanelCardPop(); selected = c; renderPanel(); renderGrid(); scrollToPickColumn(c); } : null,
                     } });
                 if (placed && W && weeklyLayer === 'internal') {
                     // Joylangan, to'qnashuvdagi dars: sabablar — server yozuvlaridan (butun doska; belgi ham shulardan — ko'rish qamrovidan tashqaridagi
@@ -12807,6 +12920,8 @@
                         closePanelCardPop();
                         selected = (selected && selected.id === c.id) ? null : c;
                         renderPanel(); renderGrid();
+                        // Guruh ustuni belgilanadi (renderGrid → markPickColumns) va jadval shu ustunga suriladi.
+                        if (selected) scrollToPickColumn(selected);
                         return;
                     }
                     // Shu joyga joylash: oldindan tekshiruv (birlik bilan), keyin server (unit-place) — band bo'lsa sababi turlarga ajratilgan
@@ -12823,18 +12938,10 @@
                     } catch (err) {
                         const ci = err && err.data && err.data.conflict_items;
                         if (Array.isArray(ci) && ci.length) showBlocks(ci);
-                        else { const pe = panelPopSplitError(err.message); msg(pe.title, true, pe.items); mudirInMsg(); }
+                        else { const pe = panelPopSplitError(err.message); msg(pe.title, true, pe.items); }
                         t.disabled = false;
                     }
                 });
-                // Rad etilgan "Shu joyga joylash" xabari ichida ham — "Vaqtincha kafedra mudiriga yozish".
-                function mudirInMsg() {
-                    const btn = pop.querySelector('[data-pop-mudir]');
-                    const m = pop.querySelector('[data-pop-msg]');
-                    if (!btn || !m || btn.disabled) return;
-                    m.insertAdjacentHTML('beforeend', '<div style="margin-top:3px"><button type="button" data-pop-mudir style="border:1px solid #ca8a04;color:#854d0e;background:#fefce8;border-radius:5px;padding:1px 8px">Vaqtincha kafedra mudiriga yozish</button></div>');
-                    reposition();
-                }
                 // Tugma holati (kech keladi): mudir / xona topilmasa — o'chiq, sababi bilan; tashqi joyi yo'q — katak tanlanadi.
                 if (pop.querySelector('[data-pop-mudir]')) {
                     mudirPhInfo(c, mudirPhSlot(c)).then(info => {
@@ -12987,10 +13094,69 @@
                 return '<div class="cb-title" data-cb-title style="font-weight:600;color:' + (cbBlocking(blocks).length ? '#991b1b' : '#9a3412') + '">' + esc(cbTitle(blocks, placed)) + '</div>' +
                     blocks.map((b, i) => '<div class="cb-block" data-cb-block="' + b.kind + '" style="margin-top:4px;padding:3px 6px;border-radius:6px;background:' + (tone[b.kind] || '#f1f5f9') + ';color:#1f2937">' +
                         '<div style="display:flex;justify-content:space-between;gap:6px;align-items:baseline"><b data-cb-head>' + esc(cbBlockHead(b) + dayTag(b)) + '</b>' +
-                        (CB_SHOWABLE.includes(b.kind) && !opts.compact ? '<a href="#" data-cb-show="' + i + '" style="white-space:nowrap;text-decoration:underline dotted">Ko\'rsatish</a>' : '') + '</div>' +
+                        (CB_SHOWABLE.includes(b.kind) && !opts.compact ? '<span style="white-space:nowrap">' +
+                            // "Xona band" — har holatda (boshqa sabablar bilan birga ham) shu blokning o'zida "Boshqa xona tanlash".
+                            (b.kind === 'room' && opts.roomPick ? '<a href="#" data-cb-room-pick="' + i + '" style="text-decoration:underline dotted;margin-right:8px">Boshqa xona tanlash</a>' : '') +
+                            '<a href="#" data-cb-show="' + i + '" style="text-decoration:underline dotted">Ko\'rsatish</a></span>' : '') + '</div>' +
                         (CB_SHOWABLE.includes(b.kind) && b.items.some(it => it.subject) ? '<ul style="margin:1px 0 0;padding-left:16px">' +
                             b.items.map(it => '<li data-cb-line>' + esc(cbLineText(it)) + '</li>').join('') + '</ul>' : '') +
+                        (b.kind === 'room' && opts.roomPick ? '<div data-cb-room="' + i + '" hidden style="margin-top:3px"></div>' : '') +
                         '<div data-cb-detail="' + i + '" hidden style="margin-top:3px"></div></div>').join('');
+            }
+            // "Boshqa xona tanlash": shu vaqt uchun xonalar (server room-options — fan mas'uli oynasidagi ro'yxat: yaqinlik tartibi, bo'sh tepada,
+            // band — kulrang kim bilan, sig'maydi, biriktirilgan — kulrang; qidiruv faqat nom bo'yicha). Tanlansa — shu xona bilan qayta tekshiruv:
+            // boshqa sabab qolmasa — "Shu xona bilan joylash" / joylangan-to'qnashuvdagi darsda "Xonani almashtirish (shu hafta)"; o'qituvchi /
+            // guruh ham band bo'lsa — xona tanlanadi, qolgan sabab ko'rsatiladi (joylanmaydi). Xona faqat shu hafta uchun.
+            async function cbRoomPick(el, blocks, ctx) {
+                const rp = ctx.solutions && ctx.solutions.roomPick;
+                if (!el || !rp) return;
+                el.hidden = false;
+                el.innerHTML = '<input type="search" data-cb-room-q placeholder="Xona qidirish (nomi)…" autocomplete="off" style="width:100%;font-size:12px;padding:1px 4px">' +
+                    '<div data-cb-room-list style="max-height:180px;overflow:auto;margin-top:2px">Yuklanmoqda…</div><div data-cb-room-msg style="margin-top:3px"></div>';
+                const list = el.querySelector('[data-cb-room-list]'), msg = el.querySelector('[data-cb-room-msg]'), q = el.querySelector('[data-cb-room-q]');
+                let rooms = [];
+                try {
+                    const j = await api(BASE + '/cards/' + rp.card.id + '/room-options?' + new URLSearchParams({ week: curWeek, day: rp.day, pair: rp.pair }));
+                    rooms = (j && j.rooms) || [];
+                } catch (e) { list.innerHTML = '<div style="color:#b91c1c">' + esc(e.message) + '</div>'; if (ctx.reposition) ctx.reposition(); return; }
+                const note = r => r.kind === 'busy' ? (r.busy || 'band') : r.kind === 'capacity' ? "sig'maydi" + (r.cap ? ' (+' + r.cap.over + ')' : '')
+                    : r.kind === 'assigned' ? (r.note || 'biriktirilgan') : (r.why || '');
+                const render = () => {
+                    const t = String(q.value || '').trim().toLowerCase();
+                    const shown = rooms.filter(r => !t || String(r.name || r.code).toLowerCase().includes(t));
+                    list.innerHTML = shown.map(r => '<button type="button" data-cb-room-code="' + esc(r.code) + '"' + (r.free ? '' : ' disabled') +
+                        (r.note_full ? ' title="' + esc(r.note_full) + '"' : '') + ' style="display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:' +
+                        (r.free ? '#fff;color:#0f172a;cursor:pointer' : '#f8fafc;color:#94a3b8') + ';padding:1px 4px">' +
+                        '<b>' + esc(r.name || r.code) + '</b>' + (r.current ? ' (hozirgi)' : '') + (+r.volume ? ' · ' + +r.volume + " o'rin" : '') +
+                        (note(r) ? ' · <span data-cb-room-note>' + esc(note(r)) + '</span>' : '') + '</button>').join('')
+                        || '<div style="color:#94a3b8">' + (rooms.length ? 'Qidiruv bo\'yicha xona topilmadi' : 'Xona topilmadi') + '</div>';
+                    if (ctx.reposition) ctx.reposition();
+                };
+                render();
+                q.oninput = render;
+                list.onclick = ev => {
+                    const row = ev.target.closest ? ev.target.closest('[data-cb-room-code]') : null;
+                    if (!row || row.disabled) return;
+                    ev.preventDefault(); ev.stopPropagation();
+                    const room = rooms.find(r => r.code === row.dataset.cbRoomCode);
+                    const rest = cbBlocking(blocks).filter(b => b.kind !== 'room' && b.kind !== 'capacity');
+                    if (rest.length) {
+                        msg.innerHTML = '<div data-cb-room-rest style="color:#991b1b">Xona tanlandi: <b>' + esc(room.name || room.code) + '</b>. Qolgan sabab: ' +
+                            esc(rest.map(cbBlockHead).join('; ')) + ' — joylanmaydi.</div>';
+                    } else {
+                        msg.innerHTML = 'Xona: <b>' + esc(room.name || room.code) + '</b> ' +
+                            '<button type="button" data-cb-room-apply style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:5px;padding:1px 8px">' +
+                            (rp.placed ? 'Xonani almashtirish (shu hafta)' : 'Shu xona bilan joylash') + '</button>';
+                        msg.querySelector('[data-cb-room-apply]').onclick = async e2 => {
+                            e2.preventDefault(); e2.stopPropagation();
+                            e2.target.disabled = true;
+                            try { await rp.apply(room); }
+                            catch (er) { e2.target.disabled = false; msg.insertAdjacentHTML('beforeend', '<div style="color:#b91c1c">' + esc(er.message) + '</div>'); }
+                        };
+                    }
+                    if (ctx.reposition) ctx.reposition();
+                };
+                if (ctx.reposition) ctx.reposition();
             }
             // "Ko'rsatish" tafsiloti uchun fokus (jadvalda to'qnashuvni ko'rish rejimi): ikkala dars guruhlari, sana, vaqt.
             // Bo'lak — to'qnashuvga aynan tegishli bo'lagi (piece_id) va uning shu yozuvdagi joyi (piece_pair): bo'laklari turli kunda yoki oraliq
@@ -13096,20 +13262,20 @@
                 bind(info);
             }
             // Bloklarni joyiga chizadi va "Ko'rsatish" / yechim tugmalarini bog'laydi. ctx: {card, ids (birlik), day, pair, len, placed, close,
-            // reposition, solutions: {room: fn, select: fn, mudir: fn}}.
+            // reposition, solutions: {room: fn, roomPick: {...}, select: fn}} ("Vaqtincha kafedra mudiriga yozish" — oynaning pastki qatorida, bitta).
             function cbRender(host, items, ctx) {
                 const blocks = cbBlocks(items);
                 if (!host) return blocks;
                 const kinds = new Set(cbBlocking(blocks).map(b => b.kind));
-                // Yechimlar: faqat xona band — "Boshqa xona bilan joylash"; o'qituvchi band — "Vaqtincha kafedra mudiriga yozish"; har doim — "Joylash uchun tanlash".
+                // Yechimlar: faqat xona band — "Boshqa xona bilan joylash" (roomPick bo'lmasa); har doim — "Joylash uchun tanlash". "Vaqtincha kafedra mudiriga yozish" — pastki qatorda (bitta).
                 const sol = ctx.solutions || {};
                 const btn = (attr, text, color) => '<button type="button" ' + attr + ' style="border:1px solid ' + color + ';color:' + color + ';background:#fff;border-radius:5px;padding:1px 8px">' + text + '</button>';
                 const sols = [
-                    kinds.has('room') && !kinds.has('teacher') && !kinds.has('group') && !kinds.has('day_end') && sol.room ? btn('data-cb-sol="room"', 'Boshqa xona bilan joylash', '#a16207') : '',
-                    kinds.has('teacher') && sol.mudir ? btn('data-cb-sol="mudir"', 'Vaqtincha kafedra mudiriga yozish', '#854d0e') : '',
+                    // Xona tanlash — "Xona band" blokining o'zida (roomPick); u yo'q joyda — eski "Boshqa xona bilan joylash" (faqat xona band).
+                    !sol.roomPick && kinds.has('room') && !kinds.has('teacher') && !kinds.has('group') && !kinds.has('day_end') && sol.room ? btn('data-cb-sol="room"', 'Boshqa xona bilan joylash', '#a16207') : '',
                     sol.select ? btn('data-cb-sol="select"', 'Joylash uchun tanlash', '#1d4ed8') : '',
                 ].filter(Boolean);
-                host.innerHTML = cbHtml(blocks, ctx.placed) + (blocks.length && sols.length ? '<div data-cb-sols style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + sols.join('') + '</div>' : '');
+                host.innerHTML = cbHtml(blocks, ctx.placed, { roomPick: !!sol.roomPick }) + (blocks.length && sols.length ? '<div data-cb-sols style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + sols.join('') + '</div>' : '');
                 host.querySelectorAll('[data-cb-show]').forEach(a => a.onclick = ev => {
                     ev.preventDefault(); ev.stopPropagation();
                     const i = +a.dataset.cbShow, el = host.querySelector('[data-cb-detail="' + i + '"]');
@@ -13117,6 +13283,14 @@
                     el.hidden = !el.hidden;
                     if (!el.hidden && !el.dataset.loaded) { el.dataset.loaded = '1'; cbShowDetail(el, blocks[i], ctx).then(() => ctx.reposition && ctx.reposition()); }
                     if (ctx.reposition) ctx.reposition();
+                });
+                host.querySelectorAll('[data-cb-room-pick]').forEach(a => a.onclick = ev => {
+                    ev.preventDefault(); ev.stopPropagation();
+                    const el = host.querySelector('[data-cb-room="' + a.dataset.cbRoomPick + '"]');
+                    if (!el) return;
+                    if (el.dataset.loaded) { el.hidden = !el.hidden; if (ctx.reposition) ctx.reposition(); return; }
+                    el.dataset.loaded = '1';
+                    cbRoomPick(el, blocks, ctx);
                 });
                 host.querySelectorAll('[data-cb-sol]').forEach(x => x.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); const f = sol[x.dataset.cbSol]; if (f) f(); });
                 if (ctx.reposition) ctx.reposition();
@@ -14022,7 +14196,7 @@
                 h += '</tr><tr>';
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => {
                     const n = grpCount(o, gr);
-                    h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') +
+                    h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '" data-gh="' + esc(gr) + '">' + esc(gName[gr] || '') +
                         (n != null ? '<div class="tt-grp-count"><em class="tt-stu-count" title="' + n + ' ta faol talaba">' + n + '</em></div>' : '') + '</th>';
                 }));
                 h += '</tr></thead><tbody>';
@@ -14236,7 +14410,7 @@
                                     // Bir katakda bir necha almashinuvchi fan — diagonal ajratgich
                                     const lecSplit = lecEx.length ? ' tt-split' : '';
                                     const lecExtras = lecEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
-                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(o.groups[gi], d, p, ids)]) + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' data-gs="' + esc(o.groups.slice(gi, gi + span).join('§')) + '" style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(o.groups[gi], d, p, ids)]) + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
@@ -14259,7 +14433,7 @@
                                     const prcSplit = prcEx.length ? ' tt-split' : '';
                                     const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
                                     const cs = span > 1 ? ' colspan="' + span + '"' : '';
-                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(grp, d, p, ids)]) + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
+                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' data-gs="' + esc(o.groups.slice(gi, gi + span).join('§')) + '" style="' + subjStyle(c) + '">' + infoOnlyGroupOverlapHtml([c, ...stackExtras(grp, d, p, ids)]) + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
                                     gi += span;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
@@ -14292,6 +14466,7 @@
                 stickGridHead();
                 activeCell = null;   // qayta render — eski faol katak eskirdi
                 focusHighlight();
+                markPickColumns();
 
                 // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)
                 document.querySelectorAll('[data-mudir-place]').forEach(td => td.onclick = () => {
@@ -14417,7 +14592,7 @@
                 m.innerHTML = '<form class="cr-proposal-form"><h3 class="font-bold text-lg">Vaqtini o‘zgartirishni so‘rash</h3>' +
                     '<p>' + esc(c.subject_name) + ' · ' + curWeek + '-hafta</p>' +
                     '<p class="text-sm">Amaldagi vaqt: ' + esc(pl ? (days[pl.day - 1] + ' · ' + (slots[pl.pair - 1]?.start || pl.pair + '-katak')) : 'Joylashmagan') + '</p>' +
-                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Faqat ertangi va keyingi kunlardagi darslar; guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
+                    '<p class="text-sm">Avval kafedra mudiri, keyin registrator ofisi yoki o‘quv bo‘limi tasdiqlaydi. Shu vaqtgacha jadval o‘zgarmaydi. Faqat ertangi va keyingi kunlardagi darslar; guruh, fan, xona va o‘qituvchi o‘zgarmaydi.</p>' +
                     '<label>Yangi kun<select name="day" required>' + days.map((d, i) => '<option value="' + (i + 1) + '"' + (pl?.day === i + 1 ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select></label>' +
                     '<label>Yangi boshlanish vaqti<select name="pair" required>' + slots.map((s, i) => '<option value="' + (i + 1) + '"' + (pl?.pair === i + 1 ? ' selected' : '') + '>' + esc(s.start || (i + 1) + '-katak') + '</option>').join('') + '</select></label>' +
                     '<label>O‘zgarish sababi<textarea name="reason" required maxlength="1000" rows="3"></textarea></label>' +
@@ -14486,6 +14661,48 @@
                     attrs: ' title="' + esc((fc.reason || '') + (fc.state === 'room' ? '\nBosing: xona tanlab joylash' : '')) + '"'
                         + (causes ? ' data-bad-ids="' + causes + '" data-bad-tone="' + fc.state + '"' : '') + (fc.state === 'room' ? ' data-fm-place="' + at + '"' : '') };
             }
+            // ── Tanlangan kartaning guruh ustuni ("Joylash uchun tanlash" va fan mas'uli joylash rejimi — umumiy) ──
+            // Ustun kataklari: bo'sh katak (data-g) va dars katagi (data-gs — qamragan guruh ustunlari, "§" bilan); sarlavha — th[data-gh].
+            function pickColumnTargets(c) {
+                const grid = document.getElementById('grid');
+                if (!grid || !c) return { cells: [], heads: [] };
+                const keys = cardGKeys(c);
+                const has = el => (el.dataset.g && keys.includes(el.dataset.g)) || (el.dataset.gs && el.dataset.gs.split('§').some(k => keys.includes(k)));
+                return { cells: [...grid.querySelectorAll('td[data-g],td[data-gs]')].filter(has),
+                    heads: [...grid.querySelectorAll('th[data-gh]')].filter(th => keys.includes(th.dataset.gh)) };
+            }
+            const pickColumnCard = () => (typeof fmPick !== 'undefined' && fmPick && fmPick.card) || (viewMode === 'group' && selected) || null;
+            // Belgi — tanlov bekor bo'lguncha (har render). Guruh ustuni filtrda yo'q — "Guruhni ko'rsatish" (filtrga qo'shib qayta chizish).
+            function markPickColumns() {
+                const grid = document.getElementById('grid');
+                if (!grid) return;
+                grid.querySelectorAll('.tt-pick-col,.tt-pick-colh').forEach(x => x.classList.remove('tt-pick-col', 'tt-pick-colh'));
+                const c = pickColumnCard();
+                const t = c ? pickColumnTargets(c) : { cells: [], heads: [] };
+                t.cells.forEach(td => td.classList.add('tt-pick-col'));
+                t.heads.forEach(th => th.classList.add('tt-pick-colh'));
+                pickColumnMsg(c && !t.heads.length ? c : null);
+            }
+            function pickColumnMsg(c) {
+                let m = document.getElementById('ttPickColMsg');
+                if (!c) { if (m) m.remove(); return; }
+                const wrap = document.getElementById('gridWrap');
+                if (!wrap) return;
+                if (!m) { m = document.createElement('div'); m.id = 'ttPickColMsg'; wrap.insertBefore(m, wrap.firstChild); }
+                m.innerHTML = 'Bu guruh hozirgi filtrda ko\'rinmaydi — <button type="button" data-pick-show>Guruhni ko\'rsatish</button>';
+                m.querySelector('[data-pick-show]').onclick = () => {
+                    const moved = fmEnsureColumn(c);
+                    if (moved) renderAll(); else { buildGroupRows(); renderPanel(); renderGrid(); }
+                    scrollToPickColumn(c);
+                };
+            }
+            // Jadval ustunga suriladi (gorizontal + vertikal, markazga): birinchi yashil (tt-ok) katak, bo'lmasa ustunning birinchi qatori.
+            function scrollToPickColumn(c) {
+                const t = pickColumnTargets(c);
+                const target = t.cells.find(td => td.classList.contains('tt-ok')) || t.cells[0] || t.heads[0];
+                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', inline: 'center' });
+                return !!target;
+            }
             // Kesim guruh bo'lmasa — guruh kesimiga o'tiladi va kartaning yo'nalishi/kursi tanlanadi (uning guruh ustuni ko'rinsin).
             function fmEnsureColumn(c) {
                 let moved = false;
@@ -14518,10 +14735,7 @@
             function fmScrollToTarget() {
                 if (!fmPick || fmPick.scrolled) return;
                 fmPick.scrolled = true;
-                const keys = cardGKeys(fmPick.card);
-                const mine = [...document.querySelectorAll('#grid td[data-g]')].filter(td => keys.includes(td.dataset.g));
-                const target = mine.find(td => td.classList.contains('tt-ok')) || mine[0];
-                if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', inline: 'center' });
+                scrollToPickColumn(fmPick.card);
             }
             // Keyingi haftaga o'tish (bo'sh joy yo'q holatidagi havola) — rejim davom etadi (fmSync shu hafta grid'ini so'raydi).
             function fmGoWeek(w) {

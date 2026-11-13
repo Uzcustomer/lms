@@ -8,7 +8,8 @@ const section = (from, to) => { const a = source.indexOf(from), b = source.index
 // «Bugungi darslar (HEMIS)»: tugma faqat registrator ofisi / admin uchun (HEMIS solishtirish yonida); oyna sarlavhasidagi hisoblar,
 // tegilmaydigan darslar kulrang, guruh filtri, JSON (bugungi o'zgartirish, qo'shish va o'chirish) va Excel.
 assert.match(source, /@if\(\$timetableCanApprove\)\n\s*<button type="button" id="hemisSyncBtn"[^\n]*\n\s*<button type="button" id="hemisTodayBtn" [^>]*>Bugungi darslar \(HEMIS\)<\/button>/);
-assert.match(source, /\$timetableCanApprove = in_array\(\$timetableActiveRole, \['superadmin', 'admin', 'registrator_ofisi'\], true\);/);
+// Tugma — tasdiqlovchilar (jadval administratorlari: registrator ofisi, o'quv bo'limi, admin...) — server APPROVER_ROLES bilan bir xil.
+assert.match(source, /\$timetableCanApprove = in_array\(\$timetableActiveRole, \\App\\Services\\Timetable\\TimetableChangeApproval::APPROVER_ROLES, true\);/);
 
 const els = {};
 const el = id => els[id] || (els[id] = { id, onclick: null, onchange: null, value: '', disabled: false, innerHTML: '' });

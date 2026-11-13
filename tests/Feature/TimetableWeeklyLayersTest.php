@@ -60,9 +60,9 @@ it('o\'quv bo\'limi tashqi jadvalga qo\'yadi, ichki jadvalga tegmaydi', function
     // Tashqida guruh bandligi tekshiriladi
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.cards.place', $s['foreign']), ['day' => 2, 'pair' => 4, 'layer' => 'external'])
         ->assertStatus(422);
-    // Ichki jadvalni o'quv bo'limi tahrirlay olmaydi
+    // O'quv bo'limi — jadval administratori: ichki jadvalni ham tahrirlaydi (registrator ofisi kabi).
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.cards.place', $s['own']), ['day' => 1, 'pair' => 1, 'layer' => 'internal'])
-        ->assertForbidden();
+        ->assertOk();
 });
 
 it('kafedra mudiri faqat o\'z kafedrasi kartasini ichki jadvalga qo\'yadi', function () {
@@ -1297,8 +1297,9 @@ it('karta yaratish va kartalar ro\'yxatini o\'zgartirish — faqat adminlar: o\'
     layerAs($s['head'], 'kafedra_mudiri')->get(route('admin.timetable.index'))->assertOk()
         ->assertSee('const TIMETABLE_CAN_PLACE = true', false)->assertSee('const TIMETABLE_CAN_UNPLACE = false', false)
         ->assertSee('const TIMETABLE_CAN_USE_MANAGER = false', false);
+    // O'quv bo'limi — jadval administratori: cheklangan rejim yo'q (registrator ofisi kabi — taqiqlangan tugmalar yo'q).
     layerAs($s['oquv'], 'oquv_bolimi')->get(route('admin.timetable.index'))->assertOk()
-        ->assertSee('const TIMETABLE_CAN_UNPLACE = true', false)->assertSee('const TIMETABLE_CAN_USE_MANAGER = true', false);
+        ->assertSee('const TIMETABLE_ASSIGNMENT_ONLY = false', false)->assertSee('const TIMETABLE_FORBIDDEN_IDS = []', false);
     // O'quv bo'limi — tashqi qatlamni bo'shatadi (avvalgidek).
     layerAs($s['oquv'], 'oquv_bolimi')->postJson(route('admin.timetable.boards.unplace', $b), ['courses' => [2], 'layer' => 'external'])->assertOk();
 });
@@ -1328,9 +1329,9 @@ it('taqiqlangan tugmalar o\'qituvchi, fan mas\'uli va kafedra mudirida sahifaga 
     // Kafedra mudiri: sikl "Yangilash" (joylashtiradi) bor; o'qituvchida — yo'q.
     expect($btn(layerAs($s['head'], 'kafedra_mudiri')->get(route('admin.timetable.index'))->getContent(), 'cycleRefresh'))->not->toContain('tt-forbidden')
         ->and($btn(layerAs($t, 'oqituvchi')->get(route('admin.timetable.index'))->getContent(), 'cycleRefresh'))->toContain('tt-forbidden');
-    // O'quv bo'limi: bo'shatish bor, kartochkalar yo'q. Admin: hammasi oddiy (tt-forbidden yo'q).
+    // O'quv bo'limi — jadval administratori: bo'shatish ham, kartochkalar ham (tt-forbidden yo'q). Admin: hammasi oddiy.
     $oquv = layerAs($s['oquv'], 'oquv_bolimi')->get(route('admin.timetable.index'))->getContent();
-    expect($btn($oquv, 'unplaceBtn'))->not->toContain('tt-forbidden')->and($btn($oquv, 'genBtn'))->toContain('tt-forbidden');
+    expect($btn($oquv, 'unplaceBtn'))->not->toContain('tt-forbidden')->and($btn($oquv, 'genBtn'))->not->toContain('tt-forbidden');
     $admin = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.index'))->assertOk()->getContent();
     foreach ($forbidden as $id) {
         expect([$id, $btn($admin, $id) !== '' && !str_contains($btn($admin, $id), 'tt-forbidden') && !str_contains($btn($admin, $id), ' disabled')])->toBe([$id, true]);

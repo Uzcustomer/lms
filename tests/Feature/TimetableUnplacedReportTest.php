@@ -200,7 +200,8 @@ it('hafta oralig\'i, tashqi qatlam va ruxsat', function () {
     // Hisobotga ruxsati yo'q rollar
     ($this->report)('oqituvchi')->assertForbidden();
     ($this->report)('kafedra_mudiri')->assertForbidden();
-    ($this->report)('kichik_admin')->assertForbidden();
+    // Kichik admin — jadval administratori: hisobot ochiq.
+    ($this->report)('kichik_admin')->assertOk();
     // O'quv bo'limi: holat va yuklab olish ham ochiq (middleware)
     expect(($this->report)('oquv_bolimi_boshligi')->assertOk()->headers->get('content-disposition'))->toContain('.xlsx');
 });

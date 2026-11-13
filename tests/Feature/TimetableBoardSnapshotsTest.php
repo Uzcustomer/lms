@@ -113,12 +113,13 @@ it('qisman qayta yaratilgan birlik: hozir ham joyida turgan eski karta egallagan
 
 it('rad etilgan yoki xato so\'rov nusxa qoldirmaydi — nusxa ruxsat va tekshiruvdan keyin olinadi', function () {
     $s = snapSetup();
-    Role::findOrCreate('kichik_admin', 'web');
-    $s['head']->assignRole('kichik_admin');
+    // Kichik admin endi jadval administratori — rad etiladigan rol sifatida kafedra mudiri olinadi.
+    Role::findOrCreate('kafedra_mudiri', 'web');
+    $s['head']->assignRole('kafedra_mudiri');
     foreach (['boards.add-missing-groups', 'boards.merge-variant-lectures', 'boards.split-long-practice', 'weekly-layer-copy'] as $name) {
-        snapAs($s['head'], 'kichik_admin')->postJson(route('admin.timetable.' . $name, $s['board']), [])->assertForbidden();
+        snapAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.' . $name, $s['board']), [])->assertForbidden();
     }
-    snapAs($s['head'], 'kichik_admin')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']),
+    snapAs($s['head'], 'kafedra_mudiri')->postJson(route('admin.timetable.boards.separate-practice-groups', $s['board']),
         ['specialty_name' => 'davolash ishi', 'course' => 2, 'subject_name' => 'Gigiyena'])->assertForbidden();
     snapAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.unplace', $s['board']), ['layer' => 'boshqa'])->assertStatus(422);
 

@@ -69,12 +69,16 @@ trait TimetableTeacherAgenda
         $pairs = $this->agendaPairs($slots);
         $staff = $this->staffTodayOk($request);
         $t0 = microtime(true);
-        $entries = $this->agendaEntries($board, $tid, $days, $layer, $rights, $slots, $roomCode, $staff);
+        // To'liq ko'rinish (qamrovdan tashqari darslar ham fan, guruh, o'qituvchi, xona bilan — faqat ko'rish): xona jadvali — hammaga;
+        // o'qituvchi jadvali — kafedra mudiriga o'z kafedrasi o'qituvchisi uchun (boshqa kafedra fanlari ham). Ko'chirish huquqi o'zgarmaydi.
+        $fullView = $roomCode !== null || ($teacher && $this->timetableActiveRole($request) === 'kafedra_mudiri' && $this->teacherInOwnKafedra($request, $teacher));
+        $entries = $this->agendaEntries($board, $tid, $days, $layer, $rights, $slots, $roomCode, $staff, $fullView);
         // Sudrash uchun: har yozuvni ko'chirish mumkinmi (huquq — karta / birlik bo'yicha bir marta, memo).
         $memo = [];
         foreach ($entries as &$en) {
-            $r = $roomCode !== null ? ['why' => "Xona bandligi — faqat ko'rish."] : ($en['hidden'] ? ['why' => 'Qamrovdan tashqari dars.']
-                : $this->agendaMoveRight($request, $board, $en, $layer, $rights, $memo));
+            $r = !empty($en['out_of_scope']) ? ['why' => "Qamrovdan tashqari dars — faqat ko'rish."]
+                : ($roomCode !== null ? ['why' => "Xona bandligi — faqat ko'rish."] : ($en['hidden'] ? ['why' => 'Qamrovdan tashqari dars.']
+                : $this->agendaMoveRight($request, $board, $en, $layer, $rights, $memo)));
             $en['movable'] = $r['why'] === null;
             $en['movable_why'] = $r['why'];
         }
@@ -139,6 +143,25 @@ trait TimetableTeacherAgenda
      * O'qituvchi telefoni kimga ko'rinadi: admin, registrator ofisi, fan mas'uli — hammasi; kafedra mudiri — o'z kafedrasi
      * o'qituvchilari; boshqa rollar (o'qituvchi) — faqat o'ziniki.
      */
+    /** O'qituvchi kafedra mudirining o'z kafedrasidanmi (asosiy kafedrasi yoki o'rindoshlik — teacher_employments; departmentHeadKafedraSafe). */
+    private function teacherInOwnKafedra(Request $request, Teacher $teacher): bool
+    {
+        $own = $this->departmentHeadKafedraSafe($request);
+        if (!$own) {
+            return false;
+        }
+        $depts = array_filter(array_merge([(string) $teacher->department],
+            \Illuminate\Support\Facades\Schema::hasTable('teacher_employments')
+                ? DB::table('teacher_employments')->where('teacher_id', $teacher->id)->pluck('department_name')->all() : []));
+        foreach ($depts as $d) {
+            if ($this->sameKafedra($d, $own)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function teacherPhoneVisible(Request $request, Teacher $teacher): bool
     {
         $actor = $this->timetableActor($request);
@@ -146,7 +169,7 @@ trait TimetableTeacherAgenda
             return true;   // ichki chaqiruv (konsol/test)
         }
         $role = $this->timetableActiveRole($request);
-        if (in_array($role, ['admin', 'superadmin', 'registrator_ofisi', 'fan_masuli'], true)) {
+        if (in_array($role, array_merge(self::TIMETABLE_FULL_EDIT_ROLES, ['fan_masuli']), true)) {
             return true;
         }
         if ($role === 'kafedra_mudiri') {
@@ -232,7 +255,7 @@ trait TimetableTeacherAgenda
      * Bitta oqim ma'ruzasi (bir nechta guruhcha yoki yo'nalish kartasi; fan, xona, vaqt bir xil) — bitta yozuv.
      */
     private function agendaEntries(TimetableBoard $board, int $tid, array $days, string $layer, array $rights, array $slots, ?string $room = null,
-        bool $staff = false): array
+        bool $staff = false, bool $fullView = false): array
     {
         $dates = array_flip($days);
         $rh = max(1, $this->cycleRowHours($board));
@@ -300,30 +323,41 @@ trait TimetableTeacherAgenda
         // flow_size — oqimdagi kartalar soni (qamrovdan qat'i nazar): ko'p kartali haftalik oqim bu oynadan ko'chirilmaydi.
         $merged = [];
         foreach ($raw as $x) {
-            $vis = $x['cards'] && collect($x['cards'])->contains(fn ($c) => $this->suggestionInScope($rights, $c));
+            $inScope = $x['cards'] && collect($x['cards'])->contains(fn ($c) => $this->suggestionInScope($rights, $c));
+            // To'liq ko'rinish: qamrovdan tashqari qism ham ko'rinadi (out_of_scope — faqat ko'rish).
+            $vis = $inScope || ($fullView && $x['cards']);
             $k = $x['lecture'] && $x['room_code'] ? implode('|', ['L', $x['date'], $x['from'], $x['to'], (string) $x['room_code'],
                 $this->normSubject($this->cycleSubjectVariantBase($x['subject']) ?? $x['subject'])]) : $x['key'];
             $k = (!empty($x['info_only']) ? 'info|' : '') . $k;
             $m = &$merged[$k];
             if ($m === null) {
-                $m = ['visible' => false, 'groups' => [], 'card_ids' => [], 'all_ids' => [], 'teachers' => []] + $x;
+                $m = ['visible' => false, 'in_scope' => false, 'groups' => [], 'card_ids' => [], 'all_ids' => [], 'teachers' => [], 'teacher_ids' => []] + $x;
                 $m['groups'] = [];
                 $m['card_ids'] = [];
                 $m['teachers'] = [];
+                $m['teacher_ids'] = [];
             }
             $m['all_ids'] = array_values(array_unique(array_merge($m['all_ids'], $x['card_ids'])));
             if ($vis) {
-                if (!$m['visible']) {
-                    // Birinchi qamrovdagi qism — yozuv fani, kaliti va boshqa tafsilotlari undan.
+                if (!$m['visible'] || ($inScope && !$m['in_scope'])) {
+                    // Birinchi qamrovdagi qism — yozuv fani, kaliti (ko'chirish) va boshqa tafsilotlari undan; to'liq ko'rinishda qamrovdagi qism
+                    // keyin kelsa ham tafsilotlar unga o'tadi (qamrovdan tashqari qism kaliti bilan ko'chirilmaydi).
                     $m = array_replace($m, array_intersect_key($x, array_flip(['subject', 'key', 'week', 'unit', 'room', 'room_code', 'lecture'])));
                 }
                 $m['visible'] = true;
-                $m['groups'] = array_values(array_unique(array_merge($m['groups'], $x['groups'])));
-                $m['card_ids'] = array_values(array_unique(array_merge($m['card_ids'], $x['card_ids'])));
-                // O'qituvchi(lar) — faqat qamrovdagi qismlardan (boshqa fakultet o'qituvchisi ko'rinmaydi).
+                // Guruhlar va kartalar: qamrovdagilar oldin; card_ids — qamrovdagi qism bo'lsa faqat ularniki (ko'chirish), aks holda ko'rinadiganlar.
+                $m[$inScope ? 'scope_groups' : 'view_groups'] = array_values(array_unique(array_merge($m[$inScope ? 'scope_groups' : 'view_groups'] ?? [], $x['groups'])));
+                $m[$inScope ? 'scope_ids' : 'view_ids'] = array_values(array_unique(array_merge($m[$inScope ? 'scope_ids' : 'view_ids'] ?? [], $x['card_ids'])));
+                $m['in_scope'] = $m['in_scope'] || $inScope;
+                $m['groups'] = array_values(array_unique(array_merge($m['scope_groups'] ?? [], $m['view_groups'] ?? [])));
+                $m['card_ids'] = $m['in_scope'] ? $m['scope_ids'] : $m['view_ids'];
+                // O'qituvchi(lar) — qamrovdagi qismlardan (boshqa fakultet o'qituvchisi ko'rinmaydi); to'liq ko'rinishda — hammasi.
                 foreach ((array) ($x['cards'] ?? []) as $c) {
-                    if ($this->suggestionInScope($rights, $c) && (string) ($c->teacher_name ?? '') !== '') {
+                    if (($fullView || $this->suggestionInScope($rights, $c)) && (string) ($c->teacher_name ?? '') !== '') {
                         $m['teachers'][(string) $c->teacher_name] = true;
+                        if ((int) ($c->teacher_id ?? 0) > 0) {
+                            $m['teacher_ids'][(int) $c->teacher_id] = true;
+                        }
                     }
                 }
             }
@@ -331,13 +365,18 @@ trait TimetableTeacherAgenda
         }
         $list = array_values($merged);
         usort($list, fn ($a, $b) => [$a['date'], $a['from'], $a['key']] <=> [$b['date'], $b['from'], $b['key']]);
+        // To'liq F.I.Sh. (katak tooltipi) — bitta so'rov.
+        $tids = array_keys(array_replace(...array_merge([[]], array_map(fn ($x) => $x['teacher_ids'] ?? [], $list))));
+        $fullNames = $tids ? Teacher::whereIn('id', $tids)->pluck('full_name', 'id')->all() : [];
         $out = [];
         foreach ($list as $i => $x) {
             $conflict = false;
+            $with = [];
             foreach ($list as $j => $y) {
                 if (empty($x['info_only']) && empty($y['info_only']) && $i !== $j && $y['date'] === $x['date'] && $y['from'] < $x['to'] && $x['from'] < $y['to']) {
                     $conflict = true;
-                    break;
+                    // To'qnashuv sababi (tooltip): bir vaqtdagi boshqa dars — ko'rinadigan bo'lsa fani va guruhlari, aks holda "band".
+                    $with[] = $y['visible'] ? $y['subject'] . ' (' . ($y['lecture'] ? 'M' : 'A') . ') — ' . implode(', ', $y['groups']) : 'band: boshqa fakultet';
                 }
             }
             $visible = $x['visible'];
@@ -351,6 +390,11 @@ trait TimetableTeacherAgenda
                 ? $base + ['hidden' => false, 'type' => $x['lecture'] ? 'M' : 'A', 'subject' => $x['subject'], 'groups' => $x['groups'],
                     // O'qituvchi(lar) — xona kunlik ro'yxatida ("Ko'rsatish").
                     'teacher' => implode(', ', array_keys($x['teachers'] ?? [])) ?: null,
+                    'teacher_full' => implode(', ', array_values(array_filter(array_map(fn ($id) => (string) ($fullNames[$id] ?? ''),
+                        array_keys($x['teacher_ids'] ?? []))))) ?: null,
+                    'conflict_with' => $with ? implode('; ', array_unique($with)) : null,
+                    // Qamrovdan tashqari (to'liq ko'rinish: xona jadvali / kafedra mudiri — o'z o'qituvchisi) — faqat ko'rish.
+                    'out_of_scope' => !$x['in_scope'],
                     'room' => $x['room'], 'room_code' => $x['room_code'], 'key' => $x['key'], 'card_ids' => $x['card_ids'], 'week' => $x['week'],
                     'unit' => $x['unit'], 'flow_size' => count($x['all_ids']),
                 'label' => $x['subject'] . ' (' . ($x['lecture'] ? 'M' : 'A') . ') — ' . implode(', ', $x['groups'])]

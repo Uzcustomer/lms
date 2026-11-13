@@ -34,7 +34,7 @@ trait TimetableBlockTickets
 
     private function isTicketAdmin(Request $request): bool
     {
-        return in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true);
+        return in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true);
     }
 
     /** "Faqat admin" (sinov) doskasi boshqa rollarga yopiq — TimetableAssignmentAccess dagi kabi; so'rov uni ochib bermaydi. */
@@ -156,7 +156,7 @@ trait TimetableBlockTickets
     /** Registrator: to'siqli darslar bo'yicha so'rov yaratish va Telegram'ga yuborish. */
     public function blockTicketsSend(Request $request, TimetableBoard $board)
     {
-        abort_unless($this->isTicketAdmin($request), 403, 'Faqat registrator ofisi uchun.');
+        abort_unless($this->isTicketAdmin($request), 403, 'Faqat registrator ofisi, o\'quv bo\'limi va adminlar uchun.');
         abort_unless($this->blockTicketsReady(), 422, 'To\'siq so\'rovlari jadvali yo\'q (migratsiya).');
         abort_if($this->ticketBoardDenied($request, $board), 403, 'Bu sinov doskasi faqat admin uchun.');
         $data = $request->validate([

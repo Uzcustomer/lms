@@ -73,11 +73,11 @@ class TimetableAssignmentAccess
                 ? $this->withHistory($request, $next, $user, $activeRole) : $next($request);
         }
 
-        // Kafedra mudiri va o'quv bo'limi ruxsatlari bir xil: joylashtirish
-        // (haftalik + sikl) hamda o'qituvchi/auditoriya biriktirish hammasiga.
-        $auditoriumAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];
-        $placementRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];
-        $teacherAssignmentRoles = ['kafedra_mudiri', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
+        // Kafedra mudiri: joylashtirish (haftalik + sikl) hamda o'qituvchi/auditoriya biriktirish. O'quv bo'limi — jadval
+        // administratori (TIMETABLE_FULL_EDIT_ROLES): registrator ofisi kabi cheklovsiz, bu ro'yxatga kirmaydi.
+        $auditoriumAssignmentRoles = ['kafedra_mudiri'];
+        $placementRoles = ['kafedra_mudiri'];
+        $teacherAssignmentRoles = ['kafedra_mudiri'];
         $assignmentRoles = $auditoriumAssignmentRoles;
 
         if ($user && in_array($activeRole, $assignmentRoles, true)) {
@@ -126,6 +126,8 @@ class TimetableAssignmentAccess
                     'admin.timetable.cards.place',
                     'admin.timetable.cards.week-override',
                     'admin.timetable.cards.unit-place',
+                    // "Boshqa xona tanlash" — xonalar ro'yxati (faqat o'qiydi; o'z kafedrasi — controller tekshiradi).
+                    'admin.timetable.cards.room-options',
                     'admin.timetable.cards.mudir-placeholder.info',
                     'admin.timetable.cards.mudir-placeholder',
                     'admin.timetable.cards.mudir-placeholder.revert',
@@ -140,15 +142,6 @@ class TimetableAssignmentAccess
                     // Sikl to'qnashuvlarini guruhcha smenasi bilan avtomatik hal qilish
                     'admin.timetable.cycle-auto-shift',
                     'admin.timetable.cycle-practice-starts',
-                ]);
-            }
-
-            // Butun doska bo'yicha joylanmagan kartalar hisoboti (Excel) — o'quv bo'limiga ham.
-            if (in_array($activeRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true)) {
-                $allowed = array_merge($allowed, [
-                    'admin.timetable.boards.unplaced-report',
-                    'admin.timetable.boards.unplaced-report.status',
-                    'admin.timetable.boards.unplaced-report.download',
                 ]);
             }
 
@@ -227,7 +220,7 @@ class TimetableAssignmentAccess
                 'ok' => true,
                 'pending_approval' => true,
                 'change_request_id' => $changeRequest->id,
-                'message' => 'O\'zgarish registrator ofisiga tasdiqlash uchun yuborildi. Tasdiqlangach jadvalga tushadi.',
+                'message' => 'O\'zgarish registrator ofisi va o\'quv bo\'limiga tasdiqlash uchun yuborildi. Tasdiqlangach jadvalga tushadi.',
                 'summary' => $changeRequest->summary,
             ]);
         }

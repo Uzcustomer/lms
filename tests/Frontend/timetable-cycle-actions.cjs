@@ -211,7 +211,24 @@ const settle = p => p.evaluate(() => new Promise(r => setTimeout(r, 30)));
         assert.deepEqual(await p.$$eval('#cycDayPop [data-cyc-cb-detail] [data-cb-hit]', xs => xs.map(x => x.textContent)),
             ["08:30–09:50 · d2/d22-13a · Gistologiya (ma'ruza) · Zal"]);
         await p.close();
-        console.log('timetable cycle actions: 8 scenarios passed');
+        // 7c) Sikl "Xona band" — blokda "Boshqa xona tanlash": sikl biriktirish oynasi (xona tanlovi) ochiladi.
+        p = await page(browser, 'admin', partial, 40);
+        await p.evaluate(() => cyclePlanData.cycle_cards.push({ key: 'u5', group: 'd2/d22-14a', placement_group: 'd2/d22-14a', specialty: 'davolash ishi', course: 5,
+            subject: 'Gigiyena', type: 'practice', placed: true, start_index: 50, conflict: 'Xona band', teacher: { id: 33, name: 'T' }, room: { code: 'R305', name: '305' },
+            mudir_ph: null, conflicts: [{ kind: 'room_busy', type: 'room', who: '305', room: 'R305', groups: ['d2/d22-15a'], date_from: '2026-11-03', date_to: '2026-11-03',
+                past: false, lecture: false, todo: 'boshqa xona tanlang yoki smenani almashtiring' }] }));
+        await p.evaluate(() => { const a = document.getElementById('anchor'); a.dataset.cfKey = 'u5'; T.openCfPop(a); });
+        assert.equal(await p.locator('#cycDayPop [data-cb-block="room"] [data-cyc-room-pick]').textContent(), 'Boshqa xona tanlash');
+        await p.locator('#cycDayPop [data-cyc-room-pick]').click();
+        assert.ok((await p.evaluate(() => T.calls)).some(c => c[0] === 'assign' && c[1] === 'u5'));
+        // Codex: birlashgan (amaliy) blokdagi ma'ruza xonasi to'qnashuvi — amaliy biriktirish ma'ruzaga tegmaydi: havola yo'q.
+        await p.evaluate(() => { const c = cyclePlanData.cycle_cards.find(x => x.key === 'u5');
+            c.conflicts = [Object.assign({}, c.conflicts[0], { lecture: true, lecture_id: 777, kind: 'room_lectures' })]; cfOwners[777] = 'u5';
+            const a = document.getElementById('anchor'); a.dataset.cfKey = 'u5'; T.openCfPop(a); });
+        assert.equal(await p.locator('#cycDayPop [data-cb-block="room"]').count(), 1);
+        assert.equal(await p.locator('#cycDayPop [data-cyc-room-pick]').count(), 0);
+        await p.close();
+        console.log('timetable cycle actions: 9 scenarios passed');
     } finally {
         await browser.close();
     }

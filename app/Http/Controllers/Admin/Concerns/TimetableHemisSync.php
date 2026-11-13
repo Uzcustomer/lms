@@ -34,8 +34,8 @@ trait TimetableHemisSync
 
     public function hemisSyncCompare(Request $request, TimetableBoard $board)
     {
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
-            abort(403, 'Faqat registrator ofisi uchun.');
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
+            abort(403, 'Faqat registrator ofisi, o\'quv bo\'limi va adminlar uchun.');
         }
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
@@ -88,8 +88,8 @@ trait TimetableHemisSync
      */
     public function unplacedSummary(Request $request, TimetableBoard $board)
     {
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
-            abort(403, 'Faqat registrator ofisi uchun.');
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
+            abort(403, 'Faqat registrator ofisi, o\'quv bo\'limi va adminlar uchun.');
         }
         $data = $request->validate([
             'faculty_names'     => 'nullable|array',
@@ -261,8 +261,8 @@ trait TimetableHemisSync
 
     private function hemisSyncDenyUnlessRegistrar(Request $request): void
     {
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
-            abort(403, 'Faqat registrator ofisi uchun.');
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
+            abort(403, 'Faqat registrator ofisi, o\'quv bo\'limi va adminlar uchun.');
         }
     }
 

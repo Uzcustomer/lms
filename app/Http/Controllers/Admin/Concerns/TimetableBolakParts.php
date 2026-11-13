@@ -34,7 +34,7 @@ trait TimetableBolakParts
             'courses.*'         => 'integer|min:1|max:7',
             'dry_run'           => 'nullable|boolean',
         ]);
-        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+        if (!in_array($this->timetableActiveRole($request), self::TIMETABLE_FULL_EDIT_ROLES, true)) {
             return response()->json(['error' => 'Bu amal faqat admin va registrator ofisi uchun.'], 403);
         }
         $dry = $request->boolean('dry_run');

@@ -365,12 +365,19 @@ it('agenda: aralash qamrovli ma\'ruza oqimi — faqat qamrovdagi kartaning tafsi
     // Avval qamrovdan tashqari karta (yozuvning birinchi qismi), keyin qamrovdagi.
     $foreign = $lec('stomatologiya', 'st/2024-01a', 'Boshqa kafedra');
     $own = $lec('pediatriya', 'pp/2024-01a', 'Farmakologiya kafedrasi');
+    // O'qituvchi kafedra mudirining o'z kafedrasidan — barcha darslari to'liq (3.3): qamrovdan tashqari guruh ham ko'rinadi, lekin kalit va
+    // kartalar (ko'chirish) — qamrovdagi qismdan; qamrovdagi guruh oldin.
     $j = agGet($s, $s['head'], 'kafedra_mudiri');
     $flow = collect($j['entries'])->firstWhere('type', 'M');
-    expect($flow)->toMatchArray(['hidden' => false, 'groups' => ['pp/2024-01a'], 'card_ids' => [$own->id], 'flow_size' => 2,
-        'key' => 'w|' . $own->id . '|' . $s['week'], 'label' => 'Farmakologiya (M) — pp/2024-01a'])
-        ->and(json_encode($j))->not->toContain('st/2024-01a')
+    expect($flow)->toMatchArray(['hidden' => false, 'groups' => ['pp/2024-01a', 'st/2024-01a'], 'card_ids' => [$own->id], 'flow_size' => 2,
+        'key' => 'w|' . $own->id . '|' . $s['week'], 'label' => 'Farmakologiya (M) — pp/2024-01a, st/2024-01a', 'out_of_scope' => false])
         ->and(collect($j['entries'])->where('type', 'M')->count())->toBe(1);
+    // Begona kafedra o'qituvchisi bo'lsa (hozirgidek) — qamrovdan tashqari guruh ko'rinmaydi.
+    $s['mux']->forceFill(['department' => 'Boshqa kafedra', 'department_hemis_id' => null])->save();
+    \Illuminate\Support\Facades\DB::table('teacher_employments')->where('teacher_id', $s['mux']->id)->delete();
+    $j2 = agGet($s, $s['head'], 'kafedra_mudiri');
+    expect(collect($j2['entries'])->firstWhere('type', 'M'))->toMatchArray(['groups' => ['pp/2024-01a'], 'card_ids' => [$own->id]])
+        ->and(json_encode($j2))->not->toContain('st/2024-01a');
     // Oqim baribir ko'p kartali — ko'chirilmaydi.
     expect(agGet($s, $s['head'], 'kafedra_mudiri', ['move' => $flow['key']])['move']['why'])->toContain("Bir nechta kartadan iborat ma'ruza oqimi");
     // Faqat qamrovdan tashqari qism — butunlay yashirin.

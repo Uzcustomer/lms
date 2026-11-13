@@ -223,16 +223,22 @@ describe('teacher confirmation', function () {
 
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
         $w = $sheet->getSheet(0);
-        // Sarlavhada ismlar o'z holicha ("tasdiqlagan" yozuvi yo'q); QR yo'q (faqat dekandan keyin)
+        // Sarlavhada ismlar o'z holicha ("tasdiqlagan" yozuvi yo'q), tasdiqlagan o'qituvchi ismidan keyin
+        // "IMZOLANDI" muhri; QR yo'q (faqat dekandan keyin)
+        $drawings = collect($w->getDrawingCollection());
         expect($w->getCell('S10')->getValue())->toBe('IZZATULLAYEV O.')
             ->and($w->getCell('V10')->getValue())->toBeNull()
             ->and($w->getCell('S11')->getValue())->toBe('KARIMOVA L.')
-            ->and($w->getCell('G60')->getValue())->toContain('Fakultet dekani')
-            ->and($w->getDrawingCollection())->toHaveCount(0)
+            ->and($w->getCell('B60')->getValue())->toContain('Fakultet dekani')
+            ->and($drawings)->toHaveCount(1)
+            ->and($drawings[0]->getDescription())->toStartWith('Imzo: IZZATULLAYEV O.')
+            ->and($drawings[0]->getCoordinates())->toBe('W10')
+            ->and($w->getMergeCells())->toHaveKey('W10:X10')
             ->and($sheet->getSheet(1)->getDrawingCollection())->toHaveCount(0);
 
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
-        expect($html)->not->toContain('tasdiqlagan')->not->toContain('<img alt=');
+        expect($html)->not->toContain('tasdiqlagan')->not->toContain('Hujjat QR')
+            ->toMatch('/<img alt="Imzo: IZZATULLAYEV O\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:/');
     });
 
     it('does not let the teacher revoke their own confirmation', function () {
@@ -283,24 +289,31 @@ describe('teacher confirmation', function () {
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '77', 30, 10, 0, 0, 60);
         $w = $sheet->getSheet(0);
         $drawings = collect($w->getDrawingCollection());
-        // Pastda: avval kafedra mudiri, keyin dekan — lavozim va darhol yonida ismi; dekan ismidan keyin yagona QR;
-        // "imzo" va "F.I.Sh." yozuvlari yo'q, muhr o'rni — dekan ostida
-        expect($w->getCell('B60')->getValue())->toBe('Kafedra mudiri ')
-            ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe('right')
-            ->and($w->getCell('C60')->getValue())->toBe('D.A.Xurmatova')
-            ->and($w->getCell('G60')->getValue())->toBe('Fakultet dekani ')
-            ->and($w->getCell('M60')->getValue())->toBe('N.Sagirayev')
-            ->and($w->getCell('K61')->getValue())->toBe('M.O‘')
+        // Pastda: avval dekan ("Jami talabalar soni" bilan bir ustunda — B), keyin kafedra mudiri — lavozim va
+        // yonida ismi, ismidan keyin "IMZOLANDI" muhri; "imzo" va "F.I.Sh." yozuvlari yo'q, muhr o'rni — dekan ostida.
+        // Hujjatning yagona QR i — chap yuqori burchakda (A2:B7), sarlavha yozuvlari o'ngga ko'chadi
+        $qr = $drawings->first(fn ($d) => str_starts_with($d->getDescription(), 'Hujjat QR: '));
+        $stamps = $drawings->filter(fn ($d) => str_starts_with($d->getDescription(), 'Imzo: '))
+            ->mapWithKeys(fn ($d) => [$d->getCoordinates() => explode(' — ', $d->getDescription())[0]])->sortKeys()->all();
+        expect($w->getCell('B60')->getValue())->toBe('Fakultet dekani')
+            ->and($w->getStyle('B60')->getAlignment()->getHorizontal())->toBe($w->getStyle('B57')->getAlignment()->getHorizontal())
+            ->and($w->getCell('C60')->getValue())->toBe('N.Sagirayev')
+            ->and($w->getCell('J60')->getValue())->toBe('Kafedra mudiri ')
+            ->and($w->getCell('N60')->getValue())->toBe('D.A.Xurmatova')
+            ->and($w->getCell('B61')->getValue())->toBe('M.O‘')
             ->and($w->getCell('U60')->getValue())->toBeNull()
             ->and($w->getCell('C61')->getValue())->toBeNull()
             ->and($w->getCell('E61')->getValue())->toBeNull()
             ->and($w->getCell('R61')->getValue())->toBeNull()
-            ->and($w->getMergeCells())->toHaveKeys(['C60:E60', 'G60:K60', 'M60:Q60', 'S60:T60'])
-            ->and($drawings)->toHaveCount(1)
-            ->and($drawings[0]->getDescription())->toStartWith('Hujjat QR: SAGIRAYEV N.')
-            ->and($drawings[0]->getCoordinates())->toBe('S60')
-            ->and($drawings[0]->getHeight())->toBe(84);
-        $png = imagecreatefromstring($drawings[0]->getImageResource() ? (function ($img) { ob_start(); imagepng($img); return ob_get_clean(); })($drawings[0]->getImageResource()) : '');
+            ->and($w->getMergeCells())->toHaveKeys(['C60:D60', 'E60:H60', 'J60:M60', 'N60:Q60', 'S60:W60', 'A2:B7'])
+            ->and($w->getCell('C3')->getValue())->toContain('TOSHKENT')
+            ->and($w->getCell('A3')->getValue())->toBeNull()
+            ->and($drawings)->toHaveCount(4)
+            ->and($stamps)->toBe(['E60' => 'Imzo: SAGIRAYEV N.', 'S60' => 'Imzo: XURMATOVA D.A.', 'W10' => 'Imzo: IZZATULLAYEV O.'])
+            ->and($qr->getDescription())->toStartWith('Hujjat QR: SAGIRAYEV N.')
+            ->and($qr->getCoordinates())->toBe('A2')
+            ->and($qr->getHeight())->toBe(84);
+        $png = imagecreatefromstring((function ($img) { ob_start(); imagepng($img); return ob_get_clean(); })($qr->getImageResource()));
         $red = false;
         for ($x = 0; $x < imagesx($png) && !$red; $x++) {
             for ($y = 0; $y < imagesy($png) && !$red; $y++) {
@@ -475,9 +488,10 @@ describe('teacher confirmation', function () {
         expect(\App\Models\YnQaydnomaConfirmation::where('role', 'kafedra_mudiri')->value('group_hemis_id'))->toBe('78')   // asosiy guruh
             ->and(\App\Models\YnQaydnomaConfirmation::where('role', 'dekan')->count())->toBe(1);
 
-        // Hujjatda yagona QR — dekandan keyin
+        // Hujjatda yagona QR — chap yuqori burchakda (dekandan keyin)
         [$sheet] = $this->controller->buildYnQaydnomaSpreadsheet('435', '19', '78', 30, 10, 0, 0, 60);
-        expect(collect($sheet->getSheet(0)->getDrawingCollection())->map->getCoordinates()->values()->all())->toBe(['S60']);
+        expect(collect($sheet->getSheet(0)->getDrawingCollection())->filter(fn ($d) => str_starts_with($d->getDescription(), 'Hujjat QR: '))
+            ->map->getCoordinates()->values()->all())->toBe(['A2']);
 
         // Rad etilsa ikkala o'qituvchi tasdig'i bekor; ikkalasi qayta topshirgach rad etish yopiladi
         // Dekan tasdig'ini qaytarib rad etadi — kafedra va ikkala o'qituvchi tasdig'i bekor
@@ -510,10 +524,11 @@ describe('teacher confirmation', function () {
         (new ReflectionMethod(JournalController::class, 'prepareYnqSheet'))->invoke(null, $w, 5);
         $w->setCellValue('U10', 'ALLAMURATOVA U.D.')->setCellValue('W8', 'd1/d22-01 (rus)');
         (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $book, '435', '19', '77');
-        // Tasdiqlarsiz ham pastki qator yangi tartibda: kafedra mudiri, keyin dekan (shablondagi ismlar bilan)
-        expect($w->getCell('B60')->getValue())->toBe('Kafedra mudiri ')
-            ->and($w->getCell('G60')->getValue())->toBe('Fakultet dekani ')
-            ->and($w->getCell('M60')->getValue())->toBe('N.J.Sagirayev');
+        // Tasdiqlarsiz ham pastki qator yangi tartibda: dekan, keyin kafedra mudiri (shablondagi ismlar bilan)
+        expect($w->getCell('B60')->getValue())->toBe('Fakultet dekani')
+            ->and($w->getCell('C60')->getValue())->toBe('N.J.Sagirayev')
+            ->and($w->getCell('J60')->getValue())->toBe('Kafedra mudiri ')
+            ->and($w->getDrawingCollection())->toHaveCount(0);
         expect($w->getMergeCells())->toHaveKeys(['N10:R10', 'S10:U10', 'N12:R12', 'S12:U12', 'V8:W8', 'K13:U13'])
             ->not->toHaveKey('U10:X10')
             ->and($w->getCell('S10')->getValue())->toBe('ALLAMURATOVA U.D.')

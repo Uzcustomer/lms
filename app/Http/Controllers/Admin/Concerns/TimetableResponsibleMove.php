@@ -413,7 +413,18 @@ trait TimetableResponsibleMove
         $this->roomRankReset();
         $partRooms = $this->responsiblePartRooms($board, collect(array_map(fn ($m) => $m[0], $moves)), $week);
 
-        return response()->json(['date' => $date, 'rooms' => $this->responsibleMoveRooms($board, $moves, $week, $day, $date, $partRooms)]);
+        return response()->json(['date' => $date, 'when' => $this->roomOptionsWhen($board, $day, $date, $moves),
+            'rooms' => $this->responsibleMoveRooms($board, $moves, $week, $day, $date, $partRooms)]);
+    }
+
+    /** Xonalar ro'yxati sarlavhasi uchun vaqt: "Seshanba, 24.11 15:00–16:20" (birlik — birinchi bo'lak boshidan oxirgisi oxirigacha). */
+    private function roomOptionsWhen(TimetableBoard $board, int $day, string $date, array $moves): string
+    {
+        $names = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
+        $from = min(array_map(fn ($m) => (int) $m[1], $moves));
+        $to = max(array_map(fn ($m) => (int) $m[1] + $m[0]->lenHalf(), $moves));
+
+        return ($names[$day - 1] ?? ($day . '-kun')) . ', ' . Carbon::parse($date)->format('d.m') . ' ' . $this->halfRangeTime($board, [$from - 1, $to - 1]);
     }
 
     private function responsibleMoveEvaluate(Request $request, TimetableCard $card, bool $withRooms): array
@@ -459,6 +470,7 @@ trait TimetableResponsibleMove
             $this->roomRankReset();
             $info['part_rooms'] = $this->responsiblePartRooms($board, $parts, $week);
             $rooms = $this->responsibleMoveRooms($board, $moves, $week, $day, $date, $info['part_rooms']);
+            $info['when'] = $this->roomOptionsWhen($board, $day, $date, $moves);
         }
 
         // Xona: berilgan — faol, sig'adi, o'qituvchiga ruxsat; berilmagan — har bo'lak o'z (shu haftadagi) xonasida, u yaroqli bo'lishi kerak.
@@ -655,8 +667,16 @@ trait TimetableResponsibleMove
         // Biriktirilgan xonalar egalari (kimga biriktirilgani — note va title uchun): faqat ro'yxatdagi tanlab bo'lmaydiganlari.
         $ownerNames = $this->responsibleRoomOwnerNames($base['teacher'], $rooms->reject($ok)->all());
         $out = [];
+        // Bino guruhlari: hozirgi xona binosi ("Shu bino: …") — birinchi, so'ng boshqa binolar nomi bo'yicha, "Bino ko'rsatilmagan" — oxirida.
+        $curRoom = $current !== '' ? ($base['all'][$current] ?? null) : null;
+        $curKey = $curRoom ? self::roomBuildingKey($curRoom) : null;
+        $curBid = $curRoom ? (string) $curRoom->building_id : '';
         foreach ($this->rankRooms($first, $rooms, $current !== '' ? $current : null, $this->roomHabitForCard($board, $first), true) as [$r, $why]) {
             $code = (string) $r->code;
+            $same = $curRoom !== null && self::roomSameBuilding($curKey, $curBid, $r);
+            $bkey = self::roomBuildingKey($r);
+            // Shu bino guruhi sarlavhasi — hozirgi xona binosi (aniqlanmasa — faqat "Shu bino").
+            $label = $same ? ($curKey !== null ? self::roomBuildingLabel($curRoom) : '') : self::roomBuildingLabel($r);
             $assigned = !$ok($r);
             // Biriktirilgan xona — faqat shu holat (bandlik va sig'im ko'rsatilmaydi: tanlab bo'lmaydi).
             $b = $assigned ? null : ($busy['rooms'][$code] ?? null);
@@ -680,14 +700,21 @@ trait TimetableResponsibleMove
             $owner = $kind === 'assigned' ? $this->responsibleRoomOwner($r, $base['teacher'], $ownerNames) : null;
             $out[] = ['code' => $code, 'name' => (string) ($r->name ?: $r->code), 'volume' => (int) $r->volume, 'why' => $kind === null ? $why : null,
                 'building_name' => (string) ($r->building_name ?? ''), 'auditorium_type_name' => (string) ($r->auditorium_type_name ?? ''),
+                'building' => $bkey !== null ? self::roomBuildingLabel($r) : '', 'same_building' => $same,
+                'group' => $same ? 'Shu bino' . ($label !== '' ? ': ' . $label : '') : ($bkey !== null ? $label : "Bino ko'rsatilmagan"),
                 'current' => !$mixed && $code === $current, 'free' => $kind === null, 'kind' => $kind,
                 'note' => $kind === 'assigned' ? ($owner ? 'Biriktirilgan: ' . $owner['short'] : "Boshqa o'qituvchiga biriktirilgan") : null,
                 'note_full' => $owner ? 'Biriktirilgan: ' . $owner['full'] : null,
                 'busy' => $b !== null ? self::roomBusyText('Band: ', (string) $b) : null, 'busy_items' => $items, 'cap' => $cap];
         }
-        // Barqaror saralash (yaqinlik tartibi guruh ichida saqlanadi): hozirgi → bo'sh → band / sig'maydigan → biriktirilgan.
-        $rank = fn (array $x) => [$x['current'] ? 0 : 1, $x['free'] ? 0 : ($x['kind'] === 'assigned' ? 2 : 1)];
-        usort($out, fn ($a, $b) => $rank($a) <=> $rank($b));
+        // Barqaror saralash (yaqinlik tartibi guruh ichida saqlanadi): hozirgi xona → bino guruhi (shu bino; boshqalari nomi bo'yicha;
+        // "Bino ko'rsatilmagan" — oxirida) → guruh ichida: bo'sh → band / sig'maydigan → biriktirilgan.
+        $noBuilding = "Bino ko'rsatilmagan";
+        $rank = fn (array $x) => [$x['current'] ? 0 : 1, $x['same_building'] ? 0 : ($x['group'] === $noBuilding ? 2 : 1)];
+        $state = fn (array $x) => $x['free'] ? 0 : ($x['kind'] === 'assigned' ? 2 : 1);
+        usort($out, fn ($a, $b) => ($rank($a) <=> $rank($b))
+            ?: ($a['same_building'] || $a['group'] === $noBuilding ? 0 : strnatcasecmp($a['group'], $b['group']))
+            ?: ($state($a) <=> $state($b)));
 
         return $out;
     }

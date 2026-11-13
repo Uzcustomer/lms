@@ -14,7 +14,9 @@ const code = cut('            // ===== Birlik: dars yaxlit joylanadi =====', "  
     + cut("            // Uzun guruh ro'yxati: avval 4 tasi", '            // "O\'qituvchi band": o\'qituvchi nomi')
     + cut('            function focusBannerText(show, groups) {', '            function renderFocusBar() {')
     // Panel kartasidagi to'qnashuv belgisi ([data-wcf]) — sahifadagi asl ishlovchi.
-    + cut("            // Panel (sikl va haftalik kartalar) to'qnashuv belgisi", "            // Haftalik panel kartasining to'qnashuvlari");
+    + cut("            // Panel (sikl va haftalik kartalar) to'qnashuv belgisi", "            // Haftalik panel kartasining to'qnashuvlari")
+    // Xona qidiruvi va server ro'yxati ko'rinishi (roomMatches, roomListGrouped, roomListHeadText).
+    + cut('            const UZ_CYR_LAT = {', "            // Ma'ruza yorlig'i:");
 const cycCode = cut("            // Sikl karta oynasi: to'qnashuvlar turlarga ajratilgan bloklarda", "            // Panel kartasi oynasi: to'qnashuvlar (bo'lsa), havolalar va amallar.");
 
 const stubs = `
@@ -114,9 +116,11 @@ const data = {
         assert.deepEqual(await txt('[data-cb-line]'), ['10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A. · 123-amaliyot xonasi',
             '10:00–11:20 · d1/d26-01a · Tibbiy biologiya. Umumiy genetika (amaliy) · NUROVA Z. A. · 123-amaliyot xonasi']);
         assert.ok(!(await p.evaluate(() => calls.some(c => /unit-place/.test(c[0])))), 'oldindan tekshiruvda rad — serverga yuborilmadi');
-        // Yechimlar: "Joylash uchun tanlash" — har doim; "Vaqtincha kafedra mudiriga yozish" — oynada bitta (pastki qatorda), yechimlarda
-        // takrorlanmaydi (6-bo'lim); xona tanlash — "Xona band" blokida.
-        assert.deepEqual(await txt('[data-cb-sol]'), ['Joylash uchun tanlash']);
+        // "Joylash uchun tanlash" va "Vaqtincha kafedra mudiriga yozish" — oynada bittadan (pastki qatorda), yechimlarda takrorlanmaydi;
+        // xona tanlash — "Xona band" blokida.
+        assert.deepEqual(await txt('[data-cb-sol]'), []);
+        assert.deepEqual(await txt('[data-pop-select]'), ['Joylash uchun tanlash']);
+        assert.equal(((await html()).match(/Joylash uchun tanlash/g) || []).length, 1);
         assert.ok(((await html()).match(/Vaqtincha kafedra mudiriga yozish/g) || []).length <= 1);
         assert.doesNotMatch(await html(), /yana \d+ ta/);
 
@@ -159,23 +163,32 @@ const data = {
         // 5) Faqat xona band — "Xona band" blokining o'zida "Boshqa xona tanlash" (5-bo'lim): shu vaqt uchun xonalar (server room-options —
         //    bo'sh tepada, band / biriktirilgan — kulrang, tanlab bo'lmaydi; qidiruv nom bo'yicha); boshqa sabab yo'q — "Shu xona bilan joylash".
         await setCards([data.card, Object.assign({}, data.blocker, { teacher_id: 44, teacher_name: 'BOSHQA' })]);
-        await p.evaluate(() => { window.reply['/room-options'] = { date: '2026-11-25', rooms: [
-            { code: 'R117', name: '117-xona', volume: 20, free: true, kind: null, why: 'shu binoda' },
-            { code: 'R118', name: '118-xona', volume: 20, free: true, kind: null },
-            { code: 'R200', name: '200-xona', volume: 30, free: false, kind: 'busy', busy: 'Band: d1/d26-05a · Anatomiya · 10:00' },
-            { code: 'R5', name: '5-xona', volume: 30, free: false, kind: 'assigned', note: 'Biriktirilgan: OSTANAQULOV SH. F.' }] }; T.open(708676); });
+        await p.evaluate(() => { window.reply['/room-options'] = { date: '2026-11-25', when: 'Chorshanba, 25.11 10:00–11:20', rooms: [
+            { code: 'R117', name: '117-xona', volume: 20, free: true, kind: null, why: 'shu binoda', group: 'Shu bino: Klinika', building: 'Klinika' },
+            { code: 'R118', name: '118-xona', volume: 20, free: true, kind: null, group: 'Asosiy bino', building: 'Asosiy bino' },
+            { code: 'R200', name: '200-xona', volume: 30, free: false, kind: 'busy', busy: 'Band: d1/d26-05a · Anatomiya · 10:00', group: 'Asosiy bino', building: 'Asosiy bino' },
+            { code: 'R5', name: '5-xona', volume: 30, free: false, kind: 'assigned', note: 'Biriktirilgan: OSTANAQULOV SH. F.', group: "Bino ko'rsatilmagan", building: '' }] }; T.open(708676); });
         await p.click('#pnCardPop [data-pop-place]');
         assert.deepEqual(await txt('[data-cb-title]'), ["Joylab bo'lmadi — sabab: xona band"]);
-        assert.deepEqual(await txt('[data-cb-sol]'), ['Joylash uchun tanlash']);
+        assert.deepEqual(await txt('[data-cb-sol]'), []);
         assert.deepEqual(await txt('[data-cb-block="room"] [data-cb-room-pick]'), ['Boshqa xona tanlash']);
         await p.click('#pnCardPop [data-cb-block="room"] [data-cb-room-pick]');
         await p.waitForSelector('#pnCardPop [data-cb-room-code]');
         assert.ok((await p.evaluate(() => calls.map(c => c[0]))).includes('/cards/708676/room-options?week=11&day=3&pair=3'));
-        assert.deepEqual(await txt('[data-cb-room-code]'), ["117-xona · 20 o'rin · shu binoda", "118-xona · 20 o'rin",
-            "200-xona · 30 o'rin · Band: d1/d26-05a · Anatomiya · 10:00", "5-xona · 30 o'rin · Biriktirilgan: OSTANAQULOV SH. F."]);
+        // Sarlavha (vaqt, bo'sh / band soni), bino guruhlari sarlavhalari, qatorda bino yorlig'i.
+        assert.deepEqual(await txt('[data-cb-room-head]'), ["Chorshanba, 25.11 10:00–11:20 uchun: 2 bo'sh, 1 band · 1 biriktirilgan"]);
+        assert.deepEqual(await txt('[data-cb-room-group]'), ['Shu bino: Klinika', 'Asosiy bino', "Bino ko'rsatilmagan"]);
+        assert.deepEqual(await txt('[data-cb-room-code]'), ["117-xona · 20 o'rin Klinika · shu binoda", "118-xona · 20 o'rin Asosiy bino",
+            "200-xona · 30 o'rin Asosiy bino · Band: d1/d26-05a · Anatomiya · 10:00", "5-xona · 30 o'rin · Biriktirilgan: OSTANAQULOV SH. F."]);
+        // Qidiruv — bino nomi bo'yicha ham (kod emas).
+        await p.fill('#pnCardPop [data-cb-room-q]', 'asosiy');
+        assert.deepEqual(await p.$$eval('#pnCardPop [data-cb-room-code]', xs => xs.map(x => x.dataset.cbRoomCode)), ['R118', 'R200']);
+        await p.fill('#pnCardPop [data-cb-room-q]', 'R117');
+        assert.deepEqual(await p.$$eval('#pnCardPop [data-cb-room-code]', xs => xs.map(x => x.dataset.cbRoomCode)), []);
+        await p.fill('#pnCardPop [data-cb-room-q]', '');
         assert.deepEqual(await p.$$eval('#pnCardPop [data-cb-room-code][disabled]', xs => xs.map(x => x.dataset.cbRoomCode)), ['R200', 'R5']);
         await p.fill('#pnCardPop [data-cb-room-q]', '118');
-        assert.deepEqual(await txt('[data-cb-room-code]'), ["118-xona · 20 o'rin"]);
+        assert.deepEqual(await txt('[data-cb-room-code]'), ["118-xona · 20 o'rin Asosiy bino"]);
         await p.click('#pnCardPop [data-cb-room-code="R118"]');
         assert.deepEqual(await txt('[data-cb-room-apply]'), ['Shu xona bilan joylash']);
         await p.click('#pnCardPop [data-cb-room-apply]');
@@ -232,7 +245,7 @@ const data = {
         const busyRoom = Object.assign({}, data.blocker, { teacher_id: 44, teacher_name: 'BOSHQA', day: 3, pair: 5 });
         await setCards([Object.assign({}, data.card, { day: 3, pair: 3 }), Object.assign({}, data.card, { id: 708677, day: 3, pair: 5 }), busyRoom]);
         await p.evaluate(() => T.open(708677));
-        assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), ['Joylash uchun tanlash']);
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), []);
         await p.click('#pnCardPop [data-pop-cf] [data-cb-block="room"] [data-cb-room-pick]');
         await p.waitForSelector('#pnCardPop [data-pop-cf] [data-cb-room-code="R117"]');
         // Codex: bosilgan — ikkinchi bo'lak (12:00), ro'yxat esa birlik boshidan (10:00, 3-qator) — joylash (unitMovePlan) bilan bir xil.
@@ -244,7 +257,7 @@ const data = {
         await setCards([Object.assign({}, data.card, { day: 1, pair: 1 }), Object.assign({}, data.card, { id: 708677, day: 3, pair: 5 }), busyRoom]);
         await p.evaluate(() => T.open(708677));
         assert.deepEqual(await txt('[data-pop-cf] [data-cb-head]'), ['Xona band: 123-amaliyot xonasi']);
-        assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), ['Joylash uchun tanlash']);
+        assert.deepEqual(await txt('[data-pop-cf] [data-cb-sol]'), []);
         assert.equal(await p.$('#pnCardPop [data-pop-cf] [data-cb-room-pick]'), null);
 
         // 7d) Codex: bo'lingan dars bir o'qituvchi bilan ikki kunda to'qnashadi — har kun alohida blok (kun va sana bilan), har birining

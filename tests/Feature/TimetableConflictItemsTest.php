@@ -98,6 +98,9 @@ it('week-override 422 va unit-fix (Yaxlitlash) natijasi ham conflict_items bilan
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-03a', 'day' => 4, 'pair' => 5]));
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09a', 'day' => 4, 'pair' => 7]));
     TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09b', 'day' => 4, 'pair' => 1]));
+    // Seshanba ham (yaxlitlash bo'laklar turgan har kunni sinaydi): o'qituvchi 12:00 va 15:00 da band.
+    TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09c', 'day' => 2, 'pair' => 5]));
+    TimetableCard::create(array_replace($s['base'], ['group_name' => 'd1/d26-09d', 'day' => 2, 'pair' => 9]));
     $f = ciAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['card']->id]])
         ->assertUnprocessable()->json('failed.0');
     expect($f['conflict_items'][0])->toMatchArray(['kind' => 'teacher', 'who' => 'NUROVA Z. A.', 'groups' => ['d1/d26-09a']]);
@@ -222,4 +225,25 @@ it('"Boshqa xona tanlash" — room-options: shu vaqt uchun xonalar (bo\'sh tepad
     test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri'])->getJson($url)->assertForbidden();
     $t = ciTeacher('OQ', 'oqituvchi');
     test()->withoutVite()->actingAs($t, 'teacher')->withSession(['active_role' => 'oqituvchi'])->getJson($url)->assertForbidden();
+});
+
+it('room-options: bino guruhlari (building_name, bo\'lmasa nomdagi bino) — hozirgi → shu bino → boshqa binolar nomi bo\'yicha; guruh ichida bo\'sh tepada; sarlavha vaqti', function () {
+    $s = ciSetup();
+    Auditorium::whereKey(Auditorium::where('code', 'R123')->value('id'))->update(['building_name' => 'Klinika']);
+    $mk = fn (string $code, string $name, ?string $b, int $vol = 60) => Auditorium::create(['code' => $code, 'name' => $name, 'volume' => $vol,
+        'active' => true, 'building_name' => $b]);
+    $mk('K1', '201-xona', 'Klinika');
+    $mk('K2', '202-xona', 'Klinika', 5);            // shu bino, sig'maydi — guruh ichida bo'shlardan keyin
+    $mk('A1', '101-xona', 'Asosiy bino');
+    $mk('Z1', '301-xona', 'Zarbdor binosi');
+    $mk('N1', '3-bino, 2-qavat, 210', null);          // building_name yo'q — nomdagi bino
+    $mk('U1', '999-xona', null);                       // bino aniqlanmagan
+    $j = ciAs()->getJson(route('admin.timetable.cards.room-options', $s['card']) . '?week=11&day=3&pair=3')->assertOk()->json();
+    $rooms = collect($j['rooms'])->keyBy('code');
+    $order = array_values(array_filter(array_keys($rooms->all()), fn ($c) => in_array($c, ['R123', 'K1', 'K2', 'A1', 'Z1', 'N1', 'U1'], true)));
+    expect($j['when'])->toBe('Chorshanba, 25.11 10:00–11:20')
+        ->and($order)->toBe(['R123', 'K1', 'K2', 'N1', 'A1', 'Z1', 'U1'])
+        ->and([$rooms['K1']['group'], $rooms['N1']['group'], $rooms['A1']['group'], $rooms['Z1']['group'], $rooms['U1']['group']])
+        ->toBe(['Shu bino: Klinika', '3-bino', 'Asosiy bino', 'Zarbdor binosi', "Bino ko'rsatilmagan"])
+        ->and([$rooms['K2']['kind'], $rooms['N1']['building'], $rooms['U1']['building']])->toBe(['capacity', '3-bino', '']);
 });

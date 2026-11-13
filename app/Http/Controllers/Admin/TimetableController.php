@@ -3216,6 +3216,10 @@ class TimetableController extends Controller
             if ($this->hasMudirPlaceholderColumn()) {
                 $overrideColumns[] = 'o.mudir_placeholder';
             }
+            $hasUnplaced = Schema::hasColumn('timetable_card_overrides', 'unplaced');
+            if ($hasUnplaced) {
+                $overrideColumns[] = 'o.unplaced';
+            }
             $wanted = $filtered ? array_flip($cardIds) : null;
             $q = DB::table('timetable_card_overrides as o')
                 ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
@@ -3232,7 +3236,9 @@ class TimetableController extends Controller
                 }
                 $ov[] = [(int) $o->card_id, (int) $o->week, $o->day !== null ? (int) $o->day : null, $o->pair !== null ? (int) $o->pair : null,
                     $o->cancelled ? 1 : 0, $hasOverrideRoom ? ($o->auditorium_code ?: null) : null, $hasOverrideRoom ? ($o->auditorium_name ?: null) : null]
-                    + ($this->ovPlaceholder($o) ? [7 => $this->ovPlaceholder($o)] : []);
+                    + ($this->ovPlaceholder($o) ? [7 => $this->ovPlaceholder($o)] : [])
+                    // 8 — joylanmagan, lekin o'tiladi (bekor qilingan yozuvda): panelda "Joylashmagan kartalar"da.
+                    + ($hasUnplaced && $o->cancelled && !empty($o->unplaced) ? [8 => 1] : []);
             }
         }
 
@@ -4172,7 +4178,8 @@ class TimetableController extends Controller
             }
             foreach (array_chunk($cancelIds, 1000) as $chunk) {
                 DB::table('timetable_card_overrides')->whereIn('id', $chunk)
-                    ->update(['cancelled' => true, 'day' => null, 'pair' => null, 'updated_at' => $now]);
+                    ->update(['cancelled' => true, 'day' => null, 'pair' => null, 'updated_at' => $now]
+                        + (Schema::hasColumn('timetable_card_overrides', 'unplaced') ? ['unplaced' => false] : []));
             }
             foreach (array_chunk($insert, 1000) as $chunk) {
                 DB::table('timetable_card_overrides')->insert($chunk);
@@ -11483,6 +11490,7 @@ class TimetableController extends Controller
                     'day' => null,
                     'pair' => null,
                     'cancelled' => true,
+                    'unplaced' => false,
                     'auditorium_code' => null,
                     'auditorium_name' => null,
                 ]

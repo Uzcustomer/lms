@@ -179,10 +179,16 @@ it('"Yaxlitlash" (unit-fix merge): eng ko\'p soatli kun, birinchi bo\'lak boshid
         'auditorium_code' => null, 'auditorium_name' => null, 'day' => 3, 'pair' => $p]));
     $b7 = $blk(7);
     $b1 = $blk(1);
+    // Seshanba ham yopiq (12:00 va 15:00 da guruh band) — bo'laklar turgan ikkala kunda ham hech bir para boshidan sig'maydi.
+    foreach ([5, 9] as $p) {
+        TimetableCard::create(array_merge($s['base'], ['subject_name' => 'Gistologiya', 'teacher_id' => $t2->id, 'teacher_name' => 'BOSHQA B.',
+            'auditorium_code' => null, 'auditorium_name' => null, 'day' => 2, 'pair' => $p]));
+    }
     // Sig'madi — 422 (hech narsa o'zgarmadi), sababi tuzilgan bloklar bilan.
     $r = $merge()->assertUnprocessable()->json();
     expect($r['done'])->toBe(0)->and($r['failed'])->toHaveCount(1)->and($r['error'])->toStartWith("Yaxlitlab bo'lmadi: ")
         ->and($r['failed'][0]['error'])->toContain("6 soat sig'maydi")->toContain('Guruh band')
+            ->toContain("Bir kunga sig'maydi (sinaldi: Chorshanba, Seshanba — har para boshidan).")
         ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[2, 1], [3, 3], [3, 5]])
         ->and(TimetableCardOverride::count())->toBe(0);
     // 08:30 bo'shadi — oxiriga tekislab: 708676 — 08:30, qolganlari joyida (chorshanba 08:30–13:20).
@@ -194,6 +200,24 @@ it('"Yaxlitlash" (unit-fix merge): eng ko\'p soatli kun, birinchi bo\'lak boshid
     $b7->delete();
     expect($merge()->assertOk()->json('done'))->toBe(1)
         ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[3, 7], [3, 3], [3, 5]]);
+});
+
+it('Yaxlitlash: har kun va har para boshidan sinaydi — eski ikki variant sig\'magan joyda 08:30 variantini topadi; eng kam surilgani', function () {
+    $s = uiSetup();
+    // a — seshanba 08:30; b — chorshanba 10:00; c — chorshanba 15:00 (9-qator). Chorshanba 13:30 band (boshqa fan, shu guruh): eski algoritm
+    // faqat 10:00 dan va 12:00 dan sinardi ("6 soat sig'maydi: 10:00 dan keyin 4 soat bo'sh"); seshanba 10:00 va 15:00 band.
+    $s['c']->update(['pair' => 9]);
+    $t2 = uiTeacher('BOSHQA B.');
+    $blk = fn (int $d, int $p) => TimetableCard::create(array_merge($s['base'], ['subject_name' => 'Anatomiya', 'teacher_id' => $t2->id,
+        'teacher_name' => 'BOSHQA B.', 'auditorium_code' => null, 'auditorium_name' => null, 'day' => $d, 'pair' => $p]));
+    $blk(3, 7);
+    $blk(2, 3);
+    $blk(2, 9);
+    $r = uiAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['a']->id]])
+        ->assertOk()->json();
+    // Chorshanba 08:30–13:20: b joyida (10:00), a — 08:30, c — 12:00 (4 soat ko'chdi — eng kami).
+    expect($r['message'])->toBe('Yaxlitlandi: d1/d26-03a — Chorshanba 08:30–13:20')
+        ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[3, 1], [3, 3], [3, 5]]);
 });
 
 it('Yaxlitlash: soat teng bo\'lsa — haftaning oldingi kuni; yaxlit birlik ro\'yxatda yo\'q va merge unga tegmaydi', function () {
@@ -270,6 +294,10 @@ it('Yaxlitlash — kafedra mudiri (o\'z kafedrasi) tasdiq rejimida ham darhol qo
         'auditorium_code' => null, 'auditorium_name' => null, 'day' => 3, 'pair' => $p]));
     $b1 = $blk(1);
     $blk(7);
+    foreach ([5, 9] as $p) {
+        TimetableCard::create(array_merge($s['base'], ['subject_name' => 'Gistologiya', 'teacher_id' => $t2->id, 'teacher_name' => 'BOSHQA B.',
+            'auditorium_code' => null, 'auditorium_name' => null, 'day' => 2, 'pair' => $p]));
+    }
     expect($merge()->assertUnprocessable()->json('failed.0.conflict_items'))->not->toBeEmpty()
         ->and(\App\Models\TimetableChangeRequest::count())->toBe(0)->and(TimetableCardOverride::count())->toBe(0);
     // Bo'shadi — darhol (pending_approval emas), natija matni va tarix ("Kiritildi").
@@ -287,4 +315,66 @@ it('Yaxlitlash — kafedra mudiri (o\'z kafedrasi) tasdiq rejimida ham darhol qo
     TimetableCard::whereIn('id', [$s['a']->id, $s['b']->id, $s['c']->id])->update(['kafedra_name' => 'Anatomiya kafedrasi', 'day' => 2]);
     TimetableCard::whereKey($s['b']->id)->update(['day' => 3]);
     expect($merge()->assertUnprocessable()->json('failed.0.error'))->toBe('Bu fan sizning kafedrangizga tegishli emas.');
+});
+
+it('Yaxlitlab bo\'lmasa (unplace_if_no_fit): birlik shu haftada joylanmaganlarga o\'tadi — shablon va boshqa hafta o\'zgarmaydi; tasdiq rejimida ham darhol, tarixda', function () {
+    $s = uiSetup();
+    $s['board']->update(['settings' => ['semester_start' => '2026-09-14', 'approval_required' => true]]);
+    \Illuminate\Support\Facades\DB::table('departments')->insert(['department_hemis_id' => 601, 'name' => 'Biologiya kafedrasi', 'code' => 'B1',
+        'structure_type_code' => 12, 'structure_type_name' => 'Kafedra', 'locality_type_code' => 11, 'locality_type_name' => 'Mahalliy', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now()]);
+    $head = uiTeacher('MUDIR', 'kafedra_mudiri');
+    $head->forceFill(['department_hemis_id' => 601, 'department' => 'Biologiya kafedrasi'])->save();
+    $as = fn () => test()->withoutVite()->actingAs($head, 'teacher')->withSession(['active_role' => 'kafedra_mudiri']);
+    $t2 = uiTeacher('BOSHQA B.');
+    foreach ([[3, 1], [3, 7], [2, 5], [2, 9]] as [$d, $p]) {
+        TimetableCard::create(array_merge($s['base'], ['subject_name' => 'Anatomiya', 'teacher_id' => $t2->id, 'teacher_name' => 'BOSHQA B.',
+            'auditorium_code' => null, 'auditorium_name' => null, 'day' => $d, 'pair' => $p]));
+    }
+    $url = route('admin.timetable.boards.unit-fix', $s['board']);
+    // Bayroqsiz — 422, hech narsa o'zgarmaydi.
+    $as()->postJson($url, ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['a']->id]])->assertUnprocessable();
+    expect(TimetableCardOverride::count())->toBe(0);
+    // Tasdiqlangan (unplace_if_no_fit) — darhol (so'rov emas): hamma bo'lak 11-haftada joylanmagan, sababi bilan.
+    $r = $as()->postJson($url, ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['a']->id], 'unplace_if_no_fit' => true])->assertOk()->json();
+    expect($r)->not->toHaveKey('pending_approval')
+        ->and($r['done'])->toBe(1)
+        ->and($r['cleared'][0]['text'])->toStartWith("Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: 6 soat sig'maydi")
+        ->and($r['cleared'][0]['conflict_items'])->not->toBeEmpty()
+        ->and($r['message'])->toEndWith('Joylash uchun tanlang.')
+        ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[null, null], [null, null], [null, null]])
+        ->and([uiAt($s['a'], 12), uiAt($s['b'], 12), uiAt($s['c'], 12)])->toBe([[2, 1], [3, 3], [3, 5]])
+        ->and([$s['a']->fresh()->day, $s['b']->fresh()->day, $s['c']->fresh()->day])->toBe([2, 3, 3]);
+    // Codex: bekor emas — "joylanmagan, o'tiladi" (unplaced): panelda qoladi, /data da 8-maydon; birlik bo'lib qayta joylanadi.
+    expect(TimetableCardOverride::where('week', 11)->orderBy('card_id')->get()->map(fn ($o) => [$o->cancelled, $o->unplaced])->all())
+        ->toBe([[true, true], [true, true], [true, true]]);
+    $ov = collect(uiAs()->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json('ov'))->filter(fn ($o) => $o[1] === 11)->values();
+    expect($ov->map(fn ($o) => $o[8] ?? 0)->all())->toBe([1, 1, 1]);
+    $h = \App\Models\TimetableChangeRequest::where('status', 'applied')->latest('id')->first();
+    expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0)
+        ->and($h->summary)->toContain("Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi");
+});
+
+it('Yaxlitlash bayrog\'i bilan, lekin endi sig\'adi — oddiy yaxlitlanadi (joydan olinmaydi)', function () {
+    $s = uiSetup();
+    $r = uiAs()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), ['week' => 11, 'action' => 'merge', 'card_ids' => [$s['a']->id],
+        'unplace_if_no_fit' => true])->assertOk()->json();
+    expect($r)->not->toHaveKey('cleared')->and($r['message'])->toBe('Yaxlitlandi: d1/d26-03a — Chorshanba 10:00–14:50')
+        ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[3, 7], [3, 3], [3, 5]]);
+});
+
+it('Codex: joylanmaganlarga o\'tkazilgan birlik (unplaced) — bitta bo\'lakni joylash butun birlikni joylaydi; oddiy "bekor" — o\'tilmaydi', function () {
+    $s = uiSetup();
+    foreach ([$s['a'], $s['b'], $s['c']] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 11, 'day' => null, 'pair' => null, 'cancelled' => true, 'unplaced' => true]);
+    }
+    $j = uiAs()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['week' => 11, 'layer' => 'internal', 'day' => 4, 'pair' => 1])->assertOk()->json('unit');
+    expect(array_map(fn ($u) => [$u['day'], $u['pair']], $j))->toBe([[4, 1], [4, 3], [4, 5]])
+        ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[4, 1], [4, 3], [4, 5]])
+        ->and(TimetableCardOverride::where('week', 11)->where('unplaced', true)->count())->toBe(0);
+    // Oddiy bekor (o'tilmaydi) — birlikka kirmaydi: faqat qolgan bo'laklar joylanadi.
+    TimetableCardOverride::query()->delete();
+    TimetableCardOverride::create(['card_id' => $s['c']->id, 'week' => 11, 'day' => null, 'pair' => null, 'cancelled' => true]);
+    uiAs()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['week' => 11, 'layer' => 'internal', 'day' => 4, 'pair' => 1])->assertOk();
+    expect([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[4, 1], [4, 3], [null, null]]);
 });

@@ -15,19 +15,21 @@ vm.createContext(ctx);
 vm.runInContext(section('            function appendFormValue(fd, key, v) {', '            async function api(url, method') + '; this.appendFormValue = appendFormValue;', ctx);
 const entries = [];
 const fd = { append: (k, v) => entries.push([k, String(v)]) };
-const body = { week: 9, card_id: 5, type: 'room', title: 'Xonani almashtirish', empty: null, none: undefined, flag: false,
-    faculty_names: ['F1', 'F2'],
+// Mantiqiy qiymatlar — '1' / '0' (Laravel 'boolean' qoidasi "true" / "false" matnini qabul qilmaydi).
+const body = { week: 9, card_id: 5, type: 'room', title: 'Xonani almashtirish', empty: null, none: undefined, flag: false, unplace_if_no_fit: true,
+    faculty_names: ['F1', 'F2'], bits: [true, false],
     actions: [{ op: 'move', card_id: 5, week: 9, day: 2, pair: 3, auditorium_code: '301' }, { op: 'teacher', card_id: 6, teacher_id: 7 }],
-    nested: { a: 1, b: [1, 2] } };
+    nested: { a: 1, b: [1, 2], ok: true } };
 Object.entries(body).forEach(([k, v]) => ctx.appendFormValue(fd, k, v));
 assert.deepEqual(entries, [
-    ['week', '9'], ['card_id', '5'], ['type', 'room'], ['title', 'Xonani almashtirish'], ['flag', 'false'],
-    ['faculty_names[]', 'F1'], ['faculty_names[]', 'F2'],
+    ['week', '9'], ['card_id', '5'], ['type', 'room'], ['title', 'Xonani almashtirish'], ['flag', '0'], ['unplace_if_no_fit', '1'],
+    ['faculty_names[]', 'F1'], ['faculty_names[]', 'F2'], ['bits[]', '1'], ['bits[]', '0'],
     ['actions[0][op]', 'move'], ['actions[0][card_id]', '5'], ['actions[0][week]', '9'], ['actions[0][day]', '2'], ['actions[0][pair]', '3'],
     ['actions[0][auditorium_code]', '301'],
     ['actions[1][op]', 'teacher'], ['actions[1][card_id]', '6'], ['actions[1][teacher_id]', '7'],
-    ['nested[a]', '1'], ['nested[b][]', '1'], ['nested[b][]', '2'],
+    ['nested[a]', '1'], ['nested[b][]', '1'], ['nested[b][]', '2'], ['nested[ok]', '1'],
 ]);
+assert(!entries.some(([, v]) => v === 'true' || v === 'false'));
 assert(!entries.some(([, v]) => v === '[object Object]'));
 assert.match(source, /Object\.entries\(body\)\.forEach\(\(\[k, v\]\) => appendFormValue\(fd, k, v\)\);/);
 

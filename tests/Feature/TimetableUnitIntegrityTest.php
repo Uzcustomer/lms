@@ -378,3 +378,23 @@ it('Codex: joylanmaganlarga o\'tkazilgan birlik (unplaced) — bitta bo\'lakni j
     uiAs()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['week' => 11, 'layer' => 'internal', 'day' => 4, 'pair' => 1])->assertOk();
     expect([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[4, 1], [4, 3], [null, null]]);
 });
+
+it('BUG: "Ha" — forma (FormData) bilan unplace_if_no_fit=1: sig\'maydigan birlik shu haftada joylanmaganga o\'tadi; "true" matni — 422', function () {
+    $s = uiSetup();
+    $t2 = uiTeacher('BOSHQA B.');
+    foreach ([[3, 1], [3, 7], [2, 5], [2, 9]] as [$d, $p]) {
+        TimetableCard::create(array_merge($s['base'], ['subject_name' => 'Anatomiya', 'teacher_id' => $t2->id, 'teacher_name' => 'BOSHQA B.',
+            'auditorium_code' => null, 'auditorium_name' => null, 'day' => $d, 'pair' => $p]));
+    }
+    $url = route('admin.timetable.boards.unit-fix', $s['board']);
+    $form = ['week' => '11', 'action' => 'merge', 'card_ids' => [(string) $s['a']->id]];
+    // Brauzer FormData'si true ni "true" matniga aylantirardi — validatsiya (o'zgarmagan) uni rad etadi; front endi 1 yuboradi.
+    uiAs()->post($url, $form + ['unplace_if_no_fit' => 'true'], ['Accept' => 'application/json'])->assertUnprocessable()
+        ->assertJsonValidationErrors('unplace_if_no_fit');
+    expect(TimetableCardOverride::count())->toBe(0);
+    $r = uiAs()->post($url, $form + ['unplace_if_no_fit' => '1'], ['Accept' => 'application/json'])->assertOk()->json();
+    expect($r['cleared'][0]['text'])->toStartWith("Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi")
+        ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[null, null], [null, null], [null, null]])
+        ->and([uiAt($s['a'], 12), uiAt($s['b'], 12), uiAt($s['c'], 12)])->toBe([[2, 1], [3, 3], [3, 5]])
+        ->and([$s['a']->fresh()->day, $s['a']->fresh()->pair, $s['b']->fresh()->day, $s['c']->fresh()->pair])->toBe([2, 1, 3, 5]);
+});

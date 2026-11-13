@@ -4098,7 +4098,7 @@
                 const roomVol = j.room_volumes || {};
                 (j.ov || []).forEach(o => {
                     overrides[o[0] + '|' + o[1]] = { day: o[2], pair: o[3], cancelled: !!o[4], auditorium_code: o[5] || null, auditorium_name: o[6] || null,
-                        auditorium_volume: o[5] ? (roomVol[o[5]] ?? null) : null, ...(o[7] ? { mudir_placeholder: o[7] } : {}) };
+                        auditorium_volume: o[5] ? (roomVol[o[5]] ?? null) : null, ...(o[7] ? { mudir_placeholder: o[7] } : {}), ...(o[8] ? { unplaced: true } : {}) };
                 });
                 (j.overrides || []).forEach(o => {
                     overrides[o.card_id + '|' + o.week] = {
@@ -5947,7 +5947,8 @@
                 if (!curWeek) return false;
                 if (c.term_weeks && curWeek > +c.term_weeks) return true;
                 const ov = overrides[c.id + '|' + curWeek];
-                return !!(ov && ov.cancelled);
+                // "Joylanmagan, o'tiladi" (unplaced) — bekor emas: "Joylashmagan kartalar"da.
+                return !!(ov && ov.cancelled && !ov.unplaced);
             };
             // Tanlangan haftada haqiqatan o'tiladigan kartalar (shablon ko'rinishida — hammasi)
             const weekActiveCards = () => visibleSpecCards().filter(c => !weekCancelled(c));
@@ -6104,7 +6105,8 @@
             }
             // Shu hafta "vaqtincha kafedra mudirida" (haftalik yozuvdagi belgi): {teacher_name (mudir), mudir_name, orig_teacher_name, …} | null.
             const phOf = (c, W = curWeek) => (c && W && overrides[c.id + '|' + W] && overrides[c.id + '|' + W].mudir_placeholder) || null;
-            const activeInWeek = (c, W) => !(W && c.term_weeks && W > +c.term_weeks) && !(W && overrides[c.id + '|' + W] && overrides[c.id + '|' + W].cancelled);
+            const activeInWeek = (c, W) => !(W && c.term_weeks && W > +c.term_weeks)
+                && !(W && overrides[c.id + '|' + W] && overrides[c.id + '|' + W].cancelled && !overrides[c.id + '|' + W].unplaced);
             // Birlik indeksi (kalit → kartalar) — panel/zichlash kabi ko'p chaqiriladigan joylar uchun bir marta quriladi.
             function buildUnitIndex(list = cards) {
                 const m = new Map();

@@ -116,7 +116,7 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
         calls.push([url, body && JSON.parse(JSON.stringify(body))]);
         if (!n++) { const e = new Error("Yaxlitlab bo'lmadi"); e.status = 422;
             e.data = { ok: false, done: 0, failed: [{ group: 'd1/d26-03a', subject: base.subject_name, card_ids: [708676, 708674, 708675], error: "6 soat sig'maydi" }] }; throw e; }
-        ['708676', '708674', '708675'].forEach(id => { ctx.overrides[id + '|11'] = { day: null, pair: null, cancelled: true }; });
+        ['708676', '708674', '708675'].forEach(id => { ctx.overrides[id + '|11'] = { day: null, pair: null, cancelled: true, unplaced: true }; });
         return { ok: true, done: 1, failed: [], message: "Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: 6 soat sig'maydi). Joylash uchun tanlang.",
             cleared: [{ group: 'd1/d26-03a', text: "Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: 6 soat sig'maydi).",
                 conflict_items: [{ kind: 'group', who: 'd1/d26-03a', groups: ['d1/d26-03a'], subject: 'Anatomiya', time: '13:30–14:50', day: 3 }] }] };
@@ -130,6 +130,9 @@ const setOv = (c, d, p) => { ctx.overrides[c.id + '|' + W] = { day: d, pair: p, 
         { week: 11, action: 'merge', card_ids: [708676, 708674, 708675], unplace_if_no_fit: true }]);
     assert.ok(calls.some(x => x[0] === 'reload'));
     assert.ok(calls.some(x => x[0] === 'toast' && /joylanmaganlarga o'tkazildi/.test(x[1]) && x[2] === 'warn'));
+    // Codex: "joylanmagan, o'tiladi" — birlik to'liq (3 bo'lak, joyi yo'q), bekor emas: bitta bo'lakni joylash butun birlikni joylaydi.
+    assert.deepEqual(ctx.unitOf(a, 11).map(x => x.id).sort(), [708674, 708675, 708676]);
+    assert.equal(ctx.unitOf(a, 11).some(x => ctx.placeInWeek(x, 11)), false);
     const ch = ctx.unitClearedHtml();
     assert.match(ch, /data-pn-cleared/);
     assert.match(ch, /Yaxlitlab bo'lmadi — d1\/d26-03a joylanmaganlarga o'tkazildi \(sabab: 6 soat sig'maydi\)\./);

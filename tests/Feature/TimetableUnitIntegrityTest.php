@@ -345,6 +345,11 @@ it('Yaxlitlab bo\'lmasa (unplace_if_no_fit): birlik shu haftada joylanmaganlarga
         ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[null, null], [null, null], [null, null]])
         ->and([uiAt($s['a'], 12), uiAt($s['b'], 12), uiAt($s['c'], 12)])->toBe([[2, 1], [3, 3], [3, 5]])
         ->and([$s['a']->fresh()->day, $s['b']->fresh()->day, $s['c']->fresh()->day])->toBe([2, 3, 3]);
+    // Codex: bekor emas — "joylanmagan, o'tiladi" (unplaced): panelda qoladi, /data da 8-maydon; birlik bo'lib qayta joylanadi.
+    expect(TimetableCardOverride::where('week', 11)->orderBy('card_id')->get()->map(fn ($o) => [$o->cancelled, $o->unplaced])->all())
+        ->toBe([[true, true], [true, true], [true, true]]);
+    $ov = collect(uiAs()->getJson(route('admin.timetable.boards.data', $s['board']))->assertOk()->json('ov'))->filter(fn ($o) => $o[1] === 11)->values();
+    expect($ov->map(fn ($o) => $o[8] ?? 0)->all())->toBe([1, 1, 1]);
     $h = \App\Models\TimetableChangeRequest::where('status', 'applied')->latest('id')->first();
     expect(\App\Models\TimetableChangeRequest::where('status', 'pending')->count())->toBe(0)
         ->and($h->summary)->toContain("Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi");
@@ -356,4 +361,20 @@ it('Yaxlitlash bayrog\'i bilan, lekin endi sig\'adi — oddiy yaxlitlanadi (joyd
         'unplace_if_no_fit' => true])->assertOk()->json();
     expect($r)->not->toHaveKey('cleared')->and($r['message'])->toBe('Yaxlitlandi: d1/d26-03a — Chorshanba 10:00–14:50')
         ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[3, 7], [3, 3], [3, 5]]);
+});
+
+it('Codex: joylanmaganlarga o\'tkazilgan birlik (unplaced) — bitta bo\'lakni joylash butun birlikni joylaydi; oddiy "bekor" — o\'tilmaydi', function () {
+    $s = uiSetup();
+    foreach ([$s['a'], $s['b'], $s['c']] as $c) {
+        TimetableCardOverride::create(['card_id' => $c->id, 'week' => 11, 'day' => null, 'pair' => null, 'cancelled' => true, 'unplaced' => true]);
+    }
+    $j = uiAs()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['week' => 11, 'layer' => 'internal', 'day' => 4, 'pair' => 1])->assertOk()->json('unit');
+    expect(array_map(fn ($u) => [$u['day'], $u['pair']], $j))->toBe([[4, 1], [4, 3], [4, 5]])
+        ->and([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[4, 1], [4, 3], [4, 5]])
+        ->and(TimetableCardOverride::where('week', 11)->where('unplaced', true)->count())->toBe(0);
+    // Oddiy bekor (o'tilmaydi) — birlikka kirmaydi: faqat qolgan bo'laklar joylanadi.
+    TimetableCardOverride::query()->delete();
+    TimetableCardOverride::create(['card_id' => $s['c']->id, 'week' => 11, 'day' => null, 'pair' => null, 'cancelled' => true]);
+    uiAs()->postJson(route('admin.timetable.cards.unit-place', $s['a']), ['week' => 11, 'layer' => 'internal', 'day' => 4, 'pair' => 1])->assertOk();
+    expect([uiAt($s['a']), uiAt($s['b']), uiAt($s['c'])])->toBe([[4, 1], [4, 3], [null, null]]);
 });

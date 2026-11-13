@@ -80,8 +80,10 @@ trait TimetableWeeklyUnits
                 continue;
             }
             $o = $week ? ($ovs[$c->id][$week] ?? null) : null;
-            $active = !($o && $o->cancelled) && (!$week || $week <= $this->cardGrid($c->board, $c)['weeks']);
-            [$d, $p] = $o && $o->day && $o->pair ? [(int) $o->day, (int) $o->pair] : [$c->day ? (int) $c->day : null, $c->pair ? (int) $c->pair : null];
+            // Bekor qilingan, lekin "joylanmagan" (unplaced) — birlikda qoladi (joyi yo'q): qayta joylashda hamma bo'lak birga.
+            $active = !($o && $o->cancelled && empty($o->unplaced)) && (!$week || $week <= $this->cardGrid($c->board, $c)['weeks']);
+            [$d, $p] = $o && $o->cancelled ? [null, null]
+                : ($o && $o->day && $o->pair ? [(int) $o->day, (int) $o->pair] : [$c->day ? (int) $c->day : null, $c->pair ? (int) $c->pair : null]);
             $out[$c->id] = ['card' => $c, 'active' => $active, 'day' => $active ? $d : null, 'pair' => $active ? $p : null];
         }
 
@@ -375,10 +377,14 @@ trait TimetableWeeklyUnits
         return $items;
     }
 
-    /** Birlik bo'laklarini yozish: [id => pair|null] (null — joydan olish). $room — shu haftada barcha bo'laklarga shu xona. */
-    private function unitWrite(Collection $cards, int $week, ?int $day, array $plan, bool $external = false, ?\App\Models\Auditorium $room = null): void
+    /**
+     * Birlik bo'laklarini yozish: [id => pair|null] (null — joydan olish). $room — shu haftada barcha bo'laklarga shu xona. $keepActive —
+     * joydan olingan shablon bo'lagi "joylanmagan (o'tiladi)" (unplaced): panelda qoladi va birlik bilan qayta joylanadi.
+     */
+    private function unitWrite(Collection $cards, int $week, ?int $day, array $plan, bool $external = false, ?\App\Models\Auditorium $room = null,
+        bool $keepActive = false): void
     {
-        DB::transaction(function () use ($cards, $week, $day, $plan, $external, $room) {
+        DB::transaction(function () use ($cards, $week, $day, $plan, $external, $room, $keepActive) {
             $ovs = $this->unitOverrides($cards);
             foreach ($cards as $c) {
                 if (!array_key_exists($c->id, $plan)) {
@@ -391,7 +397,7 @@ trait TimetableWeeklyUnits
                     $c->update(['day' => $p ? $day : null, 'pair' => $p, 'start_half' => 0, 'placement_reason_code' => null, 'placement_reason' => null]);
                 } elseif ($p) {
                     TimetableCardOverride::updateOrCreate(['card_id' => $c->id, 'week' => $week],
-                        ['day' => $day, 'pair' => $p, 'start_half' => 0, 'cancelled' => false]
+                        ['day' => $day, 'pair' => $p, 'start_half' => 0, 'cancelled' => false, 'unplaced' => false]
                             + ($room ? ['auditorium_code' => $room->code, 'auditorium_name' => $room->name] : []));
                 } elseif (!$c->day && isset($ovs[$c->id][$week])) {
                     // Shablonda joyi yo'q karta — shu haftadagi joyi olib tashlanadi (panelga qaytadi).
@@ -399,7 +405,7 @@ trait TimetableWeeklyUnits
                 } else {
                     // Shablonda joyi bor — shu haftada joydan olinadi (unplaceOneCard dagidek).
                     TimetableCardOverride::updateOrCreate(['card_id' => $c->id, 'week' => $week],
-                        ['day' => null, 'pair' => null, 'cancelled' => true, 'auditorium_code' => null, 'auditorium_name' => null]);
+                        ['day' => null, 'pair' => null, 'cancelled' => true, 'unplaced' => $keepActive, 'auditorium_code' => null, 'auditorium_name' => null]);
                 }
             }
         });
@@ -621,14 +627,15 @@ trait TimetableWeeklyUnits
         $merged = [];
         $cleared = [];
         $dayNames = $board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
-        $clear = function (Collection $cards) use ($week) {
+        // $keep — "joylanmaganlarga o'tkazish" (yaxlitlab bo'lmadi): shablondagi bo'laklar "joylanmagan, o'tiladi" (unplaced), bekor emas.
+        $clear = function (Collection $cards, bool $keep = false) use ($week) {
             $plan = [];
             foreach ($this->unitPieces($cards, $week) as $id => $p) {
                 if ($p['active'] && $p['day']) {
                     $plan[$id] = null;
                 }
             }
-            $this->unitWrite($cards, $week, null, $plan);
+            $this->unitWrite($cards, $week, null, $plan, false, null, $keep);
         };
         foreach ($this->partialUnitList($board, [$week], $scope, $merge ? ['split'] : ['partial']) as $u) {
             if ($only !== null && !array_intersect_key(array_flip($u['card_ids']), $only)) {
@@ -653,7 +660,7 @@ trait TimetableWeeklyUnits
             $result = $merge ? $this->unitMergePlan($card, $cards, $week) : $this->unitCompletePlan($card, $cards, $week);
             if ($result[0] && $unplace) {
                 // "Yaxlitlab bo'lmadi — d1/d26-03a joylanmaganlarga o'tkazildi (sabab: …)".
-                $clear($cards);
+                $clear($cards, true);
                 $done++;
                 $reason = implode(' · ', $result[0]);
                 $cleared[] = ['group' => $u['group'], 'subject' => $u['subject'], 'reason' => $reason, 'conflict_items' => $result[3] ?? [],

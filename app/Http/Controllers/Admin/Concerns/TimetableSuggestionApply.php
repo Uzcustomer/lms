@@ -381,7 +381,7 @@ trait TimetableSuggestionApply
                 $moved[$card->id . '|' . $w] = [$card, $w];
             } elseif ($op === 'cancel') {
                 TimetableCardOverride::updateOrCreate(['card_id' => $card->id, 'week' => $w],
-                    ['day' => null, 'pair' => null, 'cancelled' => true, 'auditorium_code' => null, 'auditorium_name' => null]);
+                    ['day' => null, 'pair' => null, 'cancelled' => true, 'unplaced' => false, 'auditorium_code' => null, 'auditorium_name' => null]);
             } elseif ($op === 'move') {
                 $day = (int) ($a['day'] ?? 0);
                 $pair = (int) ($a['pair'] ?? 0);

@@ -31,6 +31,7 @@ use App\Models\AdmissionIndicator;
 use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnSubmission;
+use App\Services\MtDeadline;
 use App\Services\SababliMtWindow;
 
 class StudentController extends Controller
@@ -1078,38 +1079,11 @@ class StudentController extends Controller
                 ?? $independentsBySubjectId->get($cs->subject_id)
                 ?? $independentsByName->get($cs->subject_name);
 
-            // Auto-create Independent from Schedule if none found
+            // Topshiriq bo'lmasa — dars jadvalidan avtomatik (muddati MtDeadline qoidasi bilan)
             if ((!$subjectIndependents || $subjectIndependents->count() === 0) && $correctDeadline) {
                 try {
-                    $latestSchedule = $subjectSchedules->sortByDesc('lesson_date')->first();
-                    $grp = Group::where('group_hemis_id', $groupHemisId)->first();
-                    $semModel = $grp ? Semester::where('code', $semesterCode)
-                        ->where('curriculum_hemis_id', $grp->curriculum_hemis_id)->first() : null;
-
-                    $independent = Independent::updateOrCreate(
-                        [
-                            'group_hemis_id' => $groupHemisId,
-                            'subject_hemis_id' => $cs->curriculum_subject_hemis_id,
-                            'semester_code' => $semesterCode,
-                        ],
-                        [
-                            'schedule_id' => $latestSchedule->id,
-                            'group_name' => $latestSchedule->group_name,
-                            'teacher_hemis_id' => $latestSchedule->employee_id,
-                            'teacher_name' => $latestSchedule->employee_name ?? '',
-                            'teacher_short_name' => '',
-                            'department_hemis_id' => $latestSchedule->faculty_id ?? '',
-                            'deportment_name' => $latestSchedule->faculty_name ?? '',
-                            'start_date' => $lessonDates->first(),
-                            'semester_hemis_id' => $semModel?->semester_hemis_id ?? '',
-                            'semester_name' => $latestSchedule->semester_name ?? '',
-                            'subject_name' => $cs->subject_name,
-                            'user_id' => 0,
-                            'deadline' => $correctDeadline,
-                        ]
-                    );
-
-                    $subjectIndependents = collect([$independent]);
+                    $independent = MtDeadline::ensureIndependent((string) $groupHemisId, $cs, (string) $semesterCode);
+                    $subjectIndependents = $independent ? collect([$independent]) : null;
                 } catch (\Exception $e) {
                     // Silent fail - MT button won't show
                 }
@@ -1297,9 +1271,6 @@ class StudentController extends Controller
 
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
         $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
-        $timeParts = explode(':', $mtDeadlineTime);
-        $hour = (int) ($timeParts[0] ?? 17);
-        $minute = (int) ($timeParts[1] ?? 0);
 
         // Joriy o'quv yili kodini aniqlash
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
@@ -1311,7 +1282,7 @@ class StudentController extends Controller
             ->where('semester_code', $semesterCode)
             ->orderBy('deadline', 'asc')
             ->get()
-            ->map(function ($independent) use ($student, $hour, $minute, $mtMaxResubmissions, $educationYearCode) {
+            ->map(function ($independent) use ($student, $mtMaxResubmissions, $educationYearCode) {
                 $submission = $independent->submissionByStudent($student->id);
 
                 // O'quv yili kodini schedule dan aniqlash (getSubjects bilan bir xil mantiq)
@@ -1343,7 +1314,8 @@ class StudentController extends Controller
                     ->orderBy('submission_number')
                     ->get();
 
-                $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
+                // Muddat — dars jadvalidan (MtDeadline: oxirgi dars, sozlama bo'yicha)
+                $deadlineDateTime = MtDeadline::closesAt(MtDeadline::forIndependent($independent) ?? (string) $independent->deadline);
                 $submissionCount = $submission?->submission_count ?? 0;
                 // Muddat o'tgan bo'lsa ham, tasdiqlangan sababli arizada MT
                 // ko'rsatilgan bo'lsa yuklash ochiq qoladi — submitIndependent()
@@ -1530,18 +1502,14 @@ class StudentController extends Controller
             return back()->with('error', 'Baho ' . $studentMinLimit . ' va undan yuqori — qayta yuklash mumkin emas.');
         }
 
-        // Check deadline using configured time from settings
+        // Muddat — dars jadvalidagi oxirgi dars (MtDeadline, sozlama bo'yicha); bazadagi qiymatga
+        // tayanilmaydi. Muddatdan keyin faqat tasdiqlangan sababli ariza (MT makeup) bilan ochiq —
+        // o'qituvchi tomonidagi sababli MT bahosi oynasi bilan bir xil (JournalController).
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
-        $timeParts = explode(':', $mtDeadlineTime);
-        $hour = (int) ($timeParts[0] ?? 17);
-        $minute = (int) ($timeParts[1] ?? 0);
-
-        $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
-        // Muddat o'tган bo'lsa ham, talabaning tasdiqlangan sababli arizasi (MT makeup)
-        // bo'lib, MT muddati sababli davr boshidan oldin o'tmagan bo'lsa — yuklash ochiladi.
-        // Bu o'qituvchi tomonidagi sababli MT bahosi oynasi bilan bir xil (JournalController).
+        $deadlineDate = MtDeadline::forIndependent($independent) ?? (string) $independent->deadline;
+        $deadlineTime = MtDeadline::closesAt($deadlineDate);
         if (Carbon::now()->gt($deadlineTime) && !$this->mtSubmissionOpenBySababli($student, $independent, $resolvedSubjectId)) {
-            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')');
+            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $deadlineDate . ' soat ' . $mtDeadlineTime . ')');
         }
 
         // Check resubmission limit

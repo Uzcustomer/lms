@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Avtomatik yaratilgan mustaqil ta'lim topshiriqlarining dublikatlarini tozalash.
  *
- * command:independent-auto-create avval har bir dars kuniga alohida topshiriq
+ * command:independent-auto-create (endi olib tashlangan) avval har bir dars kuniga alohida topshiriq
  * ochardi (2026-10-31 da bir kunda 138 954 ta) — talabaga bitta fandan o'nlab
  * topshiriq chiqdi. Har bir (guruh, fan, semestr) uchun bittasi qoldiriladi.
  *

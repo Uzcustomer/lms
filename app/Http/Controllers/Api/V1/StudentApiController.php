@@ -31,6 +31,7 @@ use App\Services\Retake\RetakeDebtService;
 use App\Services\Retake\RetakeJournalService;
 use App\Services\Retake\RetakeWindowService;
 use Carbon\Carbon;
+use App\Services\MtDeadline;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -740,15 +741,12 @@ class StudentApiController extends Controller
 
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
         $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
-        $timeParts = explode(':', $mtDeadlineTime);
-        $mtHour = (int) ($timeParts[0] ?? 17);
-        $mtMinute = (int) ($timeParts[1] ?? 0);
 
         $subjects = $curriculumSubjects->map(function ($cs) use (
             $semesterCode, $studentHemisId, $groupHemisId, $educationYearCode,
             $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade,
             $student, $independentsByHemisId, $independentsBySubjectId, $independentsByName,
-            $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime
+            $mtMaxResubmissions, $mtDeadlineTime
         ) {
             $subjectId = $cs->subject_id;
 
@@ -1059,6 +1057,16 @@ class StudentApiController extends Controller
                 ?? $independentsBySubjectId->get($cs->subject_id)
                 ?? $independentsByName->get($cs->subject_name);
 
+            // Topshiriq bo'lmasa — dars jadvalidan avtomatik (sayt sahifasidagi kabi, MtDeadline)
+            if (!$subjectIndependents || $subjectIndependents->count() === 0) {
+                try {
+                    $created = MtDeadline::ensureIndependent((string) $groupHemisId, $cs, (string) $semesterCode);
+                    $subjectIndependents = $created ? collect([$created]) : null;
+                } catch (\Throwable $e) {
+                    $subjectIndependents = null;
+                }
+            }
+
             if ($subjectIndependents && $subjectIndependents->count() > 0) {
                 $independent = $subjectIndependents->sortByDesc('deadline')->first();
                 $submission = $independent->submissionByStudent($student->id);
@@ -1067,7 +1075,9 @@ class StudentApiController extends Controller
                     ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                     ->first();
 
-                $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($mtHour, $mtMinute, 0);
+                // Muddat — dars jadvalidan (MtDeadline: oxirgi dars, sozlama bo'yicha)
+                $deadlineDate = MtDeadline::forIndependent($independent) ?? (string) $independent->deadline;
+                $deadlineDateTime = MtDeadline::closesAt($deadlineDate);
                 $isOverdue = Carbon::now()->gt($deadlineDateTime);
                 $submissionCount = $submission?->submission_count ?? 0;
 
@@ -1092,7 +1102,7 @@ class StudentApiController extends Controller
 
                 $mtData = [
                     'independent_id' => $independent->id,
-                    'deadline' => Carbon::parse($independent->deadline)->format('d.m.Y'),
+                    'deadline' => Carbon::parse($deadlineDate)->format('d.m.Y'),
                     'deadline_time' => $mtDeadlineTime,
                     'is_overdue' => $isOverdue,
                     'has_submission' => (bool) $submission,
@@ -1343,13 +1353,12 @@ class StudentApiController extends Controller
 
         // Deadline check
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
-        $timeParts = explode(':', $mtDeadlineTime);
-        $hour = (int) ($timeParts[0] ?? 17);
-        $minute = (int) ($timeParts[1] ?? 0);
-        $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
+        // Muddat — dars jadvalidagi oxirgi dars (MtDeadline, sozlama bo'yicha), bazadagi qiymat emas
+        $deadlineDate = MtDeadline::forIndependent($independent) ?? (string) $independent->deadline;
+        $deadlineTime = MtDeadline::closesAt($deadlineDate);
 
         if (Carbon::now()->gt($deadlineTime)) {
-            return response()->json(['message' => 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')'], 422);
+            return response()->json(['message' => 'Topshiriq muddati tugagan (muddat: ' . $deadlineDate . ' soat ' . $mtDeadlineTime . ')'], 422);
         }
 
         // Resubmission check

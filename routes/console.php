@@ -81,7 +81,6 @@ Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(fu
     $lastSuccess = \Illuminate\Support\Facades\Cache::get('final_import_last_success');
     return !$lastSuccess || !Carbon::parse($lastSuccess)->isToday();
 });
-Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 
 // Kechagi baholarni ertalab yana bir marta tortish — ertalabgi hisobotlardan
 // (08:00–08:35) oldin. HEMIS kechasi soat 23–00 da qo'yilgan baholarni API'ga

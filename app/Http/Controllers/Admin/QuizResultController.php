@@ -3119,8 +3119,8 @@ class QuizResultController extends Controller
                     'created_at_api' => $result->created_at ?? now(),
                     'reason' => 'quiz_result',
                     'status' => 'recorded',
-                    // Xalqaro ta'lim fakulteti — 5 ballik tizim (2–5)
-                    'grade' => $student->isInternationalFaculty()
+                    // PIMU (2026-yilgacha qabul) — 5 ballik tizim (2–5); xd va PIMU 2026+ — 100 ballik
+                    'grade' => $student->usesFivePointScale()
                         ? self::toFivePointScale((float) $result->grade)
                         : round($result->grade),
                     'deadline' => now(),
@@ -3280,7 +3280,7 @@ class QuizResultController extends Controller
      *     YN qulflangan: skip
      */
     /**
-     * 100 ballik natijani 5 ballik bahoga o'tkazish (Xalqaro ta'lim fakulteti):
+     * 100 ballik natijani 5 ballik bahoga o'tkazish (Student::usesFivePointScale):
      * 90–100 → 5 (a'lo), 80–89.9 → 4 (yaxshi), 70–79.9 → 3 (qoniqarli),
      * 0–69.9 → 2 (qoniqarsiz).
      */
@@ -3410,11 +3410,11 @@ class QuizResultController extends Controller
         $updatedAnyPair = false;
         $skipReasons = [];
 
-        // Xalqaro ta'lim fakulteti — jurnal 5 ballik (2–5): koeffitsient (0.8)
-        // qo'llanmaydi, har qanday holatda Moodle bahosining o'zi 5 ballikka
-        // o'tkaziladi (70 → 4); o'tish chegarasi 3.
+        // 5 ballik jurnal (PIMU, 2026-yilgacha qabul — Student::usesFivePointScale):
+        // koeffitsient (0.8) qo'llanmaydi, har qanday holatda Moodle bahosining o'zi
+        // 5 ballikka o'tkaziladi (70 → 3); o'tish chegarasi 3.
         // Boshqalar: jurnaldagi baho 70 va undan yuqori bo'lsa retake qabul qilinmaydi.
-        $isFivePoint = $student->isInternationalFaculty();
+        $isFivePoint = $student->usesFivePointScale();
         $passMark = $isFivePoint ? 3 : 70;
         $scaled = fn (float $v) => $isFivePoint ? self::toFivePointScale($v) : round($v, 2);
 

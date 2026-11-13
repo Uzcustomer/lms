@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -378,6 +379,36 @@ class Student extends Authenticatable
         return str_contains($faculty, 'xalqaro')
             || str_contains($faculty, 'international')
             || str_contains($faculty, 'международ');
+    }
+
+    /** PIMU o'quv rejalarida shu yildan boshlab qabul qilinganlar — 100 ballik tizim. */
+    public const PIMU_HUNDRED_POINT_FROM_YEAR = 2026;
+
+    /**
+     * Test markazi natijasi jurnalga 5 ballik (2–5) tizimda yoziladimi. Faqat Xalqaro ta'lim
+     * fakultetining PIMU o'quv rejalari (nomida «PIMU»: pd/, pp/, pst/), 2026-yilgacha qabul
+     * qilinganlar. Xorijiy talabalar (xd/, General medicine) va PIMU 2026+ qabuli — 100 ballik.
+     * Qabul yili — o'quv reja nomidagi birinchi yil («Davolash ishi 2025/2026(PIMU)» → 2025).
+     */
+    public function usesFivePointScale(): bool
+    {
+        if (!$this->isInternationalFaculty()) {
+            return false;
+        }
+
+        static $byGroup = [];
+        $groupId = (string) $this->group_id;
+        if (!array_key_exists($groupId, $byGroup)) {
+            $name = (string) DB::table('groups as g')
+                ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
+                ->where('g.group_hemis_id', $groupId)
+                ->value('c.name');
+            $byGroup[$groupId] = mb_stripos($name, 'pimu') !== false
+                && preg_match('/(20\d{2})/', $name, $m)
+                && (int) $m[1] < self::PIMU_HUNDRED_POINT_FROM_YEAR;
+        }
+
+        return $byGroup[$groupId];
     }
 
     public function isTelegramVerified(): bool

@@ -686,3 +686,38 @@ it('3.1/3.2: joylanmagan dars — "Darhol joylanadi (faqat shu hafta)."; ko\'p b
     expect(rmCheck($s, $p1, ['day' => 3, 'pair' => 1])->assertOk()->json('old'))
         ->toStartWith("Juma, 20.11.2026 08:30–09:50; Shanba, 21.11.2026 10:00–11:20 (bo'lingan)");
 });
+
+it('fan mas\'uli: o\'z fani — "Yaxlitlash" (darhol, tarixda) va "Boshqa xona tanlash" ro\'yxati; boshqa fan, bo\'shatish, o\'qituvchi biriktirish — 403; bugungi bo\'lak — rad', function () {
+    $s = rmSetup();
+    // Mas'ul fani (Farmakologiya), bo'lingan: chorshanba 08:30 va juma 08:30 (2 + 2).
+    $p1 = $s['card']('pp/2024-01d', $s['other'], 3, 1, $s['r1']);
+    $p2 = $s['card']('pp/2024-01d', $s['other'], 5, 1, $s['r1']);
+    // Boshqa fan (Anatomiya), bo'lingan.
+    $q1 = $s['card']('pp/2024-01e', $s['other'], 3, 5, $s['r2'], ['subject_name' => 'Anatomiya']);
+    $s['card']('pp/2024-01e', $s['other'], 5, 5, $s['r2'], ['subject_name' => 'Anatomiya']);
+    $fm = fn () => rmAs($s['fm'], 'fan_masuli');
+    $fix = fn (array $body) => $fm()->postJson(route('admin.timetable.boards.unit-fix', $s['board']), $body + ['week' => $s['week']]);
+
+    // Boshqa fan — 403 (yaxlitlash ham, xonalar ro'yxati ham); bo'shatish (clear) — 403.
+    $fix(['action' => 'merge', 'card_ids' => [$q1->id]])->assertForbidden();
+    $fm()->getJson(route('admin.timetable.cards.room-options', $q1) . '?week=' . $s['week'] . '&day=3&pair=1')->assertForbidden();
+    $fix(['action' => 'clear', 'card_ids' => [$p1->id]])->assertForbidden();
+    // O'qituvchi biriktirish — 403 (middleware).
+    $fm()->postJson(route('admin.timetable.assign-teacher', $s['board']), [])->assertForbidden();
+    // O'z fani: xonalar ro'yxati (bino guruhlari bilan).
+    $rooms = $fm()->getJson(route('admin.timetable.cards.room-options', $p1) . '?week=' . $s['week'] . '&day=3&pair=1')->assertOk()->json('rooms');
+    expect(collect($rooms)->pluck('code')->all())->toContain('R2');
+    // O'z fani: yaxlitlash — darhol (chorshanba 08:30–11:20), tarixda.
+    $r = $fix(['action' => 'merge', 'card_ids' => [$p1->id]])->assertOk()->json();
+    expect($r['done'])->toBe(1)->and($r['message'])->toStartWith('Yaxlitlandi: pp/2024-01d — Chorshanba 08:30')
+        ->and(\App\Models\TimetableChangeRequest::where('status', 'applied')->count())->toBe(1);
+    $at = fn (TimetableCard $c) => ($o = TimetableCardOverride::where('card_id', $c->id)->where('week', $s['week'])->first()) ? [(int) $o->day, (int) $o->pair] : [(int) $c->day, (int) $c->pair];
+    expect([$at($p1), $at($p2)])->toBe([[3, 1], [3, 3]]);
+
+    // Bugungi (dushanba 16.11) bo'lak — o'zgartirilmaydi.
+    TimetableCardOverride::query()->delete();
+    $p1->update(['day' => 1]);
+    $f = $fix(['action' => 'merge', 'card_ids' => [$p1->id], 'unplace_if_no_fit' => true])->assertUnprocessable()->json('failed.0.error');
+    expect($f)->toStartWith("Bugungi yoki o'tgan kundagi darsni o'zgartirib bo'lmaydi")
+        ->and(TimetableCardOverride::count())->toBe(0);
+});

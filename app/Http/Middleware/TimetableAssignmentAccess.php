@@ -64,12 +64,15 @@ class TimetableAssignmentAccess
                 // Xonalar ro'yxati shu javobda — admin.timetable.auditoriums / teachers ochilmaydi.
                 'admin.timetable.cards.responsible-move.check', 'admin.timetable.cards.responsible-move',
                 // "Joylash uchun tanlash": shu hafta kataklari holati (faqat o'qiydi; huquq — controller ichida, check bilan bir xil).
-                'admin.timetable.cards.responsible-move.grid'])) {
+                'admin.timetable.cards.responsible-move.grid',
+                // Mas'ul fani darsi (ichki jadval, shu hafta): "Boshqa xona tanlash" ro'yxati (faqat o'qiydi) va "Yaxlitlash" (faqat merge;
+                // sig'masa — joylanmaganlarga). Huquq — controller ichida (responsibleUnitDenied), aks holda 403.
+                'admin.timetable.cards.room-options', 'admin.timetable.boards.unit-fix'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
             // To'qnashuvdagi darsni so'rovsiz joylash (week-suggestions/apply — controller tekshiradi) — o'zgarishlar tarixiga yoziladi.
-            return $request->routeIs('admin.timetable.week-suggestions.apply')
+            return $request->routeIs(['admin.timetable.week-suggestions.apply', 'admin.timetable.boards.unit-fix'])
                 ? $this->withHistory($request, $next, $user, $activeRole) : $next($request);
         }
 

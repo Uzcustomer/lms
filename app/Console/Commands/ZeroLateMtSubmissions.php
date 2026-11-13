@@ -25,6 +25,7 @@ class ZeroLateMtSubmissions extends Command
 {
     protected $signature = 'mt:zero-late
         {--from=2026-09-01 : Faqat muddati shu sanadan keyingi topshiriqlar (joriy semestr)}
+        {--uploaded-since= : Faqat shu sanadan (masalan bugun) keyin yuklangan ishlar}
         {--include-locked : YN yuborilgan (qulflangan) baholarni ham 0 qilish}
         {--no-notify : Talabalarga Telegram xabari yubormaslik}
         {--force : Haqiqatan bajarish (bo\'lmasa faqat hisobot)}';
@@ -37,11 +38,14 @@ class ZeroLateMtSubmissions extends Command
         $force = (bool) $this->option('force');
         $includeLocked = (bool) $this->option('include-locked');
         $notify = !$this->option('no-notify');
+        $uploadedSince = $this->option('uploaded-since')
+            ? max($from, Carbon::parse((string) $this->option('uploaded-since'))->toDateString())
+            : $from;
 
         $submissions = DB::table('independent_submissions as sub')
             ->join('independents as i', 'i.id', '=', 'sub.independent_id')
             ->join('students as s', 's.id', '=', 'sub.student_id')
-            ->where('sub.submitted_at', '>=', $from)
+            ->where('sub.submitted_at', '>=', $uploadedSince)
             ->orderBy('i.group_name')
             ->orderBy('sub.submitted_at')
             ->get([

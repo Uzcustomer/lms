@@ -99,7 +99,8 @@ class ZeroLateMtSubmissions extends Command
 
             $late[] = compact('sub', 'subjectId', 'deadline', 'closes', 'submittedAt', 'grade');
             $rows[] = [$sub->group_name, mb_substr($sub->subject_name, 0, 35), $sub->full_name, $closes->format('d.m H:i'),
-                $submittedAt->format('d.m H:i'), $grade ? $grade->grade : 'yo\'q', $force ? 'fayl o\'chdi, baho 0' : '0 qilinadi'];
+                $submittedAt->format('d.m H:i'), $grade ? $grade->grade : 'yo\'q',
+                ($force ? 'fayl o\'chdi' : 'fayl o\'chadi') . ($grade ? ', baho 0' : ' (baho yo\'q)')];
         }
 
         $this->table(['Guruh', 'Fan', 'Talaba', 'Muddat', 'Yuklagan', 'Baho', 'Amal'], $rows);

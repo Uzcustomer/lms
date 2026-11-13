@@ -27,6 +27,25 @@ trait TimetableWeeklyUnits
     /** @var array<string, array>|null Yaxlitlash davomida bo'laklarning to'qnashuv holati ("id|xona"); null — kesh o'chiq. */
     private ?array $unitStateMemo = null;
 
+    /** @var string|null Yaxlitlash: faqat shu sanadan keyingi kunlar sinaladi (fan mas'uli — bugun); null — cheklovsiz. */
+    private ?string $unitMergeAfter = null;
+
+    /** Birlikning shu haftada joylangan bo'laklaridan bugungi yoki o'tgan kundagisi sanasi (fan mas'uli cheklovi); yo'q — null. */
+    private function unitPastPiece(Collection $cards, int $week): ?string
+    {
+        $today = self::proposalToday();
+        foreach ($this->unitPieces($cards, $week) as $p) {
+            if ($p['active'] && $p['day']) {
+                $date = $this->weekStartDate($p['card']->board, $p['card'], $week)->addDays((int) $p['day'] - 1)->toDateString();
+                if ($date <= $today) {
+                    return $date;
+                }
+            }
+        }
+
+        return null;
+    }
+
     /** Birlik kaliti: guruh, fan, tur, o'qituvchi (qamrovi bilan). Ma'ruza — karta o'zi. */
     private function weeklyUnitKey(TimetableCard $c): string
     {
@@ -596,13 +615,25 @@ trait TimetableWeeklyUnits
         $data = $request->validate(['week' => 'required|integer|min:1|max:30', 'action' => 'required|in:complete,clear,merge',
             'card_ids' => 'nullable|array', 'card_ids.*' => 'integer', 'faculty_names' => 'nullable|array', 'specialty_names' => 'nullable|array',
             'courses' => 'nullable|array', 'unplace_if_no_fit' => 'nullable|boolean']);
-        if ($denied = $this->weeklyLayerDenied($request, 'internal')) {
+        // Fan mas'uli: faqat "Yaxlitlash" (merge) aniq birlik uchun, mas'ul fanida (har birlik — responsibleUnitDenied); bugungi va o'tgan kunlar yopiq.
+        $fm = $this->isFanMasuli($request);
+        if ($fm && $data['action'] !== 'merge') {
+            return response()->json(['error' => "Fan mas'uli — faqat «Yaxlitlash»."], 403);
+        }
+        if (!$fm && ($denied = $this->weeklyLayerDenied($request, 'internal'))) {
             return $denied;
         }
         $week = (int) $data['week'];
         $merge = $data['action'] === 'merge';
         if ($merge && empty($data['card_ids'])) {
             return response()->json(['error' => 'Yaxlitlash — faqat tanlangan dars uchun (card_ids).'], 422);
+        }
+        if ($fm) {
+            foreach (TimetableCard::whereIn('id', array_map('intval', $data['card_ids']))->where('board_id', $board->id)->get() as $c) {
+                if ($denied = $this->responsibleUnitDenied($request, $c)) {
+                    return $denied;
+                }
+            }
         }
         $scope = array_filter([$data['faculty_names'] ?? null, $data['specialty_names'] ?? null, $data['courses'] ?? null]) ? $this->scopeSets($data) : null;
         $only = !empty($data['card_ids']) ? array_flip(array_map('intval', $data['card_ids'])) : null;
@@ -645,11 +676,21 @@ trait TimetableWeeklyUnits
             $card = $cards->first();
             // Kafedra mudiri — faqat o'z kafedrasi darslari (unplaceAll kabi): boshqa kafedraniki o'tkazib yuboriladi; aniq so'ralgan
             // (card_ids) bo'lsa — sababi bilan.
-            if ($cards->contains(fn ($x) => $this->weeklyLayerDenied($request, 'internal', $x) !== null)) {
+            $fm = $this->isFanMasuli($request);
+            if ($cards->contains(fn ($x) => ($fm ? $this->responsibleUnitDenied($request, $x) : $this->weeklyLayerDenied($request, 'internal', $x)) !== null)) {
                 if ($only !== null) {
-                    $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'], 'error' => 'Bu fan sizning kafedrangizga tegishli emas.',
+                    $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'],
+                        'error' => $fm ? "Faqat mas'ul faningizdagi darsni o'zgartira olasiz." : 'Bu fan sizning kafedrangizga tegishli emas.',
                         'card_ids' => $u['card_ids'], 'unit' => $u['unit']];
                 }
+                continue;
+            }
+            // Fan mas'uli: bugungi / o'tgan kundagi bo'lak bo'lsa — o'zgartirilmaydi; yangi joy — faqat ertangi va keyingi kunlar.
+            $this->unitMergeAfter = $fm ? self::proposalToday() : null;
+            if ($fm && ($past = $this->unitPastPiece($cards, $week)) !== null) {
+                $failed[] = ['group' => $u['group'], 'subject' => $u['subject'], 'day' => $u['day_name'],
+                    'error' => "Bugungi yoki o'tgan kundagi darsni o'zgartirib bo'lmaydi (dars sanasi: " . \Illuminate\Support\Carbon::parse($past)->format('d.m.Y') . ').',
+                    'card_ids' => $u['card_ids'], 'unit' => $u['unit']];
                 continue;
             }
             if ($data['action'] === 'clear') {
@@ -763,8 +804,13 @@ trait TimetableWeeklyUnits
         $first = null;
         $names = $card->board->day_names ?: TimetableBoard::DEFAULT_DAY_NAMES;
         $this->unitStateMemo = [];
+        $monday = $this->unitMergeAfter !== null ? $this->weekStartDate($card->board, $card, $week) : null;
         try {
             foreach ($days as $rank => $day) {
+                // Cheklangan (fan mas'uli): bugungi va o'tgan kunlar sinalmaydi.
+                if ($monday && $monday->copy()->addDays($day - 1)->toDateString() <= $this->unitMergeAfter) {
+                    continue;
+                }
                 $on = array_values(array_filter($sorted, fn ($p) => (int) $p['day'] === $day));
                 $other = array_values(array_filter($sorted, fn ($p) => (int) $p['day'] !== $day));
                 $firstAt = (int) $on[0]['pair'];

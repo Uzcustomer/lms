@@ -36,7 +36,11 @@ assert.match(panel, /\(!skip && fmMine\(c\) && c\.training_type !== 'lecture' \?
 const rowsFn = cut('            function buildGroupRows() {', '            // Karta uzunligi yarim-slot birligida');
 assert.match(rowsFn, /if \(fmPick && fmOwnOnly\) \{\n\s+const fc = fmPick\.card;\n\s+groupRows = groupRows\.filter\(r => r\.faculty === \(fc\.faculty_name \|\| ''\) && r\.specialty === \(fc\.specialty_name \|\| ''\) && \+r\.course === \+fc\.course\);/);
 assert.match(source, /let fmOwnOnly = true;/);
-assert.match(panel, /if \(fmMine\(c\)\) \{ fmPickStart\(c\); return; \}/);
+// Karta bosilsa — mas'ul fani amaliy darsi: karta oynasi (openPanelCardPop: sabablar, "Joylash uchun tanlash" → fmPick); ma'ruza va h.k. —
+// ko'rish oynasi (fmPickStart → openResponsibleMove, sababi bilan). "Joylash" tugmasi — rejim to'g'ridan.
+assert.match(panel, /if \(fmMine\(c\) && !fmCanPlace\(c\)\) \{ fmPickStart\(c\); return; \}\n\s+openPanelCardPop\(c, el\);/);
+// Jadvaldagi chip — fan mas'ulida o'z "Joylash" rejimi bilan sudraladi.
+assert.match(source, /if \(TIMETABLE_ROLE === 'fan_masuli'\) \{ fmDragStart\(cards\.find\(x => x\.id === \+el\.dataset\.chip\), ev\); return; \}/);
 assert.match(panel, /if \(TIMETABLE_ROLE === 'fan_masuli'\) \{ fmDragStart\(c, ev\); return; \}/);
 // "Mas'ul fanlarim" panel filtri — fan mas'ulida sukut bo'yicha yoqilgan.
 assert.match(source, /@if\(\$timetableActiveRole === 'fan_masuli'\)\n\s+<label[^>]*><input type="checkbox" id="pnMine" class="rounded border-gray-300" checked> Mas'ul fanlarim<\/label>/);

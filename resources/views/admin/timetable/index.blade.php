@@ -12702,6 +12702,8 @@
                 return gone;
             }
             const unitEditable = () => weeklyCanEdit() && !TIMETABLE_READ_ONLY && weeklyLayer === 'internal' && !!curWeek;
+            // Fan mas'uli: mas'ul fani amaliy darsi (ichki jadval, shu hafta) — "Yaxlitlash", "Joylash uchun tanlang" (server ham tekshiradi).
+            const fmUnitOk = c => TIMETABLE_ROLE === 'fan_masuli' && typeof fmCanPlace === 'function' && fmCanPlace(c);
             // Shu haftadagi bo'lingan birliklar (birlik kaliti → unitState + card): faqat amaliy, qamrovdagi (weekActiveCards).
             function weeklySplitUnits(uIdx = buildUnitIndex()) {
                 const out = new Map();
@@ -12722,7 +12724,7 @@
                         return '<div class="pn-split-item" data-split-key="' + esc(k) + '" style="margin-top:3px;border-top:1px dotted #fecaca;padding-top:3px">' +
                             '<a href="#" data-split-go="' + esc(k) + '" style="text-decoration:underline dotted">' + esc(cardGroups(st.card).join(', ') + ' · ' + st.card.subject_name) + '</a>' +
                             ' — ' + st.len + ' soat (' + st.list.map(cardLen).join('+') + '): <span data-split-days>' + esc(unitDaysText(st.list)) + '</span>' +
-                            (unitEditable() ? ' <button type="button" data-unit-merge="' + esc(k) + '"' + (pend ? ' disabled' : '') + ' title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
+                            (unitEditable() || fmUnitOk(st.card) ? ' <button type="button" data-unit-merge="' + esc(k) + '"' + (pend ? ' disabled' : '') + ' title="Bo\'laklar eng ko\'p soati turgan kunga ketma-ket (bandlik tekshiriladi)" style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:4px;padding:0 5px">Yaxlitlash</button>' : '') +
                             (pend ? ' <span data-unit-pending style="color:#b45309;font-weight:600">⏳ tasdiq kutilmoqda' + (pend > 0 ? ' (№' + esc(pend) + ')' : '') + '</span>' : '') +
                             (err ? (errItems && errItems.length
                                 ? '<div class="pn-split-err" style="margin-top:2px">' + cbHtml(cbBlocks(errItems), false, { compact: true }) + '</div>'
@@ -12743,7 +12745,7 @@
                 if (!live.length) return '';
                 return '<div data-pn-cleared style="border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 6px;margin-bottom:6px;font-size:11px">' +
                     live.map(([k, v]) => '<div data-cleared-key="' + esc(k) + '" style="margin-top:2px"><b>' + esc(v.text) + '</b> ' +
-                        (unitEditable() ? '<button type="button" data-cleared-select="' + +v.card_id + '" style="border:1px solid #2563eb;color:#1d4ed8;background:#eff6ff;border-radius:4px;padding:0 5px">Joylash uchun tanlang</button>' : 'Joylash uchun tanlang.') +
+                        (unitEditable() || fmUnitOk(cards.find(x => x.id === +v.card_id)) ? '<button type="button" data-cleared-select="' + +v.card_id + '" style="border:1px solid #2563eb;color:#1d4ed8;background:#eff6ff;border-radius:4px;padding:0 5px">Joylash uchun tanlang</button>' : 'Joylash uchun tanlang.') +
                         (v.items && v.items.length ? '<div style="margin-top:2px">' + cbHtml(cbBlocks(v.items), false, { compact: true }) + '</div>' : '') +
                         '</div>').join('') + '</div>';
             }
@@ -12919,11 +12921,15 @@
                 const placed = effPlace(c);
                 const extText = ext ? (boardDayNames()[ext.day - 1] || (ext.day + '-kun')) + ', ' + slotParaLabel(ext.pair) + ' (' + slotRangeText(ext.pair, len) + ')' : '';
                 const edit = weeklyCanEdit() && !TIMETABLE_READ_ONLY && TIMETABLE_ROLE !== 'oqituvchi';
+                // Fan mas'uli — mas'ul fani amaliy darsi (ichki jadval, shu hafta): joylash funksiyalari (o'qituvchi biriktirish va "Vaqtincha
+                // kafedra mudiriga yozish"siz). Yozish — responsible-move (darhol tuzatish yoki so'rov — server aniqlaydi), "Joylash uchun
+                // tanlash" — fmPick (server kataklari), xonalar — room-options.
+                const fmEdit = TIMETABLE_ROLE === 'fan_masuli' && typeof fmCanPlace === 'function' && fmCanPlace(c);
                 // "Shu joyga joylash": admin, superadmin, registrator ofisi, kichik admin, kafedra mudiri — ichki jadvalda bir xil. Ko'rinmasa
                 // (joylanmagan darsda) — sababi kichik matnda; joylangan (to'qnashuvdagi) darsda tugma yo'q (allaqachon joyida).
                 // Ichki jadvalni tahrirlay oladimi (tashqi qatlam ochiq bo'lsa ham — sababi "Ichki'ga o'ting" ko'rinsin).
-                const internalEditor = weeklyLayer === 'internal' ? edit : !TIMETABLE_READ_ONLY && (WEEKLY_ADMIN || TIMETABLE_ROLE === 'kafedra_mudiri');
-                const canPlaceHere = !placed && edit && ext && W && weeklyLayer === 'internal';
+                const internalEditor = fmEdit || (weeklyLayer === 'internal' ? edit : !TIMETABLE_READ_ONLY && (WEEKLY_ADMIN || TIMETABLE_ROLE === 'kafedra_mudiri'));
+                const canPlaceHere = !placed && (edit || fmEdit) && ext && W && weeklyLayer === 'internal';
                 const placeWhy = placed || canPlaceHere || !internalEditor ? ''
                     : weeklyLayer !== 'internal' ? "Tashqi jadval tanlangan — Ichki'ga o'ting"
                     : !W ? 'Hafta tanlanmagan'
@@ -12956,7 +12962,7 @@
                     // Joylangan (to'qnashuvli) karta — "Jadvalda ko'rsatish"; joylanmagan — "Shu joyga joylash" (tashqi joyiga).
                     (placed ? '<button type="button" data-pop-show style="border:1px solid #0f766e;color:#115e59;background:#f0fdfa;border-radius:5px;padding:1px 8px">Jadvalda ko\'rsatish</button>' : '') +
                     (canPlaceHere ? '<button type="button" data-pop-place style="border:1px solid #16a34a;color:#166534;background:#f0fdf4;border-radius:5px;padding:1px 8px">Shu joyga joylash</button>' : '') +
-                    (edit ? '<button type="button" data-pop-select style="border:1px solid #2563eb;color:#1d4ed8;background:#eff6ff;border-radius:5px;padding:1px 8px">Joylash uchun tanlash</button>' : '') +
+                    (edit || fmEdit ? '<button type="button" data-pop-select style="border:1px solid #2563eb;color:#1d4ed8;background:#eff6ff;border-radius:5px;padding:1px 8px">Joylash uchun tanlash</button>' : '') +
                     (mudirPhAllowed() && !phOf(c) ? '<button type="button" data-pop-mudir disabled title="tekshirilmoqda…" style="border:1px solid #ca8a04;color:#854d0e;background:#fefce8;border-radius:5px;padding:1px 8px">Vaqtincha kafedra mudiriga yozish</button>' : '') +
                     '<div data-pop-mudir-why style="width:100%;color:#a16207;font-size:11px"></div>' +
                     (placeWhy ? '<div data-pop-place-why style="width:100%;color:#64748b;font-size:11px">' + esc(placeWhy) + '</div>' : '') +
@@ -12984,12 +12990,22 @@
                         } : null,
                         // "Boshqa xona tanlash" — "Xona band" blokida (boshqa sabablar bilan birga ham): xonalar ro'yxati (server), tanlangach qayta
                         // tekshiruv va joylash / shu hafta xonani almashtirish (placeCardWithRoom: birlik — unit-place, yakka — week-override).
-                        roomPick: edit && W && weeklyLayer === 'internal' && !(isPlaced && unitIsSplit(list)) ? (() => {
+                        roomPick: (edit || fmEdit) && W && weeklyLayer === 'internal' && !(isPlaced && unitIsSplit(list)) ? (() => {
                             const at = isPlaced ? effPlace(roomCard) : null;
                             const day = at ? at.day : d, pair = at ? at.pair : p;
                             // Xonalar ro'yxati — birlik boshidan (bosilgan bo'lak keyingisi bo'lsa ham): placeCardWithRoom (unitMovePlan) bilan bir xil.
                             const plan = unitMovePlan(roomCard, pair);
                             return { card: roomCard, day, pair: plan ? plan[0][1] : pair, placed: !!isPlaced, apply: async room => {
+                                if (fmEdit) {
+                                    // Fan mas'uli: responsible-move (joylanmagan / to'qnashuvdagi dars — darhol; aks holda server rad etadi).
+                                    await api(BASE + '/cards/' + roomCard.id + '/responsible-move', 'POST',
+                                        { week: curWeek, day, pair: plan ? plan[0][1] : pair, auditorium_code: room.code });
+                                    closePanelCardPop();
+                                    if (typeof fmGridCache !== 'undefined') fmGridCache.clear();
+                                    await loadBoard(board.id);
+                                    ttToast(esc((isPlaced ? 'Xona almashtirildi (shu hafta): ' : 'Joylandi: ') + (room.name || room.code)), 'ok');
+                                    return;
+                                }
                                 const r = await placeCardWithRoom(roomCard, day, pair, room);
                                 closePanelCardPop();
                                 selected = null;
@@ -13051,6 +13067,8 @@
                     if (t.hasAttribute('data-pop-mudir')) { if (!t.disabled) openMudirPhConfirm(c, mudirPhSlot(c)); return; }
                     if (t.hasAttribute('data-pop-select')) {
                         closePanelCardPop();
+                        // Fan mas'uli — o'z "Joylash uchun tanlash" rejimi (guruh ustuni belgilanadi, jadval suriladi; kataklar serverdan).
+                        if (fmEdit) { fmPickStart(c); return; }
                         selected = (selected && selected.id === c.id) ? null : c;
                         renderPanel(); renderGrid();
                         // Guruh ustuni belgilanadi (renderGrid → markPickColumns) va jadval shu ustunga suriladi.
@@ -13061,6 +13079,8 @@
                     // bloklarda (xona sig'imi — ogohlantirish, joylashga to'sqinlik qilmaydi).
                     const pre = cbPlanItems(list, ext.day, ext.pair);
                     if (cbBlocking(cbBlocks(pre)).length) { showBlocks(pre); return; }
+                    // Fan mas'uli: tasdiq oynasi (xona, darhol / so'rov — responsible-move check), shu joyga.
+                    if (fmEdit) { closePanelCardPop(); openResponsibleMove(list[0], { pick: true, day: ext.day, pair: ext.pair, anchor: el }); return; }
                     t.disabled = true;
                     try {
                         await placeUnitAt(list[0], ext.day, ext.pair);
@@ -13571,7 +13591,9 @@
                         const c = cards.find(x => x.id === +el.dataset.id);
                         if (!c) return;
                         // Fan mas'uli: mas'ul fani kartasi (yoki uning "Joylash" tugmasi) — "Joylash uchun tanlash" rejimi.
-                        if (fmMine(c)) { fmPickStart(c); return; }
+                        // Fan mas'uli: mas'ul fani amaliy darsi — karta oynasi (sabab bloklari, "Shu joyga joylash", "Joylash uchun tanlash",
+                        // "Boshqa xona tanlash", jadvallar); ma'ruza va boshqa holatlar — ko'rish oynasi (sababi bilan).
+                        if (fmMine(c) && !fmCanPlace(c)) { fmPickStart(c); return; }
                         openPanelCardPop(c, el);
                     };
                     el.addEventListener('dragstart', ev => {
@@ -13606,6 +13628,8 @@
                     const c = cards.find(x => x.id === +b.dataset.clearedSelect);
                     if (!c) return;
                     const first = unitOf(c, curWeek)[0] || c;
+                    // Fan mas'uli — o'z "Joylash" rejimi (server kataklari: bugun / o'tgan kun, xona ruxsati, so'rov yoki darhol).
+                    if (fmUnitOk(first)) { fmPickStart(first); return; }
                     selected = first;
                     renderPanel(); renderGrid();
                     scrollToPickColumn(first);
@@ -14663,6 +14687,9 @@
                     el.setAttribute('draggable', 'true');
                     el.addEventListener('dragstart', ev => {
                         ev.stopPropagation();
+                        // Fan mas'uli: mas'ul fani darsi — o'z "Joylash" rejimi bilan (tashlansa — tasdiq oynasi: to'qnashuvdagi — darhol, to'qnashuvsiz
+                        // joylashgan — so'rov); boshqalari sudralmaydi.
+                        if (TIMETABLE_ROLE === 'fan_masuli') { fmDragStart(cards.find(x => x.id === +el.dataset.chip), ev); return; }
                         // Bo'laklar sarlavhasi — hamma bo'lak bitta katakka birga ko'chadi (data-parallel-ids).
                         const parallel = !!el.dataset.parallelIds;
                         const list = parallel ? el.dataset.parallelIds : el.dataset.mergeIds;

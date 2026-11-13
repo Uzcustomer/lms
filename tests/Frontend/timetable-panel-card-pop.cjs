@@ -265,5 +265,27 @@ vm.runInContext(source.slice(source.indexOf('            function dragPlan('), s
     ctx.openPanelCardPop(cards[0], el());
     assert.doesNotMatch(doc.getElementById('pnCardPop').innerHTML, /data-pop-room-off/);
     ctx.closePanelCardPop();
-    console.log('timetable panel card pop: 10 scenarios passed');
+
+    // 11) Fan mas'uli (mas'ul fani amaliy darsi): oynada "Shu joyga joylash" — tasdiq oynasi (responsible-move, pick), "Joylash uchun
+    //     tanlash" — o'z rejimi (fmPickStart); boshqa fan — ko'rish (tugmalarsiz). "Vaqtincha kafedra mudiriga yozish" — yo'q.
+    const fmCalls = [], callsBefore = calls.length;
+    Object.assign(ctx, { TIMETABLE_ROLE: 'fan_masuli', weeklyCanEdit: () => false, TIMETABLE_READ_ONLY: true,
+        fmCanPlace: c => +c.id === 1, fmPickStart: c => fmCalls.push(['pick', c.id]), openResponsibleMove: (c, o) => fmCalls.push(['rm', c.id, o.pick, o.day, o.pair]) });
+    ctx.openPanelCardPop(cards[0], el());
+    let pf = doc.getElementById('pnCardPop');
+    assert.match(pf.innerHTML, /data-pop-place/);
+    assert.match(pf.innerHTML, /data-pop-select/);
+    assert.doesNotMatch(pf.innerHTML, /data-pop-mudir /);
+    await pf.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === 'data-pop-place', disabled: false }) }, preventDefault() {}, stopPropagation() {} });
+    ctx.openPanelCardPop(cards[0], el());
+    pf = doc.getElementById('pnCardPop');
+    await pf.listeners.click({ target: { closest: () => ({ hasAttribute: x => x === 'data-pop-select', disabled: false }) }, preventDefault() {}, stopPropagation() {} });
+    assert.deepEqual(fmCalls, [['rm', 1, true, 2, 3], ['pick', 1]]);
+    // Kafedra mudiri yo'llari (unit-place / week-override) chaqirilmaydi.
+    assert.ok(!calls.slice(callsBefore).some(c => /unit-place|week-override/.test(c[0])));
+    ctx.openPanelCardPop(cards[3], el());
+    assert.doesNotMatch(doc.getElementById('pnCardPop').innerHTML, /data-pop-place|data-pop-select/);
+    ctx.closePanelCardPop();
+    Object.assign(ctx, { TIMETABLE_ROLE: 'kafedra_mudiri', weeklyCanEdit: () => true, TIMETABLE_READ_ONLY: false });
+    console.log('timetable panel card pop: 11 scenarios passed');
 })().catch(e => { console.error(e); process.exit(1); });

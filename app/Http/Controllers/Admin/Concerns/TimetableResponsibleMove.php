@@ -360,6 +360,36 @@ trait TimetableResponsibleMove
      * Huquq (check, saqlash va grid uchun bir xil): faol rol — fan mas'uli (Teacher); ma'ruza — rad; birlikning barcha bo'laklari mas'ul
      * fanida. Qaytaradi: [actor, board, keys, unit kartalari].
      */
+    private function isFanMasuli(Request $request): bool
+    {
+        return $this->timetableActor($request) !== null && $this->timetableActiveRole($request) === 'fan_masuli';
+    }
+
+    /**
+     * Fan mas'uli (faol rol): kafedra mudiri joylash funksiyalaridan foydalanadigan yo'llar ("Boshqa xona tanlash" ro'yxati, "Yaxlitlash")
+     * uchun huquq — faqat mas'ul fani kartasi, ma'ruza emas (ichki jadval). Boshqa rollar — null (o'z tekshiruvi). Rad — 403 JSON.
+     */
+    private function responsibleUnitDenied(Request $request, TimetableCard $card)
+    {
+        if (!$this->isFanMasuli($request)) {
+            return null;
+        }
+        $actor = $this->timetableActor($request);
+        if (!$actor instanceof Teacher) {
+            return response()->json(['error' => "Fan mas'uli aniqlanmadi."], 403);
+        }
+        if ($card->training_type === 'lecture') {
+            return response()->json(['error' => "Ma'ruzani o'zgartirish — faqat kafedra mudiri va adminlar."], 403);
+        }
+        $keys = $this->responsibleKeysMemo[(int) $actor->id] ??= $this->responsibleSubjectKeysFor((int) $actor->id);
+
+        return $keys && $this->responsibleMatch($keys, $card) ? null
+            : response()->json(['error' => "Faqat mas'ul faningizdagi darsni o'zgartira olasiz."], 403);
+    }
+
+    /** @var array<int, array> fan mas'uli id => mas'ul fanlar kalitlari (so'rov davomida) */
+    private array $responsibleKeysMemo = [];
+
     private function responsibleMoveAuth(Request $request, TimetableCard $card): array
     {
         $actor = $this->timetableActor($request);
@@ -400,7 +430,7 @@ trait TimetableResponsibleMove
         $cards = $this->weeklyUnitCards($card);
         foreach ($cards as $c) {
             $c->setRelation('board', $board);
-            if ($denied = $this->weeklyLayerDenied($request, 'internal', $c)) {
+            if ($denied = $this->responsibleUnitDenied($request, $c) ?? ($this->isFanMasuli($request) ? null : $this->weeklyLayerDenied($request, 'internal', $c))) {
                 return $denied;
             }
         }

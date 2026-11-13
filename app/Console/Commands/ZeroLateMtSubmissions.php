@@ -58,7 +58,7 @@ class ZeroLateMtSubmissions extends Command
         $deadlines = [];
         $rows = [];
         $late = [];
-        $stats = ['sababli' => 0, 'locked' => 0];
+        $stats = ['sababli' => 0, 'locked' => 0, 'ontime' => 0];
         foreach ($submissions as $sub) {
             $subjectId = $subjectIds[$sub->subject_hemis_id] ??= DB::table('curriculum_subjects')
                 ->where('curriculum_subject_hemis_id', $sub->subject_hemis_id)->value('subject_id');
@@ -92,7 +92,17 @@ class ZeroLateMtSubmissions extends Command
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
                 ->whereNull('deleted_at')
-                ->first(['id', 'grade', 'is_yn_locked']);
+                ->first(['id', 'grade', 'is_yn_locked', 'created_at']);
+
+            // Baho muddatgacha qo'yilgan — ish vaqtida topshirilgan, keyingi yuklash faqat
+            // yozuvdagi sanani almashtirgan (bitta yozuv qayta yuklashda yangilanadi)
+            if ($grade && $grade->created_at && Carbon::parse($grade->created_at)->lte($closes)) {
+                $stats['ontime']++;
+                $rows[] = [$sub->group_name, mb_substr($sub->subject_name, 0, 35), $sub->full_name, $closes->format('d.m H:i'),
+                    $submittedAt->format('d.m H:i'), $grade->grade, 'muddatgacha baholangan — tegilmaydi'];
+                continue;
+            }
+
             $locked = $grade && $grade->is_yn_locked;
             if ($locked && !$includeLocked) {
                 $stats['locked']++;
@@ -108,7 +118,8 @@ class ZeroLateMtSubmissions extends Command
         }
 
         $this->table(['Guruh', 'Fan', 'Talaba', 'Muddat', 'Yuklagan', 'Baho', 'Amal'], $rows);
-        $this->info('Muddatdan keyin (sababsiz): ' . count($late) . " · sababli: {$stats['sababli']} · YN yuborilgan: {$stats['locked']}");
+        $this->info('Muddatdan keyin (sababsiz): ' . count($late) . " · sababli: {$stats['sababli']} · YN yuborilgan: {$stats['locked']}"
+            . " · muddatgacha baholangan: {$stats['ontime']}");
         if (!$force) {
             $this->warn("Faqat hisobot. Bajarish uchun: php artisan mt:zero-late --force");
 

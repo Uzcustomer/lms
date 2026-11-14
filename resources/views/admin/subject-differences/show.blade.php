@@ -1,4 +1,5 @@
 <x-app-layout>
+@include('admin.subject-differences._styles')
 @php
     $t = $check->transcript ?? [];
     $source = $check->transcriptSource();
@@ -9,23 +10,25 @@
     $sourceLabels = ['ai' => 'AI (Gemini)', 'text' => 'Matn (pdftotext)'];
 @endphp
 
+<div class="sd-page">
     <div class="min-h-full bg-[#eef3f9] px-3 py-5 sm:px-5 lg:px-6"
          x-data="{ edit: null, openEdit(src, i, r) { this.edit = { source: src, index: i, name: r.name, semester: r.semester, ball: r.ball, grade: r.grade }; } }">
         <div class="mx-auto max-w-[1700px] space-y-4">
 
-            <div class="rounded-2xl px-6 py-5 text-white shadow-lg" style="background: linear-gradient(135deg, #102a56 0%, #1e5da8 68%, #3181c8 100%) !important;">
-                <a href="{{ route('admin.subject-differences.index') }}" class="text-xs text-white/70 hover:text-white">&larr; Fanlar farqi</a>
-                <div class="mt-1 flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <h1 class="text-2xl font-bold">{{ $check->student_name ?: 'Talaba' }}</h1>
-                        <p class="mt-1 text-sm text-white/80">{{ $check->source_institution ?: 'Avvalgi OTM ko\'rsatilmagan' }} · {{ $scale->label() }}</p>
-                    </div>
-                    <div class="flex flex-wrap gap-2 text-xs">
-                        @foreach($files as $i => $f)
-                            <a href="{{ route('admin.subject-differences.file', [$check, $i]) }}" target="_blank"
-                               class="rounded-lg bg-white/15 px-3 py-1.5 font-semibold hover:bg-white/25">📄 {{ $f['role'] }}: {{ \Illuminate\Support\Str::limit($f['name'], 30) }}</a>
-                        @endforeach
-                    </div>
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <a href="{{ route('admin.subject-differences.index') }}" class="text-sm text-blue-700 hover:underline">&larr; Fanlar farqi</a>
+                    <h1 class="mt-1 text-xl font-bold text-slate-900">{{ $check->student_name ?: 'Talaba' }}</h1>
+                    <p class="mt-0.5 text-sm text-slate-600">{{ $check->source_institution ?: 'Avvalgi OTM ko\'rsatilmagan' }} · {{ $scale->label() }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2 text-sm">
+                    @foreach($files as $i => $f)
+                        <a href="{{ route('admin.subject-differences.file', [$check, $i]) }}" target="_blank"
+                           class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 font-semibold text-slate-800 hover:bg-slate-50">
+                            <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            {{ $f['role'] }}
+                        </a>
+                    @endforeach
                 </div>
             </div>
 
@@ -465,4 +468,5 @@
             };
         }
     </script>
+</div>
 </x-app-layout>

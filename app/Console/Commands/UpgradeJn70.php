@@ -68,11 +68,17 @@ class UpgradeJn70 extends Command
         $rows = [];
         $write = [];
 
-        foreach ($this->vedomosts($groupIds, $cutoff, $since) as $v) {
+        $vedomosts = $this->vedomosts($groupIds, $cutoff, $since);
+        $this->info("Imtihonlari {$since} — {$cutoff} oralig'ida tugagan guruh × fanlar: " . $vedomosts->count()
+            . " (qatnashmaganlari borlarida JN jurnaldagidek hisoblanadi — bir necha daqiqa olishi mumkin)");
+        $started = microtime(true);
+        foreach ($vedomosts as $i => $v) {
             $absent = $this->absentStudents($v);
             if ($absent->isEmpty()) {
                 continue;
             }
+            $this->line(sprintf('  [%d/%d] %s · %s — qatnashmagan: %d', $i + 1, $vedomosts->count(), $v->group_name,
+                mb_substr($v->subject_name, 0, 40), $absent->count()));
             $plain = $journal->ynqJnMaps($v->subject_id, $v->semester_code, $v->group_hemis_id, false);
             $up = $journal->ynqJnMaps($v->subject_id, $v->semester_code, $v->group_hemis_id, true);
             if (is_string($plain) || is_string($up)) {
@@ -94,6 +100,7 @@ class UpgradeJn70 extends Command
         }
 
         $this->table(['Guruh', 'Fan', 'Talaba', 'Imtihon', 'JN', 'JN 70%'], $rows);
+        $this->line('Vaqt: ' . round(microtime(true) - $started) . ' s');
         $this->info('Talabalar: ' . count($write));
         if (!$force) {
             $this->warn('Faqat hisobot. Yozish uchun: --force (bekor qilish: --revert --force)');

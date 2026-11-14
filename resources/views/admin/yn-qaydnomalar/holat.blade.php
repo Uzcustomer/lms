@@ -168,29 +168,41 @@
             }).join('');
             return html || '<span class="vh-muted">—</span>';
         }
+        // Amal tugmalari belgilari (SVG) — har amal o'z rangi va belgisi bilan
+        function vhIcon(d) {
+            return '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="' + d + '"/></svg>';
+        }
+        var VH_ICO = {
+            pdf: vhIcon('M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'),
+            view: vhIcon('M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'),
+            journal: vhIcon('M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'),
+            excel: vhIcon('M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'),
+            trash: vhIcon('M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16')
+        };
         function vhActions(r) {
             var a = '';
             if (r.pdf_url) {
-                a += '<a class="vh-btn vh-btn--pdf" href="' + escA(r.pdf_url) + '" onclick="return vhPdf(this)">PDF</a>'
-                   + '<a class="vh-btn" target="_blank" rel="noopener" href="' + escA(r.pdf_view_url) + '">Ko\'rish</a>';
+                a += '<a class="vh-btn vh-btn--pdf" href="' + escA(r.pdf_url) + '" onclick="return vhPdf(this)">' + VH_ICO.pdf + '<span>PDF</span></a>'
+                   + '<a class="vh-btn vh-btn--view" target="_blank" rel="noopener" href="' + escA(r.pdf_view_url) + '">' + VH_ICO.view + 'Ko\'rish</a>';
             } else if (r.view_url) {
-                a += '<a class="vh-btn" target="_blank" rel="noopener" href="' + escA(r.view_url) + '">Ko\'rish</a>';
+                a += '<a class="vh-btn vh-btn--view" target="_blank" rel="noopener" href="' + escA(r.view_url) + '">' + VH_ICO.view + 'Ko\'rish</a>';
             } else if (r.journal_url) {
-                a += '<a class="vh-btn" href="' + escA(r.journal_url) + '">Jurnal</a>';
+                a += '<a class="vh-btn vh-btn--journal" href="' + escA(r.journal_url) + '">' + VH_ICO.journal + 'Jurnal</a>';
             }
             if (r.excel) {
-                a += '<button type="button" class="vh-btn vh-btn--excel" data-params="' + escA(JSON.stringify(r.excel)) + '" onclick="vhExcel(this)">Excel</button>';
+                a += '<button type="button" class="vh-btn vh-btn--excel" data-params="' + escA(JSON.stringify(r.excel)) + '" onclick="vhExcel(this)">' + VH_ICO.excel + 'Excel</button>';
             }
             if (vhCanDelete && r.delete_key) {
-                a += '<button type="button" class="vh-btn vh-btn--del" data-key="' + escA(JSON.stringify(r.delete_key)) + '" onclick="vhDelete(this)">O\'chirish</button>';
+                a += '<button type="button" class="vh-btn vh-btn--del" data-key="' + escA(JSON.stringify(r.delete_key)) + '" onclick="vhDelete(this)">' + VH_ICO.trash + 'O\'chirish</button>';
             }
             return a;
         }
-        // PDF tayyorlanishi bir necha soniya oladi — tugma holati
+        // PDF tayyorlanishi bir necha soniya oladi — tugma holati (belgi qoladi, matn almashadi)
         function vhPdf(a) {
             if (a.classList.contains('is-busy')) return false;
-            a.classList.add('is-busy'); a.textContent = 'Tayyorlanmoqda…';
-            setTimeout(function () { a.classList.remove('is-busy'); a.textContent = 'PDF'; }, 15000);
+            var label = a.querySelector('span');
+            a.classList.add('is-busy'); label.textContent = 'Tayyorlanmoqda…';
+            setTimeout(function () { a.classList.remove('is-busy'); label.textContent = 'PDF'; }, 15000);
             return true;
         }
         function vhExcel(btn) {
@@ -254,15 +266,24 @@
         .vh-badge--rejected { background:#faf5ff; color:#7e22ce; border-color:#e9d5ff; }
         .vh-badge--dean { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
         .vh-badge--waiting { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
-        .vh-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
-        .vh-btn { display:inline-flex; align-items:center; height:30px; padding:0 12px; border-radius:7px; border:1px solid #cbd5e1; background:#fff; color:#1e3a8a !important; font-size:12px; font-weight:700; text-decoration:none !important; cursor:pointer; white-space:nowrap; }
-        .vh-btn:hover { background:#f1f5f9; }
+        .vh-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; }
+        /* Amal tugmalari — kattaroq, har biri o'z rangi va belgisi bilan */
+        .vh-btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; height:38px; padding:0 14px; border-radius:9px; border:1px solid #cbd5e1;
+            background:#fff; color:#334155 !important; font-size:13px; font-weight:700; text-decoration:none !important; cursor:pointer; white-space:nowrap;
+            transition:background-color .15s, border-color .15s, transform .05s; }
+        .vh-btn:hover { background:#f1f5f9; border-color:#94a3b8; }
+        .vh-btn:active { transform:translateY(1px); }
+        .vh-btn svg { width:16px; height:16px; flex-shrink:0; }
         .vh-btn:focus-visible, .vh-chip:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
-        .vh-btn--pdf { background:#b91c1c; border-color:#b91c1c; color:#fff !important; }
-        .vh-btn--pdf:hover { background:#991b1b; }
-        .vh-btn--pdf.is-busy { background:#94a3b8; border-color:#94a3b8; pointer-events:none; }
-        .vh-btn--excel { color:#15803d !important; border-color:#bbf7d0; }
-        .vh-btn--del { color:#b91c1c !important; border-color:#fecaca; }
+        .vh-btn--pdf { background:#b91c1c; border-color:#b91c1c; color:#fff !important; box-shadow:0 2px 6px rgba(185,28,28,.28); }
+        .vh-btn--pdf:hover { background:#991b1b; border-color:#991b1b; }
+        .vh-btn--pdf.is-busy { background:#94a3b8; border-color:#94a3b8; pointer-events:none; box-shadow:none; }
+        .vh-btn--view { color:#1d4ed8 !important; background:#eff6ff; border-color:#bfdbfe; }
+        .vh-btn--view:hover { background:#dbeafe; border-color:#93c5fd; }
+        .vh-btn--excel { color:#15803d !important; background:#f0fdf4; border-color:#86efac; }
+        .vh-btn--excel:hover { background:#dcfce7; border-color:#4ade80; }
+        .vh-btn--del { color:#b91c1c !important; border-color:#fca5a5; }
+        .vh-btn--del:hover { background:#fef2f2; border-color:#f87171; }
         .vh-btn--del:disabled { opacity:.6; }
     </style>
 </x-app-layout>

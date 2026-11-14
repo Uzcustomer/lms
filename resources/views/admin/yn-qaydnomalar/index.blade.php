@@ -40,13 +40,25 @@
         .yq-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
         .yq-btn--primary { background: var(--yq-navy); border-color: var(--yq-navy); color: #fff !important; }
         .yq-btn--primary:hover { background: #1e40af; }
-        .yq-btn--sm { height: 32px; padding: 0 11px; font-size: 12.5px; }
-        .yq-btn--excel { color: var(--yq-green) !important; border-color: var(--yq-green-line); background: var(--yq-green-bg); }
-        .yq-btn--excel:hover { background: #dcfce7; border-color: #86efac; }
-        .yq-btn--pdf { color: #fff !important; border-color: #b91c1c; background: #b91c1c; }
+        /* Jadvaldagi amal tugmalari — har biri o'z rangi va belgisi bilan, bir-biridan aniq ajralib turadi */
+        .yq-btn--sm { height: 38px; padding: 0 14px; font-size: 13px; font-weight: 700; border-radius: 9px; gap: 7px;
+            transition: background-color .15s, border-color .15s, box-shadow .15s, transform .05s; }
+        .yq-btn--sm:active { transform: translateY(1px); }
+        .yq-btn--primary { box-shadow: 0 2px 6px rgba(30,58,138,.28); }
+        .yq-btn--approve { color: #fff !important; background: #16a34a; border-color: #16a34a; box-shadow: 0 2px 6px rgba(22,163,74,.3); }
+        .yq-btn--approve:hover { background: #15803d; border-color: #15803d; }
+        .yq-btn--view { color: #1d4ed8 !important; background: #eff6ff; border-color: #bfdbfe; }
+        .yq-btn--view:hover { background: #dbeafe; border-color: #93c5fd; }
+        .yq-btn--journal { color: #334155 !important; background: #fff; border-color: #cbd5e1; }
+        .yq-btn--journal:hover { background: #f1f5f9; border-color: #94a3b8; }
+        .yq-btn--excel { color: var(--yq-green) !important; border-color: #86efac; background: var(--yq-green-bg); }
+        .yq-btn--excel:hover { background: #dcfce7; border-color: #4ade80; }
+        .yq-btn--pdf { color: #fff !important; border-color: #b91c1c; background: #b91c1c; box-shadow: 0 2px 6px rgba(185,28,28,.28); }
         .yq-btn--pdf:hover { background: #991b1b; border-color: #991b1b; }
-        .yq-btn--pdf.is-busy { background: #94a3b8; border-color: #94a3b8; pointer-events: none; }
-        .yq-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+        .yq-btn--pdf.is-busy { background: #94a3b8; border-color: #94a3b8; pointer-events: none; box-shadow: none; }
+        .yq-btn--danger { color: #b91c1c !important; background: #fff; border-color: #fca5a5; }
+        .yq-btn--danger:hover { background: #fef2f2; border-color: #f87171; }
+        .yq-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
         /* Jadval */
         .yq-card { border-radius: 12px; background: #fff; border: 1px solid var(--yq-line); box-shadow: 0 1px 2px rgba(15,23,42,.05); overflow: hidden; }
@@ -88,10 +100,10 @@
         .yq-badge--head { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
         .yq-badge--rejected { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
         .yq-reason { margin-top: 4px; padding: 6px 9px; border-radius: 8px; background: #faf5ff; border: 1px solid #e9d5ff; color: #6b21a8; font-size: 12px; max-width: 34ch; }
-        .yq-btn--warn { color: #fff !important; border-color: #7e22ce; background: #7e22ce; }
+        .yq-btn--warn { color: #fff !important; border-color: #7e22ce; background: #7e22ce; box-shadow: 0 2px 6px rgba(126,34,206,.28); }
         .yq-btn--warn:hover { background: #6b21a8; }
         .yq-badge--dean { background: var(--yq-green-bg); color: var(--yq-green); border-color: var(--yq-green-line); }
-        .yq-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+        .yq-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
         .yq-actions form { margin: 0; }
         .yq-muted { color: #94a3b8; }
         .yq-empty { padding: 48px 16px; text-align: center; color: var(--yq-muted); }
@@ -102,6 +114,15 @@
     @php
         $statusUrl = fn ($s) => request()->fullUrlWithQuery(['status' => $s, 'page' => null]);
         $active = $filters['status'] ?? '';
+        $svg = fn (string $d) => '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="' . $d . '"/></svg>';
+        $ico = [
+            'create' => $svg('M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'),
+            'view' => $svg('M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'),
+            'approve' => $svg('M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'),
+            'redo' => $svg('M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'),
+            'journal' => $svg('M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'),
+            'trash' => $svg('M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'),
+        ];
         $statusLabels = ['none' => 'Topshirilmagan', 'partial' => 'Qisman topshirilgan', 'teacher' => 'Kafedra tasdig\'i kutilmoqda', 'head' => 'Dekan tasdig\'i kutilmoqda',
             'rejected' => 'Rad etilgan', 'dean' => 'Dekan tasdiqlagan'];
         $isHead = $isHead ?? false;
@@ -242,12 +263,12 @@
                                             @if($isTeacher)
                                                 <div class="yq-actions">
                                                     @if($row->status === 'rejected' && $row->params)
-                                                        <a class="yq-btn yq-btn--sm yq-btn--warn" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">Qayta ko'rib chiqish</a>
+                                                        <a class="yq-btn yq-btn--sm yq-btn--warn" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">{!! $ico['redo'] !!}Qayta ko'rib chiqish</a>
                                                     @elseif($row->create_params)
                                                         {{-- Fan tugagan — qaydnoma darhol tasdiqlash sahifasida (jurnalsiz) --}}
-                                                        <a class="yq-btn yq-btn--sm yq-btn--primary" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->create_params) }}">YN qaydnoma</a>
+                                                        <a class="yq-btn yq-btn--sm yq-btn--primary" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->create_params) }}">{!! $ico['create'] !!}YN qaydnoma</a>
                                                     @elseif($row->teachers->isNotEmpty() && $row->params)
-                                                        <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">Ko'rish</a>
+                                                        <a class="yq-btn yq-btn--sm yq-btn--view" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">{!! $ico['view'] !!}Ko'rish</a>
                                                     @elseif(!$row->exams_finished)
                                                         {{-- Fan tugamaguncha qaydnoma yaratilmaydi --}}
                                                         {{-- 12a / 12b — sabab o'zi ("2-urinish hali topshirilmagan"), asosiy shaklda — "Fan tugamagan: …" --}}
@@ -256,8 +277,8 @@
                                                         <span class="yq-muted" style="font-size:12px;">Avval jurnalda YN ga yuboring</span>
                                                     @endif
                                                     @if($row->group_pk)
-                                                        <a class="yq-btn yq-btn--sm"
-                                                           href="{{ route('admin.journal.show', [collect($row->my_groups)->first(fn ($g) => !$g->confirmed && $g->pk)?->pk ?? $row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">Jurnal</a>
+                                                        <a class="yq-btn yq-btn--sm yq-btn--journal"
+                                                           href="{{ route('admin.journal.show', [collect($row->my_groups)->first(fn ($g) => !$g->confirmed && $g->pk)?->pk ?? $row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{!! $ico['journal'] !!}Jurnal</a>
                                                     @endif
                                                 </div>
                                             @elseif($row->teachers->isNotEmpty() && $row->params)
@@ -270,11 +291,11 @@
                                                         </a>
                                                     @endif
                                                     {{-- Dekan tasdiqlagan — "Ko'rish" mavjud PDF ni ochadi (PDF huquqi borlarga) --}}
-                                                    <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener"
+                                                    <a class="yq-btn yq-btn--sm {{ $myTurn && $row->status === $myTurn ? 'yq-btn--approve' : 'yq-btn--view' }}" target="_blank" rel="noopener"
                                                        href="{{ $canPdf && $row->status === 'dean'
                                                            ? route('admin.vedomost-tekshirish.qaydnoma-pdf', ['subject_id' => $row->subject_id, 'semester_code' => $row->semester_code, 'group_hemis_id' => $row->group_hemis_id, 'form' => $row->form, 'inline' => 1, 'v' => substr(md5((string) ($row->dean->pdf_path ?? '')), 0, 8)])
                                                            : route('admin.journal.view-yn-qaydnoma', $row->params) }}">
-                                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                                        {!! $myTurn && $row->status === $myTurn ? $ico['approve'] : $ico['view'] !!}
                                                         {{ $myTurn && $row->status === $myTurn ? 'Ko\'rish va tasdiqlash' : 'Ko\'rish' }}
                                                     </a>
                                                     <form method="POST" action="{{ route('admin.journal.export-yn-qaydnoma') }}">
@@ -298,7 +319,7 @@
                                                     <input type="hidden" name="subject_id" value="{{ $row->subject_id }}">
                                                     <input type="hidden" name="semester_code" value="{{ $row->semester_code }}">
                                                     <input type="hidden" name="group_hemis_id" value="{{ $row->group_hemis_id }}"><input type="hidden" name="form" value="{{ $row->form }}">
-                                                    <button type="submit" class="yq-btn yq-btn--sm" style="color:#b91c1c !important;border-color:#fecaca;">O'chirish</button>
+                                                    <button type="submit" class="yq-btn yq-btn--sm yq-btn--danger">{!! $ico['trash'] !!}O'chirish</button>
                                                 </form>
                                             @endif
                                         </td>

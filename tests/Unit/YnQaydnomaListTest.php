@@ -277,6 +277,22 @@ it('shows subgroups a/b as one vedomost that waits for every subgroup teacher', 
     $row = collect(($this->page)()['rows']->items())->firstWhere('group', 'd1/d22-02');
     expect($row->status)->toBe('teacher')                                   // endi kafedra mudiri navbati
         ->and($row->teachers->pluck('teacher_name')->sort()->values()->all())->toBe(['KARIMOV A.', 'SOBIROV B.']);
+
+    // 12-qo'shimcha — faqat 02b da talabasi bor: uni 02b o'qituvchisining o'zi topshiradi, 02a kutilmaydi
+    app()->instance(\App\Http\Controllers\Admin\JournalController::class, new class extends \App\Http\Controllers\Admin\JournalController {
+        public function __construct() {}
+
+        public function ynqFormMembers(string $subjectId, string $semesterCode, string $groupHemisId, ?string $form): array
+        {
+            return $form === '12q' ? ['79'] : ['78', '79'];
+        }
+    });
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '79', 'form' => '12q', 'teacher_id' => 3,
+        'teacher_name' => 'SOBIROV B.', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);
+    $q = collect(($this->page)()['rows']->items())->firstWhere('form', '12q');
+    expect($q->group)->toBe('d1/d22-02b')
+        ->and($q->members)->toBe(['79'])
+        ->and($q->status)->toBe('teacher');                                    // kafedra mudiri navbati
 });
 
 it('filters by status', function () {

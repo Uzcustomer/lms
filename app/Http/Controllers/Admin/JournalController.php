@@ -10874,7 +10874,10 @@ class JournalController extends Controller
     public static function ynqChain(string $subjectId, string $semesterCode, string $groupHemisId, ?string $form = null): array
     {
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
-        $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+        // Qo'shimcha / 12a / 12b — faqat shu shaklda talabasi bor kichik guruhlar (ularning o'qituvchilari tasdiqlaydi)
+        $members = \App\Services\YnqForm::normalize($form) === \App\Services\YnqForm::MAIN
+            ? \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId)
+            : app(self::class)->ynqFormMembers($subjectId, $semesterCode, $groupHemisId, $form);
         $all = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')
             ? $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members, $form)->orderByDesc('confirmed_at')->get()
             : collect();
@@ -11037,25 +11040,57 @@ class JournalController extends Controller
      */
     public function ynqActiveForms(string $subjectId, string $semesterCode, string $groupHemisId): array
     {
+        $forms = array_merge([\App\Services\YnqForm::MAIN], ...array_values($this->ynqFormsByMember($subjectId, $semesterCode, $groupHemisId)));
+
+        return array_values(array_intersect(\App\Services\YnqForm::codes(), $forms));
+    }
+
+    /**
+     * Shu shaklda talabasi bor kichik guruhlar — qo'shimcha / 12a / 12b qaydnomasini faqat ularning
+     * o'qituvchilari tasdiqlaydi (asosiy 12-shakl — oilaning hamma guruhi). Hech biri topilmasa — hammasi.
+     *
+     * @return string[]
+     */
+    public function ynqFormMembers(string $subjectId, string $semesterCode, string $groupHemisId, ?string $form): array
+    {
+        $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+        $form = \App\Services\YnqForm::normalize($form);
+        if ($form === \App\Services\YnqForm::MAIN || count($members) < 2) {
+            return $members;
+        }
+        $byMember = $this->ynqFormsByMember($subjectId, $semesterCode, $groupHemisId);
+        $with = array_values(array_filter($members, fn ($g) => in_array($form, $byMember[$g] ?? [], true)));
+
+        return $with ?: $members;
+    }
+
+    /**
+     * Har kichik guruh bo'yicha talabasi bor shakllar (YnqForm kodlari). Hisob og'ir — 10 daqiqaga keshlanadi.
+     *
+     * @return array<string, string[]>
+     */
+    private function ynqFormsByMember(string $subjectId, string $semesterCode, string $groupHemisId): array
+    {
         $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
 
-        return \Illuminate\Support\Facades\Cache::remember('ynq_forms:' . $subjectId . ':' . $semesterCode . ':' . $members[0], 600, function () use ($subjectId, $semesterCode, $members) {
-            $forms = [\App\Services\YnqForm::MAIN];
+        return \Illuminate\Support\Facades\Cache::remember('ynq_forms_by_member:' . $subjectId . ':' . $semesterCode . ':' . $members[0], 600, function () use ($subjectId, $semesterCode, $members) {
+            $byMember = [];
             foreach ($members as $g) {
                 $part = \App\Models\MarkingSystemScore::withSubject($g, $subjectId, $semesterCode,
                     fn () => $this->ynQaydnoma($subjectId, $semesterCode, $g, 30, 10, 0, 0, 60, 1, true));
+                $byMember[$g] = [];
                 if (is_string($part)) {
                     continue;
                 }
                 foreach ($part['forms'] as $sheetForm => $f) {
                     $code = \App\Services\YnqForm::fromSheetForm($sheetForm);
                     if ($code && ($code === \App\Services\YnqForm::MAIN || $f['students']->isNotEmpty())) {
-                        $forms[] = $code;
+                        $byMember[$g][] = $code;
                     }
                 }
             }
 
-            return array_values(array_intersect(\App\Services\YnqForm::codes(), $forms));
+            return $byMember;
         });
     }
 

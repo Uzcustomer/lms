@@ -272,7 +272,11 @@ class YnQaydnomaListController extends Controller
                 }
                 $forms = array_values(array_diff(array_intersect(YnqForm::codes(), $forms), [YnqForm::MAIN]));
 
-                return array_merge([$main], array_map(fn ($form) => $flags($this->makeRow($this->withForm($r, $form), $confirmations, $rejections)), $forms));
+                $extra = array_map(fn ($form) => $this->makeRow($this->withForm($r, $form), $confirmations, $rejections), $forms);
+                $mineHere = $mine[$r->subject_id . '|' . $r->semester_code] ?? [(string) $r->group_hemis_id];
+                $extra = array_filter($extra, fn ($row) => array_intersect($row->members, $mineHere) !== []);
+
+                return array_merge([$main], array_map($flags, array_values($extra)));
             })
             // "Joriy semestr" — dars jadvalining joriy o'quv yili bilan cheklangan (yuqorida); semesters.current
             // ga qaralmaydi: HEMIS da ba'zi o'quv rejalarda belgilanmagan — o'qituvchi fanlari yashirinib qolardi
@@ -301,11 +305,32 @@ class YnQaydnomaListController extends Controller
         return ['weight_jn' => $jn, 'weight_mt' => $mt, 'weight_on' => $on, 'weight_oski' => $oski, 'weight_test' => $test];
     }
 
-    /** Qatorning shakl bo'yicha nusxasi */
+    /**
+     * Qatorning shakl bo'yicha nusxasi: qo'shimcha / 12a / 12b — faqat shu shaklda talabasi bor kichik
+     * guruhlar (ularning o'qituvchilari tasdiqlaydi; boshqalari "kutilmoqda" bo'lib turmaydi)
+     */
     private function withForm(object $r, string $form): object
     {
         $copy = clone $r;
         $copy->form = $form;
+        if ($form !== YnqForm::MAIN && count($r->members ?? []) > 1) {
+            try {
+                $keep = app(JournalController::class)->ynqFormMembers((string) $r->subject_id, (string) $r->semester_code, (string) $r->group_hemis_id, $form);
+            } catch (\Throwable $e) {
+                report($e);
+                $keep = $r->members;
+            }
+            $names = array_combine($r->members, $r->member_names ?: $r->members);
+            $copy->members = array_values(array_intersect($r->members, $keep));
+            $copy->member_names = array_map(fn ($g) => $names[$g] ?? $g, $copy->members);
+            // Bitta kichik guruh qoldi — qator o'sha guruh nomi va jurnali bilan
+            if (count($copy->members) === 1) {
+                $copy->group_name = $copy->member_names[0];
+                $copy->member_names = [];
+                $copy->group_hemis_id = $copy->members[0];
+                $copy->group_pk = DB::table('groups')->where('group_hemis_id', $copy->members[0])->value('id') ?? $r->group_pk;
+            }
+        }
 
         return $copy;
     }

@@ -22,6 +22,10 @@
 
                 <div id="results-area" style="display:none;">
                     <div class="vh-bar">
+                        {{-- Shakl (12-shakl, qo'shimcha, 12a, 12b) — har biri alohida qaydnoma --}}
+                        <label class="vh-form-filter" for="vh-form">Shakl
+                            <select id="vh-form" onchange="vhFormFilter(this.value)"></select>
+                        </label>
                         <div class="vh-chips" id="vh-chips"></div>
                     </div>
                     <div style="overflow-x:auto;">
@@ -63,7 +67,9 @@
     @include('admin.vedomost_tekshirish.partials.filters-js')
 
     <script>
-        var vhItems = [], vhCanDelete = false, vhStatus = '';
+        var vhItems = [], vhCanDelete = false, vhStatus = '', vhForm = '';
+        // Shakllar tartibi (YnqForm)
+        var VH_FORMS = ['12', '12q', '12a', '12aq', '12b', '12bq'];
         var VH_STATUS = {
             none:     ['Topshirilishi kerak', 'vh-badge--none'],
             partial:  ['Qisman topshirilgan', 'vh-badge--partial'],
@@ -88,7 +94,7 @@
                 url: '{{ route("admin.vedomost-tekshirish.holat") }}', type: 'GET', data: collectParams(), timeout: 90000,
                 success: function (res) {
                     $('#search-loading').hide(); $('#btn-search').prop('disabled', false);
-                    vhItems = (res && res.items) || []; vhCanDelete = !!(res && res.can_delete); vhStatus = '';
+                    vhItems = (res && res.items) || []; vhCanDelete = !!(res && res.can_delete); vhStatus = ''; vhForm = '';
                     if (!vhItems.length) { $('#no-results').show(); return; }
                     vhRender();
                     $('#results-area').show();
@@ -101,11 +107,22 @@
         }
 
         function vhFilter(status) { vhStatus = vhStatus === status ? '' : status; vhRender(); }
+        function vhFormFilter(form) { vhForm = form; vhStatus = ''; vhRender(); }
 
         function vhRender() {
+            // Shakl filtri — topilgan shakllar soni bilan; holat chiplari tanlangan shakl bo'yicha
+            var formCounts = {}, formLabels = {};
+            vhItems.forEach(function (r) { formCounts[r.form] = (formCounts[r.form] || 0) + 1; formLabels[r.form] = r.form_label; });
+            var opts = '<option value="">Barcha shakllar (' + vhItems.length + ')</option>';
+            VH_FORMS.forEach(function (f) {
+                if (formCounts[f]) opts += '<option value="' + f + '"' + (vhForm === f ? ' selected' : '') + '>' + esc(formLabels[f]) + ' (' + formCounts[f] + ')</option>';
+            });
+            $('#vh-form').html(opts);
+            var base = vhItems.filter(function (r) { return !vhForm || r.form === vhForm; });
+
             var counts = {};
-            vhItems.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
-            var chips = '<button type="button" class="vh-chip' + (vhStatus === '' ? ' is-active' : '') + '" onclick="vhFilter(\'\')">Jami <b>' + vhItems.length + '</b></button>';
+            base.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
+            var chips = '<button type="button" class="vh-chip' + (vhStatus === '' ? ' is-active' : '') + '" onclick="vhFilter(\'\')">Jami <b>' + base.length + '</b></button>';
             VH_ORDER.forEach(function (s) {
                 if (!counts[s]) return;
                 chips += '<button type="button" class="vh-chip ' + VH_STATUS[s][1] + (vhStatus === s ? ' is-active' : '') + '" onclick="vhFilter(\'' + s + '\')">'
@@ -114,7 +131,7 @@
             $('#vh-chips').html(chips);
 
             var html = '';
-            vhItems.filter(function (r) { return !vhStatus || r.status === vhStatus; }).forEach(function (r, i) {
+            base.filter(function (r) { return !vhStatus || r.status === vhStatus; }).forEach(function (r, i) {
                 html += '<tr>'
                     + '<td class="td-num">' + (i + 1) + '</td>'
                     + '<td><b class="vh-group">' + esc(r.group) + '</b>'
@@ -208,7 +225,10 @@
         .vh-back { font-size:12.5px; color:#2b5ea7; text-decoration:none; font-weight:600; }
         .vh-back:hover { text-decoration:underline; }
         .vh-sub { margin:4px 0 0; font-size:13px; color:#64748b; max-width:90ch; }
-        .vh-bar { padding:10px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+        .vh-bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; padding:10px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+        .vh-form-filter { display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:#475569; }
+        .vh-form-filter select { height:32px; padding:0 28px 0 10px; border:1px solid #cbd5e1; border-radius:8px; background-color:#fff; font-size:13px; color:#0f172a; }
+        .vh-form-filter select:focus-visible { outline:2px solid #2563eb; outline-offset:1px; }
         .vh-chips { display:flex; flex-wrap:wrap; gap:8px; }
         .vh-chip { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 12px; border-radius:999px; border:1px solid #cbd5e1; background:#fff; color:#334155; font-size:12.5px; font-weight:600; cursor:pointer; }
         .vh-chip b { font-variant-numeric:tabular-nums; }

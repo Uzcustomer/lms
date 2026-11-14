@@ -119,8 +119,8 @@
                     <h1 class="yq-title">{{ $isTeacher ? 'Vedomostlarim' : 'Vedomostlar' }}</h1>
                     <p class="yq-sub">
                         @if($isTeacher)
-                            Siz amaliy mashg'ulot o'tadigan guruh va fanlar. YN yuborilgach jurnalda «YN qaydnoma yaratish» orqali qaydnomani tekshirib
-                            tasdiqlaysiz; kafedra mudiri yoki dekan rad etsa — sababini ko'rib, qayta tasdiqlab yuborasiz.
+                            Siz amaliy mashg'ulot o'tadigan barcha guruh va fanlar. Fan tugagach (imtihonlar o'tgach, imtihonsiz fanda — oxirgi dars o'tgach)
+                            jurnalda «YN qaydnoma yaratish» orqali qaydnomani tekshirib tasdiqlaysiz; kafedra mudiri yoki dekan rad etsa — sababini ko'rib, qayta tasdiqlab yuborasiz.
                         @else
                             YN imtihonlari (OSKI / test) tugagan fanlar{{ $isDean ? ' — fakultetingiz guruhlari' : ($isHead ? ' — kafedrangiz fanlari' : '') }}:
                             amaliy o'qituvchi YN qaydnomani topshirganmi, kafedra mudiri va dekan tasdiqlaganmi.
@@ -154,12 +154,12 @@
                 </a>
             </div>
 
-            {{-- O'qituvchi: imtihoni tugagan, YN yuborilgan, hali tasdiqlamagan vedomostlar (qo'shimcha / 12a / 12b ham) --}}
+            {{-- O'qituvchi: fani tugagan, hali topshirmagan vedomostlar (qo'shimcha / 12a / 12b ham) --}}
             @if($isTeacher && ($needsAction ?? collect())->isNotEmpty())
                 <section class="yq-todo" aria-labelledby="yq-todo-title">
                     <div class="yq-todo-head">
-                        <b id="yq-todo-title">Tasdiqlashingiz kerak · {{ $needsAction->count() }}</b>
-                        <span>Jurnalni oching, «YN qaydnoma yaratish» bilan qaydnomani tekshirib tasdiqlang.</span>
+                        <b id="yq-todo-title">Vedomost yaratishingiz kerak · {{ $needsAction->count() }}</b>
+                        <span>Fan tugagan: jurnalda «YN qaydnoma yaratish» bilan qaydnomani tekshirib tasdiqlang (YN yuborilmagan bo'lsa — avval yuboring).</span>
                     </div>
                     <ul class="yq-todo-list">
                         @foreach($needsAction as $row)
@@ -170,13 +170,14 @@
                                     <span class="yq-small">
                                         {{ collect([$row->oski_date ? 'OSKI ' . \Carbon\Carbon::parse($row->oski_date)->format('d.m.Y') : null,
                                             $row->test_date ? 'Test ' . \Carbon\Carbon::parse($row->test_date)->format('d.m.Y') : null])->filter()->implode(' · ') }}
+                                        @if(!$row->yn_submitted) · YN hali yuborilmagan @endif
                                         @if($row->status === 'rejected' && $row->rejection) · rad etilgan: «{{ $row->rejection->reason }}»@endif
                                     </span>
                                 </div>
                                 <span class="yq-badge yq-badge--{{ $row->status }}">{{ $statusLabels[$row->status] }}</span>
                                 @if($row->group_pk)
                                     <a class="yq-btn yq-btn--sm yq-btn--primary"
-                                       href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">Jurnalni ochish</a>
+                                       href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $row->yn_submitted ? 'YN qaydnoma yaratish' : 'Jurnalni ochish' }}</a>
                                 @endif
                             </li>
                         @endforeach
@@ -270,12 +271,16 @@
                                                         <a class="yq-btn yq-btn--sm yq-btn--warn" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">Qayta ko'rib chiqish</a>
                                                     @elseif($row->teachers->isNotEmpty() && $row->params)
                                                         <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">Ko'rish</a>
+                                                    @elseif(!$row->exams_finished)
+                                                        {{-- Fan tugamaguncha qaydnoma yaratilmaydi --}}
+                                                        <span class="yq-muted" style="font-size:12px;">Fan tugamagan{{ $row->finish_reason ? ': ' . $row->finish_reason : '' }}</span>
                                                     @elseif(!$row->yn_submitted)
-                                                        <span class="yq-muted" style="font-size:12px;">YN hali yuborilmagan</span>
+                                                        <span class="yq-muted" style="font-size:12px;">Avval jurnalda YN ga yuboring</span>
                                                     @endif
                                                     @if($row->group_pk)
-                                                        <a class="yq-btn yq-btn--sm {{ $row->status === 'none' && $row->yn_submitted ? 'yq-btn--primary' : '' }}"
-                                                           href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">Jurnal</a>
+                                                        @php $readyToCreate = $row->needs_action && $row->yn_submitted && $row->status !== 'rejected'; @endphp
+                                                        <a class="yq-btn yq-btn--sm {{ $readyToCreate ? 'yq-btn--primary' : '' }}"
+                                                           href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $readyToCreate ? 'YN qaydnoma yaratish' : 'Jurnal' }}</a>
                                                     @endif
                                                 </div>
                                             @elseif($row->teachers->isNotEmpty() && $row->params)

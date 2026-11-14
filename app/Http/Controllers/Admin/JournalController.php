@@ -1894,6 +1894,8 @@ class JournalController extends Controller
         $isAmaliyTeacher = $canSubmitYn && $this->isAmaliyTeacherFor((string) $subjectId, (string) $group->group_hemis_id);
         // Qaydnoma shakli — "Vedomostlarim" dagi qo'shimcha / 12a / 12b qatoridan (?ynq_form=), sukut bo'yicha 12
         $ynqForm = \App\Services\YnqForm::normalize($request->query('ynq_form'));
+        // O'qituvchi YN qaydnomani faqat fan tugagach yaratadi
+        $ynqReady = $isAmaliyTeacher ? \App\Services\YnqReadiness::for((string) $group->group_hemis_id, (string) $subjectId, (string) $semesterCode) : null;
         // O'zi tasdiqlagan qaydnoma qayta yaratilmaydi — dekan rad etsa (tasdiq o'chadi) yana ochiladi
         $myYnConfirmation = null;
         if ($isAmaliyTeacher && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations') && ($me = $this->currentTeacher())) {
@@ -2619,6 +2621,7 @@ class JournalController extends Controller
             'isAmaliyTeacher',
             'myYnConfirmation',
             'ynqForm',
+            'ynqReady',
             'allLessonsCompleted',
             'remainingLessonsCount',
             'lastLessonDate',
@@ -10088,6 +10091,9 @@ class JournalController extends Controller
                 ->exists();
             abort_unless(is_active_oqituvchi() && $ynSubmitted && $this->isAmaliyTeacherFor($subjectId, $groupHemisId), 403,
                 "YN qaydnomani shu fanning amaliy o'qituvchisi YN yuborilgandan keyin ko'ra oladi.");
+            // Faqat fan tugagach (imtihonlar o'tgach; imtihonsiz fanda — oxirgi dars o'tgach)
+            $ready = \App\Services\YnqReadiness::for($groupHemisId, $subjectId, $semesterCode);
+            abort_unless($ready['finished'], 403, "YN qaydnoma fan tugagach yaratiladi: {$ready['reason']}.");
         }
 
         $weightJn = (int) ($request->weight_jn ?? 30);
@@ -10215,6 +10221,8 @@ class JournalController extends Controller
                 ->where('group_hemis_id', $g)->exists();
             abort_unless($teacher && is_active_oqituvchi() && $ynSubmitted($groupHemisId) && $this->isAmaliyTeacherFor($subjectId, $groupHemisId), 403,
                 "YN qaydnomani shu fanning amaliy o'qituvchisi YN yuborilgandan keyin tasdiqlaydi.");
+            $ready = \App\Services\YnqReadiness::for($groupHemisId, $subjectId, $semesterCode);
+            abort_unless($ready['finished'], 403, "YN qaydnoma fan tugagach tasdiqlanadi: {$ready['reason']}.");
             $role = $Confirmation::ROLE_TEACHER;
             $weights = [
                 'jn' => (int) ($data['weight_jn'] ?? 30), 'mt' => (int) ($data['weight_mt'] ?? 10), 'on' => (int) ($data['weight_on'] ?? 0),

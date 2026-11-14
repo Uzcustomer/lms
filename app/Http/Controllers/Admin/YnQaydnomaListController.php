@@ -8,6 +8,7 @@ use App\Models\YnQaydnomaConfirmation;
 use App\Models\YnQaydnomaRejection;
 use App\Services\YnqFamily;
 use App\Services\YnqForm;
+use App\Services\YnqReadiness;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -195,21 +196,23 @@ class YnQaydnomaListController extends Controller
         $submitted = Schema::hasTable('yn_submissions')
             ? DB::table('yn_submissions')->whereIn('group_hemis_id', $groups)->get(['group_hemis_id', 'subject_id', 'semester_code'])->keyBy($key)
             : collect();
-        $today = Carbon::today()->toDateString();
         // Holat — kichik guruhlar oilasining barcha tasdiqlari bo'yicha (boshqa o'qituvchilarniki ham)
         $entries = $this->withFamilies($this->entries($refs));
         [$confirmations, $rejections] = $this->statusData($entries->flatMap(fn ($r) => $r->members)->unique()->values()->all());
 
         $journal = app(JournalController::class);
+        // Fan tugaganmi: imtihonlar (OSKI / test) o'tgan, imtihonsiz fanda — oxirgi dars o'tgan
+        $ready = YnqReadiness::forMany($entries->map(fn ($r) => [$r->group_hemis_id, $r->subject_id, $r->semester_code]));
 
         return $entries
-            ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $today, $key, $journal, $teacher) {
-                $flags = function ($row) use ($r, $submitted, $today, $key, $teacher) {
+            ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $ready, $key, $journal, $teacher) {
+                $flags = function ($row) use ($r, $submitted, $ready, $key, $teacher) {
                     $row->yn_submitted = $submitted->has($key($r));
-                    $row->exams_finished = self::examsFinished($r, $today);
+                    $row->exams_finished = $ready[$key($r)]['finished'] ?? false;
+                    $row->finish_reason = $ready[$key($r)]['reason'] ?? null;
                     $row->current = $r->current;
-                    // Tasdiqlashingiz kerak: imtihon tugagan, YN yuborilgan, siz hali tasdiqlamagansiz
-                    $row->needs_action = $row->exams_finished && $row->yn_submitted
+                    // Tasdiqlashingiz kerak: fan tugagan, siz hali topshirmagansiz (YN yuborilmagan bo'lsa — avval yuborasiz)
+                    $row->needs_action = $row->exams_finished
                         && in_array($row->status, [self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_REJECTED], true)
                         && !$row->teachers->contains('teacher_id', $teacher->id);
 
@@ -388,6 +391,7 @@ class YnQaydnomaListController extends Controller
             'pending_teachers' => collect(),
             'yn_submitted' => null,
             'exams_finished' => null,
+            'finish_reason' => null,
             'needs_action' => false,
             'status' => $status,
             // Qaydnoma sahifasi — topshirilgan yoki rad etilgan (qayta ko'rib chiqish) vaznlari bilan

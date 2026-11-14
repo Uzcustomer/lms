@@ -125,14 +125,21 @@ describe('teacher confirmation', function () {
         Schema::create('model_has_roles', fn ($t) => [$t->unsignedBigInteger('role_id'), $t->string('model_type'), $t->unsignedBigInteger('model_id')]);
         Schema::create('activity_logs', fn ($t) => [$t->id(), $t->timestamps()]);
         Schema::create('schedules', fn ($t) => [$t->id(), $t->unsignedBigInteger('employee_id'), $t->unsignedBigInteger('subject_id'),
-            $t->unsignedBigInteger('group_id'), $t->string('training_type_code'), $t->softDeletes()]);
+            $t->unsignedBigInteger('group_id'), $t->string('training_type_code'), $t->string('semester_code')->nullable(), $t->dateTime('lesson_date')->nullable(), $t->softDeletes()]);
+        // Fan tugagan: YN imtihonlari o'tgan (o'qituvchi qaydnomani shundan keyin yaratadi)
+        Schema::create('exam_schedules', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('subject_id'), $t->string('semester_code'),
+            $t->string('student_hemis_id')->nullable(), $t->date('oski_date')->nullable(), $t->date('test_date')->nullable(),
+            $t->boolean('oski_na')->default(false), $t->boolean('test_na')->default(false)]);
+        DB::table('exam_schedules')->insert(['group_hemis_id' => '77', 'subject_id' => '435', 'semester_code' => '19',
+            'oski_date' => now()->subDays(5)->toDateString(), 'test_date' => now()->subDays(3)->toDateString()]);
         Schema::create('curriculum_subject_teachers', fn ($t) => [$t->id(), $t->unsignedBigInteger('employee_id'), $t->unsignedBigInteger('subject_id'),
             $t->unsignedBigInteger('group_id'), $t->string('training_type_code')->nullable(), $t->timestamps()]);
         Schema::create('yn_submissions', fn ($t) => [$t->id(), $t->string('subject_id'), $t->string('semester_code'), $t->string('group_hemis_id'), $t->timestamps()]);
         Schema::create('groups', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('name'), $t->string('curriculum_hemis_id')->nullable(),
             $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->string('department_name')->nullable(), $t->string('specialty_name')->nullable()]);
         Schema::create('curriculum_subjects', fn ($t) => [$t->id(), $t->string('curricula_hemis_id')->nullable(), $t->string('subject_id'),
-            $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('department_id')->nullable()]);
+            $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('department_id')->nullable(),
+            $t->string('closing_form')->nullable()]);
         Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->string('document_type'), $t->string('subject_name')->nullable(),
             $t->string('group_names')->nullable(), $t->string('semester_name')->nullable(), $t->string('department_name')->nullable(),
             $t->string('generated_by')->nullable(), $t->timestamp('generated_at')->nullable(), $t->string('document_path')->nullable(), $t->json('meta')->nullable(), $t->timestamps()]);
@@ -482,7 +489,9 @@ describe('teacher confirmation', function () {
         expect(\App\Services\YnqFamily::members('435', '19', '77'))->toBe(['78', '77'])
             ->and(\App\Services\YnqFamily::label('d1/d22-01a (rus)', 2))->toBe('d1/d22-01 (rus)');
 
-        Schema::table('schedules', fn ($t) => [$t->string('semester_code')->nullable(), $t->string('subject_name')->nullable(), $t->boolean('education_year_current')->default(true)]);
+        Schema::table('schedules', fn ($t) => [$t->string('subject_name')->nullable(), $t->boolean('education_year_current')->default(true)]);
+        DB::table('exam_schedules')->insert(['group_hemis_id' => '78', 'subject_id' => '435', 'semester_code' => '19',
+            'oski_date' => now()->subDays(5)->toDateString(), 'test_date' => now()->subDays(3)->toDateString()]);
         DB::table('schedules')->update(['semester_code' => '19', 'subject_name' => 'Pediatriya']);
         expect(\App\Services\YnqPending::forTeacher(\App\Models\Teacher::find(5)))->toBe([]);          // hali hech kim tasdiqlamagan
 

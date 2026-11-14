@@ -35,7 +35,8 @@ beforeEach(function () {
         $t->unsignedBigInteger('student_hemis_id')->nullable(), $t->date('oski_date')->nullable(), $t->date('test_date')->nullable(),
         $t->boolean('oski_na')->default(false), $t->boolean('test_na')->default(false)]);
     Schema::create('schedules', fn ($t) => [$t->id(), $t->string('group_id'), $t->string('subject_id'), $t->string('semester_code')->nullable(), $t->string('subject_name')->nullable(),
-        $t->string('training_type_code'), $t->unsignedBigInteger('employee_id')->nullable(), $t->string('employee_name')->nullable(), $t->boolean('education_year_current')->default(true), $t->softDeletes()]);
+        $t->string('training_type_code'), $t->unsignedBigInteger('employee_id')->nullable(), $t->string('employee_name')->nullable(), $t->boolean('education_year_current')->default(true),
+        $t->dateTime('lesson_date')->nullable(), $t->softDeletes()]);
     Schema::create('document_verifications', fn ($t) => [$t->id(), $t->string('token'), $t->timestamps()]);
     (require base_path('database/migrations/2026_11_07_160000_create_yn_qaydnoma_confirmations_table.php'))->up();
     (require base_path('database/migrations/2026_11_09_120000_add_role_to_yn_qaydnoma_confirmations.php'))->up();

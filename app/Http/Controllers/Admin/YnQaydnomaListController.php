@@ -103,8 +103,6 @@ class YnQaydnomaListController extends Controller
 
         return view('admin.yn-qaydnomalar.index', $context + [
             'rows' => $paginator, 'counts' => $counts, 'filters' => ['status' => $status, 'current' => $current ? '1' : '0'],
-            // O'qituvchi: imtihoni tugagan, YN yuborilgan va hali tasdiqlamagan vedomostlari — sahifa tepasida
-            'needsAction' => $context['isTeacher'] ? $rows->where('needs_action', true)->values() : collect(),
         ]);
     }
 
@@ -249,6 +247,15 @@ class YnQaydnomaListController extends Controller
                     $row->needs_action = $row->exams_finished
                         && in_array($row->status, [self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_REJECTED], true)
                         && collect($row->my_groups)->contains(fn ($g) => !$g->confirmed);
+                    // "YN qaydnoma" — jurnalsiz, darhol tasdiqlash sahifasi: hali tasdiqlanmagan o'z kichik guruhi,
+                    // vaznlar — topshirilgan / rad etilgan qaydnomaniki, bo'lmasa jurnal oynasidagi standart
+                    $target = collect($row->my_groups)->first(fn ($g) => !$g->confirmed);
+                    $w = $row->params ?? self::defaultWeights($r);
+                    $row->create_params = $row->needs_action && $row->yn_submitted && $target ? [
+                        'subject_id' => (string) $r->subject_id, 'semester_code' => (string) $r->semester_code, 'group_hemis_id' => $target->hemis_id,
+                        'weight_jn' => $w['weight_jn'], 'weight_mt' => $w['weight_mt'], 'weight_on' => $w['weight_on'],
+                        'weight_oski' => $w['weight_oski'], 'weight_test' => $w['weight_test'], 'form' => $row->form,
+                    ] : null;
 
                     return $row;
                 };
@@ -269,8 +276,29 @@ class YnQaydnomaListController extends Controller
             })
             // "Joriy semestr" — dars jadvalining joriy o'quv yili bilan cheklangan (yuqorida); semesters.current
             // ga qaralmaydi: HEMIS da ba'zi o'quv rejalarda belgilanmagan — o'qituvchi fanlari yashirinib qolardi
-            ->sortBy(fn ($r) => [array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_DEAN]), $r->group, $r->subject, $r->form])
+            // Avval tasdiqlashingiz kerak bo'lganlar, keyin holat bo'yicha
+            ->sortBy(fn ($r) => [$r->needs_action ? 0 : 1, array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_DEAN]), $r->group, $r->subject, $r->form])
             ->values();
+    }
+
+    /**
+     * Qaydnoma vaznlari — jurnaldagi "YN qaydnoma yaratish" oynasining standarti bilan bir xil: sinov —
+     * 50/20/0/0/30; OSKI va test — 50/20/0/15/15; faqat OSKI — 50/20/0/30/0; faqat test — 50/20/0/0/30;
+     * imtihonsiz — 80/20/0/0/0 (OSKI / test "yo'q" deb belgilanmagan bo'lsa — bor).
+     */
+    private static function defaultWeights(object $r): array
+    {
+        $hasOski = !($r->oski_na ?? false);
+        $hasTest = !($r->test_na ?? false);
+        [$jn, $mt, $on, $oski, $test] = match (true) {
+            ($r->closing_form ?? null) === 'sinov' => [50, 20, 0, 0, 30],
+            $hasOski && $hasTest => [50, 20, 0, 15, 15],
+            $hasOski => [50, 20, 0, 30, 0],
+            $hasTest => [50, 20, 0, 0, 30],
+            default => [80, 20, 0, 0, 0],
+        };
+
+        return ['weight_jn' => $jn, 'weight_mt' => $mt, 'weight_on' => $on, 'weight_oski' => $oski, 'weight_test' => $test];
     }
 
     /** Qatorning shakl bo'yicha nusxasi */
@@ -428,6 +456,7 @@ class YnQaydnomaListController extends Controller
             'finish_reason' => null,
             'needs_action' => false,
             'my_groups' => [],
+            'create_params' => null,
             'status' => $status,
             // Qaydnoma sahifasi — topshirilgan yoki rad etilgan (qayta ko'rib chiqish) vaznlari bilan
             'params' => $w === null ? null : [

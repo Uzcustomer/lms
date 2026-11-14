@@ -70,16 +70,9 @@
         .yq-form--main { color: #334155 !important; background: #f1f5f9 !important; border-color: #e2e8f0 !important; }
         .yq-form { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700;
             color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; white-space: nowrap; vertical-align: 1px; }
-        /* O'qituvchi: tasdiqlashi kerak bo'lgan vedomostlar */
-        .yq-todo { margin-bottom: 16px; border-radius: 12px; background: var(--yq-amber-bg); border: 1px solid var(--yq-amber-line); overflow: hidden; }
-        .yq-todo-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--yq-amber-line); }
-        .yq-todo-head b { font-size: 15px; color: var(--yq-ink); }
-        .yq-todo-head span { font-size: 12.5px; color: var(--yq-amber); }
-        .yq-todo-list { list-style: none; margin: 0; padding: 0; }
-        .yq-todo-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px; background: #fff; }
-        .yq-todo-item + .yq-todo-item { border-top: 1px solid var(--yq-line); }
-        .yq-todo-main { flex: 1 1 280px; min-width: 0; }
-        .yq-todo-main .yq-group { margin-right: 6px; }
+        /* O'qituvchi: fan tugagan, siz hali tasdiqlamagan qaydnoma — qator chap chetida sariq chiziq */
+        .yq-table tr.yq-row--todo > td { background: #fffdf5; }
+        .yq-table tr.yq-row--todo > td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
         .yq-dates { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12.5px; }
         .yq-dates b { display: inline-block; min-width: 40px; color: var(--yq-muted); font-weight: 600; font-size: 11px; }
         .yq-person { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; color: var(--yq-ink); }
@@ -128,7 +121,8 @@
                     <p class="yq-sub">
                         @if($isTeacher)
                             Siz amaliy mashg'ulot o'tadigan barcha guruh va fanlar. Fan tugagach (imtihonlar o'tgach, imtihonsiz fanda — oxirgi dars o'tgach)
-                            jurnalda «YN qaydnoma yaratish» orqali qaydnomani tekshirib tasdiqlaysiz; kafedra mudiri yoki dekan rad etsa — sababini ko'rib, qayta tasdiqlab yuborasiz.
+                            «YN qaydnoma» tugmasi bilan qaydnomani ochib, tekshirib tasdiqlaysiz; tasdiqlashingiz kerak bo'lganlar ro'yxat boshida, sariq chiziq bilan.
+                            Kafedra mudiri yoki dekan rad etsa — sababini ko'rib, qayta tasdiqlab yuborasiz.
                         @else
                             YN imtihonlari (OSKI / test) tugagan fanlar{{ $isDean ? ' — fakultetingiz guruhlari' : ($isHead ? ' — kafedrangiz fanlari' : '') }}:
                             amaliy o'qituvchi YN qaydnomani topshirganmi, kafedra mudiri va dekan tasdiqlaganmi.
@@ -162,37 +156,6 @@
                 </a>
             </div>
 
-            {{-- O'qituvchi: fani tugagan, hali topshirmagan vedomostlar (qo'shimcha / 12a / 12b ham) --}}
-            @if($isTeacher && ($needsAction ?? collect())->isNotEmpty())
-                <section class="yq-todo" aria-labelledby="yq-todo-title">
-                    <div class="yq-todo-head">
-                        <b id="yq-todo-title">Vedomost yaratishingiz kerak · {{ $needsAction->count() }}</b>
-                        <span>Fan tugagan: jurnalda «YN qaydnoma yaratish» bilan qaydnomani tekshirib tasdiqlang (YN yuborilmagan bo'lsa — avval yuboring).</span>
-                    </div>
-                    <ul class="yq-todo-list">
-                        @foreach($needsAction as $row)
-                            <li class="yq-todo-item">
-                                <div class="yq-todo-main">
-                                    <span class="yq-group">{{ $row->group }}</span>{{ $row->subject }}
-                                    @include('admin.yn-qaydnomalar.partials.my-groups')
-                                    <span class="yq-form {{ $row->form === '12' ? 'yq-form--main' : '' }}">{{ $row->form_label }}</span>
-                                    <span class="yq-small">
-                                        {{ collect([$row->oski_date ? 'OSKI ' . \Carbon\Carbon::parse($row->oski_date)->format('d.m.Y') : null,
-                                            $row->test_date ? 'Test ' . \Carbon\Carbon::parse($row->test_date)->format('d.m.Y') : null])->filter()->implode(' · ') }}
-                                        @if(!$row->yn_submitted) · YN hali yuborilmagan @endif
-                                        @if($row->status === 'rejected' && $row->rejection) · rad etilgan: «{{ $row->rejection->reason }}»@endif
-                                    </span>
-                                </div>
-                                <span class="yq-badge yq-badge--{{ $row->status }}">{{ $statusLabels[$row->status] }}</span>
-                                @if($row->group_pk)
-                                    <a class="yq-btn yq-btn--sm yq-btn--primary"
-                                       href="{{ route('admin.journal.show', [collect($row->my_groups)->first(fn ($g) => !$g->confirmed && $g->pk)?->pk ?? $row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $row->yn_submitted ? 'YN qaydnoma yaratish' : 'Jurnalni ochish' }}</a>
-                                @endif
-                            </li>
-                        @endforeach
-                    </ul>
-                </section>
-            @endif
 
 
             <div class="yq-card">
@@ -220,7 +183,7 @@
                             </thead>
                             <tbody>
                                 @foreach($rows as $i => $row)
-                                    <tr>
+                                    <tr class="{{ $isTeacher && $row->needs_action ? 'yq-row--todo' : '' }}">
                                         <td class="yq-num">{{ $rows->firstItem() + $i }}</td>
                                         <td>
                                             <span class="yq-group">{{ $row->group }}</span>
@@ -280,6 +243,9 @@
                                                 <div class="yq-actions">
                                                     @if($row->status === 'rejected' && $row->params)
                                                         <a class="yq-btn yq-btn--sm yq-btn--warn" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">Qayta ko'rib chiqish</a>
+                                                    @elseif($row->create_params)
+                                                        {{-- Fan tugagan — qaydnoma darhol tasdiqlash sahifasida (jurnalsiz) --}}
+                                                        <a class="yq-btn yq-btn--sm yq-btn--primary" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->create_params) }}">YN qaydnoma</a>
                                                     @elseif($row->teachers->isNotEmpty() && $row->params)
                                                         <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">Ko'rish</a>
                                                     @elseif(!$row->exams_finished)
@@ -289,9 +255,8 @@
                                                         <span class="yq-muted" style="font-size:12px;">Avval jurnalda YN ga yuboring</span>
                                                     @endif
                                                     @if($row->group_pk)
-                                                        @php $readyToCreate = $row->needs_action && $row->yn_submitted && $row->status !== 'rejected'; @endphp
-                                                        <a class="yq-btn yq-btn--sm {{ $readyToCreate ? 'yq-btn--primary' : '' }}"
-                                                           href="{{ route('admin.journal.show', [collect($row->my_groups)->first(fn ($g) => !$g->confirmed && $g->pk)?->pk ?? $row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $readyToCreate ? 'YN qaydnoma yaratish' : 'Jurnal' }}</a>
+                                                        <a class="yq-btn yq-btn--sm"
+                                                           href="{{ route('admin.journal.show', [collect($row->my_groups)->first(fn ($g) => !$g->confirmed && $g->pk)?->pk ?? $row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">Jurnal</a>
                                                     @endif
                                                 </div>
                                             @elseif($row->teachers->isNotEmpty() && $row->params)

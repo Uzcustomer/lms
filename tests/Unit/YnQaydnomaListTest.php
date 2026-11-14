@@ -332,7 +332,12 @@ it('lists the qo\'shimcha / 12a forms as separate vedomosts and puts the ones th
     expect($rows->map(fn ($r) => $r->group . ' ' . $r->form . ' ' . $r->status)->sort()->values()->all())
         ->toBe(['d1/d22-01a 12 dean', 'd1/d22-01a 12a teacher', 'd1/d22-01a 12q none'])
         // Tepada — faqat hali tasdiqlanmagan 12-qo'shimcha
-        ->and($data['needsAction']->map(fn ($r) => $r->form . ' ' . $r->form_label)->all())->toBe(["12q 12-shakl qo'shimchasi"])
+        ->and($rows->where('needs_action', true)->map(fn ($r) => $r->form . ' ' . $r->form_label)->values()->all())->toBe(["12q 12-shakl qo'shimchasi"])
+        ->and($rows->first()->form)->toBe('12q')                                                    // ro'yxat boshida
+        // "YN qaydnoma" — jurnalsiz, darhol tasdiqlash sahifasi (jurnal oynasidagi standart vaznlar bilan)
+        ->and($rows->firstWhere('form', '12q')->create_params)->toBe(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '77',
+            'weight_jn' => 50, 'weight_mt' => 20, 'weight_on' => 0, 'weight_oski' => 15, 'weight_test' => 15, 'form' => '12q'])
+        ->and($rows->firstWhere('form', '12a')->create_params)->toBeNull()
         ->and($rows->firstWhere('form', '12a')->params)->toMatchArray(['form' => '12a'])
         // O'qituvchining o'z kichik guruhi va shu shaklda tasdiqlagani
         ->and(collect($rows->firstWhere('form', '12a')->my_groups)->map(fn ($g) => $g->name . ($g->confirmed ? ' ✓' : ''))->all())->toBe(['d1/d22-01a ✓'])

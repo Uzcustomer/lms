@@ -23,6 +23,9 @@ beforeEach(function () {
         $t->boolean('oski_na')->default(false), $t->boolean('test_na')->default(false),
         $t->date('oski_resit_date')->nullable(), $t->date('test_resit_date')->nullable(), $t->date('oski_resit2_date')->nullable(), $t->date('test_resit2_date')->nullable()]);
     Schema::create('schedules', fn ($t) => [$t->id(), $t->string('group_id'), $t->string('subject_id'), $t->string('semester_code'), $t->dateTime('lesson_date')->nullable(), $t->softDeletes()]);
+    Schema::create('students', fn ($t) => [$t->id(), $t->string('hemis_id'), $t->string('group_id')]);
+    Schema::create('student_grades', fn ($t) => [$t->id(), $t->string('student_hemis_id'), $t->string('subject_id'), $t->string('semester_code'),
+        $t->integer('training_type_code'), $t->integer('attempt')->nullable(), $t->decimal('grade')->nullable(), $t->decimal('retake_grade')->nullable(), $t->softDeletes()]);
 
     DB::table('groups')->insert(['group_hemis_id' => '1', 'curriculum_hemis_id' => '5']);
     DB::table('curriculum_subjects')->insert([
@@ -53,13 +56,22 @@ it('treats a subject as finished only after its exams, or its last lesson when i
         ->and($r['1|14|19'])->toBe(['finished' => false, 'reason' => 'test sanasi belgilanmagan']);
 });
 
-it('opens the 12a / 12b vedomost only after that retake exam, not the main one', function () {
-    // 10-fan: asosiy imtihonlar o'tgan; 12a — faqat test qayta topshiriladi (20.11), 12b — sanasi yo'q
+it('opens the 12a / 12b vedomost only after that attempt is taken, not after the main exams', function () {
+    // 10-fan: asosiy imtihonlar o'tgan; 12a — test qayta topshirish 20.11 da, 12b — hali yo'q
     DB::table('exam_schedules')->where('subject_id', '10')->update(['test_resit_date' => '2026-11-20']);
     expect(YnqReadiness::for('1', '10', '19'))->toBe(['finished' => true, 'reason' => null])
-        ->and(YnqReadiness::for('1', '10', '19', '12a'))->toBe(['finished' => false, 'reason' => "12a test hali o'tmagan"])
-        ->and(YnqReadiness::for('1', '10', '19', '12b'))->toBe(['finished' => false, 'reason' => '12b imtihon sanasi belgilanmagan']);
+        ->and(YnqReadiness::for('1', '10', '19', '12a'))->toBe(['finished' => false, 'reason' => '2-urinish imtihoni 20.11.2026 da'])
+        ->and(YnqReadiness::for('1', '10', '19', '12b'))->toBe(['finished' => false, 'reason' => '3-urinish hali topshirilmagan']);
 
+    // Sanasi o'tgan — tayyor
     DB::table('exam_schedules')->where('subject_id', '10')->update(['test_resit_date' => '2026-11-13']);
     expect(YnqReadiness::for('1', '10', '19', '12aq'))->toBe(['finished' => true, 'reason' => null]);
+
+    // Sanasi kiritilmagan, lekin 2-urinish natijasi jurnalda bor — tayyor
+    DB::table('exam_schedules')->where('subject_id', '10')->update(['test_resit_date' => null]);
+    expect(YnqReadiness::for('1', '10', '19', '12a'))->toBe(['finished' => false, 'reason' => '2-urinish hali topshirilmagan']);
+    DB::table('students')->insert(['hemis_id' => 's1', 'group_id' => '1']);
+    DB::table('student_grades')->insert(['student_hemis_id' => 's1', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 2, 'grade' => 74]);
+    expect(YnqReadiness::for('1', '10', '19', '12a'))->toBe(['finished' => true, 'reason' => null])
+        ->and(YnqReadiness::for('1', '10', '19', '12b'))->toBe(['finished' => false, 'reason' => '3-urinish hali topshirilmagan']);
 });

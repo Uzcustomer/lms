@@ -250,7 +250,8 @@
                                                         <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener" href="{{ route('admin.journal.view-yn-qaydnoma', $row->params) }}">Ko'rish</a>
                                                     @elseif(!$row->exams_finished)
                                                         {{-- Fan tugamaguncha qaydnoma yaratilmaydi --}}
-                                                        <span class="yq-muted" style="font-size:12px;">Fan tugamagan{{ $row->finish_reason ? ': ' . $row->finish_reason : '' }}</span>
+                                                        {{-- 12a / 12b — sabab o'zi ("2-urinish hali topshirilmagan"), asosiy shaklda — "Fan tugamagan: …" --}}
+                                                        <span class="yq-muted" style="font-size:12px;">{{ in_array($row->form, ['12a', '12aq', '12b', '12bq'], true) ? ucfirst((string) $row->finish_reason) : 'Fan tugamagan' . ($row->finish_reason ? ': ' . $row->finish_reason : '') }}</span>
                                                     @elseif(!$row->yn_submitted)
                                                         <span class="yq-muted" style="font-size:12px;">Avval jurnalda YN ga yuboring</span>
                                                     @endif

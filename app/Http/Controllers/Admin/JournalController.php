@@ -10094,7 +10094,7 @@ class JournalController extends Controller
                 "YN qaydnomani shu fanning amaliy o'qituvchisi YN yuborilgandan keyin ko'ra oladi.");
             // Faqat fan tugagach (imtihonlar o'tgach; imtihonsiz fanda — oxirgi dars o'tgach)
             $ready = \App\Services\YnqReadiness::for($groupHemisId, $subjectId, $semesterCode, $form);
-            abort_unless($ready['finished'], 403, "YN qaydnoma fan tugagach yaratiladi: {$ready['reason']}.");
+            abort_unless($ready['finished'], 403, "YN qaydnoma hali yaratilmaydi: {$ready['reason']}.");
         }
 
         $weightJn = (int) ($request->weight_jn ?? 30);
@@ -10223,7 +10223,7 @@ class JournalController extends Controller
             abort_unless($teacher && is_active_oqituvchi() && $ynSubmitted($groupHemisId) && $this->isAmaliyTeacherFor($subjectId, $groupHemisId), 403,
                 "YN qaydnomani shu fanning amaliy o'qituvchisi YN yuborilgandan keyin tasdiqlaydi.");
             $ready = \App\Services\YnqReadiness::for($groupHemisId, $subjectId, $semesterCode, $form);
-            abort_unless($ready['finished'], 403, "YN qaydnoma fan tugagach tasdiqlanadi: {$ready['reason']}.");
+            abort_unless($ready['finished'], 403, "YN qaydnoma hali tasdiqlanmaydi: {$ready['reason']}.");
             $role = $Confirmation::ROLE_TEACHER;
             $weights = [
                 'jn' => (int) ($data['weight_jn'] ?? 30), 'mt' => (int) ($data['weight_mt'] ?? 10), 'on' => (int) ($data['weight_on'] ?? 0),

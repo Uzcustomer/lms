@@ -3244,7 +3244,7 @@
                                 <span class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold"
                                       style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;cursor:not-allowed;"
                                       title="YN qaydnoma fan tugagach (imtihonlar o'tgach) yaratiladi">
-                                    YN qaydnoma — fan tugagach: {{ $ynqReady['reason'] }}
+                                    YN qaydnoma — {{ in_array($ynqForm ?? '12', ['12a', '12aq', '12b', '12bq'], true) ? $ynqReady['reason'] : 'fan tugagach: ' . $ynqReady['reason'] }}
                                 </span>
                             @elseif($ynqPrivileged || ($isAmaliyTeacher ?? false))
                                 <button type="button" id="btn-export-yn-qaydnoma"

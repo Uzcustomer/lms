@@ -4,7 +4,7 @@
         <div class="mx-auto max-w-[1600px] space-y-4">
             <div class="rounded-2xl px-6 py-5 text-white shadow-lg" style="background: linear-gradient(135deg, #102a56 0%, #1e5da8 68%, #3181c8 100%) !important;">
                 <h1 class="text-2xl font-bold">Fanlar farqi</h1>
-                <p class="mt-1 text-sm text-white/80">Ko'chib kelgan talabaning transkripti bizning o'quv reja (akkreditatsiyadagi fanlar) bilan solishtiriladi: baho transkriptdan, fan va kredit bizning rejadan. GPA ≥ 2.4 bo'lsa shu kursga qabul.</p>
+                <p class="mt-1 text-sm text-white/80">Ko'chib kelgan talabaning transkriptini o'quv rejamiz bilan solishtirish: qaysi kursga o'tadi va qaysi fanlarni topshiradi.</p>
             </div>
 
             @if(session('success'))
@@ -22,67 +22,60 @@
             <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
                 {{-- Yuklash --}}
                 <form method="POST" action="{{ route('admin.subject-differences.store') }}" enctype="multipart/form-data"
-                      x-data="{ mode: '{{ old('scale_mode', $defaults['mode']) }}', busy: false }" @submit="busy = true"
+                      x-data="{ mode: '{{ old('scale_mode', $defaults['mode']) }}', busy: false, scaleOpen: {{ old('scale_mode') && old('scale_mode') !== 'ball' ? 'true' : 'false' }}, extraOpen: false }" @submit="busy = true"
                       class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
                     @csrf
-                    <h3 class="text-sm font-bold text-slate-800">Yangi tekshiruv</h3>
-                    <p class="mt-0.5 text-xs text-slate-500">Faqat transkript yuklanadi (pasport, ariza va boshqa hujjatlarsiz).</p>
+                    <h3 class="text-base font-bold text-slate-900">Yangi tekshiruv</h3>
+                    <p class="mt-0.5 text-sm text-slate-600">Talabaning transkriptini yuklang — fanlar va baholar avtomatik o'qiladi.</p>
 
                     @unless($aiConfigured)
-                        <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                            Gemini API kaliti sozlanmagan — skaner (rasm) transkriptlar o'qilmaydi, faqat matnli PDF'lar qoida bilan o'qiladi.
-                            Kalit: <b>Vedomost tekshirish → AI sozlamalari</b>.
+                        <div class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                            AI kaliti sozlanmagan: skaner qilingan transkriptlar o'qilmaydi. Kalit — <b>Vedomost tekshirish → AI sozlamalari</b>.
                         </div>
                     @endunless
 
-                    <label class="mt-4 block text-xs font-semibold text-slate-600">Transkript (PDF) <span class="text-rose-500">*</span></label>
-                    <input type="file" name="transcript" accept="application/pdf" required
-                           class="mt-1 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-blue-700">
+                    <label class="mt-4 block text-sm font-semibold text-slate-800" for="transcript">Transkript (PDF)</label>
+                    <input id="transcript" type="file" name="transcript" accept="application/pdf" required
+                           class="mt-1 block w-full rounded-lg border border-dashed border-slate-300 p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white">
+                    <p class="mt-1 text-xs text-slate-600">Faqat transkript sahifalari — pasport va arizasiz.</p>
 
-                    <label class="mt-3 block text-xs font-semibold text-slate-600">Qo'shimcha fayl (ixtiyoriy)</label>
-                    <input type="file" name="extra[]" accept="application/pdf" multiple
-                           class="mt-1 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700">
-                    <p class="mt-1 text-[11px] text-slate-500">Masalan, transkriptga kirmagan oxirgi semestr baholari uchun "Reyting daftarchasidan ko'chirma".</p>
+                    <button type="button" x-show="!extraOpen" @click="extraOpen = true" class="mt-2 text-sm font-semibold text-blue-700 hover:underline">+ Qo'shimcha ko'chirma qo'shish</button>
+                    <div x-show="extraOpen" x-cloak class="mt-3">
+                        <label class="block text-sm font-semibold text-slate-800" for="extra">Qo'shimcha ko'chirma (PDF)</label>
+                        <input id="extra" type="file" name="extra[]" accept="application/pdf" multiple
+                               class="mt-1 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-slate-800">
+                        <p class="mt-1 text-xs text-slate-600">Transkriptga kirmagan oxirgi semestr baholari bo'lsa ("Reyting daftarchasidan ko'chirma").</p>
+                    </div>
 
-                    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600">Talaba F.I.Sh.</label>
-                            <input type="text" name="student_name" value="{{ old('student_name') }}" placeholder="Bo'sh qolsa transkriptdan olinadi"
-                                   class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                    <div class="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-slate-700">Baho:
+                                <b x-show="mode === 'ball'">5 = 90+, 4 = 70+, 3 = 60+ ball</b>
+                                <b x-show="mode === 'grade'" x-cloak>transkriptda yozilgani</b>
+                            </span>
+                            <button type="button" @click="scaleOpen = !scaleOpen" class="text-sm font-semibold text-blue-700 hover:underline" x-text="scaleOpen ? 'Yopish' : 'O\'zgartirish'">O'zgartirish</button>
                         </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600">Avvalgi OTM</label>
-                            <input type="text" name="source_institution" value="{{ old('source_institution') }}" placeholder="Bo'sh qolsa transkriptdan olinadi"
-                                   class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                        <div x-show="scaleOpen" x-cloak class="mt-2 space-y-2 border-t border-slate-200 pt-2">
+                            <label class="flex items-center gap-2"><input type="radio" name="scale_mode" value="ball" x-model="mode"> Balldan hisoblansin</label>
+                            <div x-show="mode === 'ball'" class="grid grid-cols-3 gap-2 pl-6">
+                                @foreach(['five' => '5 baho ≥', 'four' => '4 baho ≥', 'three' => '3 baho ≥'] as $f => $lbl)
+                                    <label class="text-xs text-slate-600">{{ $lbl }}
+                                        <input type="number" step="0.01" min="0" max="100" name="scale_{{ $f }}" value="{{ old('scale_' . $f, $defaults[$f]) }}"
+                                               class="mt-0.5 w-full rounded-md border-slate-300 px-2 py-1 text-sm">
+                                    </label>
+                                @endforeach
+                            </div>
+                            <label class="flex items-center gap-2"><input type="radio" name="scale_mode" value="grade" x-model="mode"> Transkriptda yozilgan baho (5/4/3/2)</label>
+                            <p class="text-xs text-slate-600">Transkript pastidagi "Baholash tizimi"ga qarang.</p>
                         </div>
                     </div>
 
-                    <fieldset class="mt-4 rounded-xl border border-slate-200 p-3">
-                        <legend class="px-1 text-xs font-semibold text-slate-600">Baho shkalasi</legend>
-                        <label class="flex items-start gap-2 text-sm">
-                            <input type="radio" name="scale_mode" value="ball" x-model="mode" class="mt-0.5">
-                            <span>Balldan hisoblansin (100 ballik)</span>
-                        </label>
-                        <div x-show="mode === 'ball'" class="mt-2 grid grid-cols-3 gap-2 pl-6">
-                            @foreach(['five' => '5 baho ≥', 'four' => '4 baho ≥', 'three' => '3 baho ≥'] as $f => $lbl)
-                                <label class="text-[11px] text-slate-500">{{ $lbl }}
-                                    <input type="number" step="0.01" min="0" max="100" name="scale_{{ $f }}" value="{{ old('scale_' . $f, $defaults[$f]) }}"
-                                           class="mt-0.5 w-full rounded-lg border-slate-300 px-2 py-1 text-sm">
-                                </label>
-                            @endforeach
-                        </div>
-                        <label class="mt-2 flex items-start gap-2 text-sm">
-                            <input type="radio" name="scale_mode" value="grade" x-model="mode" class="mt-0.5">
-                            <span>Transkriptda yozilgan baho (5/4/3/2) olinsin</span>
-                        </label>
-                        <p class="mt-2 text-[11px] text-slate-500">Transkript pastidagi "Baholash tizimi"ga qarab belgilang. Ball va yozilgan baho zid kelsa, qatorda ogohlantirish chiqadi.</p>
-                    </fieldset>
-
                     <button type="submit" :disabled="busy"
-                            class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60">
-                        <svg x-show="busy" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                            class="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                        <svg x-show="busy" x-cloak class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
                         <span x-text="busy ? 'Transkript o\'qilmoqda… (1–2 daqiqa)' : 'Yuklash va o\'qish'">Yuklash va o'qish</span>
                     </button>
+                    <p class="mt-2 text-xs text-slate-600">Talaba ismi va OTM nomi transkriptdan olinadi, keyin o'zgartirish mumkin.</p>
                 </form>
 
                 {{-- Ro'yxat --}}
@@ -126,7 +119,7 @@
                                                         {{ $sum['decision']['passed'] ? '✓' : '✕' }} {{ $sum['decision']['kurs'] }}-kurs
                                                     </span>
                                                     <span class="font-semibold tabular-nums text-slate-800">GPA {{ number_format($sum['gpa'], 2) }}</span>
-                                                    <span class="whitespace-nowrap text-slate-600">· {{ $sum['farq'] }} farq</span>
+                                                    <span class="whitespace-nowrap text-slate-600">{{ $sum['farq'] }} farq</span>
                                                 </div>
                                                 <div class="mt-0.5 text-[11px] text-slate-600">{{ $sum['levels'] }} bosqich · 1–{{ $sum['upto'] }}-semestr fanlari bo'yicha</div>
                                             @else

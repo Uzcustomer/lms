@@ -39,10 +39,304 @@
                 <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">@foreach($errors->all() as $e)<div>{{ $e }}</div>@endforeach</div>
             @endif
 
+            {{-- ───────────── Natija (bosqichlar) ───────────── --}}
+            @foreach($levels as $n => $item)
+                @php
+                    $level = $item['level'];
+                    $res = $item['result'];
+                    $dec = $res['decision'];
+                    $trRows = $res['transcript'];
+                    $hasAi = $res['ai_gpa'] !== null;
+                    $isAnswer = $n === $answerIndex;
+                    $isElective = fn ($t) => \App\Services\SubjectDifference\DifferenceCalculator::isElective($t);
+                    $optLabel = fn ($ti, $tr) => \Illuminate\Support\Str::limit($trLabel($tr), 60) . ' · ' . $fmt($tr['ball'] ?? null) . '/' . ($tr['grade'] ?? '—');
+                    $optList = collect($trRows)->map(fn ($tr, $ti) => [$ti, $optLabel($ti, $tr)])->values();
+                    $farqRows = collect($res['rows'])->filter(fn ($r) => $r['farq'] && !$r['excluded'])->values();
+                    $confirmRows = collect($res['rows'])->filter(fn ($r) => $r['disagree'] && !$r['overridden'] && !$r['excluded'])->values();
+                    $confirmKeys = $confirmRows->pluck('key')->all();
+                    $kursLabel = (int) $level['upto'] <= 1 ? '1-kurs' : $dec['kurs'] . '-kurs';
+                @endphp
+                <script>window.sdOpts = window.sdOpts || {}; window.sdOpts[{{ \Illuminate\Support\Js::from($level['id']) }}] = {{ \Illuminate\Support\Js::from($optList) }};</script>
+
+                <details class="group rounded-2xl border bg-white shadow-sm {{ $isAnswer ? 'border-slate-300' : 'border-slate-200' }}" id="level-{{ $level['id'] }}" @if($isAnswer) open @endif>
+                    {{-- Bitta gapdagi natija --}}
+                    <summary class="flex cursor-pointer list-none items-start gap-3 px-4 py-4 sm:items-center sm:gap-4 sm:px-5 [&::-webkit-details-marker]:hidden">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white {{ $dec['passed'] ? 'bg-emerald-600' : 'bg-rose-600' }}" aria-hidden="true">
+                            @if($dec['passed'])
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                            @else
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            @endif
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-lg font-bold text-slate-900">
+                                {{ $dec['passed'] ? $dec['text'] : $kursLabel . 'ga o\'tmaydi' }}
+                            </div>
+                            <div class="mt-0.5 text-sm text-slate-600">
+                                @if((int) $level['upto'] > 1)
+                                    GPA <b class="tabular-nums {{ $dec['passed'] ? 'text-slate-900' : 'text-rose-700' }}">{{ number_format($res['gpa'], 2) }}</b>
+                                    <span class="text-slate-500">(kamida 2.4 kerak)</span> ·
+                                @endif
+                                <b class="text-slate-900">{{ $res['farq_count'] }}</b> ta fan farqi ({{ $fmt($res['farq_credit']) }} kredit) ·
+                                {{ $level['curriculum_name'] }}, 1–{{ $level['upto'] }}-semestr
+                            </div>
+                            @if($confirmRows->count())
+                                <span class="mt-2 inline-block rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 sm:hidden">{{ $confirmRows->count() }} ta qatorni tasdiqlang</span>
+                            @endif
+                        </div>
+                        <div class="flex shrink-0 items-center gap-2">
+                            @if($confirmRows->count())
+                                <span class="hidden rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 sm:inline-block">{{ $confirmRows->count() }} ta qatorni tasdiqlang</span>
+                            @endif
+                            <svg class="h-5 w-5 text-slate-500 transition group-open:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                    </summary>
+
+                    <form method="POST" action="{{ route('admin.subject-differences.levels.mapping', [$check, $level['id']]) }}" x-data="{ dirty: 0 }" @change="dirty++" class="border-t border-slate-200">
+                        @csrf
+                        <div class="space-y-6 px-5 py-5">
+
+                            {{-- Asosiy amallar --}}
+                            <div class="flex flex-wrap items-center gap-2">
+                                <a href="{{ route('admin.subject-differences.levels.excel', [$check, $level['id']]) }}"
+                                   class="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                                    Excel yuklab olish
+                                </a>
+                                @if(!$dec['passed'] && $n === count($levels) - 1)
+                                    <a href="#new-level" class="inline-flex h-9 items-center rounded-lg border border-rose-300 bg-rose-50 px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100">
+                                        Pastki kursni tekshirish ({{ $dec['next_upto'] ?? 1 }}-semestrgacha) ↓
+                                    </a>
+                                @endif
+                            </div>
+
+                            {{-- 1. Tasdiqlash kerak --}}
+                            @if($confirmRows->count())
+                                <section>
+                                    <h3 class="text-sm font-bold text-slate-900">Tasdiqlang: qaysi fan mos?</h3>
+                                    <p class="mt-0.5 text-sm text-slate-600">Bu fanlarda ikki usul (nom bo'yicha va AI) har xil javob berdi. To'g'risini belgilang va saqlang.</p>
+                                    <div class="mt-3 divide-y divide-slate-200 rounded-xl border border-amber-300">
+                                        @foreach($confirmRows as $r)
+                                            @php
+                                                $ruleTr = $r['rule_tr'] !== null ? ($trRows[$r['rule_tr']] ?? null) : null;
+                                                $aiTr = $r['ai_tr'] !== null ? ($trRows[$r['ai_tr']] ?? null) : null;
+                                                $aiVal = $r['ai_tr'] === null ? 'none' : (string) $r['ai_tr'];
+                                                $ruleVal = $r['rule_tr'] === null ? 'none' : (string) $r['rule_tr'];
+                                            @endphp
+                                            <fieldset class="grid grid-cols-1 gap-3 px-4 py-3 md:grid-cols-12">
+                                                <legend class="sr-only">{{ $r['name'] }}</legend>
+                                                <div class="md:col-span-4">
+                                                    <div class="font-semibold text-slate-900">{{ $r['name'] }}</div>
+                                                    <div class="text-xs text-slate-600">{{ $r['semester'] }}-semestr · {{ $fmt($r['credit']) }} kredit</div>
+                                                </div>
+                                                <div class="space-y-1.5 md:col-span-8">
+                                                    <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                                                        <input type="radio" name="map[{{ $r['key'] }}]" value="{{ $aiVal }}" checked class="mt-0.5">
+                                                        <span class="text-sm">
+                                                            <span class="font-semibold text-slate-900">{{ $aiTr ? $trLabel($aiTr) . ' — ' . $fmt($aiTr['ball'] ?? null) . ' ball' : 'Mos fan yo\'q (farq)' }}</span>
+                                                            <span class="block text-xs text-slate-600">AI taklifi{{ $r['ai_reason'] ? ': ' . $r['ai_reason'] : '' }}</span>
+                                                        </span>
+                                                    </label>
+                                                    @if($ruleVal !== $aiVal)
+                                                        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                                                            <input type="radio" name="map[{{ $r['key'] }}]" value="{{ $ruleVal }}" class="mt-0.5">
+                                                            <span class="text-sm">
+                                                                <span class="font-semibold text-slate-900">{{ $ruleTr ? $trLabel($ruleTr) . ' — ' . $fmt($ruleTr['ball'] ?? null) . ' ball' : 'Mos fan yo\'q (farq)' }}</span>
+                                                                <span class="block text-xs text-slate-600">Nom bo'yicha taklif</span>
+                                                            </span>
+                                                        </label>
+                                                    @endif
+                                                </div>
+                                            </fieldset>
+                                        @endforeach
+                                    </div>
+                                </section>
+                            @endif
+
+                            {{-- 2. Fanlar farqi --}}
+                            <section>
+                                <h3 class="text-sm font-bold text-slate-900">Talaba topshirishi kerak bo'lgan fanlar
+                                    <span class="ml-1 font-normal text-slate-600">— {{ $farqRows->count() }} ta, {{ $fmt($farqRows->sum('credit')) }} kredit</span>
+                                </h3>
+                                @if($farqRows->isEmpty())
+                                    <p class="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">Fanlar farqi yo'q — barcha fanlar transkriptda bor.</p>
+                                @else
+                                    <table class="mt-2 w-full text-sm">
+                                        <thead class="text-left text-xs text-slate-600">
+                                            <tr class="border-b border-slate-200">
+                                                <th class="py-2 pr-3 font-semibold">Semestr</th>
+                                                <th class="py-2 pr-3 font-semibold">Fan</th>
+                                                <th class="py-2 pr-3 text-right font-semibold">Kredit</th>
+                                                <th class="py-2 font-semibold">Sabab</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($farqRows as $r)
+                                                <tr class="border-b border-slate-100">
+                                                    <td class="py-2 pr-3 text-slate-700">{{ $r['semester'] }}</td>
+                                                    <td class="py-2 pr-3 font-medium text-slate-900">{{ $r['name'] }}</td>
+                                                    <td class="py-2 pr-3 text-right tabular-nums text-slate-900">{{ $fmt($r['credit']) }}</td>
+                                                    <td class="py-2 text-slate-700">
+                                                        {{ $r['tr_name'] ? 'Baho yetarli emas (' . $r['grade'] . ')' : 'Transkriptda yo\'q' }}
+                                                        @if($isElective($r['type']))<span class="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-xs font-semibold text-violet-800" title="Guruhdagi tanlov fan muqobili — farq sifatida hisoblandi">tanlov fan</span>@endif
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                @endif
+                            </section>
+
+                            {{-- 3. Barcha fanlar --}}
+                            <details class="rounded-xl border border-slate-200">
+                                <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">
+                                    Barcha fanlar va baholar ({{ count($res['rows']) }})
+                                    <span class="ml-1 font-normal text-slate-600">— moslikni qo'lda o'zgartirish shu yerda</span>
+                                </summary>
+                                <div class="overflow-x-auto border-t border-slate-200">
+                                    <table class="min-w-full text-sm">
+                                        <thead class="text-left text-xs text-slate-600">
+                                            <tr class="border-b border-slate-200">
+                                                <th class="px-4 py-2 font-semibold">Bizning fan</th>
+                                                <th class="px-3 py-2 text-right font-semibold">Kredit</th>
+                                                <th class="px-3 py-2 font-semibold">Transkriptdagi mos fan</th>
+                                                <th class="px-3 py-2 text-center font-semibold">Baho</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @php $prevSem = null; @endphp
+                                            @foreach($res['rows'] as $r)
+                                                @php
+                                                    $sel = $r['excluded'] ? 'exclude' : ($r['overridden'] ? ($level['overrides'][$r['key']] === null ? 'none' : (string) $level['overrides'][$r['key']]) : 'auto');
+                                                    $inConfirm = in_array($r['key'], $confirmKeys, true);
+                                                    $extra = array_values(array_filter($r['notes'], fn ($x) => str_contains($x, 'lekin') || str_contains($x, 'o\'qilmadi')));
+                                                @endphp
+                                                @if($prevSem !== $r['semester'])
+                                                    @php $prevSem = $r['semester']; @endphp
+                                                    <tr class="bg-slate-50"><td colspan="4" class="px-4 py-1.5 text-xs font-bold text-slate-700">{{ $r['semester'] }}-semestr</td></tr>
+                                                @endif
+                                                <tr class="border-b border-slate-100 align-top {{ $r['excluded'] ? 'text-slate-500' : '' }}">
+                                                    <td class="px-4 py-2">
+                                                        <div class="font-medium {{ $r['excluded'] ? 'line-through' : 'text-slate-900' }}">{{ $r['name'] }}</div>
+                                                        @if($isElective($r['type']))<div class="text-xs text-violet-700">tanlov fan</div>@endif
+                                                    </td>
+                                                    <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($r['credit']) }}</td>
+                                                    <td class="px-3 py-2">
+                                                        @if($inConfirm)
+                                                            <span class="text-sm text-amber-800">Yuqorida tasdiqlang</span>
+                                                        @else
+                                                            <select name="map[{{ $r['key'] }}]" data-level="{{ $level['id'] }}" onfocus="sdFill(this)" onmousedown="sdFill(this)" aria-label="{{ $r['name'] }} uchun mos fan"
+                                                                    class="w-full max-w-md rounded-md py-1 text-sm {{ $sel !== 'auto' ? 'border-blue-500 ring-1 ring-blue-300' : 'border-slate-300' }}">
+                                                                <option value="auto" @selected($sel === 'auto')>{{ $r['tr_name'] && !$r['overridden'] ? \Illuminate\Support\Str::limit($trLabel(['semester' => $r['tr_semester'], 'name' => $r['tr_name']]), 55) . ' · ' . $fmt($r['tr_ball']) . ' ball' : 'Avtomatik: mos fan topilmadi' }}</option>
+                                                                <option value="none" @selected($sel === 'none')>— Mos fan yo'q (farq)</option>
+                                                                <option value="exclude" @selected($sel === 'exclude')>— Hisobga olinmasin</option>
+                                                                @if(is_numeric($sel) && isset($trRows[(int) $sel]))
+                                                                    <option value="{{ $sel }}" selected>{{ $optLabel((int) $sel, $trRows[(int) $sel]) }}</option>
+                                                                @endif
+                                                            </select>
+                                                        @endif
+                                                        @foreach($extra as $note)<div class="mt-1 text-xs text-amber-800">⚠ {{ $note }}</div>@endforeach
+                                                    </td>
+                                                    <td class="px-3 py-2 text-center">
+                                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold {{ $r['excluded'] ? 'bg-slate-100 text-slate-500' : ($r['grade'] < 3 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-900') }}">{{ $r['excluded'] ? '—' : $r['grade'] }}</span>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+
+                            {{-- Texnik tafsilotlar --}}
+                            <details class="text-sm text-slate-700">
+                                <summary class="cursor-pointer text-slate-600 hover:text-slate-900">Batafsil: usullar solishtirmasi va boshqa amallar</summary>
+                                <div class="mt-2 space-y-2 rounded-lg bg-slate-50 px-4 py-3">
+                                    <div>Nom bo'yicha (qoida) GPA: <b class="tabular-nums">{{ number_format($res['rule_gpa'], 3) }}</b> ·
+                                        AI bo'yicha GPA: <b class="tabular-nums">{{ $hasAi ? number_format($res['ai_gpa'], 3) : '—' }}</b> ·
+                                        kelishmagan qatorlar: <b>{{ $res['disagree'] }}</b> · yakuniy: <b class="tabular-nums">{{ number_format($res['gpa'], 3) }}</b> ({{ $fmt($res['total_product']) }} / {{ $fmt($res['total_credit']) }})</div>
+                                    <div class="text-slate-600">Transkript manbasi: {{ $sourceLabels[$level['source'] ?? 'ai'] ?? '' }}{{ ($level['ai_model'] ?? null) ? ' · model ' . $level['ai_model'] : '' }}</div>
+                                    @if($level['ai_error'] ?? null)<div class="text-amber-800">AI xatosi: {{ $level['ai_error'] }} — hozir nom bo'yicha natija ishlatilmoqda.</div>@endif
+                                    <div class="flex flex-wrap gap-2 pt-1">
+                                        <button type="submit" form="rematch-{{ $level['id'] }}" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Qayta moslashtirish (AI bilan)</button>
+                                        <button type="submit" form="delete-{{ $level['id'] }}" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Bu tekshiruvni o'chirish</button>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+
+                        <div :class="dirty ? 'sticky bottom-0 z-10 border-blue-300 bg-blue-50 shadow-[0_-4px_12px_rgba(15,23,42,0.08)]' : 'border-slate-200 bg-white'"
+                             class="flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t px-5 py-3 text-sm">
+                            <span x-show="!dirty" class="text-slate-600">{{ $confirmRows->count() ? 'Tasdiqlagandan so\'ng saqlang — GPA qayta hisoblanadi.' : 'O\'zgartirish kiritsangiz, saqlang — GPA qayta hisoblanadi.' }}</span>
+                            <span x-show="dirty" x-cloak class="font-semibold text-blue-900">Saqlanmagan o'zgarishlar bor</span>
+                            <button class="inline-flex h-9 items-center rounded-lg bg-blue-600 px-4 font-semibold text-white hover:bg-blue-700">Saqlash va qayta hisoblash</button>
+                        </div>
+                    </form>
+                    <form id="rematch-{{ $level['id'] }}" method="POST" action="{{ route('admin.subject-differences.levels.rematch', [$check, $level['id']]) }}" class="hidden">@csrf<input type="hidden" name="use_ai" value="1"></form>
+                    <form id="delete-{{ $level['id'] }}" method="POST" action="{{ route('admin.subject-differences.levels.destroy', [$check, $level['id']]) }}" class="hidden" onsubmit="return confirm('Bu tekshiruv o\'chirilsinmi?')">@csrf @method('DELETE')</form>
+                </details>
+            @endforeach
+
+            {{-- ───────────── Yangi bosqich ───────────── --}}
+            @if($check->status !== 'error' && $rows)
+                @php $needNew = !count($levels) || $suggestUpto; @endphp
+                <details id="new-level" class="rounded-2xl border bg-white shadow-sm {{ $needNew ? 'border-blue-300' : 'border-slate-200' }}" @if($needNew) open @endif>
+                    <summary class="cursor-pointer list-none px-5 py-4 [&::-webkit-details-marker]:hidden">
+                        <span class="text-base font-bold text-slate-900">
+                            @if(!count($levels)) O'quv reja bilan solishtirish
+                            @elseif($suggestUpto) Pastki kurs bilan tekshirish
+                            @else <span class="text-sm font-semibold text-blue-700">+ Boshqa o'quv reja bilan tekshirish</span>
+                            @endif
+                        </span>
+                        @if($needNew)
+                            <span class="mt-1 block text-sm text-slate-600">
+                                @if($suggestUpto)
+                                    Talaba yuqoridagi kursga o'tmadi. Pastki kurs o'quv rejasini tanlang — {{ $suggestUpto }}-semestrgacha tekshiriladi.
+                                @else
+                                    Talaba qabul qilinadigan kursdagi o'quv rejani tanlang. Masalan, 5-kursga qabul uchun 1–8-semestr fanlari tekshiriladi.
+                                @endif
+                            </span>
+                        @endif
+                    </summary>
+                    <form method="POST" action="{{ route('admin.subject-differences.levels.store', $check) }}" class="border-t border-slate-200 px-5 py-4"
+                          x-data="curriculumPicker('{{ route('admin.subject-differences.curricula') }}')" x-init="load()" @submit="busy = true">
+                        @csrf
+                        <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                            <div class="lg:col-span-7">
+                                <label class="block text-sm font-semibold text-slate-800" for="curriculum-search">1. O'quv reja</label>
+                                <input id="curriculum-search" type="text" x-model="q" @input.debounce.400ms="load()" placeholder="Qidirish: yo'nalish, o'quv yili…"
+                                       class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                                <select name="curriculum_id" required size="5" aria-label="O'quv reja" class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                                    <template x-for="c in list" :key="c.id">
+                                        <option :value="c.id" x-text="label(c)"></option>
+                                    </template>
+                                </select>
+                                <p class="mt-1 text-xs text-slate-600" x-show="loading">Yuklanmoqda…</p>
+                                <p class="mt-1 text-xs text-slate-600" x-show="!loading && list.length === 0">O'quv reja topilmadi.</p>
+                            </div>
+                            <div class="lg:col-span-5">
+                                <label class="block text-sm font-semibold text-slate-800" for="upto">2. Qaysi kursga qabul?</label>
+                                <select id="upto" name="upto" required class="mt-1 w-full rounded-lg border-slate-300 text-sm">
+                                    @for($s = 1; $s <= 12; $s++)
+                                        <option value="{{ $s }}" @selected($s === ($suggestUpto ?? 8))>{{ $s === 1 ? '1-kurs (2-semestrdan) — 1-semestr fanlari' : (intdiv($s, 2) + 1) . '-kurs — 1–' . $s . '-semestr fanlari' }}</option>
+                                    @endfor
+                                </select>
+                                <input type="hidden" name="use_ai" value="{{ $aiConfigured ? 1 : 0 }}">
+                                <button type="submit" :disabled="busy"
+                                        class="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                                    <span x-text="busy ? 'Tekshirilmoqda… (1 daqiqagacha)' : 'Tekshirish'">Tekshirish</span>
+                                </button>
+                                <p class="mt-2 text-xs text-slate-600">Fanlar shu rejada haqiqatda o'tilgan fanlardan (akkreditatsiya) olinadi.{{ $aiConfigured ? '' : ' AI kaliti sozlanmagan — faqat nom bo\'yicha moslashtiriladi.' }}</p>
+                            </div>
+                        </div>
+                    </form>
+                </details>
+            @endif
+
             {{-- ───────────── Transkript ───────────── --}}
-            <details class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" {{ empty($levels) ? 'open' : '' }}>
-                <summary class="flex cursor-pointer flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
-                    <div>
+<details class="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                    <div class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-slate-500 transition group-open:rotate-90" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                         <h3 class="inline text-sm font-bold text-slate-800">Transkriptdan o'qilgan fanlar</h3>
                         <span class="ml-2 text-xs text-slate-600">{{ count($rows) }} qator · asosiy manba: {{ $sourceLabels[$source] ?? $source }}</span>
                     </div>
@@ -150,318 +444,6 @@
                     @endif
                 </div>
             </details>
-
-            {{-- ───────────── Bosqichlar ───────────── --}}
-            @foreach($levels as $n => $item)
-                @php
-                    $level = $item['level'];
-                    $res = $item['result'];
-                    $dec = $res['decision'];
-                    $trRows = $res['transcript'];
-                    $hasAi = $res['ai_gpa'] !== null;
-                    $optLabel = fn ($ti, $tr) => \Illuminate\Support\Str::limit($trLabel($tr), 60) . ' · ' . $fmt($tr['ball'] ?? null) . '/' . ($tr['grade'] ?? '—');
-                    $optList = collect($trRows)->map(fn ($tr, $ti) => [$ti, $optLabel($ti, $tr)])->values();
-                    $overCount = collect($res['rows'])->where('overridden', true)->count();
-                    $isElective = fn ($t) => \App\Services\SubjectDifference\DifferenceCalculator::isElective($t);
-                    $title = (int) $level['upto'] <= 1
-                        ? '1-kurs (2-semestrdan davom) tekshiruvi'
-                        : $dec['kurs'] . '-kursga qabul tekshiruvi';
-                    $gpaPct = min(100, max(0, $res['gpa'] / 5 * 100));
-                    $limitPct = \App\Services\SubjectDifference\DifferenceCalculator::GPA_LIMIT / 5 * 100;
-                @endphp
-                <script>window.sdOpts = window.sdOpts || {}; window.sdOpts[{{ \Illuminate\Support\Js::from($level['id']) }}] = {{ \Illuminate\Support\Js::from($optList) }};</script>
-                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm" id="level-{{ $level['id'] }}"
-                     x-data="{ filter: '{{ ($res['farq_count'] + $res['disagree']) > 0 ? 'review' : 'all' }}', dirty: 0 }">
-
-                    {{-- Sarlavha --}}
-                    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
-                        <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-bold text-white">{{ $n + 1 }}-bosqich</span>
-                                <h3 class="text-base font-bold text-slate-900">{{ $title }}</h3>
-                                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">1–{{ $level['upto'] }}-semestr</span>
-                            </div>
-                            <p class="mt-1 text-xs text-slate-600">
-                                {{ $level['curriculum_name'] }} · {{ count($level['plan']) }} ta fan (akkreditatsiya) · transkript: {{ $sourceLabels[$level['source'] ?? 'ai'] ?? '' }}
-                                @if($level['ai_model'] ?? null) · {{ $level['ai_model'] }} @endif
-                            </p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2 text-xs">
-                            <a href="{{ route('admin.subject-differences.levels.excel', [$check, $level['id']]) }}"
-                               class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 font-semibold text-white hover:bg-emerald-700">
-                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
-                                Excel
-                            </a>
-                            <form method="POST" action="{{ route('admin.subject-differences.levels.rematch', [$check, $level['id']]) }}" x-data="{busy:false}" @submit="busy=true">
-                                @csrf
-                                <input type="hidden" name="use_ai" value="1">
-                                <button :disabled="busy" class="inline-flex h-8 items-center rounded-lg border border-slate-300 bg-white px-3 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60" x-text="busy ? 'Moslashtirilmoqda…' : 'Qayta moslashtirish'">Qayta moslashtirish</button>
-                            </form>
-                            <form method="POST" action="{{ route('admin.subject-differences.levels.destroy', [$check, $level['id']]) }}" onsubmit="return confirm('Bosqich o\'chirilsinmi?')">
-                                @csrf @method('DELETE')
-                                <button class="inline-flex h-8 items-center rounded-lg border border-rose-200 bg-white px-3 font-semibold text-rose-600 hover:bg-rose-50">O'chirish</button>
-                            </form>
-                        </div>
-                    </div>
-
-                    {{-- Xulosa --}}
-                    <div class="grid grid-cols-1 gap-3 p-5 lg:grid-cols-12">
-                        <div class="flex items-start gap-3 rounded-xl border p-4 lg:col-span-5 {{ $dec['passed'] ? 'border-emerald-300 bg-emerald-50' : 'border-rose-300 bg-rose-50' }}">
-                            <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white {{ $dec['passed'] ? 'bg-emerald-600' : 'bg-rose-600' }}" aria-hidden="true">
-                                @if($dec['passed'])
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                @else
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                @endif
-                            </span>
-                            <div class="min-w-0">
-                                <div class="text-xs font-semibold {{ $dec['passed'] ? 'text-emerald-800' : 'text-rose-800' }}">Xulosa · {{ $dec['rule'] }}</div>
-                                <div class="mt-0.5 text-base font-bold leading-snug {{ $dec['passed'] ? 'text-emerald-950' : 'text-rose-950' }}">{{ $dec['text'] }}</div>
-                            </div>
-                        </div>
-
-                        <div class="rounded-xl border border-slate-200 p-4 lg:col-span-4">
-                            <div class="flex items-baseline justify-between">
-                                <span class="text-xs font-semibold text-slate-600">Yakuniy GPA</span>
-                                <span class="text-xs text-slate-600">{{ $fmt($res['total_product']) }} / {{ $fmt($res['total_credit']) }} kredit</span>
-                            </div>
-                            <div class="mt-1 text-3xl font-bold tabular-nums {{ $res['gpa'] >= \App\Services\SubjectDifference\DifferenceCalculator::GPA_LIMIT ? 'text-slate-900' : 'text-rose-600' }}">{{ number_format($res['gpa'], 3) }}</div>
-                            @if((int) $level['upto'] > 1)
-                                <div class="relative mt-2 h-2 rounded-full bg-slate-100" role="img" aria-label="GPA {{ number_format($res['gpa'], 2) }}, chegara 2.4">
-                                    <div class="h-2 rounded-full {{ $res['gpa'] >= 2.4 ? 'bg-emerald-500' : 'bg-rose-500' }}" style="width: {{ $gpaPct }}%"></div>
-                                    <div class="absolute -top-1 h-4 w-0.5 bg-slate-700" style="left: {{ $limitPct }}%"></div>
-                                </div>
-                                <div class="relative mt-1 h-4 text-[11px] text-slate-600">
-                                    <span class="absolute -translate-x-1/2" style="left: {{ $limitPct }}%">2.4</span>
-                                    <span class="absolute right-0">5.0</span>
-                                </div>
-                            @endif
-                        </div>
-
-                        <div class="rounded-xl border border-slate-200 p-4 lg:col-span-3">
-                            <div class="text-xs font-semibold text-slate-600">Fanlar farqi</div>
-                            <div class="mt-1 text-3xl font-bold tabular-nums text-rose-600">{{ $res['farq_count'] }} <span class="text-base font-semibold text-slate-600">fan</span></div>
-                            <div class="mt-1 text-xs text-slate-600">{{ $fmt($res['farq_credit']) }} kredit o'zlashtirilishi kerak</div>
-                        </div>
-
-                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700 lg:col-span-12">
-                            <span class="font-semibold text-slate-800">Usullar solishtirmasi:</span>
-                            <span>Qoida bo'yicha GPA <b class="tabular-nums">{{ number_format($res['rule_gpa'], 3) }}</b></span>
-                            <span>AI bo'yicha GPA <b class="tabular-nums text-violet-700">{{ $hasAi ? number_format($res['ai_gpa'], 3) : '—' }}</b></span>
-                            <span>Kelishmagan qatorlar: <b class="{{ $res['disagree'] ? 'text-amber-700' : '' }}">{{ $res['disagree'] }}</b></span>
-                            @if($overCount)<span>Qo'lda tuzatilgan: <b class="text-blue-700">{{ $overCount }}</b></span>@endif
-                        </div>
-
-                        @if($level['ai_error'] ?? null)
-                            <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 lg:col-span-12">
-                                <b>AI moslashtirishda xato:</b> {{ $level['ai_error'] }}. Hozir qoida bo'yicha natija ishlatilmoqda — «Qayta moslashtirish»ni bosing.
-                            </div>
-                        @endif
-                    </div>
-
-                    {{-- Filtrlar --}}
-                    @php
-                        $counts = [
-                            'review' => collect($res['rows'])->filter(fn ($r) => $r['farq'] || $r['disagree'] || $r['overridden'])->count(),
-                            'farq' => $res['farq_count'],
-                            'disagree' => $res['disagree'],
-                            'over' => $overCount,
-                            'all' => count($res['rows']),
-                        ];
-                        $filters = ['review' => 'Tekshirish kerak', 'farq' => 'Farq', 'disagree' => 'Qoida ≠ AI', 'over' => 'Qo\'lda tuzatilgan', 'all' => 'Hammasi'];
-                    @endphp
-                    <div class="flex flex-wrap items-center gap-2 border-y border-slate-200 bg-slate-50 px-5 py-2.5" role="tablist" aria-label="Qatorlar filtri">
-                        @foreach($filters as $fk => $fl)
-                            @continue($fk === 'over' && !$counts['over'])
-                            @continue($fk === 'disagree' && !$hasAi)
-                            <button type="button" role="tab" @click="filter = '{{ $fk }}'" :aria-selected="filter === '{{ $fk }}'"
-                                    :class="filter === '{{ $fk }}' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'"
-                                    class="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold">
-                                {{ $fl }}
-                                <span :class="filter === '{{ $fk }}' ? 'bg-white/20' : 'bg-slate-100'" class="rounded-full px-1.5 text-[11px] tabular-nums">{{ $counts[$fk] }}</span>
-                            </button>
-                        @endforeach
-                        <span class="ml-auto text-xs text-slate-600" x-show="filter === 'review'">Farqlar, qoida va AI kelishmagan hamda qo'lda tuzatilgan qatorlar</span>
-                    </div>
-
-                    <form method="POST" action="{{ route('admin.subject-differences.levels.mapping', [$check, $level['id']]) }}" @change="dirty++">
-                        @csrf
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full text-sm">
-                                <thead class="bg-white text-left text-xs font-semibold text-slate-600">
-                                    <tr class="border-b border-slate-200">
-                                        <th class="px-4 py-2.5">Bizning fan</th>
-                                        <th class="px-3 py-2.5 text-right">Kredit</th>
-                                        <th class="px-3 py-2.5">Transkriptdagi mos fan</th>
-                                        <th class="px-3 py-2.5 text-center">Ball</th>
-                                        <th class="px-3 py-2.5 text-center">Baho</th>
-                                        <th class="px-3 py-2.5 text-right">K×B</th>
-                                        <th class="px-3 py-2.5">Holat</th>
-                                        <th class="px-3 py-2.5">Tuzatish</th>
-                                        <th class="px-3 py-2.5 text-center"><span title="Hisobdan chiqarish (masalan, bir-ikki talabada uchragan ortiqcha yozuv)">Chiqarish</span></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @php $prevSem = null; @endphp
-                                    @foreach($res['rows'] as $r)
-                                        @php
-                                            $rule = $r['rule_tr'] !== null ? ($trRows[$r['rule_tr']] ?? null) : null;
-                                            $ai = $r['ai_tr'] !== null ? ($trRows[$r['ai_tr']] ?? null) : null;
-                                            $sel = $r['overridden'] ? ($level['overrides'][$r['key']] === null ? 'none' : (string) $level['overrides'][$r['key']]) : 'auto';
-                                            $rowBg = $r['excluded'] ? 'bg-slate-50 text-slate-500' : ($r['farq'] ? 'bg-rose-50/70' : ($r['disagree'] ? 'bg-amber-50/70' : 'bg-white'));
-                                            $standard = ["Transkriptda yo'q — fanlar farqi", 'Tanlov fan (guruhdagi muqobil) — farq sifatida hisoblandi', 'Xodim hisobdan chiqargan'];
-                                            $extra = array_values(array_filter($r['notes'], fn ($x) => !in_array($x, $standard, true) && !str_starts_with($x, "O'zlashtirilmagan")));
-                                            $show = "filter === 'all'"
-                                                . ($r['farq'] || $r['disagree'] || $r['overridden'] ? " || filter === 'review'" : '')
-                                                . ($r['farq'] ? " || filter === 'farq'" : '')
-                                                . ($r['disagree'] ? " || filter === 'disagree'" : '')
-                                                . ($r['overridden'] ? " || filter === 'over'" : '');
-                                            $semRows = collect($res['rows'])->where('semester', $r['semester']);
-                                        @endphp
-                                        @if($prevSem !== $r['semester'])
-                                            @php $prevSem = $r['semester']; $semFarq = $semRows->where('farq', true)->where('excluded', false)->count(); @endphp
-                                            <tr x-show="filter === 'all'" class="border-y border-slate-200 bg-slate-100/80">
-                                                <td colspan="9" class="px-4 py-1.5 text-xs font-bold text-slate-700">
-                                                    {{ $r['semester'] }}-semestr
-                                                    <span class="ml-2 font-normal text-slate-600">{{ $semRows->count() }} fan · {{ $fmt($semRows->sum('credit')) }} kredit</span>
-                                                    @if($semFarq)<span class="ml-2 rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">{{ $semFarq }} farq</span>@endif
-                                                </td>
-                                            </tr>
-                                        @endif
-                                        <tr x-show="{{ $show }}" class="{{ $rowBg }} border-b border-slate-100 align-top">
-                                            <td class="px-4 py-2">
-                                                <div class="font-medium text-slate-900 {{ $r['excluded'] ? 'line-through' : '' }}">{{ $r['name'] }}</div>
-                                                <div class="mt-0.5 text-xs text-slate-600">
-                                                    <span x-show="filter !== 'all'">{{ $r['semester'] }}-sem · </span>
-                                                    @if($r['type'])<span class="{{ $isElective($r['type']) ? 'font-semibold text-violet-700' : '' }}">{{ $r['type'] }}</span>@endif
-                                                    @if($isElective($r['type']) || $r['students'] < 10)<span title="Shu rejada bu fan bo'yicha baholangan talabalar soni"> · {{ $r['students'] }} talaba</span>@endif
-                                                </div>
-                                            </td>
-                                            <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($r['credit']) }}</td>
-                                            <td class="px-3 py-2">
-                                                @if($r['tr_name'])
-                                                    <div class="text-slate-900">{{ $r['tr_name'] }}</div>
-                                                    <div class="mt-0.5 text-xs text-slate-600">{{ $r['tr_semester'] ? $r['tr_semester'] . '-sem' : '' }}{{ $r['tr_credit'] ? ' · ' . $fmt($r['tr_credit']) . ' kredit' : '' }}</div>
-                                                @else
-                                                    <div class="text-slate-500">Topilmadi</div>
-                                                @endif
-                                                @if($r['overridden'])
-                                                    <span class="mt-1 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-semibold text-blue-800">Qo'lda tanlangan</span>
-                                                @elseif($r['disagree'])
-                                                    <div class="mt-1 space-y-0.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs">
-                                                        <div><span class="font-semibold text-slate-700">Qoida:</span> {{ $rule ? $trLabel($rule) : 'topilmadi' }}@if($rule && $r['rule_score'] !== null) <span class="text-slate-600">({{ number_format($r['rule_score'] * 100) }}%)</span>@endif</div>
-                                                        <div><span class="font-semibold text-violet-700">AI:</span> {{ $ai ? $trLabel($ai) : 'topilmadi' }}@if($r['ai_confidence'] !== null) <span class="text-slate-600">({{ number_format($r['ai_confidence'] * 100) }}%)</span>@endif</div>
-                                                        @if($r['ai_reason'])<div class="text-slate-600">{{ $r['ai_reason'] }}</div>@endif
-                                                    </div>
-                                                @elseif($hasAi && $r['tr_name'])
-                                                    <span class="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-700" title="{{ $r['ai_reason'] }}">
-                                                        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                                        Qoida va AI bir xil
-                                                    </span>
-                                                @endif
-                                            </td>
-                                            <td class="px-3 py-2 text-center tabular-nums text-slate-700">{{ $fmt($r['tr_ball']) }}</td>
-                                            <td class="px-3 py-2 text-center">
-                                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold {{ $r['grade'] < 3 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-900' }}">{{ $r['grade'] }}</span>
-                                            </td>
-                                            <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ $fmt($r['product']) }}</td>
-                                            <td class="px-3 py-2">
-                                                <div class="flex flex-wrap gap-1">
-                                                    @if($r['excluded'])
-                                                        <span class="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">Chiqarilgan</span>
-                                                    @elseif($r['farq'])
-                                                        <span class="rounded bg-rose-600 px-1.5 py-0.5 text-[11px] font-semibold text-white" title="{{ $r['tr_name'] ? 'O\'zlashtirilmagan baho' : 'Transkriptda mos fan yo\'q' }}">Farq</span>
-                                                        @if($isElective($r['type']))<span class="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800" title="Tanlov fan (guruhdagi muqobil) — farq sifatida hisoblandi">Tanlov</span>@endif
-                                                    @else
-                                                        <span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800">O'tdi</span>
-                                                    @endif
-                                                    @foreach($extra as $note)
-                                                        <span class="cursor-help rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900" title="{{ $note }}">⚠ {{ \Illuminate\Support\Str::limit($note, 28) }}</span>
-                                                    @endforeach
-                                                </div>
-                                            </td>
-                                            <td class="px-3 py-2">
-                                                {{-- Transkript qatorlari ro'yxati select ochilganda JS bilan to'ldiriladi (sahifa yengil bo'lsin) --}}
-                                                <select name="map[{{ $r['key'] }}]" data-level="{{ $level['id'] }}" onfocus="sdFill(this)" onmousedown="sdFill(this)" aria-label="{{ $r['name'] }} uchun mos fan"
-                                                        class="w-56 rounded-md py-1 text-xs {{ $r['overridden'] ? 'border-blue-500 ring-1 ring-blue-300' : 'border-slate-300' }}">
-                                                    <option value="auto" @selected($sel === 'auto')>Avtomatik ({{ $hasAi ? 'AI' : 'qoida' }})</option>
-                                                    <option value="none" @selected($sel === 'none')>— Mos fan yo'q (farq)</option>
-                                                    @if(is_numeric($sel) && isset($trRows[(int) $sel]))
-                                                        <option value="{{ $sel }}" selected>{{ $optLabel((int) $sel, $trRows[(int) $sel]) }}</option>
-                                                    @endif
-                                                </select>
-                                            </td>
-                                            <td class="px-3 py-2 text-center">
-                                                <input type="checkbox" name="excluded[]" value="{{ $r['key'] }}" @checked($r['excluded']) class="h-4 w-4 rounded border-slate-400"
-                                                       aria-label="{{ $r['name'] }} — hisobdan chiqarish">
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                        <div :class="dirty ? 'sticky bottom-0 z-10 border-blue-300 bg-blue-50 shadow-[0_-4px_12px_rgba(15,23,42,0.08)]' : 'border-slate-200 bg-slate-50'"
-                             class="flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t px-5 py-3 text-xs text-slate-600">
-                            <span x-show="!dirty">Moslikni o'zgartirsangiz yoki qatorni hisobdan chiqarsangiz, GPA saqlangandan keyin qayta hisoblanadi.</span>
-                            <span x-show="dirty" x-cloak class="font-semibold text-blue-900">Saqlanmagan o'zgarishlar bor — GPA hali eski.</span>
-                            <button class="inline-flex h-9 items-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">Saqlash va qayta hisoblash</button>
-                        </div>
-                    </form>
-                </div>
-            @endforeach
-
-            {{-- ───────────── Yangi bosqich ───────────── --}}
-            @if($check->status !== 'error' && $rows)
-                <form method="POST" action="{{ route('admin.subject-differences.levels.store', $check) }}"
-                      class="rounded-2xl border-2 border-dashed {{ $suggestUpto ? 'border-rose-300' : 'border-blue-300' }} bg-white p-5 shadow-sm"
-                      x-data="curriculumPicker('{{ route('admin.subject-differences.curricula') }}')" x-init="load()" @submit="busy = true">
-                    @csrf
-                    <h3 class="text-sm font-bold text-slate-800">{{ count($levels) ? (count($levels) + 1) . '-bosqich: ' . ($suggestUpto ? 'pastki kurs o\'quv rejasi bilan' : 'boshqa o\'quv reja bilan') : 'O\'quv reja bilan solishtirish' }}</h3>
-                    <p class="mt-0.5 text-xs text-slate-500">
-                        @if($suggestUpto)
-                            <b class="text-rose-600">Oxirgi bosqichda talaba o'tmadi.</b> Pastki kurs o'quv rejasini tanlang va {{ $suggestUpto }}-semestrgacha tekshiring.
-                        @else
-                            Talaba qabul qilinadigan kursdagi o'quv rejani tanlang. Masalan, 5-kursga qabul uchun 1–8-semestr fanlari.
-                        @endif
-                        Fanlar ro'yxati akkreditatsiyadan (shu rejada haqiqatda o'tilgan va baholangan fanlar) olinadi.
-                    </p>
-
-                    <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12">
-                        <div class="lg:col-span-7">
-                            <label class="block text-xs font-semibold text-slate-600">O'quv reja (HEMIS)</label>
-                            <input type="text" x-model="q" @input.debounce.400ms="load()" placeholder="Qidirish: yo'nalish, reja nomi, o'quv yili…"
-                                   class="mt-1 w-full rounded-lg border-slate-300 text-sm">
-                            <select name="curriculum_id" required size="6" class="mt-1 w-full rounded-lg border-slate-300 text-sm">
-                                <template x-for="c in list" :key="c.id">
-                                    <option :value="c.id" x-text="label(c)"></option>
-                                </template>
-                            </select>
-                            <p class="mt-1 text-[11px] text-slate-500" x-show="loading">Yuklanmoqda…</p>
-                            <p class="mt-1 text-[11px] text-slate-500" x-show="!loading && list.length === 0">Akkreditatsiya ma'lumoti bor o'quv reja topilmadi.</p>
-                        </div>
-                        <div class="lg:col-span-2">
-                            <label class="block text-xs font-semibold text-slate-600">Qaysi semestrgacha</label>
-                            <select name="upto" required class="mt-1 w-full rounded-lg border-slate-300 text-sm">
-                                @for($s = 1; $s <= 12; $s++)
-                                    <option value="{{ $s }}" @selected($s === ($suggestUpto ?? 8))>1–{{ $s }}-semestr → {{ $s === 1 ? '1-kurs 2-sem' : (intdiv($s, 2) + 1) . '-kurs' }}</option>
-                                @endfor
-                            </select>
-                        </div>
-                        <div class="lg:col-span-3">
-                            <label class="block text-xs font-semibold text-slate-600">Moslashtirish</label>
-                            <label class="mt-2 flex items-center gap-2 text-sm">
-                                <input type="hidden" name="use_ai" value="0">
-                                <input type="checkbox" name="use_ai" value="1" {{ $aiConfigured ? 'checked' : 'disabled' }}>
-                                Qoida + AI (Gemini)
-                            </label>
-                            <button type="submit" :disabled="busy"
-                                    class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-                                <span x-text="busy ? 'Solishtirilmoqda… (1 daqiqagacha)' : 'Solishtirish'">Solishtirish</span>
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            @endif
 
             {{-- ───────────── Ma'lumotlar ───────────── --}}
             <details class="rounded-2xl border border-slate-200 bg-white shadow-sm">

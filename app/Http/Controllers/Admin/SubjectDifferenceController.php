@@ -41,8 +41,30 @@ class SubjectDifferenceController extends Controller
             ->paginate(20)
             ->withQueryString();
 
+        // Ro'yxatda yakuniy xulosa (kurs, GPA): bosqichlar yuqori kursdan pastga qo'shiladi, shuning uchun
+        // birinchi o'tgan bosqich — javob; hech biri o'tmagan bo'lsa oxirgisi. Saqlangan moslikdan hisoblanadi, AI chaqirilmaydi.
+        $summaries = [];
+        foreach ($checks as $c) {
+            $picked = null;
+            foreach ($c->levels ?? [] as $level) {
+                try {
+                    $ev = $this->service->evaluate($c, $level);
+                } catch (\Throwable $e) {
+                    continue; // buzilgan yozuv ro'yxatni to'xtatmasin
+                }
+                $picked = ['decision' => $ev['decision'], 'gpa' => $ev['gpa'], 'farq' => $ev['farq_count'], 'upto' => $level['upto'], 'levels' => count($c->levels)];
+                if ($ev['decision']['passed']) {
+                    break;
+                }
+            }
+            if ($picked) {
+                $summaries[$c->id] = $picked;
+            }
+        }
+
         return view('admin.subject-differences.index', [
             'checks' => $checks,
+            'summaries' => $summaries,
             'aiConfigured' => TranscriptReader::aiConfigured(),
             'defaults' => GradeScale::DEFAULTS,
         ]);

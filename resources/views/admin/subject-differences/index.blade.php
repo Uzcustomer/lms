@@ -111,22 +111,29 @@
                                         $lastLevel = collect($c->levels ?? [])->last();
                                     @endphp
                                     <tr class="cursor-pointer hover:bg-blue-50/50" onclick="window.location='{{ route('admin.subject-differences.show', $c) }}'">
-                                        <td class="whitespace-nowrap px-4 py-2 text-xs text-slate-500">{{ $c->created_at?->format('d.m.Y H:i') }}</td>
+                                        <td class="whitespace-nowrap px-4 py-2 text-xs text-slate-600">{{ $c->created_at?->format('d.m.Y H:i') }}</td>
                                         <td class="px-4 py-2 font-semibold text-slate-800">
                                             <a href="{{ route('admin.subject-differences.show', $c) }}" class="hover:text-blue-700">{{ $c->student_name ?: '—' }}</a>
                                         </td>
                                         <td class="px-4 py-2 text-slate-600">{{ $c->source_institution ?: '—' }}</td>
                                         <td class="px-4 py-2 text-xs">
+                                            @php $sum = $summaries[$c->id] ?? null; @endphp
                                             @if($c->status === 'error')
-                                                <span class="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-700">Xato</span>
-                                            @elseif($lastLevel)
-                                                <span class="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">{{ count($c->levels) }} bosqich</span>
-                                                <span class="text-slate-500">· oxirgisi 1–{{ $lastLevel['upto'] }}-semestr</span>
+                                                <span class="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-800">Transkript o'qilmadi</span>
+                                            @elseif($sum)
+                                                <div class="flex flex-wrap items-center gap-1.5">
+                                                    <span class="rounded-full px-2 py-0.5 font-semibold {{ $sum['decision']['passed'] ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                                                        {{ $sum['decision']['passed'] ? '✓' : '✕' }} {{ $sum['decision']['kurs'] }}-kurs
+                                                    </span>
+                                                    <span class="font-semibold tabular-nums text-slate-800">GPA {{ number_format($sum['gpa'], 2) }}</span>
+                                                    <span class="whitespace-nowrap text-slate-600">· {{ $sum['farq'] }} farq</span>
+                                                </div>
+                                                <div class="mt-0.5 text-[11px] text-slate-600">{{ $sum['levels'] }} bosqich · 1–{{ $sum['upto'] }}-semestr fanlari bo'yicha</div>
                                             @else
-                                                <span class="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700">O'quv reja tanlanmagan</span>
+                                                <span class="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">O'quv reja tanlanmagan</span>
                                             @endif
                                         </td>
-                                        <td class="px-4 py-2 text-xs text-slate-500">{{ $c->created_by_name }}</td>
+                                        <td class="px-4 py-2 text-xs text-slate-600">{{ $c->created_by_name }}</td>
                                     </tr>
                                 @empty
                                     <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-slate-500">Hozircha tekshiruv yo'q.</td></tr>

@@ -26,11 +26,14 @@ beforeEach(function () {
     Schema::create('dean_faculties', fn ($t) => [$t->id(), $t->unsignedBigInteger('teacher_id'), $t->unsignedBigInteger('department_hemis_id'), $t->timestamps()]);
     Schema::create('specialties', fn ($t) => [$t->id(), $t->unsignedBigInteger('specialty_hemis_id'), $t->string('name')]);
     Schema::create('groups', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('name'), $t->string('curriculum_hemis_id')->nullable(),
-        $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->unsignedBigInteger('specialty_hemis_id')->nullable(), $t->string('department_name')->nullable()]);
-    Schema::create('semesters', fn ($t) => [$t->id(), $t->string('curriculum_hemis_id'), $t->string('code'), $t->boolean('current'), $t->string('level_code'), $t->string('level_name')]);
+        $t->unsignedBigInteger('department_hemis_id')->nullable(), $t->unsignedBigInteger('specialty_hemis_id')->nullable(), $t->string('department_name')->nullable(),
+        $t->boolean('active')->default(true), $t->boolean('department_active')->default(true)]);
+    Schema::create('semesters', fn ($t) => [$t->id(), $t->string('curriculum_hemis_id'), $t->string('code'), $t->boolean('current'), $t->string('level_code'), $t->string('level_name'),
+        $t->string('semester_hemis_id')->nullable(), $t->string('education_year')->nullable()]);
+    Schema::create('curriculum_weeks', fn ($t) => [$t->id(), $t->string('semester_hemis_id'), $t->date('start_date')->nullable()]);
     Schema::create('curriculum_subjects', fn ($t) => [$t->id(), $t->string('curricula_hemis_id')->nullable(), $t->string('subject_id'),
         $t->string('semester_code'), $t->string('subject_name'), $t->string('semester_name')->nullable(), $t->string('closing_form')->nullable(),
-        $t->string('department_id')->nullable(), $t->string('department_name')->nullable()]);
+        $t->string('department_id')->nullable(), $t->string('department_name')->nullable(), $t->boolean('is_active')->default(true)]);
     Schema::create('exam_schedules', fn ($t) => [$t->id(), $t->string('group_hemis_id'), $t->string('subject_id'), $t->string('semester_code'), $t->string('subject_name')->nullable(),
         $t->unsignedBigInteger('student_hemis_id')->nullable(), $t->date('oski_date')->nullable(), $t->date('test_date')->nullable(),
         $t->boolean('oski_na')->default(false), $t->boolean('test_na')->default(false)]);
@@ -57,7 +60,7 @@ beforeEach(function () {
         ['group_hemis_id' => '78', 'name' => 'd1/d22-02a', 'curriculum_hemis_id' => '5', 'department_hemis_id' => 11, 'specialty_hemis_id' => 7, 'department_name' => '1-son davolash'],
         ['group_hemis_id' => '88', 'name' => 'p/22-01', 'curriculum_hemis_id' => '5', 'department_hemis_id' => 22, 'specialty_hemis_id' => 7, 'department_name' => 'Pediatriya'],
     ]);
-    DB::table('semesters')->insert(['curriculum_hemis_id' => '5', 'code' => '19', 'current' => true, 'level_code' => '15', 'level_name' => '5-kurs']);
+    DB::table('semesters')->insert(['curriculum_hemis_id' => '5', 'code' => '19', 'current' => true, 'level_code' => '15', 'level_name' => '5-kurs', 'semester_hemis_id' => 'S19']);
     DB::table('curriculum_subjects')->insert([
         ['curricula_hemis_id' => '5', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '55', 'department_name' => 'Akusherlik kafedrasi'],
         ['curricula_hemis_id' => '5', 'subject_id' => '30', 'semester_code' => '19', 'subject_name' => 'Pediatriya', 'semester_name' => '9-semestr', 'closing_form' => 'oski_test', 'department_id' => '66', 'department_name' => 'Pediatriya kafedrasi'],
@@ -204,7 +207,7 @@ it('gives the teacher their own groups and subjects with status', function () {
 
 it('keeps submitted and rejected vedomosts of a past semester visible with the current-semester filter on', function () {
     // O'tgan o'quv yili semestri (joriy emas)
-    DB::table('semesters')->insert(['curriculum_hemis_id' => '5', 'code' => '17', 'current' => false, 'level_code' => '14', 'level_name' => '4-kurs']);
+    DB::table('semesters')->insert(['curriculum_hemis_id' => '5', 'code' => '17', 'current' => false, 'level_code' => '14', 'level_name' => '4-kurs', 'semester_hemis_id' => 'S17']);
     DB::table('teachers')->insert(['id' => 1, 'hemis_id' => 501, 'full_name' => 'ALLAMURATOVA U.D.']);
     DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '17', 'group_hemis_id' => '77', 'teacher_id' => 1,
         'teacher_name' => 'ALLAMURATOVA U.D.', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);

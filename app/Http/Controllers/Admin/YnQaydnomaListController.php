@@ -167,18 +167,35 @@ class YnQaydnomaListController extends Controller
     }
 
     /**
-     * O'qituvchining joriy dars jadvalidagi amaliy (ma'ruza va nazoratlardan tashqari) guruh × fanlari
-     * va o'zi tasdiqlagan qaydnomalar; YN yuborilgani va imtihon tugagani bilan.
+     * O'qituvchining guruh × fanlari — Jurnal sahifasidagi ro'yxat bilan bir xil manba (o'quv rejasidagi
+     * faol fan, faol guruh, dars jadvalida shu o'qituvchining joriy o'quv yilidagi amaliy darsi — ma'ruza va
+     * nazoratlardan tashqari; joriy semestr — o'quv haftalari bo'yicha, semesters.current ga qaralmaydi)
+     * va o'zi tasdiqlagan qaydnomalar; YN yuborilgani va fan tugagani bilan.
      */
     public function teacherVedomosts(Teacher $teacher, bool $currentSemester = true): Collection
     {
         $key = self::keyFn();
-        $refs = DB::table('schedules')
-            ->whereNull('deleted_at')
-            ->where('employee_id', $teacher->hemis_id)
-            ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
-            ->when($currentSemester, fn ($q) => $q->where('education_year_current', true))
-            ->select('group_id as group_hemis_id', 'subject_id', 'semester_code', 'subject_name')
+        $window = $currentSemester ? app(JournalController::class)->journalCurrentSemesterWindowQuery() : null;
+        $refs = DB::table('curriculum_subjects as cs')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('semesters as s', function ($j) {
+                $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')->on('s.code', '=', 'cs.semester_code');
+            })
+            ->where('g.active', true)
+            ->where('g.department_active', true)
+            ->where('cs.is_active', true)
+            ->whereExists(function ($sub) use ($teacher) {
+                $sub->select(DB::raw(1))
+                    ->from('schedules')
+                    ->whereColumn('schedules.subject_id', 'cs.subject_id')
+                    ->whereColumn('schedules.group_id', 'g.group_hemis_id')
+                    ->where('schedules.employee_id', $teacher->hemis_id)
+                    ->where('schedules.education_year_current', true)
+                    ->whereNotIn('schedules.training_type_code', [11, 99, 100, 101, 102, 103])
+                    ->whereNull('schedules.deleted_at');
+            })
+            ->when($window !== null, fn ($q) => $q->whereIn('s.semester_hemis_id', $window ?: ['-']))
+            ->select('g.group_hemis_id', 'cs.subject_id', 'cs.semester_code', 'cs.subject_name')
             ->distinct()
             ->get()
             ->unique($key)
@@ -233,8 +250,8 @@ class YnQaydnomaListController extends Controller
 
                 return array_merge([$main], array_map(fn ($form) => $flags($this->makeRow($this->withForm($r, $form), $confirmations, $rejections)), $forms));
             })
-            // "Joriy semestr" — faqat hali topshirilmaganlarga
-            ->filter(fn ($row) => !$currentSemester || $row->current || $row->status !== self::STATUS_NONE)
+            // "Joriy semestr" — dars jadvalining joriy o'quv yili bilan cheklangan (yuqorida); semesters.current
+            // ga qaralmaydi: HEMIS da ba'zi o'quv rejalarda belgilanmagan — o'qituvchi fanlari yashirinib qolardi
             ->sortBy(fn ($r) => [array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_DEAN]), $r->group, $r->subject, $r->form])
             ->values();
     }

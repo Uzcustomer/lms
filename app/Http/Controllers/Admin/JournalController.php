@@ -5134,7 +5134,8 @@ class JournalController extends Controller
      * Sanaga qattiq bog'lanmaymiz: dars haftasi tugagan kurslar ham joriy o'quv
      * yili jurnalida ko'rinishi kerak.
      */
-    private function journalCurrentSemesterWindowQuery()
+    /** Joriy semestrlar (semester_hemis_id) — o'quv haftalari bo'yicha; Jurnal va "Vedomostlarim" */
+    public function journalCurrentSemesterWindowQuery()
     {
         static $ids = null;
         if ($ids !== null) {

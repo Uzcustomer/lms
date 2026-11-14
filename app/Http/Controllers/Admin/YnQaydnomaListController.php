@@ -220,10 +220,24 @@ class YnQaydnomaListController extends Controller
         $journal = app(JournalController::class);
         // Fan tugaganmi: imtihonlar (OSKI / test) o'tgan, imtihonsiz fanda — oxirgi dars o'tgan
         $ready = YnqReadiness::forMany($entries->map(fn ($r) => [$r->group_hemis_id, $r->subject_id, $r->semester_code]));
+        // O'qituvchining o'z (kichik) guruhlari — fan bo'yicha; har birini o'zi alohida tasdiqlaydi
+        $mine = $refs->groupBy(fn ($x) => $x->subject_id . '|' . $x->semester_code)
+            ->map(fn ($c) => $c->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->all());
+        $memberInfo = DB::table('groups')->whereIn('group_hemis_id', $entries->flatMap(fn ($r) => $r->members)->unique()->values())
+            ->get(['id', 'group_hemis_id', 'name'])->keyBy(fn ($g) => (string) $g->group_hemis_id);
 
         return $entries
-            ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $ready, $key, $journal, $teacher) {
-                $flags = function ($row) use ($r, $submitted, $ready, $key, $teacher) {
+            ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $ready, $key, $journal, $teacher, $mine, $memberInfo) {
+                $flags = function ($row) use ($r, $submitted, $ready, $key, $teacher, $mine, $memberInfo, $confirmations) {
+                    // Sizning kichik guruhlaringiz: nomi, jurnali, shu shaklda tasdiqlaganmisiz
+                    $own = array_values(array_intersect($row->members, $mine[$r->subject_id . '|' . $r->semester_code] ?? [(string) $r->group_hemis_id]));
+                    $row->my_groups = array_map(fn ($g) => (object) [
+                        'hemis_id' => $g,
+                        'name' => $memberInfo[$g]->name ?? $g,
+                        'pk' => $memberInfo[$g]->id ?? null,
+                        'confirmed' => $confirmations->get($g . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $row->form, collect())
+                            ->contains(fn ($c) => $c->role === YnQaydnomaConfirmation::ROLE_TEACHER && (int) $c->teacher_id === (int) $teacher->id),
+                    ], $own ?: [(string) $r->group_hemis_id]);
                     $row->yn_submitted = $submitted->has($key($r));
                     // 12a / 12b — o'z qayta topshirish imtihonlari o'tgach
                     $rd = $row->form === YnqForm::MAIN || $row->form === '12q' ? ($ready[$key($r)] ?? null)
@@ -234,7 +248,7 @@ class YnQaydnomaListController extends Controller
                     // Tasdiqlashingiz kerak: fan tugagan, siz hali topshirmagansiz (YN yuborilmagan bo'lsa — avval yuborasiz)
                     $row->needs_action = $row->exams_finished
                         && in_array($row->status, [self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_REJECTED], true)
-                        && !$row->teachers->contains('teacher_id', $teacher->id);
+                        && collect($row->my_groups)->contains(fn ($g) => !$g->confirmed);
 
                     return $row;
                 };
@@ -413,6 +427,7 @@ class YnQaydnomaListController extends Controller
             'exams_finished' => null,
             'finish_reason' => null,
             'needs_action' => false,
+            'my_groups' => [],
             'status' => $status,
             // Qaydnoma sahifasi — topshirilgan yoki rad etilgan (qayta ko'rib chiqish) vaznlari bilan
             'params' => $w === null ? null : [

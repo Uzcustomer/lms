@@ -333,7 +333,10 @@ it('lists the qo\'shimcha / 12a forms as separate vedomosts and puts the ones th
         ->toBe(['d1/d22-01a 12 dean', 'd1/d22-01a 12a teacher', 'd1/d22-01a 12q none'])
         // Tepada — faqat hali tasdiqlanmagan 12-qo'shimcha
         ->and($data['needsAction']->map(fn ($r) => $r->form . ' ' . $r->form_label)->all())->toBe(["12q 12-shakl qo'shimchasi"])
-        ->and($rows->firstWhere('form', '12a')->params)->toMatchArray(['form' => '12a']);
+        ->and($rows->firstWhere('form', '12a')->params)->toMatchArray(['form' => '12a'])
+        // O'qituvchining o'z kichik guruhi va shu shaklda tasdiqlagani
+        ->and(collect($rows->firstWhere('form', '12a')->my_groups)->map(fn ($g) => $g->name . ($g->confirmed ? ' ✓' : ''))->all())->toBe(['d1/d22-01a ✓'])
+        ->and(collect($rows->firstWhere('form', '12q')->my_groups)->map(fn ($g) => $g->name . ($g->confirmed ? ' ✓' : ''))->all())->toBe(['d1/d22-01a']);
 
     // Dekan — topshirilgan shakl (12a) alohida qator; topshirilmaganlari (hisob talab qiladi) — yo'q
     Auth::guard('teacher')->login(\App\Models\Teacher::find(9));

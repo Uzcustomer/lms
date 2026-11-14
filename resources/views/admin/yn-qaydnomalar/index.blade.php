@@ -60,6 +60,13 @@
         .yq-group { font-weight: 700; color: var(--yq-ink); white-space: nowrap; }
         .yq-small { display: block; font-size: 12px; color: var(--yq-muted); margin-top: 2px; font-weight: 400; }
         /* Qaydnoma shakli (12-shakl qo'shimchasi, 12a, …) — alohida vedomost */
+        .yq-mine-list { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; }
+        .yq-mine-label { font-size: 12px; color: var(--yq-muted); }
+        .yq-mine { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap;
+            color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; text-decoration: none; }
+        a.yq-mine:hover { background: #dbeafe; }
+        a.yq-mine:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+        .yq-mine.is-done { color: var(--yq-green); background: var(--yq-green-bg); border-color: var(--yq-green-line); }
         .yq-form--main { color: #334155 !important; background: #f1f5f9 !important; border-color: #e2e8f0 !important; }
         .yq-form { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700;
             color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; white-space: nowrap; vertical-align: 1px; }
@@ -167,6 +174,7 @@
                             <li class="yq-todo-item">
                                 <div class="yq-todo-main">
                                     <span class="yq-group">{{ $row->group }}</span>{{ $row->subject }}
+                                    @include('admin.yn-qaydnomalar.partials.my-groups')
                                     <span class="yq-form {{ $row->form === '12' ? 'yq-form--main' : '' }}">{{ $row->form_label }}</span>
                                     <span class="yq-small">
                                         {{ collect([$row->oski_date ? 'OSKI ' . \Carbon\Carbon::parse($row->oski_date)->format('d.m.Y') : null,
@@ -178,7 +186,7 @@
                                 <span class="yq-badge yq-badge--{{ $row->status }}">{{ $statusLabels[$row->status] }}</span>
                                 @if($row->group_pk)
                                     <a class="yq-btn yq-btn--sm yq-btn--primary"
-                                       href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $row->yn_submitted ? 'YN qaydnoma yaratish' : 'Jurnalni ochish' }}</a>
+                                       href="{{ route('admin.journal.show', [collect($row->my_groups)->first(fn ($g) => !$g->confirmed && $g->pk)?->pk ?? $row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $row->yn_submitted ? 'YN qaydnoma yaratish' : 'Jurnalni ochish' }}</a>
                                 @endif
                             </li>
                         @endforeach
@@ -219,6 +227,7 @@
                                             @if($row->member_names)
                                                 <span class="yq-small">Kichik guruhlar: {{ implode(', ', $row->member_names) }}</span>
                                             @endif
+                                            @if($isTeacher)@include('admin.yn-qaydnomalar.partials.my-groups')@endif
                                             <span class="yq-small">{{ collect([$isDean ? null : $row->faculty, $row->specialty, $row->level_name])->filter()->implode(' · ') }}</span>
                                         </td>
                                         <td>
@@ -282,7 +291,7 @@
                                                     @if($row->group_pk)
                                                         @php $readyToCreate = $row->needs_action && $row->yn_submitted && $row->status !== 'rejected'; @endphp
                                                         <a class="yq-btn yq-btn--sm {{ $readyToCreate ? 'yq-btn--primary' : '' }}"
-                                                           href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $readyToCreate ? 'YN qaydnoma yaratish' : 'Jurnal' }}</a>
+                                                           href="{{ route('admin.journal.show', [collect($row->my_groups)->first(fn ($g) => !$g->confirmed && $g->pk)?->pk ?? $row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">{{ $readyToCreate ? 'YN qaydnoma yaratish' : 'Jurnal' }}</a>
                                                     @endif
                                                 </div>
                                             @elseif($row->teachers->isNotEmpty() && $row->params)

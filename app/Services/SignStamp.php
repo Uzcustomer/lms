@@ -3,8 +3,8 @@
 namespace App\Services;
 
 /**
- * "IMZOLANDI dd.mm.yyyy" — rezina muhrga o'xshash belgi (PNG, GD bilan): ko'k, qo'sh ramka, biroz qiya,
- * fon shaffof. Qaydnomada tasdiqlagan har bir o'qituvchi, kafedra mudiri va dekan ismidan keyin.
+ * "IMZOLANDI dd.mm.yyyy" — rezina muhrga o'xshash belgi (PNG, GD bilan): ko'k, qo'sh ramka, to'g'ri
+ * (qiyshaymagan), fon shaffof. Qaydnomada tasdiqlagan har bir o'qituvchi, kafedra mudiri va dekan ismidan keyin.
  */
 class SignStamp
 {
@@ -36,14 +36,9 @@ class SignStamp
         $frame(11, 2);
         imagettftext($img, $size, 0, (int) (($w - $tw) / 2) - $box[0], (int) (($h + $th) / 2) - 4, $ink, $font, $text);
 
-        // Biroz qiya — qo'lda bosilgan muhrdek
-        $rotated = imagerotate($img, 4, imagecolorallocatealpha($img, 255, 255, 255, 127));
-        imagesavealpha($rotated, true);
-        imagedestroy($img);
-
         ob_start();
-        imagepng($rotated);
-        imagedestroy($rotated);
+        imagepng($img);
+        imagedestroy($img);
 
         return (string) ob_get_clean();
     }

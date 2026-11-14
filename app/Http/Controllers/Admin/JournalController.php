@@ -77,7 +77,7 @@ class JournalController extends Controller
     private const YNQ_QR_ROWS = [2, 7];
     /** "IMZOLANDI" muhri (SignStamp) — tasdiqlagan har kishi ismidan keyin; balandligi (px): sarlavhada / pastda */
     private const YNQ_STAMP_ALT = 'Imzo: ';
-    private const YNQ_STAMP_PX = [28, 34];
+    private const YNQ_STAMP_PX = [21, 26];
     /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
     private const YNQ_TABLE_ROWS = [15, 50];
     /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — tasdiqlar va muhrlar */
@@ -12212,7 +12212,7 @@ class JournalController extends Controller
             if (!$names || in_array(null, $confirmations, true)) {
                 continue;
             }
-            $sheet->getRowDimension($r)->setRowHeight(max((float) $sheet->getRowDimension($r)->getRowHeight(), 20));
+            $sheet->getRowDimension($r)->setRowHeight(max((float) $sheet->getRowDimension($r)->getRowHeight(), 18));
             self::placeStamp($sheet, 'W', self::YNQ_LAST_COL, $r, collect($confirmations)->sortByDesc('confirmed_at')->first(), self::YNQ_STAMP_PX[0]);
         }
     }
@@ -12336,7 +12336,7 @@ class JournalController extends Controller
             $sheet->getCell("B{$next}")->setValue($stamp)->setXfIndex($stampXf);
         }
         if ($head || $dean) {
-            $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 26));
+            $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 23));
         }
         if ($dean) {
             self::placeStamp($sheet, 'E', 'H', $row, $dean, self::YNQ_STAMP_PX[1]);

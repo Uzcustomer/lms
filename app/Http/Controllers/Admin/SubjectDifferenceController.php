@@ -41,8 +41,30 @@ class SubjectDifferenceController extends Controller
             ->paginate(20)
             ->withQueryString();
 
+        // Ro'yxatda yakuniy xulosa (kurs, GPA): bosqichlar yuqori kursdan pastga qo'shiladi, shuning uchun
+        // birinchi o'tgan bosqich — javob; hech biri o'tmagan bo'lsa oxirgisi. Saqlangan moslikdan hisoblanadi, AI chaqirilmaydi.
+        $summaries = [];
+        foreach ($checks as $c) {
+            $picked = null;
+            foreach ($c->levels ?? [] as $level) {
+                try {
+                    $ev = $this->service->evaluate($c, $level);
+                } catch (\Throwable $e) {
+                    continue; // buzilgan yozuv ro'yxatni to'xtatmasin
+                }
+                $picked = ['decision' => $ev['decision'], 'gpa' => $ev['gpa'], 'farq' => $ev['farq_count'], 'upto' => $level['upto'], 'levels' => count($c->levels)];
+                if ($ev['decision']['passed']) {
+                    break;
+                }
+            }
+            if ($picked) {
+                $summaries[$c->id] = $picked;
+            }
+        }
+
         return view('admin.subject-differences.index', [
             'checks' => $checks,
+            'summaries' => $summaries,
             'aiConfigured' => TranscriptReader::aiConfigured(),
             'defaults' => GradeScale::DEFAULTS,
         ]);
@@ -94,6 +116,8 @@ class SubjectDifferenceController extends Controller
             'scale' => GradeScale::fromArray($check->scale),
             'aiConfigured' => TranscriptReader::aiConfigured(),
             'suggestUpto' => $this->suggestUpto($levels),
+            // Javob bo'lgan bosqich: birinchi o'tgani, hech biri o'tmagan bo'lsa oxirgisi — ochiq ko'rsatiladi.
+            'answerIndex' => $this->answerIndex($levels),
             'sourceCompare' => $this->service->compareSources($check),
         ]);
     }
@@ -140,8 +164,17 @@ class SubjectDifferenceController extends Controller
             'map' => 'nullable|array',
             'excluded' => 'nullable|array',
         ]);
+        // "Hisobga olinmasin" moslik ro'yxatining bir varianti sifatida keladi (har qatorda bitta boshqaruv).
+        $map = $data['map'] ?? [];
+        $excluded = $data['excluded'] ?? [];
+        foreach ($map as $key => $value) {
+            if ($value === 'exclude') {
+                $excluded[] = (string) $key;
+                unset($map[$key]);
+            }
+        }
         try {
-            $this->service->saveMapping($check, $level, $data['map'] ?? [], $data['excluded'] ?? []);
+            $this->service->saveMapping($check, $level, $map, $excluded);
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -243,6 +276,17 @@ class SubjectDifferenceController extends Controller
         $check->delete();
 
         return redirect()->route('admin.subject-differences.index')->with('success', 'Tekshiruv o\'chirildi.');
+    }
+
+    private function answerIndex(array $levels): ?int
+    {
+        foreach ($levels as $i => $item) {
+            if ($item['result']['decision']['passed']) {
+                return $i;
+            }
+        }
+
+        return $levels ? count($levels) - 1 : null;
     }
 
     /** Oxirgi bosqich o'tmagan bo'lsa — keyingi tekshiriladigan semestr. */

@@ -10712,7 +10712,9 @@ class JournalController extends Controller
             $html = $scale($html, $ratio * 0.97);
         }
 
+        // Shriftdan faqat ishlatilgan belgilar joylanadi (subsetting) — PDF ~1 MB emas, o'nlab KB
         return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($withPage($html))
+            ->setOption('isFontSubsettingEnabled', true)
             ->setPaper('a4', $landscape ? 'landscape' : 'portrait')
             ->output();
     }

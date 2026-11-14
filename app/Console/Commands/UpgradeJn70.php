@@ -143,7 +143,9 @@ class UpgradeJn70 extends Command
                 $test = $v->test_na ? null : $v->test_date;
                 // Yopuvchi imtihon: test bo'lsa — test, faqat OSKI bo'lsa — OSKI
                 $v->exam_types = $test ? [102, 103] : ($oski ? [101] : []);
-                $v->exam_date = max(array_filter([(string) $oski, (string) $test])) ?: null;
+                // Ikkala sana ham yo'q (yoki "yo'q" deb belgilangan) jadval qatori — o'tkazib yuboriladi
+                $dates = array_filter([(string) $oski, (string) $test]);
+                $v->exam_date = $dates ? max($dates) : null;
                 $v->subject_name = $v->subject_name ?? ('Fan #' . $v->subject_id);
 
                 return $v;

@@ -36,6 +36,7 @@ beforeEach(function () {
     DB::table('exam_schedules')->insert([
         ['group_hemis_id' => '1', 'subject_id' => '10', 'semester_code' => '19', 'oski_date' => '2026-10-15', 'test_date' => '2026-10-20'],   // 26.10 dan oldin
         ['group_hemis_id' => '1', 'subject_id' => '11', 'semester_code' => '19', 'oski_date' => '2026-10-22', 'test_date' => '2026-11-04'],   // keyin — tegilmaydi
+        ['group_hemis_id' => '1', 'subject_id' => '12', 'semester_code' => '19', 'oski_date' => null, 'test_date' => null],                 // sanasiz — o'tkaziladi
     ]);
     DB::table('students')->insert([
         ['hemis_id' => 's1', 'group_id' => '1', 'full_name' => 'A TESTGA KELGAN'],

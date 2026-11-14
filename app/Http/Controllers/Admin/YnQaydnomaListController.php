@@ -225,8 +225,11 @@ class YnQaydnomaListController extends Controller
             ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $ready, $key, $journal, $teacher) {
                 $flags = function ($row) use ($r, $submitted, $ready, $key, $teacher) {
                     $row->yn_submitted = $submitted->has($key($r));
-                    $row->exams_finished = $ready[$key($r)]['finished'] ?? false;
-                    $row->finish_reason = $ready[$key($r)]['reason'] ?? null;
+                    // 12a / 12b — o'z qayta topshirish imtihonlari o'tgach
+                    $rd = $row->form === YnqForm::MAIN || $row->form === '12q' ? ($ready[$key($r)] ?? null)
+                        : YnqReadiness::for((string) $r->group_hemis_id, (string) $r->subject_id, (string) $r->semester_code, $row->form);
+                    $row->exams_finished = $rd['finished'] ?? false;
+                    $row->finish_reason = $rd['reason'] ?? null;
                     $row->current = $r->current;
                     // Tasdiqlashingiz kerak: fan tugagan, siz hali topshirmagansiz (YN yuborilmagan bo'lsa — avval yuborasiz)
                     $row->needs_action = $row->exams_finished

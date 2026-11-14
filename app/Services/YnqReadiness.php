@@ -10,16 +10,26 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Fan tugaganmi — YN qaydnoma (vedomost) shundan keyin yaratiladi: yopilish shakli talab qilgan
  * imtihonlar (OSKI / test) sanasi bugungacha o'tgan; imtihonsiz fan (sinov, normativ yoki imtihon
- * jadvali yo'q) — guruhning shu fandagi oxirgi darsi o'tgan.
+ * jadvali yo'q) — guruhning shu fandagi oxirgi darsi o'tgan. 12a / 12b (va qo'shimchalari) shakllari —
+ * o'z qayta topshirish imtihonlari sanasi (oski_resit_date / test_resit_date, …resit2…) o'tgach.
  */
 class YnqReadiness
 {
     /**
      * @param  Collection<int, array{0: string, 1: string, 2: string}>|array  $refs  [guruh, fan, semestr]
+     * @param  string  $ynqForm  qaydnoma shakli (YnqForm) — 12a / 12b da o'sha urinish imtihonlari sanasi
      * @return array<string, array{finished: bool, reason: ?string}>  kalit — "guruh|fan|semestr"
      */
-    public static function forMany(Collection|array $refs): array
+    public static function forMany(Collection|array $refs, string $ynqForm = YnqForm::MAIN): array
     {
+        // Urinish: 12 / 12q — asosiy imtihonlar, 12a / 12aq — 1-qayta, 12b / 12bq — 2-qayta topshirish
+        $attempt = match (YnqForm::normalize($ynqForm)) {
+            '12a', '12aq' => ['oski_resit_date', 'test_resit_date', '12a '],
+            '12b', '12bq' => ['oski_resit2_date', 'test_resit2_date', '12b '],
+            default => ['oski_date', 'test_date', ''],
+        };
+        [$oskiCol, $testCol, $prefix] = $attempt;
+        $retake = $prefix !== '';
         $refs = collect($refs)->map(fn ($r) => array_map('strval', array_values((array) $r)))->unique(fn ($r) => implode('|', $r))->values();
         if ($refs->isEmpty()) {
             return [];
@@ -28,9 +38,9 @@ class YnqReadiness
         $groups = $refs->pluck(0)->unique()->values();
         $subjects = $refs->pluck(1)->unique()->values();
 
-        $exams = Schema::hasTable('exam_schedules')
+        $exams = Schema::hasTable('exam_schedules') && Schema::hasColumns('exam_schedules', [$oskiCol, $testCol])
             ? DB::table('exam_schedules')->whereNull('student_hemis_id')->whereIn('group_hemis_id', $groups)->whereIn('subject_id', $subjects)
-                ->get(['group_hemis_id', 'subject_id', 'semester_code', 'oski_date', 'test_date', 'oski_na', 'test_na'])
+                ->get(['group_hemis_id', 'subject_id', 'semester_code', "{$oskiCol} as oski_date", "{$testCol} as test_date", 'oski_na', 'test_na'])
                 ->keyBy(fn ($e) => $e->group_hemis_id . '|' . $e->subject_id . '|' . $e->semester_code)
             : collect();
         $closing = DB::table('groups as g')
@@ -52,7 +62,8 @@ class YnqReadiness
             $form = $closing->get($key)->closing_form ?? null;
             $oski = $exam && !$exam->oski_na ? $exam->oski_date : null;
             $test = $exam && !$exam->test_na ? $exam->test_date : null;
-            $required = match ($form) {
+            // Qayta topshirishda — belgilangan imtihonlar (faqat yiqilgan turi o'tkazilishi mumkin)
+            $required = $retake ? array_filter(['OSKI' => $oski, 'test' => $test]) : match ($form) {
                 'oski' => ['OSKI' => $oski],
                 'test' => ['test' => $test],
                 'oski_test' => ['OSKI' => $oski, 'test' => $test],
@@ -62,9 +73,14 @@ class YnqReadiness
             if ($required !== []) {
                 $pending = array_keys(array_filter($required, fn ($d) => !$d || substr((string) $d, 0, 10) > $today));
                 $result[$key] = ['finished' => $pending === [], 'reason' => $pending === [] ? null
-                    : (collect($required)->only($pending)->filter()->isEmpty()
+                    : $prefix . (collect($required)->only($pending)->filter()->isEmpty()
                         ? implode(' va ', $pending) . ' sanasi belgilanmagan'
                         : implode(' va ', $pending) . ' hali o\'tmagan')];
+                continue;
+            }
+            // Qayta topshirish shakli — imtihon sanasi bo'lmasa tayyor emas
+            if ($retake) {
+                $result[$key] = ['finished' => false, 'reason' => $prefix . 'imtihon sanasi belgilanmagan'];
                 continue;
             }
             // Imtihonsiz fan — oxirgi dars o'tgan bo'lsa
@@ -77,8 +93,8 @@ class YnqReadiness
     }
 
     /** @return array{finished: bool, reason: ?string} */
-    public static function for(string $groupHemisId, string $subjectId, string $semesterCode): array
+    public static function for(string $groupHemisId, string $subjectId, string $semesterCode, string $ynqForm = YnqForm::MAIN): array
     {
-        return self::forMany([[$groupHemisId, $subjectId, $semesterCode]])["{$groupHemisId}|{$subjectId}|{$semesterCode}"];
+        return self::forMany([[$groupHemisId, $subjectId, $semesterCode]], $ynqForm)["{$groupHemisId}|{$subjectId}|{$semesterCode}"];
     }
 }

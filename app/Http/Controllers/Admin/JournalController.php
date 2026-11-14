@@ -61,7 +61,10 @@ class JournalController extends Controller
     /** Ustun olib tashlangach oxirgi ustun — so'z bilan baho ("aʼlo", …) */
     private const YNQ_LAST_COL = 'X';
     /** Shu ustunga qo'shimcha kenglik (Excel birligi) */
-    private const YNQ_WORD_COL_EXTRA = 6;
+    private const YNQ_WORD_COL_EXTRA = 0;
+    /** "O'zlashtirish ko'rsatkichi" ustuni va unga qo'shimcha kenglik (sahifa kengligi o'zgarmasin — so'z ustunidan) */
+    private const YNQ_RATE_COL = 'V';
+    private const YNQ_RATE_COL_EXTRA = 6;
     /** Jadvaldagi baho guruhlari orasidagi bo'sh (ajratuvchi) ustunlar — hammasi bir xil, tor */
     private const YNQ_SPACER_COLS = ['F', 'I', 'L', 'O', 'R', 'U'];
     private const YNQ_SPACER_WIDTH = 1.55;   // PDF da ~4pt
@@ -74,7 +77,7 @@ class JournalController extends Controller
     private const YNQ_QR_ROWS = [2, 7];
     /** "IMZOLANDI" muhri (SignStamp) — tasdiqlagan har kishi ismidan keyin; balandligi (px): sarlavhada / pastda */
     private const YNQ_STAMP_ALT = 'Imzo: ';
-    private const YNQ_STAMP_PX = [21, 26];
+    private const YNQ_STAMP_PX = [28, 34];
     /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
     private const YNQ_TABLE_ROWS = [15, 50];
     /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — tasdiqlar va muhrlar */
@@ -12181,18 +12184,35 @@ class JournalController extends Controller
     /**
      * Sarlavhadagi amaliyot o'qituvchilari (10–12-qatorlar, ismlar S:U da): tasdiqlagan o'qituvchi ismidan
      * keyin muhr (W:X; V — uzun ism sig'ishi uchun bo'sh). Bir qatorda bir nechta ism (vergul bilan) bo'lsa — hammasi tasdiqlagandagina.
+     *
+     * Ism solishtirish: familiya bir xil, initsiallardan biri ikkinchisining boshi — dars jadvalidagi ism
+     * ("MAMURJANOVA MAFTUNA SROJIDDIN" → M.S.) bilan tasdiqdagi to'liq ism ("… SROJIDDIN QIZI" → M.S.Q.) mos keladi.
      */
     private static function stampHeaderTeachers(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, \Illuminate\Support\Collection $teachers): void
     {
-        $key = fn (string $name) => mb_strtoupper(preg_replace('/\s+/u', '', $name));
-        $byName = $teachers->keyBy(fn ($c) => $key(self::abbreviateName((string) $c->teacher_name)));
+        $split = function (string $abbr): array {
+            $abbr = mb_strtoupper(trim($abbr));
+            $space = mb_strpos($abbr, ' ');
+
+            return $space === false ? [$abbr, ''] : [mb_substr($abbr, 0, $space), preg_replace('/\s+/u', '', mb_substr($abbr, $space))];
+        };
+        $find = function (string $name) use ($teachers, $split) {
+            [$surname, $initials] = $split($name);
+
+            return $teachers->first(function ($c) use ($split, $surname, $initials) {
+                [$s, $i] = $split(self::abbreviateName((string) $c->teacher_name));
+
+                return $s === $surname && ($i === $initials || ($i !== '' && $initials !== ''
+                    && (str_starts_with($i, $initials) || str_starts_with($initials, $i))));
+            });
+        };
         foreach ([10, 11, 12] as $r) {
             $names = array_filter(array_map('trim', explode(',', (string) $sheet->getCell("S{$r}")->getValue())));
-            $confirmations = array_map(fn ($n) => $byName->get($key($n)), $names);
+            $confirmations = array_map($find, $names);
             if (!$names || in_array(null, $confirmations, true)) {
                 continue;
             }
-            $sheet->getRowDimension($r)->setRowHeight(max((float) $sheet->getRowDimension($r)->getRowHeight(), 18));
+            $sheet->getRowDimension($r)->setRowHeight(max((float) $sheet->getRowDimension($r)->getRowHeight(), 20));
             self::placeStamp($sheet, 'W', self::YNQ_LAST_COL, $r, collect($confirmations)->sortByDesc('confirmed_at')->first(), self::YNQ_STAMP_PX[0]);
         }
     }
@@ -12316,7 +12336,7 @@ class JournalController extends Controller
             $sheet->getCell("B{$next}")->setValue($stamp)->setXfIndex($stampXf);
         }
         if ($head || $dean) {
-            $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 23));
+            $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 26));
         }
         if ($dean) {
             self::placeStamp($sheet, 'E', 'H', $row, $dean, self::YNQ_STAMP_PX[1]);
@@ -12424,9 +12444,11 @@ class JournalController extends Controller
         foreach ($others as $col) {
             $sheet->getColumnDimension($col)->setWidth($width($col) + $freed / count($others));
         }
-        // So'z bilan baho ("aʼlo", "kelmadi", "qoʻyilmadi") ustuni kengroq — o'ng yuqori burchakda kafedra mudiri QR i ham shu ustun ustida
+        // So'z bilan baho ("aʼlo", "kelmadi", "qoʻyilmadi") va "O'zlashtirish ko'rsatkichi" ustunlari kengroq
         $wordCol = $sheet->getColumnDimension(self::YNQ_LAST_COL);
         $wordCol->setWidth($wordCol->getWidth() + self::YNQ_WORD_COL_EXTRA);
+        $rateCol = $sheet->getColumnDimension(self::YNQ_RATE_COL);
+        $rateCol->setWidth($rateCol->getWidth() + self::YNQ_RATE_COL_EXTRA);
 
         // Shakl raqami ("12-shakl", …) — o'ng yuqori burchakda (1-qator, oxirgi ustun): shablonda u
         // C1 dan oxirigacha birlashtirilgan katak ichida qolib, ko'rinmas edi

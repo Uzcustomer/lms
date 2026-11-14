@@ -37,7 +37,7 @@ class SignStamp
         imagettftext($img, $size, 0, (int) (($w - $tw) / 2) - $box[0], (int) (($h + $th) / 2) - 4, $ink, $font, $text);
 
         // Biroz qiya — qo'lda bosilgan muhrdek
-        $rotated = imagerotate($img, 1, imagecolorallocatealpha($img, 255, 255, 255, 127));
+        $rotated = imagerotate($img, 4, imagecolorallocatealpha($img, 255, 255, 255, 127));
         imagesavealpha($rotated, true);
         imagedestroy($img);
 

@@ -543,6 +543,17 @@ describe('teacher confirmation', function () {
             ->and($w->getStyle('X11')->getBorders()->getTop()->getBorderStyle())->toBe('none');
     });
 
+    it('stamps a header teacher whose confirmed full name has an extra patronymic word', function () {
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(public_path('templates/yn_qaydnoma (1).xlsx'));
+        $w = $book->getActiveSheet();
+        $w->setCellValue('S10', 'MAMURJANOVA M.S.')->setCellValue('S11', 'MAMURJANOVA D.')->setCellValue('S12', 'ALIYEVA B.');
+        $c = fn ($name) => (object) ['teacher_name' => $name, 'confirmed_at' => \Carbon\Carbon::parse('2026-11-12 11:56')];
+        (new ReflectionMethod(JournalController::class, 'stampHeaderTeachers'))
+            ->invoke(null, $w, collect([$c('MAMURJANOVA MAFTUNA SROJIDDIN QIZI'), $c('ALIYEV BOBUR')]));
+        // Jadvaldagi "M.S." — tasdiqdagi "M.S.Q." ga mos; boshqa initsial yoki boshqa familiya — yo'q
+        expect(collect($w->getDrawingCollection())->map->getCoordinates()->values()->all())->toBe(['W10']);
+    });
+
     it('does not let the lecturer confirm', function () {
         expect(fn () => ($this->confirm)(2))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         expect(\App\Models\YnQaydnomaConfirmation::count())->toBe(0);

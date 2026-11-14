@@ -60,6 +60,7 @@
         .yq-group { font-weight: 700; color: var(--yq-ink); white-space: nowrap; }
         .yq-small { display: block; font-size: 12px; color: var(--yq-muted); margin-top: 2px; font-weight: 400; }
         /* Qaydnoma shakli (12-shakl qo'shimchasi, 12a, …) — alohida vedomost */
+        .yq-form--main { color: #334155 !important; background: #f1f5f9 !important; border-color: #e2e8f0 !important; }
         .yq-form { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700;
             color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; white-space: nowrap; vertical-align: 1px; }
         /* O'qituvchi: tasdiqlashi kerak bo'lgan vedomostlar */
@@ -166,7 +167,7 @@
                             <li class="yq-todo-item">
                                 <div class="yq-todo-main">
                                     <span class="yq-group">{{ $row->group }}</span>{{ $row->subject }}
-                                    @if($row->form !== '12')<span class="yq-form">{{ $row->form_label }}</span>@endif
+                                    <span class="yq-form {{ $row->form === '12' ? 'yq-form--main' : '' }}">{{ $row->form_label }}</span>
                                     <span class="yq-small">
                                         {{ collect([$row->oski_date ? 'OSKI ' . \Carbon\Carbon::parse($row->oski_date)->format('d.m.Y') : null,
                                             $row->test_date ? 'Test ' . \Carbon\Carbon::parse($row->test_date)->format('d.m.Y') : null])->filter()->implode(' · ') }}
@@ -200,6 +201,7 @@
                                     <th>#</th>
                                     <th>Guruh</th>
                                     <th>Fan</th>
+                                    <th>Shakl</th>
                                     <th>YN sanasi</th>
                                     @unless($isTeacher)<th>Amaliy o'qituvchi</th>@endunless
                                     <th>Kafedra mudiri</th>
@@ -221,9 +223,9 @@
                                         </td>
                                         <td>
                                             {{ $row->subject }}
-                                            @if($row->form !== '12')<span class="yq-form">{{ $row->form_label }}</span>@endif
                                             <span class="yq-small">{{ $row->semester }}</span>
                                         </td>
+                                        <td><span class="yq-form {{ $row->form === '12' ? 'yq-form--main' : '' }}" style="margin-left:0">{{ $row->form_label }}</span></td>
                                         <td class="yq-dates">
                                             @if($row->oski_date)<div><b>OSKI</b> {{ \Carbon\Carbon::parse($row->oski_date)->format('d.m.Y') }}</div>@endif
                                             @if($row->test_date)<div><b>Test</b> {{ \Carbon\Carbon::parse($row->test_date)->format('d.m.Y') }}</div>@endif

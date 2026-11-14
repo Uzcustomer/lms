@@ -112,7 +112,9 @@
                                 </td>
                                 <td class="px-4 py-2.5 text-slate-700">{{ $c->source_institution ?: '—' }}</td>
                                 <td class="px-4 py-2.5">
-                                    @if($c->status === 'error')
+                                    @if(in_array($c->status, ['reading', 'matching'], true))
+                                        <span class="font-semibold text-blue-800">Tekshirilmoqda…</span>
+                                    @elseif($c->status === 'error')
                                         <span class="font-semibold text-rose-700">Transkript o'qilmadi</span>
                                     @elseif($sum)
                                         <span class="font-semibold {{ $sum['decision']['passed'] ? 'text-emerald-800' : 'text-rose-700' }}">

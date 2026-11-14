@@ -298,3 +298,56 @@ test("matnli PDF (pdftotext): Talaba A transkriptining 61 qatori to'liq o'qiladi
     $fromFixture = (new RuleMatcher())->match($f['plan'], $f['transcript']);
     expect(array_column($fromText, 'tr'))->toBe(array_column($fromFixture, 'tr'));
 });
+
+// ─────────────── bitta transkript fani → barcha semestrlar ───────────────
+
+test("transkriptda bitta Gistologiya — rejadagi uch semestrning hammasiga shu baho qo'yiladi", function () {
+    $plan = [
+        ['key' => 'g2', 'subject_id' => 7, 'semester' => 2, 'name' => 'Gistologiya, sitologiya, embriologiya'],
+        ['key' => 'g3', 'subject_id' => 7, 'semester' => 3, 'name' => 'Gistologiya, sitologiya, embriologiya'],
+        ['key' => 'g4', 'subject_id' => 7, 'semester' => 4, 'name' => 'Gistologiya, sitologiya, embriologiya'],
+        ['key' => 'f2', 'subject_id' => 8, 'semester' => 2, 'name' => 'Falsafa'],
+    ];
+    // AI faqat 3-semestrni bog'lagan, qolganlarini "yo'q" degan
+    $ai = [
+        'g2' => ['tr' => null, 'confidence' => 0.2, 'reason' => "yo'q"],
+        'g3' => ['tr' => 5, 'confidence' => 0.95, 'reason' => 'bir xil fan'],
+        'g4' => ['tr' => null, 'confidence' => 0.2, 'reason' => "yo'q"],
+        'f2' => ['tr' => null, 'confidence' => 0.1, 'reason' => "yo'q"],
+    ];
+    $out = \App\Services\SubjectDifference\SameSubjectFill::apply($plan, $ai);
+
+    expect($out['g2']['tr'])->toBe(5)
+        ->and($out['g4']['tr'])->toBe(5)
+        ->and($out['g2']['filled_from'])->toBe('g3')
+        ->and($out['g2']['reason'])->toContain('3-semestr')
+        ->and($out['f2']['tr'])->toBeNull(); // boshqa fan — farq bo'lib qoladi
+});
+
+test("fanning bir nechta semestri transkriptda bor bo'lsa — mavjud mosliklarga tegilmaydi, bo'shiga eng yaqini", function () {
+    $plan = [
+        ['key' => 'b3', 'subject_id' => 9, 'semester' => 3, 'name' => 'Biokimyo'],
+        ['key' => 'b4', 'subject_id' => 9, 'semester' => 4, 'name' => 'Biokimyo'],
+        ['key' => 'b5', 'subject_id' => 9, 'semester' => 5, 'name' => 'Biokimyo'],
+    ];
+    $rule = ['b3' => ['tr' => 1, 'score' => 1.0], 'b4' => ['tr' => 2, 'score' => 1.0], 'b5' => ['tr' => null, 'score' => 0.0]];
+    $out = \App\Services\SubjectDifference\SameSubjectFill::apply($plan, $rule);
+
+    expect($out['b3']['tr'])->toBe(1)->and($out['b4']['tr'])->toBe(2)->and($out['b5']['tr'])->toBe(2);
+});
+
+test("reja tartibi: semestr, so'ng o'quv reja bloki (akkreditatsiyadagidek), so'ng rejadagi o'rni", function () {
+    $records = [];
+    foreach ([[1, 'Biofizika'], [2, "O'zbekistonning eng yangi tarixi"], [3, 'Tibbiy kimyo'], [4, 'Ishlab chiqarish amaliyoti']] as [$id, $name]) {
+        $records[] = ['subject_id' => $id, 'subject_name' => $name, 'semester_id' => '11', 'credit' => '2', 'total_acload' => 60, 'student_id' => 1];
+    }
+    $types = [
+        '1|11' => ['subject_type_name' => 'Majburiy', 'credit' => 2, 'subject_block_code' => '2.02', 'curriculum_subject_hemis_id' => 30],
+        '2|11' => ['subject_type_name' => 'Majburiy', 'credit' => 2, 'subject_block_code' => '1.01', 'curriculum_subject_hemis_id' => 90],
+        '3|11' => ['subject_type_name' => 'Majburiy', 'credit' => 2, 'subject_block_code' => '2.02', 'curriculum_subject_hemis_id' => 10],
+        '4|11' => ['subject_type_name' => 'Majburiy', 'credit' => 2, 'subject_block_code' => '10.01', 'curriculum_subject_hemis_id' => 5],
+    ];
+    $plan = (new PlanBuilder())->aggregate($records, $types);
+
+    expect(array_column($plan, 'name'))->toBe(["O'zbekistonning eng yangi tarixi", 'Tibbiy kimyo', 'Biofizika', 'Ishlab chiqarish amaliyoti']);
+});

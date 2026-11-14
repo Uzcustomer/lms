@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessSubjectDifferenceCheck;
 use App\Models\SubjectDifferenceCheck;
 use App\Services\SubjectDifference\GradeScale;
 use App\Services\SubjectDifference\PlanBuilder;
@@ -87,7 +88,6 @@ class SubjectDifferenceController extends Controller
             'extra.*' => "Qo'shimcha fayl",
         ]);
 
-        @set_time_limit(300);
         $files = array_merge([$request->file('transcript')], $request->file('extra', []));
         $check = $this->service->create(
             $files,
@@ -97,10 +97,20 @@ class SubjectDifferenceController extends Controller
             auth()->user()
         );
 
-        return redirect()->route('admin.subject-differences.show', $check)
-            ->with($check->status === 'error' ? 'error' : 'success', $check->status === 'error'
-                ? 'Transkript o\'qilmadi: ' . $check->error
-                : 'Transkript o\'qildi. Endi o\'quv rejani va qaysi semestrgachaligini tanlang.');
+        ProcessSubjectDifferenceCheck::dispatch($check->id, 'read');
+
+        return redirect()->route('admin.subject-differences.show', $check);
+    }
+
+    /** Fon vazifasi holati — sahifa shuni so'rab turadi. */
+    public function status(SubjectDifferenceCheck $check): JsonResponse
+    {
+        return response()->json(['status' => $check->status, 'error' => $check->error, 'updated' => $check->updated_at?->timestamp]);
+    }
+
+    private function busy(SubjectDifferenceCheck $check): bool
+    {
+        return in_array($check->status, ['reading', 'matching'], true);
     }
 
     public function show(SubjectDifferenceCheck $check): View
@@ -136,26 +146,28 @@ class SubjectDifferenceController extends Controller
         ]);
         abort_if($check->status === 'error' || !$check->transcriptRows(), 422, 'Avval transkript o\'qilishi kerak.');
 
-        @set_time_limit(300);
-        try {
-            $this->service->addLevel($check, (int) $data['curriculum_id'], (int) $data['upto'], $request->boolean('use_ai', true));
-        } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage());
+        if ($this->busy($check)) {
+            return back()->with('error', 'Oldingi amal hali tugamadi — biroz kuting.');
         }
+        $check->forceFill(['status' => 'matching', 'error' => null])->save();
+        ProcessSubjectDifferenceCheck::dispatch($check->id, 'level', [
+            'curriculum_id' => (int) $data['curriculum_id'],
+            'upto' => (int) $data['upto'],
+            'use_ai' => $request->boolean('use_ai', true),
+        ]);
 
-        return redirect()->route('admin.subject-differences.show', $check)->with('success', 'Solishtirildi.');
+        return redirect()->route('admin.subject-differences.show', $check);
     }
 
     public function rematch(Request $request, SubjectDifferenceCheck $check, string $level): RedirectResponse
     {
-        @set_time_limit(300);
-        try {
-            $this->service->rematch($check, $level, $request->boolean('use_ai', true));
-        } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage());
+        if ($this->busy($check)) {
+            return back()->with('error', 'Oldingi amal hali tugamadi — biroz kuting.');
         }
+        $check->forceFill(['status' => 'matching', 'error' => null])->save();
+        ProcessSubjectDifferenceCheck::dispatch($check->id, 'rematch', ['level' => $level, 'use_ai' => $request->boolean('use_ai', true)]);
 
-        return back()->with('success', 'Moslashtirish qayta bajarildi.');
+        return back();
     }
 
     public function saveMapping(Request $request, SubjectDifferenceCheck $check, string $level): RedirectResponse|JsonResponse
@@ -221,12 +233,13 @@ class SubjectDifferenceController extends Controller
 
     public function reread(SubjectDifferenceCheck $check): RedirectResponse
     {
-        @set_time_limit(300);
-        $this->service->read($check);
+        if ($this->busy($check)) {
+            return back()->with('error', 'Oldingi amal hali tugamadi — biroz kuting.');
+        }
+        $check->forceFill(['status' => 'reading', 'error' => null])->save();
+        ProcessSubjectDifferenceCheck::dispatch($check->id, 'read');
 
-        return back()->with($check->status === 'error' ? 'error' : 'success', $check->status === 'error'
-            ? 'Transkript o\'qilmadi: ' . $check->error
-            : 'Transkript qayta o\'qildi. Bosqichlarni «Qayta moslashtirish» bilan yangilang.');
+        return back();
     }
 
     public function update(Request $request, SubjectDifferenceCheck $check): RedirectResponse

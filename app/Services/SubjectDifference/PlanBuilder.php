@@ -83,7 +83,7 @@ class PlanBuilder
         $types = DB::table('curriculum_subjects')
             ->where('curricula_hemis_id', $curriculumId)
             ->whereIn('semester_code', $codes)
-            ->select('subject_id', 'semester_code', 'subject_type_name', 'credit', 'subject_name')
+            ->select('subject_id', 'semester_code', 'subject_type_name', 'credit', 'subject_name', 'subject_block_code', 'curriculum_subject_hemis_id')
             ->get()
             ->keyBy(fn ($r) => $r->subject_id . '|' . $r->semester_code);
 
@@ -141,10 +141,18 @@ class PlanBuilder
                 'hours' => ($h = $this->mode($g['hours'] ?? [])) !== null ? (int) $h : null,
                 'type' => $cs->subject_type_name ?? null,
                 'students' => count($g['students'] ?? []),
+                // HEMIS akkreditatsiya sahifasidagi tartib: semestr ichida o'quv reja bloki
+                // (gumanitar → tabiiy → kasbiy → amaliyot), so'ng rejadagi o'rni.
+                'block' => $cs->subject_block_code ?? null,
+                'order' => isset($cs->curriculum_subject_hemis_id) ? (int) $cs->curriculum_subject_hemis_id : null,
             ];
         }
 
-        usort($out, fn ($a, $b) => [$a['semester'], self::isPractice($a['name']), $a['name']] <=> [$b['semester'], self::isPractice($b['name']), $b['name']]);
+        usort($out, function ($a, $b) {
+            return [$a['semester'], $a['block'] === null ? 1 : 0] <=> [$b['semester'], $b['block'] === null ? 1 : 0]
+                ?: strnatcmp((string) $a['block'], (string) $b['block'])
+                ?: [$a['order'] ?? PHP_INT_MAX, self::isPractice($a['name']), $a['name']] <=> [$b['order'] ?? PHP_INT_MAX, self::isPractice($b['name']), $b['name']];
+        });
 
         return $out;
     }

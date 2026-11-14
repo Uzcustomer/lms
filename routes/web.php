@@ -343,6 +343,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/', 'store')->name('store');
                 Route::get('/curricula', 'curricula')->name('curricula');
                 Route::get('/{check}', 'show')->whereNumber('check')->name('show');
+                Route::get('/{check}/status', 'status')->whereNumber('check')->name('status');
                 Route::post('/{check}', 'update')->whereNumber('check')->name('update');
                 Route::delete('/{check}', 'destroy')->whereNumber('check')->name('destroy');
                 Route::post('/{check}/reread', 'reread')->whereNumber('check')->name('reread');

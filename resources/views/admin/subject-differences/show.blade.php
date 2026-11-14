@@ -42,6 +42,28 @@
                 <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">@foreach($errors->all() as $e)<div>{{ $e }}</div>@endforeach</div>
             @endif
 
+            @php $busy = in_array($check->status, ['reading', 'matching'], true); @endphp
+            @if($busy)
+                <div class="flex items-center gap-3 rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-950" role="status" aria-live="polite"
+                     x-data x-init="sdPoll('{{ route('admin.subject-differences.status', $check) }}', '{{ $check->status }}')">
+                    <svg width="20" height="20" class="h-5 w-5 shrink-0 animate-spin text-blue-700" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                    <div>
+                        <div class="font-semibold">{{ $check->status === 'reading' ? 'Transkript o\'qilmoqda…' : 'O\'quv reja bilan solishtirilmoqda…' }}</div>
+                        <div class="text-blue-900">Serverda bajarilyapti (odatda 1–2 daqiqa). Sahifa tayyor bo'lganda o'zi yangilanadi — kutish yoki boshqa ish bilan shug'ullanish mumkin.</div>
+                    </div>
+                </div>
+            @elseif($check->error)
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900" role="alert">
+                    <div><b>{{ $check->status === 'error' ? 'Transkript o\'qilmadi:' : 'Oxirgi amal bajarilmadi:' }}</b> {{ $check->error }}</div>
+                    @if($check->status === 'error')
+                        <form method="POST" action="{{ route('admin.subject-differences.reread', $check) }}">
+                            @csrf
+                            <button class="inline-flex h-8 items-center rounded-md border border-rose-300 bg-white px-3 font-semibold text-rose-800 hover:bg-rose-100">Qayta o'qish</button>
+                        </form>
+                    @endif
+                </div>
+            @endif
+
             {{-- ───────────── Natija (bosqichlar) ───────────── --}}
             @foreach($levels as $n => $item)
                 @php
@@ -204,7 +226,7 @@
             @endforeach
 
             {{-- ───────────── Yangi bosqich ───────────── --}}
-            @if($check->status !== 'error' && $rows)
+            @if($check->status !== 'error' && $rows && !$busy)
                 @php $needNew = !count($levels) || $suggestUpto; @endphp
                 <details id="new-level" class="rounded-2xl border bg-white shadow-sm {{ $needNew ? 'border-blue-300' : 'border-slate-200' }}" @if($needNew) open @endif>
                     <summary class="cursor-pointer list-none px-5 py-4 [&::-webkit-details-marker]:hidden">
@@ -438,6 +460,20 @@
     </div>
 
     <script>
+        function sdPoll(url, current) {
+            const tick = async () => {
+                try {
+                    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    if (r.ok) {
+                        const d = await r.json();
+                        if (d.status !== current) { window.location.reload(); return; }
+                    }
+                } catch (e) { /* tarmoq uzilsa — keyingi urinish */ }
+                setTimeout(tick, 4000);
+            };
+            setTimeout(tick, 4000);
+        }
+
         function sdFill(sel) {
             if (sel.dataset.filled) return;
             sel.dataset.filled = '1';

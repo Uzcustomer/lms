@@ -55,9 +55,8 @@ class SubjectDifferenceService
             ];
         }
         $check->files = $stored;
+        $check->status = 'reading'; // o'qish fon navbatida (ProcessSubjectDifferenceCheck)
         $check->save();
-
-        $this->read($check);
 
         return $check;
     }
@@ -69,7 +68,7 @@ class SubjectDifferenceService
             $res = $this->reader->read($paths);
             $res['source'] = $res['ai'] !== null ? 'ai' : 'text';
             $check->transcript = $res;
-            $check->status = 'read';
+            $check->status = !empty($check->levels) ? 'checked' : 'read';
             $check->error = null;
             if (!$check->student_name && !empty($res['header']['student_name'])) {
                 $check->student_name = $res['header']['student_name'];
@@ -118,6 +117,12 @@ class SubjectDifferenceService
     {
         $this->updateLevel($check, $levelId, function (array $level) use ($check, $useAi) {
             $level['source'] = $check->transcriptSource();
+            // Reja qayta quriladi (yangi tartib, akkreditatsiyadagi o'zgarishlar); kalitlar
+            // "fan-semestr" bo'lgani uchun xodim tuzatishlari saqlanadi.
+            $plan = $this->plans->build((int) $level['curriculum_id'], (int) $level['upto']);
+            if ($plan) {
+                $level['plan'] = $plan;
+            }
             $this->match($check, $level, $useAi);
 
             return $level;
@@ -295,7 +300,7 @@ class SubjectDifferenceService
     private function match(SubjectDifferenceCheck $check, array &$level, bool $useAi): void
     {
         $rows = $this->rows($check, $level);
-        $level['rule'] = $this->rule->match($level['plan'], $rows);
+        $level['rule'] = SameSubjectFill::apply($level['plan'], $this->rule->match($level['plan'], $rows));
         $level['ai'] = null;
         $level['ai_error'] = null;
         $level['ai_model'] = null;
@@ -303,7 +308,7 @@ class SubjectDifferenceService
         if ($useAi && TranscriptReader::aiConfigured()) {
             try {
                 $res = $this->ai->match($level['plan'], $rows);
-                $level['ai'] = $res['map'];
+                $level['ai'] = SameSubjectFill::apply($level['plan'], $res['map']);
                 $level['ai_model'] = $res['model'];
             } catch (\Throwable $e) {
                 $level['ai_error'] = mb_substr($e->getMessage(), 0, 500);

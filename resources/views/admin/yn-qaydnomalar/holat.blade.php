@@ -179,30 +179,59 @@
             excel: vhIcon('M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'),
             trash: vhIcon('M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16')
         };
+        // Qatordagi amallar — bitta "Amallar" tugmasi, bosilganda ochiladigan ro'yxat
         function vhActions(r) {
             var a = '';
             if (r.pdf_url) {
-                a += '<a class="vh-btn vh-btn--pdf" href="' + escA(r.pdf_url) + '" onclick="return vhPdf(this)">' + VH_ICO.pdf + '<span>PDF</span></a>'
-                   + '<a class="vh-btn vh-btn--view" target="_blank" rel="noopener" href="' + escA(r.pdf_view_url) + '">' + VH_ICO.view + 'Ko\'rish</a>';
+                a += '<a class="vh-mi vh-mi--pdf" role="menuitem" href="' + escA(r.pdf_url) + '" onclick="return vhPdf(this)">' + VH_ICO.pdf + '<span>PDF yuklab olish</span></a>'
+                   + '<a class="vh-mi vh-mi--view" role="menuitem" target="_blank" rel="noopener" href="' + escA(r.pdf_view_url) + '">' + VH_ICO.view + 'Ko\'rish</a>';
             } else if (r.view_url) {
-                a += '<a class="vh-btn vh-btn--view" target="_blank" rel="noopener" href="' + escA(r.view_url) + '">' + VH_ICO.view + 'Ko\'rish</a>';
-            } else if (r.journal_url) {
-                a += '<a class="vh-btn vh-btn--journal" href="' + escA(r.journal_url) + '">' + VH_ICO.journal + 'Jurnal</a>';
+                a += '<a class="vh-mi vh-mi--view" role="menuitem" target="_blank" rel="noopener" href="' + escA(r.view_url) + '">' + VH_ICO.view + 'Ko\'rish</a>';
+            }
+            if (r.journal_url) {
+                a += '<a class="vh-mi vh-mi--journal" role="menuitem" href="' + escA(r.journal_url) + '">' + VH_ICO.journal + 'Jurnal</a>';
             }
             if (r.excel) {
-                a += '<button type="button" class="vh-btn vh-btn--excel" data-params="' + escA(JSON.stringify(r.excel)) + '" onclick="vhExcel(this)">' + VH_ICO.excel + 'Excel</button>';
+                a += '<button type="button" class="vh-mi vh-mi--excel" role="menuitem" data-params="' + escA(JSON.stringify(r.excel)) + '" onclick="vhExcel(this)">' + VH_ICO.excel + 'Excel yuklab olish</button>';
             }
             if (vhCanDelete && r.delete_key) {
-                a += '<button type="button" class="vh-btn vh-btn--del" data-key="' + escA(JSON.stringify(r.delete_key)) + '" onclick="vhDelete(this)">' + VH_ICO.trash + 'O\'chirish</button>';
+                a += '<button type="button" class="vh-mi vh-mi--del" role="menuitem" data-key="' + escA(JSON.stringify(r.delete_key)) + '" onclick="vhDelete(this)">' + VH_ICO.trash + 'O\'chirish</button>';
             }
-            return a;
+            if (!a) return '<span class="vh-muted">—</span>';
+            return '<div class="vh-menu"><button type="button" class="vh-btn vh-btn--menu" aria-haspopup="menu" aria-expanded="false" onclick="vhMenu(this, event)">'
+                + 'Amallar' + vhIcon('M19 9l-7 7-7-7') + '</button><div class="vh-menu-pop" role="menu" hidden>' + a + '</div></div>';
         }
+        // Ro'yxat jadval chetidan qirqilmasin — tugma ostida, o'ng chetiga tekislangan (fixed)
+        function vhMenu(btn, e) {
+            e.stopPropagation();
+            var pop = btn.nextElementSibling, open = pop.hidden;
+            vhMenuClose();
+            if (!open) return;
+            pop.hidden = false;
+            btn.setAttribute('aria-expanded', 'true');
+            var rect = btn.getBoundingClientRect(), h = pop.offsetHeight;
+            var top = rect.bottom + 6;
+            if (top + h > window.innerHeight - 8 && rect.top - h - 6 > 8) top = rect.top - h - 6;   // pastda joy bo'lmasa — tepaga
+            pop.style.top = top + 'px';
+            pop.style.left = Math.max(8, rect.right - pop.offsetWidth) + 'px';
+        }
+        function vhMenuClose() {
+            document.querySelectorAll('.vh-menu-pop').forEach(function (p) { p.hidden = true; });
+            document.querySelectorAll('.vh-btn--menu').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+        }
+        // Tashqariga yoki amal bandiga bosilsa — yopiladi
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.vh-menu-pop') || e.target.closest('.vh-mi')) setTimeout(vhMenuClose, 0);
+        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') vhMenuClose(); });
+        window.addEventListener('scroll', vhMenuClose, true);
+        window.addEventListener('resize', vhMenuClose);
         // PDF tayyorlanishi bir necha soniya oladi — tugma holati (belgi qoladi, matn almashadi)
         function vhPdf(a) {
             if (a.classList.contains('is-busy')) return false;
             var label = a.querySelector('span');
             a.classList.add('is-busy'); label.textContent = 'Tayyorlanmoqda…';
-            setTimeout(function () { a.classList.remove('is-busy'); label.textContent = 'PDF'; }, 15000);
+            setTimeout(function () { a.classList.remove('is-busy'); label.textContent = 'PDF yuklab olish'; }, 15000);
             return true;
         }
         function vhExcel(btn) {
@@ -285,5 +314,24 @@
         .vh-btn--del { color:#b91c1c !important; border-color:#fca5a5; }
         .vh-btn--del:hover { background:#fef2f2; border-color:#f87171; }
         .vh-btn--del:disabled { opacity:.6; }
+        /* "Amallar" ochiladigan ro'yxati */
+        .vh-menu { display:inline-block; }
+        .vh-btn--menu { color:#1e3a8a !important; border-color:#93c5fd; background:#eff6ff; }
+        .vh-btn--menu:hover, .vh-btn--menu[aria-expanded="true"] { background:#dbeafe; border-color:#60a5fa; }
+        .vh-btn--menu svg { width:14px; height:14px; transition:transform .15s; }
+        .vh-btn--menu[aria-expanded="true"] svg { transform:rotate(180deg); }
+        .vh-menu-pop { position:fixed; z-index:60; min-width:210px; padding:6px; display:flex; flex-direction:column; gap:2px;
+            background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 14px 34px rgba(15,23,42,.18); }
+        .vh-menu-pop[hidden] { display:none; }
+        .vh-mi { display:flex; align-items:center; gap:10px; width:100%; height:40px; padding:0 12px; border:0; border-radius:8px; background:none;
+            font-size:13.5px; font-weight:600; color:#0f172a !important; text-decoration:none !important; text-align:left; cursor:pointer; white-space:nowrap; }
+        .vh-mi:hover { background:#f1f5f9; }
+        .vh-mi:focus-visible { outline:2px solid #2563eb; outline-offset:-2px; }
+        .vh-mi svg { width:18px; height:18px; flex-shrink:0; }
+        .vh-mi--pdf svg { color:#b91c1c; } .vh-mi--view svg { color:#1d4ed8; } .vh-mi--journal svg { color:#475569; } .vh-mi--excel svg { color:#15803d; }
+        .vh-mi--pdf.is-busy { color:#94a3b8 !important; pointer-events:none; }
+        .vh-mi--del { color:#b91c1c !important; margin-top:4px; border-top:1px solid #f1f5f9; border-radius:0 0 8px 8px; }
+        .vh-mi--del:hover { background:#fef2f2; }
+        .vh-mi--del:disabled { opacity:.6; }
     </style>
 </x-app-layout>

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
  * "JN 70%": YN imtihonlari chegara sanadan (sukut bo'yicha 26.10.2026) oldin tugagan fanda (o'tish bali 60)
  * yopuvchi imtihonga — test, faqat OSKI bilan yopiladigan fanda OSKI — qatnashmagan talaba uni keyin
  * topshiradi (12-qo'shimcha / sababli, 12a, 12b). Unga JN kunlik baholar grades:admin-upgrade formulasi bo'yicha
- * oshirib hisoblanadi (60 dan pasti — o'zgarmaydi) va jn_upgrades ga yoziladi: jurnalda "JN 70%" ustuni,
+ * oshirib hisoblanadi (60 dan pasti — o'zgarmaydi; asl JN 60 dan past talabaga umuman tegilmaydi) va jn_upgrades ga yoziladi: jurnalda "JN 70%" ustuni,
  * qaydnomaning keyingi urinishlar varag'ida shu JN va o'tish chegarasi 70. Asosiy 12-shakl, asl baholar va JN
  * o'zgarmaydi. Sukut bo'yicha — faqat hisobot; yozish — --force; bekor qilish — --revert.
  *
@@ -28,6 +28,9 @@ class UpgradeJn70 extends Command
         {--since=2026-09-01 : O\'quv yili boshi — undan oldingi imtihonlar olinmaydi}
         {--force : Haqiqatan yozish (bo\'lmasa faqat hisobot)}
         {--revert : "JN 70%" ni bekor qilish (yozuvlar o\'chiriladi; asl JN o\'zi o\'zgarmagan)}';
+
+    /** Asl JN shundan past bo'lsa — "JN 70%" yozilmaydi (oshirilmaydi) */
+    private const MIN_JN = 60;
 
     protected $description = "\"JN 70%\": 26.10 dan oldin tugagan fanda yopuvchi imtihonga qatnashmagan talabalarning keyingi urinishlari uchun oshirilgan JN";
 
@@ -67,6 +70,8 @@ class UpgradeJn70 extends Command
         $journal = app(JournalController::class);
         $rows = [];
         $write = [];
+        $skipped = 0;
+        $stale = [];   // avval yozilgan, endi tegilmaydiganlar (asl JN 60 dan past) — o'chiriladi
 
         $vedomosts = $this->vedomosts($groupIds, $cutoff, $since);
         $this->info("Imtihonlari {$since} — {$cutoff} oralig'ida tugagan guruh × fanlar: " . $vedomosts->count()
@@ -89,6 +94,12 @@ class UpgradeJn70 extends Command
                 // Keyingi urinishlar JN i — sababli bahosi bilan (V2)
                 $jn = (int) round((float) ($plain[1][$s->hemis_id] ?? 0));
                 $jn70 = (int) round((float) ($up[1][$s->hemis_id] ?? 0));
+                // Asl JN 60 dan past — tegilmaydi (oshirilmaydi)
+                if ($jn < self::MIN_JN) {
+                    $skipped++;
+                    $stale[] = [(string) $s->hemis_id, (string) $v->subject_id, (string) $v->semester_code];
+                    continue;
+                }
                 $rows[] = [$v->group_name, mb_substr($v->subject_name, 0, 34), $s->full_name, Carbon::parse($v->exam_date)->format('d.m.Y'), $jn, $jn70];
                 $write[] = [
                     'student_hemis_id' => (string) $s->hemis_id, 'group_hemis_id' => (string) $v->group_hemis_id,
@@ -101,11 +112,14 @@ class UpgradeJn70 extends Command
 
         $this->table(['Guruh', 'Fan', 'Talaba', 'Imtihon', 'JN', 'JN 70%'], $rows);
         $this->line('Vaqt: ' . round(microtime(true) - $started) . ' s');
-        $this->info('Talabalar: ' . count($write));
+        $this->info('Talabalar: ' . count($write) . ($skipped ? ' · asl JN ' . self::MIN_JN . " dan past — tegilmadi: {$skipped}" : ''));
         if (!$force) {
             $this->warn('Faqat hisobot. Yozish uchun: --force (bekor qilish: --revert --force)');
 
             return self::SUCCESS;
+        }
+        foreach ($stale as [$student, $subject, $semester]) {
+            DB::table('jn_upgrades')->where('student_hemis_id', $student)->where('subject_id', $subject)->where('semester_code', $semester)->delete();
         }
         foreach (array_chunk($write, 200) as $chunk) {
             DB::table('jn_upgrades')->upsert($chunk, ['student_hemis_id', 'subject_id', 'semester_code'],

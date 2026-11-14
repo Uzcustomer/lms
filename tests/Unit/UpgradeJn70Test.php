@@ -42,6 +42,7 @@ beforeEach(function () {
         ['hemis_id' => 's1', 'group_id' => '1', 'full_name' => 'A TESTGA KELGAN'],
         ['hemis_id' => 's2', 'group_id' => '1', 'full_name' => 'B BAHOSI YOQ'],
         ['hemis_id' => 's3', 'group_id' => '1', 'full_name' => 'C KELMAGAN'],
+        ['hemis_id' => 's4', 'group_id' => '1', 'full_name' => 'D JN PAST'],
     ]);
     DB::table('student_grades')->insert([
         ['student_hemis_id' => 's1', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 1, 'grade' => 80, 'reason' => null],
@@ -53,7 +54,7 @@ beforeEach(function () {
 
         public function ynqJnMaps(string $subjectId, string $semesterCode, string $groupHemisId, bool $upgraded): array|string
         {
-            return $upgraded ? [[], ['s1' => 90, 's2' => 75, 's3' => 86]] : [[], ['s1' => 85, 's2' => 65, 's3' => 80]];
+            return $upgraded ? [[], ['s1' => 90, 's2' => 75, 's3' => 86, 's4' => 64]] : [[], ['s1' => 85, 's2' => 65, 's3' => 80, 's4' => 58]];
         }
     });
 });
@@ -65,7 +66,7 @@ it('stores JN 70% only for students who missed the closing exam of a subject fin
     $this->artisan('grades:jn70 --force')->assertSuccessful();
     expect(DB::table('jn_upgrades')->orderBy('student_hemis_id')->get(['student_hemis_id', 'subject_id', 'jn_original', 'jn_upgraded'])
         ->map(fn ($r) => "{$r->student_hemis_id} {$r->subject_id} {$r->jn_original}→{$r->jn_upgraded}")->all())
-        ->toBe(['s2 10 65→75', 's3 10 80→86']);                              // testga kelgan s1 va 26.10 dan keyingi fan — yo'q
+        ->toBe(['s2 10 65→75', 's3 10 80→86']);                              // testga kelgan s1, asl JN 60 dan past s4 va 26.10 dan keyingi fan — yo'q
     expect(\App\Services\JnUpgrade::map('10', '19', ['s1', 's2', 's3']))->toBe(['s2' => 75, 's3' => 86]);
 
     $this->artisan('grades:jn70 --revert')->assertSuccessful();              // hisobot — o'chirilmaydi

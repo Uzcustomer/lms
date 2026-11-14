@@ -152,6 +152,29 @@ class MarkingSystemScore extends Model
         self::$subjectLimit = null;
     }
 
+    /** Joriy kontekst chegarasi (null — sozlamadagi) — vaqtincha almashtirib, keyin tiklash uchun */
+    public static function subjectLimit(): ?int
+    {
+        return self::$subjectLimit;
+    }
+
+    public static function setSubjectLimit(?int $limit): void
+    {
+        self::$subjectLimit = $limit;
+    }
+
+    /** $fn ni berilgan chegara bilan bajaradi ("JN 70%" — keyingi urinishlar 70 da), keyin tiklanadi */
+    public static function withLimit(int $limit, callable $fn): mixed
+    {
+        $previous = self::$subjectLimit;
+        self::$subjectLimit = $limit;
+        try {
+            return $fn();
+        } finally {
+            self::$subjectLimit = $previous;
+        }
+    }
+
     /** YN ga ruxsat / vedomost JN-MT chegarasi: hammaga 70, chegara oshirilishidan oldin tugagan fanda — 60 */
     public static function ynJnMtLimit(): int
     {

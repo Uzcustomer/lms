@@ -1285,6 +1285,10 @@
                                         @else
                                             <th colspan="1" class="px-1 py-2 font-bold text-gray-700 text-center joriy-header">JN</th>
                                         @endif
+                                        @if(!empty($jn70))
+                                            {{-- "JN 70%" (grades:jn70) — keyingi urinishlar (12-qo'shimcha, 12a, 12b) uchun oshirilgan JN --}}
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-center align-middle" style="width: 55px;color:#c2410c;" title="Asosiy imtihonga qatnashmagan talabaning keyingi urinishlari uchun JN (formula bo'yicha, o'tish bali 70). Asl JN o'zgarmagan.">JN 70%</th>
+                                        @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
@@ -1534,6 +1538,9 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
+                                            @if(!empty($jn70))
+                                                <td class="px-1 py-1 text-center">@if(isset($jn70[$student->hemis_id]))<span class="font-bold" style="color:#c2410c;">{{ $jn70[$student->hemis_id] }}</span>@else<span class="text-gray-300">—</span>@endif</td>
+                                            @endif
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             @php
                                                 $mtGraderLines = [];
@@ -1889,6 +1896,10 @@
                                             <th colspan="{{ count($jbColumns) }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Joriy nazorat (har bir dars)</th>
                                         @else
                                             <th colspan="1" class="px-1 py-2 font-bold text-gray-700 text-center joriy-header">JN</th>
+                                        @endif
+                                        @if(!empty($jn70))
+                                            {{-- "JN 70%" (grades:jn70) — keyingi urinishlar (12-qo'shimcha, 12a, 12b) uchun oshirilgan JN --}}
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-center align-middle" style="width: 55px;color:#c2410c;" title="Asosiy imtihonga qatnashmagan talabaning keyingi urinishlari uchun JN (formula bo'yicha, o'tish bali 70). Asl JN o'zgarmagan.">JN 70%</th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
@@ -2390,6 +2401,9 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
+                                            @if(!empty($jn70))
+                                                <td class="px-1 py-1 text-center">@if(isset($jn70[$student->hemis_id]))<span class="font-bold" style="color:#c2410c;">{{ $jn70[$student->hemis_id] }}</span>@else<span class="text-gray-300">—</span>@endif</td>
+                                            @endif
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             @php
                                                 $mtGraderLines = [];

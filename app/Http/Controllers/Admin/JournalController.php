@@ -82,6 +82,12 @@ class JournalController extends Controller
     private const YNQ_TABLE_ROWS = [15, 50];
     /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — tasdiqlar va muhrlar */
     private const YNQ_SIGN_ROW = 60;
+    /**
+     * grades:jn70 uchun: JN hisobida har kunlik baho shu funksiyadan o'tadi ("JN 70%" — formula bo'yicha
+     * oshirilgan JN). Faqat hisob — bazadagi baholarga tegmaydi; sukut bo'yicha null (o'zgarishsiz).
+     */
+    public static ?\Closure $jbGradeTransform = null;
+
     private const YNQ_RULES = [
         'subject_id' => 'required',
         'semester_code' => 'required',
@@ -1896,6 +1902,8 @@ class JournalController extends Controller
         $ynqForm = \App\Services\YnqForm::normalize($request->query('ynq_form'));
         // O'qituvchi YN qaydnomani faqat fan tugagach yaratadi
         $ynqReady = $isAmaliyTeacher ? \App\Services\YnqReadiness::for((string) $group->group_hemis_id, (string) $subjectId, (string) $semesterCode, $ynqForm) : null;
+        // "JN 70%" (grades:jn70) — keyingi urinishlar uchun oshirilgan JN; asl JN o'zgarmaydi
+        $jn70 = \App\Services\JnUpgrade::map((string) $subjectId, (string) $semesterCode, collect($students)->pluck('hemis_id')->all());
         // O'zi tasdiqlagan qaydnoma qayta yaratilmaydi — dekan rad etsa (tasdiq o'chadi) yana ochiladi
         $myYnConfirmation = null;
         if ($isAmaliyTeacher && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations') && ($me = $this->currentTeacher())) {
@@ -2622,6 +2630,7 @@ class JournalController extends Controller
             'myYnConfirmation',
             'ynqForm',
             'ynqReady',
+            'jn70',
             'allLessonsCompleted',
             'remainingLessonsCount',
             'lastLessonDate',
@@ -11104,6 +11113,28 @@ class JournalController extends Controller
      *
      * @return array{forms: array<string, array{students: \Illuminate\Support\Collection, jn: array, mt: array, other: array}>}|string  xato matni
      */
+    /**
+     * grades:jn70 uchun guruhning JN lari (asosiy — V1, sababli bilan — V2), $upgraded bo'lsa har kunlik baho
+     * formula bo'yicha oshirib hisoblangan (bazaga tegmaydi). Xato — matn.
+     *
+     * @return array{0: array<string, int|float>, 1: array<string, int|float>}|string
+     */
+    public function ynqJnMaps(string $subjectId, string $semesterCode, string $groupHemisId, bool $upgraded): array|string
+    {
+        $previous = self::$jbGradeTransform;
+        self::$jbGradeTransform = $upgraded
+            ? fn ($g) => is_numeric($g) ? (\App\Console\Commands\AdminUpgradeGrades::upgradedGrade((float) $g) ?? $g) : $g
+            : null;
+        try {
+            $part = \App\Models\MarkingSystemScore::withSubject($groupHemisId, $subjectId, $semesterCode,
+                fn () => $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, 30, 10, 0, 0, 60, 1, true));
+        } finally {
+            self::$jbGradeTransform = $previous;
+        }
+
+        return is_string($part) ? $part : $part['jn'];
+    }
+
     public function ynQaydnomaForms(
         string $subjectId, string $semesterCode, string $groupHemisId,
         int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest
@@ -11367,6 +11398,9 @@ class JournalController extends Controller
                 $studentDayGrades = $jbGradesMap[$hemisId] ?? [];
                 foreach ($jbLessonDates as $date) {
                     $dayGrades = $studentDayGrades[$date] ?? [];
+                    if (self::$jbGradeTransform) {
+                        $dayGrades = array_map(self::$jbGradeTransform, $dayGrades);
+                    }
                     $pairsInDay = $jbPairsPerDay[$date] ?? 1;
                     $gradeSum = array_sum($dayGrades);
                     $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
@@ -11399,6 +11433,9 @@ class JournalController extends Controller
 
         [$calculatedJnGradesV1, $calculatedMtGradesV1] = $computeJnMt($jbGradesV1, $mtGradesMapV1);
         [$calculatedJnGradesV2, $calculatedMtGradesV2] = $computeJnMt($jbGradesV2, $mtGradesMapV2);
+        // "JN 70%" (grades:jn70): asosiy imtihonga qatnashmagan talabaning keyingi urinishlari (12-qo'shimcha,
+        // 12a, 12b) — shu JN va 70 chegarasi bilan; asosiy 12-shakl o'zgarmaydi
+        $jn70 = \App\Services\JnUpgrade::map((string) $subjectId, (string) $semesterCode, $studentHemisIds);
 
         // ON (100), OSKI (101), Test (102), Quiz (103) baholarni urinish bo'yicha olish
         // attempt=1 → asosiy YN, attempt=2 → 12a (1-urinish), attempt=3 → 12b (2-urinish)
@@ -11752,18 +11789,24 @@ class JournalController extends Controller
             $jn2 = (int) ($calculatedJnGradesV2[$h] ?? 0);
             $mt2 = (int) ($calculatedMtGradesV2[$h] ?? 0);
 
+            // "JN 70%" bo'lsa — keyingi urinishlar o'sha JN va 70 chegarasi bilan (urinish o'z chegarasini saqlaydi)
+            $buildNext = isset($jn70[$h])
+                ? fn (int $jn, int $mt, array $other) => \App\Models\MarkingSystemScore::withLimit(\App\Services\JnUpgrade::LIMIT,
+                    fn () => $build($jn70[$h], $mt, $other)) + ['limit' => \App\Services\JnUpgrade::LIMIT]
+                : $build;
+
             $main       = $build($jn1, $mt1, $gradesByTypeV1);
-            $qoshimcha  = $build($jn2, $mt2, $gradesByTypeV2);
+            $qoshimcha  = $buildNext($jn2, $mt2, $gradesByTypeV2);
             // 12a/12b ham JN/MT uchun qo'shimcha (V2) ni ishlatadi — JN/MT qayta ko'rilmaydi
             $aHas       = isset($gradesByTypeAv1[100][$h]) || isset($gradesByTypeAv1[101][$h]) || isset($gradesByTypeAv1[102][$h]);
             $aQHas      = isset($gradesByTypeAv2[100][$h]) || isset($gradesByTypeAv2[101][$h]) || isset($gradesByTypeAv2[102][$h]);
             $bHas       = isset($gradesByTypeBv1[100][$h]) || isset($gradesByTypeBv1[101][$h]) || isset($gradesByTypeBv1[102][$h]);
             $bQHas      = isset($gradesByTypeBv2[100][$h]) || isset($gradesByTypeBv2[101][$h]) || isset($gradesByTypeBv2[102][$h]);
 
-            $a          = $aHas ? $build($jn2, $mt2, $gradesByType12aMain) : null;
-            $aQoshimcha = $aQHas ? $build($jn2, $mt2, $gradesByType12aQosh) : null;
-            $b          = $bHas ? $build($jn2, $mt2, $gradesByType12bMain) : null;
-            $bQoshimcha = $bQHas ? $build($jn2, $mt2, $gradesByType12bQosh) : null;
+            $a          = $aHas ? $buildNext($jn2, $mt2, $gradesByType12aMain) : null;
+            $aQoshimcha = $aQHas ? $buildNext($jn2, $mt2, $gradesByType12aQosh) : null;
+            $b          = $bHas ? $buildNext($jn2, $mt2, $gradesByType12bMain) : null;
+            $bQoshimcha = $bQHas ? $buildNext($jn2, $mt2, $gradesByType12bQosh) : null;
 
             $stage = \App\Services\YnAttemptStatusService::determineStage(
                 $main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha
@@ -11781,6 +11824,7 @@ class JournalController extends Controller
                 continue;
             }
             $familyForms[] = $part['forms'];
+            $jn70 += $part['jn70'] ?? [];
             $students = $students->concat($part['students']);
             $stages += $part['stages'];
             $davomatByStudent += $part['davomat'];
@@ -11829,6 +11873,22 @@ class JournalController extends Controller
             }
             return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
         };
+        // Keyingi urinishlar varaqlarida (12-qo'shimcha, 12a, 12b) "JN 70%" bo'lgan talabaning JN i — o'sha
+        if ($jn70) {
+            $plainGradeMaps = $gradeMapsFor;
+            $gradeMapsFor = function (string $form) use ($plainGradeMaps, $jn70) {
+                [$jnMap, $mtMap, $otherMap] = $plainGradeMaps($form);
+                if ($form !== \App\Services\YnAttemptStatusService::FORM_12) {
+                    foreach ($jn70 as $h => $v) {
+                        if (array_key_exists($h, $jnMap)) {
+                            $jnMap[$h] = $v;
+                        }
+                    }
+                }
+
+                return [$jnMap, $mtMap, $otherMap];
+            };
+        }
         if ($familyForms) {
             $ownGradeMaps = $gradeMapsFor;
             $gradeMapsFor = function (string $form) use ($ownGradeMaps, $familyForms) {
@@ -11863,7 +11923,8 @@ class JournalController extends Controller
                 $forms[$form] = ['students' => $list, 'jn' => $jnMap, 'mt' => $mtMap, 'other' => $otherMap];
             }
 
-            return ['forms' => $forms, 'students' => $students, 'stages' => $stages, 'davomat' => $davomatByStudent];
+            return ['forms' => $forms, 'students' => $students, 'stages' => $stages, 'davomat' => $davomatByStudent,
+                'jn70' => $jn70, 'jn' => [$calculatedJnGradesV1, $calculatedJnGradesV2]];
         }
 
         // Shablon yuklash — har shakl uchun alohida sheet
@@ -11920,7 +11981,8 @@ class JournalController extends Controller
         // Bitta sheet'ni to'ldiruvchi closure — 12-shakl va 12-qo'shimcha
         // shakl uchun bir xil shablondan foydalanadi, ma'lumotlarni parametr
         // sifatida oladi.
-        $fillSheet = function ($s, $studentsList, array $jnMap, array $mtMap, array $otherMap, string $sheetTitle, string $shaklLabel)
+        // $limit70 — "JN 70%" bo'lgan talabalar (keyingi urinishlar varag'ida o'tish chegarasi 70)
+        $fillSheet = function ($s, $studentsList, array $jnMap, array $mtMap, array $otherMap, string $sheetTitle, string $shaklLabel, array $limit70 = [])
             use ($facultyName, $specialty, $kurs, $semesterInYear, $groupLabel, $subject,
                  $abbreviatedPracticeTeachers, $abbreviatedMaruza, $dekanExcelName, $kafedraMudiriName,
                  $weightJn, $weightMt, $weightOn, $weightOski, $weightTest,
@@ -11960,11 +12022,13 @@ class JournalController extends Controller
             $s->setCellValue('S19', $weightTest);
 
             $startRow = self::YNQ_FIRST_ROW;
+            $baseLimit = \App\Models\MarkingSystemScore::subjectLimit();
 
             foreach ($studentsList as $index => $student) {
                 $row = $startRow + $index;
 
                 $hemisId = $student->hemis_id;
+                \App\Models\MarkingSystemScore::setSubjectLimit(isset($limit70[$hemisId]) ? \App\Services\JnUpgrade::LIMIT : $baseLimit);
                 $davomatPct = (float) ($davomatByStudent[$hemisId] ?? 0);
                 $davomatFailed = $davomatPct >= 25;
 
@@ -12117,6 +12181,7 @@ class JournalController extends Controller
                         ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
                 }
             }
+            \App\Models\MarkingSystemScore::setSubjectLimit($baseLimit);
         };
 
         $cleanGroupName = str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $groupLabel ?: 'Sheet');
@@ -12162,7 +12227,8 @@ class JournalController extends Controller
                 $mtMap,
                 $otherMap,
                 $sheetTitleFor($form),
-                $shaklLabelFor($form)
+                $shaklLabelFor($form),
+                $form === \App\Services\YnAttemptStatusService::FORM_12 ? [] : $jn70
             );
         }
 

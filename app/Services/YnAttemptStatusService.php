@@ -71,9 +71,10 @@ class YnAttemptStatusService
         ?array $bQoshimcha = null
     ): array {
         $passes = fn(?array $row) => $row !== null && self::isPassing($row);
+        // Urinishning o'z chegarasi ('limit' — "JN 70%" bilan hisoblangan keyingi urinishlarda 70)
         $jnMtOk = fn(?array $row) => $row !== null
-            && (int)($row['jn'] ?? 0) >= \App\Models\MarkingSystemScore::lowGradeLimit()
-            && (int)($row['mt'] ?? 0) >= \App\Models\MarkingSystemScore::lowGradeLimit();
+            && (int)($row['jn'] ?? 0) >= ($row['limit'] ?? \App\Models\MarkingSystemScore::lowGradeLimit())
+            && (int)($row['mt'] ?? 0) >= ($row['limit'] ?? \App\Models\MarkingSystemScore::lowGradeLimit());
         // Davomat ≥ 25% bo'lsa computeV -3 qaytaradi (pullik deb hisoblash uchun)
         $davomatFailed = fn(?array $row) => $row !== null && ($row['v'] ?? null) === -3;
 
@@ -153,7 +154,7 @@ class YnAttemptStatusService
         $v = $row['v'] ?? null;
         if ($v === null || $v === '') return false;
         if (!is_numeric($v)) return false;
-        return ((float)$v) >= \App\Models\MarkingSystemScore::lowGradeLimit();
+        return ((float)$v) >= ($row['limit'] ?? \App\Models\MarkingSystemScore::lowGradeLimit());
     }
 
     /**

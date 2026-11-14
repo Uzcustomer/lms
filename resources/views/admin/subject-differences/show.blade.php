@@ -90,15 +90,16 @@
                         </div>
 
                         <div class="overflow-x-auto">
-                            <table class="min-w-full border-collapse text-sm">
+                            <table class="w-full border-collapse text-sm">
                                 <thead>
                                     <tr class="bg-slate-100 text-left text-slate-800">
-                                        <th class="border border-slate-300 px-3 py-2 font-semibold">№</th>
+                                        <th class="w-12 border border-slate-300 px-3 py-2 font-semibold">№</th>
                                         <th class="border border-slate-300 px-3 py-2 font-semibold">O'quv reja fani</th>
-                                        <th class="border border-slate-300 px-3 py-2 text-center font-semibold">Kredit</th>
+                                        <th class="w-16 border border-slate-300 px-3 py-2 text-center font-semibold">Kredit</th>
                                         <th class="border border-slate-300 px-3 py-2 font-semibold">Transkriptdagi fan</th>
-                                        <th class="border border-slate-300 px-3 py-2 text-center font-semibold">Moslik</th>
-                                        <th class="border border-slate-300 px-3 py-2 text-center font-semibold">Baho</th>
+                                        <th class="w-20 border border-slate-300 px-3 py-2 text-center font-semibold">Moslik</th>
+                                        <th class="w-16 border border-slate-300 px-3 py-2 text-center font-semibold">Ball</th>
+                                        <th class="w-16 border border-slate-300 px-3 py-2 text-center font-semibold">Baho</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -112,7 +113,7 @@
                                         @endphp
                                         @if($prevSem !== $r['semester'])
                                             @php $prevSem = $r['semester']; @endphp
-                                            <tr><td colspan="6" class="border border-slate-300 bg-slate-50 px-3 py-1.5 text-center text-sm font-bold text-slate-800">{{ $r['semester'] }}-semestr</td></tr>
+                                            <tr><td colspan="7" class="border border-slate-300 bg-slate-50 px-3 py-1.5 text-center text-sm font-bold text-slate-800">{{ $r['semester'] }}-semestr</td></tr>
                                         @endif
                                         <tr class="{{ $rowBg }}">
                                             <td class="border border-slate-300 px-3 py-1.5 text-center tabular-nums text-slate-600">{{ $no }}</td>
@@ -127,7 +128,7 @@
                                                         <span class="text-slate-500">Hisobga olinmagan</span>
                                                     @elseif($r['tr_name'])
                                                         {{ $r['tr_name'] }}
-                                                        <span class="text-xs text-slate-600">({{ $r['tr_semester'] ? $r['tr_semester'] . '-sem, ' : '' }}{{ $fmt($r['tr_ball']) }} ball)</span>
+                                                        @if($r['tr_semester'])<span class="text-xs text-slate-600">({{ $r['tr_semester'] }}-sem)</span>@endif
                                                     @else
                                                         <span class="font-semibold text-rose-700">Yo'q — fanlar farqi</span>
                                                     @endif
@@ -146,6 +147,7 @@
                                                 {{ $pct['text'] }}
                                                 @if($r['disagree'] && !$r['overridden'])<span class="cursor-help text-amber-700" title="Nom bo'yicha boshqa natija chiqdi — tekshiring">⚠</span>@endif
                                             </td>
+                                            <td class="border border-slate-300 px-3 py-1.5 text-center tabular-nums text-slate-800">{{ $r['excluded'] || !$r['tr_name'] ? '—' : $fmt($r['tr_ball']) }}</td>
                                             <td class="border border-slate-300 px-3 py-1.5 text-center font-bold tabular-nums {{ $r['excluded'] ? '' : ($r['grade'] < 3 ? 'text-rose-700' : 'text-slate-900') }}">{{ $r['excluded'] ? '—' : $r['grade'] }}</td>
                                         </tr>
                                     @endforeach
@@ -154,7 +156,7 @@
                                     <tr class="bg-slate-100 font-semibold text-slate-900">
                                         <td colspan="2" class="border border-slate-300 px-3 py-2 text-right">Jami kredit</td>
                                         <td class="border border-slate-300 px-3 py-2 text-center tabular-nums">{{ $fmt($res['total_credit']) }}</td>
-                                        <td colspan="2" class="border border-slate-300 px-3 py-2 text-right">GPA ({{ $fmt($res['total_product']) }} / {{ $fmt($res['total_credit']) }})</td>
+                                        <td colspan="3" class="border border-slate-300 px-3 py-2 text-right">GPA ({{ $fmt($res['total_product']) }} / {{ $fmt($res['total_credit']) }})</td>
                                         <td class="border border-slate-300 px-3 py-2 text-center text-base tabular-nums {{ $dec['passed'] ? 'text-emerald-800' : 'text-rose-700' }}">{{ number_format($res['gpa'], 2) }}</td>
                                     </tr>
                                 </tfoot>

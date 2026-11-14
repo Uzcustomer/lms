@@ -11482,7 +11482,21 @@ class JournalController extends Controller
         $practiceTeacherNames = array_map(fn($t) => $t['name'], $teacherData['practice_teachers']);
         // Kichik guruhlar qaydnomasi — umumiy nom (harfsiz) va barcha guruhlarning amaliyot o'qituvchilari
         $groupLabel = \App\Services\YnqFamily::label($group->name, count($family));
+        // Qo'shimcha / 12a / 12b — faqat shu shaklda talabasi bor kichik guruhlar (nomi va o'qituvchilari)
+        $sheetMembers = $family;
+        if ($ynqForm !== null && $ynqForm !== \App\Services\YnqForm::MAIN && count($family) > 1) {
+            $sheetMembers = $this->ynqFormMembers($subjectId, $semesterCode, $groupHemisId, $ynqForm);
+            if (count($sheetMembers) === 1) {
+                $groupLabel = Group::where('group_hemis_id', $sheetMembers[0])->value('name') ?? $groupLabel;
+            }
+            if (!in_array($groupHemisId, $sheetMembers, true)) {
+                $practiceTeacherNames = [];
+            }
+        }
         foreach (array_slice($family, 1) as $memberHemisId) {
+            if (!in_array($memberHemisId, $sheetMembers, true)) {
+                continue;
+            }
             foreach ($this->getTeachersByType($memberHemisId, $subjectId, $semesterCode)['practice_teachers'] as $t) {
                 $practiceTeacherNames[] = $t['name'];
             }

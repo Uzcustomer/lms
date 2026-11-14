@@ -15,6 +15,11 @@
         function vtLoadFilters() {
             try { return JSON.parse(localStorage.getItem(VT_STORE) || 'null'); } catch (e) { return null; }
         }
+        function vtResetFilters() {
+            try { localStorage.removeItem(VT_STORE); } catch (e) {}
+            vtRestoring = true;   // qayta yuklanguncha saqlanmasin
+            location.reload();
+        }
         function vtSaveFilters(searched) {
             if (vtRestoring) return;
             try {

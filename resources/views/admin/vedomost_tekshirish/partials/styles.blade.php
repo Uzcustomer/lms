@@ -43,6 +43,10 @@
         /* Buttons */
         .btn-calc { display:inline-flex; align-items:center; gap:8px; padding:8px 20px; background:linear-gradient(135deg,#2b5ea7,#3b7ddb); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(43,94,167,.3); height:36px; }
         .btn-calc:hover:not(:disabled) { background:linear-gradient(135deg,#1e4b8a,#2b5ea7); }
+        /* Filtrlarni tozalash — ikkinchi darajali, Qidirish yonida */
+        .btn-reset { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; height:36px; background:#fff; color:#475569; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+        .btn-reset:hover { background:#f1f5f9; border-color:#94a3b8; color:#0f172a; }
+        .btn-reset:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
         .btn-excel { display:inline-flex; align-items:center; gap:6px; padding:8px 18px; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; height:36px; transition:all .2s; white-space:nowrap; }
         .btn-disabled { background:#94a3b8; cursor:not-allowed; }
         .btn-active { background:linear-gradient(135deg,#16a34a,#22c55e); cursor:pointer; box-shadow:0 2px 8px rgba(22,163,74,.3); }

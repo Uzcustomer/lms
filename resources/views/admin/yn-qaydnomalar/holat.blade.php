@@ -120,7 +120,9 @@
                     + '<td><b class="vh-group">' + esc(r.group) + '</b>'
                     + (r.member_names.length ? '<span class="vh-small vh-sub-groups">Kichik guruhlar: ' + esc(r.member_names.join(', ')) + '</span>' : '')
                     + '<span class="vh-small">' + esc([r.faculty, r.specialty, r.level].filter(Boolean).join(' · ')) + '</span></td>'
-                    + '<td><span class="text-subject">' + esc(r.subject) + '</span><span class="vh-small">' + esc(r.semester) + '</span></td>'
+                    + '<td><span class="text-subject">' + esc(r.subject) + '</span>'
+                    + (r.form && r.form !== '12' ? ' <span class="vh-form">' + esc(r.form_label) + '</span>' : '')
+                    + '<span class="vh-small">' + esc(r.semester) + '</span></td>'
                     + '<td class="vh-dates">' + (r.oski_date ? '<div><span>OSKI</span> ' + esc(r.oski_date) + '</div>' : '')
                     + (r.test_date ? '<div><span>Test</span> ' + esc(r.test_date) + '</div>' : '') + (!r.oski_date && !r.test_date ? '<span class="vh-muted">—</span>' : '') + '</td>'
                     + '<td>' + vhTeachers(r) + '</td>'
@@ -198,6 +200,9 @@
 
     @include('admin.vedomost_tekshirish.partials.styles')
     <style>
+        /* Qaydnoma shakli (12-shakl qo'shimchasi, 12a, …) — alohida qaydnoma */
+        .vh-form { display:inline-block; padding:1px 8px; border-radius:6px; font-size:11.5px; font-weight:700; white-space:nowrap;
+            color:#6d28d9; background:#f5f3ff; border:1px solid #ddd6fe; }
         .vh-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 20px; border-bottom:1px solid #e2e8f0; background:#fff; }
         .vh-back { font-size:12.5px; color:#2b5ea7; text-decoration:none; font-weight:600; }
         .vh-back:hover { text-decoration:underline; }

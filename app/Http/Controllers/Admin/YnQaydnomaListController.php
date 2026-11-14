@@ -334,12 +334,15 @@ class YnQaydnomaListController extends Controller
         $entries = $this->withFamilies($this->entries($refs->keyBy($key)));
         [$confirmations, $rejections] = $this->statusData($entries->flatMap(fn ($r) => $r->members)->unique()->values()->all());
         $today = Carbon::today()->toDateString();
-        $rows = $entries->map(function ($r) use ($confirmations, $rejections, $today) {
-            $row = $this->makeRow($r, $confirmations, $rejections);
-            $row->exams_finished = self::examsFinished($r, $today);
+        // Qo'shimcha / 12a / 12b — o'qituvchi topshirgan (yoki rad etilgan) bo'lsa alohida qator
+        $rows = $entries->flatMap(fn ($r) => array_map(function ($form) use ($r, $confirmations, $rejections, $today) {
+            $row = $this->makeRow($this->withForm($r, $form), $confirmations, $rejections);
+            $row->exams_finished = $form === YnqForm::MAIN ? self::examsFinished($r, $today)
+                : YnqReadiness::for((string) $r->group_hemis_id, (string) $r->subject_id, (string) $r->semester_code, $form)['finished'];
 
             return $row;
-        })->sortBy(fn ($r) => [$r->group, $r->subject])->values();
+        }, array_merge([YnqForm::MAIN], $this->submittedForms($r, $confirmations, $rejections))))
+            ->sortBy(fn ($r) => [$r->group, $r->subject, $r->form])->values();
         $this->attachPendingTeachers($rows);
 
         return $rows;

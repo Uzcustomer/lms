@@ -116,7 +116,7 @@ class VedomostTekshirishController extends Controller
     private function holatItem(object $r, bool $canDelete): array
     {
         $person = fn ($c) => $c ? ['name' => $c->teacher_name, 'at' => $c->confirmed_at->format('d.m.Y H:i')] : null;
-        $key = ['subject_id' => $r->subject_id, 'semester_code' => $r->semester_code, 'group_hemis_id' => $r->group_hemis_id];
+        $key = ['subject_id' => $r->subject_id, 'semester_code' => $r->semester_code, 'group_hemis_id' => $r->group_hemis_id, 'form' => $r->form];
         $status = $r->status === YnQaydnomaListController::STATUS_NONE && !$r->exams_finished ? 'waiting' : $r->status;
 
         return [
@@ -127,6 +127,9 @@ class VedomostTekshirishController extends Controller
             'level' => $r->level_name,
             'subject' => $r->subject,
             'semester' => $r->semester,
+            // Shakl (12, 12-qo'shimcha, 12a, …) — har biri alohida qaydnoma
+            'form' => $r->form,
+            'form_label' => $r->form_label,
             'oski_date' => $r->oski_date ? Carbon::parse($r->oski_date)->format('d.m.Y') : null,
             'test_date' => $r->test_date ? Carbon::parse($r->test_date)->format('d.m.Y') : null,
             // waiting — YN imtihonlari hali tugamagan; none — tugagan, topshirilishi kerak
@@ -141,7 +144,8 @@ class VedomostTekshirishController extends Controller
             'excel' => $r->params,
             'pdf_url' => $r->status === YnQaydnomaListController::STATUS_DEAN ? route('admin.vedomost-tekshirish.qaydnoma-pdf', $key) : null,
             'pdf_view_url' => $r->status === YnQaydnomaListController::STATUS_DEAN ? route('admin.vedomost-tekshirish.qaydnoma-pdf', $key + ['inline' => 1]) : null,
-            'journal_url' => $r->group_pk ? route('admin.journal.show', [$r->group_pk, $r->subject_id, $r->semester_code]) : null,
+            'journal_url' => $r->group_pk ? route('admin.journal.show', [$r->group_pk, $r->subject_id, $r->semester_code]
+                + ($r->form !== '12' ? ['ynq_form' => $r->form] : [])) : null,
             'delete_key' => $canDelete && ($r->teachers->isNotEmpty() || $r->rejection) ? $key : null,
         ];
     }

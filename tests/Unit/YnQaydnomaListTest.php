@@ -348,4 +348,8 @@ it('lists the qo\'shimcha / 12a forms as separate vedomosts and puts the ones th
     session(['active_role' => 'dekan']);
     $dean = collect(($this->page)()['rows']->items())->where('group', 'd1/d22-01a');
     expect($dean->map(fn ($r) => $r->form . ' ' . $r->status)->sort()->values()->all())->toBe(['12 dean', '12a teacher']);
+
+    // Registrator "Vedomostlar holati" — topshirilgan shakl (12a) ham alohida qator
+    $holat = (new YnQaydnomaListController())->statusFor(collect([(object) ['group_hemis_id' => '77', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik']]));
+    expect($holat->map(fn ($r) => $r->form . ' ' . $r->status)->all())->toBe(['12 dean', '12a teacher']);
 });

@@ -10,11 +10,12 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * "JN 70%": YN imtihonlari chegara sanadan (sukut bo'yicha 26.10.2026) oldin tugagan fanda (o'tish bali 60)
- * yopuvchi imtihonga — test, faqat OSKI bilan yopiladigan fanda OSKI — qatnashmagan talaba uni keyin
- * topshiradi (12-qo'shimcha / sababli, 12a, 12b). Unga JN kunlik baholar grades:admin-upgrade formulasi bo'yicha
- * oshirib hisoblanadi (60 dan pasti — o'zgarmaydi; asl JN 60 dan past talabaga umuman tegilmaydi) va jn_upgrades ga yoziladi: jurnalda "JN 70%" ustuni,
- * qaydnomaning keyingi urinishlar varag'ida shu JN va o'tish chegarasi 70. Asosiy 12-shakl, asl baholar va JN
- * o'zgarmaydi. Sukut bo'yicha — faqat hisobot; yozish — --force; bekor qilish — --revert.
+ * OSKI yoki testdan o'tmagan talaba — qatnashmagan yoki 60 dan past olgan — keyingi urinishni chegara sanadan
+ * keyin topshiradi (12-qo'shimcha / sababli, 12a, 12b). Unga JN kunlik baholar grades:admin-upgrade formulasi
+ * bo'yicha oshirib hisoblanadi (60 dan pasti — o'zgarmaydi; asl JN 60 dan past talabaga umuman tegilmaydi) va
+ * jn_upgrades ga yoziladi: jurnalda "JN 70%" ustuni, qaydnomaning keyingi urinishlar varag'ida shu JN va o'tish
+ * chegarasi 70. Asosiy 12-shakl, asl baholar va JN o'zgarmaydi. Sukut bo'yicha — faqat hisobot; yozish — --force;
+ * bekor qilish — --revert.
  *
  *   php artisan grades:jn70                       hisobot (barcha guruhlar)
  *   php artisan grades:jn70 d1/d22-01 --force     yozish (kichik guruhlari a, b, c bilan)
@@ -32,7 +33,10 @@ class UpgradeJn70 extends Command
     /** Asl JN shundan past bo'lsa — "JN 70%" yozilmaydi (oshirilmaydi) */
     private const MIN_JN = 60;
 
-    protected $description = "\"JN 70%\": 26.10 dan oldin tugagan fanda yopuvchi imtihonga qatnashmagan talabalarning keyingi urinishlari uchun oshirilgan JN";
+    /** Chegara sanadan oldingi o'tish bali — OSKI / testdan shundan past olgan talaba ham keyingi urinishga qoladi */
+    private const OLD_PASS = 60;
+
+    protected $description = "\"JN 70%\": 26.10 dan oldin tugagan fanda OSKI / testdan o'tmagan (qatnashmagan yoki 60 dan past) talabalarning keyingi urinishlari uchun oshirilgan JN";
 
     public function handle(): int
     {
@@ -78,11 +82,11 @@ class UpgradeJn70 extends Command
             . " (qatnashmaganlari borlarida JN jurnaldagidek hisoblanadi — bir necha daqiqa olishi mumkin)");
         $started = microtime(true);
         foreach ($vedomosts as $i => $v) {
-            $absent = $this->absentStudents($v);
+            $absent = $this->failedStudents($v);
             if ($absent->isEmpty()) {
                 continue;
             }
-            $this->line(sprintf('  [%d/%d] %s · %s — qatnashmagan: %d', $i + 1, $vedomosts->count(), $v->group_name,
+            $this->line(sprintf('  [%d/%d] %s · %s — o\'tmagan / qatnashmagan: %d', $i + 1, $vedomosts->count(), $v->group_name,
                 mb_substr($v->subject_name, 0, 40), $absent->count()));
             $plain = $journal->ynqJnMaps($v->subject_id, $v->semester_code, $v->group_hemis_id, false);
             $up = $journal->ynqJnMaps($v->subject_id, $v->semester_code, $v->group_hemis_id, true);
@@ -162,8 +166,8 @@ class UpgradeJn70 extends Command
             ->map(function ($v) {
                 $oski = $v->oski_na ? null : $v->oski_date;
                 $test = $v->test_na ? null : $v->test_date;
-                // Yopuvchi imtihon: test bo'lsa — test, faqat OSKI bo'lsa — OSKI
-                $v->exam_types = $test ? [102, 103] : ($oski ? [101] : []);
+                // Fanning YN imtihonlari: OSKI va / yoki test ("yo'q" deb belgilanmaganlari)
+                $v->exam_types = array_values(array_filter(['oski' => $oski ? 'oski' : null, 'test' => $test ? 'test' : null]));
                 // Ikkala sana ham yo'q (yoki "yo'q" deb belgilangan) jadval qatori — o'tkazib yuboriladi
                 $dates = array_filter([(string) $oski, (string) $test]);
                 $v->exam_date = $dates ? max($dates) : null;
@@ -176,22 +180,39 @@ class UpgradeJn70 extends Command
             ->values();
     }
 
-    /** Yopuvchi imtihonga (asosiy urinish) qatnashmagan talabalar: bahosi yo'q yoki "kelmagan" (sababli bahosi hisobga olinmaydi) */
-    private function absentStudents(object $v)
+    /**
+     * Asosiy urinishda fanning YN imtihonlaridan (OSKI va / yoki test) birortasidan o'tmagan talabalar:
+     * qatnashmagan (bahosi yo'q yoki "kelmagan") yoki eski chegaradan (60) past olgan — ular keyingi urinishni
+     * chegara sanadan keyin topshiradi. Sababli bahosi (retake_grade) hisobga olinmaydi.
+     */
+    private function failedStudents(object $v)
     {
-        $attended = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->where('subject_id', $v->subject_id)->where('semester_code', $v->semester_code)
-            ->whereIn('training_type_code', $v->exam_types)
-            ->when(Schema::hasColumn('student_grades', 'attempt'), fn ($q) => $q->where(fn ($w) => $w->where('attempt', 1)->orWhereNull('attempt')))
-            ->whereNotNull('grade')
-            ->where(fn ($q) => $q->whereNull('reason')->orWhere('reason', '!=', 'absent'))
-            ->distinct()->pluck('student_hemis_id')->map(fn ($x) => (string) $x)->flip();
+        $rows = DB::table('student_grades as sg')
+            ->leftJoin('hemis_quiz_results as q', 'q.id', '=', 'sg.quiz_result_id')
+            ->whereNull('sg.deleted_at')
+            ->where('sg.subject_id', $v->subject_id)->where('sg.semester_code', $v->semester_code)
+            ->whereIn('sg.training_type_code', [101, 102, 103])
+            ->when(Schema::hasColumn('student_grades', 'attempt'), fn ($q) => $q->where(fn ($w) => $w->where('sg.attempt', 1)->orWhereNull('sg.attempt')))
+            ->whereNotNull('sg.grade')
+            ->where(fn ($q) => $q->whereNull('sg.reason')->orWhere('sg.reason', '!=', 'absent'))
+            ->get(['sg.student_hemis_id', 'sg.training_type_code', 'sg.grade', 'q.quiz_type']);
+        // Har talaba bo'yicha imtihon turi → eng yuqori baho (quiz natijasi — turi bo'yicha OSKI yoki test)
+        $best = [];
+        foreach ($rows as $r) {
+            $type = match ((int) $r->training_type_code) {
+                101 => 'oski',
+                102 => 'test',
+                default => str_contains(mb_strtolower((string) $r->quiz_type), 'oski') ? 'oski' : 'test',
+            };
+            $key = (string) $r->student_hemis_id;
+            $best[$key][$type] = max($best[$key][$type] ?? 0, (float) $r->grade);
+        }
+        $passed = fn (string $h) => collect($v->exam_types)->every(fn ($t) => ($best[$h][$t] ?? -1) >= self::OLD_PASS);
 
         return DB::table('students')->where('group_id', $v->group_hemis_id)
             ->where(fn ($q) => $q->whereNull('student_status_code')->orWhere('student_status_code', '!=', '60'))
             ->orderBy('full_name')->get(['hemis_id', 'full_name'])
-            ->reject(fn ($s) => $attended->has((string) $s->hemis_id))
+            ->reject(fn ($s) => $passed((string) $s->hemis_id))
             ->values();
     }
 

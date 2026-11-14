@@ -43,34 +43,44 @@ beforeEach(function () {
         ['hemis_id' => 's2', 'group_id' => '1', 'full_name' => 'B BAHOSI YOQ'],
         ['hemis_id' => 's3', 'group_id' => '1', 'full_name' => 'C KELMAGAN'],
         ['hemis_id' => 's4', 'group_id' => '1', 'full_name' => 'D JN PAST'],
+        ['hemis_id' => 's5', 'group_id' => '1', 'full_name' => 'E TESTDAN YIQILGAN'],
     ]);
+    Schema::create('hemis_quiz_results', fn ($t) => [$t->id(), $t->string('quiz_type')->nullable()]);
+    Schema::table('student_grades', fn ($t) => $t->unsignedBigInteger('quiz_result_id')->nullable());
     DB::table('student_grades')->insert([
-        ['student_hemis_id' => 's1', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 1, 'grade' => 80, 'reason' => null],
-        ['student_hemis_id' => 's3', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 1, 'grade' => null, 'reason' => 'absent'],
+        // s1 — OSKI va testdan o'tgan (OSKI — test markazi natijasi, quiz)
+        ['student_hemis_id' => 's1', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 1, 'grade' => 80, 'reason' => null, 'quiz_result_id' => null],
+        ['student_hemis_id' => 's1', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 103, 'attempt' => 1, 'grade' => 75, 'reason' => null, 'quiz_result_id' => 1],
+        // s3 — testga kelmagan
+        ['student_hemis_id' => 's3', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 1, 'grade' => null, 'reason' => 'absent', 'quiz_result_id' => null],
+        // s5 — OSKI 70, test 55 (60 dan past)
+        ['student_hemis_id' => 's5', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 101, 'attempt' => 1, 'grade' => 70, 'reason' => null, 'quiz_result_id' => null],
+        ['student_hemis_id' => 's5', 'subject_id' => '10', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 1, 'grade' => 55, 'reason' => null, 'quiz_result_id' => null],
     ]);
+    DB::table('hemis_quiz_results')->insert(['id' => 1, 'quiz_type' => 'OSKI (uzb)']);
     // Baho hisobi (jurnal) o'rniga: asl va formula bo'yicha oshirilgan JN (V1, V2)
     app()->instance(JournalController::class, new class extends JournalController {
         public function __construct() {}
 
         public function ynqJnMaps(string $subjectId, string $semesterCode, string $groupHemisId, bool $upgraded): array|string
         {
-            return $upgraded ? [[], ['s1' => 90, 's2' => 75, 's3' => 86, 's4' => 64]] : [[], ['s1' => 85, 's2' => 65, 's3' => 80, 's4' => 58]];
+            return $upgraded ? [[], ['s1' => 90, 's2' => 75, 's3' => 86, 's4' => 64, 's5' => 79]] : [[], ['s1' => 85, 's2' => 65, 's3' => 80, 's4' => 58, 's5' => 68]];
         }
     });
 });
 
-it('stores JN 70% only for students who missed the closing exam of a subject finished before 26.10, and reverts it', function () {
+it('stores JN 70% for students who missed or failed (<60) OSKI or test of a subject finished before 26.10, and reverts it', function () {
     $this->artisan('grades:jn70')->assertSuccessful();                       // hisobot — yozilmaydi
     expect(DB::table('jn_upgrades')->count())->toBe(0);
 
     $this->artisan('grades:jn70 --force')->assertSuccessful();
     expect(DB::table('jn_upgrades')->orderBy('student_hemis_id')->get(['student_hemis_id', 'subject_id', 'jn_original', 'jn_upgraded'])
         ->map(fn ($r) => "{$r->student_hemis_id} {$r->subject_id} {$r->jn_original}→{$r->jn_upgraded}")->all())
-        ->toBe(['s2 10 65→75', 's3 10 80→86']);                              // testga kelgan s1, asl JN 60 dan past s4 va 26.10 dan keyingi fan — yo'q
-    expect(\App\Services\JnUpgrade::map('10', '19', ['s1', 's2', 's3']))->toBe(['s2' => 75, 's3' => 86]);
+        ->toBe(['s2 10 65→75', 's3 10 80→86', 's5 10 68→79']);               // o'tgan s1, asl JN 60 dan past s4 va 26.10 dan keyingi fan — yo'q
+    expect(\App\Services\JnUpgrade::map('10', '19', ['s1', 's2', 's3', 's5']))->toBe(['s2' => 75, 's3' => 86, 's5' => 79]);
 
     $this->artisan('grades:jn70 --revert')->assertSuccessful();              // hisobot — o'chirilmaydi
-    expect(DB::table('jn_upgrades')->count())->toBe(2);
+    expect(DB::table('jn_upgrades')->count())->toBe(3);
     $this->artisan('grades:jn70 --revert --force')->assertSuccessful();
     expect(DB::table('jn_upgrades')->count())->toBe(0);
 });

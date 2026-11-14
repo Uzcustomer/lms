@@ -333,12 +333,27 @@ Route::prefix('admin')->name('admin.')->group(function () {
                     ->whereNumber('index')->name('image');
             });
 
-        // Fanlar farqi (hozircha bo'sh bo'lim)
-        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
+        // Fanlar farqi: ko'chib kelgan talaba transkripti ↔ bizning o'quv reja (akkreditatsiya fanlari)
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi')
             ->prefix('subject-differences')
             ->name('subject-differences.')
+            ->controller(\App\Http\Controllers\Admin\SubjectDifferenceController::class)
             ->group(function () {
-                Route::get('/', [\App\Http\Controllers\Admin\SubjectDifferenceController::class, 'index'])->name('index');
+                Route::get('/', 'index')->name('index');
+                Route::post('/', 'store')->name('store');
+                Route::get('/curricula', 'curricula')->name('curricula');
+                Route::get('/{check}', 'show')->whereNumber('check')->name('show');
+                Route::post('/{check}', 'update')->whereNumber('check')->name('update');
+                Route::delete('/{check}', 'destroy')->whereNumber('check')->name('destroy');
+                Route::post('/{check}/reread', 'reread')->whereNumber('check')->name('reread');
+                Route::post('/{check}/source', 'setSource')->whereNumber('check')->name('source');
+                Route::post('/{check}/row', 'editRow')->whereNumber('check')->name('row');
+                Route::get('/{check}/files/{index}', 'file')->whereNumber(['check', 'index'])->name('file');
+                Route::post('/{check}/levels', 'addLevel')->whereNumber('check')->name('levels.store');
+                Route::post('/{check}/levels/{level}/rematch', 'rematch')->whereNumber('check')->name('levels.rematch');
+                Route::post('/{check}/levels/{level}/mapping', 'saveMapping')->whereNumber('check')->name('levels.mapping');
+                Route::delete('/{check}/levels/{level}', 'deleteLevel')->whereNumber('check')->name('levels.destroy');
+                Route::get('/{check}/levels/{level}/excel', 'excel')->whereNumber('check')->name('levels.excel');
             });
 
         // Akademik mobillik: Registrator ariza yaratadi, O'quv bo'limi va prorektor tasdiqlaydi.

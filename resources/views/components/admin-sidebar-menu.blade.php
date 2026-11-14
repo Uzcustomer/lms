@@ -1149,7 +1149,7 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
         <a href="{{ route('admin.subject-differences.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.subject-differences.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

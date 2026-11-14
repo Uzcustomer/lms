@@ -1,0 +1,1294 @@
+{
+ "source": "Talaba A: TDTU akademik ma'lumotnomasi (skaner, 3 bet) + registrator qo'lda to'ldirgan Excel. expected_ball/expected_grade — Excel'dagi BALL va undan transkript shkalasi (90/70/60) bo'yicha baho; excel_grade — Excel'da yozilgan baho ('Tibbiyot kasbiga kirish' qatorida 8 — xato).",
+ "scale_text": "5 = 90-100, 4 = 70-89, 3 = 60-69, 2 = 0-59",
+ "transcript": [
+  {
+   "semester": 1,
+   "name": "O‘zbekistonning eng yangi tarixi",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 67.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 1,
+   "name": "Lotin tili va tibbiy terminologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 79.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 1,
+   "name": "Biofizika",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 75.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 1,
+   "name": "Pedagogika.Psixologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 71.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 2,
+   "name": "Falsafa",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 77.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 2,
+   "name": "Tibbiy biologiya. Umumiy genetika",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 75.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 2,
+   "name": "Tibbiy kimyo",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 78.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 2,
+   "name": "Tibbiyot kasbiga kirish",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 68.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 2,
+   "name": "Tibbiyotda axborot texnologiyalari",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 64.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 2,
+   "name": "Tibbiyotda xorijiy til",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 68.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 2,
+   "name": "Kichik tibbiy xodim yordamchisi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 82.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "Odam anatomiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 77.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "Gistologiya, sitologiya, embriologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 80.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "Biokimyo",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 65.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "Normal fiziologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 75.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "Mikrobiologiya, virusologiya, immunologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "ball": 77.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "Psixologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 74.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "Gigiyena, harbiy gigiyena. Tibbiy ekologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 73.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 3,
+   "name": "O‘zbekiston Respublikasi Konstitutsiyasi",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 66.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Gigiyena, harbiy gigiyena. Tibbiy ekologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 75.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Biokimyo",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 72.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Mikrobiologiya, virusologiya, immunologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "ball": 72.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Normal fiziologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 77.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Ichki kasalliklar propedevtikasi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 69.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Bolalar kasalliklari propedevtikasi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 69.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Yosh davrlari psixologiyasi",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 78.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 4,
+   "name": "Palata hamshirasi yordamchisi",
+   "hours": 180,
+   "credit": 6.0,
+   "ball": 70.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Bolalar kasalliklari propedevtikasi",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 73.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Ichki kasalliklar propedevtikasi",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 76.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Umumiy xirurgiya",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 77.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Klinik anatomiya",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 69.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Patologik anatomiya",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 78.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Patologik fiziologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 72.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Farmakologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 72.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 5,
+   "name": "Sport tibbiyoti",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 72.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Farmakologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 68.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Bolalar kasalliklari propedevtikasi",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 77.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Tibbiy radiologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 75.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Patologik anatomiya",
+   "hours": 150,
+   "credit": 5.0,
+   "ball": 77.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Konfliktologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 78.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Patologik fiziologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "ball": 74.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Klinik anatomiya",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 72.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Umumiy xirurgiya",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 78.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "Ichki kasalliklar propedevtikasi",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 71.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 6,
+   "name": "QVP, QOP, ambulator-poliklinik bo'g'in va tez yordam hamshirasi yordamchisi",
+   "hours": 180,
+   "credit": 6.0,
+   "ball": 78.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 7,
+   "name": "Dermatovenerologiya",
+   "hours": 30,
+   "credit": 3.0,
+   "ball": 83.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 7,
+   "name": "Bemor xavfsizligi",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 81.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 7,
+   "name": "Ichki kasalliklar",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 80.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 7,
+   "name": "Yuqumli kasalliklar. Bolalar yuqumli kasalliklari",
+   "hours": 60,
+   "credit": 2.0,
+   "ball": 76.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 7,
+   "name": "Tibbiy radiologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 74.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 7,
+   "name": "Endokrinologiya, bolalalar endokrinologiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 83.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Pediatriya, neonatologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "ball": 81.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Xirurgik kasalliklar",
+   "hours": 150,
+   "credit": 5.0,
+   "ball": 84.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Bolalar xirurgiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 73.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Akusherlik va ginekologiya, bolalar ginekologiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 80.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Sud tibbiyoti, vrach faoliyatini huquqiy asoslari",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 74.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Travmatologiya va ortopediya, HDJ. Bolalar travmatologiyasi va ortopediyasi",
+   "hours": 180,
+   "credit": 6.0,
+   "ball": 73.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Urologiya, bolalar urologiyasi",
+   "hours": 90,
+   "credit": 3.0,
+   "ball": 68.0,
+   "grade": 3,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Ftizatriya. Bolalar ftizatriyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "ball": 73.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Harbiy dala terapiyasi",
+   "hours": 30,
+   "credit": 1.0,
+   "ball": 84.0,
+   "grade": 4,
+   "grade_text": null
+  },
+  {
+   "semester": 8,
+   "name": "Statsionar vrach yordamchisi",
+   "hours": 180,
+   "credit": 6.0,
+   "ball": 88.0,
+   "grade": 4,
+   "grade_text": null
+  }
+ ],
+ "plan": [
+  {
+   "key": "2388-1",
+   "semester": 1,
+   "name": "O‘zbekistonning eng yangi tarixi",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 67,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "2889-1",
+   "semester": 1,
+   "name": "Tibbiy biologiya. Umumiy genetika",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 75,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "2892-1",
+   "semester": 1,
+   "name": "Tibbiy kimyo",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 78,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "2900-1",
+   "semester": 1,
+   "name": "Biofizika",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 75,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "2896-1",
+   "semester": 1,
+   "name": "Lotin tili va tibbiy terminologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 79,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "2951-1",
+   "semester": 1,
+   "name": "Jismoniy tarbiya va sport",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Tanlov",
+   "expected_ball": 0,
+   "expected_grade": 0,
+   "excel_grade": 0
+  },
+  {
+   "key": "2980-1",
+   "semester": 1,
+   "name": "Tibbiyot tarixi",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Tanlov",
+   "expected_ball": 0,
+   "expected_grade": 0,
+   "excel_grade": 0
+  },
+  {
+   "key": "15454-2",
+   "semester": 2,
+   "name": "Tibbiyotda xorijiy til",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Tanlov",
+   "expected_ball": 68,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "15305-2",
+   "semester": 2,
+   "name": "Tibbiyotda axborot texnologiyalari",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 64,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "15320-2",
+   "semester": 2,
+   "name": "Falsafa",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 77,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "15337-2",
+   "semester": 2,
+   "name": "Tibbiy biologiya. Umumiy genetika",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 75,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "15341-2",
+   "semester": 2,
+   "name": "Tibbiy kimyo",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 78,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67739-2",
+   "semester": 2,
+   "name": "O‘zbek/rus tili",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Tanlov",
+   "expected_ball": 0,
+   "expected_grade": 0,
+   "excel_grade": 0
+  },
+  {
+   "key": "15361-2",
+   "semester": 2,
+   "name": "Lotin tili va tibbiy terminologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 79,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "15389-2",
+   "semester": 2,
+   "name": "Tibbiyot kasbiga kirish",
+   "hours": 240,
+   "credit": 8.0,
+   "type": "Majburiy",
+   "expected_ball": 68,
+   "expected_grade": 3,
+   "excel_grade": 8
+  },
+  {
+   "key": "15423-2",
+   "semester": 2,
+   "name": "Gistologiya, sitologiya, embriologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 80,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "21957-2",
+   "semester": 2,
+   "name": "Kichik tibbiy xodim yordamchisi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 82,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22593-3",
+   "semester": 3,
+   "name": "Odam anatomiyasi",
+   "hours": 360,
+   "credit": 12.0,
+   "type": "Majburiy",
+   "expected_ball": 77,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22600-3",
+   "semester": 3,
+   "name": "Normal fiziologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 75,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22595-3",
+   "semester": 3,
+   "name": "Gistologiya, sitologiya, embriologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 80,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22611-3",
+   "semester": 3,
+   "name": "Psixologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 74,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22667-3",
+   "semester": 3,
+   "name": "Gigiyena, harbiy gigiyena. Tibbiy ekologiya.",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 75,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22598-3",
+   "semester": 3,
+   "name": "Biokimyo",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 65,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "22676-3",
+   "semester": 3,
+   "name": "Hayot faoliyati xavfsizligi. Fuqaro muhofazasi",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Tanlov",
+   "expected_ball": 0,
+   "expected_grade": 0,
+   "excel_grade": 0
+  },
+  {
+   "key": "22607-3",
+   "semester": 3,
+   "name": "Mikrobiologiya, virusologiya, immunologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "type": "Majburiy",
+   "expected_ball": 77,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22697-4",
+   "semester": 4,
+   "name": "Biokimyo",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 72,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22701-4",
+   "semester": 4,
+   "name": "Mikrobiologiya, virusologiya, immunologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "type": "Majburiy",
+   "expected_ball": 72,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67777-4",
+   "semester": 4,
+   "name": "Bolalar kasalliklari propedevtikasi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 69,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "67766-4",
+   "semester": 4,
+   "name": "Ichki kasalliklar propedevtikasi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 69,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "22699-4",
+   "semester": 4,
+   "name": "Normal fiziologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 77,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "22761-4",
+   "semester": 4,
+   "name": "Valеologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Tanlov",
+   "expected_ball": 0,
+   "expected_grade": 0,
+   "excel_grade": 0
+  },
+  {
+   "key": "22751-4",
+   "semester": 4,
+   "name": "Gigiyena, harbiy gigiyena. Tibbiy ekologiya.",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 73,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "36817-4",
+   "semester": 4,
+   "name": "Ishlab chiqarish amaliyoti",
+   "hours": 180,
+   "credit": 6.0,
+   "type": "Majburiy",
+   "expected_ball": 70,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "65417-5",
+   "semester": 5,
+   "name": "Ichki kasalliklar propedevtikasi",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 76,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "65441-5",
+   "semester": 5,
+   "name": "Bolalar kasalliklari propedevtikasi",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 73,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "38280-5",
+   "semester": 5,
+   "name": "Patologik anatomiya",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 78,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "38289-5",
+   "semester": 5,
+   "name": "Patologik fiziologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 72,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "38299-5",
+   "semester": 5,
+   "name": "Farmakologiya",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 72,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "65472-5",
+   "semester": 5,
+   "name": "Umumiy xirurgiya",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 77,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "50630-5",
+   "semester": 5,
+   "name": "Sport tibbiyoti",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Tanlov",
+   "expected_ball": 72,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "50612-5",
+   "semester": 5,
+   "name": "Klinik anatomiya (OXTA)",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 69,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "49743-6",
+   "semester": 6,
+   "name": "Patologik fiziologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "type": "Majburiy",
+   "expected_ball": 74,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "49899-6",
+   "semester": 6,
+   "name": "Konfliktologiya",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 78,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "49949-6",
+   "semester": 6,
+   "name": "Farmakologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 68,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "49960-6",
+   "semester": 6,
+   "name": "Patologik anatomiya",
+   "hours": 150,
+   "credit": 5.0,
+   "type": "Majburiy",
+   "expected_ball": 77,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "62263-6",
+   "semester": 6,
+   "name": "Operativ jarroxlik va topografik anatomiya",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 72,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "62282-6",
+   "semester": 6,
+   "name": "Bolalar kasalliklari propedevtikasi",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 77,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "62302-6",
+   "semester": 6,
+   "name": "Tibbiy radiologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 75,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "62323-6",
+   "semester": 6,
+   "name": "Umumiy xirurgiya",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 78,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "62345-6",
+   "semester": 6,
+   "name": "Ichki kasalliklar propedevtikasi",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 71,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "66200-6",
+   "semester": 6,
+   "name": "Ishlab chiqarish amaliyoti",
+   "hours": 180,
+   "credit": 6.0,
+   "type": "Majburiy",
+   "expected_ball": 78,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67084-7",
+   "semester": 7,
+   "name": "Tibbiy radiologiya",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 74,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67087-7",
+   "semester": 7,
+   "name": "Xirurgik kasalliklar",
+   "hours": 150,
+   "credit": 5.0,
+   "type": "Majburiy",
+   "expected_ball": 84,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67094-7",
+   "semester": 7,
+   "name": "Akusherlik va ginekologiya, bolalar ginekologiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 80,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67112-7",
+   "semester": 7,
+   "name": "Endokrinologiya, bolalar endokrinologiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 83,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67285-7",
+   "semester": 7,
+   "name": "Pediatriya. Neonatologiya",
+   "hours": 150,
+   "credit": 5.0,
+   "type": "Majburiy",
+   "expected_ball": 81,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "67341-7",
+   "semester": 7,
+   "name": "Ichki kasalliklar, Kasb kasalliklari",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 80,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "71561-7",
+   "semester": 7,
+   "name": "Bemor xavfsizligi",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Tanlov",
+   "expected_ball": 81,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "68951-8",
+   "semester": 8,
+   "name": "Bolalar xirurgiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 73,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "68953-8",
+   "semester": 8,
+   "name": "Dermatovenerologiya va bolalar dermatovenerologiyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 83,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "68956-8",
+   "semester": 8,
+   "name": "Ftiziatriya, bolalar ftiziatriyasi",
+   "hours": 120,
+   "credit": 4.0,
+   "type": "Majburiy",
+   "expected_ball": 73,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "69570-8",
+   "semester": 8,
+   "name": "Urologiya, bolalar urologiyasi",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 68,
+   "expected_grade": 3,
+   "excel_grade": 3
+  },
+  {
+   "key": "69576-8",
+   "semester": 8,
+   "name": "Sud tibbiyoti, vrach faoliyatining huquqiy asoslari",
+   "hours": 90,
+   "credit": 3.0,
+   "type": "Majburiy",
+   "expected_ball": 74,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "69583-8",
+   "semester": 8,
+   "name": "Travmatologiya va ortopediya, XDJ. Bolalar travmatologiyasi va ortopediyasi",
+   "hours": 180,
+   "credit": 6.0,
+   "type": "Majburiy",
+   "expected_ball": 73,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "77631-8",
+   "semester": 8,
+   "name": "Yuqumli kasalliklar. Bolalar yuqumli kasalliklari",
+   "hours": 60,
+   "credit": 2.0,
+   "type": "Majburiy",
+   "expected_ball": 76,
+   "expected_grade": 4,
+   "excel_grade": 4
+  },
+  {
+   "key": "69600-8",
+   "semester": 8,
+   "name": "Gematologiya, XDT",
+   "hours": 30,
+   "credit": 1.0,
+   "type": "Majburiy",
+   "expected_ball": 0,
+   "expected_grade": 0,
+   "excel_grade": 0
+  },
+  {
+   "key": "68964-8",
+   "semester": 8,
+   "name": "Ishlab chiqarish amaliyoti",
+   "hours": 180,
+   "credit": 6.0,
+   "type": "Majburiy",
+   "expected_ball": 88,
+   "expected_grade": 4,
+   "excel_grade": 4
+  }
+ ]
+}

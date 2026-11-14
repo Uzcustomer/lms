@@ -1,0 +1,3 @@
+@tailwind components;
+@tailwind utilities;
+.sd-page [x-cloak]{display:none!important}

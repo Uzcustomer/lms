@@ -52,223 +52,145 @@
                     $optLabel = fn ($ti, $tr) => \Illuminate\Support\Str::limit($trLabel($tr), 60) . ' · ' . $fmt($tr['ball'] ?? null) . '/' . ($tr['grade'] ?? '—');
                     $optList = collect($trRows)->map(fn ($tr, $ti) => [$ti, $optLabel($ti, $tr)])->values();
                     $farqRows = collect($res['rows'])->filter(fn ($r) => $r['farq'] && !$r['excluded'])->values();
-                    $confirmRows = collect($res['rows'])->filter(fn ($r) => $r['disagree'] && !$r['overridden'] && !$r['excluded'])->values();
-                    $confirmKeys = $confirmRows->pluck('key')->all();
-                    $kursLabel = (int) $level['upto'] <= 1 ? '1-kurs' : $dec['kurs'] . '-kurs';
+                    $title = (int) $level['upto'] <= 1 ? '1-kurs (2-semestrdan)' : $dec['kurs'] . '-kursga qabul';
+                    // Moslik foizi: qo'lda tanlangan bo'lsa "qo'lda", aks holda yakuniy moslikni bergan usulning ishonchi
+                    $matchPct = function ($r) use ($hasAi) {
+                        if ($r['overridden']) {
+                            return ['text' => 'qo\'lda', 'title' => 'Xodim qo\'lda tanlagan'];
+                        }
+                        if ($r['tr'] === null) {
+                            return ['text' => '—', 'title' => 'Mos fan topilmadi'];
+                        }
+                        $v = $hasAi ? $r['ai_confidence'] : $r['rule_score'];
+                        return ['text' => $v !== null ? round($v * 100) . '%' : '—', 'title' => ($hasAi ? 'AI ishonchi' : 'Nom o\'xshashligi') . ($r['ai_reason'] ? ': ' . $r['ai_reason'] : '')];
+                    };
                 @endphp
                 <script>window.sdOpts = window.sdOpts || {}; window.sdOpts[{{ \Illuminate\Support\Js::from($level['id']) }}] = {{ \Illuminate\Support\Js::from($optList) }};</script>
 
-                <details class="group rounded-2xl border bg-white shadow-sm {{ $isAnswer ? 'border-slate-300' : 'border-slate-200' }}" id="level-{{ $level['id'] }}" @if($isAnswer) open @endif>
-                    {{-- Bitta gapdagi natija --}}
-                    <summary class="flex cursor-pointer list-none items-start gap-3 px-4 py-4 sm:items-center sm:gap-4 sm:px-5 [&::-webkit-details-marker]:hidden">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white {{ $dec['passed'] ? 'bg-emerald-600' : 'bg-rose-600' }}" aria-hidden="true">
-                            @if($dec['passed'])
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                            @else
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                            @endif
+                <details class="group rounded-xl border border-slate-300 bg-white" id="level-{{ $level['id'] }}" @if($isAnswer) open @endif>
+                    <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                        <div class="flex items-center gap-2">
+                            <svg class="h-4 w-4 text-slate-500 transition group-open:rotate-90" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                            <h3 class="text-base font-bold text-slate-900">{{ $title }}</h3>
+                            <span class="text-sm text-slate-600">· {{ $level['curriculum_name'] }} · 1–{{ $level['upto'] }}-semestr</span>
+                        </div>
+                        <span class="rounded-md px-2 py-1 text-sm font-semibold {{ $dec['passed'] ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900' }}">
+                            GPA {{ number_format($res['gpa'], 2) }} · {{ $dec['passed'] ? 'o\'tdi' : 'o\'tmadi' }}
                         </span>
-                        <div class="min-w-0 flex-1">
-                            <div class="text-lg font-bold text-slate-900">
-                                {{ $dec['passed'] ? $dec['text'] : $kursLabel . 'ga o\'tmaydi' }}
-                            </div>
-                            <div class="mt-0.5 text-sm text-slate-600">
-                                @if((int) $level['upto'] > 1)
-                                    GPA <b class="tabular-nums {{ $dec['passed'] ? 'text-slate-900' : 'text-rose-700' }}">{{ number_format($res['gpa'], 2) }}</b>
-                                    <span class="text-slate-500">(kamida 2.4 kerak)</span> ·
-                                @endif
-                                <b class="text-slate-900">{{ $res['farq_count'] }}</b> ta fan farqi ({{ $fmt($res['farq_credit']) }} kredit) ·
-                                {{ $level['curriculum_name'] }}, 1–{{ $level['upto'] }}-semestr
-                            </div>
-                            @if($confirmRows->count())
-                                <span class="mt-2 inline-block rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 sm:hidden">{{ $confirmRows->count() }} ta qatorni tasdiqlang</span>
-                            @endif
-                        </div>
-                        <div class="flex shrink-0 items-center gap-2">
-                            @if($confirmRows->count())
-                                <span class="hidden rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 sm:inline-block">{{ $confirmRows->count() }} ta qatorni tasdiqlang</span>
-                            @endif
-                            <svg class="h-5 w-5 text-slate-500 transition group-open:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                        </div>
                     </summary>
 
-                    <form method="POST" action="{{ route('admin.subject-differences.levels.mapping', [$check, $level['id']]) }}" x-data="{ dirty: 0 }" @change="dirty++" class="border-t border-slate-200">
+                    <form method="POST" action="{{ route('admin.subject-differences.levels.mapping', [$check, $level['id']]) }}"
+                          x-data="{ edit: false, dirty: 0 }" @change="dirty++" class="border-t border-slate-300">
                         @csrf
-                        <div class="space-y-6 px-5 py-5">
-
-                            {{-- Asosiy amallar --}}
-                            <div class="flex flex-wrap items-center gap-2">
-                                <a href="{{ route('admin.subject-differences.levels.excel', [$check, $level['id']]) }}"
-                                   class="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
-                                    Excel yuklab olish
-                                </a>
-                                @if(!$dec['passed'] && $n === count($levels) - 1)
-                                    <a href="#new-level" class="inline-flex h-9 items-center rounded-lg border border-rose-300 bg-rose-50 px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100">
-                                        Pastki kursni tekshirish ({{ $dec['next_upto'] ?? 1 }}-semestrgacha) ↓
-                                    </a>
-                                @endif
-                            </div>
-
-                            {{-- 1. Tasdiqlash kerak --}}
-                            @if($confirmRows->count())
-                                <section>
-                                    <h3 class="text-sm font-bold text-slate-900">Tasdiqlang: qaysi fan mos?</h3>
-                                    <p class="mt-0.5 text-sm text-slate-600">Bu fanlarda ikki usul (nom bo'yicha va AI) har xil javob berdi. To'g'risini belgilang va saqlang.</p>
-                                    <div class="mt-3 divide-y divide-slate-200 rounded-xl border border-amber-300">
-                                        @foreach($confirmRows as $r)
-                                            @php
-                                                $ruleTr = $r['rule_tr'] !== null ? ($trRows[$r['rule_tr']] ?? null) : null;
-                                                $aiTr = $r['ai_tr'] !== null ? ($trRows[$r['ai_tr']] ?? null) : null;
-                                                $aiVal = $r['ai_tr'] === null ? 'none' : (string) $r['ai_tr'];
-                                                $ruleVal = $r['rule_tr'] === null ? 'none' : (string) $r['rule_tr'];
-                                            @endphp
-                                            <fieldset class="grid grid-cols-1 gap-3 px-4 py-3 md:grid-cols-12">
-                                                <legend class="sr-only">{{ $r['name'] }}</legend>
-                                                <div class="md:col-span-4">
-                                                    <div class="font-semibold text-slate-900">{{ $r['name'] }}</div>
-                                                    <div class="text-xs text-slate-600">{{ $r['semester'] }}-semestr · {{ $fmt($r['credit']) }} kredit</div>
-                                                </div>
-                                                <div class="space-y-1.5 md:col-span-8">
-                                                    <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
-                                                        <input type="radio" name="map[{{ $r['key'] }}]" value="{{ $aiVal }}" checked class="mt-0.5">
-                                                        <span class="text-sm">
-                                                            <span class="font-semibold text-slate-900">{{ $aiTr ? $trLabel($aiTr) . ' — ' . $fmt($aiTr['ball'] ?? null) . ' ball' : 'Mos fan yo\'q (farq)' }}</span>
-                                                            <span class="block text-xs text-slate-600">AI taklifi{{ $r['ai_reason'] ? ': ' . $r['ai_reason'] : '' }}</span>
-                                                        </span>
-                                                    </label>
-                                                    @if($ruleVal !== $aiVal)
-                                                        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
-                                                            <input type="radio" name="map[{{ $r['key'] }}]" value="{{ $ruleVal }}" class="mt-0.5">
-                                                            <span class="text-sm">
-                                                                <span class="font-semibold text-slate-900">{{ $ruleTr ? $trLabel($ruleTr) . ' — ' . $fmt($ruleTr['ball'] ?? null) . ' ball' : 'Mos fan yo\'q (farq)' }}</span>
-                                                                <span class="block text-xs text-slate-600">Nom bo'yicha taklif</span>
-                                                            </span>
-                                                        </label>
-                                                    @endif
-                                                </div>
-                                            </fieldset>
-                                        @endforeach
-                                    </div>
-                                </section>
-                            @endif
-
-                            {{-- 2. Fanlar farqi --}}
-                            <section>
-                                <h3 class="text-sm font-bold text-slate-900">Talaba topshirishi kerak bo'lgan fanlar
-                                    <span class="ml-1 font-normal text-slate-600">— {{ $farqRows->count() }} ta, {{ $fmt($farqRows->sum('credit')) }} kredit</span>
-                                </h3>
-                                @if($farqRows->isEmpty())
-                                    <p class="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">Fanlar farqi yo'q — barcha fanlar transkriptda bor.</p>
-                                @else
-                                    <table class="mt-2 w-full text-sm">
-                                        <thead class="text-left text-xs text-slate-600">
-                                            <tr class="border-b border-slate-200">
-                                                <th class="py-2 pr-3 font-semibold">Semestr</th>
-                                                <th class="py-2 pr-3 font-semibold">Fan</th>
-                                                <th class="py-2 pr-3 text-right font-semibold">Kredit</th>
-                                                <th class="py-2 font-semibold">Sabab</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($farqRows as $r)
-                                                <tr class="border-b border-slate-100">
-                                                    <td class="py-2 pr-3 text-slate-700">{{ $r['semester'] }}</td>
-                                                    <td class="py-2 pr-3 font-medium text-slate-900">{{ $r['name'] }}</td>
-                                                    <td class="py-2 pr-3 text-right tabular-nums text-slate-900">{{ $fmt($r['credit']) }}</td>
-                                                    <td class="py-2 text-slate-700">
-                                                        {{ $r['tr_name'] ? 'Baho yetarli emas (' . $r['grade'] . ')' : 'Transkriptda yo\'q' }}
-                                                        @if($isElective($r['type']))<span class="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-xs font-semibold text-violet-800" title="Guruhdagi tanlov fan muqobili — farq sifatida hisoblandi">tanlov fan</span>@endif
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                @endif
-                            </section>
-
-                            {{-- 3. Barcha fanlar --}}
-                            <details class="rounded-xl border border-slate-200">
-                                <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">
-                                    Barcha fanlar va baholar ({{ count($res['rows']) }})
-                                    <span class="ml-1 font-normal text-slate-600">— moslikni qo'lda o'zgartirish shu yerda</span>
-                                </summary>
-                                <div class="overflow-x-auto border-t border-slate-200">
-                                    <table class="min-w-full text-sm">
-                                        <thead class="text-left text-xs text-slate-600">
-                                            <tr class="border-b border-slate-200">
-                                                <th class="px-4 py-2 font-semibold">Bizning fan</th>
-                                                <th class="px-3 py-2 text-right font-semibold">Kredit</th>
-                                                <th class="px-3 py-2 font-semibold">Transkriptdagi mos fan</th>
-                                                <th class="px-3 py-2 text-center font-semibold">Baho</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @php $prevSem = null; @endphp
-                                            @foreach($res['rows'] as $r)
-                                                @php
-                                                    $sel = $r['excluded'] ? 'exclude' : ($r['overridden'] ? ($level['overrides'][$r['key']] === null ? 'none' : (string) $level['overrides'][$r['key']]) : 'auto');
-                                                    $inConfirm = in_array($r['key'], $confirmKeys, true);
-                                                    $extra = array_values(array_filter($r['notes'], fn ($x) => str_contains($x, 'lekin') || str_contains($x, 'o\'qilmadi')));
-                                                @endphp
-                                                @if($prevSem !== $r['semester'])
-                                                    @php $prevSem = $r['semester']; @endphp
-                                                    <tr class="bg-slate-50"><td colspan="4" class="px-4 py-1.5 text-xs font-bold text-slate-700">{{ $r['semester'] }}-semestr</td></tr>
-                                                @endif
-                                                <tr class="border-b border-slate-100 align-top {{ $r['excluded'] ? 'text-slate-500' : '' }}">
-                                                    <td class="px-4 py-2">
-                                                        <div class="font-medium {{ $r['excluded'] ? 'line-through' : 'text-slate-900' }}">{{ $r['name'] }}</div>
-                                                        @if($isElective($r['type']))<div class="text-xs text-violet-700">tanlov fan</div>@endif
-                                                    </td>
-                                                    <td class="px-3 py-2 text-right tabular-nums">{{ $fmt($r['credit']) }}</td>
-                                                    <td class="px-3 py-2">
-                                                        @if($inConfirm)
-                                                            <span class="text-sm text-amber-800">Yuqorida tasdiqlang</span>
-                                                        @else
-                                                            <select name="map[{{ $r['key'] }}]" data-level="{{ $level['id'] }}" onfocus="sdFill(this)" onmousedown="sdFill(this)" aria-label="{{ $r['name'] }} uchun mos fan"
-                                                                    class="w-full max-w-md rounded-md py-1 text-sm {{ $sel !== 'auto' ? 'border-blue-500 ring-1 ring-blue-300' : 'border-slate-300' }}">
-                                                                <option value="auto" @selected($sel === 'auto')>{{ $r['tr_name'] && !$r['overridden'] ? \Illuminate\Support\Str::limit($trLabel(['semester' => $r['tr_semester'], 'name' => $r['tr_name']]), 55) . ' · ' . $fmt($r['tr_ball']) . ' ball' : 'Avtomatik: mos fan topilmadi' }}</option>
-                                                                <option value="none" @selected($sel === 'none')>— Mos fan yo'q (farq)</option>
-                                                                <option value="exclude" @selected($sel === 'exclude')>— Hisobga olinmasin</option>
-                                                                @if(is_numeric($sel) && isset($trRows[(int) $sel]))
-                                                                    <option value="{{ $sel }}" selected>{{ $optLabel((int) $sel, $trRows[(int) $sel]) }}</option>
-                                                                @endif
-                                                            </select>
-                                                        @endif
-                                                        @foreach($extra as $note)<div class="mt-1 text-xs text-amber-800">⚠ {{ $note }}</div>@endforeach
-                                                    </td>
-                                                    <td class="px-3 py-2 text-center">
-                                                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold {{ $r['excluded'] ? 'bg-slate-100 text-slate-500' : ($r['grade'] < 3 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-900') }}">{{ $r['excluded'] ? '—' : $r['grade'] }}</span>
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </details>
-
-                            {{-- Texnik tafsilotlar --}}
-                            <details class="text-sm text-slate-700">
-                                <summary class="cursor-pointer text-slate-600 hover:text-slate-900">Batafsil: usullar solishtirmasi va boshqa amallar</summary>
-                                <div class="mt-2 space-y-2 rounded-lg bg-slate-50 px-4 py-3">
-                                    <div>Nom bo'yicha (qoida) GPA: <b class="tabular-nums">{{ number_format($res['rule_gpa'], 3) }}</b> ·
-                                        AI bo'yicha GPA: <b class="tabular-nums">{{ $hasAi ? number_format($res['ai_gpa'], 3) : '—' }}</b> ·
-                                        kelishmagan qatorlar: <b>{{ $res['disagree'] }}</b> · yakuniy: <b class="tabular-nums">{{ number_format($res['gpa'], 3) }}</b> ({{ $fmt($res['total_product']) }} / {{ $fmt($res['total_credit']) }})</div>
-                                    <div class="text-slate-600">Transkript manbasi: {{ $sourceLabels[$level['source'] ?? 'ai'] ?? '' }}{{ ($level['ai_model'] ?? null) ? ' · model ' . $level['ai_model'] : '' }}</div>
-                                    @if($level['ai_error'] ?? null)<div class="text-amber-800">AI xatosi: {{ $level['ai_error'] }} — hozir nom bo'yicha natija ishlatilmoqda.</div>@endif
-                                    <div class="flex flex-wrap gap-2 pt-1">
-                                        <button type="submit" form="rematch-{{ $level['id'] }}" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Qayta moslashtirish (AI bilan)</button>
-                                        <button type="submit" form="delete-{{ $level['id'] }}" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Bu tekshiruvni o'chirish</button>
-                                    </div>
-                                </div>
-                            </details>
+                        <div class="flex flex-wrap items-center justify-end gap-2 px-4 py-2">
+                            <button type="button" @click="edit = !edit" class="inline-flex h-8 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                                    x-text="edit ? 'Tahrirlashni yopish' : 'Moslikni tahrirlash'">Moslikni tahrirlash</button>
+                            <a href="{{ route('admin.subject-differences.levels.excel', [$check, $level['id']]) }}"
+                               class="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-sm font-semibold text-white hover:bg-emerald-700">Excel</a>
                         </div>
 
-                        <div :class="dirty ? 'sticky bottom-0 z-10 border-blue-300 bg-blue-50 shadow-[0_-4px_12px_rgba(15,23,42,0.08)]' : 'border-slate-200 bg-white'"
-                             class="flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t px-5 py-3 text-sm">
-                            <span x-show="!dirty" class="text-slate-600">{{ $confirmRows->count() ? 'Tasdiqlagandan so\'ng saqlang — GPA qayta hisoblanadi.' : 'O\'zgartirish kiritsangiz, saqlang — GPA qayta hisoblanadi.' }}</span>
-                            <span x-show="dirty" x-cloak class="font-semibold text-blue-900">Saqlanmagan o'zgarishlar bor</span>
-                            <button class="inline-flex h-9 items-center rounded-lg bg-blue-600 px-4 font-semibold text-white hover:bg-blue-700">Saqlash va qayta hisoblash</button>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-slate-100 text-left text-slate-800">
+                                        <th class="border border-slate-300 px-3 py-2 font-semibold">№</th>
+                                        <th class="border border-slate-300 px-3 py-2 font-semibold">O'quv reja fani</th>
+                                        <th class="border border-slate-300 px-3 py-2 text-center font-semibold">Kredit</th>
+                                        <th class="border border-slate-300 px-3 py-2 font-semibold">Transkriptdagi fan</th>
+                                        <th class="border border-slate-300 px-3 py-2 text-center font-semibold">Moslik</th>
+                                        <th class="border border-slate-300 px-3 py-2 text-center font-semibold">Baho</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @php $prevSem = null; $no = 0; @endphp
+                                    @foreach($res['rows'] as $r)
+                                        @php
+                                            $no++;
+                                            $sel = $r['excluded'] ? 'exclude' : ($r['overridden'] ? ($level['overrides'][$r['key']] === null ? 'none' : (string) $level['overrides'][$r['key']]) : 'auto');
+                                            $pct = $matchPct($r);
+                                            $rowBg = $r['excluded'] ? 'bg-slate-50 text-slate-500' : ($r['farq'] ? 'bg-rose-50' : '');
+                                        @endphp
+                                        @if($prevSem !== $r['semester'])
+                                            @php $prevSem = $r['semester']; @endphp
+                                            <tr><td colspan="6" class="border border-slate-300 bg-slate-50 px-3 py-1.5 text-center text-sm font-bold text-slate-800">{{ $r['semester'] }}-semestr</td></tr>
+                                        @endif
+                                        <tr class="{{ $rowBg }}">
+                                            <td class="border border-slate-300 px-3 py-1.5 text-center tabular-nums text-slate-600">{{ $no }}</td>
+                                            <td class="border border-slate-300 px-3 py-1.5 {{ $r['excluded'] ? 'line-through' : 'text-slate-900' }}">
+                                                {{ $r['name'] }}
+                                                @if($isElective($r['type']))<span class="ml-1 text-xs text-violet-700">(tanlov)</span>@endif
+                                            </td>
+                                            <td class="border border-slate-300 px-3 py-1.5 text-center tabular-nums">{{ $fmt($r['credit']) }}</td>
+                                            <td class="border border-slate-300 px-3 py-1.5">
+                                                <div x-show="!edit">
+                                                    @if($r['excluded'])
+                                                        <span class="text-slate-500">Hisobga olinmagan</span>
+                                                    @elseif($r['tr_name'])
+                                                        {{ $r['tr_name'] }}
+                                                        <span class="text-xs text-slate-600">({{ $r['tr_semester'] ? $r['tr_semester'] . '-sem, ' : '' }}{{ $fmt($r['tr_ball']) }} ball)</span>
+                                                    @else
+                                                        <span class="font-semibold text-rose-700">Yo'q — fanlar farqi</span>
+                                                    @endif
+                                                </div>
+                                                <select x-show="edit" x-cloak name="map[{{ $r['key'] }}]" data-level="{{ $level['id'] }}" onfocus="sdFill(this)" onmousedown="sdFill(this)" aria-label="{{ $r['name'] }} uchun mos fan"
+                                                        class="w-full min-w-[16rem] rounded border-slate-300 py-1 text-sm">
+                                                    <option value="auto" @selected($sel === 'auto')>{{ $r['tr_name'] && !$r['overridden'] ? \Illuminate\Support\Str::limit($r['tr_name'], 55) . ' · ' . $fmt($r['tr_ball']) . ' ball' : 'Avtomatik: topilmadi' }}</option>
+                                                    <option value="none" @selected($sel === 'none')>— Mos fan yo'q (farq)</option>
+                                                    <option value="exclude" @selected($sel === 'exclude')>— Hisobga olinmasin</option>
+                                                    @if(is_numeric($sel) && isset($trRows[(int) $sel]))
+                                                        <option value="{{ $sel }}" selected>{{ $optLabel((int) $sel, $trRows[(int) $sel]) }}</option>
+                                                    @endif
+                                                </select>
+                                            </td>
+                                            <td class="border border-slate-300 px-3 py-1.5 text-center tabular-nums" title="{{ $pct['title'] }}">
+                                                {{ $pct['text'] }}
+                                                @if($r['disagree'] && !$r['overridden'])<span class="cursor-help text-amber-700" title="Nom bo'yicha boshqa natija chiqdi — tekshiring">⚠</span>@endif
+                                            </td>
+                                            <td class="border border-slate-300 px-3 py-1.5 text-center font-bold tabular-nums {{ $r['excluded'] ? '' : ($r['grade'] < 3 ? 'text-rose-700' : 'text-slate-900') }}">{{ $r['excluded'] ? '—' : $r['grade'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                                <tfoot>
+                                    <tr class="bg-slate-100 font-semibold text-slate-900">
+                                        <td colspan="2" class="border border-slate-300 px-3 py-2 text-right">Jami kredit</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-center tabular-nums">{{ $fmt($res['total_credit']) }}</td>
+                                        <td colspan="2" class="border border-slate-300 px-3 py-2 text-right">GPA ({{ $fmt($res['total_product']) }} / {{ $fmt($res['total_credit']) }})</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-center text-base tabular-nums {{ $dec['passed'] ? 'text-emerald-800' : 'text-rose-700' }}">{{ number_format($res['gpa'], 2) }}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        {{-- Yakun: GPA va fanlar farqi --}}
+                        <div class="grid grid-cols-1 gap-4 px-4 py-4 md:grid-cols-2">
+                            <div class="rounded-lg border p-4 {{ $dec['passed'] ? 'border-emerald-300 bg-emerald-50' : 'border-rose-300 bg-rose-50' }}">
+                                <div class="text-sm text-slate-700">GPA</div>
+                                <div class="text-3xl font-bold tabular-nums {{ $dec['passed'] ? 'text-emerald-900' : 'text-rose-800' }}">{{ number_format($res['gpa'], 2) }}</div>
+                                <div class="mt-1 text-sm font-semibold {{ $dec['passed'] ? 'text-emerald-900' : 'text-rose-900' }}">{{ $dec['text'] }}</div>
+                                @if(!$dec['passed'] && $n === count($levels) - 1)
+                                    <a href="#new-level" class="mt-2 inline-block text-sm font-semibold text-rose-800 underline">Pastki kurs bilan tekshirish ↓</a>
+                                @endif
+                            </div>
+                            <div class="rounded-lg border border-slate-300 p-4">
+                                <div class="text-sm text-slate-700">Fanlar farqi</div>
+                                <div class="text-3xl font-bold tabular-nums text-slate-900">{{ $farqRows->count() }} <span class="text-base font-semibold text-slate-700">fan, {{ $fmt($farqRows->sum('credit')) }} kredit</span></div>
+                                @if($farqRows->isNotEmpty())
+                                    <ol class="mt-2 list-decimal space-y-0.5 pl-5 text-sm text-slate-800">
+                                        @foreach($farqRows as $r)
+                                            <li>{{ $r['name'] }} <span class="text-slate-600">— {{ $r['semester'] }}-sem, {{ $fmt($r['credit']) }} kredit{{ $isElective($r['type']) ? ', tanlov' : '' }}</span></li>
+                                        @endforeach
+                                    </ol>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div x-show="edit || dirty" x-cloak class="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-blue-300 bg-blue-50 px-4 py-3 text-sm">
+                            <span class="text-blue-900" x-text="dirty ? 'Saqlanmagan o\'zgarishlar bor' : 'Mos fanni tanlang va saqlang — GPA qayta hisoblanadi'"></span>
+                            <div class="flex items-center gap-3">
+                                <button type="submit" form="rematch-{{ $level['id'] }}" class="text-sm font-semibold text-slate-700 underline">Qayta moslashtirish</button>
+                                <button type="submit" form="delete-{{ $level['id'] }}" class="text-sm font-semibold text-rose-700 underline">O'chirish</button>
+                                <button class="inline-flex h-9 items-center rounded-md bg-blue-600 px-4 font-semibold text-white hover:bg-blue-700">Saqlash</button>
+                            </div>
                         </div>
                     </form>
                     <form id="rematch-{{ $level['id'] }}" method="POST" action="{{ route('admin.subject-differences.levels.rematch', [$check, $level['id']]) }}" class="hidden">@csrf<input type="hidden" name="use_ai" value="1"></form>

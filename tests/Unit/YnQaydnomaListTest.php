@@ -343,6 +343,16 @@ it('lists the qo\'shimcha / 12a forms as separate vedomosts and puts the ones th
     Auth::guard('teacher')->login(\App\Models\Teacher::find(1));
     session(['active_role' => 'oqituvchi']);
 
+    // Asosiy imtihon natijasi hali jurnalga tushmagan — qo'shimcha hisoblanmaydi (faqat topshirilgan 12a)
+    Schema::create('students', fn ($t) => [$t->id(), $t->string('hemis_id'), $t->string('group_id')]);
+    Schema::create('student_grades', fn ($t) => [$t->id(), $t->string('student_hemis_id'), $t->string('subject_id'), $t->string('semester_code'),
+        $t->integer('training_type_code'), $t->integer('attempt')->nullable(), $t->decimal('grade')->nullable(), $t->decimal('retake_grade')->nullable(), $t->softDeletes()]);
+    $mine = fn () => collect((new YnQaydnomaListController())->mine(\Illuminate\Http\Request::create('/admin/vedomostlarim'))->getData()['rows']->items());
+    expect($mine()->pluck('form')->sort()->values()->all())->toBe(['12', '12a']);
+
+    // Natija tushdi — talabasi bor shakllar 12-shakl topshirilishini kutmasdan chiqadi
+    DB::table('students')->insert(['hemis_id' => 's1', 'group_id' => '77']);
+    DB::table('student_grades')->insert(['student_hemis_id' => 's1', 'subject_id' => '27', 'semester_code' => '19', 'training_type_code' => 102, 'attempt' => 1, 'grade' => 85]);
     $data = (new YnQaydnomaListController())->mine(\Illuminate\Http\Request::create('/admin/vedomostlarim'))->getData();
     $rows = collect($data['rows']->items());
     expect($rows->map(fn ($r) => $r->group . ' ' . $r->form . ' ' . $r->status)->sort()->values()->all())

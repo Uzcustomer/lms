@@ -223,9 +223,20 @@ class YnQaydnomaListController extends Controller
             ->map(fn ($c) => $c->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->all());
         $memberInfo = DB::table('groups')->whereIn('group_hemis_id', $entries->flatMap(fn ($r) => $r->members)->unique()->values())
             ->get(['id', 'group_hemis_id', 'name'])->keyBy(fn ($g) => (string) $g->group_hemis_id);
+        // Asosiy imtihon (OSKI / test, 1-urinish) natijasi jurnalga tushgan guruh × fanlar
+        $examGraded = Schema::hasTable('student_grades') && Schema::hasTable('students')
+            ? DB::table('student_grades as sg')->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->whereNull('sg.deleted_at')->whereIn('sg.training_type_code', [101, 102, 103])
+                ->when(Schema::hasColumn('student_grades', 'attempt'), fn ($q) => $q->where(fn ($w) => $w->where('sg.attempt', 1)->orWhereNull('sg.attempt')))
+                ->where(fn ($q) => $q->whereNotNull('sg.grade')->orWhereNotNull('sg.retake_grade'))
+                ->whereIn('st.group_id', $entries->pluck('group_hemis_id')->map(fn ($v) => (string) $v)->unique()->values())
+                ->whereIn('sg.subject_id', $entries->pluck('subject_id')->map(fn ($v) => (string) $v)->unique()->values())
+                ->distinct()->get(['st.group_id', 'sg.subject_id', 'sg.semester_code'])
+                ->mapWithKeys(fn ($x) => [$x->group_id . '|' . $x->subject_id . '|' . $x->semester_code => true])
+            : collect();
 
         return $entries
-            ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $ready, $key, $journal, $teacher, $mine, $memberInfo) {
+            ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $ready, $key, $journal, $teacher, $mine, $memberInfo, $examGraded) {
                 $flags = function ($row) use ($r, $submitted, $ready, $key, $teacher, $mine, $memberInfo, $confirmations) {
                     // Sizning kichik guruhlaringiz: nomi, jurnali, shu shaklda tasdiqlaganmisiz
                     $own = array_values(array_intersect($row->members, $mine[$r->subject_id . '|' . $r->semester_code] ?? [(string) $r->group_hemis_id]));
@@ -260,10 +271,11 @@ class YnQaydnomaListController extends Controller
                     return $row;
                 };
                 $main = $flags($this->makeRow($r, $confirmations, $rejections));
-                // Asosiy qaydnoma topshirilgach — talabasi bor qo'shimcha / 12a / 12b shakllari (dars jadvali
-                // va baholar bo'yicha, keshlangan) ham alohida qator
+                // Talabasi bor qo'shimcha / 12a / 12b shakllari — 12-shakl topshirilishini kutmasdan, alohida qator
+                // (baholar bo'yicha hisob, keshlangan). Asosiy imtihon natijalari jurnalga tushgandan keyin:
+                // aks holda natijasi yo'q hamma talaba "yiqilgan" bo'lib 12a ga tushib qolardi
                 $forms = $this->submittedForms($r, $confirmations, $rejections);
-                if ($main->exams_finished && $main->yn_submitted && $main->status !== self::STATUS_NONE) {
+                if ($main->exams_finished && $main->yn_submitted && $examGraded->has($key($r))) {
                     try {
                         $forms = array_merge($forms, $journal->ynqActiveForms((string) $r->subject_id, (string) $r->semester_code, (string) $r->group_hemis_id));
                     } catch (\Throwable $e) {

@@ -9,6 +9,24 @@
         // cbData[id] = [{value, label}] — full list for each checkbox dropdown
         var cbData = { groups: [], subjects: [] };
 
+        /* ===== Filtrlar sahifa yangilanganda saqlanadi (brauzerda, shu sahifa uchun) ===== */
+        var VT_STORE = 'vt-filters:' + location.pathname;
+        var vtRestoring = false;
+        function vtLoadFilters() {
+            try { return JSON.parse(localStorage.getItem(VT_STORE) || 'null'); } catch (e) { return null; }
+        }
+        function vtSaveFilters(searched) {
+            if (vtRestoring) return;
+            try {
+                var prev = vtLoadFilters() || {};
+                var state = collectParams();
+                state.group_ids = getCbValues('groups');
+                state.subject_ids = getCbValues('subjects');
+                state.searched = searched === undefined ? !!prev.searched : searched;
+                localStorage.setItem(VT_STORE, JSON.stringify(state));
+            } catch (e) {}
+        }
+
         /* ===== Checkbox dropdown helpers ===== */
         function toggleCb(id) {
             var panel = document.getElementById(id+'-panel');
@@ -43,6 +61,7 @@
                 inp.checked = cb.checked;
             });
             updateCbLabel(id);
+            vtSaveFilters();
         }
         function updateCbAllState(id) {
             var list = document.getElementById(id+'-list');
@@ -55,7 +74,7 @@
                 allCb.indeterminate = checked > 0 && checked < visible.length;
             }
         }
-        function onCbItemChange(id) { updateCbAllState(id); updateCbLabel(id); }
+        function onCbItemChange(id) { updateCbAllState(id); updateCbLabel(id); vtSaveFilters(); }
         function updateCbLabel(id) {
             var vals = getCbValues(id);
             var label = document.getElementById(id+'-label');
@@ -115,6 +134,7 @@
         }
         function toggleSemester() {
             document.getElementById('current-semester-toggle').classList.toggle('active');
+            vtSaveFilters();
             if (window.reloadVedomostDependentFilters) {
                 window.reloadVedomostDependentFilters({
                     keepSpecialty: false,
@@ -131,10 +151,21 @@
                 .on('select2:open', function () { setTimeout(function(){ var s=document.querySelector('.select2-container--open .select2-search__field'); if(s)s.focus(); },10); });
             });
 
-            // Ta'lim turi — by default Bakalavr
+            // Saqlangan filtrlar (sahifa yangilangan) — bo'lmasa ta'lim turi sukut bo'yicha Bakalavr
+            var saved = vtLoadFilters();
             @if($defaultEducationType)
-            $('#education_type').val('{{ $defaultEducationType }}').trigger('change');
+            if (!saved) { $('#education_type').val('{{ $defaultEducationType }}').trigger('change.select2'); }
             @endif
+            if (saved) {
+                vtRestoring = true;
+                var setSel = function (id, v) { var $el = $(id); if (v && $el.find('option[value="' + v + '"]').length) $el.val(v); $el.trigger('change.select2'); };
+                setSel('#education_type', saved.education_type);
+                if (!document.getElementById('dekan_faculty_id')) setSel('#faculty', saved.faculty_id);
+                setSel('#department', saved.department_id);
+                $('#yn_date_from').val(saved.yn_date_from || '');
+                $('#yn_date_to').val(saved.yn_date_to || '');
+                document.getElementById('current-semester-toggle').classList.toggle('active', saved.current_semester !== '0');
+            }
 
             // Calendar
             new ScrollCalendar('yn_date_from');
@@ -183,23 +214,27 @@
                 });
             }
 
-            function rSpec(keepSpecialty){
-                pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty', keepSpecialty || '');
+            function rSpec(keepSpecialty, cb){
+                pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty', keepSpecialty || '', cb);
             }
-            function rGrp(){
-                var prev=getCbValues('groups');
+            // Saqlangan guruh / fan tanlovi — birinchi yuklashda tiklanadi
+            var pendingCb = { groups: saved ? (saved.group_ids || []) : [], subjects: saved ? (saved.subject_ids || []) : [] };
+            function rGrp(cb){
+                var prev=getCbValues('groups').concat(pendingCb.groups); pendingCb.groups=[];
                 $.get('{{ route("admin.journal.get-groups") }}',fp(),function(d){
                     var items=[];
                     $.each(d,function(k,v){ items.push({value:k,label:v}); });
                     loadCbItems('groups',items,prev);
+                    if(cb)cb();
                 });
             }
-            function rSubj(){
-                var prev=getCbValues('subjects');
+            function rSubj(cb){
+                var prev=getCbValues('subjects').concat(pendingCb.subjects); pendingCb.subjects=[];
                 $.get('{{ route("admin.journal.get-subjects") }}',fp(),function(d){
                     var seen={},items=[];
                     $.each(d,function(k,v){ if(!seen[v]){seen[v]=true;items.push({value:k,label:v});} });
                     loadCbItems('subjects',items,prev);
+                    if(cb)cb();
                 });
             }
 
@@ -211,9 +246,10 @@
                 options = options || {};
                 pd('{{ route("admin.journal.get-level-codes") }}', fp(), '#level_code', options.keepLevel || '', function(){
                     reloadSemesters(options.keepSemester || '', function(){
-                        rSubj();
-                        rGrp();
-                        if (options.after) options.after();
+                        var pending = 2;
+                        var done = function () { if (--pending === 0 && options.after) options.after(); };
+                        rSubj(done);
+                        rGrp(done);
                     });
                 });
             }
@@ -225,6 +261,10 @@
             }
 
             window.reloadVedomostDependentFilters = reloadAllDependentFilters;
+
+            // Har o'zgarishda — saqlanadi
+            $('#education_type, #faculty, #specialty, #department, #level_code, #semester_code, #yn_date_from, #yn_date_to')
+                .on('change', function(){ vtSaveFilters(); });
 
             $('#education_type').change(function(){
                 reloadAllDependentFilters({ keepSpecialty:false, keepLevel:false, keepSemester:false });
@@ -244,8 +284,18 @@
             });
             $('#semester_code').change(function(){ rSubj(); rGrp(); });
 
-            // Initial load
-            reloadAllDependentFilters({ keepSpecialty:false, keepLevel:false, keepSemester:false });
+            // Initial load — saqlangan filtrlar bo'lsa ketma-ket tiklanadi (yo'nalish → kurs → semestr → guruh / fan)
+            // va oxirgi qidiruv qayta bajariladi
+            if (saved) {
+                rSpec(saved.specialty_id || '', function(){
+                    reloadLevelsAndSemesters({ keepLevel: saved.level_code || '', keepSemester: saved.semester_code || '', after: function(){
+                        vtRestoring = false;
+                        if (saved.searched && typeof doSearch === 'function') doSearch();
+                    } });
+                });
+            } else {
+                reloadAllDependentFilters({ keepSpecialty:false, keepLevel:false, keepSemester:false });
+            }
         });
 
         function collectParams() {
@@ -265,4 +315,7 @@
             var sv=getCbValues('subjects'); if(sv.length) params.subject_ids=sv;
             return params;
         }
+
+        // Qidiruv bosildi — filtrlar va "qidirilgan" holat saqlanadi (yangilanganda natija qayta chiqadi)
+        $(function () { $('#btn-search').on('click', function () { vtSaveFilters(true); }); });
     </script>

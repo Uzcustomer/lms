@@ -74,7 +74,7 @@ class JournalController extends Controller
     private const YNQ_QR_ROWS = [2, 7];
     /** "IMZOLANDI" muhri (SignStamp) — tasdiqlagan har kishi ismidan keyin; balandligi (px): sarlavhada / pastda */
     private const YNQ_STAMP_ALT = 'Imzo: ';
-    private const YNQ_STAMP_PX = [26, 32];
+    private const YNQ_STAMP_PX = [21, 26];
     /** Shablondagi talabalar jadvali: sarlavha (15) dan "O'rtacha foiz" (50) gacha — PDF da faqat shu chiziqli */
     private const YNQ_TABLE_ROWS = [15, 50];
     /** Pastki imzolar qatori (shablonda "Fakultet dekani … / Kafedra mudiri …") — tasdiqlar va muhrlar */
@@ -10598,9 +10598,9 @@ class JournalController extends Controller
         // Hujjat QR i: dompdf flex/absolute'ni bilmaydi — katakda chap yuqorida, oddiy rasm
         $html = preg_replace_callback(
             "/<td([^>]*?) style='position: relative;'([^>]*)>((?:\s*<img alt=\"" . preg_quote(self::YNQ_QR_ALT, '/') . "[^>]*\/>)+)/u",
-            fn ($m) => '<td' . $m[1] . " style='vertical-align:top;text-align:left'" . $m[2] . '>' . preg_replace(
+            fn ($m) => '<td' . $m[1] . " style='vertical-align:top;text-align:left;padding-left:0 !important'" . $m[2] . '>' . preg_replace(
                 // Masshtabdan qat'i nazar oson skanerlanadigan o'lcham (~21 mm)
-                '/style="[^"]*"/', 'style="width:' . self::YNQ_PDF_QR_PT . 'pt;height:' . self::YNQ_PDF_QR_PT . 'pt;margin:0 2pt"', $m[3]
+                '/style="[^"]*"/', 'style="width:' . self::YNQ_PDF_QR_PT . 'pt;height:' . self::YNQ_PDF_QR_PT . 'pt;margin:0"', $m[3]
             ),
             $html
         );
@@ -12192,7 +12192,7 @@ class JournalController extends Controller
             if (!$names || in_array(null, $confirmations, true)) {
                 continue;
             }
-            $sheet->getRowDimension($r)->setRowHeight(max((float) $sheet->getRowDimension($r)->getRowHeight(), 22));
+            $sheet->getRowDimension($r)->setRowHeight(max((float) $sheet->getRowDimension($r)->getRowHeight(), 18));
             self::placeStamp($sheet, 'W', self::YNQ_LAST_COL, $r, collect($confirmations)->sortByDesc('confirmed_at')->first(), self::YNQ_STAMP_PX[0]);
         }
     }
@@ -12254,7 +12254,7 @@ class JournalController extends Controller
         $qr->setDescription(self::YNQ_QR_ALT . self::abbreviateName($dean->teacher_name) . ' — ' . $dean->confirmed_at->format('d.m.Y H:i'));
         $qr->setHeight(84);
         $qr->setCoordinates("A{$first}");
-        $qr->setOffsetX(4);
+        $qr->setOffsetX(0);
         $qr->setOffsetY(2);
         $qr->setWorksheet($sheet);
     }
@@ -12316,7 +12316,7 @@ class JournalController extends Controller
             $sheet->getCell("B{$next}")->setValue($stamp)->setXfIndex($stampXf);
         }
         if ($head || $dean) {
-            $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 27));
+            $sheet->getRowDimension($row)->setRowHeight(max((float) $sheet->getRowDimension($row)->getRowHeight(), 23));
         }
         if ($dean) {
             self::placeStamp($sheet, 'E', 'H', $row, $dean, self::YNQ_STAMP_PX[1]);

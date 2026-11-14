@@ -48,6 +48,13 @@ class VedomostAiChecker
      */
     public function check(VedomostSubmission $v, bool $fresh = false): array
     {
+        // O'tish chegarasi — shu fan bo'yicha (26.10.2026 dan oldin tugagan fanda 60)
+        return \App\Models\MarkingSystemScore::withSubject((string) $v->group_hemis_id, (string) $v->subject_id, (string) $v->semester_code,
+            fn () => $this->checkVedomost($v, $fresh));
+    }
+
+    private function checkVedomost(VedomostSubmission $v, bool $fresh): array
+    {
         if (!$v->pdf_path || !Storage::disk('public')->exists($v->pdf_path)) {
             throw new RuntimeException('Skaner PDF topilmadi.');
         }

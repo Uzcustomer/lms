@@ -31,6 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // operatsiyalari (POST/PUT/PATCH/DELETE) global ravishda bloklanadi.
         $middleware->web(append: [
             \App\Http\Middleware\NazoratchiReadOnly::class,
+            // O'tish chegarasi shu fan bo'yicha (26.10.2026 dan oldin tugagan fanda — 60)
+            \App\Http\Middleware\ApplySubjectGradeLimit::class,
         ]);
 
         // locale cookie ni encrypt qilmaslik

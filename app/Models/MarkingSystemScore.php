@@ -49,6 +49,17 @@ class MarkingSystemScore extends Model
     private static bool $lmsMinimumLimitLoaded = false;
 
     /**
+     * Chegara oshirilgan sana (settings: grade_minimum_limit_from, sukut — 26.10.2026): YN imtihonlari
+     * shu sanadan oldin tugagan fanlar uchun eski chegara (OLD_LIMIT) qoladi.
+     */
+    public const SETTING_LIMIT_FROM = 'grade_minimum_limit_from';
+    public const DEFAULT_LIMIT_FROM = '2026-10-26';
+    public const OLD_LIMIT = 60;
+
+    /** Joriy fan (guruh × fan × semestr) konteksti: chegara oshirilishidan oldin tugagan bo'lsa — OLD_LIMIT */
+    private static ?int $subjectLimit = null;
+
+    /**
      * Minimal chegara (past baho → otrabotka, MT qulfi, JN va hisobotlar): admin sozlamasida
      * belgilangan bo'lsa — barcha baholash tizimlari uchun shu, aks holda HEMIS qiymati.
      * HEMIS sinxronizatsiyasi faqat asl ustunni yangilaydi — sozlamaga tegmaydi.
@@ -66,6 +77,9 @@ class MarkingSystemScore extends Model
 
     public static function lmsMinimumLimit(): ?int
     {
+        if (self::$subjectLimit !== null) {
+            return self::$subjectLimit;
+        }
         if (!self::$lmsMinimumLimitLoaded) {
             $value = Setting::get(self::SETTING_MINIMUM_LIMIT);
             self::$lmsMinimumLimit = is_numeric($value) ? (int) $value : null;
@@ -88,6 +102,60 @@ class MarkingSystemScore extends Model
     public static function forgetLmsMinimumLimit(): void
     {
         self::$lmsMinimumLimitLoaded = false;
+    }
+
+    /**
+     * Fan YN imtihonlari (guruh jadvalidagi OSKI / test sanalari, "yo'q" deb belgilanganlari hisobga
+     * olinmaydi) chegara oshirilgan sanadan oldin tugaganmi. Jadvali yo'q — yo'q (yangi chegara).
+     */
+    public static function finishedBeforeLimitChange(string $groupHemisId, string $subjectId, string $semesterCode): bool
+    {
+        static $cache = [];
+        $key = $groupHemisId . '|' . $subjectId . '|' . $semesterCode;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+        $from = (string) (Setting::get(self::SETTING_LIMIT_FROM) ?: self::DEFAULT_LIMIT_FROM);
+        $exam = \Illuminate\Support\Facades\Schema::hasTable('exam_schedules')
+            ? \Illuminate\Support\Facades\DB::table('exam_schedules')->whereNull('student_hemis_id')
+                ->where('group_hemis_id', $groupHemisId)->where('subject_id', $subjectId)->where('semester_code', $semesterCode)
+                ->first(['oski_date', 'test_date', 'oski_na', 'test_na'])
+            : null;
+        $dates = $exam ? array_filter([$exam->oski_na ? null : $exam->oski_date, $exam->test_na ? null : $exam->test_date]) : [];
+
+        return $cache[$key] = $dates !== [] && substr((string) max($dates), 0, 10) < $from;
+    }
+
+    /**
+     * Shu so'rov (hisob) davomida chegara — shu fan bo'yicha: chegara oshirilishidan oldin tugagan bo'lsa
+     * eski chegara (60), aks holda sozlamadagi. Jurnal, qaydnoma, YN — bitta guruh × fan bilan ishlaydi.
+     */
+    public static function useSubject(string $groupHemisId, string $subjectId, string $semesterCode): void
+    {
+        self::$subjectLimit = self::finishedBeforeLimitChange($groupHemisId, $subjectId, $semesterCode) ? self::OLD_LIMIT : null;
+    }
+
+    /** $fn ni shu fan chegarasi bilan bajaradi (avvalgi kontekst tiklanadi) */
+    public static function withSubject(string $groupHemisId, string $subjectId, string $semesterCode, callable $fn): mixed
+    {
+        $previous = self::$subjectLimit;
+        self::useSubject($groupHemisId, $subjectId, $semesterCode);
+        try {
+            return $fn();
+        } finally {
+            self::$subjectLimit = $previous;
+        }
+    }
+
+    public static function forgetSubject(): void
+    {
+        self::$subjectLimit = null;
+    }
+
+    /** YN ga ruxsat / vedomost JN-MT chegarasi: hammaga 70, chegara oshirilishidan oldin tugagan fanda — 60 */
+    public static function ynJnMtLimit(): int
+    {
+        return self::$subjectLimit ?? self::YN_JN_MT_LIMIT;
     }
 
     public function curricula()
@@ -159,8 +227,9 @@ class MarkingSystemScore extends Model
     {
         $score = static::getByStudentHemisId($studentHemisId);
 
-        $raiseJn = $score->jn_active && $score->jn_limit < self::YN_JN_MT_LIMIT;
-        $raiseMt = $score->mt_active && $score->mt_limit < self::YN_JN_MT_LIMIT;
+        $limit = self::ynJnMtLimit();
+        $raiseJn = $score->jn_active && $score->jn_limit < $limit;
+        $raiseMt = $score->mt_active && $score->mt_limit < $limit;
         if (!$raiseJn && !$raiseMt) {
             return $score;
         }
@@ -168,10 +237,10 @@ class MarkingSystemScore extends Model
         // getByStudentHemisId keshidagi obyekt boshqa talabalar bilan umumiy — nusxasini o'zgartiramiz
         $score = clone $score;
         if ($raiseJn) {
-            $score->jn_limit = self::YN_JN_MT_LIMIT;
+            $score->jn_limit = $limit;
         }
         if ($raiseMt) {
-            $score->mt_limit = self::YN_JN_MT_LIMIT;
+            $score->mt_limit = $limit;
         }
 
         return $score;
@@ -182,7 +251,7 @@ class MarkingSystemScore extends Model
      */
     public static function vedomostJnMtPass($studentHemisId): int
     {
-        return self::YN_JN_MT_LIMIT;
+        return self::ynJnMtLimit();
     }
 
     /**

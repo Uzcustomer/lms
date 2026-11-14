@@ -11014,9 +11014,10 @@ class JournalController extends Controller
         int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true,
         ?string $form = null
     ): array|string {
-        // Shakl berilmasa (admin Excel eksporti) — barcha shakllar varaqlari bitta faylda
-        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, false, $withFamily,
-            $form === null ? null : \App\Services\YnqForm::normalize($form));
+        // Shakl berilmasa (admin Excel eksporti) — barcha shakllar varaqlari bitta faylda; o'tish chegarasi — shu fan bo'yicha
+        return \App\Models\MarkingSystemScore::withSubject($groupHemisId, $subjectId, $semesterCode, fn () => $this->ynQaydnoma(
+            $subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, false, $withFamily,
+            $form === null ? null : \App\Services\YnqForm::normalize($form)));
     }
 
     /**
@@ -11032,7 +11033,8 @@ class JournalController extends Controller
         return \Illuminate\Support\Facades\Cache::remember('ynq_forms:' . $subjectId . ':' . $semesterCode . ':' . $members[0], 600, function () use ($subjectId, $semesterCode, $members) {
             $forms = [\App\Services\YnqForm::MAIN];
             foreach ($members as $g) {
-                $part = $this->ynQaydnoma($subjectId, $semesterCode, $g, 30, 10, 0, 0, 60, 1, true);
+                $part = \App\Models\MarkingSystemScore::withSubject($g, $subjectId, $semesterCode,
+                    fn () => $this->ynQaydnoma($subjectId, $semesterCode, $g, 30, 10, 0, 0, 60, 1, true));
                 if (is_string($part)) {
                     continue;
                 }
@@ -11060,7 +11062,8 @@ class JournalController extends Controller
         string $subjectId, string $semesterCode, string $groupHemisId,
         int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest
     ): array|string {
-        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, 1, true);
+        return \App\Models\MarkingSystemScore::withSubject($groupHemisId, $subjectId, $semesterCode,
+            fn () => $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, 1, true));
     }
 
     private function ynQaydnoma(

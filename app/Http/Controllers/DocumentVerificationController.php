@@ -59,9 +59,11 @@ class DocumentVerificationController extends Controller
                 if ($path) {
                     $name = str_replace(['/', '\\', ' '], '_', 'YN_qaydnoma_' . $verification->group_names . '_' . $verification->subject_name) . '.pdf';
 
+                    // Keshlanmasin — PDF qayta yaratilsa QR orqali ham doim eng so'nggisi ochiladi
                     return response()->file($disk->path($path), [
                         'Content-Type' => 'application/pdf',
                         'Content-Disposition' => 'inline; filename="' . $name . '"',
+                        'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0', 'Pragma' => 'no-cache', 'Expires' => '0',
                     ]);
                 }
             }
@@ -98,6 +100,8 @@ class DocumentVerificationController extends Controller
             return null;
         }
 
-        return [(string) $meta['subjectId'], (string) $meta['semesterCode'], (string) $meta['groupHemisId']];
+        // Shakl (12, 12-qo'shimcha, 12a, …) — har biri alohida qaydnoma; eski tasdiqlarda yo'q — 12
+        return [(string) $meta['subjectId'], (string) $meta['semesterCode'], (string) $meta['groupHemisId'],
+            \App\Services\YnqForm::normalize($meta['form'] ?? null)];
     }
 }

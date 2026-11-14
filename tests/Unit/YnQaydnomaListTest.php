@@ -42,6 +42,7 @@ beforeEach(function () {
     (require base_path('database/migrations/2026_11_09_200000_add_pdf_path_to_yn_qaydnoma_confirmations.php'))->up();
     (require base_path('database/migrations/2026_11_09_160000_create_yn_qaydnoma_rejections_table.php'))->up();
     (require base_path('database/migrations/2026_11_09_180000_add_teacher_ids_to_yn_qaydnoma_rejections.php'))->up();
+    (require base_path('database/migrations/2026_11_14_120000_add_form_to_yn_qaydnoma_confirmations.php'))->up();
     Schema::create('yn_submissions', fn ($t) => [$t->id(), $t->string('subject_id'), $t->string('semester_code'), $t->string('group_hemis_id'), $t->timestamps()]);
 
     DB::table('teachers')->insert(['id' => 9, 'hemis_id' => 900, 'full_name' => 'DEKAN']);
@@ -298,4 +299,41 @@ it('compiles the page templates', function () {
         unlink($file);
         expect($code)->toBe(0);
     }
+});
+
+it('lists the qo\'shimcha / 12a forms as separate vedomosts and puts the ones the teacher must confirm on top', function () {
+    DB::table('teachers')->insert(['id' => 1, 'hemis_id' => 501, 'full_name' => 'ALLAMURATOVA U.D.']);
+    DB::table('roles')->insert(['id' => 3, 'name' => 'oqituvchi', 'guard_name' => 'web']);
+    DB::table('model_has_roles')->insert(['role_id' => 3, 'model_type' => \App\Models\Teacher::class, 'model_id' => 1]);
+    DB::table('schedules')->insert(['group_id' => '77', 'subject_id' => '27', 'semester_code' => '19', 'subject_name' => 'Akusherlik',
+        'training_type_code' => '13', 'employee_id' => 501, 'employee_name' => 'ALLAMURATOVA U.D.']);
+    DB::table('yn_submissions')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '77']);
+    // Asosiy 12-shakl dekan tasdiqlagan (beforeEach); keyin sababli / qayta topshirganlar — 12-qo'shimcha va 12a
+    app()->instance(\App\Http\Controllers\Admin\JournalController::class, new class extends \App\Http\Controllers\Admin\JournalController {
+        public function __construct() {}
+
+        public function ynqActiveForms(string $subjectId, string $semesterCode, string $groupHemisId): array
+        {
+            return ['12', '12q', '12a'];
+        }
+    });
+    // 12a ni o'qituvchi allaqachon topshirgan — kafedra mudiri kutilmoqda
+    DB::table('yn_qaydnoma_confirmations')->insert(['subject_id' => '27', 'semester_code' => '19', 'group_hemis_id' => '77', 'form' => '12a',
+        'teacher_id' => 1, 'teacher_name' => 'ALLAMURATOVA U.D.', 'role' => 'oqituvchi', 'weights' => '{}', 'confirmed_at' => now()]);
+    Auth::guard('teacher')->login(\App\Models\Teacher::find(1));
+    session(['active_role' => 'oqituvchi']);
+
+    $data = (new YnQaydnomaListController())->mine(\Illuminate\Http\Request::create('/admin/vedomostlarim'))->getData();
+    $rows = collect($data['rows']->items());
+    expect($rows->map(fn ($r) => $r->group . ' ' . $r->form . ' ' . $r->status)->sort()->values()->all())
+        ->toBe(['d1/d22-01a 12 dean', 'd1/d22-01a 12a teacher', 'd1/d22-01a 12q none'])
+        // Tepada — faqat hali tasdiqlanmagan 12-qo'shimcha
+        ->and($data['needsAction']->map(fn ($r) => $r->form . ' ' . $r->form_label)->all())->toBe(["12q 12-shakl qo'shimchasi"])
+        ->and($rows->firstWhere('form', '12a')->params)->toMatchArray(['form' => '12a']);
+
+    // Dekan — topshirilgan shakl (12a) alohida qator; topshirilmaganlari (hisob talab qiladi) — yo'q
+    Auth::guard('teacher')->login(\App\Models\Teacher::find(9));
+    session(['active_role' => 'dekan']);
+    $dean = collect(($this->page)()['rows']->items())->where('group', 'd1/d22-01a');
+    expect($dean->map(fn ($r) => $r->form . ' ' . $r->status)->sort()->values()->all())->toBe(['12 dean', '12a teacher']);
 });

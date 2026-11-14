@@ -92,6 +92,8 @@ class JournalController extends Controller
         'weight_oski' => 'nullable|integer|min:0|max:100',
         'weight_test' => 'nullable|integer|min:0|max:100',
         'shakl' => 'nullable|integer|min:1|max:7',
+        // Qaydnoma shakli (YnqForm): 12, 12q, 12a, 12aq, 12b, 12bq — har biri alohida vedomost
+        'form' => 'nullable|string|in:12,12q,12a,12aq,12b,12bq',
     ];
 
     public function index(Request $request)
@@ -1890,11 +1892,13 @@ class JournalController extends Controller
         }
         // Amaliy o'qituvchi: YN yuborilgandan keyin "YN qaydnoma yaratish" — sahifada ko'radi
         $isAmaliyTeacher = $canSubmitYn && $this->isAmaliyTeacherFor((string) $subjectId, (string) $group->group_hemis_id);
+        // Qaydnoma shakli — "Vedomostlarim" dagi qo'shimcha / 12a / 12b qatoridan (?ynq_form=), sukut bo'yicha 12
+        $ynqForm = \App\Services\YnqForm::normalize($request->query('ynq_form'));
         // O'zi tasdiqlagan qaydnoma qayta yaratilmaydi — dekan rad etsa (tasdiq o'chadi) yana ochiladi
         $myYnConfirmation = null;
         if ($isAmaliyTeacher && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations') && ($me = $this->currentTeacher())) {
             // Aynan shu (kichik) guruh bo'yicha — boshqa kichik guruhdagi tasdig'i bu yerni yopmaydi
-            $myYnConfirmation = \App\Models\YnQaydnomaConfirmation::forVedomost((string) $subjectId, (string) $semesterCode, [(string) $group->group_hemis_id])
+            $myYnConfirmation = \App\Models\YnQaydnomaConfirmation::forVedomost((string) $subjectId, (string) $semesterCode, [(string) $group->group_hemis_id], $ynqForm)
                 ->where('role', \App\Models\YnQaydnomaConfirmation::ROLE_TEACHER)
                 ->where('teacher_id', $me->id)
                 ->latest('confirmed_at')
@@ -2614,6 +2618,7 @@ class JournalController extends Controller
             'canSubmitYn',
             'isAmaliyTeacher',
             'myYnConfirmation',
+            'ynqForm',
             'allLessonsCompleted',
             'remainingLessonsCount',
             'lastLessonDate',
@@ -10013,6 +10018,7 @@ class JournalController extends Controller
             'weight_oski' => 'nullable|integer|min:0|max:100',
             'weight_test' => 'nullable|integer|min:0|max:100',
             'shakl' => 'nullable|integer|min:1|max:7',
+            'form' => self::YNQ_RULES['form'],
         ]);
 
         $weightJn = (int) ($request->weight_jn ?? 30);
@@ -10028,7 +10034,7 @@ class JournalController extends Controller
 
         $built = $this->buildYnQaydnomaSpreadsheet(
             (string) $request->subject_id, (string) $request->semester_code, (string) $request->group_hemis_id,
-            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1)
+            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1), true, $request->form
         );
         if (is_string($built)) {
             return back()->with('error', $built);
@@ -10065,10 +10071,12 @@ class JournalController extends Controller
             'weight_oski' => 'nullable|integer|min:0|max:100',
             'weight_test' => 'nullable|integer|min:0|max:100',
             'shakl' => 'nullable|integer|min:1|max:7',
+            'form' => self::YNQ_RULES['form'],
         ]);
         $subjectId = (string) $request->subject_id;
         $semesterCode = (string) $request->semester_code;
         $groupHemisId = (string) $request->group_hemis_id;
+        $form = \App\Services\YnqForm::normalize($request->form);
 
         $isPrivileged = is_active_registrator() || (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
         // Kafedra mudiri (fan kafedrasi) va dekan (o'z fakulteti) — ko'radi, tasdiqlaydi yoki rad etadi, yuklab oladi
@@ -10092,7 +10100,7 @@ class JournalController extends Controller
         // Kichik guruhlar qaydnomasi: amaliyot o'qituvchisi — faqat o'z guruhi talabalari; kafedra mudiri,
         // dekan va boshqalar — umumiy jadval (hamma kichik guruhlar)
         $built = $this->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
-            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1), $isPrivileged || $approverRole);
+            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, (int) ($request->shakl ?? 1), $isPrivileged || $approverRole, $form);
         if (is_string($built)) {
             abort(422, $built);
         }
@@ -10102,7 +10110,7 @@ class JournalController extends Controller
         // kafedra mudiri va dekan rad eta oladi; admin — kimlar tasdiqlagani
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
         // Kichik guruhlar (a/b/c) — bitta qaydnoma: kafedra mudiri hammasining o'qituvchilari tasdiqlagach
-        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
+        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId, $form);
         $byRole = $chain['byRole'];
         $myRole = $approverRole ?? $Confirmation::ROLE_TEACHER;
         $teacher = $isPrivileged ? null : $this->currentTeacher();
@@ -10111,7 +10119,7 @@ class JournalController extends Controller
             ->first(fn ($c) => $approverRole || (string) $c->group_hemis_id === $groupHemisId) : null;
         $previousRole = $Confirmation::CHAIN[array_search($myRole, $Confirmation::CHAIN, true) - 1] ?? null;
         $hidden = '';
-        foreach ($request->only(['subject_id', 'semester_code', 'group_hemis_id', 'weight_jn', 'weight_mt', 'weight_on', 'weight_oski', 'weight_test', 'shakl']) as $k => $v) {
+        foreach ($request->only(['subject_id', 'semester_code', 'group_hemis_id', 'weight_jn', 'weight_mt', 'weight_on', 'weight_oski', 'weight_test', 'shakl', 'form']) as $k => $v) {
             $hidden .= '<input type="hidden" name="' . e($k) . '" value="' . e($v) . '">';
         }
 
@@ -10142,7 +10150,7 @@ class JournalController extends Controller
                         . '<button type="submit" class="ynq-revoke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>Rad etish</button></form>';
                 }
             }
-            $rejection = $approverRole ? null : \App\Models\YnQaydnomaRejection::openFor($subjectId, $semesterCode, $groupHemisId);
+            $rejection = $approverRole ? null : \App\Models\YnQaydnomaRejection::openFor($subjectId, $semesterCode, $groupHemisId, $form);
             if ($rejection) {
                 $actions = '<span class="ynq-rejected">Rad etilgan (' . e($rejection->dean_name) . ', '
                     . $rejection->rejected_at->format('d.m.Y H:i') . '): «' . e($rejection->reason) . '». Ko\'rib chiqib, qayta tasdiqlang.</span>' . $actions;
@@ -10159,7 +10167,7 @@ class JournalController extends Controller
         // Dekan tasdiqlagan — PDF: bosilganda eskisi o'chirilib, joriy ko'rinish va baholar bo'yicha yangisi
         if ($isPrivileged && $byRole[$Confirmation::ROLE_DEAN]->isNotEmpty()) {
             $actions .= '<a class="ynq-pdf" href="' . e(route('admin.vedomost-tekshirish.qaydnoma-pdf', [
-                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId,
+                'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $groupHemisId, 'form' => $form,
             ])) . '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>PDF (yangisini yaratish)</a>';
         }
         if ($flash = session('ynq_flash')) {
@@ -10183,12 +10191,13 @@ class JournalController extends Controller
         $subjectId = (string) $data['subject_id'];
         $semesterCode = (string) $data['semester_code'];
         $groupHemisId = (string) $data['group_hemis_id'];
+        $form = \App\Services\YnqForm::normalize($data['form'] ?? null);
         $back = route('admin.journal.view-yn-qaydnoma', $request->only(array_keys($data)));
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
 
         $teacher = $this->currentTeacher();
         $approverRole = $teacher ? self::approverRoleFor($subjectId, $semesterCode, $groupHemisId) : null;
-        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
+        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId, $form);
         $canonical = $chain['members'][0];
         if ($approverRole) {
             $role = $approverRole;
@@ -10228,7 +10237,7 @@ class JournalController extends Controller
             ->where('subject_id', $subjectId)->where('semester_code', $semesterCode)->first();
         $groupName = \App\Services\YnqFamily::label($group?->name, count($chain['members']));
 
-        $confirmation = DB::transaction(function () use ($Confirmation, $teacher, $role, $group, $groupName, $subject, $subjectId, $semesterCode, $groupHemisId, $groups, $weights) {
+        $confirmation = DB::transaction(function () use ($Confirmation, $teacher, $role, $group, $groupName, $subject, $subjectId, $semesterCode, $groupHemisId, $groups, $weights, $form) {
             $verification = DocumentVerification::createForDocument([
                 'document_type' => 'yn_qaydnoma',
                 'subject_name' => $subject?->subject_name,
@@ -10236,7 +10245,7 @@ class JournalController extends Controller
                 'semester_name' => $subject?->semester_name,
                 'department_name' => $group?->department_name,
                 'generated_by' => $teacher->full_name,
-                'meta' => compact('subjectId', 'semesterCode', 'groupHemisId', 'weights', 'role') + [
+                'meta' => compact('subjectId', 'semesterCode', 'groupHemisId', 'weights', 'role', 'form') + [
                     'teacher_id' => $teacher->id,
                     'specialty_name' => $group?->specialty_name,
                 ],
@@ -10247,6 +10256,7 @@ class JournalController extends Controller
             foreach ($groups as $g) {
                 $created = $Confirmation::create([
                     'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $g,
+                ] + ($Confirmation::hasFormColumn() ? ['form' => $form] : []) + [
                     'teacher_id' => $teacher->id, 'teacher_name' => $teacher->full_name, 'role' => $role,
                     'document_verification_id' => $verification->id, 'weights' => $weights, 'confirmed_at' => now(),
                 ]);
@@ -10257,14 +10267,14 @@ class JournalController extends Controller
 
         // Rad etish — barcha kichik guruhlar o'qituvchilari qayta tasdiqlagach yopiladi
         if ($role === $Confirmation::ROLE_TEACHER && \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_rejections')
-            && self::ynqChain($subjectId, $semesterCode, $groupHemisId)['uncovered'] === []) {
-            \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $chain['members'])
+            && self::ynqChain($subjectId, $semesterCode, $groupHemisId, $form)['uncovered'] === []) {
+            \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $chain['members'], $form)
                 ->whereNull('resolved_at')->update(['resolved_at' => now()]);
         }
         \App\Services\YnqPending::forgetFamily($subjectId, $chain['members']);
-        $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId);
+        $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, [], $form);
         \App\Services\ActivityLogService::log('confirm', 'yn_qaydnoma',
-            "YN qaydnoma tasdiqlandi ({$confirmation->roleLabel()}): {$group?->name}, {$subject?->subject_name}", $confirmation);
+            "YN qaydnoma tasdiqlandi ({$confirmation->roleLabel()}, " . \App\Services\YnqForm::label($form) . "): {$group?->name}, {$subject?->subject_name}", $confirmation);
 
         return redirect($back)->with('ynq_flash', 'Qaydnoma tasdiqlandi — QR kodingiz bosildi.');
     }
@@ -10280,6 +10290,7 @@ class JournalController extends Controller
         $subjectId = (string) $data['subject_id'];
         $semesterCode = (string) $data['semester_code'];
         $groupHemisId = (string) $data['group_hemis_id'];
+        $form = \App\Services\YnqForm::normalize($data['form'] ?? null);
         $back = route('admin.journal.view-yn-qaydnoma', $request->only(array_keys(self::YNQ_RULES)));
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
 
@@ -10287,7 +10298,7 @@ class JournalController extends Controller
         $role = $approver ? self::approverRoleFor($subjectId, $semesterCode, $groupHemisId) : null;
         abort_unless($role, 403, 'Qaydnomani fan kafedrasining mudiri yoki fakultet dekani rad eta oladi.');
         $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
-        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members);
+        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members, $form);
         $teachers = $vedomost()->where('role', $Confirmation::ROLE_TEACHER)->get();
         if ($teachers->isEmpty()) {
             return redirect($back)->with('ynq_flash', 'Rad etiladigan tasdiq yo\'q — o\'qituvchi hali topshirmagan.');
@@ -10299,9 +10310,10 @@ class JournalController extends Controller
         // O'qituvchi(lar) va undan keyingi (kafedra mudiri) tasdiqlari bekor
         $drop = $vedomost()->whereIn('role', [$Confirmation::ROLE_TEACHER, $Confirmation::ROLE_HEAD])->get();
         $stale = $drop->pluck('verification.document_path')->concat($drop->pluck('pdf_path'))->filter()->all();
-        DB::transaction(function () use ($teachers, $drop, $approver, $data, $subjectId, $semesterCode, $members) {
+        DB::transaction(function () use ($teachers, $drop, $approver, $data, $subjectId, $semesterCode, $members, $form) {
             $rejection = \App\Models\YnQaydnomaRejection::create([
                 'subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $members[0],
+            ] + (\App\Models\YnQaydnomaRejection::hasFormColumn() ? ['form' => $form] : []) + [
                 'dean_id' => $approver->id, 'dean_name' => $approver->full_name, 'reason' => trim($data['reason']),
                 'teacher_ids' => $teachers->pluck('teacher_id')->unique()->values()->all(),
                 'weights' => $teachers->sortByDesc('confirmed_at')->first()->weights, 'rejected_at' => now(),
@@ -10312,7 +10324,7 @@ class JournalController extends Controller
             }
             \App\Services\ActivityLogService::log('reject', 'yn_qaydnoma', "YN qaydnoma rad etildi: {$data['reason']}", $rejection);
         });
-        $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, $stale);
+        $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, $stale, $form);
         \App\Services\YnqPending::forgetFamily($subjectId, $members);
 
         return redirect($back)->with('ynq_flash', 'Qaydnoma rad etildi — o\'qituvchi sababini ko\'rib, qayta topshiradi.');
@@ -10329,6 +10341,7 @@ class JournalController extends Controller
         $subjectId = (string) $data['subject_id'];
         $semesterCode = (string) $data['semester_code'];
         $groupHemisId = (string) $data['group_hemis_id'];
+        $form = \App\Services\YnqForm::normalize($data['form'] ?? null);
         $back = route('admin.journal.view-yn-qaydnoma', $request->only(array_keys($data)));
         $teacher = $this->currentTeacher();
         abort_unless($teacher, 403);
@@ -10340,7 +10353,7 @@ class JournalController extends Controller
             "Tasdiqlangan qaydnoma qaytarilmaydi — faqat rad etilsa qayta topshiriladi.");
 
         $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
-        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members);
+        $vedomost = fn () => $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members, $form);
         $mine = $vedomost()->where('teacher_id', $teacher->id)->where('role', $role)->get();
         if ($mine->isEmpty()) {
             return redirect($back)->with('ynq_flash', 'Sizning tasdig\'ingiz topilmadi.');
@@ -10365,7 +10378,7 @@ class JournalController extends Controller
                 $c->delete();
             }
         });
-        $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, $stale);
+        $this->refreshYnQaydnomaFile($subjectId, $semesterCode, $groupHemisId, $stale, $form);
         \App\Services\YnqPending::forgetFamily($subjectId, $members);
 
         return redirect($back)->with('ynq_flash', 'Tasdiq qaytarildi — QR kodingiz olib tashlandi.');
@@ -10375,9 +10388,9 @@ class JournalController extends Controller
      * Vedomostning tasdiqlangan Excel fayli (barcha QR lari bilan) — har tasdiq/qaytarishda
      * qayta yoziladi; shu vedomostdagi har QR (DocumentVerification) shu faylga havola qiladi.
      */
-    private function refreshYnQaydnomaFile(string $subjectId, string $semesterCode, string $groupHemisId, array $staleFiles = []): void
+    private function refreshYnQaydnomaFile(string $subjectId, string $semesterCode, string $groupHemisId, array $staleFiles = [], ?string $form = null): void
     {
-        $all = \App\Models\YnQaydnomaConfirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId)->get();
+        $all = \App\Models\YnQaydnomaConfirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId, $form)->get();
         $old = $all->pluck('verification.document_path')->filter()->concat($staleFiles)->unique();
         $path = null;
 
@@ -10385,7 +10398,7 @@ class JournalController extends Controller
         if ($base) {
             $w = $base->weights;
             $built = $this->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
-                (int) $w['jn'], (int) $w['mt'], (int) $w['on'], (int) $w['oski'], (int) $w['test']);
+                (int) $w['jn'], (int) $w['mt'], (int) $w['on'], (int) $w['oski'], (int) $w['test'], 1, true, $form);
             if (!is_string($built)) {
                 [$spreadsheet] = $built;
                 $tmp = tempnam(sys_get_temp_dir(), 'ynq');
@@ -10403,7 +10416,7 @@ class JournalController extends Controller
 
         // Dekan tasdiqlagan qaydnoma — PDF avtomatik (javob yuborilgach, foydalanuvchi kutmaydi)
         if ($all->contains('role', \App\Models\YnQaydnomaConfirmation::ROLE_DEAN)) {
-            app()->terminating(fn () => $this->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId));
+            app()->terminating(fn () => $this->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId, $form));
         }
     }
 
@@ -10411,12 +10424,12 @@ class JournalController extends Controller
      * Dekan tasdiqlagan qaydnoma PDF i (barcha shakllar, QR lari bilan) — public diskka yoziladi,
      * yo'li dekan tasdig'ida (pdf_path); eskisi o'chiriladi. Tayyorlab bo'lmasa — null.
      */
-    public function generateYnQaydnomaPdf(string $subjectId, string $semesterCode, string $groupHemisId): ?string
+    public function generateYnQaydnomaPdf(string $subjectId, string $semesterCode, string $groupHemisId, ?string $form = null): ?string
     {
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
-        $dean = $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId)->where('role', $Confirmation::ROLE_DEAN)
+        $dean = $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId, $form)->where('role', $Confirmation::ROLE_DEAN)
             ->latest('confirmed_at')->first();
-        $base = $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId)->first();
+        $base = $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_TEACHER, $form)->first();
         if (!$dean || !$base) {
             return null;
         }
@@ -10424,7 +10437,7 @@ class JournalController extends Controller
         try {
             $w = $base->weights;
             $built = $this->buildYnQaydnomaSpreadsheet($subjectId, $semesterCode, $groupHemisId,
-                (int) $w['jn'], (int) $w['mt'], (int) $w['on'], (int) $w['oski'], (int) $w['test']);
+                (int) $w['jn'], (int) $w['mt'], (int) $w['on'], (int) $w['oski'], (int) $w['test'], 1, true, $form);
             if (is_string($built)) {
                 return null;
             }
@@ -10454,18 +10467,19 @@ class JournalController extends Controller
     public function deleteYnQaydnoma(Request $request)
     {
         abort_unless(auth()->user()?->hasRole('superadmin') && !session('impersonating'), 403);
-        $data = $request->validate(['subject_id' => 'required', 'semester_code' => 'required', 'group_hemis_id' => 'required']);
+        $data = $request->validate(['subject_id' => 'required', 'semester_code' => 'required', 'group_hemis_id' => 'required', 'form' => self::YNQ_RULES['form']]);
         [$subjectId, $semesterCode, $groupHemisId] = [(string) $data['subject_id'], (string) $data['semester_code'], (string) $data['group_hemis_id']];
+        $form = \App\Services\YnqForm::normalize($data['form'] ?? null);
 
-        $confirmations = \App\Models\YnQaydnomaConfirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId)->get();
+        $confirmations = \App\Models\YnQaydnomaConfirmation::with('verification')->forVedomost($subjectId, $semesterCode, $groupHemisId, $form)->get();
         $files = $confirmations->pluck('verification.document_path')->concat($confirmations->pluck('pdf_path'))->filter()->unique();
-        DB::transaction(function () use ($confirmations, $subjectId, $semesterCode, $groupHemisId) {
+        DB::transaction(function () use ($confirmations, $subjectId, $semesterCode, $groupHemisId, $form) {
             foreach ($confirmations as $c) {
                 $c->verification?->delete();
                 $c->delete();
             }
             if (\Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_rejections')) {
-                \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $groupHemisId)->delete();
+                \App\Models\YnQaydnomaRejection::forVedomost($subjectId, $semesterCode, $groupHemisId, $form)->delete();
             }
         });
         foreach ($files as $file) {
@@ -10848,12 +10862,12 @@ class JournalController extends Controller
      *
      * @return array{members: string[], all: \Illuminate\Support\Collection, byRole: array<string, \Illuminate\Support\Collection>, uncovered: string[]}
      */
-    public static function ynqChain(string $subjectId, string $semesterCode, string $groupHemisId): array
+    public static function ynqChain(string $subjectId, string $semesterCode, string $groupHemisId, ?string $form = null): array
     {
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
         $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
         $all = \Illuminate\Support\Facades\Schema::hasTable('yn_qaydnoma_confirmations')
-            ? $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members)->orderByDesc('confirmed_at')->get()
+            ? $Confirmation::with('verification')->forVedomost($subjectId, $semesterCode, $members, $form)->orderByDesc('confirmed_at')->get()
             : collect();
         $byRole = [];
         foreach ($Confirmation::CHAIN as $role) {
@@ -10997,9 +11011,41 @@ class JournalController extends Controller
      */
     public function buildYnQaydnomaSpreadsheet(
         string $subjectId, string $semesterCode, string $groupHemisId,
-        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true
+        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true,
+        ?string $form = null
     ): array|string {
-        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, false, $withFamily);
+        // Shakl berilmasa (admin Excel eksporti) — barcha shakllar varaqlari bitta faylda
+        return $this->ynQaydnoma($subjectId, $semesterCode, $groupHemisId, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $shaklId, false, $withFamily,
+            $form === null ? null : \App\Services\YnqForm::normalize($form));
+    }
+
+    /**
+     * Guruh × fanda talabasi bor qaydnoma shakllari (YnqForm kodlari; 12 — doim), kichik guruhlar
+     * oilasi bo'yicha. Hisob og'ir — 10 daqiqaga keshlanadi.
+     *
+     * @return string[]
+     */
+    public function ynqActiveForms(string $subjectId, string $semesterCode, string $groupHemisId): array
+    {
+        $members = \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisId);
+
+        return \Illuminate\Support\Facades\Cache::remember('ynq_forms:' . $subjectId . ':' . $semesterCode . ':' . $members[0], 600, function () use ($subjectId, $semesterCode, $members) {
+            $forms = [\App\Services\YnqForm::MAIN];
+            foreach ($members as $g) {
+                $part = $this->ynQaydnoma($subjectId, $semesterCode, $g, 30, 10, 0, 0, 60, 1, true);
+                if (is_string($part)) {
+                    continue;
+                }
+                foreach ($part['forms'] as $sheetForm => $f) {
+                    $code = \App\Services\YnqForm::fromSheetForm($sheetForm);
+                    if ($code && ($code === \App\Services\YnqForm::MAIN || $f['students']->isNotEmpty())) {
+                        $forms[] = $code;
+                    }
+                }
+            }
+
+            return array_values(array_intersect(\App\Services\YnqForm::codes(), $forms));
+        });
     }
 
     /**
@@ -11019,7 +11065,8 @@ class JournalController extends Controller
 
     private function ynQaydnoma(
         string $subjectId, string $semesterCode, string $groupHemisId,
-        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId, bool $formsOnly, bool $withFamily = true
+        int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId, bool $formsOnly, bool $withFamily = true,
+        ?string $ynqForm = null
     ): array|string {
         $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
 
@@ -11790,6 +11837,21 @@ class JournalController extends Controller
             }
         }
 
+        // Har shakl — alohida vedomost: faqat so'ralgan shakl varag'i qoladi (shakl berilmasa — hammasi)
+        if ($ynqForm !== null) {
+            $wanted = \App\Services\YnqForm::sheetForm($ynqForm);
+            if ($wanted !== $svc::FORM_12 && ($studentsForForm($wanted)->isEmpty() || empty($activeForms[$wanted]))) {
+                return \App\Services\YnqForm::label($ynqForm) . ' bo\'yicha talaba yo\'q';
+            }
+            foreach ($sheetMap as $form => $formSheet) {
+                if ($form !== $wanted) {
+                    $spreadsheet->removeSheetByIndex($spreadsheet->getIndex($formSheet));
+                    unset($sheetMap[$form]);
+                }
+            }
+            $spreadsheet->setActiveSheetIndex(0);
+        }
+
         $levelCodeForRounding = (string) ($semester?->level_code ?? '');
 
         // Bitta sheet'ni to'ldiruvchi closure — 12-shakl va 12-qo'shimcha
@@ -12114,7 +12176,7 @@ class JournalController extends Controller
         $fileName = 'YN_qaydnoma_' . $groupName . '_' . $subjectName . '.xlsx';
 
         // Amaliy o'qituvchi tasdiqlagan bo'lsa — unikal QR o'qituvchi ismi yoniga
-        self::stampConfirmationQrs($spreadsheet, $subjectId, $semesterCode, $groupHemisId);
+        self::stampConfirmationQrs($spreadsheet, $subjectId, $semesterCode, $groupHemisId, $ynqForm);
 
         return [$spreadsheet, $fileName];
     }
@@ -12126,10 +12188,10 @@ class JournalController extends Controller
      * skanerlansa barcha tasdiqlaganlar (lavozimi, o'qituvchilarda — guruhi) va PDF. Kafedra mudiri —
      * barcha kichik guruhlar o'qituvchilari tasdiqlagach, dekan — undan keyin. Excelda ham, sahifada ham.
      */
-    private static function stampConfirmationQrs(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $subjectId, string $semesterCode, string $groupHemisId): void
+    private static function stampConfirmationQrs(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $subjectId, string $semesterCode, string $groupHemisId, ?string $form = null): void
     {
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
-        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId);
+        $chain = self::ynqChain($subjectId, $semesterCode, $groupHemisId, $form);
         $head = self::ynqStepDone($chain, $Confirmation::ROLE_TEACHER) ? $chain['byRole'][$Confirmation::ROLE_HEAD]->first() : null;
         $dean = $head ? $chain['byRole'][$Confirmation::ROLE_DEAN]->first(fn ($c) => $c->verification) : null;
         // "YaN o'tkazilgan sana" — asosiy guruhning YN jadvalidagi oxirgi imtihon (test, bo'lmasa OSKI)

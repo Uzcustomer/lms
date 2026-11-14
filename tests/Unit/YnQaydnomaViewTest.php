@@ -141,6 +141,7 @@ describe('teacher confirmation', function () {
         (require base_path('database/migrations/2026_11_09_200000_add_pdf_path_to_yn_qaydnoma_confirmations.php'))->up();
         (require base_path('database/migrations/2026_11_09_160000_create_yn_qaydnoma_rejections_table.php'))->up();
         (require base_path('database/migrations/2026_11_09_180000_add_teacher_ids_to_yn_qaydnoma_rejections.php'))->up();
+        (require base_path('database/migrations/2026_11_14_120000_add_form_to_yn_qaydnoma_confirmations.php'))->up();
         Schema::create('departments', fn ($t) => [$t->id(), $t->unsignedBigInteger('department_hemis_id'), $t->string('name')]);
         Schema::create('dean_faculties', fn ($t) => [$t->id(), $t->unsignedBigInteger('teacher_id'), $t->unsignedBigInteger('department_hemis_id'), $t->timestamps()]);
 
@@ -165,12 +166,16 @@ describe('teacher confirmation', function () {
         $this->controller = new class extends JournalController {
             public ?bool $withFamily = null;
 
+            public ?string $form = null;
+
             public function __construct() {}
 
             public function buildYnQaydnomaSpreadsheet(string $subjectId, string $semesterCode, string $groupHemisId,
-                int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true): array|string
+                int $weightJn, int $weightMt, int $weightOn, int $weightOski, int $weightTest, int $shaklId = 1, bool $withFamily = true,
+                ?string $form = null): array|string
             {
                 $this->withFamily = $withFamily;
+                $this->form = $form;
                 // Asl shablon: 10 talaba, sarlavhada amaliyot o'qituvchilari (fillSheet kabi U10, U11)
                 $s = \PhpOffice\PhpSpreadsheet\IOFactory::load(public_path('templates/yn_qaydnoma (1).xlsx'));
                 $w = $s->getActiveSheet();
@@ -180,16 +185,16 @@ describe('teacher confirmation', function () {
                     $w->setCellValue("B{$r}", 'TALABA ' . $r);
                 }
                 $s->createSheet()->setTitle('Tarix')->setCellValue('A1', 'tarix');
-                (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $s, $subjectId, $semesterCode, $groupHemisId);
+                (new ReflectionMethod(JournalController::class, 'stampConfirmationQrs'))->invoke(null, $s, $subjectId, $semesterCode, $groupHemisId, $form);
 
                 return [$s, 'YN_qaydnoma_test.xlsx'];
             }
         };
-        $this->confirm = function (int $teacherId, string $action = 'confirm', string $group = '77') {
+        $this->confirm = function (int $teacherId, string $action = 'confirm', string $group = '77', ?string $form = null) {
             $request = \Illuminate\Http\Request::create('/admin/journal/' . $action . '-yn-qaydnoma', 'POST', [
                 'subject_id' => '435', 'semester_code' => '19', 'group_hemis_id' => $group,
                 'weight_jn' => 30, 'weight_mt' => 10, 'weight_on' => 0, 'weight_oski' => 0, 'weight_test' => 60,
-            ]);
+            ] + ($form ? ['form' => $form] : []));
             $request->setLaravelSession($session = app('session')->driver());
             $session->start();
             app()->instance('request', $request);
@@ -239,6 +244,19 @@ describe('teacher confirmation', function () {
         $html = JournalController::qaydnomaHtml($sheet, 'YN', '');
         expect($html)->not->toContain('tasdiqlagan')->not->toContain('Hujjat QR')
             ->toMatch('/<img alt="Imzo: IZZATULLAYEV O\.[^"]*" src="data:image\/png;base64,[^"]+" style="width:/');
+    });
+
+    it('keeps the qo\'shimcha form a separate vedomost with its own confirmation chain', function () {
+        ($this->confirm)(1);                                     // asosiy 12-shakl
+        ($this->confirm)(1, 'confirm', '77', '12q');             // 12-shakl qo'shimchasi — alohida tasdiq
+        expect($this->controller->form)->toBe('12q');            // qaydnoma faqat shu shakl bilan quriladi
+        ($this->confirm)(4, 'confirm', '77', '12q');             // kafedra mudiri — faqat qo'shimchani
+
+        expect(\App\Models\YnQaydnomaConfirmation::orderBy('id')->get()->map(fn ($c) => $c->form . ':' . $c->role)->all())
+            ->toBe(['12:oqituvchi', '12q:oqituvchi', '12q:kafedra_mudiri'])
+            ->and(JournalController::ynqChain('435', '19', '77')['byRole']['kafedra_mudiri'])->toHaveCount(0)
+            ->and(JournalController::ynqChain('435', '19', '77', '12q')['byRole']['kafedra_mudiri'])->toHaveCount(1)
+            ->and(\App\Models\YnQaydnomaConfirmation::where('form', '12q')->first()->verification->meta['form'])->toBe('12q');
     });
 
     it('does not let the teacher revoke their own confirmation', function () {

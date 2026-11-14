@@ -18,7 +18,7 @@ class YnQaydnomaConfirmation extends Model
     public const CHAIN = [self::ROLE_TEACHER, self::ROLE_HEAD, self::ROLE_DEAN];
 
     protected $fillable = [
-        'subject_id', 'semester_code', 'group_hemis_id', 'teacher_id', 'teacher_name', 'role',
+        'subject_id', 'semester_code', 'group_hemis_id', 'form', 'teacher_id', 'teacher_name', 'role',
         'document_verification_id', 'pdf_path', 'weights', 'confirmed_at',
     ];
 
@@ -32,21 +32,33 @@ class YnQaydnomaConfirmation extends Model
         return $this->belongsTo(DocumentVerification::class, 'document_verification_id');
     }
 
-    /** Qaydnoma bo'yicha: guruh berilsa — uning kichik guruhlari oilasi (a/b/c) bilan, ro'yxat berilsa — aynan shular */
-    public function scopeForVedomost($query, string $subjectId, string $semesterCode, string|array $groupHemisIds)
+    /**
+     * Qaydnoma bo'yicha: guruh berilsa — uning kichik guruhlari oilasi (a/b/c) bilan, ro'yxat berilsa — aynan
+     * shular; shakl (YnqForm) — har shakl alohida vedomost, sukut bo'yicha asosiy 12-shakl
+     */
+    public function scopeForVedomost($query, string $subjectId, string $semesterCode, string|array $groupHemisIds, ?string $form = null)
     {
         $groups = is_array($groupHemisIds) ? $groupHemisIds : \App\Services\YnqFamily::members($subjectId, $semesterCode, $groupHemisIds);
 
         return $query->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->whereIn('group_hemis_id', array_map('strval', $groups));
+            ->whereIn('group_hemis_id', array_map('strval', $groups))
+            ->when(self::hasFormColumn(), fn ($q) => $q->where('form', \App\Services\YnqForm::normalize($form)));
+    }
+
+    /** Shakl ustuni bormi (migratsiyadan oldin — hammasi asosiy 12-shakl) */
+    public static function hasFormColumn(): bool
+    {
+        static $has = [];
+
+        return $has[static::class] ??= \Illuminate\Support\Facades\Schema::hasColumn((new static())->getTable(), 'form');
     }
 
     /** Vedomost bo'yicha har kishining oxirgi tasdig'i (sukut bo'yicha — o'qituvchilarniki). */
-    public static function latestFor(string $subjectId, string $semesterCode, string|array $groupHemisId, string $role = self::ROLE_TEACHER)
+    public static function latestFor(string $subjectId, string $semesterCode, string|array $groupHemisId, string $role = self::ROLE_TEACHER, ?string $form = null)
     {
         return static::with('verification')
-            ->forVedomost($subjectId, $semesterCode, $groupHemisId)
+            ->forVedomost($subjectId, $semesterCode, $groupHemisId, $form)
             ->where('role', $role)
             ->orderByDesc('confirmed_at')
             ->get()

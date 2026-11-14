@@ -7,6 +7,7 @@ use App\Models\Teacher;
 use App\Models\YnQaydnomaConfirmation;
 use App\Models\YnQaydnomaRejection;
 use App\Services\YnqFamily;
+use App\Services\YnqForm;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Schema;
  * admin/superadmin/registrator — hammasi (fakultet filtri bilan), dekan tasdiqlaganlari PDF da.
  * "Vedomostlarim": o'qituvchining o'z guruh × fanlari. Kichik guruhlar (a/b/c) — bitta qator
  * (bitta umumiy qaydnoma, YnqFamily): hammasining o'qituvchilari topshirgach kafedra mudiriga o'tadi.
+ * Har shakl (12, 12-qo'shimcha, 12a, 12b va qo'shimchalari — YnqForm) — alohida qator, o'z tasdiq zanjiri bilan.
  */
 class YnQaydnomaListController extends Controller
 {
@@ -100,6 +102,8 @@ class YnQaydnomaListController extends Controller
 
         return view('admin.yn-qaydnomalar.index', $context + [
             'rows' => $paginator, 'counts' => $counts, 'filters' => ['status' => $status, 'current' => $current ? '1' : '0'],
+            // O'qituvchi: imtihoni tugagan, YN yuborilgan va hali tasdiqlamagan vedomostlari — sahifa tepasida
+            'needsAction' => $context['isTeacher'] ? $rows->where('needs_action', true)->values() : collect(),
         ]);
     }
 
@@ -147,12 +151,15 @@ class YnQaydnomaListController extends Controller
 
         // Topshirilgan yoki rad etilgan qaydnoma — imtihon tugamagan, jadvalda yo'q yoki o'tgan
         // semestrniki bo'lsa ham doim ko'rinadi ("Joriy semestr" faqat topshirilmaganlarni toraytiradi)
-        $refs = $confirmations->map->first()->union($rejections)->diffKeys($exams);
+        $refs = $confirmations->map->first()->union($rejections)->keyBy($key)->diffKeys($exams);
         if ($refs->isNotEmpty()) {
             $exams = $exams->union($this->entries($refs));
         }
 
-        return $this->withFamilies($exams)->map(fn ($r) => $this->makeRow($r, $confirmations, $rejections))
+        // Qo'shimcha / 12a / 12b shakllari — o'qituvchi topshirgan (yoki rad etilgan) bo'lsa alohida qator
+        return $this->withFamilies($exams)
+            ->flatMap(fn ($r) => array_map(fn ($form) => $this->makeRow($this->withForm($r, $form), $confirmations, $rejections),
+                array_merge([YnqForm::MAIN], $this->submittedForms($r, $confirmations, $rejections))))
             // Kafedra mudiri — faqat o'z kafedrasi fanlari
             ->when($kafedraHemisIds !== null, fn ($c) => $c->whereIn('kafedra_id', $kafedraHemisIds))
             ->sortByDesc('finished_at')->values();
@@ -193,19 +200,59 @@ class YnQaydnomaListController extends Controller
         $entries = $this->withFamilies($this->entries($refs));
         [$confirmations, $rejections] = $this->statusData($entries->flatMap(fn ($r) => $r->members)->unique()->values()->all());
 
-        return $entries
-            ->map(function ($r) use ($confirmations, $rejections, $submitted, $today, $key) {
-                $row = $this->makeRow($r, $confirmations, $rejections);
-                $row->yn_submitted = $submitted->has($key($r));
-                $row->exams_finished = self::examsFinished($r, $today);
-                $row->current = $r->current;
+        $journal = app(JournalController::class);
 
-                return $row;
+        return $entries
+            ->flatMap(function ($r) use ($confirmations, $rejections, $submitted, $today, $key, $journal, $teacher) {
+                $flags = function ($row) use ($r, $submitted, $today, $key, $teacher) {
+                    $row->yn_submitted = $submitted->has($key($r));
+                    $row->exams_finished = self::examsFinished($r, $today);
+                    $row->current = $r->current;
+                    // Tasdiqlashingiz kerak: imtihon tugagan, YN yuborilgan, siz hali tasdiqlamagansiz
+                    $row->needs_action = $row->exams_finished && $row->yn_submitted
+                        && in_array($row->status, [self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_REJECTED], true)
+                        && !$row->teachers->contains('teacher_id', $teacher->id);
+
+                    return $row;
+                };
+                $main = $flags($this->makeRow($r, $confirmations, $rejections));
+                // Asosiy qaydnoma topshirilgach — talabasi bor qo'shimcha / 12a / 12b shakllari (dars jadvali
+                // va baholar bo'yicha, keshlangan) ham alohida qator
+                $forms = $this->submittedForms($r, $confirmations, $rejections);
+                if ($main->exams_finished && $main->yn_submitted && $main->status !== self::STATUS_NONE) {
+                    try {
+                        $forms = array_merge($forms, $journal->ynqActiveForms((string) $r->subject_id, (string) $r->semester_code, (string) $r->group_hemis_id));
+                    } catch (\Throwable $e) {
+                        report($e);
+                    }
+                }
+                $forms = array_values(array_diff(array_intersect(YnqForm::codes(), $forms), [YnqForm::MAIN]));
+
+                return array_merge([$main], array_map(fn ($form) => $flags($this->makeRow($this->withForm($r, $form), $confirmations, $rejections)), $forms));
             })
             // "Joriy semestr" — faqat hali topshirilmaganlarga
             ->filter(fn ($row) => !$currentSemester || $row->current || $row->status !== self::STATUS_NONE)
-            ->sortBy(fn ($r) => [array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_DEAN]), $r->group, $r->subject])
+            ->sortBy(fn ($r) => [array_search($r->status, [self::STATUS_REJECTED, self::STATUS_NONE, self::STATUS_PARTIAL, self::STATUS_TEACHER, self::STATUS_HEAD, self::STATUS_DEAN]), $r->group, $r->subject, $r->form])
             ->values();
+    }
+
+    /** Qatorning shakl bo'yicha nusxasi */
+    private function withForm(object $r, string $form): object
+    {
+        $copy = clone $r;
+        $copy->form = $form;
+
+        return $copy;
+    }
+
+    /** Asosiydan tashqari shakllar — oila guruhlari bo'yicha tasdiq yoki ochiq rad etishi borlari */
+    private function submittedForms(object $r, Collection $confirmations, Collection $rejections): array
+    {
+        $members = $r->members ?? [(string) $r->group_hemis_id];
+
+        return array_values(array_filter(YnqForm::codes(), fn ($form) => $form !== YnqForm::MAIN
+            && collect($members)->contains(fn ($g) => $confirmations->has($k = $g . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $form)
+                || $rejections->has($k))));
     }
 
     /**
@@ -238,10 +285,10 @@ class YnQaydnomaListController extends Controller
         return fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
     }
 
-    /** Tasdiqlar (kalit → ro'yxat) va yopilmagan rad etishlar (kalit → eng so'nggisi); null — hamma guruh */
+    /** Tasdiqlar (kalit|shakl → ro'yxat) va yopilmagan rad etishlar (kalit|shakl → eng so'nggisi); null — hamma guruh */
     private function statusData(?array $groupHemisIds): array
     {
-        $key = self::keyFn();
+        $key = fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . ($r->form ?? YnqForm::MAIN);
         $confirmations = YnQaydnomaConfirmation::with('verification')
             ->when($groupHemisIds !== null, fn ($q) => $q->whereIn('group_hemis_id', $groupHemisIds ?: ['-']))
             ->orderByDesc('confirmed_at')
@@ -289,7 +336,8 @@ class YnQaydnomaListController extends Controller
     private function makeRow(object $r, Collection $confirmations, Collection $rejections): object
     {
         $members = $r->members ?? [(string) $r->group_hemis_id];
-        $keys = array_map(fn ($g) => $g . '|' . $r->subject_id . '|' . $r->semester_code, $members);
+        $form = YnqForm::normalize($r->form ?? null);
+        $keys = array_map(fn ($g) => $g . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $form, $members);
         $all = collect($keys)->flatMap(fn ($k) => $confirmations->get($k, collect()))->sortByDesc('confirmed_at')->values();
         $teacherRows = $all->where('role', YnQaydnomaConfirmation::ROLE_TEACHER);
         $teachers = $teacherRows->unique('teacher_id')->values();
@@ -323,6 +371,8 @@ class YnQaydnomaListController extends Controller
             'level_name' => $r->level_name ?? '',
             'subject_id' => (string) $r->subject_id,
             'subject' => $r->subject_name ?? $r->exam_subject_name,
+            'form' => $form,
+            'form_label' => YnqForm::label($form),
             'semester_code' => (string) $r->semester_code,
             'semester' => $r->semester_name ?? $r->semester_code,
             'oski_date' => $r->oski_na ? null : $r->oski_date,
@@ -338,12 +388,13 @@ class YnQaydnomaListController extends Controller
             'pending_teachers' => collect(),
             'yn_submitted' => null,
             'exams_finished' => null,
+            'needs_action' => false,
             'status' => $status,
             // Qaydnoma sahifasi — topshirilgan yoki rad etilgan (qayta ko'rib chiqish) vaznlari bilan
             'params' => $w === null ? null : [
                 'subject_id' => (string) $r->subject_id, 'semester_code' => (string) $r->semester_code, 'group_hemis_id' => (string) $r->group_hemis_id,
                 'weight_jn' => $w['jn'] ?? 30, 'weight_mt' => $w['mt'] ?? 10, 'weight_on' => $w['on'] ?? 0,
-                'weight_oski' => $w['oski'] ?? 0, 'weight_test' => $w['test'] ?? 60,
+                'weight_oski' => $w['oski'] ?? 0, 'weight_test' => $w['test'] ?? 60, 'form' => $form,
             ],
         ];
     }

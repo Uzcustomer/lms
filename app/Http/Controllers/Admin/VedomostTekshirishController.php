@@ -374,8 +374,9 @@ class VedomostTekshirishController extends Controller
         // Ro'yxat tasdiqlarning o'zidan quriladi (siklli fanlar curriculum_subjects da bo'lmasligi
         // mumkin — qidiruvdagi fallback kabi); filtrlar guruh / semestr / o'quv reja bo'yicha.
         // "Joriy semestr" qo'llanmaydi — tasdiqlangan qaydnoma o'tgan semestrniki bo'lsa ham ko'rinadi
+        // Har shakl (12, 12-qo'shimcha, 12a, …) — alohida qaydnoma
         $deans = $Confirmation::with('verification')->where('role', $Confirmation::ROLE_DEAN)
-            ->orderByDesc('confirmed_at')->get()->unique($key)->values();
+            ->orderByDesc('confirmed_at')->get()->unique(fn ($c) => $key($c) . '|' . ($c->form ?? '12'))->values();
         $groups = Group::whereIn('group_hemis_id', $deans->pluck('group_hemis_id')->unique()->values())->get()->keyBy(fn ($g) => (string) $g->group_hemis_id);
         $curricula = $groups->pluck('curriculum_hemis_id')->filter()->unique()->values();
         $semesters = DB::table('semesters')->whereIn('curriculum_hemis_id', $curricula)
@@ -462,7 +463,8 @@ class VedomostTekshirishController extends Controller
                 'specialty_name' => $specialties[$r->group->specialty_hemis_id] ?? '',
                 'level_name' => $r->semester->level_name ?? '',
                 'group_name' => \App\Services\YnqFamily::label($r->group->name, count($r->members)),
-                'subject_name' => $r->subject->subject_name ?? ($v->subject_name ?? ''),
+                'subject_name' => ($r->subject->subject_name ?? ($v->subject_name ?? ''))
+                    . (($c->form ?? '12') !== '12' ? ' (' . \App\Services\YnqForm::label($c->form) . ')' : ''),
                 'semester_name' => $r->subject->semester_name ?? ($v->semester_name ?? ''),
                 'teachers' => collect($r->members)->flatMap(fn ($g) => $teachers[$g . '|' . $c->subject_id . '|' . $c->semester_code] ?? collect())
                     ->unique('teacher_id')->pluck('teacher_name')->values(),
@@ -470,9 +472,11 @@ class VedomostTekshirishController extends Controller
                 'dean_at' => $c->confirmed_at->format('d.m.Y H:i'),
                 'pdf_url' => route('admin.vedomost-tekshirish.qaydnoma-pdf', [
                     'subject_id' => $c->subject_id, 'semester_code' => $c->semester_code, 'group_hemis_id' => $c->group_hemis_id,
+                    'form' => $c->form ?? '12',
                 ]),
                 'pdf_ready' => (bool) $c->pdf_path,
-                'key' => ['subject_id' => (string) $c->subject_id, 'semester_code' => (string) $c->semester_code, 'group_hemis_id' => (string) $c->group_hemis_id],
+                'key' => ['subject_id' => (string) $c->subject_id, 'semester_code' => (string) $c->semester_code, 'group_hemis_id' => (string) $c->group_hemis_id,
+                    'form' => (string) ($c->form ?? '12')],
             ];
         })->values();
 
@@ -488,38 +492,42 @@ class VedomostTekshirishController extends Controller
     public function qaydnomaPdf(Request $request)
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
-        $data = $request->validate(['subject_id' => 'required', 'semester_code' => 'required', 'group_hemis_id' => 'required']);
+        $data = $request->validate(['subject_id' => 'required', 'semester_code' => 'required', 'group_hemis_id' => 'required',
+            'form' => 'nullable|string|in:' . implode(',', \App\Services\YnqForm::codes())]);
         [$subjectId, $semesterCode, $groupHemisId] = [(string) $data['subject_id'], (string) $data['semester_code'], (string) $data['group_hemis_id']];
+        $form = \App\Services\YnqForm::normalize($data['form'] ?? null);
 
         $Confirmation = \App\Models\YnQaydnomaConfirmation::class;
-        $base = $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId)->first();
-        abort_unless($base && $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_DEAN)->isNotEmpty(), 404,
+        $base = $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_TEACHER, $form)->first();
+        abort_unless($base && $Confirmation::latestFor($subjectId, $semesterCode, $groupHemisId, $Confirmation::ROLE_DEAN, $form)->isNotEmpty(), 404,
             'Qaydnoma hali dekan tomonidan tasdiqlanmagan.');
 
         // "PDF" (yuklab olish) — har bosilganda eskisi o'chirilib, joriy ko'rinish va baholar bo'yicha yangisi;
         // "Ko'rish" (inline) — mavjud PDF brauzerda ochiladi (yo'q bo'lsa — tayyorlanadi)
         $inline = $request->boolean('inline');
         $disk = \Illuminate\Support\Facades\Storage::disk('public');
-        $stored = $inline ? $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId)
+        $stored = $inline ? $Confirmation::forVedomost($subjectId, $semesterCode, $groupHemisId, $form)
             ->where('role', $Confirmation::ROLE_DEAN)->latest('confirmed_at')->value('pdf_path') : null;
         $path = $stored && $disk->exists($stored)
             ? $stored
-            : app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId);
+            : app(JournalController::class)->generateYnQaydnomaPdf($subjectId, $semesterCode, $groupHemisId, $form);
         abort_unless($path, 422, 'PDF tayyorlab bo\'lmadi.');
 
         // Kichik guruhlar qaydnomasi — umumiy (harfsiz) nomi tasdiqda saqlangan
         $group = $base->verification->group_names ?? Group::where('group_hemis_id', $groupHemisId)->value('name') ?? $groupHemisId;
         $subject = $base->verification->subject_name ?? $subjectId;
-        $name = str_replace(['/', '\\', ' '], '_', 'YN_qaydnoma_' . $group . '_' . $subject) . '.pdf';
+        $name = str_replace(['/', '\\', ' '], '_', 'YN_qaydnoma_' . $group . '_' . $subject . ($form !== '12' ? '_' . $form : '')) . '.pdf';
 
+        // Brauzer keshlamasin: "PDF" yangisini yaratgach, "Ko'rish" (manzili o'zgarmaydi) eskisini ko'rsatib qolardi
+        $noCache = ['Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0', 'Pragma' => 'no-cache', 'Expires' => '0'];
         if ($inline) {
             return response()->file($disk->path($path), [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'inline; filename="' . $name . '"',
-            ]);
+            ] + $noCache);
         }
 
-        return response()->download($disk->path($path), $name, ['Content-Type' => 'application/pdf']);
+        return response()->download($disk->path($path), $name, ['Content-Type' => 'application/pdf'] + $noCache);
     }
 
     private function parseDate(string $value): ?string

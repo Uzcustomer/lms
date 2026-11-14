@@ -3233,9 +3233,10 @@
                                 <span class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold"
                                       style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;"
                                       title="Qaydnomani {{ $myYnConfirmation->confirmed_at->format('d.m.Y H:i') }} da tasdiqlagansiz. Dekan rad etsa qayta yaratish ochiladi.">
-                                    ✓ Qaydnoma allaqachon yaratilgan
+                                    ✓ {{ ($ynqForm ?? '12') !== '12' ? \App\Services\YnqForm::label($ynqForm) . ' allaqachon yaratilgan' : 'Qaydnoma allaqachon yaratilgan' }}
                                     <a href="{{ route('admin.journal.view-yn-qaydnoma', ['subject_id' => $subjectId, 'semester_code' => $semesterCode, 'group_hemis_id' => $group->group_hemis_id,
-                                        'weight_jn' => $ynqW['jn'] ?? 30, 'weight_mt' => $ynqW['mt'] ?? 10, 'weight_on' => $ynqW['on'] ?? 0, 'weight_oski' => $ynqW['oski'] ?? 0, 'weight_test' => $ynqW['test'] ?? 60]) }}"
+                                        'weight_jn' => $ynqW['jn'] ?? 30, 'weight_mt' => $ynqW['mt'] ?? 10, 'weight_on' => $ynqW['on'] ?? 0, 'weight_oski' => $ynqW['oski'] ?? 0, 'weight_test' => $ynqW['test'] ?? 60,
+                                        'form' => $ynqForm ?? '12']) }}"
                                        target="_blank" rel="noopener" style="color:#166534;text-decoration:underline;">ko'rish</a>
                                 </span>
                             @elseif($ynqPrivileged || ($isAmaliyTeacher ?? false))
@@ -3246,8 +3247,8 @@
                                     <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
-                                    YN qaydnoma yaratish
-                                    @if($sababliStudentsCount > 0)
+                                    YN qaydnoma yaratish{{ ($ynqForm ?? '12') !== '12' ? ' — ' . \App\Services\YnqForm::label($ynqForm) : '' }}
+                                    @if($sababliStudentsCount > 0 && ($ynqForm ?? '12') === '12')
                                         <span class="absolute -top-2 -right-2 bg-violet-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md" title="12-qo'shimcha shaklga {{ $sababliStudentsCount }} ta talaba tushadi">{{ $sababliStudentsCount }}</span>
                                     @endif
                                 </button>
@@ -7228,6 +7229,7 @@
                 group_hemis_id: '{{ $group->group_hemis_id }}',
                 shakl: parseInt(document.getElementById('yn-shakl').value) || 1,
                 weight_jn: jn, weight_mt: mt, weight_on: on, weight_oski: oski, weight_test: test,
+                form: '{{ $ynqForm ?? '12' }}',
             }).toString(), '_blank');
             return;
             @endif

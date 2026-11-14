@@ -59,6 +59,19 @@
         .yq-num { color: #94a3b8; font-variant-numeric: tabular-nums; width: 1%; }
         .yq-group { font-weight: 700; color: var(--yq-ink); white-space: nowrap; }
         .yq-small { display: block; font-size: 12px; color: var(--yq-muted); margin-top: 2px; font-weight: 400; }
+        /* Qaydnoma shakli (12-shakl qo'shimchasi, 12a, …) — alohida vedomost */
+        .yq-form { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700;
+            color: #6d28d9; background: #f5f3ff; border: 1px solid #ddd6fe; white-space: nowrap; vertical-align: 1px; }
+        /* O'qituvchi: tasdiqlashi kerak bo'lgan vedomostlar */
+        .yq-todo { margin-bottom: 16px; border-radius: 12px; background: var(--yq-amber-bg); border: 1px solid var(--yq-amber-line); overflow: hidden; }
+        .yq-todo-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--yq-amber-line); }
+        .yq-todo-head b { font-size: 15px; color: var(--yq-ink); }
+        .yq-todo-head span { font-size: 12.5px; color: var(--yq-amber); }
+        .yq-todo-list { list-style: none; margin: 0; padding: 0; }
+        .yq-todo-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px; background: #fff; }
+        .yq-todo-item + .yq-todo-item { border-top: 1px solid var(--yq-line); }
+        .yq-todo-main { flex: 1 1 280px; min-width: 0; }
+        .yq-todo-main .yq-group { margin-right: 6px; }
         .yq-dates { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12.5px; }
         .yq-dates b { display: inline-block; min-width: 40px; color: var(--yq-muted); font-weight: 600; font-size: 11px; }
         .yq-person { display: flex; align-items: flex-start; gap: 6px; font-weight: 600; color: var(--yq-ink); }
@@ -141,6 +154,36 @@
                 </a>
             </div>
 
+            {{-- O'qituvchi: imtihoni tugagan, YN yuborilgan, hali tasdiqlamagan vedomostlar (qo'shimcha / 12a / 12b ham) --}}
+            @if($isTeacher && ($needsAction ?? collect())->isNotEmpty())
+                <section class="yq-todo" aria-labelledby="yq-todo-title">
+                    <div class="yq-todo-head">
+                        <b id="yq-todo-title">Tasdiqlashingiz kerak · {{ $needsAction->count() }}</b>
+                        <span>Jurnalni oching, «YN qaydnoma yaratish» bilan qaydnomani tekshirib tasdiqlang.</span>
+                    </div>
+                    <ul class="yq-todo-list">
+                        @foreach($needsAction as $row)
+                            <li class="yq-todo-item">
+                                <div class="yq-todo-main">
+                                    <span class="yq-group">{{ $row->group }}</span>{{ $row->subject }}
+                                    @if($row->form !== '12')<span class="yq-form">{{ $row->form_label }}</span>@endif
+                                    <span class="yq-small">
+                                        {{ collect([$row->oski_date ? 'OSKI ' . \Carbon\Carbon::parse($row->oski_date)->format('d.m.Y') : null,
+                                            $row->test_date ? 'Test ' . \Carbon\Carbon::parse($row->test_date)->format('d.m.Y') : null])->filter()->implode(' · ') }}
+                                        @if($row->status === 'rejected' && $row->rejection) · rad etilgan: «{{ $row->rejection->reason }}»@endif
+                                    </span>
+                                </div>
+                                <span class="yq-badge yq-badge--{{ $row->status }}">{{ $statusLabels[$row->status] }}</span>
+                                @if($row->group_pk)
+                                    <a class="yq-btn yq-btn--sm yq-btn--primary"
+                                       href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">Jurnalni ochish</a>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                </section>
+            @endif
+
 
             <div class="yq-card">
                 @if($rows->isEmpty())
@@ -177,6 +220,7 @@
                                         </td>
                                         <td>
                                             {{ $row->subject }}
+                                            @if($row->form !== '12')<span class="yq-form">{{ $row->form_label }}</span>@endif
                                             <span class="yq-small">{{ $row->semester }}</span>
                                         </td>
                                         <td class="yq-dates">
@@ -231,14 +275,14 @@
                                                     @endif
                                                     @if($row->group_pk)
                                                         <a class="yq-btn yq-btn--sm {{ $row->status === 'none' && $row->yn_submitted ? 'yq-btn--primary' : '' }}"
-                                                           href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code]) }}">Jurnal</a>
+                                                           href="{{ route('admin.journal.show', [$row->group_pk, $row->subject_id, $row->semester_code] + ($row->form !== '12' ? ['ynq_form' => $row->form] : [])) }}">Jurnal</a>
                                                     @endif
                                                 </div>
                                             @elseif($row->teachers->isNotEmpty() && $row->params)
                                                 <div class="yq-actions">
                                                     @if($canPdf && $row->status === 'dean')
                                                         <a class="yq-btn yq-btn--sm yq-btn--pdf" onclick="return yqPdf(this)"
-                                                           href="{{ route('admin.vedomost-tekshirish.qaydnoma-pdf', ['subject_id' => $row->subject_id, 'semester_code' => $row->semester_code, 'group_hemis_id' => $row->group_hemis_id]) }}">
+                                                           href="{{ route('admin.vedomost-tekshirish.qaydnoma-pdf', ['subject_id' => $row->subject_id, 'semester_code' => $row->semester_code, 'group_hemis_id' => $row->group_hemis_id, 'form' => $row->form]) }}">
                                                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                                             PDF
                                                         </a>
@@ -246,7 +290,7 @@
                                                     {{-- Dekan tasdiqlagan — "Ko'rish" mavjud PDF ni ochadi (PDF huquqi borlarga) --}}
                                                     <a class="yq-btn yq-btn--sm" target="_blank" rel="noopener"
                                                        href="{{ $canPdf && $row->status === 'dean'
-                                                           ? route('admin.vedomost-tekshirish.qaydnoma-pdf', ['subject_id' => $row->subject_id, 'semester_code' => $row->semester_code, 'group_hemis_id' => $row->group_hemis_id, 'inline' => 1])
+                                                           ? route('admin.vedomost-tekshirish.qaydnoma-pdf', ['subject_id' => $row->subject_id, 'semester_code' => $row->semester_code, 'group_hemis_id' => $row->group_hemis_id, 'form' => $row->form, 'inline' => 1, 'v' => substr(md5((string) ($row->dean->pdf_path ?? '')), 0, 8)])
                                                            : route('admin.journal.view-yn-qaydnoma', $row->params) }}">
                                                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                                         {{ $myTurn && $row->status === $myTurn ? 'Ko\'rish va tasdiqlash' : 'Ko\'rish' }}
@@ -271,7 +315,7 @@
                                                     @csrf
                                                     <input type="hidden" name="subject_id" value="{{ $row->subject_id }}">
                                                     <input type="hidden" name="semester_code" value="{{ $row->semester_code }}">
-                                                    <input type="hidden" name="group_hemis_id" value="{{ $row->group_hemis_id }}">
+                                                    <input type="hidden" name="group_hemis_id" value="{{ $row->group_hemis_id }}"><input type="hidden" name="form" value="{{ $row->form }}">
                                                     <button type="submit" class="yq-btn yq-btn--sm" style="color:#b91c1c !important;border-color:#fecaca;">O'chirish</button>
                                                 </form>
                                             @endif
